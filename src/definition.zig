@@ -87,6 +87,13 @@ fn validateDefinition(comptime spec: anytype) void {
     {
         @compileError("agent decision byte maxima must be positive");
     }
+    if (boundary.schema.maximumEncodedSize(spec.Action) >
+        spec.decision.maximum_result_bytes)
+    {
+        @compileError(
+            "agent Action schema exceeds decision.maximum_result_bytes",
+        );
+    }
 
     if (spec.budget.maximum_turns == 0) {
         @compileError("agent maximum_turns must be positive");

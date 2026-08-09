@@ -23,7 +23,7 @@ const Compiled = agent.compile(Definition, Strategy, .{});
 pub const Machine = Compiled.Machine;
 ```
 
-The package targets Zig 0.16.0 and exact Boundary v1.0.0. It contains no host,
+The package targets Zig 0.16.0 and exact Boundary v1.3.1. It contains no host,
 capability implementation, runtime definition loader, strategy registry, tool
 registry, or generic agent interpreter.
 

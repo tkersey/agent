@@ -1,0 +1,19 @@
+.{
+    .name = .agent,
+    .version = "0.0.0",
+    .dependencies = .{
+        .boundary = .{
+            .url = "https://github.com/tkersey/boundary/archive/refs/tags/v1.0.0.tar.gz",
+            .hash = "boundary-1.0.0-flclaPgFEQBhYvlC3eqNVK3X67InkTuaX-pHFvRLzWJ8",
+        },
+    },
+    .minimum_zig_version = "0.16.0",
+    .paths = .{
+        "LICENSE",
+        "README.md",
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+    .fingerprint = 0x268b9c9d84371874,
+}

@@ -78,6 +78,7 @@ fn MachineFor(comptime AgentDefinition: type, comptime Strategy: type) type {
 }
 
 const TurnMachine = MachineFor(Definition(2, 3, 3, 3), agent.strategy.react(.{}));
+const EffectMachine = MachineFor(Definition(3, 3, 1, 3), agent.strategy.react(.{}));
 const ChildMachine = MachineFor(Definition(3, 3, 3, 1), agent.strategy.react(.{}));
 const DecisionMachine = MachineFor(
     Definition(3, 1, 3, 3),
@@ -144,6 +145,17 @@ test "turn budget fails before the next decision" {
     try performTool(TurnMachine, state, &fuel, 1, 11);
     try performTool(TurnMachine, state, &fuel, 2, 22);
     try expectBudgetFailure(TurnMachine, state, &fuel);
+}
+
+test "effect-action budget fails before the excess effect" {
+    const state = try EffectMachine.initialState(std.testing.allocator, @as(u32, 1));
+    defer EffectMachine.deinitState(state);
+    var fuel: u64 = 10_000;
+    try performTool(EffectMachine, state, &fuel, 1, 11);
+
+    const decision = try nextRequest(EffectMachine, state, &fuel);
+    try resumeRequest(EffectMachine, state, decision, Action{ .tool = 2 });
+    try expectBudgetFailure(EffectMachine, state, &fuel);
 }
 
 test "child budget fails before the excess child effect" {

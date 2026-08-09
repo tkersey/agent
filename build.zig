@@ -27,7 +27,11 @@ pub fn build(b: *std.Build) void {
     const run_tests = b.addRunArtifact(tests);
 
     const check = b.step("check", "Compile and test the agent package");
-    check.dependOn(&run_tests.step);
+    const semantic_check = b.step(
+        "check-agent-semantic",
+        "Run every Agent v1 semantic and conformance gate",
+    );
+    semantic_check.dependOn(&run_tests.step);
 
     const no_runtime_gate = b.addSystemCommand(&.{
         "sh",
@@ -38,7 +42,7 @@ pub fn build(b: *std.Build) void {
         "Reject runtime agent interpreters, registries, and integrations",
     );
     no_runtime.dependOn(&no_runtime_gate.step);
-    check.dependOn(no_runtime);
+    semantic_check.dependOn(no_runtime);
 
     const external_consumer_gate = b.addSystemCommand(&.{
         "sh",
@@ -49,7 +53,7 @@ pub fn build(b: *std.Build) void {
         "Build one custom Agent from an archive in an empty directory",
     );
     external_consumer.dependOn(&external_consumer_gate.step);
-    check.dependOn(external_consumer);
+    semantic_check.dependOn(external_consumer);
 
     const format_check = b.addSystemCommand(&.{
         b.graph.zig_exe,
@@ -107,7 +111,7 @@ pub fn build(b: *std.Build) void {
             boundary_module,
         );
     }
-    check.dependOn(compile_fail);
+    semantic_check.dependOn(compile_fail);
 
     addFocusedTest(
         b,
@@ -118,7 +122,7 @@ pub fn build(b: *std.Build) void {
         boundary_module,
         target,
         optimize,
-        check,
+        semantic_check,
     );
     addSharedBoundaryTest(
         b,
@@ -129,7 +133,7 @@ pub fn build(b: *std.Build) void {
         shared_boundary_module,
         target,
         optimize,
-        check,
+        semantic_check,
     );
     addFocusedTest(
         b,
@@ -140,7 +144,7 @@ pub fn build(b: *std.Build) void {
         boundary_module,
         target,
         optimize,
-        check,
+        semantic_check,
     );
     addFocusedTest(
         b,
@@ -151,7 +155,7 @@ pub fn build(b: *std.Build) void {
         boundary_module,
         target,
         optimize,
-        check,
+        semantic_check,
     );
     addFocusedTest(
         b,
@@ -162,7 +166,7 @@ pub fn build(b: *std.Build) void {
         boundary_module,
         target,
         optimize,
-        check,
+        semantic_check,
     );
     addFocusedTest(
         b,
@@ -173,7 +177,7 @@ pub fn build(b: *std.Build) void {
         boundary_module,
         target,
         optimize,
-        check,
+        semantic_check,
     );
     addFocusedTest(
         b,
@@ -184,7 +188,7 @@ pub fn build(b: *std.Build) void {
         boundary_module,
         target,
         optimize,
-        check,
+        semantic_check,
     );
     addFocusedTest(
         b,
@@ -195,7 +199,7 @@ pub fn build(b: *std.Build) void {
         boundary_module,
         target,
         optimize,
-        check,
+        semantic_check,
     );
     addFocusedTest(
         b,
@@ -206,7 +210,7 @@ pub fn build(b: *std.Build) void {
         boundary_module,
         target,
         optimize,
-        check,
+        semantic_check,
     );
     addFocusedTest(
         b,
@@ -217,7 +221,7 @@ pub fn build(b: *std.Build) void {
         boundary_module,
         target,
         optimize,
-        check,
+        semantic_check,
     );
     addSpecializationTest(
         b,
@@ -228,7 +232,7 @@ pub fn build(b: *std.Build) void {
         boundary_module,
         target,
         optimize,
-        check,
+        semantic_check,
     );
     addSpecializationTest(
         b,
@@ -239,19 +243,45 @@ pub fn build(b: *std.Build) void {
         boundary_module,
         target,
         optimize,
-        check,
+        semantic_check,
     );
     addSpecializationTest(
         b,
-        "check-agent-lifecycle",
+        "check-agent-lifecycle-native",
         "Run typed Research and Coding lifecycles across all strategies",
         "test/specialization_matrix.zig",
         agent_module,
         boundary_module,
         target,
         optimize,
-        check,
+        semantic_check,
     );
+
+    const world_conformance_gate = b.addSystemCommand(&.{
+        "node",
+        "tools/check_world_conformance.mjs",
+        "--zig",
+    });
+    world_conformance_gate.addArg(b.graph.zig_exe);
+    const world_conformance = b.step(
+        "check-agent-world-conformance",
+        "Close four Agent Machines with exact released World v3.1.0",
+    );
+    world_conformance.dependOn(&world_conformance_gate.step);
+    const hosted_lifecycle = b.step(
+        "check-agent-lifecycle",
+        "Drive Research and Coding World applications through exact world-host v1.0.0",
+    );
+    hosted_lifecycle.dependOn(&world_conformance_gate.step);
+    const release_externality = b.step(
+        "check-agent-1-externality",
+        "Prove the clean-room Agent, World, host, and Effect v1 release lifecycle",
+    );
+    release_externality.dependOn(&world_conformance_gate.step);
+    no_runtime.dependOn(&world_conformance_gate.step);
+    semantic_check.dependOn(world_conformance);
+    semantic_check.dependOn(hosted_lifecycle);
+    semantic_check.dependOn(release_externality);
     addSpecializationTest(
         b,
         "check-agent-boundary-equivalence",
@@ -261,7 +291,18 @@ pub fn build(b: *std.Build) void {
         boundary_module,
         target,
         optimize,
-        check,
+        semantic_check,
+    );
+    addSpecializationTest(
+        b,
+        "check-agent-performance",
+        "Prove generated and direct Boundary semantics have identical state, topology, and reducer cost",
+        "test/boundary_equivalence.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
     );
 
     const host_boundary_dependency = b.dependency("boundary", .{
@@ -336,8 +377,21 @@ pub fn build(b: *std.Build) void {
         "Check byte-identical native and wasm32 Agent Machine observations",
     );
     machine_native_wasm.dependOn(&compare_parity.step);
-    check.dependOn(machine_native_wasm);
+    semantic_check.dependOn(machine_native_wasm);
     no_runtime.dependOn(&run_wasm.step);
+
+    const release = b.step(
+        "check-agent-release",
+        "Run the Agent v1 release-owner semantic proof",
+    );
+    const release_receipt = b.addSystemCommand(&.{
+        "node",
+        "tools/check_agent_release.mjs",
+    });
+    release_receipt.step.dependOn(semantic_check);
+    release_receipt.step.dependOn(lint);
+    release.dependOn(&release_receipt.step);
+    check.dependOn(release);
 }
 
 fn addSharedBoundaryTest(

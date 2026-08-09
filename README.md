@@ -67,9 +67,9 @@ pub const Compiled = agent.compile(
 pub const Machine = Compiled.Machine;
 ```
 
-The package targets Zig 0.16.0 and exact Boundary v1.3.1. It exposes that same
-Boundary module to downstream build wiring so World and Agent can share one
-nominal package instance.
+The package targets Zig 0.16.0 and exact Boundary v1.3.1. Its clean-room proof
+closes four specialized Machines with exact World v3.1.0 and runs them through
+unchanged world-host v1.0.0 and the authenticated Effect v1 capability release.
 
 The agent definition is never loaded at runtime. A strategy is not a runtime
 plugin. The package contains no host, capability implementation, model client,

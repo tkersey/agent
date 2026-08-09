@@ -16,7 +16,7 @@ const machine_options: boundary.MachineOptions = .{
     .maximum_machine_fuel = 10_000_000,
 };
 
-const Generated = agent.compile(
+pub const Generated = agent.compile(
     Definition,
     Strategy,
     .{ .machine = machine_options },
@@ -426,11 +426,11 @@ const ReferenceBody = struct {
     };
 };
 
-const ReferenceProgram = boundary.program(
+pub const ReferenceProgram = boundary.program(
     "research-agent:agent.strategy.react.v1",
     ReferenceBody,
 );
-const ReferenceMachine = ReferenceProgram.compile(machine_options);
+pub const ReferenceMachine = ReferenceProgram.compile(machine_options);
 
 const Hasher = std.crypto.hash.sha2.Sha256;
 

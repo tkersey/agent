@@ -1,0 +1,24 @@
+.{
+    .name = .agent_world_consumer,
+    .version = "0.0.0",
+    .dependencies = .{
+        .agent = .{ .path = "../agent" },
+        .world = .{
+            .url = "https://github.com/tkersey/world/archive/refs/tags/v3.1.0.tar.gz",
+            .hash = "world-3.1.0-XXTUeKXGBgCQMg4JFpXgtEmlG5g--OYyW2DgfwYbVEXu",
+        },
+    },
+    .minimum_zig_version = "0.16.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "research_application.zig",
+        "research_reflective_application.zig",
+        "research_direct_application.zig",
+        "coding_application.zig",
+        "coding_react_application.zig",
+        "wasm_main.zig",
+        "run_lifecycle.mjs",
+    },
+    .fingerprint = 0xd0b250269ecc2cad,
+}

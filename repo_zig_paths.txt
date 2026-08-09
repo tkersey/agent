@@ -54,3 +54,10 @@ test/run_machine_native.zig
 test/shared_boundary.zig
 test/specialization_matrix.zig
 test/strategy_reflective.zig
+test/world_consumer/build.zig
+test/world_consumer/coding_application.zig
+test/world_consumer/coding_react_application.zig
+test/world_consumer/research_application.zig
+test/world_consumer/research_direct_application.zig
+test/world_consumer/research_reflective_application.zig
+test/world_consumer/wasm_main.zig

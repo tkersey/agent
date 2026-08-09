@@ -27,6 +27,8 @@ test/compile_fail/zero_turn_budget.zig
 test/compiler.zig
 test/custom_strategy.zig
 test/definition.zig
+test/external_consumer/build.zig
+test/external_consumer/main.zig
 test/flow.zig
 test/machine_native_wasm.zig
 test/malformed.zig

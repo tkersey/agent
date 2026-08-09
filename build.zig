@@ -40,6 +40,17 @@ pub fn build(b: *std.Build) void {
     no_runtime.dependOn(&no_runtime_gate.step);
     check.dependOn(no_runtime);
 
+    const external_consumer_gate = b.addSystemCommand(&.{
+        "sh",
+        "tools/check_external_consumer.sh",
+    });
+    const external_consumer = b.step(
+        "check-agent-external-consumer",
+        "Build one custom Agent from an archive in an empty directory",
+    );
+    external_consumer.dependOn(&external_consumer_gate.step);
+    check.dependOn(external_consumer);
+
     const format_check = b.addSystemCommand(&.{
         b.graph.zig_exe,
         "fmt",

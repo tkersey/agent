@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+clean_root=$(mktemp -d "${TMPDIR:-/tmp}/agent-external-consumer.XXXXXX")
+trap 'rm -rf "$clean_root"' EXIT
+
+mkdir "$clean_root/agent" "$clean_root/consumer"
+git -C "$repo_root" archive HEAD | tar -x -C "$clean_root/agent"
+cp -R "$repo_root/test/external_consumer/." "$clean_root/consumer/"
+
+test ! -e "$clean_root/boundary"
+cd "$clean_root/consumer"
+zig build check --summary all
+
+printf '%s\n' \
+    'clean_room_agent_definition=true' \
+    'clean_room_strategy_selection=true' \
+    'boundary_source_checkout_required=false' \
+    'sibling_checkout_required=false'

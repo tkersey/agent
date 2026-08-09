@@ -289,6 +289,7 @@ pub fn custom(comptime spec: anytype) type {
         );
     }
     const ConfigType = @TypeOf(spec.config);
+    rejectRuntimePointers(ConfigType);
     boundary.schema.assertPortable(ConfigType);
 
     return struct {
@@ -335,6 +336,23 @@ pub fn custom(comptime spec: anytype) type {
             return Implementation.Body(Definition, normalized_config);
         }
     };
+}
+
+fn rejectRuntimePointers(comptime T: type) void {
+    switch (@typeInfo(T)) {
+        .pointer => @compileError(
+            "agent RuntimeStrategy config cannot contain runtime callbacks or pointers",
+        ),
+        .array => |info| rejectRuntimePointers(info.child),
+        .optional => |info| rejectRuntimePointers(info.child),
+        .@"struct" => |info| inline for (info.fields) |field| {
+            rejectRuntimePointers(field.type);
+        },
+        .@"union" => |info| inline for (info.fields) |field| {
+            rejectRuntimePointers(field.type);
+        },
+        else => {},
+    }
 }
 
 pub fn failureNamed(

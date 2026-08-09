@@ -58,6 +58,26 @@ fn validateEffectSite(comptime Descriptor: type) void {
     }
 }
 
+fn rejectPointerBearingType(comptime T: type, comptime surface: []const u8) void {
+    switch (@typeInfo(T)) {
+        .pointer => @compileError("agent " ++ surface ++ " must be Boundary-portable"),
+        .array => |info| rejectPointerBearingType(info.child, surface),
+        .optional => |info| rejectPointerBearingType(info.child, surface),
+        .@"struct" => |info| inline for (info.fields) |field| {
+            rejectPointerBearingType(field.type, surface);
+        },
+        .@"union" => |info| inline for (info.fields) |field| {
+            rejectPointerBearingType(field.type, surface);
+        },
+        else => {},
+    }
+}
+
+fn assertDefinitionPortable(comptime T: type, comptime surface: []const u8) void {
+    rejectPointerBearingType(T, surface);
+    boundary.schema.assertPortable(T);
+}
+
 fn validateDefinition(comptime spec: anytype) void {
     if (spec.name.len == 0) @compileError("agent definition name must not be empty");
     if (spec.version.len == 0) @compileError("agent definition version must not be empty");
@@ -68,13 +88,14 @@ fn validateDefinition(comptime spec: anytype) void {
         @compileError("agent definition instructions exceed maximum_instructions_bytes");
     }
 
-    boundary.schema.assertPortable(spec.Goal);
-    boundary.schema.assertPortable(spec.Action);
-    boundary.schema.assertPortable(spec.Observation);
-    boundary.schema.assertPortable(spec.Result);
-    boundary.schema.assertPortable(spec.Failure);
-
     const action_info = taggedUnionInfo(spec.Action, "Action");
+
+    assertDefinitionPortable(spec.Goal, "Goal");
+    assertDefinitionPortable(spec.Observation, "Observation");
+    assertDefinitionPortable(spec.Result, "Result");
+    assertDefinitionPortable(spec.Failure, "Failure");
+    assertDefinitionPortable(spec.Action, "Action");
+
     if (spec.actions.len != action_info.fields.len) {
         @compileError("agent action algebra must contain exactly one descriptor per Action variant");
     }
@@ -100,6 +121,15 @@ fn validateDefinition(comptime spec: anytype) void {
     }
     if (spec.budget.maximum_decisions == 0) {
         @compileError("agent maximum_decisions must be positive");
+    }
+    if (spec.history.maximum_observations > std.math.maxInt(u32)) {
+        @compileError("agent history maximum_observations exceeds u32");
+    }
+    const history_overflow_name = @tagName(spec.history.overflow);
+    if (!std.mem.eql(u8, history_overflow_name, "fail") and
+        !std.mem.eql(u8, history_overflow_name, "drop_oldest"))
+    {
+        @compileError("agent history overflow policy is unsupported");
     }
 
     var final_count: usize = 0;

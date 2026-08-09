@@ -850,6 +850,9 @@ fn assertStrategy(comptime Definition: type, comptime Strategy: type) void {
     }
     Strategy.validate(Definition);
     const DecisionRequest = Strategy.DecisionRequestType(Definition);
+    if (@typeInfo(DecisionRequest) == .pointer) {
+        @compileError("agent RuntimeStrategy DecisionRequest must be Boundary-portable");
+    }
     boundary.schema.assertPortable(DecisionRequest);
     if (boundary.schema.maximumEncodedSize(DecisionRequest) >
         Definition.decision.maximum_request_bytes)

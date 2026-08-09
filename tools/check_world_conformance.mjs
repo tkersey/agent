@@ -17,7 +17,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const versions = Object.freeze({
-    agent: "1.0.0",
+    agent: "1.0.1",
     boundary: "1.3.1",
     world: "3.1.0",
     host: "1.0.0",
@@ -230,8 +230,8 @@ async function materializeAgent(stagingRoot, archiveRoot) {
             throw new Error("AGENT_V1_ARCHIVE_SHA256 is required with AGENT_V1_ARCHIVE");
         }
         const bytes = await loadArchive("AGENT_V1_ARCHIVE", null);
-        verifySha256("Agent v1.0.0", bytes, expectedSha256);
-        const archivePath = join(archiveRoot, "agent-v1.0.0.tar.gz");
+        verifySha256(`Agent v${versions.agent}`, bytes, expectedSha256);
+        const archivePath = join(archiveRoot, `agent-v${versions.agent}.tar.gz`);
         writeFileSync(archivePath, bytes);
         const packageHash = fetchPackageHash(options.zig, archivePath);
         const extractedRoot = join(dirname(stagingRoot), "agent-extracted");

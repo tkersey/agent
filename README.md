@@ -82,6 +82,8 @@ AgentDefinition and RuntimeStrategy specialization. Direct Boundary authoring
 remains available below this layer.
 
 See [docs/architecture.md](docs/architecture.md) and the typed Research and
-Coding definitions under [examples](examples).
+Coding definitions under [examples](examples). The authorized dependency
+correction from the initial targets to the released compatibility line is
+recorded in [docs/release_line.md](docs/release_line.md).
 
 Licensed under the MIT License.

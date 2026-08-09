@@ -5,11 +5,11 @@ receipt after the focused compiler, specialization, Boundary-equivalence,
 native/WASM, no-runtime, clean-room World, lifecycle, external-consumer,
 compile-fail, and lint proofs pass.
 
-After `v1.0.0` is tagged, run the released-artifact proof with the exact source
+After `v1.0.1` is tagged, run the released-artifact proof with the exact source
 archive and its verified SHA-256:
 
 ```sh
-AGENT_V1_ARCHIVE=/path/to/agent-v1.0.0.tar.gz \
+AGENT_V1_ARCHIVE=/path/to/agent-v1.0.1.tar.gz \
 AGENT_V1_ARCHIVE_SHA256=<sha256> \
 zig build check-agent-1-externality --summary all
 ```
@@ -19,3 +19,6 @@ builds the four specialization applications against exact released Boundary and
 World packages, copies only runtime artifacts to a second directory, removes Zig
 from runtime `PATH`, and drives the applications with exact released world-host
 and Effect v1 capability artifacts.
+
+The release-line provenance and the meaning of historical versus remaining
+upstream work are defined in [release_line.md](../../docs/release_line.md).

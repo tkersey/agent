@@ -9,6 +9,10 @@ pub const package_version = "0.0.0";
 pub const define = definition.define;
 /// Typed action-descriptor constructors.
 pub const action = @import("action.zig");
+/// Compiler-only structured authoring surface for RuntimeStrategies.
+pub const Flow = @import("flow.zig").Flow;
+/// Compiler-only typed symbolic value.
+pub const Value = @import("flow.zig").Value;
 
 pub const Counters = budget_types.Counters;
 pub const Budget = budget_types.Budget;

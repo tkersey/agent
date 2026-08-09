@@ -45,6 +45,17 @@ pub fn build(b: *std.Build) void {
         optimize,
         check,
     );
+    addFocusedTest(
+        b,
+        "check-agent-flow",
+        "Validate structured Flow lowering to Boundary Control IR",
+        "test/flow.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        check,
+    );
 }
 
 fn addFocusedTest(

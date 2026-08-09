@@ -1,6 +1,8 @@
 src/action.zig
 src/budget.zig
 src/definition.zig
+src/flow.zig
 src/root.zig
 test/action_algebra.zig
 test/definition.zig
+test/flow.zig

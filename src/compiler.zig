@@ -48,12 +48,18 @@ fn observationIndex(
     unreachable;
 }
 
+fn observationFieldCount(comptime Definition: type) usize {
+    return switch (@typeInfo(Definition.Observation)) {
+        .@"union" => |info| info.fields.len,
+        else => 0,
+    };
+}
+
 fn schemaTypes(
     comptime Definition: type,
     comptime Strategy: type,
-) [13 + Definition.action_count + @typeInfo(Definition.Observation).@"union".fields.len]type {
-    const observation_fields = @typeInfo(Definition.Observation).@"union".fields;
-    var result: [13 + Definition.action_count + observation_fields.len]type = undefined;
+) [13 + Definition.action_count + observationFieldCount(Definition)]type {
+    var result: [13 + Definition.action_count + observationFieldCount(Definition)]type = undefined;
     result[0..13].* = .{
         Definition.Goal,
         Definition.Action,
@@ -72,8 +78,11 @@ fn schemaTypes(
     inline for (@typeInfo(Definition.Action).@"union".fields, 0..) |field, index| {
         result[13 + index] = field.type;
     }
-    inline for (observation_fields, 0..) |field, index| {
-        result[13 + Definition.action_count + index] = field.type;
+    switch (@typeInfo(Definition.Observation)) {
+        .@"union" => |info| inline for (info.fields, 0..) |field, index| {
+            result[13 + Definition.action_count + index] = field.type;
+        },
+        else => {},
     }
     return result;
 }

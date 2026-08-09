@@ -16,6 +16,12 @@ pub fn build(b: *std.Build) void {
     });
     const boundary_module = boundary_dependency.module("boundary");
     agent_module.addImport("boundary", boundary_module);
+    const shared_boundary_module = b.addModule("boundary", .{
+        .root_source_file = b.path("src/boundary_package.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    shared_boundary_module.addImport("agent_boundary_upstream", boundary_module);
 
     const tests = b.addTest(.{ .root_module = agent_module });
     const run_tests = b.addRunArtifact(tests);
@@ -80,6 +86,17 @@ pub fn build(b: *std.Build) void {
         "test/definition.zig",
         agent_module,
         boundary_module,
+        target,
+        optimize,
+        check,
+    );
+    addSharedBoundaryTest(
+        b,
+        "check-agent-shared-boundary",
+        "Prove downstream consumers share Agent's exact Boundary module",
+        "test/shared_boundary.zig",
+        agent_module,
+        shared_boundary_module,
         target,
         optimize,
         check,
@@ -172,6 +189,31 @@ pub fn build(b: *std.Build) void {
         optimize,
         check,
     );
+}
+
+fn addSharedBoundaryTest(
+    b: *std.Build,
+    name: []const u8,
+    description: []const u8,
+    path: []const u8,
+    agent_module: *std.Build.Module,
+    shared_boundary_module: *std.Build.Module,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    aggregate: *std.Build.Step,
+) void {
+    const module = b.createModule(.{
+        .root_source_file = b.path(path),
+        .target = target,
+        .optimize = optimize,
+    });
+    module.addImport("agent", agent_module);
+    module.addImport("boundary", shared_boundary_module);
+    const tests = b.addTest(.{ .root_module = module });
+    const run_tests = b.addRunArtifact(tests);
+    const step = b.step(name, description);
+    step.dependOn(&run_tests.step);
+    aggregate.dependOn(step);
 }
 
 fn addExpectedCompileFailure(

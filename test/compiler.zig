@@ -175,6 +175,18 @@ test "drop_oldest keeps the newest bounded observation" {
         },
         else => return error.UnexpectedEffectSite,
     }
+    try resumeRequest(&state, decision_three, Action{ .tool = 3 });
+    switch (try Machine.step(state, &fuel)) {
+        .failed => |failure| switch (failure) {
+            .authored => |authored| try std.testing.expectEqual(
+                Failure.budget_exhausted,
+                authored,
+            ),
+            else => return error.UnexpectedMachineFailure,
+        },
+        .request => return error.ExcessEffectWasEmitted,
+        else => return error.UnexpectedMachineStep,
+    }
 }
 
 test "history fail policy rejects before emitting an excess effect" {

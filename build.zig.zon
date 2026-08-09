@@ -11,9 +11,14 @@
     .paths = .{
         "LICENSE",
         "README.md",
+        "repo_zig_paths.txt",
         "build.zig",
         "build.zig.zon",
         "src",
+        "docs",
+        "examples",
+        "test",
+        "tools",
     },
     .fingerprint = 0x268b9c9d84371874,
 }

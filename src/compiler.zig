@@ -957,6 +957,15 @@ pub fn compile(
         pub const DefinitionManifest = definition_manifest;
         pub const StrategyManifest = strategy_manifest;
         pub const Manifest = compiled_manifest;
+        pub const DefinitionManifestBytes = manifest.encodeDefinition(
+            DefinitionType,
+            definition_manifest,
+        );
+        pub const StrategyManifestBytes = manifest.encodeStrategy(
+            StrategyType,
+            strategy_manifest,
+        );
+        pub const ManifestBytes = manifest.encodeCompiled(compiled_manifest);
         pub const DecisionSite = decisionSiteType(DefinitionType, StrategyType);
         pub const ActionSites = effectSites(DefinitionType, StrategyType);
     };

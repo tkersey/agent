@@ -51,6 +51,8 @@ pub fn build(b: *std.Build) void {
     });
     const lint = b.step("lint", "Check Zig source formatting");
     lint.dependOn(&format_check.step);
+    const path_check = b.addSystemCommand(&.{ "sh", "tools/check_zig_paths.sh" });
+    lint.dependOn(&path_check.step);
 
     const compile_fail = b.step(
         "compile-fail",
@@ -167,6 +169,28 @@ pub fn build(b: *std.Build) void {
         optimize,
         check,
     );
+    addFocusedTest(
+        b,
+        "check-agent-budgets",
+        "Validate turn, decision, effect, child, and history budgets",
+        "test/budgets.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        check,
+    );
+    addFocusedTest(
+        b,
+        "check-agent-malformed",
+        "Reject malformed decision bytes without Agent state mutation",
+        "test/malformed.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        check,
+    );
     addSpecializationTest(
         b,
         "check-agent-specialization-matrix",
@@ -189,6 +213,103 @@ pub fn build(b: *std.Build) void {
         optimize,
         check,
     );
+    addSpecializationTest(
+        b,
+        "check-agent-lifecycle",
+        "Run typed Research and Coding lifecycles across all strategies",
+        "test/specialization_matrix.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        check,
+    );
+    addSpecializationTest(
+        b,
+        "check-agent-boundary-equivalence",
+        "Compare ReAct with an isolated direct Boundary Control IR reference",
+        "test/boundary_equivalence.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        check,
+    );
+
+    const host_boundary_dependency = b.dependency("boundary", .{
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+    const host_agent = b.createModule(.{
+        .root_source_file = b.path("src/root.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+    host_agent.addImport("boundary", host_boundary_dependency.module("boundary"));
+    const native_witness = b.createModule(.{
+        .root_source_file = b.path("test/machine_native_wasm.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+    native_witness.addImport("agent", host_agent);
+    const native_runner = b.createModule(.{
+        .root_source_file = b.path("test/run_machine_native.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+    native_runner.addImport("witness", native_witness);
+    const native_executable = b.addExecutable(.{
+        .name = "agent-machine-native-parity",
+        .root_module = native_runner,
+    });
+    const native_output = b.addRunArtifact(native_executable).captureStdOut(.{
+        .basename = "agent-machine-native-parity.bin",
+    });
+
+    const wasm_target = b.resolveTargetQuery(.{
+        .cpu_arch = .wasm32,
+        .os_tag = .freestanding,
+        .abi = .none,
+    });
+    const wasm_boundary_dependency = b.dependency("boundary", .{
+        .target = wasm_target,
+        .optimize = .ReleaseSmall,
+    });
+    const wasm_agent = b.createModule(.{
+        .root_source_file = b.path("src/root.zig"),
+        .target = wasm_target,
+        .optimize = .ReleaseSmall,
+    });
+    wasm_agent.addImport("boundary", wasm_boundary_dependency.module("boundary"));
+    const wasm_witness = b.createModule(.{
+        .root_source_file = b.path("test/machine_native_wasm.zig"),
+        .target = wasm_target,
+        .optimize = .ReleaseSmall,
+    });
+    wasm_witness.addImport("agent", wasm_agent);
+    const wasm_executable = b.addExecutable(.{
+        .name = "agent-machine-wasm-parity",
+        .root_module = wasm_witness,
+    });
+    wasm_executable.entry = .disabled;
+    wasm_executable.rdynamic = true;
+    wasm_executable.export_memory = true;
+    const run_wasm = b.addSystemCommand(&.{"node"});
+    run_wasm.addFileArg(b.path("test/run_machine_wasm.mjs"));
+    run_wasm.addFileArg(wasm_executable.getEmittedBin());
+    const wasm_output = run_wasm.captureStdOut(.{
+        .basename = "agent-machine-wasm-parity.bin",
+    });
+    const compare_parity = b.addSystemCommand(&.{ "cmp", "-s" });
+    compare_parity.addFileArg(native_output);
+    compare_parity.addFileArg(wasm_output);
+    const machine_native_wasm = b.step(
+        "check-agent-machine-native-wasm",
+        "Check byte-identical native and wasm32 Agent Machine observations",
+    );
+    machine_native_wasm.dependOn(&compare_parity.step);
+    check.dependOn(machine_native_wasm);
+    no_runtime.dependOn(&run_wasm.step);
 }
 
 fn addSharedBoundaryTest(

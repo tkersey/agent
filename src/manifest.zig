@@ -1,3 +1,4 @@
+const std = @import("std");
 const boundary = @import("boundary");
 const action = @import("action.zig");
 const identity = @import("identity.zig");
@@ -11,6 +12,7 @@ pub const DefinitionAction = struct {
     name_digest: [32]u8,
     description_digest: [32]u8,
     payload_schema_digest: [32]u8,
+    observation_name_digest: [32]u8,
     resume_schema_digest: [32]u8,
     effect_identity_digest: [32]u8,
 };
@@ -112,12 +114,17 @@ pub fn definition(comptime Definition: type) DefinitionManifest(Definition.actio
             identity.digestBytes(Descriptor.Site.semantic_identity)
         else
             [_]u8{0} ** 32;
+        const observation_name = if (Descriptor.kind == .effect)
+            Descriptor.observation_name
+        else
+            "";
         actions[index] = .{
             .kind = Descriptor.kind,
             .class = Descriptor.class,
             .name_digest = identity.digestBytes(Descriptor.name),
             .description_digest = identity.digestBytes(Descriptor.description),
             .payload_schema_digest = payload_digest,
+            .observation_name_digest = identity.digestBytes(observation_name),
             .resume_schema_digest = resume_digest,
             .effect_identity_digest = effect_identity_digest,
         };
@@ -126,6 +133,7 @@ pub fn definition(comptime Definition: type) DefinitionManifest(Definition.actio
         identity.bytes(&hasher, Descriptor.name);
         identity.bytes(&hasher, Descriptor.description);
         hashDigest(&hasher, payload_digest);
+        identity.bytes(&hasher, observation_name);
         hashDigest(&hasher, resume_digest);
         hashDigest(&hasher, effect_identity_digest);
     }
@@ -159,6 +167,209 @@ pub fn definition(comptime Definition: type) DefinitionManifest(Definition.actio
         .history_overflow = @intFromEnum(Definition.history.overflow),
         .semantic_digest = identity.finish(&hasher),
     };
+}
+
+fn Writer(comptime capacity: usize) type {
+    return struct {
+        buffer: [capacity]u8 = undefined,
+        cursor: usize = 0,
+
+        fn raw(self: *@This(), value: []const u8) void {
+            const end = std.math.add(usize, self.cursor, value.len) catch
+                @compileError("agent manifest encoded length overflows usize");
+            if (end > capacity) @compileError("agent manifest writer capacity mismatch");
+            @memcpy(self.buffer[self.cursor..end], value);
+            self.cursor = end;
+        }
+
+        fn u8Value(self: *@This(), value: u8) void {
+            self.raw(&.{value});
+        }
+
+        fn u32Value(self: *@This(), value: anytype) void {
+            var encoded: [4]u8 = undefined;
+            std.mem.writeInt(u32, &encoded, @intCast(value), .big);
+            self.raw(&encoded);
+        }
+
+        fn u64Value(self: *@This(), value: anytype) void {
+            var encoded: [8]u8 = undefined;
+            std.mem.writeInt(u64, &encoded, @intCast(value), .big);
+            self.raw(&encoded);
+        }
+
+        fn byteField(self: *@This(), value: []const u8) void {
+            self.u32Value(value.len);
+            self.raw(value);
+        }
+
+        fn digest(self: *@This(), value: [32]u8) void {
+            self.raw(&value);
+        }
+
+        fn finish(self: @This()) [capacity]u8 {
+            if (self.cursor != capacity) {
+                @compileError("agent manifest encoding left trailing capacity");
+            }
+            return self.buffer;
+        }
+    };
+}
+
+fn addLength(comptime left: usize, comptime right: usize) usize {
+    return std.math.add(usize, left, right) catch
+        @compileError("agent manifest encoded length overflows usize");
+}
+
+fn byteFieldLength(comptime value: []const u8) usize {
+    if (value.len > std.math.maxInt(u32)) {
+        @compileError("agent manifest byte field exceeds u32 length");
+    }
+    return addLength(4, value.len);
+}
+
+fn definitionEncodedLength(comptime Definition: type) usize {
+    var length: usize = 8;
+    length = addLength(length, byteFieldLength(package_version));
+    length = addLength(length, byteFieldLength(Definition.name));
+    length = addLength(length, byteFieldLength(Definition.version));
+    length = addLength(length, byteFieldLength(Definition.instructions));
+    length = addLength(length, 5 * 32);
+    length = addLength(length, byteFieldLength(Definition.decision.interface));
+    length = addLength(length, 16 + 4);
+    inline for (0..Definition.action_count) |index| {
+        const Descriptor = Definition.ActionDescriptor(index);
+        const observation_name = if (Descriptor.kind == .effect)
+            Descriptor.observation_name
+        else
+            "";
+        const effect_identity = if (Descriptor.kind == .effect)
+            Descriptor.Site.semantic_identity
+        else
+            "";
+        length = addLength(length, 2);
+        length = addLength(length, byteFieldLength(Descriptor.name));
+        length = addLength(length, byteFieldLength(Descriptor.description));
+        length = addLength(length, 32);
+        length = addLength(length, byteFieldLength(observation_name));
+        length = addLength(length, 32);
+        length = addLength(length, byteFieldLength(effect_identity));
+    }
+    return addLength(length, 16 + 4 + 1 + 32);
+}
+
+/// Canonical target-neutral Definition manifest bytes. This is executable
+/// provenance output, never an AgentDefinition input.
+pub fn encodeDefinition(
+    comptime Definition: type,
+    value: DefinitionManifest(Definition.action_count),
+) [definitionEncodedLength(Definition)]u8 {
+    var writer = Writer(definitionEncodedLength(Definition)){};
+    writer.raw(&value.magic);
+    writer.byteField(package_version);
+    writer.byteField(Definition.name);
+    writer.byteField(Definition.version);
+    writer.byteField(Definition.instructions);
+    writer.digest(value.goal_schema_digest);
+    writer.digest(value.action_schema_digest);
+    writer.digest(value.observation_schema_digest);
+    writer.digest(value.result_schema_digest);
+    writer.digest(value.failure_schema_digest);
+    writer.byteField(Definition.decision.interface);
+    writer.u64Value(value.maximum_request_bytes);
+    writer.u64Value(value.maximum_result_bytes);
+    writer.u32Value(Definition.action_count);
+    inline for (0..Definition.action_count) |index| {
+        const Descriptor = Definition.ActionDescriptor(index);
+        const entry = value.actions[index];
+        const observation_name = if (Descriptor.kind == .effect)
+            Descriptor.observation_name
+        else
+            "";
+        const effect_identity = if (Descriptor.kind == .effect)
+            Descriptor.Site.semantic_identity
+        else
+            "";
+        writer.u8Value(@intFromEnum(entry.kind));
+        writer.u8Value(@intFromEnum(entry.class));
+        writer.byteField(Descriptor.name);
+        writer.byteField(Descriptor.description);
+        writer.digest(entry.payload_schema_digest);
+        writer.byteField(observation_name);
+        writer.digest(entry.resume_schema_digest);
+        writer.byteField(effect_identity);
+    }
+    writer.u32Value(value.maximum_turns);
+    writer.u32Value(value.maximum_decisions);
+    writer.u32Value(value.maximum_effect_actions);
+    writer.u32Value(value.maximum_child_actions);
+    writer.u32Value(value.maximum_observations);
+    writer.u8Value(value.history_overflow);
+    writer.digest(value.semantic_digest);
+    return writer.finish();
+}
+
+fn strategyEncodedLength(comptime Strategy: type) usize {
+    const config_size = boundary.schema.encodedSize(
+        Strategy.Config,
+        Strategy.normalized_config,
+    ) catch @compileError("agent strategy config is not canonically encodable");
+    var length: usize = 8;
+    length = addLength(length, byteFieldLength(package_version));
+    length = addLength(length, byteFieldLength(Strategy.semantic_identity));
+    length = addLength(length, 4 + 32);
+    length = addLength(length, addLength(4, config_size));
+    return addLength(length, 4 * 32);
+}
+
+/// Canonical target-neutral RuntimeStrategy manifest bytes.
+pub fn encodeStrategy(
+    comptime Strategy: type,
+    value: StrategyManifest,
+) [strategyEncodedLength(Strategy)]u8 {
+    const config_maximum = boundary.schema.maximumEncodedSize(Strategy.Config);
+    var config_buffer: [config_maximum]u8 = undefined;
+    const config_length = boundary.schema.encode(
+        Strategy.Config,
+        Strategy.normalized_config,
+        &config_buffer,
+    ) catch unreachable;
+    var writer = Writer(strategyEncodedLength(Strategy)){};
+    writer.raw(&value.magic);
+    writer.byteField(package_version);
+    writer.byteField(Strategy.semantic_identity);
+    writer.u32Value(value.reflection_rounds);
+    writer.digest(value.config_schema_digest);
+    writer.byteField(config_buffer[0..config_length]);
+    writer.digest(value.decision_request_schema_digest);
+    writer.digest(value.state_schema_catalog_digest);
+    writer.digest(value.control_ir_digest);
+    writer.digest(value.semantic_digest);
+    return writer.finish();
+}
+
+fn compiledEncodedLength() usize {
+    var length: usize = 8 + 2 * 32 + 3 * 8 + 1;
+    length = addLength(length, byteFieldLength(boundary_package_identity));
+    return addLength(length, 4 + 3 * 32);
+}
+
+/// Canonical target-neutral CompiledAgent manifest bytes.
+pub fn encodeCompiled(value: CompiledManifest) [compiledEncodedLength()]u8 {
+    var writer = Writer(compiledEncodedLength()){};
+    writer.raw(&value.magic);
+    writer.digest(value.definition_digest);
+    writer.digest(value.strategy_digest);
+    writer.u64Value(value.maximum_frames);
+    writer.u64Value(value.maximum_state_bytes);
+    writer.u64Value(value.maximum_machine_fuel);
+    writer.u8Value(@intFromBool(value.debug_metadata));
+    writer.byteField(boundary_package_identity);
+    writer.u32Value(value.boundary_machine_abi);
+    writer.digest(value.boundary_machine_contract_digest);
+    writer.digest(value.residual_effect_catalog_digest);
+    writer.digest(value.semantic_digest);
+    return writer.finish();
 }
 
 pub fn strategy(

@@ -240,9 +240,19 @@ fn descriptorFor(
     unreachable;
 }
 
+fn normalizedDescriptors(comptime spec: anytype) [spec.actions.len]type {
+    var result: [spec.actions.len]type = undefined;
+    inline for (0..spec.actions.len) |index| {
+        result[index] = descriptorFor(spec, index);
+    }
+    return result;
+}
+
 /// Admit immutable typed comptime agent data and close its Action algebra.
 pub fn define(comptime spec: anytype) type {
+    @setEvalBranchQuota(1_000_000);
     comptime validateDefinition(spec);
+    const descriptors = normalizedDescriptors(spec);
 
     return struct {
         pub const name = spec.name;
@@ -279,7 +289,10 @@ pub fn define(comptime spec: anytype) type {
 
         /// Return the unique descriptor in Action declaration order.
         pub fn ActionDescriptor(comptime action_index: usize) type {
-            return descriptorFor(spec, action_index);
+            if (action_index >= descriptors.len) {
+                @compileError("agent Action descriptor index is out of bounds");
+            }
+            return descriptors[action_index];
         }
 
         /// Return the Action declaration index for one stable semantic name.

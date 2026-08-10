@@ -1113,7 +1113,6 @@ pub fn compile(
     comptime StrategyType: type,
     comptime options: anytype,
 ) type {
-    @setEvalBranchQuota(1_000_000 + 250_000 * DefinitionType.action_count);
     comptime assertStrategy(DefinitionType, StrategyType);
     if (!@hasField(@TypeOf(options), "machine")) {
         @compileError("agent.compile options require .machine");

@@ -8,6 +8,48 @@ import { pathToFileURL } from "node:url";
 const APPLICATION_ID = "26f5ab2b7e86994e5d3b234bb32447891906276853c094f0ac73def2b99610bb";
 const DECISION_CONTRACT_DIGEST = "3e2e4a1bd58b047dc9343964cfdc413174bb50a39d573e340cb963bf29127800";
 const WORKER_MEMORY_BYTES = 512 * 1024 * 1024;
+const FAILED_ATTEMPT_RECEIPT_BRAND = Symbol("failed-attempt-receipt");
+const LIVE_RECEIPT_BOOLEAN_FIELDS = Object.freeze([
+  "openai_responses_api", "openai_model_requested_present", "openai_model_returned_present",
+  "live_model_call_count_positive", "provider_usage_complete", "controlled_fixture_only", "interactive_approval",
+  "approval_before_mutation", "real_filesystem_reads", "real_test_process", "real_mutation",
+  "failing_test_observed", "passing_test_observed", "typed_final_result", "hidden_verifier_passed"
+]);
+
+export class LiveActualityAttemptError extends Error {
+  constructor(receipt) {
+    if (receipt?.[FAILED_ATTEMPT_RECEIPT_BRAND] !== true) {
+      throw new TypeError("owned_failed_attempt_receipt_required");
+    }
+    super(`live_actuality_failed:${receipt.failure_code}`);
+    this.name = "LiveActualityAttemptError";
+    this.receipt = Object.freeze(receipt);
+  }
+}
+
+class PublicLiveActualityFailure extends Error {
+  constructor(code) {
+    const admitted = admitPublicFailureCode(code);
+    super(admitted);
+    this.name = "PublicLiveActualityFailure";
+    this.code = admitted;
+  }
+}
+
+export async function runLiveCommand(options, dependencies = {}) {
+  const run = dependencies.run ?? runLiveActuality;
+  const write = dependencies.write ?? ((value) => process.stdout.write(value));
+  try {
+    const receipt = await run(options);
+    write(`${JSON.stringify(receipt, null, 2)}\n`);
+    return receipt;
+  } catch (error) {
+    if (error instanceof LiveActualityAttemptError) {
+      write(`${JSON.stringify(error.receipt, null, 2)}\n`);
+    }
+    throw error;
+  }
+}
 
 export async function runLiveActuality(options = {}) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -31,6 +73,18 @@ export async function runLiveActuality(options = {}) {
   const capabilitiesRoot = resolve(options.capabilitiesRoot ?? join(agentRoot, "../world-capabilities-actuality-v1"));
   const artifactRoot = resolve(options.artifactRoot ?? join(agentRoot, "zig-out/agent-actuality"));
   const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-actuality-live-"));
+  let context;
+  let genesisFrameId = null;
+  let terminalFrameId = null;
+  const interfaces = [];
+  const provider = {
+    returnedModels: new Set(),
+    responseIdDigests: [],
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0
+  };
+  const evidenceDigests = [];
   try {
     const host = await import(pathToFileURL(join(hostRoot, "src/v1/index.mjs")));
     const capabilities = await import(pathToFileURL(join(capabilitiesRoot, "src/v1/index.mjs")));
@@ -64,7 +118,7 @@ export async function runLiveActuality(options = {}) {
         ...capabilities.repositoryWorkspaceBindings()
       ]
     });
-    const context = {
+    context = {
       applicationId: APPLICATION_ID,
       workspaceRoot,
       workspaceRootReal: await realpath(workspaceRoot),
@@ -79,17 +133,8 @@ export async function runLiveActuality(options = {}) {
       policy: { repositoryActuality: true, openaiRepositoryRepair: true }
     };
 
-    const provider = {
-      returnedModels: new Set(),
-      responseIdDigests: [],
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0
-    };
-    const evidenceDigests = [];
-    const interfaces = [];
     let current = await controller.initialize("actuality-live-v1", "main", { initialArgsBytes });
-    const genesisFrameId = hex(current.frame.frameId);
+    genesisFrameId = hex(current.frame.frameId);
     while (current.frame.status === host.FrameStatus.needsEffect) {
       const request = current.frame.pendingEffect;
       const inspected = router.inspect(request.encodedBytes);
@@ -119,14 +164,6 @@ export async function runLiveActuality(options = {}) {
       }
       const resolved = await router.resolve(context, request.encodedBytes);
       evidenceDigests.push(sha256(resolved.result.encodedBytes));
-      if (inspected.bindingId === "repository-repair-openai.v1") {
-        const claims = JSON.parse(Buffer.from(resolved.result.hostClaims).toString("utf8"));
-        provider.returnedModels.add(claims.returnedModel);
-        provider.responseIdDigests.push(claims.responseIdSha256);
-        provider.inputTokens += claims.inputTokens;
-        provider.outputTokens += claims.outputTokens;
-        provider.totalTokens += claims.totalTokens;
-      }
       current = await controller.advance("actuality-live-v1", "main", {
         effectResult: resolved.result,
         effectMetadata: {
@@ -135,9 +172,18 @@ export async function runLiveActuality(options = {}) {
           recoveryClass: resolved.recoveryClass
         }
       });
+      terminalFrameId = hex(current.frame.frameId);
+      if (inspected.bindingId === "repository-repair-openai.v1") {
+        const claims = admitSuccessfulProviderClaims(resolved.result, capabilities.EffectStatus);
+        provider.returnedModels.add(claims.returnedModel);
+        provider.responseIdDigests.push(claims.responseIdSha256);
+        provider.inputTokens += claims.inputTokens;
+        provider.outputTokens += claims.outputTokens;
+        provider.totalTokens += claims.totalTokens;
+      }
     }
     if (current.frame.status !== host.FrameStatus.completed) {
-      throw new Error(`live_terminal_status:${current.frame.status}`);
+      throw new PublicLiveActualityFailure(`live_terminal_status_${current.frame.status}`);
     }
     const finalResult = capabilities.decodeRepositoryRepairFinalResult(current.frame.finalResultBytes);
     const changedPaths = parsePorcelain(await git(workspaceRoot, ["status", "--porcelain=v1"]));
@@ -157,6 +203,11 @@ export async function runLiveActuality(options = {}) {
       live_model_call_count: context.modelCalls ?? 0,
       live_model_call_count_positive: (context.modelCalls ?? 0) > 0,
       provider_failure_count: context.providerFailures ?? 0,
+      provider_usage_complete:
+        (context.modelCalls ?? 0) === provider.responseIdDigests.length,
+      known_input_tokens: provider.inputTokens,
+      known_output_tokens: provider.outputTokens,
+      known_total_tokens: provider.totalTokens,
       input_tokens: provider.inputTokens,
       output_tokens: provider.outputTokens,
       total_tokens: provider.totalTokens,
@@ -174,7 +225,7 @@ export async function runLiveActuality(options = {}) {
       hidden_verifier_passed: hiddenVerifierPassed,
       changed_paths: changedPaths,
       genesis_frame_id: genesisFrameId,
-      terminal_frame_id: hex(current.frame.frameId),
+      terminal_frame_id: terminalFrameId,
       ordered_interfaces: interfaces,
       public_receipt_contains_raw_prompt: false,
       public_receipt_contains_raw_repository_bytes: false,
@@ -185,6 +236,18 @@ export async function runLiveActuality(options = {}) {
     };
     assertLiveReceipt(receipt);
     return receipt;
+  } catch (error) {
+    if (error instanceof LiveActualityAttemptError) throw error;
+    throw new LiveActualityAttemptError(failedAttemptReceipt({
+      model,
+      context,
+      genesisFrameId,
+      terminalFrameId,
+      interfaces,
+      provider,
+      evidenceDigests,
+      failureCode: publicFailureCode(error)
+    }));
   } finally {
     prompt.close();
     if (!options.keepTemporary) await rm(temporaryRoot, { recursive: true, force: true });
@@ -192,17 +255,112 @@ export async function runLiveActuality(options = {}) {
   }
 }
 
+export function admitSuccessfulProviderClaims(result, effectStatus) {
+  if (!result || result.status !== effectStatus.ok) {
+    const status = Object.entries(effectStatus).find(([, value]) => value === result?.status)?.at(0) ?? "unknown";
+    throw new PublicLiveActualityFailure(`model_effect_${status}`);
+  }
+  if (!(result.hostClaims instanceof Uint8Array) || result.hostClaims.length === 0) {
+    throw new PublicLiveActualityFailure("model_host_claims_missing");
+  }
+  let claims;
+  try {
+    claims = JSON.parse(Buffer.from(result.hostClaims).toString("utf8"));
+  } catch {
+    throw new PublicLiveActualityFailure("model_host_claims_invalid");
+  }
+  if (!claims || typeof claims !== "object" || Array.isArray(claims) ||
+      typeof claims.returnedModel !== "string" || claims.returnedModel.length === 0 ||
+      typeof claims.responseIdSha256 !== "string" || !/^[0-9a-f]{64}$/.test(claims.responseIdSha256) ||
+      !safeCount(claims.inputTokens) || !safeCount(claims.outputTokens) || !safeCount(claims.totalTokens)) {
+    throw new PublicLiveActualityFailure("model_host_claims_invalid");
+  }
+  return claims;
+}
+
+export function failedAttemptReceipt({
+  model,
+  context,
+  genesisFrameId,
+  terminalFrameId,
+  interfaces,
+  provider,
+  evidenceDigests,
+  failureCode
+}) {
+  const modelCalls = context?.modelCalls ?? 0;
+  const providerFailures = context?.providerFailures ?? 0;
+  const knownInputTokens = provider?.inputTokens ?? 0;
+  const knownOutputTokens = provider?.outputTokens ?? 0;
+  const knownTotalTokens = provider?.totalTokens ?? 0;
+  const providerUsageComplete = modelCalls === (provider?.responseIdDigests?.length ?? 0);
+  const receipt = {
+    agent_actuality_format: 1,
+    agent_actuality_mode: "live",
+    application_id: APPLICATION_ID,
+    openai_responses_api: true,
+    openai_model_requested_present: typeof model === "string" && model.length > 0,
+    openai_store: false,
+    openai_tools_count: 0,
+    openai_api_key_recorded: false,
+    live_model_call_count: modelCalls,
+    provider_failure_count: providerFailures,
+    provider_usage_complete: providerUsageComplete,
+    openai_models_returned: [...(provider?.returnedModels ?? [])],
+    provider_response_id_digests: [...(provider?.responseIdDigests ?? [])],
+    known_input_tokens: knownInputTokens,
+    known_output_tokens: knownOutputTokens,
+    known_total_tokens: knownTotalTokens,
+    input_tokens: providerUsageComplete ? knownInputTokens : null,
+    output_tokens: providerUsageComplete ? knownOutputTokens : null,
+    total_tokens: providerUsageComplete ? knownTotalTokens : null,
+    controlled_fixture_only: true,
+    personal_repository_data_sent: false,
+    genesis_frame_id: genesisFrameId,
+    terminal_frame_id: terminalFrameId,
+    ordered_interfaces: [...interfaces],
+    public_receipt_contains_raw_prompt: false,
+    public_receipt_contains_raw_repository_bytes: false,
+    public_receipt_contains_raw_model_output: false,
+    private_evidence_digest: sha256(Buffer.from((evidenceDigests ?? []).join("\n"))),
+    failure_code: failureCode,
+    live_attempt_count: 1,
+    live_success_count: 0
+  };
+  Object.defineProperty(receipt, FAILED_ATTEMPT_RECEIPT_BRAND, { value: true });
+  return Object.freeze(receipt);
+}
+
+export function publicFailureCode(error) {
+  return error instanceof PublicLiveActualityFailure ? error.code : "live_actuality_failed";
+}
+
+function safeCount(value) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
 function assertLiveReceipt(receipt) {
-  for (const field of [
-    "openai_responses_api", "openai_model_requested_present", "openai_model_returned_present",
-    "live_model_call_count_positive", "controlled_fixture_only", "interactive_approval",
-    "approval_before_mutation", "real_filesystem_reads", "real_test_process", "real_mutation",
-    "failing_test_observed", "passing_test_observed", "typed_final_result", "hidden_verifier_passed"
-  ]) {
-    if (receipt[field] !== true) throw new Error(`live_receipt_failed:${field}`);
+  for (const field of LIVE_RECEIPT_BOOLEAN_FIELDS) {
+    if (receipt[field] !== true) {
+      throw new PublicLiveActualityFailure(`live_receipt_failed:${field}`);
+    }
   }
   if (receipt.live_model_call_count > 16 || receipt.changed_paths.length !== 1 ||
-      receipt.changed_paths.at(0) !== "src/range.mjs") throw new Error("live_receipt_bounds_failed");
+      receipt.changed_paths.at(0) !== "src/range.mjs") {
+    throw new PublicLiveActualityFailure("live_receipt_bounds_failed");
+  }
+}
+
+function admitPublicFailureCode(code) {
+  if (code === "model_host_claims_missing" || code === "model_host_claims_invalid" ||
+      code === "live_receipt_bounds_failed" ||
+      /^model_effect_(rejected|failed|deferred|cancelled|unknown)$/.test(code) ||
+      /^live_terminal_status_[0-4]$/.test(code)) return code;
+  if (typeof code === "string" && code.startsWith("live_receipt_failed:")) {
+    const field = code.slice("live_receipt_failed:".length);
+    if (LIVE_RECEIPT_BOOLEAN_FIELDS.includes(field)) return code;
+  }
+  return "live_actuality_failed";
 }
 
 function boundedDiff(before, after) {

@@ -8,9 +8,8 @@ import { pathToFileURL } from "node:url";
 const options = parseArguments(process.argv.slice(2));
 if (options.mode !== "deterministic") {
   if (options.mode === "live") {
-    const { runLiveActuality } = await import("./live.mjs");
-    const receipt = await runLiveActuality(options);
-    process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
+    const { runLiveCommand } = await import("./live.mjs");
+    await runLiveCommand(options);
     process.exit(0);
   }
   const { runLifecycleProof } = await import("./lifecycle.mjs");

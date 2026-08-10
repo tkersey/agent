@@ -80,6 +80,38 @@ fn reflectiveUnitConstantIndex(comptime Definition: type) u16 {
     };
 }
 
+fn generatedFlowLimits(
+    comptime Definition: type,
+    comptime is_reflective: bool,
+) flow_module.Limits {
+    const actions = Definition.action_count;
+    const scale: usize = if (is_reflective) 2 else 1;
+    return .{
+        .maximum_values = 128 + 64 * actions * scale,
+        .maximum_blocks = 16 + 16 * actions * scale,
+        .maximum_instructions = 64 + 64 * actions * scale,
+        .maximum_operands = 128 + 128 * actions * scale,
+        .maximum_parameters = 64 + 64 * actions * scale,
+        .maximum_requests = 8 + 8 * actions * scale,
+        .maximum_edge_arguments = 128 + 128 * actions * scale,
+    };
+}
+
+fn generatedCompilerLimits(
+    comptime Definition: type,
+    comptime is_reflective: bool,
+) boundary.ir.CompilerLimits {
+    const limits = generatedFlowLimits(Definition, is_reflective);
+    return .{
+        .maximum_values = limits.maximum_values,
+        .maximum_blocks = limits.maximum_blocks,
+        .maximum_constructors = limits.maximum_values * 2,
+        .maximum_environment_fields = limits.maximum_parameters,
+        .maximum_invariant_terms = limits.maximum_values,
+        .maximum_generated_operations = limits.maximum_instructions * 256,
+    };
+}
+
 fn schemaTypes(
     comptime Definition: type,
     comptime Strategy: type,
@@ -552,15 +584,7 @@ fn ReactLowering(comptime Definition: type, comptime Strategy: type) type {
     @setEvalBranchQuota(1_000_000);
     const Builder = flow_module.Flow(.{
         .schema_types = schemaTypes(Definition, Strategy),
-        .limits = flow_module.Limits{
-            .maximum_values = 256,
-            .maximum_blocks = 64,
-            .maximum_instructions = 128,
-            .maximum_operands = 256,
-            .maximum_parameters = 128,
-            .maximum_requests = 32,
-            .maximum_edge_arguments = 256,
-        },
+        .limits = generatedFlowLimits(Definition, false),
     });
     comptime var flow = Builder.init("agent-react-v1");
     const goal = flow.begin(Definition.Goal);
@@ -665,15 +689,7 @@ fn ReflectiveLowering(comptime Definition: type, comptime Strategy: type) type {
     @setEvalBranchQuota(10_000_000);
     const Builder = flow_module.Flow(.{
         .schema_types = schemaTypes(Definition, Strategy),
-        .limits = flow_module.Limits{
-            .maximum_values = 256,
-            .maximum_blocks = 64,
-            .maximum_instructions = 192,
-            .maximum_operands = 384,
-            .maximum_parameters = 192,
-            .maximum_requests = 32,
-            .maximum_edge_arguments = 384,
-        },
+        .limits = generatedFlowLimits(Definition, true),
     });
     comptime var flow = Builder.init("agent-reflective-react-v1");
     const goal = flow.begin(Definition.Goal);
@@ -963,14 +979,7 @@ fn ReactBody(comptime Definition: type, comptime Strategy: type) type {
         pub const effect_sites = effectSites(Definition, Strategy);
         pub const schema_types = Lowering.schema_types;
         pub const control_ir = Lowering.control_ir;
-        pub const compiler_limits: boundary.ir.CompilerLimits = .{
-            .maximum_values = 256,
-            .maximum_blocks = 64,
-            .maximum_constructors = 256,
-            .maximum_environment_fields = 128,
-            .maximum_invariant_terms = 64,
-            .maximum_generated_operations = 32_768,
-        };
+        pub const compiler_limits = generatedCompilerLimits(Definition, false);
     };
 }
 
@@ -1021,14 +1030,7 @@ fn ReflectiveBody(comptime Definition: type, comptime Strategy: type) type {
         pub const effect_sites = effectSites(Definition, Strategy);
         pub const schema_types = Lowering.schema_types;
         pub const control_ir = Lowering.control_ir;
-        pub const compiler_limits: boundary.ir.CompilerLimits = .{
-            .maximum_values = 256,
-            .maximum_blocks = 64,
-            .maximum_constructors = 256,
-            .maximum_environment_fields = 128,
-            .maximum_invariant_terms = 64,
-            .maximum_generated_operations = 32_768,
-        };
+        pub const compiler_limits = generatedCompilerLimits(Definition, true);
     };
 }
 

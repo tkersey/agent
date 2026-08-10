@@ -215,6 +215,8 @@ export async function runLiveActuality(options = {}) {
       controlled_fixture_only: true,
       personal_repository_data_sent: false,
       interactive_approval: context.approval?.approved === true,
+      approval_effect_request_id: context.approval?.requestId ?? null,
+      approval_proposal_digest: context.approval?.proposalDigest ?? null,
       approval_before_mutation: context.mutationsApplied === 1,
       real_filesystem_reads: (context.fileReads ?? 0) > 0,
       real_test_process: (context.testRuns ?? 0) > 0,
@@ -339,7 +341,7 @@ function safeCount(value) {
   return Number.isSafeInteger(value) && value >= 0;
 }
 
-function assertLiveReceipt(receipt) {
+export function assertLiveReceipt(receipt) {
   for (const field of LIVE_RECEIPT_BOOLEAN_FIELDS) {
     if (receipt[field] !== true) {
       throw new PublicLiveActualityFailure(`live_receipt_failed:${field}`);
@@ -349,11 +351,15 @@ function assertLiveReceipt(receipt) {
       receipt.changed_paths.at(0) !== "src/range.mjs") {
     throw new PublicLiveActualityFailure("live_receipt_bounds_failed");
   }
+  if (!/^[0-9a-f]{64}$/.test(receipt.approval_effect_request_id) ||
+      !/^[0-9a-f]{64}$/.test(receipt.approval_proposal_digest)) {
+    throw new PublicLiveActualityFailure("live_receipt_approval_binding_failed");
+  }
 }
 
 function admitPublicFailureCode(code) {
   if (code === "model_host_claims_missing" || code === "model_host_claims_invalid" ||
-      code === "live_receipt_bounds_failed" ||
+      code === "live_receipt_bounds_failed" || code === "live_receipt_approval_binding_failed" ||
       /^model_effect_(rejected|failed|deferred|cancelled|unknown)$/.test(code) ||
       /^live_terminal_status_[0-4]$/.test(code)) return code;
   if (typeof code === "string" && code.startsWith("live_receipt_failed:")) {

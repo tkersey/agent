@@ -273,6 +273,36 @@ pub fn build(b: *std.Build) void {
     actuality_release.dependOn(actuality_negative);
     semantic_check.dependOn(actuality_negative);
 
+    const actuality_live_receipt_command = b.addSystemCommand(&.{
+        "bun",
+        "tools/actuality/verify-live-receipt.mjs",
+    });
+    if (b.args) |args| actuality_live_receipt_command.addArgs(args);
+    const actuality_live_receipt = b.step(
+        "check-agent-actuality-v1-live-receipt",
+        "Verify a live receipt against exact release archives and application WASM",
+    );
+    actuality_live_receipt.dependOn(&actuality_live_receipt_command.step);
+    const actuality_live_receipt_test_command = b.addSystemCommand(&.{
+        "bun",
+        "--cwd",
+        "test",
+        "test",
+        "actuality_live_receipt.test.mjs",
+    });
+    const actuality_live_receipt_test = b.step(
+        "check-agent-actuality-live-receipt-negative",
+        "Reject forged or incomplete live actuality receipts",
+    );
+    actuality_live_receipt_test.dependOn(&actuality_live_receipt_test_command.step);
+    semantic_check.dependOn(actuality_live_receipt_test);
+    const actuality_v1 = b.step(
+        "check-agent-actuality-v1",
+        "Run network-free Actuality proof and verify the exact released live receipt",
+    );
+    actuality_v1.dependOn(actuality_release);
+    actuality_v1.dependOn(actuality_live_receipt);
+
     const external_consumer_gate = b.addSystemCommand(&.{
         "sh",
         "tools/check_external_consumer.sh",

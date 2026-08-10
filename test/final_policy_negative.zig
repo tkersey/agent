@@ -2,14 +2,16 @@ const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
 
+const TestRequest = struct { suite: u8 };
 const TestResult = struct { passed: bool };
-const RunTests = boundary.effect.site(1, "repo.test.v1", void, TestResult);
-const Action = union(enum) { run_tests: void, final: u32, abort: Failure };
+const RunTests = boundary.effect.site(1, "repo.test.v1", TestRequest, TestResult);
+const Action = union(enum) { run_tests: TestRequest, final: u32, abort: Failure };
 const Observation = union(enum) { run_tests: TestResult };
 const Failure = enum {
     budget_exhausted,
     history_overflow,
     arithmetic_overflow,
+    invalid_index,
     invalid_variant,
     capacity_exceeded,
     authored_abort,
@@ -98,7 +100,7 @@ test "final policy rejects final after a failing test observation" {
         .request => |request| request,
         else => return error.UnexpectedMachineStep,
     };
-    try resumeRequest(&state, decision, Action{ .run_tests = {} });
+    try resumeRequest(&state, decision, Action{ .run_tests = .{ .suite = 0 } });
     const test_request = switch (try Machine.step(state, &fuel)) {
         .request => |request| request,
         else => return error.UnexpectedMachineStep,

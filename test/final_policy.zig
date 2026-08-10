@@ -15,6 +15,7 @@ const Failure = enum {
     budget_exhausted,
     history_overflow,
     arithmetic_overflow,
+    invalid_index,
     invalid_variant,
     capacity_exceeded,
     authored_abort,

@@ -243,7 +243,7 @@ async function materializeAgent(stagingRoot, archiveRoot) {
     const stagedAgent = join(stagingRoot, "agent");
     mkdirSync(stagedAgent);
     const surfaces = declaredPackageSurfaces(readFileSync(join(sourceRoot, "build.zig.zon"), "utf8"));
-    const files = gitFiles(surfaces);
+    const files = packageFiles(surfaces);
     if (files.length === 0) throw new Error("Agent candidate package is empty");
     for (const relative of files) {
         const source = join(sourceRoot, relative);
@@ -344,7 +344,10 @@ function declaredPackageSurfaces(zon) {
     return [...body.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
 }
 
-function gitFiles(surfaces) {
+function packageFiles(surfaces) {
+    if (!existsSync(join(sourceRoot, ".git"))) {
+        return surfaces.flatMap((surface) => filesUnder(surface)).sort();
+    }
     const result = run("git", [
         "ls-files",
         "--cached",
@@ -355,6 +358,19 @@ function gitFiles(surfaces) {
         ...surfaces,
     ], sourceRoot, false);
     return result.stdout.split("\0").filter(Boolean).sort();
+}
+
+function filesUnder(relative) {
+    const absolute = join(sourceRoot, relative);
+    if (!existsSync(absolute)) return [];
+    if (statSync(absolute).isFile()) return [relative];
+    return readdirSync(absolute, { withFileTypes: true })
+        .sort((left, right) => left.name.localeCompare(right.name))
+        .flatMap((entry) => {
+            const child = join(relative, entry.name);
+            if (entry.isDirectory()) return filesUnder(child);
+            return entry.isFile() ? [child] : [];
+        });
 }
 
 function useMaterializedBoundary(path) {

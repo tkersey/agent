@@ -225,6 +225,28 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic_check,
     );
+    addActualityDefinitionTest(
+        b,
+        "check-agent-decision-contract",
+        "Project the exact Action algebra into deterministic strict JSON",
+        "test/decision_contract.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addActualityDefinitionTest(
+        b,
+        "check-agent-decision-contract-negative",
+        "Prove the projected JSON contract closes every Action object",
+        "test/decision_contract.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
     addFocusedTest(
         b,
         "check-agent-strategy-reflective",

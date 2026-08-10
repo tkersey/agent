@@ -17,6 +17,8 @@ pub const Flow = @import("flow.zig").Flow;
 pub const Value = @import("flow.zig").Value;
 /// Reusable compile-time RuntimeStrategies.
 pub const strategy = @import("strategy.zig");
+/// Provider-neutral projections of the closed decision Action algebra.
+pub const decision = @import("decision_contract.zig");
 /// Specialize one definition and strategy into an ordinary Boundary Machine.
 pub const compile = @import("compiler.zig").compile;
 

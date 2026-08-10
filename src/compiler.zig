@@ -56,6 +56,30 @@ fn observationFieldCount(comptime Definition: type) usize {
     };
 }
 
+fn hasVoidEffectAction(comptime Definition: type) bool {
+    inline for (0..Definition.action_count) |index| {
+        const Descriptor = Definition.ActionDescriptor(index);
+        if (Descriptor.kind == .effect and Descriptor.Site.Payload == void) {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn reactUnitConstantIndex(comptime Definition: type) u16 {
+    return switch (Definition.final_policy) {
+        .none => 12,
+        .latest_observation_bool => 13,
+    };
+}
+
+fn reflectiveUnitConstantIndex(comptime Definition: type) u16 {
+    return switch (Definition.final_policy) {
+        .none => 14,
+        .latest_observation_bool => 15,
+    };
+}
+
 fn schemaTypes(
     comptime Definition: type,
     comptime Strategy: type,
@@ -103,10 +127,14 @@ fn emitEffectAction(
     action_value: flow_module.Value(Definition.Action),
     state_value: flow_module.Value(strategy.State(Definition)),
     loop_block: anytype,
+    comptime unit_constant_index: u16,
 ) void {
     const Descriptor = Definition.ActionDescriptor(action_index);
     const Site = ActionSite(Definition, action_index);
-    const payload = flow.sumExtract(action_index, action_value);
+    const payload = if (Descriptor.Site.Payload == void)
+        flow.constant(void, unit_constant_index)
+    else
+        flow.sumExtract(action_index, action_value);
     const counters = flow.productExtract(2, state_value);
     const effect_actions = flow.productExtract(2, counters);
     const maximum_effect_actions = flow.constant(
@@ -349,6 +377,7 @@ fn emitAction(
     state_value: flow_module.Value(strategy.State(Definition)),
     loop_block: anytype,
     comptime invalid_variant_constant: u16,
+    comptime unit_constant_index: u16,
 ) void {
     const Descriptor = Definition.ActionDescriptor(action_index);
     switch (Descriptor.kind) {
@@ -368,6 +397,7 @@ fn emitAction(
             action_value,
             state_value,
             loop_block,
+            unit_constant_index,
         ),
     }
 }
@@ -467,6 +497,7 @@ fn emitDispatch(
     state_value: flow_module.Value(strategy.State(Definition)),
     loop_block: anytype,
     comptime invalid_variant_constant: u16,
+    comptime unit_constant_index: u16,
 ) void {
     var current_action = action_value;
     var current_state = state_value;
@@ -480,6 +511,7 @@ fn emitDispatch(
                 current_state,
                 loop_block,
                 invalid_variant_constant,
+                unit_constant_index,
             );
         } else {
             const selected = flow.block(.segment, .{
@@ -507,6 +539,7 @@ fn emitDispatch(
                 selected_values[1],
                 loop_block,
                 invalid_variant_constant,
+                unit_constant_index,
             );
             const next_values = flow.enter(next);
             current_action = next_values[0];
@@ -616,7 +649,15 @@ fn ReactLowering(comptime Definition: type, comptime Strategy: type) type {
     );
     const action_value = decision.value;
     const dispatch_state = next_state;
-    emitDispatch(Definition, &flow, action_value, dispatch_state, loop_block, 12);
+    emitDispatch(
+        Definition,
+        &flow,
+        action_value,
+        dispatch_state,
+        loop_block,
+        12,
+        reactUnitConstantIndex(Definition),
+    );
     return flow.finish(Definition.Result);
 }
 
@@ -874,6 +915,7 @@ fn ReflectiveLowering(comptime Definition: type, comptime Strategy: type) type {
         counted_dispatch_state,
         loop_block,
         14,
+        reflectiveUnitConstantIndex(Definition),
     );
     return flow.finish(Definition.Result);
 }
@@ -884,7 +926,7 @@ fn ReactBody(comptime Definition: type, comptime Strategy: type) type {
         pub const InitialArgs = Definition.Goal;
         pub const Result = Definition.Result;
         pub const Failure = Definition.Failure;
-        pub const constants = switch (Definition.final_policy) {
+        pub const constants = (switch (Definition.final_policy) {
             .none => .{
                 strategy.instructionsValue(Definition),
                 strategy.catalogValue(Definition),
@@ -914,7 +956,10 @@ fn ReactBody(comptime Definition: type, comptime Strategy: type) type {
                 strategy.failureNamed(Definition, "history_overflow"),
                 strategy.failureNamed(Definition, "invalid_variant"),
             },
-        };
+        }) ++ if (hasVoidEffectAction(Definition))
+            .{@as(void, {})}
+        else
+            .{};
         pub const effect_sites = effectSites(Definition, Strategy);
         pub const schema_types = Lowering.schema_types;
         pub const control_ir = Lowering.control_ir;
@@ -935,7 +980,7 @@ fn ReflectiveBody(comptime Definition: type, comptime Strategy: type) type {
         pub const InitialArgs = Definition.Goal;
         pub const Result = Definition.Result;
         pub const Failure = Definition.Failure;
-        pub const constants = switch (Definition.final_policy) {
+        pub const constants = (switch (Definition.final_policy) {
             .none => .{
                 strategy.instructionsValue(Definition),
                 strategy.catalogValue(Definition),
@@ -969,7 +1014,10 @@ fn ReflectiveBody(comptime Definition: type, comptime Strategy: type) type {
                 Strategy.normalized_config.reflection_rounds,
                 strategy.failureNamed(Definition, "invalid_variant"),
             },
-        };
+        }) ++ if (hasVoidEffectAction(Definition))
+            .{@as(void, {})}
+        else
+            .{};
         pub const effect_sites = effectSites(Definition, Strategy);
         pub const schema_types = Lowering.schema_types;
         pub const control_ir = Lowering.control_ir;

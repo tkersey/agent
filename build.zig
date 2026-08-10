@@ -205,6 +205,17 @@ pub fn build(b: *std.Build) void {
     );
     addFocusedTest(
         b,
+        "check-agent-void-effect-action",
+        "Lower void Action payloads as ordinary Boundary unit effects",
+        "test/void_effect_action.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addFocusedTest(
+        b,
         "check-agent-strategy-reflective",
         "Validate Reflective ReAct specialization",
         "test/strategy_reflective.zig",

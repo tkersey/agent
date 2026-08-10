@@ -60,7 +60,7 @@ function evidence() {
     expectedWorldHostArchiveSha256: H,
     expectedCapabilitiesArchiveSha256: I,
     expectedApplicationWasmSha256: W,
-    expectedAgentVersion: "1.1.1",
+    expectedAgentVersion: "1.1.2",
     expectedBoundaryVersion: "1.3.2",
     expectedWorldVersion: "3.1.1",
     expectedWorldHostVersion: "1.0.0",
@@ -73,7 +73,7 @@ function validReceipt() {
     format: "agent-actuality-receipt-v1",
     mode: "live",
     components: {
-      agent: { version: "1.1.1", archiveSha256: H },
+      agent: { version: "1.1.2", archiveSha256: H },
       boundary: { version: "1.3.2", archiveSha256: H, machineAbi: 2 },
       world: { version: "3.1.1", archiveSha256: H, applicationAbi: 1, frameVersion: 1 },
       worldHost: { version: "1.0.0", archiveSha256: H, runtimeChanged: false },

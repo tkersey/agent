@@ -3,7 +3,7 @@ const boundary = @import("boundary");
 const action = @import("action.zig");
 const identity = @import("identity.zig");
 
-pub const package_version = "1.1.1";
+pub const package_version = "1.1.2";
 pub const boundary_package_identity = "tkersey/boundary@v1.3.2";
 
 pub const DefinitionAction = struct {

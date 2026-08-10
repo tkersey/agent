@@ -12,7 +12,7 @@ Implementation produced two concrete obstructions:
   wiring, but its owned application provenance still recorded Boundary v1.0.0.
 
 The release owner authorized the smallest upstream correction releases. The
-released compatibility line is Boundary v1.3.1 and World v3.1.0. Boundary
+current compatibility line is Boundary v1.3.2 and World v3.1.1. Boundary
 Machine ABI v2, World Application ABI v1, World Frame v1, Effect protocol v1,
 world-host v1.0.0, and the one-pending-effect restriction remain unchanged.
 
@@ -27,3 +27,7 @@ Release receipts distinguish two temporal claims:
 Agent v1.0.1 supersedes the ambiguous v1.0.0 receipt wording. This correction
 changes provenance metadata and its reproducible proof; it does not introduce
 another runtime, reducer, state format, ABI, Frame, or capability implementation.
+
+Agent v1.1.0 adds the repository-repair actuality witness and provider-neutral
+decision contract while preserving the same Machine, Application, Frame, and
+Effect protocol ABIs.

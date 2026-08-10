@@ -1,0 +1,8 @@
+{
+  "name": "repository-repair-v1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test"
+  }
+}

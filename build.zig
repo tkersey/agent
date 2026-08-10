@@ -1,4 +1,7 @@
 const std = @import("std");
+const world_build = @import("world");
+
+pub const ActualityApplication = @import("actuality/application.zig").Application;
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -23,6 +26,133 @@ pub fn build(b: *std.Build) void {
     });
     shared_boundary_module.addImport("agent_boundary_upstream", boundary_module);
 
+    const actuality_application = world_build.addApplicationWasm(b, .{
+        .name = "repository-repair-actuality",
+        .root_source_file = b.path("build.zig"),
+        .application_decl = "ActualityApplication",
+        .stack_size_bytes = 384 * 1024 * 1024,
+        .memory = .{
+            .initial_pages = 8192,
+            .maximum_pages = 8192,
+        },
+        .install_human_readable_manifest = true,
+    });
+    const install_actuality_wasm = b.addInstallFile(
+        actuality_application.wasm.getEmittedBin(),
+        "agent-actuality/repository-repair-actuality.world.wasm",
+    );
+    install_actuality_wasm.step.dependOn(actuality_application.check_step);
+    const install_actuality_manifest = b.addInstallFile(
+        actuality_application.manifest,
+        "agent-actuality/repository-repair-actuality.manifest.bin",
+    );
+    install_actuality_manifest.step.dependOn(actuality_application.check_step);
+    b.getInstallStep().dependOn(&install_actuality_wasm.step);
+    b.getInstallStep().dependOn(&install_actuality_manifest.step);
+
+    const contract_actuality = b.createModule(.{
+        .root_source_file = b.path("examples/repository_repair_actuality.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+    contract_actuality.addImport("agent", agent_module);
+    contract_actuality.addImport("boundary", boundary_module);
+    contract_actuality.addImport(
+        "repository_repair_definition",
+        b.createModule(.{
+            .root_source_file = b.path("actuality/repository_repair_definition.zig"),
+            .target = b.graph.host,
+            .optimize = .ReleaseSafe,
+        }),
+    );
+    const contract_emitter_module = b.createModule(.{
+        .root_source_file = b.path("actuality/emit_decision_contract.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+    contract_emitter_module.addImport("agent", agent_module);
+    contract_emitter_module.addImport("repository_repair_actuality", contract_actuality);
+    const contract_emitter = b.addExecutable(.{
+        .name = "emit-repository-repair-decision-contract",
+        .root_module = contract_emitter_module,
+    });
+    const contract_output = b.addRunArtifact(contract_emitter).captureStdOut(.{
+        .basename = "repository-repair-decision-contract.json",
+    });
+    const install_contract = b.addInstallFile(
+        contract_output,
+        "agent-actuality/repository-repair-decision-contract.json",
+    );
+    b.getInstallStep().dependOn(&install_contract.step);
+
+    const contract_digest_emitter_module = b.createModule(.{
+        .root_source_file = b.path("actuality/emit_decision_contract_digest.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+    contract_digest_emitter_module.addImport("agent", agent_module);
+    contract_digest_emitter_module.addImport("repository_repair_actuality", contract_actuality);
+    const contract_digest_emitter = b.addExecutable(.{
+        .name = "emit-repository-repair-decision-contract-digest",
+        .root_module = contract_digest_emitter_module,
+    });
+    const contract_digest_output = b.addRunArtifact(contract_digest_emitter).captureStdOut(.{
+        .basename = "repository-repair-decision-contract.sha256",
+    });
+    const install_contract_digest = b.addInstallFile(
+        contract_digest_output,
+        "agent-actuality/repository-repair-decision-contract.sha256",
+    );
+    b.getInstallStep().dependOn(&install_contract_digest.step);
+
+    const first_request_module = b.createModule(.{
+        .root_source_file = b.path("actuality/emit_first_decision_request.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+    first_request_module.addImport("agent", agent_module);
+    first_request_module.addImport("boundary", boundary_module);
+    first_request_module.addImport("repository_repair_actuality", contract_actuality);
+    const first_request_emitter = b.addExecutable(.{
+        .name = "emit-repository-repair-first-decision-request",
+        .root_module = first_request_module,
+    });
+    const run_first_request = b.addRunArtifact(first_request_emitter);
+    const first_request_output = run_first_request.captureStdOut(.{
+        .basename = "repository-repair-first-decision-request.bin",
+    });
+    const emit_first_request = b.step(
+        "emit-agent-actuality-first-request",
+        "Emit the first canonical repository-repair decision request",
+    );
+    emit_first_request.dependOn(&run_first_request.step);
+    const install_first_request = b.addInstallFile(
+        first_request_output,
+        "agent-actuality/repository-repair-first-decision-request.bin",
+    );
+    b.getInstallStep().dependOn(&install_first_request.step);
+
+    const initial_args_module = b.createModule(.{
+        .root_source_file = b.path("actuality/emit_initial_args.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+    initial_args_module.addImport("agent", agent_module);
+    initial_args_module.addImport("boundary", boundary_module);
+    initial_args_module.addImport("repository_repair_actuality", contract_actuality);
+    const initial_args_emitter = b.addExecutable(.{
+        .name = "emit-repository-repair-initial-args",
+        .root_module = initial_args_module,
+    });
+    const initial_args_output = b.addRunArtifact(initial_args_emitter).captureStdOut(.{
+        .basename = "initial-args.bin",
+    });
+    const install_initial_args = b.addInstallFile(
+        initial_args_output,
+        "agent-actuality/initial-args.bin",
+    );
+    b.getInstallStep().dependOn(&install_initial_args.step);
+
     const tests = b.addTest(.{ .root_module = agent_module });
     const run_tests = b.addRunArtifact(tests);
 
@@ -43,6 +173,90 @@ pub fn build(b: *std.Build) void {
     );
     no_runtime.dependOn(&no_runtime_gate.step);
     semantic_check.dependOn(no_runtime);
+
+    const actuality_world = b.step(
+        "check-agent-actuality-world",
+        "Compile the exact World v3.1.1 repository-repair application",
+    );
+    actuality_world.dependOn(actuality_application.check_step);
+    semantic_check.dependOn(actuality_world);
+    const actuality_wasm = b.step(
+        "check-agent-actuality-wasm",
+        "Prove the repository-repair application WASM is import-free and bounded",
+    );
+    actuality_wasm.dependOn(actuality_application.check_step);
+    semantic_check.dependOn(actuality_wasm);
+
+    const actuality_runtime_gates = [_]struct {
+        name: []const u8,
+        description: []const u8,
+        mode: []const u8,
+    }{
+        .{
+            .name = "check-agent-actuality-deterministic",
+            .description = "Repair the real fixture repository through deterministic capabilities",
+            .mode = "deterministic",
+        },
+        .{
+            .name = "check-agent-actuality-retry",
+            .description = "Reuse the persisted mutation result and reproduce byte-identical child Frame bytes",
+            .mode = "retry",
+        },
+        .{
+            .name = "check-agent-actuality-replay",
+            .description = "Replay the completed actuality run with zero fresh external effects",
+            .mode = "replay",
+        },
+        .{
+            .name = "check-agent-actuality-branch",
+            .description = "Produce two distinct valid children from one decision Frame",
+            .mode = "branch",
+        },
+        .{
+            .name = "check-agent-actuality-migrate",
+            .description = "Export and continue the actuality run under fresh receiver policy",
+            .mode = "migrate",
+        },
+    };
+    const actuality_lifecycle = b.step(
+        "check-agent-actuality-lifecycle",
+        "Prove retry, replay, branching, and migration for the actuality application",
+    );
+    const actuality_release = b.step(
+        "check-agent-actuality-release",
+        "Run every network-free Agent Actuality v1 proof",
+    );
+    for (actuality_runtime_gates) |gate| {
+        const command = b.addSystemCommand(&.{
+            "bun",
+            "tools/actuality/run.mjs",
+            "--mode",
+            gate.mode,
+        });
+        command.step.dependOn(&install_actuality_wasm.step);
+        command.step.dependOn(&install_actuality_manifest.step);
+        command.step.dependOn(&install_initial_args.step);
+        const step = b.step(gate.name, gate.description);
+        step.dependOn(&command.step);
+        actuality_release.dependOn(step);
+        if (!std.mem.eql(u8, gate.mode, "deterministic")) {
+            actuality_lifecycle.dependOn(step);
+        }
+    }
+    const actuality_live_command = b.addSystemCommand(&.{
+        "bun",
+        "tools/actuality/run.mjs",
+        "--mode",
+        "live",
+    });
+    actuality_live_command.step.dependOn(&install_actuality_wasm.step);
+    actuality_live_command.step.dependOn(&install_actuality_manifest.step);
+    actuality_live_command.step.dependOn(&install_initial_args.step);
+    const actuality_live = b.step(
+        "check-agent-actuality-live",
+        "Run the explicit OpenAI plus interactive-approval actuality proof",
+    );
+    actuality_live.dependOn(&actuality_live_command.step);
 
     const external_consumer_gate = b.addSystemCommand(&.{
         "sh",
@@ -101,6 +315,8 @@ pub fn build(b: *std.Build) void {
         .{ .path = "test/compile_fail/strategy_decision_request_nonportable.zig", .message = "agent RuntimeStrategy DecisionRequest must be Boundary-portable" },
         .{ .path = "test/compile_fail/strategy_undeclared_effect.zig", .message = "agent RuntimeStrategy Body effect row must equal the closed decision and Action effect row" },
         .{ .path = "test/compile_fail/strategy_runtime_callback.zig", .message = "agent RuntimeStrategy config cannot contain runtime callbacks or pointers" },
+        .{ .path = "test/compile_fail/final_policy_missing_observation.zig", .message = "agent final policy Observation has no variant named 'run_tests'" },
+        .{ .path = "test/compile_fail/final_policy_non_boolean_field.zig", .message = "agent final policy observation field must be bool" },
     }) |witness| {
         addExpectedCompileFailure(
             b,
@@ -173,6 +389,72 @@ pub fn build(b: *std.Build) void {
         "check-agent-strategy-react",
         "Validate ReAct specialization",
         "test/compiler.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addFocusedTest(
+        b,
+        "check-agent-final-policy",
+        "Prove final completion after the required typed observation",
+        "test/final_policy.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addFocusedTest(
+        b,
+        "check-agent-final-policy-negative",
+        "Reject final completion before the required typed observation",
+        "test/final_policy_negative.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addFocusedTest(
+        b,
+        "check-agent-void-effect-action",
+        "Lower void Action payloads as ordinary Boundary unit effects",
+        "test/void_effect_action.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addActualityDefinitionTest(
+        b,
+        "check-agent-actuality-definition",
+        "Compile the typed repository repair AgentDefinition",
+        "test/actuality_definition.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addActualityDefinitionTest(
+        b,
+        "check-agent-decision-contract",
+        "Project the exact Action algebra into deterministic strict JSON",
+        "test/decision_contract.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addActualityDefinitionTest(
+        b,
+        "check-agent-decision-contract-negative",
+        "Prove the projected JSON contract closes every Action object",
+        "test/decision_contract.zig",
         agent_module,
         boundary_module,
         target,
@@ -265,7 +547,7 @@ pub fn build(b: *std.Build) void {
     world_conformance_gate.addArg(b.graph.zig_exe);
     const world_conformance = b.step(
         "check-agent-world-conformance",
-        "Close four Agent Machines with exact released World v3.1.0",
+        "Close four Agent Machines with exact released World v3.1.1",
     );
     world_conformance.dependOn(&world_conformance_gate.step);
     const hosted_lifecycle = b.step(
@@ -499,6 +781,46 @@ fn addFocusedTest(
     });
     module.addImport("agent", agent_module);
     module.addImport("boundary", boundary_module);
+    const tests = b.addTest(.{ .root_module = module });
+    const run_tests = b.addRunArtifact(tests);
+    const step = b.step(name, description);
+    step.dependOn(&run_tests.step);
+    aggregate.dependOn(step);
+}
+
+fn addActualityDefinitionTest(
+    b: *std.Build,
+    name: []const u8,
+    description: []const u8,
+    path: []const u8,
+    agent_module: *std.Build.Module,
+    boundary_module: *std.Build.Module,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    aggregate: *std.Build.Step,
+) void {
+    const actuality = b.createModule(.{
+        .root_source_file = b.path("examples/repository_repair_actuality.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    actuality.addImport("agent", agent_module);
+    actuality.addImport("boundary", boundary_module);
+    const actuality_definition = b.createModule(.{
+        .root_source_file = b.path("actuality/repository_repair_definition.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    actuality.addImport("repository_repair_definition", actuality_definition);
+
+    const module = b.createModule(.{
+        .root_source_file = b.path(path),
+        .target = target,
+        .optimize = optimize,
+    });
+    module.addImport("agent", agent_module);
+    module.addImport("boundary", boundary_module);
+    module.addImport("repository_repair_actuality", actuality);
     const tests = b.addTest(.{ .root_module = module });
     const run_tests = b.addRunArtifact(tests);
     const step = b.step(name, description);

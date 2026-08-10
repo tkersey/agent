@@ -1,0 +1,40 @@
+const agent = @import("agent");
+const boundary = @import("boundary");
+
+const Actuality = @import("repository_repair_definition")
+    .RepositoryRepair(agent, boundary);
+
+pub const Path = Actuality.Path;
+pub const GoalText = Actuality.GoalText;
+pub const QueryText = Actuality.QueryText;
+pub const ExcerptText = Actuality.ExcerptText;
+pub const FileText = Actuality.FileText;
+pub const ProcessText = Actuality.ProcessText;
+pub const SummaryText = Actuality.SummaryText;
+pub const DigestHex = Actuality.DigestHex;
+pub const Goal = Actuality.Goal;
+pub const EntryKind = Actuality.EntryKind;
+pub const TreeEntry = Actuality.TreeEntry;
+pub const ListResult = Actuality.ListResult;
+pub const ReadRequest = Actuality.ReadRequest;
+pub const ReadResult = Actuality.ReadResult;
+pub const SearchRequest = Actuality.SearchRequest;
+pub const SearchHit = Actuality.SearchHit;
+pub const SearchResult = Actuality.SearchResult;
+pub const TestSuite = Actuality.TestSuite;
+pub const TestRequest = Actuality.TestRequest;
+pub const TestResult = Actuality.TestResult;
+pub const ReplaceRequest = Actuality.ReplaceRequest;
+pub const ReplaceApplied = Actuality.ReplaceApplied;
+pub const ReplaceDenied = Actuality.ReplaceDenied;
+pub const ReplaceConflict = Actuality.ReplaceConflict;
+pub const ReplaceOutcome = Actuality.ReplaceOutcome;
+pub const FinalResult = Actuality.FinalResult;
+pub const Failure = Actuality.Failure;
+pub const Action = Actuality.Action;
+pub const Observation = Actuality.Observation;
+pub const instructions = Actuality.instructions;
+pub const Definition = Actuality.Definition;
+pub const Strategy = Actuality.Strategy;
+pub const Compiled = Actuality.Compiled;
+pub const Machine = Actuality.Machine;

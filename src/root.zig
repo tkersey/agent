@@ -3,18 +3,22 @@ const budget_types = @import("budget.zig");
 const definition = @import("definition.zig");
 
 /// Agent package bootstrap version.
-pub const package_version = "1.0.1";
+pub const package_version = "1.1.0";
 
 /// Define immutable typed comptime agent data and close its Action algebra.
 pub const define = definition.define;
 /// Typed action-descriptor constructors.
 pub const action = @import("action.zig");
+/// Closed compile-time final-result preconditions.
+pub const final_policy = @import("final_policy.zig");
 /// Compiler-only structured authoring surface for RuntimeStrategies.
 pub const Flow = @import("flow.zig").Flow;
 /// Compiler-only typed symbolic value.
 pub const Value = @import("flow.zig").Value;
 /// Reusable compile-time RuntimeStrategies.
 pub const strategy = @import("strategy.zig");
+/// Provider-neutral projections of the closed decision Action algebra.
+pub const decision = @import("decision_contract.zig");
 /// Specialize one definition and strategy into an ordinary Boundary Machine.
 pub const compile = @import("compiler.zig").compile;
 
@@ -30,7 +34,7 @@ pub const DecisionPhase = budget_types.DecisionPhase;
 
 comptime {
     if (!@hasDecl(boundary, "program")) {
-        @compileError("agent requires Boundary v1.3.1 program compilation");
+        @compileError("agent requires Boundary v1.3.2 program compilation");
     }
 }
 

@@ -67,8 +67,8 @@ pub const Compiled = agent.compile(
 pub const Machine = Compiled.Machine;
 ```
 
-The package targets Zig 0.16.0 and exact Boundary v1.3.1. Its clean-room proof
-closes four specialized Machines with exact World v3.1.0 and runs them through
+The package targets Zig 0.16.0 and exact Boundary v1.3.2. Its clean-room proof
+closes four specialized Machines with exact World v3.1.1 and runs them through
 unchanged world-host v1.0.0 and the authenticated Effect v1 capability release.
 
 The agent definition is never loaded at runtime. A strategy is not a runtime
@@ -85,5 +85,25 @@ See [docs/architecture.md](docs/architecture.md) and the typed Research and
 Coding definitions under [examples](examples). The authorized dependency
 correction from the initial targets to the released compatibility line is
 recorded in [docs/release_line.md](docs/release_line.md).
+
+Agent v1.1.0 also contains the `repository-repair-actuality` witness: the
+compiled Machine reads a controlled repository, observes a failing Bun test,
+requests one digest-bound replacement, and returns success only after the real
+test passes. The ordinary release proof is deterministic and network-free:
+
+```sh
+zig build check-agent-actuality-release
+```
+
+The OpenAI lane is explicit, requires `OPENAI_API_KEY`, `OPENAI_MODEL`, and an
+interactive approval, and is never part of `zig build check`:
+
+```sh
+OPENAI_API_KEY=... OPENAI_MODEL=... zig build check-agent-actuality-live
+```
+
+See [Actuality](docs/actuality.md), the
+[decision contract](docs/decision_contract.md), and
+[live model data handling](docs/live_model_data.md).
 
 Licensed under the MIT License.

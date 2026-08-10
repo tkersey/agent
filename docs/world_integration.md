@@ -7,11 +7,11 @@ Action, Observation, budget, history, or strategy knowledge.
 
 Agent has no World source dependency. Clean consumers materialize exact Agent
 and World archives independently and resolve both packages to the same exact
-Boundary v1.3.1 release. Agent exports its Boundary module for downstream
+Boundary v1.3.2 release. Agent exports its Boundary module for downstream
 source construction; World admits the resulting Machine structurally as ABI
 v2 without weakening its own Machine admission.
 
-Exact released World v3.1.0 pins and records Boundary v1.3.1. The clean-room
+Exact released World v3.1.1 pins and records Boundary v1.3.2. The clean-room
 conformance gate compiles all four Research/Coding by ReAct/Reflective
 specializations into import-free application WASM, then drives Research ReAct
 and Coding Reflective through exact world-host v1.0.0. Application ABI v1,

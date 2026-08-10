@@ -5,11 +5,11 @@ receipt after the focused compiler, specialization, Boundary-equivalence,
 native/WASM, no-runtime, clean-room World, lifecycle, external-consumer,
 compile-fail, and lint proofs pass.
 
-After `v1.0.1` is tagged, run the released-artifact proof with the exact source
+After `v1.1.0` is tagged, run the released-artifact proof with the exact source
 archive and its verified SHA-256:
 
 ```sh
-AGENT_V1_ARCHIVE=/path/to/agent-v1.0.1.tar.gz \
+AGENT_V1_ARCHIVE=/path/to/agent-v1.1.0.tar.gz \
 AGENT_V1_ARCHIVE_SHA256=<sha256> \
 zig build check-agent-1-externality --summary all
 ```

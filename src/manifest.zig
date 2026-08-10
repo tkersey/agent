@@ -3,8 +3,8 @@ const boundary = @import("boundary");
 const action = @import("action.zig");
 const identity = @import("identity.zig");
 
-pub const package_version = "1.0.1";
-pub const boundary_package_identity = "tkersey/boundary@v1.3.1";
+pub const package_version = "1.1.0";
+pub const boundary_package_identity = "tkersey/boundary@v1.3.2";
 
 pub const DefinitionAction = struct {
     kind: action.Kind,
@@ -143,6 +143,18 @@ pub fn definition(comptime Definition: type) DefinitionManifest(Definition.actio
     identity.unsigned(&hasher, Definition.budget.maximum_child_actions);
     identity.unsigned(&hasher, Definition.history.maximum_observations);
     identity.unsigned(&hasher, @intFromEnum(Definition.history.overflow));
+    identity.unsigned(
+        &hasher,
+        @intFromEnum(std.meta.activeTag(Definition.final_policy)),
+    );
+    switch (Definition.final_policy) {
+        .none => {},
+        .latest_observation_bool => |requirement| {
+            identity.bytes(&hasher, requirement.observation_name);
+            identity.bytes(&hasher, requirement.field_name);
+            identity.unsigned(&hasher, @intFromBool(requirement.expected));
+        },
+    }
     return .{
         .magic = "AGT_DEF1".*,
         .package_version_digest = identity.digestBytes(package_version),

@@ -88,6 +88,7 @@ fn normalizedFinalPolicy(comptime spec: anytype) final_policy_types.Policy {
 }
 
 fn validateDefinition(comptime spec: anytype) void {
+    @setEvalBranchQuota(1_000_000);
     if (spec.name.len == 0) @compileError("agent definition name must not be empty");
     if (spec.version.len == 0) @compileError("agent definition version must not be empty");
     if (spec.instructions.len == 0) {

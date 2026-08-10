@@ -17,6 +17,11 @@ receipt field. The public receipt records model identities, token counts, and
 hashed response IDs but excludes prompts, repository bytes, raw model output,
 approval input, and credentials.
 
+When a provider failure does not expose redacted usage claims, the failed-attempt
+receipt sets aggregate token counts to `null`, retains any prior successful calls
+under `known_*_tokens`, and records `provider_usage_complete: false`. It never
+represents unavailable billable usage as zero.
+
 `store: false` is not a zero-retention claim. Provider abuse-monitoring and
 account-level data controls may still apply. Use this lane only with the
 checked-in fixture data.

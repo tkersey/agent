@@ -42,7 +42,7 @@ describe("live actuality failure receipts", () => {
     };
     const receipt = failedAttemptReceipt({
       model: "gpt-5.6-sol",
-      context: { modelCalls: 1, providerFailures: 1 },
+      context: { modelCalls: 2, providerFailures: 1 },
       genesisFrameId: "a".repeat(64),
       terminalFrameId: null,
       interfaces: ["model.decide.v1"],
@@ -55,7 +55,9 @@ describe("live actuality failure receipts", () => {
     expect(receipt.provider_failure_count).toBe(1);
     expect(receipt.openai_models_returned).toEqual(["gpt-5.6-sol-2026-08-10"]);
     expect(receipt.provider_response_id_digests).toEqual(["b".repeat(64)]);
-    expect(receipt.total_tokens).toBe(120);
+    expect(receipt.provider_usage_complete).toBe(false);
+    expect(receipt.known_total_tokens).toBe(120);
+    expect(receipt.total_tokens).toBeNull();
     expect(receipt.private_evidence_digest).toMatch(/^[0-9a-f]{64}$/);
     expect(receipt.failure_code).toBe("model_effect_failed");
     expect(receipt.openai_api_key_recorded).toBe(false);
@@ -85,5 +87,22 @@ describe("live actuality failure receipts", () => {
       write: (value) => { output += value; }
     })).rejects.toThrow("live_actuality_failed:model_effect_failed");
     expect(JSON.parse(output)).toEqual(receipt);
+  });
+
+  test("attempt errors require a module-owned receipt", () => {
+    expect(() => new LiveActualityAttemptError({ failure_code: "model_effect_failed" }))
+      .toThrow("owned_failed_attempt_receipt_required");
+  });
+
+  test("the command never serializes receipt-shaped arbitrary errors", async () => {
+    const error = Object.assign(new Error("provider response"), {
+      receipt: { apiKey: "secret", rawModelOutput: "private" }
+    });
+    let output = "";
+    await expect(runLiveCommand({}, {
+      run: async () => { throw error; },
+      write: (value) => { output += value; }
+    })).rejects.toBe(error);
+    expect(output).toBe("");
   });
 });

@@ -214,6 +214,17 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic_check,
     );
+    addActualityDefinitionTest(
+        b,
+        "check-agent-actuality-definition",
+        "Compile the typed repository repair AgentDefinition",
+        "test/actuality_definition.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
     addFocusedTest(
         b,
         "check-agent-strategy-reflective",
@@ -534,6 +545,40 @@ fn addFocusedTest(
     });
     module.addImport("agent", agent_module);
     module.addImport("boundary", boundary_module);
+    const tests = b.addTest(.{ .root_module = module });
+    const run_tests = b.addRunArtifact(tests);
+    const step = b.step(name, description);
+    step.dependOn(&run_tests.step);
+    aggregate.dependOn(step);
+}
+
+fn addActualityDefinitionTest(
+    b: *std.Build,
+    name: []const u8,
+    description: []const u8,
+    path: []const u8,
+    agent_module: *std.Build.Module,
+    boundary_module: *std.Build.Module,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    aggregate: *std.Build.Step,
+) void {
+    const actuality = b.createModule(.{
+        .root_source_file = b.path("examples/repository_repair_actuality.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    actuality.addImport("agent", agent_module);
+    actuality.addImport("boundary", boundary_module);
+
+    const module = b.createModule(.{
+        .root_source_file = b.path(path),
+        .target = target,
+        .optimize = optimize,
+    });
+    module.addImport("agent", agent_module);
+    module.addImport("boundary", boundary_module);
+    module.addImport("repository_repair_actuality", actuality);
     const tests = b.addTest(.{ .root_module = module });
     const run_tests = b.addRunArtifact(tests);
     const step = b.step(name, description);

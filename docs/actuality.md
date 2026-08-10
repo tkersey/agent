@@ -39,7 +39,7 @@ from the exact Agent archive:
 ```sh
 zig build check-agent-actuality-v1-live-receipt -- \
   --receipt "$RECEIPT" --receipt-sha256 "$RECEIPT_SHA256" \
-  --agent-archive "$AGENT_ARCHIVE" --agent-archive-sha256 "$AGENT_SHA256" --agent-version 1.1.1 \
+  --agent-archive "$AGENT_ARCHIVE" --agent-archive-sha256 "$AGENT_SHA256" --agent-version 1.1.2 \
   --boundary-archive "$BOUNDARY_ARCHIVE" --boundary-archive-sha256 "$BOUNDARY_SHA256" --boundary-version 1.3.2 \
   --world-archive "$WORLD_ARCHIVE" --world-archive-sha256 "$WORLD_SHA256" --world-version 3.1.1 \
   --world-host-archive "$WORLD_HOST_ARCHIVE" --world-host-archive-sha256 "$WORLD_HOST_SHA256" --world-host-version 1.0.0 \

@@ -1,6 +1,6 @@
 .{
     .name = .agent,
-    .version = "1.1.1",
+    .version = "1.1.2",
     .dependencies = .{
         .boundary = .{
             .url = "https://github.com/tkersey/boundary/archive/refs/tags/v1.3.2.tar.gz",

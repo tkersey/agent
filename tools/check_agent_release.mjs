@@ -1,15 +1,15 @@
 import { readFileSync } from "node:fs";
 
-const expectedVersion = "1.1.1";
+const expectedVersion = "1.1.2";
 const zon = readFileSync("build.zig.zon", "utf8");
 const root = readFileSync("src/root.zig", "utf8");
 const manifest = readFileSync("src/manifest.zig", "utf8");
 const releaseLine = readFileSync("docs/release_line.md", "utf8");
 
 for (const [path, source, pattern] of [
-    ["build.zig.zon", zon, /\.version = "1\.1\.1"/],
-    ["src/root.zig", root, /package_version = "1\.1\.1"/],
-    ["src/manifest.zig", manifest, /package_version = "1\.1\.1"/],
+    ["build.zig.zon", zon, /\.version = "1\.1\.2"/],
+    ["src/root.zig", root, /package_version = "1\.1\.2"/],
+    ["src/manifest.zig", manifest, /package_version = "1\.1\.2"/],
     ["docs/release_line.md", releaseLine, /initial exact targets were Boundary v1\.0\.0 and World v3\.0\.0/],
     ["docs/release_line.md", releaseLine, /current compatibility line is Boundary v1\.3\.2 and World v3\.1\.1/],
 ]) {

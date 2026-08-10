@@ -98,17 +98,21 @@ fn generatedFlowLimits(
 }
 
 fn generatedCompilerLimits(
-    comptime Definition: type,
+    comptime control_ir: boundary.ir.Program,
     comptime is_reflective: bool,
 ) boundary.ir.CompilerLimits {
-    const limits = generatedFlowLimits(Definition, is_reflective);
+    const defaults: boundary.ir.CompilerLimits = .{};
     return .{
-        .maximum_values = limits.maximum_values,
-        .maximum_blocks = limits.maximum_blocks,
-        .maximum_constructors = limits.maximum_values * 2,
-        .maximum_environment_fields = limits.maximum_parameters,
-        .maximum_invariant_terms = limits.maximum_values,
-        .maximum_generated_operations = limits.maximum_instructions * 256,
+        .maximum_values = @max(
+            control_ir.value_types.len,
+            defaults.maximum_environment_fields,
+        ),
+        .maximum_blocks = control_ir.blocks.len,
+        .maximum_constructors = defaults.maximum_constructors,
+        .maximum_environment_fields = defaults.maximum_environment_fields,
+        .maximum_invariant_terms = defaults.maximum_invariant_terms +
+            @intFromBool(is_reflective),
+        .maximum_generated_operations = defaults.maximum_generated_operations,
     };
 }
 
@@ -979,7 +983,7 @@ fn ReactBody(comptime Definition: type, comptime Strategy: type) type {
         pub const effect_sites = effectSites(Definition, Strategy);
         pub const schema_types = Lowering.schema_types;
         pub const control_ir = Lowering.control_ir;
-        pub const compiler_limits = generatedCompilerLimits(Definition, false);
+        pub const compiler_limits = generatedCompilerLimits(control_ir, false);
     };
 }
 
@@ -1030,7 +1034,7 @@ fn ReflectiveBody(comptime Definition: type, comptime Strategy: type) type {
         pub const effect_sites = effectSites(Definition, Strategy);
         pub const schema_types = Lowering.schema_types;
         pub const control_ir = Lowering.control_ir;
-        pub const compiler_limits = generatedCompilerLimits(Definition, true);
+        pub const compiler_limits = generatedCompilerLimits(control_ir, true);
     };
 }
 

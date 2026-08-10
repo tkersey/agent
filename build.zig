@@ -1,4 +1,7 @@
 const std = @import("std");
+const world_build = @import("world");
+
+pub const ActualityApplication = @import("actuality/application.zig").Application;
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -23,6 +26,30 @@ pub fn build(b: *std.Build) void {
     });
     shared_boundary_module.addImport("agent_boundary_upstream", boundary_module);
 
+    const actuality_application = world_build.addApplicationWasm(b, .{
+        .name = "repository-repair-actuality",
+        .root_source_file = b.path("build.zig"),
+        .application_decl = "ActualityApplication",
+        .stack_size_bytes = 4 * 1024 * 1024,
+        .memory = .{
+            .initial_pages = 640,
+            .maximum_pages = 640,
+        },
+        .install_human_readable_manifest = true,
+    });
+    const install_actuality_wasm = b.addInstallFile(
+        actuality_application.wasm.getEmittedBin(),
+        "agent-actuality/repository-repair-actuality.world.wasm",
+    );
+    install_actuality_wasm.step.dependOn(actuality_application.check_step);
+    const install_actuality_manifest = b.addInstallFile(
+        actuality_application.manifest,
+        "agent-actuality/repository-repair-actuality.manifest.bin",
+    );
+    install_actuality_manifest.step.dependOn(actuality_application.check_step);
+    b.getInstallStep().dependOn(&install_actuality_wasm.step);
+    b.getInstallStep().dependOn(&install_actuality_manifest.step);
+
     const tests = b.addTest(.{ .root_module = agent_module });
     const run_tests = b.addRunArtifact(tests);
 
@@ -43,6 +70,19 @@ pub fn build(b: *std.Build) void {
     );
     no_runtime.dependOn(&no_runtime_gate.step);
     semantic_check.dependOn(no_runtime);
+
+    const actuality_world = b.step(
+        "check-agent-actuality-world",
+        "Compile the exact World v3.1.1 repository-repair application",
+    );
+    actuality_world.dependOn(actuality_application.check_step);
+    semantic_check.dependOn(actuality_world);
+    const actuality_wasm = b.step(
+        "check-agent-actuality-wasm",
+        "Prove the repository-repair application WASM is import-free and bounded",
+    );
+    actuality_wasm.dependOn(actuality_application.check_step);
+    semantic_check.dependOn(actuality_wasm);
 
     const external_consumer_gate = b.addSystemCommand(&.{
         "sh",
@@ -333,7 +373,7 @@ pub fn build(b: *std.Build) void {
     world_conformance_gate.addArg(b.graph.zig_exe);
     const world_conformance = b.step(
         "check-agent-world-conformance",
-        "Close four Agent Machines with exact released World v3.1.0",
+        "Close four Agent Machines with exact released World v3.1.1",
     );
     world_conformance.dependOn(&world_conformance_gate.step);
     const hosted_lifecycle = b.step(
@@ -592,6 +632,12 @@ fn addActualityDefinitionTest(
     });
     actuality.addImport("agent", agent_module);
     actuality.addImport("boundary", boundary_module);
+    const actuality_definition = b.createModule(.{
+        .root_source_file = b.path("actuality/repository_repair_definition.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    actuality.addImport("repository_repair_definition", actuality_definition);
 
     const module = b.createModule(.{
         .root_source_file = b.path(path),

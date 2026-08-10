@@ -34,7 +34,7 @@ pub const DecisionPhase = budget_types.DecisionPhase;
 
 comptime {
     if (!@hasDecl(boundary, "program")) {
-        @compileError("agent requires Boundary v1.3.1 program compilation");
+        @compileError("agent requires Boundary v1.3.2 program compilation");
     }
 }
 

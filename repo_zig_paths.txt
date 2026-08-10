@@ -1,3 +1,5 @@
+actuality/application.zig
+actuality/repository_repair_definition.zig
 build.zig
 examples/coding_agent.zig
 examples/repository_repair_actuality.zig

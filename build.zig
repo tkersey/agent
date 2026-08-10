@@ -258,6 +258,19 @@ pub fn build(b: *std.Build) void {
     );
     actuality_live.dependOn(&actuality_live_command.step);
 
+    const actuality_negative_command = b.addSystemCommand(&.{
+        "bun",
+        "test",
+        "test/actuality_live_failure.test.mjs",
+    });
+    const actuality_negative = b.step(
+        "check-agent-actuality-negative",
+        "Prove live capability failures emit redacted attempt receipts and fail closed",
+    );
+    actuality_negative.dependOn(&actuality_negative_command.step);
+    actuality_release.dependOn(actuality_negative);
+    semantic_check.dependOn(actuality_negative);
+
     const external_consumer_gate = b.addSystemCommand(&.{
         "sh",
         "tools/check_external_consumer.sh",

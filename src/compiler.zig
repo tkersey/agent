@@ -1033,6 +1033,7 @@ fn ReflectiveBody(comptime Definition: type, comptime Strategy: type) type {
 }
 
 fn assertStrategy(comptime Definition: type, comptime Strategy: type) void {
+    @setEvalBranchQuota(1_000_000);
     if (!@hasDecl(Strategy, "semantic_identity") or
         !@hasDecl(Strategy, "kind") or
         !@hasDecl(Strategy, "validate") or

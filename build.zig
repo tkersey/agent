@@ -101,6 +101,8 @@ pub fn build(b: *std.Build) void {
         .{ .path = "test/compile_fail/strategy_decision_request_nonportable.zig", .message = "agent RuntimeStrategy DecisionRequest must be Boundary-portable" },
         .{ .path = "test/compile_fail/strategy_undeclared_effect.zig", .message = "agent RuntimeStrategy Body effect row must equal the closed decision and Action effect row" },
         .{ .path = "test/compile_fail/strategy_runtime_callback.zig", .message = "agent RuntimeStrategy config cannot contain runtime callbacks or pointers" },
+        .{ .path = "test/compile_fail/final_policy_missing_observation.zig", .message = "agent final policy Observation has no variant named 'run_tests'" },
+        .{ .path = "test/compile_fail/final_policy_non_boolean_field.zig", .message = "agent final policy observation field must be bool" },
     }) |witness| {
         addExpectedCompileFailure(
             b,
@@ -173,6 +175,28 @@ pub fn build(b: *std.Build) void {
         "check-agent-strategy-react",
         "Validate ReAct specialization",
         "test/compiler.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addFocusedTest(
+        b,
+        "check-agent-final-policy",
+        "Prove final completion after the required typed observation",
+        "test/final_policy.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addFocusedTest(
+        b,
+        "check-agent-final-policy-negative",
+        "Reject final completion before the required typed observation",
+        "test/final_policy_negative.zig",
         agent_module,
         boundary_module,
         target,

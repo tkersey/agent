@@ -9,6 +9,8 @@ pub const package_version = "1.0.1";
 pub const define = definition.define;
 /// Typed action-descriptor constructors.
 pub const action = @import("action.zig");
+/// Closed compile-time final-result preconditions.
+pub const final_policy = @import("final_policy.zig");
 /// Compiler-only structured authoring surface for RuntimeStrategies.
 pub const Flow = @import("flow.zig").Flow;
 /// Compiler-only typed symbolic value.

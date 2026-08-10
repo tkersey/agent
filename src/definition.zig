@@ -2,6 +2,7 @@ const std = @import("std");
 const boundary = @import("boundary");
 const action = @import("action.zig");
 const budget_types = @import("budget.zig");
+const final_policy_types = @import("final_policy.zig");
 
 pub const maximum_instructions_bytes = 256 * 1024;
 pub const maximum_action_name_bytes = 128;
@@ -76,6 +77,14 @@ fn rejectPointerBearingType(comptime T: type, comptime surface: []const u8) void
 fn assertDefinitionPortable(comptime T: type, comptime surface: []const u8) void {
     rejectPointerBearingType(T, surface);
     boundary.schema.assertPortable(T);
+}
+
+fn normalizedFinalPolicy(comptime spec: anytype) final_policy_types.Policy {
+    if (!@hasField(@TypeOf(spec), "final_policy")) return final_policy_types.none;
+    if (@TypeOf(spec.final_policy) != final_policy_types.Policy) {
+        @compileError("agent definition final_policy must be created by agent.final_policy");
+    }
+    return spec.final_policy;
 }
 
 fn validateDefinition(comptime spec: anytype) void {
@@ -201,6 +210,15 @@ fn validateDefinition(comptime spec: anytype) void {
     if (effect_count != 0 and spec.history.maximum_observations == 0) {
         @compileError("agent effect actions require positive history capacity");
     }
+    const final_policy = normalizedFinalPolicy(spec);
+    const has_final_policy = switch (final_policy) {
+        .none => false,
+        .latest_observation_bool => true,
+    };
+    if (has_final_policy and spec.history.maximum_observations == 0) {
+        @compileError("agent final policy requires positive history capacity");
+    }
+    final_policy_types.validate(spec.Observation, spec.actions, final_policy);
 }
 
 fn descriptorFor(
@@ -229,6 +247,7 @@ pub fn define(comptime spec: anytype) type {
         pub const name = spec.name;
         pub const version = spec.version;
         pub const instructions = spec.instructions;
+        pub const final_policy = normalizedFinalPolicy(spec);
 
         pub const Goal = spec.Goal;
         pub const Action = spec.Action;

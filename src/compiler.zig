@@ -3,6 +3,7 @@ const boundary = @import("boundary");
 const action = @import("action.zig");
 const budget = @import("budget.zig");
 const flow_module = @import("flow.zig");
+const final_policy = @import("final_policy.zig");
 const manifest = @import("manifest.zig");
 const strategy = @import("strategy.zig");
 
@@ -347,10 +348,18 @@ fn emitAction(
     action_value: flow_module.Value(Definition.Action),
     state_value: flow_module.Value(strategy.State(Definition)),
     loop_block: anytype,
+    comptime invalid_variant_constant: u16,
 ) void {
     const Descriptor = Definition.ActionDescriptor(action_index);
     switch (Descriptor.kind) {
-        .final => flow.returnValue(flow.sumExtract(action_index, action_value)),
+        .final => emitFinalAction(
+            Definition,
+            action_index,
+            flow,
+            action_value,
+            state_value,
+            invalid_variant_constant,
+        ),
         .fail => flow.failValue(flow.sumExtract(action_index, action_value)),
         .effect => emitEffectAction(
             Definition,
@@ -363,18 +372,115 @@ fn emitAction(
     }
 }
 
+fn emitFinalAction(
+    comptime Definition: type,
+    comptime action_index: usize,
+    flow: anytype,
+    action_value: flow_module.Value(Definition.Action),
+    state_value: flow_module.Value(strategy.State(Definition)),
+    comptime invalid_variant_constant: u16,
+) void {
+    const result = flow.sumExtract(action_index, action_value);
+    switch (Definition.final_policy) {
+        .none => flow.returnValue(result),
+        .latest_observation_bool => |requirement| {
+            const history = flow.productExtract(1, state_value);
+            const history_length = flow.vectorLength(history);
+            const history_empty = flow.compareEqZero(history_length);
+            const reject = flow.block(.terminal_handoff, .{});
+            const inspect_observation = flow.block(.segment, .{
+                Definition.Result,
+                strategy.History(Definition),
+                u32,
+            });
+            flow.branch(
+                history_empty,
+                reject,
+                .{},
+                inspect_observation,
+                .{ result, history, history_length },
+            );
+
+            _ = flow.enter(reject);
+            flow.failValue(flow.constant(
+                Definition.Failure,
+                invalid_variant_constant,
+            ));
+
+            const inspect_values = flow.enter(inspect_observation);
+            const one = flow.constant(u32, @intFromEnum(Constant.one));
+            const last_index = flow.integerSubtract(inspect_values[2], one);
+            const observation = flow.vectorGet(inspect_values[1], last_index);
+            const observation_matches = flow.sumTagIs(
+                final_policy.observationIndex(Definition.Observation, requirement),
+                observation,
+            );
+            const inspect_field = flow.block(.segment, .{
+                Definition.Result,
+                Definition.Observation,
+            });
+            flow.branch(
+                observation_matches,
+                inspect_field,
+                .{ inspect_values[0], observation },
+                reject,
+                .{},
+            );
+
+            const field_values = flow.enter(inspect_field);
+            const observation_payload = flow.sumExtract(
+                final_policy.observationIndex(Definition.Observation, requirement),
+                field_values[1],
+            );
+            const observed = flow.productExtract(
+                final_policy.payloadFieldIndex(Definition.Observation, requirement),
+                observation_payload,
+            );
+            const accept = flow.block(.terminal_handoff, .{Definition.Result});
+            if (requirement.expected) {
+                flow.branch(
+                    observed,
+                    accept,
+                    .{field_values[0]},
+                    reject,
+                    .{},
+                );
+            } else {
+                flow.branch(
+                    observed,
+                    reject,
+                    .{},
+                    accept,
+                    .{field_values[0]},
+                );
+            }
+            const accepted = flow.enter(accept);
+            flow.returnValue(accepted[0]);
+        },
+    }
+}
+
 fn emitDispatch(
     comptime Definition: type,
     flow: anytype,
     action_value: flow_module.Value(Definition.Action),
     state_value: flow_module.Value(strategy.State(Definition)),
     loop_block: anytype,
+    comptime invalid_variant_constant: u16,
 ) void {
     var current_action = action_value;
     var current_state = state_value;
     inline for (0..Definition.action_count) |index| {
         if (index + 1 == Definition.action_count) {
-            emitAction(Definition, index, flow, current_action, current_state, loop_block);
+            emitAction(
+                Definition,
+                index,
+                flow,
+                current_action,
+                current_state,
+                loop_block,
+                invalid_variant_constant,
+            );
         } else {
             const selected = flow.block(.segment, .{
                 Definition.Action,
@@ -400,6 +506,7 @@ fn emitDispatch(
                 selected_values[0],
                 selected_values[1],
                 loop_block,
+                invalid_variant_constant,
             );
             const next_values = flow.enter(next);
             current_action = next_values[0];
@@ -509,7 +616,7 @@ fn ReactLowering(comptime Definition: type, comptime Strategy: type) type {
     );
     const action_value = decision.value;
     const dispatch_state = next_state;
-    emitDispatch(Definition, &flow, action_value, dispatch_state, loop_block);
+    emitDispatch(Definition, &flow, action_value, dispatch_state, loop_block, 12);
     return flow.finish(Definition.Result);
 }
 
@@ -766,6 +873,7 @@ fn ReflectiveLowering(comptime Definition: type, comptime Strategy: type) type {
         dispatch_candidate,
         counted_dispatch_state,
         loop_block,
+        14,
     );
     return flow.finish(Definition.Result);
 }
@@ -776,19 +884,36 @@ fn ReactBody(comptime Definition: type, comptime Strategy: type) type {
         pub const InitialArgs = Definition.Goal;
         pub const Result = Definition.Result;
         pub const Failure = Definition.Failure;
-        pub const constants = .{
-            strategy.instructionsValue(Definition),
-            strategy.catalogValue(Definition),
-            @as(u32, 0),
-            @as(u32, 1),
-            Definition.budget.maximum_turns,
-            Definition.budget.maximum_decisions,
-            Definition.budget.maximum_effect_actions,
-            Definition.budget.maximum_child_actions,
-            Definition.history.maximum_observations,
-            budget.DecisionPhase.decide,
-            strategy.failureNamed(Definition, "budget_exhausted"),
-            strategy.failureNamed(Definition, "history_overflow"),
+        pub const constants = switch (Definition.final_policy) {
+            .none => .{
+                strategy.instructionsValue(Definition),
+                strategy.catalogValue(Definition),
+                @as(u32, 0),
+                @as(u32, 1),
+                Definition.budget.maximum_turns,
+                Definition.budget.maximum_decisions,
+                Definition.budget.maximum_effect_actions,
+                Definition.budget.maximum_child_actions,
+                Definition.history.maximum_observations,
+                budget.DecisionPhase.decide,
+                strategy.failureNamed(Definition, "budget_exhausted"),
+                strategy.failureNamed(Definition, "history_overflow"),
+            },
+            .latest_observation_bool => .{
+                strategy.instructionsValue(Definition),
+                strategy.catalogValue(Definition),
+                @as(u32, 0),
+                @as(u32, 1),
+                Definition.budget.maximum_turns,
+                Definition.budget.maximum_decisions,
+                Definition.budget.maximum_effect_actions,
+                Definition.budget.maximum_child_actions,
+                Definition.history.maximum_observations,
+                budget.DecisionPhase.decide,
+                strategy.failureNamed(Definition, "budget_exhausted"),
+                strategy.failureNamed(Definition, "history_overflow"),
+                strategy.failureNamed(Definition, "invalid_variant"),
+            },
         };
         pub const effect_sites = effectSites(Definition, Strategy);
         pub const schema_types = Lowering.schema_types;
@@ -810,21 +935,40 @@ fn ReflectiveBody(comptime Definition: type, comptime Strategy: type) type {
         pub const InitialArgs = Definition.Goal;
         pub const Result = Definition.Result;
         pub const Failure = Definition.Failure;
-        pub const constants = .{
-            strategy.instructionsValue(Definition),
-            strategy.catalogValue(Definition),
-            @as(u32, 0),
-            @as(u32, 1),
-            Definition.budget.maximum_turns,
-            Definition.budget.maximum_decisions,
-            Definition.budget.maximum_effect_actions,
-            Definition.budget.maximum_child_actions,
-            Definition.history.maximum_observations,
-            budget.DecisionPhase.propose,
-            strategy.failureNamed(Definition, "budget_exhausted"),
-            strategy.failureNamed(Definition, "history_overflow"),
-            budget.DecisionPhase.reflect,
-            Strategy.normalized_config.reflection_rounds,
+        pub const constants = switch (Definition.final_policy) {
+            .none => .{
+                strategy.instructionsValue(Definition),
+                strategy.catalogValue(Definition),
+                @as(u32, 0),
+                @as(u32, 1),
+                Definition.budget.maximum_turns,
+                Definition.budget.maximum_decisions,
+                Definition.budget.maximum_effect_actions,
+                Definition.budget.maximum_child_actions,
+                Definition.history.maximum_observations,
+                budget.DecisionPhase.propose,
+                strategy.failureNamed(Definition, "budget_exhausted"),
+                strategy.failureNamed(Definition, "history_overflow"),
+                budget.DecisionPhase.reflect,
+                Strategy.normalized_config.reflection_rounds,
+            },
+            .latest_observation_bool => .{
+                strategy.instructionsValue(Definition),
+                strategy.catalogValue(Definition),
+                @as(u32, 0),
+                @as(u32, 1),
+                Definition.budget.maximum_turns,
+                Definition.budget.maximum_decisions,
+                Definition.budget.maximum_effect_actions,
+                Definition.budget.maximum_child_actions,
+                Definition.history.maximum_observations,
+                budget.DecisionPhase.propose,
+                strategy.failureNamed(Definition, "budget_exhausted"),
+                strategy.failureNamed(Definition, "history_overflow"),
+                budget.DecisionPhase.reflect,
+                Strategy.normalized_config.reflection_rounds,
+                strategy.failureNamed(Definition, "invalid_variant"),
+            },
         };
         pub const effect_sites = effectSites(Definition, Strategy);
         pub const schema_types = Lowering.schema_types;

@@ -17,7 +17,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const versions = Object.freeze({
-    agent: "1.1.0",
+    agent: "1.1.1",
     boundary: "1.3.2",
     world: "3.1.1",
     host: "1.0.0",

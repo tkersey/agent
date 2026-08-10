@@ -17,22 +17,22 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const versions = Object.freeze({
-    agent: "1.0.1",
-    boundary: "1.3.1",
-    world: "3.1.0",
+    agent: "1.1.0",
+    boundary: "1.3.2",
+    world: "3.1.1",
     host: "1.0.0",
     capabilities: "2.0.2",
 });
 const releases = Object.freeze({
     boundary: Object.freeze({
-        url: "https://github.com/tkersey/boundary/archive/refs/tags/v1.3.1.tar.gz",
-        sha256: "85f79ce9dd4c20a4b32a32ed624c849c911d0d1cd16016b21ec4f21ad7d7a09f",
-        packageHash: "boundary-1.3.1-flclaF8vEQC4Ekvifn6ZQLyMTQMgoMiHien7PUZheBjS",
+        url: "https://github.com/tkersey/boundary/archive/refs/tags/v1.3.2.tar.gz",
+        sha256: "d33a682f92033fa287169e4bc42c5e96f891cf1fe307381efc6983361de3fe0d",
+        packageHash: "boundary-1.3.2-flclaAI0EQBXh0WrWcNTh-CwL-m0RLPbRX8RBRxP9E95",
     }),
     world: Object.freeze({
-        url: "https://github.com/tkersey/world/archive/refs/tags/v3.1.0.tar.gz",
-        sha256: "77ed415fe7a0e170e10247b7568ebab9265b88d3c9db849b36067c35e7ba2036",
-        packageHash: "world-3.1.0-XXTUeKXGBgCQMg4JFpXgtEmlG5g--OYyW2DgfwYbVEXu",
+        url: "https://github.com/tkersey/world/archive/refs/tags/v3.1.1.tar.gz",
+        sha256: "ebde48f0bc037678e79051e3f8c3cde2fa1964df0b14ff53ed9cef94ccb1f63c",
+        packageHash: "world-3.1.1-XXTUeKXGBgAZhWa2YvUU9Sj4GE-E53Km85AcgecObJV6",
     }),
     host: Object.freeze({
         assetApiPath: "repos/tkersey/world-host/releases/assets/490040522",
@@ -68,13 +68,13 @@ try {
         loadArchive("AGENT_WORLD_HOST_ARCHIVE", null, releases.host.assetApiPath),
         loadArchive("AGENT_CAPABILITIES_ARCHIVE", null, releases.capabilities.assetApiPath),
     ]);
-    verifySha256("Boundary v1.3.1", boundaryArchive, releases.boundary.sha256);
-    verifySha256("World v3.1.0", worldArchive, releases.world.sha256);
+    verifySha256("Boundary v1.3.2", boundaryArchive, releases.boundary.sha256);
+    verifySha256("World v3.1.1", worldArchive, releases.world.sha256);
     verifySha256("world-host v1.0.0", hostArchive, releases.host.sha256);
     verifySha256("world-capabilities v2.0.2 Effect v1", capabilitiesArchive, releases.capabilities.sha256);
 
-    const boundaryArchivePath = join(archiveRoot, "boundary-v1.3.1.tar.gz");
-    const worldArchivePath = join(archiveRoot, "world-v3.1.0.tar.gz");
+    const boundaryArchivePath = join(archiveRoot, "boundary-v1.3.2.tar.gz");
+    const worldArchivePath = join(archiveRoot, "world-v3.1.1.tar.gz");
     const hostArchivePath = join(archiveRoot, "world-host-v1.0.0.tar.gz");
     const capabilitiesArchivePath = join(archiveRoot, "world-capabilities-v2.0.2-effect-v1.tar.gz");
     writeFileSync(boundaryArchivePath, boundaryArchive);

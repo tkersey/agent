@@ -1,4 +1,8 @@
 actuality/application.zig
+actuality/emit_decision_contract.zig
+actuality/emit_decision_contract_digest.zig
+actuality/emit_first_decision_request.zig
+actuality/emit_initial_args.zig
 actuality/repository_repair_definition.zig
 build.zig
 examples/coding_agent.zig

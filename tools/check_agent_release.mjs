@@ -1,17 +1,17 @@
 import { readFileSync } from "node:fs";
 
-const expectedVersion = "1.0.1";
+const expectedVersion = "1.1.0";
 const zon = readFileSync("build.zig.zon", "utf8");
 const root = readFileSync("src/root.zig", "utf8");
 const manifest = readFileSync("src/manifest.zig", "utf8");
 const releaseLine = readFileSync("docs/release_line.md", "utf8");
 
 for (const [path, source, pattern] of [
-    ["build.zig.zon", zon, /\.version = "1\.0\.1"/],
-    ["src/root.zig", root, /package_version = "1\.0\.1"/],
-    ["src/manifest.zig", manifest, /package_version = "1\.0\.1"/],
+    ["build.zig.zon", zon, /\.version = "1\.1\.0"/],
+    ["src/root.zig", root, /package_version = "1\.1\.0"/],
+    ["src/manifest.zig", manifest, /package_version = "1\.1\.0"/],
     ["docs/release_line.md", releaseLine, /initial exact targets were Boundary v1\.0\.0 and World v3\.0\.0/],
-    ["docs/release_line.md", releaseLine, /released compatibility line is Boundary v1\.3\.1 and World v3\.1\.0/],
+    ["docs/release_line.md", releaseLine, /current compatibility line is Boundary v1\.3\.2 and World v3\.1\.1/],
 ]) {
     if (!pattern.test(source)) throw new Error(`${path} does not satisfy the Agent ${expectedVersion} release contract`);
 }
@@ -22,8 +22,8 @@ const receipt = Object.freeze({
     agent_repository_public: true,
     initial_boundary_target: "1.0.0",
     initial_world_target: "3.0.0",
-    released_boundary_target: "1.3.1",
-    released_world_target: "3.1.0",
+    released_boundary_target: "1.3.2",
+    released_world_target: "3.1.1",
     release_line_override_authorized: true,
     agent_boundary_changes_required: true,
     agent_world_changes_required: true,
@@ -33,7 +33,7 @@ const receipt = Object.freeze({
     agent_additional_world_changes_required: false,
     agent_additional_world_host_changes_required: false,
     agent_additional_world_capabilities_changes_required: false,
-    boundary_package_version: "1.3.1",
+    boundary_package_version: "1.3.2",
     boundary_machine_abi: 2,
     boundary_machine_is_only_reducer: true,
     boundary_agent_profile_used: false,
@@ -62,7 +62,7 @@ const receipt = Object.freeze({
     boundary_equivalence: true,
     agent_machine_contract_deterministic: true,
     application_wasm_import_count: 0,
-    world_package_version: "3.1.0",
+    world_package_version: "3.1.1",
     world_application_abi: 1,
     world_frame_version: 1,
     effect_protocol_version: 1,

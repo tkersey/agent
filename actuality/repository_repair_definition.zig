@@ -190,7 +190,7 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
                 .maximum_child_actions = 0,
             },
             .history = .{
-                .maximum_observations = 12,
+                .maximum_observations = 8,
                 .overflow = .fail,
             },
             .final_policy = agent.final_policy.latestObservationBool(
@@ -205,7 +205,7 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
             .machine = .{
                 .maximum_frames = 32,
                 .maximum_state_bytes = 1_000_000,
-                .maximum_machine_fuel = 5_000_000,
+                .maximum_machine_fuel = 100_000,
             },
         });
         pub const Machine = Compiled.Machine;

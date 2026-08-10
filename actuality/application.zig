@@ -75,7 +75,7 @@ pub const Application = world.application(.{
         .maximum_host_claim_bytes = 16 << 10,
         .maximum_host_metadata_bytes = 16 << 10,
         .maximum_failure_bytes = 64 << 10,
-        .maximum_fuel_per_step = 5_000_000,
+        .maximum_fuel_per_step = 100_000,
         .maximum_frame_depth = 32,
     },
 });

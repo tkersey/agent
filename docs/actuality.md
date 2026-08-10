@@ -32,6 +32,29 @@ workspace capability can mutate `src/range.mjs`.
 OPENAI_API_KEY=... OPENAI_MODEL=... zig build check-agent-actuality-live
 ```
 
+A published live receipt is a non-authoritative projection. Verify it against
+independently obtained release archives and the application artifacts generated
+from the exact Agent archive:
+
+```sh
+zig build check-agent-actuality-v1-live-receipt -- \
+  --receipt "$RECEIPT" --receipt-sha256 "$RECEIPT_SHA256" \
+  --agent-archive "$AGENT_ARCHIVE" --agent-archive-sha256 "$AGENT_SHA256" --agent-version 1.1.1 \
+  --boundary-archive "$BOUNDARY_ARCHIVE" --boundary-archive-sha256 "$BOUNDARY_SHA256" --boundary-version 1.3.2 \
+  --world-archive "$WORLD_ARCHIVE" --world-archive-sha256 "$WORLD_SHA256" --world-version 3.1.1 \
+  --world-host-archive "$WORLD_HOST_ARCHIVE" --world-host-archive-sha256 "$WORLD_HOST_SHA256" --world-host-version 1.0.0 \
+  --capabilities-archive "$CAPABILITIES_ARCHIVE" --capabilities-archive-sha256 "$CAPABILITIES_SHA256" --capabilities-version 2.1.1 \
+  --application-wasm "$APPLICATION_WASM" --application-wasm-sha256 "$APPLICATION_WASM_SHA256" \
+  --application-manifest "$APPLICATION_MANIFEST" \
+  --initial-args "$INITIAL_ARGS" \
+  --decision-contract-digest-file "$DECISION_CONTRACT_DIGEST_FILE"
+```
+
+The verifier hashes every supplied file, checks those hashes against the
+independent expected values and receipt claims, and then checks the live
+acceptance, approval, mutation, lifecycle, and redaction predicates. The
+receipt remains evidence only; it does not authorize execution.
+
 The application artifact is import-free. The current measured WASM is
 5,912,631 bytes. This exceeds the provisional 2 MiB target because the direct
 specialization contains the bounded 32 KiB text-bearing Action, Observation,

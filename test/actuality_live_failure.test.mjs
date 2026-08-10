@@ -5,7 +5,8 @@ import {
   failedAttemptReceipt,
   LiveActualityAttemptError,
   publicFailureCode,
-  runLiveCommand
+  runLiveCommand,
+  assertLiveReceipt
 } from "../tools/actuality/live.mjs";
 
 const EffectStatus = Object.freeze({ ok: 0, rejected: 1, failed: 2, deferred: 3, cancelled: 4 });
@@ -68,6 +69,25 @@ describe("live actuality failure receipts", () => {
 
   test("collapses arbitrary error messages to one public code", () => {
     expect(publicFailureCode(new Error("model_generated_lowercase_message"))).toBe("live_actuality_failed");
+  });
+
+  test("successful live receipts require request-bound proposal evidence", () => {
+    const receipt = Object.fromEntries([
+      "openai_responses_api", "openai_model_requested_present", "openai_model_returned_present",
+      "live_model_call_count_positive", "provider_usage_complete", "controlled_fixture_only",
+      "interactive_approval", "approval_before_mutation", "real_filesystem_reads",
+      "real_test_process", "real_mutation", "failing_test_observed", "passing_test_observed",
+      "typed_final_result", "hidden_verifier_passed"
+    ].map((name) => [name, true]));
+    Object.assign(receipt, {
+      live_model_call_count: 1,
+      changed_paths: ["src/range.mjs"],
+      approval_effect_request_id: "a".repeat(64),
+      approval_proposal_digest: "b".repeat(64)
+    });
+    expect(() => assertLiveReceipt(receipt)).not.toThrow();
+    receipt.approval_proposal_digest = null;
+    expect(() => assertLiveReceipt(receipt)).toThrow("live_receipt_approval_binding_failed");
   });
 
   test("the command writes a failed receipt and remains nonzero", async () => {

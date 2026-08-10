@@ -260,8 +260,10 @@ pub fn build(b: *std.Build) void {
 
     const actuality_negative_command = b.addSystemCommand(&.{
         "bun",
+        "--cwd",
         "test",
-        "test/actuality_live_failure.test.mjs",
+        "test",
+        "actuality_live_failure.test.mjs",
     });
     const actuality_negative = b.step(
         "check-agent-actuality-negative",

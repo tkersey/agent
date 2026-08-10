@@ -17,6 +17,27 @@ export class LiveActualityAttemptError extends Error {
   }
 }
 
+class PublicLiveActualityFailure extends Error {
+  constructor(code) {
+    super(code);
+    this.name = "PublicLiveActualityFailure";
+    this.code = code;
+  }
+}
+
+export async function runLiveCommand(options, dependencies = {}) {
+  const run = dependencies.run ?? runLiveActuality;
+  const write = dependencies.write ?? ((value) => process.stdout.write(value));
+  try {
+    const receipt = await run(options);
+    write(`${JSON.stringify(receipt, null, 2)}\n`);
+    return receipt;
+  } catch (error) {
+    if (error?.receipt) write(`${JSON.stringify(error.receipt, null, 2)}\n`);
+    throw error;
+  }
+}
+
 export async function runLiveActuality(options = {}) {
   const apiKey = process.env.OPENAI_API_KEY;
   const model = process.env.OPENAI_MODEL;
@@ -43,6 +64,14 @@ export async function runLiveActuality(options = {}) {
   let genesisFrameId = null;
   let terminalFrameId = null;
   const interfaces = [];
+  const provider = {
+    returnedModels: new Set(),
+    responseIdDigests: [],
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0
+  };
+  const evidenceDigests = [];
   try {
     const host = await import(pathToFileURL(join(hostRoot, "src/v1/index.mjs")));
     const capabilities = await import(pathToFileURL(join(capabilitiesRoot, "src/v1/index.mjs")));
@@ -91,14 +120,6 @@ export async function runLiveActuality(options = {}) {
       policy: { repositoryActuality: true, openaiRepositoryRepair: true }
     };
 
-    const provider = {
-      returnedModels: new Set(),
-      responseIdDigests: [],
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0
-    };
-    const evidenceDigests = [];
     let current = await controller.initialize("actuality-live-v1", "main", { initialArgsBytes });
     genesisFrameId = hex(current.frame.frameId);
     while (current.frame.status === host.FrameStatus.needsEffect) {
@@ -149,7 +170,7 @@ export async function runLiveActuality(options = {}) {
       terminalFrameId = hex(current.frame.frameId);
     }
     if (current.frame.status !== host.FrameStatus.completed) {
-      throw new Error(`live_terminal_status:${current.frame.status}`);
+      throw new PublicLiveActualityFailure(`live_terminal_status_${current.frame.status}`);
     }
     const finalResult = capabilities.decodeRepositoryRepairFinalResult(current.frame.finalResultBytes);
     const changedPaths = parsePorcelain(await git(workspaceRoot, ["status", "--porcelain=v1"]));
@@ -205,6 +226,8 @@ export async function runLiveActuality(options = {}) {
       genesisFrameId,
       terminalFrameId,
       interfaces,
+      provider,
+      evidenceDigests,
       failureCode: publicFailureCode(error)
     }));
   } finally {
@@ -217,22 +240,22 @@ export async function runLiveActuality(options = {}) {
 export function admitSuccessfulProviderClaims(result, effectStatus) {
   if (!result || result.status !== effectStatus.ok) {
     const status = Object.entries(effectStatus).find(([, value]) => value === result?.status)?.at(0) ?? "unknown";
-    throw new Error(`model_effect_${status}`);
+    throw new PublicLiveActualityFailure(`model_effect_${status}`);
   }
   if (!(result.hostClaims instanceof Uint8Array) || result.hostClaims.length === 0) {
-    throw new Error("model_host_claims_missing");
+    throw new PublicLiveActualityFailure("model_host_claims_missing");
   }
   let claims;
   try {
     claims = JSON.parse(Buffer.from(result.hostClaims).toString("utf8"));
   } catch {
-    throw new Error("model_host_claims_invalid");
+    throw new PublicLiveActualityFailure("model_host_claims_invalid");
   }
   if (!claims || typeof claims !== "object" || Array.isArray(claims) ||
       typeof claims.returnedModel !== "string" || claims.returnedModel.length === 0 ||
       typeof claims.responseIdSha256 !== "string" || !/^[0-9a-f]{64}$/.test(claims.responseIdSha256) ||
       !safeCount(claims.inputTokens) || !safeCount(claims.outputTokens) || !safeCount(claims.totalTokens)) {
-    throw new Error("model_host_claims_invalid");
+    throw new PublicLiveActualityFailure("model_host_claims_invalid");
   }
   return claims;
 }
@@ -243,6 +266,8 @@ export function failedAttemptReceipt({
   genesisFrameId,
   terminalFrameId,
   interfaces,
+  provider,
+  evidenceDigests,
   failureCode
 }) {
   return {
@@ -256,6 +281,11 @@ export function failedAttemptReceipt({
     openai_api_key_recorded: false,
     live_model_call_count: context?.modelCalls ?? 0,
     provider_failure_count: context?.providerFailures ?? 0,
+    openai_models_returned: [...(provider?.returnedModels ?? [])],
+    provider_response_id_digests: [...(provider?.responseIdDigests ?? [])],
+    input_tokens: provider?.inputTokens ?? 0,
+    output_tokens: provider?.outputTokens ?? 0,
+    total_tokens: provider?.totalTokens ?? 0,
     controlled_fixture_only: true,
     personal_repository_data_sent: false,
     genesis_frame_id: genesisFrameId,
@@ -264,15 +294,15 @@ export function failedAttemptReceipt({
     public_receipt_contains_raw_prompt: false,
     public_receipt_contains_raw_repository_bytes: false,
     public_receipt_contains_raw_model_output: false,
+    private_evidence_digest: sha256(Buffer.from((evidenceDigests ?? []).join("\n"))),
     failure_code: failureCode,
     live_attempt_count: 1,
     live_success_count: 0
   };
 }
 
-function publicFailureCode(error) {
-  const value = typeof error?.message === "string" ? error.message : "live_actuality_failed";
-  return /^[a-z0-9_:]{1,128}$/.test(value) ? value : "live_actuality_failed";
+export function publicFailureCode(error) {
+  return error instanceof PublicLiveActualityFailure ? error.code : "live_actuality_failed";
 }
 
 function safeCount(value) {

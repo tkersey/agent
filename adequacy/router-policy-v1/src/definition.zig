@@ -24,6 +24,31 @@ pub const DocumentSlot = enum {
     router_test,
 };
 
+pub fn slotCode(slot: DocumentSlot) u8 {
+    return @intFromEnum(slot);
+}
+
+pub fn slotPath(slot: DocumentSlot) []const u8 {
+    return switch (slot) {
+        .readme => "README.md",
+        .package => "package.json",
+        .methods_source => "src/methods.mjs",
+        .pattern_source => "src/pattern.mjs",
+        .errors_source => "src/errors.mjs",
+        .router_source => "src/router.mjs",
+        .index_source => "src/index.mjs",
+        .methods_test => "test/methods.test.mjs",
+        .router_test => "test/router.test.mjs",
+    };
+}
+
+pub fn slotWritable(slot: DocumentSlot) bool {
+    return switch (slot) {
+        .methods_source, .errors_source, .router_source, .index_source => true,
+        else => false,
+    };
+}
+
 pub const Goal = struct {
     task: GoalText,
     repository: boundary.Text(128),
@@ -246,7 +271,10 @@ pub const Epistemics = agent.epistemics.custom(.{
 pub const Compiled = agent.compile(Definition, Strategy, Epistemics, .{
     .machine = .{
         .maximum_frames = 32,
-        .maximum_state_bytes = 512 * 1024,
+        // World runtime state contains a small fixed envelope around its root
+        // Machine frame. Keep that envelope inside the unchanged 512 KiB
+        // application-state ceiling.
+        .maximum_state_bytes = 511 * 1024,
         .maximum_machine_fuel = 8_000_000,
     },
 });
@@ -257,5 +285,21 @@ test "definition compiles with exact public budgets" {
     try std.testing.expectEqual(@as(usize, 32), Definition.budget.maximum_turns);
     try std.testing.expectEqual(@as(usize, 32), Definition.budget.maximum_decisions);
     try std.testing.expectEqual(@as(usize, 31), Definition.budget.maximum_effect_actions);
+    try std.testing.expectEqual(@as(u32, 511 * 1024), Compiled.Machine.Manifest.maximum_state_bytes);
     _ = Compiled;
+}
+
+test "document slots have one exact closed path map" {
+    const std = @import("std");
+    inline for (@typeInfo(DocumentSlot).@"enum".fields, 0..) |field, index| {
+        const slot: DocumentSlot = @enumFromInt(field.value);
+        try std.testing.expectEqual(@as(u8, @intCast(index)), slotCode(slot));
+        try std.testing.expect(slotPath(slot).len != 0);
+    }
+    try std.testing.expect(slotWritable(.methods_source));
+    try std.testing.expect(slotWritable(.errors_source));
+    try std.testing.expect(slotWritable(.router_source));
+    try std.testing.expect(slotWritable(.index_source));
+    try std.testing.expect(!slotWritable(.pattern_source));
+    try std.testing.expect(!slotWritable(.router_test));
 }

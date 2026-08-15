@@ -178,9 +178,6 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
             const header = flow.block(.loop_header, .{ T.Documents, u32, T.DocumentSnapshot });
             const inspect = flow.block(.segment, .{ T.Documents, u32, T.DocumentSnapshot });
             const missing = flow.block(.segment, .{ T.Documents, T.DocumentSnapshot });
-            const replace = flow.block(.segment, .{ T.Documents, u32, T.DocumentSnapshot });
-            const advance = flow.block(.segment, .{ T.Documents, u32, T.DocumentSnapshot });
-            const append = flow.block(.segment, .{ T.Documents, T.DocumentSnapshot });
             const capacity = flow.block(.terminal_handoff, .{});
             const joined = flow.block(.segment, .{T.Documents});
 
@@ -198,35 +195,26 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
             const entry = flow.vectorGet(current[0], current[1]);
             flow.branch(
                 flow.integerEqual(flow.productExtract(1, entry), flow.productExtract(1, current[2])),
-                replace,
-                current,
-                advance,
-                current,
+                joined,
+                .{flow.vectorSet(current[0], current[1], current[2])},
+                header,
+                .{
+                    current[0],
+                    flow.integerAdd(current[1], flow.constant(u32, context.one_index)),
+                    current[2],
+                },
             );
-
-            const replacing = flow.enter(replace);
-            flow.jump(joined, .{flow.vectorSet(replacing[0], replacing[1], replacing[2])});
-
-            const advancing = flow.enter(advance);
-            flow.jump(header, .{
-                advancing[0],
-                flow.integerAdd(advancing[1], flow.constant(u32, context.one_index)),
-                advancing[2],
-            });
 
             const absent = flow.enter(missing);
             flow.branch(
                 flow.integerGreaterEqual(flow.vectorLength(absent[0]), flow.constant(u32, context.nine_u32_index)),
                 capacity,
                 .{},
-                append,
-                absent,
+                joined,
+                .{flow.vectorPush(absent[0], absent[1])},
             );
             _ = flow.enter(capacity);
             flow.failValue(flow.constant(T.Failure, context.capacity_failure_index));
-
-            const appending = flow.enter(append);
-            flow.jump(joined, .{flow.vectorPush(appending[0], appending[1])});
             return flow.enter(joined)[0];
         }
 
@@ -234,9 +222,6 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
             requireValidSlotCode(flow, slot, code, context);
             const header = flow.block(.loop_header, .{ T.Documents, T.Documents, u32, u8 });
             const inspect = flow.block(.segment, .{ T.Documents, T.Documents, u32, u8 });
-            const skip = flow.block(.segment, .{ T.Documents, T.Documents, u32, u8 });
-            const retain = flow.block(.segment, .{ T.Documents, T.Documents, u32, u8 });
-            const next = flow.block(.segment, .{ T.Documents, T.Documents, u32, u8 });
             const done = flow.block(.segment, .{T.Documents});
 
             flow.jump(header, .{
@@ -256,29 +241,15 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
 
             const inspecting = flow.enter(inspect);
             const entry = flow.vectorGet(inspecting[0], inspecting[2]);
-            flow.branch(
-                flow.integerEqual(flow.productExtract(1, entry), inspecting[3]),
-                skip,
-                inspecting,
-                retain,
-                inspecting,
-            );
-
-            const skipping = flow.enter(skip);
-            flow.jump(next, skipping);
-            const retaining = flow.enter(retain);
-            flow.jump(next, .{
-                retaining[0],
-                flow.vectorPush(retaining[1], flow.vectorGet(retaining[0], retaining[2])),
-                retaining[2],
-                retaining[3],
-            });
-            const continuing = flow.enter(next);
             flow.jump(header, .{
-                continuing[0],
-                continuing[1],
-                flow.integerAdd(continuing[2], flow.constant(u32, context.one_index)),
-                continuing[3],
+                inspecting[0],
+                flow.select(
+                    flow.integerEqual(flow.productExtract(1, entry), inspecting[3]),
+                    inspecting[1],
+                    flow.vectorPush(inspecting[1], entry),
+                ),
+                flow.integerAdd(inspecting[2], flow.constant(u32, context.one_index)),
+                inspecting[3],
             });
             return flow.enter(done)[0];
         }

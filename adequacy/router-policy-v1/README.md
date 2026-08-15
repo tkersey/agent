@@ -1,9 +1,9 @@
 # Router Policy Adequacy Application
 
-This standalone project ships in the exact public Agent `v2.1.0` package and
-builds against the exact public Boundary `v1.4.0` and World `v3.1.2` packages.
+This standalone project ships in the exact public Agent `v2.2.0` package and
+builds against the exact public Boundary `v1.5.0` and World `v3.1.3` packages.
 It implements the bounded nine-document, four-mutation working set for the
 `router-policy-adequacy` conformance witness.
 
 The historical exact Agent `v2.0.0` obstruction remains recorded beside this
-project. Agent `v2.1.0` is the successor correction line.
+project. Agent `v2.2.0` is the successor correction line.

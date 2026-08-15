@@ -9,8 +9,14 @@ actuality/repository_repair_epistemics.zig
 adequacy/router-policy-v1/build.zig
 adequacy/router-policy-v1/reproducer/build.zig
 adequacy/router-policy-v1/reproducer/main.zig
+adequacy/router-policy-v1/src/application.zig
 adequacy/router-policy-v1/src/definition.zig
+adequacy/router-policy-v1/src/emit_decision_contract.zig
+adequacy/router-policy-v1/src/emit_initial_args.zig
+adequacy/router-policy-v1/src/emit_type_measurements.zig
 adequacy/router-policy-v1/src/epistemics.zig
+adequacy/router-policy-v1/src/epistemics_test.zig
+adequacy/router-policy-v1/src/wasm_main.zig
 build.zig
 examples/coding_agent.zig
 examples/repository_repair_actuality.zig

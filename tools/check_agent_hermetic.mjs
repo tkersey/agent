@@ -10,14 +10,14 @@ import { inspectTarGz } from "./reference_stack.mjs";
 
 const releases = Object.freeze({
     boundary: Object.freeze({
-        version: "1.4.0",
-        url: "https://github.com/tkersey/boundary/archive/refs/tags/v1.4.0.tar.gz",
-        sha256: "8c33e9460e74aa4782b5106575f62b410446a5242a9d66bbcb6df5d06407b270",
+        version: "1.5.0",
+        url: "https://github.com/tkersey/boundary/archive/refs/tags/v1.5.0.tar.gz",
+        sha256: "8bcf9cf4f289eb3e530cae37089411dfc0014963fb6e0978474fa08a39fcedea",
     }),
     world: Object.freeze({
-        version: "3.1.2",
-        url: "https://github.com/tkersey/world/archive/refs/tags/v3.1.2.tar.gz",
-        sha256: "0ec899bc2b818384ddfb6929bfbe22ff83559e2a3336686a0a763e79e49b8b32",
+        version: "3.1.3",
+        url: "https://github.com/tkersey/world/archive/refs/tags/v3.1.3.tar.gz",
+        sha256: "1333a27aa4538c255b8a6c515c9151987fd5402c0be43a9a2501703599d1a5a9",
     }),
 });
 
@@ -64,9 +64,9 @@ try {
         "--summary",
         "all",
     ], agentRoot, environment);
-    console.log("agent_hermetic_boundary_version=1.4.0");
+    console.log("agent_hermetic_boundary_version=1.5.0");
     console.log(`agent_hermetic_boundary_sha256=${releases.boundary.sha256}`);
-    console.log("agent_hermetic_world_version=3.1.2");
+    console.log("agent_hermetic_world_version=3.1.3");
     console.log(`agent_hermetic_world_sha256=${releases.world.sha256}`);
     console.log("agent_hermetic_network_after_acquisition=false");
     console.log("agent_hermetic_check=pass");

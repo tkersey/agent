@@ -1,14 +1,14 @@
 .{
     .name = .agent,
-    .version = "2.1.0",
+    .version = "2.2.0",
     .dependencies = .{
         .boundary = .{
-            .url = "https://github.com/tkersey/boundary/archive/refs/tags/v1.4.0.tar.gz",
-            .hash = "boundary-1.4.0-flclaDRLEQAzxJEl23bFxWD_WHd35B5yynEAK2vfEg-A",
+            .url = "https://github.com/tkersey/boundary/archive/refs/tags/v1.5.0.tar.gz",
+            .hash = "boundary-1.5.0-flclaGtSEQDH_RFNHovmN4QfnmRMnFoNfyYq_84rZrsr",
         },
         .world = .{
-            .url = "https://github.com/tkersey/world/archive/refs/tags/v3.1.2.tar.gz",
-            .hash = "world-3.1.2-XXTUeKXGBgB3uohAGhVb3qRqdWkLlpmzt90EEoEmQQKL",
+            .url = "https://github.com/tkersey/world/archive/refs/tags/v3.1.3.tar.gz",
+            .hash = "world-3.1.3-XXTUeKXGBgDDzZ7uarFCYSLwYD8pGNBMNdIYfgIcu23v",
         },
     },
     .minimum_zig_version = "0.16.0",

@@ -5,8 +5,15 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 
-const APPLICATION_ID = "0fbb283a46e495774dad29c808a03eaeec21411700feb3bdcac625a85a4675c2";
-const DECISION_CONTRACT_DIGEST = "35b9a4670ec3a81dbfd0761900388a24ea28e49628da96ca68b97042ee15373f";
+const candidate = JSON.parse(await readFile(new URL(
+  "../../conformance/agent-v2/candidate.json",
+  import.meta.url,
+)));
+const APPLICATION_ID = admittedDigest(candidate.identities?.applicationId, "candidate_application_id");
+const DECISION_CONTRACT_DIGEST = admittedDigest(
+  candidate.identities?.decisionContractDigest,
+  "candidate_decision_contract_digest",
+);
 const WORKER_MEMORY_BYTES = 256 * 1024 * 1024;
 const FAILED_ATTEMPT_RECEIPT_BRAND = Symbol("failed-attempt-receipt");
 const LIVE_RECEIPT_BOOLEAN_FIELDS = Object.freeze([
@@ -345,6 +352,13 @@ export function publicFailureCode(error) {
 
 function safeCount(value) {
   return Number.isSafeInteger(value) && value >= 0;
+}
+
+function admittedDigest(value, label) {
+  if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) {
+    throw new Error(`${label}_invalid`);
+  }
+  return value;
 }
 
 export function assertLiveReceipt(receipt) {

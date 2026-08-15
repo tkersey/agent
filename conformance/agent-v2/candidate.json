@@ -15,7 +15,7 @@
     "wasmBytes": 3768948,
     "wasmStackBytes": 134217728,
     "wasmMaximumMemoryBytes": 268435456,
-    "declaredStateBytes": 512000,
+    "declaredStateBytes": 524288,
     "firstFrameBytes": 1979,
     "peakFrameBytes": 9927,
     "peakMachineStateBytes": 7775,
@@ -35,7 +35,7 @@
   "identities": {
     "applicationId": "14926c1ecd6436230718f3e1772f2946916ec0959fc81a8fab94190cc2e9a3d5",
     "decisionContractDigest": "871aecb1a6dd95c27f31b3d246961b88dabf8044f29c1452a56ea0b1eef516d5",
-    "sourceProjectionSha256": "219066e1b350c5e8da4deb7f5aa7d6fa225ddb1b85a368ea037c282320eadd94"
+    "sourceProjectionSha256": "28ded1b9184f2713f5bdc4a16d9c1a8affbb6535e54e6dc7b0c681bba1c6a8b7"
   },
   "artifactChecksums": {
     "applicationWasmSha256": "6d968547df3322be46f048c7e74b9f6bbdcafdc2dfa9778c0354a6a8f4a8cef3",

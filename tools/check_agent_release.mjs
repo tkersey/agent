@@ -38,6 +38,20 @@ const agentGitArchiveSha256 = existsSync(".git")
 if (existsSync(".git")) requireCleanPackageInputs();
 require(sourceProjectionSha256() === candidate.identities.sourceProjectionSha256,
   "Agent benchmark source projection");
+const installedManifest = decodeApplicationManifest(
+  readFileSync(join(actualityRoot, "repository-repair-actuality.manifest.bin")),
+);
+const installedDecisionContract = readJson(
+  join(actualityRoot, "repository-repair-decision-contract.json"),
+);
+require(installedManifest.applicationId === candidate.identities.applicationId,
+  "candidate application identity");
+require(stackReceipt.deterministic.application_id === candidate.identities.applicationId,
+  "reference receipt application identity");
+require(installedDecisionContract.semanticDigest === candidate.identities.decisionContractDigest,
+  "candidate DecisionContract identity");
+require(installedManifest.maximumStateBytes === candidate.measurements.declaredStateBytes,
+  "candidate declared state identity");
 const agentPackageHash = fetchPackageHash();
 require(/^agent-2\.0\.0-[A-Za-z0-9_-]+$/.test(agentPackageHash), "Agent Zig package hash");
 
@@ -261,6 +275,43 @@ function canonicalJson(value) {
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
   }
   return JSON.stringify(value);
+}
+
+function decodeApplicationManifest(bytes) {
+  let offset = 0;
+  const requireBytes = (count) => {
+    require(Number.isSafeInteger(count) && count >= 0 && offset + count <= bytes.length,
+      "application manifest bounds");
+  };
+  const take = (count) => {
+    requireBytes(count);
+    const value = bytes.subarray(offset, offset + count);
+    offset += count;
+    return value;
+  };
+  const u32 = () => {
+    requireBytes(4);
+    const value = bytes.readUInt32BE(offset);
+    offset += 4;
+    return value;
+  };
+  const lenBytes = () => take(u32());
+
+  require(take(8).toString("ascii") === "WRLDMNF1", "application manifest magic");
+  require(u32() === 1, "application manifest version");
+  const applicationId = take(32).toString("hex");
+  lenBytes();
+  lenBytes();
+  lenBytes();
+  take(4);
+  lenBytes();
+  take(4);
+  take(32);
+  take(u32() * 32);
+  take(u32() * 113);
+  take(8);
+  const maximumStateBytes = u32();
+  return { applicationId, maximumStateBytes };
 }
 
 function measureCurrentCompiler() {

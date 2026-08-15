@@ -35,7 +35,7 @@ const agentTree = existsSync(".git") ? git(["rev-parse", "HEAD^{tree}"]) : "sour
 const agentGitArchiveSha256 = existsSync(".git")
   ? sha256(execFileSync("git", ["archive", "--format=tar", "HEAD"]))
   : "source-archive";
-if (existsSync(".git")) requireCleanPackageInputs();
+if (existsSync(".git")) requireExactImplementationRevision();
 require(sourceProjectionSha256() === candidate.identities.sourceProjectionSha256,
   "Agent benchmark source projection");
 const installedManifest = decodeApplicationManifest(
@@ -135,6 +135,9 @@ const receipt = {
   agent_commit: agentCommit,
   agent_tree: agentTree,
   agent_git_archive_sha256: agentGitArchiveSha256,
+  agent_implementation_commit: candidate.identities.implementationCommit,
+  agent_implementation_tree: candidate.identities.implementationTree,
+  agent_implementation_git_archive_sha256: candidate.identities.implementationGitArchiveSha256,
   agent_package_hash: agentPackageHash,
   fresh_compile_milliseconds: freshCompiler.compileMilliseconds,
   fresh_peak_compiler_bytes: freshCompiler.peakCompilerBytes,
@@ -243,6 +246,9 @@ function sourceProjectionSha256() {
     } else if (path === "conformance/agent-v2/candidate.json") {
       const projected = readJson(path);
       projected.identities.sourceProjectionSha256 = null;
+      projected.identities.implementationCommit = null;
+      projected.identities.implementationTree = null;
+      projected.identities.implementationGitArchiveSha256 = null;
       digest.update(canonicalJson(projected));
     } else {
       digest.update(readFileSync(path));
@@ -260,13 +266,28 @@ function packagePaths() {
   return paths;
 }
 
-function requireCleanPackageInputs() {
+function requireExactImplementationRevision() {
   const status = execFileSync(
     "git",
     ["status", "--porcelain=v1", "--untracked-files=all", "--", ...declaredPackagePaths],
     { encoding: "utf8" },
   );
   require(status.length === 0, "clean declared Agent package inputs");
+  const parents = git(["rev-list", "--parents", "-n", "1", "HEAD"]).split(" ").slice(1);
+  require(parents.length === 1, "single-parent release evidence commit");
+  const implementationCommit = parents[0];
+  const changedPaths = git(["diff", "--name-only", implementationCommit, "HEAD"])
+    .split("\n")
+    .filter(Boolean);
+  require(changedPaths.length === 1 && changedPaths[0] === "conformance/agent-v2/candidate.json",
+    "release evidence commit changes only candidate.json");
+  require(implementationCommit === candidate.identities.implementationCommit,
+    "candidate implementation commit");
+  require(git(["rev-parse", `${implementationCommit}^{tree}`]) === candidate.identities.implementationTree,
+    "candidate implementation tree");
+  require(sha256(execFileSync("git", ["archive", "--format=tar", implementationCommit])) ===
+    candidate.identities.implementationGitArchiveSha256,
+  "candidate implementation Git archive");
 }
 
 function canonicalJson(value) {

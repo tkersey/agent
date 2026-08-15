@@ -3,7 +3,7 @@ const budget_types = @import("budget.zig");
 const definition = @import("definition.zig");
 
 /// Agent package bootstrap version.
-pub const package_version = "2.0.0";
+pub const package_version = "2.1.0";
 
 /// Define immutable typed comptime agent data and close its Action algebra.
 pub const define = definition.define;
@@ -38,7 +38,7 @@ pub const DecisionPhase = budget_types.DecisionPhase;
 
 comptime {
     if (!@hasDecl(boundary, "program")) {
-        @compileError("agent requires Boundary v1.3.2 program compilation");
+        @compileError("agent requires Boundary v1.4.0 program compilation");
     }
 }
 

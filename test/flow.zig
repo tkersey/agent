@@ -37,6 +37,36 @@ const AuthoredFailure = enum(u8) {
     aborted,
 };
 
+const DocumentSlot = enum(u16) {
+    readme = 3,
+    router_source = 19,
+};
+
+fn EnumLowered() type {
+    const Builder = agent.Flow(.{ .schema_types = .{DocumentSlot} });
+    comptime var flow = Builder.init("flow-enum-to-u32");
+    const slot = flow.begin(DocumentSlot);
+    const slot_code = flow.enumToU32(slot);
+    flow.returnValue(slot_code);
+    return flow.finish(u32);
+}
+
+const EnumBody = struct {
+    const Lowering = EnumLowered();
+    pub const InitialArgs = DocumentSlot;
+    pub const Result = u32;
+    pub const Failure = enum { impossible };
+    pub const effect_sites = boundary.effect.row(.{});
+    pub const schema_types = Lowering.schema_types;
+    pub const control_ir = Lowering.control_ir;
+};
+
+const EnumMachine = boundary.program("flow-enum-to-u32", EnumBody).compile(.{
+    .maximum_frames = 2,
+    .maximum_state_bytes = 1024,
+    .maximum_machine_fuel = 32,
+});
+
 fn FailureLowered() type {
     const Builder = agent.Flow(.{ .schema_types = .{AuthoredFailure} });
     comptime var flow = Builder.init("flow-authored-failure");
@@ -159,6 +189,23 @@ test "Flow preserves an authored failure value through Boundary Machine ABI v2" 
             else => return error.UnexpectedMachineFailure,
         },
         else => return error.UnexpectedMachineStep,
+    }
+}
+
+test "Flow projects portable enum values to canonical u32 tags" {
+    inline for (.{ DocumentSlot.readme, DocumentSlot.router_source }) |slot| {
+        const state = try EnumMachine.initialState(std.testing.allocator, slot);
+        defer EnumMachine.deinitState(state);
+        var fuel: u64 = 8;
+        const done = switch (try EnumMachine.step(state, &fuel)) {
+            .done => |result| result,
+            else => return error.UnexpectedMachineStep,
+        };
+        defer done.deinit();
+        try std.testing.expectEqual(
+            @as(u32, @intCast(@intFromEnum(slot))),
+            done.value().*,
+        );
     }
 }
 

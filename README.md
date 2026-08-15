@@ -64,8 +64,8 @@ pub const Compiled = agent.compile(Definition, Runtime, Epistemics, .{
 });
 ```
 
-The package targets Zig 0.16.0, Boundary v1.3.2, Machine ABI v2, World
-v3.1.1, Application ABI v1, and Frame v1. Agent definitions and strategies are
+The package targets Zig 0.16.0, Boundary v1.4.0, Machine ABI v2, World
+v3.1.2, Application ABI v1, and Frame v1. Agent definitions and strategies are
 compile-time inputs: there is no runtime definition loader, strategy registry,
 memory VM, provider-owned conversation, or second reducer.
 

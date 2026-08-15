@@ -1,0 +1,13 @@
+.{
+    .name = .agent_adequacy_flow_reproducer,
+    .version = "0.0.0",
+    .dependencies = .{
+        .agent = .{
+            .url = "https://github.com/tkersey/agent/archive/refs/tags/v2.0.0.tar.gz",
+            .hash = "agent-2.0.0-dBg3hBEwCgDuBIyJSmp-9PnvI9JVNJ8TBUAgAhp3b1Ap",
+        },
+    },
+    .minimum_zig_version = "0.16.0",
+    .paths = .{ "build.zig", "build.zig.zon", "main.zig", "verify.mjs" },
+    .fingerprint = 0xd5ede7c774d17e22,
+}

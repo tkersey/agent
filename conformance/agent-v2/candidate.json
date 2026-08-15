@@ -35,7 +35,7 @@
   "identities": {
     "applicationId": "ed145c722e0a0cf8cfa4c9bce4846ecca6d74aab08cb92a6b14537817dfc3f32",
     "decisionContractDigest": "35b9a4670ec3a81dbfd0761900388a24ea28e49628da96ca68b97042ee15373f",
-    "sourceProjectionSha256": "1fcfe934bff09c52b8c6a8cdd9e1cdfd42c9dcb9df4e445cb6b197d73ec50c1e"
+    "sourceProjectionSha256": "2dab2d4981643f3dc1dc60074af69576b2ca1a2e92b0112cbdf9f8a5be6b8160"
   },
   "artifactChecksums": {
     "applicationWasmSha256": "7285c0d20c661b3e7321b9d7ea16adc879c13122722232498e7f6e563d81c920",

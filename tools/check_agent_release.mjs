@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const baseline = readJson("conformance/agent-v2/baseline.json");
 const candidate = readJson("conformance/agent-v2/candidate.json");
@@ -34,7 +36,7 @@ if (existsSync(".git")) {
   require(sourceProjectionSha256() === candidate.identities.sourceProjectionSha256,
     "Agent benchmark source projection");
 }
-const agentPackageHash = execFileSync("zig", ["fetch", "."], { encoding: "utf8" }).trim();
+const agentPackageHash = fetchPackageHash();
 require(/^agent-2\.0\.0-[A-Za-z0-9_-]+$/.test(agentPackageHash), "Agent Zig package hash");
 
 const before = baseline.measurements;
@@ -206,4 +208,31 @@ function sourceProjectionSha256() {
     digest.update("\0");
   }
   return digest.digest("hex");
+}
+
+function fetchPackageHash() {
+  const repository = process.cwd();
+  const workspace = mkdtempSync(join(tmpdir(), "agent-release-zig-fetch-"));
+  const archive = join(workspace, "agent.tar");
+  try {
+    copyFileSync(join(repository, "build.zig"), join(workspace, "build.zig"));
+    copyFileSync(join(repository, "build.zig.zon"), join(workspace, "build.zig.zon"));
+    const packagePathsBlock = zon.match(/\.paths\s*=\s*\.\{([\s\S]*?)\n\s*\},/);
+    require(packagePathsBlock !== null, "Agent package path declaration");
+    const packagePaths = [...packagePathsBlock[1].matchAll(/"([^"]+)"/g)]
+      .map((match) => match[1]);
+    require(packagePaths.length > 0, "Agent package paths");
+    execFileSync("tar", ["-cf", archive, "-C", repository, ...packagePaths]);
+    return execFileSync("zig", [
+      "fetch",
+      "--global-cache-dir",
+      join(workspace, "cache"),
+      archive,
+    ], {
+      cwd: workspace,
+      encoding: "utf8",
+    }).trim();
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
 }

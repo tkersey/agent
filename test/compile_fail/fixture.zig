@@ -8,6 +8,7 @@ pub fn define(
     comptime actions: anytype,
     comptime history: anytype,
 ) type {
+    _ = history;
     return agent.define(.{
         .name = "compile-fail-fixture",
         .version = "1.0.0",
@@ -29,6 +30,5 @@ pub fn define(
             .maximum_effect_actions = 0,
             .maximum_child_actions = 0,
         },
-        .history = history,
     });
 }

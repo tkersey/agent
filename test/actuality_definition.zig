@@ -19,8 +19,8 @@ test "repository repair actuality definition is closed and bounded" {
     );
     try std.testing.expect(
         comptime boundary.schema.maximumEncodedSize(
-            actuality.Strategy.DecisionRequestType(actuality.Definition),
-        ) <= 512 * 1024,
+            actuality.Compiled.DecisionSite.Payload,
+        ) <= 160 * 1024,
     );
     try std.testing.expectEqualStrings(
         "model.decide.v1",
@@ -36,13 +36,25 @@ test "repository repair actuality definition is closed and bounded" {
     );
 }
 
-test "repository repair final policy requires passing tests" {
-    try std.testing.expectEqual(
-        .latest_observation_bool,
-        std.meta.activeTag(actuality.Definition.final_policy),
+test "repository repair uses explicit working-set epistemics" {
+    try std.testing.expectEqualStrings(
+        "agent.epistemics.repository-working-set.v1",
+        actuality.Epistemics.semantic_identity,
     );
-    const requirement = actuality.Definition.final_policy.latest_observation_bool;
-    try std.testing.expectEqualStrings("run_tests", requirement.observation_name);
-    try std.testing.expectEqualStrings("passed", requirement.field_name);
-    try std.testing.expect(requirement.expected);
+    try std.testing.expect(actuality.Epistemics.MemoryType(actuality.Definition) == actuality.Memory);
+    try std.testing.expect(actuality.Epistemics.DecisionViewType(actuality.Definition) == actuality.DecisionView);
+}
+
+test "repository repair ENF schema maxima fit the reduced runtime envelope" {
+    const State = actuality.Compiled.State;
+    const Turn = actuality.Compiled.DecisionSite.Payload;
+    const memory_bytes = comptime boundary.schema.maximumEncodedSize(actuality.Memory);
+    const view_bytes = comptime boundary.schema.maximumEncodedSize(actuality.DecisionView);
+    const state_bytes = comptime boundary.schema.maximumEncodedSize(State);
+    const turn_bytes = comptime boundary.schema.maximumEncodedSize(Turn);
+
+    try std.testing.expect(memory_bytes <= 160 * 1024);
+    try std.testing.expect(view_bytes <= 160 * 1024);
+    try std.testing.expect(state_bytes <= 192 * 1024);
+    try std.testing.expect(turn_bytes <= 192 * 1024);
 }

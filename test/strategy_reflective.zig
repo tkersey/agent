@@ -58,10 +58,11 @@ const Definition = agent.define(.{
         .maximum_effect_actions = 2,
         .maximum_child_actions = 0,
     },
-    .history = .{
-        .maximum_observations = 4,
-        .overflow = .fail,
-    },
+});
+const Epistemics = agent.epistemics.verbatim(.{
+    .maximum_observations = 4,
+    .overflow = .fail,
+    .final = agent.final_policy.none,
 });
 
 const machine_options = .{
@@ -72,11 +73,13 @@ const machine_options = .{
 const Reflective = agent.compile(
     Definition,
     agent.strategy.reflective(.{ .reflection_rounds = 1 }),
+    Epistemics,
     .{ .machine = machine_options },
 );
 const React = agent.compile(
     Definition,
     agent.strategy.react(.{}),
+    Epistemics,
     .{ .machine = machine_options },
 );
 const Machine = Reflective.Machine;
@@ -108,7 +111,7 @@ test "Reflective ReAct proposes, reflects, dispatches, and specializes distinctl
     switch (proposal.value) {
         .s0 => |request| {
             try std.testing.expectEqual(agent.DecisionPhase.propose, request.phase);
-            try std.testing.expect(request.candidate == null);
+            try std.testing.expect(request.strategy_local == null);
             try std.testing.expectEqual(@as(u32, 0), request.counters.decisions);
         },
         else => return error.UnexpectedEffectSite,
@@ -123,7 +126,7 @@ test "Reflective ReAct proposes, reflects, dispatches, and specializes distinctl
         .s0 => |request| {
             try std.testing.expectEqual(agent.DecisionPhase.reflect, request.phase);
             try std.testing.expectEqual(@as(u32, 1), request.counters.decisions);
-            switch (request.candidate.?) {
+            switch (request.strategy_local.?) {
                 .tool => |payload| try std.testing.expectEqual(@as(u32, 7), payload),
                 else => return error.UnexpectedCandidate,
             }
@@ -152,7 +155,7 @@ test "Reflective ReAct proposes, reflects, dispatches, and specializes distinctl
             try std.testing.expectEqual(@as(u32, 1), request.counters.turns);
             try std.testing.expectEqual(@as(u32, 2), request.counters.decisions);
             try std.testing.expectEqual(@as(u32, 1), request.counters.effect_actions);
-            try std.testing.expectEqual(@as(u32, 1), try request.history.len());
+            try std.testing.expectEqual(@as(u32, 1), try request.context.len());
         },
         else => return error.UnexpectedEffectSite,
     }
@@ -163,7 +166,7 @@ test "Reflective ReAct proposes, reflects, dispatches, and specializes distinctl
         else => return error.UnexpectedMachineStep,
     };
     switch (final_reflection.value) {
-        .s0 => |request| switch (request.candidate.?) {
+        .s0 => |request| switch (request.strategy_local.?) {
             .final => |result| try std.testing.expectEqual(@as(u32, 99), result),
             else => return error.UnexpectedCandidate,
         },

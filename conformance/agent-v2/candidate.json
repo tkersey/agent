@@ -1,0 +1,48 @@
+{
+  "format": "agent-enf-candidate-v1",
+  "toolchain": {
+    "zig": "0.16.0",
+    "bun": "1.3.14"
+  },
+  "components": {
+    "agent": "2.0.0",
+    "boundary": "1.3.2",
+    "world": "3.1.1",
+    "worldHost": "1.0.1",
+    "worldCapabilities": "2.2.0"
+  },
+  "measurements": {
+    "wasmBytes": 3766433,
+    "wasmStackBytes": 134217728,
+    "wasmMaximumMemoryBytes": 268435456,
+    "declaredStateBytes": 512000,
+    "firstFrameBytes": 1979,
+    "peakFrameBytes": 9927,
+    "peakMachineStateBytes": 7775,
+    "firstDecisionPayloadBytes": 350,
+    "peakDecisionPayloadBytes": 1664,
+    "compileMilliseconds": 82670,
+    "peakCompilerBytes": 3408183296,
+    "coldStepNanoseconds": 11232541,
+    "warmStepNanoseconds": 18445458
+  },
+  "ratios": {
+    "peakFrameToBaseline": 0.460329237,
+    "wasmToBaseline": 0.637014723,
+    "compileTimeToBaseline": 1.150271323,
+    "compilerMemoryToBaseline": 1.503277279
+  },
+  "identities": {
+    "applicationId": "ed145c722e0a0cf8cfa4c9bce4846ecca6d74aab08cb92a6b14537817dfc3f32",
+    "decisionContractDigest": "35b9a4670ec3a81dbfd0761900388a24ea28e49628da96ca68b97042ee15373f",
+    "sourceProjectionSha256": "2dab2d4981643f3dc1dc60074af69576b2ca1a2e92b0112cbdf9f8a5be6b8160"
+  },
+  "artifactChecksums": {
+    "applicationWasmSha256": "7285c0d20c661b3e7321b9d7ea16adc879c13122722232498e7f6e563d81c920",
+    "applicationManifestSha256": "8cea8fdd174575d212205a08f6d78e7c3ee91da99b08be8bbd4d1a5065ebb7b2",
+    "decisionContractBinarySha256": "fd7df48eb8bc79c7e4150156de83e911e8a76593cb59850952ecb11385f49b94",
+    "decisionContractJsonSha256": "0ae9cb01cf12217372c9d8fb933947124518fff117fec74debe83b90e80664cd",
+    "worldHostRuntimeArchiveSha256": "e501ab1fe540ed2ee5cbd1db5a027f00271f95694747160fe36fa64cffaab52d",
+    "worldCapabilitiesArchiveSha256": "5612c45a84abbe8a2b9fa821cf5d6dc34a82d38d82c8df18b7a45617aba9ba74"
+  }
+}

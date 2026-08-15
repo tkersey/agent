@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const LIFECYCLE_MODES = new Set(["retry", "replay", "branch", "migrate"]);
-const WORKER_MEMORY_BYTES = 512 * 1024 * 1024;
+const WORKER_MEMORY_BYTES = 256 * 1024 * 1024;
 
 export async function runLifecycleProof(mode, options = {}) {
   if (!LIFECYCLE_MODES.has(mode)) throw new Error(`lifecycle_mode_invalid:${mode}`);
@@ -96,7 +96,13 @@ async function proveReplay(roots, temporaryRoot) {
     initialArgsBytes: roots.initialArgsBytes
   });
   for (const resultBytes of original.results) {
+    while (current.frame.status === roots.host.FrameStatus.yieldedFuel) {
+      current = await replayController.advance("replay", "main");
+    }
     current = await replayController.advance("replay", "main", { effectResult: resultBytes });
+  }
+  while (current.frame.status === roots.host.FrameStatus.yieldedFuel) {
+    current = await replayController.advance("replay", "main");
   }
   const byteIdentical = Buffer.from(current.frameBytes).equals(original.terminal.frameBytes);
   if (current.frame.status !== roots.host.FrameStatus.completed || !byteIdentical) {
@@ -125,7 +131,7 @@ async function proveBranch(roots, temporaryRoot) {
   const listResult = actionResult(roots, request, { action: "list_repository", arguments: {} });
   const readResult = actionResult(roots, request, {
     action: "read_file",
-    arguments: { path: "src/range.mjs" }
+    arguments: { role: "source", path: "src/range.mjs" }
   });
   const listChild = await environment.controller.advance("branch", "list", { effectResult: listResult });
   const readChild = await environment.controller.advance("branch", "read", { effectResult: readResult });
@@ -190,8 +196,11 @@ async function proveMigration(roots, temporaryRoot) {
     throw new Error("migration_receiver_workspace_preflight_failed");
   }
   current = await imported.controller.readCurrentFrame("migration-target", "main");
-  while (current.frame.status === roots.host.FrameStatus.needsEffect) {
-    current = await resolveAndAdvance(target, "migration-target", "main", current);
+  while (current.frame.status === roots.host.FrameStatus.needsEffect ||
+      current.frame.status === roots.host.FrameStatus.yieldedFuel) {
+    current = current.frame.status === roots.host.FrameStatus.yieldedFuel
+      ? await target.controller.advance("migration-target", "main")
+      : await resolveAndAdvance(target, "migration-target", "main", current);
   }
   if (current.frame.status !== roots.host.FrameStatus.completed || targetPreflights !== 1 ||
       target.context.mutationsApplied !== 1 || target.context.lastTestPassed !== true) {
@@ -209,8 +218,8 @@ async function proveMigration(roots, temporaryRoot) {
 
 async function loadRoots(options) {
   const agentRoot = resolve(options.agentRoot ?? process.cwd());
-  const hostRoot = resolve(options.worldHostRoot ?? join(agentRoot, "../world-host"));
-  const capabilitiesRoot = resolve(options.capabilitiesRoot ?? join(agentRoot, "../world-capabilities-actuality-v1"));
+  const hostRoot = resolve(options.worldHostRoot ?? process.env.AGENT_WORLD_HOST_ROOT ?? join(agentRoot, "../world-host"));
+  const capabilitiesRoot = resolve(options.capabilitiesRoot ?? process.env.AGENT_WORLD_CAPABILITIES_ROOT ?? join(agentRoot, "../world-capabilities"));
   const artifactRoot = resolve(options.artifactRoot ?? join(agentRoot, "zig-out/agent-actuality"));
   const host = await import(pathToFileURL(join(hostRoot, "src/v1/index.mjs")));
   const capabilities = await import(pathToFileURL(join(capabilitiesRoot, "src/v1/index.mjs")));
@@ -276,7 +285,12 @@ function environmentForImported(roots, controller, workspace) {
 async function completeRun(environment, runId, branchId, initialArgsBytes, retainResults) {
   let current = await environment.controller.initialize(runId, branchId, { initialArgsBytes });
   const results = [];
-  while (current.frame.status === environment.roots.host.FrameStatus.needsEffect) {
+  while (current.frame.status === environment.roots.host.FrameStatus.needsEffect ||
+      current.frame.status === environment.roots.host.FrameStatus.yieldedFuel) {
+    if (current.frame.status === environment.roots.host.FrameStatus.yieldedFuel) {
+      current = await environment.controller.advance(runId, branchId);
+      continue;
+    }
     const resolved = await resolvePending(environment, current);
     if (retainResults) results.push(Buffer.from(resolved.result.encodedBytes));
     current = await environment.controller.advance(runId, branchId, {
@@ -292,10 +306,14 @@ async function completeRun(environment, runId, branchId, initialArgsBytes, retai
 
 async function resolveAndAdvance(environment, runId, branchId, current) {
   const resolved = await resolvePending(environment, current);
-  return environment.controller.advance(runId, branchId, {
+  let next = await environment.controller.advance(runId, branchId, {
     effectResult: resolved.result,
     effectMetadata: effectMetadata(resolved)
   });
+  while (next.frame.status === environment.roots.host.FrameStatus.yieldedFuel) {
+    next = await environment.controller.advance(runId, branchId);
+  }
+  return next;
 }
 
 async function resolvePending(environment, current) {

@@ -36,9 +36,12 @@ const Definition = agent.define(.{
         .maximum_effect_actions = 0,
         .maximum_child_actions = 0,
     },
-    .history = .{ .maximum_observations = 0, .overflow = .fail },
 });
-const Compiled = agent.compile(Definition, agent.strategy.react(.{}), .{
+const Compiled = agent.compile(Definition, agent.strategy.react(.{}), agent.epistemics.verbatim(.{
+    .maximum_observations = 0,
+    .overflow = .fail,
+    .final = agent.final_policy.none,
+}), .{
     .machine = .{
         .maximum_frames = 16,
         .maximum_state_bytes = 64 * 1024,
@@ -47,12 +50,12 @@ const Compiled = agent.compile(Definition, agent.strategy.react(.{}), .{
 });
 
 test "public Boundary module shares Agent's exact nominal types" {
-    const ExpectedHistory = boundary.Vector(void, 0);
-    try std.testing.expect(ExpectedHistory == agent.strategy.History(Definition));
+    const ExpectedMemory = boundary.Vector(void, 0);
+    try std.testing.expect(ExpectedMemory == Compiled.Epistemics.MemoryType(Definition));
     try std.testing.expectEqualSlices(
         u8,
-        &boundary.schema.schemaDigest(Compiled.DecisionSite.Payload),
-        &Compiled.StrategyManifest.decision_request_schema_digest,
+        &boundary.schema.schemaDigest(Compiled.Strategy.DecisionLocalType(Definition)),
+        &Compiled.StrategyManifest.decision_local_schema_digest,
     );
 
     const Machine = Compiled.Machine;

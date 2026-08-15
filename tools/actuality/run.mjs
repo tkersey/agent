@@ -19,8 +19,8 @@ if (options.mode !== "deterministic") {
 }
 
 const agentRoot = resolve(options.agentRoot ?? process.cwd());
-const hostRoot = resolve(options.worldHostRoot ?? join(agentRoot, "../world-host"));
-const capabilitiesRoot = resolve(options.capabilitiesRoot ?? join(agentRoot, "../world-capabilities-actuality-v1"));
+const hostRoot = resolve(options.worldHostRoot ?? process.env.AGENT_WORLD_HOST_ROOT ?? join(agentRoot, "../world-host"));
+const capabilitiesRoot = resolve(options.capabilitiesRoot ?? process.env.AGENT_WORLD_CAPABILITIES_ROOT ?? join(agentRoot, "../world-capabilities"));
 const artifactRoot = resolve(options.artifactRoot ?? join(agentRoot, "zig-out/agent-actuality"));
 const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-actuality-v1-"));
 
@@ -44,7 +44,7 @@ try {
     wasmBytes,
     blockStore,
     headStore,
-    workerFactory: () => new host.ApplicationWorker({ maximumMemoryBytes: 512 * 1024 * 1024 }),
+    workerFactory: () => new host.ApplicationWorker({ maximumMemoryBytes: 256 * 1024 * 1024 }),
     preflight: async (manifest) => {
       preflightRuns += 1;
       return { blockers: Buffer.from(manifest.applicationId).toString("hex") === capabilities.ACTUALITY_APPLICATION_ID
@@ -72,13 +72,30 @@ try {
 
   const runId = "actuality-deterministic-v1";
   const branchId = "main";
+  const stepDurations = [];
+  const initializeStarted = performance.now();
   let current = await controller.initialize(runId, branchId, { initialArgsBytes });
+  stepDurations.push(performance.now() - initializeStarted);
+  const firstFrameBytes = current.frameBytes.length;
+  const firstDecisionPayloadBytes = current.frame.pendingEffect?.payloadBytes.length ?? 0;
+  let peakFrameBytes = firstFrameBytes;
+  let peakMachineStateBytes = current.frame.stateBytes.length;
+  let peakDecisionPayloadBytes = firstDecisionPayloadBytes;
   const genesisFrameId = Buffer.from(current.frame.frameId).toString("hex");
   const interfaces = [];
   const requestIds = [];
   const resultIds = [];
 
-  while (current.frame.status === host.FrameStatus.needsEffect) {
+  while (current.frame.status === host.FrameStatus.needsEffect ||
+      current.frame.status === host.FrameStatus.yieldedFuel) {
+    if (current.frame.status === host.FrameStatus.yieldedFuel) {
+      const advanceStarted = performance.now();
+      current = await controller.advance(runId, branchId);
+      stepDurations.push(performance.now() - advanceStarted);
+      peakFrameBytes = Math.max(peakFrameBytes, current.frameBytes.length);
+      peakMachineStateBytes = Math.max(peakMachineStateBytes, current.frame.stateBytes.length);
+      continue;
+    }
     const request = current.frame.pendingEffect;
     const inspected = router.inspect(request.encodedBytes);
     interfaces.push(bindingInterfaceLabel(inspected.bindingId));
@@ -98,6 +115,7 @@ try {
     }
     const resolved = await router.resolve(context, request.encodedBytes);
     resultIds.push(hashHex(resolved.result.resultId));
+    const advanceStarted = performance.now();
     current = await controller.advance(runId, branchId, {
       effectResult: resolved.result,
       effectMetadata: {
@@ -106,10 +124,26 @@ try {
         recoveryClass: resolved.recoveryClass
       }
     });
+    stepDurations.push(performance.now() - advanceStarted);
+    peakFrameBytes = Math.max(peakFrameBytes, current.frameBytes.length);
+    peakMachineStateBytes = Math.max(peakMachineStateBytes, current.frame.stateBytes.length);
+    if (current.frame.pendingEffect !== null) {
+      const pending = router.inspect(current.frame.pendingEffect.encodedBytes);
+      if (pending.bindingId === "repository-repair-decision-fixture.v1") {
+        peakDecisionPayloadBytes = Math.max(
+          peakDecisionPayloadBytes,
+          current.frame.pendingEffect.payloadBytes.length,
+        );
+      }
+    }
   }
 
   if (current.frame.status !== host.FrameStatus.completed) {
-    throw new Error(`actuality_terminal_status:${current.frame.status}`);
+    const failureBytes = current.frame.failure ?? null;
+    const failure = failureBytes === null
+      ? ""
+      : `:${Buffer.from(failureBytes).toString("hex")}`;
+    throw new Error(`actuality_terminal_status:${current.frame.status}${failure}:interfaces=${interfaces.join(",")}`);
   }
   const finalResult = capabilities.decodeRepositoryRepairFinalResult(current.frame.finalResultBytes);
   const changedPaths = (await git(workspaceRoot, ["status", "--porcelain=v1"]))
@@ -118,6 +152,7 @@ try {
     .map((line) => line.replace(/^[ MADRCU?!]{1,2} /, ""));
   const finalSource = await readFile(join(workspaceRoot, "src/range.mjs"));
   const hiddenVerifierPassed = await hiddenVerify(workspaceRoot);
+  const warmDurations = stepDurations.slice(1).sort((left, right) => left - right);
   const receipt = {
     agent_actuality_format: 1,
     agent_actuality_mode: "deterministic",
@@ -150,7 +185,18 @@ try {
     final_source_digest_matches: finalResult.final_source_sha256 === sha256(finalSource),
     disposable_worker_per_step: true,
     receiver_preflight_runs: preflightRuns,
-    terminal_result_digest: sha256(current.frame.finalResultBytes)
+    terminal_result_digest: sha256(current.frame.finalResultBytes),
+    measurements: {
+      applicationWasmBytes: wasmBytes.length,
+      firstFrameBytes,
+      peakFrameBytes,
+      peakMachineStateBytes,
+      firstDecisionPayloadBytes,
+      peakDecisionPayloadBytes,
+      coldStepNanoseconds: Math.round(stepDurations[0] * 1_000_000),
+      warmStepNanoseconds: Math.round(warmDurations[Math.floor(warmDurations.length / 2)] * 1_000_000),
+      stepCount: stepDurations.length,
+    }
   };
   assertReceipt(receipt);
   process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);

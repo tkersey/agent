@@ -41,7 +41,6 @@ const Definition = agent.define(.{
         .maximum_effect_actions = 1,
         .maximum_child_actions = 0,
     },
-    .history = .{ .maximum_observations = 1, .overflow = .fail },
 });
 
 test "descriptors are projected in Action declaration order" {

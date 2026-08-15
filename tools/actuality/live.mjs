@@ -5,9 +5,9 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 
-const APPLICATION_ID = "26f5ab2b7e86994e5d3b234bb32447891906276853c094f0ac73def2b99610bb";
-const DECISION_CONTRACT_DIGEST = "3e2e4a1bd58b047dc9343964cfdc413174bb50a39d573e340cb963bf29127800";
-const WORKER_MEMORY_BYTES = 512 * 1024 * 1024;
+const APPLICATION_ID = "ed145c722e0a0cf8cfa4c9bce4846ecca6d74aab08cb92a6b14537817dfc3f32";
+const DECISION_CONTRACT_DIGEST = "35b9a4670ec3a81dbfd0761900388a24ea28e49628da96ca68b97042ee15373f";
+const WORKER_MEMORY_BYTES = 256 * 1024 * 1024;
 const FAILED_ATTEMPT_RECEIPT_BRAND = Symbol("failed-attempt-receipt");
 const LIVE_RECEIPT_BOOLEAN_FIELDS = Object.freeze([
   "openai_responses_api", "openai_model_requested_present", "openai_model_returned_present",
@@ -69,8 +69,8 @@ export async function runLiveActuality(options = {}) {
   }
 
   const agentRoot = resolve(options.agentRoot ?? process.cwd());
-  const hostRoot = resolve(options.worldHostRoot ?? join(agentRoot, "../world-host"));
-  const capabilitiesRoot = resolve(options.capabilitiesRoot ?? join(agentRoot, "../world-capabilities-actuality-v1"));
+  const hostRoot = resolve(options.worldHostRoot ?? process.env.AGENT_WORLD_HOST_ROOT ?? join(agentRoot, "../world-host"));
+  const capabilitiesRoot = resolve(options.capabilitiesRoot ?? process.env.AGENT_WORLD_CAPABILITIES_ROOT ?? join(agentRoot, "../world-capabilities"));
   const artifactRoot = resolve(options.artifactRoot ?? join(agentRoot, "zig-out/agent-actuality"));
   const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-actuality-live-"));
   let context;
@@ -135,7 +135,13 @@ export async function runLiveActuality(options = {}) {
 
     let current = await controller.initialize("actuality-live-v1", "main", { initialArgsBytes });
     genesisFrameId = hex(current.frame.frameId);
-    while (current.frame.status === host.FrameStatus.needsEffect) {
+    while (current.frame.status === host.FrameStatus.needsEffect ||
+        current.frame.status === host.FrameStatus.yieldedFuel) {
+      if (current.frame.status === host.FrameStatus.yieldedFuel) {
+        current = await controller.advance("actuality-live-v1", "main");
+        terminalFrameId = hex(current.frame.frameId);
+        continue;
+      }
       const request = current.frame.pendingEffect;
       const inspected = router.inspect(request.encodedBytes);
       interfaces.push(bindingInterfaceLabel(inspected.bindingId));

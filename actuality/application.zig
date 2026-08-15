@@ -6,6 +6,13 @@ const factory = @import("repository_repair_definition.zig");
 pub const Actuality = factory.RepositoryRepair(agent, boundary);
 pub const Compiled = Actuality.Compiled;
 pub const Contract = agent.decision.jsonContract(Compiled);
+pub const wasm_stack_size_bytes: u32 = 128 * 1024 * 1024;
+
+/// Artifact-resident packaging metadata used by the release verifier. This is
+/// not part of World Application ABI v1 and carries no runtime authority.
+pub export fn agent_actuality_wasm_stack_size_bytes() u32 {
+    return wasm_stack_size_bytes;
+}
 
 fn authorityRequirements(comptime authorities: anytype) u64 {
     var result: u64 = 0;
@@ -21,7 +28,7 @@ fn maximumResultBytes(comptime Site: type) u32 {
 
 pub const Application = world.application(.{
     .name = "repository-repair-actuality",
-    .version = "1.0.0",
+    .version = "2.0.0",
     .root = Compiled.Machine,
     .external = .{
         world.external(Compiled.Machine, Compiled.DecisionSite.site_id, .{
@@ -69,12 +76,12 @@ pub const Application = world.application(.{
     },
     .limits = .{
         .maximum_initial_args_bytes = 8 << 10,
-        .maximum_state_bytes = 1 << 20,
-        .maximum_payload_bytes = 512 << 10,
-        .maximum_result_bytes = 128 << 10,
-        .maximum_host_claim_bytes = 16 << 10,
-        .maximum_host_metadata_bytes = 16 << 10,
-        .maximum_failure_bytes = 64 << 10,
+        .maximum_state_bytes = 512 << 10,
+        .maximum_payload_bytes = 160 << 10,
+        .maximum_result_bytes = 40 << 10,
+        .maximum_host_claim_bytes = 4 << 10,
+        .maximum_host_metadata_bytes = 4 << 10,
+        .maximum_failure_bytes = 4 << 10,
         .maximum_fuel_per_step = 100_000,
         .maximum_frame_depth = 32,
     },

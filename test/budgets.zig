@@ -63,12 +63,15 @@ fn Definition(
             .maximum_effect_actions = maximum_effect_actions,
             .maximum_child_actions = maximum_child_actions,
         },
-        .history = .{ .maximum_observations = 8, .overflow = .fail },
     });
 }
 
 fn MachineFor(comptime AgentDefinition: type, comptime Strategy: type) type {
-    return agent.compile(AgentDefinition, Strategy, .{
+    return agent.compile(AgentDefinition, Strategy, agent.epistemics.verbatim(.{
+        .maximum_observations = 8,
+        .overflow = .fail,
+        .final = agent.final_policy.none,
+    }), .{
         .machine = .{
             .maximum_frames = 32,
             .maximum_state_bytes = 128 * 1024,

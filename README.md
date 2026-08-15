@@ -1,143 +1,102 @@
 # agent
 
-`agent` is a Zig staged compiler for data-defined agent systems.
+`agent` is a Zig staged compiler for typed agent systems.
 
 ```text
-AgentDefinition
-+ RuntimeStrategy
--> Boundary Machine
--> World application WASM
+AgentDefinition + RuntimeStrategy + EpistemicStrategy
+    -> one Boundary Program
+    -> one Boundary Machine ABI v2 reducer
+    -> World application-specific WASM
 ```
 
-Agent definitions are immutable typed comptime data. Runtime strategies are
-reusable compile-time software. `agent.compile` specializes both through one
-ordinary Boundary program; the resulting Boundary Machine is the only
-executable meaning.
+Agent v2 separates four objects:
+
+```text
+Evidence != Memory != DecisionView != DecisionContract
+```
+
+world-host retains complete Frames and EffectResults as evidence. The Machine
+retains bounded typed Memory. An EpistemicStrategy deterministically folds each
+Observation into Memory and projects a turn-specific DecisionView. The external
+decision provider admits one immutable, digest-bound DecisionContract and
+receives only the dynamic DecisionTurn.
 
 ```zig
-const agent = @import("agent");
-
-const Action = union(enum) { final: u32 };
-const Failure = enum {
-    budget_exhausted,
-    history_overflow,
-    arithmetic_overflow,
-    invalid_variant,
-    capacity_exceeded,
-};
-
 const Definition = agent.define(.{
     .name = "answer-agent",
-    .version = "1.0.0",
+    .version = "2.0.0",
     .instructions = "Return one typed answer.",
     .Goal = u32,
-    .Action = Action,
+    .Action = union(enum) { final: u32 },
     .Observation = void,
     .Result = u32,
-    .Failure = Failure,
+    .Failure = enum { budget_exhausted, history_overflow, arithmetic_overflow, invalid_variant, capacity_exceeded },
     .decision = .{
         .interface = "model.decide.v1",
         .maximum_request_bytes = 4096,
         .maximum_result_bytes = 64,
     },
-    .actions = .{
-        agent.action.final(.final, .{
-            .name = "final",
-            .description = "Return the answer.",
-        }),
-    },
+    .actions = .{agent.action.final(.final, .{
+        .name = "final",
+        .description = "Return the answer.",
+    })},
     .budget = .{
         .maximum_turns = 1,
         .maximum_decisions = 1,
         .maximum_effect_actions = 0,
         .maximum_child_actions = 0,
     },
-    .history = .{ .maximum_observations = 0, .overflow = .fail },
 });
 
-pub const Compiled = agent.compile(
-    Definition,
-    agent.strategy.react(.{}),
-    .{ .machine = .{
+const Runtime = agent.strategy.react(.{});
+const Epistemics = agent.epistemics.verbatim(.{
+    .maximum_observations = 0,
+    .overflow = .fail,
+    .final = agent.final_policy.none,
+});
+
+pub const Compiled = agent.compile(Definition, Runtime, Epistemics, .{
+    .machine = .{
         .maximum_frames = 16,
         .maximum_state_bytes = 64 * 1024,
         .maximum_machine_fuel = 4096,
-    } },
-);
-pub const Machine = Compiled.Machine;
+    },
+});
 ```
 
-The package targets Zig 0.16.0 and exact Boundary v1.3.2. Its public clean-room
-proof closes four specialized Machines with exact World v3.1.1 and runs them
-through public world-host v1.0.1 and world-capabilities v2.1.2 artifacts bound
-by [the reference-stack lock](conformance/reference-stack-v1.lock.json).
+The package targets Zig 0.16.0, Boundary v1.3.2, Machine ABI v2, World
+v3.1.1, Application ABI v1, and Frame v1. Agent definitions and strategies are
+compile-time inputs: there is no runtime definition loader, strategy registry,
+memory VM, provider-owned conversation, or second reducer.
 
-The agent definition is never loaded at runtime. A strategy is not a runtime
-plugin. The package contains no host, capability implementation, model client,
-definition loader, strategy registry, tool registry, or generic interpreter.
-Concrete model and tool implementations remain external effects.
-
-`boundary.Agent` is a historical thin spelling over Boundary program
-compilation. This repository does not import or extend it; `tkersey/agent` owns
-AgentDefinition and RuntimeStrategy specialization. Direct Boundary authoring
-remains available below this layer.
-
-See [docs/architecture.md](docs/architecture.md) and the typed Research and
-Coding definitions under [examples](examples). The authorized dependency
-correction from the initial targets to the released compatibility line is
-recorded in [docs/release_line.md](docs/release_line.md).
-
-Agent exposes three separate proof classes:
+## Proof classes
 
 ```sh
-# Compiler semantics, World packaging, and native/WASM parity.
+# Public compiler semantics, packaging, native/WASM parity, malformed corpus.
 zig build check
 
-# Anonymous deterministic host/capability lifecycle and repository Actuality.
+# Compiler proof after exact archive acquisition with network disabled.
+zig build check-agent-hermetic
+
+# Anonymous deterministic host/capability lifecycle from lock-pinned releases.
 zig build check-agent-reference-stack
 
-# Explicit owner-operated provider proof.
-OPENAI_API_KEY=... OPENAI_MODEL=... zig build check-agent-actuality-live
-```
-
-`check-agent-hermetic` acquires exact Boundary and World archives, then disables
-network access while running the compiler proof. The reference-stack proof also
-has an offline form that requires all four local archives and checks them
-against the pinned identities:
-
-```sh
-zig build check-agent-reference-stack-offline \
-  -Dboundary-archive=/path/to/boundary-v1.3.2.tar.gz \
-  -Dworld-archive=/path/to/world-v3.1.1.tar.gz \
-  -Dworld-host-archive=/path/to/world-host-v1.0.1-runtime.tar.gz \
-  -Dworld-capabilities-archive=/path/to/world-capabilities-v2.1.2-deterministic.tar.gz
-```
-
-Agent v1.1 also contains the `repository-repair-actuality` witness: the
-compiled Machine reads a controlled repository, observes a failing Bun test,
-requests one digest-bound replacement, and returns success only after the real
-test passes. The local capability-development proof is deterministic and
-network-free:
-
-```sh
+# Local deterministic ENF Actuality plus retry/replay/branch/migration.
 zig build check-agent-actuality-release
-```
 
-The OpenAI lane is explicit, requires `OPENAI_API_KEY`, `OPENAI_MODEL`, and an
-interactive approval, and is never part of `zig build check` or the public
-deterministic reference-stack proof:
-
-```sh
+# Explicit credentialed and interactive provider proof.
 OPENAI_API_KEY=... OPENAI_MODEL=... zig build check-agent-actuality-live
 ```
 
-Published live evidence can be checked against independently supplied release
-archives and generated application artifacts with
-`zig build check-agent-actuality-v1-live-receipt -- ...`; see
-[Actuality](docs/actuality.md) for the exact arguments.
+The live lane is never part of `zig build check` or the anonymous public proof.
+Reference implementations do not imply exactly-once effects, hostile-host
+protection, universal receiver policy, or credential-free live model access.
 
-See [Actuality](docs/actuality.md), the
-[decision contract](docs/decision_contract.md), and
-[live model data handling](docs/live_model_data.md).
+See [Epistemic Normal Form](docs/epistemic_normal_form.md),
+[EpistemicStrategy](docs/epistemic_strategy.md),
+[DecisionContract](docs/decision_contract.md),
+[evidence and memory](docs/evidence_and_memory.md),
+[Actuality](docs/actuality.md), and the
+[v1.1 migration guide](docs/migration_from_1_1.md).
 
 Licensed under the MIT License.

@@ -2,7 +2,7 @@ const base = @import("base_application");
 const direct = @import("direct_reference");
 const world = @import("world");
 
-const Machine = direct.ReferenceMachine;
+const Machine = direct.DirectMachine;
 
 pub const App = world.application(.{
     .name = "research-agent",

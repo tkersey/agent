@@ -2,17 +2,18 @@ const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
 
-const Action = union(enum) {
-    final: u32,
-};
-
+const Action = union(enum) { final: u32 };
 const Failure = enum {
+    budget_exhausted,
+    history_overflow,
+    arithmetic_overflow,
     invalid_variant,
+    capacity_exceeded,
 };
 
 const Definition = agent.define(.{
     .name = "custom-strategy-fixture",
-    .version = "1.0.0",
+    .version = "2.0.0",
     .instructions = "Return the typed final result.",
     .Goal = u32,
     .Action = Action,
@@ -20,118 +21,90 @@ const Definition = agent.define(.{
     .Result = u32,
     .Failure = Failure,
     .decision = .{
-        .interface = "fixture.custom-decide.v1",
-        .maximum_request_bytes = 8,
-        .maximum_result_bytes = 8,
+        .interface = "fixture.custom-decide.v2",
+        .maximum_request_bytes = 4096,
+        .maximum_result_bytes = 64,
     },
-    .actions = .{
-        agent.action.final(.final, .{
-            .name = "final",
-            .description = "Return the exact typed result.",
-        }),
-    },
+    .actions = .{agent.action.final(.final, .{
+        .name = "final",
+        .description = "Return the exact typed result.",
+    })},
     .budget = .{
         .maximum_turns = 1,
         .maximum_decisions = 1,
         .maximum_effect_actions = 0,
         .maximum_child_actions = 0,
     },
-    .history = .{
-        .maximum_observations = 0,
-        .overflow = .fail,
-    },
 });
 
-const Config = struct {
-    request_marker: u32,
-};
-
+const Config = struct { identity_marker: u32 };
 const CustomImplementation = struct {
     pub fn validate(comptime _: type, comptime _: Config) void {}
 
-    pub fn DecisionRequest(comptime _: type, comptime _: Config) type {
-        return struct {
-            goal: u32,
-            marker: u32,
-        };
+    pub fn DecisionLocalType(comptime _: type, comptime _: Config) type {
+        return u32;
     }
 
-    pub fn StateSchemaTypes(comptime _: type, comptime config: Config) @TypeOf(.{
-        DecisionRequest(void, config),
-    }) {
-        return .{DecisionRequest(void, config)};
+    pub fn StateSchemaTypes(comptime _: type, comptime _: Config) @TypeOf(.{u32}) {
+        return .{u32};
     }
 
-    pub fn Body(comptime AgentDefinition: type, comptime config: Config) type {
-        const Request = DecisionRequest(AgentDefinition, config);
-        const Builder = agent.Flow(.{
-            .schema_types = .{ AgentDefinition.Action, Request },
-        });
-        comptime var flow = Builder.init("custom-strategy-fixture-v1");
-        const goal = flow.begin(AgentDefinition.Goal);
-        const marker = flow.constant(u32, 0);
-        const request = flow.productConstruct(Request, .{ goal, marker });
-        const decision = flow.perform(
-            agent.strategy.DecisionSiteFor(AgentDefinition, Request),
-            request,
-            .{},
-        );
-        flow.returnValue(flow.sumExtract(0, decision.value));
-        const Lowering = flow.finish(AgentDefinition.Result);
-        return struct {
-            pub const InitialArgs = AgentDefinition.Goal;
-            pub const Result = AgentDefinition.Result;
-            pub const Failure = AgentDefinition.Failure;
-            pub const constants = .{config.request_marker};
-            pub const effect_sites = agent.strategy.effectSitesFor(
-                AgentDefinition,
-                Request,
-            );
-            pub const schema_types = Lowering.schema_types;
-            pub const control_ir = Lowering.control_ir;
-        };
+    pub fn topology(comptime _: type, comptime _: Config, comptime runtime: type) agent.RuntimeTopology {
+        return runtime.react();
+    }
+
+    pub fn emitDecisionLocal(
+        comptime _: type,
+        comptime _: Config,
+        flow: anytype,
+        state: anytype,
+    ) agent.Value(u32) {
+        return flow.productExtract(0, state);
     }
 };
 
 fn Strategy(comptime marker: u32) type {
     return agent.strategy.custom(.{
-        .semantic_identity = "fixture.custom-strategy.v1",
-        .config = Config{ .request_marker = marker },
+        .semantic_identity = "fixture.custom-strategy.v2",
+        .config = Config{ .identity_marker = marker },
         .implementation = CustomImplementation,
         .action_coverage = .{"final"},
     });
 }
 
-const Compiled = agent.compile(Definition, Strategy(7), .{
-    .machine = .{
-        .maximum_frames = 8,
-        .maximum_state_bytes = 64 * 1024,
-        .maximum_machine_fuel = 1024,
-    },
+const Epistemics = agent.epistemics.verbatim(.{
+    .maximum_observations = 0,
+    .overflow = .fail,
+    .final = agent.final_policy.none,
 });
 
-const OtherConfig = agent.compile(Definition, Strategy(8), .{
-    .machine = .{
-        .maximum_frames = 8,
-        .maximum_state_bytes = 64 * 1024,
-        .maximum_machine_fuel = 1024,
-    },
-});
+fn compiled(comptime marker: u32) type {
+    return agent.compile(Definition, Strategy(marker), Epistemics, .{
+        .machine = .{
+            .maximum_frames = 8,
+            .maximum_state_bytes = 64 * 1024,
+            .maximum_machine_fuel = 4096,
+        },
+    });
+}
 
-test "downstream strategy lowers through public Flow and is erased" {
+const Compiled = compiled(7);
+const OtherConfig = compiled(8);
+
+test "custom RuntimeStrategy selects compiler-owned ReAct topology" {
     const Machine = Compiled.Machine;
     const state = try Machine.initialState(std.testing.allocator, @as(u32, 12));
     defer Machine.deinitState(state);
-    var fuel: u64 = 512;
+    var fuel: u64 = 4096;
 
     const decision = switch (try Machine.step(state, &fuel)) {
         .request => |request| request,
         else => return error.UnexpectedMachineStep,
     };
     switch (decision.value) {
-        .s0 => |request| {
-            try std.testing.expectEqual(@as(u32, 12), request.goal);
-            try std.testing.expectEqual(@as(u32, 7), request.marker);
+        .s0 => |turn| {
+            try std.testing.expectEqual(@as(u32, 12), turn.goal);
+            try std.testing.expectEqual(@as(u32, 12), turn.strategy_local);
         },
     }
     {
@@ -146,7 +119,9 @@ test "downstream strategy lowers through public Flow and is erased" {
     };
     defer done.deinit();
     try std.testing.expectEqual(@as(u32, 44), done.value().*);
+}
 
+test "custom config changes strategy and Machine identity without runtime callbacks" {
     try std.testing.expect(!std.mem.eql(
         u8,
         &Compiled.StrategyManifest.config_value_digest,
@@ -157,11 +132,6 @@ test "downstream strategy lowers through public Flow and is erased" {
         &Compiled.Machine.Manifest.machine_contract_digest,
         &OtherConfig.Machine.Manifest.machine_contract_digest,
     ));
-}
-
-comptime {
-    if (@hasDecl(Compiled, "run") or @hasDecl(Compiled, "session")) {
-        @compileError("CompiledAgent must expose no runtime strategy object");
-    }
+    try std.testing.expect(!@hasDecl(Compiled.Strategy, "ProgramBody"));
     _ = boundary;
 }

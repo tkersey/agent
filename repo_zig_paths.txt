@@ -1,9 +1,11 @@
 actuality/application.zig
 actuality/emit_decision_contract.zig
+actuality/emit_decision_contract_binary.zig
 actuality/emit_decision_contract_digest.zig
 actuality/emit_first_decision_request.zig
 actuality/emit_initial_args.zig
 actuality/repository_repair_definition.zig
+actuality/repository_repair_epistemics.zig
 build.zig
 examples/coding_agent.zig
 examples/repository_repair_actuality.zig
@@ -14,11 +16,13 @@ src/budget.zig
 src/compiler.zig
 src/decision_contract.zig
 src/definition.zig
+src/epistemics.zig
 src/final_policy.zig
 src/flow.zig
 src/identity.zig
 src/manifest.zig
 src/root.zig
+src/runtime_flow.zig
 src/strategy.zig
 test/action_algebra.zig
 test/actuality_definition.zig
@@ -30,6 +34,7 @@ test/compile_fail/duplicate_stable_action_name.zig
 test/compile_fail/effect_payload_mismatch.zig
 test/compile_fail/effect_without_history.zig
 test/compile_fail/empty_instructions.zig
+test/compile_fail/epistemics_effectful_initial.zig
 test/compile_fail/fail_payload_mismatch.zig
 test/compile_fail/final_payload_mismatch.zig
 test/compile_fail/final_policy_missing_observation.zig
@@ -48,6 +53,7 @@ test/compile_fail/observation_payload_mismatch.zig
 test/compile_fail/open_action.zig
 test/compile_fail/oversized_instructions.zig
 test/compile_fail/strategy_decision_request_nonportable.zig
+test/compile_fail/strategy_effectful_decision_local.zig
 test/compile_fail/strategy_omits_action_variant.zig
 test/compile_fail/strategy_runtime_callback.zig
 test/compile_fail/strategy_undeclared_effect.zig
@@ -58,6 +64,7 @@ test/compiler.zig
 test/custom_strategy.zig
 test/decision_contract.zig
 test/definition.zig
+test/epistemics_working_set.zig
 test/external_consumer/build.zig
 test/external_consumer/main.zig
 test/final_policy.zig

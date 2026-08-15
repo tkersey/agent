@@ -2,7 +2,7 @@ const std = @import("std");
 const agent = @import("agent");
 const actuality = @import("repository_repair_actuality");
 
-const Contract = agent.decision.jsonContract(actuality.Compiled);
+const Contract = agent.decision.contract(actuality.Compiled);
 
 pub fn main(init: std.process.Init) !void {
     const hex = std.fmt.bytesToHex(Contract.canonical_digest, .lower);

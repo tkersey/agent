@@ -48,10 +48,6 @@ const Definition = agent.define(.{
         .maximum_effect_actions = 2,
         .maximum_child_actions = 0,
     },
-    .history = .{
-        .maximum_observations = 2,
-        .overflow = .drop_oldest,
-    },
 });
 
 test "definition retains typed immutable inputs" {
@@ -62,5 +58,5 @@ test "definition retains typed immutable inputs" {
     try std.testing.expect(Definition.Failure == Failure);
     try std.testing.expectEqualStrings("model.decide.v1", Definition.decision.interface);
     try std.testing.expectEqual(@as(u32, 4), Definition.budget.maximum_turns);
-    try std.testing.expectEqual(agent.HistoryOverflow.drop_oldest, Definition.history.overflow);
+    try std.testing.expect(!@hasDecl(Definition, "history"));
 }

@@ -59,14 +59,15 @@ const Definition = agent.define(.{
         .maximum_effect_actions = 2,
         .maximum_child_actions = 0,
     },
-    .history = .{
-        .maximum_observations = 1,
-        .overflow = .drop_oldest,
-    },
 });
 
 const Strategy = agent.strategy.react(.{});
-const Compiled = agent.compile(Definition, Strategy, .{
+const Epistemics = agent.epistemics.verbatim(.{
+    .maximum_observations = 1,
+    .overflow = .drop_oldest,
+    .final = agent.final_policy.none,
+});
+const Compiled = agent.compile(Definition, Strategy, Epistemics, .{
     .machine = .{
         .maximum_frames = 32,
         .maximum_state_bytes = 64 * 1024,
@@ -110,15 +111,16 @@ const FailHistoryDefinition = agent.define(.{
         .maximum_effect_actions = 3,
         .maximum_child_actions = 0,
     },
-    .history = .{
-        .maximum_observations = 1,
-        .overflow = .fail,
-    },
 });
 
 const FailHistoryMachine = agent.compile(
     FailHistoryDefinition,
     agent.strategy.react(.{}),
+    agent.epistemics.verbatim(.{
+        .maximum_observations = 1,
+        .overflow = .fail,
+        .final = agent.final_policy.none,
+    }),
     .{
         .machine = .{
             .maximum_frames = 32,
@@ -167,8 +169,8 @@ test "drop_oldest keeps the newest bounded observation" {
     };
     switch (decision_three.value) {
         .s0 => |request| {
-            try std.testing.expectEqual(@as(u32, 1), try request.history.len());
-            const observation = (try request.history.get(0)).?;
+            try std.testing.expectEqual(@as(u32, 1), try request.context.len());
+            const observation = (try request.context.get(0)).?;
             switch (observation) {
                 .tool => |value| try std.testing.expectEqual(@as(u32, 22), value),
             }
@@ -189,7 +191,7 @@ test "drop_oldest keeps the newest bounded observation" {
     }
 }
 
-test "history fail policy rejects before emitting an excess effect" {
+test "verbatim fail policy rejects an effect before execution at capacity" {
     const state = try FailHistoryMachine.initialState(
         std.testing.allocator,
         @as(u32, 1),
@@ -233,7 +235,7 @@ test "history fail policy rejects before emitting an excess effect" {
             ),
             else => return error.UnexpectedMachineFailure,
         },
-        .request => return error.ExcessEffectWasEmitted,
+        .request => return error.UnexpectedMachineStep,
         else => return error.UnexpectedMachineStep,
     }
 }
@@ -256,7 +258,7 @@ test "agent.compile specializes ReAct into one Boundary Machine" {
         .s0 => |request| {
             try std.testing.expectEqual(@as(u32, 9), request.goal);
             try std.testing.expectEqual(@as(u32, 0), request.counters.decisions);
-            try std.testing.expectEqual(@as(u32, 0), try request.history.len());
+            try std.testing.expectEqual(@as(u32, 0), try request.context.len());
         },
         else => return error.UnexpectedEffectSite,
     }
@@ -281,8 +283,8 @@ test "agent.compile specializes ReAct into one Boundary Machine" {
             try std.testing.expectEqual(@as(u32, 1), request.counters.turns);
             try std.testing.expectEqual(@as(u32, 1), request.counters.decisions);
             try std.testing.expectEqual(@as(u32, 1), request.counters.effect_actions);
-            try std.testing.expectEqual(@as(u32, 1), try request.history.len());
-            const observation = (try request.history.get(0)).?;
+            try std.testing.expectEqual(@as(u32, 1), try request.context.len());
+            const observation = (try request.context.get(0)).?;
             switch (observation) {
                 .tool => |value| try std.testing.expectEqual(@as(u32, 11), value),
             }

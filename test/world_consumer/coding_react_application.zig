@@ -5,6 +5,7 @@ const world = @import("world");
 pub const Compiled = agent.compile(
     base.Definition,
     agent.strategy.react(.{}),
+    base.Epistemics,
     .{
         .machine = .{
             .maximum_frames = 64,

@@ -6,15 +6,13 @@ clean_root=$(mktemp -d "${TMPDIR:-/tmp}/agent-external-consumer.XXXXXX")
 trap 'rm -rf "$clean_root"' EXIT
 
 mkdir "$clean_root/agent" "$clean_root/consumer"
-if git -C "$repo_root" rev-parse --git-dir >/dev/null 2>&1; then
-    git -C "$repo_root" archive HEAD | tar -x -C "$clean_root/agent"
-else
-    tar \
-        --exclude='./zig-cache' \
-        --exclude='./zig-out' \
-        --exclude='./zig-pkg' \
-        -C "$repo_root" -cf - . | tar -x -C "$clean_root/agent"
-fi
+tar \
+    --exclude='./.git' \
+    --exclude='./.zig-cache' \
+    --exclude='./zig-cache' \
+    --exclude='./zig-out' \
+    --exclude='./zig-pkg' \
+    -C "$repo_root" -cf - . | tar -x -C "$clean_root/agent"
 cp -R "$repo_root/test/external_consumer/." "$clean_root/consumer/"
 
 if [ -n "${AGENT_BOUNDARY_ROOT:-}" ]; then

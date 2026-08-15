@@ -127,6 +127,9 @@ pub fn Flow(comptime config: anytype) type {
         edge_argument_count: usize = 0,
         current_block: boundary.ir.BlockId = 0,
         started: bool = false,
+        terminal_handoff_count: usize = 0,
+        return_handoff_count: usize = 0,
+        control_mutation_count: usize = 0,
 
         pub fn init(comptime label: []const u8) Self {
             if (label.len == 0) @compileError("agent.Flow label must not be empty");
@@ -137,6 +140,24 @@ pub fn Flow(comptime config: anytype) type {
         /// facades use this to reject effects introduced by pure lowering hooks.
         pub fn suspensionCount(self: *const Self) usize {
             return self.request_count;
+        }
+
+        /// Number of authored terminal handoffs emitted so far. Pure strategy
+        /// and epistemic hooks may elaborate local deterministic control flow,
+        /// but they may not return or fail the enclosing Agent program.
+        pub fn terminalHandoffCount(self: *const Self) usize {
+            return self.terminal_handoff_count;
+        }
+
+        /// Number of successful program returns emitted so far. Epistemic
+        /// folds may author deterministic failures, but never a final result.
+        pub fn returnHandoffCount(self: *const Self) usize {
+            return self.return_handoff_count;
+        }
+
+        /// Number of compiler control-topology mutations emitted so far.
+        pub fn controlMutationCount(self: *const Self) usize {
+            return self.control_mutation_count;
         }
 
         fn failLimit(comptime message: []const u8) noreturn {
@@ -223,6 +244,7 @@ pub fn Flow(comptime config: anytype) type {
             if (self.started) @compileError("agent.Flow may begin only once");
             const entry = self.addBlock(.loop_header);
             self.started = true;
+            self.control_mutation_count += 1;
             self.enterRaw(entry);
             const input = self.addValue(InitialArgs);
             self.addParameterTo(entry, input.id);
@@ -236,6 +258,7 @@ pub fn Flow(comptime config: anytype) type {
             comptime ParameterTypes: anytype,
         ) Block(ParameterTypes) {
             const id = self.addBlock(role);
+            self.control_mutation_count += 1;
             var result: Block(ParameterTypes) = .{
                 .id = id,
                 .parameters = undefined,
@@ -254,6 +277,7 @@ pub fn Flow(comptime config: anytype) type {
                 @compileError("agent.Flow must terminate the current block before entering another");
             }
             self.enterRaw(target.id);
+            self.control_mutation_count += 1;
             return target.parameters;
         }
 
@@ -558,6 +582,7 @@ pub fn Flow(comptime config: anytype) type {
             self.current().jump_target = target.id;
             self.current().jump_argument_start = edge.start;
             self.current().jump_argument_count = edge.count;
+            self.control_mutation_count += 1;
         }
 
         /// Select one of two typed successor blocks.
@@ -582,6 +607,7 @@ pub fn Flow(comptime config: anytype) type {
             self.current().else_target = else_target.id;
             self.current().else_argument_start = else_edge.start;
             self.current().else_argument_count = else_edge.count;
+            self.control_mutation_count += 1;
         }
 
         /// Perform one declared typed effect and enter its continuation block.
@@ -627,6 +653,7 @@ pub fn Flow(comptime config: anytype) type {
                 self.edge_argument_count - continuation_argument_start;
             self.blocks[@intCast(source_block)].resume_type = loweredType(Site.Resume);
             self.enterRaw(continuation);
+            self.control_mutation_count += 1;
             return output;
         }
 
@@ -636,6 +663,9 @@ pub fn Flow(comptime config: anytype) type {
             }
             self.current().terminator_kind = .return_value;
             self.current().result_value = value.id;
+            self.terminal_handoff_count += 1;
+            self.return_handoff_count += 1;
+            self.control_mutation_count += 1;
         }
 
         /// Terminate with the exact typed authored failure value.
@@ -645,6 +675,8 @@ pub fn Flow(comptime config: anytype) type {
             }
             self.current().terminator_kind = .fail_value;
             self.current().failure_value = failure.id;
+            self.terminal_handoff_count += 1;
+            self.control_mutation_count += 1;
         }
 
         fn finalizeInstructions(

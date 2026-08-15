@@ -8,8 +8,8 @@
   },
   "worldCapabilities": {
     "repository": "tkersey/world-capabilities",
-    "version": "2.2.0",
-    "url": "https://github.com/tkersey/world-capabilities/releases/download/v2.2.0/world-capabilities-v2.2.0-deterministic.tar.gz",
-    "sha256": "5612c45a84abbe8a2b9fa821cf5d6dc34a82d38d82c8df18b7a45617aba9ba74"
+    "version": "2.2.1",
+    "url": "https://github.com/tkersey/world-capabilities/releases/download/v2.2.1/world-capabilities-v2.2.1-deterministic.tar.gz",
+    "sha256": "6b910eb05f6811181635dd61f50003d4c9ed4f89e2a3d22734121da64019ae5c"
   }
 }

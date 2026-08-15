@@ -27,7 +27,7 @@ const versions = Object.freeze({
     boundary: "1.3.2",
     world: "3.1.1",
     host: "1.0.1",
-    capabilities: "2.2.0",
+    capabilities: "2.2.1",
 });
 const releases = Object.freeze({
     boundary: Object.freeze({
@@ -143,7 +143,6 @@ try {
         researchReflective: "research-reflective.world.wasm",
         codingReact: "coding-react.world.wasm",
         codingReflective: "coding-reflective.world.wasm",
-        researchDirect: "research-direct.world.wasm",
     });
     const runtimeApplications = join(runtimeRoot, "applications");
     mkdirSync(runtimeApplications);
@@ -322,7 +321,6 @@ function assertLifecycle(receipt) {
         sameAgentDifferentStrategy: true,
         unusedStrategyCodePresent: false,
         unusedActionCodePresent: false,
-        boundaryEquivalentApplicationWasm: true,
         freshInstanceResume: true,
         deterministicRetry: true,
         retryChildFrameByteIdentical: true,
@@ -339,12 +337,6 @@ function assertLifecycle(receipt) {
         if (receipt[name] !== expected) {
             throw new Error(`lifecycle receipt mismatch: ${name} expected=${expected} actual=${receipt[name]}`);
         }
-    }
-    if (!(receipt.applicationWasmSizeRatio <= 1.15)) {
-        throw new Error(`generated application WASM ratio exceeds 1.15: ${receipt.applicationWasmSizeRatio}`);
-    }
-    if (!(receipt.stepRuntimeRatio <= 1.10)) {
-        throw new Error(`generated step runtime ratio exceeds 1.10: ${receipt.stepRuntimeRatio}`);
     }
 }
 

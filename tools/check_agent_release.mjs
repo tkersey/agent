@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -17,7 +17,7 @@ requireMatch(root, /package_version = "2\.0\.0"/, "root package version");
 requireMatch(manifestSource, /package_version = "2\.0\.0"/, "manifest package version");
 require(lock.format === "agent-reference-stack-lock-v1", "reference stack format");
 require(lock.worldHost.version === "1.0.1", "world-host release identity");
-require(lock.worldCapabilities.version === "2.2.0", "world-capabilities release identity");
+require(lock.worldCapabilities.version === "2.2.1", "world-capabilities release identity");
 require(lock.worldHost.sha256 === candidate.artifactChecksums.worldHostRuntimeArchiveSha256,
   "host archive identity");
 require(lock.worldCapabilities.sha256 === candidate.artifactChecksums.worldCapabilitiesArchiveSha256,
@@ -32,10 +32,8 @@ const agentTree = existsSync(".git") ? git(["rev-parse", "HEAD^{tree}"]) : "sour
 const agentGitArchiveSha256 = existsSync(".git")
   ? sha256(execFileSync("git", ["archive", "--format=tar", "HEAD"]))
   : "source-archive";
-if (existsSync(".git")) {
-  require(sourceProjectionSha256() === candidate.identities.sourceProjectionSha256,
-    "Agent benchmark source projection");
-}
+require(sourceProjectionSha256() === candidate.identities.sourceProjectionSha256,
+  "Agent benchmark source projection");
 const agentPackageHash = fetchPackageHash();
 require(/^agent-2\.0\.0-[A-Za-z0-9_-]+$/.test(agentPackageHash), "Agent Zig package hash");
 
@@ -59,7 +57,7 @@ require(after.wasmBytes <= 4_730_104, "WASM absolute size");
 require(after.firstDecisionPayloadBytes <= 16 * 1024, "first decision payload");
 require(after.compileMilliseconds <= before.compileMilliseconds * 2, "compile time ratio");
 require(after.peakCompilerBytes <= before.peakCompilerBytes * 2, "compiler memory ratio");
-require(fresh.warmStepNanoseconds <= before.warmStepNanoseconds * 1.25, "fresh single-step ratio");
+require(after.warmStepNanoseconds <= before.warmStepNanoseconds * 1.25, "single-step ratio");
 
 for (const [path, expected] of [
   ["zig-out/agent-actuality/repository-repair-actuality.world.wasm", candidate.artifactChecksums.applicationWasmSha256],
@@ -107,7 +105,7 @@ const receipt = {
   world_host_version: "1.0.1",
   world_host_public: true,
   world_host_runtime_changed: false,
-  world_capabilities_version: "2.2.0",
+  world_capabilities_version: "2.2.1",
   world_capabilities_public: true,
   effect_protocol_version: 1,
   github_authentication_required: false,
@@ -197,14 +195,30 @@ function git(args) {
 
 function sourceProjectionSha256() {
   const digest = createHash("sha256");
-  const files = execFileSync("git", ["ls-files", "-z"])
-    .toString("utf8")
-    .split("\0")
-    .filter((path) => path && path !== "conformance/agent-v2/candidate.json");
+  const excludedRoots = new Set([".git", ".ledger", ".zig-cache", "zig-out", "zig-pkg"]);
+  const files = [];
+  const visit = (relativePath) => {
+    const entries = readdirSync(relativePath || ".", { withFileTypes: true });
+    for (const entry of entries) {
+      const path = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+      if (!relativePath && excludedRoots.has(entry.name)) continue;
+      if (path === "conformance/agent-v2/candidate.json") continue;
+      if (entry.isDirectory()) visit(path);
+      else files.push(path);
+    }
+  };
+  visit("");
+  files.sort();
   for (const path of files) {
     digest.update(path);
     digest.update("\0");
-    digest.update(readFileSync(path));
+    const stat = lstatSync(path);
+    if (stat.isSymbolicLink()) {
+      digest.update("symlink\0");
+      digest.update(readlinkSync(path));
+    } else {
+      digest.update(readFileSync(path));
+    }
     digest.update("\0");
   }
   return digest.digest("hex");

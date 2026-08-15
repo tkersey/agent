@@ -323,15 +323,19 @@ pub fn custom(comptime spec: anytype) type {
             flow: anytype,
             state: anytype,
         ) @import("flow.zig").Value(DecisionLocalType(Definition)) {
-            const before = flow.suspensionCount();
+            const before_suspensions = flow.suspensionCount();
+            const before_control = flow.controlMutationCount();
             const result = Implementation.emitDecisionLocal(
                 Definition,
                 normalized_config,
                 flow,
                 state,
             );
-            if (flow.suspensionCount() != before) {
+            if (flow.suspensionCount() != before_suspensions) {
                 @compileError("agent custom RuntimeStrategy emitDecisionLocal must be effect-free");
+            }
+            if (flow.controlMutationCount() != before_control) {
+                @compileError("agent custom RuntimeStrategy emitDecisionLocal must not alter compiler-owned control topology");
             }
             return result;
         }

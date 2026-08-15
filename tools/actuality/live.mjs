@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 
-const APPLICATION_ID = "ed145c722e0a0cf8cfa4c9bce4846ecca6d74aab08cb92a6b14537817dfc3f32";
+const APPLICATION_ID = "0fbb283a46e495774dad29c808a03eaeec21411700feb3bdcac625a85a4675c2";
 const DECISION_CONTRACT_DIGEST = "35b9a4670ec3a81dbfd0761900388a24ea28e49628da96ca68b97042ee15373f";
 const WORKER_MEMORY_BYTES = 256 * 1024 * 1024;
 const FAILED_ATTEMPT_RECEIPT_BRAND = Symbol("failed-attempt-receipt");

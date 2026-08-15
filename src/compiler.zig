@@ -131,8 +131,8 @@ fn schemaTypes(
     comptime Definition: type,
     comptime Strategy: type,
     comptime Epistemics: type,
-) [13 + Definition.action_count + observationFieldCount(Definition) + Epistemics.StateSchemaTypes(Definition).len]type {
-    var result: [13 + Definition.action_count + observationFieldCount(Definition) + Epistemics.StateSchemaTypes(Definition).len]type = undefined;
+) [13 + Definition.action_count + observationFieldCount(Definition) + Strategy.StateSchemaTypes(Definition).len + Epistemics.StateSchemaTypes(Definition).len]type {
+    var result: [13 + Definition.action_count + observationFieldCount(Definition) + Strategy.StateSchemaTypes(Definition).len + Epistemics.StateSchemaTypes(Definition).len]type = undefined;
     result[0..13].* = .{
         Definition.Goal,
         Definition.Action,
@@ -157,9 +157,14 @@ fn schemaTypes(
         },
         else => {},
     }
+    const state_offset = 13 + Definition.action_count + observationFieldCount(Definition);
+    const strategy_types = Strategy.StateSchemaTypes(Definition);
+    inline for (strategy_types, 0..) |StateType, index| {
+        result[state_offset + index] = StateType;
+    }
     const epistemic_types = Epistemics.StateSchemaTypes(Definition);
     inline for (epistemic_types, 0..) |StateType, index| {
-        result[13 + Definition.action_count + observationFieldCount(Definition) + index] = StateType;
+        result[state_offset + strategy_types.len + index] = StateType;
     }
     return result;
 }
@@ -1029,6 +1034,7 @@ pub fn compile(
         pub const Strategy = StrategyType;
         pub const Epistemics = EpistemicsType;
         pub const State = strategy.State(DefinitionType, EpistemicsType);
+        pub const SchemaTypes = Body.schema_types;
         pub const Program = ProgramType;
         pub const Machine = MachineType;
         pub const DefinitionManifest = definition_manifest;

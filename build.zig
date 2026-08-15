@@ -401,7 +401,11 @@ pub fn build(b: *std.Build) void {
         .{ .path = "test/compile_fail/strategy_decision_request_nonportable.zig", .message = "agent RuntimeStrategy DecisionLocalType must be Boundary-portable" },
         .{ .path = "test/compile_fail/strategy_runtime_callback.zig", .message = "agent RuntimeStrategy config cannot contain runtime callbacks or pointers" },
         .{ .path = "test/compile_fail/strategy_effectful_decision_local.zig", .message = "agent custom RuntimeStrategy emitDecisionLocal must be effect-free" },
+        .{ .path = "test/compile_fail/strategy_terminal_decision_local.zig", .message = "agent custom RuntimeStrategy emitDecisionLocal must not alter compiler-owned control topology" },
+        .{ .path = "test/compile_fail/strategy_branching_decision_local.zig", .message = "agent custom RuntimeStrategy emitDecisionLocal must not alter compiler-owned control topology" },
         .{ .path = "test/compile_fail/epistemics_effectful_initial.zig", .message = "agent custom EpistemicStrategy emitInitial must be effect-free" },
+        .{ .path = "test/compile_fail/epistemics_terminal_initial.zig", .message = "agent custom EpistemicStrategy emitInitial must not terminate the Agent program" },
+        .{ .path = "test/compile_fail/epistemics_zero_lowering_complexity.zig", .message = "agent custom EpistemicStrategy lowering_complexity must be positive" },
         .{ .path = "test/compile_fail/final_policy_missing_observation.zig", .message = "agent v2 Definition no longer accepts .final_policy; final admission belongs to EpistemicStrategy" },
         .{ .path = "test/compile_fail/final_policy_non_boolean_field.zig", .message = "agent v2 Definition no longer accepts .final_policy; final admission belongs to EpistemicStrategy" },
     }) |witness| {
@@ -515,7 +519,7 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic_check,
     );
-    addActualityDefinitionTest(
+    _ = addActualityDefinitionTest(
         b,
         "check-agent-actuality-definition",
         "Compile the typed repository repair AgentDefinition",
@@ -526,7 +530,7 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic_check,
     );
-    addActualityDefinitionTest(
+    const working_set_check = addActualityDefinitionTest(
         b,
         "check-agent-epistemics-working-set",
         "Prove repository working-set replacement and stale-data laws",
@@ -537,18 +541,13 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic_check,
     );
-    addActualityDefinitionTest(
-        b,
+    const long_trace_check = b.step(
         "check-agent-epistemic-long-trace",
         "Fold 32 repository effects without structural Memory growth",
-        "test/epistemics_working_set.zig",
-        agent_module,
-        boundary_module,
-        target,
-        optimize,
-        semantic_check,
     );
-    addActualityDefinitionTest(
+    long_trace_check.dependOn(working_set_check);
+    semantic_check.dependOn(long_trace_check);
+    _ = addActualityDefinitionTest(
         b,
         "check-agent-decision-contract",
         "Project the exact Action algebra into deterministic strict JSON",
@@ -559,7 +558,7 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic_check,
     );
-    addActualityDefinitionTest(
+    _ = addActualityDefinitionTest(
         b,
         "check-agent-decision-contract-negative",
         "Prove the projected JSON contract closes every Action object",
@@ -614,7 +613,7 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic_check,
     );
-    addSpecializationTest(
+    _ = addSpecializationTest(
         b,
         "check-agent-specialization-matrix",
         "Compile two definitions by two strategies into four Machines",
@@ -625,7 +624,7 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic_check,
     );
-    addSpecializationTest(
+    _ = addSpecializationTest(
         b,
         "check-agent-manifests",
         "Validate deterministic Agent manifests and identities",
@@ -636,7 +635,7 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic_check,
     );
-    addSpecializationTest(
+    _ = addSpecializationTest(
         b,
         "check-agent-lifecycle-native",
         "Run typed Research and Coding lifecycles across all strategies",
@@ -740,7 +739,7 @@ pub fn build(b: *std.Build) void {
         "Acquire exact public compiler archives, then run the compiler proof with network disabled",
     );
     hermetic.dependOn(&hermetic_command.step);
-    addSpecializationTest(
+    const boundary_equivalence_check = addSpecializationTest(
         b,
         "check-agent-boundary-equivalence",
         "Compare ReAct with an isolated direct Boundary Control IR reference",
@@ -751,17 +750,12 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic_check,
     );
-    addSpecializationTest(
-        b,
+    const performance_check = b.step(
         "check-agent-performance",
-        "Prove generated and direct Boundary semantics have identical state, topology, and reducer cost",
-        "test/boundary_equivalence.zig",
-        agent_module,
-        boundary_module,
-        target,
-        optimize,
-        semantic_check,
+        "Reuse the independent Boundary behavior witness alongside measured release gates",
     );
+    performance_check.dependOn(boundary_equivalence_check);
+    semantic_check.dependOn(performance_check);
 
     const host_boundary_dependency = b.dependency("boundary", .{
         .target = b.graph.host,
@@ -922,7 +916,7 @@ fn addSpecializationTest(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     aggregate: *std.Build.Step,
-) void {
+) *std.Build.Step {
     const research = b.createModule(.{
         .root_source_file = b.path("examples/research_agent.zig"),
         .target = target,
@@ -952,6 +946,7 @@ fn addSpecializationTest(
     const step = b.step(name, description);
     step.dependOn(&run_tests.step);
     aggregate.dependOn(step);
+    return step;
 }
 
 fn addFocusedTest(
@@ -989,7 +984,7 @@ fn addActualityDefinitionTest(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     aggregate: *std.Build.Step,
-) void {
+) *std.Build.Step {
     const actuality = b.createModule(.{
         .root_source_file = b.path("examples/repository_repair_actuality.zig"),
         .target = target,
@@ -1018,4 +1013,5 @@ fn addActualityDefinitionTest(
     const step = b.step(name, description);
     step.dependOn(&run_tests.step);
     aggregate.dependOn(step);
+    return step;
 }

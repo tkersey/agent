@@ -298,6 +298,10 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
             });
 
             const search_values = flow.enter(search);
+            const clears_search = flow.booleanOr(
+                search_values[2],
+                flow.sumTagIs(2, search_values[1]),
+            );
             const summary = flow.block(.segment, .{ T.Memory, T.ReplaceOutcome, bool });
             flow.jump(summary, .{
                 replaceMemoryField(
@@ -305,7 +309,7 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
                     search_values[0],
                     4,
                     flow.select(
-                        search_values[2],
+                        clears_search,
                         flow.optionalNone(?T.CompactSearch),
                         flow.productExtract(4, search_values[0]),
                     ),
@@ -331,7 +335,10 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
                 flow,
                 mutation_values[0],
                 8,
-                mutation_values[1],
+                flow.booleanOr(
+                    flow.productExtract(8, mutation_values[0]),
+                    mutation_values[1],
+                ),
             );
             return replaceMemoryField(
                 flow,

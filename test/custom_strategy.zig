@@ -38,6 +38,7 @@ const Definition = agent.define(.{
 });
 
 const Config = struct { identity_marker: u32 };
+const StrategyOnlySchema = struct { marker: u32 };
 const CustomImplementation = struct {
     pub fn validate(comptime _: type, comptime _: Config) void {}
 
@@ -45,8 +46,8 @@ const CustomImplementation = struct {
         return u32;
     }
 
-    pub fn StateSchemaTypes(comptime _: type, comptime _: Config) @TypeOf(.{u32}) {
-        return .{u32};
+    pub fn StateSchemaTypes(comptime _: type, comptime _: Config) @TypeOf(.{StrategyOnlySchema}) {
+        return .{StrategyOnlySchema};
     }
 
     pub fn topology(comptime _: type, comptime _: Config, comptime runtime: type) agent.RuntimeTopology {
@@ -92,6 +93,11 @@ const Compiled = compiled(7);
 const OtherConfig = compiled(8);
 
 test "custom RuntimeStrategy selects compiler-owned ReAct topology" {
+    comptime var found_strategy_schema = false;
+    inline for (Compiled.SchemaTypes) |Schema| {
+        if (Schema == StrategyOnlySchema) found_strategy_schema = true;
+    }
+    try std.testing.expect(found_strategy_schema);
     const Machine = Compiled.Machine;
     const state = try Machine.initialState(std.testing.allocator, @as(u32, 12));
     defer Machine.deinitState(state);

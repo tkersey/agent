@@ -24,22 +24,34 @@ import {
 
 const options = parseArgs(process.argv.slice(2));
 const versions = Object.freeze({
-    agent: options.agentV1Release ? "1.1.2" : "2.0.0",
-    boundary: "1.3.2",
-    world: "3.1.1",
+    agent: options.agentV1Release ? "1.1.2" : "2.1.0",
+    boundary: options.agentV1Release ? "1.3.2" : "1.4.0",
+    world: options.agentV1Release ? "3.1.1" : "3.1.2",
     host: "1.0.1",
     capabilities: options.agentV1Release ? "2.1.2" : "2.2.2",
 });
 const releases = Object.freeze({
     boundary: Object.freeze({
-        url: "https://github.com/tkersey/boundary/archive/refs/tags/v1.3.2.tar.gz",
-        sha256: "d33a682f92033fa287169e4bc42c5e96f891cf1fe307381efc6983361de3fe0d",
-        packageHash: "boundary-1.3.2-flclaAI0EQBXh0WrWcNTh-CwL-m0RLPbRX8RBRxP9E95",
+        url: options.agentV1Release
+            ? "https://github.com/tkersey/boundary/archive/refs/tags/v1.3.2.tar.gz"
+            : "https://github.com/tkersey/boundary/archive/refs/tags/v1.4.0.tar.gz",
+        sha256: options.agentV1Release
+            ? "d33a682f92033fa287169e4bc42c5e96f891cf1fe307381efc6983361de3fe0d"
+            : "8c33e9460e74aa4782b5106575f62b410446a5242a9d66bbcb6df5d06407b270",
+        packageHash: options.agentV1Release
+            ? "boundary-1.3.2-flclaAI0EQBXh0WrWcNTh-CwL-m0RLPbRX8RBRxP9E95"
+            : "boundary-1.4.0-flclaDRLEQAzxJEl23bFxWD_WHd35B5yynEAK2vfEg-A",
     }),
     world: Object.freeze({
-        url: "https://github.com/tkersey/world/archive/refs/tags/v3.1.1.tar.gz",
-        sha256: "ebde48f0bc037678e79051e3f8c3cde2fa1964df0b14ff53ed9cef94ccb1f63c",
-        packageHash: "world-3.1.1-XXTUeKXGBgAZhWa2YvUU9Sj4GE-E53Km85AcgecObJV6",
+        url: options.agentV1Release
+            ? "https://github.com/tkersey/world/archive/refs/tags/v3.1.1.tar.gz"
+            : "https://github.com/tkersey/world/archive/refs/tags/v3.1.2.tar.gz",
+        sha256: options.agentV1Release
+            ? "ebde48f0bc037678e79051e3f8c3cde2fa1964df0b14ff53ed9cef94ccb1f63c"
+            : "0ec899bc2b818384ddfb6929bfbe22ff83559e2a3336686a0a763e79e49b8b32",
+        packageHash: options.agentV1Release
+            ? "world-3.1.1-XXTUeKXGBgAZhWa2YvUU9Sj4GE-E53Km85AcgecObJV6"
+            : "world-3.1.2-XXTUeKXGBgB3uohAGhVb3qRqdWkLlpmzt90EEoEmQQKL",
     }),
 });
 
@@ -80,11 +92,11 @@ try {
             },
         }),
     ]);
-    verifySha256("Boundary v1.3.2", boundaryArchive, releases.boundary.sha256);
-    verifySha256("World v3.1.1", worldArchive, releases.world.sha256);
+    verifySha256(`Boundary v${versions.boundary}`, boundaryArchive, releases.boundary.sha256);
+    verifySha256(`World v${versions.world}`, worldArchive, releases.world.sha256);
 
-    const boundaryArchivePath = join(archiveRoot, "boundary-v1.3.2.tar.gz");
-    const worldArchivePath = join(archiveRoot, "world-v3.1.1.tar.gz");
+    const boundaryArchivePath = join(archiveRoot, `boundary-v${versions.boundary}.tar.gz`);
+    const worldArchivePath = join(archiveRoot, `world-v${versions.world}.tar.gz`);
     writeFileSync(boundaryArchivePath, boundaryArchive);
     writeFileSync(worldArchivePath, worldArchive);
 

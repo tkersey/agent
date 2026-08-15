@@ -525,6 +525,29 @@ pub fn Flow(comptime config: anytype) type {
             return self.instruction(bool, .pure, .integer_equal, .{ left, right });
         }
 
+        pub fn integerConvert(
+            self: *Self,
+            comptime Result: type,
+            value: anytype,
+        ) Value(Result) {
+            if (comptime @typeInfo(Result) != .int or
+                @typeInfo(@TypeOf(value).Type) != .int)
+            {
+                @compileError("agent.Flow integerConvert requires integer types");
+            }
+            return self.instruction(Result, .pure, .integer_convert, .{value});
+        }
+
+        /// Project an exhaustive portable enum to the canonical u32 tag used
+        /// by Boundary encoding.
+        pub fn enumToU32(self: *Self, value: anytype) Value(u32) {
+            const Enum = @TypeOf(value).Type;
+            if (comptime @typeInfo(Enum) != .@"enum") {
+                @compileError("agent.Flow enumToU32 requires an enum value");
+            }
+            return self.instruction(u32, .pure, .enum_to_u32, .{value});
+        }
+
         pub fn compareEqZero(self: *Self, value: anytype) Value(bool) {
             return self.instruction(bool, .compare_eq_zero, .compare_eq_zero, .{value});
         }

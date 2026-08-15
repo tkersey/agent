@@ -40,3 +40,9 @@ static decision contracts. It remains on Boundary v1.3.2, Machine ABI v2,
 World v3.1.1, Application ABI v1, Frame v1, world-host v1.0.1, and Effect
 protocol v1. world-capabilities v2.2.2 changes only application-specific
 decision codecs, contract artifacts, bindings, and rendering.
+
+Agent v2.1.0 adds public Flow projections for fixed-width integer conversion
+and canonical portable enum tags. It consumes Boundary v1.4.0 and World v3.1.2
+without changing Machine ABI v2, Application ABI v1, Frame v1, or Effect
+protocol v1. The exact Agent v2.0.0 adequacy obstruction remains historical;
+the successor tuple is the correction line.

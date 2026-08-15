@@ -1,0 +1,21 @@
+.{
+    .name = .router_policy_adequacy,
+    .version = "1.0.0",
+    .dependencies = .{
+        .agent = .{
+            .path = "../..",
+        },
+        .world = .{
+            .url = "https://github.com/tkersey/world/archive/refs/tags/v3.1.2.tar.gz",
+            .hash = "world-3.1.2-XXTUeKXGBgB3uohAGhVb3qRqdWkLlpmzt90EEoEmQQKL",
+        },
+    },
+    .minimum_zig_version = "0.16.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "README.md",
+        "src",
+    },
+    .fingerprint = 0xdc6f800f50ceb2b6,
+}

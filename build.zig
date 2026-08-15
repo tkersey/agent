@@ -6,8 +6,8 @@ pub const ActualityApplication = @import("actuality/application.zig").Applicatio
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const boundary_archive = b.option([]const u8, "boundary-archive", "Local Boundary v1.3.2 archive for offline proof");
-    const world_archive = b.option([]const u8, "world-archive", "Local World v3.1.1 archive for offline proof");
+    const boundary_archive = b.option([]const u8, "boundary-archive", "Local Boundary v1.4.0 archive for offline proof");
+    const world_archive = b.option([]const u8, "world-archive", "Local World v3.1.2 archive for offline proof");
     const world_host_archive = b.option([]const u8, "world-host-archive", "Local world-host v1.0.1 runtime archive");
     const world_capabilities_archive = b.option([]const u8, "world-capabilities-archive", "Local lock-pinned world-capabilities deterministic archive");
 
@@ -200,7 +200,7 @@ pub fn build(b: *std.Build) void {
 
     const actuality_world = b.step(
         "check-agent-actuality-world",
-        "Compile the exact World v3.1.1 repository-repair application",
+        "Compile the exact World v3.1.2 repository-repair application",
     );
     actuality_world.dependOn(actuality_application.check_step);
     semantic_check.dependOn(actuality_world);
@@ -655,7 +655,7 @@ pub fn build(b: *std.Build) void {
     world_conformance_gate.addArg(b.graph.zig_exe);
     const world_conformance = b.step(
         "check-agent-world-conformance",
-        "Close four Agent Machines with exact released World v3.1.1",
+        "Close four Agent Machines with exact released World v3.1.2",
     );
     world_conformance.dependOn(&world_conformance_gate.step);
     const hosted_lifecycle = b.step(
@@ -881,6 +881,20 @@ pub fn build(b: *std.Build) void {
         "Prove the controlled router fixture fails initially and passes its reviewed visible and hidden solution",
     );
     adequacy_fixture.dependOn(&adequacy_fixture_command.step);
+
+    const adequacy_compile_command = b.addSystemCommand(&.{
+        b.graph.zig_exe,
+        "build",
+        "check",
+        "--summary",
+        "all",
+    });
+    adequacy_compile_command.setCwd(b.path("adequacy/router-policy-v1"));
+    const adequacy_compile = b.step(
+        "check-agent-adequacy-compile",
+        "Compile the router-policy working set against the exact released dependency tuple",
+    );
+    adequacy_compile.dependOn(&adequacy_compile_command.step);
 
     check.dependOn(semantic_check);
     check.dependOn(lint);

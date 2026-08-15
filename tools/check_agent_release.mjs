@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 
 const baseline = readJson("conformance/agent-v2/baseline.json");
 const candidate = readJson("conformance/agent-v2/candidate.json");
 const lock = readJson("conformance/reference-stack-v1.lock.json");
+const stackReceipt = readJson("zig-out/agent-actuality/reference-stack-receipt.json");
 const zon = readFileSync("build.zig.zon", "utf8");
 const root = readFileSync("src/root.zig", "utf8");
 const manifestSource = readFileSync("src/manifest.zig", "utf8");
@@ -14,22 +16,48 @@ requireMatch(manifestSource, /package_version = "2\.0\.0"/, "manifest package ve
 require(lock.format === "agent-reference-stack-lock-v1", "reference stack format");
 require(lock.worldHost.version === "1.0.1", "world-host release identity");
 require(lock.worldCapabilities.version === "2.2.0", "world-capabilities release identity");
+require(lock.worldHost.sha256 === candidate.artifactChecksums.worldHostRuntimeArchiveSha256,
+  "host archive identity");
 require(lock.worldCapabilities.sha256 === candidate.artifactChecksums.worldCapabilitiesArchiveSha256,
   "capability archive identity");
+require(stackReceipt.format === "agent-reference-stack-receipt-v1", "reference stack receipt format");
+require(stackReceipt.worldHostArchiveSha256 === lock.worldHost.sha256, "reference receipt host archive");
+require(stackReceipt.worldCapabilitiesArchiveSha256 === lock.worldCapabilities.sha256,
+  "reference receipt capability archive");
+
+const agentCommit = existsSync(".git") ? git(["rev-parse", "HEAD"]) : "source-archive";
+const agentTree = existsSync(".git") ? git(["rev-parse", "HEAD^{tree}"]) : "source-archive";
+const agentGitArchiveSha256 = existsSync(".git")
+  ? sha256(execFileSync("git", ["archive", "--format=tar", "HEAD"]))
+  : "source-archive";
+if (existsSync(".git")) {
+  require(sourceProjectionSha256() === candidate.identities.sourceProjectionSha256,
+    "Agent benchmark source projection");
+}
+const agentPackageHash = execFileSync("zig", ["fetch", "."], { encoding: "utf8" }).trim();
+require(/^agent-2\.0\.0-[A-Za-z0-9_-]+$/.test(agentPackageHash), "Agent Zig package hash");
 
 const before = baseline.measurements;
 const after = candidate.measurements;
+const fresh = stackReceipt.deterministic.measurements;
+for (const field of [
+  "applicationWasmBytes",
+  "firstFrameBytes",
+  "peakFrameBytes",
+  "peakMachineStateBytes",
+  "firstDecisionPayloadBytes",
+  "peakDecisionPayloadBytes",
+]) require(fresh[field] === after[field === "applicationWasmBytes" ? "wasmBytes" : field],
+  `fresh candidate measurement ${field}`);
 require(after.peakFrameBytes <= Math.floor(before.peakFrameBytes * 0.5), "peak Frame ratio");
 require(after.peakMachineStateBytes <= 384 * 1024, "peak Machine state");
 require(after.declaredStateBytes <= 512 * 1024, "declared state");
 require(after.wasmBytes <= Math.floor(before.wasmBytes * 0.8), "WASM ratio");
 require(after.wasmBytes <= 4_730_104, "WASM absolute size");
-require(after.wasmStackBytes <= 128 * 1024 * 1024, "WASM stack");
-require(after.wasmMaximumMemoryBytes <= 256 * 1024 * 1024, "WASM maximum memory");
 require(after.firstDecisionPayloadBytes <= 16 * 1024, "first decision payload");
 require(after.compileMilliseconds <= before.compileMilliseconds * 2, "compile time ratio");
 require(after.peakCompilerBytes <= before.peakCompilerBytes * 2, "compiler memory ratio");
-require(after.warmStepNanoseconds <= before.warmStepNanoseconds * 1.25, "single-step ratio");
+require(fresh.warmStepNanoseconds <= before.warmStepNanoseconds * 1.25, "fresh single-step ratio");
 
 for (const [path, expected] of [
   ["zig-out/agent-actuality/repository-repair-actuality.world.wasm", candidate.artifactChecksums.applicationWasmSha256],
@@ -37,6 +65,31 @@ for (const [path, expected] of [
   ["zig-out/agent-actuality/repository-repair-decision-contract.bin", candidate.artifactChecksums.decisionContractBinarySha256],
   ["zig-out/agent-actuality/repository-repair-decision-contract.json", candidate.artifactChecksums.decisionContractJsonSha256],
 ]) require(sha256(readFileSync(path)) === expected, `${path} checksum`);
+
+const wasmBytes = readFileSync("zig-out/agent-actuality/repository-repair-actuality.world.wasm");
+const wasmModule = new WebAssembly.Module(wasmBytes);
+require(WebAssembly.Module.imports(wasmModule).length === 0, "application WASM imports");
+const wasmInstance = new WebAssembly.Instance(wasmModule, {});
+const emittedStackBytes = wasmInstance.exports.agent_actuality_wasm_stack_size_bytes?.();
+const emittedMaximumMemoryBytes = wasmInstance.exports.memory?.buffer.byteLength;
+require(emittedStackBytes === after.wasmStackBytes, "emitted WASM stack identity");
+require(emittedStackBytes <= 128 * 1024 * 1024, "emitted WASM stack bound");
+require(emittedMaximumMemoryBytes === after.wasmMaximumMemoryBytes, "emitted WASM memory identity");
+require(emittedMaximumMemoryBytes <= 256 * 1024 * 1024, "emitted WASM maximum memory bound");
+let memoryCanGrow = true;
+try {
+  wasmInstance.exports.memory.grow(1);
+} catch (error) {
+  if (error instanceof RangeError) memoryCanGrow = false;
+  else throw error;
+}
+require(!memoryCanGrow, "emitted WASM maximum memory is closed");
+require(stackReceipt.deterministic.hidden_verifier_passed === true, "fresh hidden verifier");
+require(stackReceipt.deterministic.typed_final_result === true, "fresh typed final result");
+require(stackReceipt.retry.retry_child_frame_byte_identical === true, "fresh retry");
+require(stackReceipt.replay.replay_fresh_effect_count === 0, "fresh replay");
+require(stackReceipt.branch.branching === true, "fresh branching");
+require(stackReceipt.migrate.migration_receiver_preflight === true, "fresh migration");
 
 const receipt = {
   agent_package_version: "2.0.0",
@@ -58,6 +111,12 @@ const receipt = {
   github_authentication_required: false,
   private_release_asset_required: false,
   public_reference_stack_reproducible: true,
+  world_host_runtime_archive_sha256: lock.worldHost.sha256,
+  world_capabilities_archive_sha256: lock.worldCapabilities.sha256,
+  agent_commit: agentCommit,
+  agent_tree: agentTree,
+  agent_git_archive_sha256: agentGitArchiveSha256,
+  agent_package_hash: agentPackageHash,
   agent_definition_manifest: "AGT_DEF2",
   agent_strategy_manifest: "AGT_STR2",
   agent_epistemics_manifest: "AGT_EPI1",
@@ -128,4 +187,23 @@ function require(condition, label) {
 
 function requireMatch(source, pattern, label) {
   require(pattern.test(source), label);
+}
+
+function git(args) {
+  return execFileSync("git", args, { encoding: "utf8" }).trim();
+}
+
+function sourceProjectionSha256() {
+  const digest = createHash("sha256");
+  const files = execFileSync("git", ["ls-files", "-z"])
+    .toString("utf8")
+    .split("\0")
+    .filter((path) => path && path !== "conformance/agent-v2/candidate.json");
+  for (const path of files) {
+    digest.update(path);
+    digest.update("\0");
+    digest.update(readFileSync(path));
+    digest.update("\0");
+  }
+  return digest.digest("hex");
 }

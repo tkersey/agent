@@ -5,8 +5,8 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 
-const APPLICATION_ID = "9de00d549101541f91554399aa4114020ea9e4470fe64c1a40b93f52e6243245";
-const DECISION_CONTRACT_DIGEST = "eff01f65a1bc5d46693af84be7a2ce2a0cd07e7f6d7f20b7cb91aee76c2ad639";
+const APPLICATION_ID = "ed145c722e0a0cf8cfa4c9bce4846ecca6d74aab08cb92a6b14537817dfc3f32";
+const DECISION_CONTRACT_DIGEST = "35b9a4670ec3a81dbfd0761900388a24ea28e49628da96ca68b97042ee15373f";
 const WORKER_MEMORY_BYTES = 256 * 1024 * 1024;
 const FAILED_ATTEMPT_RECEIPT_BRAND = Symbol("failed-attempt-receipt");
 const LIVE_RECEIPT_BOOLEAN_FIELDS = Object.freeze([
@@ -135,7 +135,13 @@ export async function runLiveActuality(options = {}) {
 
     let current = await controller.initialize("actuality-live-v1", "main", { initialArgsBytes });
     genesisFrameId = hex(current.frame.frameId);
-    while (current.frame.status === host.FrameStatus.needsEffect) {
+    while (current.frame.status === host.FrameStatus.needsEffect ||
+        current.frame.status === host.FrameStatus.yieldedFuel) {
+      if (current.frame.status === host.FrameStatus.yieldedFuel) {
+        current = await controller.advance("actuality-live-v1", "main");
+        terminalFrameId = hex(current.frame.frameId);
+        continue;
+      }
       const request = current.frame.pendingEffect;
       const inspected = router.inspect(request.encodedBytes);
       interfaces.push(bindingInterfaceLabel(inspected.bindingId));

@@ -34,6 +34,7 @@ test/compile_fail/duplicate_stable_action_name.zig
 test/compile_fail/effect_payload_mismatch.zig
 test/compile_fail/effect_without_history.zig
 test/compile_fail/empty_instructions.zig
+test/compile_fail/epistemics_effectful_initial.zig
 test/compile_fail/fail_payload_mismatch.zig
 test/compile_fail/final_payload_mismatch.zig
 test/compile_fail/final_policy_missing_observation.zig
@@ -52,6 +53,7 @@ test/compile_fail/observation_payload_mismatch.zig
 test/compile_fail/open_action.zig
 test/compile_fail/oversized_instructions.zig
 test/compile_fail/strategy_decision_request_nonportable.zig
+test/compile_fail/strategy_effectful_decision_local.zig
 test/compile_fail/strategy_omits_action_variant.zig
 test/compile_fail/strategy_runtime_callback.zig
 test/compile_fail/strategy_undeclared_effect.zig

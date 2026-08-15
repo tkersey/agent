@@ -496,14 +496,7 @@ pub fn epistemics(
 ) EpistemicsManifest {
     @setEvalBranchQuota(10_000_000);
     const config_schema_digest = boundary.schema.schemaDigest(Epistemics.Config);
-    var config_hasher = identity.Hasher.init(.{});
-    identity.bytes(&config_hasher, "agent-epistemics-config/v1");
-    boundary.schema.updateCanonicalHash(
-        Epistemics.Config,
-        Epistemics.normalized_config,
-        &config_hasher,
-    ) catch unreachable;
-    const config_value_digest = identity.finish(&config_hasher);
+    const config_value_digest = Epistemics.semantic_config_digest;
     const memory_digest = boundary.schema.schemaDigest(Epistemics.MemoryType(Definition));
     const view_digest = boundary.schema.schemaDigest(Epistemics.DecisionViewType(Definition));
     var state_hasher = identity.Hasher.init(.{});

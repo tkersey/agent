@@ -191,7 +191,7 @@ test "drop_oldest keeps the newest bounded observation" {
     }
 }
 
-test "verbatim fail policy rejects the observation fold at capacity" {
+test "verbatim fail policy rejects an effect before execution at capacity" {
     const state = try FailHistoryMachine.initialState(
         std.testing.allocator,
         @as(u32, 1),
@@ -227,15 +227,6 @@ test "verbatim fail policy rejects the observation fold at capacity" {
         try FailHistoryMachine.@"resume"(prepared, Action{ .tool = 2 });
     }
 
-    const second_tool = switch (try FailHistoryMachine.step(state, &fuel)) {
-        .request => |request| request,
-        else => return error.UnexpectedMachineStep,
-    };
-    {
-        const prepared = try FailHistoryMachine.prepareResume(state, second_tool);
-        defer FailHistoryMachine.deinitPreparedResume(prepared);
-        try FailHistoryMachine.@"resume"(prepared, @as(u32, 22));
-    }
     switch (try FailHistoryMachine.step(state, &fuel)) {
         .failed => |failure| switch (failure) {
             .authored => |authored| try std.testing.expectEqual(

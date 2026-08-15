@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) void {
         .name = "repository-repair-actuality",
         .root_source_file = b.path("build.zig"),
         .application_decl = "ActualityApplication",
-        .stack_size_bytes = 128 * 1024 * 1024,
+        .stack_size_bytes = @import("actuality/application.zig").wasm_stack_size_bytes,
         .memory = .{
             .initial_pages = 4096,
             .maximum_pages = 4096,
@@ -400,6 +400,8 @@ pub fn build(b: *std.Build) void {
         .{ .path = "test/compile_fail/strategy_omits_action_variant.zig", .message = "agent RuntimeStrategy action coverage must contain every Action variant" },
         .{ .path = "test/compile_fail/strategy_decision_request_nonportable.zig", .message = "agent RuntimeStrategy DecisionLocalType must be Boundary-portable" },
         .{ .path = "test/compile_fail/strategy_runtime_callback.zig", .message = "agent RuntimeStrategy config cannot contain runtime callbacks or pointers" },
+        .{ .path = "test/compile_fail/strategy_effectful_decision_local.zig", .message = "agent custom RuntimeStrategy emitDecisionLocal must be effect-free" },
+        .{ .path = "test/compile_fail/epistemics_effectful_initial.zig", .message = "agent custom EpistemicStrategy emitInitial must be effect-free" },
         .{ .path = "test/compile_fail/final_policy_missing_observation.zig", .message = "agent v2 Definition no longer accepts .final_policy; final admission belongs to EpistemicStrategy" },
         .{ .path = "test/compile_fail/final_policy_non_boolean_field.zig", .message = "agent v2 Definition no longer accepts .final_policy; final admission belongs to EpistemicStrategy" },
     }) |witness| {
@@ -673,6 +675,10 @@ pub fn build(b: *std.Build) void {
         "--artifact-root",
     });
     reference_stack_command.addArg(b.getInstallPath(.prefix, "agent-actuality"));
+    reference_stack_command.addArgs(&.{
+        "--receipt-path",
+        b.getInstallPath(.prefix, "agent-actuality/reference-stack-receipt.json"),
+    });
     reference_stack_command.step.dependOn(&install_actuality_wasm.step);
     reference_stack_command.step.dependOn(&install_actuality_manifest.step);
     reference_stack_command.step.dependOn(&install_initial_args.step);
@@ -705,6 +711,10 @@ pub fn build(b: *std.Build) void {
         "--artifact-root",
     });
     offline_reference_stack_command.addArg(b.getInstallPath(.prefix, "agent-actuality"));
+    offline_reference_stack_command.addArgs(&.{
+        "--receipt-path",
+        b.getInstallPath(.prefix, "agent-actuality/reference-stack-receipt.json"),
+    });
     if (world_host_archive) |path| offline_reference_stack_command.addArgs(&.{ "--world-host-archive", path });
     if (world_capabilities_archive) |path| offline_reference_stack_command.addArgs(&.{ "--world-capabilities-archive", path });
     offline_reference_stack_command.step.dependOn(&install_actuality_wasm.step);
@@ -769,6 +779,7 @@ pub fn build(b: *std.Build) void {
         .optimize = .ReleaseSafe,
     });
     native_witness.addImport("agent", host_agent);
+    native_witness.addImport("boundary", host_boundary_dependency.module("boundary"));
     const native_runner = b.createModule(.{
         .root_source_file = b.path("test/run_machine_native.zig"),
         .target = b.graph.host,
@@ -804,6 +815,7 @@ pub fn build(b: *std.Build) void {
         .optimize = .ReleaseSmall,
     });
     wasm_witness.addImport("agent", wasm_agent);
+    wasm_witness.addImport("boundary", wasm_boundary_dependency.module("boundary"));
     const wasm_executable = b.addExecutable(.{
         .name = "agent-machine-wasm-parity",
         .root_module = wasm_witness,
@@ -840,7 +852,17 @@ pub fn build(b: *std.Build) void {
     release_receipt.step.dependOn(lint);
     release_receipt.step.dependOn(hermetic);
     release_receipt.step.dependOn(reference_stack);
-    release.dependOn(&release_receipt.step);
+    release_receipt.step.dependOn(actuality_wasm);
+    release_receipt.step.dependOn(&install_contract.step);
+    release_receipt.step.dependOn(&install_contract_binary.step);
+    const release_receipt_output = release_receipt.captureStdOut(.{
+        .basename = "completion-receipt.txt",
+    });
+    const install_release_receipt = b.addInstallFile(
+        release_receipt_output,
+        "agent-v2/completion-receipt.txt",
+    );
+    release.dependOn(&install_release_receipt.step);
     check.dependOn(semantic_check);
     check.dependOn(lint);
 }

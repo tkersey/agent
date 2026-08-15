@@ -1,6 +1,27 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const final_policy = @import("final_policy.zig");
+const identity = @import("identity.zig");
+
+fn semanticConfigDigest(
+    comptime Config: type,
+    comptime config: Config,
+    comptime policy: ?final_policy.Policy,
+) [32]u8 {
+    var hasher = identity.Hasher.init(.{});
+    identity.bytes(&hasher, "agent-epistemics-semantic-config/v1");
+    boundary.schema.updateCanonicalHash(Config, config, &hasher) catch unreachable;
+    if (policy) |selected| switch (selected) {
+        .none => identity.bytes(&hasher, "final:none"),
+        .latest_observation_bool => |requirement| {
+            identity.bytes(&hasher, "final:latest-observation-bool");
+            identity.bytes(&hasher, requirement.observation_name);
+            identity.bytes(&hasher, requirement.field_name);
+            identity.unsigned(&hasher, @intFromBool(requirement.expected));
+        },
+    } else identity.bytes(&hasher, "final:custom-lowering");
+    return identity.finish(&hasher);
+}
 
 pub const Overflow = enum { fail, drop_oldest };
 
@@ -121,7 +142,9 @@ pub fn verbatim(comptime config: anytype) type {
             .maximum_observations = @intCast(config.maximum_observations),
             .overflow = overflow,
         };
+        pub const semantic_config_digest = semanticConfigDigest(Config, normalized_config, policy);
         pub const final_policy_value = policy;
+        pub const has_implementation_constant_values = false;
         pub const lowering_complexity: usize = 1;
         pub fn constantValues(comptime Definition: type) @TypeOf(.{
             @as(u32, normalized_config.maximum_observations),
@@ -133,16 +156,16 @@ pub fn verbatim(comptime config: anytype) type {
             };
         }
 
-        pub fn constantContext(comptime base: u16) type {
-            _ = base;
+        pub fn constantContext(comptime Definition: type, comptime base: u16) type {
+            _ = Definition;
             return struct {
                 pub const zero_index: u16 = 0;
                 pub const one_index: u16 = 1;
                 pub const initial_memory_index: u16 = 10;
                 pub const true_index: u16 = 11;
                 pub const false_index: u16 = 12;
-                pub const maximum_observations_index: u16 = 15;
-                pub const history_overflow_index: u16 = 16;
+                pub const maximum_observations_index: u16 = base;
+                pub const history_overflow_index: u16 = base + 1;
             };
         }
 
@@ -304,6 +327,8 @@ pub fn custom(comptime spec: anytype) type {
         pub const is_verbatim = false;
         pub const Config = ConfigType;
         pub const normalized_config: Config = spec.config;
+        pub const semantic_config_digest = semanticConfigDigest(Config, normalized_config, null);
+        pub const has_implementation_constant_values = @hasDecl(Implementation, "constantValues");
         pub const lowering_complexity: usize = if (@hasDecl(Implementation, "lowering_complexity"))
             Implementation.lowering_complexity
         else
@@ -312,26 +337,27 @@ pub fn custom(comptime spec: anytype) type {
         pub fn constantValues(comptime Definition: type) @TypeOf(if (@hasDecl(Implementation, "constantValues"))
             Implementation.constantValues(Definition, normalized_config)
         else
-            .{}) {
-            if (@hasDecl(Implementation, "constantValues")) {
+            .{@as(void, {})}) {
+            if (comptime @hasDecl(Implementation, "constantValues")) {
                 return comptime Implementation.constantValues(Definition, normalized_config);
             }
-            return comptime .{};
+            return comptime .{@as(void, {})};
         }
 
-        pub fn constantContext(comptime base: u16) type {
-            if (@hasDecl(Implementation, "constantContext")) {
-                return Implementation.constantContext(normalized_config, base);
+        pub fn constantContext(comptime Definition: type, comptime base: u16) type {
+            if (comptime @hasDecl(Implementation, "constantContext")) {
+                return Implementation.constantContext(Definition, normalized_config, base);
             }
+            const custom_count: u16 = @intCast(constantValues(Definition).len);
             return struct {
                 pub const zero_index: u16 = 0;
                 pub const one_index: u16 = 1;
                 pub const initial_memory_index: u16 = 10;
                 pub const true_index: u16 = 11;
                 pub const false_index: u16 = 12;
-                pub const zero_u8_index: u16 = 18;
-                pub const one_u8_index: u16 = 19;
-                pub const two_u8_index: u16 = 20;
+                pub const zero_u8_index: u16 = base + custom_count + 1;
+                pub const one_u8_index: u16 = base + custom_count + 2;
+                pub const two_u8_index: u16 = base + custom_count + 3;
             };
         }
 
@@ -366,13 +392,23 @@ pub fn custom(comptime spec: anytype) type {
 
         pub fn emitInitial(comptime Definition: type, flow: anytype, goal: anytype, comptime context: anytype) @import("flow.zig").Value(MemoryType(Definition)) {
             if (@hasDecl(Implementation, "emitInitial")) {
-                return Implementation.emitInitial(Definition, normalized_config, flow, goal, context);
+                const before = flow.suspensionCount();
+                const result = Implementation.emitInitial(Definition, normalized_config, flow, goal, context);
+                if (flow.suspensionCount() != before) {
+                    @compileError("agent custom EpistemicStrategy emitInitial must be effect-free");
+                }
+                return result;
             }
             return flow.constant(MemoryType(Definition), context.initial_memory_index);
         }
 
         pub fn emitObserve(comptime Definition: type, flow: anytype, memory: anytype, observation: anytype, comptime context: anytype) @import("flow.zig").Value(MemoryType(Definition)) {
-            return Implementation.emitObserve(Definition, normalized_config, flow, memory, observation, context);
+            const before = flow.suspensionCount();
+            const result = Implementation.emitObserve(Definition, normalized_config, flow, memory, observation, context);
+            if (flow.suspensionCount() != before) {
+                @compileError("agent custom EpistemicStrategy emitObserve must be effect-free");
+            }
+            return result;
         }
 
         pub fn emitObserveKnown(
@@ -384,7 +420,8 @@ pub fn custom(comptime spec: anytype) type {
             comptime context: anytype,
         ) @import("flow.zig").Value(MemoryType(Definition)) {
             if (@hasDecl(Implementation, "emitObserveKnown")) {
-                return Implementation.emitObserveKnown(
+                const before = flow.suspensionCount();
+                const result = Implementation.emitObserveKnown(
                     Definition,
                     normalized_config,
                     flow,
@@ -393,6 +430,10 @@ pub fn custom(comptime spec: anytype) type {
                     observation,
                     context,
                 );
+                if (flow.suspensionCount() != before) {
+                    @compileError("agent custom EpistemicStrategy emitObserveKnown must be effect-free");
+                }
+                return result;
             }
             return emitObserve(Definition, flow, memory, observation, context);
         }
@@ -406,7 +447,8 @@ pub fn custom(comptime spec: anytype) type {
             comptime context: anytype,
         ) @import("flow.zig").Value(MemoryType(Definition)) {
             if (@hasDecl(Implementation, "emitObservePayload")) {
-                return Implementation.emitObservePayload(
+                const before = flow.suspensionCount();
+                const result = Implementation.emitObservePayload(
                     Definition,
                     normalized_config,
                     flow,
@@ -415,6 +457,10 @@ pub fn custom(comptime spec: anytype) type {
                     payload,
                     context,
                 );
+                if (flow.suspensionCount() != before) {
+                    @compileError("agent custom EpistemicStrategy emitObservePayload must be effect-free");
+                }
+                return result;
             }
             return emitObserveKnown(
                 Definition,
@@ -427,11 +473,21 @@ pub fn custom(comptime spec: anytype) type {
         }
 
         pub fn emitProject(comptime Definition: type, flow: anytype, memory: anytype) @import("flow.zig").Value(DecisionViewType(Definition)) {
-            return Implementation.emitProject(Definition, normalized_config, flow, memory);
+            const before = flow.suspensionCount();
+            const result = Implementation.emitProject(Definition, normalized_config, flow, memory);
+            if (flow.suspensionCount() != before) {
+                @compileError("agent custom EpistemicStrategy emitProject must be effect-free");
+            }
+            return result;
         }
 
         pub fn emitFinalAllowed(comptime Definition: type, flow: anytype, memory: anytype, result: anytype, comptime context: anytype) @import("flow.zig").Value(bool) {
-            return Implementation.emitFinalAllowed(Definition, normalized_config, flow, memory, result, context);
+            const before = flow.suspensionCount();
+            const allowed = Implementation.emitFinalAllowed(Definition, normalized_config, flow, memory, result, context);
+            if (flow.suspensionCount() != before) {
+                @compileError("agent custom EpistemicStrategy emitFinalAllowed must be effect-free");
+            }
+            return allowed;
         }
     };
 }

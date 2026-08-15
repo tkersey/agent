@@ -273,3 +273,67 @@ test "repository working set admits final result only after failing mutation pas
     try std.testing.expectEqual(true, done.value().tests_passed);
     try std.testing.expectEqual(@as(u32, 1), done.value().changed_files.len());
 }
+
+test "repository working set revokes passing evidence after a later failing test" {
+    const goal = actuality.Goal{
+        .task = try actuality.GoalText.fromSlice("repair fixture"),
+        .repository = try boundary.Text(128).fromSlice("fixture"),
+    };
+    var state = try Machine.initialState(std.testing.allocator, goal);
+    defer Machine.deinitState(state);
+
+    for (0..11) |index| _ = try runOne(&state, index);
+    _ = try driveEffect(
+        &state,
+        .{ .run_tests = .{ .suite = .default } },
+        try testResult(false),
+    );
+
+    var changed_files = boundary.Vector(actuality.Path, 4).empty();
+    try changed_files.push(try actuality.Path.fromSlice("src/range.mjs"));
+    const result = actuality.FinalResult{
+        .summary = try actuality.SummaryText.fromSlice("repair no longer passes"),
+        .changed_files = changed_files,
+        .tests_passed = true,
+        .final_source_sha256 = try digest(),
+    };
+    const decision = try nextRequest(state);
+    const view = switch (decision.value) {
+        .s0 => |turn| turn.context,
+        else => return error.ExpectedDecisionSite,
+    };
+    try std.testing.expect(!view.evidence.passing_test_observed);
+    try resumeRequest(&state, decision, actuality.Action{ .final = result });
+    var fuel: u64 = 200_000;
+    switch (try Machine.step(state, &fuel)) {
+        .failed => |failure| switch (failure) {
+            .authored => |authored| try std.testing.expectEqual(
+                actuality.Failure.invalid_variant,
+                authored,
+            ),
+            else => return error.ExpectedAuthoredFinalFailure,
+        },
+        else => return error.ExpectedRejectedFinal,
+    }
+}
+
+test "repository working set normalizes a mismatched read role before retention" {
+    const goal = actuality.Goal{
+        .task = try actuality.GoalText.fromSlice("repair fixture"),
+        .repository = try boundary.Text(128).fromSlice("fixture"),
+    };
+    var state = try Machine.initialState(std.testing.allocator, goal);
+    defer Machine.deinitState(state);
+
+    var mismatched = try readResult(.package);
+    mismatched.role = .source;
+    _ = try driveEffect(&state, try actionForRead(.package), mismatched);
+    const decision = try nextRequest(state);
+    const view = switch (decision.value) {
+        .s0 => |turn| turn.context,
+        else => return error.ExpectedDecisionSite,
+    };
+    try std.testing.expect(view.package_document != null);
+    try std.testing.expectEqual(actuality.DocumentRole.package, view.package_document.?.role);
+    try std.testing.expect(view.source_document == null);
+}

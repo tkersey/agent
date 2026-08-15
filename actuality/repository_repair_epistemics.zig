@@ -6,6 +6,39 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
         const CompactHits = @typeInfo(T.CompactSearch).@"struct".fields[0].type;
         const SourceHits = @typeInfo(T.SearchResult).@"struct".fields[0].type;
 
+        pub fn constantValues(comptime Definition: type, comptime config: anytype) @TypeOf(.{
+            T.DocumentRole.package,
+            T.DocumentRole.source,
+            T.DocumentRole.@"test",
+        }) {
+            _ = Definition;
+            _ = config;
+            return .{
+                T.DocumentRole.package,
+                T.DocumentRole.source,
+                T.DocumentRole.@"test",
+            };
+        }
+
+        pub fn constantContext(comptime Definition: type, comptime config: anytype, comptime base: u16) type {
+            _ = Definition;
+            _ = config;
+            return struct {
+                pub const zero_index: u16 = 0;
+                pub const one_index: u16 = 1;
+                pub const invalid_variant_index: u16 = 8;
+                pub const initial_memory_index: u16 = 10;
+                pub const true_index: u16 = 11;
+                pub const false_index: u16 = 12;
+                pub const package_role_index: u16 = base;
+                pub const source_role_index: u16 = base + 1;
+                pub const test_role_index: u16 = base + 2;
+                pub const zero_u8_index: u16 = base + 4;
+                pub const one_u8_index: u16 = base + 5;
+                pub const two_u8_index: u16 = base + 6;
+            };
+        }
+
         pub fn validate(comptime Definition: type, comptime config: anytype) void {
             _ = config;
             if (Definition.Observation != T.Observation) {
@@ -55,8 +88,11 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
             T.ReplaceDenied,
             T.ReplaceConflict,
             T.Path,
+            T.DigestHex,
+            T.FileText,
             T.ExcerptText,
             T.EntryKind,
+            T.DocumentRole,
         }) {
             _ = Definition;
             _ = config;
@@ -90,8 +126,11 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
                 T.ReplaceDenied,
                 T.ReplaceConflict,
                 T.Path,
+                T.DigestHex,
+                T.FileText,
                 T.ExcerptText,
                 T.EntryKind,
+                T.DocumentRole,
             };
         }
 
@@ -133,28 +172,68 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
 
         fn observeRead(flow: anytype, memory: anytype, read: anytype, comptime context: anytype) agent.Value(T.Memory) {
             const code = flow.productExtract(1, read);
+            const zero_code = flow.constant(u8, context.zero_u8_index);
             const source_code = flow.constant(u8, context.one_u8_index);
-            const is_package = flow.compareEqZero(code);
+            const test_code = flow.constant(u8, context.two_u8_index);
+            const is_package = flow.integerEqual(code, zero_code);
             const is_source = flow.integerEqual(code, source_code);
-            const some_read = flow.optionalSome(?T.ReadResult, read);
+            const is_test = flow.integerEqual(code, test_code);
             const package = flow.block(.segment, .{});
             const classify_non_package = flow.block(.segment, .{});
             const source = flow.block(.segment, .{});
+            const classify_test = flow.block(.segment, .{});
             const test_document = flow.block(.segment, .{});
+            const invalid = flow.block(.terminal_handoff, .{});
             const joined = flow.block(.segment, .{T.Memory});
             flow.branch(is_package, package, .{}, classify_non_package, .{});
 
             _ = flow.enter(package);
-            flow.jump(joined, .{replaceMemoryField(flow, memory, 1, some_read)});
+            const package_read = flow.productReplace(
+                0,
+                read,
+                flow.constant(T.DocumentRole, context.package_role_index),
+            );
+            flow.jump(joined, .{replaceMemoryField(
+                flow,
+                memory,
+                1,
+                flow.optionalSome(?T.ReadResult, package_read),
+            )});
 
             _ = flow.enter(classify_non_package);
-            flow.branch(is_source, source, .{}, test_document, .{});
+            flow.branch(is_source, source, .{}, classify_test, .{});
 
             _ = flow.enter(source);
-            flow.jump(joined, .{replaceMemoryField(flow, memory, 2, some_read)});
+            const source_read = flow.productReplace(
+                0,
+                read,
+                flow.constant(T.DocumentRole, context.source_role_index),
+            );
+            flow.jump(joined, .{replaceMemoryField(
+                flow,
+                memory,
+                2,
+                flow.optionalSome(?T.ReadResult, source_read),
+            )});
+
+            _ = flow.enter(classify_test);
+            flow.branch(is_test, test_document, .{}, invalid, .{});
 
             _ = flow.enter(test_document);
-            flow.jump(joined, .{replaceMemoryField(flow, memory, 3, some_read)});
+            const test_read = flow.productReplace(
+                0,
+                read,
+                flow.constant(T.DocumentRole, context.test_role_index),
+            );
+            flow.jump(joined, .{replaceMemoryField(
+                flow,
+                memory,
+                3,
+                flow.optionalSome(?T.ReadResult, test_read),
+            )});
+
+            _ = flow.enter(invalid);
+            flow.failValue(flow.constant(T.Failure, context.invalid_variant_index));
 
             return flow.enter(joined)[0];
         }
@@ -163,7 +242,6 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
             const passed = flow.productExtract(1, test_result);
             const mutation = flow.productExtract(8, memory);
             const failing = flow.booleanAnd(flow.booleanNot(passed), flow.booleanNot(mutation));
-            const passing = flow.booleanAnd(passed, mutation);
             const compact = flow.productConstruct(T.CompactTestResult, .{
                 flow.productExtract(0, test_result),
                 passed,
@@ -180,7 +258,11 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
                     flow.optionalSome(?T.CompactTestResult, compact),
                 ),
                 failing,
-                passing,
+                flow.select(
+                    mutation,
+                    passed,
+                    flow.productExtract(9, memory),
+                ),
             });
 
             const flag_values = flow.enter(flags);
@@ -194,7 +276,7 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
                 flow,
                 failing_memory,
                 9,
-                flow.booleanOr(flow.productExtract(9, failing_memory), flag_values[2]),
+                flag_values[2],
             );
         }
 

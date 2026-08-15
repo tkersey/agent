@@ -78,13 +78,11 @@ fn hasVoidEffectAction(comptime Definition: type) bool {
 }
 
 fn unitConstantIndex(comptime Epistemics: type, comptime Definition: type) u16 {
-    _ = Epistemics;
-    _ = Definition;
-    return 17;
+    return epistemic_constant_base + Epistemics.constantValues(Definition).len;
 }
 
-fn epistemicContext(comptime Epistemics: type) type {
-    return Epistemics.constantContext(epistemic_constant_base);
+fn epistemicContext(comptime Definition: type, comptime Epistemics: type) type {
+    return Epistemics.constantContext(Definition, epistemic_constant_base);
 }
 
 fn generatedFlowLimits(
@@ -190,7 +188,32 @@ fn emitEffectAction(
         flow.constant(void, unit_constant_index)
     else
         flow.sumExtract(action_index, action_value);
-    const counters = flow.productExtract(2, state_value);
+    var checked_payload = payload;
+    var checked_state = state_value;
+    if (comptime Epistemics.is_verbatim) {
+        if (comptime Epistemics.normalized_config.overflow == .fail) {
+            const memory = flow.productExtract(1, state_value);
+            const full = flow.integerGreaterEqual(
+                flow.vectorLength(memory),
+                flow.constant(u32, epistemicContext(Definition, Epistemics).maximum_observations_index),
+            );
+            const history_failure = flow.block(.terminal_handoff, .{});
+            const capacity_ok = flow.block(.segment, .{
+                Descriptor.Site.Payload,
+                strategy.State(Definition, Epistemics),
+            });
+            flow.branch(full, history_failure, .{}, capacity_ok, .{ payload, state_value });
+            _ = flow.enter(history_failure);
+            flow.failValue(flow.constant(
+                Definition.Failure,
+                epistemicContext(Definition, Epistemics).history_overflow_index,
+            ));
+            const admitted = flow.enter(capacity_ok);
+            checked_payload = admitted[0];
+            checked_state = admitted[1];
+        }
+    }
+    const counters = flow.productExtract(2, checked_state);
     const effect_actions = flow.productExtract(2, counters);
     const maximum_effect_actions = flow.constant(
         u32,
@@ -223,7 +246,7 @@ fn emitEffectAction(
         budget_failure,
         .{},
         perform_block,
-        .{ payload, state_value },
+        .{ checked_payload, checked_state },
     );
 
     _ = flow.enter(budget_failure);
@@ -259,7 +282,7 @@ fn emitEffectAction(
         flow.productExtract(1, folded_state),
         observation_index,
         fold_values[1],
-        epistemicContext(Epistemics),
+        epistemicContext(Definition, Epistemics),
     );
     flow.jump(loop_block, .{flow.productConstruct(
         strategy.State(Definition, Epistemics),
@@ -323,7 +346,7 @@ fn emitFinalAction(
         flow,
         memory,
         result,
-        epistemicContext(Epistemics),
+        epistemicContext(Definition, Epistemics),
     );
     const accept = flow.block(.terminal_handoff, .{Definition.Result});
     const reject = flow.block(.terminal_handoff, .{});
@@ -409,7 +432,7 @@ fn ReactLowering(
         Definition,
         &flow,
         goal,
-        epistemicContext(Epistemics),
+        epistemicContext(Definition, Epistemics),
     );
     const zero = flow.constant(u32, @intFromEnum(Constant.zero));
     const counters = flow.productConstruct(budget.Counters, .{ zero, zero, zero, zero });
@@ -510,7 +533,7 @@ fn ReflectiveLowering(
         Definition,
         &flow,
         goal,
-        epistemicContext(Epistemics),
+        epistemicContext(Definition, Epistemics),
     );
     const zero = flow.constant(u32, @intFromEnum(Constant.zero));
     const counters = flow.productConstruct(
@@ -757,39 +780,42 @@ fn ReactBody(
     comptime Epistemics: type,
 ) type {
     const Lowering = ReactLowering(Definition, Strategy, Epistemics);
+    const prefix = .{
+        @as(u32, 0),
+        @as(u32, 1),
+        Definition.budget.maximum_turns,
+        Definition.budget.maximum_decisions,
+        Definition.budget.maximum_effect_actions,
+        Definition.budget.maximum_child_actions,
+        budget.DecisionPhase.decide,
+        strategy.failureNamed(Definition, "budget_exhausted"),
+        strategy.failureNamed(Definition, "invalid_variant"),
+        decision_contract.semanticDigest(Definition, Strategy, Epistemics),
+        Epistemics.initialMemory(Definition),
+        true,
+        false,
+        budget.DecisionPhase.reflect,
+        @as(u32, 0),
+    };
+    const tail = .{
+        @as(void, {}),
+        @as(u8, 0),
+        @as(u8, 1),
+        @as(u8, 2),
+    };
     return struct {
         pub const InitialArgs = Definition.Goal;
         pub const Result = Definition.Result;
         pub const Failure = Definition.Failure;
-        pub const constants = .{
-            @as(u32, 0),
-            @as(u32, 1),
-            Definition.budget.maximum_turns,
-            Definition.budget.maximum_decisions,
-            Definition.budget.maximum_effect_actions,
-            Definition.budget.maximum_child_actions,
-            budget.DecisionPhase.decide,
-            strategy.failureNamed(Definition, "budget_exhausted"),
-            strategy.failureNamed(Definition, "invalid_variant"),
-            decision_contract.semanticDigest(Definition, Strategy, Epistemics),
-            Epistemics.initialMemory(Definition),
-            true,
-            false,
-            budget.DecisionPhase.reflect,
-            @as(u32, 0),
-            if (Epistemics.is_verbatim)
-                Epistemics.normalized_config.maximum_observations
-            else
-                @as(u32, 0),
-            if (Epistemics.is_verbatim)
-                strategy.failureNamed(Definition, "history_overflow")
-            else
-                strategy.failureNamed(Definition, "invalid_variant"),
-            @as(void, {}),
-            @as(u8, 0),
-            @as(u8, 1),
-            @as(u8, 2),
-        };
+        pub const constants = if (Epistemics.is_verbatim)
+            prefix ++ .{
+                Epistemics.normalized_config.maximum_observations,
+                strategy.failureNamed(Definition, "history_overflow"),
+            } ++ tail
+        else if (Epistemics.has_implementation_constant_values)
+            prefix ++ Epistemics.constantValues(Definition) ++ tail
+        else
+            prefix ++ .{@as(void, {})} ++ tail;
         pub const effect_sites = effectSites(Definition, Strategy, Epistemics);
         pub const schema_types = Lowering.schema_types;
         pub const control_ir = Lowering.control_ir;
@@ -807,39 +833,42 @@ fn ReflectiveBody(
     comptime Epistemics: type,
 ) type {
     const Lowering = ReflectiveLowering(Definition, Strategy, Epistemics);
+    const prefix = .{
+        @as(u32, 0),
+        @as(u32, 1),
+        Definition.budget.maximum_turns,
+        Definition.budget.maximum_decisions,
+        Definition.budget.maximum_effect_actions,
+        Definition.budget.maximum_child_actions,
+        budget.DecisionPhase.propose,
+        strategy.failureNamed(Definition, "budget_exhausted"),
+        strategy.failureNamed(Definition, "invalid_variant"),
+        decision_contract.semanticDigest(Definition, Strategy, Epistemics),
+        Epistemics.initialMemory(Definition),
+        true,
+        false,
+        budget.DecisionPhase.reflect,
+        Strategy.normalized_config.reflection_rounds,
+    };
+    const tail = .{
+        @as(void, {}),
+        @as(u8, 0),
+        @as(u8, 1),
+        @as(u8, 2),
+    };
     return struct {
         pub const InitialArgs = Definition.Goal;
         pub const Result = Definition.Result;
         pub const Failure = Definition.Failure;
-        pub const constants = .{
-            @as(u32, 0),
-            @as(u32, 1),
-            Definition.budget.maximum_turns,
-            Definition.budget.maximum_decisions,
-            Definition.budget.maximum_effect_actions,
-            Definition.budget.maximum_child_actions,
-            budget.DecisionPhase.propose,
-            strategy.failureNamed(Definition, "budget_exhausted"),
-            strategy.failureNamed(Definition, "invalid_variant"),
-            decision_contract.semanticDigest(Definition, Strategy, Epistemics),
-            Epistemics.initialMemory(Definition),
-            true,
-            false,
-            budget.DecisionPhase.reflect,
-            Strategy.normalized_config.reflection_rounds,
-            if (Epistemics.is_verbatim)
-                Epistemics.normalized_config.maximum_observations
-            else
-                @as(u32, 0),
-            if (Epistemics.is_verbatim)
-                strategy.failureNamed(Definition, "history_overflow")
-            else
-                strategy.failureNamed(Definition, "invalid_variant"),
-            @as(void, {}),
-            @as(u8, 0),
-            @as(u8, 1),
-            @as(u8, 2),
-        };
+        pub const constants = if (Epistemics.is_verbatim)
+            prefix ++ .{
+                Epistemics.normalized_config.maximum_observations,
+                strategy.failureNamed(Definition, "history_overflow"),
+            } ++ tail
+        else if (Epistemics.has_implementation_constant_values)
+            prefix ++ Epistemics.constantValues(Definition) ++ tail
+        else
+            prefix ++ .{@as(void, {})} ++ tail;
         pub const effect_sites = effectSites(Definition, Strategy, Epistemics);
         pub const schema_types = Lowering.schema_types;
         pub const control_ir = Lowering.control_ir;

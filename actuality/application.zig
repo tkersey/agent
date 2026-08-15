@@ -6,6 +6,13 @@ const factory = @import("repository_repair_definition.zig");
 pub const Actuality = factory.RepositoryRepair(agent, boundary);
 pub const Compiled = Actuality.Compiled;
 pub const Contract = agent.decision.jsonContract(Compiled);
+pub const wasm_stack_size_bytes: u32 = 128 * 1024 * 1024;
+
+/// Artifact-resident packaging metadata used by the release verifier. This is
+/// not part of World Application ABI v1 and carries no runtime authority.
+pub export fn agent_actuality_wasm_stack_size_bytes() u32 {
+    return wasm_stack_size_bytes;
+}
 
 fn authorityRequirements(comptime authorities: anytype) u64 {
     var result: u64 = 0;

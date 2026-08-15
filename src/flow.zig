@@ -133,6 +133,12 @@ pub fn Flow(comptime config: anytype) type {
             return .{ .label = label };
         }
 
+        /// Number of external-effect suspensions emitted so far. Compiler-owned
+        /// facades use this to reject effects introduced by pure lowering hooks.
+        pub fn suspensionCount(self: *const Self) usize {
+            return self.request_count;
+        }
+
         fn failLimit(comptime message: []const u8) noreturn {
             @compileError("agent.Flow " ++ message);
         }

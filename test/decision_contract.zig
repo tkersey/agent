@@ -6,6 +6,65 @@ const actuality = @import("repository_repair_actuality");
 const Contract = agent.decision.jsonContract(actuality.Compiled);
 const StaticContract = agent.decision.contract(actuality.Compiled);
 
+const GuardSite = boundary.effect.site(91, "fixture.contract-guard.v1", void, GuardObservationPayload);
+const GuardObservationPayload = struct { passed: bool };
+const GuardObservation = union(enum) { run_tests: GuardObservationPayload };
+const GuardAction = union(enum) { run_tests: void, final: u32 };
+const GuardFailure = enum {
+    budget_exhausted,
+    history_overflow,
+    arithmetic_overflow,
+    invalid_variant,
+    invalid_index,
+    capacity_exceeded,
+};
+const GuardDefinition = agent.define(.{
+    .name = "decision-contract-final-guard",
+    .version = "2.0.0",
+    .instructions = "Finish only when the selected final guard admits it.",
+    .Goal = void,
+    .Action = GuardAction,
+    .Observation = GuardObservation,
+    .Result = u32,
+    .Failure = GuardFailure,
+    .decision = .{
+        .interface = "fixture.contract-guard-decide.v1",
+        .maximum_request_bytes = 4096,
+        .maximum_result_bytes = 64,
+    },
+    .actions = .{
+        agent.action.effect(.run_tests, .run_tests, GuardSite, .{
+            .name = "run_tests",
+            .description = "Observe the test result.",
+            .class = .tool,
+        }),
+        agent.action.final(.final, .{ .name = "final", .description = "Finish." }),
+    },
+    .budget = .{
+        .maximum_turns = 2,
+        .maximum_decisions = 2,
+        .maximum_effect_actions = 1,
+        .maximum_child_actions = 0,
+    },
+});
+
+fn guardedContract(comptime expected: bool) type {
+    return agent.compile(
+        GuardDefinition,
+        agent.strategy.react(.{}),
+        agent.epistemics.verbatim(.{
+            .maximum_observations = 1,
+            .overflow = .fail,
+            .final = agent.final_policy.latestObservationBool(.run_tests, .passed, expected),
+        }),
+        .{ .machine = .{
+            .maximum_frames = 8,
+            .maximum_state_bytes = 64 * 1024,
+            .maximum_machine_fuel = 4096,
+        } },
+    ).DecisionContract;
+}
+
 test "DecisionContract v2 is the exact immutable artifact named by the Machine" {
     try std.testing.expectEqualStrings(
         "agent-decision-contract/v2",
@@ -72,6 +131,14 @@ test "DecisionContract v2 binds the exact provider-neutral action schema bytes" 
         &expected,
         &StaticContract.action_schema_digest,
     );
+}
+
+test "DecisionContract identity binds the verbatim final guard" {
+    try std.testing.expect(!std.mem.eql(
+        u8,
+        &guardedContract(true).canonical_digest,
+        &guardedContract(false).canonical_digest,
+    ));
 }
 
 test "decision contract is deterministic and bound to the Action schema" {

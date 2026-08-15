@@ -323,12 +323,17 @@ pub fn custom(comptime spec: anytype) type {
             flow: anytype,
             state: anytype,
         ) @import("flow.zig").Value(DecisionLocalType(Definition)) {
-            return Implementation.emitDecisionLocal(
+            const before = flow.suspensionCount();
+            const result = Implementation.emitDecisionLocal(
                 Definition,
                 normalized_config,
                 flow,
                 state,
             );
+            if (flow.suspensionCount() != before) {
+                @compileError("agent custom RuntimeStrategy emitDecisionLocal must be effect-free");
+            }
+            return result;
         }
     };
 }

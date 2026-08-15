@@ -95,6 +95,20 @@ try {
     assert.equal(receipts.migrate.migration, true);
     assert.equal(receipts.migrate.migration_receiver_preflight, true);
 
+    if (options.receiptPath !== null) {
+        mkdirSync(dirname(options.receiptPath), { recursive: true });
+        writeFileSync(options.receiptPath, `${JSON.stringify({
+            format: "agent-reference-stack-receipt-v1",
+            worldHostArchiveSha256: acquired.worldHost.entry.sha256,
+            worldCapabilitiesArchiveSha256: acquired.worldCapabilities.entry.sha256,
+            deterministic: receipts.deterministic,
+            retry: receipts.retry,
+            replay: receipts.replay,
+            branch: receipts.branch,
+            migrate: receipts.migrate,
+        }, null, 2)}\n`);
+    }
+
     for (const [kind, artifact] of Object.entries(acquired)) {
         console.log(`${snake(kind)}_version=${artifact.entry.version}`);
         console.log(`${snake(kind)}_archive_sha256=${artifact.entry.sha256}`);
@@ -140,11 +154,11 @@ function run(command, args, cwd, env, forward = true) {
 }
 
 function parseArgs(argv) {
-    const result = { offline: false, worldHostArchive: null, worldCapabilitiesArchive: null, artifactRoot: null };
+    const result = { offline: false, worldHostArchive: null, worldCapabilitiesArchive: null, artifactRoot: null, receiptPath: null };
     for (let index = 0; index < argv.length; index += 1) {
         const argument = argv[index];
         if (argument === "--offline") result.offline = true;
-        else if (["--world-host-archive", "--world-capabilities-archive", "--artifact-root"].includes(argument)) {
+        else if (["--world-host-archive", "--world-capabilities-archive", "--artifact-root", "--receipt-path"].includes(argument)) {
             if (index + 1 >= argv.length) throw new Error(`${argument} requires a value`);
             result[argument.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = resolve(argv[index += 1]);
         } else throw new Error(`unknown argument: ${argument}`);

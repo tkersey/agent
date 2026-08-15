@@ -4,9 +4,14 @@
 repository-repair run used by the v2 resource gates. Measurements were taken
 with Zig 0.16.0 and Bun 1.3.14 against checksum-authenticated public artifacts.
 
-`candidate.json` binds the Agent v2 frozen candidate and uses the same
-measurement runner and controlled fixture. `completion-receipt.txt` is emitted
-only after deterministic lifecycle, public archive, and live-receipt gates pass.
+`candidate.json` binds the exact Agent v2 commit, tree, deterministic Git
+archive, artifacts, and authenticated compiler benchmark. The release check
+reruns the controlled deterministic lifecycle from lock-pinned public runtime
+archives and rejects any mismatch in Frame, state, payload, or WASM measures.
+
+`zig build check-agent-release` installs its deterministic receipt at
+`zig-out/agent-v2/completion-receipt.txt`. The redacted live Actuality receipt
+is a separate release-closeout gate and must pass before the Agent tag is cut.
 
 The measurement runner is `tools/actuality/measure-release.mjs`. Frame and
 state sizes are canonical bytes returned and admitted by world-host; timing

@@ -1,7 +1,10 @@
 const std = @import("std");
 const agent = @import("agent");
+const boundary = @import("boundary");
 
-const Action = union(enum) { final: u32 };
+const ToolSite = boundary.effect.site(72, "fixture.agent-parity-tool.v1", u32, u32);
+const Action = union(enum) { tool: u32, final: u32 };
+const Observation = union(enum) { tool: u32 };
 const Failure = enum {
     budget_exhausted,
     history_overflow,
@@ -15,7 +18,7 @@ const Definition = agent.define(.{
     .instructions = "Return the exact typed result.",
     .Goal = u32,
     .Action = Action,
-    .Observation = void,
+    .Observation = Observation,
     .Result = u32,
     .Failure = Failure,
     .decision = .{
@@ -24,20 +27,25 @@ const Definition = agent.define(.{
         .maximum_result_bytes = 64,
     },
     .actions = .{
+        agent.action.effect(.tool, .tool, ToolSite, .{
+            .name = "tool",
+            .description = "Return the parity observation.",
+            .class = .tool,
+        }),
         agent.action.final(.final, .{
             .name = "final",
             .description = "Return the result.",
         }),
     },
     .budget = .{
-        .maximum_turns = 1,
-        .maximum_decisions = 1,
-        .maximum_effect_actions = 0,
+        .maximum_turns = 2,
+        .maximum_decisions = 2,
+        .maximum_effect_actions = 1,
         .maximum_child_actions = 0,
     },
 });
 const Compiled = agent.compile(Definition, agent.strategy.react(.{}), agent.epistemics.verbatim(.{
-    .maximum_observations = 0,
+    .maximum_observations = 1,
     .overflow = .fail,
     .final = agent.final_policy.none,
 }), .{
@@ -70,14 +78,43 @@ pub export fn agentMachineParityRun() u32 {
         return 0;
     defer Machine.deinitState(state);
     var fuel: u64 = 4096;
-    const effect = switch (Machine.step(state, &fuel) catch return 0) {
+    const first_decision = switch (Machine.step(state, &fuel) catch return 0) {
         .request => |request| request,
         else => return 0,
     };
-    const request = switch (effect.value) {
+    {
+        const prepared = Machine.prepareResume(state, first_decision) catch return 0;
+        defer Machine.deinitPreparedResume(prepared);
+        Machine.@"resume"(prepared, Action{ .tool = 7 }) catch return 0;
+    }
+    const tool_request = switch (Machine.step(state, &fuel) catch return 0) {
+        .request => |request| request,
+        else => return 0,
+    };
+    switch (tool_request.value) {
+        .s1 => |payload| if (payload != 7) return 0,
+        else => return 0,
+    }
+    {
+        const prepared = Machine.prepareResume(state, tool_request) catch return 0;
+        defer Machine.deinitPreparedResume(prepared);
+        Machine.@"resume"(prepared, @as(u32, 11)) catch return 0;
+    }
+    const decision = switch (Machine.step(state, &fuel) catch return 0) {
+        .request => |request| request,
+        else => return 0,
+    };
+    const request = switch (decision.value) {
         .s0 => |value| value,
+        else => return 0,
     };
     const history_length = request.context.len() catch return 0;
+    if (history_length != 1) return 0;
+    const observation = (request.context.get(0) catch return 0) orelse return 0;
+    const observed_tool = switch (observation) {
+        .tool => |value| value,
+    };
+    if (observed_tool != 11) return 0;
     const catalog_length: u32 = 0;
     const instruction_length: u32 = 0;
 
@@ -87,7 +124,7 @@ pub export fn agentMachineParityRun() u32 {
         state,
     ) catch return 0;
     {
-        const prepared = Machine.prepareResume(state, effect) catch return 0;
+        const prepared = Machine.prepareResume(state, decision) catch return 0;
         defer Machine.deinitPreparedResume(prepared);
         Machine.@"resume"(prepared, Action{ .final = 42 }) catch return 0;
     }
@@ -101,12 +138,13 @@ pub export fn agentMachineParityRun() u32 {
     var cursor: usize = 0;
     writeInt(&output_storage, &cursor, u32, @intCast(encoded_state.len));
     writeBytes(&output_storage, &cursor, encoded_state);
-    writeInt(&output_storage, &cursor, u64, effect.sequence);
-    writeInt(&output_storage, &cursor, u32, effect.constructor_id);
+    writeInt(&output_storage, &cursor, u64, decision.sequence);
+    writeInt(&output_storage, &cursor, u32, decision.constructor_id);
     writeInt(&output_storage, &cursor, u32, request.goal);
     writeInt(&output_storage, &cursor, u32, request.counters.turns);
     writeInt(&output_storage, &cursor, u32, request.counters.decisions);
     writeInt(&output_storage, &cursor, u32, history_length);
+    writeInt(&output_storage, &cursor, u32, observed_tool);
     writeInt(&output_storage, &cursor, u32, catalog_length);
     writeInt(&output_storage, &cursor, u32, instruction_length);
     writeInt(&output_storage, &cursor, u32, @intFromEnum(request.phase));

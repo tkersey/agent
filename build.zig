@@ -871,6 +871,17 @@ pub fn build(b: *std.Build) void {
         "agent-v2/completion-receipt.txt",
     );
     release.dependOn(&install_release_receipt.step);
+
+    const adequacy_fixture_command = b.addSystemCommand(&.{
+        "bun",
+        "tools/adequacy/fixture-proof.mjs",
+    });
+    const adequacy_fixture = b.step(
+        "check-agent-adequacy-fixture",
+        "Prove the controlled router fixture fails initially and passes its reviewed visible and hidden solution",
+    );
+    adequacy_fixture.dependOn(&adequacy_fixture_command.step);
+
     check.dependOn(semantic_check);
     check.dependOn(lint);
 }

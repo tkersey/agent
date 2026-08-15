@@ -1,0 +1,15 @@
+{
+  "schema": "router-policy-fixture-manifest/v1",
+  "fixture": "router-policy-v1",
+  "files": [
+    { "slot": "readme", "path": "README.md", "bytes": 197, "sha256": "92ba0de0ffce53188a3557e51acd86fa25480b6b78225c05a008d68d1dd51a68" },
+    { "slot": "package", "path": "package.json", "bytes": 142, "sha256": "3caa7a7b8ff6e2fd56ec94a4fc74909fa6456e42878e3a39a2034549da83e14b" },
+    { "slot": "methods_source", "path": "src/methods.mjs", "bytes": 250, "sha256": "400a90f9bbaad42519569d1edad196fff3ba212a2bfbee51d17fcf3190e58133" },
+    { "slot": "pattern_source", "path": "src/pattern.mjs", "bytes": 1504, "sha256": "a7bca5907d7109e71b5b149279be4599da82e8190813c731a43a3bf7ec918600" },
+    { "slot": "errors_source", "path": "src/errors.mjs", "bytes": 63, "sha256": "96e86c78d6d9ea5636441d0a3f11ae0a641f42d27bfc5602881fd2df50c00dae" },
+    { "slot": "router_source", "path": "src/router.mjs", "bytes": 493, "sha256": "79e1ada61ccf481b0526e6a30feb001a778acd92f0174ada83012de8fba983c6" },
+    { "slot": "index_source", "path": "src/index.mjs", "bytes": 128, "sha256": "a9644c6f76b88c27f8721c853fb641dfe376b5860d43a61f4aa278ca514270c1" },
+    { "slot": "methods_test", "path": "test/methods.test.mjs", "bytes": 1099, "sha256": "eb54d01c7743f7c60edd816de24db75b39a681e4bb2becb18b30ea43df61780c" },
+    { "slot": "router_test", "path": "test/router.test.mjs", "bytes": 3784, "sha256": "48c6df27eafe6fd079bf42f67e709ef448af155c2d5c3183dafa14a877d1c0f8" }
+  ]
+}

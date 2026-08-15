@@ -291,7 +291,7 @@ function decodeApplicationManifest(bytes) {
   };
   const u32 = () => {
     requireBytes(4);
-    const value = bytes.readUInt32BE(offset);
+    const value = bytes.readUInt32LE(offset);
     offset += 4;
     return value;
   };

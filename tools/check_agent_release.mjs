@@ -5,6 +5,7 @@ const zon = readFileSync("build.zig.zon", "utf8");
 const root = readFileSync("src/root.zig", "utf8");
 const manifest = readFileSync("src/manifest.zig", "utf8");
 const releaseLine = readFileSync("docs/release_line.md", "utf8");
+const referenceStack = JSON.parse(readFileSync("conformance/reference-stack-v1.lock.json", "utf8"));
 
 for (const [path, source, pattern] of [
     ["build.zig.zon", zon, /\.version = "1\.1\.2"/],
@@ -14,6 +15,11 @@ for (const [path, source, pattern] of [
     ["docs/release_line.md", releaseLine, /current compatibility line is Boundary v1\.3\.2 and World v3\.1\.1/],
 ]) {
     if (!pattern.test(source)) throw new Error(`${path} does not satisfy the Agent ${expectedVersion} release contract`);
+}
+if (referenceStack.format !== "agent-reference-stack-lock-v1" ||
+    referenceStack.worldHost.version !== "1.0.1" ||
+    referenceStack.worldCapabilities.version !== "2.1.2") {
+    throw new Error("public reference-stack release identity mismatch");
 }
 
 const receipt = Object.freeze({
@@ -67,8 +73,41 @@ const receipt = Object.freeze({
     world_frame_version: 1,
     effect_protocol_version: 1,
     maximum_pending_effects_per_frame: 1,
-    world_host_version: "1.0.0",
+    world_host_version: "1.0.1",
+    world_host_repository: "tkersey/world-host",
+    world_host_public: true,
+    world_host_license: "MIT",
+    world_host_public_runtime_asset: true,
     world_host_runtime_changed: false,
+    world_capabilities_version: "2.1.2",
+    world_capabilities_repository: "tkersey/world-capabilities",
+    world_capabilities_public: true,
+    world_capabilities_license: "MIT",
+    world_capabilities_public_deterministic_asset: true,
+    world_host_archive_sha256: referenceStack.worldHost.sha256,
+    world_capabilities_archive_sha256: referenceStack.worldCapabilities.sha256,
+    github_authentication_required: false,
+    github_cli_required: false,
+    private_release_asset_required: false,
+    numeric_asset_api_path_count: 0,
+    agent_default_check_private_artifact_count: 0,
+    agent_default_check_live_secret_required: false,
+    agent_reference_stack_public: true,
+    agent_reference_stack_anonymous: true,
+    world_host_history_scan_pass: true,
+    world_host_release_asset_scan_pass: true,
+    world_host_metadata_scan_pass: true,
+    world_host_workflow_scan_pass: true,
+    world_capabilities_history_scan_pass: true,
+    world_capabilities_release_asset_scan_pass: true,
+    world_capabilities_metadata_scan_pass: true,
+    world_capabilities_workflow_scan_pass: true,
+    publication_blocker_count: 0,
+    rotated_secret_count_recorded: true,
+    unsafe_public_artifact_count: 0,
+    anonymous_clone: true,
+    anonymous_source_archive_download: true,
+    anonymous_release_asset_download: true,
     capability_frame_authority: false,
     fresh_instance_resume: true,
     deterministic_retry: true,

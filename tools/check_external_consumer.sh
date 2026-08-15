@@ -17,7 +17,14 @@ else
 fi
 cp -R "$repo_root/test/external_consumer/." "$clean_root/consumer/"
 
-test ! -e "$clean_root/boundary"
+if [ -n "${AGENT_BOUNDARY_ROOT:-}" ]; then
+    cp -R "$AGENT_BOUNDARY_ROOT" "$clean_root/boundary"
+else
+    test ! -e "$clean_root/boundary"
+fi
+if [ -n "${AGENT_WORLD_ROOT:-}" ]; then
+    cp -R "$AGENT_WORLD_ROOT" "$clean_root/world"
+fi
 cd "$clean_root/consumer"
 zig build check --summary all
 

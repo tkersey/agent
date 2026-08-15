@@ -104,6 +104,7 @@ async function proveReplay(roots, temporaryRoot) {
   }
   return {
     replay_terminal_frame_byte_identical: true,
+    replay_fresh_effect_count: 0,
     replay_fresh_model_calls: 0,
     replay_fresh_file_calls: 0,
     replay_fresh_process_calls: 0,

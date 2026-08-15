@@ -16,12 +16,18 @@ import { basename, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import {
+    acquireReferenceStack,
+    materializeReferenceArtifact,
+    readReferenceStackLock,
+} from "./reference_stack.mjs";
+
 const versions = Object.freeze({
     agent: "1.1.2",
     boundary: "1.3.2",
     world: "3.1.1",
-    host: "1.0.0",
-    capabilities: "2.0.2",
+    host: "1.0.1",
+    capabilities: "2.1.2",
 });
 const releases = Object.freeze({
     boundary: Object.freeze({
@@ -33,14 +39,6 @@ const releases = Object.freeze({
         url: "https://github.com/tkersey/world/archive/refs/tags/v3.1.1.tar.gz",
         sha256: "ebde48f0bc037678e79051e3f8c3cde2fa1964df0b14ff53ed9cef94ccb1f63c",
         packageHash: "world-3.1.1-XXTUeKXGBgAZhWa2YvUU9Sj4GE-E53Km85AcgecObJV6",
-    }),
-    host: Object.freeze({
-        assetApiPath: "repos/tkersey/world-host/releases/assets/490040522",
-        sha256: "f881aaf3ada062ca3d80fc46d10cb001f38504d816ecd4995faf34bcd14ecc70",
-    }),
-    capabilities: Object.freeze({
-        assetApiPath: "repos/tkersey/world-capabilities/releases/assets/507613227",
-        sha256: "e1718f14ff6c2443b52a06e35650cf8530feb7863ef120950ee7c5c6f1c951a6",
     }),
 });
 
@@ -62,25 +60,28 @@ try {
     mkdirSync(stagingRoot, { recursive: true });
     mkdirSync(runtimeRoot, { recursive: true });
 
-    const [boundaryArchive, worldArchive, hostArchive, capabilitiesArchive] = await Promise.all([
+    if (options.offline && (!process.env.AGENT_BOUNDARY_ARCHIVE || !process.env.AGENT_WORLD_ARCHIVE)) {
+        throw new Error("offline World conformance requires local Boundary and World archives");
+    }
+    const lock = readReferenceStackLock(join(sourceRoot, "conformance/reference-stack-v1.lock.json"));
+    const [boundaryArchive, worldArchive, referenceStack] = await Promise.all([
         loadArchive("AGENT_BOUNDARY_ARCHIVE", releases.boundary.url),
         loadArchive("AGENT_WORLD_ARCHIVE", releases.world.url),
-        loadArchive("AGENT_WORLD_HOST_ARCHIVE", null, releases.host.assetApiPath),
-        loadArchive("AGENT_CAPABILITIES_ARCHIVE", null, releases.capabilities.assetApiPath),
+        acquireReferenceStack(lock, {
+            offline: options.offline,
+            overrides: {
+                worldHost: options.worldHostArchive,
+                worldCapabilities: options.worldCapabilitiesArchive,
+            },
+        }),
     ]);
     verifySha256("Boundary v1.3.2", boundaryArchive, releases.boundary.sha256);
     verifySha256("World v3.1.1", worldArchive, releases.world.sha256);
-    verifySha256("world-host v1.0.0", hostArchive, releases.host.sha256);
-    verifySha256("world-capabilities v2.0.2 Effect v1", capabilitiesArchive, releases.capabilities.sha256);
 
     const boundaryArchivePath = join(archiveRoot, "boundary-v1.3.2.tar.gz");
     const worldArchivePath = join(archiveRoot, "world-v3.1.1.tar.gz");
-    const hostArchivePath = join(archiveRoot, "world-host-v1.0.0.tar.gz");
-    const capabilitiesArchivePath = join(archiveRoot, "world-capabilities-v2.0.2-effect-v1.tar.gz");
     writeFileSync(boundaryArchivePath, boundaryArchive);
     writeFileSync(worldArchivePath, worldArchive);
-    writeFileSync(hostArchivePath, hostArchive);
-    writeFileSync(capabilitiesArchivePath, capabilitiesArchive);
 
     assertPackageHash(options.zig, boundaryArchivePath, releases.boundary.packageHash);
     assertPackageHash(options.zig, worldArchivePath, releases.world.packageHash);
@@ -116,19 +117,24 @@ try {
         "all",
     ], consumerRoot);
 
-    const hostExtracted = join(proofRoot, "host-extracted");
-    const capabilitiesExtracted = join(proofRoot, "capabilities-extracted");
-    extract(hostArchivePath, hostExtracted);
-    extract(capabilitiesArchivePath, capabilitiesExtracted);
-    const hostReleaseRoot = exactRoot(hostExtracted, `world-host-v${versions.host}`);
-    const capabilitiesReleaseRoot = exactRoot(
-        capabilitiesExtracted,
-        `world-capabilities-v${versions.capabilities}`,
+    const hostArtifact = materializeReferenceArtifact(
+        "worldHost",
+        referenceStack.worldHost,
+        archiveRoot,
+        join(proofRoot, "host-extracted"),
     );
+    const capabilitiesArtifact = materializeReferenceArtifact(
+        "worldCapabilities",
+        referenceStack.worldCapabilities,
+        archiveRoot,
+        join(proofRoot, "capabilities-extracted"),
+    );
+    const hostReleaseRoot = hostArtifact.root;
+    const capabilitiesReleaseRoot = capabilitiesArtifact.root;
     const runtimeHost = join(runtimeRoot, "host/src/v1");
     const runtimeCapabilities = join(runtimeRoot, "capabilities");
     mkdirSync(dirname(runtimeHost), { recursive: true });
-    cpSync(join(hostReleaseRoot, "host/src/v1"), runtimeHost, { recursive: true });
+    cpSync(join(hostReleaseRoot, "src/v1"), runtimeHost, { recursive: true });
     cpSync(capabilitiesReleaseRoot, runtimeCapabilities, { recursive: true });
     assertCapabilityPack(runtimeCapabilities);
 
@@ -199,10 +205,14 @@ try {
     console.log("world_frame_version=1");
     console.log("effect_protocol_version=1");
     console.log(`world_host_version=${versions.host}`);
-    console.log(`world_host_archive_sha256=${releases.host.sha256}`);
+    console.log(`world_host_archive_sha256=${referenceStack.worldHost.entry.sha256}`);
     console.log("world_host_runtime_changed=false");
     console.log(`world_capabilities_version=${versions.capabilities}`);
-    console.log(`world_capabilities_archive_sha256=${releases.capabilities.sha256}`);
+    console.log(`world_capabilities_archive_sha256=${referenceStack.worldCapabilities.entry.sha256}`);
+    console.log("github_authentication_required=false");
+    console.log("github_cli_required=false");
+    console.log("private_repository_permission_required=false");
+    console.log("numeric_asset_api_path_count=0");
     console.log("capability_frame_authority=false");
     for (const [name, value] of Object.entries(receipt)) {
         console.log(`${camelToSnake(name)}=${value}`);
@@ -384,22 +394,13 @@ function useMaterializedBoundary(path) {
     writeFileSync(path, updated);
 }
 
-async function loadArchive(environmentName, defaultUrl, assetApiPath = null) {
+async function loadArchive(environmentName, defaultUrl) {
     const override = process.env[environmentName];
     if (override) {
         if (/^https?:\/\//.test(override)) return download(override);
         return readFileSync(resolve(override));
     }
-    if (defaultUrl !== null) return download(defaultUrl);
-    const result = spawnSync(
-        "gh",
-        ["api", "-H", "Accept: application/octet-stream", assetApiPath],
-        { encoding: null, maxBuffer: 64 * 1024 * 1024 },
-    );
-    if (result.status !== 0) {
-        throw new Error(`release asset download failed: ${result.stderr?.toString("utf8") ?? ""}`);
-    }
-    return Buffer.from(result.stdout);
+    return download(defaultUrl);
 }
 
 async function download(url) {
@@ -447,10 +448,17 @@ function camelToSnake(value) {
 }
 
 function parseArgs(args) {
-    if (args.length !== 2 || args[0] !== "--zig" || !args[1]) {
-        throw new Error("usage: node tools/check_world_conformance.mjs --zig <absolute-zig>");
+    const result = { zig: null, offline: false, worldHostArchive: null, worldCapabilitiesArchive: null };
+    for (let index = 0; index < args.length; index += 1) {
+        const argument = args[index];
+        if (argument === "--offline") result.offline = true;
+        else if (["--zig", "--world-host-archive", "--world-capabilities-archive"].includes(argument)) {
+            if (index + 1 >= args.length) throw new Error(`${argument} requires a value`);
+            result[argument.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = resolve(args[index += 1]);
+        } else throw new Error(`unknown argument: ${argument}`);
     }
-    const zig = resolve(args[1]);
+    if (!result.zig) throw new Error("--zig is required");
+    const zig = result.zig;
     if (!existsSync(zig)) throw new Error(`Zig executable does not exist: ${zig}`);
-    return { zig };
+    return { ...result, zig };
 }

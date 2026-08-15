@@ -14,6 +14,6 @@ v2 without weakening its own Machine admission.
 Exact released World v3.1.1 pins and records Boundary v1.3.2. The clean-room
 conformance gate compiles all four Research/Coding by ReAct/Reflective
 specializations into import-free application WASM, then drives Research ReAct
-and Coding Reflective through exact world-host v1.0.0. Application ABI v1,
+and Coding Reflective through public world-host v1.0.1. Application ABI v1,
 Frame v1, Effect protocol v1, and the one-pending-effect restriction remain
 unchanged.

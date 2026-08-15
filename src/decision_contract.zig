@@ -155,7 +155,7 @@ fn writeUnionSchema(comptime T: type, writer: anytype) void {
 
 fn writeSchema(comptime T: type, writer: anytype) void {
     if (comptime boundary.schema.isTextType(T)) {
-        writer.raw("{\"type\":\"string\",\"maxLength\":");
+        writer.raw("{\"type\":\"string\",\"description\":\"Canonical admission additionally enforces the Boundary Text UTF-8 byte bound.\",\"maxLength\":");
         writeUnsigned(writer, T.maximum_length);
         writer.byte('}');
         return;

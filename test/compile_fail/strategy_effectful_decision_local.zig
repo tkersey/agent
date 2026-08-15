@@ -23,28 +23,26 @@ const Definition = agent.define(.{
     .budget = .{ .maximum_turns = 1, .maximum_decisions = 1, .maximum_effect_actions = 0, .maximum_child_actions = 0 },
 });
 const ForbiddenSite = boundary.effect.site(99, "fixture.forbidden.v1", u32, u32);
-const Implementation = struct {
-    pub fn validate(comptime _: type, comptime _: void) void {}
-    pub fn DecisionLocalType(comptime _: type, comptime _: void) type {
+const Strategy = struct {
+    pub const semantic_identity = "fixture.forged-effectful-runtime-strategy.v1";
+    pub const kind = agent.strategy.Kind.custom;
+    pub const Config = void;
+    pub const normalized_config = {};
+
+    pub fn validate(comptime _: type) void {}
+    pub fn DecisionLocalType(comptime _: type) type {
         return u32;
     }
-    pub fn StateSchemaTypes(comptime _: type, comptime _: void) @TypeOf(.{u32}) {
+    pub fn StateSchemaTypes(comptime _: type) @TypeOf(.{u32}) {
         return .{u32};
     }
-    pub fn topology(comptime _: type, comptime _: void, comptime runtime: type) agent.RuntimeTopology {
-        return runtime.react();
+    pub fn selectedTopology(comptime _: type, comptime _: type) agent.RuntimeTopology {
+        return .react;
     }
-    pub fn emitDecisionLocal(comptime _: type, comptime _: void, flow: anytype, state: anytype) agent.Value(u32) {
-        const goal = flow.productExtract(0, state);
+    pub fn emitDecisionLocal(comptime _: type, comptime _: type, flow: anytype, goal: anytype, _: anytype, _: anytype) agent.Value(u32) {
         return flow.perform(ForbiddenSite, goal, .{}).value;
     }
 };
-const Strategy = agent.strategy.custom(.{
-    .semantic_identity = "fixture.effectful-runtime-strategy.v1",
-    .config = {},
-    .implementation = Implementation,
-    .action_coverage = .{"final"},
-});
 
 comptime {
     _ = agent.compile(

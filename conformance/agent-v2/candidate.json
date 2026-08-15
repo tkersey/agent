@@ -33,16 +33,16 @@
     "compilerMemoryToBaseline": 1.528910151
   },
   "identities": {
-    "applicationId": "0fbb283a46e495774dad29c808a03eaeec21411700feb3bdcac625a85a4675c2",
-    "decisionContractDigest": "35b9a4670ec3a81dbfd0761900388a24ea28e49628da96ca68b97042ee15373f",
-    "sourceProjectionSha256": "43635a482a55f49c6c94fc2d32a1dd42428d6342f7f3992079acfb6c24b76657"
+    "applicationId": "14926c1ecd6436230718f3e1772f2946916ec0959fc81a8fab94190cc2e9a3d5",
+    "decisionContractDigest": "871aecb1a6dd95c27f31b3d246961b88dabf8044f29c1452a56ea0b1eef516d5",
+    "sourceProjectionSha256": "219066e1b350c5e8da4deb7f5aa7d6fa225ddb1b85a368ea037c282320eadd94"
   },
   "artifactChecksums": {
-    "applicationWasmSha256": "ab96d9d380b237975976ef57675d7be4789d82ba84ab0c6061a15cc9f3afc4e0",
-    "applicationManifestSha256": "5551f423d7b429242e2d3e26907965070b13c4a7a1adf39f3f6aa679c851cddf",
-    "decisionContractBinarySha256": "fd7df48eb8bc79c7e4150156de83e911e8a76593cb59850952ecb11385f49b94",
-    "decisionContractJsonSha256": "0ae9cb01cf12217372c9d8fb933947124518fff117fec74debe83b90e80664cd",
+    "applicationWasmSha256": "6d968547df3322be46f048c7e74b9f6bbdcafdc2dfa9778c0354a6a8f4a8cef3",
+    "applicationManifestSha256": "4eea111be939f70c4ba3bb371ec013ae08c1a736b15952c7ccd8124390ae82b6",
+    "decisionContractBinarySha256": "2ea75d022c0c3abbb3fa92ea571cbe040d3b97ff590f14911f8b2ae7ad68c99f",
+    "decisionContractJsonSha256": "9ac621c66dd63b22cc46e3bd8bd6c1c8f4d6e2d71506661cb52afdc98e38efd1",
     "worldHostRuntimeArchiveSha256": "e501ab1fe540ed2ee5cbd1db5a027f00271f95694747160fe36fa64cffaab52d",
-    "worldCapabilitiesArchiveSha256": "6b910eb05f6811181635dd61f50003d4c9ed4f89e2a3d22734121da64019ae5c"
+    "worldCapabilitiesArchiveSha256": "c4357c59848c36fe848cd7166bce5c601cf26d984ca610eefb10a09f45b226d5"
   }
 }

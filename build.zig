@@ -403,7 +403,7 @@ pub fn build(b: *std.Build) void {
         .{ .path = "test/compile_fail/strategy_effectful_decision_local.zig", .message = "agent custom RuntimeStrategy emitDecisionLocal must be effect-free" },
         .{ .path = "test/compile_fail/strategy_terminal_decision_local.zig", .message = "agent custom RuntimeStrategy emitDecisionLocal must not alter compiler-owned control topology" },
         .{ .path = "test/compile_fail/strategy_branching_decision_local.zig", .message = "agent custom RuntimeStrategy emitDecisionLocal must not alter compiler-owned control topology" },
-        .{ .path = "test/compile_fail/epistemics_effectful_initial.zig", .message = "agent custom EpistemicStrategy emitInitial must be effect-free" },
+        .{ .path = "test/compile_fail/epistemics_effectful_initial.zig", .message = "agent EpistemicStrategy emitInitial must be effect-free" },
         .{ .path = "test/compile_fail/epistemics_terminal_initial.zig", .message = "agent custom EpistemicStrategy emitInitial must not terminate the Agent program" },
         .{ .path = "test/compile_fail/epistemics_zero_lowering_complexity.zig", .message = "agent custom EpistemicStrategy lowering_complexity must be positive" },
         .{ .path = "test/compile_fail/final_policy_missing_observation.zig", .message = "agent v2 Definition no longer accepts .final_policy; final admission belongs to EpistemicStrategy" },
@@ -842,6 +842,7 @@ pub fn build(b: *std.Build) void {
         "node",
         "tools/check_agent_release.mjs",
     });
+    release_receipt.addArg(b.getInstallPath(.prefix, ""));
     release_receipt.step.dependOn(semantic_check);
     release_receipt.step.dependOn(lint);
     release_receipt.step.dependOn(hermetic);

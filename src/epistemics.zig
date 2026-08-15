@@ -148,11 +148,17 @@ pub fn verbatim(comptime config: anytype) type {
         pub const lowering_complexity: usize = 1;
         pub fn constantValues(comptime Definition: type) @TypeOf(.{
             @as(u32, normalized_config.maximum_observations),
-            failureNamed(Definition, "history_overflow"),
+            if (overflow == .fail)
+                failureNamed(Definition, "history_overflow")
+            else
+                @as(void, {}),
         }) {
             return comptime .{
                 @as(u32, normalized_config.maximum_observations),
-                failureNamed(Definition, "history_overflow"),
+                if (overflow == .fail)
+                    failureNamed(Definition, "history_overflow")
+                else
+                    @as(void, {}),
             };
         }
 

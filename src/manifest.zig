@@ -481,11 +481,26 @@ pub fn strategy(
 fn loweringDigest(
     comptime domain: []const u8,
     control_digest: [32]u8,
+    constants_digest: [32]u8,
 ) [32]u8 {
     var hasher = identity.Hasher.init(.{});
     identity.bytes(&hasher, "agent-epistemics-lowering/v1");
     identity.bytes(&hasher, domain);
     hashDigest(&hasher, control_digest);
+    hashDigest(&hasher, constants_digest);
+    return identity.finish(&hasher);
+}
+
+fn programConstantsDigest(comptime Program: type) [32]u8 {
+    var hasher = identity.Hasher.init(.{});
+    identity.bytes(&hasher, "agent-program-constants/v1");
+    identity.unsigned(&hasher, Program.constants.len);
+    inline for (Program.constants) |constant| {
+        const T = @TypeOf(constant);
+        boundary.schema.assertPortable(T);
+        hashDigest(&hasher, boundary.schema.schemaDigest(T));
+        boundary.schema.updateCanonicalHash(T, constant, &hasher) catch unreachable;
+    }
     return identity.finish(&hasher);
 }
 
@@ -507,10 +522,11 @@ pub fn epistemics(
     }
     const state_digest = identity.finish(&state_hasher);
     const control_digest = identity.controlDigest(Program.control_ir);
-    const initial_digest = loweringDigest("initial", control_digest);
-    const observe_digest = loweringDigest("observe", control_digest);
-    const project_digest = loweringDigest("project", control_digest);
-    const final_digest = loweringDigest("final", control_digest);
+    const constants_digest = programConstantsDigest(Program);
+    const initial_digest = loweringDigest("initial", control_digest, constants_digest);
+    const observe_digest = loweringDigest("observe", control_digest, constants_digest);
+    const project_digest = loweringDigest("project", control_digest, constants_digest);
+    const final_digest = loweringDigest("final", control_digest, constants_digest);
     var hasher = identity.Hasher.init(.{});
     identity.bytes(&hasher, "agent-epistemics-manifest/v1");
     identity.bytes(&hasher, Epistemics.semantic_identity);

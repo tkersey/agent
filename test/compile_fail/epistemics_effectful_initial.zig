@@ -49,11 +49,57 @@ const Implementation = struct {
         return flow.constant(bool, context.true_index);
     }
 };
-const Epistemics = agent.epistemics.custom(.{
+const BaseEpistemics = agent.epistemics.custom(.{
     .semantic_identity = "fixture.effectful-epistemics.v1",
     .config = {},
     .implementation = Implementation,
 });
+const Epistemics = struct {
+    pub const semantic_identity = BaseEpistemics.semantic_identity;
+    pub const is_verbatim = BaseEpistemics.is_verbatim;
+    pub const Config = BaseEpistemics.Config;
+    pub const normalized_config = BaseEpistemics.normalized_config;
+    pub const semantic_config_digest = BaseEpistemics.semantic_config_digest;
+    pub const has_implementation_constant_values = BaseEpistemics.has_implementation_constant_values;
+    pub const lowering_complexity = BaseEpistemics.lowering_complexity;
+
+    pub fn constantValues(comptime D: type) @TypeOf(BaseEpistemics.constantValues(D)) {
+        return BaseEpistemics.constantValues(D);
+    }
+    pub fn constantContext(comptime D: type, comptime base: u16) type {
+        return BaseEpistemics.constantContext(D, base);
+    }
+    pub fn validate(comptime D: type) void {
+        BaseEpistemics.validate(D);
+    }
+    pub fn MemoryType(comptime D: type) type {
+        return BaseEpistemics.MemoryType(D);
+    }
+    pub fn DecisionViewType(comptime D: type) type {
+        return BaseEpistemics.DecisionViewType(D);
+    }
+    pub fn StateSchemaTypes(comptime D: type) @TypeOf(BaseEpistemics.StateSchemaTypes(D)) {
+        return BaseEpistemics.StateSchemaTypes(D);
+    }
+    pub fn initialMemory(comptime D: type) MemoryType(D) {
+        return BaseEpistemics.initialMemory(D);
+    }
+    pub fn emitInitial(comptime _: type, flow: anytype, goal: anytype, comptime _: anytype) agent.Value(u32) {
+        return flow.perform(ForbiddenSite, goal, .{}).value;
+    }
+    pub fn emitObserve(comptime D: type, flow: anytype, memory: anytype, observation: anytype, comptime context: anytype) agent.Value(MemoryType(D)) {
+        return BaseEpistemics.emitObserve(D, flow, memory, observation, context);
+    }
+    pub fn emitObservePayload(comptime D: type, flow: anytype, memory: anytype, comptime observation_index: u16, payload: anytype, comptime context: anytype) agent.Value(MemoryType(D)) {
+        return BaseEpistemics.emitObservePayload(D, flow, memory, observation_index, payload, context);
+    }
+    pub fn emitProject(comptime D: type, flow: anytype, memory: anytype) agent.Value(DecisionViewType(D)) {
+        return BaseEpistemics.emitProject(D, flow, memory);
+    }
+    pub fn emitFinalAllowed(comptime D: type, flow: anytype, memory: anytype, result: anytype, comptime context: anytype) agent.Value(bool) {
+        return BaseEpistemics.emitFinalAllowed(D, flow, memory, result, context);
+    }
+};
 
 comptime {
     _ = agent.compile(

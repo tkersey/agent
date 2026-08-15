@@ -26,8 +26,7 @@ const Implementation = struct {
     pub fn topology(comptime _: type, comptime _: void, comptime runtime: type) agent.RuntimeTopology {
         return runtime.react();
     }
-    pub fn emitDecisionLocal(comptime _: type, comptime _: void, flow: anytype, state: anytype) agent.Value(u32) {
-        const goal = flow.productExtract(0, state);
+    pub fn emitDecisionLocal(comptime _: type, comptime _: void, flow: anytype, goal: anytype, _: anytype, _: anytype) agent.Value(u32) {
         const selected = flow.block(.segment, .{u32});
         flow.jump(selected, .{goal});
         return flow.enter(selected)[0];

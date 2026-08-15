@@ -177,6 +177,99 @@ fn failureConstant(
     return flow.constant(Definition.Failure, @intFromEnum(which));
 }
 
+fn emitEpistemicInitial(
+    comptime Definition: type,
+    comptime Epistemics: type,
+    flow: anytype,
+    goal: flow_module.Value(Definition.Goal),
+) flow_module.Value(Epistemics.MemoryType(Definition)) {
+    const before_suspensions = flow.suspensionCount();
+    const before_returns = flow.returnHandoffCount();
+    const result = Epistemics.emitInitial(
+        Definition,
+        flow,
+        goal,
+        epistemicContext(Definition, Epistemics),
+    );
+    if (flow.suspensionCount() != before_suspensions) {
+        @compileError("agent EpistemicStrategy emitInitial must be effect-free");
+    }
+    if (flow.returnHandoffCount() != before_returns) {
+        @compileError("agent EpistemicStrategy emitInitial must not terminate the Agent program");
+    }
+    return result;
+}
+
+fn emitEpistemicObservePayload(
+    comptime Definition: type,
+    comptime Epistemics: type,
+    flow: anytype,
+    memory: flow_module.Value(Epistemics.MemoryType(Definition)),
+    comptime observation_index: u16,
+    payload: anytype,
+) flow_module.Value(Epistemics.MemoryType(Definition)) {
+    const before_suspensions = flow.suspensionCount();
+    const before_returns = flow.returnHandoffCount();
+    const result = Epistemics.emitObservePayload(
+        Definition,
+        flow,
+        memory,
+        observation_index,
+        payload,
+        epistemicContext(Definition, Epistemics),
+    );
+    if (flow.suspensionCount() != before_suspensions) {
+        @compileError("agent EpistemicStrategy emitObserve must be effect-free");
+    }
+    if (flow.returnHandoffCount() != before_returns) {
+        @compileError("agent EpistemicStrategy emitObserve must not terminate the Agent program");
+    }
+    return result;
+}
+
+fn emitEpistemicProject(
+    comptime Definition: type,
+    comptime Epistemics: type,
+    flow: anytype,
+    memory: flow_module.Value(Epistemics.MemoryType(Definition)),
+) flow_module.Value(Epistemics.DecisionViewType(Definition)) {
+    const before_suspensions = flow.suspensionCount();
+    const before_returns = flow.returnHandoffCount();
+    const result = Epistemics.emitProject(Definition, flow, memory);
+    if (flow.suspensionCount() != before_suspensions) {
+        @compileError("agent EpistemicStrategy emitProject must be effect-free");
+    }
+    if (flow.returnHandoffCount() != before_returns) {
+        @compileError("agent EpistemicStrategy emitProject must not terminate the Agent program");
+    }
+    return result;
+}
+
+fn emitEpistemicFinalAllowed(
+    comptime Definition: type,
+    comptime Epistemics: type,
+    flow: anytype,
+    memory: flow_module.Value(Epistemics.MemoryType(Definition)),
+    result: flow_module.Value(Definition.Result),
+) flow_module.Value(bool) {
+    const before_suspensions = flow.suspensionCount();
+    const before_returns = flow.returnHandoffCount();
+    const allowed = Epistemics.emitFinalAllowed(
+        Definition,
+        flow,
+        memory,
+        result,
+        epistemicContext(Definition, Epistemics),
+    );
+    if (flow.suspensionCount() != before_suspensions) {
+        @compileError("agent EpistemicStrategy emitFinalAllowed must be effect-free");
+    }
+    if (flow.returnHandoffCount() != before_returns) {
+        @compileError("agent EpistemicStrategy emitFinalAllowed must not terminate the Agent program");
+    }
+    return allowed;
+}
+
 fn emitEffectAction(
     comptime Definition: type,
     comptime Epistemics: type,
@@ -193,52 +286,23 @@ fn emitEffectAction(
         flow.constant(void, unit_constant_index)
     else
         flow.sumExtract(action_index, action_value);
-    var checked_payload = payload;
-    var checked_state = state_value;
-    if (comptime Epistemics.is_verbatim) {
-        if (comptime Epistemics.normalized_config.overflow == .fail) {
-            const memory = flow.productExtract(1, state_value);
-            const full = flow.integerGreaterEqual(
-                flow.vectorLength(memory),
-                flow.constant(u32, epistemicContext(Definition, Epistemics).maximum_observations_index),
-            );
-            const history_failure = flow.block(.terminal_handoff, .{});
-            const capacity_ok = flow.block(.segment, .{
-                Descriptor.Site.Payload,
-                strategy.State(Definition, Epistemics),
-            });
-            flow.branch(full, history_failure, .{}, capacity_ok, .{ payload, state_value });
-            _ = flow.enter(history_failure);
-            flow.failValue(flow.constant(
-                Definition.Failure,
-                epistemicContext(Definition, Epistemics).history_overflow_index,
-            ));
-            const admitted = flow.enter(capacity_ok);
-            checked_payload = admitted[0];
-            checked_state = admitted[1];
-        }
-    }
-    const counters = flow.productExtract(2, checked_state);
-    const effect_actions = flow.productExtract(2, counters);
+    const initial_counters = flow.productExtract(2, state_value);
+    const effect_actions = flow.productExtract(2, initial_counters);
     const maximum_effect_actions = flow.constant(
         u32,
         @intFromEnum(Constant.maximum_effect_actions),
     );
-    var budget_exhausted = flow.integerGreaterEqual(
-        effect_actions,
-        maximum_effect_actions,
-    );
+    var budget_exhausted = flow.integerGreaterEqual(effect_actions, maximum_effect_actions);
     if (Descriptor.class == .child_agent) {
-        const child_actions = flow.productExtract(3, counters);
+        const child_actions = flow.productExtract(3, initial_counters);
         const maximum_child_actions = flow.constant(
             u32,
             @intFromEnum(Constant.maximum_child_actions),
         );
-        const child_exhausted = flow.integerGreaterEqual(
-            child_actions,
-            maximum_child_actions,
+        budget_exhausted = flow.booleanOr(
+            budget_exhausted,
+            flow.integerGreaterEqual(child_actions, maximum_child_actions),
         );
-        budget_exhausted = flow.booleanOr(budget_exhausted, child_exhausted);
     }
 
     const budget_failure = flow.block(.terminal_handoff, .{});
@@ -246,16 +310,57 @@ fn emitEffectAction(
         Descriptor.Site.Payload,
         strategy.State(Definition, Epistemics),
     });
-    flow.branch(
-        budget_exhausted,
-        budget_failure,
-        .{},
-        perform_block,
-        .{ checked_payload, checked_state },
-    );
+    if (comptime Epistemics.is_verbatim) {
+        if (comptime Epistemics.normalized_config.overflow == .fail) {
+            const capacity_check = flow.block(.segment, .{
+                Descriptor.Site.Payload,
+                strategy.State(Definition, Epistemics),
+            });
+            flow.branch(
+                budget_exhausted,
+                budget_failure,
+                .{},
+                capacity_check,
+                .{ payload, state_value },
+            );
+            _ = flow.enter(budget_failure);
+            flow.failValue(failureConstant(flow, Definition, .budget_exhausted));
 
-    _ = flow.enter(budget_failure);
-    flow.failValue(failureConstant(flow, Definition, .budget_exhausted));
+            const budget_values = flow.enter(capacity_check);
+            const memory = flow.productExtract(1, budget_values[1]);
+            const full = flow.integerGreaterEqual(
+                flow.vectorLength(memory),
+                flow.constant(u32, epistemicContext(Definition, Epistemics).maximum_observations_index),
+            );
+            const history_failure = flow.block(.terminal_handoff, .{});
+            flow.branch(full, history_failure, .{}, perform_block, budget_values);
+            _ = flow.enter(history_failure);
+            flow.failValue(flow.constant(
+                Definition.Failure,
+                epistemicContext(Definition, Epistemics).history_overflow_index,
+            ));
+        } else {
+            flow.branch(
+                budget_exhausted,
+                budget_failure,
+                .{},
+                perform_block,
+                .{ payload, state_value },
+            );
+            _ = flow.enter(budget_failure);
+            flow.failValue(failureConstant(flow, Definition, .budget_exhausted));
+        }
+    } else {
+        flow.branch(
+            budget_exhausted,
+            budget_failure,
+            .{},
+            perform_block,
+            .{ payload, state_value },
+        );
+        _ = flow.enter(budget_failure);
+        flow.failValue(failureConstant(flow, Definition, .budget_exhausted));
+    }
 
     const performing = flow.enter(perform_block);
     const performed = flow.perform(Site, performing[0], .{performing[1]});
@@ -281,13 +386,13 @@ fn emitEffectAction(
         const next_child_actions = flow.integerAdd(old_child_actions, one);
         next_counters = flow.productReplace(3, next_counters, next_child_actions);
     }
-    const next_memory = Epistemics.emitObservePayload(
+    const next_memory = emitEpistemicObservePayload(
         Definition,
+        Epistemics,
         flow,
         flow.productExtract(1, folded_state),
         observation_index,
         fold_values[1],
-        epistemicContext(Definition, Epistemics),
     );
     flow.jump(loop_block, .{flow.productConstruct(
         strategy.State(Definition, Epistemics),
@@ -346,12 +451,12 @@ fn emitFinalAction(
 ) void {
     const result = flow.sumExtract(action_index, action_value);
     const memory = flow.productExtract(1, state_value);
-    const allowed = Epistemics.emitFinalAllowed(
+    const allowed = emitEpistemicFinalAllowed(
         Definition,
+        Epistemics,
         flow,
         memory,
         result,
-        epistemicContext(Definition, Epistemics),
     );
     const accept = flow.block(.terminal_handoff, .{Definition.Result});
     const reject = flow.block(.terminal_handoff, .{});
@@ -433,12 +538,7 @@ fn ReactLowering(
     });
     comptime var flow = Builder.init("agent-react-v2");
     const goal = flow.begin(Definition.Goal);
-    const memory = Epistemics.emitInitial(
-        Definition,
-        &flow,
-        goal,
-        epistemicContext(Definition, Epistemics),
-    );
+    const memory = emitEpistemicInitial(Definition, Epistemics, &flow, goal);
     const zero = flow.constant(u32, @intFromEnum(Constant.zero));
     const counters = flow.productConstruct(budget.Counters, .{ zero, zero, zero, zero });
     const initial_state = flow.productConstruct(
@@ -467,11 +567,26 @@ fn ReactLowering(
     const decide_goal = flow.productExtract(0, decide_state);
     const decide_memory = flow.productExtract(1, decide_state);
     const decide_counters = flow.productExtract(2, decide_state);
-    const view = Epistemics.emitProject(Definition, &flow, decide_memory);
-    const decision_local = if (Strategy.kind == .custom)
-        Strategy.emitDecisionLocal(Definition, &flow, decide_state)
-    else
-        flow.constant(void, unitConstantIndex(Epistemics, Definition));
+    const view = emitEpistemicProject(Definition, Epistemics, &flow, decide_memory);
+    const decision_local = if (Strategy.kind == .custom) decision_local: {
+        const before_suspensions = flow.suspensionCount();
+        const before_control = flow.controlMutationCount();
+        const value = Strategy.emitDecisionLocal(
+            Definition,
+            Epistemics,
+            &flow,
+            decide_goal,
+            decide_counters,
+            view,
+        );
+        if (flow.suspensionCount() != before_suspensions) {
+            @compileError("agent custom RuntimeStrategy emitDecisionLocal must be effect-free");
+        }
+        if (flow.controlMutationCount() != before_control) {
+            @compileError("agent custom RuntimeStrategy emitDecisionLocal must not alter compiler-owned control topology");
+        }
+        break :decision_local value;
+    } else flow.constant(void, unitConstantIndex(Epistemics, Definition));
     const request = flow.productConstruct(
         strategy.DecisionTurn(Definition, Strategy, Epistemics),
         .{
@@ -534,12 +649,7 @@ fn ReflectiveLowering(
     });
     comptime var flow = Builder.init("agent-reflective-react-v2");
     const goal = flow.begin(Definition.Goal);
-    const memory = Epistemics.emitInitial(
-        Definition,
-        &flow,
-        goal,
-        epistemicContext(Definition, Epistemics),
-    );
+    const memory = emitEpistemicInitial(Definition, Epistemics, &flow, goal);
     const zero = flow.constant(u32, @intFromEnum(Constant.zero));
     const counters = flow.productConstruct(
         budget.Counters,
@@ -586,7 +696,7 @@ fn ReflectiveLowering(
     const propose_goal = flow.productExtract(0, propose_state);
     const propose_memory = flow.productExtract(1, propose_state);
     const propose_counters = flow.productExtract(2, propose_state);
-    const propose_view = Epistemics.emitProject(Definition, &flow, propose_memory);
+    const propose_view = emitEpistemicProject(Definition, Epistemics, &flow, propose_memory);
     const propose_phase = flow.constant(
         budget.DecisionPhase,
         @intFromEnum(Constant.initial_phase),
@@ -702,7 +812,7 @@ fn ReflectiveLowering(
     const reflect_goal = flow.productExtract(0, reflect_state);
     const reflect_memory = flow.productExtract(1, reflect_state);
     const reflect_counters = flow.productExtract(2, reflect_state);
-    const reflect_view = Epistemics.emitProject(Definition, &flow, reflect_memory);
+    const reflect_view = emitEpistemicProject(Definition, Epistemics, &flow, reflect_memory);
     const reflect_phase = flow.constant(
         budget.DecisionPhase,
         @intFromEnum(Constant.reflect_phase),
@@ -815,7 +925,10 @@ fn ReactBody(
         pub const constants = if (Epistemics.is_verbatim)
             prefix ++ .{
                 Epistemics.normalized_config.maximum_observations,
-                strategy.failureNamed(Definition, "history_overflow"),
+                if (Epistemics.normalized_config.overflow == .fail)
+                    strategy.failureNamed(Definition, "history_overflow")
+                else
+                    @as(void, {}),
             } ++ tail
         else if (Epistemics.has_implementation_constant_values)
             prefix ++ Epistemics.constantValues(Definition) ++ tail
@@ -868,7 +981,10 @@ fn ReflectiveBody(
         pub const constants = if (Epistemics.is_verbatim)
             prefix ++ .{
                 Epistemics.normalized_config.maximum_observations,
-                strategy.failureNamed(Definition, "history_overflow"),
+                if (Epistemics.normalized_config.overflow == .fail)
+                    strategy.failureNamed(Definition, "history_overflow")
+                else
+                    @as(void, {}),
             } ++ tail
         else if (Epistemics.has_implementation_constant_values)
             prefix ++ Epistemics.constantValues(Definition) ++ tail
@@ -1014,7 +1130,7 @@ pub fn compile(
     const epistemics_manifest = manifest.epistemics(
         DefinitionType,
         EpistemicsType,
-        ProgramType,
+        Body,
     );
     const decision_contract_digest = decision_contract.semanticDigest(
         DefinitionType,

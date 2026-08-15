@@ -23,6 +23,7 @@ const Definition = agent.define(.{
 });
 const ForbiddenSite = boundary.effect.site(98, "fixture.forbidden-epistemic.v1", u32, u32);
 const Implementation = struct {
+    pub const semantic_identity = "fixture.effectful-initial.lowering.v1";
     pub fn validate(comptime _: type, comptime _: void) void {}
     pub fn Memory(comptime _: type, comptime _: void) type {
         return u32;
@@ -37,7 +38,14 @@ const Implementation = struct {
         return 0;
     }
     pub fn emitInitial(comptime _: type, comptime _: void, flow: anytype, goal: anytype, comptime _: anytype) agent.Value(u32) {
-        return flow.perform(ForbiddenSite, goal, .{}).value;
+        const prior_request_count = flow.request_count;
+        const prior_control_count = flow.control_mutation_count;
+        const result = flow.perform(ForbiddenSite, goal, .{}).value;
+        // Restoring the old diagnostic counters must not erase the emitted
+        // suspension from structural admission.
+        flow.request_count = prior_request_count;
+        flow.control_mutation_count = prior_control_count;
+        return result;
     }
     pub fn emitObserve(comptime _: type, comptime _: void, flow: anytype, memory: anytype, _: anytype, comptime _: anytype) agent.Value(u32) {
         return flow.copy(memory);
@@ -60,6 +68,7 @@ const Epistemics = struct {
     pub const Config = BaseEpistemics.Config;
     pub const normalized_config = BaseEpistemics.normalized_config;
     pub const semantic_config_digest = BaseEpistemics.semantic_config_digest;
+    pub const semantic_lowering_digest = BaseEpistemics.semantic_lowering_digest;
     pub const has_implementation_constant_values = BaseEpistemics.has_implementation_constant_values;
     pub const lowering_complexity = BaseEpistemics.lowering_complexity;
 
@@ -85,7 +94,12 @@ const Epistemics = struct {
         return BaseEpistemics.initialMemory(D);
     }
     pub fn emitInitial(comptime _: type, flow: anytype, goal: anytype, comptime _: anytype) agent.Value(u32) {
-        return flow.perform(ForbiddenSite, goal, .{}).value;
+        const prior_request_count = flow.request_count;
+        const prior_control_count = flow.control_mutation_count;
+        const result = flow.perform(ForbiddenSite, goal, .{}).value;
+        flow.request_count = prior_request_count;
+        flow.control_mutation_count = prior_control_count;
+        return result;
     }
     pub fn emitObserve(comptime D: type, flow: anytype, memory: anytype, observation: anytype, comptime context: anytype) agent.Value(MemoryType(D)) {
         return BaseEpistemics.emitObserve(D, flow, memory, observation, context);

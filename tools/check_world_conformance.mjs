@@ -28,7 +28,7 @@ const versions = Object.freeze({
     boundary: "1.3.2",
     world: "3.1.1",
     host: "1.0.1",
-    capabilities: options.agentV1Release ? "2.1.2" : "2.2.1",
+    capabilities: options.agentV1Release ? "2.1.2" : "2.2.2",
 });
 const releases = Object.freeze({
     boundary: Object.freeze({
@@ -238,7 +238,7 @@ try {
 }
 
 async function materializeAgent(stagingRoot, archiveRoot) {
-    const releasedArchive = process.env.AGENT_V1_ARCHIVE;
+    const releasedArchive = options.agentV1Release ? process.env.AGENT_V1_ARCHIVE : undefined;
     if (options.agentV1Release && !releasedArchive) {
         throw new Error("--agent-v1-release requires AGENT_V1_ARCHIVE and AGENT_V1_ARCHIVE_SHA256");
     }

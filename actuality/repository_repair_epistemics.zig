@@ -1,5 +1,6 @@
 pub fn WorkingSet(comptime agent: type, comptime T: type) type {
     return struct {
+        pub const semantic_identity = "agent.epistemics.repository-working-set.lowering.v1";
         pub const lowering_complexity: usize = 8;
         const CompactEntries = @typeInfo(T.CompactListing).@"struct".fields[0].type;
         const SourceEntries = @typeInfo(T.ListResult).@"struct".fields[0].type;
@@ -319,7 +320,7 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
             });
 
             const summary_values = flow.enter(summary);
-            const mutation = flow.block(.segment, .{ T.Memory, bool });
+            const mutation = flow.block(.segment, .{ T.Memory, bool, bool });
             flow.jump(mutation, .{
                 replaceMemoryField(
                     flow,
@@ -328,6 +329,10 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
                     flow.optionalSome(T.ReplacementSummary, summary_values[1]),
                 ),
                 summary_values[2],
+                flow.booleanOr(
+                    summary_values[2],
+                    flow.sumTagIs(2, summary_values[1]),
+                ),
             });
 
             const mutation_values = flow.enter(mutation);
@@ -345,7 +350,7 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
                 mutation_memory,
                 9,
                 flow.select(
-                    mutation_values[1],
+                    mutation_values[2],
                     flow.constant(bool, context.false_index),
                     flow.productExtract(9, mutation_memory),
                 ),

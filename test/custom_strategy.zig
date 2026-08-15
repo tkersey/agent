@@ -97,6 +97,10 @@ const OtherConfig = compiled(8);
 
 fn ConstantEpistemicImplementation(comptime marker: u32) type {
     return struct {
+        pub const semantic_identity = std.fmt.comptimePrint(
+            "fixture.constant-epistemics.lowering.{d}",
+            .{marker},
+        );
         pub fn validate(comptime _: type, comptime _: void) void {}
         pub fn Memory(comptime _: type, comptime _: void) type {
             return u32;
@@ -202,5 +206,10 @@ test "epistemics lowering identity includes canonical Program constants" {
         u8,
         &Seven.EpistemicsManifest.initial_lowering_digest,
         &Eight.EpistemicsManifest.initial_lowering_digest,
+    ));
+    try std.testing.expect(!std.mem.eql(
+        u8,
+        &Seven.DecisionContract.canonical_digest,
+        &Eight.DecisionContract.canonical_digest,
     ));
 }

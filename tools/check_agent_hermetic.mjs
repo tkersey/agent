@@ -37,7 +37,7 @@ try {
     const agentRoot = join(proofRoot, "agent");
     cpSync(sourceRoot, agentRoot, {
         recursive: true,
-        filter: (path) => ![".git", "zig-cache", ".zig-cache", "zig-out", "zig-pkg"].includes(path.slice(path.lastIndexOf("/") + 1)),
+        filter: (path) => ![".git", ".ledger", "zig-cache", ".zig-cache", "zig-out", "zig-pkg"].includes(path.slice(path.lastIndexOf("/") + 1)),
     });
     replaceDependency(join(agentRoot, "build.zig.zon"), "boundary", '../boundary');
     replaceDependency(join(agentRoot, "build.zig.zon"), "world", '../world');

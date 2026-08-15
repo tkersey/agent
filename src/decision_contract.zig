@@ -309,6 +309,7 @@ fn epistemicsDigest(
     identity.bytes(&hasher, "agent-epistemics-contract/v1");
     identity.bytes(&hasher, Epistemics.semantic_identity);
     hasher.update(&Epistemics.semantic_config_digest);
+    hasher.update(&Epistemics.semantic_lowering_digest);
     hasher.update(&boundary.schema.schemaDigest(Epistemics.MemoryType(Definition)));
     hasher.update(&boundary.schema.schemaDigest(Epistemics.DecisionViewType(Definition)));
     return identity.finish(&hasher);

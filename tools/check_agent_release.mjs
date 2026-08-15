@@ -21,7 +21,7 @@ requireMatch(root, /package_version = "2\.0\.0"/, "root package version");
 requireMatch(manifestSource, /package_version = "2\.0\.0"/, "manifest package version");
 require(lock.format === "agent-reference-stack-lock-v1", "reference stack format");
 require(lock.worldHost.version === "1.0.1", "world-host release identity");
-require(lock.worldCapabilities.version === "2.2.1", "world-capabilities release identity");
+require(lock.worldCapabilities.version === "2.2.2", "world-capabilities release identity");
 require(lock.worldHost.sha256 === candidate.artifactChecksums.worldHostRuntimeArchiveSha256,
   "host archive identity");
 require(lock.worldCapabilities.sha256 === candidate.artifactChecksums.worldCapabilitiesArchiveSha256,
@@ -128,7 +128,7 @@ const receipt = {
   world_host_version: "1.0.1",
   world_host_public: true,
   world_host_runtime_changed: false,
-  world_capabilities_version: "2.2.1",
+  world_capabilities_version: "2.2.2",
   world_capabilities_public: true,
   effect_protocol_version: 1,
   github_authentication_required: false,

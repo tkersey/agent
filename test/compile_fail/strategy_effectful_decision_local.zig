@@ -40,7 +40,12 @@ const Strategy = struct {
         return .react;
     }
     pub fn emitDecisionLocal(comptime _: type, comptime _: type, flow: anytype, goal: anytype, _: anytype, _: anytype) agent.Value(u32) {
-        return flow.perform(ForbiddenSite, goal, .{}).value;
+        const prior_request_count = flow.request_count;
+        const prior_control_count = flow.control_mutation_count;
+        const result = flow.perform(ForbiddenSite, goal, .{}).value;
+        flow.request_count = prior_request_count;
+        flow.control_mutation_count = prior_control_count;
+        return result;
     }
 };
 

@@ -326,8 +326,8 @@ pub fn custom(comptime spec: anytype) type {
             counters: @import("flow.zig").Value(budget.Counters),
             view: @import("flow.zig").Value(Epistemics.DecisionViewType(Definition)),
         ) @import("flow.zig").Value(DecisionLocalType(Definition)) {
-            const before_suspensions = flow.suspensionCount();
-            const before_control = flow.controlMutationCount();
+            const before_suspensions = flow.suspensionSnapshot();
+            const before_control = flow.controlTopologySnapshot();
             const result = Implementation.emitDecisionLocal(
                 Definition,
                 normalized_config,
@@ -336,10 +336,10 @@ pub fn custom(comptime spec: anytype) type {
                 counters,
                 view,
             );
-            if (flow.suspensionCount() != before_suspensions) {
+            if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
                 @compileError("agent custom RuntimeStrategy emitDecisionLocal must be effect-free");
             }
-            if (flow.controlMutationCount() != before_control) {
+            if (!std.meta.eql(flow.controlTopologySnapshot(), before_control)) {
                 @compileError("agent custom RuntimeStrategy emitDecisionLocal must not alter compiler-owned control topology");
             }
             return result;

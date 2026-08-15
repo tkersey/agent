@@ -759,9 +759,14 @@ pub fn build(b: *std.Build) void {
     );
     const performance_check = b.step(
         "check-agent-performance",
-        "Reuse the independent Boundary behavior witness alongside measured release gates",
+        "Check the authenticated Agent v2 resource regression gates",
     );
     performance_check.dependOn(boundary_equivalence_check);
+    const performance_gate = b.addSystemCommand(&.{
+        "node",
+        "tools/check_agent_performance.mjs",
+    });
+    performance_check.dependOn(&performance_gate.step);
     semantic_check.dependOn(performance_check);
 
     const host_boundary_dependency = b.dependency("boundary", .{

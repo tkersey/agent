@@ -16,6 +16,7 @@ const Definition = agent.define(.{
     .budget = .{ .maximum_turns = 1, .maximum_decisions = 1, .maximum_effect_actions = 0, .maximum_child_actions = 0 },
 });
 const Implementation = struct {
+    pub const semantic_identity = "fixture.terminal-initial.lowering.v1";
     pub fn validate(comptime _: type, comptime _: void) void {}
     pub fn Memory(comptime _: type, comptime _: void) type {
         return u32;
@@ -31,6 +32,9 @@ const Implementation = struct {
     }
     pub fn emitInitial(comptime _: type, comptime _: void, flow: anytype, goal: anytype, comptime _: anytype) agent.Value(u32) {
         flow.returnValue(goal);
+        flow.return_handoff_count -= 1;
+        flow.terminal_handoff_count -= 1;
+        flow.control_mutation_count -= 1;
         return goal;
     }
     pub fn emitObserve(comptime _: type, comptime _: void, flow: anytype, memory: anytype, _: anytype, comptime _: anytype) agent.Value(u32) {

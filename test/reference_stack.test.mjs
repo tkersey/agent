@@ -3,15 +3,21 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { readReferenceStackLock } from "../tools/reference_stack.mjs";
+import { archiveEntrySize, readReferenceStackLock } from "../tools/reference_stack.mjs";
 
 const lockPath = "conformance/reference-stack-v1.lock.json";
 
 describe("public reference stack lock", () => {
+    test("parses BSD and GNU tar inventories", () => {
+        expect(archiveEntrySize("-rw-r--r--  0 owner group 123 Aug 15 03:00 root/file")).toBe(123);
+        expect(archiveEntrySize("-rw-r--r-- owner/group 456 2026-08-15 03:00 root/file")).toBe(456);
+        expect(() => archiveEntrySize("not a tar inventory")).toThrow();
+    });
+
     test("binds exact stable public release URLs and checksums", () => {
         const lock = readReferenceStackLock(lockPath);
         expect(lock.worldHost.version).toBe("1.0.1");
-        expect(lock.worldCapabilities.version).toBe("2.2.1");
+        expect(lock.worldCapabilities.version).toBe("2.2.2");
         expect(lock.worldHost.url).not.toContain("/releases/assets/");
         expect(lock.worldCapabilities.url).not.toContain("/releases/assets/");
     });

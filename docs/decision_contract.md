@@ -13,8 +13,9 @@ Boundary type; the schema alone is not the portable-value decoder.
 
 The immutable contract contains instructions, the closed action catalog,
 schema identities, runtime and epistemic identities, and rendering metadata.
-Changing any semantic field changes the digest. JSON is a projection; the
-canonical binary is authoritative.
+The epistemic identity includes the admitted custom implementation's explicit
+lowering identity. Changing any semantic field or lowering identity changes the
+digest. JSON is a projection; the canonical binary is authoritative.
 
 The Machine carries only the 32-byte contract digest in each dynamic turn:
 

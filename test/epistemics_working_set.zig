@@ -321,7 +321,7 @@ test "repository working set revokes passing evidence after a later failing test
     }
 }
 
-test "later denied or conflicting replacements do not erase applied mutation evidence" {
+test "denial preserves passing evidence while conflict invalidates it" {
     const goal = actuality.Goal{
         .task = try actuality.GoalText.fromSlice("repair fixture"),
         .repository = try boundary.Text(128).fromSlice("fixture"),
@@ -358,7 +358,7 @@ test "later denied or conflicting replacements do not erase applied mutation evi
         else => return error.ExpectedDecisionSite,
     };
     try std.testing.expect(view.evidence.mutation_applied);
-    try std.testing.expect(view.evidence.passing_test_observed);
+    try std.testing.expect(!view.evidence.passing_test_observed);
     try std.testing.expect(view.source_document == null);
     try std.testing.expect(view.latest_search == null);
 }

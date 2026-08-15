@@ -160,6 +160,104 @@ pub fn Flow(comptime config: anytype) type {
             return self.control_mutation_count;
         }
 
+        const SuspensionSnapshot = struct {
+            count: usize,
+            blocks: [limits.maximum_blocks]BlockDraft,
+            request_count: usize,
+            requests: [limits.maximum_requests]boundary.ir.ValueId,
+        };
+
+        const ReturnSnapshot = struct {
+            count: usize,
+            block_ids: [limits.maximum_blocks]boundary.ir.BlockId,
+            result_values: [limits.maximum_blocks]boundary.ir.ValueId,
+        };
+
+        const ControlTopologySnapshot = struct {
+            block_count: usize,
+            blocks: [limits.maximum_blocks]BlockDraft,
+            parameter_count: usize,
+            parameters: [limits.maximum_parameters]boundary.ir.ValueId,
+            request_count: usize,
+            requests: [limits.maximum_requests]boundary.ir.ValueId,
+            edge_argument_count: usize,
+            edge_arguments: [limits.maximum_edge_arguments]boundary.ir.EdgeArgument,
+            current_block: boundary.ir.BlockId,
+            started: bool,
+        };
+
+        /// Exact effect topology visible to compiler-only hook admission.
+        /// Unlike the diagnostic counters, this snapshot cannot be forged by
+        /// decrementing one mutable field after emitting an effect.
+        pub fn suspensionSnapshot(self: *const Self) SuspensionSnapshot {
+            var result = SuspensionSnapshot{
+                .count = 0,
+                .blocks = [_]BlockDraft{.{
+                    .id = 0,
+                    .parameter_start = 0,
+                    .instruction_start = 0,
+                }} ** limits.maximum_blocks,
+                .request_count = self.request_count,
+                .requests = [_]boundary.ir.ValueId{0} ** limits.maximum_requests,
+            };
+            for (self.blocks[0..self.block_count]) |draft| {
+                if (draft.terminator_kind != .suspend_effect) continue;
+                result.blocks[result.count] = draft;
+                result.blocks[result.count].instruction_start = 0;
+                result.blocks[result.count].instruction_count = 0;
+                result.count += 1;
+            }
+            @memcpy(result.requests[0..self.request_count], self.requests[0..self.request_count]);
+            return result;
+        }
+
+        /// Exact successful-return topology visible to epistemic hook admission.
+        pub fn returnSnapshot(self: *const Self) ReturnSnapshot {
+            var result = ReturnSnapshot{
+                .count = 0,
+                .block_ids = [_]boundary.ir.BlockId{0} ** limits.maximum_blocks,
+                .result_values = [_]boundary.ir.ValueId{0} ** limits.maximum_blocks,
+            };
+            for (self.blocks[0..self.block_count]) |draft| {
+                if (draft.terminator_kind != .return_value) continue;
+                result.block_ids[result.count] = draft.id;
+                result.result_values[result.count] = draft.result_value;
+                result.count += 1;
+            }
+            return result;
+        }
+
+        /// Exact compiler-owned control topology. Pure instructions are
+        /// intentionally excluded so a decision-local hook can elaborate a
+        /// value but cannot add, remove, or rewrite blocks and terminators.
+        pub fn controlTopologySnapshot(self: *const Self) ControlTopologySnapshot {
+            var result = ControlTopologySnapshot{
+                .block_count = self.block_count,
+                .blocks = [_]BlockDraft{.{
+                    .id = 0,
+                    .parameter_start = 0,
+                    .instruction_start = 0,
+                }} ** limits.maximum_blocks,
+                .parameter_count = self.parameter_count,
+                .parameters = [_]boundary.ir.ValueId{0} ** limits.maximum_parameters,
+                .request_count = self.request_count,
+                .requests = [_]boundary.ir.ValueId{0} ** limits.maximum_requests,
+                .edge_argument_count = self.edge_argument_count,
+                .edge_arguments = [_]boundary.ir.EdgeArgument{.{ .value = 0 }} ** limits.maximum_edge_arguments,
+                .current_block = self.current_block,
+                .started = self.started,
+            };
+            for (self.blocks[0..self.block_count], 0..) |draft, index| {
+                result.blocks[index] = draft;
+                result.blocks[index].instruction_start = 0;
+                result.blocks[index].instruction_count = 0;
+            }
+            @memcpy(result.parameters[0..self.parameter_count], self.parameters[0..self.parameter_count]);
+            @memcpy(result.requests[0..self.request_count], self.requests[0..self.request_count]);
+            @memcpy(result.edge_arguments[0..self.edge_argument_count], self.edge_arguments[0..self.edge_argument_count]);
+            return result;
+        }
+
         fn failLimit(comptime message: []const u8) noreturn {
             @compileError("agent.Flow " ++ message);
         }

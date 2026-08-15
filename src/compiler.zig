@@ -183,18 +183,18 @@ fn emitEpistemicInitial(
     flow: anytype,
     goal: flow_module.Value(Definition.Goal),
 ) flow_module.Value(Epistemics.MemoryType(Definition)) {
-    const before_suspensions = flow.suspensionCount();
-    const before_returns = flow.returnHandoffCount();
+    const before_suspensions = flow.suspensionSnapshot();
+    const before_returns = flow.returnSnapshot();
     const result = Epistemics.emitInitial(
         Definition,
         flow,
         goal,
         epistemicContext(Definition, Epistemics),
     );
-    if (flow.suspensionCount() != before_suspensions) {
+    if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
         @compileError("agent EpistemicStrategy emitInitial must be effect-free");
     }
-    if (flow.returnHandoffCount() != before_returns) {
+    if (!std.meta.eql(flow.returnSnapshot(), before_returns)) {
         @compileError("agent EpistemicStrategy emitInitial must not terminate the Agent program");
     }
     return result;
@@ -208,8 +208,8 @@ fn emitEpistemicObservePayload(
     comptime observation_index: u16,
     payload: anytype,
 ) flow_module.Value(Epistemics.MemoryType(Definition)) {
-    const before_suspensions = flow.suspensionCount();
-    const before_returns = flow.returnHandoffCount();
+    const before_suspensions = flow.suspensionSnapshot();
+    const before_returns = flow.returnSnapshot();
     const result = Epistemics.emitObservePayload(
         Definition,
         flow,
@@ -218,10 +218,10 @@ fn emitEpistemicObservePayload(
         payload,
         epistemicContext(Definition, Epistemics),
     );
-    if (flow.suspensionCount() != before_suspensions) {
+    if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
         @compileError("agent EpistemicStrategy emitObserve must be effect-free");
     }
-    if (flow.returnHandoffCount() != before_returns) {
+    if (!std.meta.eql(flow.returnSnapshot(), before_returns)) {
         @compileError("agent EpistemicStrategy emitObserve must not terminate the Agent program");
     }
     return result;
@@ -233,13 +233,13 @@ fn emitEpistemicProject(
     flow: anytype,
     memory: flow_module.Value(Epistemics.MemoryType(Definition)),
 ) flow_module.Value(Epistemics.DecisionViewType(Definition)) {
-    const before_suspensions = flow.suspensionCount();
-    const before_returns = flow.returnHandoffCount();
+    const before_suspensions = flow.suspensionSnapshot();
+    const before_returns = flow.returnSnapshot();
     const result = Epistemics.emitProject(Definition, flow, memory);
-    if (flow.suspensionCount() != before_suspensions) {
+    if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
         @compileError("agent EpistemicStrategy emitProject must be effect-free");
     }
-    if (flow.returnHandoffCount() != before_returns) {
+    if (!std.meta.eql(flow.returnSnapshot(), before_returns)) {
         @compileError("agent EpistemicStrategy emitProject must not terminate the Agent program");
     }
     return result;
@@ -252,8 +252,8 @@ fn emitEpistemicFinalAllowed(
     memory: flow_module.Value(Epistemics.MemoryType(Definition)),
     result: flow_module.Value(Definition.Result),
 ) flow_module.Value(bool) {
-    const before_suspensions = flow.suspensionCount();
-    const before_returns = flow.returnHandoffCount();
+    const before_suspensions = flow.suspensionSnapshot();
+    const before_returns = flow.returnSnapshot();
     const allowed = Epistemics.emitFinalAllowed(
         Definition,
         flow,
@@ -261,10 +261,10 @@ fn emitEpistemicFinalAllowed(
         result,
         epistemicContext(Definition, Epistemics),
     );
-    if (flow.suspensionCount() != before_suspensions) {
+    if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
         @compileError("agent EpistemicStrategy emitFinalAllowed must be effect-free");
     }
-    if (flow.returnHandoffCount() != before_returns) {
+    if (!std.meta.eql(flow.returnSnapshot(), before_returns)) {
         @compileError("agent EpistemicStrategy emitFinalAllowed must not terminate the Agent program");
     }
     return allowed;
@@ -569,8 +569,8 @@ fn ReactLowering(
     const decide_counters = flow.productExtract(2, decide_state);
     const view = emitEpistemicProject(Definition, Epistemics, &flow, decide_memory);
     const decision_local = if (Strategy.kind == .custom) decision_local: {
-        const before_suspensions = flow.suspensionCount();
-        const before_control = flow.controlMutationCount();
+        const before_suspensions = flow.suspensionSnapshot();
+        const before_control = flow.controlTopologySnapshot();
         const value = Strategy.emitDecisionLocal(
             Definition,
             Epistemics,
@@ -579,10 +579,10 @@ fn ReactLowering(
             decide_counters,
             view,
         );
-        if (flow.suspensionCount() != before_suspensions) {
+        if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
             @compileError("agent custom RuntimeStrategy emitDecisionLocal must be effect-free");
         }
-        if (flow.controlMutationCount() != before_control) {
+        if (!std.meta.eql(flow.controlTopologySnapshot(), before_control)) {
             @compileError("agent custom RuntimeStrategy emitDecisionLocal must not alter compiler-owned control topology");
         }
         break :decision_local value;
@@ -1020,10 +1020,10 @@ fn assertEpistemics(
     comptime Epistemics: type,
 ) void {
     inline for (.{
-        "semantic_identity", "normalized_config", "validate",         "MemoryType",
-        "DecisionViewType",  "StateSchemaTypes",  "initialMemory",    "emitInitial",
-        "emitObserve",       "emitProject",       "emitFinalAllowed", "constantValues",
-        "constantContext",
+        "semantic_identity", "normalized_config",        "validate",         "MemoryType",
+        "DecisionViewType",  "StateSchemaTypes",         "initialMemory",    "emitInitial",
+        "emitObserve",       "emitProject",              "emitFinalAllowed", "constantValues",
+        "constantContext",   "semantic_lowering_digest",
     }) |name| {
         if (!@hasDecl(Epistemics, name)) {
             @compileError("agent compile requires EpistemicStrategy declaration " ++ name);

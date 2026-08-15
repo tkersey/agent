@@ -105,14 +105,22 @@ export function inspectTarGz(archivePath, expectedRoot) {
     let expandedBytes = 0;
     for (const line of verbose) {
         if (line.startsWith("l") || line.startsWith("h")) throw new Error("reference archive links are forbidden");
-        const match = line.match(/^\S+\s+\d+\s+\S+\s+\S+\s+(\d+)\s+/);
-        if (!match) throw new Error(`cannot parse archive inventory: ${line}`);
-        expandedBytes += Number(match[1]);
+        expandedBytes += archiveEntrySize(line);
         if (!Number.isSafeInteger(expandedBytes) || expandedBytes > MAX_EXPANDED_BYTES) {
             throw new Error("reference archive expansion exceeds byte limit");
         }
     }
     return Object.freeze({ paths, entryCount: listing.length, expandedBytes });
+}
+
+export function archiveEntrySize(line) {
+    const bsd = line.match(/^\S+\s+\d+\s+\S+\s+\S+\s+(\d+)\s+/);
+    const gnu = line.match(/^\S+\s+\S+\/\S+\s+(\d+)\s+/);
+    const encoded = bsd?.[1] ?? gnu?.[1];
+    if (encoded === undefined) throw new Error(`cannot parse archive inventory: ${line}`);
+    const size = Number(encoded);
+    if (!Number.isSafeInteger(size) || size < 0) throw new Error(`invalid archive entry size: ${line}`);
+    return size;
 }
 
 async function downloadPublicArtifact(initial) {

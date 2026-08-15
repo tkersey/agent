@@ -667,7 +667,14 @@ pub fn build(b: *std.Build) void {
         "check-agent-1-externality",
         "Prove the clean-room Agent, World, host, and Effect v1 release lifecycle",
     );
-    release_externality.dependOn(&world_conformance_gate.step);
+    const release_externality_gate = b.addSystemCommand(&.{
+        "node",
+        "tools/check_world_conformance.mjs",
+        "--zig",
+    });
+    release_externality_gate.addArg(b.graph.zig_exe);
+    release_externality_gate.addArg("--agent-v1-release");
+    release_externality.dependOn(&release_externality_gate.step);
     const reference_stack_command = b.addSystemCommand(&.{
         "bun",
         "tools/check_reference_stack.mjs",
@@ -843,6 +850,7 @@ pub fn build(b: *std.Build) void {
         "tools/check_agent_release.mjs",
     });
     release_receipt.addArg(b.getInstallPath(.prefix, ""));
+    release_receipt.addArg(b.graph.zig_exe);
     release_receipt.step.dependOn(semantic_check);
     release_receipt.step.dependOn(lint);
     release_receipt.step.dependOn(hermetic);

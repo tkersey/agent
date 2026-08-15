@@ -16,6 +16,14 @@ describe("public reference stack lock", () => {
         expect(lock.worldCapabilities.url).not.toContain("/releases/assets/");
     });
 
+    test("preserves the exact Agent v1.1.2 public runtime tuple", () => {
+        const lock = readReferenceStackLock("conformance/reference-stack-v1.1.2.lock.json");
+        expect(lock.worldHost.version).toBe("1.0.1");
+        expect(lock.worldCapabilities.version).toBe("2.1.2");
+        expect(lock.worldHost.sha256).toBe("e501ab1fe540ed2ee5cbd1db5a027f00271f95694747160fe36fa64cffaab52d");
+        expect(lock.worldCapabilities.sha256).toBe("51d62b02ae3362f12740102a7f2fae5d112650475817f99b65abbfe9c41ae5d7");
+    });
+
     test("rejects private, mismatched, duplicate, and incomplete identities", () => {
         const original = JSON.parse(readFileSync(lockPath, "utf8"));
         for (const mutate of [

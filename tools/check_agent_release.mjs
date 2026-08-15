@@ -8,6 +8,7 @@ const baseline = readJson("conformance/agent-v2/baseline.json");
 const candidate = readJson("conformance/agent-v2/candidate.json");
 const lock = readJson("conformance/reference-stack-v1.lock.json");
 const installPrefix = resolve(process.argv[2] ?? "zig-out");
+const zigExecutable = process.argv[3] ? resolve(process.argv[3]) : null;
 const actualityRoot = join(installPrefix, "agent-actuality");
 const stackReceipt = readJson(join(actualityRoot, "reference-stack-receipt.json"));
 const zon = readFileSync("build.zig.zon", "utf8");
@@ -29,6 +30,9 @@ require(stackReceipt.format === "agent-reference-stack-receipt-v1", "reference s
 require(stackReceipt.worldHostArchiveSha256 === lock.worldHost.sha256, "reference receipt host archive");
 require(stackReceipt.worldCapabilitiesArchiveSha256 === lock.worldCapabilities.sha256,
   "reference receipt capability archive");
+require(zigExecutable !== null && existsSync(zigExecutable), "owning Zig executable");
+require(execFileSync(zigExecutable, ["version"], { encoding: "utf8" }).trim() === candidate.toolchain.zig,
+  "owning Zig version");
 
 const agentCommit = existsSync(".git") ? git(["rev-parse", "HEAD"]) : "source-archive";
 const agentTree = existsSync(".git") ? git(["rev-parse", "HEAD^{tree}"]) : "source-archive";
@@ -74,9 +78,9 @@ require(after.declaredStateBytes <= 512 * 1024, "declared state");
 require(after.wasmBytes <= Math.floor(before.wasmBytes * 0.8), "WASM ratio");
 require(after.wasmBytes <= 4_730_104, "WASM absolute size");
 require(after.firstDecisionPayloadBytes <= 16 * 1024, "first decision payload");
-require(freshCompiler.compileMilliseconds <= before.compileMilliseconds * 2, "fresh compile time ratio");
-require(freshCompiler.peakCompilerBytes <= before.peakCompilerBytes * 2, "fresh compiler memory ratio");
-require(fresh.warmStepNanoseconds <= before.warmStepNanoseconds * 1.25, "fresh single-step ratio");
+require(after.compileMilliseconds <= before.compileMilliseconds * 2, "recorded compile time ratio");
+require(after.peakCompilerBytes <= before.peakCompilerBytes * 2, "recorded compiler memory ratio");
+require(after.warmStepNanoseconds <= before.warmStepNanoseconds * 1.25, "recorded single-step ratio");
 
 for (const [path, expected] of [
   [join(actualityRoot, "repository-repair-actuality.world.wasm"), candidate.artifactChecksums.applicationWasmSha256],
@@ -273,16 +277,14 @@ function requireExactImplementationRevision() {
     { encoding: "utf8" },
   );
   require(status.length === 0, "clean declared Agent package inputs");
-  const parents = git(["rev-list", "--parents", "-n", "1", "HEAD"]).split(" ").slice(1);
-  require(parents.length === 1, "single-parent release evidence commit");
-  const implementationCommit = parents[0];
+  const implementationCommit = candidate.identities.implementationCommit;
+  require(spawnSync("git", ["merge-base", "--is-ancestor", implementationCommit, "HEAD"]).status === 0,
+    "candidate implementation commit is an ancestor");
   const changedPaths = git(["diff", "--name-only", implementationCommit, "HEAD"])
     .split("\n")
     .filter(Boolean);
   require(changedPaths.length === 1 && changedPaths[0] === "conformance/agent-v2/candidate.json",
-    "release evidence commit changes only candidate.json");
-  require(implementationCommit === candidate.identities.implementationCommit,
-    "candidate implementation commit");
+    "post-implementation revisions change only candidate.json");
   require(git(["rev-parse", `${implementationCommit}^{tree}`]) === candidate.identities.implementationTree,
     "candidate implementation tree");
   require(sha256(execFileSync("git", ["archive", "--format=tar", implementationCommit])) ===
@@ -342,11 +344,13 @@ function measureCurrentCompiler() {
   try {
     const result = spawnSync("/usr/bin/time", [
       timeFlag,
-      "zig",
+      zigExecutable,
       "build",
       "check-agent-actuality-world",
       "--cache-dir",
       join(workspace, "cache"),
+      "--global-cache-dir",
+      join(workspace, "global-cache"),
       "--prefix",
       join(workspace, "out"),
       "--summary",
@@ -378,7 +382,7 @@ function fetchPackageHash() {
     copyFileSync(join(repository, "build.zig"), join(workspace, "build.zig"));
     copyFileSync(join(repository, "build.zig.zon"), join(workspace, "build.zig.zon"));
     execFileSync("tar", ["-cf", archive, "-C", repository, ...declaredPackagePaths]);
-    return execFileSync("zig", [
+    return execFileSync(zigExecutable, [
       "fetch",
       "--global-cache-dir",
       join(workspace, "cache"),

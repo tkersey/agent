@@ -6,9 +6,10 @@ with Zig 0.16.0 and Bun 1.3.14 against checksum-authenticated public artifacts.
 
 `candidate.json` binds the exact Agent v2 implementation commit, tree,
 deterministic Git archive, package-source projection, artifacts, and
-authenticated compiler benchmark. The final evidence commit may change only
-`candidate.json`; this avoids a self-referential commit hash while making any
-later implementation change fail closed. The release check reruns the
+authenticated compiler benchmark. Revisions after that implementation commit,
+including a topology-only merge commit, may change only `candidate.json`; this
+avoids a self-referential commit hash while making any later implementation
+change fail closed. The release check reruns the
 controlled deterministic lifecycle from lock-pinned public runtime archives
 and rejects any mismatch in revision, Frame, state, payload, or WASM measures.
 

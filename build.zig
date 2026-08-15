@@ -6,6 +6,10 @@ pub const ActualityApplication = @import("actuality/application.zig").Applicatio
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const boundary_archive = b.option([]const u8, "boundary-archive", "Local Boundary v1.3.2 archive for offline proof");
+    const world_archive = b.option([]const u8, "world-archive", "Local World v3.1.1 archive for offline proof");
+    const world_host_archive = b.option([]const u8, "world-host-archive", "Local world-host v1.0.1 runtime archive");
+    const world_capabilities_archive = b.option([]const u8, "world-capabilities-archive", "Local world-capabilities v2.1.2 deterministic archive");
 
     const boundary_dependency = b.dependency("boundary", .{
         .target = target,
@@ -159,7 +163,7 @@ pub fn build(b: *std.Build) void {
     const check = b.step("check", "Compile and test the agent package");
     const semantic_check = b.step(
         "check-agent-semantic",
-        "Run every Agent v1 semantic and conformance gate",
+        "Run the public compiler, World packaging, parity, and malformed-input proof",
     );
     semantic_check.dependOn(&run_tests.step);
 
@@ -313,6 +317,18 @@ pub fn build(b: *std.Build) void {
     );
     external_consumer.dependOn(&external_consumer_gate.step);
     semantic_check.dependOn(external_consumer);
+
+    const reference_stack_test_command = b.addSystemCommand(&.{
+        "bun",
+        "test",
+        "./test/reference_stack.test.mjs",
+    });
+    const reference_stack_lock = b.step(
+        "check-agent-reference-stack-lock",
+        "Validate the exact public reference-stack lock",
+    );
+    reference_stack_lock.dependOn(&reference_stack_test_command.step);
+    semantic_check.dependOn(reference_stack_lock);
 
     const format_check = b.addSystemCommand(&.{
         b.graph.zig_exe,
@@ -597,7 +613,7 @@ pub fn build(b: *std.Build) void {
     world_conformance.dependOn(&world_conformance_gate.step);
     const hosted_lifecycle = b.step(
         "check-agent-lifecycle",
-        "Drive Research and Coding World applications through exact world-host v1.0.0",
+        "Drive Research and Coding World applications through public world-host v1.0.1",
     );
     hosted_lifecycle.dependOn(&world_conformance_gate.step);
     const release_externality = b.step(
@@ -605,10 +621,69 @@ pub fn build(b: *std.Build) void {
         "Prove the clean-room Agent, World, host, and Effect v1 release lifecycle",
     );
     release_externality.dependOn(&world_conformance_gate.step);
-    no_runtime.dependOn(&world_conformance_gate.step);
-    semantic_check.dependOn(world_conformance);
-    semantic_check.dependOn(hosted_lifecycle);
-    semantic_check.dependOn(release_externality);
+    const reference_stack_command = b.addSystemCommand(&.{
+        "bun",
+        "tools/check_reference_stack.mjs",
+        "--artifact-root",
+    });
+    reference_stack_command.addArg(b.getInstallPath(.prefix, "agent-actuality"));
+    reference_stack_command.step.dependOn(&install_actuality_wasm.step);
+    reference_stack_command.step.dependOn(&install_actuality_manifest.step);
+    reference_stack_command.step.dependOn(&install_initial_args.step);
+    const reference_stack = b.step(
+        "check-agent-reference-stack",
+        "Run the anonymously acquired public host/capability lifecycle and Actuality proof",
+    );
+    reference_stack.dependOn(world_conformance);
+    reference_stack.dependOn(&reference_stack_command.step);
+
+    const offline_world_conformance_gate = b.addSystemCommand(&.{
+        "node",
+        "tools/check_world_conformance.mjs",
+        "--zig",
+    });
+    offline_world_conformance_gate.addArg(b.graph.zig_exe);
+    offline_world_conformance_gate.addArg("--offline");
+    if (world_host_archive) |path| {
+        offline_world_conformance_gate.addArgs(&.{ "--world-host-archive", path });
+    }
+    if (world_capabilities_archive) |path| {
+        offline_world_conformance_gate.addArgs(&.{ "--world-capabilities-archive", path });
+    }
+    if (boundary_archive) |path| offline_world_conformance_gate.setEnvironmentVariable("AGENT_BOUNDARY_ARCHIVE", path);
+    if (world_archive) |path| offline_world_conformance_gate.setEnvironmentVariable("AGENT_WORLD_ARCHIVE", path);
+    const offline_reference_stack_command = b.addSystemCommand(&.{
+        "bun",
+        "tools/check_reference_stack.mjs",
+        "--offline",
+        "--artifact-root",
+    });
+    offline_reference_stack_command.addArg(b.getInstallPath(.prefix, "agent-actuality"));
+    if (world_host_archive) |path| offline_reference_stack_command.addArgs(&.{ "--world-host-archive", path });
+    if (world_capabilities_archive) |path| offline_reference_stack_command.addArgs(&.{ "--world-capabilities-archive", path });
+    offline_reference_stack_command.step.dependOn(&install_actuality_wasm.step);
+    offline_reference_stack_command.step.dependOn(&install_actuality_manifest.step);
+    offline_reference_stack_command.step.dependOn(&install_initial_args.step);
+    const offline_reference_stack = b.step(
+        "check-agent-reference-stack-offline",
+        "Run the public reference-stack proof from checksum-matching local archives",
+    );
+    offline_reference_stack.dependOn(&offline_world_conformance_gate.step);
+    offline_reference_stack.dependOn(&offline_reference_stack_command.step);
+
+    const hermetic_command = b.addSystemCommand(&.{
+        "node",
+        "tools/check_agent_hermetic.mjs",
+        "--zig",
+    });
+    hermetic_command.addArg(b.graph.zig_exe);
+    if (boundary_archive) |path| hermetic_command.addArgs(&.{ "--boundary-archive", path });
+    if (world_archive) |path| hermetic_command.addArgs(&.{ "--world-archive", path });
+    const hermetic = b.step(
+        "check-agent-hermetic",
+        "Acquire exact public compiler archives, then run the compiler proof with network disabled",
+    );
+    hermetic.dependOn(&hermetic_command.step);
     addSpecializationTest(
         b,
         "check-agent-boundary-equivalence",
@@ -717,8 +792,11 @@ pub fn build(b: *std.Build) void {
     });
     release_receipt.step.dependOn(semantic_check);
     release_receipt.step.dependOn(lint);
+    release_receipt.step.dependOn(hermetic);
+    release_receipt.step.dependOn(reference_stack);
     release.dependOn(&release_receipt.step);
-    check.dependOn(release);
+    check.dependOn(semantic_check);
+    check.dependOn(lint);
 }
 
 fn addSharedBoundaryTest(

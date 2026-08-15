@@ -20,6 +20,17 @@ test before the replacement, a passing test afterward, the hidden behavior
 check, typed completion, fresh-instance continuation, retry, replay, branching,
 and migration.
 
+The public lane downloads exact world-host v1.0.1 and world-capabilities v2.1.2
+release assets from stable anonymous URLs, verifies the lock checksums before
+extraction, and runs the lifecycle without sibling source checkouts:
+
+```sh
+zig build check-agent-reference-stack
+```
+
+The local capability-development lane instead accepts nearby or explicitly
+selected runtime roots:
+
 ```sh
 zig build check-agent-actuality-release
 ```

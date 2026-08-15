@@ -14,7 +14,9 @@ Implementation produced two concrete obstructions:
 The release owner authorized the smallest upstream correction releases. The
 current compatibility line is Boundary v1.3.2 and World v3.1.1. Boundary
 Machine ABI v2, World Application ABI v1, World Frame v1, Effect protocol v1,
-world-host v1.0.0, and the one-pending-effect restriction remain unchanged.
+world-host v1 runtime semantics, and the one-pending-effect restriction remain
+unchanged. Public world-host v1.0.1 changes release packaging and metadata only;
+it preserves v1.0.0 runtime behavior.
 
 Release receipts distinguish two temporal claims:
 

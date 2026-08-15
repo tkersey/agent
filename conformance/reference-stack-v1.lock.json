@@ -1,0 +1,15 @@
+{
+  "format": "agent-reference-stack-lock-v1",
+  "worldHost": {
+    "repository": "tkersey/world-host",
+    "version": "1.0.1",
+    "url": "https://github.com/tkersey/world-host/releases/download/v1.0.1/world-host-v1.0.1-runtime.tar.gz",
+    "sha256": "e501ab1fe540ed2ee5cbd1db5a027f00271f95694747160fe36fa64cffaab52d"
+  },
+  "worldCapabilities": {
+    "repository": "tkersey/world-capabilities",
+    "version": "2.1.2",
+    "url": "https://github.com/tkersey/world-capabilities/releases/download/v2.1.2/world-capabilities-v2.1.2-deterministic.tar.gz",
+    "sha256": "51d62b02ae3362f12740102a7f2fae5d112650475817f99b65abbfe9c41ae5d7"
+  }
+}

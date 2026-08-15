@@ -35,9 +35,12 @@ const Definition = agent.define(.{
         .maximum_effect_actions = 0,
         .maximum_child_actions = 0,
     },
-    .history = .{ .maximum_observations = 0, .overflow = .fail },
 });
-const Compiled = agent.compile(Definition, agent.strategy.react(.{}), .{
+const Compiled = agent.compile(Definition, agent.strategy.react(.{}), agent.epistemics.verbatim(.{
+    .maximum_observations = 0,
+    .overflow = .fail,
+    .final = agent.final_policy.none,
+}), .{
     .machine = .{
         .maximum_frames = 16,
         .maximum_state_bytes = 64 * 1024,
@@ -74,9 +77,9 @@ pub export fn agentMachineParityRun() u32 {
     const request = switch (effect.value) {
         .s0 => |value| value,
     };
-    const history_length = request.history.len() catch return 0;
-    const catalog_length = request.action_catalog.len() catch return 0;
-    const instruction_length = request.instructions.len() catch return 0;
+    const history_length = request.context.len() catch return 0;
+    const catalog_length: u32 = 0;
+    const instruction_length: u32 = 0;
 
     var image_allocator = std.heap.FixedBufferAllocator.init(&image_storage);
     const encoded_state = Machine.encodeState(

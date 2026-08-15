@@ -14,18 +14,20 @@ const Definition = agent.define(.{
     .decision = .{ .interface = "decide.v1", .maximum_request_bytes = 64, .maximum_result_bytes = 64 },
     .actions = .{agent.action.final(.final, .{ .name = "final", .description = "Return." })},
     .budget = .{ .maximum_turns = 1, .maximum_decisions = 1, .maximum_effect_actions = 0, .maximum_child_actions = 0 },
-    .history = .{ .maximum_observations = 0, .overflow = .fail },
 });
 const Implementation = struct {
     pub fn validate(comptime _: type, comptime _: void) void {}
-    pub fn DecisionRequest(comptime _: type, comptime _: void) type {
+    pub fn DecisionLocalType(comptime _: type, comptime _: void) type {
         return u32;
     }
     pub fn StateSchemaTypes(comptime _: type, comptime _: void) @TypeOf(.{}) {
         return .{};
     }
-    pub fn Body(comptime _: type, comptime _: void) type {
-        return void;
+    pub fn topology(comptime _: type, comptime _: void, comptime runtime: type) agent.RuntimeTopology {
+        return runtime.react();
+    }
+    pub fn emitDecisionLocal(comptime _: type, comptime _: void, flow: anytype, state: anytype) agent.Value(u32) {
+        return flow.productExtract(0, state);
     }
 };
 const Strategy = agent.strategy.custom(.{
@@ -36,5 +38,9 @@ const Strategy = agent.strategy.custom(.{
 });
 
 comptime {
-    _ = agent.compile(Definition, Strategy, .{ .machine = .{} });
+    _ = agent.compile(Definition, Strategy, agent.epistemics.verbatim(.{
+        .maximum_observations = 0,
+        .overflow = .fail,
+        .final = agent.final_policy.none,
+    }), .{ .machine = .{} });
 }

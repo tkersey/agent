@@ -12,21 +12,25 @@ const machine_options = .{
 pub const ResearchReact = agent.compile(
     Research.Definition,
     agent.strategy.react(.{}),
+    Research.Epistemics,
     .{ .machine = machine_options },
 );
 pub const ResearchReflective = agent.compile(
     Research.Definition,
     agent.strategy.reflective(.{ .reflection_rounds = 1 }),
+    Research.Epistemics,
     .{ .machine = machine_options },
 );
 pub const CodingReact = agent.compile(
     Coding.Definition,
     agent.strategy.react(.{}),
+    Coding.Epistemics,
     .{ .machine = machine_options },
 );
 pub const CodingReflective = agent.compile(
     Coding.Definition,
     agent.strategy.reflective(.{ .reflection_rounds = 1 }),
+    Coding.Epistemics,
     .{ .machine = machine_options },
 );
 
@@ -79,9 +83,10 @@ test "two definitions by two strategies produce four distinct Machines" {
 }
 
 test "agent manifests bind definitions strategies and Boundary Machines" {
-    try std.testing.expectEqualStrings("AGT_DEF1", &ResearchReact.DefinitionManifest.magic);
-    try std.testing.expectEqualStrings("AGT_STR1", &ResearchReact.StrategyManifest.magic);
-    try std.testing.expectEqualStrings("AGT_CMP1", &ResearchReact.Manifest.magic);
+    try std.testing.expectEqualStrings("AGT_DEF2", &ResearchReact.DefinitionManifest.magic);
+    try std.testing.expectEqualStrings("AGT_STR2", &ResearchReact.StrategyManifest.magic);
+    try std.testing.expectEqualStrings("AGT_EPI1", &ResearchReact.EpistemicsManifest.magic);
+    try std.testing.expectEqualStrings("AGT_CMP2", &ResearchReact.Manifest.magic);
 
     try std.testing.expectEqualSlices(
         u8,
@@ -131,7 +136,7 @@ test "agent manifests bind definitions strategies and Boundary Machines" {
         &ResearchReflective.ManifestBytes,
     ));
     try std.testing.expectEqualStrings(
-        "AGT_DEF1",
+        "AGT_DEF2",
         ResearchReact.DefinitionManifestBytes[0..8],
     );
     try std.testing.expect(std.mem.indexOf(
@@ -148,6 +153,11 @@ test "agent manifests bind definitions strategies and Boundary Machines" {
         u8,
         &ResearchReact.StrategyManifest.semantic_digest,
         ResearchReact.StrategyManifestBytes[ResearchReact.StrategyManifestBytes.len - 32 ..],
+    );
+    try std.testing.expectEqualSlices(
+        u8,
+        &ResearchReact.EpistemicsManifest.semantic_digest,
+        ResearchReact.EpistemicsManifestBytes[ResearchReact.EpistemicsManifestBytes.len - 32 ..],
     );
     try std.testing.expectEqualSlices(
         u8,
@@ -192,7 +202,7 @@ test "Research ReAct performs decision search decision read decision final" {
             try std.testing.expectEqual(@as(u32, 1), request.counters.turns);
             try std.testing.expectEqual(@as(u32, 1), request.counters.decisions);
             try std.testing.expectEqual(@as(u32, 1), request.counters.effect_actions);
-            const observed = (try request.history.get(0)).?;
+            const observed = (try request.context.get(0)).?;
             switch (observed) {
                 .search => |value| try std.testing.expectEqual(@as(u32, 22), value),
                 else => return error.UnexpectedObservation,
@@ -252,7 +262,7 @@ test "Research Reflective ReAct reflects each selected action" {
     switch (reflect_search.value) {
         .s0 => |request| {
             try std.testing.expectEqual(agent.DecisionPhase.reflect, request.phase);
-            try std.testing.expect(request.candidate != null);
+            try std.testing.expect(request.strategy_local != null);
         },
         else => return error.UnexpectedEffectSite,
     }

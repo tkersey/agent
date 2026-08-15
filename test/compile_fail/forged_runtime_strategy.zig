@@ -14,7 +14,6 @@ const Definition = agent.define(.{
     .decision = .{ .interface = "decide.v1", .maximum_request_bytes = 64, .maximum_result_bytes = 64 },
     .actions = .{agent.action.final(.final, .{ .name = "final", .description = "Return." })},
     .budget = .{ .maximum_turns = 1, .maximum_decisions = 1, .maximum_effect_actions = 0, .maximum_child_actions = 0 },
-    .history = .{ .maximum_observations = 0, .overflow = .fail },
 });
 const Forged = struct {
     pub const semantic_identity = "forged";
@@ -22,5 +21,9 @@ const Forged = struct {
 };
 
 comptime {
-    _ = agent.compile(Definition, Forged, .{ .machine = .{} });
+    _ = agent.compile(Definition, Forged, agent.epistemics.verbatim(.{
+        .maximum_observations = 0,
+        .overflow = .fail,
+        .final = agent.final_policy.none,
+    }), .{ .machine = .{} });
 }

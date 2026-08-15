@@ -393,12 +393,33 @@ pub fn Flow(comptime config: anytype) type {
             return self.instruction(bool, .pure, .integer_greater_equal, .{ left, right });
         }
 
+        pub fn integerEqual(self: *Self, left: anytype, right: @TypeOf(left)) Value(bool) {
+            return self.instruction(bool, .pure, .integer_equal, .{ left, right });
+        }
+
         pub fn compareEqZero(self: *Self, value: anytype) Value(bool) {
             return self.instruction(bool, .compare_eq_zero, .compare_eq_zero, .{value});
         }
 
         pub fn booleanOr(self: *Self, left: Value(bool), right: Value(bool)) Value(bool) {
             return self.instruction(bool, .pure, .boolean_or, .{ left, right });
+        }
+
+        pub fn booleanAnd(self: *Self, left: Value(bool), right: Value(bool)) Value(bool) {
+            return self.instruction(bool, .pure, .boolean_and, .{ left, right });
+        }
+
+        pub fn booleanNot(self: *Self, value: Value(bool)) Value(bool) {
+            return self.instruction(bool, .pure, .boolean_not, .{value});
+        }
+
+        pub fn select(self: *Self, condition: Value(bool), when_true: anytype, when_false: @TypeOf(when_true)) @TypeOf(when_true) {
+            return self.instruction(
+                @TypeOf(when_true).Type,
+                .pure,
+                .select,
+                .{ condition, when_true, when_false },
+            );
         }
 
         pub fn sumConstruct(

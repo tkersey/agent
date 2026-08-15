@@ -74,13 +74,14 @@ pub const Definition = agent.define(.{
         .maximum_effect_actions = 48,
         .maximum_child_actions = 8,
     },
-    .history = .{
-        .maximum_observations = 32,
-        .overflow = .fail,
-    },
+});
+pub const Epistemics = agent.epistemics.verbatim(.{
+    .maximum_observations = 32,
+    .overflow = .fail,
+    .final = agent.final_policy.none,
 });
 
-pub const Compiled = agent.compile(Definition, agent.strategy.react(.{}), .{
+pub const Compiled = agent.compile(Definition, agent.strategy.react(.{}), Epistemics, .{
     .machine = .{
         .maximum_frames = 64,
         .maximum_state_bytes = 4 * 1024 * 1024,

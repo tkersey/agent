@@ -113,7 +113,7 @@ fn terminator(hasher: *Hasher, value: boundary.ir.Terminator) void {
 
 /// Canonical target-neutral digest of normalized generated Boundary Control IR.
 pub fn controlDigest(comptime program: boundary.ir.Program) [32]u8 {
-    @setEvalBranchQuota(10_000_000);
+    @setEvalBranchQuota(100_000_000);
     var hasher = Hasher.init(.{});
     bytes(&hasher, "agent-control-ir/v1");
     unsigned(&hasher, program.value_types.len);

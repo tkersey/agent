@@ -49,15 +49,13 @@ const Definition = agent.define(.{
         .maximum_effect_actions = 2,
         .maximum_child_actions = 0,
     },
-    .history = .{ .maximum_observations = 2, .overflow = .fail },
-    .final_policy = agent.final_policy.latestObservationBool(
-        .run_tests,
-        .passed,
-        true,
-    ),
 });
 
-const Machine = agent.compile(Definition, agent.strategy.react(.{}), .{
+const Machine = agent.compile(Definition, agent.strategy.react(.{}), agent.epistemics.verbatim(.{
+    .maximum_observations = 2,
+    .overflow = .fail,
+    .final = agent.final_policy.latestObservationBool(.run_tests, .passed, true),
+}), .{
     .machine = .{
         .maximum_frames = 32,
         .maximum_state_bytes = 64 * 1024,

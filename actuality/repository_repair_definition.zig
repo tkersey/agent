@@ -1,11 +1,11 @@
 pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
     return struct {
         pub const Path = boundary.Text(256);
-        pub const GoalText = boundary.Text(4096);
+        pub const GoalText = boundary.Text(2048);
         pub const QueryText = boundary.Text(256);
-        pub const ExcerptText = boundary.Text(512);
+        pub const ExcerptText = boundary.Text(256);
         pub const FileText = boundary.Text(32 * 1024);
-        pub const ProcessText = boundary.Text(16 * 1024);
+        pub const ProcessText = boundary.Text(4 * 1024);
         pub const SummaryText = boundary.Text(4096);
         pub const DigestHex = boundary.Text(64);
 
@@ -20,12 +20,24 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
             kind: EntryKind,
             byte_length: u32,
         };
-        pub const ListResult = struct {
-            entries: boundary.Vector(TreeEntry, 128),
+        pub const CompactTreeEntry = struct {
+            path: Path,
+            kind: EntryKind,
         };
+        pub const ListResult = struct {
+            entries: boundary.Vector(CompactTreeEntry, 32),
+            truncated: bool,
+        };
+        pub const CompactListing = ListResult;
 
-        pub const ReadRequest = struct { path: Path };
+        pub const DocumentRole = enum { package, source, @"test" };
+        pub const ReadRequest = struct {
+            role: DocumentRole,
+            path: Path,
+        };
         pub const ReadResult = struct {
+            role: DocumentRole,
+            role_code: u8,
             path: Path,
             sha256: DigestHex,
             contents: FileText,
@@ -41,9 +53,11 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
             excerpt: ExcerptText,
         };
         pub const SearchResult = struct {
-            hits: boundary.Vector(SearchHit, 32),
+            hits: boundary.Vector(SearchHit, 8),
             truncated: bool,
         };
+        pub const CompactSearchHit = SearchHit;
+        pub const CompactSearch = SearchResult;
 
         pub const TestSuite = enum { default };
         pub const TestRequest = struct { suite: TestSuite };
@@ -52,6 +66,12 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
             passed: bool,
             stdout: ProcessText,
             stderr: ProcessText,
+            stdout_truncated: bool,
+            stderr_truncated: bool,
+        };
+        pub const CompactTestResult = struct {
+            exit_code: i32,
+            passed: bool,
             stdout_truncated: bool,
             stderr_truncated: bool,
         };
@@ -80,6 +100,35 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
             conflict: ReplaceConflict,
         };
 
+        pub const ReplacementSummary = ?ReplaceOutcome;
+        pub const Memory = struct {
+            listing: ?CompactListing,
+            package_document: ?ReadResult,
+            source_document: ?ReadResult,
+            test_document: ?ReadResult,
+            latest_search: ?CompactSearch,
+            latest_test: ?CompactTestResult,
+            replacement: ReplacementSummary,
+            failing_test_observed: bool,
+            mutation_applied: bool,
+            passing_test_observed: bool,
+        };
+        pub const DecisionEvidence = struct {
+            failing_test_observed: bool,
+            mutation_applied: bool,
+            passing_test_observed: bool,
+        };
+        pub const DecisionView = struct {
+            listing: ?CompactListing,
+            package_document: ?ReadResult,
+            source_document: ?ReadResult,
+            test_document: ?ReadResult,
+            latest_search: ?CompactSearch,
+            latest_test: ?CompactTestResult,
+            replacement: ReplacementSummary,
+            evidence: DecisionEvidence,
+        };
+
         pub const FinalResult = struct {
             summary: SummaryText,
             changed_files: boundary.Vector(Path, 4),
@@ -89,7 +138,6 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
 
         pub const Failure = enum {
             budget_exhausted,
-            history_overflow,
             arithmetic_overflow,
             invalid_index,
             invalid_variant,
@@ -136,7 +184,7 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
 
         pub const Definition = agent.define(.{
             .name = "repository-repair-actuality",
-            .version = "1.0.0",
+            .version = "2.0.0",
             .instructions = instructions,
             .Goal = Goal,
             .Action = Action,
@@ -145,8 +193,8 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
             .Failure = Failure,
             .decision = .{
                 .interface = "model.decide.v1",
-                .maximum_request_bytes = 512 * 1024,
-                .maximum_result_bytes = 64 * 1024,
+                .maximum_request_bytes = 160 * 1024,
+                .maximum_result_bytes = 40 * 1024,
             },
             .actions = .{
                 agent.action.effect(.list_repository, .list_repository, ListRepository, .{
@@ -184,28 +232,24 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
                 }),
             },
             .budget = .{
-                .maximum_turns = 16,
-                .maximum_decisions = 16,
-                .maximum_effect_actions = 16,
+                .maximum_turns = 32,
+                .maximum_decisions = 32,
+                .maximum_effect_actions = 32,
                 .maximum_child_actions = 0,
             },
-            .history = .{
-                .maximum_observations = 8,
-                .overflow = .fail,
-            },
-            .final_policy = agent.final_policy.latestObservationBool(
-                .run_tests,
-                .passed,
-                true,
-            ),
         });
 
         pub const Strategy = agent.strategy.react(.{});
-        pub const Compiled = agent.compile(Definition, Strategy, .{
+        pub const Epistemics = agent.epistemics.custom(.{
+            .semantic_identity = "agent.epistemics.repository-working-set.v1",
+            .config = .{},
+            .implementation = @import("repository_repair_epistemics.zig").WorkingSet(agent, @This()),
+        });
+        pub const Compiled = agent.compile(Definition, Strategy, Epistemics, .{
             .machine = .{
                 .maximum_frames = 32,
-                .maximum_state_bytes = 1_000_000,
-                .maximum_machine_fuel = 100_000,
+                .maximum_state_bytes = 500 * 1024,
+                .maximum_machine_fuel = 4_000_000,
             },
         });
         pub const Machine = Compiled.Machine;

@@ -23,11 +23,11 @@ import {
 } from "./reference_stack.mjs";
 
 const versions = Object.freeze({
-    agent: "1.1.2",
+    agent: "2.0.0",
     boundary: "1.3.2",
     world: "3.1.1",
     host: "1.0.1",
-    capabilities: "2.1.2",
+    capabilities: "2.2.0",
 });
 const releases = Object.freeze({
     boundary: Object.freeze({

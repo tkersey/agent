@@ -1,9 +1,11 @@
 actuality/application.zig
 actuality/emit_decision_contract.zig
+actuality/emit_decision_contract_binary.zig
 actuality/emit_decision_contract_digest.zig
 actuality/emit_first_decision_request.zig
 actuality/emit_initial_args.zig
 actuality/repository_repair_definition.zig
+actuality/repository_repair_epistemics.zig
 build.zig
 examples/coding_agent.zig
 examples/repository_repair_actuality.zig
@@ -14,11 +16,13 @@ src/budget.zig
 src/compiler.zig
 src/decision_contract.zig
 src/definition.zig
+src/epistemics.zig
 src/final_policy.zig
 src/flow.zig
 src/identity.zig
 src/manifest.zig
 src/root.zig
+src/runtime_flow.zig
 src/strategy.zig
 test/action_algebra.zig
 test/actuality_definition.zig
@@ -58,6 +62,7 @@ test/compiler.zig
 test/custom_strategy.zig
 test/decision_contract.zig
 test/definition.zig
+test/epistemics_working_set.zig
 test/external_consumer/build.zig
 test/external_consumer/main.zig
 test/final_policy.zig

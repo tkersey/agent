@@ -19,8 +19,8 @@ if (options.mode !== "deterministic") {
 }
 
 const agentRoot = resolve(options.agentRoot ?? process.cwd());
-const hostRoot = resolve(options.worldHostRoot ?? join(agentRoot, "../world-host"));
-const capabilitiesRoot = resolve(options.capabilitiesRoot ?? join(agentRoot, "../world-capabilities-actuality-v1"));
+const hostRoot = resolve(options.worldHostRoot ?? process.env.AGENT_WORLD_HOST_ROOT ?? join(agentRoot, "../world-host"));
+const capabilitiesRoot = resolve(options.capabilitiesRoot ?? process.env.AGENT_WORLD_CAPABILITIES_ROOT ?? join(agentRoot, "../world-capabilities"));
 const artifactRoot = resolve(options.artifactRoot ?? join(agentRoot, "zig-out/agent-actuality"));
 const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-actuality-v1-"));
 
@@ -44,7 +44,7 @@ try {
     wasmBytes,
     blockStore,
     headStore,
-    workerFactory: () => new host.ApplicationWorker({ maximumMemoryBytes: 512 * 1024 * 1024 }),
+    workerFactory: () => new host.ApplicationWorker({ maximumMemoryBytes: 256 * 1024 * 1024 }),
     preflight: async (manifest) => {
       preflightRuns += 1;
       return { blockers: Buffer.from(manifest.applicationId).toString("hex") === capabilities.ACTUALITY_APPLICATION_ID
@@ -78,7 +78,12 @@ try {
   const requestIds = [];
   const resultIds = [];
 
-  while (current.frame.status === host.FrameStatus.needsEffect) {
+  while (current.frame.status === host.FrameStatus.needsEffect ||
+      current.frame.status === host.FrameStatus.yieldedFuel) {
+    if (current.frame.status === host.FrameStatus.yieldedFuel) {
+      current = await controller.advance(runId, branchId);
+      continue;
+    }
     const request = current.frame.pendingEffect;
     const inspected = router.inspect(request.encodedBytes);
     interfaces.push(bindingInterfaceLabel(inspected.bindingId));
@@ -109,7 +114,11 @@ try {
   }
 
   if (current.frame.status !== host.FrameStatus.completed) {
-    throw new Error(`actuality_terminal_status:${current.frame.status}`);
+    const failureBytes = current.frame.failure ?? null;
+    const failure = failureBytes === null
+      ? ""
+      : `:${Buffer.from(failureBytes).toString("hex")}`;
+    throw new Error(`actuality_terminal_status:${current.frame.status}${failure}:interfaces=${interfaces.join(",")}`);
   }
   const finalResult = capabilities.decodeRepositoryRepairFinalResult(current.frame.finalResultBytes);
   const changedPaths = (await git(workspaceRoot, ["status", "--porcelain=v1"]))

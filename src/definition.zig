@@ -2,7 +2,6 @@ const std = @import("std");
 const boundary = @import("boundary");
 const action = @import("action.zig");
 const budget_types = @import("budget.zig");
-const final_policy_types = @import("final_policy.zig");
 
 pub const maximum_instructions_bytes = 256 * 1024;
 pub const maximum_action_name_bytes = 128;
@@ -79,16 +78,14 @@ fn assertDefinitionPortable(comptime T: type, comptime surface: []const u8) void
     boundary.schema.assertPortable(T);
 }
 
-fn normalizedFinalPolicy(comptime spec: anytype) final_policy_types.Policy {
-    if (!@hasField(@TypeOf(spec), "final_policy")) return final_policy_types.none;
-    if (@TypeOf(spec.final_policy) != final_policy_types.Policy) {
-        @compileError("agent definition final_policy must be created by agent.final_policy");
-    }
-    return spec.final_policy;
-}
-
 fn validateDefinition(comptime spec: anytype) void {
     @setEvalBranchQuota(1_000_000);
+    if (@hasField(@TypeOf(spec), "history")) {
+        @compileError("agent v2 Definition no longer accepts .history; choose an EpistemicStrategy");
+    }
+    if (@hasField(@TypeOf(spec), "final_policy")) {
+        @compileError("agent v2 Definition no longer accepts .final_policy; final admission belongs to EpistemicStrategy");
+    }
     if (spec.name.len == 0) @compileError("agent definition name must not be empty");
     if (spec.version.len == 0) @compileError("agent definition version must not be empty");
     if (spec.instructions.len == 0) {
@@ -131,15 +128,6 @@ fn validateDefinition(comptime spec: anytype) void {
     }
     if (spec.budget.maximum_decisions == 0) {
         @compileError("agent maximum_decisions must be positive");
-    }
-    if (spec.history.maximum_observations > std.math.maxInt(u32)) {
-        @compileError("agent history maximum_observations exceeds u32");
-    }
-    const history_overflow_name = @tagName(spec.history.overflow);
-    if (!std.mem.eql(u8, history_overflow_name, "fail") and
-        !std.mem.eql(u8, history_overflow_name, "drop_oldest"))
-    {
-        @compileError("agent history overflow policy is unsupported");
     }
 
     var final_count: usize = 0;
@@ -208,18 +196,6 @@ fn validateDefinition(comptime spec: anytype) void {
     if (child_count != 0 and spec.budget.maximum_child_actions == 0) {
         @compileError("agent maximum_child_actions disables a declared child_agent action");
     }
-    if (effect_count != 0 and spec.history.maximum_observations == 0) {
-        @compileError("agent effect actions require positive history capacity");
-    }
-    const final_policy = normalizedFinalPolicy(spec);
-    const has_final_policy = switch (final_policy) {
-        .none => false,
-        .latest_observation_bool => true,
-    };
-    if (has_final_policy and spec.history.maximum_observations == 0) {
-        @compileError("agent final policy requires positive history capacity");
-    }
-    final_policy_types.validate(spec.Observation, spec.actions, final_policy);
 }
 
 fn descriptorFor(
@@ -258,13 +234,13 @@ pub fn define(comptime spec: anytype) type {
         pub const name = spec.name;
         pub const version = spec.version;
         pub const instructions = spec.instructions;
-        pub const final_policy = normalizedFinalPolicy(spec);
 
         pub const Goal = spec.Goal;
         pub const Action = spec.Action;
         pub const Observation = spec.Observation;
         pub const Result = spec.Result;
         pub const Failure = spec.Failure;
+        pub const actions = spec.actions;
 
         pub const decision = DecisionProtocol{
             .interface = spec.decision.interface,
@@ -277,14 +253,6 @@ pub fn define(comptime spec: anytype) type {
             .maximum_effect_actions = spec.budget.maximum_effect_actions,
             .maximum_child_actions = spec.budget.maximum_child_actions,
         };
-        pub const history = budget_types.HistoryPolicy{
-            .maximum_observations = spec.history.maximum_observations,
-            .overflow = @field(
-                budget_types.HistoryOverflow,
-                @tagName(spec.history.overflow),
-            ),
-        };
-
         pub const action_count = @typeInfo(Action).@"union".fields.len;
 
         /// Return the unique descriptor in Action declaration order.

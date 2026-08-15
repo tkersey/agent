@@ -1,0 +1,47 @@
+{
+  "format": "agent-enf-candidate-v1",
+  "toolchain": {
+    "zig": "0.16.0",
+    "bun": "1.3.14"
+  },
+  "components": {
+    "agent": "2.0.0",
+    "boundary": "1.3.2",
+    "world": "3.1.1",
+    "worldHost": "1.0.1",
+    "worldCapabilities": "2.2.0"
+  },
+  "measurements": {
+    "wasmBytes": 3741106,
+    "wasmStackBytes": 134217728,
+    "wasmMaximumMemoryBytes": 268435456,
+    "declaredStateBytes": 512000,
+    "firstFrameBytes": 1979,
+    "peakFrameBytes": 9927,
+    "peakMachineStateBytes": 7775,
+    "firstDecisionPayloadBytes": 350,
+    "peakDecisionPayloadBytes": 1664,
+    "compileMilliseconds": 92370,
+    "peakCompilerBytes": 2400059392,
+    "coldStepNanoseconds": 11854959,
+    "warmStepNanoseconds": 19482291
+  },
+  "ratios": {
+    "peakFrameToBaseline": 0.460329237,
+    "wasmToBaseline": 0.632731182,
+    "compileTimeToBaseline": 1.285237234,
+    "compilerMemoryToBaseline": 1.058615232
+  },
+  "identities": {
+    "applicationId": "9de00d549101541f91554399aa4114020ea9e4470fe64c1a40b93f52e6243245",
+    "decisionContractDigest": "eff01f65a1bc5d46693af84be7a2ce2a0cd07e7f6d7f20b7cb91aee76c2ad639"
+  },
+  "artifactChecksums": {
+    "applicationWasmSha256": "47986bc30c09ba0c385247fdc63cf1a61e80f190b2cb6bae3ee913f14e6676b4",
+    "applicationManifestSha256": "b5b32baabeef43e6f29d33c77e223d06d1ae3e2bb0825eefdd9b6ff70a9e2098",
+    "decisionContractBinarySha256": "b4dbb25a02cb787400088201e311f346c42038fad1a19bfcdc347ac2aad59000",
+    "decisionContractJsonSha256": "7085a707bfde60cd1c638b68b3874ea5516aed4087d927ffcf86b113deab6eec",
+    "worldHostRuntimeArchiveSha256": "e501ab1fe540ed2ee5cbd1db5a027f00271f95694747160fe36fa64cffaab52d",
+    "worldCapabilitiesArchiveSha256": "396b25a982cb156f22a39bc6b3a005ddd53b47fbf14e31af748b1960a2b2f30f"
+  }
+}

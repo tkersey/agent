@@ -15,7 +15,6 @@ const Definition = agent.define(.{
     .decision = .{ .interface = "decide.v1", .maximum_request_bytes = 64, .maximum_result_bytes = 64 },
     .actions = .{agent.action.final(.final, .{ .name = "final", .description = "Return." })},
     .budget = .{ .maximum_turns = 1, .maximum_decisions = 1, .maximum_effect_actions = 0, .maximum_child_actions = 0 },
-    .history = .{ .maximum_observations = 0, .overflow = .fail },
 });
 const ExtraSite = boundary.effect.site(99, "fixture.undeclared.v1", u32, u32);
 const Implementation = struct {

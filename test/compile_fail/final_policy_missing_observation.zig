@@ -17,7 +17,6 @@ comptime {
         .decision = .{ .interface = "decide.v1", .maximum_request_bytes = 64, .maximum_result_bytes = 64 },
         .actions = .{agent.action.final(.final, .{ .name = "final", .description = "Return." })},
         .budget = .{ .maximum_turns = 1, .maximum_decisions = 1, .maximum_effect_actions = 0, .maximum_child_actions = 0 },
-        .history = .{ .maximum_observations = 1, .overflow = .fail },
         .final_policy = agent.final_policy.latestObservationBool(.run_tests, .passed, true),
     });
 }

@@ -48,10 +48,13 @@ const Definition = agent.define(.{
         .maximum_effect_actions = 1,
         .maximum_child_actions = 0,
     },
-    .history = .{ .maximum_observations = 1, .overflow = .fail },
 });
 
-const Machine = agent.compile(Definition, agent.strategy.react(.{}), .{
+const Machine = agent.compile(Definition, agent.strategy.react(.{}), agent.epistemics.verbatim(.{
+    .maximum_observations = 1,
+    .overflow = .fail,
+    .final = agent.final_policy.none,
+}), .{
     .machine = .{
         .maximum_frames = 16,
         .maximum_state_bytes = 64 * 1024,

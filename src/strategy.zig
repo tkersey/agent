@@ -2,6 +2,7 @@ const std = @import("std");
 const boundary = @import("boundary");
 const action = @import("action.zig");
 const budget = @import("budget.zig");
+const runtime_flow = @import("runtime_flow.zig");
 
 pub const Kind = enum {
     react,
@@ -71,15 +72,19 @@ pub fn effectSitesFor(
     return result;
 }
 
-pub fn DecisionSite(comptime Definition: type, comptime Strategy: type) type {
-    return DecisionSiteFor(Definition, Strategy.DecisionRequestType(Definition));
+pub fn DecisionSite(comptime _: type, comptime _: type) type {
+    @compileError("agent v2 DecisionSite requires an explicit EpistemicStrategy");
 }
 
 pub fn effectSites(
     comptime Definition: type,
     comptime Strategy: type,
+    comptime Epistemics: type,
 ) [1 + effectCount(Definition)]type {
-    return effectSitesFor(Definition, Strategy.DecisionRequestType(Definition));
+    return effectSitesFor(
+        Definition,
+        DecisionTurn(Definition, Strategy, Epistemics),
+    );
 }
 
 fn maximumActionNameBytes(comptime Definition: type) usize {
@@ -107,45 +112,30 @@ pub fn ActionCatalogEntry(comptime Definition: type) type {
     };
 }
 
-pub fn History(comptime Definition: type) type {
-    return boundary.Vector(
-        Definition.Observation,
-        Definition.history.maximum_observations,
-    );
-}
-
 pub fn ActionCatalog(comptime Definition: type) type {
     return boundary.Vector(ActionCatalogEntry(Definition), Definition.action_count);
 }
 
-pub fn State(comptime Definition: type) type {
+pub fn State(comptime Definition: type, comptime Epistemics: type) type {
     return struct {
         goal: Definition.Goal,
-        history: History(Definition),
+        memory: Epistemics.MemoryType(Definition),
         counters: budget.Counters,
     };
 }
 
-pub fn DecisionRequest(comptime Definition: type) type {
+pub fn DecisionTurn(
+    comptime Definition: type,
+    comptime Strategy: type,
+    comptime Epistemics: type,
+) type {
     return struct {
-        instructions: boundary.Text(Definition.instructions.len),
-        action_catalog: ActionCatalog(Definition),
+        contract_digest: [32]u8,
         goal: Definition.Goal,
         counters: budget.Counters,
         phase: budget.DecisionPhase,
-        history: History(Definition),
-    };
-}
-
-pub fn ReflectiveDecisionRequest(comptime Definition: type) type {
-    return struct {
-        instructions: boundary.Text(Definition.instructions.len),
-        action_catalog: ActionCatalog(Definition),
-        goal: Definition.Goal,
-        counters: budget.Counters,
-        phase: budget.DecisionPhase,
-        history: History(Definition),
-        candidate: ?Definition.Action,
+        context: Epistemics.DecisionViewType(Definition),
+        strategy_local: Strategy.DecisionLocalType(Definition),
     };
 }
 
@@ -185,30 +175,26 @@ pub fn react(comptime config: anytype) type {
         @compileError("agent.strategy.react v1 accepts only an empty config");
     }
     return struct {
-        pub const semantic_identity = "agent.strategy.react.v1";
+        pub const semantic_identity = "agent.strategy.react.v2";
         pub const kind = Kind.react;
         pub const Config = ReactConfig;
         pub const normalized_config = Config{};
 
         pub fn validate(comptime Definition: type) void {
             _ = failureNamed(Definition, "budget_exhausted");
-            _ = failureNamed(Definition, "history_overflow");
             _ = failureNamed(Definition, "arithmetic_overflow");
             _ = failureNamed(Definition, "invalid_variant");
             _ = failureNamed(Definition, "capacity_exceeded");
-            if (Definition.history.overflow == .drop_oldest) {
-                _ = failureNamed(Definition, "invalid_index");
-            }
         }
 
-        pub fn DecisionRequestType(comptime Definition: type) type {
-            return DecisionRequest(Definition);
+        pub fn DecisionLocalType(comptime Definition: type) type {
+            _ = Definition;
+            return void;
         }
 
-        pub fn StateSchemaTypes(
-            comptime Definition: type,
-        ) @TypeOf(.{ History(Definition), State(Definition) }) {
-            return .{ History(Definition), State(Definition) };
+        pub fn StateSchemaTypes(comptime Definition: type) @TypeOf(.{void}) {
+            _ = Definition;
+            return .{void};
         }
     };
 }
@@ -227,7 +213,7 @@ pub fn reflective(comptime config: anytype) type {
         @compileError("agent.strategy.reflective reflection_rounds must be in 1...64");
     }
     return struct {
-        pub const semantic_identity = "agent.strategy.reflective-react.v1";
+        pub const semantic_identity = "agent.strategy.reflective-react.v2";
         pub const kind = Kind.reflective;
         pub const Config = ReflectiveConfig;
         pub const normalized_config = Config{
@@ -236,33 +222,24 @@ pub fn reflective(comptime config: anytype) type {
 
         pub fn validate(comptime Definition: type) void {
             _ = failureNamed(Definition, "budget_exhausted");
-            _ = failureNamed(Definition, "history_overflow");
             _ = failureNamed(Definition, "arithmetic_overflow");
             _ = failureNamed(Definition, "invalid_variant");
             _ = failureNamed(Definition, "capacity_exceeded");
-            if (Definition.history.overflow == .drop_oldest) {
-                _ = failureNamed(Definition, "invalid_index");
-            }
         }
 
-        pub fn DecisionRequestType(comptime Definition: type) type {
-            return ReflectiveDecisionRequest(Definition);
+        pub fn DecisionLocalType(comptime Definition: type) type {
+            return ?Definition.Action;
         }
 
         pub fn StateSchemaTypes(
             comptime Definition: type,
-        ) @TypeOf(.{
-            History(Definition),
-            State(Definition),
-            Definition.Action,
-        }) {
-            return .{ History(Definition), State(Definition), Definition.Action };
+        ) @TypeOf(.{?Definition.Action}) {
+            return .{?Definition.Action};
         }
     };
 }
 
-/// Admit downstream compile-time strategy software that lowers through public
-/// `agent.Flow` into one ordinary Boundary program body.
+/// Admit downstream topology software without granting a Program Body bypass.
 pub fn custom(comptime spec: anytype) type {
     if (!@hasField(@TypeOf(spec), "semantic_identity") or
         !@hasField(@TypeOf(spec), "config") or
@@ -278,20 +255,20 @@ pub fn custom(comptime spec: anytype) type {
         @compileError("agent.strategy.custom semantic_identity must not be empty");
     }
     const Implementation = spec.implementation;
+    const ConfigType = @TypeOf(spec.config);
+    rejectRuntimePointers(ConfigType);
+    boundary.schema.assertPortable(ConfigType);
     if (!@hasDecl(Implementation, "validate") or
-        !@hasDecl(Implementation, "DecisionRequest") or
-        !@hasDecl(Implementation, "Body") or
+        !@hasDecl(Implementation, "DecisionLocalType") or
+        !@hasDecl(Implementation, "topology") or
+        !@hasDecl(Implementation, "emitDecisionLocal") or
         !@hasDecl(Implementation, "StateSchemaTypes"))
     {
         @compileError(
             "agent.strategy.custom implementation requires validate, " ++
-                "DecisionRequest, Body, and StateSchemaTypes",
+                "DecisionLocalType, topology, emitDecisionLocal, and StateSchemaTypes",
         );
     }
-    const ConfigType = @TypeOf(spec.config);
-    rejectRuntimePointers(ConfigType);
-    boundary.schema.assertPortable(ConfigType);
-
     return struct {
         pub const semantic_identity = spec.semantic_identity;
         pub const kind = Kind.custom;
@@ -316,11 +293,12 @@ pub fn custom(comptime spec: anytype) type {
                     );
                 }
             }
+            rejectDecisionLocalPointers(DecisionLocalType(Definition));
             Implementation.validate(Definition, normalized_config);
         }
 
-        pub fn DecisionRequestType(comptime Definition: type) type {
-            return Implementation.DecisionRequest(Definition, normalized_config);
+        pub fn DecisionLocalType(comptime Definition: type) type {
+            return Implementation.DecisionLocalType(Definition, normalized_config);
         }
 
         pub fn StateSchemaTypes(
@@ -332,10 +310,44 @@ pub fn custom(comptime spec: anytype) type {
             return Implementation.StateSchemaTypes(Definition, normalized_config);
         }
 
-        pub fn ProgramBody(comptime Definition: type) type {
-            return Implementation.Body(Definition, normalized_config);
+        pub fn selectedTopology(
+            comptime Definition: type,
+            comptime Epistemics: type,
+        ) runtime_flow.Topology {
+            const Facade = runtime_flow.RuntimeFlow(Definition, Epistemics);
+            return Implementation.topology(Definition, normalized_config, Facade);
+        }
+
+        pub fn emitDecisionLocal(
+            comptime Definition: type,
+            flow: anytype,
+            state: anytype,
+        ) @import("flow.zig").Value(DecisionLocalType(Definition)) {
+            return Implementation.emitDecisionLocal(
+                Definition,
+                normalized_config,
+                flow,
+                state,
+            );
         }
     };
+}
+
+fn rejectDecisionLocalPointers(comptime T: type) void {
+    switch (@typeInfo(T)) {
+        .pointer => @compileError(
+            "agent RuntimeStrategy DecisionLocalType must be Boundary-portable",
+        ),
+        .array => |info| rejectDecisionLocalPointers(info.child),
+        .optional => |info| rejectDecisionLocalPointers(info.child),
+        .@"struct" => |info| inline for (info.fields) |field| {
+            rejectDecisionLocalPointers(field.type);
+        },
+        .@"union" => |info| inline for (info.fields) |field| {
+            rejectDecisionLocalPointers(field.type);
+        },
+        else => {},
+    }
 }
 
 fn rejectRuntimePointers(comptime T: type) void {

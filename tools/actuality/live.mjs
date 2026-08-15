@@ -5,9 +5,9 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 
-const APPLICATION_ID = "26f5ab2b7e86994e5d3b234bb32447891906276853c094f0ac73def2b99610bb";
-const DECISION_CONTRACT_DIGEST = "3e2e4a1bd58b047dc9343964cfdc413174bb50a39d573e340cb963bf29127800";
-const WORKER_MEMORY_BYTES = 512 * 1024 * 1024;
+const APPLICATION_ID = "9de00d549101541f91554399aa4114020ea9e4470fe64c1a40b93f52e6243245";
+const DECISION_CONTRACT_DIGEST = "eff01f65a1bc5d46693af84be7a2ce2a0cd07e7f6d7f20b7cb91aee76c2ad639";
+const WORKER_MEMORY_BYTES = 256 * 1024 * 1024;
 const FAILED_ATTEMPT_RECEIPT_BRAND = Symbol("failed-attempt-receipt");
 const LIVE_RECEIPT_BOOLEAN_FIELDS = Object.freeze([
   "openai_responses_api", "openai_model_requested_present", "openai_model_returned_present",
@@ -69,8 +69,8 @@ export async function runLiveActuality(options = {}) {
   }
 
   const agentRoot = resolve(options.agentRoot ?? process.cwd());
-  const hostRoot = resolve(options.worldHostRoot ?? join(agentRoot, "../world-host"));
-  const capabilitiesRoot = resolve(options.capabilitiesRoot ?? join(agentRoot, "../world-capabilities-actuality-v1"));
+  const hostRoot = resolve(options.worldHostRoot ?? process.env.AGENT_WORLD_HOST_ROOT ?? join(agentRoot, "../world-host"));
+  const capabilitiesRoot = resolve(options.capabilitiesRoot ?? process.env.AGENT_WORLD_CAPABILITIES_ROOT ?? join(agentRoot, "../world-capabilities"));
   const artifactRoot = resolve(options.artifactRoot ?? join(agentRoot, "zig-out/agent-actuality"));
   const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-actuality-live-"));
   let context;

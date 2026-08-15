@@ -1,13 +1,8 @@
 const agent = @import("agent");
-const fixture = @import("fixture.zig");
-
-const Action = union(enum) { final: u32 };
-
 comptime {
-    _ = fixture.define(
-        Action,
-        void,
-        .{agent.action.final(.final, .{ .name = "final", .description = "Return." })},
-        .{ .maximum_observations = @as(u64, 1) << 32, .overflow = .fail },
-    );
+    _ = agent.epistemics.verbatim(.{
+        .maximum_observations = @as(u64, 1) << 32,
+        .overflow = .fail,
+        .final = agent.final_policy.none,
+    });
 }

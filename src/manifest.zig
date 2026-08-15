@@ -3,7 +3,7 @@ const boundary = @import("boundary");
 const action = @import("action.zig");
 const identity = @import("identity.zig");
 
-pub const package_version = "1.1.2";
+pub const package_version = "2.0.0";
 pub const boundary_package_identity = "tkersey/boundary@v1.3.2";
 
 pub const DefinitionAction = struct {
@@ -38,8 +38,6 @@ pub fn DefinitionManifest(comptime action_count: usize) type {
         maximum_decisions: u32,
         maximum_effect_actions: u32,
         maximum_child_actions: u32,
-        maximum_observations: u32,
-        history_overflow: u8,
         semantic_digest: [32]u8,
     };
 }
@@ -50,9 +48,24 @@ pub const StrategyManifest = struct {
     reflection_rounds: u32,
     config_schema_digest: [32]u8,
     config_value_digest: [32]u8,
-    decision_request_schema_digest: [32]u8,
+    decision_local_schema_digest: [32]u8,
     state_schema_catalog_digest: [32]u8,
     control_ir_digest: [32]u8,
+    semantic_digest: [32]u8,
+};
+
+pub const EpistemicsManifest = struct {
+    magic: [8]u8,
+    semantic_identity_digest: [32]u8,
+    config_schema_digest: [32]u8,
+    config_value_digest: [32]u8,
+    memory_schema_digest: [32]u8,
+    decision_view_schema_digest: [32]u8,
+    state_schema_catalog_digest: [32]u8,
+    initial_lowering_digest: [32]u8,
+    observe_lowering_digest: [32]u8,
+    project_lowering_digest: [32]u8,
+    final_guard_lowering_digest: [32]u8,
     semantic_digest: [32]u8,
 };
 
@@ -60,6 +73,8 @@ pub const CompiledManifest = struct {
     magic: [8]u8,
     definition_digest: [32]u8,
     strategy_digest: [32]u8,
+    epistemics_digest: [32]u8,
+    decision_contract_digest: [32]u8,
     maximum_frames: u64,
     maximum_state_bytes: u64,
     maximum_machine_fuel: u64,
@@ -83,7 +98,7 @@ pub fn definition(comptime Definition: type) DefinitionManifest(Definition.actio
     @setEvalBranchQuota(10_000_000);
     var actions: [Definition.action_count]DefinitionAction = undefined;
     var hasher = identity.Hasher.init(.{});
-    identity.bytes(&hasher, "agent-definition-manifest/v1");
+    identity.bytes(&hasher, "agent-definition-manifest/v2");
     identity.bytes(&hasher, package_version);
     identity.bytes(&hasher, Definition.name);
     identity.bytes(&hasher, Definition.version);
@@ -141,22 +156,8 @@ pub fn definition(comptime Definition: type) DefinitionManifest(Definition.actio
     identity.unsigned(&hasher, Definition.budget.maximum_decisions);
     identity.unsigned(&hasher, Definition.budget.maximum_effect_actions);
     identity.unsigned(&hasher, Definition.budget.maximum_child_actions);
-    identity.unsigned(&hasher, Definition.history.maximum_observations);
-    identity.unsigned(&hasher, @intFromEnum(Definition.history.overflow));
-    identity.unsigned(
-        &hasher,
-        @intFromEnum(std.meta.activeTag(Definition.final_policy)),
-    );
-    switch (Definition.final_policy) {
-        .none => {},
-        .latest_observation_bool => |requirement| {
-            identity.bytes(&hasher, requirement.observation_name);
-            identity.bytes(&hasher, requirement.field_name);
-            identity.unsigned(&hasher, @intFromBool(requirement.expected));
-        },
-    }
     return .{
-        .magic = "AGT_DEF1".*,
+        .magic = "AGT_DEF2".*,
         .package_version_digest = identity.digestBytes(package_version),
         .name_digest = identity.digestBytes(Definition.name),
         .version_digest = identity.digestBytes(Definition.version),
@@ -175,8 +176,6 @@ pub fn definition(comptime Definition: type) DefinitionManifest(Definition.actio
         .maximum_decisions = Definition.budget.maximum_decisions,
         .maximum_effect_actions = Definition.budget.maximum_effect_actions,
         .maximum_child_actions = Definition.budget.maximum_child_actions,
-        .maximum_observations = Definition.history.maximum_observations,
-        .history_overflow = @intFromEnum(Definition.history.overflow),
         .semantic_digest = identity.finish(&hasher),
     };
 }
@@ -267,7 +266,7 @@ fn definitionEncodedLength(comptime Definition: type) usize {
         length = addLength(length, 32);
         length = addLength(length, byteFieldLength(effect_identity));
     }
-    return addLength(length, 16 + 4 + 1 + 32);
+    return addLength(length, 16 + 32);
 }
 
 /// Canonical target-neutral Definition manifest bytes. This is executable
@@ -315,8 +314,6 @@ pub fn encodeDefinition(
     writer.u32Value(value.maximum_decisions);
     writer.u32Value(value.maximum_effect_actions);
     writer.u32Value(value.maximum_child_actions);
-    writer.u32Value(value.maximum_observations);
-    writer.u8Value(value.history_overflow);
     writer.digest(value.semantic_digest);
     return writer.finish();
 }
@@ -353,15 +350,58 @@ pub fn encodeStrategy(
     writer.u32Value(value.reflection_rounds);
     writer.digest(value.config_schema_digest);
     writer.byteField(config_buffer[0..config_length]);
-    writer.digest(value.decision_request_schema_digest);
+    writer.digest(value.decision_local_schema_digest);
     writer.digest(value.state_schema_catalog_digest);
     writer.digest(value.control_ir_digest);
     writer.digest(value.semantic_digest);
     return writer.finish();
 }
 
+fn epistemicsEncodedLength(comptime Epistemics: type) usize {
+    const config_size = boundary.schema.encodedSize(
+        Epistemics.Config,
+        Epistemics.normalized_config,
+    ) catch @compileError("agent epistemics config is not canonically encodable");
+    var length: usize = 8;
+    length = addLength(length, byteFieldLength(package_version));
+    length = addLength(length, byteFieldLength(Epistemics.semantic_identity));
+    length = addLength(length, 32);
+    length = addLength(length, addLength(4, config_size));
+    return addLength(length, 9 * 32);
+}
+
+/// Canonical target-neutral EpistemicStrategy manifest bytes.
+pub fn encodeEpistemics(
+    comptime Epistemics: type,
+    value: EpistemicsManifest,
+) [epistemicsEncodedLength(Epistemics)]u8 {
+    const config_maximum = boundary.schema.maximumEncodedSize(Epistemics.Config);
+    var config_buffer: [config_maximum]u8 = undefined;
+    const config_length = boundary.schema.encode(
+        Epistemics.Config,
+        Epistemics.normalized_config,
+        &config_buffer,
+    ) catch unreachable;
+    var writer = Writer(epistemicsEncodedLength(Epistemics)){};
+    writer.raw(&value.magic);
+    writer.byteField(package_version);
+    writer.byteField(Epistemics.semantic_identity);
+    writer.digest(value.config_schema_digest);
+    writer.byteField(config_buffer[0..config_length]);
+    writer.digest(value.config_value_digest);
+    writer.digest(value.memory_schema_digest);
+    writer.digest(value.decision_view_schema_digest);
+    writer.digest(value.state_schema_catalog_digest);
+    writer.digest(value.initial_lowering_digest);
+    writer.digest(value.observe_lowering_digest);
+    writer.digest(value.project_lowering_digest);
+    writer.digest(value.final_guard_lowering_digest);
+    writer.digest(value.semantic_digest);
+    return writer.finish();
+}
+
 fn compiledEncodedLength() usize {
-    var length: usize = 8 + 2 * 32 + 3 * 8 + 1;
+    var length: usize = 8 + 4 * 32 + 3 * 8 + 1;
     length = addLength(length, byteFieldLength(boundary_package_identity));
     return addLength(length, 4 + 3 * 32);
 }
@@ -372,6 +412,8 @@ pub fn encodeCompiled(value: CompiledManifest) [compiledEncodedLength()]u8 {
     writer.raw(&value.magic);
     writer.digest(value.definition_digest);
     writer.digest(value.strategy_digest);
+    writer.digest(value.epistemics_digest);
+    writer.digest(value.decision_contract_digest);
     writer.u64Value(value.maximum_frames);
     writer.u64Value(value.maximum_state_bytes);
     writer.u64Value(value.maximum_machine_fuel);
@@ -404,9 +446,7 @@ pub fn strategy(
         &config_hasher,
     ) catch unreachable;
     const config_value_digest = identity.finish(&config_hasher);
-    const request_digest = boundary.schema.schemaDigest(
-        Strategy.DecisionRequestType(Definition),
-    );
+    const request_digest = boundary.schema.schemaDigest(Strategy.DecisionLocalType(Definition));
     var state_hasher = identity.Hasher.init(.{});
     identity.bytes(&state_hasher, "agent-strategy-state-schemas/v1");
     const state_types = Strategy.StateSchemaTypes(Definition);
@@ -417,7 +457,7 @@ pub fn strategy(
     const state_catalog_digest = identity.finish(&state_hasher);
     const control_digest = identity.controlDigest(Program.control_ir);
     var hasher = identity.Hasher.init(.{});
-    identity.bytes(&hasher, "agent-strategy-manifest/v1");
+    identity.bytes(&hasher, "agent-strategy-manifest/v2");
     identity.bytes(&hasher, Strategy.semantic_identity);
     identity.unsigned(&hasher, reflection_rounds);
     hashDigest(&hasher, config_schema_digest);
@@ -426,14 +466,82 @@ pub fn strategy(
     hashDigest(&hasher, state_catalog_digest);
     hashDigest(&hasher, control_digest);
     return .{
-        .magic = "AGT_STR1".*,
+        .magic = "AGT_STR2".*,
         .semantic_identity_digest = identity.digestBytes(Strategy.semantic_identity),
         .reflection_rounds = reflection_rounds,
         .config_schema_digest = config_schema_digest,
         .config_value_digest = config_value_digest,
-        .decision_request_schema_digest = request_digest,
+        .decision_local_schema_digest = request_digest,
         .state_schema_catalog_digest = state_catalog_digest,
         .control_ir_digest = control_digest,
+        .semantic_digest = identity.finish(&hasher),
+    };
+}
+
+fn loweringDigest(
+    comptime domain: []const u8,
+    control_digest: [32]u8,
+) [32]u8 {
+    var hasher = identity.Hasher.init(.{});
+    identity.bytes(&hasher, "agent-epistemics-lowering/v1");
+    identity.bytes(&hasher, domain);
+    hashDigest(&hasher, control_digest);
+    return identity.finish(&hasher);
+}
+
+pub fn epistemics(
+    comptime Definition: type,
+    comptime Epistemics: type,
+    comptime Program: type,
+) EpistemicsManifest {
+    @setEvalBranchQuota(10_000_000);
+    const config_schema_digest = boundary.schema.schemaDigest(Epistemics.Config);
+    var config_hasher = identity.Hasher.init(.{});
+    identity.bytes(&config_hasher, "agent-epistemics-config/v1");
+    boundary.schema.updateCanonicalHash(
+        Epistemics.Config,
+        Epistemics.normalized_config,
+        &config_hasher,
+    ) catch unreachable;
+    const config_value_digest = identity.finish(&config_hasher);
+    const memory_digest = boundary.schema.schemaDigest(Epistemics.MemoryType(Definition));
+    const view_digest = boundary.schema.schemaDigest(Epistemics.DecisionViewType(Definition));
+    var state_hasher = identity.Hasher.init(.{});
+    identity.bytes(&state_hasher, "agent-epistemics-state-schemas/v1");
+    inline for (Epistemics.StateSchemaTypes(Definition)) |State| {
+        boundary.schema.assertPortable(State);
+        hashDigest(&state_hasher, boundary.schema.schemaDigest(State));
+    }
+    const state_digest = identity.finish(&state_hasher);
+    const control_digest = identity.controlDigest(Program.control_ir);
+    const initial_digest = loweringDigest("initial", control_digest);
+    const observe_digest = loweringDigest("observe", control_digest);
+    const project_digest = loweringDigest("project", control_digest);
+    const final_digest = loweringDigest("final", control_digest);
+    var hasher = identity.Hasher.init(.{});
+    identity.bytes(&hasher, "agent-epistemics-manifest/v1");
+    identity.bytes(&hasher, Epistemics.semantic_identity);
+    hashDigest(&hasher, config_schema_digest);
+    hashDigest(&hasher, config_value_digest);
+    hashDigest(&hasher, memory_digest);
+    hashDigest(&hasher, view_digest);
+    hashDigest(&hasher, state_digest);
+    hashDigest(&hasher, initial_digest);
+    hashDigest(&hasher, observe_digest);
+    hashDigest(&hasher, project_digest);
+    hashDigest(&hasher, final_digest);
+    return .{
+        .magic = "AGT_EPI1".*,
+        .semantic_identity_digest = identity.digestBytes(Epistemics.semantic_identity),
+        .config_schema_digest = config_schema_digest,
+        .config_value_digest = config_value_digest,
+        .memory_schema_digest = memory_digest,
+        .decision_view_schema_digest = view_digest,
+        .state_schema_catalog_digest = state_digest,
+        .initial_lowering_digest = initial_digest,
+        .observe_lowering_digest = observe_digest,
+        .project_lowering_digest = project_digest,
+        .final_guard_lowering_digest = final_digest,
         .semantic_digest = identity.finish(&hasher),
     };
 }
@@ -454,15 +562,19 @@ fn residualCatalogDigest(comptime Machine: type) [32]u8 {
 pub fn compiled(
     definition_manifest: anytype,
     strategy_manifest: StrategyManifest,
+    epistemics_manifest: EpistemicsManifest,
+    decision_contract_digest: [32]u8,
     comptime Machine: type,
 ) CompiledManifest {
     @setEvalBranchQuota(10_000_000);
     const boundary_digest = identity.digestBytes(boundary_package_identity);
     const residual_digest = residualCatalogDigest(Machine);
     var hasher = identity.Hasher.init(.{});
-    identity.bytes(&hasher, "agent-compiled-manifest/v1");
+    identity.bytes(&hasher, "agent-compiled-manifest/v2");
     hashDigest(&hasher, definition_manifest.semantic_digest);
     hashDigest(&hasher, strategy_manifest.semantic_digest);
+    hashDigest(&hasher, epistemics_manifest.semantic_digest);
+    hashDigest(&hasher, decision_contract_digest);
     identity.unsigned(&hasher, Machine.Manifest.maximum_frames);
     identity.unsigned(&hasher, Machine.Manifest.maximum_state_bytes);
     identity.unsigned(&hasher, Machine.Manifest.maximum_machine_fuel);
@@ -472,9 +584,11 @@ pub fn compiled(
     hashDigest(&hasher, Machine.Manifest.machine_contract_digest);
     hashDigest(&hasher, residual_digest);
     return .{
-        .magic = "AGT_CMP1".*,
+        .magic = "AGT_CMP2".*,
         .definition_digest = definition_manifest.semantic_digest,
         .strategy_digest = strategy_manifest.semantic_digest,
+        .epistemics_digest = epistemics_manifest.semantic_digest,
+        .decision_contract_digest = decision_contract_digest,
         .maximum_frames = Machine.Manifest.maximum_frames,
         .maximum_state_bytes = Machine.Manifest.maximum_state_bytes,
         .maximum_machine_fuel = Machine.Manifest.maximum_machine_fuel,

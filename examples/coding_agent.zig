@@ -74,8 +74,10 @@ pub const Definition = agent.define(.{
         .maximum_effect_actions = 24,
         .maximum_child_actions = 0,
     },
-    .history = .{
-        .maximum_observations = 16,
-        .overflow = .fail,
-    },
+});
+
+pub const Epistemics = agent.epistemics.verbatim(.{
+    .maximum_observations = 16,
+    .overflow = .fail,
+    .final = agent.final_policy.none,
 });

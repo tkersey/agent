@@ -22,6 +22,5 @@ comptime {
             agent.action.final(.final, .{ .name = "final", .description = "Return." }),
         },
         .budget = .{ .maximum_turns = 1, .maximum_decisions = 1, .maximum_effect_actions = 1, .maximum_child_actions = 0 },
-        .history = .{ .maximum_observations = 1, .overflow = .fail },
     });
 }

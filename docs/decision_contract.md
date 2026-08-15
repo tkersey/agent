@@ -1,36 +1,26 @@
-# Provider-neutral decision contract
+# DecisionContract v2
 
-`agent.decision.jsonContract(Compiled)` projects the closed `Action` tagged
-union into deterministic JSON Schema for external structured-output providers.
-It does not execute in the Machine and is not an alternate semantic type
-system.
+`agent.decision.contract(Compiled)` emits canonical `AGT_DCT2` binary bytes,
+a deterministic JSON projection, strict provider-neutral Action JSON Schema,
+and SHA-256 identities for the contract, Action schema, DecisionTurn schema,
+and DecisionView schema.
 
-The projection exposes its format version, Action schema digest, closed variant
-catalog, canonical JSON bytes, and semantic SHA-256 digest. Every branch uses
-one constant action name and an exact `arguments` object with required fields,
-bounded values, and `additionalProperties: false`.
+The immutable contract contains instructions, the closed action catalog,
+schema identities, runtime and epistemic identities, and rendering metadata.
+Changing any semantic field changes the digest. JSON is a projection; the
+canonical binary is authoritative.
 
-The repository-repair artifacts are installed as:
+The Machine carries only the 32-byte contract digest in each dynamic turn:
 
 ```text
-zig-out/agent-actuality/repository-repair-decision-contract.json
-zig-out/agent-actuality/repository-repair-decision-contract.sha256
+contract_digest + goal + counters + phase + DecisionView + strategy_local
 ```
 
-The digest file contains the semantic contract digest, not merely the hash of
-the presentation bytes. The capability must validate structured JSON against
-this exact contract, recheck UTF-8 byte and integer bounds, map the stable name
-to the exact tagged-union variant, and encode canonical Boundary Action bytes.
-Only those Boundary bytes cross Effect protocol v1 with semantic authority.
+Instructions, action descriptions, Action JSON Schema, manifests, and complete
+evidence are absent from DecisionTurn. A capability recomputes and admits the
+exact static contract before provider invocation, verifies the request digest
+and DecisionTurn schema binding, then renders static provider content before
+the dynamic turn.
 
-The model-facing shape is:
-
-```json
-{
-  "action": "read_file",
-  "arguments": { "path": "src/range.mjs" }
-}
-```
-
-Unknown actions, missing or extra fields, invalid enums, overlong text, and
-out-of-range values are rejected before the Machine resumes.
+The contract digest is content identity, not a signature, secret,
+authorization token, or mutable runtime configuration.

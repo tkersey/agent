@@ -9,7 +9,7 @@ pub fn build(b: *std.Build) void {
     const boundary_archive = b.option([]const u8, "boundary-archive", "Local Boundary v1.3.2 archive for offline proof");
     const world_archive = b.option([]const u8, "world-archive", "Local World v3.1.1 archive for offline proof");
     const world_host_archive = b.option([]const u8, "world-host-archive", "Local world-host v1.0.1 runtime archive");
-    const world_capabilities_archive = b.option([]const u8, "world-capabilities-archive", "Local world-capabilities v2.1.2 deterministic archive");
+    const world_capabilities_archive = b.option([]const u8, "world-capabilities-archive", "Local lock-pinned world-capabilities deterministic archive");
 
     const boundary_dependency = b.dependency("boundary", .{
         .target = target,
@@ -34,10 +34,10 @@ pub fn build(b: *std.Build) void {
         .name = "repository-repair-actuality",
         .root_source_file = b.path("build.zig"),
         .application_decl = "ActualityApplication",
-        .stack_size_bytes = 384 * 1024 * 1024,
+        .stack_size_bytes = 128 * 1024 * 1024,
         .memory = .{
-            .initial_pages = 8192,
-            .maximum_pages = 8192,
+            .initial_pages = 4096,
+            .maximum_pages = 4096,
         },
         .install_human_readable_manifest = true,
     });
@@ -88,6 +88,26 @@ pub fn build(b: *std.Build) void {
         "agent-actuality/repository-repair-decision-contract.json",
     );
     b.getInstallStep().dependOn(&install_contract.step);
+
+    const contract_binary_emitter_module = b.createModule(.{
+        .root_source_file = b.path("actuality/emit_decision_contract_binary.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+    contract_binary_emitter_module.addImport("agent", agent_module);
+    contract_binary_emitter_module.addImport("repository_repair_actuality", contract_actuality);
+    const contract_binary_emitter = b.addExecutable(.{
+        .name = "emit-repository-repair-decision-contract-binary",
+        .root_module = contract_binary_emitter_module,
+    });
+    const contract_binary_output = b.addRunArtifact(contract_binary_emitter).captureStdOut(.{
+        .basename = "repository-repair-decision-contract.bin",
+    });
+    const install_contract_binary = b.addInstallFile(
+        contract_binary_output,
+        "agent-actuality/repository-repair-decision-contract.bin",
+    );
+    b.getInstallStep().dependOn(&install_contract_binary.step);
 
     const contract_digest_emitter_module = b.createModule(.{
         .root_source_file = b.path("actuality/emit_decision_contract_digest.zig"),
@@ -188,7 +208,13 @@ pub fn build(b: *std.Build) void {
         "check-agent-actuality-wasm",
         "Prove the repository-repair application WASM is import-free and bounded",
     );
-    actuality_wasm.dependOn(actuality_application.check_step);
+    const actuality_wasm_size_gate = b.addSystemCommand(&.{
+        "node",
+        "tools/check_actuality_wasm_v2.mjs",
+    });
+    actuality_wasm_size_gate.addFileArg(actuality_application.wasm.getEmittedBin());
+    actuality_wasm_size_gate.step.dependOn(actuality_application.check_step);
+    actuality_wasm.dependOn(&actuality_wasm_size_gate.step);
     semantic_check.dependOn(actuality_wasm);
 
     const actuality_runtime_gates = [_]struct {
@@ -357,7 +383,7 @@ pub fn build(b: *std.Build) void {
         .{ .path = "test/compile_fail/empty_instructions.zig", .message = "agent definition instructions must not be empty" },
         .{ .path = "test/compile_fail/decision_result_too_small.zig", .message = "agent Action schema exceeds decision.maximum_result_bytes" },
         .{ .path = "test/compile_fail/zero_turn_budget.zig", .message = "agent maximum_turns must be positive" },
-        .{ .path = "test/compile_fail/effect_without_history.zig", .message = "agent effect actions require positive history capacity" },
+        .{ .path = "test/compile_fail/effect_without_history.zig", .message = "agent v2 Definition no longer accepts .history; choose an EpistemicStrategy" },
         .{ .path = "test/compile_fail/forged_runtime_strategy.zig", .message = "agent compile requires a RuntimeStrategy structural contract" },
         .{ .path = "test/compile_fail/open_action.zig", .message = "agent Action must be exhaustive" },
         .{ .path = "test/compile_fail/nonexistent_action_variant.zig", .message = "agent Action has no variant named 'missing'" },
@@ -366,18 +392,16 @@ pub fn build(b: *std.Build) void {
         .{ .path = "test/compile_fail/duplicate_stable_action_name.zig", .message = "agent action stable name is duplicated" },
         .{ .path = "test/compile_fail/oversized_instructions.zig", .message = "agent definition instructions exceed maximum_instructions_bytes" },
         .{ .path = "test/compile_fail/zero_decision_budget.zig", .message = "agent maximum_decisions must be positive" },
-        .{ .path = "test/compile_fail/invalid_history_limit.zig", .message = "agent history maximum_observations exceeds u32" },
-        .{ .path = "test/compile_fail/unsupported_history_policy.zig", .message = "agent history overflow policy is unsupported" },
+        .{ .path = "test/compile_fail/invalid_history_limit.zig", .message = "agent.epistemics.verbatim maximum_observations exceeds u32" },
         .{ .path = "test/compile_fail/nonportable_goal.zig", .message = "agent Goal must be Boundary-portable" },
         .{ .path = "test/compile_fail/nonportable_action.zig", .message = "agent Action must be Boundary-portable" },
         .{ .path = "test/compile_fail/nonportable_observation.zig", .message = "agent Observation must be Boundary-portable" },
         .{ .path = "test/compile_fail/nonportable_result.zig", .message = "agent Result must be Boundary-portable" },
         .{ .path = "test/compile_fail/strategy_omits_action_variant.zig", .message = "agent RuntimeStrategy action coverage must contain every Action variant" },
-        .{ .path = "test/compile_fail/strategy_decision_request_nonportable.zig", .message = "agent RuntimeStrategy DecisionRequest must be Boundary-portable" },
-        .{ .path = "test/compile_fail/strategy_undeclared_effect.zig", .message = "agent RuntimeStrategy Body effect row must equal the closed decision and Action effect row" },
+        .{ .path = "test/compile_fail/strategy_decision_request_nonportable.zig", .message = "agent RuntimeStrategy DecisionLocalType must be Boundary-portable" },
         .{ .path = "test/compile_fail/strategy_runtime_callback.zig", .message = "agent RuntimeStrategy config cannot contain runtime callbacks or pointers" },
-        .{ .path = "test/compile_fail/final_policy_missing_observation.zig", .message = "agent final policy Observation has no variant named 'run_tests'" },
-        .{ .path = "test/compile_fail/final_policy_non_boolean_field.zig", .message = "agent final policy observation field must be bool" },
+        .{ .path = "test/compile_fail/final_policy_missing_observation.zig", .message = "agent v2 Definition no longer accepts .final_policy; final admission belongs to EpistemicStrategy" },
+        .{ .path = "test/compile_fail/final_policy_non_boolean_field.zig", .message = "agent v2 Definition no longer accepts .final_policy; final admission belongs to EpistemicStrategy" },
     }) |witness| {
         addExpectedCompileFailure(
             b,
@@ -494,6 +518,28 @@ pub fn build(b: *std.Build) void {
         "check-agent-actuality-definition",
         "Compile the typed repository repair AgentDefinition",
         "test/actuality_definition.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addActualityDefinitionTest(
+        b,
+        "check-agent-epistemics-working-set",
+        "Prove repository working-set replacement and stale-data laws",
+        "test/epistemics_working_set.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addActualityDefinitionTest(
+        b,
+        "check-agent-epistemic-long-trace",
+        "Fold 32 repository effects without structural Memory growth",
+        "test/epistemics_working_set.zig",
         agent_module,
         boundary_module,
         target,
@@ -784,7 +830,7 @@ pub fn build(b: *std.Build) void {
 
     const release = b.step(
         "check-agent-release",
-        "Run the Agent v1 release-owner semantic proof",
+        "Run the Agent v2 ENF release-owner semantic proof",
     );
     const release_receipt = b.addSystemCommand(&.{
         "node",
@@ -945,6 +991,7 @@ fn addActualityDefinitionTest(
     module.addImport("boundary", boundary_module);
     module.addImport("repository_repair_actuality", actuality);
     const tests = b.addTest(.{ .root_module = module });
+    tests.stack_size = 256 * 1024 * 1024;
     const run_tests = b.addRunArtifact(tests);
     const step = b.step(name, description);
     step.dependOn(&run_tests.step);

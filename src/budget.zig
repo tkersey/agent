@@ -14,17 +14,6 @@ pub const Budget = struct {
     maximum_child_actions: u32,
 };
 
-pub const HistoryOverflow = enum {
-    fail,
-    drop_oldest,
-};
-
-/// Bounded observation-history policy selected at comptime.
-pub const HistoryPolicy = struct {
-    maximum_observations: u32,
-    overflow: HistoryOverflow,
-};
-
 /// Standard phases available to typed strategy decision requests.
 pub const DecisionPhase = enum {
     decide,

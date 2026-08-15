@@ -1,84 +1,44 @@
-# Agent Actuality v1
+# Agent Actuality v2
 
-`repository-repair-actuality` is a compiled AgentDefinition using the existing
-ReAct strategy. Its only runtime meaning is the generated Boundary Machine.
-All six effects remain residual in the World application:
+`repository-repair-actuality` compiles AgentDefinition v2, ReAct, and the
+`repository_working_set_v1` EpistemicStrategy into one ordinary Boundary
+Machine and one World Application ABI v1 WASM.
 
-```text
-model.decide.v1
-repo.list.v1
-repo.read.v1
-repo.search.v1
-repo.test.v1
-repo.replace.approved.v1
+The deterministic lane performs real repository reads, literal search,
+`bun test`, request-bound approval, one atomic source replacement, a hidden
+behavior check, and typed completion. The current artifact is import-free,
+3,741,106 bytes, uses a 128 MiB WASM stack, declares at most 256 MiB linear
+memory, and admits at most 512 KiB application state.
+
+```sh
+AGENT_WORLD_HOST_ROOT=/path/to/world-host \
+AGENT_WORLD_CAPABILITIES_ROOT=/path/to/world-capabilities \
+zig build check-agent-actuality-release
 ```
 
-The deterministic lane copies `fixtures/repository-repair-v1` into a fresh
-temporary Git repository. It performs real reads, literal search, `bun test`,
-request-bound fixture approval, and one atomic replacement. It proves a failing
-test before the replacement, a passing test afterward, the hidden behavior
-check, typed completion, fresh-instance continuation, retry, replay, branching,
-and migration.
+The lifecycle proof additionally requires byte-identical retry, zero-fresh-
+effect replay, independent children from one parent, and migration with
+receiver preflight and no transferred secrets or approval.
 
-The public lane downloads exact world-host v1.0.1 and world-capabilities v2.1.2
-release assets from stable anonymous URLs, verifies the lock checksums before
-extraction, and runs the lifecycle without sibling source checkouts:
+The anonymous public lane downloads exact lock-pinned world-host and
+world-capabilities artifacts, authenticates them before extraction, and runs
+without sibling source checkouts or GitHub credentials:
 
 ```sh
 zig build check-agent-reference-stack
 ```
 
-The local capability-development lane instead accepts nearby or explicitly
-selected runtime roots:
+The live lane swaps only the deterministic decision handler for the admitted
+OpenAI pack. It requires `OPENAI_API_KEY`, `OPENAI_MODEL`, a TTY confirmation
+before controlled fixture contents are sent, and request-specific interactive
+approval before mutation:
 
 ```sh
-zig build check-agent-actuality-release
+AGENT_WORLD_HOST_ROOT=/path/to/world-host \
+AGENT_WORLD_CAPABILITIES_ROOT=/path/to/world-capabilities \
+OPENAI_API_KEY=... OPENAI_MODEL=... \
+zig build check-agent-actuality-live
 ```
 
-The live lane replaces only the deterministic decision capability. It uses the
-OpenAI Responses API and requires an interactive human approval before the
-workspace capability can mutate `src/range.mjs`.
-
-```sh
-OPENAI_API_KEY=... OPENAI_MODEL=... zig build check-agent-actuality-live
-```
-
-A published live receipt is a non-authoritative projection. Verify it against
-independently obtained release archives and the application artifacts generated
-from the exact Agent archive:
-
-```sh
-zig build check-agent-actuality-v1-live-receipt -- \
-  --receipt "$RECEIPT" --receipt-sha256 "$RECEIPT_SHA256" \
-  --agent-archive "$AGENT_ARCHIVE" --agent-archive-sha256 "$AGENT_SHA256" --agent-version 1.1.2 \
-  --boundary-archive "$BOUNDARY_ARCHIVE" --boundary-archive-sha256 "$BOUNDARY_SHA256" --boundary-version 1.3.2 \
-  --world-archive "$WORLD_ARCHIVE" --world-archive-sha256 "$WORLD_SHA256" --world-version 3.1.1 \
-  --world-host-archive "$WORLD_HOST_ARCHIVE" --world-host-archive-sha256 "$WORLD_HOST_SHA256" --world-host-version 1.0.0 \
-  --capabilities-archive "$CAPABILITIES_ARCHIVE" --capabilities-archive-sha256 "$CAPABILITIES_SHA256" --capabilities-version 2.1.1 \
-  --application-wasm "$APPLICATION_WASM" --application-wasm-sha256 "$APPLICATION_WASM_SHA256" \
-  --application-manifest "$APPLICATION_MANIFEST" \
-  --initial-args "$INITIAL_ARGS" \
-  --decision-contract-digest-file "$DECISION_CONTRACT_DIGEST_FILE"
-```
-
-The verifier hashes every supplied file, checks those hashes against the
-independent expected values and receipt claims, and then checks the live
-acceptance, approval, mutation, lifecycle, and redaction predicates. The
-receipt remains evidence only; it does not authorize execution.
-
-The application artifact is import-free. The current measured WASM is
-5,912,631 bytes. This exceeds the provisional 2 MiB target because the direct
-specialization contains the bounded 32 KiB text-bearing Action, Observation,
-history, and decision-request schemas. It is a reviewed size exception, not a
-runtime interpreter or strategy registry. The canonical Frame is 873,504 bytes
-and remains below the declared 1 MiB Machine-state limit.
-
-The generated WASM has a bounded 384 MiB stack and 512 MiB maximum memory. The
-unchanged world-host public worker API admits that artifact under explicit
-receiver policy with `maximumMemoryBytes = 512 MiB`; no Boundary, World, or
-world-host semantic change is involved. The history bound is eight
-observations, exactly the deterministic witness sequence.
-
-Capabilities return Effect outcomes only. They cannot author Frame bytes,
-Machine state, branch heads, or terminal results. The host persists canonical
-results and the World application computes every successor Frame.
+Capabilities return EffectResults only. They cannot author Memory,
+DecisionView, Frames, Machine state, branch heads, or terminal results.

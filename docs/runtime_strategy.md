@@ -1,21 +1,15 @@
-# RuntimeStrategy v1
+# RuntimeStrategy v2
 
-A RuntimeStrategy is comptime Zig software. It validates one definition,
-selects a portable config and decision-request type, declares strategy state
-schemas, and elaborates one Boundary program body.
+A RuntimeStrategy is compile-time Zig software that selects deliberation
+topology. ReAct and reflective ReAct share compiler-owned AgentState,
+DecisionTurn construction, effect dispatch, observation folding, budget
+counters, and final admission.
 
-Built-ins are `agent.strategy.react(.{})` and
-`agent.strategy.reflective(.{ .reflection_rounds = N })`. Reflective ReAct
-performs one proposal followed by a statically bounded number of reflection
-decisions before dispatching the selected Action.
+Custom strategies select topology through `agent.RuntimeFlow`. They cannot
+replace the complete Program Body or bypass the selected EpistemicStrategy.
+RuntimeFlow owns every state and epistemic boundary; custom code may choose
+phases and transitions only.
 
-Downstream strategies use `agent.strategy.custom` with a typed portable config,
-an implementation exposing `validate`, `DecisionRequest`, `StateSchemaTypes`,
-and `Body`, and exhaustive stable-name coverage in Action declaration order.
-The Body must be authored through public `agent.Flow` or equivalent ordinary
-Boundary IR. The compiler rejects any Body whose effect row differs from the
-definition-derived decision and Action sites.
-
-No callback, config object, strategy enum, or strategy selection mechanism is
-retained in the Machine. Config canonical bytes, generated Control IR, state
-schemas, and Machine contract identity are retained only as provenance.
+No callback, strategy registry, or strategy selection object remains in the
+Machine. Every strategy lowers into the same ordinary Boundary Program and the
+same Machine ABI v2 reducer.

@@ -21,7 +21,7 @@ fn maximumResultBytes(comptime Site: type) u32 {
 
 pub const Application = world.application(.{
     .name = "repository-repair-actuality",
-    .version = "1.0.0",
+    .version = "2.0.0",
     .root = Compiled.Machine,
     .external = .{
         world.external(Compiled.Machine, Compiled.DecisionSite.site_id, .{
@@ -69,12 +69,12 @@ pub const Application = world.application(.{
     },
     .limits = .{
         .maximum_initial_args_bytes = 8 << 10,
-        .maximum_state_bytes = 1 << 20,
-        .maximum_payload_bytes = 512 << 10,
-        .maximum_result_bytes = 128 << 10,
-        .maximum_host_claim_bytes = 16 << 10,
-        .maximum_host_metadata_bytes = 16 << 10,
-        .maximum_failure_bytes = 64 << 10,
+        .maximum_state_bytes = 512 << 10,
+        .maximum_payload_bytes = 160 << 10,
+        .maximum_result_bytes = 40 << 10,
+        .maximum_host_claim_bytes = 4 << 10,
+        .maximum_host_metadata_bytes = 4 << 10,
+        .maximum_failure_bytes = 4 << 10,
         .maximum_fuel_per_step = 100_000,
         .maximum_frame_depth = 32,
     },

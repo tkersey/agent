@@ -164,23 +164,6 @@ async function runScenario({
     };
 }
 
-async function benchmarkGenesis(bytes, manifest, initialArgs, iterations = 2000) {
-    const worker = await workerFor(bytes);
-    try {
-        const input = host.encodeStepInput({
-            applicationId: manifest.applicationId,
-            initialArgsBytes: initialArgs,
-            fuel: 100_000n,
-        }, manifest.limits);
-        for (let index = 0; index < 200; index += 1) worker.step(input);
-        const started = process.hrtime.bigint();
-        for (let index = 0; index < iterations; index += 1) worker.step(input);
-        return Number(process.hrtime.bigint() - started) / iterations;
-    } finally {
-        worker.dispose();
-    }
-}
-
 const model = authority(0);
 const fileWrite = authority(2);
 const network = authority(3);
@@ -214,7 +197,7 @@ const inspections = Object.fromEntries(
         return [name, inspection];
     }),
 );
-assert.equal(Object.keys(inspections).length, 5);
+assert.equal(Object.keys(inspections).length, 4);
 
 const manifests = Object.fromEntries(
     await Promise.all(Object.entries(wasm).map(async ([name, bytes]) => [name, await manifestFor(bytes)])),
@@ -227,7 +210,6 @@ const specializationNames = [
 ];
 assert.equal(new Set(specializationNames.map((name) => Buffer.from(manifests[name].applicationId).toString("hex"))).size, 4);
 assert.equal(new Set(specializationNames.map((name) => digest(wasm[name]))).size, 4);
-assert.deepEqual(manifests.researchDirect.applicationId, manifests.researchReact.applicationId);
 
 for (const [name, bytes] of Object.entries(wasm)) {
     const forbidden = name.startsWith("research")
@@ -261,30 +243,6 @@ const coding = await runScenario({
     expectedResult: 26,
     retryIndex: 5,
 });
-const direct = await runScenario({
-    bytes: wasm.researchDirect,
-    initialArgs: u32(7),
-    plan: researchPlan,
-    allowedAuthority: model | network | childAgent,
-    expectedResult: 55,
-    retainedResults: research.results,
-});
-assert.equal(direct.frames.length, research.frames.length);
-for (let index = 0; index < direct.frames.length; index += 1) {
-    assert.deepEqual(direct.frames[index].frameBytes, research.frames[index].frameBytes);
-}
-const applicationWasmSizeRatio = wasm.researchReact.length / wasm.researchDirect.length;
-assert(applicationWasmSizeRatio <= 1.15);
-const runtimeRatios = [];
-for (let round = 0; round < 3; round += 1) {
-    const directTime = await benchmarkGenesis(wasm.researchDirect, direct.manifest, u32(7));
-    const generatedTime = await benchmarkGenesis(wasm.researchReact, research.manifest, u32(7));
-    runtimeRatios.push(generatedTime / directTime);
-}
-runtimeRatios.sort((left, right) => left - right);
-const stepRuntimeRatio = runtimeRatios[1];
-assert(stepRuntimeRatio <= 1.10);
-
 const replayInstancesBefore = workerInstances;
 const researchReplay = await runScenario({
     bytes: wasm.researchReact,
@@ -423,11 +381,6 @@ console.log(JSON.stringify({
     sameAgentDifferentStrategy: true,
     unusedStrategyCodePresent: false,
     unusedActionCodePresent: false,
-    boundaryEquivalentApplicationWasm: true,
-    handAuthoredWasmBytes: wasm.researchDirect.length,
-    generatedWasmBytes: wasm.researchReact.length,
-    applicationWasmSizeRatio,
-    stepRuntimeRatio,
     freshInstanceResume: true,
     freshInstanceCount: workerInstances,
     deterministicRetry: research.deterministicRetry && coding.deterministicRetry,

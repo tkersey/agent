@@ -63,44 +63,6 @@ pub fn build(b: *std.Build) void {
         world_module,
         coding_reflective,
     );
-
-    const research_example = b.createModule(.{
-        .root_source_file = agent_dependency.path("examples/research_agent.zig"),
-        .target = wasm_target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "agent", .module = agent_module },
-            .{ .name = "boundary", .module = boundary_module },
-        },
-    });
-    const direct_reference = b.createModule(.{
-        .root_source_file = agent_dependency.path("test/boundary_equivalence.zig"),
-        .target = wasm_target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "agent", .module = agent_module },
-            .{ .name = "boundary", .module = boundary_module },
-            .{ .name = "research_agent", .module = research_example },
-        },
-    });
-    const direct_application = b.createModule(.{
-        .root_source_file = b.path("research_direct_application.zig"),
-        .target = wasm_target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "base_application", .module = research_react },
-            .{ .name = "direct_reference", .module = direct_reference },
-            .{ .name = "world", .module = world_module },
-        },
-    });
-    installApplication(
-        b,
-        "research-direct",
-        wasm_target,
-        optimize,
-        world_module,
-        direct_application,
-    );
 }
 
 fn addApplication(

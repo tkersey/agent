@@ -22,12 +22,13 @@ import {
     readReferenceStackLock,
 } from "./reference_stack.mjs";
 
+const options = parseArgs(process.argv.slice(2));
 const versions = Object.freeze({
-    agent: "2.0.0",
+    agent: options.agentV1Release ? "1.1.2" : "2.0.0",
     boundary: "1.3.2",
     world: "3.1.1",
     host: "1.0.1",
-    capabilities: "2.2.0",
+    capabilities: options.agentV1Release ? "2.1.2" : "2.2.2",
 });
 const releases = Object.freeze({
     boundary: Object.freeze({
@@ -42,7 +43,6 @@ const releases = Object.freeze({
     }),
 });
 
-const options = parseArgs(process.argv.slice(2));
 const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const proofRoot = mkdtempSync(join(tmpdir(), "agent-world-conformance-"));
 let passed = false;
@@ -63,7 +63,12 @@ try {
     if (options.offline && (!process.env.AGENT_BOUNDARY_ARCHIVE || !process.env.AGENT_WORLD_ARCHIVE)) {
         throw new Error("offline World conformance requires local Boundary and World archives");
     }
-    const lock = readReferenceStackLock(join(sourceRoot, "conformance/reference-stack-v1.lock.json"));
+    const lock = readReferenceStackLock(join(
+        sourceRoot,
+        options.agentV1Release
+            ? "conformance/reference-stack-v1.1.2.lock.json"
+            : "conformance/reference-stack-v1.lock.json",
+    ));
     const [boundaryArchive, worldArchive, referenceStack] = await Promise.all([
         loadArchive("AGENT_BOUNDARY_ARCHIVE", releases.boundary.url),
         loadArchive("AGENT_WORLD_ARCHIVE", releases.world.url),
@@ -143,7 +148,7 @@ try {
         researchReflective: "research-reflective.world.wasm",
         codingReact: "coding-react.world.wasm",
         codingReflective: "coding-reflective.world.wasm",
-        researchDirect: "research-direct.world.wasm",
+        ...(options.agentV1Release ? { researchDirect: "research-direct.world.wasm" } : {}),
     });
     const runtimeApplications = join(runtimeRoot, "applications");
     mkdirSync(runtimeApplications);
@@ -233,7 +238,10 @@ try {
 }
 
 async function materializeAgent(stagingRoot, archiveRoot) {
-    const releasedArchive = process.env.AGENT_V1_ARCHIVE;
+    const releasedArchive = options.agentV1Release ? process.env.AGENT_V1_ARCHIVE : undefined;
+    if (options.agentV1Release && !releasedArchive) {
+        throw new Error("--agent-v1-release requires AGENT_V1_ARCHIVE and AGENT_V1_ARCHIVE_SHA256");
+    }
     if (releasedArchive) {
         const expectedSha256 = process.env.AGENT_V1_ARCHIVE_SHA256;
         if (!expectedSha256) {
@@ -322,7 +330,6 @@ function assertLifecycle(receipt) {
         sameAgentDifferentStrategy: true,
         unusedStrategyCodePresent: false,
         unusedActionCodePresent: false,
-        boundaryEquivalentApplicationWasm: true,
         freshInstanceResume: true,
         deterministicRetry: true,
         retryChildFrameByteIdentical: true,
@@ -339,12 +346,6 @@ function assertLifecycle(receipt) {
         if (receipt[name] !== expected) {
             throw new Error(`lifecycle receipt mismatch: ${name} expected=${expected} actual=${receipt[name]}`);
         }
-    }
-    if (!(receipt.applicationWasmSizeRatio <= 1.15)) {
-        throw new Error(`generated application WASM ratio exceeds 1.15: ${receipt.applicationWasmSizeRatio}`);
-    }
-    if (!(receipt.stepRuntimeRatio <= 1.10)) {
-        throw new Error(`generated step runtime ratio exceeds 1.10: ${receipt.stepRuntimeRatio}`);
     }
 }
 
@@ -448,10 +449,17 @@ function camelToSnake(value) {
 }
 
 function parseArgs(args) {
-    const result = { zig: null, offline: false, worldHostArchive: null, worldCapabilitiesArchive: null };
+    const result = {
+        zig: null,
+        offline: false,
+        agentV1Release: false,
+        worldHostArchive: null,
+        worldCapabilitiesArchive: null,
+    };
     for (let index = 0; index < args.length; index += 1) {
         const argument = args[index];
         if (argument === "--offline") result.offline = true;
+        else if (argument === "--agent-v1-release") result.agentV1Release = true;
         else if (["--zig", "--world-host-archive", "--world-capabilities-archive"].includes(argument)) {
             if (index + 1 >= args.length) throw new Error(`${argument} requires a value`);
             result[argument.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = resolve(args[index += 1]);

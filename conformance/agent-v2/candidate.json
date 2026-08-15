@@ -9,40 +9,43 @@
     "boundary": "1.3.2",
     "world": "3.1.1",
     "worldHost": "1.0.1",
-    "worldCapabilities": "2.2.0"
+    "worldCapabilities": "2.2.2"
   },
   "measurements": {
-    "wasmBytes": 3766433,
+    "wasmBytes": 3770595,
     "wasmStackBytes": 134217728,
     "wasmMaximumMemoryBytes": 268435456,
-    "declaredStateBytes": 512000,
+    "declaredStateBytes": 524288,
     "firstFrameBytes": 1979,
     "peakFrameBytes": 9927,
     "peakMachineStateBytes": 7775,
     "firstDecisionPayloadBytes": 350,
     "peakDecisionPayloadBytes": 1664,
-    "compileMilliseconds": 82670,
-    "peakCompilerBytes": 3408183296,
-    "coldStepNanoseconds": 11232541,
-    "warmStepNanoseconds": 18445458
+    "compileMilliseconds": 93200,
+    "peakCompilerBytes": 3584884736,
+    "coldStepNanoseconds": 12209041,
+    "warmStepNanoseconds": 19493750
   },
   "ratios": {
     "peakFrameToBaseline": 0.460329237,
-    "wasmToBaseline": 0.637014723,
-    "compileTimeToBaseline": 1.150271323,
-    "compilerMemoryToBaseline": 1.503277279
+    "wasmToBaseline": 0.637718640,
+    "compileTimeToBaseline": 1.296785863,
+    "compilerMemoryToBaseline": 1.581216532
   },
   "identities": {
-    "applicationId": "ed145c722e0a0cf8cfa4c9bce4846ecca6d74aab08cb92a6b14537817dfc3f32",
-    "decisionContractDigest": "35b9a4670ec3a81dbfd0761900388a24ea28e49628da96ca68b97042ee15373f",
-    "sourceProjectionSha256": "2dab2d4981643f3dc1dc60074af69576b2ca1a2e92b0112cbdf9f8a5be6b8160"
+    "applicationId": "2ed225966c6a42ad4ded0501a94e37b239d9ff4b1a3817d1e3b9097038ff7d72",
+    "decisionContractDigest": "dddc4713e9cb478afc7beef464f35374fdb9aeb1b59d9307edc43438c1e192b5",
+    "sourceProjectionSha256": "ac88a1e9f559d7094faa35a472431226cb231731bc1c10b36fecbbe200fbc091",
+    "implementationCommit": "124a51c1c83195400a717ba6551f79c3a2fc6827",
+    "implementationTree": "56fc5714f1a4d1214e64806fd322aa3f863e4bcf",
+    "implementationGitArchiveSha256": "d418fd8275302d0deb39eb2a00ecc9366eec76b0c55a248c8dbefcd4ea49a84c"
   },
   "artifactChecksums": {
-    "applicationWasmSha256": "7285c0d20c661b3e7321b9d7ea16adc879c13122722232498e7f6e563d81c920",
-    "applicationManifestSha256": "8cea8fdd174575d212205a08f6d78e7c3ee91da99b08be8bbd4d1a5065ebb7b2",
-    "decisionContractBinarySha256": "fd7df48eb8bc79c7e4150156de83e911e8a76593cb59850952ecb11385f49b94",
-    "decisionContractJsonSha256": "0ae9cb01cf12217372c9d8fb933947124518fff117fec74debe83b90e80664cd",
+    "applicationWasmSha256": "6aff28de56a444ebd6298ad118b1bce3ac817ec955fc351f20e1c4f2ae9e41e9",
+    "applicationManifestSha256": "6ff2c25e8d8777c821302bd6358fea94a26b2e91c19f1f052b536ed721ad7939",
+    "decisionContractBinarySha256": "235cff9231965d5650b12d8605a309c501e91c3b15e08d7e087c7ca928ea043e",
+    "decisionContractJsonSha256": "c9cba76c98310a216a99d50221907f0c4c1a6cc73aef4438d353376d04c100d7",
     "worldHostRuntimeArchiveSha256": "e501ab1fe540ed2ee5cbd1db5a027f00271f95694747160fe36fa64cffaab52d",
-    "worldCapabilitiesArchiveSha256": "5612c45a84abbe8a2b9fa821cf5d6dc34a82d38d82c8df18b7a45617aba9ba74"
+    "worldCapabilitiesArchiveSha256": "928567e46defa3d3361ddc6c869cc9e4e582e2e6045a66ece54c7f2bdf079c2e"
   }
 }

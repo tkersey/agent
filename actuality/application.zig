@@ -5,7 +5,9 @@ const factory = @import("repository_repair_definition.zig");
 
 pub const Actuality = factory.RepositoryRepair(agent, boundary);
 pub const Compiled = Actuality.Compiled;
-pub const Contract = agent.decision.jsonContract(Compiled);
+pub const DecisionContract = agent.decision.contract(Compiled);
+pub const Contract = DecisionContract;
+pub const ActionJsonContract = agent.decision.jsonContract(Compiled);
 pub const wasm_stack_size_bytes: u32 = 128 * 1024 * 1024;
 
 /// Artifact-resident packaging metadata used by the release verifier. This is

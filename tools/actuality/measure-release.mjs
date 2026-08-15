@@ -61,7 +61,12 @@ try {
   stepDurations.push(performance.now() - started);
   const frames = [frameMeasurement(current.frameBytes, current.frame)];
   const firstFrameBytes = current.frameBytes.length;
-  const firstDecisionPayloadBytes = current.frame.pendingEffect?.payloadBytes.length ?? 0;
+  const firstPending = current.frame.pendingEffect === null
+    ? null
+    : router.inspect(current.frame.pendingEffect.encodedBytes);
+  const firstDecisionPayloadBytes = firstPending?.bindingId === "repository-repair-decision-fixture.v1"
+    ? current.frame.pendingEffect.payloadBytes.length
+    : 0;
   let peakFrameBytes = firstFrameBytes;
   let peakStateBytes = current.frame.stateBytes.length;
   let peakDecisionPayloadBytes = firstDecisionPayloadBytes;
@@ -112,7 +117,8 @@ try {
     frames.push(frameMeasurement(current.frameBytes, current.frame));
     peakFrameBytes = Math.max(peakFrameBytes, current.frameBytes.length);
     peakStateBytes = Math.max(peakStateBytes, current.frame.stateBytes.length);
-    if (current.frame.pendingEffect !== null) {
+    if (current.frame.pendingEffect !== null &&
+        router.inspect(current.frame.pendingEffect.encodedBytes).bindingId === "repository-repair-decision-fixture.v1") {
       peakDecisionPayloadBytes = Math.max(
         peakDecisionPayloadBytes,
         current.frame.pendingEffect.payloadBytes.length

@@ -1,23 +1,27 @@
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { copyFileSync, existsSync, lstatSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 const baseline = readJson("conformance/agent-v2/baseline.json");
 const candidate = readJson("conformance/agent-v2/candidate.json");
 const lock = readJson("conformance/reference-stack-v1.lock.json");
-const stackReceipt = readJson("zig-out/agent-actuality/reference-stack-receipt.json");
+const installPrefix = resolve(process.argv[2] ?? "zig-out");
+const zigExecutable = process.argv[3] ? resolve(process.argv[3]) : null;
+const actualityRoot = join(installPrefix, "agent-actuality");
+const stackReceipt = readJson(join(actualityRoot, "reference-stack-receipt.json"));
 const zon = readFileSync("build.zig.zon", "utf8");
 const root = readFileSync("src/root.zig", "utf8");
 const manifestSource = readFileSync("src/manifest.zig", "utf8");
+const declaredPackagePaths = packagePaths();
 
 requireMatch(zon, /\.version = "2\.0\.0"/, "build.zig.zon version");
 requireMatch(root, /package_version = "2\.0\.0"/, "root package version");
 requireMatch(manifestSource, /package_version = "2\.0\.0"/, "manifest package version");
 require(lock.format === "agent-reference-stack-lock-v1", "reference stack format");
 require(lock.worldHost.version === "1.0.1", "world-host release identity");
-require(lock.worldCapabilities.version === "2.2.0", "world-capabilities release identity");
+require(lock.worldCapabilities.version === "2.2.2", "world-capabilities release identity");
 require(lock.worldHost.sha256 === candidate.artifactChecksums.worldHostRuntimeArchiveSha256,
   "host archive identity");
 require(lock.worldCapabilities.sha256 === candidate.artifactChecksums.worldCapabilitiesArchiveSha256,
@@ -26,22 +30,39 @@ require(stackReceipt.format === "agent-reference-stack-receipt-v1", "reference s
 require(stackReceipt.worldHostArchiveSha256 === lock.worldHost.sha256, "reference receipt host archive");
 require(stackReceipt.worldCapabilitiesArchiveSha256 === lock.worldCapabilities.sha256,
   "reference receipt capability archive");
+require(zigExecutable !== null && existsSync(zigExecutable), "owning Zig executable");
+require(execFileSync(zigExecutable, ["version"], { encoding: "utf8" }).trim() === candidate.toolchain.zig,
+  "owning Zig version");
 
 const agentCommit = existsSync(".git") ? git(["rev-parse", "HEAD"]) : "source-archive";
 const agentTree = existsSync(".git") ? git(["rev-parse", "HEAD^{tree}"]) : "source-archive";
 const agentGitArchiveSha256 = existsSync(".git")
   ? sha256(execFileSync("git", ["archive", "--format=tar", "HEAD"]))
   : "source-archive";
-if (existsSync(".git")) {
-  require(sourceProjectionSha256() === candidate.identities.sourceProjectionSha256,
-    "Agent benchmark source projection");
-}
+if (existsSync(".git")) requireExactImplementationRevision();
+require(sourceProjectionSha256() === candidate.identities.sourceProjectionSha256,
+  "Agent benchmark source projection");
+const installedManifest = decodeApplicationManifest(
+  readFileSync(join(actualityRoot, "repository-repair-actuality.manifest.bin")),
+);
+const installedDecisionContract = readJson(
+  join(actualityRoot, "repository-repair-decision-contract.json"),
+);
+require(installedManifest.applicationId === candidate.identities.applicationId,
+  "candidate application identity");
+require(stackReceipt.deterministic.application_id === candidate.identities.applicationId,
+  "reference receipt application identity");
+require(installedDecisionContract.semanticDigest === candidate.identities.decisionContractDigest,
+  "candidate DecisionContract identity");
+require(installedManifest.maximumStateBytes === candidate.measurements.declaredStateBytes,
+  "candidate declared state identity");
 const agentPackageHash = fetchPackageHash();
 require(/^agent-2\.0\.0-[A-Za-z0-9_-]+$/.test(agentPackageHash), "Agent Zig package hash");
 
 const before = baseline.measurements;
 const after = candidate.measurements;
 const fresh = stackReceipt.deterministic.measurements;
+const freshCompiler = measureCurrentCompiler();
 for (const field of [
   "applicationWasmBytes",
   "firstFrameBytes",
@@ -57,18 +78,18 @@ require(after.declaredStateBytes <= 512 * 1024, "declared state");
 require(after.wasmBytes <= Math.floor(before.wasmBytes * 0.8), "WASM ratio");
 require(after.wasmBytes <= 4_730_104, "WASM absolute size");
 require(after.firstDecisionPayloadBytes <= 16 * 1024, "first decision payload");
-require(after.compileMilliseconds <= before.compileMilliseconds * 2, "compile time ratio");
-require(after.peakCompilerBytes <= before.peakCompilerBytes * 2, "compiler memory ratio");
-require(fresh.warmStepNanoseconds <= before.warmStepNanoseconds * 1.25, "fresh single-step ratio");
+require(after.compileMilliseconds <= before.compileMilliseconds * 2, "recorded compile time ratio");
+require(after.peakCompilerBytes <= before.peakCompilerBytes * 2, "recorded compiler memory ratio");
+require(after.warmStepNanoseconds <= before.warmStepNanoseconds * 1.25, "recorded single-step ratio");
 
 for (const [path, expected] of [
-  ["zig-out/agent-actuality/repository-repair-actuality.world.wasm", candidate.artifactChecksums.applicationWasmSha256],
-  ["zig-out/agent-actuality/repository-repair-actuality.manifest.bin", candidate.artifactChecksums.applicationManifestSha256],
-  ["zig-out/agent-actuality/repository-repair-decision-contract.bin", candidate.artifactChecksums.decisionContractBinarySha256],
-  ["zig-out/agent-actuality/repository-repair-decision-contract.json", candidate.artifactChecksums.decisionContractJsonSha256],
+  [join(actualityRoot, "repository-repair-actuality.world.wasm"), candidate.artifactChecksums.applicationWasmSha256],
+  [join(actualityRoot, "repository-repair-actuality.manifest.bin"), candidate.artifactChecksums.applicationManifestSha256],
+  [join(actualityRoot, "repository-repair-decision-contract.bin"), candidate.artifactChecksums.decisionContractBinarySha256],
+  [join(actualityRoot, "repository-repair-decision-contract.json"), candidate.artifactChecksums.decisionContractJsonSha256],
 ]) require(sha256(readFileSync(path)) === expected, `${path} checksum`);
 
-const wasmBytes = readFileSync("zig-out/agent-actuality/repository-repair-actuality.world.wasm");
+const wasmBytes = readFileSync(join(actualityRoot, "repository-repair-actuality.world.wasm"));
 const wasmModule = new WebAssembly.Module(wasmBytes);
 require(WebAssembly.Module.imports(wasmModule).length === 0, "application WASM imports");
 const wasmInstance = new WebAssembly.Instance(wasmModule, {});
@@ -107,7 +128,7 @@ const receipt = {
   world_host_version: "1.0.1",
   world_host_public: true,
   world_host_runtime_changed: false,
-  world_capabilities_version: "2.2.0",
+  world_capabilities_version: "2.2.2",
   world_capabilities_public: true,
   effect_protocol_version: 1,
   github_authentication_required: false,
@@ -118,7 +139,13 @@ const receipt = {
   agent_commit: agentCommit,
   agent_tree: agentTree,
   agent_git_archive_sha256: agentGitArchiveSha256,
+  agent_implementation_commit: candidate.identities.implementationCommit,
+  agent_implementation_tree: candidate.identities.implementationTree,
+  agent_implementation_git_archive_sha256: candidate.identities.implementationGitArchiveSha256,
   agent_package_hash: agentPackageHash,
+  fresh_compile_milliseconds: freshCompiler.compileMilliseconds,
+  fresh_peak_compiler_bytes: freshCompiler.peakCompilerBytes,
+  fresh_warm_step_nanoseconds: fresh.warmStepNanoseconds,
   agent_definition_manifest: "AGT_DEF2",
   agent_strategy_manifest: "AGT_STR2",
   agent_epistemics_manifest: "AGT_EPI1",
@@ -197,17 +224,154 @@ function git(args) {
 
 function sourceProjectionSha256() {
   const digest = createHash("sha256");
-  const files = execFileSync("git", ["ls-files", "-z"])
-    .toString("utf8")
-    .split("\0")
-    .filter((path) => path && path !== "conformance/agent-v2/candidate.json");
+  const files = [];
+  const visit = (relativePath) => {
+    const stat = lstatSync(relativePath);
+    if (!stat.isDirectory()) {
+      files.push(relativePath);
+      return;
+    }
+    const entries = readdirSync(relativePath, { withFileTypes: true });
+    for (const entry of entries) {
+      const path = `${relativePath}/${entry.name}`;
+      if (entry.isDirectory()) visit(path);
+      else files.push(path);
+    }
+  };
+  for (const path of declaredPackagePaths) visit(path);
+  files.sort();
   for (const path of files) {
     digest.update(path);
     digest.update("\0");
-    digest.update(readFileSync(path));
+    const stat = lstatSync(path);
+    if (stat.isSymbolicLink()) {
+      digest.update("symlink\0");
+      digest.update(readlinkSync(path));
+    } else if (path === "conformance/agent-v2/candidate.json") {
+      const projected = readJson(path);
+      projected.identities.sourceProjectionSha256 = null;
+      projected.identities.implementationCommit = null;
+      projected.identities.implementationTree = null;
+      projected.identities.implementationGitArchiveSha256 = null;
+      digest.update(canonicalJson(projected));
+    } else {
+      digest.update(readFileSync(path));
+    }
     digest.update("\0");
   }
   return digest.digest("hex");
+}
+
+function packagePaths() {
+  const packagePathsBlock = zon.match(/\.paths\s*=\s*\.\{([\s\S]*?)\n\s*\},/);
+  require(packagePathsBlock !== null, "Agent package path declaration");
+  const paths = [...packagePathsBlock[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  require(paths.length > 0, "Agent package paths");
+  return paths;
+}
+
+function requireExactImplementationRevision() {
+  const status = execFileSync(
+    "git",
+    ["status", "--porcelain=v1", "--untracked-files=all", "--", ...declaredPackagePaths],
+    { encoding: "utf8" },
+  );
+  require(status.length === 0, "clean declared Agent package inputs");
+  const implementationCommit = candidate.identities.implementationCommit;
+  require(spawnSync("git", ["merge-base", "--is-ancestor", implementationCommit, "HEAD"]).status === 0,
+    "candidate implementation commit is an ancestor");
+  const changedPaths = git(["diff", "--name-only", implementationCommit, "HEAD"])
+    .split("\n")
+    .filter(Boolean);
+  require(changedPaths.length === 1 && changedPaths[0] === "conformance/agent-v2/candidate.json",
+    "post-implementation revisions change only candidate.json");
+  require(git(["rev-parse", `${implementationCommit}^{tree}`]) === candidate.identities.implementationTree,
+    "candidate implementation tree");
+  require(sha256(execFileSync("git", ["archive", "--format=tar", implementationCommit])) ===
+    candidate.identities.implementationGitArchiveSha256,
+  "candidate implementation Git archive");
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function decodeApplicationManifest(bytes) {
+  let offset = 0;
+  const requireBytes = (count) => {
+    require(Number.isSafeInteger(count) && count >= 0 && offset + count <= bytes.length,
+      "application manifest bounds");
+  };
+  const take = (count) => {
+    requireBytes(count);
+    const value = bytes.subarray(offset, offset + count);
+    offset += count;
+    return value;
+  };
+  const u32 = () => {
+    requireBytes(4);
+    const value = bytes.readUInt32LE(offset);
+    offset += 4;
+    return value;
+  };
+  const lenBytes = () => take(u32());
+
+  require(take(8).toString("ascii") === "WRLDMNF1", "application manifest magic");
+  require(u32() === 1, "application manifest version");
+  const applicationId = take(32).toString("hex");
+  lenBytes();
+  lenBytes();
+  lenBytes();
+  take(4);
+  lenBytes();
+  take(4);
+  take(32);
+  take(u32() * 32);
+  take(u32() * 113);
+  take(8);
+  const maximumStateBytes = u32();
+  return { applicationId, maximumStateBytes };
+}
+
+function measureCurrentCompiler() {
+  const workspace = mkdtempSync(join(tmpdir(), "agent-release-compiler-measurement-"));
+  const timeFlag = process.platform === "darwin" ? "-l" : "-v";
+  const started = process.hrtime.bigint();
+  try {
+    const result = spawnSync("/usr/bin/time", [
+      timeFlag,
+      zigExecutable,
+      "build",
+      "check-agent-actuality-world",
+      "--cache-dir",
+      join(workspace, "cache"),
+      "--global-cache-dir",
+      join(workspace, "global-cache"),
+      "--prefix",
+      join(workspace, "out"),
+      "--summary",
+      "none",
+    ], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    if (result.status !== 0) {
+      throw new Error(`fresh compiler measurement failed:\n${result.stdout}\n${result.stderr}`);
+    }
+    const compileMilliseconds = Number(process.hrtime.bigint() - started) / 1_000_000;
+    const mac = result.stderr.match(/(\d+)\s+maximum resident set size/);
+    const linux = result.stderr.match(/Maximum resident set size \(kbytes\):\s*(\d+)/);
+    const peakCompilerBytes = mac ? Number(mac[1]) : linux ? Number(linux[1]) * 1024 : 0;
+    require(peakCompilerBytes > 0, "fresh compiler memory measurement");
+    return { compileMilliseconds: Math.round(compileMilliseconds), peakCompilerBytes };
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
 }
 
 function fetchPackageHash() {
@@ -217,13 +381,8 @@ function fetchPackageHash() {
   try {
     copyFileSync(join(repository, "build.zig"), join(workspace, "build.zig"));
     copyFileSync(join(repository, "build.zig.zon"), join(workspace, "build.zig.zon"));
-    const packagePathsBlock = zon.match(/\.paths\s*=\s*\.\{([\s\S]*?)\n\s*\},/);
-    require(packagePathsBlock !== null, "Agent package path declaration");
-    const packagePaths = [...packagePathsBlock[1].matchAll(/"([^"]+)"/g)]
-      .map((match) => match[1]);
-    require(packagePaths.length > 0, "Agent package paths");
-    execFileSync("tar", ["-cf", archive, "-C", repository, ...packagePaths]);
-    return execFileSync("zig", [
+    execFileSync("tar", ["-cf", archive, "-C", repository, ...declaredPackagePaths]);
+    return execFileSync(zigExecutable, [
       "fetch",
       "--global-cache-dir",
       join(workspace, "cache"),

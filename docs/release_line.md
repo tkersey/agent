@@ -38,5 +38,5 @@ Agent v2.0.0 adds an explicit EpistemicStrategy compilation axis, bounded typed
 Memory, deterministic DecisionView projection, and digest-bound `AGT_DCT2`
 static decision contracts. It remains on Boundary v1.3.2, Machine ABI v2,
 World v3.1.1, Application ABI v1, Frame v1, world-host v1.0.1, and Effect
-protocol v1. world-capabilities v2.2.0 changes only application-specific
+protocol v1. world-capabilities v2.2.2 changes only application-specific
 decision codecs, contract artifacts, bindings, and rendering.

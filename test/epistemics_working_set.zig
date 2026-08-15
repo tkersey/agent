@@ -139,6 +139,15 @@ fn replacement() !actuality.ReplaceOutcome {
     } };
 }
 
+fn replacementAction() !actuality.Action {
+    return .{ .replace_file = .{
+        .path = try actuality.Path.fromSlice("src/range.mjs"),
+        .expected_sha256 = try digest(),
+        .replacement = try actuality.FileText.fromSlice("0123456789abcdef"),
+        .rationale = try actuality.SummaryText.fromSlice("0123456789abcdef"),
+    } };
+}
+
 fn actionForRead(role: actuality.DocumentRole) !actuality.Action {
     const path = switch (role) {
         .package => "package.json",
@@ -163,12 +172,7 @@ noinline fn runOne(state: *Machine.State, index: usize) !Cycle {
         } }, try searchResult()),
         5 => driveEffect(state, .{ .run_tests = .{ .suite = .default } }, try testResult(true)),
         6 => driveEffect(state, .{ .run_tests = .{ .suite = .default } }, try testResult(false)),
-        7 => driveEffect(state, .{ .replace_file = .{
-            .path = try actuality.Path.fromSlice("src/range.mjs"),
-            .expected_sha256 = try digest(),
-            .replacement = try actuality.FileText.fromSlice("0123456789abcdef"),
-            .rationale = try actuality.SummaryText.fromSlice("0123456789abcdef"),
-        } }, try replacement()),
+        7 => driveEffect(state, try replacementAction(), try replacement()),
         8 => driveEffect(state, try actionForRead(.source), try readResult(.source)),
         9 => driveEffect(state, .{ .search_text = .{
             .query = try actuality.QueryText.fromSlice("range"),
@@ -315,6 +319,48 @@ test "repository working set revokes passing evidence after a later failing test
         },
         else => return error.ExpectedRejectedFinal,
     }
+}
+
+test "denial preserves passing evidence while conflict invalidates it" {
+    const goal = actuality.Goal{
+        .task = try actuality.GoalText.fromSlice("repair fixture"),
+        .repository = try boundary.Text(128).fromSlice("fixture"),
+    };
+    var state = try Machine.initialState(std.testing.allocator, goal);
+    defer Machine.deinitState(state);
+
+    for (0..11) |index| _ = try runOne(&state, index);
+    _ = try driveEffect(&state, try replacementAction(), actuality.ReplaceOutcome{ .denied = .{
+        .reason = try boundary.Text(256).fromSlice("approval denied"),
+    } });
+    var decision = try nextRequest(state);
+    var view = switch (decision.value) {
+        .s0 => |turn| turn.context,
+        else => return error.ExpectedDecisionSite,
+    };
+    try std.testing.expect(view.evidence.mutation_applied);
+    try std.testing.expect(view.evidence.passing_test_observed);
+    try std.testing.expect(view.source_document != null);
+    try std.testing.expect(view.latest_search != null);
+
+    try resumeRequest(&state, decision, try replacementAction());
+    const effect = try nextRequest(state);
+    try resumeRequest(&state, effect, actuality.ReplaceOutcome{ .conflict = .{
+        .path = try actuality.Path.fromSlice("src/range.mjs"),
+        .expected_sha256 = try digest(),
+        .actual_sha256 = try actuality.DigestHex.fromSlice(
+            "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+        ),
+    } });
+    decision = try nextRequest(state);
+    view = switch (decision.value) {
+        .s0 => |turn| turn.context,
+        else => return error.ExpectedDecisionSite,
+    };
+    try std.testing.expect(view.evidence.mutation_applied);
+    try std.testing.expect(!view.evidence.passing_test_observed);
+    try std.testing.expect(view.source_document == null);
+    try std.testing.expect(view.latest_search == null);
 }
 
 test "repository working set normalizes a mismatched read role before retention" {

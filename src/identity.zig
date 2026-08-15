@@ -19,6 +19,7 @@ pub fn bytes(hasher: *Hasher, value: []const u8) void {
 }
 
 pub fn digestBytes(value: []const u8) [32]u8 {
+    @setEvalBranchQuota(100_000);
     var result: [32]u8 = undefined;
     Hasher.hash(value, &result, .{});
     return result;

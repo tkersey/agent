@@ -5,10 +5,17 @@ a deterministic JSON projection, strict provider-neutral Action JSON Schema,
 and SHA-256 identities for the contract, Action schema, DecisionTurn schema,
 and DecisionView schema.
 
+JSON Schema `maxLength` counts Unicode scalar values, while Boundary `Text(N)`
+is bounded in UTF-8 bytes. The generated schema uses `maxLength` as an early
+provider-neutral bound. Capability admission also canonical-encodes the
+selected Action and rejects strings whose UTF-8 representation exceeds the
+Boundary type; the schema alone is not the portable-value decoder.
+
 The immutable contract contains instructions, the closed action catalog,
 schema identities, runtime and epistemic identities, and rendering metadata.
-Changing any semantic field changes the digest. JSON is a projection; the
-canonical binary is authoritative.
+The epistemic identity includes the admitted custom implementation's explicit
+lowering identity. Changing any semantic field or lowering identity changes the
+digest. JSON is a projection; the canonical binary is authoritative.
 
 The Machine carries only the 32-byte contract digest in each dynamic turn:
 

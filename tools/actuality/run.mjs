@@ -77,7 +77,7 @@ try {
   let current = await controller.initialize(runId, branchId, { initialArgsBytes });
   stepDurations.push(performance.now() - initializeStarted);
   const firstFrameBytes = current.frameBytes.length;
-  const firstDecisionPayloadBytes = current.frame.pendingEffect?.payloadBytes.length ?? 0;
+  const firstDecisionPayloadBytes = decisionPayloadBytes(current.frame, router);
   let peakFrameBytes = firstFrameBytes;
   let peakMachineStateBytes = current.frame.stateBytes.length;
   let peakDecisionPayloadBytes = firstDecisionPayloadBytes;
@@ -94,6 +94,10 @@ try {
       stepDurations.push(performance.now() - advanceStarted);
       peakFrameBytes = Math.max(peakFrameBytes, current.frameBytes.length);
       peakMachineStateBytes = Math.max(peakMachineStateBytes, current.frame.stateBytes.length);
+      peakDecisionPayloadBytes = Math.max(
+        peakDecisionPayloadBytes,
+        decisionPayloadBytes(current.frame, router),
+      );
       continue;
     }
     const request = current.frame.pendingEffect;
@@ -127,15 +131,10 @@ try {
     stepDurations.push(performance.now() - advanceStarted);
     peakFrameBytes = Math.max(peakFrameBytes, current.frameBytes.length);
     peakMachineStateBytes = Math.max(peakMachineStateBytes, current.frame.stateBytes.length);
-    if (current.frame.pendingEffect !== null) {
-      const pending = router.inspect(current.frame.pendingEffect.encodedBytes);
-      if (pending.bindingId === "repository-repair-decision-fixture.v1") {
-        peakDecisionPayloadBytes = Math.max(
-          peakDecisionPayloadBytes,
-          current.frame.pendingEffect.payloadBytes.length,
-        );
-      }
-    }
+    peakDecisionPayloadBytes = Math.max(
+      peakDecisionPayloadBytes,
+      decisionPayloadBytes(current.frame, router),
+    );
   }
 
   if (current.frame.status !== host.FrameStatus.completed) {
@@ -216,6 +215,14 @@ function assertReceipt(receipt) {
   if (receipt.changed_source_file_count !== 1 || receipt.changed_test_file_count !== 0 || receipt.changed_package_file_count !== 0) {
     throw new Error("actuality_changed_paths");
   }
+}
+
+function decisionPayloadBytes(frame, router) {
+  if (frame.pendingEffect === null) return 0;
+  const pending = router.inspect(frame.pendingEffect.encodedBytes);
+  return pending.bindingId === "repository-repair-decision-fixture.v1"
+    ? frame.pendingEffect.payloadBytes.length
+    : 0;
 }
 
 async function initializeGit(workspaceRoot) {

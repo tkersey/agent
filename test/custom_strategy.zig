@@ -38,6 +38,7 @@ const Definition = agent.define(.{
 });
 
 const Config = struct { identity_marker: u32 };
+const StrategyOnlySchema = struct { marker: u32 };
 const CustomImplementation = struct {
     pub fn validate(comptime _: type, comptime _: Config) void {}
 
@@ -45,8 +46,8 @@ const CustomImplementation = struct {
         return u32;
     }
 
-    pub fn StateSchemaTypes(comptime _: type, comptime _: Config) @TypeOf(.{u32}) {
-        return .{u32};
+    pub fn StateSchemaTypes(comptime _: type, comptime _: Config) @TypeOf(.{StrategyOnlySchema}) {
+        return .{StrategyOnlySchema};
     }
 
     pub fn topology(comptime _: type, comptime _: Config, comptime runtime: type) agent.RuntimeTopology {
@@ -57,9 +58,12 @@ const CustomImplementation = struct {
         comptime _: type,
         comptime _: Config,
         flow: anytype,
-        state: anytype,
+        goal: anytype,
+        _: anytype,
+        _: anytype,
     ) agent.Value(u32) {
-        return flow.productExtract(0, state);
+        _ = flow;
+        return goal;
     }
 };
 
@@ -91,7 +95,61 @@ fn compiled(comptime marker: u32) type {
 const Compiled = compiled(7);
 const OtherConfig = compiled(8);
 
+fn ConstantEpistemicImplementation(comptime marker: u32) type {
+    return struct {
+        pub const semantic_identity = std.fmt.comptimePrint(
+            "fixture.constant-epistemics.lowering.{d}",
+            .{marker},
+        );
+        pub fn validate(comptime _: type, comptime _: void) void {}
+        pub fn Memory(comptime _: type, comptime _: void) type {
+            return u32;
+        }
+        pub fn DecisionView(comptime _: type, comptime _: void) type {
+            return u32;
+        }
+        pub fn StateSchemaTypes(comptime _: type, comptime _: void) @TypeOf(.{u32}) {
+            return .{u32};
+        }
+        pub fn initialMemory(comptime _: type, comptime _: void) u32 {
+            return marker;
+        }
+        pub fn emitObserve(comptime _: type, comptime _: void, flow: anytype, memory: anytype, _: anytype, comptime _: anytype) agent.Value(u32) {
+            return flow.copy(memory);
+        }
+        pub fn emitProject(comptime _: type, comptime _: void, flow: anytype, memory: anytype) agent.Value(u32) {
+            return flow.copy(memory);
+        }
+        pub fn emitFinalAllowed(comptime _: type, comptime _: void, flow: anytype, _: anytype, _: anytype, comptime context: anytype) agent.Value(bool) {
+            return flow.constant(bool, context.true_index);
+        }
+    };
+}
+
+fn constantEpistemics(comptime marker: u32) type {
+    return agent.epistemics.custom(.{
+        .semantic_identity = "fixture.constant-epistemics.v1",
+        .config = {},
+        .implementation = ConstantEpistemicImplementation(marker),
+    });
+}
+
+fn constantCompiled(comptime marker: u32) type {
+    return agent.compile(Definition, agent.strategy.react(.{}), constantEpistemics(marker), .{
+        .machine = .{
+            .maximum_frames = 8,
+            .maximum_state_bytes = 64 * 1024,
+            .maximum_machine_fuel = 4096,
+        },
+    });
+}
+
 test "custom RuntimeStrategy selects compiler-owned ReAct topology" {
+    comptime var found_strategy_schema = false;
+    inline for (Compiled.SchemaTypes) |Schema| {
+        if (Schema == StrategyOnlySchema) found_strategy_schema = true;
+    }
+    try std.testing.expect(found_strategy_schema);
     const Machine = Compiled.Machine;
     const state = try Machine.initialState(std.testing.allocator, @as(u32, 12));
     defer Machine.deinitState(state);
@@ -134,4 +192,24 @@ test "custom config changes strategy and Machine identity without runtime callba
     ));
     try std.testing.expect(!@hasDecl(Compiled.Strategy, "ProgramBody"));
     _ = boundary;
+}
+
+test "epistemics lowering identity includes canonical Program constants" {
+    const Seven = constantCompiled(7);
+    const Eight = constantCompiled(8);
+    try std.testing.expectEqualSlices(
+        u8,
+        &Seven.StrategyManifest.control_ir_digest,
+        &Eight.StrategyManifest.control_ir_digest,
+    );
+    try std.testing.expect(!std.mem.eql(
+        u8,
+        &Seven.EpistemicsManifest.initial_lowering_digest,
+        &Eight.EpistemicsManifest.initial_lowering_digest,
+    ));
+    try std.testing.expect(!std.mem.eql(
+        u8,
+        &Seven.DecisionContract.canonical_digest,
+        &Eight.DecisionContract.canonical_digest,
+    ));
 }

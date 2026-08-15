@@ -76,6 +76,41 @@ const Compiled = agent.compile(Definition, Strategy, Epistemics, .{
 });
 const Machine = Compiled.Machine;
 
+const DropOldestFailure = enum {
+    budget_exhausted,
+    arithmetic_overflow,
+    invalid_variant,
+    invalid_index,
+    capacity_exceeded,
+};
+const DropOldestAction = union(enum) { tool: u32, final: u32 };
+const DropOldestDefinition = agent.define(.{
+    .name = "drop-oldest-without-overflow-failure",
+    .version = "2.0.0",
+    .instructions = "Use the tool and retain the newest observation.",
+    .Goal = u32,
+    .Action = DropOldestAction,
+    .Observation = Observation,
+    .Result = u32,
+    .Failure = DropOldestFailure,
+    .decision = .{ .interface = "fixture.drop-oldest.v1", .maximum_request_bytes = 32 * 1024, .maximum_result_bytes = 1024 },
+    .actions = .{
+        agent.action.effect(.tool, .tool, ToolSite, .{ .name = "tool", .description = "Use the tool.", .class = .tool }),
+        agent.action.final(.final, .{ .name = "final", .description = "Finish." }),
+    },
+    .budget = .{ .maximum_turns = 2, .maximum_decisions = 2, .maximum_effect_actions = 1, .maximum_child_actions = 0 },
+});
+const DropOldestWithoutOverflowFailure = agent.compile(
+    DropOldestDefinition,
+    agent.strategy.react(.{}),
+    agent.epistemics.verbatim(.{
+        .maximum_observations = 1,
+        .overflow = .drop_oldest,
+        .final = agent.final_policy.none,
+    }),
+    .{ .machine = .{ .maximum_frames = 8, .maximum_state_bytes = 64 * 1024, .maximum_machine_fuel = 4096 } },
+);
+
 const FailHistoryDefinition = agent.define(.{
     .name = "history-fail-fixture",
     .version = "1.0.0",
@@ -128,6 +163,47 @@ const FailHistoryMachine = agent.compile(
             .maximum_machine_fuel = 4096,
         },
     },
+).Machine;
+
+const BudgetBeforeHistoryDefinition = agent.define(.{
+    .name = "budget-before-history-fixture",
+    .version = "2.0.0",
+    .instructions = "Use the declared tool within both budgets.",
+    .Goal = u32,
+    .Action = Action,
+    .Observation = Observation,
+    .Result = u32,
+    .Failure = Failure,
+    .decision = .{
+        .interface = "fixture.decide.v1",
+        .maximum_request_bytes = 32 * 1024,
+        .maximum_result_bytes = 1024,
+    },
+    .actions = .{
+        agent.action.effect(.tool, .tool, ToolSite, .{
+            .name = "tool",
+            .description = "Invoke the typed fixture tool.",
+            .class = .tool,
+        }),
+        agent.action.final(.final, .{ .name = "final", .description = "Finish." }),
+        agent.action.fail(.abort, .{ .name = "abort", .description = "Abort." }),
+    },
+    .budget = .{
+        .maximum_turns = 3,
+        .maximum_decisions = 3,
+        .maximum_effect_actions = 1,
+        .maximum_child_actions = 0,
+    },
+});
+const BudgetBeforeHistoryMachine = agent.compile(
+    BudgetBeforeHistoryDefinition,
+    agent.strategy.react(.{}),
+    agent.epistemics.verbatim(.{
+        .maximum_observations = 1,
+        .overflow = .fail,
+        .final = agent.final_policy.none,
+    }),
+    .{ .machine = .{ .maximum_frames = 16, .maximum_state_bytes = 64 * 1024, .maximum_machine_fuel = 4096 } },
 ).Machine;
 
 fn resumeRequest(state: *Machine.State, request: Machine.Request, value: anytype) !void {
@@ -191,6 +267,14 @@ test "drop_oldest keeps the newest bounded observation" {
     }
 }
 
+test "drop_oldest does not require an unused history_overflow failure" {
+    const state = try DropOldestWithoutOverflowFailure.Machine.initialState(
+        std.testing.allocator,
+        @as(u32, 1),
+    );
+    defer DropOldestWithoutOverflowFailure.Machine.deinitState(state);
+}
+
 test "verbatim fail policy rejects an effect before execution at capacity" {
     const state = try FailHistoryMachine.initialState(
         std.testing.allocator,
@@ -236,6 +320,50 @@ test "verbatim fail policy rejects an effect before execution at capacity" {
             else => return error.UnexpectedMachineFailure,
         },
         .request => return error.UnexpectedMachineStep,
+        else => return error.UnexpectedMachineStep,
+    }
+}
+
+test "effect budget failure precedes verbatim history overflow" {
+    const state = try BudgetBeforeHistoryMachine.initialState(
+        std.testing.allocator,
+        @as(u32, 1),
+    );
+    defer BudgetBeforeHistoryMachine.deinitState(state);
+    var fuel: u64 = 4096;
+
+    const first_decision = switch (try BudgetBeforeHistoryMachine.step(state, &fuel)) {
+        .request => |request| request,
+        else => return error.UnexpectedMachineStep,
+    };
+    {
+        const prepared = try BudgetBeforeHistoryMachine.prepareResume(state, first_decision);
+        defer BudgetBeforeHistoryMachine.deinitPreparedResume(prepared);
+        try BudgetBeforeHistoryMachine.@"resume"(prepared, Action{ .tool = 1 });
+    }
+    const tool = switch (try BudgetBeforeHistoryMachine.step(state, &fuel)) {
+        .request => |request| request,
+        else => return error.UnexpectedMachineStep,
+    };
+    {
+        const prepared = try BudgetBeforeHistoryMachine.prepareResume(state, tool);
+        defer BudgetBeforeHistoryMachine.deinitPreparedResume(prepared);
+        try BudgetBeforeHistoryMachine.@"resume"(prepared, @as(u32, 11));
+    }
+    const second_decision = switch (try BudgetBeforeHistoryMachine.step(state, &fuel)) {
+        .request => |request| request,
+        else => return error.UnexpectedMachineStep,
+    };
+    {
+        const prepared = try BudgetBeforeHistoryMachine.prepareResume(state, second_decision);
+        defer BudgetBeforeHistoryMachine.deinitPreparedResume(prepared);
+        try BudgetBeforeHistoryMachine.@"resume"(prepared, Action{ .tool = 2 });
+    }
+    switch (try BudgetBeforeHistoryMachine.step(state, &fuel)) {
+        .failed => |failure| switch (failure) {
+            .authored => |authored| try std.testing.expectEqual(Failure.budget_exhausted, authored),
+            else => return error.UnexpectedMachineFailure,
+        },
         else => return error.UnexpectedMachineStep,
     }
 }

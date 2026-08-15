@@ -143,16 +143,23 @@ pub fn verbatim(comptime config: anytype) type {
             .overflow = overflow,
         };
         pub const semantic_config_digest = semanticConfigDigest(Config, normalized_config, policy);
+        pub const semantic_lowering_digest = identity.digestBytes("agent.epistemics.verbatim.lowering.v1");
         pub const final_policy_value = policy;
         pub const has_implementation_constant_values = false;
         pub const lowering_complexity: usize = 1;
         pub fn constantValues(comptime Definition: type) @TypeOf(.{
             @as(u32, normalized_config.maximum_observations),
-            failureNamed(Definition, "history_overflow"),
+            if (overflow == .fail)
+                failureNamed(Definition, "history_overflow")
+            else
+                @as(void, {}),
         }) {
             return comptime .{
                 @as(u32, normalized_config.maximum_observations),
-                failureNamed(Definition, "history_overflow"),
+                if (overflow == .fail)
+                    failureNamed(Definition, "history_overflow")
+                else
+                    @as(void, {}),
             };
         }
 
@@ -322,17 +329,25 @@ pub fn custom(comptime spec: anytype) type {
     rejectRuntimePointers(ConfigType, "Config");
     boundary.schema.assertPortable(ConfigType);
     const Implementation = spec.implementation;
+    if (!@hasDecl(Implementation, "semantic_identity") or Implementation.semantic_identity.len == 0) {
+        @compileError("agent custom EpistemicStrategy implementation requires a non-empty semantic_identity");
+    }
+    const admitted_lowering_complexity: usize = if (@hasDecl(Implementation, "lowering_complexity"))
+        Implementation.lowering_complexity
+    else
+        1;
+    if (admitted_lowering_complexity == 0) {
+        @compileError("agent custom EpistemicStrategy lowering_complexity must be positive");
+    }
     return struct {
         pub const semantic_identity = spec.semantic_identity;
         pub const is_verbatim = false;
         pub const Config = ConfigType;
         pub const normalized_config: Config = spec.config;
         pub const semantic_config_digest = semanticConfigDigest(Config, normalized_config, null);
+        pub const semantic_lowering_digest = identity.digestBytes(Implementation.semantic_identity);
         pub const has_implementation_constant_values = @hasDecl(Implementation, "constantValues");
-        pub const lowering_complexity: usize = if (@hasDecl(Implementation, "lowering_complexity"))
-            Implementation.lowering_complexity
-        else
-            1;
+        pub const lowering_complexity: usize = admitted_lowering_complexity;
 
         pub fn constantValues(comptime Definition: type) @TypeOf(if (@hasDecl(Implementation, "constantValues"))
             Implementation.constantValues(Definition, normalized_config)
@@ -392,10 +407,14 @@ pub fn custom(comptime spec: anytype) type {
 
         pub fn emitInitial(comptime Definition: type, flow: anytype, goal: anytype, comptime context: anytype) @import("flow.zig").Value(MemoryType(Definition)) {
             if (@hasDecl(Implementation, "emitInitial")) {
-                const before = flow.suspensionCount();
+                const before_suspensions = flow.suspensionSnapshot();
+                const before_returns = flow.returnSnapshot();
                 const result = Implementation.emitInitial(Definition, normalized_config, flow, goal, context);
-                if (flow.suspensionCount() != before) {
+                if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
                     @compileError("agent custom EpistemicStrategy emitInitial must be effect-free");
+                }
+                if (!std.meta.eql(flow.returnSnapshot(), before_returns)) {
+                    @compileError("agent custom EpistemicStrategy emitInitial must not terminate the Agent program");
                 }
                 return result;
             }
@@ -403,10 +422,14 @@ pub fn custom(comptime spec: anytype) type {
         }
 
         pub fn emitObserve(comptime Definition: type, flow: anytype, memory: anytype, observation: anytype, comptime context: anytype) @import("flow.zig").Value(MemoryType(Definition)) {
-            const before = flow.suspensionCount();
+            const before_suspensions = flow.suspensionSnapshot();
+            const before_returns = flow.returnSnapshot();
             const result = Implementation.emitObserve(Definition, normalized_config, flow, memory, observation, context);
-            if (flow.suspensionCount() != before) {
+            if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
                 @compileError("agent custom EpistemicStrategy emitObserve must be effect-free");
+            }
+            if (!std.meta.eql(flow.returnSnapshot(), before_returns)) {
+                @compileError("agent custom EpistemicStrategy emitObserve must not terminate the Agent program");
             }
             return result;
         }
@@ -420,7 +443,8 @@ pub fn custom(comptime spec: anytype) type {
             comptime context: anytype,
         ) @import("flow.zig").Value(MemoryType(Definition)) {
             if (@hasDecl(Implementation, "emitObserveKnown")) {
-                const before = flow.suspensionCount();
+                const before_suspensions = flow.suspensionSnapshot();
+                const before_returns = flow.returnSnapshot();
                 const result = Implementation.emitObserveKnown(
                     Definition,
                     normalized_config,
@@ -430,8 +454,11 @@ pub fn custom(comptime spec: anytype) type {
                     observation,
                     context,
                 );
-                if (flow.suspensionCount() != before) {
+                if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
                     @compileError("agent custom EpistemicStrategy emitObserveKnown must be effect-free");
+                }
+                if (!std.meta.eql(flow.returnSnapshot(), before_returns)) {
+                    @compileError("agent custom EpistemicStrategy emitObserveKnown must not terminate the Agent program");
                 }
                 return result;
             }
@@ -447,7 +474,8 @@ pub fn custom(comptime spec: anytype) type {
             comptime context: anytype,
         ) @import("flow.zig").Value(MemoryType(Definition)) {
             if (@hasDecl(Implementation, "emitObservePayload")) {
-                const before = flow.suspensionCount();
+                const before_suspensions = flow.suspensionSnapshot();
+                const before_returns = flow.returnSnapshot();
                 const result = Implementation.emitObservePayload(
                     Definition,
                     normalized_config,
@@ -457,8 +485,11 @@ pub fn custom(comptime spec: anytype) type {
                     payload,
                     context,
                 );
-                if (flow.suspensionCount() != before) {
+                if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
                     @compileError("agent custom EpistemicStrategy emitObservePayload must be effect-free");
+                }
+                if (!std.meta.eql(flow.returnSnapshot(), before_returns)) {
+                    @compileError("agent custom EpistemicStrategy emitObservePayload must not terminate the Agent program");
                 }
                 return result;
             }
@@ -473,19 +504,27 @@ pub fn custom(comptime spec: anytype) type {
         }
 
         pub fn emitProject(comptime Definition: type, flow: anytype, memory: anytype) @import("flow.zig").Value(DecisionViewType(Definition)) {
-            const before = flow.suspensionCount();
+            const before_suspensions = flow.suspensionSnapshot();
+            const before_returns = flow.returnSnapshot();
             const result = Implementation.emitProject(Definition, normalized_config, flow, memory);
-            if (flow.suspensionCount() != before) {
+            if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
                 @compileError("agent custom EpistemicStrategy emitProject must be effect-free");
+            }
+            if (!std.meta.eql(flow.returnSnapshot(), before_returns)) {
+                @compileError("agent custom EpistemicStrategy emitProject must not terminate the Agent program");
             }
             return result;
         }
 
         pub fn emitFinalAllowed(comptime Definition: type, flow: anytype, memory: anytype, result: anytype, comptime context: anytype) @import("flow.zig").Value(bool) {
-            const before = flow.suspensionCount();
+            const before_suspensions = flow.suspensionSnapshot();
+            const before_returns = flow.returnSnapshot();
             const allowed = Implementation.emitFinalAllowed(Definition, normalized_config, flow, memory, result, context);
-            if (flow.suspensionCount() != before) {
+            if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
                 @compileError("agent custom EpistemicStrategy emitFinalAllowed must be effect-free");
+            }
+            if (!std.meta.eql(flow.returnSnapshot(), before_returns)) {
+                @compileError("agent custom EpistemicStrategy emitFinalAllowed must not terminate the Agent program");
             }
             return allowed;
         }

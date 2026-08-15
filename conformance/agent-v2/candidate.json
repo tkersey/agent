@@ -35,10 +35,10 @@
   "identities": {
     "applicationId": "14926c1ecd6436230718f3e1772f2946916ec0959fc81a8fab94190cc2e9a3d5",
     "decisionContractDigest": "871aecb1a6dd95c27f31b3d246961b88dabf8044f29c1452a56ea0b1eef516d5",
-    "sourceProjectionSha256": null,
-    "implementationCommit": null,
-    "implementationTree": null,
-    "implementationGitArchiveSha256": null
+    "sourceProjectionSha256": "af37874a6587906ce0a95482a74e300624d2682579460ac11cbd8bbcb019c932",
+    "implementationCommit": "b3829157824898207f4facd2e063cfd2529bda6f",
+    "implementationTree": "86496b139612b82e79f82b043dd8195dae38802e",
+    "implementationGitArchiveSha256": "121b1149cd2d7f9eb2fec00a8154f867e9ae6cb9226c9bc3a9d0701f610065b8"
   },
   "artifactChecksums": {
     "applicationWasmSha256": "6d968547df3322be46f048c7e74b9f6bbdcafdc2dfa9778c0354a6a8f4a8cef3",

@@ -120,6 +120,22 @@ const BaselineEpistemics = struct {
         return flow.booleanOr(flow.booleanNot(replacing), memory);
     }
 
+    pub fn emitActionAllowedKnown(
+        comptime DefinitionType: type,
+        comptime config: void,
+        flow: anytype,
+        memory: anytype,
+        comptime _: u16,
+        action: anytype,
+        comptime context: anytype,
+    ) agent.Value(bool) {
+        return emitActionAllowed(DefinitionType, config, flow, memory, action, context);
+    }
+
+    pub fn actionAlwaysAllowedKnown(comptime _: type, comptime _: void, comptime _: u16) bool {
+        return false;
+    }
+
     pub fn emitFinalAllowed(comptime _: type, comptime _: void, flow: anytype, _: anytype, _: anytype, comptime context: anytype) agent.Value(bool) {
         return flow.constant(bool, context.true_index);
     }

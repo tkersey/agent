@@ -407,6 +407,7 @@ pub fn build(b: *std.Build) void {
         .{ .path = "test/compile_fail/strategy_branching_decision_local.zig", .message = "agent custom RuntimeStrategy emitDecisionLocal must not alter compiler-owned control topology" },
         .{ .path = "test/compile_fail/epistemics_effectful_initial.zig", .message = "agent EpistemicStrategy emitInitial must be effect-free" },
         .{ .path = "test/compile_fail/epistemics_effectful_action_admission.zig", .message = "agent custom EpistemicStrategy emitActionAllowed must be effect-free" },
+        .{ .path = "test/compile_fail/epistemics_specialized_admission_without_fallback.zig", .message = "agent specialized action admission requires emitActionAllowed fallback" },
         .{ .path = "test/compile_fail/epistemics_terminal_initial.zig", .message = "agent custom EpistemicStrategy emitInitial must not terminate the Agent program" },
         .{ .path = "test/compile_fail/flow_text_compare_nontext.zig", .message = "agent.Flow textCompare requires Text values" },
         .{ .path = "test/compile_fail/epistemics_zero_lowering_complexity.zig", .message = "agent custom EpistemicStrategy lowering_complexity must be positive" },

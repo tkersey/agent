@@ -92,9 +92,20 @@ fn generatedFlowLimits(
 ) flow_module.Limits {
     const actions = Definition.action_count;
     const scale: usize = if (is_reflective) 2 else 1;
+    // Boundary v1.5.0's compiler admits at most 1024 values and 128 blocks.
+    // Complexity may scale the other authoring buffers, but it must not make
+    // Agent request an impossible Boundary compiler envelope.
+    const maximum_values = 1024;
+    const maximum_blocks = 128;
     return .{
-        .maximum_values = 128 + 64 * actions * scale + 128 * Epistemics.lowering_complexity,
-        .maximum_blocks = 16 + 16 * actions * scale + 32 * Epistemics.lowering_complexity,
+        .maximum_values = @min(
+            maximum_values,
+            128 + 64 * actions * scale + 128 * Epistemics.lowering_complexity,
+        ),
+        .maximum_blocks = @min(
+            maximum_blocks,
+            16 + 16 * actions * scale + 32 * Epistemics.lowering_complexity,
+        ),
         .maximum_instructions = 64 + 64 * actions * scale + 128 * Epistemics.lowering_complexity,
         .maximum_operands = 128 + 128 * actions * scale + 256 * Epistemics.lowering_complexity,
         .maximum_parameters = 64 + 64 * actions * scale + 128 * Epistemics.lowering_complexity,
@@ -273,19 +284,30 @@ fn emitEpistemicFinalAllowed(
 fn emitEpistemicActionAllowed(
     comptime Definition: type,
     comptime Epistemics: type,
+    comptime action_index: u16,
     flow: anytype,
     memory: flow_module.Value(Epistemics.MemoryType(Definition)),
     action_value: flow_module.Value(Definition.Action),
 ) flow_module.Value(bool) {
     const before_suspensions = flow.suspensionSnapshot();
     const before_returns = flow.returnSnapshot();
-    const allowed = Epistemics.emitActionAllowed(
-        Definition,
-        flow,
-        memory,
-        action_value,
-        epistemicContext(Definition, Epistemics),
-    );
+    const allowed = if (@hasDecl(Epistemics, "emitActionAllowedKnown"))
+        Epistemics.emitActionAllowedKnown(
+            Definition,
+            flow,
+            memory,
+            action_index,
+            action_value,
+            epistemicContext(Definition, Epistemics),
+        )
+    else
+        Epistemics.emitActionAllowed(
+            Definition,
+            flow,
+            memory,
+            action_value,
+            epistemicContext(Definition, Epistemics),
+        );
     if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
         @compileError("agent EpistemicStrategy emitActionAllowed must be effect-free");
     }
@@ -293,6 +315,20 @@ fn emitEpistemicActionAllowed(
         @compileError("agent EpistemicStrategy emitActionAllowed must not terminate the Agent program");
     }
     return allowed;
+}
+
+fn epistemicActionAlwaysAllowed(
+    comptime Definition: type,
+    comptime Epistemics: type,
+    comptime action_index: u16,
+) bool {
+    if (!@hasDecl(Epistemics, "actionAlwaysAllowedKnown")) return false;
+    return Epistemics.actionAlwaysAllowedKnown(Definition, action_index);
+}
+
+fn epistemicCapacityCheckRequired(comptime Epistemics: type) bool {
+    if (!Epistemics.is_verbatim) return false;
+    return Epistemics.normalized_config.overflow == .fail;
 }
 
 fn emitEffectAction(
@@ -332,75 +368,78 @@ fn emitEffectAction(
     }
 
     const budget_failure = flow.block(.terminal_handoff, .{});
-    const admission_check = flow.block(.segment, .{
-        Definition.Action,
-        Descriptor.Site.Payload,
-        strategy.State(Definition, Epistemics),
-    });
     const perform_block = flow.block(.segment, .{
         Descriptor.Site.Payload,
         strategy.State(Definition, Epistemics),
     });
-    flow.branch(
-        budget_exhausted,
-        budget_failure,
-        .{},
-        admission_check,
-        .{ action_value, payload, state_value },
-    );
-    _ = flow.enter(budget_failure);
-    flow.failValue(failureConstant(flow, Definition, .budget_exhausted));
+    const after_admission = if (comptime epistemicCapacityCheckRequired(Epistemics))
+        flow.block(.segment, .{
+            Descriptor.Site.Payload,
+            strategy.State(Definition, Epistemics),
+        })
+    else
+        perform_block;
+    if (comptime !epistemicActionAlwaysAllowed(Definition, Epistemics, action_index)) {
+        const admission_check = flow.block(.segment, .{
+            Definition.Action,
+            Descriptor.Site.Payload,
+            strategy.State(Definition, Epistemics),
+        });
+        flow.branch(
+            budget_exhausted,
+            budget_failure,
+            .{},
+            admission_check,
+            .{ action_value, payload, state_value },
+        );
+        _ = flow.enter(budget_failure);
+        flow.failValue(failureConstant(flow, Definition, .budget_exhausted));
 
-    const admission_values = flow.enter(admission_check);
-    const action_allowed = emitEpistemicActionAllowed(
-        Definition,
-        Epistemics,
-        flow,
-        flow.productExtract(1, admission_values[2]),
-        admission_values[0],
-    );
-    const admission_failure = flow.block(.terminal_handoff, .{});
-    const admitted = flow.block(.segment, .{
-        Descriptor.Site.Payload,
-        strategy.State(Definition, Epistemics),
-    });
-    flow.branch(
-        action_allowed,
-        admitted,
-        .{ admission_values[1], admission_values[2] },
-        admission_failure,
-        .{},
-    );
-    _ = flow.enter(admission_failure);
-    flow.failValue(flow.constant(Definition.Failure, invalid_variant_constant));
-
-    const admitted_values = flow.enter(admitted);
-    if (comptime Epistemics.is_verbatim) {
-        if (comptime Epistemics.normalized_config.overflow == .fail) {
-            const capacity_check = flow.block(.segment, .{
-                Descriptor.Site.Payload,
-                strategy.State(Definition, Epistemics),
-            });
-            flow.jump(capacity_check, admitted_values);
-
-            const budget_values = flow.enter(capacity_check);
-            const memory = flow.productExtract(1, budget_values[1]);
-            const full = flow.integerGreaterEqual(
-                flow.vectorLength(memory),
-                flow.constant(u32, epistemicContext(Definition, Epistemics).maximum_observations_index),
-            );
-            const history_failure = flow.block(.terminal_handoff, .{});
-            flow.branch(full, history_failure, .{}, perform_block, budget_values);
-            _ = flow.enter(history_failure);
-            flow.failValue(flow.constant(
-                Definition.Failure,
-                epistemicContext(Definition, Epistemics).history_overflow_index,
-            ));
-        } else {
-            flow.jump(perform_block, admitted_values);
-        }
+        const admission_values = flow.enter(admission_check);
+        const action_allowed = emitEpistemicActionAllowed(
+            Definition,
+            Epistemics,
+            action_index,
+            flow,
+            flow.productExtract(1, admission_values[2]),
+            admission_values[0],
+        );
+        const admission_failure = flow.block(.terminal_handoff, .{});
+        flow.branch(
+            action_allowed,
+            after_admission,
+            .{ admission_values[1], admission_values[2] },
+            admission_failure,
+            .{},
+        );
+        _ = flow.enter(admission_failure);
+        flow.failValue(flow.constant(Definition.Failure, invalid_variant_constant));
     } else {
-        flow.jump(perform_block, admitted_values);
+        flow.branch(
+            budget_exhausted,
+            budget_failure,
+            .{},
+            after_admission,
+            .{ payload, state_value },
+        );
+        _ = flow.enter(budget_failure);
+        flow.failValue(failureConstant(flow, Definition, .budget_exhausted));
+    }
+
+    if (comptime epistemicCapacityCheckRequired(Epistemics)) {
+        const capacity_values = flow.enter(after_admission);
+        const memory = flow.productExtract(1, capacity_values[1]);
+        const full = flow.integerGreaterEqual(
+            flow.vectorLength(memory),
+            flow.constant(u32, epistemicContext(Definition, Epistemics).maximum_observations_index),
+        );
+        const history_failure = flow.block(.terminal_handoff, .{});
+        flow.branch(full, history_failure, .{}, perform_block, capacity_values);
+        _ = flow.enter(history_failure);
+        flow.failValue(flow.constant(
+            Definition.Failure,
+            epistemicContext(Definition, Epistemics).history_overflow_index,
+        ));
     }
 
     const performing = flow.enter(perform_block);

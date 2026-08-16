@@ -110,6 +110,9 @@ const Epistemics = struct {
     pub fn emitProject(comptime D: type, flow: anytype, memory: anytype) agent.Value(DecisionViewType(D)) {
         return BaseEpistemics.emitProject(D, flow, memory);
     }
+    pub fn emitActionAllowed(comptime D: type, flow: anytype, memory: anytype, action: anytype, comptime context: anytype) agent.Value(bool) {
+        return BaseEpistemics.emitActionAllowed(D, flow, memory, action, context);
+    }
     pub fn emitFinalAllowed(comptime D: type, flow: anytype, memory: anytype, result: anytype, comptime context: anytype) agent.Value(bool) {
         return BaseEpistemics.emitFinalAllowed(D, flow, memory, result, context);
     }

@@ -46,3 +46,10 @@ Boundary v1.5.0 and World v3.1.3 without changing Machine ABI v2, Application
 ABI v1, Frame v1, or Effect
 protocol v1. The exact Agent v2.0.0 adequacy obstruction remains historical;
 the successor tuple is the correction line.
+
+Agent v2.3.0 adds typed, effect-free action admission before an effect action
+reaches its declared site. Custom EpistemicStrategies may inspect current
+Memory and the selected Action; denial produces the definition's typed
+`invalid_variant` failure before `flow.perform`. Implementations that omit the
+hook retain the v2.2.0 admit-all behavior. Machine ABI v2 and `ABL_RNF2` remain
+unchanged.

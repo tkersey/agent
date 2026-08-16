@@ -10,6 +10,8 @@ pub fn build(b: *std.Build) void {
     const world_archive = b.option([]const u8, "world-archive", "Local World v3.1.3 archive for offline proof");
     const world_host_archive = b.option([]const u8, "world-host-archive", "Local world-host v1.0.1 runtime archive");
     const world_capabilities_archive = b.option([]const u8, "world-capabilities-archive", "Local lock-pinned world-capabilities deterministic archive");
+    const world_capabilities_root = b.option([]const u8, "world-capabilities-root", "Local world-capabilities v2.3.2 source or extracted release root for adequacy development");
+    const world_host_root = b.option([]const u8, "world-host-root", "Local world-host v1.0.1 source root for adequacy development");
 
     const boundary_dependency = b.dependency("boundary", .{
         .target = target,
@@ -895,6 +897,51 @@ pub fn build(b: *std.Build) void {
         "Compile the router-policy working set against the exact released dependency tuple",
     );
     adequacy_compile.dependOn(&adequacy_compile_command.step);
+
+    const adequacy_modes = [_]struct {
+        name: []const u8,
+        mode: []const u8,
+        description: []const u8,
+    }{
+        .{ .name = "check-agent-adequacy-deterministic", .mode = "deterministic", .description = "Run the exact 47-effect deterministic adequacy witness" },
+        .{ .name = "check-agent-adequacy-retry", .mode = "retry", .description = "Prove lost-output retry at router replacement three" },
+        .{ .name = "check-agent-adequacy-replay", .mode = "replay", .description = "Replay the adequacy trace with zero fresh effects" },
+        .{ .name = "check-agent-adequacy-branch", .mode = "branch", .description = "Prove isolated pre-read adequacy branches" },
+        .{ .name = "check-agent-adequacy-migrate", .mode = "migrate", .description = "Migrate the pre-mutation adequacy state under fresh receiver policy" },
+        .{ .name = "check-agent-adequacy-measure", .mode = "measure", .description = "Measure the exact adequacy artifact and deterministic trace" },
+    };
+    for (adequacy_modes) |gate| {
+        const command = b.addSystemCommand(&.{
+            "bun",
+            "tools/adequacy/run.mjs",
+            "--mode",
+            gate.mode,
+            "--artifact-root",
+            "adequacy/router-policy-v1/zig-out/router-policy-adequacy",
+        });
+        if (world_capabilities_root) |path| command.addArgs(&.{ "--capabilities-root", path });
+        if (world_host_root) |path| command.addArgs(&.{ "--world-host-root", path });
+        command.step.dependOn(adequacy_compile);
+        const step = b.step(gate.name, gate.description);
+        step.dependOn(&command.step);
+    }
+
+    const adequacy_live_command = b.addSystemCommand(&.{
+        "bun",
+        "tools/adequacy/run.mjs",
+        "--mode",
+        "live",
+        "--artifact-root",
+        "adequacy/router-policy-v1/zig-out/router-policy-adequacy",
+    });
+    if (world_capabilities_root) |path| adequacy_live_command.addArgs(&.{ "--capabilities-root", path });
+    if (world_host_root) |path| adequacy_live_command.addArgs(&.{ "--world-host-root", path });
+    adequacy_live_command.step.dependOn(adequacy_compile);
+    const adequacy_live = b.step(
+        "check-agent-adequacy-live",
+        "Run the explicit OpenAI plus four receiver-verified replacement adequacy witness",
+    );
+    adequacy_live.dependOn(&adequacy_live_command.step);
 
     check.dependOn(semantic_check);
     check.dependOn(lint);

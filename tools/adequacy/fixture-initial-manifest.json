@@ -9,7 +9,7 @@
     { "slot": "errors_source", "path": "src/errors.mjs", "bytes": 63, "sha256": "96e86c78d6d9ea5636441d0a3f11ae0a641f42d27bfc5602881fd2df50c00dae" },
     { "slot": "router_source", "path": "src/router.mjs", "bytes": 493, "sha256": "79e1ada61ccf481b0526e6a30feb001a778acd92f0174ada83012de8fba983c6" },
     { "slot": "index_source", "path": "src/index.mjs", "bytes": 128, "sha256": "a9644c6f76b88c27f8721c853fb641dfe376b5860d43a61f4aa278ca514270c1" },
-    { "slot": "methods_test", "path": "test/methods.test.mjs", "bytes": 1099, "sha256": "eb54d01c7743f7c60edd816de24db75b39a681e4bb2becb18b30ea43df61780c" },
-    { "slot": "router_test", "path": "test/router.test.mjs", "bytes": 3784, "sha256": "48c6df27eafe6fd079bf42f67e709ef448af155c2d5c3183dafa14a877d1c0f8" }
+    { "slot": "methods_test", "path": "test/methods.test.mjs", "bytes": 906, "sha256": "06cb4632352a1d7ed583a6ee3d28da39f0b568dbb5a782f69db84398ba68ad58" },
+    { "slot": "router_test", "path": "test/router.test.mjs", "bytes": 3044, "sha256": "a953ef05adc8cb46d7009a60e1e429bc1095f0988f543e4ee83e196e06d34267" }
   ]
 }

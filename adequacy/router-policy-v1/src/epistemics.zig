@@ -261,17 +261,19 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
                 flow.integerEqual(mutation_count, flow.constant(u32, context.zero_index)),
                 flow.booleanNot(passed),
             );
-            var next = replaceMemoryField(flow, memory, 3, flow.optionalSome(?T.TestResult, result));
-            next = replaceMemoryField(flow, next, 6, flow.booleanOr(flow.productExtract(6, memory), baseline_failure));
-            next = replaceMemoryField(flow, next, 7, passed);
-            next = replaceMemoryField(flow, next, 9, mutation_count);
-            next = replaceMemoryField(
-                flow,
-                next,
-                10,
+            return flow.productConstruct(T.Memory, .{
+                flow.productExtract(0, memory),
+                flow.productExtract(1, memory),
+                flow.productExtract(2, memory),
+                flow.optionalSome(?T.TestResult, result),
+                flow.productExtract(4, memory),
+                flow.productExtract(5, memory),
+                flow.booleanOr(flow.productExtract(6, memory), baseline_failure),
+                passed,
+                mutation_count,
+                mutation_count,
                 flow.integerAdd(flow.productExtract(10, memory), flow.constant(u32, context.one_index)),
-            );
-            return next;
+            });
         }
 
         fn observeApplied(flow: anytype, memory: anytype, outcome: anytype, applied: anytype, comptime context: anytype) agent.Value(T.Memory) {
@@ -313,23 +315,19 @@ pub fn WorkingSet(comptime agent: type, comptime T: type) type {
                 flow.productExtract(5, applied),
             });
 
-            var next = replaceMemoryField(
-                flow,
-                memory,
-                1,
+            return flow.productConstruct(T.Memory, .{
+                flow.productExtract(0, memory),
                 upsertDocument(flow, flow.productExtract(1, memory), admitted, context),
-            );
-            next = replaceMemoryField(flow, next, 2, flow.optionalNone(?T.SearchResult));
-            next = replaceMemoryField(flow, next, 4, flow.optionalSome(?T.ReplaceOutcome, outcome));
-            next = replaceMemoryField(flow, next, 5, flow.vectorPush(append_values[0], summary));
-            next = replaceMemoryField(flow, next, 7, flow.constant(bool, context.false_index));
-            next = replaceMemoryField(
-                flow,
-                next,
-                8,
+                flow.optionalNone(?T.SearchResult),
+                flow.productExtract(3, memory),
+                flow.optionalSome(?T.ReplaceOutcome, outcome),
+                flow.vectorPush(append_values[0], summary),
+                flow.productExtract(6, memory),
+                flow.constant(bool, context.false_index),
                 flow.integerAdd(flow.productExtract(8, memory), flow.constant(u32, context.one_index)),
-            );
-            return next;
+                flow.productExtract(9, memory),
+                flow.productExtract(10, memory),
+            });
         }
 
         fn observeReplacement(flow: anytype, memory: anytype, outcome: anytype, comptime context: anytype) agent.Value(T.Memory) {

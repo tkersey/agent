@@ -302,6 +302,19 @@ pub fn verbatim(comptime config: anytype) type {
             return flow.copy(memory);
         }
 
+        pub fn emitActionAllowed(
+            comptime Definition: type,
+            flow: anytype,
+            memory: anytype,
+            action: anytype,
+            comptime context: anytype,
+        ) @import("flow.zig").Value(bool) {
+            _ = Definition;
+            _ = memory;
+            _ = action;
+            return flow.constant(bool, context.true_index);
+        }
+
         pub fn emitFinalAllowed(
             comptime Definition: type,
             flow: anytype,
@@ -514,6 +527,22 @@ pub fn custom(comptime spec: anytype) type {
                 @compileError("agent custom EpistemicStrategy emitProject must not terminate the Agent program");
             }
             return result;
+        }
+
+        pub fn emitActionAllowed(comptime Definition: type, flow: anytype, memory: anytype, action: anytype, comptime context: anytype) @import("flow.zig").Value(bool) {
+            if (!@hasDecl(Implementation, "emitActionAllowed")) {
+                return flow.constant(bool, context.true_index);
+            }
+            const before_suspensions = flow.suspensionSnapshot();
+            const before_returns = flow.returnSnapshot();
+            const allowed = Implementation.emitActionAllowed(Definition, normalized_config, flow, memory, action, context);
+            if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
+                @compileError("agent custom EpistemicStrategy emitActionAllowed must be effect-free");
+            }
+            if (!std.meta.eql(flow.returnSnapshot(), before_returns)) {
+                @compileError("agent custom EpistemicStrategy emitActionAllowed must not terminate the Agent program");
+            }
+            return allowed;
         }
 
         pub fn emitFinalAllowed(comptime Definition: type, flow: anytype, memory: anytype, result: anytype, comptime context: anytype) @import("flow.zig").Value(bool) {

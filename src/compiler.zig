@@ -270,6 +270,31 @@ fn emitEpistemicFinalAllowed(
     return allowed;
 }
 
+fn emitEpistemicActionAllowed(
+    comptime Definition: type,
+    comptime Epistemics: type,
+    flow: anytype,
+    memory: flow_module.Value(Epistemics.MemoryType(Definition)),
+    action_value: flow_module.Value(Definition.Action),
+) flow_module.Value(bool) {
+    const before_suspensions = flow.suspensionSnapshot();
+    const before_returns = flow.returnSnapshot();
+    const allowed = Epistemics.emitActionAllowed(
+        Definition,
+        flow,
+        memory,
+        action_value,
+        epistemicContext(Definition, Epistemics),
+    );
+    if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
+        @compileError("agent EpistemicStrategy emitActionAllowed must be effect-free");
+    }
+    if (!std.meta.eql(flow.returnSnapshot(), before_returns)) {
+        @compileError("agent EpistemicStrategy emitActionAllowed must not terminate the Agent program");
+    }
+    return allowed;
+}
+
 fn emitEffectAction(
     comptime Definition: type,
     comptime Epistemics: type,
@@ -278,6 +303,7 @@ fn emitEffectAction(
     action_value: flow_module.Value(Definition.Action),
     state_value: flow_module.Value(strategy.State(Definition, Epistemics)),
     loop_block: anytype,
+    comptime invalid_variant_constant: u16,
     comptime unit_constant_index: u16,
 ) void {
     const Descriptor = Definition.ActionDescriptor(action_index);
@@ -306,25 +332,56 @@ fn emitEffectAction(
     }
 
     const budget_failure = flow.block(.terminal_handoff, .{});
+    const admission_check = flow.block(.segment, .{
+        Definition.Action,
+        Descriptor.Site.Payload,
+        strategy.State(Definition, Epistemics),
+    });
     const perform_block = flow.block(.segment, .{
         Descriptor.Site.Payload,
         strategy.State(Definition, Epistemics),
     });
+    flow.branch(
+        budget_exhausted,
+        budget_failure,
+        .{},
+        admission_check,
+        .{ action_value, payload, state_value },
+    );
+    _ = flow.enter(budget_failure);
+    flow.failValue(failureConstant(flow, Definition, .budget_exhausted));
+
+    const admission_values = flow.enter(admission_check);
+    const action_allowed = emitEpistemicActionAllowed(
+        Definition,
+        Epistemics,
+        flow,
+        flow.productExtract(1, admission_values[2]),
+        admission_values[0],
+    );
+    const admission_failure = flow.block(.terminal_handoff, .{});
+    const admitted = flow.block(.segment, .{
+        Descriptor.Site.Payload,
+        strategy.State(Definition, Epistemics),
+    });
+    flow.branch(
+        action_allowed,
+        admitted,
+        .{ admission_values[1], admission_values[2] },
+        admission_failure,
+        .{},
+    );
+    _ = flow.enter(admission_failure);
+    flow.failValue(flow.constant(Definition.Failure, invalid_variant_constant));
+
+    const admitted_values = flow.enter(admitted);
     if (comptime Epistemics.is_verbatim) {
         if (comptime Epistemics.normalized_config.overflow == .fail) {
             const capacity_check = flow.block(.segment, .{
                 Descriptor.Site.Payload,
                 strategy.State(Definition, Epistemics),
             });
-            flow.branch(
-                budget_exhausted,
-                budget_failure,
-                .{},
-                capacity_check,
-                .{ payload, state_value },
-            );
-            _ = flow.enter(budget_failure);
-            flow.failValue(failureConstant(flow, Definition, .budget_exhausted));
+            flow.jump(capacity_check, admitted_values);
 
             const budget_values = flow.enter(capacity_check);
             const memory = flow.productExtract(1, budget_values[1]);
@@ -340,26 +397,10 @@ fn emitEffectAction(
                 epistemicContext(Definition, Epistemics).history_overflow_index,
             ));
         } else {
-            flow.branch(
-                budget_exhausted,
-                budget_failure,
-                .{},
-                perform_block,
-                .{ payload, state_value },
-            );
-            _ = flow.enter(budget_failure);
-            flow.failValue(failureConstant(flow, Definition, .budget_exhausted));
+            flow.jump(perform_block, admitted_values);
         }
     } else {
-        flow.branch(
-            budget_exhausted,
-            budget_failure,
-            .{},
-            perform_block,
-            .{ payload, state_value },
-        );
-        _ = flow.enter(budget_failure);
-        flow.failValue(failureConstant(flow, Definition, .budget_exhausted));
+        flow.jump(perform_block, admitted_values);
     }
 
     const performing = flow.enter(perform_block);
@@ -435,6 +476,7 @@ fn emitAction(
             action_value,
             state_value,
             loop_block,
+            invalid_variant_constant,
             unit_constant_index,
         ),
     }
@@ -1020,10 +1062,10 @@ fn assertEpistemics(
     comptime Epistemics: type,
 ) void {
     inline for (.{
-        "semantic_identity", "normalized_config",        "validate",         "MemoryType",
-        "DecisionViewType",  "StateSchemaTypes",         "initialMemory",    "emitInitial",
-        "emitObserve",       "emitProject",              "emitFinalAllowed", "constantValues",
-        "constantContext",   "semantic_lowering_digest",
+        "semantic_identity", "normalized_config", "validate",                 "MemoryType",
+        "DecisionViewType",  "StateSchemaTypes",  "initialMemory",            "emitInitial",
+        "emitObserve",       "emitProject",       "emitActionAllowed",        "emitFinalAllowed",
+        "constantValues",    "constantContext",   "semantic_lowering_digest",
     }) |name| {
         if (!@hasDecl(Epistemics, name)) {
             @compileError("agent compile requires EpistemicStrategy declaration " ++ name);

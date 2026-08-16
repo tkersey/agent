@@ -35,6 +35,7 @@ src/manifest.zig
 src/root.zig
 src/runtime_flow.zig
 src/strategy.zig
+test/action_admission.zig
 test/action_algebra.zig
 test/actuality_definition.zig
 test/boundary_equivalence.zig
@@ -45,6 +46,7 @@ test/compile_fail/duplicate_stable_action_name.zig
 test/compile_fail/effect_payload_mismatch.zig
 test/compile_fail/effect_without_history.zig
 test/compile_fail/empty_instructions.zig
+test/compile_fail/epistemics_effectful_action_admission.zig
 test/compile_fail/epistemics_effectful_initial.zig
 test/compile_fail/epistemics_terminal_initial.zig
 test/compile_fail/epistemics_zero_lowering_complexity.zig

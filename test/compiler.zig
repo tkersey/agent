@@ -76,6 +76,66 @@ const Compiled = agent.compile(Definition, Strategy, Epistemics, .{
 });
 const Machine = Compiled.Machine;
 
+const HighComplexityWorkingSet = struct {
+    pub const semantic_identity = "agent.epistemics.high-complexity-buffer-witness.v1";
+    pub const lowering_complexity: usize = 8;
+
+    pub fn validate(comptime _: type, comptime _: anytype) void {}
+    pub fn Memory(comptime _: type, comptime _: anytype) type {
+        return u32;
+    }
+    pub fn DecisionView(comptime _: type, comptime _: anytype) type {
+        return u32;
+    }
+    pub fn StateSchemaTypes(comptime _: type, comptime _: anytype) @TypeOf(.{u32}) {
+        return .{u32};
+    }
+    pub fn initialMemory(comptime _: type, comptime _: anytype) u32 {
+        return 0;
+    }
+    pub fn emitObserve(comptime _: type, comptime _: anytype, flow: anytype, _: anytype, observation: anytype, comptime _: anytype) agent.Value(u32) {
+        return flow.sumExtract(0, observation);
+    }
+    pub fn emitProject(comptime _: type, comptime _: anytype, flow: anytype, memory: anytype) agent.Value(u32) {
+        return flow.copy(memory);
+    }
+    pub fn emitActionAllowed(comptime _: type, comptime _: anytype, _: anytype, _: anytype, _: anytype, comptime _: anytype) agent.Value(bool) {
+        @compileError("known action admission must bypass the global lowering");
+    }
+    pub fn emitActionAllowedKnown(comptime _: type, comptime _: anytype, flow: anytype, _: anytype, comptime action_index: u16, _: anytype, comptime context: anytype) agent.Value(bool) {
+        if (action_index != 0) @compileError("unexpected effect action index");
+        return flow.constant(bool, context.true_index);
+    }
+    pub fn actionAlwaysAllowedKnown(comptime _: type, comptime _: anytype, comptime action_index: u16) bool {
+        if (action_index != 0) @compileError("unexpected effect action index");
+        return true;
+    }
+    pub fn emitFinalAllowed(comptime _: type, comptime _: anytype, flow: anytype, _: anytype, _: anytype, comptime context: anytype) agent.Value(bool) {
+        return flow.constant(bool, context.true_index);
+    }
+};
+
+const HighComplexityCompiled = agent.compile(
+    Definition,
+    Strategy,
+    agent.epistemics.custom(.{
+        .semantic_identity = "agent.epistemics.high-complexity-buffer-witness.v1",
+        .config = .{},
+        .implementation = HighComplexityWorkingSet,
+    }),
+    .{
+        .machine = .{
+            .maximum_frames = 32,
+            .maximum_state_bytes = 64 * 1024,
+            .maximum_machine_fuel = 4096,
+        },
+    },
+);
+
+test "custom epistemic complexity and known admission fit the released Boundary compiler envelope" {
+    try std.testing.expectEqual(@as(u32, 2), HighComplexityCompiled.Machine.abi_version);
+}
+
 const DropOldestFailure = enum {
     budget_exhausted,
     arithmetic_overflow,

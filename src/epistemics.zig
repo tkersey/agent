@@ -352,6 +352,12 @@ pub fn custom(comptime spec: anytype) type {
     if (admitted_lowering_complexity == 0) {
         @compileError("agent custom EpistemicStrategy lowering_complexity must be positive");
     }
+    if ((@hasDecl(Implementation, "emitActionAllowedKnown") or
+        @hasDecl(Implementation, "actionAlwaysAllowedKnown")) and
+        !@hasDecl(Implementation, "emitActionAllowed"))
+    {
+        @compileError("agent specialized action admission requires emitActionAllowed fallback");
+    }
     return struct {
         pub const semantic_identity = spec.semantic_identity;
         pub const is_verbatim = false;
@@ -543,6 +549,51 @@ pub fn custom(comptime spec: anytype) type {
                 @compileError("agent custom EpistemicStrategy emitActionAllowed must not terminate the Agent program");
             }
             return allowed;
+        }
+
+        pub fn emitActionAllowedKnown(
+            comptime Definition: type,
+            flow: anytype,
+            memory: anytype,
+            comptime action_index: u16,
+            action: anytype,
+            comptime context: anytype,
+        ) @import("flow.zig").Value(bool) {
+            if (!@hasDecl(Implementation, "emitActionAllowedKnown")) {
+                return emitActionAllowed(Definition, flow, memory, action, context);
+            }
+            const before_suspensions = flow.suspensionSnapshot();
+            const before_returns = flow.returnSnapshot();
+            const allowed = Implementation.emitActionAllowedKnown(
+                Definition,
+                normalized_config,
+                flow,
+                memory,
+                action_index,
+                action,
+                context,
+            );
+            if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
+                @compileError("agent custom EpistemicStrategy emitActionAllowedKnown must be effect-free");
+            }
+            if (!std.meta.eql(flow.returnSnapshot(), before_returns)) {
+                @compileError("agent custom EpistemicStrategy emitActionAllowedKnown must not terminate the Agent program");
+            }
+            return allowed;
+        }
+
+        pub fn actionAlwaysAllowedKnown(
+            comptime Definition: type,
+            comptime action_index: u16,
+        ) bool {
+            if (!@hasDecl(Implementation, "actionAlwaysAllowedKnown")) {
+                return !@hasDecl(Implementation, "emitActionAllowed");
+            }
+            return Implementation.actionAlwaysAllowedKnown(
+                Definition,
+                normalized_config,
+                action_index,
+            );
         }
 
         pub fn emitFinalAllowed(comptime Definition: type, flow: anytype, memory: anytype, result: anytype, comptime context: anytype) @import("flow.zig").Value(bool) {

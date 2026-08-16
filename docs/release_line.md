@@ -59,3 +59,14 @@ typed `Flow.textCompare` authoring seam. Custom strategies can compare bounded
 UTF-8 Text values without bypassing Flow or adding an effect. Native and WASM
 Machine behavior remain byte-identical; Machine ABI v2 and `ABL_RNF2` are
 unchanged.
+
+Agent v2.5.0 saturates generated Flow value and block authoring buffers at the
+existing Boundary v1.5.0 compiler ceilings. A custom EpistemicStrategy may use
+its declared lowering complexity without causing Agent to request an impossible
+Boundary compiler envelope. It may also specialize pre-effect admission by the
+compile-time action index so an exact predicate is lowered only at its owning
+site. A strategy may explicitly mark a specialized site as statically admitted,
+which omits the dead runtime admission branch; the existing global hook remains
+the required fail-closed fallback for specialized declarations. Actual Control
+IR must still fit Boundary's unchanged ceilings; Machine ABI v2 and `ABL_RNF2`
+remain unchanged.

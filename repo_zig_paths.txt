@@ -48,6 +48,7 @@ test/compile_fail/effect_without_history.zig
 test/compile_fail/empty_instructions.zig
 test/compile_fail/epistemics_effectful_action_admission.zig
 test/compile_fail/epistemics_effectful_initial.zig
+test/compile_fail/epistemics_specialized_admission_without_fallback.zig
 test/compile_fail/epistemics_terminal_initial.zig
 test/compile_fail/epistemics_zero_lowering_complexity.zig
 test/compile_fail/fail_payload_mismatch.zig

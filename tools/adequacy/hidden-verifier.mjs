@@ -25,6 +25,7 @@ const writablePaths = [
 async function listFiles(root, prefix = "") {
   const result = [];
   for (const entry of await readdir(resolve(root, prefix), { withFileTypes: true })) {
+    if (prefix === "" && entry.name === ".git") continue;
     const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
     if (entry.isSymbolicLink()) throw new Error(`symlink is forbidden: ${relative}`);
     if (entry.isDirectory()) result.push(...(await listFiles(root, relative)));
@@ -81,8 +82,8 @@ export async function verify(workspace, pristine) {
     ]),
   );
   await check("08 custom Allow byte order", () =>
-    assert.deepEqual(methods.canonicalAllow(["z-last", "a-first", "post"]), [
-      "POST", "A-FIRST", "Z-LAST",
+    assert.deepEqual(methods.canonicalAllow(["trace", "m-search", "connect", "!first", "post"]), [
+      "POST", "!FIRST", "CONNECT", "M-SEARCH", "TRACE",
     ]),
   );
   await check("09 static route precedence", () => {

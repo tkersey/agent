@@ -1,0 +1,11 @@
+{
+  "agent_adequacy_format": 1,
+  "agent_adequacy_mode": "branch",
+  "application_id": "7eb84c4aa723014876aa7edf68d0fcbe73915af98cecc98ef382c3ed3c343aaa",
+  "branching": true,
+  "branch_parent_unchanged": true,
+  "branch_children_distinct": true,
+  "branch_memories_distinct": true,
+  "branch_result_crossing_rejected": true,
+  "branch_independent_continuation": true
+}

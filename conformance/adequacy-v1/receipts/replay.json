@@ -1,0 +1,15 @@
+{
+  "agent_adequacy_format": 1,
+  "agent_adequacy_mode": "replay",
+  "application_id": "7eb84c4aa723014876aa7edf68d0fcbe73915af98cecc98ef382c3ed3c343aaa",
+  "replay_fresh_effect_count": 0,
+  "replay_fresh_model_effect_count": 0,
+  "replay_fresh_file_effect_count": 0,
+  "replay_fresh_search_effect_count": 0,
+  "replay_fresh_test_process_count": 0,
+  "replay_fresh_approval_count": 0,
+  "replay_fresh_mutation_count": 0,
+  "replay_terminal_result_equal": true,
+  "replay_terminal_frame_byte_identical": true,
+  "replay_worker_instances": 81
+}

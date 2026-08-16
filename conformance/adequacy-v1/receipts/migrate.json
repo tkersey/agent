@@ -1,0 +1,11 @@
+{
+  "agent_adequacy_format": 1,
+  "agent_adequacy_mode": "migrate",
+  "application_id": "7eb84c4aa723014876aa7edf68d0fcbe73915af98cecc98ef382c3ed3c343aaa",
+  "migration": true,
+  "migration_receiver_preflight": true,
+  "migration_terminal_result_valid": true,
+  "migration_secrets_transferred": false,
+  "migration_approval_transferred": false,
+  "migration_workspace_path_transferred_as_state": false
+}

@@ -1,0 +1,83 @@
+{
+  "format": "agent-adequacy-reference-stack-lock-v1",
+  "historicalLockedTuple": {
+    "agent": "2.0.0",
+    "boundary": "1.3.2",
+    "world": "3.1.1",
+    "status": "compiler_expressivity_obstruction"
+  },
+  "successorTuple": {
+    "agent": "2.2.0",
+    "boundary": "1.5.0",
+    "world": "3.1.3",
+    "worldHost": "1.0.1",
+    "worldCapabilities": "2.3.2",
+    "machineAbi": 2,
+    "machineStateFormat": "ABL_RNF2",
+    "applicationAbi": 1,
+    "frame": 1,
+    "effectProtocol": 1,
+    "maximumPendingEffects": 1
+  },
+  "archives": {
+    "agent": {
+      "url": "https://github.com/tkersey/agent/archive/refs/tags/v2.2.0.tar.gz",
+      "sha256": "74a568821aad94508759c67bec974d6b14d4ae93a4b7e3693dfd4828410a9dd2",
+      "packageHash": "agent-2.2.0-dBg3hEHJDABT5usyJGH7PowXTWmpI3rhYXszl6sMz1BV",
+      "root": "agent-2.2.0"
+    },
+    "boundary": {
+      "url": "https://github.com/tkersey/boundary/archive/refs/tags/v1.5.0.tar.gz",
+      "sha256": "8bcf9cf4f289eb3e530cae37089411dfc0014963fb6e0978474fa08a39fcedea",
+      "packageHash": "boundary-1.5.0-flclaGtSEQDH_RFNHovmN4QfnmRMnFoNfyYq_84rZrsr",
+      "root": "boundary-1.5.0"
+    },
+    "world": {
+      "url": "https://github.com/tkersey/world/archive/refs/tags/v3.1.3.tar.gz",
+      "sha256": "1333a27aa4538c255b8a6c515c9151987fd5402c0be43a9a2501703599d1a5a9",
+      "packageHash": "world-3.1.3-XXTUeKXGBgDDzZ7uarFCYSLwYD8pGNBMNdIYfgIcu23v",
+      "root": "world-3.1.3"
+    },
+    "worldHost": {
+      "url": "https://github.com/tkersey/world-host/releases/download/v1.0.1/world-host-v1.0.1-runtime.tar.gz",
+      "sha256": "e501ab1fe540ed2ee5cbd1db5a027f00271f95694747160fe36fa64cffaab52d",
+      "root": "world-host-v1.0.1-runtime"
+    },
+    "worldCapabilities": {
+      "url": "https://github.com/tkersey/world-capabilities/releases/download/v2.3.2/world-capabilities-v2.3.2-deterministic.tar.gz",
+      "sha256": "270f9d149a9fc90b48c08b7eecc7b812e5e0d3b42f76c68797daa0654b58ed91",
+      "root": "world-capabilities-v2.3.2-deterministic"
+    }
+  },
+  "application": {
+    "id": "7eb84c4aa723014876aa7edf68d0fcbe73915af98cecc98ef382c3ed3c343aaa",
+    "wasm": {
+      "path": "router-policy-adequacy.world.wasm",
+      "sha256": "e1e98c7c5284de0274bb0c76e00043275d52672a7ef8ab0831a05e4e0b02073d"
+    },
+    "manifestBinary": {
+      "path": "router-policy-adequacy.manifest.bin",
+      "sha256": "893636028ebefbe3c59ccc39753c295558b84437d64d1c71fc0bbf7057658f30"
+    },
+    "manifestText": {
+      "path": "router-policy-adequacy.manifest.txt",
+      "sha256": "20d3540c95e19bb313d3004183bfc0981ea3037ad90253bb58a577188952c151"
+    },
+    "decisionContractBinary": {
+      "path": "router-policy-adequacy.decision-contract.bin",
+      "sha256": "60083b0bef866af0291d111489efcaa2ff691f3185a5f3f4fcbe0c94248b1128"
+    },
+    "decisionContractJson": {
+      "path": "router-policy-adequacy.decision-contract.json",
+      "sha256": "24780daf784b3053a2ef0f2525052b230952dad29636ee6fd063a74e136709d2"
+    },
+    "initialArgs": {
+      "path": "router-policy-adequacy.initial-args.bin",
+      "sha256": "517acb9d6e96c2c24fe407b26f06be60df428912edcd050e76e187340a0507cd"
+    },
+    "fixtureManifest": {
+      "path": "tools/adequacy/fixture-initial-manifest.json",
+      "sha256": "83578abd555c4e7a2dc3d1191c61d83637cb1d805786ed097cedaf933aa44bcc"
+    }
+  }
+}

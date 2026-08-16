@@ -1,0 +1,10 @@
+{
+  "agent_adequacy_format": 1,
+  "agent_adequacy_mode": "retry",
+  "application_id": "7eb84c4aa723014876aa7edf68d0fcbe73915af98cecc98ef382c3ed3c343aaa",
+  "deterministic_retry": true,
+  "retry_capability_invocations": 1,
+  "retry_content_writes": 1,
+  "retry_child_frame_byte_identical": true,
+  "retry_parent_frame_unchanged": true
+}

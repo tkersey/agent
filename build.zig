@@ -897,6 +897,16 @@ pub fn build(b: *std.Build) void {
         "Compile the router-policy working set against the exact released dependency tuple",
     );
     adequacy_compile.dependOn(&adequacy_compile_command.step);
+    const adequacy_epistemics = b.step(
+        "check-agent-adequacy-epistemics",
+        "Run the bounded working-set epistemics tests",
+    );
+    adequacy_epistemics.dependOn(adequacy_compile);
+    const adequacy_native_wasm = b.step(
+        "check-agent-adequacy-native-wasm",
+        "Prove native and WASM manifest identity for the adequacy application",
+    );
+    adequacy_native_wasm.dependOn(adequacy_compile);
 
     const adequacy_modes = [_]struct {
         name: []const u8,
@@ -942,6 +952,56 @@ pub fn build(b: *std.Build) void {
         "Run the explicit OpenAI plus four receiver-verified replacement adequacy witness",
     );
     adequacy_live.dependOn(&adequacy_live_command.step);
+
+    const adequacy_lock_command = b.addSystemCommand(&.{
+        "bun",
+        "tools/adequacy/check-lock.mjs",
+        "--acquire",
+        "true",
+    });
+    adequacy_lock_command.step.dependOn(adequacy_compile);
+    const adequacy_lock = b.step(
+        "check-agent-adequacy-lock",
+        "Authenticate the successor release tuple and adequacy artifacts",
+    );
+    adequacy_lock.dependOn(&adequacy_lock_command.step);
+
+    const adequacy_reference_command = b.addSystemCommand(&.{
+        "bun",
+        "tools/adequacy/reference-stack.mjs",
+    });
+    adequacy_reference_command.step.dependOn(adequacy_compile);
+    const adequacy_reference = b.step(
+        "check-agent-adequacy-reference-stack",
+        "Acquire the public host and capabilities anonymously and run the complete deterministic lifecycle",
+    );
+    adequacy_reference.dependOn(&adequacy_reference_command.step);
+
+    const adequacy_offline_command = b.addSystemCommand(&.{
+        "bun",
+        "tools/adequacy/reference-stack.mjs",
+        "--offline",
+        "true",
+    });
+    if (world_host_archive) |path| adequacy_offline_command.addArgs(&.{ "--world-host-archive", path });
+    if (world_capabilities_archive) |path| adequacy_offline_command.addArgs(&.{ "--world-capabilities-archive", path });
+    adequacy_offline_command.step.dependOn(adequacy_compile);
+    const adequacy_offline = b.step(
+        "check-agent-adequacy-reference-stack-offline",
+        "Run the complete deterministic lifecycle from caller-supplied authenticated runtime archives",
+    );
+    adequacy_offline.dependOn(&adequacy_offline_command.step);
+
+    const adequacy_release_command = b.addSystemCommand(&.{
+        "bun",
+        "tools/adequacy/build-release.mjs",
+    });
+    adequacy_release_command.step.dependOn(adequacy_compile);
+    const adequacy_release = b.step(
+        "check-agent-adequacy-release",
+        "Validate the successor receipts and build the conformance release assets",
+    );
+    adequacy_release.dependOn(&adequacy_release_command.step);
 
     check.dependOn(semantic_check);
     check.dependOn(lint);

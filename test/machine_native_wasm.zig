@@ -93,13 +93,13 @@ const TextCompareMachine = boundary.program(
     .maximum_machine_fuel = 32,
 });
 
-fn runTextCompareParity() ?i8 {
+fn runTextCompareParity(left: []const u8, right: []const u8) ?i8 {
     var allocator = std.heap.FixedBufferAllocator.init(&text_compare_state_storage);
     const state = TextCompareMachine.initialState(
         allocator.allocator(),
         .{
-            .left = ParityText.fromSlice("same") catch return null,
-            .right = ParityText.fromSlice("same") catch return null,
+            .left = ParityText.fromSlice(left) catch return null,
+            .right = ParityText.fromSlice(right) catch return null,
         },
     ) catch return null;
     defer TextCompareMachine.deinitState(state);
@@ -205,7 +205,9 @@ pub export fn agentMachineParityRun() u32 {
     writeInt(&output_storage, &cursor, u32, instruction_length);
     writeInt(&output_storage, &cursor, u32, @intFromEnum(request.phase));
     writeInt(&output_storage, &cursor, u32, done.value().*);
-    writeInt(&output_storage, &cursor, i8, runTextCompareParity() orelse return 0);
+    writeInt(&output_storage, &cursor, i8, runTextCompareParity("alpha", "beta") orelse return 0);
+    writeInt(&output_storage, &cursor, i8, runTextCompareParity("same", "same") orelse return 0);
+    writeInt(&output_storage, &cursor, i8, runTextCompareParity("beta", "alpha") orelse return 0);
     writeBytes(&output_storage, &cursor, &Compiled.DefinitionManifestBytes);
     writeBytes(&output_storage, &cursor, &Compiled.StrategyManifestBytes);
     writeBytes(&output_storage, &cursor, &Compiled.ManifestBytes);

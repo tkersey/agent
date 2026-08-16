@@ -42,6 +42,43 @@ const DocumentSlot = enum(u16) {
     router_source = 19,
 };
 
+const CompareText = boundary.Text(16);
+const CompareArgs = struct {
+    left: CompareText,
+    right: CompareText,
+};
+
+fn TextCompareLowered() type {
+    const Builder = agent.Flow(.{ .schema_types = .{ CompareArgs, CompareText } });
+    comptime var flow = Builder.init("flow-text-compare");
+    const args = flow.begin(CompareArgs);
+    const ordering = flow.textCompare(
+        flow.productExtract(0, args),
+        flow.productExtract(1, args),
+    );
+    flow.returnValue(ordering);
+    return flow.finish(i8);
+}
+
+const TextCompareBody = struct {
+    const Lowering = TextCompareLowered();
+    pub const InitialArgs = CompareArgs;
+    pub const Result = i8;
+    pub const Failure = enum { impossible };
+    pub const effect_sites = boundary.effect.row(.{});
+    pub const schema_types = Lowering.schema_types;
+    pub const control_ir = Lowering.control_ir;
+};
+
+const TextCompareMachine = boundary.program(
+    "flow-text-compare",
+    TextCompareBody,
+).compile(.{
+    .maximum_frames = 2,
+    .maximum_state_bytes = 1024,
+    .maximum_machine_fuel = 32,
+});
+
 fn EnumLowered() type {
     const Builder = agent.Flow(.{ .schema_types = .{DocumentSlot} });
     comptime var flow = Builder.init("flow-enum-to-u32");
@@ -206,6 +243,35 @@ test "Flow projects portable enum values to canonical u32 tags" {
             @as(u32, @intCast(@intFromEnum(slot))),
             done.value().*,
         );
+    }
+}
+
+test "Flow lowers canonical Text comparison" {
+    try std.testing.expectEqual(
+        boundary.ir.InstructionOperation.text_compare,
+        TextCompareBody.control_ir.blocks[0].instructions[2].operation,
+    );
+
+    inline for (.{
+        .{ "alpha", "alpha", @as(i8, 0) },
+        .{ "alpha", "beta", @as(i8, -1) },
+        .{ "beta", "alpha", @as(i8, 1) },
+    }) |fixture| {
+        const state = try TextCompareMachine.initialState(
+            std.testing.allocator,
+            .{
+                .left = try CompareText.fromSlice(fixture[0]),
+                .right = try CompareText.fromSlice(fixture[1]),
+            },
+        );
+        defer TextCompareMachine.deinitState(state);
+        var fuel: u64 = 16;
+        const done = switch (try TextCompareMachine.step(state, &fuel)) {
+            .done => |result| result,
+            else => return error.UnexpectedMachineStep,
+        };
+        defer done.deinit();
+        try std.testing.expectEqual(fixture[2], done.value().*);
     }
 }
 

@@ -55,6 +55,7 @@ test/compile_fail/final_payload_mismatch.zig
 test/compile_fail/final_policy_missing_observation.zig
 test/compile_fail/final_policy_non_boolean_field.zig
 test/compile_fail/fixture.zig
+test/compile_fail/flow_text_compare_nontext.zig
 test/compile_fail/forged_runtime_strategy.zig
 test/compile_fail/invalid_history_limit.zig
 test/compile_fail/missing_action_descriptor.zig

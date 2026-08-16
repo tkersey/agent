@@ -408,6 +408,7 @@ pub fn build(b: *std.Build) void {
         .{ .path = "test/compile_fail/epistemics_effectful_initial.zig", .message = "agent EpistemicStrategy emitInitial must be effect-free" },
         .{ .path = "test/compile_fail/epistemics_effectful_action_admission.zig", .message = "agent custom EpistemicStrategy emitActionAllowed must be effect-free" },
         .{ .path = "test/compile_fail/epistemics_terminal_initial.zig", .message = "agent custom EpistemicStrategy emitInitial must not terminate the Agent program" },
+        .{ .path = "test/compile_fail/flow_text_compare_nontext.zig", .message = "agent.Flow textCompare requires Text values" },
         .{ .path = "test/compile_fail/epistemics_zero_lowering_complexity.zig", .message = "agent custom EpistemicStrategy lowering_complexity must be positive" },
         .{ .path = "test/compile_fail/final_policy_missing_observation.zig", .message = "agent v2 Definition no longer accepts .final_policy; final admission belongs to EpistemicStrategy" },
         .{ .path = "test/compile_fail/final_policy_non_boolean_field.zig", .message = "agent v2 Definition no longer accepts .final_policy; final admission belongs to EpistemicStrategy" },

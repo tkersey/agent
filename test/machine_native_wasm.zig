@@ -57,9 +57,65 @@ const Compiled = agent.compile(Definition, agent.strategy.react(.{}), agent.epis
 });
 const Machine = Compiled.Machine;
 
+const ParityText = boundary.Text(16);
+const TextCompareArgs = struct {
+    left: ParityText,
+    right: ParityText,
+};
+
+fn TextCompareLowered() type {
+    const Builder = agent.Flow(.{ .schema_types = .{ TextCompareArgs, ParityText } });
+    comptime var flow = Builder.init("agent-flow-text-compare-parity");
+    const args = flow.begin(TextCompareArgs);
+    flow.returnValue(flow.textCompare(
+        flow.productExtract(0, args),
+        flow.productExtract(1, args),
+    ));
+    return flow.finish(i8);
+}
+
+const TextCompareBody = struct {
+    const Lowering = TextCompareLowered();
+    pub const InitialArgs = TextCompareArgs;
+    pub const Result = i8;
+    pub const Failure = enum { impossible };
+    pub const effect_sites = boundary.effect.row(.{});
+    pub const schema_types = Lowering.schema_types;
+    pub const control_ir = Lowering.control_ir;
+};
+
+const TextCompareMachine = boundary.program(
+    "agent-flow-text-compare-parity",
+    TextCompareBody,
+).compile(.{
+    .maximum_frames = 2,
+    .maximum_state_bytes = 1024,
+    .maximum_machine_fuel = 32,
+});
+
+fn runTextCompareParity() ?i8 {
+    var allocator = std.heap.FixedBufferAllocator.init(&text_compare_state_storage);
+    const state = TextCompareMachine.initialState(
+        allocator.allocator(),
+        .{
+            .left = ParityText.fromSlice("same") catch return null,
+            .right = ParityText.fromSlice("same") catch return null,
+        },
+    ) catch return null;
+    defer TextCompareMachine.deinitState(state);
+    var fuel: u64 = 32;
+    const done = switch (TextCompareMachine.step(state, &fuel) catch return null) {
+        .done => |result| result,
+        else => return null,
+    };
+    defer done.deinit();
+    return done.value().*;
+}
+
 var state_storage: [256 * 1024]u8 = undefined;
 var image_storage: [128 * 1024]u8 = undefined;
 var output_storage: [256 * 1024]u8 = undefined;
+var text_compare_state_storage: [4096]u8 = undefined;
 
 fn writeInt(output: []u8, cursor: *usize, comptime T: type, value: T) void {
     const width = @divExact(@typeInfo(T).int.bits, 8);
@@ -149,6 +205,7 @@ pub export fn agentMachineParityRun() u32 {
     writeInt(&output_storage, &cursor, u32, instruction_length);
     writeInt(&output_storage, &cursor, u32, @intFromEnum(request.phase));
     writeInt(&output_storage, &cursor, u32, done.value().*);
+    writeInt(&output_storage, &cursor, i8, runTextCompareParity() orelse return 0);
     writeBytes(&output_storage, &cursor, &Compiled.DefinitionManifestBytes);
     writeBytes(&output_storage, &cursor, &Compiled.StrategyManifestBytes);
     writeBytes(&output_storage, &cursor, &Compiled.ManifestBytes);

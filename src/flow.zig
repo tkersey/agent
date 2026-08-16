@@ -525,6 +525,19 @@ pub fn Flow(comptime config: anytype) type {
             return self.instruction(bool, .pure, .integer_equal, .{ left, right });
         }
 
+        /// Compare two bounded UTF-8 Text values using Boundary's canonical
+        /// bytewise ordering. The result is negative, zero, or positive.
+        pub fn textCompare(self: *Self, left: anytype, right: anytype) Value(i8) {
+            const Left = @TypeOf(left).Type;
+            const Right = @TypeOf(right).Type;
+            if (comptime !boundary.schema.isTextType(Left) or
+                !boundary.schema.isTextType(Right))
+            {
+                @compileError("agent.Flow textCompare requires Text values");
+            }
+            return self.instruction(i8, .pure, .text_compare, .{ left, right });
+        }
+
         pub fn integerConvert(
             self: *Self,
             comptime Result: type,

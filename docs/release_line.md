@@ -53,3 +53,9 @@ Memory and the selected Action; denial produces the definition's typed
 `invalid_variant` failure before `flow.perform`. Implementations that omit the
 hook retain the v2.2.0 admit-all behavior. Machine ABI v2 and `ABL_RNF2` remain
 unchanged.
+
+Agent v2.4.0 exposes Boundary's existing pure `text_compare` operation as the
+typed `Flow.textCompare` authoring seam. Custom strategies can compare bounded
+UTF-8 Text values without bypassing Flow or adding an effect. Native and WASM
+Machine behavior remain byte-identical; Machine ABI v2 and `ABL_RNF2` are
+unchanged.

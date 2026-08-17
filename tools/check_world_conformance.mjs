@@ -24,7 +24,7 @@ import {
 
 const options = parseArgs(process.argv.slice(2));
 const versions = Object.freeze({
-    agent: options.agentV1Release ? "1.1.2" : "2.5.0",
+    agent: options.agentV1Release ? "1.1.2" : "2.6.0",
     boundary: options.agentV1Release ? "1.3.2" : "1.5.0",
     world: options.agentV1Release ? "3.1.1" : "3.1.3",
     host: "1.0.1",

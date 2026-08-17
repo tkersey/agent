@@ -3,7 +3,7 @@ const budget_types = @import("budget.zig");
 const definition = @import("definition.zig");
 
 /// Agent package bootstrap version.
-pub const package_version = "2.5.0";
+pub const package_version = "2.6.0";
 
 /// Define immutable typed comptime agent data and close its Action algebra.
 pub const define = definition.define;

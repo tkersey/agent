@@ -392,6 +392,7 @@ pub fn build(b: *std.Build) void {
         .{ .path = "test/compile_fail/fail_payload_mismatch.zig", .message = "agent fail action payload differs from Definition.Failure" },
         .{ .path = "test/compile_fail/missing_final_action.zig", .message = "agent action algebra requires a final action" },
         .{ .path = "test/compile_fail/duplicate_stable_action_name.zig", .message = "agent action stable name is duplicated" },
+        .{ .path = "test/compile_fail/action_metadata_class_wrong_type.zig", .message = "agent action metadata .class must have type agent.action.Class" },
         .{ .path = "test/compile_fail/oversized_instructions.zig", .message = "agent definition instructions exceed maximum_instructions_bytes" },
         .{ .path = "test/compile_fail/zero_decision_budget.zig", .message = "agent maximum_decisions must be positive" },
         .{ .path = "test/compile_fail/invalid_history_limit.zig", .message = "agent.epistemics.verbatim maximum_observations exceeds u32" },

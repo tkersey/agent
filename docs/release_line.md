@@ -70,3 +70,10 @@ which omits the dead runtime admission branch; the existing global hook remains
 the required fail-closed fallback for specialized declarations. Actual Control
 IR must still fit Boundary's unchanged ceilings; Machine ABI v2 and `ABL_RNF2`
 remain unchanged.
+
+Agent v2.6.0 makes action metadata class admission eager at the public
+descriptor-construction boundary. Effect, final, and fail descriptors resolve
+their metadata class as `agent.action.Class` before returning the descriptor
+type, so foreign enum values cannot bypass admission through Zig's lazy
+declaration analysis. Contextual enum literals and the default `.custom` class
+remain supported; Machine ABI v2 and `ABL_RNF2` remain unchanged.

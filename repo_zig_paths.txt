@@ -40,6 +40,7 @@ test/action_algebra.zig
 test/actuality_definition.zig
 test/boundary_equivalence.zig
 test/budgets.zig
+test/compile_fail/action_metadata_class_wrong_type.zig
 test/compile_fail/decision_result_too_small.zig
 test/compile_fail/duplicate_action_descriptor.zig
 test/compile_fail/duplicate_stable_action_name.zig

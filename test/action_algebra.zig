@@ -32,7 +32,7 @@ const Definition = agent.define(.{
         agent.action.effect(.lookup, .found, Lookup, .{
             .name = "lookup",
             .description = "Look up a value.",
-            .class = .tool,
+            .class = @as(agent.action.Class, .tool),
         }),
     },
     .budget = .{
@@ -59,4 +59,15 @@ test "effect descriptor retains exact typed site relation" {
     try std.testing.expect(Descriptor.Site.Payload == u32);
     try std.testing.expect(Descriptor.Site.Resume == bool);
     try std.testing.expectEqualStrings("found", Descriptor.observation_name);
+}
+
+test "action metadata class is typed and defaults to custom when omitted" {
+    const EffectDescriptor = Definition.ActionDescriptor(0);
+    const FinalDescriptor = Definition.ActionDescriptor(1);
+    const FailDescriptor = Definition.ActionDescriptor(2);
+
+    try std.testing.expect(@TypeOf(EffectDescriptor.class) == agent.action.Class);
+    try std.testing.expectEqual(agent.action.Class.tool, EffectDescriptor.class);
+    try std.testing.expectEqual(agent.action.Class.custom, FinalDescriptor.class);
+    try std.testing.expectEqual(agent.action.Class.custom, FailDescriptor.class);
 }

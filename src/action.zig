@@ -33,7 +33,13 @@ fn metadataDescription(comptime metadata: anytype) []const u8 {
 
 fn metadataClass(comptime metadata: anytype) Class {
     if (!@hasField(@TypeOf(metadata), "class")) return .custom;
-    return @field(Class, @tagName(metadata.class));
+
+    const class = metadata.class;
+    const ClassType = @TypeOf(class);
+    if (ClassType != Class and ClassType != @TypeOf(.custom)) {
+        @compileError("agent action metadata .class must have type agent.action.Class");
+    }
+    return class;
 }
 
 /// Bind one Action variant to one statically known typed Boundary effect site.
@@ -43,6 +49,7 @@ pub fn effect(
     comptime EffectSite: type,
     comptime metadata: anytype,
 ) type {
+    const resolved_class = metadataClass(metadata);
     return struct {
         pub const kind = Kind.effect;
         pub const action_name = @tagName(action_variant);
@@ -50,7 +57,7 @@ pub fn effect(
         pub const Site = EffectSite;
         pub const name = metadataName(metadata);
         pub const description = metadataDescription(metadata);
-        pub const class = metadataClass(metadata);
+        pub const class = resolved_class;
     };
 }
 
@@ -59,12 +66,13 @@ pub fn final(
     comptime action_variant: anytype,
     comptime metadata: anytype,
 ) type {
+    const resolved_class = metadataClass(metadata);
     return struct {
         pub const kind = Kind.final;
         pub const action_name = @tagName(action_variant);
         pub const name = metadataName(metadata);
         pub const description = metadataDescription(metadata);
-        pub const class = metadataClass(metadata);
+        pub const class = resolved_class;
     };
 }
 
@@ -73,12 +81,13 @@ pub fn fail(
     comptime action_variant: anytype,
     comptime metadata: anytype,
 ) type {
+    const resolved_class = metadataClass(metadata);
     return struct {
         pub const kind = Kind.fail;
         pub const action_name = @tagName(action_variant);
         pub const name = metadataName(metadata);
         pub const description = metadataDescription(metadata);
-        pub const class = metadataClass(metadata);
+        pub const class = resolved_class;
     };
 }
 

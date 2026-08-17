@@ -1,0 +1,25 @@
+const agent = @import("agent");
+
+const ForeignClass = enum { tool };
+const Action = union(enum) { final: u32 };
+const Failure = enum { authored };
+
+comptime {
+    _ = agent.define(.{
+        .name = "foreign-action-class",
+        .version = "1.0.0",
+        .instructions = "Return.",
+        .Goal = u32,
+        .Action = Action,
+        .Observation = void,
+        .Result = u32,
+        .Failure = Failure,
+        .decision = .{ .interface = "decide.v1", .maximum_request_bytes = 64, .maximum_result_bytes = 64 },
+        .actions = .{agent.action.final(.final, .{
+            .name = "finish",
+            .description = "Finish.",
+            .class = ForeignClass.tool,
+        })},
+        .budget = .{ .maximum_turns = 1, .maximum_decisions = 1, .maximum_effect_actions = 0, .maximum_child_actions = 0 },
+    });
+}

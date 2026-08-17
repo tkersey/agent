@@ -33,7 +33,13 @@ fn metadataDescription(comptime metadata: anytype) []const u8 {
 
 fn metadataClass(comptime metadata: anytype) Class {
     if (!@hasField(@TypeOf(metadata), "class")) return .custom;
-    return @field(Class, @tagName(metadata.class));
+
+    const class = metadata.class;
+    const ClassType = @TypeOf(class);
+    if (ClassType != Class and ClassType != @TypeOf(.custom)) {
+        @compileError("agent action metadata .class must have type agent.action.Class");
+    }
+    return class;
 }
 
 /// Bind one Action variant to one statically known typed Boundary effect site.

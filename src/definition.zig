@@ -78,6 +78,10 @@ fn assertDefinitionPortable(comptime T: type, comptime surface: []const u8) void
     boundary.schema.assertPortable(T);
 }
 
+fn descriptorClassIsValid(comptime kind: anytype, comptime class: anytype) bool {
+    return kind == .effect or class != .child_agent;
+}
+
 fn validateDefinition(comptime spec: anytype) void {
     @setEvalBranchQuota(1_000_000);
     if (@hasField(@TypeOf(spec), "history")) {
@@ -139,6 +143,9 @@ fn validateDefinition(comptime spec: anytype) void {
         }
         if (Descriptor.description.len > maximum_action_description_bytes) {
             @compileError("agent action description exceeds its bound");
+        }
+        if (!descriptorClassIsValid(Descriptor.kind, Descriptor.class)) {
+            @compileError("agent child_agent class requires an effect action");
         }
 
         _ = unionFieldType(spec.Action, Descriptor.action_name, "Action");
@@ -275,6 +282,18 @@ pub fn define(comptime spec: anytype) type {
             @compileError("agent action algebra has no stable name '" ++ stable_name ++ "'");
         }
     };
+}
+
+test "descriptor classes admit child_agent only for effects" {
+    const Kind = enum { effect, final, fail };
+    const Class = enum { child_agent, other };
+
+    try std.testing.expect(descriptorClassIsValid(Kind.effect, Class.child_agent));
+    try std.testing.expect(descriptorClassIsValid(Kind.effect, Class.other));
+    try std.testing.expect(descriptorClassIsValid(Kind.final, Class.other));
+    try std.testing.expect(descriptorClassIsValid(Kind.fail, Class.other));
+    try std.testing.expect(!descriptorClassIsValid(Kind.final, Class.child_agent));
+    try std.testing.expect(!descriptorClassIsValid(Kind.fail, Class.child_agent));
 }
 
 comptime {

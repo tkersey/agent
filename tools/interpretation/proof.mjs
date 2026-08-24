@@ -84,7 +84,9 @@ export async function proveAgentInterpretation(options) {
     const runtime = await prepareCleanRoom(runtimeRoot, interpretedRoot, options);
     const cleanInventory = await assertCleanRoom(runtimeRoot, runtime);
     const interpretedOutput = join(runtimeRoot, "interpreted-result.json");
-    const sandboxProfile = await cleanRoomSandboxProfile(options, runtimeRoot);
+    const sandboxProfile = process.platform === "darwin"
+      ? await cleanRoomSandboxProfile(options, runtimeRoot)
+      : "";
     const sandboxEnvironment = {
       HOME: interpretedHome,
       TMPDIR: interpretedHome,
@@ -95,10 +97,10 @@ export async function proveAgentInterpretation(options) {
     const sandboxDenials = await proveSandboxReadDenials(
       options,
       sandboxProfile,
-      sandboxEnvironment
+      sandboxEnvironment,
+      runtimeRoot
     );
-    const child = Bun.spawn([
-      "/usr/bin/sandbox-exec", "-p", sandboxProfile,
+    const child = Bun.spawn(sandboxInvocation(options, sandboxProfile, runtimeRoot, [
       options.bunExecutable, runtime.drive,
       "--bpi1", join(runtime.artifacts, "repository-repair.agent.bpi1"),
       "--mv2p1", join(runtime.artifacts, "repository-repair.agent.mv2p1"),
@@ -113,7 +115,7 @@ export async function proveAgentInterpretation(options) {
       "--temporary-home", interpretedHome,
       "--bun-executable", options.bunExecutable,
       "--output", interpretedOutput
-    ], {
+    ]), {
       cwd: runtimeRoot,
       stdout: "pipe",
       stderr: "pipe",
@@ -218,21 +220,23 @@ async function assertAgentSourceClean(agentRoot) {
   }
 }
 
-async function proveSandboxReadDenials(options, sandboxProfile, environment) {
+async function proveSandboxReadDenials(
+  options,
+  sandboxProfile,
+  environment,
+  runtimeRoot
+) {
   const denied = {};
   for (const [name, path] of [
     ["agent_source", join(options.agentRoot, "build.zig")],
     ["application_wasm", options.applicationWasm]
   ]) {
     const script = `await Bun.file(${JSON.stringify(resolve(path))}).arrayBuffer();`;
-    const child = Bun.spawn([
-      "/usr/bin/sandbox-exec",
-      "-p",
-      sandboxProfile,
+    const child = Bun.spawn(sandboxInvocation(options, sandboxProfile, runtimeRoot, [
       options.bunExecutable,
       "--eval",
       script
-    ], { stdout: "pipe", stderr: "pipe", env: environment });
+    ]), { stdout: "pipe", stderr: "pipe", env: environment });
     const [, , exitCode] = await Promise.all([
       new Response(child.stdout).text(),
       new Response(child.stderr).text(),
@@ -244,6 +248,30 @@ async function proveSandboxReadDenials(options, sandboxProfile, environment) {
     throw new Error(`clean_room_sandbox_read_allowed:${JSON.stringify(denied)}`);
   }
   return Object.freeze(denied);
+}
+
+function sandboxInvocation(options, profile, runtimeRoot, argv) {
+  if (process.platform === "darwin") {
+    return ["/usr/bin/sandbox-exec", "-p", profile, ...argv];
+  }
+  if (process.platform === "linux") {
+    const bubblewrap = Bun.which("bwrap");
+    if (bubblewrap === null) throw new Error("linux_clean_room_requires_bwrap");
+    return [
+      bubblewrap,
+      "--die-with-parent",
+      "--new-session",
+      "--unshare-net",
+      "--ro-bind", "/", "/",
+      "--tmpfs", resolve(options.agentRoot),
+      "--tmpfs", "/tmp",
+      "--bind", resolve(runtimeRoot), resolve(runtimeRoot),
+      "--dev", "/dev",
+      "--proc", "/proc",
+      ...argv
+    ];
+  }
+  throw new Error(`clean_room_platform_unsupported:${process.platform}`);
 }
 
 async function cleanRoomSandboxProfile(options, runtimeRoot) {

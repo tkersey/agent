@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 
 import { readBpi1EffectCatalog } from "./bpi1_effects.mjs";
 import { resolveInterpretedEffect } from "./effect_resolver.mjs";
+import { PROOF_LIMITS } from "./proof_limits.mjs";
 import {
   compileKernel,
   decodeRequestIdentity,
@@ -58,6 +59,9 @@ export async function runInterpreted(options) {
   let terminal = null;
 
   while (terminal === null) {
+    if (transitionIndex >= PROOF_LIMITS.maximumTransitions) {
+      throw new Error("interpreted_transition_limit");
+    }
     const stepped = await executeKernelCommand({
       kernel,
       bpi1: artifacts.bpi1,
@@ -68,6 +72,9 @@ export async function runInterpreted(options) {
     });
     transitionIndex += 1;
     if (stepped.outcome === 3) {
+      if (trace.length === PROOF_LIMITS.maximumEffects) {
+        throw new Error("interpreted_effect_limit");
+      }
       const inspected = await executeKernelCommand({
         kernel,
         bpi1: artifacts.bpi1,

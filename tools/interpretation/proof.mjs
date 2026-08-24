@@ -17,7 +17,8 @@ const GENERIC_FILES = Object.freeze([
   "drive.mjs",
   "kernel_client.mjs",
   "bpi1_effects.mjs",
-  "effect_resolver.mjs"
+  "effect_resolver.mjs",
+  "proof_limits.mjs"
 ]);
 const ARTIFACT_FILES = Object.freeze([
   "repository-repair.agent.bpi1",

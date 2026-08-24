@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 
 import { readBpi1EffectCatalog } from "./bpi1_effects.mjs";
 import { compileKernel, decodeRequestIdentity, executeKernelCommand } from "./kernel_client.mjs";
+import { PROOF_LIMITS } from "./proof_limits.mjs";
 
 export async function runSpecialized(options) {
   const host = await import(pathToFileURL(join(options.worldHostRoot, "src/v1/index.mjs")));
@@ -56,6 +57,9 @@ export async function runSpecialized(options) {
   let current = await controller.initialize("agent-interpretation-specialized", "main", { initialArgsBytes });
   while (current.frame.status === host.FrameStatus.needsEffect ||
       current.frame.status === host.FrameStatus.yieldedFuel) {
+    if (transitionIndex > PROOF_LIMITS.maximumTransitions) {
+      throw new Error("specialized_transition_limit");
+    }
     if (current.frame.status === host.FrameStatus.yieldedFuel) {
       yieldBoundaries.push(Object.freeze({
         transitionIndex,
@@ -64,6 +68,9 @@ export async function runSpecialized(options) {
       current = await controller.advance("agent-interpretation-specialized", "main");
       transitionIndex += 1;
       continue;
+    }
+    if (trace.length === PROOF_LIMITS.maximumEffects) {
+      throw new Error("specialized_effect_limit");
     }
     const pending = current.frame.pendingEffect;
     const machineState = rootMachineState(current.frame.stateBytes, manifest.applicationId);

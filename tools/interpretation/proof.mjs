@@ -10,8 +10,18 @@ import { runtimeDependencyDigest } from "./dependency_digest.mjs";
 
 const EXPECTED_RUNTIME_DEPENDENCIES = Object.freeze({
   worldHost: "dfb59aaa8c2288ae85c69a31cfd7a400d9f2f27f26e0098f973442cb273977f2",
-  worldCapabilities: "f38cdb293819098b19cfcc03f65ba61f1257abf73ffef0c7e70a0e5468c3d230"
+  worldCapabilities: "7f68853a78df798a959ff68ff06ad0e09dfc0c7e0d3a3e61d697da78f0cb984e"
 });
+const WORLD_CAPABILITIES_RUNTIME_PATHS = Object.freeze([
+  "src/v1/errors.mjs",
+  "src/v1/protocol.mjs",
+  "src/v1/router.mjs",
+  "src/v1/actuality/repository_repair_codecs.mjs",
+  "src/v1/actuality/repository_repair_fixture_binding.mjs",
+  "src/v1/actuality/repository_workspace_binding.mjs",
+  "packages/repository-repair-decision-fixture",
+  "packages/repository-workspace-actuality"
+]);
 
 const GENERIC_FILES = Object.freeze([
   "drive.mjs",
@@ -258,11 +268,10 @@ function denyOutside(operation, admittedPaths) {
 
 async function bindRuntimeDependencies(options) {
   const worldHost = await runtimeDependencyDigest(options.worldHostRoot, ["src/v1"]);
-  const worldCapabilities = await runtimeDependencyDigest(options.capabilitiesRoot, [
-    "src/v1",
-    "packages/repository-repair-decision-fixture",
-    "packages/repository-workspace-actuality"
-  ]);
+  const worldCapabilities = await runtimeDependencyDigest(
+    options.capabilitiesRoot,
+    WORLD_CAPABILITIES_RUNTIME_PATHS
+  );
   if (worldHost.sha256 !== EXPECTED_RUNTIME_DEPENDENCIES.worldHost ||
       worldCapabilities.sha256 !== EXPECTED_RUNTIME_DEPENDENCIES.worldCapabilities) {
     throw new Error(`runtime_dependency_digest_mismatch:${worldHost.sha256}:${worldCapabilities.sha256}`);

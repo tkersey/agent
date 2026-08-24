@@ -21,7 +21,7 @@ export async function runLifecycleProof(mode, options = {}) {
     return Object.freeze({
       agent_actuality_format: 1,
       agent_actuality_mode: mode,
-      application_id: roots.capabilities.ACTUALITY_APPLICATION_ID,
+      application_id: roots.applicationId,
       ...receipt
     });
   } finally {
@@ -171,7 +171,7 @@ async function proveMigration(roots, temporaryRoot) {
     workerFactory: () => new roots.host.ApplicationWorker({ maximumMemoryBytes: WORKER_MEMORY_BYTES }),
     preflight: async (manifest) => {
       targetPreflights += 1;
-      return { blockers: hex(manifest.applicationId) === roots.capabilities.ACTUALITY_APPLICATION_ID
+      return { blockers: hex(manifest.applicationId) === roots.applicationId
         ? []
         : ["application_identity_mismatch"] };
     }
@@ -223,11 +223,17 @@ async function loadRoots(options) {
   const artifactRoot = resolve(options.artifactRoot ?? join(agentRoot, "zig-out/agent-actuality"));
   const host = await import(pathToFileURL(join(hostRoot, "src/v1/index.mjs")));
   const capabilities = await import(pathToFileURL(join(capabilitiesRoot, "src/v1/index.mjs")));
+  const manifestBytes = await readFile(join(artifactRoot, "repository-repair-actuality.manifest.bin"));
+  const applicationId = hex(host.decodeApplicationManifest(manifestBytes).applicationId);
+  if (!capabilities.ACTUALITY_APPLICATION_IDS.includes(applicationId)) {
+    throw new Error("application_identity_not_admitted");
+  }
   return {
     agentRoot,
     capabilitiesRoot,
     host,
     capabilities,
+    applicationId,
     wasmBytes: await readFile(join(artifactRoot, "repository-repair-actuality.world.wasm")),
     initialArgsBytes: await readFile(join(artifactRoot, "initial-args.bin"))
   };
@@ -252,7 +258,7 @@ async function createEnvironment(roots, workspace, { faultInjector = async () =>
     headStore,
     workerFactory: () => new roots.host.ApplicationWorker({ maximumMemoryBytes: WORKER_MEMORY_BYTES }),
     preflight: async (manifest) => ({
-      blockers: hex(manifest.applicationId) === roots.capabilities.ACTUALITY_APPLICATION_ID
+      blockers: hex(manifest.applicationId) === roots.applicationId
         ? []
         : ["application_identity_mismatch"]
     }),
@@ -271,7 +277,7 @@ function environmentForImported(roots, controller, workspace) {
     controller,
     router: new roots.capabilities.CapabilityRouterV1({ bindings }),
     context: {
-      applicationId: roots.capabilities.ACTUALITY_APPLICATION_ID,
+      applicationId: roots.applicationId,
       workspaceRoot: workspace.root,
       workspaceRootReal: workspace.rootReal,
       temporaryHome: workspace.temporaryHome,

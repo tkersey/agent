@@ -36,6 +36,12 @@ try {
   const initialCommit = await git(workspaceRoot, ["rev-parse", "HEAD"]);
 
   const wasmBytes = await readFile(join(artifactRoot, "repository-repair-actuality.world.wasm"));
+  const manifestBytes = await readFile(join(artifactRoot, "repository-repair-actuality.manifest.bin"));
+  const applicationManifest = host.decodeApplicationManifest(manifestBytes);
+  const applicationId = Buffer.from(applicationManifest.applicationId).toString("hex");
+  if (!capabilities.ACTUALITY_APPLICATION_IDS.includes(applicationId)) {
+    throw new Error("application_identity_not_admitted");
+  }
   const initialArgsBytes = await readFile(join(artifactRoot, "initial-args.bin"));
   const blockStore = new host.MemoryBlockStore();
   const headStore = new host.MemoryBranchHeadStore();
@@ -47,7 +53,7 @@ try {
     workerFactory: () => new host.ApplicationWorker({ maximumMemoryBytes: 256 * 1024 * 1024 }),
     preflight: async (manifest) => {
       preflightRuns += 1;
-      return { blockers: Buffer.from(manifest.applicationId).toString("hex") === capabilities.ACTUALITY_APPLICATION_ID
+      return { blockers: Buffer.from(manifest.applicationId).toString("hex") === applicationId
         ? []
         : ["application_identity_mismatch"] };
     }
@@ -58,7 +64,7 @@ try {
   ];
   const router = new capabilities.CapabilityRouterV1({ bindings });
   const context = {
-    applicationId: capabilities.ACTUALITY_APPLICATION_ID,
+    applicationId,
     workspaceRoot,
     workspaceRootReal: await realpath(workspaceRoot),
     temporaryHome,
@@ -155,7 +161,7 @@ try {
   const receipt = {
     agent_actuality_format: 1,
     agent_actuality_mode: "deterministic",
-    application_id: capabilities.ACTUALITY_APPLICATION_ID,
+    application_id: applicationId,
     application_wasm_sha256: sha256(wasmBytes),
     initial_git_tree: initialTree,
     initial_git_commit: initialCommit,

@@ -9,8 +9,8 @@ const candidate = JSON.parse(await readFile(new URL(
   "../../conformance/agent-v2/candidate.json",
   import.meta.url,
 )));
-const APPLICATION_ID = admittedDigest(candidate.identities?.applicationId, "candidate_application_id");
-const DECISION_CONTRACT_DIGEST = admittedDigest(
+const LEGACY_APPLICATION_ID = admittedDigest(candidate.identities?.applicationId, "candidate_application_id");
+const LEGACY_DECISION_CONTRACT_DIGEST = admittedDigest(
   candidate.identities?.decisionContractDigest,
   "candidate_decision_contract_digest",
 );
@@ -80,6 +80,8 @@ export async function runLiveActuality(options = {}) {
   const capabilitiesRoot = resolve(options.capabilitiesRoot ?? process.env.AGENT_WORLD_CAPABILITIES_ROOT ?? join(agentRoot, "../world-capabilities"));
   const artifactRoot = resolve(options.artifactRoot ?? join(agentRoot, "zig-out/agent-actuality"));
   const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-actuality-live-"));
+  let applicationId = LEGACY_APPLICATION_ID;
+  let decisionContractDigest = LEGACY_DECISION_CONTRACT_DIGEST;
   let context;
   let genesisFrameId = null;
   let terminalFrameId = null;
@@ -99,6 +101,10 @@ export async function runLiveActuality(options = {}) {
       capabilitiesRoot,
       "packages/repository-workspace-actuality/adapter.mjs"
     )));
+    const openaiAdapter = await import(pathToFileURL(join(
+      capabilitiesRoot,
+      "packages/repository-repair-openai/adapter.mjs"
+    )));
     const workspaceRoot = join(temporaryRoot, "workspace");
     const temporaryHome = join(temporaryRoot, "home");
     await cp(join(agentRoot, "fixtures/repository-repair-v1"), workspaceRoot, {
@@ -109,6 +115,22 @@ export async function runLiveActuality(options = {}) {
     await initializeGit(workspaceRoot);
 
     const wasmBytes = await readFile(join(artifactRoot, "repository-repair-actuality.world.wasm"));
+    const manifestBytes = await readFile(join(artifactRoot, "repository-repair-actuality.manifest.bin"));
+    applicationId = hex(host.decodeApplicationManifest(manifestBytes).applicationId);
+    const applicationIndex = openaiAdapter.ADMITTED_APPLICATION_IDS.indexOf(applicationId);
+    if (applicationIndex < 0) throw new Error("application_identity_not_admitted");
+    const decisionContractBytes = await readFile(join(
+      artifactRoot,
+      "repository-repair-decision-contract.bin"
+    ));
+    decisionContractDigest = decisionContractBytes.subarray(-32).toString("hex");
+    const admittedContracts = [
+      openaiAdapter.DECISION_CONTRACT_DIGEST,
+      openaiAdapter.INTERPRETATION_DECISION_CONTRACT_DIGEST
+    ];
+    if (decisionContractDigest !== admittedContracts.at(applicationIndex)) {
+      throw new Error("decision_contract_identity_not_admitted");
+    }
     const initialArgsBytes = await readFile(join(artifactRoot, "initial-args.bin"));
     const controller = await host.RunControllerV1.create({
       wasmBytes,
@@ -116,7 +138,7 @@ export async function runLiveActuality(options = {}) {
       headStore: new host.MemoryBranchHeadStore(),
       workerFactory: () => new host.ApplicationWorker({ maximumMemoryBytes: WORKER_MEMORY_BYTES }),
       preflight: async (manifest) => ({
-        blockers: hex(manifest.applicationId) === APPLICATION_ID ? [] : ["application_identity_mismatch"]
+        blockers: hex(manifest.applicationId) === applicationId ? [] : ["application_identity_mismatch"]
       })
     });
     const router = new capabilities.CapabilityRouterV1({
@@ -126,7 +148,7 @@ export async function runLiveActuality(options = {}) {
       ]
     });
     context = {
-      applicationId: APPLICATION_ID,
+      applicationId,
       workspaceRoot,
       workspaceRootReal: await realpath(workspaceRoot),
       temporaryHome,
@@ -135,7 +157,7 @@ export async function runLiveActuality(options = {}) {
       secrets: { OPENAI_API_KEY: apiKey },
       openaiModel: model,
       allowedModels: [model],
-      decisionContractDigest: DECISION_CONTRACT_DIGEST,
+      decisionContractDigest,
       maximumModelCalls: 16,
       policy: { repositoryActuality: true, openaiRepositoryRepair: true }
     };
@@ -158,7 +180,7 @@ export async function runLiveActuality(options = {}) {
         const proposalDigest = workspaceAdapter.proposalDigest({ operation: "replace", ...proposal });
         const prior = await readFile(join(workspaceRoot, proposal.path), "utf8");
         process.stderr.write(
-          `\nApplication: ${APPLICATION_ID}\n` +
+          `\nApplication: ${applicationId}\n` +
           `EffectRequest: ${requestId}\n` +
           `Path: ${proposal.path}\n` +
           `Expected SHA-256: ${proposal.expectedSha256}\n` +
@@ -204,7 +226,7 @@ export async function runLiveActuality(options = {}) {
     const receipt = {
       agent_actuality_format: 1,
       agent_actuality_mode: "live",
-      application_id: APPLICATION_ID,
+      application_id: applicationId,
       application_wasm_sha256: sha256(wasmBytes),
       openai_responses_api: true,
       openai_model_requested_present: model.length > 0,
@@ -261,6 +283,7 @@ export async function runLiveActuality(options = {}) {
       interfaces,
       provider,
       evidenceDigests,
+      applicationId,
       failureCode: publicFailureCode(error)
     }));
   } finally {
@@ -301,6 +324,7 @@ export function failedAttemptReceipt({
   interfaces,
   provider,
   evidenceDigests,
+  applicationId = LEGACY_APPLICATION_ID,
   failureCode
 }) {
   const modelCalls = context?.modelCalls ?? 0;
@@ -312,7 +336,7 @@ export function failedAttemptReceipt({
   const receipt = {
     agent_actuality_format: 1,
     agent_actuality_mode: "live",
-    application_id: APPLICATION_ID,
+    application_id: applicationId,
     openai_responses_api: true,
     openai_model_requested_present: typeof model === "string" && model.length > 0,
     openai_store: false,

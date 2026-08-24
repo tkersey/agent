@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 
@@ -71,9 +71,22 @@ export async function proveAgentInterpretation(options) {
 
     const runtime = await prepareCleanRoom(runtimeRoot, interpretedRoot, options);
     const cleanInventory = await assertCleanRoom(runtimeRoot, runtime);
-    const interpretedOutput = join(temporaryRoot, "interpreted-result.json");
+    const interpretedOutput = join(runtimeRoot, "interpreted-result.json");
+    const sandboxProfile = await cleanRoomSandboxProfile(options, runtimeRoot);
+    const sandboxEnvironment = {
+      HOME: interpretedHome,
+      TMPDIR: interpretedHome,
+      PATH: dirname(options.bunExecutable),
+      NO_COLOR: "1",
+      LC_ALL: "C"
+    };
+    const sandboxDenials = await proveSandboxReadDenials(
+      options,
+      sandboxProfile,
+      sandboxEnvironment
+    );
     const child = Bun.spawn([
-      "/usr/bin/sandbox-exec", "-p", "(version 1) (allow default) (deny network*)",
+      "/usr/bin/sandbox-exec", "-p", sandboxProfile,
       options.bunExecutable, runtime.drive,
       "--bpi1", join(runtime.artifacts, "repository-repair.agent.bpi1"),
       "--mv2p1", join(runtime.artifacts, "repository-repair.agent.mv2p1"),
@@ -92,13 +105,7 @@ export async function proveAgentInterpretation(options) {
       cwd: runtimeRoot,
       stdout: "pipe",
       stderr: "pipe",
-      env: {
-        HOME: interpretedHome,
-        TMPDIR: interpretedHome,
-        PATH: dirname(options.bunExecutable),
-        NO_COLOR: "1",
-        LC_ALL: "C"
-      }
+      env: sandboxEnvironment
     });
     const [stdout, stderr, exitCode] = await Promise.all([
       new Response(child.stdout).text(),
@@ -119,7 +126,13 @@ export async function proveAgentInterpretation(options) {
     }
     assertRepositoryResult(specializedGit, specialized, interpreted);
 
-    const negatives = await runNegativeGates(options, interpreted, runtimeRoot, runtime);
+    const negatives = await runNegativeGates(
+      options,
+      interpreted,
+      runtimeRoot,
+      runtime,
+      sandboxDenials
+    );
     const bpi1 = await readFile(join(options.artifactRoot, "repository-repair.agent.bpi1"));
     const mv2p1 = await readFile(join(options.artifactRoot, "repository-repair.agent.mv2p1"));
     const contract = await readFile(join(options.artifactRoot, "repository-repair.decision-contract.bin"));
@@ -163,6 +176,84 @@ export async function proveAgentInterpretation(options) {
     if (!options.keepTemporary) await rm(temporaryRoot, { recursive: true, force: true });
     else process.stderr.write(`temporary_root=${temporaryRoot}\n`);
   }
+}
+
+async function proveSandboxReadDenials(options, sandboxProfile, environment) {
+  const denied = {};
+  for (const [name, path] of [
+    ["agent_source", join(options.agentRoot, "build.zig")],
+    ["application_wasm", options.applicationWasm]
+  ]) {
+    const script = `await Bun.file(${JSON.stringify(resolve(path))}).arrayBuffer();`;
+    const child = Bun.spawn([
+      "/usr/bin/sandbox-exec",
+      "-p",
+      sandboxProfile,
+      options.bunExecutable,
+      "--eval",
+      script
+    ], { stdout: "pipe", stderr: "pipe", env: environment });
+    const [, , exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited
+    ]);
+    denied[name] = exitCode !== 0;
+  }
+  if (Object.values(denied).some((value) => value !== true)) {
+    throw new Error(`clean_room_sandbox_read_allowed:${JSON.stringify(denied)}`);
+  }
+  return Object.freeze(denied);
+}
+
+async function cleanRoomSandboxProfile(options, runtimeRoot) {
+  const declaredReadable = [
+    "/System",
+    "/usr",
+    "/bin",
+    "/sbin",
+    "/dev",
+    "/private/etc",
+    "/private/var/db/timezone",
+    "/opt/homebrew",
+    runtimeRoot,
+    options.worldHostRoot,
+    options.capabilitiesRoot
+  ];
+  const readable = [...new Set([
+    ...declaredReadable,
+    ...await Promise.all(declaredReadable.map((path) => realpath(path)))
+  ])];
+  const writable = [...new Set([
+    runtimeRoot,
+    await realpath(runtimeRoot),
+    "/dev",
+    await realpath("/dev")
+  ])];
+  const readDeny = denyOutside("file-read*", readable);
+  const writeDeny = denyOutside("file-write*", writable);
+  return `(version 1)
+    (allow default)
+    (deny network*)
+    ${readDeny}
+    ${writeDeny}`;
+}
+
+function denyOutside(operation, admittedPaths) {
+  const paths = [...new Set(admittedPaths.map((path) => resolve(path)))];
+  const ancestors = new Set(["/"]);
+  for (const path of paths) {
+    let current = dirname(path);
+    while (current !== "/") {
+      ancestors.add(current);
+      current = dirname(current);
+    }
+  }
+  const admitted = [
+    ...paths.map((path) => `(subpath ${JSON.stringify(path)})`),
+    ...[...ancestors].map((path) => `(literal ${JSON.stringify(path)})`)
+  ];
+  return `(deny ${operation} (require-all ${admitted.map((rule) => `(require-not ${rule})`).join(" ")}))`;
 }
 
 async function bindRuntimeDependencies(options) {
@@ -276,7 +367,13 @@ function compareExecution(specialized, interpreted) {
   }
 }
 
-async function runNegativeGates(options, interpreted, runtimeRoot, runtime) {
+async function runNegativeGates(
+  options,
+  interpreted,
+  runtimeRoot,
+  runtime,
+  sandboxDenials
+) {
   const [kernelBytes, bpi1, mv2p1, initialArgs, unrelatedBpi1, unrelatedMv2p1] = await Promise.all([
     readFile(options.kernelWasm),
     readFile(join(options.artifactRoot, "repository-repair.agent.bpi1")),
@@ -359,7 +456,9 @@ async function runNegativeGates(options, interpreted, runtimeRoot, runtime) {
     mutated_response_rejected: mutatedResponseRejected,
     source_smuggling_rejected: sourceSmugglingRejected,
     application_specific_wasm_smuggling_rejected: applicationWasmSmugglingRejected,
-    untracked_path_detected: untrackedPathDetected
+    untracked_path_detected: untrackedPathDetected,
+    sandbox_agent_source_read_rejected: sandboxDenials.agent_source,
+    sandbox_application_wasm_read_rejected: sandboxDenials.application_wasm
   });
   if (Object.values(result).some((value) => value !== true)) throw new Error(`negative_gate_failed:${JSON.stringify(result)}`);
   return result;

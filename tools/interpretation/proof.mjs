@@ -51,17 +51,27 @@ const FORBIDDEN_DRIVER_LITERALS = Object.freeze([
 ]);
 
 export async function proveAgentInterpretation(options) {
-  await assertAgentSourceClean(options.agentRoot);
+  const sourceBinding = await bindAgentSource(options.agentRoot);
   const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-interpretation-v1-"));
   try {
     await verifyArtifactSidecars(options);
+    const inputBinding = await bindProofInputs(options);
     const dependencyBindings = await bindRuntimeDependencies(options);
+    const snapshotOptions = await snapshotProofInputs(
+      temporaryRoot,
+      options,
+      dependencyBindings
+    );
+    if (await bindProofInputs(snapshotOptions) !== inputBinding) {
+      throw new Error("proof_inputs_changed_during_snapshot");
+    }
+    await verifyRuntimeDependenciesUnchanged(snapshotOptions, dependencyBindings);
     const specializedRoot = join(temporaryRoot, "specialized-workspace");
     const runtimeRoot = join(temporaryRoot, "clean-room");
     const interpretedRoot = join(runtimeRoot, "workspace");
     await mkdir(runtimeRoot);
-    await cp(options.fixtureRoot, specializedRoot, { recursive: true, errorOnExist: true });
-    await cp(options.fixtureRoot, interpretedRoot, { recursive: true, errorOnExist: true });
+    await cp(snapshotOptions.fixtureRoot, specializedRoot, { recursive: true, errorOnExist: true });
+    await cp(snapshotOptions.fixtureRoot, interpretedRoot, { recursive: true, errorOnExist: true });
     await Promise.all([initializeGit(specializedRoot), initializeGit(interpretedRoot)]);
     const initialSpecializedTree = await git(specializedRoot, ["rev-parse", "HEAD^{tree}"]);
     const initialInterpretedTree = await git(interpretedRoot, ["rev-parse", "HEAD^{tree}"]);
@@ -71,11 +81,11 @@ export async function proveAgentInterpretation(options) {
     await Promise.all([mkdir(specializedHome), mkdir(interpretedHome)]);
 
     const specialized = await runSpecialized({
-      worldHostRoot: options.worldHostRoot,
-      capabilitiesRoot: options.capabilitiesRoot,
-      environmentModule: options.environmentModule,
-      applicationWasm: options.applicationWasm,
-      artifactRoot: options.artifactRoot,
+      worldHostRoot: snapshotOptions.worldHostRoot,
+      capabilitiesRoot: snapshotOptions.capabilitiesRoot,
+      environmentModule: snapshotOptions.environmentModule,
+      applicationWasm: snapshotOptions.applicationWasm,
+      artifactRoot: snapshotOptions.artifactRoot,
       workspaceRoot: specializedRoot,
       temporaryHome: specializedHome,
       bunExecutable: options.bunExecutable
@@ -84,7 +94,7 @@ export async function proveAgentInterpretation(options) {
     const runtime = await prepareCleanRoom(
       runtimeRoot,
       interpretedRoot,
-      options,
+      snapshotOptions,
       dependencyBindings
     );
     const cleanInventory = await assertCleanRoom(runtimeRoot, runtime);
@@ -152,18 +162,19 @@ export async function proveAgentInterpretation(options) {
     assertRepositoryResult(specializedGit, specialized, interpreted);
 
     const negatives = await runNegativeGates(
-      options,
+      snapshotOptions,
       interpreted,
       runtimeRoot,
       runtime,
-      sandboxDenials
+      sandboxDenials,
+      inputBinding
     );
-    const bpi1 = await readFile(join(options.artifactRoot, "repository-repair.agent.bpi1"));
-    const mv2p1 = await readFile(join(options.artifactRoot, "repository-repair.agent.mv2p1"));
-    const contract = await readFile(join(options.artifactRoot, "repository-repair.decision-contract.bin"));
+    const bpi1 = await readFile(join(snapshotOptions.artifactRoot, "repository-repair.agent.bpi1"));
+    const mv2p1 = await readFile(join(snapshotOptions.artifactRoot, "repository-repair.agent.mv2p1"));
+    const contract = await readFile(join(snapshotOptions.artifactRoot, "repository-repair.decision-contract.bin"));
     const receipt = {
       format: "agent-interpretation-v1",
-      agent_commit: await git(options.agentRoot, ["rev-parse", "HEAD"]),
+      agent_commit: sourceBinding.head,
       agent_version: "2.7.0",
       boundary_version: "1.6.0",
       kernel_wasm_sha256: options.kernelSha256,
@@ -195,6 +206,12 @@ export async function proveAgentInterpretation(options) {
       clean_room_inventory: cleanInventory,
       negative_gates: negatives
     };
+    await assertAgentSourceUnchanged(options.agentRoot, sourceBinding);
+    await verifyArtifactSidecars(options);
+    if (await bindProofInputs(options) !== inputBinding) {
+      throw new Error("proof_inputs_changed_during_execution");
+    }
+    await verifyRuntimeDependenciesUnchanged(options, dependencyBindings);
     await writeFile(options.receiptOutput, `${JSON.stringify(receipt, null, 2)}\n`);
     return receipt;
   } finally {
@@ -203,7 +220,8 @@ export async function proveAgentInterpretation(options) {
   }
 }
 
-async function assertAgentSourceClean(agentRoot) {
+async function bindAgentSource(agentRoot) {
+  const headBefore = await git(agentRoot, ["rev-parse", "HEAD"]);
   const child = Bun.spawn([
     "git",
     "status",
@@ -222,6 +240,16 @@ async function assertAgentSourceClean(agentRoot) {
   }).filter((path) => !path.startsWith("zig-out/"));
   if (unexpected.length !== 0) {
     throw new Error(`agent_source_dirty:${unexpected.join(",")}`);
+  }
+  const headAfter = await git(agentRoot, ["rev-parse", "HEAD"]);
+  if (headBefore !== headAfter) throw new Error("agent_source_head_changed_during_binding");
+  return Object.freeze({ head: headAfter });
+}
+
+async function assertAgentSourceUnchanged(agentRoot, expected) {
+  const current = await bindAgentSource(agentRoot);
+  if (current.head !== expected.head) {
+    throw new Error(`agent_source_head_changed:${expected.head}:${current.head}`);
   }
 }
 
@@ -373,6 +401,103 @@ async function verifyArtifactSidecars(options) {
   }
 }
 
+async function bindProofInputs(options) {
+  const entries = [];
+  const add = (label, path) => entries.push(Object.freeze({ label, path }));
+  for (const name of ARTIFACT_FILES) {
+    add(
+      `artifact/${name}`,
+      name === "boundary-machine-v2-kernel-v1.wasm"
+        ? options.kernelWasm
+        : join(options.artifactRoot, name)
+    );
+  }
+  add("application-wasm", options.applicationWasm);
+  add("unrelated-bpi1", options.unrelatedBpi1);
+  add("unrelated-mv2p1", options.unrelatedMv2p1);
+  add("environment-module", options.environmentModule);
+  for (const name of GENERIC_FILES) {
+    add(`interpretation-tool/${name}`, join(options.interpretationToolsRoot, name));
+  }
+  for (const relativePath of await recursiveFiles(options.fixtureRoot)) {
+    add(`fixture/${relativePath}`, join(options.fixtureRoot, relativePath));
+  }
+  entries.sort((left, right) => Buffer.compare(Buffer.from(left.label), Buffer.from(right.label)));
+  const hasher = createHash("sha256");
+  hasher.update("agent-interpretation-proof-inputs-v1\0");
+  for (const entry of entries) {
+    const [label, bytes] = await Promise.all([
+      Promise.resolve(Buffer.from(entry.label, "utf8")),
+      readFile(entry.path)
+    ]);
+    const lengths = Buffer.alloc(8);
+    lengths.writeUInt32LE(label.length, 0);
+    lengths.writeUInt32LE(bytes.length, 4);
+    hasher.update(lengths);
+    hasher.update(label);
+    hasher.update(bytes);
+  }
+  return hasher.digest("hex");
+}
+
+async function snapshotProofInputs(temporaryRoot, options, dependencyBindings) {
+  const root = join(temporaryRoot, "proof-inputs");
+  const artifacts = join(root, "artifacts");
+  const tools = join(root, "interpretation-tools");
+  const fixture = join(root, "fixture");
+  const dependencies = join(root, "dependencies");
+  const worldHostRoot = join(dependencies, "world-host");
+  const capabilitiesRoot = join(dependencies, "world-capabilities");
+  await Promise.all([
+    mkdir(artifacts, { recursive: true }),
+    mkdir(tools, { recursive: true }),
+    mkdir(dependencies, { recursive: true })
+  ]);
+  for (const name of ARTIFACT_FILES) {
+    const source = name === "boundary-machine-v2-kernel-v1.wasm"
+      ? options.kernelWasm
+      : join(options.artifactRoot, name);
+    await cp(source, join(artifacts, name), { errorOnExist: true });
+  }
+  for (const name of GENERIC_FILES) {
+    await cp(join(options.interpretationToolsRoot, name), join(tools, name), { errorOnExist: true });
+  }
+  const environmentModule = join(tools, "environment.mjs");
+  const applicationWasm = join(root, "repository-repair-actuality.world.wasm");
+  const unrelatedBpi1 = join(root, "unrelated.bpi1");
+  const unrelatedMv2p1 = join(root, "unrelated.mv2p1");
+  await Promise.all([
+    cp(options.fixtureRoot, fixture, { recursive: true, errorOnExist: true }),
+    cp(options.environmentModule, environmentModule, { errorOnExist: true }),
+    cp(options.applicationWasm, applicationWasm, { errorOnExist: true }),
+    cp(options.unrelatedBpi1, unrelatedBpi1, { errorOnExist: true }),
+    cp(options.unrelatedMv2p1, unrelatedMv2p1, { errorOnExist: true }),
+    copyRuntimeDependency(
+      options.worldHostRoot,
+      worldHostRoot,
+      dependencyBindings.worldHost.files
+    ),
+    copyRuntimeDependency(
+      options.capabilitiesRoot,
+      capabilitiesRoot,
+      dependencyBindings.worldCapabilities.files
+    )
+  ]);
+  return Object.freeze({
+    ...options,
+    artifactRoot: artifacts,
+    applicationWasm,
+    kernelWasm: join(artifacts, "boundary-machine-v2-kernel-v1.wasm"),
+    unrelatedBpi1,
+    unrelatedMv2p1,
+    fixtureRoot: fixture,
+    interpretationToolsRoot: tools,
+    environmentModule,
+    worldHostRoot,
+    capabilitiesRoot
+  });
+}
+
 async function prepareCleanRoom(
   runtimeRoot,
   interpretedRoot,
@@ -506,7 +631,8 @@ async function runNegativeGates(
   interpreted,
   runtimeRoot,
   runtime,
-  sandboxDenials
+  sandboxDenials,
+  inputBinding
 ) {
   const [kernelBytes, bpi1, mv2p1, initialArgs, unrelatedBpi1, unrelatedMv2p1] = await Promise.all([
     readFile(options.kernelWasm),
@@ -580,6 +706,16 @@ async function runNegativeGates(
   const untrackedPathDetected = (await listChangedPaths(runtime.interpretedRoot))
     .includes("untracked-negative.txt");
   await rm(untrackedPath);
+  const unrelatedOriginal = await readFile(options.unrelatedBpi1);
+  const unrelatedMutated = Buffer.from(unrelatedOriginal);
+  unrelatedMutated[unrelatedMutated.length - 1] ^= 1;
+  let proofInputMutationDetected = false;
+  try {
+    await writeFile(options.unrelatedBpi1, unrelatedMutated);
+    proofInputMutationDetected = await bindProofInputs(options) !== inputBinding;
+  } finally {
+    await writeFile(options.unrelatedBpi1, unrelatedOriginal);
+  }
   const result = Object.freeze({
     corrupted_bpi1_rejected: await rejects(() => executeKernelCommand({ kernel, bpi1: corruptedImage, mv2p1, command: 0 })),
     corrupted_mv2p1_rejected: await rejects(() => executeKernelCommand({ kernel, bpi1, mv2p1: corruptedProfile, command: 0 })),
@@ -594,7 +730,8 @@ async function runNegativeGates(
     sandbox_agent_source_read_rejected: sandboxDenials.agent_source,
     sandbox_application_wasm_read_rejected: sandboxDenials.application_wasm,
     sandbox_world_host_source_read_rejected: sandboxDenials.world_host_source,
-    sandbox_world_capabilities_source_read_rejected: sandboxDenials.world_capabilities_source
+    sandbox_world_capabilities_source_read_rejected: sandboxDenials.world_capabilities_source,
+    proof_input_mutation_detected: proofInputMutationDetected
   });
   if (Object.values(result).some((value) => value !== true)) throw new Error(`negative_gate_failed:${JSON.stringify(result)}`);
   return result;

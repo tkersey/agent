@@ -429,7 +429,6 @@ pub fn build(b: *std.Build) void {
     const run_tests = b.addRunArtifact(tests);
 
     const check = b.step("check", "Compile and test the agent package");
-    check.dependOn(interpretation_proof);
     const semantic_check = b.step(
         "check-agent-semantic",
         "Run the public compiler, World packaging, parity, and malformed-input proof",

@@ -16,7 +16,10 @@ import {
 export async function runInterpreted(options) {
   const artifacts = await loadArtifacts(options);
   const host = await import(pathToFileURL(join(options.worldHostRoot, "src/v1/index.mjs")));
-  const capabilities = await import(pathToFileURL(join(options.capabilitiesRoot, "src/v1/index.mjs")));
+  const capabilityProtocol = await import(pathToFileURL(join(
+    options.capabilitiesRoot,
+    "src/v1/protocol.mjs"
+  )));
   const environmentModule = await import(pathToFileURL(options.environmentModule));
   const kernel = await compileKernel(artifacts.kernel);
   const effects = readBpi1EffectCatalog(artifacts.bpi1);
@@ -27,7 +30,6 @@ export async function runInterpreted(options) {
   await executeKernelCommand({ kernel, bpi1: artifacts.bpi1, mv2p1: artifacts.mv2p1, command: 0 });
 
   const environment = await environmentModule.createRepositoryRepairEnvironment({
-    capabilities,
     capabilitiesRoot: options.capabilitiesRoot,
     workspaceRoot: options.workspaceRoot,
     temporaryHome: options.temporaryHome,
@@ -92,8 +94,8 @@ export async function runInterpreted(options) {
         payloadBytes: stepped.value,
         bindings: environment.bindings,
         receiverContext: environment.context,
-        effectInterfaceId: capabilities.effectInterfaceId,
-        statusNames: capabilities.statusNames,
+        effectInterfaceId: capabilityProtocol.effectInterfaceId,
+        statusNames: capabilityProtocol.statusNames,
         beforeResolve: environment.beforeResolve
       });
       trace.push(freezeBoundary({

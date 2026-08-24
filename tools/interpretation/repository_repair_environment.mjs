@@ -4,13 +4,28 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export async function createRepositoryRepairEnvironment({
-  capabilities,
   capabilitiesRoot,
   workspaceRoot,
   temporaryHome,
   bunExecutable,
   applicationId
 }) {
+  const capabilityProtocol = await import(pathToFileURL(join(
+    capabilitiesRoot,
+    "src/v1/protocol.mjs"
+  )));
+  const codecs = await import(pathToFileURL(join(
+    capabilitiesRoot,
+    "src/v1/actuality/repository_repair_codecs.mjs"
+  )));
+  const fixtureBinding = await import(pathToFileURL(join(
+    capabilitiesRoot,
+    "src/v1/actuality/repository_repair_fixture_binding.mjs"
+  )));
+  const workspaceBinding = await import(pathToFileURL(join(
+    capabilitiesRoot,
+    "src/v1/actuality/repository_workspace_binding.mjs"
+  )));
   const workspaceAdapter = await import(pathToFileURL(join(
     capabilitiesRoot,
     "packages/repository-workspace-actuality/adapter.mjs"
@@ -20,8 +35,8 @@ export async function createRepositoryRepairEnvironment({
     "packages/repository-repair-decision-fixture/adapter.mjs"
   )));
   const bindings = Object.freeze([
-    capabilities.repositoryRepairDecisionFixtureBinding(),
-    ...capabilities.repositoryWorkspaceBindings()
+    fixtureBinding.repositoryRepairDecisionFixtureBinding(),
+    ...workspaceBinding.repositoryWorkspaceBindings()
   ]);
   const context = {
     applicationId,
@@ -51,9 +66,9 @@ export async function createRepositoryRepairEnvironment({
       });
     },
     beforeSpecializedResolve: async (request) => {
-      const replaceInterfaceId = capabilities.effectInterfaceId("repo.replace.approved.v1");
+      const replaceInterfaceId = capabilityProtocol.effectInterfaceId("repo.replace.approved.v1");
       if (!Buffer.from(request.interfaceId).equals(Buffer.from(replaceInterfaceId))) return;
-      const proposal = capabilities.decodeRepositoryReplaceRequest(request.payloadBytes);
+      const proposal = codecs.decodeReplaceRequest(request.payloadBytes);
       const proposalDigest = workspaceAdapter.proposalDigest({ operation: "replace", ...proposal });
       context.fixtureRequestDigest = proposalDigest;
       context.approval = Object.freeze({
@@ -64,7 +79,7 @@ export async function createRepositoryRepairEnvironment({
       });
     },
     verifyTerminal: async (finalResultBytes) => {
-      const result = capabilities.decodeRepositoryRepairFinalResult(finalResultBytes);
+      const result = codecs.decodeFinalResult(finalResultBytes);
       const source = await readFile(join(workspaceRoot, "src/range.mjs"));
       const hiddenVerifierPassed = await hiddenVerify(workspaceRoot);
       if (result.tests_passed !== true || result.changed_files.length !== 1 ||

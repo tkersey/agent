@@ -8,7 +8,14 @@ import { compileKernel, decodeRequestIdentity, executeKernelCommand } from "./ke
 
 export async function runSpecialized(options) {
   const host = await import(pathToFileURL(join(options.worldHostRoot, "src/v1/index.mjs")));
-  const capabilities = await import(pathToFileURL(join(options.capabilitiesRoot, "src/v1/index.mjs")));
+  const capabilityProtocol = await import(pathToFileURL(join(
+    options.capabilitiesRoot,
+    "src/v1/protocol.mjs"
+  )));
+  const { CapabilityRouterV1 } = await import(pathToFileURL(join(
+    options.capabilitiesRoot,
+    "src/v1/router.mjs"
+  )));
   const environmentModule = await import(pathToFileURL(options.environmentModule));
   const [wasmBytes, bpi1, mv2p1, manifestBytes, kernelBytes, initialArgsBytes] = await Promise.all([
     readFile(options.applicationWasm),
@@ -23,14 +30,13 @@ export async function runSpecialized(options) {
   const kernel = await compileKernel(kernelBytes);
   const effects = readBpi1EffectCatalog(bpi1);
   const environment = await environmentModule.createRepositoryRepairEnvironment({
-    capabilities,
     capabilitiesRoot: options.capabilitiesRoot,
     workspaceRoot: options.workspaceRoot,
     temporaryHome: options.temporaryHome,
     bunExecutable: options.bunExecutable,
     applicationId
   });
-  const router = new capabilities.CapabilityRouterV1({ bindings: environment.bindings });
+  const router = new CapabilityRouterV1({ bindings: environment.bindings });
   let preflightRuns = 0;
   const controller = await host.RunControllerV1.create({
     wasmBytes,
@@ -78,10 +84,10 @@ export async function runSpecialized(options) {
     if (!effect || !Buffer.from(identity.effectSiteDigest).equals(effect.ordinalEffectDigest)) {
       throw new Error("specialized_request_identity_invalid");
     }
-    const decodedRequest = capabilities.decodeEffectRequest(pending.encodedBytes);
+    const decodedRequest = capabilityProtocol.decodeEffectRequest(pending.encodedBytes);
     await environment.beforeSpecializedResolve(decodedRequest);
     const resolved = await router.resolve(environment.context, pending.encodedBytes);
-    if (resolved.result.status !== capabilities.EffectStatus.ok || resolved.result.resultBytes === null) {
+    if (resolved.result.status !== capabilityProtocol.EffectStatus.ok || resolved.result.resultBytes === null) {
       throw new Error("specialized_effect_not_ok");
     }
     trace.push(Object.freeze({

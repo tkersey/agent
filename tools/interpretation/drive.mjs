@@ -16,7 +16,10 @@ import {
 
 export async function runInterpreted(options) {
   const artifacts = await loadArtifacts(options);
-  const host = await import(pathToFileURL(join(options.worldHostRoot, "src/v1/index.mjs")));
+  const hostProtocol = await import(pathToFileURL(join(
+    options.worldHostRoot,
+    "src/v1/protocol.mjs"
+  )));
   const capabilityProtocol = await import(pathToFileURL(join(
     options.capabilitiesRoot,
     "src/v1/protocol.mjs"
@@ -24,7 +27,7 @@ export async function runInterpreted(options) {
   const environmentModule = await import(pathToFileURL(options.environmentModule));
   const kernel = await compileKernel(artifacts.kernel);
   const effects = readBpi1EffectCatalog(artifacts.bpi1);
-  const manifest = host.decodeApplicationManifest(artifacts.manifest);
+  const manifest = hostProtocol.decodeApplicationManifest(artifacts.manifest);
   const applicationId = Buffer.from(manifest.applicationId).toString("hex");
   verifyArtifactBindings(artifacts, manifest);
   const decisionContractDigest = verifyDecisionContract(artifacts.decisionContract);

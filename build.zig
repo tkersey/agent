@@ -286,6 +286,7 @@ pub fn build(b: *std.Build) void {
     acquire_boundary_assets.addFileArg(
         b.path("tools/interpretation/acquire_kernel.mjs"),
     );
+    acquire_boundary_assets.addArg(b.graph.zig_exe);
     acquire_boundary_assets.addDirectoryArg(boundary_dependency.path("."));
     acquire_boundary_assets.addArg(boundary_kernel_wasm orelse "-");
     const interpretation_kernel_wasm = acquire_boundary_assets.addOutputFileArg(

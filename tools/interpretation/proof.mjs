@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 
 import { runSpecialized } from "./specialized.mjs";
 import { compileKernel, encodeResumeAuxiliary, executeKernelCommand } from "./kernel_client.mjs";
@@ -51,6 +51,7 @@ const FORBIDDEN_DRIVER_LITERALS = Object.freeze([
 ]);
 
 export async function proveAgentInterpretation(options) {
+  await assertAgentSourceClean(options.agentRoot);
   const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-interpretation-v1-"));
   try {
     await verifyArtifactSidecars(options);
@@ -125,6 +126,12 @@ export async function proveAgentInterpretation(options) {
     ]);
     if (exitCode !== 0) throw new Error(`clean_room_execution_failed:${exitCode}:${stderr.trim()}:${stdout.trim()}`);
     const interpreted = decodeInterpretedResult(JSON.parse(await readFile(interpretedOutput, "utf8")));
+    await assertPostExecutionInventory(
+      runtimeRoot,
+      runtime,
+      cleanInventory,
+      interpretedOutput
+    );
     await verifyRuntimeDependenciesUnchanged(options, dependencyBindings);
     compareExecution(specialized, interpreted);
 
@@ -189,6 +196,28 @@ export async function proveAgentInterpretation(options) {
   }
 }
 
+async function assertAgentSourceClean(agentRoot) {
+  const child = Bun.spawn([
+    "git",
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all"
+  ], { cwd: agentRoot, stdout: "pipe", stderr: "pipe", env: { PATH: process.env.PATH } });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited
+  ]);
+  if (exitCode !== 0) throw new Error(`agent_source_status_failed:${stderr.trim()}`);
+  const unexpected = stdout.split("\n").filter(Boolean).map((line) => {
+    const path = line.slice(3);
+    return path.includes(" -> ") ? path.split(" -> ").at(-1) : path;
+  }).filter((path) => !path.startsWith("zig-out/"));
+  if (unexpected.length !== 0) {
+    throw new Error(`agent_source_dirty:${unexpected.join(",")}`);
+  }
+}
+
 async function proveSandboxReadDenials(options, sandboxProfile, environment) {
   const denied = {};
   for (const [name, path] of [
@@ -218,6 +247,7 @@ async function proveSandboxReadDenials(options, sandboxProfile, environment) {
 }
 
 async function cleanRoomSandboxProfile(options, runtimeRoot) {
+  const bunExecutableReal = await realpath(options.bunExecutable);
   const declaredReadable = [
     "/System",
     "/usr",
@@ -226,7 +256,8 @@ async function cleanRoomSandboxProfile(options, runtimeRoot) {
     "/dev",
     "/private/etc",
     "/private/var/db/timezone",
-    "/opt/homebrew",
+    dirname(options.bunExecutable),
+    dirname(bunExecutableReal),
     runtimeRoot,
     options.worldHostRoot,
     options.capabilitiesRoot
@@ -327,7 +358,9 @@ async function prepareCleanRoom(runtimeRoot, interpretedRoot, options) {
 async function assertCleanRoom(runtimeRoot, runtime) {
   const inventory = await recursiveFiles(runtimeRoot);
   for (const path of inventory) {
-    if (path.endsWith(".zig") || (path.endsWith(".wasm") && basename(path) !== "boundary-machine-v2-kernel-v1.wasm")) {
+    if (path.endsWith(".zig") ||
+        (path.endsWith(".wasm") &&
+          path !== "artifacts/boundary-machine-v2-kernel-v1.wasm")) {
       throw new Error(`clean_room_forbidden_file:${path}`);
     }
   }
@@ -341,6 +374,24 @@ async function assertCleanRoom(runtimeRoot, runtime) {
     if (!inventory.includes(`artifacts/${name}`)) throw new Error(`clean_room_missing:${name}`);
   }
   return Object.freeze(inventory);
+}
+
+async function assertPostExecutionInventory(
+  runtimeRoot,
+  runtime,
+  initialInventory,
+  interpretedOutput
+) {
+  const finalInventory = await assertCleanRoom(runtimeRoot, runtime);
+  const initial = new Set(initialInventory);
+  const admittedOutput = relative(runtimeRoot, interpretedOutput);
+  const unexpected = finalInventory.filter((path) =>
+    !initial.has(path) &&
+    path !== admittedOutput &&
+    !path.startsWith("workspace/.git/objects/"));
+  if (unexpected.length !== 0) {
+    throw new Error(`clean_room_post_inventory:${unexpected.join(",")}`);
+  }
 }
 
 function compareExecution(specialized, interpreted) {

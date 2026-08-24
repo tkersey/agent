@@ -6,14 +6,14 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const EXPECTED_KERNEL_SHA256 = "12973fb655f126c2acd5693a84be47496649d1ab10bf22d565c9b675172e4f27";
-const [boundaryRootArgument, overrideArgument, kernelOutput, imageOutput, profileOutput] = process.argv.slice(2);
-if (![boundaryRootArgument, overrideArgument, kernelOutput, imageOutput, profileOutput].every(Boolean)) {
-  throw new Error("usage: acquire_kernel.mjs BOUNDARY_ROOT OVERRIDE_OR_DASH KERNEL_OUT IMAGE_OUT PROFILE_OUT");
+const [zigExecutable, boundaryRootArgument, overrideArgument, kernelOutput, imageOutput, profileOutput] = process.argv.slice(2);
+if (![zigExecutable, boundaryRootArgument, overrideArgument, kernelOutput, imageOutput, profileOutput].every(Boolean)) {
+  throw new Error("usage: acquire_kernel.mjs ZIG BOUNDARY_ROOT OVERRIDE_OR_DASH KERNEL_OUT IMAGE_OUT PROFILE_OUT");
 }
 const boundaryRoot = resolve(boundaryRootArgument);
 const temporary = await mkdtemp(join(tmpdir(), "agent-boundary-assets-"));
 try {
-  const result = spawnSync("zig", ["build", "emit-boundary-kernel-assets", "--prefix", temporary, "--summary", "all"], {
+  const result = spawnSync(resolve(zigExecutable), ["build", "emit-boundary-kernel-assets", "--prefix", temporary, "--summary", "all"], {
     cwd: boundaryRoot,
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,

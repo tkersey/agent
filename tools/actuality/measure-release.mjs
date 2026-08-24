@@ -26,6 +26,13 @@ try {
   await initializeGit(workspaceRoot);
 
   const wasmBytes = await readFile(join(artifactRoot, "repository-repair-actuality.world.wasm"));
+  const manifestBytes = await readFile(join(artifactRoot, "repository-repair-actuality.manifest.bin"));
+  const applicationId = Buffer.from(
+    host.decodeApplicationManifest(manifestBytes).applicationId
+  ).toString("hex");
+  if (!capabilities.ACTUALITY_APPLICATION_IDS.includes(applicationId)) {
+    throw new Error("application_identity_not_admitted");
+  }
   const initialArgsBytes = await readFile(join(artifactRoot, "initial-args.bin"));
   const controller = await host.RunControllerV1.create({
     wasmBytes,
@@ -33,7 +40,7 @@ try {
     headStore: new host.MemoryBranchHeadStore(),
     workerFactory: () => new host.ApplicationWorker({ maximumMemoryBytes: workerMemoryBytes }),
     preflight: async (manifest) => ({
-      blockers: Buffer.from(manifest.applicationId).toString("hex") === capabilities.ACTUALITY_APPLICATION_ID
+      blockers: Buffer.from(manifest.applicationId).toString("hex") === applicationId
         ? []
         : ["application_identity_mismatch"]
     })
@@ -45,7 +52,7 @@ try {
     ]
   });
   const context = {
-    applicationId: capabilities.ACTUALITY_APPLICATION_ID,
+    applicationId,
     workspaceRoot,
     workspaceRootReal: await realpath(workspaceRoot),
     temporaryHome,

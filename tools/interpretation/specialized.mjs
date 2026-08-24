@@ -30,7 +30,7 @@ export async function runSpecialized(options) {
   const applicationId = Buffer.from(manifest.applicationId).toString("hex");
   const kernel = await compileKernel(kernelBytes);
   const effects = readBpi1EffectCatalog(bpi1);
-  const environment = await environmentModule.createRepositoryRepairEnvironment({
+  const environment = await environmentModule.createEnvironment({
     capabilitiesRoot: options.capabilitiesRoot,
     workspaceRoot: options.workspaceRoot,
     temporaryHome: options.temporaryHome,

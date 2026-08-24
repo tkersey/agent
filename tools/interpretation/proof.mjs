@@ -46,7 +46,8 @@ const ARTIFACT_FILES = Object.freeze([
 ]);
 const FORBIDDEN_DRIVER_LITERALS = Object.freeze([
   "AgentDefinition", "RuntimeStrategy", "EpistemicStrategy", "list_repository",
-  "read_file", "search_text", "run_tests", "replace_file", "final admission"
+  "read_file", "search_text", "run_tests", "replace_file", "final admission",
+  "repositoryRepair", "repository_repair", "repository-repair"
 ]);
 
 export async function proveAgentInterpretation(options) {

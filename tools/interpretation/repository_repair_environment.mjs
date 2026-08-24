@@ -3,7 +3,7 @@ import { readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-export async function createRepositoryRepairEnvironment({
+export async function createEnvironment({
   capabilitiesRoot,
   workspaceRoot,
   temporaryHome,

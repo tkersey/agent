@@ -33,7 +33,7 @@ export async function runInterpreted(options) {
   const decisionContractDigest = verifyDecisionContract(artifacts.decisionContract);
   await executeKernelCommand({ kernel, bpi1: artifacts.bpi1, mv2p1: artifacts.mv2p1, command: 0 });
 
-  const environment = await environmentModule.createRepositoryRepairEnvironment({
+  const environment = await environmentModule.createEnvironment({
     capabilitiesRoot: options.capabilitiesRoot,
     workspaceRoot: options.workspaceRoot,
     temporaryHome: options.temporaryHome,

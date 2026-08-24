@@ -13,9 +13,10 @@ pub export fn repository_repair_bpi1_output_len() u32 {
 }
 
 pub export fn repository_repair_bpi1_emit() u32 {
+    const image = actuality.Compiled.Program.image();
     output_length = 0;
-    output_length = @intCast(
-        actuality.Compiled.Program.encodeImage(&output_storage) catch return 1,
-    );
+    if (image.bytes.len > output_storage.len) return 1;
+    @memcpy(output_storage[0..image.bytes.len], &image.bytes);
+    output_length = @intCast(image.bytes.len);
     return 0;
 }

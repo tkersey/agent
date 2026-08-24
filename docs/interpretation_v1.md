@@ -29,11 +29,13 @@ network-free development; no proof path defaults to an ambient sibling
 checkout.
 
 The clean-room run contains the fixed kernel, emitted semantic artifacts,
-generic kernel driver, receiver environment, and repository fixture. It
+generic kernel driver, receiver environment, repository fixture, and only the
+content-digest-bound world-host and world-capabilities runtime files. It
 contains no Zig source, Agent source, application-specific WebAssembly, native
 Compiled.Machine code, or repository-repair World WASM. Bun executes under a
 filesystem- and network-denying sandbox: `sandbox-exec` on Darwin or Bubblewrap
-with an unshared network namespace and hidden Agent source root on Linux.
+with an unshared network namespace and hidden Agent source root on Linux. The
+interpreted child cannot read the outer dependency source roots.
 
 On the deterministic actuality fixture, specialized World execution and fixed
 kernel interpretation observed identical canonical Machine State, request

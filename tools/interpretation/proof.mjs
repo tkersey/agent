@@ -81,7 +81,12 @@ export async function proveAgentInterpretation(options) {
       bunExecutable: options.bunExecutable
     });
 
-    const runtime = await prepareCleanRoom(runtimeRoot, interpretedRoot, options);
+    const runtime = await prepareCleanRoom(
+      runtimeRoot,
+      interpretedRoot,
+      options,
+      dependencyBindings
+    );
     const cleanInventory = await assertCleanRoom(runtimeRoot, runtime);
     const interpretedOutput = join(runtimeRoot, "interpreted-result.json");
     const sandboxProfile = process.platform === "darwin"
@@ -108,8 +113,8 @@ export async function proveAgentInterpretation(options) {
       "--decision-contract", join(runtime.artifacts, "repository-repair.decision-contract.bin"),
       "--manifest", join(runtime.artifacts, "repository-repair-actuality.manifest.bin"),
       "--kernel", join(runtime.artifacts, "boundary-machine-v2-kernel-v1.wasm"),
-      "--world-host-root", options.worldHostRoot,
-      "--capabilities-root", options.capabilitiesRoot,
+      "--world-host-root", runtime.worldHostRoot,
+      "--capabilities-root", runtime.capabilitiesRoot,
       "--environment-module", runtime.environment,
       "--workspace-root", interpretedRoot,
       "--temporary-home", interpretedHome,
@@ -229,7 +234,12 @@ async function proveSandboxReadDenials(
   const denied = {};
   for (const [name, path] of [
     ["agent_source", join(options.agentRoot, "build.zig")],
-    ["application_wasm", options.applicationWasm]
+    ["application_wasm", options.applicationWasm],
+    ["world_host_source", join(options.worldHostRoot, "src/v1/index.mjs")],
+    ["world_capabilities_source", join(
+      options.capabilitiesRoot,
+      "src/v1/actuality/repository_repair_codecs.mjs"
+    )]
   ]) {
     const script = `await Bun.file(${JSON.stringify(resolve(path))}).arrayBuffer();`;
     const child = Bun.spawn(sandboxInvocation(options, sandboxProfile, runtimeRoot, [
@@ -286,9 +296,7 @@ async function cleanRoomSandboxProfile(options, runtimeRoot) {
     "/private/var/db/timezone",
     dirname(options.bunExecutable),
     dirname(bunExecutableReal),
-    runtimeRoot,
-    options.worldHostRoot,
-    options.capabilitiesRoot
+    runtimeRoot
   ];
   const readable = [...new Set([
     ...declaredReadable,
@@ -365,10 +373,18 @@ async function verifyArtifactSidecars(options) {
   }
 }
 
-async function prepareCleanRoom(runtimeRoot, interpretedRoot, options) {
+async function prepareCleanRoom(
+  runtimeRoot,
+  interpretedRoot,
+  options,
+  dependencyBindings
+) {
   const artifacts = join(runtimeRoot, "artifacts");
   const runner = join(runtimeRoot, "runner");
-  await Promise.all([mkdir(artifacts), mkdir(runner)]);
+  const dependencies = join(runtimeRoot, "dependencies");
+  const worldHostRoot = join(dependencies, "world-host");
+  const capabilitiesRoot = join(dependencies, "world-capabilities");
+  await Promise.all([mkdir(artifacts), mkdir(runner), mkdir(dependencies)]);
   for (const name of ARTIFACT_FILES) {
     const source = name === "boundary-machine-v2-kernel-v1.wasm"
       ? options.kernelWasm
@@ -380,7 +396,35 @@ async function prepareCleanRoom(runtimeRoot, interpretedRoot, options) {
   }
   const environment = join(runner, "repository_repair_environment.mjs");
   await cp(options.environmentModule, environment, { errorOnExist: true });
-  return Object.freeze({ artifacts, runner, drive: join(runner, "drive.mjs"), environment, interpretedRoot });
+  await Promise.all([
+    copyRuntimeDependency(
+      options.worldHostRoot,
+      worldHostRoot,
+      dependencyBindings.worldHost.files
+    ),
+    copyRuntimeDependency(
+      options.capabilitiesRoot,
+      capabilitiesRoot,
+      dependencyBindings.worldCapabilities.files
+    )
+  ]);
+  return Object.freeze({
+    artifacts,
+    runner,
+    drive: join(runner, "drive.mjs"),
+    environment,
+    interpretedRoot,
+    worldHostRoot,
+    capabilitiesRoot
+  });
+}
+
+async function copyRuntimeDependency(sourceRoot, destinationRoot, files) {
+  for (const relativePath of files) {
+    const destination = join(destinationRoot, relativePath);
+    await mkdir(dirname(destination), { recursive: true });
+    await cp(join(sourceRoot, relativePath), destination, { errorOnExist: true });
+  }
 }
 
 async function assertCleanRoom(runtimeRoot, runtime) {
@@ -548,7 +592,9 @@ async function runNegativeGates(
     application_specific_wasm_smuggling_rejected: applicationWasmSmugglingRejected,
     untracked_path_detected: untrackedPathDetected,
     sandbox_agent_source_read_rejected: sandboxDenials.agent_source,
-    sandbox_application_wasm_read_rejected: sandboxDenials.application_wasm
+    sandbox_application_wasm_read_rejected: sandboxDenials.application_wasm,
+    sandbox_world_host_source_read_rejected: sandboxDenials.world_host_source,
+    sandbox_world_capabilities_source_read_rejected: sandboxDenials.world_capabilities_source
   });
   if (Object.values(result).some((value) => value !== true)) throw new Error(`negative_gate_failed:${JSON.stringify(result)}`);
   return result;

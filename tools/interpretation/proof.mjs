@@ -140,7 +140,7 @@ export async function proveAgentInterpretation(options) {
       effect_count: new Set(interpreted.trace.map((entry) => entry.effectIdentity)).size,
       model_decision_count: interpreted.trace.filter((entry) => entry.effectIdentity === "model.decide.v1").length,
       repository_effect_count: interpreted.trace.filter((entry) => entry.effectIdentity !== "model.decide.v1").length,
-      yield_boundary_count: interpreted.yieldPositions.length,
+      yield_boundary_count: interpreted.yieldBoundaries.length,
       state_comparison_count: interpreted.trace.length,
       payload_comparison_count: interpreted.trace.length,
       request_identity_comparison_count: interpreted.trace.length,
@@ -243,10 +243,17 @@ async function assertCleanRoom(runtimeRoot, runtime) {
 
 function compareExecution(specialized, interpreted) {
   if (specialized.applicationId !== interpreted.applicationId ||
-      JSON.stringify(specialized.yieldPositions) !== JSON.stringify(interpreted.yieldPositions) ||
+      specialized.yieldBoundaries.length !== interpreted.yieldBoundaries.length ||
       specialized.trace.length !== interpreted.trace.length ||
       !specialized.terminalResultBytes.equals(interpreted.terminalResultBytes)) {
     throw new Error("execution_trace_shape_mismatch");
+  }
+  for (let index = 0; index < specialized.yieldBoundaries.length; index += 1) {
+    const left = specialized.yieldBoundaries[index];
+    const right = interpreted.yieldBoundaries[index];
+    if (left.transitionIndex !== right.transitionIndex || !left.state.equals(right.state)) {
+      throw new Error(`yield_boundary_mismatch:${index}`);
+    }
   }
   const byteFields = ["state", "identity", "payload", "response"];
   for (let index = 0; index < specialized.trace.length; index += 1) {
@@ -331,6 +338,11 @@ async function runNegativeGates(options, interpreted, runtimeRoot, runtime) {
     await cp(options.applicationWasm, smuggledWasmPath, { errorOnExist: true });
     try { await assertCleanRoom(runtimeRoot, runtime); } finally { await rm(smuggledWasmPath); }
   });
+  const untrackedPath = join(runtime.interpretedRoot, "untracked-negative.txt");
+  await writeFile(untrackedPath, "untracked\n", { flag: "wx" });
+  const untrackedPathDetected = (await listChangedPaths(runtime.interpretedRoot))
+    .includes("untracked-negative.txt");
+  await rm(untrackedPath);
   const result = Object.freeze({
     corrupted_bpi1_rejected: await rejects(() => executeKernelCommand({ kernel, bpi1: corruptedImage, mv2p1, command: 0 })),
     corrupted_mv2p1_rejected: await rejects(() => executeKernelCommand({ kernel, bpi1, mv2p1: corruptedProfile, command: 0 })),
@@ -340,7 +352,8 @@ async function runNegativeGates(options, interpreted, runtimeRoot, runtime) {
     unrelated_completion_rejected: unrelatedCompletionRejected,
     mutated_response_rejected: mutatedResponseRejected,
     source_smuggling_rejected: sourceSmugglingRejected,
-    application_specific_wasm_smuggling_rejected: applicationWasmSmugglingRejected
+    application_specific_wasm_smuggling_rejected: applicationWasmSmugglingRejected,
+    untracked_path_detected: untrackedPathDetected
   });
   if (Object.values(result).some((value) => value !== true)) throw new Error(`negative_gate_failed:${JSON.stringify(result)}`);
   return result;
@@ -356,6 +369,10 @@ function decodeInterpretedResult(value) {
       payload: Buffer.from(entry.payload, "base64"),
       response: Buffer.from(entry.response, "base64")
     }))),
+    yieldBoundaries: Object.freeze(value.yieldBoundaries.map((entry) => Object.freeze({
+      transitionIndex: entry.transitionIndex,
+      state: Buffer.from(entry.state, "base64")
+    }))),
     terminalResultBytes: Buffer.from(value.terminalResultBytes, "base64"),
     finalSourceBytes: Buffer.from(value.finalSourceBytes, "base64")
   });
@@ -370,10 +387,18 @@ async function initializeGit(cwd) {
 }
 
 async function inspectFinalGit(cwd) {
-  const changed = await git(cwd, ["diff", "--name-only", "HEAD"]);
-  const changedPaths = changed.split("\n").filter(Boolean).sort();
+  const changedPaths = await listChangedPaths(cwd);
   await git(cwd, ["add", "-A"]);
   return Object.freeze({ tree: await git(cwd, ["write-tree"]), changedPaths });
+}
+
+async function listChangedPaths(cwd) {
+  const [tracked, untracked] = await Promise.all([
+    git(cwd, ["diff", "--name-only", "HEAD"]),
+    git(cwd, ["ls-files", "--others", "--exclude-standard"])
+  ]);
+  return [...new Set([...tracked.split("\n"), ...untracked.split("\n")].filter(Boolean))]
+    .sort();
 }
 
 function assertRepositoryResult(gitResult, specialized, interpreted) {

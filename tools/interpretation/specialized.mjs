@@ -51,13 +51,18 @@ export async function runSpecialized(options) {
     }
   });
   const trace = [];
-  const yieldPositions = [];
+  const yieldBoundaries = [];
+  let transitionIndex = 1;
   let current = await controller.initialize("agent-interpretation-specialized", "main", { initialArgsBytes });
   while (current.frame.status === host.FrameStatus.needsEffect ||
       current.frame.status === host.FrameStatus.yieldedFuel) {
     if (current.frame.status === host.FrameStatus.yieldedFuel) {
-      yieldPositions.push(trace.length);
+      yieldBoundaries.push(Object.freeze({
+        transitionIndex,
+        state: rootMachineState(current.frame.stateBytes, manifest.applicationId)
+      }));
       current = await controller.advance("agent-interpretation-specialized", "main");
+      transitionIndex += 1;
       continue;
     }
     const pending = current.frame.pendingEffect;
@@ -92,6 +97,7 @@ export async function runSpecialized(options) {
     }
     trace.push(Object.freeze({
       boundaryIndex: trace.length,
+      transitionIndex,
       state: machineState,
       identity: Buffer.from(inspected.metadata),
       effectIdentity: effect.identity,
@@ -106,6 +112,7 @@ export async function runSpecialized(options) {
         recoveryClass: resolved.recoveryClass
       }
     });
+    transitionIndex += 1;
   }
   if (current.frame.status !== host.FrameStatus.completed) {
     throw new Error(`specialized_terminal_failure:${current.frame.status}`);
@@ -116,7 +123,8 @@ export async function runSpecialized(options) {
     applicationId,
     applicationWasmSha256: sha256(wasmBytes),
     trace: Object.freeze(trace),
-    yieldPositions: Object.freeze(yieldPositions),
+    yieldBoundaries: Object.freeze(yieldBoundaries),
+    yieldPositions: Object.freeze(yieldBoundaries.map((entry) => entry.transitionIndex)),
     terminalResultBytes,
     terminalResultSha256: sha256(terminalResultBytes),
     finalSourceBytes: Buffer.from(verified.finalSource),

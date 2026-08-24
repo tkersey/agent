@@ -53,7 +53,7 @@ export async function runInterpreted(options) {
   if (result.outcome !== 1 || result.state.length === 0) throw new Error("interpreted_initialization_failed");
   let state = result.state;
   const trace = [];
-  const yieldPositions = [];
+  const yieldBoundaries = [];
   let transitionIndex = 0;
   let terminal = null;
 
@@ -121,7 +121,10 @@ export async function runInterpreted(options) {
       continue;
     }
     if (stepped.outcome === 4) {
-      yieldPositions.push(trace.length);
+      yieldBoundaries.push(Object.freeze({
+        transitionIndex,
+        state: Buffer.from(stepped.state)
+      }));
       state = stepped.state;
       continue;
     }
@@ -139,7 +142,8 @@ export async function runInterpreted(options) {
     kernelImportCount: kernel.importCount,
     effectCount: effects.length,
     trace: Object.freeze(trace),
-    yieldPositions: Object.freeze(yieldPositions),
+    yieldBoundaries: Object.freeze(yieldBoundaries),
+    yieldPositions: Object.freeze(yieldBoundaries.map((entry) => entry.transitionIndex)),
     terminalResultBytes: Buffer.from(terminal),
     terminalResultSha256: sha256Bytes(terminal),
     finalSourceBytes: Buffer.from(verified.finalSource),
@@ -221,6 +225,10 @@ if (import.meta.main) {
       identity: entry.identity.toString("base64"),
       payload: entry.payload.toString("base64"),
       response: entry.response.toString("base64")
+    })),
+    yieldBoundaries: result.yieldBoundaries.map((entry) => ({
+      transitionIndex: entry.transitionIndex,
+      state: entry.state.toString("base64")
     })),
     terminalResultBytes: result.terminalResultBytes.toString("base64"),
     finalSourceBytes: result.finalSourceBytes.toString("base64")

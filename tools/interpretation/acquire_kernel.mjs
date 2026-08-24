@@ -13,7 +13,7 @@ if (![boundaryRootArgument, overrideArgument, kernelOutput, imageOutput, profile
 const boundaryRoot = resolve(boundaryRootArgument);
 const temporary = await mkdtemp(join(tmpdir(), "agent-boundary-assets-"));
 try {
-  const result = spawnSync("zig", ["build", "emit-boundary-reification-assets", "--prefix", temporary, "--summary", "all"], {
+  const result = spawnSync("zig", ["build", "emit-boundary-kernel-assets", "--prefix", temporary, "--summary", "all"], {
     cwd: boundaryRoot,
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,

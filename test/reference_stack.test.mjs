@@ -17,7 +17,7 @@ describe("public reference stack lock", () => {
     test("binds exact stable public release URLs and checksums", () => {
         const lock = readReferenceStackLock(lockPath);
         expect(lock.worldHost.version).toBe("1.0.1");
-        expect(lock.worldCapabilities.version).toBe("2.2.2");
+        expect(lock.worldCapabilities.version).toBe("2.3.3");
         expect(lock.worldHost.url).not.toContain("/releases/assets/");
         expect(lock.worldCapabilities.url).not.toContain("/releases/assets/");
     });

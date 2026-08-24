@@ -378,6 +378,35 @@ pub fn build(b: *std.Build) void {
         interpretation_assets.dependOn(&installation.step);
     }
 
+    const acquire_interpretation_runtime = b.addSystemCommand(&.{"bun"});
+    acquire_interpretation_runtime.addFileArg(
+        b.path("tools/interpretation/acquire_runtime_dependencies.mjs"),
+    );
+    acquire_interpretation_runtime.addArg("--lock");
+    acquire_interpretation_runtime.addFileArg(
+        b.path("interpretation/runtime-dependencies.lock.json"),
+    );
+    if (world_host_root) |path| {
+        acquire_interpretation_runtime.addArg("--world-host-root");
+        acquire_interpretation_runtime.addDirectoryArg(.{ .cwd_relative = b.pathFromRoot(path) });
+    }
+    if (world_capabilities_root) |path| {
+        acquire_interpretation_runtime.addArg("--world-capabilities-root");
+        acquire_interpretation_runtime.addDirectoryArg(.{ .cwd_relative = b.pathFromRoot(path) });
+    }
+    if (world_host_archive) |path| {
+        acquire_interpretation_runtime.addArg("--world-host-archive");
+        acquire_interpretation_runtime.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
+    }
+    if (world_capabilities_archive) |path| {
+        acquire_interpretation_runtime.addArg("--world-capabilities-archive");
+        acquire_interpretation_runtime.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
+    }
+    acquire_interpretation_runtime.addArg("--output");
+    const interpretation_runtime = acquire_interpretation_runtime.addOutputDirectoryArg(
+        "runtime-dependencies",
+    );
+
     const interpretation_proof_command = b.addSystemCommand(&.{"bun"});
     interpretation_proof_command.has_side_effects = true;
     interpretation_proof_command.addFileArg(
@@ -403,9 +432,15 @@ pub fn build(b: *std.Build) void {
         "--fixture-root",
         b.pathFromRoot("fixtures/repository-repair-v1"),
         "--world-host-root",
-        world_host_root orelse b.pathFromRoot("../world-host"),
-        "--capabilities-root",
-        world_capabilities_root orelse b.pathFromRoot("../world-capabilities"),
+    });
+    interpretation_proof_command.addDirectoryArg(
+        interpretation_runtime.path(b, "world-host"),
+    );
+    interpretation_proof_command.addArg("--capabilities-root");
+    interpretation_proof_command.addDirectoryArg(
+        interpretation_runtime.path(b, "world-capabilities"),
+    );
+    interpretation_proof_command.addArgs(&.{
         "--interpretation-tools-root",
         b.pathFromRoot("tools/interpretation"),
         "--environment-module",

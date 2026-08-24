@@ -21,6 +21,13 @@ repository-repair environment supplies the workspace, deterministic decision
 fixture, test process, and request-bound replacement approval; it contains no
 Agent loop or expected action schedule.
 
+The aggregate build acquires world-host and world-capabilities from the exact
+archives bound in `interpretation/runtime-dependencies.lock.json`, stages them
+as build inputs, and verifies the admitted runtime closure again by content
+digest. Local root and archive overrides retain the same digest checks for
+network-free development; no proof path defaults to an ambient sibling
+checkout.
+
 The clean-room run contains the fixed kernel, emitted semantic artifacts,
 generic kernel driver, receiver environment, and repository fixture. It
 contains no Zig source, Agent source, application-specific WebAssembly, native

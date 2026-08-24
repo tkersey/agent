@@ -378,6 +378,7 @@ pub fn build(b: *std.Build) void {
     }
 
     const interpretation_proof_command = b.addSystemCommand(&.{"bun"});
+    interpretation_proof_command.has_side_effects = true;
     interpretation_proof_command.addFileArg(
         b.path("tools/interpretation/proof.mjs"),
     );

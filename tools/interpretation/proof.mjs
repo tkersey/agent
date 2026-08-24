@@ -6,6 +6,12 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 
 import { runSpecialized } from "./specialized.mjs";
 import { compileKernel, encodeResumeAuxiliary, executeKernelCommand } from "./kernel_client.mjs";
+import { runtimeDependencyDigest } from "./dependency_digest.mjs";
+
+const EXPECTED_RUNTIME_DEPENDENCIES = Object.freeze({
+  worldHost: "dfb59aaa8c2288ae85c69a31cfd7a400d9f2f27f26e0098f973442cb273977f2",
+  worldCapabilities: "f38cdb293819098b19cfcc03f65ba61f1257abf73ffef0c7e70a0e5468c3d230"
+});
 
 const GENERIC_FILES = Object.freeze([
   "drive.mjs",
@@ -36,6 +42,7 @@ export async function proveAgentInterpretation(options) {
   const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-interpretation-v1-"));
   try {
     await verifyArtifactSidecars(options);
+    const dependencyBindings = await bindRuntimeDependencies(options);
     const specializedRoot = join(temporaryRoot, "specialized-workspace");
     const runtimeRoot = join(temporaryRoot, "clean-room");
     const interpretedRoot = join(runtimeRoot, "workspace");
@@ -99,6 +106,7 @@ export async function proveAgentInterpretation(options) {
     ]);
     if (exitCode !== 0) throw new Error(`clean_room_execution_failed:${exitCode}:${stderr.trim()}:${stdout.trim()}`);
     const interpreted = decodeInterpretedResult(JSON.parse(await readFile(interpretedOutput, "utf8")));
+    await verifyRuntimeDependenciesUnchanged(options, dependencyBindings);
     compareExecution(specialized, interpreted);
 
     const specializedGit = await inspectFinalGit(specializedRoot);
@@ -121,6 +129,8 @@ export async function proveAgentInterpretation(options) {
       boundary_version: "1.6.0",
       kernel_wasm_sha256: options.kernelSha256,
       kernel_import_count: 0,
+      world_host_runtime_sha256: dependencyBindings.worldHost.sha256,
+      world_capabilities_runtime_sha256: dependencyBindings.worldCapabilities.sha256,
       bpi1_sha256: sha256(bpi1),
       mv2p1_sha256: sha256(mv2p1),
       program_transition_digest: bpi1.subarray(32, 64).toString("hex"),
@@ -151,6 +161,28 @@ export async function proveAgentInterpretation(options) {
   } finally {
     if (!options.keepTemporary) await rm(temporaryRoot, { recursive: true, force: true });
     else process.stderr.write(`temporary_root=${temporaryRoot}\n`);
+  }
+}
+
+async function bindRuntimeDependencies(options) {
+  const worldHost = await runtimeDependencyDigest(options.worldHostRoot, ["src/v1"]);
+  const worldCapabilities = await runtimeDependencyDigest(options.capabilitiesRoot, [
+    "src/v1",
+    "packages/repository-repair-decision-fixture",
+    "packages/repository-workspace-actuality"
+  ]);
+  if (worldHost.sha256 !== EXPECTED_RUNTIME_DEPENDENCIES.worldHost ||
+      worldCapabilities.sha256 !== EXPECTED_RUNTIME_DEPENDENCIES.worldCapabilities) {
+    throw new Error(`runtime_dependency_digest_mismatch:${worldHost.sha256}:${worldCapabilities.sha256}`);
+  }
+  return Object.freeze({ worldHost, worldCapabilities });
+}
+
+async function verifyRuntimeDependenciesUnchanged(options, expected) {
+  const current = await bindRuntimeDependencies(options);
+  if (current.worldHost.sha256 !== expected.worldHost.sha256 ||
+      current.worldCapabilities.sha256 !== expected.worldCapabilities.sha256) {
+    throw new Error("runtime_dependency_changed_during_proof");
   }
 }
 
@@ -294,6 +326,11 @@ async function runNegativeGates(options, interpreted, runtimeRoot, runtime) {
     await writeFile(smuggledPath, "const smuggled = true;\n", { flag: "wx" });
     try { await assertCleanRoom(runtimeRoot, runtime); } finally { await rm(smuggledPath); }
   });
+  const smuggledWasmPath = join(runtime.runner, "repository-repair-actuality.world.wasm");
+  const applicationWasmSmugglingRejected = await rejects(async () => {
+    await cp(options.applicationWasm, smuggledWasmPath, { errorOnExist: true });
+    try { await assertCleanRoom(runtimeRoot, runtime); } finally { await rm(smuggledWasmPath); }
+  });
   const result = Object.freeze({
     corrupted_bpi1_rejected: await rejects(() => executeKernelCommand({ kernel, bpi1: corruptedImage, mv2p1, command: 0 })),
     corrupted_mv2p1_rejected: await rejects(() => executeKernelCommand({ kernel, bpi1, mv2p1: corruptedProfile, command: 0 })),
@@ -302,7 +339,8 @@ async function runNegativeGates(options, interpreted, runtimeRoot, runtime) {
     unrelated_pair_validated: unrelatedValid,
     unrelated_completion_rejected: unrelatedCompletionRejected,
     mutated_response_rejected: mutatedResponseRejected,
-    source_smuggling_rejected: sourceSmugglingRejected
+    source_smuggling_rejected: sourceSmugglingRejected,
+    application_specific_wasm_smuggling_rejected: applicationWasmSmugglingRejected
   });
   if (Object.values(result).some((value) => value !== true)) throw new Error(`negative_gate_failed:${JSON.stringify(result)}`);
   return result;

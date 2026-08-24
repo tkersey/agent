@@ -321,7 +321,12 @@ async function runNegativeGates(options, interpreted, runtimeRoot, runtime) {
       auxiliary: encodeResumeAuxiliary(first.identity, mutated)
     });
     const stepped = await executeKernelCommand({
-      kernel, bpi1, mv2p1, command: 4, state: resumed.state, callerFuel: 4_000_000n
+      kernel,
+      bpi1,
+      mv2p1,
+      command: 4,
+      state: resumed.state,
+      callerFuel: interpreted.maximumFuelPerStep
     });
     const expected = interpreted.trace.at(1);
     mutatedResponseRejected = stepped.outcome !== 3 || !Buffer.from(stepped.state).equals(expected.state) ||
@@ -363,6 +368,7 @@ async function runNegativeGates(options, interpreted, runtimeRoot, runtime) {
 function decodeInterpretedResult(value) {
   return Object.freeze({
     ...value,
+    maximumFuelPerStep: BigInt(value.maximumFuelPerStep),
     trace: Object.freeze(value.trace.map((entry) => Object.freeze({
       ...entry,
       state: Buffer.from(entry.state, "base64"),

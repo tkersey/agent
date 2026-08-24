@@ -148,6 +148,7 @@ export async function runInterpreted(options) {
     kernelSha256: kernel.sha256,
     kernelImportCount: kernel.importCount,
     effectCount: effects.length,
+    maximumFuelPerStep: manifest.limits.maximumFuelPerStep,
     trace: Object.freeze(trace),
     yieldBoundaries: Object.freeze(yieldBoundaries),
     yieldPositions: Object.freeze(yieldBoundaries.map((entry) => entry.transitionIndex)),
@@ -224,6 +225,7 @@ if (import.meta.main) {
   const result = await runInterpreted(options);
   const serializable = {
     ...result,
+    maximumFuelPerStep: result.maximumFuelPerStep.toString(),
     manifest: undefined,
     context: summarizeContext(result.context),
     trace: result.trace.map((entry) => ({

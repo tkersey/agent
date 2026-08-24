@@ -388,7 +388,8 @@ async function assertPostExecutionInventory(
   const unexpected = finalInventory.filter((path) =>
     !initial.has(path) &&
     path !== admittedOutput &&
-    !path.startsWith("workspace/.git/objects/"));
+    !path.startsWith("workspace/.git/objects/") &&
+    !(path.startsWith("home/Library/Caches/bun/") && path.endsWith(".pile")));
   if (unexpected.length !== 0) {
     throw new Error(`clean_room_post_inventory:${unexpected.join(",")}`);
   }

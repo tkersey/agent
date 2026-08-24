@@ -57,14 +57,14 @@ export async function runSpecialized(options) {
   let current = await controller.initialize("agent-interpretation-specialized", "main", { initialArgsBytes });
   while (current.frame.status === host.FrameStatus.needsEffect ||
       current.frame.status === host.FrameStatus.yieldedFuel) {
-    if (transitionIndex > PROOF_LIMITS.maximumTransitions) {
-      throw new Error("specialized_transition_limit");
-    }
     if (current.frame.status === host.FrameStatus.yieldedFuel) {
       yieldBoundaries.push(Object.freeze({
         transitionIndex,
         state: rootMachineState(current.frame.stateBytes, manifest.applicationId)
       }));
+      if (transitionIndex >= PROOF_LIMITS.maximumTransitions) {
+        throw new Error("specialized_transition_limit");
+      }
       current = await controller.advance("agent-interpretation-specialized", "main");
       transitionIndex += 1;
       continue;
@@ -111,6 +111,9 @@ export async function runSpecialized(options) {
       payload: Buffer.from(pending.payloadBytes),
       response: Buffer.from(resolved.result.resultBytes)
     }));
+    if (transitionIndex >= PROOF_LIMITS.maximumTransitions) {
+      throw new Error("specialized_transition_limit");
+    }
     current = await controller.advance("agent-interpretation-specialized", "main", {
       effectResult: resolved.result,
       effectMetadata: {

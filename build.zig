@@ -530,6 +530,7 @@ pub fn build(b: *std.Build) void {
     actuality_live_command.step.dependOn(&install_actuality_wasm.step);
     actuality_live_command.step.dependOn(&install_actuality_manifest.step);
     actuality_live_command.step.dependOn(&install_initial_args.step);
+    actuality_live_command.step.dependOn(&install_contract_binary.step);
     const actuality_live = b.step(
         "check-agent-actuality-live",
         "Run the explicit OpenAI plus interactive-approval actuality proof",

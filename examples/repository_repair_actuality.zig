@@ -46,5 +46,6 @@ pub const instructions = Actuality.instructions;
 pub const Definition = Actuality.Definition;
 pub const Strategy = Actuality.Strategy;
 pub const Epistemics = Actuality.Epistemics;
+pub const machine_options = Actuality.machine_options;
 pub const Compiled = Actuality.Compiled;
 pub const Machine = Actuality.Machine;

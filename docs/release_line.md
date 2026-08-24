@@ -61,7 +61,7 @@ Machine behavior remain byte-identical; Machine ABI v2 and `ABL_RNF2` are
 unchanged.
 
 Agent v2.5.0 saturates generated Flow value and block authoring buffers at the
-existing Boundary v1.5.0 compiler ceilings. A custom EpistemicStrategy may use
+existing Boundary v1.6.0 compiler ceilings. A custom EpistemicStrategy may use
 its declared lowering complexity without causing Agent to request an impossible
 Boundary compiler envelope. It may also specialize pre-effect admission by the
 compile-time action index so an exact predicate is lowered only at its owning
@@ -77,3 +77,11 @@ their metadata class as `agent.action.Class` before returning the descriptor
 type, so foreign enum values cannot bypass admission through Zig's lazy
 declaration analysis. Contextual enum literals and the default `.custom` class
 remain supported; Machine ABI v2 and `ABL_RNF2` remain unchanged.
+
+Agent v2.7.0 adds a second execution engine for the same compiled semantics:
+canonical BPI1 plus MachineV2Profile executed by Boundary v1.6.0's fixed,
+import-free Machine-v2 kernel. The repository-repair actuality proof compares
+specialized World execution and fixed-kernel interpretation at every external
+effect boundary. World v3.1.4 changes package identity only, and
+world-capabilities v2.3.3 admits both the prior and interpretation actuality
+identities without changing interface schemas or authority policy.

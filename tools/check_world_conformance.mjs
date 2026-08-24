@@ -24,34 +24,40 @@ import {
 
 const options = parseArgs(process.argv.slice(2));
 const versions = Object.freeze({
-    agent: options.agentV1Release ? "1.1.2" : "2.6.0",
-    boundary: options.agentV1Release ? "1.3.2" : "1.5.0",
-    world: options.agentV1Release ? "3.1.1" : "3.1.3",
+    agent: options.agentV1Release ? "1.1.2" : "2.7.0",
+    boundary: options.agentV1Release ? "1.3.2" : "1.6.0",
+    world: options.agentV1Release ? "3.1.1" : "3.1.4",
     host: "1.0.1",
-    capabilities: options.agentV1Release ? "2.1.2" : "2.2.2",
+    capabilities: options.agentV1Release ? "2.1.2" : "2.3.3",
 });
 const releases = Object.freeze({
     boundary: Object.freeze({
         url: options.agentV1Release
             ? "https://github.com/tkersey/boundary/archive/refs/tags/v1.3.2.tar.gz"
-            : "https://github.com/tkersey/boundary/archive/refs/tags/v1.5.0.tar.gz",
+            : "https://github.com/tkersey/boundary/archive/0bd38fa0977774ac081656024677a25af3f474e3.tar.gz",
         sha256: options.agentV1Release
             ? "d33a682f92033fa287169e4bc42c5e96f891cf1fe307381efc6983361de3fe0d"
-            : "8bcf9cf4f289eb3e530cae37089411dfc0014963fb6e0978474fa08a39fcedea",
+            : "0f283fa14b0ab462d147b2d81324691d0aca7ee982e18acea0662c8b20491fb4",
         packageHash: options.agentV1Release
             ? "boundary-1.3.2-flclaAI0EQBXh0WrWcNTh-CwL-m0RLPbRX8RBRxP9E95"
-            : "boundary-1.5.0-flclaGtSEQDH_RFNHovmN4QfnmRMnFoNfyYq_84rZrsr",
+            : "boundary-1.6.0-flclaL2fHgCpIM0-3l4McMxnXs8_AYpFa1dy6rdYGJyR",
+        root: options.agentV1Release
+            ? "boundary-1.3.2"
+            : "boundary-0bd38fa0977774ac081656024677a25af3f474e3",
     }),
     world: Object.freeze({
         url: options.agentV1Release
             ? "https://github.com/tkersey/world/archive/refs/tags/v3.1.1.tar.gz"
-            : "https://github.com/tkersey/world/archive/refs/tags/v3.1.3.tar.gz",
+            : "https://github.com/tkersey/world/archive/5a64a70d39e9712b16aee3bb57c23409ece1abc3.tar.gz",
         sha256: options.agentV1Release
             ? "ebde48f0bc037678e79051e3f8c3cde2fa1964df0b14ff53ed9cef94ccb1f63c"
-            : "1333a27aa4538c255b8a6c515c9151987fd5402c0be43a9a2501703599d1a5a9",
+            : "6787c5580a487979cef79d10b1e7d8cda767593436f3d5bfd9eca6ae9c3fee9d",
         packageHash: options.agentV1Release
             ? "world-3.1.1-XXTUeKXGBgAZhWa2YvUU9Sj4GE-E53Km85AcgecObJV6"
-            : "world-3.1.3-XXTUeKXGBgDDzZ7uarFCYSLwYD8pGNBMNdIYfgIcu23v",
+            : "world-3.1.4-XXTUeO3GBgAJIfBpEVp4dpeHGNO4U71UniWabi3dftQ-",
+        root: options.agentV1Release
+            ? "world-3.1.1"
+            : "world-5a64a70d39e9712b16aee3bb57c23409ece1abc3",
     }),
 });
 
@@ -107,10 +113,10 @@ try {
     extractOneRoot(
         boundaryArchivePath,
         join(proofRoot, "boundary-extracted"),
-        `boundary-${versions.boundary}`,
+        releases.boundary.root,
         materializedBoundary,
     );
-    extractOneRoot(worldArchivePath, join(proofRoot, "world-extracted"), `world-${versions.world}`, materializedWorld);
+    extractOneRoot(worldArchivePath, join(proofRoot, "world-extracted"), releases.world.root, materializedWorld);
     useMaterializedBoundary(join(materializedAgent, "build.zig.zon"));
     useMaterializedBoundary(join(materializedWorld, "build.zig.zon"));
 

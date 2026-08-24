@@ -10,14 +10,16 @@ import { inspectTarGz } from "./reference_stack.mjs";
 
 const releases = Object.freeze({
     boundary: Object.freeze({
-        version: "1.5.0",
-        url: "https://github.com/tkersey/boundary/archive/refs/tags/v1.5.0.tar.gz",
-        sha256: "8bcf9cf4f289eb3e530cae37089411dfc0014963fb6e0978474fa08a39fcedea",
+        version: "1.6.0",
+        root: "boundary-0bd38fa0977774ac081656024677a25af3f474e3",
+        url: "https://github.com/tkersey/boundary/archive/0bd38fa0977774ac081656024677a25af3f474e3.tar.gz",
+        sha256: "0f283fa14b0ab462d147b2d81324691d0aca7ee982e18acea0662c8b20491fb4",
     }),
     world: Object.freeze({
-        version: "3.1.3",
-        url: "https://github.com/tkersey/world/archive/refs/tags/v3.1.3.tar.gz",
-        sha256: "1333a27aa4538c255b8a6c515c9151987fd5402c0be43a9a2501703599d1a5a9",
+        version: "3.1.4",
+        root: "world-5a64a70d39e9712b16aee3bb57c23409ece1abc3",
+        url: "https://github.com/tkersey/world/archive/5a64a70d39e9712b16aee3bb57c23409ece1abc3.tar.gz",
+        sha256: "6787c5580a487979cef79d10b1e7d8cda767593436f3d5bfd9eca6ae9c3fee9d",
     }),
 });
 
@@ -64,9 +66,9 @@ try {
         "--summary",
         "all",
     ], agentRoot, environment);
-    console.log("agent_hermetic_boundary_version=1.5.0");
+    console.log("agent_hermetic_boundary_version=1.6.0");
     console.log(`agent_hermetic_boundary_sha256=${releases.boundary.sha256}`);
-    console.log("agent_hermetic_world_version=3.1.3");
+    console.log("agent_hermetic_world_version=3.1.4");
     console.log(`agent_hermetic_world_sha256=${releases.world.sha256}`);
     console.log("agent_hermetic_network_after_acquisition=false");
     console.log("agent_hermetic_check=pass");
@@ -93,7 +95,7 @@ async function download(url) {
 }
 
 function extractRelease(kind, archive, root) {
-    const expectedRoot = `${kind}-${releases[kind].version}`;
+    const expectedRoot = releases[kind].root;
     inspectTarGz(archive, expectedRoot);
     const extracted = join(root, `${kind}-extracted`);
     mkdirSync(extracted);

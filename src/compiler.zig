@@ -92,7 +92,7 @@ fn generatedFlowLimits(
 ) flow_module.Limits {
     const actions = Definition.action_count;
     const scale: usize = if (is_reflective) 2 else 1;
-    // Boundary v1.5.0's compiler admits at most 1024 values and 128 blocks.
+    // Boundary v1.6.0's compiler admits at most 1024 values and 128 blocks.
     // Complexity may scale the other authoring buffers, but it must not make
     // Agent request an impossible Boundary compiler envelope.
     const maximum_values = 1024;

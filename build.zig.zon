@@ -1,14 +1,14 @@
 .{
     .name = .agent,
-    .version = "2.6.0",
+    .version = "2.7.0",
     .dependencies = .{
         .boundary = .{
-            .url = "https://github.com/tkersey/boundary/archive/refs/tags/v1.5.0.tar.gz",
-            .hash = "boundary-1.5.0-flclaGtSEQDH_RFNHovmN4QfnmRMnFoNfyYq_84rZrsr",
+            .url = "https://github.com/tkersey/boundary/archive/0bd38fa0977774ac081656024677a25af3f474e3.tar.gz",
+            .hash = "boundary-1.6.0-flclaL2fHgCpIM0-3l4McMxnXs8_AYpFa1dy6rdYGJyR",
         },
         .world = .{
-            .url = "https://github.com/tkersey/world/archive/refs/tags/v3.1.3.tar.gz",
-            .hash = "world-3.1.3-XXTUeKXGBgDDzZ7uarFCYSLwYD8pGNBMNdIYfgIcu23v",
+            .url = "https://github.com/tkersey/world/archive/5a64a70d39e9712b16aee3bb57c23409ece1abc3.tar.gz",
+            .hash = "world-3.1.4-XXTUeO3GBgAJIfBpEVp4dpeHGNO4U71UniWabi3dftQ-",
         },
     },
     .minimum_zig_version = "0.16.0",
@@ -22,6 +22,7 @@
         "docs",
         "conformance",
         "actuality",
+        "interpretation",
         "adequacy",
         "examples",
         "fixtures",

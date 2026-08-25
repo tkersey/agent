@@ -4,6 +4,9 @@
     "repository": "tkersey/world-host",
     "version": "1.0.1",
     "runtimeSha256": "dfb59aaa8c2288ae85c69a31cfd7a400d9f2f27f26e0098f973442cb273977f2",
+    "runtimePaths": [
+      "src/v1"
+    ],
     "defaultArchive": {
       "url": "https://github.com/tkersey/world-host/releases/download/v1.0.1/world-host-v1.0.1-runtime.tar.gz",
       "sha256": "e501ab1fe540ed2ee5cbd1db5a027f00271f95694747160fe36fa64cffaab52d",
@@ -15,6 +18,16 @@
     "repository": "tkersey/world-capabilities",
     "version": "2.3.3",
     "runtimeSha256": "554b40b77668678aa9f5f41e774b86a202954b17c011cee694d2589d8a2c6525",
+    "runtimePaths": [
+      "src/v1/errors.mjs",
+      "src/v1/protocol.mjs",
+      "src/v1/router.mjs",
+      "src/v1/actuality/repository_repair_codecs.mjs",
+      "src/v1/actuality/repository_repair_fixture_binding.mjs",
+      "src/v1/actuality/repository_workspace_binding.mjs",
+      "packages/repository-repair-decision-fixture",
+      "packages/repository-workspace-actuality"
+    ],
     "defaultArchive": {
       "url": "https://github.com/tkersey/world-capabilities/archive/58569cd32a33c4cd5e9cc60b0fd8a6be63b48e73.tar.gz",
       "sha256": "db047e63a18bf05b8258e65c7f0a503f47a191fe5e8790e9503f6bb056129f38",

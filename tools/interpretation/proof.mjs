@@ -10,22 +10,8 @@ import { runSpecialized } from "./specialized.mjs";
 import { readBpi1EffectCatalog } from "./bpi1_effects.mjs";
 import { compileKernel, encodeResumeAuxiliary, executeKernelCommand } from "./kernel_client.mjs";
 import { runtimeDependencyDigest } from "./dependency_digest.mjs";
-
-const EXPECTED_RUNTIME_DEPENDENCIES = Object.freeze({
-  worldHost: "dfb59aaa8c2288ae85c69a31cfd7a400d9f2f27f26e0098f973442cb273977f2",
-  worldCapabilities: "554b40b77668678aa9f5f41e774b86a202954b17c011cee694d2589d8a2c6525"
-});
+import { readRuntimeDependencyLock } from "./runtime_dependency_lock.mjs";
 const FIXED_KERNEL_RELEASE_VERSION = "1.6.0";
-const WORLD_CAPABILITIES_RUNTIME_PATHS = Object.freeze([
-  "src/v1/errors.mjs",
-  "src/v1/protocol.mjs",
-  "src/v1/router.mjs",
-  "src/v1/actuality/repository_repair_codecs.mjs",
-  "src/v1/actuality/repository_repair_fixture_binding.mjs",
-  "src/v1/actuality/repository_workspace_binding.mjs",
-  "packages/repository-repair-decision-fixture",
-  "packages/repository-workspace-actuality"
-]);
 const WORLD_HOST_INTERPRETED_RUNTIME_PATHS = Object.freeze([
   "src/v1/errors.mjs",
   "src/v1/protocol.mjs"
@@ -38,6 +24,7 @@ const GENERIC_FILES = Object.freeze([
   "effect_resolver.mjs",
   "proof_limits.mjs"
 ]);
+const PROOF_SUPPORT_FILES = Object.freeze(["runtime_dependency_lock.mjs"]);
 const ARTIFACT_FILES = Object.freeze([
   "repository-repair.agent.bpi1",
   "repository-repair.agent.bpi1.sha256",
@@ -558,13 +545,17 @@ function denyOutside(operation, admittedPaths) {
 }
 
 async function bindRuntimeDependencies(options) {
-  const worldHost = await runtimeDependencyDigest(options.worldHostRoot, ["src/v1"]);
+  const lock = readRuntimeDependencyLock(options.runtimeLock);
+  const worldHost = await runtimeDependencyDigest(
+    options.worldHostRoot,
+    lock.worldHost.runtimePaths
+  );
   const worldCapabilities = await runtimeDependencyDigest(
     options.capabilitiesRoot,
-    WORLD_CAPABILITIES_RUNTIME_PATHS
+    lock.worldCapabilities.runtimePaths
   );
-  if (worldHost.sha256 !== EXPECTED_RUNTIME_DEPENDENCIES.worldHost ||
-      worldCapabilities.sha256 !== EXPECTED_RUNTIME_DEPENDENCIES.worldCapabilities) {
+  if (worldHost.sha256 !== lock.worldHost.runtimeSha256 ||
+      worldCapabilities.sha256 !== lock.worldCapabilities.runtimeSha256) {
     throw new Error(`runtime_dependency_digest_mismatch:${worldHost.sha256}:${worldCapabilities.sha256}`);
   }
   return Object.freeze({ worldHost, worldCapabilities });
@@ -611,7 +602,8 @@ async function bindProofInputs(options) {
   add("unrelated-bpi1", options.unrelatedBpi1);
   add("unrelated-mv2p1", options.unrelatedMv2p1);
   add("environment-module", options.environmentModule);
-  for (const name of GENERIC_FILES) {
+  add("runtime-dependency-lock", options.runtimeLock);
+  for (const name of [...GENERIC_FILES, ...PROOF_SUPPORT_FILES]) {
     add(`interpretation-tool/${name}`, join(options.interpretationToolsRoot, name));
   }
   for (const relativePath of await recursiveFiles(options.fixtureRoot)) {
@@ -654,19 +646,21 @@ async function snapshotProofInputs(temporaryRoot, options, dependencyBindings) {
       : join(options.artifactRoot, name);
     await cp(source, join(artifacts, name), { errorOnExist: true });
   }
-  for (const name of GENERIC_FILES) {
+  for (const name of [...GENERIC_FILES, ...PROOF_SUPPORT_FILES]) {
     await cp(join(options.interpretationToolsRoot, name), join(tools, name), { errorOnExist: true });
   }
   const environmentModule = join(tools, "environment.mjs");
   const applicationWasm = join(root, "repository-repair-actuality.world.wasm");
   const unrelatedBpi1 = join(root, "unrelated.bpi1");
   const unrelatedMv2p1 = join(root, "unrelated.mv2p1");
+  const runtimeLock = join(root, "runtime-dependencies.lock.json");
   await Promise.all([
     cp(options.fixtureRoot, fixture, { recursive: true, errorOnExist: true }),
     cp(options.environmentModule, environmentModule, { errorOnExist: true }),
     cp(options.applicationWasm, applicationWasm, { errorOnExist: true }),
     cp(options.unrelatedBpi1, unrelatedBpi1, { errorOnExist: true }),
     cp(options.unrelatedMv2p1, unrelatedMv2p1, { errorOnExist: true }),
+    cp(options.runtimeLock, runtimeLock, { errorOnExist: true }),
     copyRuntimeDependency(
       options.worldHostRoot,
       worldHostRoot,
@@ -685,6 +679,7 @@ async function snapshotProofInputs(temporaryRoot, options, dependencyBindings) {
     kernelWasm: join(artifacts, "boundary-machine-v2-kernel-v1.wasm"),
     unrelatedBpi1,
     unrelatedMv2p1,
+    runtimeLock,
     fixtureRoot: fixture,
     interpretationToolsRoot: tools,
     environmentModule,
@@ -1107,7 +1102,7 @@ function parseArguments(argv) {
   for (const key of [
     "agentRoot", "artifactRoot", "applicationWasm", "kernelWasm", "unrelatedBpi1",
     "unrelatedMv2p1", "fixtureRoot", "worldHostRoot", "capabilitiesRoot",
-    "interpretationToolsRoot", "environmentModule", "receiptOutput"
+    "interpretationToolsRoot", "environmentModule", "runtimeLock", "receiptOutput"
   ]) {
     if (typeof result[key] !== "string") throw new Error(`missing_argument:${key}`);
     result[key] = resolve(result[key]);

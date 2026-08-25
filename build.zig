@@ -324,6 +324,7 @@ pub fn build(b: *std.Build) void {
         interpretation_assets.dependOn(&installation.step);
     }
 
+    const interpretation_runtime_lock = b.path("interpretation/runtime-dependencies.lock.json");
     const acquire_interpretation_runtime = b.addSystemCommand(&.{"bun"});
     if (world_host_root != null or world_capabilities_root != null) {
         acquire_interpretation_runtime.has_side_effects = true;
@@ -332,9 +333,7 @@ pub fn build(b: *std.Build) void {
         b.path("tools/interpretation/acquire_runtime_dependencies.mjs"),
     );
     acquire_interpretation_runtime.addArg("--lock");
-    acquire_interpretation_runtime.addFileArg(
-        b.path("interpretation/runtime-dependencies.lock.json"),
-    );
+    acquire_interpretation_runtime.addFileArg(interpretation_runtime_lock);
     if (world_host_root) |path| {
         acquire_interpretation_runtime.addArg("--world-host-root");
         acquire_interpretation_runtime.addDirectoryArg(.{ .cwd_relative = b.pathFromRoot(path) });
@@ -389,6 +388,8 @@ pub fn build(b: *std.Build) void {
     interpretation_proof_command.addDirectoryArg(
         interpretation_runtime.path(b, "world-capabilities"),
     );
+    interpretation_proof_command.addArg("--runtime-lock");
+    interpretation_proof_command.addFileArg(interpretation_runtime_lock);
     interpretation_proof_command.addArgs(&.{
         "--interpretation-tools-root",
         b.pathFromRoot("tools/interpretation"),

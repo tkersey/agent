@@ -176,6 +176,7 @@ try {
   requireZigBinary(admittedZig);
   const environment = sourceSnapshotEnvironment(home, verifierBin);
   const boundaryInputs = snapshotBoundaryInputs(options, proofRoot);
+  requireSourceGitIsolation(options.agentRoot);
   const binding = bindSource(options.agentRoot, gitExecutable, environment);
   const archive = join(proofRoot, "agent-source.tar.gz");
   run(gitExecutable, [
@@ -308,7 +309,27 @@ function requireSourceUnchanged(root, expected, gitExecutable, environment) {
 }
 
 function git(root, executable, environment, args) {
-  return run(executable, ["-C", root, ...args], root, environment, false).stdout.trim();
+  return run(executable, [
+    "-c", "core.attributesFile=/dev/null",
+    "-c", "core.excludesFile=/dev/null",
+    "-c", "core.fsmonitor=false",
+    "-c", "core.hooksPath=/dev/null",
+    "-C", root,
+    ...args
+  ], root, {
+    ...environment,
+    GIT_ATTR_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_OPTIONAL_LOCKS: "0"
+  }, false).stdout.trim();
+}
+
+function requireSourceGitIsolation(root) {
+  const attributes = join(root, ".git", "info", "attributes");
+  if (existsSync(attributes) && readFileSync(attributes, "utf8").trim().length !== 0) {
+    throw new Error("source snapshot rejects non-tree Git attributes");
+  }
 }
 
 function makeReadOnly(root, writableScratch) {

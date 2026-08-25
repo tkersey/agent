@@ -534,14 +534,14 @@ pub fn build(b: *std.Build) void {
             snapshot_proof.addArg("--world-capabilities-archive");
             snapshot_proof.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
         }
-        if (world_host_root) |path| {
-            snapshot_proof.addArg("--world-host-root");
-            snapshot_proof.addDirectoryArg(.{ .cwd_relative = b.pathFromRoot(path) });
-        }
-        if (world_capabilities_root) |path| {
-            snapshot_proof.addArg("--world-capabilities-root");
-            snapshot_proof.addDirectoryArg(.{ .cwd_relative = b.pathFromRoot(path) });
-        }
+        snapshot_proof.addArg("--world-host-root");
+        snapshot_proof.addDirectoryArg(
+            interpretation_runtime.path(b, "world-host"),
+        );
+        snapshot_proof.addArg("--world-capabilities-root");
+        snapshot_proof.addDirectoryArg(
+            interpretation_runtime.path(b, "world-capabilities"),
+        );
         snapshot_proof.addArg("--receipt-output");
         const snapshot_receipt = snapshot_proof.addOutputFileArg(
             "agent-interpretation-v1-receipt.json",

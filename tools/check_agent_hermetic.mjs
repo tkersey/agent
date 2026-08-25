@@ -477,7 +477,9 @@ function runNetworkIsolated(command, args, cwd, env) {
     if (process.platform === "darwin" && existsSync("/usr/bin/sandbox-exec")) {
         return run(
             "/usr/bin/sandbox-exec",
-            ["-p", "(version 1) (allow default) (deny network*)", command, ...args],
+            ["-p", `(version 1)
+                (allow default)
+                (deny network*)`, command, ...args],
             cwd,
             env,
         );

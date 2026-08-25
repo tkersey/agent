@@ -105,6 +105,7 @@ export async function runSpecialized(options) {
     trace.push(Object.freeze({
       boundaryIndex: trace.length,
       transitionIndex,
+      frameStatus: current.frame.status,
       state: machineState,
       identity: Buffer.from(inspected.metadata),
       effectIdentity: effect.identity,
@@ -132,6 +133,7 @@ export async function runSpecialized(options) {
   return Object.freeze({
     applicationId,
     applicationWasmSha256: sha256(wasmBytes),
+    needsEffectFrameStatus: host.FrameStatus.needsEffect,
     trace: Object.freeze(trace),
     yieldBoundaries: Object.freeze(yieldBoundaries),
     yieldPositions: Object.freeze(yieldBoundaries.map((entry) => entry.transitionIndex)),

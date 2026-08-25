@@ -769,6 +769,9 @@ function compareExecution(specialized, interpreted) {
   for (let index = 0; index < specialized.trace.length; index += 1) {
     const left = specialized.trace[index];
     const right = interpreted.trace[index];
+    if (left.frameStatus !== specialized.needsEffectFrameStatus) {
+      throw new Error(`specialized_frame_status_mismatch:${index}:${left.frameStatus}`);
+    }
     if (left.effectIdentity !== right.effectIdentity) throw new Error(`effect_identity_mismatch:${index}`);
     for (const field of byteFields) {
       if (!left[field].equals(right[field])) {

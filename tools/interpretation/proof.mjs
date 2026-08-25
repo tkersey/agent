@@ -24,6 +24,10 @@ const WORLD_CAPABILITIES_RUNTIME_PATHS = Object.freeze([
   "packages/repository-repair-decision-fixture",
   "packages/repository-workspace-actuality"
 ]);
+const WORLD_HOST_INTERPRETED_RUNTIME_PATHS = Object.freeze([
+  "src/v1/errors.mjs",
+  "src/v1/protocol.mjs"
+]);
 
 const GENERIC_FILES = Object.freeze([
   "drive.mjs",
@@ -49,7 +53,9 @@ const ARTIFACT_FILES = Object.freeze([
 const FORBIDDEN_DRIVER_LITERALS = Object.freeze([
   "AgentDefinition", "RuntimeStrategy", "EpistemicStrategy", "list_repository",
   "read_file", "search_text", "run_tests", "replace_file", "final admission",
-  "repositoryRepair", "repository_repair", "repository-repair"
+  "repositoryRepair", "repository_repair", "repository-repair",
+  "src/v1/index.mjs", "RunController", "run_controller",
+  "ApplicationWorker", "application_worker"
 ]);
 
 export async function proveAgentInterpretation(options) {
@@ -710,7 +716,7 @@ async function prepareCleanRoom(
     copyRuntimeDependency(
       options.worldHostRoot,
       worldHostRoot,
-      dependencyBindings.worldHost.files
+      WORLD_HOST_INTERPRETED_RUNTIME_PATHS
     ),
     copyRuntimeDependency(
       options.capabilitiesRoot,
@@ -739,6 +745,13 @@ async function copyRuntimeDependency(sourceRoot, destinationRoot, files) {
 
 async function assertCleanRoom(runtimeRoot, runtime) {
   const inventory = await recursiveFiles(runtimeRoot);
+  for (const forbidden of [
+    "dependencies/world-host/src/v1/index.mjs",
+    "dependencies/world-host/src/v1/run_controller.mjs",
+    "dependencies/world-host/src/v1/application_worker.mjs"
+  ]) {
+    if (inventory.includes(forbidden)) throw new Error(`clean_room_provider_loop_file:${forbidden}`);
+  }
   for (const path of inventory) {
     if (path.endsWith(".zig") ||
         (path.endsWith(".wasm") &&
@@ -884,6 +897,13 @@ async function runNegativeGates(
     await writeFile(smuggledPath, "const smuggled = true;\n", { flag: "wx" });
     try { await assertCleanRoom(runtimeRoot, runtime); } finally { await rm(smuggledPath); }
   });
+  const driveSource = await readFile(runtime.drive, "utf8");
+  const providerLoopImportSmugglingRejected = await rejects(async () => {
+    await writeFile(runtime.drive, `${driveSource}\n// src/v1/index.mjs\n`);
+    try { await assertCleanRoom(runtimeRoot, runtime); } finally {
+      await writeFile(runtime.drive, driveSource);
+    }
+  });
   const smuggledWasmPath = join(runtime.runner, "repository-repair-actuality.world.wasm");
   const applicationWasmSmugglingRejected = await rejects(async () => {
     await cp(options.applicationWasm, smuggledWasmPath, { errorOnExist: true });
@@ -913,6 +933,7 @@ async function runNegativeGates(
     unrelated_completion_rejected: unrelatedCompletionRejected,
     mutated_response_rejected: mutatedResponseRejected,
     source_smuggling_rejected: sourceSmugglingRejected,
+    provider_loop_import_smuggling_rejected: providerLoopImportSmugglingRejected,
     application_specific_wasm_smuggling_rejected: applicationWasmSmugglingRejected,
     untracked_path_detected: untrackedPathDetected,
     sandbox_agent_source_read_rejected: sandboxDenials.agent_source,

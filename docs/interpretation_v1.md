@@ -33,7 +33,8 @@ checkout.
 
 The clean-room run contains the fixed kernel, emitted semantic artifacts,
 generic kernel driver, receiver environment, repository fixture, and only the
-content-digest-bound world-host and world-capabilities runtime files. It
+content-digest-bound world-host protocol/error modules and world-capabilities
+runtime closure. It
 contains no Zig source, Agent source, application-specific WebAssembly, native
 Compiled.Machine code, or repository-repair World WASM. Bun executes under a
 filesystem- and network-denying sandbox: `sandbox-exec` on Darwin or Bubblewrap

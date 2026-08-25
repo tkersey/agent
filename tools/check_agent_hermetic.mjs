@@ -222,16 +222,14 @@ function materializeAgentSource(source, root, gitExecutable, tarExecutable, envi
         source,
         "archive",
         "--format=tar.gz",
-        "--prefix=agent-source/",
+        "--prefix=agent/",
         `--output=${archive}`,
         head,
     ], source, environment, false);
     requireAgentSourceUnchanged(source, head, gitExecutable, environment);
-    inspectTarGz(archive, "agent-source", { tarExecutable, environment });
-    const extracted = join(root, "agent-extracted");
-    mkdirSync(extracted);
-    run(tarExecutable, ["-xzf", archive, "-C", extracted], root, environment, false);
-    const snapshot = join(extracted, "agent-source");
+    inspectTarGz(archive, "agent", { tarExecutable, environment });
+    run(tarExecutable, ["-xzf", archive, "-C", root], root, environment, false);
+    const snapshot = join(root, "agent");
     if (!existsSync(snapshot) || existsSync(join(snapshot, ".git"))) {
         throw new Error("authenticated Agent source snapshot is invalid");
     }

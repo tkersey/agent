@@ -295,7 +295,7 @@ function requireZigCompiler(zig, root, globalCache, environment) {
 function requireHermeticBuildTranscript(result) {
     const transcript = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
     for (const marker of [
-        "Build Summary: 138/138 steps succeeded; 60/60 tests passed",
+        "Build Summary: 140/140 steps succeeded; 60/60 tests passed",
         "check-agent-semantic success",
         "lint success",
     ]) {

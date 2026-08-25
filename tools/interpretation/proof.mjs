@@ -468,7 +468,9 @@ async function proveSandboxReadDenials(
     sandboxProfile,
     environment,
     runtimeRoot,
-    `try { await Bun.write(${JSON.stringify(resolve(readOnlyRuntimeInput))}, "mutated\\n");` +
+    `try { const { chmod } = await import("node:fs/promises");` +
+    `await chmod(${JSON.stringify(resolve(readOnlyRuntimeInput))}, 0o600);` +
+    `await Bun.write(${JSON.stringify(resolve(readOnlyRuntimeInput))}, "mutated\\n");` +
     `process.stdout.write("SANDBOX_WRITE_ALLOWED\\n"); } catch {` +
     `process.stderr.write("SANDBOX_WRITE_DENIED\\n"); process.exit(23); }`
   );
@@ -479,7 +481,9 @@ async function proveSandboxReadDenials(
     sandboxProfile,
     environment,
     runtimeRoot,
-    `try { await Bun.write(${JSON.stringify(resolve(readOnlyGitControl))}, "mutated\\n");` +
+    `try { const { chmod } = await import("node:fs/promises");` +
+    `await chmod(${JSON.stringify(resolve(readOnlyGitControl))}, 0o600);` +
+    `await Bun.write(${JSON.stringify(resolve(readOnlyGitControl))}, "mutated\\n");` +
     `process.stdout.write("SANDBOX_GIT_WRITE_ALLOWED\\n"); } catch {` +
     `process.stderr.write("SANDBOX_GIT_WRITE_DENIED\\n"); process.exit(23); }`
   );
@@ -647,9 +651,13 @@ async function cleanRoomSandboxProfile(options, runtimeRoot, interpretedRoot, in
   ])];
   const readDeny = denyOutside("file-read*", readable);
   const writeDeny = denyOutside("file-write*", writable);
-  const gitControlWriteDeny = `(deny file-write* (subpath ${JSON.stringify(
-    resolve(join(interpretedRoot, ".git"))
-  )}))`;
+  const gitControlPaths = [...new Set([
+    resolve(join(interpretedRoot, ".git")),
+    await realpath(join(interpretedRoot, ".git"))
+  ])];
+  const gitControlWriteDeny = gitControlPaths
+    .map((path) => `(deny file-write* (subpath ${JSON.stringify(path)}))`)
+    .join("\n");
   return `(version 1)
     (allow default)
     (deny network*)

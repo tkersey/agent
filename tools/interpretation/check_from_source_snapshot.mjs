@@ -112,7 +112,7 @@ try {
     throw new Error("snapshot proof receipt source binding mismatch");
   }
   mkdirSync(dirname(options.receiptOutput), { recursive: true });
-  writeFileSync(options.receiptOutput, receiptBytes, { flag: "wx" });
+  writeFileSync(options.receiptOutput, receiptBytes);
   process.stdout.write(`agent_source_commit=${binding.head}\n`);
   process.stdout.write(`agent_source_tree=${binding.tree}\n`);
   process.stdout.write(`agent_source_archive_sha256=${archiveSha256}\n`);

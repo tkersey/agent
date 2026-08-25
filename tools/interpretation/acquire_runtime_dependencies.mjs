@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { inspectTarGz } from "../reference_stack.mjs";
@@ -17,15 +17,17 @@ const ALLOWED_HOSTS = new Set([
 ]);
 const REQUIRED_PATHS = Object.freeze({
   worldHost: Object.freeze([
-    "src/v1/index.mjs",
-    "src/v1/protocol.mjs"
+    "src/v1"
   ]),
   worldCapabilities: Object.freeze([
+    "src/v1/errors.mjs",
+    "src/v1/protocol.mjs",
+    "src/v1/router.mjs",
     "src/v1/actuality/repository_repair_codecs.mjs",
     "src/v1/actuality/repository_repair_fixture_binding.mjs",
     "src/v1/actuality/repository_workspace_binding.mjs",
-    "packages/repository-repair-decision-fixture/manifest.json",
-    "packages/repository-workspace-actuality/manifest.json"
+    "packages/repository-repair-decision-fixture",
+    "packages/repository-workspace-actuality"
   ])
 });
 
@@ -46,7 +48,7 @@ async function materialize(kind, entry, rootOverride, archiveOverride) {
   if (existsSync(destination)) throw new Error(`runtime dependency output already exists: ${destination}`);
   if (rootOverride !== null) {
     requirePaths(kind, rootOverride);
-    cpSync(rootOverride, destination, { recursive: true, errorOnExist: true });
+    copyRuntimeClosure(kind, rootOverride, destination);
     return;
   }
 
@@ -70,7 +72,16 @@ async function materialize(kind, entry, rootOverride, archiveOverride) {
   run("tar", ["-xzf", archivePath, "-C", extractionRoot]);
   const source = join(extractionRoot, acquired.archive.root);
   requirePaths(kind, source);
-  cpSync(source, destination, { recursive: true, errorOnExist: true });
+  copyRuntimeClosure(kind, source, destination);
+}
+
+function copyRuntimeClosure(kind, source, destination) {
+  mkdirSync(destination, { recursive: true });
+  for (const relativePath of REQUIRED_PATHS[kind]) {
+    const target = join(destination, relativePath);
+    mkdirSync(dirname(target), { recursive: true });
+    cpSync(join(source, relativePath), target, { recursive: true, errorOnExist: true });
+  }
 }
 
 function readLock(path) {

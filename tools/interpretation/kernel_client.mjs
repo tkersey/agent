@@ -42,10 +42,10 @@ export async function executeKernelCommand({
   callerFuel = 0n
 }) {
   if (!kernel?.module) throw new Error("kernel_not_compiled");
-  const image = ownedBytes(bpi1, "BPI1");
-  const profile = ownedBytes(mv2p1, "MV2P1");
-  const canonicalState = ownedBytes(state, "State");
-  const aux = ownedBytes(auxiliary, "auxiliary");
+  const image = byteView(bpi1, "BPI1");
+  const profile = byteView(mv2p1, "MV2P1");
+  const canonicalState = byteView(state, "State");
+  const aux = byteView(auxiliary, "auxiliary");
   if (!Number.isInteger(command) || command < 0 || command > 5) throw new Error("kernel_command_invalid");
   if (typeof callerFuel !== "bigint" || callerFuel < 0n || callerFuel > 0xffffffffffffffffn) {
     throw new Error("kernel_fuel_invalid");
@@ -53,7 +53,14 @@ export async function executeKernelCommand({
   for (const [name, value] of [["BPI1", image], ["MV2P1", profile], ["State", canonicalState], ["auxiliary", aux]]) {
     if (value.length > 0xffffffff) throw new Error(`kernel_${name}_length_invalid`);
   }
-  const input = Buffer.alloc(48 + image.length + profile.length + canonicalState.length + aux.length);
+  const instance = await WebAssembly.instantiate(kernel.module, {});
+  const abi = instance.exports;
+  const inputLength = 48 + image.length + profile.length + canonicalState.length + aux.length;
+  if (!Number.isSafeInteger(inputLength) ||
+      inputLength > abi.boundary_machine_v2_kernel_input_capacity()) {
+    throw new Error("kernel_input_capacity");
+  }
+  const input = Buffer.alloc(inputLength);
   input.write("ABL_KIN1", 0, "ascii");
   input.writeUInt16LE(1, 8);
   input.writeUInt16LE(command, 10);
@@ -64,14 +71,8 @@ export async function executeKernelCommand({
   input.writeUInt32LE(aux.length, 36);
   let cursor = 48;
   for (const value of [image, profile, canonicalState, aux]) {
-    value.copy(input, cursor);
+    Buffer.from(value.buffer, value.byteOffset, value.byteLength).copy(input, cursor);
     cursor += value.length;
-  }
-
-  const instance = await WebAssembly.instantiate(kernel.module, {});
-  const abi = instance.exports;
-  if (input.length > abi.boundary_machine_v2_kernel_input_capacity()) {
-    throw new Error("kernel_input_capacity");
   }
   const memory = new Uint8Array(abi.memory.buffer);
   memory.set(input, abi.boundary_machine_v2_kernel_input_ptr());
@@ -88,13 +89,15 @@ export async function executeKernelCommand({
 }
 
 export function encodeResumeAuxiliary(requestIdentity, responseBytes) {
-  const identity = ownedBytes(requestIdentity, "RequestIdentity");
-  const response = ownedBytes(responseBytes, "response");
+  const identity = byteView(requestIdentity, "RequestIdentity");
+  const response = byteView(responseBytes, "response");
   if (identity.length !== 176 || response.length > 0xffffffff) throw new Error("kernel_resume_invalid");
-  const result = Buffer.alloc(184 + response.length);
-  identity.copy(result, 0);
+  const resultLength = 184 + response.length;
+  if (!Number.isSafeInteger(resultLength)) throw new Error("kernel_resume_invalid");
+  const result = Buffer.alloc(resultLength);
+  Buffer.from(identity.buffer, identity.byteOffset, identity.byteLength).copy(result, 0);
   result.writeUInt32LE(response.length, 176);
-  response.copy(result, 184);
+  Buffer.from(response.buffer, response.byteOffset, response.byteLength).copy(result, 184);
   return result;
 }
 
@@ -143,4 +146,9 @@ function decodeKernelOutput(bytes, command) {
 function ownedBytes(value, label) {
   if (!(value instanceof Uint8Array)) throw new TypeError(`${label} must be bytes`);
   return Buffer.from(value);
+}
+
+function byteView(value, label) {
+  if (!(value instanceof Uint8Array)) throw new TypeError(`${label} must be bytes`);
+  return value;
 }

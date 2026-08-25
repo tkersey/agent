@@ -379,6 +379,7 @@ pub fn build(b: *std.Build) void {
     }
 
     const acquire_interpretation_runtime = b.addSystemCommand(&.{"bun"});
+    acquire_interpretation_runtime.has_side_effects = true;
     acquire_interpretation_runtime.addFileArg(
         b.path("tools/interpretation/acquire_runtime_dependencies.mjs"),
     );
@@ -387,12 +388,10 @@ pub fn build(b: *std.Build) void {
         b.path("interpretation/runtime-dependencies.lock.json"),
     );
     if (world_host_root) |path| {
-        acquire_interpretation_runtime.addArg("--world-host-root");
-        acquire_interpretation_runtime.addDirectoryArg(.{ .cwd_relative = b.pathFromRoot(path) });
+        acquire_interpretation_runtime.addArgs(&.{ "--world-host-root", b.pathFromRoot(path) });
     }
     if (world_capabilities_root) |path| {
-        acquire_interpretation_runtime.addArg("--world-capabilities-root");
-        acquire_interpretation_runtime.addDirectoryArg(.{ .cwd_relative = b.pathFromRoot(path) });
+        acquire_interpretation_runtime.addArgs(&.{ "--world-capabilities-root", b.pathFromRoot(path) });
     }
     if (world_host_archive) |path| {
         acquire_interpretation_runtime.addArg("--world-host-archive");

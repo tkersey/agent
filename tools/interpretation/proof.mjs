@@ -73,6 +73,10 @@ export async function proveAgentInterpretation(options) {
     await mkdir(runtimeRoot);
     await cp(snapshotOptions.fixtureRoot, specializedRoot, { recursive: true, errorOnExist: true });
     await cp(snapshotOptions.fixtureRoot, interpretedRoot, { recursive: true, errorOnExist: true });
+    await Promise.all([
+      makeTreeWritable(specializedRoot),
+      makeTreeWritable(interpretedRoot)
+    ]);
     await Promise.all([initializeGit(specializedRoot), initializeGit(interpretedRoot)]);
     const initialSpecializedTree = await git(specializedRoot, ["rev-parse", "HEAD^{tree}"]);
     const initialInterpretedTree = await git(interpretedRoot, ["rev-parse", "HEAD^{tree}"]);

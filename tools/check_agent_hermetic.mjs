@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -97,9 +97,21 @@ try {
         baseEnvironment,
     );
     const agentRoot = agentSource.root;
-    replaceDependency(join(agentRoot, "build.zig.zon"), "boundary", '../boundary');
-    replaceDependency(join(agentRoot, "build.zig.zon"), "world", '../world');
-    replaceDependency(join(worldRoot, "build.zig.zon"), "boundary", '../boundary');
+    replaceDependency(
+        join(agentRoot, "build.zig.zon"),
+        "boundary",
+        relative(agentRoot, boundaryRoot),
+    );
+    replaceDependency(
+        join(agentRoot, "build.zig.zon"),
+        "world",
+        relative(agentRoot, worldRoot),
+    );
+    replaceDependency(
+        join(worldRoot, "build.zig.zon"),
+        "boundary",
+        relative(worldRoot, boundaryRoot),
+    );
     prefetchDependencyTree(
         options.zig,
         agentRoot,

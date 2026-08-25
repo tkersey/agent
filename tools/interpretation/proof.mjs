@@ -753,6 +753,7 @@ async function snapshotProofInputs(temporaryRoot, options, dependencyBindings) {
       dependencyBindings.worldCapabilities.files
     )
   ]);
+  await chmod(unrelatedBpi1, 0o600);
   return Object.freeze({
     ...options,
     artifactRoot: artifacts,

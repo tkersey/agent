@@ -9,6 +9,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   writeFileSync
 } from "node:fs";
@@ -28,7 +29,9 @@ const FORWARDED_OPTIONS = Object.freeze([
 ]);
 
 const options = parseArguments(process.argv.slice(2));
-const proofRoot = mkdtempSync(join(tmpdir(), "agent-interpretation-source-"));
+const proofRoot = realpathSync(
+  mkdtempSync(join(tmpdir(), "agent-interpretation-source-"))
+);
 let passed = false;
 
 try {
@@ -64,6 +67,25 @@ try {
   const packageScratch = join(sourceSnapshot, "zig-pkg");
   mkdirSync(packageScratch);
   makeReadOnly(sourceSnapshot, packageScratch);
+  prefetchDependencyTree(
+    options.zig,
+    sourceSnapshot,
+    join(proofRoot, "agent-fetch-cache"),
+    options.globalCacheDir,
+    environment
+  );
+  const boundaryPackages = readdirSync(packageScratch)
+    .filter((name) => name.startsWith("boundary-"));
+  if (boundaryPackages.length !== 1) {
+    throw new Error(`expected one Boundary package, found ${boundaryPackages.length}`);
+  }
+  prefetchDependencyTree(
+    options.zig,
+    join(packageScratch, boundaryPackages[0]),
+    join(proofRoot, "boundary-fetch-cache"),
+    options.globalCacheDir,
+    environment
+  );
 
   const prefix = join(proofRoot, "out");
   const command = [
@@ -196,6 +218,17 @@ function sourceSnapshotEnvironment(zig, home) {
     if (process.env[name] !== undefined) environment[name] = process.env[name];
   }
   return environment;
+}
+
+function prefetchDependencyTree(zig, root, cache, globalCache, environment) {
+  run(zig, [
+    "build",
+    "--fetch",
+    "--cache-dir",
+    cache,
+    "--global-cache-dir",
+    globalCache
+  ], root, environment);
 }
 
 function run(command, args, cwd, environment, forward = true) {

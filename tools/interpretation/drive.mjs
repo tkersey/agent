@@ -126,7 +126,7 @@ export async function runInterpreted(options) {
         state: stepped.state,
         identity: stepped.metadata,
         effectIdentity: effect.identity,
-        interfaceId: Buffer.from(resolved.projected.interfaceId, "hex"),
+        interfaceId: Buffer.from(admission.interfaceId),
         payload: stepped.value,
         response: resolved.responseBytes
       }));

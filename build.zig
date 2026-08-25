@@ -379,7 +379,6 @@ pub fn build(b: *std.Build) void {
     }
 
     const acquire_interpretation_runtime = b.addSystemCommand(&.{"bun"});
-    acquire_interpretation_runtime.has_side_effects = true;
     acquire_interpretation_runtime.addFileArg(
         b.path("tools/interpretation/acquire_runtime_dependencies.mjs"),
     );

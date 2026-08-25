@@ -90,8 +90,7 @@ export async function resolveInterpretedEffect({
       bindingId: binding.bindingId,
       driverId: binding.driverId,
       recoveryClass: binding.recoveryClass ?? "pure"
-    }),
-    projected
+    })
   });
 }
 

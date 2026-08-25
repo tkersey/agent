@@ -7,8 +7,8 @@
             .hash = "boundary-1.6.0-flclaM8nHgDZhxPK5MqHPdvRNsac_7cUW6NJ_cIC-34Y",
         },
         .world = .{
-            .url = "https://github.com/tkersey/world/archive/5a64a70d39e9712b16aee3bb57c23409ece1abc3.tar.gz",
-            .hash = "world-3.1.4-XXTUeO3GBgAJIfBpEVp4dpeHGNO4U71UniWabi3dftQ-",
+            .url = "https://github.com/tkersey/world/archive/4b7f46d4d5d15f974ada85794047c2eb3c5c9764.tar.gz",
+            .hash = "world-3.1.4-XXTUeO3GBgAymk00fWGFm-F-c7bBbhw06YcsEcb0vhx2",
         },
     },
     .minimum_zig_version = "0.16.0",

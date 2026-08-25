@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { readBpi1EffectCatalog } from "./bpi1_effects.mjs";
-import { resolveInterpretedEffect } from "./effect_resolver.mjs";
+import { buildInterpretedEffectMap, resolveInterpretedEffect } from "./effect_resolver.mjs";
 import { PROOF_LIMITS } from "./proof_limits.mjs";
 import {
   compileKernel,
@@ -52,6 +52,12 @@ export async function runInterpreted(options) {
   if (!environment.bindings.every((binding) => binding.applicationIds.some(
     (id) => Buffer.from(id).equals(manifest.applicationId)
   ))) throw new Error("interpreted_application_not_admitted");
+  const effectAdmissions = buildInterpretedEffectMap({
+    effects,
+    manifest,
+    bindings: environment.bindings,
+    effectInterfaceId: capabilityProtocol.effectInterfaceId
+  });
 
   let result = await executeKernelCommand({
     kernel,
@@ -103,14 +109,14 @@ export async function runInterpreted(options) {
           sha256Bytes(stepped.value) !== Buffer.from(identity.payloadDigest).toString("hex")) {
         throw new Error("interpreted_request_identity_invalid");
       }
+      const admission = effectAdmissions[identity.siteOrdinal];
+      if (admission?.effect !== effect) throw new Error("interpreted_effect_admission_missing");
       const resolved = await resolveInterpretedEffect({
-        effect,
+        admission,
         manifest,
         requestIdentity: identity,
         payloadBytes: stepped.value,
-        bindings: environment.bindings,
         receiverContext: environment.context,
-        effectInterfaceId: capabilityProtocol.effectInterfaceId,
         statusNames: capabilityProtocol.statusNames,
         beforeResolve: environment.beforeResolve
       });
@@ -177,7 +183,9 @@ function verifyArtifactBindings(artifacts, manifest) {
   if (!sameBytes(manifest.rootProgramId, artifacts.mv2p1.subarray(96, 128))) {
     throw new Error("manifest_mv2p1_contract_mismatch");
   }
-  if (manifest.boundaryPackageVersion !== "1.6.0" || manifest.boundaryStaticMachineAbiVersion !== 2) {
+  if (manifest.boundaryPackageVersion !== "1.6.0" ||
+      manifest.worldPackageVersion !== "3.1.4" ||
+      manifest.boundaryStaticMachineAbiVersion !== 2) {
     throw new Error("manifest_boundary_identity_mismatch");
   }
 }

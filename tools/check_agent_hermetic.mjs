@@ -17,9 +17,9 @@ const releases = Object.freeze({
     }),
     world: Object.freeze({
         version: "3.1.4",
-        root: "world-5a64a70d39e9712b16aee3bb57c23409ece1abc3",
-        url: "https://github.com/tkersey/world/archive/5a64a70d39e9712b16aee3bb57c23409ece1abc3.tar.gz",
-        sha256: "6787c5580a487979cef79d10b1e7d8cda767593436f3d5bfd9eca6ae9c3fee9d",
+        root: "world-4b7f46d4d5d15f974ada85794047c2eb3c5c9764",
+        url: "https://github.com/tkersey/world/archive/4b7f46d4d5d15f974ada85794047c2eb3c5c9764.tar.gz",
+        sha256: "5ee8e47805f81363cb5b5ea33ea242ccd2197cad7c0d5b9b62518b59bc58ee81",
     }),
 });
 

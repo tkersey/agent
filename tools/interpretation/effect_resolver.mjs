@@ -1,28 +1,63 @@
 import { createHash } from "node:crypto";
 
+export function buildInterpretedEffectMap({
+  effects,
+  manifest,
+  bindings,
+  effectInterfaceId
+}) {
+  if (effects.length !== manifest.residualEffects.length) {
+    throw new Error(`interpreted_effect_catalog_count:${effects.length}:${manifest.residualEffects.length}`);
+  }
+  const applicationId = Buffer.from(manifest.applicationId);
+  const usedResiduals = new Set();
+  const usedBindings = new Set();
+  return Object.freeze(effects.map((effect) => {
+    const interfaceId = effectInterfaceId(effect.identity);
+    const residuals = manifest.residualEffects.filter((entry) =>
+      sameBytes(entry.interfaceId, interfaceId));
+    if (residuals.length !== 1) {
+      throw new Error(`interpreted_manifest_effect_count:${effect.identity}:${residuals.length}`);
+    }
+    const residual = residuals[0];
+    const residualIndex = manifest.residualEffects.indexOf(residual);
+    if (usedResiduals.has(residualIndex)) {
+      throw new Error(`interpreted_manifest_effect_reused:${effect.identity}:${residualIndex}`);
+    }
+    usedResiduals.add(residualIndex);
+    const admitted = bindings.filter((binding) =>
+      sameBytes(binding.interfaceId, interfaceId) &&
+      sameBytes(binding.payloadSchemaId, residual.payloadSchemaId) &&
+      sameBytes(binding.resultSchemaId, residual.resultSchemaId) &&
+      BigInt(binding.authorityRequirements) === residual.authorityRequirements &&
+      binding.applicationIds.some((id) => sameBytes(id, applicationId)));
+    if (admitted.length !== 1) {
+      throw new Error(`interpreted_binding_count:${effect.identity}:${admitted.length}`);
+    }
+    const bindingIndex = bindings.indexOf(admitted[0]);
+    if (usedBindings.has(bindingIndex)) {
+      throw new Error(`interpreted_binding_reused:${effect.identity}:${bindingIndex}`);
+    }
+    usedBindings.add(bindingIndex);
+    return Object.freeze({
+      effect,
+      interfaceId: Buffer.from(interfaceId),
+      residual,
+      binding: admitted[0]
+    });
+  }));
+}
+
 export async function resolveInterpretedEffect({
-  effect,
+  admission,
   manifest,
   requestIdentity,
   payloadBytes,
-  bindings,
   receiverContext,
-  effectInterfaceId,
   statusNames,
   beforeResolve = async () => {}
 }) {
-  const interfaceId = effectInterfaceId(effect.identity);
-  const residuals = manifest.residualEffects.filter((entry) => sameBytes(entry.interfaceId, interfaceId));
-  if (residuals.length !== 1) throw new Error(`interpreted_manifest_effect_count:${effect.identity}:${residuals.length}`);
-  const residual = residuals[0];
-  const applicationId = Buffer.from(manifest.applicationId);
-  const admitted = bindings.filter((binding) => sameBytes(binding.interfaceId, interfaceId) &&
-    sameBytes(binding.payloadSchemaId, residual.payloadSchemaId) &&
-    sameBytes(binding.resultSchemaId, residual.resultSchemaId) &&
-    BigInt(binding.authorityRequirements) === residual.authorityRequirements &&
-    binding.applicationIds.some((id) => sameBytes(id, applicationId)));
-  if (admitted.length !== 1) throw new Error(`interpreted_binding_count:${effect.identity}:${admitted.length}`);
-  const binding = admitted[0];
+  const { effect, interfaceId, residual, binding } = admission;
   const requestId = Buffer.from(requestIdentity.digest).toString("hex");
   const idempotencyKey = createHash("sha256")
     .update("agent-interpretation-v1-idempotency\0")

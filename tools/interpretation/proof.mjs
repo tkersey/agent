@@ -189,6 +189,9 @@ export async function proveAgentInterpretation(options) {
       boundary_version: sourceBinding.boundaryVersion,
       boundary_source_commit: sourceBinding.boundarySourceCommit,
       boundary_package_hash: sourceBinding.boundaryPackageHash,
+      world_version: sourceBinding.worldVersion,
+      world_source_commit: sourceBinding.worldSourceCommit,
+      world_package_hash: sourceBinding.worldPackageHash,
       kernel_wasm_sha256: options.kernelSha256,
       kernel_import_count: 0,
       world_host_runtime_sha256: dependencyBindings.worldHost.sha256,
@@ -201,7 +204,10 @@ export async function proveAgentInterpretation(options) {
       machine_v2_contract_digest: mv2p1.subarray(96, 128).toString("hex"),
       application_id: interpreted.applicationId,
       decision_contract_digest: contract.subarray(-32).toString("hex"),
-      effect_count: new Set(interpreted.trace.map((entry) => entry.effectIdentity)).size,
+      effect_count: interpreted.effectCount,
+      observed_effect_identity_count: new Set(
+        interpreted.trace.map((entry) => entry.effectIdentity)
+      ).size,
       model_decision_count: interpreted.trace.filter((entry) => entry.effectIdentity === "model.decide.v1").length,
       repository_effect_count: interpreted.trace.filter((entry) => entry.effectIdentity !== "model.decide.v1").length,
       yield_boundary_count: interpreted.yieldBoundaries.length,
@@ -210,6 +216,14 @@ export async function proveAgentInterpretation(options) {
       payload_comparison_count: interpreted.trace.length,
       request_identity_comparison_count: interpreted.trace.length,
       response_comparison_count: interpreted.trace.length,
+      specialized_file_read_count: specialized.context.fileReads,
+      interpreted_file_read_count: interpreted.context.fileReads,
+      specialized_search_count: specialized.context.searches,
+      interpreted_search_count: interpreted.context.searches,
+      specialized_test_run_count: specialized.context.testRuns,
+      interpreted_test_run_count: interpreted.context.testRuns,
+      specialized_pre_mutation_test_failed: specialized.context.preMutationTestFailed,
+      interpreted_pre_mutation_test_failed: interpreted.context.preMutationTestFailed,
       specialized_terminal_result_sha256: specialized.terminalResultSha256,
       interpreted_terminal_result_sha256: interpreted.terminalResultSha256,
       specialized_final_git_tree: specializedGit.tree,
@@ -285,11 +299,18 @@ async function bindAgentIdentity(agentRoot) {
     /\.boundary = \.\{\s*\.url = "https:\/\/github\.com\/tkersey\/boundary\/archive\/([0-9a-f]{40})\.tar\.gz",\s*\.hash = "(boundary-(\d+\.\d+\.\d+)-[^"]+)",\s*\}/s
   );
   if (boundary === null) throw new Error("boundary_dependency_binding_invalid");
+  const world = packageSource.match(
+    /\.world = \.\{\s*\.url = "https:\/\/github\.com\/tkersey\/world\/archive\/([0-9a-f]{40})\.tar\.gz",\s*\.hash = "(world-(\d+\.\d+\.\d+)-[^"]+)",\s*\}/s
+  );
+  if (world === null) throw new Error("world_dependency_binding_invalid");
   return Object.freeze({
     version: packageVersion,
     boundarySourceCommit: boundary[1],
     boundaryPackageHash: boundary[2],
-    boundaryVersion: boundary[3]
+    boundaryVersion: boundary[3],
+    worldSourceCommit: world[1],
+    worldPackageHash: world[2],
+    worldVersion: world[3]
   });
 }
 
@@ -957,18 +978,34 @@ async function listChangedPaths(cwd) {
 function assertRepositoryResult(gitResult, specialized, interpreted) {
   if (JSON.stringify(gitResult.changedPaths) !== JSON.stringify(["src/range.mjs"]) ||
       specialized.context.mutationsApplied !== 1 || interpreted.context.mutationsApplied !== 1 ||
-      specialized.context.lastTestPassed !== true || interpreted.context.lastTestPassed !== true ||
+      !requiredRepositoryObservations(specialized.context) ||
+      !requiredRepositoryObservations(interpreted.context) ||
       !specialized.hiddenVerifierPassed || !interpreted.hiddenVerifierPassed) {
     throw new Error(`repository_result_invalid:${JSON.stringify({
       changedPaths: gitResult.changedPaths,
       specializedMutations: specialized.context.mutationsApplied,
       interpretedMutations: interpreted.context.mutationsApplied,
+      specializedFileReads: specialized.context.fileReads,
+      interpretedFileReads: interpreted.context.fileReads,
+      specializedSearches: specialized.context.searches,
+      interpretedSearches: interpreted.context.searches,
+      specializedTestRuns: specialized.context.testRuns,
+      interpretedTestRuns: interpreted.context.testRuns,
+      specializedPreMutationFailed: specialized.context.preMutationTestFailed,
+      interpretedPreMutationFailed: interpreted.context.preMutationTestFailed,
       specializedPassed: specialized.context.lastTestPassed,
       interpretedPassed: interpreted.context.lastTestPassed,
       specializedHidden: specialized.hiddenVerifierPassed,
       interpretedHidden: interpreted.hiddenVerifierPassed
     })}`);
   }
+}
+
+function requiredRepositoryObservations(context) {
+  return Number.isSafeInteger(context.fileReads) && context.fileReads > 0 &&
+    Number.isSafeInteger(context.searches) && context.searches > 0 &&
+    Number.isSafeInteger(context.testRuns) && context.testRuns >= 2 &&
+    context.preMutationTestFailed === true && context.lastTestPassed === true;
 }
 
 async function recursiveFiles(root) {

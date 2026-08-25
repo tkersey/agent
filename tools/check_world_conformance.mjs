@@ -48,16 +48,16 @@ const releases = Object.freeze({
     world: Object.freeze({
         url: options.agentV1Release
             ? "https://github.com/tkersey/world/archive/refs/tags/v3.1.1.tar.gz"
-            : "https://github.com/tkersey/world/archive/5a64a70d39e9712b16aee3bb57c23409ece1abc3.tar.gz",
+            : "https://github.com/tkersey/world/archive/4b7f46d4d5d15f974ada85794047c2eb3c5c9764.tar.gz",
         sha256: options.agentV1Release
             ? "ebde48f0bc037678e79051e3f8c3cde2fa1964df0b14ff53ed9cef94ccb1f63c"
-            : "6787c5580a487979cef79d10b1e7d8cda767593436f3d5bfd9eca6ae9c3fee9d",
+            : "5ee8e47805f81363cb5b5ea33ea242ccd2197cad7c0d5b9b62518b59bc58ee81",
         packageHash: options.agentV1Release
             ? "world-3.1.1-XXTUeKXGBgAZhWa2YvUU9Sj4GE-E53Km85AcgecObJV6"
-            : "world-3.1.4-XXTUeO3GBgAJIfBpEVp4dpeHGNO4U71UniWabi3dftQ-",
+            : "world-3.1.4-XXTUeO3GBgAymk00fWGFm-F-c7bBbhw06YcsEcb0vhx2",
         root: options.agentV1Release
             ? "world-3.1.1"
-            : "world-5a64a70d39e9712b16aee3bb57c23409ece1abc3",
+            : "world-4b7f46d4d5d15f974ada85794047c2eb3c5c9764",
     }),
 });
 

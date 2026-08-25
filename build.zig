@@ -195,89 +195,31 @@ pub fn build(b: *std.Build) void {
             .optimize = .Debug,
         }),
     );
-    const interpretation_wasm_target = b.resolveTargetQuery(.{
-        .cpu_arch = .wasm32,
-        .os_tag = .freestanding,
-        .abi = .none,
+    const interpretation_artifact_module = b.createModule(.{
+        .root_source_file = b.path("interpretation/emit_repository_repair_artifact.zig"),
+        .target = b.graph.host,
+        .optimize = .Debug,
     });
-    const interpretation_wasm_boundary_dependency = b.dependency("boundary", .{
-        .target = interpretation_wasm_target,
-        .optimize = .ReleaseSmall,
-    });
-    const interpretation_wasm_boundary =
-        interpretation_wasm_boundary_dependency.module("boundary");
-    const interpretation_wasm_agent = b.createModule(.{
-        .root_source_file = b.path("src/root.zig"),
-        .target = interpretation_wasm_target,
-        .optimize = .ReleaseSmall,
-    });
-    interpretation_wasm_agent.addImport(
-        "boundary",
-        interpretation_wasm_boundary,
-    );
-    const interpretation_wasm_actuality = b.createModule(.{
-        .root_source_file = b.path("examples/repository_repair_actuality.zig"),
-        .target = interpretation_wasm_target,
-        .optimize = .ReleaseSmall,
-    });
-    interpretation_wasm_actuality.addImport("agent", interpretation_wasm_agent);
-    interpretation_wasm_actuality.addImport(
-        "boundary",
-        interpretation_wasm_boundary,
-    );
-    interpretation_wasm_actuality.addImport(
-        "repository_repair_definition",
-        b.createModule(.{
-            .root_source_file = b.path("actuality/repository_repair_definition.zig"),
-            .target = interpretation_wasm_target,
-            .optimize = .ReleaseSmall,
-        }),
-    );
-    const interpretation_bpi1_wasm_module = b.createModule(.{
-        .root_source_file = b.path("interpretation/emit_repository_repair_bpi1_wasm.zig"),
-        .target = interpretation_wasm_target,
-        .optimize = .ReleaseSmall,
-    });
-    interpretation_bpi1_wasm_module.addImport(
+    interpretation_artifact_module.addImport(
         "repository_repair_actuality",
-        interpretation_wasm_actuality,
+        interpretation_actuality,
     );
-    const interpretation_bpi1_wasm = b.addExecutable(.{
-        .name = "emit-repository-repair-agent-bpi1",
-        .root_module = interpretation_bpi1_wasm_module,
+    const interpretation_artifact_emitter = b.addExecutable(.{
+        .name = "emit-repository-repair-agent-artifact",
+        .root_module = interpretation_artifact_module,
     });
-    interpretation_bpi1_wasm.entry = .disabled;
-    interpretation_bpi1_wasm.rdynamic = true;
-    interpretation_bpi1_wasm.export_memory = true;
-    interpretation_bpi1_wasm.max_memory = 256 << 20;
-    const run_interpretation_bpi1 = b.addSystemCommand(&.{"node"});
-    run_interpretation_bpi1.addFileArg(
-        b.path("interpretation/run_bpi1_wasm.mjs"),
+    const run_interpretation_bpi1 = b.addRunArtifact(
+        interpretation_artifact_emitter,
     );
-    run_interpretation_bpi1.addFileArg(
-        interpretation_bpi1_wasm.getEmittedBin(),
-    );
+    run_interpretation_bpi1.addArg("bpi1");
     const interpretation_bpi1_output = run_interpretation_bpi1.captureStdOut(
         .{ .basename = "repository-repair.agent.bpi1" },
     );
 
-    const interpretation_mv2p1_module = b.createModule(.{
-        .root_source_file = b.path("interpretation/emit_repository_repair_mv2p1.zig"),
-        .target = b.graph.host,
-        .optimize = .Debug,
-    });
-    interpretation_mv2p1_module.addImport(
-        "repository_repair_actuality",
-        interpretation_actuality,
-    );
-    const interpretation_mv2p1_emitter = b.addExecutable(.{
-        .name = "emit-repository-repair-agent-mv2p1",
-        .root_module = interpretation_mv2p1_module,
-    });
     const run_interpretation_mv2p1 = b.addRunArtifact(
-        interpretation_mv2p1_emitter,
+        interpretation_artifact_emitter,
     );
-    run_interpretation_mv2p1.step.dependOn(&run_interpretation_bpi1.step);
+    run_interpretation_mv2p1.addArg("mv2p1");
     const interpretation_mv2p1_output = run_interpretation_mv2p1.captureStdOut(
         .{ .basename = "repository-repair.agent.mv2p1" },
     );

@@ -109,6 +109,54 @@ export function materializeReferenceArtifact(kind, artifact, archiveRoot, extrac
     return Object.freeze({ archivePath, root: join(extractionRoot, expectedRoot), inventory });
 }
 
+export function materializeWorldCapabilitiesArtifact(artifact, archiveRoot, extractionRoot, options = {}) {
+    const source = materializeReferenceArtifact(
+        "worldCapabilities",
+        artifact,
+        archiveRoot,
+        join(extractionRoot, "source"),
+    );
+    if (artifact.entry.provenance !== "source-build") return source;
+
+    const bunExecutable = options.bunExecutable ?? process.execPath;
+    const environment = options.environment ?? process.env;
+    const build = spawnSync(bunExecutable, [
+        join(source.root, "scripts/build-public-deterministic-v1.mjs"),
+    ], {
+        cwd: source.root,
+        env: environment,
+        encoding: "utf8",
+        maxBuffer: 128 * 1024 * 1024,
+    });
+    if (build.stdout) process.stdout.write(build.stdout);
+    if (build.stderr) process.stderr.write(build.stderr);
+    if (build.error) throw build.error;
+    if (build.status !== 0) throw new Error(`worldCapabilities distribution build failed with status ${build.status}`);
+
+    const builtPath = join(
+        source.root,
+        "zig-out/public-deterministic",
+        `world-capabilities-v${artifact.entry.version}-deterministic.tar.gz`,
+    );
+    const bytes = readFileSync(builtPath);
+    if (bytes.length > MAX_ARCHIVE_BYTES) throw new Error("worldCapabilities distribution archive exceeds byte limit");
+    const digest = sha256(bytes);
+    if (digest !== artifact.entry.sha256) {
+        throw new Error(`worldCapabilities distribution checksum mismatch: expected=${artifact.entry.sha256} actual=${digest}`);
+    }
+    return materializeReferenceArtifact("worldCapabilities", {
+        entry: {
+            repository: artifact.entry.repository,
+            version: artifact.entry.version,
+            url: `https://github.com/tkersey/world-capabilities/releases/download/v${artifact.entry.version}/world-capabilities-v${artifact.entry.version}-deterministic.tar.gz`,
+            sha256: digest,
+        },
+        bytes,
+        resolvedUrl: null,
+        source: "source-built",
+    }, archiveRoot, join(extractionRoot, "distribution"));
+}
+
 export function inspectTarGz(archivePath, expectedRoot) {
     const listing = run("tar", ["-tzf", archivePath], false).stdout.split("\n").filter(Boolean);
     if (listing.length === 0 || listing.length > MAX_ENTRIES) throw new Error("reference archive entry count is invalid");

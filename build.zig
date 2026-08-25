@@ -10,7 +10,7 @@ pub fn build(b: *std.Build) void {
     const boundary_kernel_wasm = b.option([]const u8, "boundary-kernel-wasm", "Exact local Boundary v1.6.0 fixed-kernel WASM override");
     const world_archive = b.option([]const u8, "world-archive", "Local World v3.1.4 archive for offline proof");
     const world_host_archive = b.option([]const u8, "world-host-archive", "Local world-host v1.0.1 runtime archive");
-    const world_capabilities_archive = b.option([]const u8, "world-capabilities-archive", "Local lock-pinned world-capabilities deterministic archive");
+    const world_capabilities_archive = b.option([]const u8, "world-capabilities-archive", "Local lock-pinned world-capabilities archive");
     const world_capabilities_root = b.option([]const u8, "world-capabilities-root", "Local world-capabilities v2.3.3 source or extracted release root for development proofs");
     const world_host_root = b.option([]const u8, "world-host-root", "Local world-host v1.0.1 source root for adequacy development");
 

@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import {
     acquireReferenceStack,
     materializeReferenceArtifact,
+    materializeWorldCapabilitiesArtifact,
     readReferenceStackLock,
 } from "./reference_stack.mjs";
 
@@ -146,11 +147,11 @@ try {
         archiveRoot,
         join(proofRoot, "host-extracted"),
     );
-    const capabilitiesArtifact = materializeReferenceArtifact(
-        "worldCapabilities",
+    const capabilitiesArtifact = materializeWorldCapabilitiesArtifact(
         referenceStack.worldCapabilities,
         archiveRoot,
         join(proofRoot, "capabilities-extracted"),
+        { bunExecutable: process.execPath, environment: sourceBuildEnvironment(proofRoot) },
     );
     const hostReleaseRoot = hostArtifact.root;
     const capabilitiesReleaseRoot = capabilitiesArtifact.root;
@@ -159,6 +160,12 @@ try {
     mkdirSync(dirname(runtimeHost), { recursive: true });
     cpSync(join(hostReleaseRoot, "src/v1"), runtimeHost, { recursive: true });
     cpSync(capabilitiesReleaseRoot, runtimeCapabilities, { recursive: true });
+    if (referenceStack.worldCapabilities.entry.provenance === "source-build") {
+        if (existsSync(join(runtimeCapabilities, "scripts/build-public-deterministic-v1.mjs")) ||
+            existsSync(join(runtimeCapabilities, "zig-out"))) {
+            throw new Error("world-capabilities source/build tree leaked into runtime");
+        }
+    }
     assertCapabilityPack(runtimeCapabilities);
 
     const wasmNames = Object.freeze({
@@ -232,6 +239,7 @@ try {
     console.log("world_host_runtime_changed=false");
     console.log(`world_capabilities_version=${versions.capabilities}`);
     console.log(`world_capabilities_source_archive_sha256=${referenceStack.worldCapabilities.entry.sourceSha256 ?? referenceStack.worldCapabilities.entry.sha256}`);
+    console.log(`world_capabilities_archive_sha256=${referenceStack.worldCapabilities.entry.sha256}`);
     console.log("github_authentication_required=false");
     console.log("github_cli_required=false");
     console.log("private_repository_permission_required=false");
@@ -253,6 +261,19 @@ try {
 } finally {
     if (passed) rmSync(proofRoot, { recursive: true, force: true });
     else console.error(`agent_world_conformance_proof_root=${proofRoot}`);
+}
+
+function sourceBuildEnvironment(proofRoot) {
+    const environment = {
+        ...process.env,
+        HOME: join(proofRoot, "capabilities-build-home"),
+        PATH: "/usr/bin:/bin",
+    };
+    mkdirSync(environment.HOME);
+    for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "OPENAI_API_KEY", "BUN_OPTIONS", "NODE_OPTIONS"]) {
+        delete environment[name];
+    }
+    return environment;
 }
 
 async function materializeAgent(stagingRoot, archiveRoot) {

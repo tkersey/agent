@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -10,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import {
     acquireReferenceStack,
     materializeReferenceArtifact,
+    materializeWorldCapabilitiesArtifact,
     readReferenceStackLock,
 } from "./reference_stack.mjs";
 
@@ -29,18 +29,16 @@ try {
     });
     const archives = join(proofRoot, "archives");
     const host = materializeReferenceArtifact("worldHost", acquired.worldHost, archives, join(proofRoot, "host-extracted"));
-    const capabilitiesSource = materializeReferenceArtifact(
-        "worldCapabilities",
+    const capabilities = materializeWorldCapabilitiesArtifact(
         acquired.worldCapabilities,
         archives,
-        join(proofRoot, "capabilities-source-extracted"),
+        join(proofRoot, "capabilities-extracted"),
+        {
+            bunExecutable: process.execPath,
+            environment: capabilitiesBuildEnvironment(proofRoot),
+        },
     );
-    const capabilities = acquired.worldCapabilities.entry.provenance === "source-build"
-        ? buildCapabilitiesDistribution(acquired.worldCapabilities, capabilitiesSource, archives, proofRoot)
-        : capabilitiesSource;
-    const capabilitiesArchiveSha256 = acquired.worldCapabilities.entry.provenance === "source-build"
-        ? acquired.worldCapabilities.entry.sha256
-        : acquired.worldCapabilities.entry.sha256;
+    const capabilitiesArchiveSha256 = acquired.worldCapabilities.entry.sha256;
     const runtimeRoot = join(proofRoot, "runtime");
     const runtimeHost = join(runtimeRoot, "world-host");
     const runtimeCapabilities = join(runtimeRoot, "world-capabilities");
@@ -147,7 +145,7 @@ try {
     else console.error(`agent_reference_stack_proof_root=${proofRoot}`);
 }
 
-function buildCapabilitiesDistribution(acquired, source, archives, proofRoot) {
+function capabilitiesBuildEnvironment(proofRoot) {
     const environment = {
         ...process.env,
         HOME: join(proofRoot, "capabilities-build-home"),
@@ -157,28 +155,7 @@ function buildCapabilitiesDistribution(acquired, source, archives, proofRoot) {
     for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "OPENAI_API_KEY", "BUN_OPTIONS", "NODE_OPTIONS"]) {
         delete environment[name];
     }
-    run(process.execPath, [
-        join(source.root, "scripts/build-public-deterministic-v1.mjs"),
-    ], source.root, environment);
-    const archivePath = join(
-        source.root,
-        "zig-out/public-deterministic",
-        `world-capabilities-v${acquired.entry.version}-deterministic.tar.gz`,
-    );
-    const bytes = readFileSync(archivePath);
-    const digest = createHash("sha256").update(bytes).digest("hex");
-    assert.equal(digest, acquired.entry.sha256, "built capability distribution digest mismatch");
-    return materializeReferenceArtifact("worldCapabilities", {
-        entry: {
-            repository: acquired.entry.repository,
-            version: acquired.entry.version,
-            url: `https://github.com/tkersey/world-capabilities/releases/download/v${acquired.entry.version}/world-capabilities-v${acquired.entry.version}-deterministic.tar.gz`,
-            sha256: digest,
-        },
-        bytes,
-        resolvedUrl: null,
-        source: "source-built",
-    }, archives, join(proofRoot, "capabilities-extracted"));
+    return environment;
 }
 
 function copyRuntime(source, destination, entries) {

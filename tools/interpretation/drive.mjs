@@ -184,7 +184,7 @@ function verifyArtifactBindings(artifacts, manifest) {
   if (!sameBytes(manifest.rootProgramId, artifacts.mv2p1.subarray(96, 128))) {
     throw new Error("manifest_mv2p1_contract_mismatch");
   }
-  if (manifest.boundaryPackageVersion !== "1.6.0" ||
+  if (manifest.boundaryPackageVersion !== "1.6.1" ||
       manifest.worldPackageVersion !== "3.1.4" ||
       manifest.boundaryStaticMachineAbiVersion !== 2) {
     throw new Error("manifest_boundary_identity_mismatch");

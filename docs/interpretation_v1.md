@@ -8,6 +8,8 @@ therefore the Agent-specific executable meaning; it is not a runtime
 AgentDefinition loader.
 
 The runtime WebAssembly module is Boundary v1.6.0's fixed Machine-v2 kernel.
+The BPI1 compiler package is Boundary v1.6.1, whose patch identity owns the
+post-release image-emitter resource fix without changing the fixed kernel.
 Its SHA-256 is
 `12973fb655f126c2acd5693a84be47496649d1ab10bf22d565c9b675172e4f27`,
 it imports nothing, and a fresh instance receives the complete BPI1,

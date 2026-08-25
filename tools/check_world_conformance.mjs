@@ -25,7 +25,7 @@ import {
 const options = parseArgs(process.argv.slice(2));
 const versions = Object.freeze({
     agent: options.agentV1Release ? "1.1.2" : "2.7.0",
-    boundary: options.agentV1Release ? "1.3.2" : "1.6.0",
+    boundary: options.agentV1Release ? "1.3.2" : "1.6.1",
     world: options.agentV1Release ? "3.1.1" : "3.1.4",
     host: "1.0.1",
     capabilities: options.agentV1Release ? "2.1.2" : "2.3.3",
@@ -34,30 +34,30 @@ const releases = Object.freeze({
     boundary: Object.freeze({
         url: options.agentV1Release
             ? "https://github.com/tkersey/boundary/archive/refs/tags/v1.3.2.tar.gz"
-            : "https://github.com/tkersey/boundary/archive/f4e9268aa7b44842a8a3779fa9b6db167c8e90cb.tar.gz",
+            : "https://github.com/tkersey/boundary/archive/8998d1bd12df65de2e7280d76197ce05e0deefc4.tar.gz",
         sha256: options.agentV1Release
             ? "d33a682f92033fa287169e4bc42c5e96f891cf1fe307381efc6983361de3fe0d"
-            : "17b33ddd3223cd515aa8b3150753e4e523ce44c3526c593607ea3aebbd0a3f9f",
+            : "625b93fc6b650591029260eb718f9d8ce4deee75a691a88c03f4ee5abcd64fa8",
         packageHash: options.agentV1Release
             ? "boundary-1.3.2-flclaAI0EQBXh0WrWcNTh-CwL-m0RLPbRX8RBRxP9E95"
-            : "boundary-1.6.0-flclaM8nHgDZhxPK5MqHPdvRNsac_7cUW6NJ_cIC-34Y",
+            : "boundary-1.6.1-flclaPInHgBIqGD7uxEKhtaVdQOPRbAmLlh44QU3QZ6l",
         root: options.agentV1Release
             ? "boundary-1.3.2"
-            : "boundary-f4e9268aa7b44842a8a3779fa9b6db167c8e90cb",
+            : "boundary-8998d1bd12df65de2e7280d76197ce05e0deefc4",
     }),
     world: Object.freeze({
         url: options.agentV1Release
             ? "https://github.com/tkersey/world/archive/refs/tags/v3.1.1.tar.gz"
-            : "https://github.com/tkersey/world/archive/4b7f46d4d5d15f974ada85794047c2eb3c5c9764.tar.gz",
+            : "https://github.com/tkersey/world/archive/35b809bedd05daf6e874e4c799218895ba119c18.tar.gz",
         sha256: options.agentV1Release
             ? "ebde48f0bc037678e79051e3f8c3cde2fa1964df0b14ff53ed9cef94ccb1f63c"
-            : "5ee8e47805f81363cb5b5ea33ea242ccd2197cad7c0d5b9b62518b59bc58ee81",
+            : "ec8fad1609f242d1f575cff411f3fb25c596cc10caa2dd88cd23ec6576563ff0",
         packageHash: options.agentV1Release
             ? "world-3.1.1-XXTUeKXGBgAZhWa2YvUU9Sj4GE-E53Km85AcgecObJV6"
-            : "world-3.1.4-XXTUeO3GBgAymk00fWGFm-F-c7bBbhw06YcsEcb0vhx2",
+            : "world-3.1.4-XXTUeO3GBgBXM2QC6Ky_n_seqlA5MariCfcD3L19Y_EP",
         root: options.agentV1Release
             ? "world-3.1.1"
-            : "world-4b7f46d4d5d15f974ada85794047c2eb3c5c9764",
+            : "world-35b809bedd05daf6e874e4c799218895ba119c18",
     }),
 });
 

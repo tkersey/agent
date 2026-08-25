@@ -116,7 +116,7 @@ async function runScenario({
     retryIndex = -1,
 }) {
     const manifest = await manifestFor(bytes);
-    assert.equal(manifest.boundaryPackageVersion, "1.6.0");
+    assert.equal(manifest.boundaryPackageVersion, "1.6.1");
     assert.equal(manifest.worldPackageVersion, "3.1.4");
     assert.equal(manifest.worldApplicationAbiVersion, 1);
     assert.equal(manifest.boundaryStaticMachineAbiVersion, 2);
@@ -368,7 +368,7 @@ assert.equal(config.zigAvailableAtRuntime, false);
 console.log(JSON.stringify({
     applicationWasmImportCount: 0,
     applicationWasmMemoryBounded: true,
-    boundaryPackageVersion: "1.6.0",
+    boundaryPackageVersion: "1.6.1",
     boundaryMachineAbi: 2,
     worldPackageVersion: "3.1.4",
     worldApplicationAbi: 1,

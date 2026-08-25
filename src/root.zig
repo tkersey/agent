@@ -41,7 +41,7 @@ comptime {
         !@hasDecl(boundary, "image") or
         !@hasDecl(boundary, "machine_v2"))
     {
-        @compileError("agent requires Boundary v1.6.0 program image and Machine-v2 compilation");
+        @compileError("agent requires Boundary v1.6.1 program image and Machine-v2 compilation");
     }
 }
 

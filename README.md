@@ -69,7 +69,7 @@ pub const Compiled = agent.compile(Definition, Runtime, Epistemics, .{
 });
 ```
 
-The package targets Zig 0.16.0, Boundary v1.6.0, Machine ABI v2, World
+The package targets Zig 0.16.0, Boundary v1.6.1, Machine ABI v2, World
 v3.1.4, Application ABI v1, and Frame v1. Agent definitions and strategies are
 compile-time inputs: BPI1 is a post-compilation semantic image, not a runtime
 definition loader or strategy registry.

@@ -7,7 +7,7 @@ agent.compile -> boundary.program -> Program.compile -> specialized Machine ABI 
 agent.compile -> boundary.program -> BPI1 + MachineV2Profile -> fixed Boundary kernel
 ```
 
-Agent consumes exact Boundary v1.6.0. It uses public program, Control IR,
+Agent compiles with exact Boundary v1.6.1. It uses public program, Control IR,
 effect, schema, codec, Driver, image, and Machine-v2 kernel surfaces. It does
 not import `boundary.Agent`, duplicate value codecs, reinterpret fuel, or
 author another state transition system. The asset build compiles one host

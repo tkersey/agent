@@ -14,6 +14,7 @@ const EXPECTED_RUNTIME_DEPENDENCIES = Object.freeze({
   worldHost: "dfb59aaa8c2288ae85c69a31cfd7a400d9f2f27f26e0098f973442cb273977f2",
   worldCapabilities: "7f68853a78df798a959ff68ff06ad0e09dfc0c7e0d3a3e61d697da78f0cb984e"
 });
+const FIXED_KERNEL_RELEASE_VERSION = "1.6.0";
 const WORLD_CAPABILITIES_RUNTIME_PATHS = Object.freeze([
   "src/v1/errors.mjs",
   "src/v1/protocol.mjs",
@@ -192,7 +193,8 @@ export async function proveAgentInterpretation(options) {
       format: "agent-interpretation-v1",
       agent_commit: sourceBinding.head,
       agent_version: sourceBinding.version,
-      boundary_version: sourceBinding.boundaryVersion,
+      boundary_version: FIXED_KERNEL_RELEASE_VERSION,
+      boundary_compiler_version: sourceBinding.boundaryVersion,
       boundary_source_commit: sourceBinding.boundarySourceCommit,
       boundary_package_hash: sourceBinding.boundaryPackageHash,
       world_version: sourceBinding.worldVersion,

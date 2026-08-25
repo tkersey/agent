@@ -6,7 +6,7 @@ pub const ActualityApplication = @import("actuality/application.zig").Applicatio
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const boundary_archive = b.option([]const u8, "boundary-archive", "Local Boundary v1.6.0 archive for offline proof");
+    const boundary_archive = b.option([]const u8, "boundary-archive", "Local Boundary v1.6.1 archive for offline proof");
     const boundary_kernel_wasm = b.option([]const u8, "boundary-kernel-wasm", "Exact local Boundary v1.6.0 fixed-kernel WASM override");
     const world_archive = b.option([]const u8, "world-archive", "Local World v3.1.4 archive for offline proof");
     const world_host_archive = b.option([]const u8, "world-host-archive", "Local world-host v1.0.1 runtime archive");

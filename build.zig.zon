@@ -3,12 +3,12 @@
     .version = "2.7.0",
     .dependencies = .{
         .boundary = .{
-            .url = "https://github.com/tkersey/boundary/archive/f4e9268aa7b44842a8a3779fa9b6db167c8e90cb.tar.gz",
-            .hash = "boundary-1.6.0-flclaM8nHgDZhxPK5MqHPdvRNsac_7cUW6NJ_cIC-34Y",
+            .url = "https://github.com/tkersey/boundary/archive/8998d1bd12df65de2e7280d76197ce05e0deefc4.tar.gz",
+            .hash = "boundary-1.6.1-flclaPInHgBIqGD7uxEKhtaVdQOPRbAmLlh44QU3QZ6l",
         },
         .world = .{
-            .url = "https://github.com/tkersey/world/archive/4b7f46d4d5d15f974ada85794047c2eb3c5c9764.tar.gz",
-            .hash = "world-3.1.4-XXTUeO3GBgAymk00fWGFm-F-c7bBbhw06YcsEcb0vhx2",
+            .url = "https://github.com/tkersey/world/archive/35b809bedd05daf6e874e4c799218895ba119c18.tar.gz",
+            .hash = "world-3.1.4-XXTUeO3GBgBXM2QC6Ky_n_seqlA5MariCfcD3L19Y_EP",
         },
     },
     .minimum_zig_version = "0.16.0",

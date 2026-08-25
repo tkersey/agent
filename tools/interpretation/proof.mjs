@@ -48,7 +48,11 @@ const FORBIDDEN_DRIVER_LITERALS = Object.freeze([
 ]);
 
 export async function proveAgentInterpretation(options) {
-  const sourceBinding = await bindAgentSource(options.agentRoot);
+  const sourceBinding = await bindAgentSource(
+    options.agentRoot,
+    options.agentSourceHead,
+    options.agentSourceArchiveSha256
+  );
   const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-interpretation-v1-"));
   try {
     await verifyArtifactSidecars(options);
@@ -180,6 +184,7 @@ export async function proveAgentInterpretation(options) {
     const receipt = {
       format: "agent-interpretation-v1",
       agent_commit: sourceBinding.head,
+      agent_source_archive_sha256: sourceBinding.sourceArchiveSha256,
       agent_version: sourceBinding.version,
       boundary_version: FIXED_KERNEL_RELEASE_VERSION,
       boundary_compiler_version: sourceBinding.boundaryVersion,
@@ -246,7 +251,19 @@ export async function proveAgentInterpretation(options) {
   }
 }
 
-async function bindAgentSource(agentRoot) {
+async function bindAgentSource(agentRoot, expectedHead, expectedArchiveSha256) {
+  if (!existsSync(join(agentRoot, ".git"))) {
+    if (!/^[0-9a-f]{40}$/.test(expectedHead ?? "") ||
+        !/^[0-9a-f]{64}$/.test(expectedArchiveSha256 ?? "")) {
+      throw new Error("agent_source_snapshot_binding_missing");
+    }
+    return Object.freeze({
+      head: expectedHead,
+      sourceArchiveSha256: expectedArchiveSha256,
+      sourceTreeDigest: await digestAgentSourceTree(agentRoot),
+      ...await bindAgentIdentity(agentRoot)
+    });
+  }
   const headBefore = await git(agentRoot, ["rev-parse", "HEAD"]);
   const identity = await bindAgentIdentity(agentRoot);
   const child = Bun.spawn([
@@ -270,14 +287,40 @@ async function bindAgentSource(agentRoot) {
   }
   const headAfter = await git(agentRoot, ["rev-parse", "HEAD"]);
   if (headBefore !== headAfter) throw new Error("agent_source_head_changed_during_binding");
-  return Object.freeze({ head: headAfter, ...identity });
+  return Object.freeze({
+    head: headAfter,
+    sourceArchiveSha256: null,
+    sourceTreeDigest: null,
+    ...identity
+  });
 }
 
 async function assertAgentSourceUnchanged(agentRoot, expected) {
-  const current = await bindAgentSource(agentRoot);
+  const current = await bindAgentSource(
+    agentRoot,
+    expected.head,
+    expected.sourceArchiveSha256
+  );
   if (JSON.stringify(current) !== JSON.stringify(expected)) {
     throw new Error(`agent_source_binding_changed:${JSON.stringify(expected)}:${JSON.stringify(current)}`);
   }
+}
+
+async function digestAgentSourceTree(agentRoot) {
+  const files = await recursiveFiles(agentRoot);
+  const hasher = createHash("sha256");
+  hasher.update("agent-source-snapshot-tree-v1\0");
+  for (const path of files) {
+    const encoded = Buffer.from(path, "utf8");
+    const bytes = await readFile(join(agentRoot, path));
+    const lengths = Buffer.alloc(8);
+    lengths.writeUInt32LE(encoded.length, 0);
+    lengths.writeUInt32LE(bytes.length, 4);
+    hasher.update(lengths);
+    hasher.update(encoded);
+    hasher.update(bytes);
+  }
+  return hasher.digest("hex");
 }
 
 async function bindAgentIdentity(agentRoot) {
@@ -1108,6 +1151,18 @@ function parseArguments(argv) {
     result[key] = resolve(result[key]);
   }
   result.bunExecutable = resolve(result.bunExecutable ?? process.execPath);
+  for (const [name, pattern] of [
+    ["agentSourceHead", /^[0-9a-f]{40}$/],
+    ["agentSourceArchiveSha256", /^[0-9a-f]{64}$/]
+  ]) {
+    if (result[name] !== undefined && !pattern.test(result[name])) {
+      throw new Error(`invalid_argument:${name}`);
+    }
+  }
+  if ((result.agentSourceHead === undefined) !==
+      (result.agentSourceArchiveSha256 === undefined)) {
+    throw new Error("incomplete_agent_source_snapshot_binding");
+  }
   result.kernelSha256 = "12973fb655f126c2acd5693a84be47496649d1ab10bf22d565c9b675172e4f27";
   return result;
 }

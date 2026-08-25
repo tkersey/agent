@@ -13,6 +13,27 @@ pub fn build(b: *std.Build) void {
     const world_capabilities_archive = b.option([]const u8, "world-capabilities-archive", "Local lock-pinned world-capabilities archive");
     const world_capabilities_root = b.option([]const u8, "world-capabilities-root", "Local world-capabilities v2.3.3 source or extracted release root for development proofs");
     const world_host_root = b.option([]const u8, "world-host-root", "Local world-host v1.0.1 source root for adequacy development");
+    const interpretation_source_snapshot = b.option(
+        bool,
+        "interpretation-source-snapshot",
+        "Internal: execute the interpretation proof inside an authenticated Agent source snapshot",
+    ) orelse false;
+    const agent_source_head = b.option(
+        []const u8,
+        "agent-source-head",
+        "Internal authenticated Agent source commit for a snapshot proof",
+    );
+    const agent_source_archive_sha256 = b.option(
+        []const u8,
+        "agent-source-archive-sha256",
+        "Internal authenticated Agent source archive digest for a snapshot proof",
+    );
+    if ((agent_source_head == null) != (agent_source_archive_sha256 == null)) {
+        std.process.fatal(
+            "agent-source-head and agent-source-archive-sha256 must be supplied together",
+            .{},
+        );
+    }
 
     const boundary_dependency = b.dependency("boundary", .{
         .target = target,
@@ -395,21 +416,82 @@ pub fn build(b: *std.Build) void {
         b.pathFromRoot("tools/interpretation"),
         "--environment-module",
         b.pathFromRoot("tools/interpretation/repository_repair_environment.mjs"),
-        "--receipt-output",
     });
-    const interpretation_receipt = interpretation_proof_command.addOutputFileArg(
+    if (agent_source_head) |head| {
+        interpretation_proof_command.addArgs(&.{ "--agent-source-head", head });
+        interpretation_proof_command.addArgs(&.{
+            "--agent-source-archive-sha256",
+            agent_source_archive_sha256.?,
+        });
+    }
+    interpretation_proof_command.addArg("--receipt-output");
+    const direct_interpretation_receipt = interpretation_proof_command.addOutputFileArg(
         "agent-interpretation-v1-receipt.json",
     );
     interpretation_proof_command.step.dependOn(interpretation_assets);
-    const install_interpretation_receipt = b.addInstallFile(
-        interpretation_receipt,
+    const install_direct_interpretation_receipt = b.addInstallFile(
+        direct_interpretation_receipt,
         "agent-interpretation-v1/agent-interpretation-v1-receipt.json",
     );
     const interpretation_proof = b.step(
         "check-agent-interpretation-v1",
         "Prove fixed-kernel execution and specialized equivalence",
     );
-    interpretation_proof.dependOn(&install_interpretation_receipt.step);
+    if (interpretation_source_snapshot) {
+        interpretation_proof.dependOn(
+            &install_direct_interpretation_receipt.step,
+        );
+    } else {
+        const snapshot_proof = b.addSystemCommand(&.{"node"});
+        snapshot_proof.has_side_effects = true;
+        snapshot_proof.addFileArg(
+            b.path("tools/interpretation/check_from_source_snapshot.mjs"),
+        );
+        snapshot_proof.addArg("--agent-root");
+        snapshot_proof.addDirectoryArg(b.path("."));
+        snapshot_proof.addArgs(&.{ "--zig", b.graph.zig_exe });
+        snapshot_proof.addArgs(&.{
+            "--global-cache-dir",
+            b.graph.global_cache_root.path orelse ".",
+        });
+        if (boundary_archive) |path| {
+            snapshot_proof.addArg("--boundary-archive");
+            snapshot_proof.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
+        }
+        if (boundary_kernel_wasm) |path| {
+            snapshot_proof.addArg("--boundary-kernel-wasm");
+            snapshot_proof.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
+        }
+        if (world_archive) |path| {
+            snapshot_proof.addArg("--world-archive");
+            snapshot_proof.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
+        }
+        if (world_host_archive) |path| {
+            snapshot_proof.addArg("--world-host-archive");
+            snapshot_proof.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
+        }
+        if (world_capabilities_archive) |path| {
+            snapshot_proof.addArg("--world-capabilities-archive");
+            snapshot_proof.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
+        }
+        if (world_host_root) |path| {
+            snapshot_proof.addArg("--world-host-root");
+            snapshot_proof.addDirectoryArg(.{ .cwd_relative = b.pathFromRoot(path) });
+        }
+        if (world_capabilities_root) |path| {
+            snapshot_proof.addArg("--world-capabilities-root");
+            snapshot_proof.addDirectoryArg(.{ .cwd_relative = b.pathFromRoot(path) });
+        }
+        snapshot_proof.addArg("--receipt-output");
+        const snapshot_receipt = snapshot_proof.addOutputFileArg(
+            "agent-interpretation-v1-receipt.json",
+        );
+        const install_snapshot_receipt = b.addInstallFile(
+            snapshot_receipt,
+            "agent-interpretation-v1/agent-interpretation-v1-receipt.json",
+        );
+        interpretation_proof.dependOn(&install_snapshot_receipt.step);
+    }
 
     const tests = b.addTest(.{ .root_module = agent_module });
     const run_tests = b.addRunArtifact(tests);

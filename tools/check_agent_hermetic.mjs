@@ -37,8 +37,11 @@ const proofRoot = mkdtempSync(join(tmpdir(), "agent-hermetic-"));
 let passed = false;
 
 try {
+    const gitExecutable = "/usr/bin/git";
     const tarExecutable = "/usr/bin/tar";
-    if (!existsSync(tarExecutable)) throw new Error("trusted tar executable is unavailable");
+    if (!existsSync(gitExecutable) || !existsSync(tarExecutable)) {
+        throw new Error("trusted source-snapshot tools are unavailable");
+    }
     const globalCacheRoot = join(proofRoot, "zig-global-cache");
     const hermeticHome = join(proofRoot, "home");
     mkdirSync(hermeticHome);
@@ -48,7 +51,7 @@ try {
         LC_ALL: "C",
         LOGNAME: process.env.LOGNAME ?? "agent-hermetic",
         NO_COLOR: "1",
-        PATH: `${dirname(options.zig)}:${process.env.PATH ?? ""}`,
+        PATH: closedVerifierPath(options.zig),
         SHELL: "/bin/sh",
         TERM: "dumb",
         TMPDIR: process.env.TMPDIR ?? tmpdir(),
@@ -86,11 +89,14 @@ try {
     );
     requireReleaseBuildGraph("boundary", boundaryRoot);
     requireReleaseBuildGraph("world", worldRoot);
-    const agentRoot = join(proofRoot, "agent");
-    cpSync(sourceRoot, agentRoot, {
-        recursive: true,
-        filter: (path) => ![".git", ".ledger", "zig-cache", ".zig-cache", "zig-out", "zig-pkg"].includes(path.slice(path.lastIndexOf("/") + 1)),
-    });
+    const agentSource = materializeAgentSource(
+        sourceRoot,
+        proofRoot,
+        gitExecutable,
+        tarExecutable,
+        baseEnvironment,
+    );
+    const agentRoot = agentSource.root;
     replaceDependency(join(agentRoot, "build.zig.zon"), "boundary", '../boundary');
     replaceDependency(join(agentRoot, "build.zig.zon"), "world", '../world');
     replaceDependency(join(worldRoot, "build.zig.zon"), "boundary", '../boundary');
@@ -118,6 +124,12 @@ try {
         "--summary",
         "all",
     ], agentRoot, environment);
+    requireAgentSourceUnchanged(
+        sourceRoot,
+        agentSource.head,
+        gitExecutable,
+        baseEnvironment,
+    );
     requireReleaseBuildGraph("boundary", boundaryRoot);
     if (existsSync(join(hermeticHome, ".cache", "zig"))) {
         throw new Error("hermetic proof escaped into the temporary HOME Zig cache");
@@ -126,11 +138,15 @@ try {
     console.log(`agent_hermetic_boundary_sha256=${releases.boundary.sha256}`);
     console.log("agent_hermetic_world_version=3.1.4");
     console.log(`agent_hermetic_world_sha256=${releases.world.sha256}`);
+    console.log(`agent_hermetic_agent_commit=${agentSource.head}`);
+    console.log(`agent_hermetic_agent_archive_sha256=${agentSource.sha256}`);
+    console.log("agent_hermetic_agent_source_snapshot=true");
     console.log("agent_hermetic_boundary_build_graph_preserved=true");
     console.log(`agent_hermetic_archive_tool=${tarExecutable}`);
     console.log("agent_hermetic_release_build_graph_bound=true");
     console.log("agent_hermetic_ambient_zig_cache_absent=true");
     console.log("agent_hermetic_ambient_zig_overrides_absent=true");
+    console.log("agent_hermetic_closed_verifier_path=true");
     console.log("agent_hermetic_network_after_acquisition=false");
     console.log("agent_hermetic_check=pass");
     passed = true;
@@ -164,6 +180,79 @@ function requireReleaseBuildGraph(kind, root) {
     if (sha256File(join(root, "build.zig")) !== expected.build ||
         sha256File(join(root, "build.zig.zon")) !== expected.manifest) {
         throw new Error(`${kind} build graph does not match the authenticated release`);
+    }
+}
+
+function closedVerifierPath(zig) {
+    return [...new Set([
+        dirname(zig),
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        "/usr/bin",
+        "/bin",
+        "/usr/sbin",
+        "/sbin",
+    ])].join(":");
+}
+
+function materializeAgentSource(source, root, gitExecutable, tarExecutable, environment) {
+    const head = bindAgentGitSource(source, gitExecutable, environment);
+    const archive = join(root, "agent-source.tar.gz");
+    run(gitExecutable, [
+        "-C",
+        source,
+        "archive",
+        "--format=tar.gz",
+        "--prefix=agent-source/",
+        `--output=${archive}`,
+        head,
+    ], source, environment, false);
+    requireAgentSourceUnchanged(source, head, gitExecutable, environment);
+    inspectTarGz(archive, "agent-source", { tarExecutable, environment });
+    const extracted = join(root, "agent-extracted");
+    mkdirSync(extracted);
+    run(tarExecutable, ["-xzf", archive, "-C", extracted], root, environment, false);
+    const snapshot = join(extracted, "agent-source");
+    if (!existsSync(snapshot) || existsSync(join(snapshot, ".git"))) {
+        throw new Error("authenticated Agent source snapshot is invalid");
+    }
+    return Object.freeze({
+        head,
+        root: snapshot,
+        sha256: sha256File(archive),
+    });
+}
+
+function bindAgentGitSource(source, gitExecutable, environment) {
+    const head = run(
+        gitExecutable,
+        ["-C", source, "rev-parse", "HEAD"],
+        source,
+        environment,
+        false,
+    ).stdout.trim();
+    if (!/^[0-9a-f]{40}$/.test(head)) throw new Error("Agent Git head is invalid");
+    requireAgentSourceUnchanged(source, head, gitExecutable, environment);
+    return head;
+}
+
+function requireAgentSourceUnchanged(source, expectedHead, gitExecutable, environment) {
+    const head = run(
+        gitExecutable,
+        ["-C", source, "rev-parse", "HEAD"],
+        source,
+        environment,
+        false,
+    ).stdout.trim();
+    const status = run(
+        gitExecutable,
+        ["-C", source, "status", "--porcelain=v1", "--untracked-files=all"],
+        source,
+        environment,
+        false,
+    ).stdout.trim();
+    if (head !== expectedHead || status !== "") {
+        throw new Error("Agent source changed during snapshot-bound proof");
     }
 }
 

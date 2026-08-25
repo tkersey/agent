@@ -292,7 +292,8 @@ async function proveSandboxReadDenials(
       options.capabilitiesRoot,
       "src/v1/actuality/repository_repair_codecs.mjs"
     )],
-    ["outside_clean_room", outsideCanary]
+    ["outside_clean_room", outsideCanary],
+    ["host_proc_root", `/proc/${process.pid}/root${resolve(outsideCanary)}`]
   ]) {
     const script = `await Bun.file(${JSON.stringify(resolve(path))}).arrayBuffer();`;
     const child = Bun.spawn(sandboxInvocation(options, sandboxProfile, runtimeRoot, [
@@ -351,6 +352,7 @@ function sandboxInvocation(options, profile, runtimeRoot, argv) {
       "--die-with-parent",
       "--new-session",
       "--unshare-net",
+      "--unshare-pid",
       ...mountDirectories.flatMap((path) => ["--dir", path]),
       ...systemDirectories.flatMap((path) => ["--ro-bind", path, path]),
       ...systemSymlinks.flatMap(({ target, destination }) => [
@@ -800,6 +802,7 @@ async function runNegativeGates(
     sandbox_world_host_source_read_rejected: sandboxDenials.world_host_source,
     sandbox_world_capabilities_source_read_rejected: sandboxDenials.world_capabilities_source,
     sandbox_outside_clean_room_read_rejected: sandboxDenials.outside_clean_room,
+    sandbox_host_proc_root_read_rejected: sandboxDenials.host_proc_root,
     proof_input_mutation_detected: proofInputMutationDetected
   });
   if (Object.values(result).some((value) => value !== true)) throw new Error(`negative_gate_failed:${JSON.stringify(result)}`);

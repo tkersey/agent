@@ -117,6 +117,7 @@ export async function runInterpreted(options) {
         requestIdentity: identity,
         payloadBytes: stepped.value,
         receiverContext: environment.context,
+        admitCapabilityOutcome: environment.admitCapabilityOutcome,
         statusNames: capabilityProtocol.statusNames,
         beforeResolve: environment.beforeResolve
       });

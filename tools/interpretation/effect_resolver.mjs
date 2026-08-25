@@ -54,6 +54,7 @@ export async function resolveInterpretedEffect({
   requestIdentity,
   payloadBytes,
   receiverContext,
+  admitCapabilityOutcome,
   statusNames,
   beforeResolve = async () => {}
 }) {
@@ -76,10 +77,14 @@ export async function resolveInterpretedEffect({
     payload: binding.decodePayload(payloadBytes)
   });
   await beforeResolve(Object.freeze({ effect, binding, projected, requestIdentity }));
-  const preflight = await binding.adapter.preflight(receiverContext, projected);
+  const preflight = admitCapabilityOutcome(
+    await binding.adapter.preflight(receiverContext, projected)
+  );
   assertOutcome(preflight, requestId);
   if (preflight.status !== "ok") throw new Error(`interpreted_preflight_rejected:${effect.identity}:${preflight.payload?.reason ?? "unknown"}`);
-  const outcome = await binding.adapter.resolve(receiverContext, projected);
+  const outcome = admitCapabilityOutcome(
+    await binding.adapter.resolve(receiverContext, projected)
+  );
   assertOutcome(outcome, requestId);
   if (outcome.status !== "ok") throw new Error(`interpreted_effect_not_ok:${effect.identity}:${outcome.status}`);
   const responseBytes = Buffer.from(binding.encodeOutcome(outcome, projected));

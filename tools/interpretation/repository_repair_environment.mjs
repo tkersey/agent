@@ -14,6 +14,10 @@ export async function createEnvironment({
     capabilitiesRoot,
     "src/v1/protocol.mjs"
   )));
+  const { admitCapabilityOutcomeV1 } = await import(pathToFileURL(join(
+    capabilitiesRoot,
+    "src/v1/router.mjs"
+  )));
   const codecs = await import(pathToFileURL(join(
     capabilitiesRoot,
     "src/v1/actuality/repository_repair_codecs.mjs"
@@ -53,6 +57,7 @@ export async function createEnvironment({
   return Object.freeze({
     bindings,
     context,
+    admitCapabilityOutcome: admitCapabilityOutcomeV1,
     expectedDecisionContractDigest: fixtureAdapter.INTERPRETATION_DECISION_CONTRACT_DIGEST,
     beforeResolve: async ({ effect, projected }) => {
       if (effect.identity !== "repo.replace.approved.v1") return;

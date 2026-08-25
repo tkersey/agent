@@ -30,7 +30,7 @@ const EXPECTED_ZIG_SHA256 =
 const EXPECTED_APPLICATION_WASM_SHA256 =
   "8f60b66adad465fbbe01ad4511c765c0e0e31929fea7717de1fa862ceff1d491";
 const EXPECTED_PROOF_INPUT_DIGEST =
-  "8342e9499c09728a2dfcfe95d68f463d62063d406adfb17fbb0936b4e065f45b";
+  "d3785aec7a3c853ee50f2b7ee2024b5d3aca9f9c12bd90e4a0f8115e86e51df4";
 const EXPECTED_BPI1_SHA256 =
   "7440076a8078220d9d4000b871423d981bbbee19aedba499afaa4a86239fe6a6";
 const EXPECTED_MV2P1_SHA256 =
@@ -41,6 +41,99 @@ const EXPECTED_TERMINAL_RESULT_SHA256 =
   "6a473b2e74e2f8229d10061d1b613ad71ab2ad5b139c21bd9a898b7a2778f75c";
 const EXPECTED_FINAL_GIT_TREE =
   "0d9ac8802aac6597cb0a443245efb6f92a0249fe";
+const EXPECTED_PROGRAM_TRANSITION_DIGEST =
+  "48eb6ec9a74b9a4c958d78c526f3eacded2ba5baad2402a05465e3f1dbe34816";
+const EXPECTED_MACHINE_V2_CONTRACT_DIGEST =
+  "e5143aecdf9e1d0e7c18ccf70ef158eeec2e59840574acc40a09ec58d7e9b08d";
+const EXPECTED_DECISION_CONTRACT_DIGEST =
+  "28ad8f64d48be98b260c14d91ef7a61387c0782b61f0cca641bd38ed8efae7ae";
+const EXPECTED_WORLD_HOST_RUNTIME_SHA256 =
+  "dfb59aaa8c2288ae85c69a31cfd7a400d9f2f27f26e0098f973442cb273977f2";
+const EXPECTED_WORLD_CAPABILITIES_RUNTIME_SHA256 =
+  "beffb10afe190471565e29c5e9332513c60f192b653a7e42a407f870ae8b2b32";
+
+const INNER_RECEIPT_FIELDS = Object.freeze([
+  "format",
+  "agent_commit",
+  "agent_source_archive_sha256",
+  "agent_source_git_tree",
+  "agent_source_tree_digest",
+  "agent_version",
+  "boundary_version",
+  "boundary_compiler_version",
+  "boundary_source_commit",
+  "boundary_package_hash",
+  "world_version",
+  "world_source_commit",
+  "world_package_hash",
+  "kernel_wasm_sha256",
+  "kernel_import_count",
+  "application_wasm_sha256",
+  "proof_input_digest",
+  "world_host_runtime_sha256",
+  "world_capabilities_runtime_sha256",
+  "bpi1_sha256",
+  "mv2p1_sha256",
+  "unrelated_bpi1_sha256",
+  "unrelated_mv2p1_sha256",
+  "program_transition_digest",
+  "machine_v2_contract_digest",
+  "application_id",
+  "decision_contract_digest",
+  "effect_count",
+  "effect_catalog_count",
+  "observed_effect_identity_count",
+  "model_decision_count",
+  "repository_effect_count",
+  "yield_boundary_count",
+  "state_comparison_count",
+  "interface_identity_comparison_count",
+  "payload_comparison_count",
+  "request_identity_comparison_count",
+  "response_comparison_count",
+  "specialized_file_read_count",
+  "interpreted_file_read_count",
+  "specialized_search_count",
+  "interpreted_search_count",
+  "specialized_test_run_count",
+  "interpreted_test_run_count",
+  "specialized_pre_mutation_test_failed",
+  "interpreted_pre_mutation_test_failed",
+  "specialized_terminal_result_sha256",
+  "interpreted_terminal_result_sha256",
+  "specialized_final_git_tree",
+  "interpreted_final_git_tree",
+  "clean_room_agent_source_absent",
+  "application_specific_wasm_absent",
+  "hidden_verifier_passed",
+  "specialized_interpreted_equivalent",
+  "clean_room_inventory",
+  "negative_gates"
+]);
+
+const NEGATIVE_GATE_FIELDS = Object.freeze([
+  "corrupted_bpi1_rejected",
+  "corrupted_bpi1_routing_magic_rejected",
+  "corrupted_mv2p1_rejected",
+  "wrong_kernel_rejected",
+  "missing_bpi1_rejected",
+  "unrelated_pair_validated",
+  "unrelated_completion_rejected",
+  "mutated_response_rejected",
+  "source_smuggling_rejected",
+  "provider_loop_import_smuggling_rejected",
+  "application_specific_wasm_smuggling_rejected",
+  "untracked_path_detected",
+  "sandbox_agent_source_read_rejected",
+  "sandbox_application_wasm_read_rejected",
+  "sandbox_world_host_source_read_rejected",
+  "sandbox_world_capabilities_source_read_rejected",
+  "sandbox_outside_clean_room_read_rejected",
+  "sandbox_positive_control_passed",
+  "sandbox_network_read_rejected",
+  ...(process.platform === "linux" ? ["sandbox_host_proc_root_read_rejected"] : []),
+  "proof_input_mutation_detected"
+]);
 
 const FORWARDED_OPTIONS = Object.freeze([
   "boundary-archive",
@@ -340,12 +433,30 @@ function requireZigBinary(zig) {
 }
 
 function requireCanonicalInnerReceipt(receipt) {
+  requireExactKeys(receipt, INNER_RECEIPT_FIELDS, "inner receipt");
   for (const [field, expected] of Object.entries({
+    format: "agent-interpretation-v1-inner",
+    agent_version: "2.7.0",
+    boundary_version: "1.6.0",
+    boundary_compiler_version: "1.6.1",
+    boundary_source_commit: "4788bc152d2b0213e9c5c4e6544df1231e4b034d",
+    boundary_package_hash: "boundary-1.6.1-flclaE0pHgC1I33KEuEcfwmoMEidT7fLonNkdqBIlfwf",
+    world_version: "3.1.4",
+    world_source_commit: "5d8fad6e76863312c19a5ba6988bf6307f29a783",
+    world_package_hash: "world-3.1.4-XXTUeO3GBgD8JA4s-vElnLKVnT11p5mv6MS0eV5nk-Fd",
+    kernel_wasm_sha256: EXPECTED_KERNEL_SHA256,
+    world_host_runtime_sha256: EXPECTED_WORLD_HOST_RUNTIME_SHA256,
+    world_capabilities_runtime_sha256: EXPECTED_WORLD_CAPABILITIES_RUNTIME_SHA256,
     application_wasm_sha256: EXPECTED_APPLICATION_WASM_SHA256,
     proof_input_digest: EXPECTED_PROOF_INPUT_DIGEST,
     bpi1_sha256: EXPECTED_BPI1_SHA256,
     mv2p1_sha256: EXPECTED_MV2P1_SHA256,
+    unrelated_bpi1_sha256: EXPECTED_UNRELATED_BPI1_SHA256,
+    unrelated_mv2p1_sha256: EXPECTED_UNRELATED_MV2P1_SHA256,
+    program_transition_digest: EXPECTED_PROGRAM_TRANSITION_DIGEST,
+    machine_v2_contract_digest: EXPECTED_MACHINE_V2_CONTRACT_DIGEST,
     application_id: EXPECTED_APPLICATION_ID,
+    decision_contract_digest: EXPECTED_DECISION_CONTRACT_DIGEST,
     specialized_terminal_result_sha256: EXPECTED_TERMINAL_RESULT_SHA256,
     interpreted_terminal_result_sha256: EXPECTED_TERMINAL_RESULT_SHA256,
     specialized_final_git_tree: EXPECTED_FINAL_GIT_TREE,
@@ -356,21 +467,32 @@ function requireCanonicalInnerReceipt(receipt) {
     }
   }
   for (const [field, expected] of Object.entries({
+    kernel_import_count: 0,
     effect_count: 17,
     effect_catalog_count: 6,
+    observed_effect_identity_count: 6,
     model_decision_count: 9,
     repository_effect_count: 8,
     yield_boundary_count: 1,
     state_comparison_count: 17,
+    interface_identity_comparison_count: 17,
     payload_comparison_count: 17,
     request_identity_comparison_count: 17,
-    response_comparison_count: 17
+    response_comparison_count: 17,
+    specialized_file_read_count: 4,
+    interpreted_file_read_count: 4,
+    specialized_search_count: 1,
+    interpreted_search_count: 1,
+    specialized_test_run_count: 2,
+    interpreted_test_run_count: 2
   })) {
     if (receipt[field] !== expected) {
       throw new Error(`inner receipt ${field} mismatch: ${receipt[field]}`);
     }
   }
   for (const field of [
+    "specialized_pre_mutation_test_failed",
+    "interpreted_pre_mutation_test_failed",
     "clean_room_agent_source_absent",
     "application_specific_wasm_absent",
     "hidden_verifier_passed",
@@ -378,9 +500,64 @@ function requireCanonicalInnerReceipt(receipt) {
   ]) {
     if (receipt[field] !== true) throw new Error(`inner receipt ${field} is not true`);
   }
-  const negativeGates = Object.values(receipt.negative_gates ?? {});
-  if (negativeGates.length < 20 || negativeGates.some((value) => value !== true)) {
-    throw new Error("inner receipt negative gates are incomplete");
+  for (const field of [
+    "agent_commit",
+    "agent_source_git_tree",
+    "boundary_source_commit",
+    "world_source_commit",
+    "specialized_final_git_tree",
+    "interpreted_final_git_tree"
+  ]) {
+    requireHex(receipt[field], field, 40);
+  }
+  for (const field of [
+    "agent_source_archive_sha256",
+    "agent_source_tree_digest",
+    "kernel_wasm_sha256",
+    "application_wasm_sha256",
+    "proof_input_digest",
+    "world_host_runtime_sha256",
+    "world_capabilities_runtime_sha256",
+    "bpi1_sha256",
+    "mv2p1_sha256",
+    "unrelated_bpi1_sha256",
+    "unrelated_mv2p1_sha256",
+    "program_transition_digest",
+    "machine_v2_contract_digest",
+    "application_id",
+    "decision_contract_digest",
+    "specialized_terminal_result_sha256",
+    "interpreted_terminal_result_sha256"
+  ]) {
+    requireHex(receipt[field], field, 64);
+  }
+  if (!Array.isArray(receipt.clean_room_inventory) || receipt.clean_room_inventory.length === 0 ||
+      new Set(receipt.clean_room_inventory).size !== receipt.clean_room_inventory.length ||
+      receipt.clean_room_inventory.some((entry) => typeof entry !== "string" || entry.length === 0)) {
+    throw new Error("inner receipt clean-room inventory is invalid");
+  }
+  requireExactKeys(receipt.negative_gates, NEGATIVE_GATE_FIELDS, "inner receipt negative gates");
+  for (const field of NEGATIVE_GATE_FIELDS) {
+    if (receipt.negative_gates[field] !== true) {
+      throw new Error(`inner receipt negative gate ${field} is not true`);
+    }
+  }
+}
+
+function requireExactKeys(value, expected, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label} is not an object`);
+  }
+  const actual = Object.keys(value).sort();
+  const canonical = [...expected].sort();
+  if (JSON.stringify(actual) !== JSON.stringify(canonical)) {
+    throw new Error(`${label} fields mismatch: ${actual.join(",")}`);
+  }
+}
+
+function requireHex(value, field, length) {
+  if (typeof value !== "string" || value.length !== length || !/^[0-9a-f]+$/.test(value)) {
+    throw new Error(`inner receipt ${field} is not canonical hex`);
   }
 }
 

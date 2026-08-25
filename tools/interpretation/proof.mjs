@@ -12,7 +12,7 @@ import { runtimeDependencyDigest } from "./dependency_digest.mjs";
 
 const EXPECTED_RUNTIME_DEPENDENCIES = Object.freeze({
   worldHost: "dfb59aaa8c2288ae85c69a31cfd7a400d9f2f27f26e0098f973442cb273977f2",
-  worldCapabilities: "7f68853a78df798a959ff68ff06ad0e09dfc0c7e0d3a3e61d697da78f0cb984e"
+  worldCapabilities: "554b40b77668678aa9f5f41e774b86a202954b17c011cee694d2589d8a2c6525"
 });
 const FIXED_KERNEL_RELEASE_VERSION = "1.6.0";
 const WORLD_CAPABILITIES_RUNTIME_PATHS = Object.freeze([

@@ -1,10 +1,24 @@
 #!/usr/bin/env bun
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import {
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
+  rmdirSync,
+  rmSync,
+  writeFileSync
+} from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { inspectTarGz } from "../reference_stack.mjs";
+import { runtimeDependencyDigest } from "./dependency_digest.mjs";
 
 const FORMAT = "agent-interpretation-runtime-dependencies-v1";
 const OUTPUT_SENTINEL = ".agent-interpretation-runtime-dependencies-v1";
@@ -40,60 +54,106 @@ const REQUIRED_PATHS = Object.freeze({
 });
 
 const parsedOptions = parseArgs(process.argv.slice(2));
-const options = Object.freeze({
-  ...parsedOptions,
-  output: prepareOutput(parsedOptions.output)
-});
-const lock = readLock(options.lock);
+const lock = readLock(parsedOptions.lock);
+const publication = inspectPublicationTarget(parsedOptions.output);
+if (publication.state === "owned") {
+  await verifyRuntimeAt("worldHost", lock.worldHost, publication.output);
+  await verifyRuntimeAt("worldCapabilities", lock.worldCapabilities, publication.output);
+}
+const [worldHost, worldCapabilities] = await Promise.all([
+  acquire("worldHost", lock.worldHost, parsedOptions.worldHostRoot, parsedOptions.worldHostArchive),
+  acquire(
+    "worldCapabilities",
+    lock.worldCapabilities,
+    parsedOptions.worldCapabilitiesRoot,
+    parsedOptions.worldCapabilitiesArchive
+  )
+]);
+mkdirSync(publication.parent, { recursive: true });
+if (realpathSync(publication.parent) !== publication.parent) {
+  throw new Error(`runtime dependency output has a symlink ancestor: ${publication.output}`);
+}
+const staging = mkdtempSync(join(publication.parent, `.${publication.basename}.staging-`));
+try {
+  materialize("worldHost", worldHost, staging);
+  materialize("worldCapabilities", worldCapabilities, staging);
+  await verifyRuntimeAt("worldHost", lock.worldHost, staging);
+  await verifyRuntimeAt("worldCapabilities", lock.worldCapabilities, staging);
+  writeFileSync(join(staging, OUTPUT_SENTINEL), `${FORMAT}\n`, { flag: "wx" });
+  publishOutput(publication, staging);
+} finally {
+  if (existsSync(staging)) rmSync(staging, { recursive: true, force: true });
+}
 
-await materialize("worldHost", lock.worldHost, options.worldHostRoot, options.worldHostArchive);
-await materialize(
-  "worldCapabilities",
-  lock.worldCapabilities,
-  options.worldCapabilitiesRoot,
-  options.worldCapabilitiesArchive
-);
-
-function prepareOutput(output) {
-  if (existsSync(output) && lstatSync(output).isSymbolicLink()) {
-    throw new Error(`runtime dependency output is a symlink: ${output}`);
+function inspectPublicationTarget(output) {
+  const absolute = resolve(output);
+  const parent = dirname(absolute);
+  requireCanonicalExistingAncestor(parent, absolute);
+  let state = "absent";
+  if (existsSync(absolute)) {
+    const metadata = lstatSync(absolute);
+    if (metadata.isSymbolicLink() || !metadata.isDirectory() || realpathSync(absolute) !== absolute) {
+      throw new Error(`runtime dependency output is not a canonical directory: ${output}`);
+    }
+    const entries = readdirSync(absolute);
+    state = entries.length === 0 ? "empty" : "owned";
+    if (state === "owned") requireOwnedOutput(absolute);
   }
-  mkdirSync(output, { recursive: true });
-  const resolvedOutput = realpathSync(output);
-  if (resolvedOutput !== resolve(output)) {
+  return Object.freeze({ output: absolute, parent, basename: basename(absolute), state });
+}
+
+function requireCanonicalExistingAncestor(path, output) {
+  let ancestor = resolve(path);
+  while (!existsSync(ancestor)) {
+    const next = dirname(ancestor);
+    if (next === ancestor) throw new Error(`runtime dependency output has no existing ancestor: ${output}`);
+    ancestor = next;
+  }
+  const metadata = lstatSync(ancestor);
+  if (metadata.isSymbolicLink() || !metadata.isDirectory() || realpathSync(ancestor) !== ancestor) {
     throw new Error(`runtime dependency output has a symlink ancestor: ${output}`);
   }
-  const entries = readdirSync(resolvedOutput);
+}
+
+function requireOwnedOutput(output) {
+  const entries = readdirSync(output);
   const entriesOwned = entries.every((entry) => OWNED_OUTPUT_ENTRIES.has(entry));
-  const sentinel = join(resolvedOutput, OUTPUT_SENTINEL);
+  const sentinel = join(output, OUTPUT_SENTINEL);
   const sentinelValid = entries.includes(OUTPUT_SENTINEL) &&
     !lstatSync(sentinel).isSymbolicLink() && lstatSync(sentinel).isFile() &&
     readFileSync(sentinel, "utf8") === `${FORMAT}\n`;
   const childrenValid = entries.filter((entry) => entry !== OUTPUT_SENTINEL)
     .every((entry) => {
-      const metadata = lstatSync(join(resolvedOutput, entry));
+      const metadata = lstatSync(join(output, entry));
       return !metadata.isSymbolicLink() && metadata.isDirectory();
     });
-  if (!entriesOwned || !childrenValid ||
-      (entries.length !== 0 && !sentinelValid)) {
+  if (!entriesOwned || !childrenValid || !sentinelValid) {
     throw new Error(`runtime dependency output is not owned: ${output}`);
   }
-  for (const entry of entries) {
-    rmSync(join(resolvedOutput, entry), { recursive: true, force: true });
-  }
-  writeFileSync(join(resolvedOutput, OUTPUT_SENTINEL), `${FORMAT}\n`, { flag: "wx" });
-  return resolvedOutput;
 }
 
-async function materialize(kind, entry, rootOverride, archiveOverride) {
-  const destination = join(options.output, kind === "worldHost" ? "world-host" : "world-capabilities");
-  if (existsSync(destination)) throw new Error(`runtime dependency output already exists: ${destination}`);
-  if (rootOverride !== null) {
-    requirePaths(kind, rootOverride);
-    copyRuntimeClosure(kind, rootOverride, destination);
+function publishOutput(publication, staging) {
+  if (publication.state === "absent") {
+    renameSync(staging, publication.output);
     return;
   }
+  if (publication.state === "empty") {
+    rmdirSync(publication.output);
+    try {
+      renameSync(staging, publication.output);
+    } catch (error) {
+      mkdirSync(publication.output);
+      throw error;
+    }
+    return;
+  }
+}
 
+async function acquire(kind, entry, rootOverride, archiveOverride) {
+  if (rootOverride !== null) {
+    requirePaths(kind, rootOverride);
+    return Object.freeze({ root: rootOverride, bytes: null, archive: null });
+  }
   const candidates = [entry.defaultArchive, ...entry.overrideArchives];
   const acquired = archiveOverride === null
     ? { bytes: await download(entry.defaultArchive.url), archive: entry.defaultArchive }
@@ -103,9 +163,18 @@ async function materialize(kind, entry, rootOverride, archiveOverride) {
   if (actual !== acquired.archive.sha256) {
     throw new Error(`${kind} archive checksum mismatch: expected=${acquired.archive.sha256} actual=${actual}`);
   }
+  return Object.freeze({ root: null, ...acquired });
+}
 
-  const archiveRoot = join(options.output, "archives");
-  const extractionRoot = join(options.output, "extracted", kind);
+function materialize(kind, acquired, output) {
+  const destination = join(output, kind === "worldHost" ? "world-host" : "world-capabilities");
+  if (existsSync(destination)) throw new Error(`runtime dependency output already exists: ${destination}`);
+  if (acquired.root !== null) {
+    copyRuntimeClosure(kind, acquired.root, destination);
+    return;
+  }
+  const archiveRoot = join(output, "archives");
+  const extractionRoot = join(output, "extracted", kind);
   mkdirSync(archiveRoot, { recursive: true });
   mkdirSync(extractionRoot, { recursive: true });
   const archivePath = join(archiveRoot, `${kind}.tar.gz`);
@@ -115,6 +184,14 @@ async function materialize(kind, entry, rootOverride, archiveOverride) {
   const source = join(extractionRoot, acquired.archive.root);
   requirePaths(kind, source);
   copyRuntimeClosure(kind, source, destination);
+}
+
+async function verifyRuntimeAt(kind, entry, output) {
+  const directory = kind === "worldHost" ? "world-host" : "world-capabilities";
+  const digest = await runtimeDependencyDigest(join(output, directory), REQUIRED_PATHS[kind]);
+  if (digest.sha256 !== entry.runtimeSha256) {
+    throw new Error(`${kind} runtime digest mismatch: expected=${entry.runtimeSha256} actual=${digest.sha256}`);
+  }
 }
 
 function copyRuntimeClosure(kind, source, destination) {
@@ -136,6 +213,7 @@ function readLock(path) {
     const entry = value[kind];
     if (entry?.repository !== expectedRepository) throw new Error(`${kind} repository mismatch`);
     if (!/^\d+\.\d+\.\d+$/.test(entry.version)) throw new Error(`${kind} version is not canonical`);
+    if (!/^[0-9a-f]{64}$/.test(entry.runtimeSha256 ?? "")) throw new Error(`${kind} runtime digest is invalid`);
     for (const archive of [entry.defaultArchive, ...(entry.overrideArchives ?? [])]) validateArchive(archive, kind);
   }
   return Object.freeze(value);

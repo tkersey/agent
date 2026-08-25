@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, readlinkSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, readlinkSync, realpathSync, statSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 
@@ -98,6 +99,8 @@ export async function proveAgentInterpretation(options) {
       snapshotOptions,
       dependencyBindings
     );
+    const admittedCanary = join(runtimeRoot, "sandbox-admitted-canary");
+    await writeFile(admittedCanary, "sandbox admitted\n", { flag: "wx" });
     const cleanInventory = await assertCleanRoom(runtimeRoot, runtime);
     const interpretedOutput = join(runtimeRoot, "interpreted-result.json");
     const sandboxProfile = process.platform === "darwin"
@@ -117,6 +120,7 @@ export async function proveAgentInterpretation(options) {
       sandboxProfile,
       sandboxEnvironment,
       runtimeRoot,
+      admittedCanary,
       outsideCanary
     );
     const child = Bun.spawn(sandboxInvocation(options, sandboxProfile, runtimeRoot, [
@@ -281,10 +285,23 @@ async function proveSandboxReadDenials(
   sandboxProfile,
   environment,
   runtimeRoot,
+  admittedCanary,
   outsideCanary
 ) {
+  const positive = await runSandboxProbe(
+    options,
+    sandboxProfile,
+    environment,
+    runtimeRoot,
+    `const value = await Bun.file(${JSON.stringify(resolve(admittedCanary))}).text();` +
+    `if (value !== "sandbox admitted\\n") process.exit(24);` +
+    `process.stdout.write("SANDBOX_READ_OK\\n");`
+  );
+  if (positive.exitCode !== 0 || !positive.stdout.includes("SANDBOX_READ_OK")) {
+    throw new Error(`clean_room_sandbox_positive_control_failed:${positive.exitCode}:${positive.stderr.trim()}`);
+  }
   const denied = {};
-  for (const [name, path] of [
+  const probes = [
     ["agent_source", join(options.agentRoot, "build.zig")],
     ["application_wasm", options.applicationWasm],
     ["world_host_source", join(options.worldHostRoot, "src/v1/index.mjs")],
@@ -292,26 +309,80 @@ async function proveSandboxReadDenials(
       options.capabilitiesRoot,
       "src/v1/actuality/repository_repair_codecs.mjs"
     )],
-    ["outside_clean_room", outsideCanary],
-    ["host_proc_root", `/proc/${process.pid}/root${resolve(outsideCanary)}`]
-  ]) {
-    const script = `await Bun.file(${JSON.stringify(resolve(path))}).arrayBuffer();`;
-    const child = Bun.spawn(sandboxInvocation(options, sandboxProfile, runtimeRoot, [
-      options.bunExecutable,
-      "--eval",
-      script
-    ]), { stdout: "pipe", stderr: "pipe", env: environment });
-    const [, , exitCode] = await Promise.all([
-      new Response(child.stdout).text(),
-      new Response(child.stderr).text(),
-      child.exited
-    ]);
-    denied[name] = exitCode !== 0;
+    ["outside_clean_room", outsideCanary]
+  ];
+  if (process.platform === "linux") {
+    probes.push(["host_proc_root", `/proc/${process.pid}/root${resolve(outsideCanary)}`]);
   }
+  for (const [name, path] of probes) {
+    const result = await runSandboxProbe(
+      options,
+      sandboxProfile,
+      environment,
+      runtimeRoot,
+      `try { await Bun.file(${JSON.stringify(resolve(path))}).arrayBuffer();` +
+      `process.stdout.write("SANDBOX_READ_ALLOWED\\n"); } catch {` +
+      `process.stderr.write("SANDBOX_READ_DENIED\\n"); process.exit(23); }`
+    );
+    denied[name] = result.exitCode === 23 && result.stderr.includes("SANDBOX_READ_DENIED");
+  }
+  denied.network = await proveSandboxNetworkDenial(
+    options,
+    sandboxProfile,
+    environment,
+    runtimeRoot
+  );
   if (Object.values(denied).some((value) => value !== true)) {
     throw new Error(`clean_room_sandbox_read_allowed:${JSON.stringify(denied)}`);
   }
-  return Object.freeze(denied);
+  return Object.freeze({ ...denied, positive_control: true });
+}
+
+async function runSandboxProbe(options, profile, environment, runtimeRoot, script) {
+  const child = Bun.spawn(sandboxInvocation(options, profile, runtimeRoot, [
+    options.bunExecutable,
+    "--eval",
+    script
+  ]), {
+    cwd: runtimeRoot,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: environment
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited
+  ]);
+  return Object.freeze({ stdout, stderr, exitCode });
+}
+
+async function proveSandboxNetworkDenial(options, profile, environment, runtimeRoot) {
+  const server = createServer((socket) => {
+    socket.end("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
+  });
+  await new Promise((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(0, "127.0.0.1", resolveListen);
+  });
+  try {
+    const address = server.address();
+    if (address === null || typeof address === "string") throw new Error("sandbox_network_server_address");
+    const result = await runSandboxProbe(
+      options,
+      profile,
+      environment,
+      runtimeRoot,
+      `try { await fetch("http://127.0.0.1:${address.port}");` +
+      `process.stdout.write("SANDBOX_NETWORK_ALLOWED\\n"); } catch {` +
+      `process.stderr.write("SANDBOX_NETWORK_DENIED\\n"); process.exit(23); }`
+    );
+    return result.exitCode === 23 && result.stderr.includes("SANDBOX_NETWORK_DENIED");
+  } finally {
+    await new Promise((resolveClose, rejectClose) => {
+      server.close((error) => error ? rejectClose(error) : resolveClose());
+    });
+  }
 }
 
 function sandboxInvocation(options, profile, runtimeRoot, argv) {
@@ -319,8 +390,7 @@ function sandboxInvocation(options, profile, runtimeRoot, argv) {
     return ["/usr/bin/sandbox-exec", "-p", profile, ...argv];
   }
   if (process.platform === "linux") {
-    const bubblewrap = Bun.which("bwrap");
-    if (bubblewrap === null) throw new Error("linux_clean_room_requires_bwrap");
+    const bubblewrap = linuxBubblewrapExecutable();
     const systemLinkCandidates = ["/bin", "/sbin", "/lib", "/lib64"]
       .filter(existsSync);
     const systemSymlinks = systemLinkCandidates
@@ -367,6 +437,17 @@ function sandboxInvocation(options, profile, runtimeRoot, argv) {
     ];
   }
   throw new Error(`clean_room_platform_unsupported:${process.platform}`);
+}
+
+function linuxBubblewrapExecutable() {
+  const discovered = Bun.which("bwrap");
+  if (discovered === null) throw new Error("linux_clean_room_requires_bwrap");
+  const executable = realpathSync(discovered);
+  const metadata = statSync(executable);
+  if (!metadata.isFile() || metadata.uid !== 0 || (metadata.mode & 0o022) !== 0) {
+    throw new Error(`linux_bwrap_not_trusted:${executable}`);
+  }
+  return executable;
 }
 
 function bubblewrapMountDirectories(directoryPaths, filePaths) {
@@ -802,7 +883,11 @@ async function runNegativeGates(
     sandbox_world_host_source_read_rejected: sandboxDenials.world_host_source,
     sandbox_world_capabilities_source_read_rejected: sandboxDenials.world_capabilities_source,
     sandbox_outside_clean_room_read_rejected: sandboxDenials.outside_clean_room,
-    sandbox_host_proc_root_read_rejected: sandboxDenials.host_proc_root,
+    sandbox_positive_control_passed: sandboxDenials.positive_control,
+    sandbox_network_read_rejected: sandboxDenials.network,
+    ...(process.platform === "linux"
+      ? { sandbox_host_proc_root_read_rejected: sandboxDenials.host_proc_root }
+      : {}),
     proof_input_mutation_detected: proofInputMutationDetected
   });
   if (Object.values(result).some((value) => value !== true)) throw new Error(`negative_gate_failed:${JSON.stringify(result)}`);

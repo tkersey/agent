@@ -29,7 +29,11 @@ export async function compileKernel(kernelBytes, { expectedSha256 = KERNEL_SHA25
   if (probe.exports.boundary_machine_v2_kernel_abi_version() !== 1) {
     throw new Error("kernel_abi_mismatch");
   }
-  return Object.freeze({ module, sha256, importCount: imports.length, exports });
+  const inputCapacity = probe.exports.boundary_machine_v2_kernel_input_capacity();
+  if (!Number.isSafeInteger(inputCapacity) || inputCapacity < 48) {
+    throw new Error("kernel_input_capacity_invalid");
+  }
+  return Object.freeze({ module, sha256, importCount: imports.length, exports, inputCapacity });
 }
 
 export async function executeKernelCommand({
@@ -53,11 +57,8 @@ export async function executeKernelCommand({
   for (const [name, value] of [["BPI1", image], ["MV2P1", profile], ["State", canonicalState], ["auxiliary", aux]]) {
     if (value.length > 0xffffffff) throw new Error(`kernel_${name}_length_invalid`);
   }
-  const instance = await WebAssembly.instantiate(kernel.module, {});
-  const abi = instance.exports;
   const inputLength = 48 + image.length + profile.length + canonicalState.length + aux.length;
-  if (!Number.isSafeInteger(inputLength) ||
-      inputLength > abi.boundary_machine_v2_kernel_input_capacity()) {
+  if (!Number.isSafeInteger(inputLength) || inputLength > kernel.inputCapacity) {
     throw new Error("kernel_input_capacity");
   }
   const input = Buffer.alloc(inputLength);
@@ -74,6 +75,8 @@ export async function executeKernelCommand({
     Buffer.from(value.buffer, value.byteOffset, value.byteLength).copy(input, cursor);
     cursor += value.length;
   }
+  const instance = await WebAssembly.instantiate(kernel.module, {});
+  const abi = instance.exports;
   const memory = new Uint8Array(abi.memory.buffer);
   memory.set(input, abi.boundary_machine_v2_kernel_input_ptr());
   const resultCode = abi.boundary_machine_v2_kernel_execute(input.length);

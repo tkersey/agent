@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -33,6 +33,10 @@ const REQUIRED_PATHS = Object.freeze({
 
 const options = parseArgs(process.argv.slice(2));
 const lock = readLock(options.lock);
+if (options.output === "/" || options.output.split("/").filter(Boolean).length < 2) {
+  throw new Error(`unsafe runtime dependency output: ${options.output}`);
+}
+rmSync(options.output, { recursive: true, force: true });
 mkdirSync(options.output, { recursive: true });
 
 await materialize("worldHost", lock.worldHost, options.worldHostRoot, options.worldHostArchive);

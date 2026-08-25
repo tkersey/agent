@@ -68,6 +68,7 @@ try {
     admitZigBinarySha256(sha256File(admittedZigTarget));
     const verifierBin = materializeVerifierBin(proofRoot, admittedZigTarget, verifierExecutables);
     const admittedZig = join(verifierBin, "zig");
+    admitZigBinarySha256(sha256File(admittedZig));
     const baseEnvironment = {
         HOME: hermeticHome,
         LANG: "C",

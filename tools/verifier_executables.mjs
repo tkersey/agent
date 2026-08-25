@@ -2,12 +2,15 @@ import {
   accessSync,
   chmodSync,
   constants,
+  copyFileSync,
+  cpSync,
+  existsSync,
   mkdirSync,
   realpathSync,
   statSync,
   symlinkSync
 } from "node:fs";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 
 export function resolveVerifierExecutables() {
   return Object.freeze({
@@ -23,13 +26,48 @@ export function materializeVerifierBin(root, zig, executables) {
   for (const [name, target] of [
     ["bun", executables.bun.real],
     ["git", executables.git.real],
-    ["node", executables.node.real],
-    ["zig", realpathSync(zig)]
+    ["node", executables.node.real]
   ]) {
     symlinkSync(target, join(bin, name));
   }
+  const capturedZig = captureZigToolchain(root, zig);
+  symlinkSync(capturedZig, join(bin, "zig"));
+  chmodSync(capturedZig, 0o555);
   chmodSync(bin, 0o555);
   return bin;
+}
+
+function captureZigToolchain(root, zig) {
+  const sourceZig = realpathSync(zig);
+  const distributionLib = join(dirname(sourceZig), "lib");
+  const packageLib = join(dirname(dirname(sourceZig)), "lib", "zig");
+  const toolchain = join(root, "verifier-zig");
+  if (existsSync(distributionLib)) {
+    mkdirSync(toolchain, { mode: 0o700 });
+    const capturedZig = join(toolchain, "zig");
+    copyFileSync(sourceZig, capturedZig, constants.COPYFILE_EXCL);
+    cpSync(distributionLib, join(toolchain, "lib"), {
+      recursive: true,
+      errorOnExist: true,
+      mode: constants.COPYFILE_FICLONE
+    });
+    return capturedZig;
+  }
+  if (existsSync(packageLib)) {
+    const capturedBin = join(toolchain, "bin");
+    const capturedLib = join(toolchain, "lib");
+    mkdirSync(capturedBin, { recursive: true, mode: 0o700 });
+    mkdirSync(capturedLib, { mode: 0o700 });
+    const capturedZig = join(capturedBin, "zig");
+    copyFileSync(sourceZig, capturedZig, constants.COPYFILE_EXCL);
+    cpSync(packageLib, join(capturedLib, "zig"), {
+      recursive: true,
+      errorOnExist: true,
+      mode: constants.COPYFILE_FICLONE
+    });
+    return capturedZig;
+  }
+  throw new Error(`Zig installation library is unavailable: ${sourceZig}`);
 }
 
 export function closedVerifierPath(verifierBin) {

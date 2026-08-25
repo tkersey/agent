@@ -173,6 +173,7 @@ try {
   requireZigBinary(admittedZigTarget);
   const verifierBin = materializeVerifierBin(proofRoot, admittedZigTarget, verifierExecutables);
   const admittedZig = join(verifierBin, "zig");
+  requireZigBinary(admittedZig);
   const environment = sourceSnapshotEnvironment(home, verifierBin);
   const boundaryInputs = snapshotBoundaryInputs(options, proofRoot);
   const binding = bindSource(options.agentRoot, gitExecutable, environment);

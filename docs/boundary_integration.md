@@ -11,9 +11,9 @@ Agent consumes exact Boundary v1.6.0. It uses public program, Control IR,
 effect, schema, codec, Driver, image, and Machine-v2 kernel surfaces. It does
 not import `boundary.Agent`, duplicate value codecs, reinterpret fuel, or
 author another state transition system. The asset build uses a freestanding
-WASM emitter only to run `Program.encodeImage`; application-specific WASM
-remains owned by World, and the interpreted runtime loads only the fixed
-Boundary kernel.
+WASM emitter to copy the exact repository-repair `Program.image().bytes`;
+application-specific WASM remains owned by World, and the interpreted runtime
+loads only the fixed Boundary kernel.
 
 The build exports a `boundary` module facade backed by Agent's exact dependency.
 A downstream consumer that also loads World resolves both packages to the same

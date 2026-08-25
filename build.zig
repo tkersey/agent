@@ -1465,12 +1465,8 @@ fn sha256File(
     input: std.Build.LazyPath,
     basename: []const u8,
 ) std.Build.LazyPath {
-    const command = b.addSystemCommand(&.{
-        "sh",
-        "-c",
-        "shasum -a 256 \"$1\" | awk '{print $1}'",
-        "sh",
-    });
+    const command = b.addSystemCommand(&.{"bun"});
+    command.addFileArg(b.path("tools/sha256_file.mjs"));
     command.addFileArg(input);
     return command.captureStdOut(.{ .basename = basename });
 }

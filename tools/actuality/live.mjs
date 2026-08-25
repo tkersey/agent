@@ -5,15 +5,6 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 
-const candidate = JSON.parse(await readFile(new URL(
-  "../../conformance/agent-v2/candidate.json",
-  import.meta.url,
-)));
-const LEGACY_APPLICATION_ID = admittedDigest(candidate.identities?.applicationId, "candidate_application_id");
-const LEGACY_DECISION_CONTRACT_DIGEST = admittedDigest(
-  candidate.identities?.decisionContractDigest,
-  "candidate_decision_contract_digest",
-);
 const WORKER_MEMORY_BYTES = 256 * 1024 * 1024;
 const FAILED_ATTEMPT_RECEIPT_BRAND = Symbol("failed-attempt-receipt");
 const LIVE_RECEIPT_BOOLEAN_FIELDS = Object.freeze([
@@ -80,8 +71,8 @@ export async function runLiveActuality(options = {}) {
   const capabilitiesRoot = resolve(options.capabilitiesRoot ?? process.env.AGENT_WORLD_CAPABILITIES_ROOT ?? join(agentRoot, "../world-capabilities"));
   const artifactRoot = resolve(options.artifactRoot ?? join(agentRoot, "zig-out/agent-actuality"));
   const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-actuality-live-"));
-  let applicationId = LEGACY_APPLICATION_ID;
-  let decisionContractDigest = LEGACY_DECISION_CONTRACT_DIGEST;
+  let applicationId = null;
+  let decisionContractDigest = null;
   let context;
   let genesisFrameId = null;
   let terminalFrameId = null;
@@ -324,7 +315,7 @@ export function failedAttemptReceipt({
   interfaces,
   provider,
   evidenceDigests,
-  applicationId = LEGACY_APPLICATION_ID,
+  applicationId = null,
   failureCode
 }) {
   const modelCalls = context?.modelCalls ?? 0;
@@ -376,13 +367,6 @@ export function publicFailureCode(error) {
 
 function safeCount(value) {
   return Number.isSafeInteger(value) && value >= 0;
-}
-
-function admittedDigest(value, label) {
-  if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) {
-    throw new Error(`${label}_invalid`);
-  }
-  return value;
 }
 
 export function assertLiveReceipt(receipt) {

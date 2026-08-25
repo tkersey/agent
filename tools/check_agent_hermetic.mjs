@@ -19,6 +19,10 @@ import { fileURLToPath } from "node:url";
 
 import { inspectTarGz } from "./reference_stack.mjs";
 
+const EXPECTED_ZIG_VERSION = "0.16.0";
+const EXPECTED_ZIG_SHA256 =
+    "71cc3995a7586753ebf82c66dfb8bef43df446517550678781834586a960f8c9";
+
 const releases = Object.freeze({
     boundary: Object.freeze({
         version: "1.6.1",
@@ -157,7 +161,7 @@ try {
         NO_PROXY: "",
     };
     requireNoAmbientZigOverrides(environment);
-    runNetworkIsolated(options.zig, [
+    const proofBuild = runNetworkIsolated(options.zig, [
         "build",
         "check-agent-semantic",
         "lint",
@@ -168,6 +172,7 @@ try {
         "--summary",
         "all",
     ], agentRoot, environment);
+    requireHermeticBuildTranscript(proofBuild);
     requireExecutedTree("agent", agentRoot, executedTrees.agent);
     requireExecutedTree("boundary", boundaryRoot, executedTrees.boundary);
     requireExecutedTree("world", worldRoot, executedTrees.world);
@@ -188,6 +193,7 @@ try {
     console.log(`agent_hermetic_agent_commit=${agentSource.head}`);
     console.log(`agent_hermetic_agent_archive_sha256=${agentSource.sha256}`);
     console.log(`agent_hermetic_zig_version=${zigVersion}`);
+    console.log(`agent_hermetic_zig_sha256=${EXPECTED_ZIG_SHA256}`);
     console.log("agent_hermetic_zig_compiler_witness=true");
     console.log("agent_hermetic_agent_source_snapshot=true");
     console.log(`agent_hermetic_executed_agent_tree_sha256=${executedTrees.agent}`);
@@ -240,6 +246,10 @@ function requireReleaseBuildGraph(kind, root) {
 }
 
 function requireZigCompiler(zig, root, globalCache, environment) {
+    const digest = sha256File(zig);
+    if (digest !== EXPECTED_ZIG_SHA256) {
+        throw new Error(`hermetic Zig binary digest mismatch: ${digest}`);
+    }
     const version = run(
         zig,
         ["version"],
@@ -247,8 +257,8 @@ function requireZigCompiler(zig, root, globalCache, environment) {
         environment,
         false,
     ).stdout.trim();
-    if (version !== "0.16.0") {
-        throw new Error(`hermetic proof requires Zig 0.16.0, found: ${version}`);
+    if (version !== EXPECTED_ZIG_VERSION) {
+        throw new Error(`hermetic proof requires Zig ${EXPECTED_ZIG_VERSION}, found: ${version}`);
     }
     const witnessRoot = join(root, "zig-compiler-witness");
     mkdirSync(witnessRoot);
@@ -277,6 +287,19 @@ function requireZigCompiler(zig, root, globalCache, environment) {
         false,
     );
     return version;
+}
+
+function requireHermeticBuildTranscript(result) {
+    const transcript = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+    for (const marker of [
+        "Build Summary: 138/138 steps succeeded; 60/60 tests passed",
+        "check-agent-semantic success",
+        "lint success",
+    ]) {
+        if (!transcript.includes(marker)) {
+            throw new Error(`hermetic proof build transcript is missing: ${marker}`);
+        }
+    }
 }
 
 function digestExecutedTree(root) {

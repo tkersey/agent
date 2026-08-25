@@ -25,6 +25,22 @@ const EXPECTED_UNRELATED_BPI1_SHA256 =
   "6564f37639bfd4cf33491582e71b4f6602f865ea619b9616627080d86f805f0e";
 const EXPECTED_UNRELATED_MV2P1_SHA256 =
   "08ad3c629f819e580c6bec364db9c88ad578f66e24a2cbb1e3c5424987fa7ec5";
+const EXPECTED_ZIG_SHA256 =
+  "71cc3995a7586753ebf82c66dfb8bef43df446517550678781834586a960f8c9";
+const EXPECTED_APPLICATION_WASM_SHA256 =
+  "8f60b66adad465fbbe01ad4511c765c0e0e31929fea7717de1fa862ceff1d491";
+const EXPECTED_PROOF_INPUT_DIGEST =
+  "8342e9499c09728a2dfcfe95d68f463d62063d406adfb17fbb0936b4e065f45b";
+const EXPECTED_BPI1_SHA256 =
+  "7440076a8078220d9d4000b871423d981bbbee19aedba499afaa4a86239fe6a6";
+const EXPECTED_MV2P1_SHA256 =
+  "03e93800b20201d2015a93821bd19418848637541f9125eee3877b5a4db24c2e";
+const EXPECTED_APPLICATION_ID =
+  "b2e6628424ed95648a554ab5730566476360de86c9534a375357ba152031cf4c";
+const EXPECTED_TERMINAL_RESULT_SHA256 =
+  "6a473b2e74e2f8229d10061d1b613ad71ab2ad5b139c21bd9a898b7a2778f75c";
+const EXPECTED_FINAL_GIT_TREE =
+  "0d9ac8802aac6597cb0a443245efb6f92a0249fe";
 
 const FORWARDED_OPTIONS = Object.freeze([
   "boundary-archive",
@@ -54,6 +70,7 @@ try {
   const home = join(proofRoot, "home");
   mkdirSync(home);
   const environment = sourceSnapshotEnvironment(options.zig, home);
+  requireZigBinary(options.zig);
   const boundaryInputs = snapshotBoundaryInputs(options, proofRoot);
   const binding = bindSource(options.agentRoot, gitExecutable, environment);
   const archive = join(proofRoot, "agent-source.tar.gz");
@@ -128,6 +145,7 @@ try {
       receipt.unrelated_mv2p1_sha256 !== EXPECTED_UNRELATED_MV2P1_SHA256) {
     throw new Error("snapshot proof receipt source binding mismatch");
   }
+  requireCanonicalInnerReceipt(receipt);
   const publicReceipt = {
     ...receipt,
     format: "agent-interpretation-v1",
@@ -312,6 +330,58 @@ function run(command, args, cwd, environment, forward = true) {
 
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+function requireZigBinary(zig) {
+  const actual = sha256(readFileSync(zig));
+  if (actual !== EXPECTED_ZIG_SHA256) {
+    throw new Error(`source-snapshot Zig binary digest mismatch: ${actual}`);
+  }
+}
+
+function requireCanonicalInnerReceipt(receipt) {
+  for (const [field, expected] of Object.entries({
+    application_wasm_sha256: EXPECTED_APPLICATION_WASM_SHA256,
+    proof_input_digest: EXPECTED_PROOF_INPUT_DIGEST,
+    bpi1_sha256: EXPECTED_BPI1_SHA256,
+    mv2p1_sha256: EXPECTED_MV2P1_SHA256,
+    application_id: EXPECTED_APPLICATION_ID,
+    specialized_terminal_result_sha256: EXPECTED_TERMINAL_RESULT_SHA256,
+    interpreted_terminal_result_sha256: EXPECTED_TERMINAL_RESULT_SHA256,
+    specialized_final_git_tree: EXPECTED_FINAL_GIT_TREE,
+    interpreted_final_git_tree: EXPECTED_FINAL_GIT_TREE
+  })) {
+    if (receipt[field] !== expected) {
+      throw new Error(`inner receipt ${field} mismatch: ${receipt[field]}`);
+    }
+  }
+  for (const [field, expected] of Object.entries({
+    effect_count: 17,
+    effect_catalog_count: 6,
+    model_decision_count: 9,
+    repository_effect_count: 8,
+    yield_boundary_count: 1,
+    state_comparison_count: 17,
+    payload_comparison_count: 17,
+    request_identity_comparison_count: 17,
+    response_comparison_count: 17
+  })) {
+    if (receipt[field] !== expected) {
+      throw new Error(`inner receipt ${field} mismatch: ${receipt[field]}`);
+    }
+  }
+  for (const field of [
+    "clean_room_agent_source_absent",
+    "application_specific_wasm_absent",
+    "hidden_verifier_passed",
+    "specialized_interpreted_equivalent"
+  ]) {
+    if (receipt[field] !== true) throw new Error(`inner receipt ${field} is not true`);
+  }
+  const negativeGates = Object.values(receipt.negative_gates ?? {});
+  if (negativeGates.length < 20 || negativeGates.some((value) => value !== true)) {
+    throw new Error("inner receipt negative gates are incomplete");
+  }
 }
 
 function snapshotBoundaryInputs(options, proofRoot) {

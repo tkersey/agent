@@ -497,6 +497,10 @@ pub fn build(b: *std.Build) void {
             "--mode",
             gate.mode,
         });
+        command.addArg("--world-host-root");
+        command.addDirectoryArg(interpretation_runtime.path(b, "world-host"));
+        command.addArg("--capabilities-root");
+        command.addDirectoryArg(interpretation_runtime.path(b, "world-capabilities"));
         command.step.dependOn(&install_actuality_wasm.step);
         command.step.dependOn(&install_actuality_manifest.step);
         command.step.dependOn(&install_initial_args.step);

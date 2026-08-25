@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { loadActualityCapabilities } from "./runtime_modules.mjs";
+
 const LIFECYCLE_MODES = new Set(["retry", "replay", "branch", "migrate"]);
 const WORKER_MEMORY_BYTES = 256 * 1024 * 1024;
 
@@ -222,7 +224,7 @@ async function loadRoots(options) {
   const capabilitiesRoot = resolve(options.capabilitiesRoot ?? process.env.AGENT_WORLD_CAPABILITIES_ROOT ?? join(agentRoot, "../world-capabilities"));
   const artifactRoot = resolve(options.artifactRoot ?? join(agentRoot, "zig-out/agent-actuality"));
   const host = await import(pathToFileURL(join(hostRoot, "src/v1/index.mjs")));
-  const capabilities = await import(pathToFileURL(join(capabilitiesRoot, "src/v1/index.mjs")));
+  const capabilities = await loadActualityCapabilities(capabilitiesRoot);
   const manifestBytes = await readFile(join(artifactRoot, "repository-repair-actuality.manifest.bin"));
   const applicationId = hex(host.decodeApplicationManifest(manifestBytes).applicationId);
   if (!capabilities.ACTUALITY_APPLICATION_IDS.includes(applicationId)) {

@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { loadActualityCapabilities } from "./runtime_modules.mjs";
+
 const options = parseArguments(process.argv.slice(2));
 if (options.mode !== "deterministic") {
   if (options.mode === "live") {
@@ -26,7 +28,7 @@ const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-actuality-v1-"));
 
 try {
   const host = await import(pathToFileURL(join(hostRoot, "src/v1/index.mjs")));
-  const capabilities = await import(pathToFileURL(join(capabilitiesRoot, "src/v1/index.mjs")));
+  const capabilities = await loadActualityCapabilities(capabilitiesRoot);
   const workspaceRoot = join(temporaryRoot, "workspace");
   const temporaryHome = join(temporaryRoot, "home");
   await cp(join(agentRoot, "fixtures/repository-repair-v1"), workspaceRoot, { recursive: true, errorOnExist: true });

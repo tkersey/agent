@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -39,9 +39,12 @@ const REQUIRED_PATHS = Object.freeze({
   ])
 });
 
-const options = parseArgs(process.argv.slice(2));
+const parsedOptions = parseArgs(process.argv.slice(2));
+const options = Object.freeze({
+  ...parsedOptions,
+  output: prepareOutput(parsedOptions.output)
+});
 const lock = readLock(options.lock);
-prepareOutput(options.output);
 
 await materialize("worldHost", lock.worldHost, options.worldHostRoot, options.worldHostArchive);
 await materialize(
@@ -52,17 +55,34 @@ await materialize(
 );
 
 function prepareOutput(output) {
+  if (existsSync(output) && lstatSync(output).isSymbolicLink()) {
+    throw new Error(`runtime dependency output is a symlink: ${output}`);
+  }
   mkdirSync(output, { recursive: true });
-  const entries = readdirSync(output);
+  const resolvedOutput = realpathSync(output);
+  if (resolvedOutput !== resolve(output)) {
+    throw new Error(`runtime dependency output has a symlink ancestor: ${output}`);
+  }
+  const entries = readdirSync(resolvedOutput);
   const entriesOwned = entries.every((entry) => OWNED_OUTPUT_ENTRIES.has(entry));
-  if (!entriesOwned || (entries.length !== 0 &&
-      !entries.includes(OUTPUT_SENTINEL))) {
+  const sentinel = join(resolvedOutput, OUTPUT_SENTINEL);
+  const sentinelValid = entries.includes(OUTPUT_SENTINEL) &&
+    !lstatSync(sentinel).isSymbolicLink() && lstatSync(sentinel).isFile() &&
+    readFileSync(sentinel, "utf8") === `${FORMAT}\n`;
+  const childrenValid = entries.filter((entry) => entry !== OUTPUT_SENTINEL)
+    .every((entry) => {
+      const metadata = lstatSync(join(resolvedOutput, entry));
+      return !metadata.isSymbolicLink() && metadata.isDirectory();
+    });
+  if (!entriesOwned || !childrenValid ||
+      (entries.length !== 0 && !sentinelValid)) {
     throw new Error(`runtime dependency output is not owned: ${output}`);
   }
   for (const entry of entries) {
-    rmSync(join(output, entry), { recursive: true, force: true });
+    rmSync(join(resolvedOutput, entry), { recursive: true, force: true });
   }
-  writeFileSync(join(output, OUTPUT_SENTINEL), `${FORMAT}\n`, { flag: "wx" });
+  writeFileSync(join(resolvedOutput, OUTPUT_SENTINEL), `${FORMAT}\n`, { flag: "wx" });
+  return resolvedOutput;
 }
 
 async function materialize(kind, entry, rootOverride, archiveOverride) {

@@ -19,7 +19,11 @@ import { fileURLToPath } from "node:url";
 
 import { inspectTarGz } from "./reference_stack.mjs";
 import { admitZigBinarySha256, EXPECTED_ZIG_VERSION } from "./zig_binary_identity.mjs";
-import { closedVerifierPath, resolveVerifierExecutables } from "./verifier_executables.mjs";
+import {
+    closedVerifierPath,
+    materializeVerifierBin,
+    resolveVerifierExecutables,
+} from "./verifier_executables.mjs";
 
 const releases = Object.freeze({
     boundary: Object.freeze({
@@ -59,13 +63,15 @@ try {
     const hermeticHome = join(proofRoot, "home");
     mkdirSync(hermeticHome);
     const verifierExecutables = resolveVerifierExecutables();
+    admitZigBinarySha256(sha256File(options.zig));
+    const verifierBin = materializeVerifierBin(proofRoot, options.zig, verifierExecutables);
     const baseEnvironment = {
         HOME: hermeticHome,
         LANG: "C",
         LC_ALL: "C",
         LOGNAME: process.env.LOGNAME ?? "agent-hermetic",
         NO_COLOR: "1",
-        PATH: closedVerifierPath(options.zig, verifierExecutables),
+        PATH: closedVerifierPath(verifierBin),
         SHELL: "/bin/sh",
         TERM: "dumb",
         TMPDIR: process.env.TMPDIR ?? tmpdir(),

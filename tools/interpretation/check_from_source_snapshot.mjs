@@ -19,7 +19,11 @@ import { dirname, join, relative, resolve } from "node:path";
 
 import { inspectTarGz } from "../reference_stack.mjs";
 import { admitZigBinarySha256 } from "../zig_binary_identity.mjs";
-import { closedVerifierPath, resolveVerifierExecutables } from "../verifier_executables.mjs";
+import {
+  closedVerifierPath,
+  materializeVerifierBin,
+  resolveVerifierExecutables
+} from "../verifier_executables.mjs";
 
 const EXPECTED_KERNEL_SHA256 =
   "12973fb655f126c2acd5693a84be47496649d1ab10bf22d565c9b675172e4f27";
@@ -132,6 +136,7 @@ const NEGATIVE_GATE_FIELDS = Object.freeze([
   "sandbox_positive_control_passed",
   "sandbox_network_read_rejected",
   "sandbox_runtime_input_write_rejected",
+  "sandbox_git_control_write_rejected",
   ...(process.platform === "linux" ? ["sandbox_host_proc_root_read_rejected"] : []),
   "proof_input_mutation_detected"
 ]);
@@ -164,8 +169,9 @@ try {
   const home = join(proofRoot, "home");
   mkdirSync(home);
   const verifierExecutables = resolveVerifierExecutables();
-  const environment = sourceSnapshotEnvironment(options.zig, home, verifierExecutables);
   requireZigBinary(options.zig);
+  const verifierBin = materializeVerifierBin(proofRoot, options.zig, verifierExecutables);
+  const environment = sourceSnapshotEnvironment(home, verifierBin);
   const boundaryInputs = snapshotBoundaryInputs(options, proofRoot);
   const binding = bindSource(options.agentRoot, gitExecutable, environment);
   const archive = join(proofRoot, "agent-source.tar.gz");
@@ -361,14 +367,14 @@ function digestSourceTree(root) {
   return hasher.digest("hex");
 }
 
-function sourceSnapshotEnvironment(zig, home, verifierExecutables) {
+function sourceSnapshotEnvironment(home, verifierBin) {
   const environment = {
     HOME: home,
     LANG: "C",
     LC_ALL: "C",
     LOGNAME: process.env.LOGNAME ?? "agent-interpretation",
     NO_COLOR: "1",
-    PATH: closedVerifierPath(zig, verifierExecutables),
+    PATH: closedVerifierPath(verifierBin),
     SHELL: "/bin/sh",
     TERM: "dumb",
     TMPDIR: process.env.TMPDIR ?? tmpdir(),

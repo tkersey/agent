@@ -108,6 +108,9 @@ export async function proveAgentInterpretation(options) {
     const cleanInventory = await assertCleanRoom(runtimeRoot, runtime);
     const runtimeInputDigest = await digestRuntimeInputs(runtime);
     await setRuntimeInputsReadOnly(runtime);
+    const interpretedGitControl = join(interpretedRoot, ".git");
+    await setTreeMode(interpretedGitControl, 0o555, 0o444);
+    const gitControlDigest = await digestGitControl(interpretedGitControl);
     const interpretedOutput = join(interpretedHome, "interpreted-result.json");
     const sandboxProfile = process.platform === "darwin"
       ? await cleanRoomSandboxProfile(options, runtimeRoot, interpretedRoot, interpretedHome)
@@ -128,7 +131,8 @@ export async function proveAgentInterpretation(options) {
       runtimeRoot,
       admittedCanary,
       outsideCanary,
-      runtime.drive
+      runtime.drive,
+      join(interpretedGitControl, "config")
     );
     const child = Bun.spawn(sandboxInvocation(options, sandboxProfile, runtimeRoot, [
       options.bunExecutable, runtime.drive,
@@ -163,9 +167,12 @@ export async function proveAgentInterpretation(options) {
       runtime,
       cleanInventory,
       interpretedOutput,
-      runtimeInputDigest
+      runtimeInputDigest,
+      interpretedGitControl,
+      gitControlDigest
     );
     await setRuntimeInputsWritable(runtime);
+    await setTreeMode(interpretedGitControl, 0o700, 0o600);
     await verifyRuntimeDependenciesUnchanged(options, dependencyBindings);
     compareExecution(specialized, interpreted);
 
@@ -409,7 +416,8 @@ async function proveSandboxReadDenials(
   runtimeRoot,
   admittedCanary,
   outsideCanary,
-  readOnlyRuntimeInput
+  readOnlyRuntimeInput,
+  readOnlyGitControl
 ) {
   const positive = await runSandboxProbe(
     options,
@@ -466,6 +474,17 @@ async function proveSandboxReadDenials(
   );
   denied.runtime_input_write = writeProbe.exitCode === 23 &&
     writeProbe.stderr.includes("SANDBOX_WRITE_DENIED");
+  const gitWriteProbe = await runSandboxProbe(
+    options,
+    sandboxProfile,
+    environment,
+    runtimeRoot,
+    `try { await Bun.write(${JSON.stringify(resolve(readOnlyGitControl))}, "mutated\\n");` +
+    `process.stdout.write("SANDBOX_GIT_WRITE_ALLOWED\\n"); } catch {` +
+    `process.stderr.write("SANDBOX_GIT_WRITE_DENIED\\n"); process.exit(23); }`
+  );
+  denied.git_control_write = gitWriteProbe.exitCode === 23 &&
+    gitWriteProbe.stderr.includes("SANDBOX_GIT_WRITE_DENIED");
   if (Object.values(denied).some((value) => value !== true)) {
     throw new Error(`clean_room_sandbox_read_allowed:${JSON.stringify(denied)}`);
   }
@@ -566,6 +585,7 @@ function sandboxInvocation(options, profile, runtimeRoot, argv) {
       ...bunPaths.flatMap((path) => ["--ro-bind", path, path]),
       "--ro-bind", resolve(runtimeRoot), resolve(runtimeRoot),
       "--bind", resolve(join(runtimeRoot, "workspace")), resolve(join(runtimeRoot, "workspace")),
+      "--ro-bind", resolve(join(runtimeRoot, "workspace", ".git")), resolve(join(runtimeRoot, "workspace", ".git")),
       "--bind", resolve(join(runtimeRoot, "home")), resolve(join(runtimeRoot, "home")),
       "--dev", "/dev",
       "--proc", "/proc",
@@ -627,11 +647,15 @@ async function cleanRoomSandboxProfile(options, runtimeRoot, interpretedRoot, in
   ])];
   const readDeny = denyOutside("file-read*", readable);
   const writeDeny = denyOutside("file-write*", writable);
+  const gitControlWriteDeny = `(deny file-write* (subpath ${JSON.stringify(
+    resolve(join(interpretedRoot, ".git"))
+  )}))`;
   return `(version 1)
     (allow default)
     (deny network*)
     ${readDeny}
-    ${writeDeny}`;
+    ${writeDeny}
+    ${gitControlWriteDeny}`;
 }
 
 function denyOutside(operation, admittedPaths) {
@@ -884,7 +908,9 @@ async function assertPostExecutionInventory(
   runtime,
   initialInventory,
   interpretedOutput,
-  expectedRuntimeInputDigest
+  expectedRuntimeInputDigest,
+  gitControlRoot,
+  expectedGitControlDigest
 ) {
   const finalInventory = await assertCleanRoom(runtimeRoot, runtime);
   const initial = new Set(initialInventory);
@@ -901,6 +927,28 @@ async function assertPostExecutionInventory(
   if (actualRuntimeInputDigest !== expectedRuntimeInputDigest) {
     throw new Error(`clean_room_runtime_input_changed:${actualRuntimeInputDigest}`);
   }
+  const actualGitControlDigest = await digestGitControl(gitControlRoot);
+  if (actualGitControlDigest !== expectedGitControlDigest) {
+    throw new Error(`clean_room_git_control_changed:${actualGitControlDigest}`);
+  }
+}
+
+async function digestGitControl(root) {
+  const hasher = createHash("sha256");
+  hasher.update("agent-interpretation-git-control-v1\0");
+  for (const path of await recursiveFiles(root)) {
+    const label = Buffer.from(path, "utf8");
+    const bytes = await readFile(join(root, path));
+    const mode = lstatSync(join(root, path)).mode & 0o777;
+    const metadata = Buffer.alloc(12);
+    metadata.writeUInt32LE(label.length, 0);
+    metadata.writeUInt32LE(bytes.length, 4);
+    metadata.writeUInt32LE(mode, 8);
+    hasher.update(metadata);
+    hasher.update(label);
+    hasher.update(bytes);
+  }
+  return hasher.digest("hex");
 }
 
 async function digestRuntimeInputs(runtime) {
@@ -1107,6 +1155,7 @@ async function runNegativeGates(
     sandbox_positive_control_passed: sandboxDenials.positive_control,
     sandbox_network_read_rejected: sandboxDenials.network,
     sandbox_runtime_input_write_rejected: sandboxDenials.runtime_input_write,
+    sandbox_git_control_write_rejected: sandboxDenials.git_control_write,
     ...(process.platform === "linux"
       ? { sandbox_host_proc_root_read_rejected: sandboxDenials.host_proc_root }
       : {}),

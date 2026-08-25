@@ -1,5 +1,13 @@
-import { accessSync, constants, realpathSync, statSync } from "node:fs";
-import { delimiter, dirname, join } from "node:path";
+import {
+  accessSync,
+  chmodSync,
+  constants,
+  mkdirSync,
+  realpathSync,
+  statSync,
+  symlinkSync
+} from "node:fs";
+import { delimiter, join } from "node:path";
 
 export function resolveVerifierExecutables() {
   return Object.freeze({
@@ -8,13 +16,23 @@ export function resolveVerifierExecutables() {
   });
 }
 
-export function closedVerifierPath(zig, executables) {
+export function materializeVerifierBin(root, zig, executables) {
+  const bin = join(root, "verifier-bin");
+  mkdirSync(bin, { mode: 0o700 });
+  for (const [name, target] of [
+    ["bun", executables.bun.real],
+    ["node", executables.node.real],
+    ["zig", realpathSync(zig)]
+  ]) {
+    symlinkSync(target, join(bin, name));
+  }
+  chmodSync(bin, 0o555);
+  return bin;
+}
+
+export function closedVerifierPath(verifierBin) {
   return [...new Set([
-    dirname(zig),
-    dirname(executables.node.invocation),
-    dirname(executables.node.real),
-    dirname(executables.bun.invocation),
-    dirname(executables.bun.real),
+    verifierBin,
     "/opt/homebrew/bin",
     "/usr/local/bin",
     "/usr/bin",

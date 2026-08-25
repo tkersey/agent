@@ -20,12 +20,6 @@
       "sha256": "db047e63a18bf05b8258e65c7f0a503f47a191fe5e8790e9503f6bb056129f38",
       "root": "world-capabilities-58569cd32a33c4cd5e9cc60b0fd8a6be63b48e73"
     },
-    "overrideArchives": [
-      {
-        "url": "https://github.com/tkersey/world-capabilities/releases/download/v2.3.3/world-capabilities-v2.3.3-deterministic.tar.gz",
-        "sha256": "72e295521ee164115da8b66aac6dcd7ce965728da5167a4976eb5310c21ae2b6",
-        "root": "world-capabilities-v2.3.3-deterministic"
-      }
-    ]
+    "overrideArchives": []
   }
 }

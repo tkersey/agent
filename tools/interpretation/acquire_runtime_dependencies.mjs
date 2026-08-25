@@ -1,12 +1,20 @@
 #!/usr/bin/env bun
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { inspectTarGz } from "../reference_stack.mjs";
 
 const FORMAT = "agent-interpretation-runtime-dependencies-v1";
+const OUTPUT_SENTINEL = ".agent-interpretation-runtime-dependencies-v1";
+const OWNED_OUTPUT_ENTRIES = new Set([
+  OUTPUT_SENTINEL,
+  "archives",
+  "extracted",
+  "world-capabilities",
+  "world-host"
+]);
 const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
 const MAX_REDIRECTS = 8;
 const ALLOWED_HOSTS = new Set([
@@ -33,11 +41,7 @@ const REQUIRED_PATHS = Object.freeze({
 
 const options = parseArgs(process.argv.slice(2));
 const lock = readLock(options.lock);
-if (options.output === "/" || options.output.split("/").filter(Boolean).length < 2) {
-  throw new Error(`unsafe runtime dependency output: ${options.output}`);
-}
-rmSync(options.output, { recursive: true, force: true });
-mkdirSync(options.output, { recursive: true });
+prepareOutput(options.output);
 
 await materialize("worldHost", lock.worldHost, options.worldHostRoot, options.worldHostArchive);
 await materialize(
@@ -46,6 +50,23 @@ await materialize(
   options.worldCapabilitiesRoot,
   options.worldCapabilitiesArchive
 );
+
+function prepareOutput(output) {
+  mkdirSync(output, { recursive: true });
+  const entries = readdirSync(output);
+  const entriesOwned = entries.every((entry) => OWNED_OUTPUT_ENTRIES.has(entry));
+  const legacyGeneratedOutput = basename(output) === "runtime-dependencies" &&
+    /\/o\/[0-9a-f]{32}\/runtime-dependencies$/.test(output) &&
+    entries.length !== 0 && entriesOwned;
+  if (!entriesOwned || (entries.length !== 0 &&
+      !entries.includes(OUTPUT_SENTINEL) && !legacyGeneratedOutput)) {
+    throw new Error(`runtime dependency output is not owned: ${output}`);
+  }
+  for (const entry of entries) {
+    rmSync(join(output, entry), { recursive: true, force: true });
+  }
+  writeFileSync(join(output, OUTPUT_SENTINEL), `${FORMAT}\n`, { flag: "wx" });
+}
 
 async function materialize(kind, entry, rootOverride, archiveOverride) {
   const destination = join(options.output, kind === "worldHost" ? "world-host" : "world-capabilities");

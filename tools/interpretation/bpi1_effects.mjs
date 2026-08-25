@@ -1,4 +1,4 @@
-const TEXT = new TextDecoder("utf-8", { fatal: true });
+const TEXT = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const HEADER_LENGTH = 316;
 const SECTION_COUNT = 10;
 const DESCRIPTOR_START = 76;

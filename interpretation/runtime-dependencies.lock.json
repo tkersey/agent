@@ -17,7 +17,7 @@
   "worldCapabilities": {
     "repository": "tkersey/world-capabilities",
     "version": "2.3.3",
-    "runtimeSha256": "80603890e9859ab263f983eea0f7cc1a7897a53bb30749380b93c22cc96dfebf",
+    "runtimeSha256": "1705ffc4183cac70541a5966983621c1243b9d5d31efafff0599ce1c62560427",
     "runtimePaths": [
       "src/v1/errors.mjs",
       "src/v1/protocol.mjs",
@@ -29,9 +29,9 @@
       "packages/repository-workspace-actuality"
     ],
     "defaultArchive": {
-      "url": "https://github.com/tkersey/world-capabilities/archive/c93c821f06198b4c1f021c3af5446a62cbdc87c5.tar.gz",
-      "sha256": "5cbc08ad6d12e7adfd2328f1f82b401d68493dfc36b929550013ab5bcb8de11e",
-      "root": "world-capabilities-c93c821f06198b4c1f021c3af5446a62cbdc87c5"
+      "url": "https://github.com/tkersey/world-capabilities/archive/680fe858c39911a55b7569a1324b733765c82cee.tar.gz",
+      "sha256": "5bac5a62eef6dbfb2fa8cca405c4d1f0851f745512b8aaf7fe2c809079ce5ad3",
+      "root": "world-capabilities-680fe858c39911a55b7569a1324b733765c82cee"
     },
     "overrideArchives": []
   }

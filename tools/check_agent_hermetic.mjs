@@ -98,14 +98,6 @@ try {
         globalCacheRoot,
         acquisitionEnvironment,
     );
-    const executedTrees = Object.freeze({
-        agent: digestExecutedTree(agentRoot),
-        boundary: digestExecutedTree(boundaryRoot),
-        world: digestExecutedTree(worldRoot),
-    });
-    for (const root of [agentRoot, boundaryRoot, worldRoot]) {
-        makeSourceTreeReadOnly(root);
-    }
     requireReleaseBuildGraph("boundary", boundaryRoot);
     requireReleaseBuildGraph("world", worldRoot);
     const agentSource = materializeAgentSource(
@@ -138,6 +130,14 @@ try {
         globalCacheRoot,
         acquisitionEnvironment,
     );
+    const executedTrees = Object.freeze({
+        agent: digestExecutedTree(agentRoot),
+        boundary: digestExecutedTree(boundaryRoot),
+        world: digestExecutedTree(worldRoot),
+    });
+    for (const root of [agentRoot, boundaryRoot, worldRoot]) {
+        makeSourceTreeReadOnly(root);
+    }
 
     const environment = {
         ...baseEnvironment,

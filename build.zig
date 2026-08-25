@@ -28,6 +28,21 @@ pub fn build(b: *std.Build) void {
         "agent-source-archive-sha256",
         "Internal authenticated Agent source archive digest for a snapshot proof",
     );
+    const interpretation_kernel_wasm_override = b.option(
+        []const u8,
+        "interpretation-kernel-wasm",
+        "Internal preverified fixed-kernel artifact for a source snapshot proof",
+    );
+    const interpretation_unrelated_bpi1_override = b.option(
+        []const u8,
+        "interpretation-unrelated-bpi1",
+        "Internal preverified unrelated BPI1 for a source snapshot proof",
+    );
+    const interpretation_unrelated_mv2p1_override = b.option(
+        []const u8,
+        "interpretation-unrelated-mv2p1",
+        "Internal preverified unrelated MV2P1 for a source snapshot proof",
+    );
     if ((agent_source_head == null) != (agent_source_archive_sha256 == null)) {
         std.process.fatal(
             "agent-source-head and agent-source-archive-sha256 must be supplied together",
@@ -256,15 +271,30 @@ pub fn build(b: *std.Build) void {
     } else {
         acquire_boundary_assets.addArg("-");
     }
-    const interpretation_kernel_wasm = acquire_boundary_assets.addOutputFileArg(
+    const acquired_interpretation_kernel_wasm = acquire_boundary_assets.addOutputFileArg(
         "boundary-machine-v2-kernel-v1.wasm",
     );
-    const unrelated_bpi1 = acquire_boundary_assets.addOutputFileArg(
+    const acquired_unrelated_bpi1 = acquire_boundary_assets.addOutputFileArg(
         "one-effect.boundary-program-image",
     );
-    const unrelated_mv2p1 = acquire_boundary_assets.addOutputFileArg(
+    const acquired_unrelated_mv2p1 = acquire_boundary_assets.addOutputFileArg(
         "one-effect.machine-v2-profile",
     );
+    const interpretation_kernel_wasm: std.Build.LazyPath =
+        if (interpretation_kernel_wasm_override) |path|
+            .{ .cwd_relative = b.pathFromRoot(path) }
+        else
+            acquired_interpretation_kernel_wasm;
+    const unrelated_bpi1: std.Build.LazyPath =
+        if (interpretation_unrelated_bpi1_override) |path|
+            .{ .cwd_relative = b.pathFromRoot(path) }
+        else
+            acquired_unrelated_bpi1;
+    const unrelated_mv2p1: std.Build.LazyPath =
+        if (interpretation_unrelated_mv2p1_override) |path|
+            .{ .cwd_relative = b.pathFromRoot(path) }
+        else
+            acquired_unrelated_mv2p1;
 
     const interpretation_assets = b.step(
         "emit-agent-interpretation-v1-assets",
@@ -454,6 +484,12 @@ pub fn build(b: *std.Build) void {
             "--global-cache-dir",
             b.graph.global_cache_root.path orelse ".",
         });
+        snapshot_proof.addArg("--interpretation-kernel-wasm");
+        snapshot_proof.addFileArg(interpretation_kernel_wasm);
+        snapshot_proof.addArg("--interpretation-unrelated-bpi1");
+        snapshot_proof.addFileArg(unrelated_bpi1);
+        snapshot_proof.addArg("--interpretation-unrelated-mv2p1");
+        snapshot_proof.addFileArg(unrelated_mv2p1);
         if (boundary_archive) |path| {
             snapshot_proof.addArg("--boundary-archive");
             snapshot_proof.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });

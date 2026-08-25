@@ -21,6 +21,9 @@ import { inspectTarGz } from "../reference_stack.mjs";
 const FORWARDED_OPTIONS = Object.freeze([
   "boundary-archive",
   "boundary-kernel-wasm",
+  "interpretation-kernel-wasm",
+  "interpretation-unrelated-bpi1",
+  "interpretation-unrelated-mv2p1",
   "world-archive",
   "world-host-archive",
   "world-capabilities-archive",
@@ -71,18 +74,6 @@ try {
     options.zig,
     sourceSnapshot,
     join(proofRoot, "agent-fetch-cache"),
-    options.globalCacheDir,
-    environment
-  );
-  const boundaryPackages = readdirSync(packageScratch)
-    .filter((name) => name.startsWith("boundary-"));
-  if (boundaryPackages.length !== 1) {
-    throw new Error(`expected one Boundary package, found ${boundaryPackages.length}`);
-  }
-  prefetchDependencyTree(
-    options.zig,
-    join(packageScratch, boundaryPackages[0]),
-    join(proofRoot, "boundary-fetch-cache"),
     options.globalCacheDir,
     environment
   );

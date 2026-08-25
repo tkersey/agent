@@ -100,6 +100,13 @@ try {
     replaceDependency(join(agentRoot, "build.zig.zon"), "boundary", '../boundary');
     replaceDependency(join(agentRoot, "build.zig.zon"), "world", '../world');
     replaceDependency(join(worldRoot, "build.zig.zon"), "boundary", '../boundary');
+    prefetchDependencyTree(
+        options.zig,
+        agentRoot,
+        join(proofRoot, "agent-fetch-cache"),
+        globalCacheRoot,
+        acquisitionEnvironment,
+    );
 
     const environment = {
         ...baseEnvironment,

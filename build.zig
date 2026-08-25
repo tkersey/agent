@@ -1301,6 +1301,7 @@ pub fn build(b: *std.Build) void {
     adequacy_release.dependOn(&adequacy_release_command.step);
 
     check.dependOn(semantic_check);
+    check.dependOn(interpretation_proof);
     check.dependOn(lint);
 }
 

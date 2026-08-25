@@ -202,6 +202,7 @@ export async function proveAgentInterpretation(options) {
       repository_effect_count: interpreted.trace.filter((entry) => entry.effectIdentity !== "model.decide.v1").length,
       yield_boundary_count: interpreted.yieldBoundaries.length,
       state_comparison_count: interpreted.trace.length,
+      interface_identity_comparison_count: interpreted.trace.length,
       payload_comparison_count: interpreted.trace.length,
       request_identity_comparison_count: interpreted.trace.length,
       response_comparison_count: interpreted.trace.length,
@@ -765,7 +766,7 @@ function compareExecution(specialized, interpreted) {
       throw new Error(`yield_boundary_mismatch:${index}`);
     }
   }
-  const byteFields = ["state", "identity", "payload", "response"];
+  const byteFields = ["state", "identity", "interfaceId", "payload", "response"];
   for (let index = 0; index < specialized.trace.length; index += 1) {
     const left = specialized.trace[index];
     const right = interpreted.trace[index];
@@ -913,6 +914,7 @@ function decodeInterpretedResult(value) {
       ...entry,
       state: Buffer.from(entry.state, "base64"),
       identity: Buffer.from(entry.identity, "base64"),
+      interfaceId: Buffer.from(entry.interfaceId, "base64"),
       payload: Buffer.from(entry.payload, "base64"),
       response: Buffer.from(entry.response, "base64")
     }))),

@@ -97,6 +97,10 @@ export async function runSpecialized(options) {
       throw new Error("specialized_request_identity_invalid");
     }
     const decodedRequest = capabilityProtocol.decodeEffectRequest(pending.encodedBytes);
+    const expectedInterfaceId = capabilityProtocol.effectInterfaceId(effect.identity);
+    if (!Buffer.from(decodedRequest.interfaceId).equals(Buffer.from(expectedInterfaceId))) {
+      throw new Error(`specialized_interface_identity_mismatch:${effect.identity}`);
+    }
     await environment.beforeSpecializedResolve(decodedRequest);
     const resolved = await router.resolve(environment.context, pending.encodedBytes);
     if (resolved.result.status !== capabilityProtocol.EffectStatus.ok || resolved.result.resultBytes === null) {
@@ -109,6 +113,7 @@ export async function runSpecialized(options) {
       state: machineState,
       identity: Buffer.from(inspected.metadata),
       effectIdentity: effect.identity,
+      interfaceId: Buffer.from(decodedRequest.interfaceId),
       payload: Buffer.from(pending.payloadBytes),
       response: Buffer.from(resolved.result.resultBytes)
     }));

@@ -114,6 +114,7 @@ export async function runInterpreted(options) {
         state: stepped.state,
         identity: stepped.metadata,
         effectIdentity: effect.identity,
+        interfaceId: Buffer.from(resolved.projected.interfaceId, "hex"),
         payload: stepped.value,
         response: resolved.responseBytes
       }));
@@ -197,6 +198,7 @@ function freezeBoundary(value) {
     ...value,
     state: Buffer.from(value.state),
     identity: Buffer.from(value.identity),
+    interfaceId: Buffer.from(value.interfaceId),
     payload: Buffer.from(value.payload),
     response: Buffer.from(value.response)
   });
@@ -235,6 +237,7 @@ if (import.meta.main) {
       ...entry,
       state: entry.state.toString("base64"),
       identity: entry.identity.toString("base64"),
+      interfaceId: entry.interfaceId.toString("base64"),
       payload: entry.payload.toString("base64"),
       response: entry.response.toString("base64")
     })),

@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { createHash } from "node:crypto";
+import { existsSync, lstatSync, readlinkSync, realpathSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
@@ -109,11 +110,14 @@ export async function proveAgentInterpretation(options) {
       NO_COLOR: "1",
       LC_ALL: "C"
     };
+    const outsideCanary = join(temporaryRoot, "outside-clean-room-canary");
+    await writeFile(outsideCanary, "outside clean room\n", { flag: "wx" });
     const sandboxDenials = await proveSandboxReadDenials(
       options,
       sandboxProfile,
       sandboxEnvironment,
-      runtimeRoot
+      runtimeRoot,
+      outsideCanary
     );
     const child = Bun.spawn(sandboxInvocation(options, sandboxProfile, runtimeRoot, [
       options.bunExecutable, runtime.drive,
@@ -175,7 +179,7 @@ export async function proveAgentInterpretation(options) {
     const receipt = {
       format: "agent-interpretation-v1",
       agent_commit: sourceBinding.head,
-      agent_version: "2.7.0",
+      agent_version: sourceBinding.version,
       boundary_version: "1.6.0",
       kernel_wasm_sha256: options.kernelSha256,
       kernel_import_count: 0,
@@ -222,6 +226,7 @@ export async function proveAgentInterpretation(options) {
 
 async function bindAgentSource(agentRoot) {
   const headBefore = await git(agentRoot, ["rev-parse", "HEAD"]);
+  const version = await bindAgentVersion(agentRoot);
   const child = Bun.spawn([
     "git",
     "status",
@@ -243,21 +248,40 @@ async function bindAgentSource(agentRoot) {
   }
   const headAfter = await git(agentRoot, ["rev-parse", "HEAD"]);
   if (headBefore !== headAfter) throw new Error("agent_source_head_changed_during_binding");
-  return Object.freeze({ head: headAfter });
+  return Object.freeze({ head: headAfter, version });
 }
 
 async function assertAgentSourceUnchanged(agentRoot, expected) {
   const current = await bindAgentSource(agentRoot);
-  if (current.head !== expected.head) {
-    throw new Error(`agent_source_head_changed:${expected.head}:${current.head}`);
+  if (current.head !== expected.head || current.version !== expected.version) {
+    throw new Error(
+      `agent_source_binding_changed:${expected.head}:${expected.version}:` +
+      `${current.head}:${current.version}`
+    );
   }
+}
+
+async function bindAgentVersion(agentRoot) {
+  const [packageSource, manifestSource] = await Promise.all([
+    readFile(join(agentRoot, "build.zig.zon"), "utf8"),
+    readFile(join(agentRoot, "src/manifest.zig"), "utf8")
+  ]);
+  const packageVersion = packageSource.match(/^\s*\.version = "([^"]+)",$/m)?.[1];
+  const manifestVersion = manifestSource.match(
+    /^pub const package_version = "([^"]+)";$/m
+  )?.[1];
+  if (!/^\d+\.\d+\.\d+$/.test(packageVersion ?? "") || packageVersion !== manifestVersion) {
+    throw new Error(`agent_version_binding_invalid:${packageVersion}:${manifestVersion}`);
+  }
+  return packageVersion;
 }
 
 async function proveSandboxReadDenials(
   options,
   sandboxProfile,
   environment,
-  runtimeRoot
+  runtimeRoot,
+  outsideCanary
 ) {
   const denied = {};
   for (const [name, path] of [
@@ -267,7 +291,8 @@ async function proveSandboxReadDenials(
     ["world_capabilities_source", join(
       options.capabilitiesRoot,
       "src/v1/actuality/repository_repair_codecs.mjs"
-    )]
+    )],
+    ["outside_clean_room", outsideCanary]
   ]) {
     const script = `await Bun.file(${JSON.stringify(resolve(path))}).arrayBuffer();`;
     const child = Bun.spawn(sandboxInvocation(options, sandboxProfile, runtimeRoot, [
@@ -295,14 +320,44 @@ function sandboxInvocation(options, profile, runtimeRoot, argv) {
   if (process.platform === "linux") {
     const bubblewrap = Bun.which("bwrap");
     if (bubblewrap === null) throw new Error("linux_clean_room_requires_bwrap");
+    const systemLinkCandidates = ["/bin", "/sbin", "/lib", "/lib64"]
+      .filter(existsSync);
+    const systemSymlinks = systemLinkCandidates
+      .filter((path) => lstatSync(path).isSymbolicLink())
+      .map((path) => Object.freeze({ destination: path, target: readlinkSync(path) }));
+    const systemDirectories = [
+      "/usr",
+      ...systemLinkCandidates.filter((path) => !lstatSync(path).isSymbolicLink()),
+      "/nix/store",
+      "/run/current-system/sw",
+      "/etc/ssl/certs"
+    ].filter(existsSync);
+    const systemFiles = [
+      "/etc/group",
+      "/etc/ld.so.cache",
+      "/etc/localtime",
+      "/etc/nsswitch.conf",
+      "/etc/passwd"
+    ].filter(existsSync);
+    const bunPaths = [realpathSync(options.bunExecutable)].filter((path) =>
+      !systemDirectories.some((root) =>
+      path === root || path.startsWith(`${root}/`)));
+    const mountDirectories = bubblewrapMountDirectories(
+      [...systemDirectories, resolve(runtimeRoot)],
+      [...systemFiles, ...bunPaths]
+    );
     return [
       bubblewrap,
       "--die-with-parent",
       "--new-session",
       "--unshare-net",
-      "--ro-bind", "/", "/",
-      "--tmpfs", resolve(options.agentRoot),
-      "--tmpfs", "/tmp",
+      ...mountDirectories.flatMap((path) => ["--dir", path]),
+      ...systemDirectories.flatMap((path) => ["--ro-bind", path, path]),
+      ...systemSymlinks.flatMap(({ target, destination }) => [
+        "--symlink", target, destination
+      ]),
+      ...systemFiles.flatMap((path) => ["--ro-bind", path, path]),
+      ...bunPaths.flatMap((path) => ["--ro-bind", path, path]),
       "--bind", resolve(runtimeRoot), resolve(runtimeRoot),
       "--dev", "/dev",
       "--proc", "/proc",
@@ -310,6 +365,19 @@ function sandboxInvocation(options, profile, runtimeRoot, argv) {
     ];
   }
   throw new Error(`clean_room_platform_unsupported:${process.platform}`);
+}
+
+function bubblewrapMountDirectories(directoryPaths, filePaths) {
+  const directories = new Set();
+  for (const seed of [...directoryPaths, ...filePaths.map(dirname)]) {
+    let current = seed;
+    while (current !== "/") {
+      directories.add(current);
+      current = dirname(current);
+    }
+  }
+  return [...directories].sort((left, right) =>
+    left.split("/").length - right.split("/").length || left.localeCompare(right));
 }
 
 async function cleanRoomSandboxProfile(options, runtimeRoot) {
@@ -731,6 +799,7 @@ async function runNegativeGates(
     sandbox_application_wasm_read_rejected: sandboxDenials.application_wasm,
     sandbox_world_host_source_read_rejected: sandboxDenials.world_host_source,
     sandbox_world_capabilities_source_read_rejected: sandboxDenials.world_capabilities_source,
+    sandbox_outside_clean_room_read_rejected: sandboxDenials.outside_clean_room,
     proof_input_mutation_detected: proofInputMutationDetected
   });
   if (Object.values(result).some((value) => value !== true)) throw new Error(`negative_gate_failed:${JSON.stringify(result)}`);

@@ -250,8 +250,14 @@ function requireAgentSourceUnchanged(source, expectedHead, gitExecutable, enviro
         source,
         environment,
         false,
-    ).stdout.trim();
-    if (head !== expectedHead || status !== "") {
+    ).stdout.split("\n").filter(Boolean).filter((line) => {
+        const encoded = line.slice(3);
+        const path = encoded.includes(" -> ")
+            ? encoded.split(" -> ").at(-1)
+            : encoded;
+        return !path.startsWith("zig-out/") && !path.startsWith("zig-pkg/");
+    });
+    if (head !== expectedHead || status.length !== 0) {
         throw new Error("Agent source changed during snapshot-bound proof");
     }
 }

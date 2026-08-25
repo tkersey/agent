@@ -14,12 +14,20 @@ const releases = Object.freeze({
         root: "boundary-4788bc152d2b0213e9c5c4e6544df1231e4b034d",
         url: "https://github.com/tkersey/boundary/archive/4788bc152d2b0213e9c5c4e6544df1231e4b034d.tar.gz",
         sha256: "b4036e1eceb3c18a237cbf9d48ee023a39d5217665265e380a665296b9599948",
+        buildGraph: Object.freeze({
+            build: "42bc915e1ea22141bd1db6297885eb4849ed7b3781a39d4f1f5f826526df3d6c",
+            manifest: "660271a04a0a35fd74e6dcfbb243e484e9c256bd351abeabe8c42e54f882ba88",
+        }),
     }),
     world: Object.freeze({
         version: "3.1.4",
         root: "world-5d8fad6e76863312c19a5ba6988bf6307f29a783",
         url: "https://github.com/tkersey/world/archive/5d8fad6e76863312c19a5ba6988bf6307f29a783.tar.gz",
         sha256: "7af0a97d5751bda62fc745855785ce9407bc5d556fd9054a32fbd2b609298057",
+        buildGraph: Object.freeze({
+            build: "f0c015f313bdc4a04e80c269f57f25b87f2e04500d27688da7ba8e2414a3e90d",
+            manifest: "e36f34a9787706ea6842d3360933da5c8df67d7db61b7b7adbd593fe51c99745",
+        }),
     }),
 });
 
@@ -29,16 +37,8 @@ const proofRoot = mkdtempSync(join(tmpdir(), "agent-hermetic-"));
 let passed = false;
 
 try {
-    const archives = join(proofRoot, "archives");
-    mkdirSync(archives);
-    const boundaryArchive = await acquire("boundary", options.boundaryArchive, options.offline, archives);
-    const worldArchive = await acquire("world", options.worldArchive, options.offline, archives);
-    const boundaryRoot = extractRelease("boundary", boundaryArchive, proofRoot);
-    const worldRoot = extractRelease("world", worldArchive, proofRoot);
-    const boundaryBuildGraph = Object.freeze({
-        build: sha256File(join(boundaryRoot, "build.zig")),
-        manifest: sha256File(join(boundaryRoot, "build.zig.zon")),
-    });
+    const tarExecutable = "/usr/bin/tar";
+    if (!existsSync(tarExecutable)) throw new Error("trusted tar executable is unavailable");
     const globalCacheRoot = join(proofRoot, "zig-global-cache");
     const hermeticHome = join(proofRoot, "home");
     mkdirSync(hermeticHome);
@@ -56,6 +56,14 @@ try {
         XDG_CACHE_HOME: join(proofRoot, "xdg-cache"),
         ZIG_GLOBAL_CACHE_DIR: globalCacheRoot,
     };
+    const archives = join(proofRoot, "archives");
+    mkdirSync(archives);
+    const boundaryArchive = await acquire("boundary", options.boundaryArchive, options.offline, archives);
+    const worldArchive = await acquire("world", options.worldArchive, options.offline, archives);
+    const boundaryRoot = extractRelease("boundary", boundaryArchive, proofRoot, tarExecutable, baseEnvironment);
+    const worldRoot = extractRelease("world", worldArchive, proofRoot, tarExecutable, baseEnvironment);
+    requireReleaseBuildGraph("boundary", boundaryRoot);
+    requireReleaseBuildGraph("world", worldRoot);
     const acquisitionEnvironment = { ...baseEnvironment };
     for (const name of [
         "ALL_PROXY",
@@ -76,7 +84,8 @@ try {
         globalCacheRoot,
         acquisitionEnvironment,
     );
-    requireBoundaryBuildGraph(boundaryRoot, boundaryBuildGraph);
+    requireReleaseBuildGraph("boundary", boundaryRoot);
+    requireReleaseBuildGraph("world", worldRoot);
     const agentRoot = join(proofRoot, "agent");
     cpSync(sourceRoot, agentRoot, {
         recursive: true,
@@ -109,7 +118,7 @@ try {
         "--summary",
         "all",
     ], agentRoot, environment);
-    requireBoundaryBuildGraph(boundaryRoot, boundaryBuildGraph);
+    requireReleaseBuildGraph("boundary", boundaryRoot);
     if (existsSync(join(hermeticHome, ".cache", "zig"))) {
         throw new Error("hermetic proof escaped into the temporary HOME Zig cache");
     }
@@ -118,6 +127,8 @@ try {
     console.log("agent_hermetic_world_version=3.1.4");
     console.log(`agent_hermetic_world_sha256=${releases.world.sha256}`);
     console.log("agent_hermetic_boundary_build_graph_preserved=true");
+    console.log(`agent_hermetic_archive_tool=${tarExecutable}`);
+    console.log("agent_hermetic_release_build_graph_bound=true");
     console.log("agent_hermetic_ambient_zig_cache_absent=true");
     console.log("agent_hermetic_ambient_zig_overrides_absent=true");
     console.log("agent_hermetic_network_after_acquisition=false");
@@ -148,19 +159,20 @@ function sha256File(path) {
     return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
-function requireBoundaryBuildGraph(root, expected) {
+function requireReleaseBuildGraph(kind, root) {
+    const expected = releases[kind].buildGraph;
     if (sha256File(join(root, "build.zig")) !== expected.build ||
         sha256File(join(root, "build.zig.zon")) !== expected.manifest) {
-        throw new Error("Boundary build graph changed during the hermetic proof");
+        throw new Error(`${kind} build graph does not match the authenticated release`);
     }
 }
 
-function extractRelease(kind, archive, root) {
+function extractRelease(kind, archive, root, tarExecutable, environment) {
     const expectedRoot = releases[kind].root;
-    inspectTarGz(archive, expectedRoot);
+    inspectTarGz(archive, expectedRoot, { tarExecutable, environment });
     const extracted = join(root, `${kind}-extracted`);
     mkdirSync(extracted);
-    run("tar", ["-xzf", archive, "-C", extracted], root, process.env, false);
+    run(tarExecutable, ["-xzf", archive, "-C", extracted], root, environment, false);
     const source = join(extracted, expectedRoot);
     const destination = join(root, kind);
     if (!existsSync(source)) throw new Error(`${kind} archive root is missing`);

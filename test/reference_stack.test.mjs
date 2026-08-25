@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { archiveEntrySize, readReferenceStackLock } from "../tools/reference_stack.mjs";
+import { archiveEntrySize, inspectTarGz, readReferenceStackLock } from "../tools/reference_stack.mjs";
 
 const lockPath = "conformance/reference-stack-v1.lock.json";
 
@@ -12,6 +12,31 @@ describe("public reference stack lock", () => {
         expect(archiveEntrySize("-rw-r--r--  0 owner group 123 Aug 15 03:00 root/file")).toBe(123);
         expect(archiveEntrySize("-rw-r--r-- owner/group 456 2026-08-15 03:00 root/file")).toBe(456);
         expect(() => archiveEntrySize("not a tar inventory")).toThrow();
+    });
+
+    test("uses the admitted tar executable and environment", () => {
+        const root = mkdtempSync(join(tmpdir(), "agent-reference-tar-"));
+        const tarExecutable = join(root, "tar");
+        writeFileSync(tarExecutable, `#!/bin/sh
+set -eu
+test "\${TRUSTED_TAR_MARKER:-}" = admitted
+case "$1" in
+    -tzf) printf 'root/\\nroot/file\\n' ;;
+    -tvzf) printf '%s\\n' '-rw-r--r--  0 owner group 5 Aug 15 03:00 root/file' ;;
+    *) exit 92 ;;
+esac
+`);
+        chmodSync(tarExecutable, 0o755);
+        const inventory = inspectTarGz(join(root, "ignored.tar.gz"), "root", {
+            tarExecutable,
+            environment: { PATH: "/usr/bin:/bin", TRUSTED_TAR_MARKER: "admitted" },
+        });
+        expect(inventory.entryCount).toBe(2);
+        expect(inventory.expandedBytes).toBe(5);
+        expect(() => inspectTarGz(join(root, "ignored.tar.gz"), "root", {
+            tarExecutable,
+            environment: { PATH: "/usr/bin:/bin" },
+        })).toThrow();
     });
 
     test("binds exact public artifact provenance and checksums", () => {

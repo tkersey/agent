@@ -157,8 +157,10 @@ export function materializeWorldCapabilitiesArtifact(artifact, archiveRoot, extr
     }, archiveRoot, join(extractionRoot, "distribution"));
 }
 
-export function inspectTarGz(archivePath, expectedRoot) {
-    const listing = run("tar", ["-tzf", archivePath], false).stdout.split("\n").filter(Boolean);
+export function inspectTarGz(archivePath, expectedRoot, options = {}) {
+    const tarExecutable = options.tarExecutable ?? "tar";
+    const environment = options.environment ?? process.env;
+    const listing = run(tarExecutable, ["-tzf", archivePath], false, environment).stdout.split("\n").filter(Boolean);
     if (listing.length === 0 || listing.length > MAX_ENTRIES) throw new Error("reference archive entry count is invalid");
     const paths = new Set();
     for (const name of listing) {
@@ -171,7 +173,7 @@ export function inspectTarGz(archivePath, expectedRoot) {
         if (paths.has(normalized)) throw new Error(`duplicate archive path: ${name}`);
         paths.add(normalized);
     }
-    const verbose = run("tar", ["-tvzf", archivePath], false).stdout.split("\n").filter(Boolean);
+    const verbose = run(tarExecutable, ["-tvzf", archivePath], false, environment).stdout.split("\n").filter(Boolean);
     let expandedBytes = 0;
     for (const line of verbose) {
         if (line.startsWith("l") || line.startsWith("h")) throw new Error("reference archive links are forbidden");
@@ -221,8 +223,8 @@ function sha256(bytes) {
     return createHash("sha256").update(bytes).digest("hex");
 }
 
-function run(command, args, forward = true) {
-    const result = spawnSync(command, args, { encoding: "utf8", maxBuffer: 128 * 1024 * 1024 });
+function run(command, args, forward = true, environment = process.env) {
+    const result = spawnSync(command, args, { env: environment, encoding: "utf8", maxBuffer: 128 * 1024 * 1024 });
     if (forward && result.stdout) process.stdout.write(result.stdout);
     if (forward && result.stderr) process.stderr.write(result.stderr);
     if (result.error) throw result.error;

@@ -48,11 +48,12 @@ pub fn build(b: *std.Build) void {
         "interpretation-unrelated-mv2p1",
         "Internal preverified unrelated MV2P1 for a source snapshot proof",
     );
-    const source_binding_count = @intFromBool(agent_source_head != null) +
-        @intFromBool(agent_source_archive_sha256 != null) +
-        @intFromBool(agent_source_tree != null);
-    if ((interpretation_source_snapshot and source_binding_count != 3) or
-        (!interpretation_source_snapshot and source_binding_count != 0))
+    const any_source_binding = agent_source_head != null or
+        agent_source_archive_sha256 != null or agent_source_tree != null;
+    const complete_source_binding = agent_source_head != null and
+        agent_source_archive_sha256 != null and agent_source_tree != null;
+    if ((interpretation_source_snapshot and !complete_source_binding) or
+        (!interpretation_source_snapshot and any_source_binding))
     {
         std.process.fatal(
             "internal interpretation snapshot mode requires the complete Agent source binding",

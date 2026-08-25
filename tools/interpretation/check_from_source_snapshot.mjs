@@ -209,7 +209,9 @@ function makeWritable(root) {
 function digestSourceTree(root) {
   const files = [];
   const visit = (directory) => {
-    for (const name of readdirSync(directory).sort()) {
+    for (const name of readdirSync(directory).sort(
+      (left, right) => left.localeCompare(right)
+    )) {
       const full = join(directory, name);
       const stat = lstatSync(full);
       if (stat.isDirectory()) visit(full);

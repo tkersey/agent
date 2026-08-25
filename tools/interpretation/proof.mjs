@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 
 import { runSpecialized } from "./specialized.mjs";
+import { readBpi1EffectCatalog } from "./bpi1_effects.mjs";
 import { compileKernel, encodeResumeAuxiliary, executeKernelCommand } from "./kernel_client.mjs";
 import { runtimeDependencyDigest } from "./dependency_digest.mjs";
 
@@ -852,6 +853,8 @@ async function runNegativeGates(
   };
   const corruptedImage = Buffer.from(bpi1);
   corruptedImage[corruptedImage.length - 1] ^= 1;
+  const corruptedRoutingMagic = Buffer.from(bpi1);
+  for (let index = 0; index < 8; index += 1) corruptedRoutingMagic[index] |= 0x80;
   const corruptedProfile = Buffer.from(mv2p1);
   corruptedProfile[128] ^= 1;
   const wrongKernel = Buffer.from(kernelBytes);
@@ -929,6 +932,9 @@ async function runNegativeGates(
   }
   const result = Object.freeze({
     corrupted_bpi1_rejected: await rejects(() => executeKernelCommand({ kernel, bpi1: corruptedImage, mv2p1, command: 0 })),
+    corrupted_bpi1_routing_magic_rejected: await rejects(async () => {
+      readBpi1EffectCatalog(corruptedRoutingMagic);
+    }),
     corrupted_mv2p1_rejected: await rejects(() => executeKernelCommand({ kernel, bpi1, mv2p1: corruptedProfile, command: 0 })),
     wrong_kernel_rejected: await rejects(() => compileKernel(wrongKernel)),
     missing_bpi1_rejected: missingImageRejected,

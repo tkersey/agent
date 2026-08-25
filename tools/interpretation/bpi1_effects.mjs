@@ -1,4 +1,5 @@
 const TEXT = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+const MAGIC = Buffer.from("ABL_BPI1", "ascii");
 const HEADER_LENGTH = 316;
 const SECTION_COUNT = 10;
 const DESCRIPTOR_START = 76;
@@ -6,7 +7,7 @@ const DESCRIPTOR_LENGTH = 24;
 
 export function readBpi1EffectCatalog(encoded) {
   const bytes = Buffer.from(encoded);
-  if (bytes.length < HEADER_LENGTH || bytes.subarray(0, 8).toString("ascii") !== "ABL_BPI1" ||
+  if (bytes.length < HEADER_LENGTH || !bytes.subarray(0, 8).equals(MAGIC) ||
       bytes.readUInt16LE(8) !== 1 || bytes.readUInt16LE(10) !== 1 ||
       bytes.readUInt32LE(12) !== 0 || bytes.readUInt32LE(16) !== HEADER_LENGTH ||
       bytes.readUInt32LE(20) !== SECTION_COUNT || bytes.readBigUInt64LE(24) !== BigInt(bytes.length)) {

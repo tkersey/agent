@@ -44,19 +44,28 @@ const ALLOWED_HOSTS = new Set([
 const parsedOptions = parseArgs(process.argv.slice(2));
 const lock = readRuntimeDependencyLock(parsedOptions.lock);
 validateArchiveUrls(lock);
+const explicitOverrides = await Promise.all([
+  validateExplicitOverride(
+    "worldHost",
+    lock.worldHost,
+    parsedOptions.worldHostRoot,
+    parsedOptions.worldHostArchive
+  ),
+  validateExplicitOverride(
+    "worldCapabilities",
+    lock.worldCapabilities,
+    parsedOptions.worldCapabilitiesRoot,
+    parsedOptions.worldCapabilitiesArchive
+  )
+]);
 const publication = inspectPublicationTarget(parsedOptions.output);
 if (publication.state === "owned") {
   await verifyRuntimeAt("worldHost", lock.worldHost, publication.output);
   await verifyRuntimeAt("worldCapabilities", lock.worldCapabilities, publication.output);
 } else {
   const [worldHost, worldCapabilities] = await Promise.all([
-    acquire("worldHost", lock.worldHost, parsedOptions.worldHostRoot, parsedOptions.worldHostArchive),
-    acquire(
-      "worldCapabilities",
-      lock.worldCapabilities,
-      parsedOptions.worldCapabilitiesRoot,
-      parsedOptions.worldCapabilitiesArchive
-    )
+    acquire("worldHost", lock.worldHost, explicitOverrides[0]),
+    acquire("worldCapabilities", lock.worldCapabilities, explicitOverrides[1])
   ]);
   mkdirSync(publication.parent, { recursive: true });
   if (realpathSync(publication.parent) !== publication.parent) {
@@ -139,21 +148,42 @@ function publishOutput(publication, staging) {
   }
 }
 
-async function acquire(kind, entry, rootOverride, archiveOverride) {
-  if (rootOverride !== null) {
-    requirePaths(kind, rootOverride, entry.runtimePaths);
-    return Object.freeze({ entry, root: rootOverride, bytes: null, archive: null });
-  }
-  const candidates = [entry.defaultArchive, ...entry.overrideArchives];
-  const acquired = archiveOverride === null
-    ? { bytes: await download(entry.defaultArchive.url), archive: entry.defaultArchive }
-    : selectLocalArchive(archiveOverride, candidates);
+async function acquire(kind, entry, explicitOverride) {
+  if (explicitOverride !== null) return explicitOverride;
+  const acquired = {
+    bytes: await download(entry.defaultArchive.url),
+    archive: entry.defaultArchive
+  };
   if (acquired.bytes.length > MAX_ARCHIVE_BYTES) throw new Error(`${kind} archive exceeds byte limit`);
   const actual = sha256(acquired.bytes);
   if (actual !== acquired.archive.sha256) {
     throw new Error(`${kind} archive checksum mismatch: expected=${acquired.archive.sha256} actual=${actual}`);
   }
   return Object.freeze({ entry, root: null, ...acquired });
+}
+
+async function validateExplicitOverride(kind, entry, rootOverride, archiveOverride) {
+  if (rootOverride !== null && archiveOverride !== null) {
+    throw new Error(`${kind} root and archive overrides are mutually exclusive`);
+  }
+  if (rootOverride !== null) {
+    requirePaths(kind, rootOverride, entry.runtimePaths);
+    const digest = await runtimeDependencyDigest(rootOverride, entry.runtimePaths);
+    if (digest.sha256 !== entry.runtimeSha256) {
+      throw new Error(`${kind} root override digest mismatch: expected=${entry.runtimeSha256} actual=${digest.sha256}`);
+    }
+    return Object.freeze({ entry, root: rootOverride, bytes: null, archive: null });
+  } else if (archiveOverride !== null) {
+    const acquired = selectLocalArchive(
+      archiveOverride,
+      [entry.defaultArchive, ...entry.overrideArchives]
+    );
+    if (acquired.bytes.length > MAX_ARCHIVE_BYTES) {
+      throw new Error(`${kind} archive exceeds byte limit`);
+    }
+    return Object.freeze({ entry, root: null, ...acquired });
+  }
+  return null;
 }
 
 function materialize(kind, acquired, output) {

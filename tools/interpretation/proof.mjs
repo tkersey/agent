@@ -51,7 +51,8 @@ export async function proveAgentInterpretation(options) {
   const sourceBinding = await bindAgentSource(
     options.agentRoot,
     options.agentSourceHead,
-    options.agentSourceArchiveSha256
+    options.agentSourceArchiveSha256,
+    options.agentSourceTree
   );
   const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-interpretation-v1-"));
   try {
@@ -186,9 +187,11 @@ export async function proveAgentInterpretation(options) {
     const unrelatedBpi1 = await readFile(snapshotOptions.unrelatedBpi1);
     const unrelatedMv2p1 = await readFile(snapshotOptions.unrelatedMv2p1);
     const receipt = {
-      format: "agent-interpretation-v1",
+      format: "agent-interpretation-v1-inner",
       agent_commit: sourceBinding.head,
       agent_source_archive_sha256: sourceBinding.sourceArchiveSha256,
+      agent_source_git_tree: sourceBinding.gitTree,
+      agent_source_tree_digest: sourceBinding.sourceTreeDigest,
       agent_version: sourceBinding.version,
       boundary_version: FIXED_KERNEL_RELEASE_VERSION,
       boundary_compiler_version: sourceBinding.boundaryVersion,
@@ -268,20 +271,28 @@ async function makeTreeWritable(root) {
   }
 }
 
-async function bindAgentSource(agentRoot, expectedHead, expectedArchiveSha256) {
+async function bindAgentSource(
+  agentRoot,
+  expectedHead,
+  expectedArchiveSha256,
+  expectedTree
+) {
   if (!existsSync(join(agentRoot, ".git"))) {
     if (!/^[0-9a-f]{40}$/.test(expectedHead ?? "") ||
-        !/^[0-9a-f]{64}$/.test(expectedArchiveSha256 ?? "")) {
+        !/^[0-9a-f]{64}$/.test(expectedArchiveSha256 ?? "") ||
+        !/^[0-9a-f]{40}$/.test(expectedTree ?? "")) {
       throw new Error("agent_source_snapshot_binding_missing");
     }
     return Object.freeze({
       head: expectedHead,
       sourceArchiveSha256: expectedArchiveSha256,
+      gitTree: expectedTree,
       sourceTreeDigest: await digestAgentSourceTree(agentRoot),
       ...await bindAgentIdentity(agentRoot)
     });
   }
   const headBefore = await git(agentRoot, ["rev-parse", "HEAD"]);
+  const treeBefore = await git(agentRoot, ["rev-parse", "HEAD^{tree}"]);
   const identity = await bindAgentIdentity(agentRoot);
   const child = Bun.spawn([
     "git",
@@ -303,10 +314,14 @@ async function bindAgentSource(agentRoot, expectedHead, expectedArchiveSha256) {
     throw new Error(`agent_source_dirty:${unexpected.join(",")}`);
   }
   const headAfter = await git(agentRoot, ["rev-parse", "HEAD"]);
-  if (headBefore !== headAfter) throw new Error("agent_source_head_changed_during_binding");
+  const treeAfter = await git(agentRoot, ["rev-parse", "HEAD^{tree}"]);
+  if (headBefore !== headAfter || treeBefore !== treeAfter) {
+    throw new Error("agent_source_head_changed_during_binding");
+  }
   return Object.freeze({
     head: headAfter,
     sourceArchiveSha256: null,
+    gitTree: treeAfter,
     sourceTreeDigest: null,
     ...identity
   });
@@ -316,7 +331,8 @@ async function assertAgentSourceUnchanged(agentRoot, expected) {
   const current = await bindAgentSource(
     agentRoot,
     expected.head,
-    expected.sourceArchiveSha256
+    expected.sourceArchiveSha256,
+    expected.gitTree
   );
   if (JSON.stringify(current) !== JSON.stringify(expected)) {
     throw new Error(`agent_source_binding_changed:${JSON.stringify(expected)}:${JSON.stringify(current)}`);
@@ -1176,14 +1192,19 @@ function parseArguments(argv) {
   result.bunExecutable = resolve(result.bunExecutable ?? process.execPath);
   for (const [name, pattern] of [
     ["agentSourceHead", /^[0-9a-f]{40}$/],
-    ["agentSourceArchiveSha256", /^[0-9a-f]{64}$/]
+    ["agentSourceArchiveSha256", /^[0-9a-f]{64}$/],
+    ["agentSourceTree", /^[0-9a-f]{40}$/]
   ]) {
     if (result[name] !== undefined && !pattern.test(result[name])) {
       throw new Error(`invalid_argument:${name}`);
     }
   }
-  if ((result.agentSourceHead === undefined) !==
-      (result.agentSourceArchiveSha256 === undefined)) {
+  const sourceBindingCount = [
+    result.agentSourceHead,
+    result.agentSourceArchiveSha256,
+    result.agentSourceTree
+  ].filter((value) => value !== undefined).length;
+  if (sourceBindingCount !== 0 && sourceBindingCount !== 3) {
     throw new Error("incomplete_agent_source_snapshot_binding");
   }
   result.kernelSha256 = "12973fb655f126c2acd5693a84be47496649d1ab10bf22d565c9b675172e4f27";

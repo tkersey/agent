@@ -28,6 +28,11 @@ pub fn build(b: *std.Build) void {
         "agent-source-archive-sha256",
         "Internal authenticated Agent source archive digest for a snapshot proof",
     );
+    const agent_source_tree = b.option(
+        []const u8,
+        "agent-source-tree",
+        "Internal authenticated Agent Git tree for a snapshot proof",
+    );
     const interpretation_kernel_wasm_override = b.option(
         []const u8,
         "interpretation-kernel-wasm",
@@ -43,9 +48,14 @@ pub fn build(b: *std.Build) void {
         "interpretation-unrelated-mv2p1",
         "Internal preverified unrelated MV2P1 for a source snapshot proof",
     );
-    if ((agent_source_head == null) != (agent_source_archive_sha256 == null)) {
+    const source_binding_count = @intFromBool(agent_source_head != null) +
+        @intFromBool(agent_source_archive_sha256 != null) +
+        @intFromBool(agent_source_tree != null);
+    if ((interpretation_source_snapshot and source_binding_count != 3) or
+        (!interpretation_source_snapshot and source_binding_count != 0))
+    {
         std.process.fatal(
-            "agent-source-head and agent-source-archive-sha256 must be supplied together",
+            "internal interpretation snapshot mode requires the complete Agent source binding",
             .{},
         );
     }
@@ -452,6 +462,10 @@ pub fn build(b: *std.Build) void {
         interpretation_proof_command.addArgs(&.{
             "--agent-source-archive-sha256",
             agent_source_archive_sha256.?,
+        });
+        interpretation_proof_command.addArgs(&.{
+            "--agent-source-tree",
+            agent_source_tree.?,
         });
     }
     interpretation_proof_command.addArg("--receipt-output");

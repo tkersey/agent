@@ -14,7 +14,7 @@ import {
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 
 import { inspectTarGz } from "../reference_stack.mjs";
 
@@ -67,6 +67,7 @@ try {
   if (!existsSync(sourceSnapshot) || existsSync(join(sourceSnapshot, ".git"))) {
     throw new Error("Agent source snapshot is invalid");
   }
+  const sourceTreeDigest = digestSourceTree(sourceSnapshot);
   const packageScratch = join(sourceSnapshot, "zig-pkg");
   mkdirSync(packageScratch);
   makeReadOnly(sourceSnapshot, packageScratch);
@@ -85,6 +86,7 @@ try {
     "-Dinterpretation-source-snapshot=true",
     `-Dagent-source-head=${binding.head}`,
     `-Dagent-source-archive-sha256=${archiveSha256}`,
+    `-Dagent-source-tree=${binding.tree}`,
     "--cache-dir",
     join(proofRoot, "zig-cache"),
     "--global-cache-dir",
@@ -105,17 +107,26 @@ try {
     "agent-interpretation-v1",
     "agent-interpretation-v1-receipt.json"
   );
-  const receiptBytes = readFileSync(receiptPath);
-  const receipt = JSON.parse(receiptBytes);
-  if (receipt.agent_commit !== binding.head ||
-      receipt.agent_source_archive_sha256 !== archiveSha256) {
+  const receipt = JSON.parse(readFileSync(receiptPath));
+  if (receipt.format !== "agent-interpretation-v1-inner" ||
+      receipt.agent_commit !== binding.head ||
+      receipt.agent_source_git_tree !== binding.tree ||
+      receipt.agent_source_archive_sha256 !== archiveSha256 ||
+      receipt.agent_source_tree_digest !== sourceTreeDigest) {
     throw new Error("snapshot proof receipt source binding mismatch");
   }
+  const publicReceipt = {
+    ...receipt,
+    format: "agent-interpretation-v1",
+    agent_source_binding: "git-archive-v1"
+  };
+  const receiptBytes = Buffer.from(`${JSON.stringify(publicReceipt, null, 2)}\n`);
   mkdirSync(dirname(options.receiptOutput), { recursive: true });
   writeFileSync(options.receiptOutput, receiptBytes);
   process.stdout.write(`agent_source_commit=${binding.head}\n`);
   process.stdout.write(`agent_source_tree=${binding.tree}\n`);
   process.stdout.write(`agent_source_archive_sha256=${archiveSha256}\n`);
+  process.stdout.write(`agent_source_tree_digest=${sourceTreeDigest}\n`);
   process.stdout.write("agent_source_snapshot_read_only=true\n");
   passed = true;
 } finally {
@@ -193,6 +204,33 @@ function makeWritable(root) {
   } else if (stat.isFile()) {
     chmodSync(root, 0o600);
   }
+}
+
+function digestSourceTree(root) {
+  const files = [];
+  const visit = (directory) => {
+    for (const name of readdirSync(directory).sort()) {
+      const full = join(directory, name);
+      const stat = lstatSync(full);
+      if (stat.isDirectory()) visit(full);
+      else if (stat.isFile()) files.push(relative(root, full));
+      else throw new Error(`Agent source snapshot contains a non-regular path: ${full}`);
+    }
+  };
+  visit(root);
+  const hasher = createHash("sha256");
+  hasher.update("agent-source-snapshot-tree-v1\0");
+  for (const path of files) {
+    const encoded = Buffer.from(path, "utf8");
+    const bytes = readFileSync(join(root, path));
+    const lengths = Buffer.alloc(8);
+    lengths.writeUInt32LE(encoded.length, 0);
+    lengths.writeUInt32LE(bytes.length, 4);
+    hasher.update(lengths);
+    hasher.update(encoded);
+    hasher.update(bytes);
+  }
+  return hasher.digest("hex");
 }
 
 function sourceSnapshotEnvironment(zig, home) {

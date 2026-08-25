@@ -18,6 +18,13 @@ import { dirname, join, relative, resolve } from "node:path";
 
 import { inspectTarGz } from "../reference_stack.mjs";
 
+const EXPECTED_KERNEL_SHA256 =
+  "12973fb655f126c2acd5693a84be47496649d1ab10bf22d565c9b675172e4f27";
+const EXPECTED_UNRELATED_BPI1_SHA256 =
+  "6564f37639bfd4cf33491582e71b4f6602f865ea619b9616627080d86f805f0e";
+const EXPECTED_UNRELATED_MV2P1_SHA256 =
+  "08ad3c629f819e580c6bec364db9c88ad578f66e24a2cbb1e3c5424987fa7ec5";
+
 const FORWARDED_OPTIONS = Object.freeze([
   "boundary-archive",
   "boundary-kernel-wasm",
@@ -46,6 +53,7 @@ try {
   const home = join(proofRoot, "home");
   mkdirSync(home);
   const environment = sourceSnapshotEnvironment(options.zig, home);
+  requireBoundaryInputs(options);
   const binding = bindSource(options.agentRoot, gitExecutable, environment);
   const archive = join(proofRoot, "agent-source.tar.gz");
   run(gitExecutable, [
@@ -301,6 +309,19 @@ function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+function requireBoundaryInputs(options) {
+  for (const [label, path, expected] of [
+    ["kernel", options.interpretationKernelWasm, EXPECTED_KERNEL_SHA256],
+    ["unrelated BPI1", options.interpretationUnrelatedBpi1, EXPECTED_UNRELATED_BPI1_SHA256],
+    ["unrelated MV2P1", options.interpretationUnrelatedMv2p1, EXPECTED_UNRELATED_MV2P1_SHA256]
+  ]) {
+    const actual = sha256(readFileSync(path));
+    if (actual !== expected) {
+      throw new Error(`${label} source-snapshot input digest mismatch: ${actual}`);
+    }
+  }
+}
+
 function toCamelCase(value) {
   return value.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
 }
@@ -314,7 +335,15 @@ function parseArguments(argv) {
     }
     result[toCamelCase(argument.slice(2))] = resolve(argv[index += 1]);
   }
-  for (const key of ["agentRoot", "zig", "globalCacheDir", "receiptOutput"]) {
+  for (const key of [
+    "agentRoot",
+    "zig",
+    "globalCacheDir",
+    "receiptOutput",
+    "interpretationKernelWasm",
+    "interpretationUnrelatedBpi1",
+    "interpretationUnrelatedMv2p1"
+  ]) {
     if (typeof result[key] !== "string") throw new Error(`missing argument: ${key}`);
   }
   return result;

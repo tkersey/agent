@@ -202,6 +202,8 @@ export async function proveAgentInterpretation(options) {
       world_package_hash: sourceBinding.worldPackageHash,
       kernel_wasm_sha256: options.kernelSha256,
       kernel_import_count: 0,
+      application_wasm_sha256: specialized.applicationWasmSha256,
+      proof_input_digest: inputBinding,
       world_host_runtime_sha256: dependencyBindings.worldHost.sha256,
       world_capabilities_runtime_sha256: dependencyBindings.worldCapabilities.sha256,
       bpi1_sha256: sha256(bpi1),

@@ -70,6 +70,12 @@ try {
         XDG_CACHE_HOME: join(proofRoot, "xdg-cache"),
         ZIG_GLOBAL_CACHE_DIR: globalCacheRoot,
     };
+    const zigVersion = requireZigCompiler(
+        options.zig,
+        proofRoot,
+        globalCacheRoot,
+        baseEnvironment,
+    );
     const archives = join(proofRoot, "archives");
     mkdirSync(archives);
     const boundaryArchive = await acquire("boundary", options.boundaryArchive, options.offline, archives);
@@ -181,6 +187,8 @@ try {
     console.log(`agent_hermetic_world_sha256=${releases.world.sha256}`);
     console.log(`agent_hermetic_agent_commit=${agentSource.head}`);
     console.log(`agent_hermetic_agent_archive_sha256=${agentSource.sha256}`);
+    console.log(`agent_hermetic_zig_version=${zigVersion}`);
+    console.log("agent_hermetic_zig_compiler_witness=true");
     console.log("agent_hermetic_agent_source_snapshot=true");
     console.log(`agent_hermetic_executed_agent_tree_sha256=${executedTrees.agent}`);
     console.log(`agent_hermetic_executed_boundary_tree_sha256=${executedTrees.boundary}`);
@@ -229,6 +237,46 @@ function requireReleaseBuildGraph(kind, root) {
         sha256File(join(root, "build.zig.zon")) !== expected.manifest) {
         throw new Error(`${kind} build graph does not match the authenticated release`);
     }
+}
+
+function requireZigCompiler(zig, root, globalCache, environment) {
+    const version = run(
+        zig,
+        ["version"],
+        root,
+        environment,
+        false,
+    ).stdout.trim();
+    if (version !== "0.16.0") {
+        throw new Error(`hermetic proof requires Zig 0.16.0, found: ${version}`);
+    }
+    const witnessRoot = join(root, "zig-compiler-witness");
+    mkdirSync(witnessRoot);
+    const source = join(witnessRoot, "main.zig");
+    const executable = join(witnessRoot, "zig-compiler-witness");
+    writeFileSync(source, "pub fn main() void {}\n");
+    run(zig, [
+        "build-exe",
+        source,
+        "-OReleaseSafe",
+        `-femit-bin=${executable}`,
+        "--cache-dir",
+        join(witnessRoot, "cache"),
+        "--global-cache-dir",
+        globalCache,
+    ], witnessRoot, environment, false);
+    if (!existsSync(executable) || !lstatSync(executable).isFile() ||
+        lstatSync(executable).size === 0) {
+        throw new Error("hermetic Zig compiler did not emit the witness executable");
+    }
+    run(
+        executable,
+        [],
+        witnessRoot,
+        environment,
+        false,
+    );
+    return version;
 }
 
 function digestExecutedTree(root) {

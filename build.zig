@@ -52,11 +52,20 @@ pub fn build(b: *std.Build) void {
         agent_source_archive_sha256 != null or agent_source_tree != null;
     const complete_source_binding = agent_source_head != null and
         agent_source_archive_sha256 != null and agent_source_tree != null;
+    const any_preverified_boundary_input = interpretation_kernel_wasm_override != null or
+        interpretation_unrelated_bpi1_override != null or
+        interpretation_unrelated_mv2p1_override != null;
+    const complete_preverified_boundary_inputs =
+        interpretation_kernel_wasm_override != null and
+        interpretation_unrelated_bpi1_override != null and
+        interpretation_unrelated_mv2p1_override != null;
     if ((interpretation_source_snapshot and !complete_source_binding) or
-        (!interpretation_source_snapshot and any_source_binding))
+        (!interpretation_source_snapshot and any_source_binding) or
+        (interpretation_source_snapshot and !complete_preverified_boundary_inputs) or
+        (!interpretation_source_snapshot and any_preverified_boundary_input))
     {
         std.process.fatal(
-            "internal interpretation snapshot mode requires the complete Agent source binding",
+            "internal interpretation snapshot mode requires complete source and Boundary input bindings",
             .{},
         );
     }

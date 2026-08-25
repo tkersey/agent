@@ -35,7 +35,18 @@ try {
     const worldArchive = await acquire("world", options.worldArchive, options.offline, archives);
     const boundaryRoot = extractRelease("boundary", boundaryArchive, proofRoot);
     const worldRoot = extractRelease("world", worldArchive, proofRoot);
-    installBoundaryModuleShim(boundaryRoot);
+    const boundaryBuildGraph = Object.freeze({
+        build: sha256File(join(boundaryRoot, "build.zig")),
+        manifest: sha256File(join(boundaryRoot, "build.zig.zon")),
+    });
+    const globalCacheRoot = join(proofRoot, "zig-global-cache");
+    prefetchDependencyTree(
+        options.zig,
+        boundaryRoot,
+        join(proofRoot, "boundary-fetch-cache"),
+        globalCacheRoot,
+    );
+    requireBoundaryBuildGraph(boundaryRoot, boundaryBuildGraph);
     const agentRoot = join(proofRoot, "agent");
     cpSync(sourceRoot, agentRoot, {
         recursive: true,
@@ -62,14 +73,16 @@ try {
         "--cache-dir",
         join(proofRoot, "zig-cache"),
         "--global-cache-dir",
-        join(proofRoot, "zig-global-cache"),
+        globalCacheRoot,
         "--summary",
         "all",
     ], agentRoot, environment);
+    requireBoundaryBuildGraph(boundaryRoot, boundaryBuildGraph);
     console.log("agent_hermetic_boundary_version=1.6.1");
     console.log(`agent_hermetic_boundary_sha256=${releases.boundary.sha256}`);
     console.log("agent_hermetic_world_version=3.1.4");
     console.log(`agent_hermetic_world_sha256=${releases.world.sha256}`);
+    console.log("agent_hermetic_boundary_build_graph_preserved=true");
     console.log("agent_hermetic_network_after_acquisition=false");
     console.log("agent_hermetic_check=pass");
     passed = true;
@@ -92,6 +105,17 @@ async function download(url) {
     const response = await fetch(url, { redirect: "follow" });
     if (!response.ok) throw new Error(`public archive download failed: ${url} HTTP ${response.status}`);
     return Buffer.from(await response.arrayBuffer());
+}
+
+function sha256File(path) {
+    return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function requireBoundaryBuildGraph(root, expected) {
+    if (sha256File(join(root, "build.zig")) !== expected.build ||
+        sha256File(join(root, "build.zig.zon")) !== expected.manifest) {
+        throw new Error("Boundary build graph changed during the hermetic proof");
+    }
 }
 
 function extractRelease(kind, archive, root) {
@@ -136,119 +160,15 @@ function runNetworkIsolated(command, args, cwd, env) {
     );
 }
 
-function installBoundaryModuleShim(root) {
-    const zonPath = join(root, "build.zig.zon");
-    const zon = readFileSync(zonPath, "utf8");
-    const updatedZon = zon.replace(/    \.dependencies = \.\{[\s\S]*?    \},\n    \.minimum_zig_version/, "    .dependencies = .{},\n    .minimum_zig_version");
-    if (updatedZon === zon) throw new Error("Boundary package dependencies were not closed");
-    writeFileSync(zonPath, updatedZon);
-    writeFileSync(join(root, "build.zig"), boundaryModuleShim());
-}
-
-function boundaryModuleShim() {
-    return `const std = @import("std");
-
-const Core = struct {
-    agent_profile: *std.Build.Module,
-    compiler: *std.Build.Module,
-    control_ir: *std.Build.Module,
-    driver: *std.Build.Module,
-    dynamic_value_v1: *std.Build.Module,
-    effect_v2: *std.Build.Module,
-    image_emit_v1: *std.Build.Module,
-    image_v1: *std.Build.Module,
-    kernel_machine_v1: *std.Build.Module,
-    kernel_v1: *std.Build.Module,
-    machine: *std.Build.Module,
-    machine_v2_metering_v1: *std.Build.Module,
-    machine_v2_profile_v1: *std.Build.Module,
-    portable_value: *std.Build.Module,
-    program_semantics_v1: *std.Build.Module,
-    program_v2: *std.Build.Module,
-    reducer_clause_v1: *std.Build.Module,
-    reified_program_v1: *std.Build.Module,
-    rnf: *std.Build.Module,
-};
-
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-    const control_ir = b.createModule(.{ .root_source_file = b.path("src/control_ir.zig"), .target = target, .optimize = optimize });
-    const portable_value = b.createModule(.{ .root_source_file = b.path("src/portable_value.zig"), .target = target, .optimize = optimize });
-    const rnf = b.createModule(.{ .root_source_file = b.path("src/rnf.zig"), .target = target, .optimize = optimize });
-    rnf.addImport("control_ir", control_ir);
-    const dynamic_value_v1 = b.createModule(.{ .root_source_file = b.path("src/dynamic_value_v1.zig"), .target = target, .optimize = optimize });
-    const program_semantics_v1 = b.createModule(.{ .root_source_file = b.path("src/program_semantics_v1.zig"), .target = target, .optimize = optimize });
-    program_semantics_v1.addImport("control_ir", control_ir);
-    program_semantics_v1.addImport("portable_value", portable_value);
-    program_semantics_v1.addImport("rnf", rnf);
-    const image_v1 = b.createModule(.{ .root_source_file = b.path("src/image_v1.zig"), .target = target, .optimize = optimize });
-    image_v1.addImport("dynamic_value_v1", dynamic_value_v1);
-    image_v1.addImport("program_semantics_v1", program_semantics_v1);
-    const reducer_clause_v1 = b.createModule(.{ .root_source_file = b.path("src/reducer_clause_v1.zig"), .target = target, .optimize = optimize });
-    reducer_clause_v1.addImport("dynamic_value_v1", dynamic_value_v1);
-    reducer_clause_v1.addImport("image_v1", image_v1);
-    reducer_clause_v1.addImport("program_semantics_v1", program_semantics_v1);
-    const machine = b.createModule(.{ .root_source_file = b.path("src/machine.zig"), .target = target, .optimize = optimize });
-    machine.addImport("portable_value", portable_value);
-    const machine_v2_metering_v1 = b.createModule(.{ .root_source_file = b.path("src/machine_v2_metering_v1.zig"), .target = target, .optimize = optimize });
-    machine_v2_metering_v1.addImport("control_ir", control_ir);
-    machine_v2_metering_v1.addImport("dynamic_value_v1", dynamic_value_v1);
-    machine_v2_metering_v1.addImport("image_v1", image_v1);
-    machine_v2_metering_v1.addImport("program_semantics_v1", program_semantics_v1);
-    machine_v2_metering_v1.addImport("reducer_clause_v1", reducer_clause_v1);
-    const machine_v2_profile_v1 = b.createModule(.{ .root_source_file = b.path("src/machine_v2_profile_v1.zig"), .target = target, .optimize = optimize });
-    machine_v2_profile_v1.addImport("dynamic_value_v1", dynamic_value_v1);
-    machine_v2_profile_v1.addImport("image_v1", image_v1);
-    machine_v2_profile_v1.addImport("machine_v2_metering_v1", machine_v2_metering_v1);
-    const kernel_v1 = b.createModule(.{ .root_source_file = b.path("src/kernel_v1.zig"), .target = target, .optimize = optimize });
-    kernel_v1.addImport("dynamic_value_v1", dynamic_value_v1);
-    kernel_v1.addImport("image_v1", image_v1);
-    kernel_v1.addImport("machine_v2_metering_v1", machine_v2_metering_v1);
-    kernel_v1.addImport("machine_v2_profile_v1", machine_v2_profile_v1);
-    kernel_v1.addImport("reducer_clause_v1", reducer_clause_v1);
-    const kernel_machine_v1 = b.createModule(.{ .root_source_file = b.path("src/kernel_machine_v1.zig"), .target = target, .optimize = optimize });
-    kernel_machine_v1.addImport("image_v1", image_v1);
-    kernel_machine_v1.addImport("kernel_v1", kernel_v1);
-    kernel_machine_v1.addImport("machine", machine);
-    kernel_machine_v1.addImport("portable_value", portable_value);
-    const image_emit_v1 = b.createModule(.{ .root_source_file = b.path("src/image_emit_v1.zig"), .target = target, .optimize = optimize });
-    image_emit_v1.addImport("dynamic_value_v1", dynamic_value_v1);
-    image_emit_v1.addImport("image_v1", image_v1);
-    image_emit_v1.addImport("portable_value", portable_value);
-    image_emit_v1.addImport("program_semantics_v1", program_semantics_v1);
-    const reified_program_v1 = b.createModule(.{ .root_source_file = b.path("src/reified_program_v1.zig"), .target = target, .optimize = optimize });
-    const compiler = b.createModule(.{ .root_source_file = b.path("src/compiler.zig"), .target = target, .optimize = optimize });
-    compiler.addImport("control_ir", control_ir);
-    compiler.addImport("machine", machine);
-    compiler.addImport("machine_v2_metering_v1", machine_v2_metering_v1);
-    compiler.addImport("machine_v2_profile_v1", machine_v2_profile_v1);
-    compiler.addImport("portable_value", portable_value);
-    compiler.addImport("reified_program_v1", reified_program_v1);
-    compiler.addImport("program_semantics_v1", program_semantics_v1);
-    compiler.addImport("rnf", rnf);
-    const program_v2 = b.createModule(.{ .root_source_file = b.path("src/program_v2.zig"), .target = target, .optimize = optimize });
-    program_v2.addImport("compiler", compiler);
-    program_v2.addImport("image_emit_v1", image_emit_v1);
-    program_v2.addImport("kernel_machine_v1", kernel_machine_v1);
-    program_v2.addImport("machine", machine);
-    program_v2.addImport("machine_v2_profile_v1", machine_v2_profile_v1);
-    const driver = b.createModule(.{ .root_source_file = b.path("src/driver.zig"), .target = target, .optimize = optimize });
-    const effect_v2 = b.createModule(.{ .root_source_file = b.path("src/effect_v2.zig"), .target = target, .optimize = optimize });
-    const agent_profile = b.createModule(.{ .root_source_file = b.path("src/agent_profile.zig"), .target = target, .optimize = optimize });
-    agent_profile.addImport("program_v2", program_v2);
-    const boundary = b.addModule("boundary", .{ .root_source_file = b.path("src/root.zig"), .target = target, .optimize = optimize });
-    boundary.addImport("agent_profile", agent_profile);
-    boundary.addImport("control_ir", control_ir);
-    boundary.addImport("driver", driver);
-    boundary.addImport("effect_v2", effect_v2);
-    boundary.addImport("image_v1", image_v1);
-    boundary.addImport("kernel_v1", kernel_v1);
-    boundary.addImport("machine", machine);
-    boundary.addImport("portable_value", portable_value);
-    boundary.addImport("program_v2", program_v2);
-}
-`;
+function prefetchDependencyTree(zig, root, cacheRoot, globalCacheRoot) {
+    run(zig, [
+        "build",
+        "--fetch",
+        "--cache-dir",
+        cacheRoot,
+        "--global-cache-dir",
+        globalCacheRoot,
+    ], root, process.env);
 }
 
 function parseArgs(argv) {

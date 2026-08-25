@@ -223,7 +223,10 @@ try {
         makeTreeWritable(proofRoot);
         rmSync(proofRoot, { recursive: true, force: true });
     }
-    else console.error(`agent_hermetic_proof_root=${proofRoot}`);
+    else {
+        makeTreeWritable(proofRoot);
+        console.error(`agent_hermetic_proof_root=${proofRoot}`);
+    }
 }
 
 async function acquire(kind, override, offline, archiveRoot) {

@@ -273,7 +273,10 @@ try {
       retryDelay: 50
     });
   }
-  else process.stderr.write(`agent_source_snapshot_root=${proofRoot}\n`);
+  else {
+    makeWritable(proofRoot);
+    process.stderr.write(`agent_source_snapshot_root=${proofRoot}\n`);
+  }
 }
 
 function bindSource(root, gitExecutable, environment) {

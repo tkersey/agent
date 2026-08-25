@@ -526,14 +526,6 @@ pub fn build(b: *std.Build) void {
             snapshot_proof.addArg("--world-archive");
             snapshot_proof.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
         }
-        if (world_host_archive) |path| {
-            snapshot_proof.addArg("--world-host-archive");
-            snapshot_proof.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
-        }
-        if (world_capabilities_archive) |path| {
-            snapshot_proof.addArg("--world-capabilities-archive");
-            snapshot_proof.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
-        }
         snapshot_proof.addArg("--world-host-root");
         snapshot_proof.addDirectoryArg(
             interpretation_runtime.path(b, "world-host"),

@@ -34,30 +34,30 @@ const releases = Object.freeze({
     boundary: Object.freeze({
         url: options.agentV1Release
             ? "https://github.com/tkersey/boundary/archive/refs/tags/v1.3.2.tar.gz"
-            : "https://github.com/tkersey/boundary/archive/8998d1bd12df65de2e7280d76197ce05e0deefc4.tar.gz",
+            : "https://github.com/tkersey/boundary/archive/4788bc152d2b0213e9c5c4e6544df1231e4b034d.tar.gz",
         sha256: options.agentV1Release
             ? "d33a682f92033fa287169e4bc42c5e96f891cf1fe307381efc6983361de3fe0d"
-            : "625b93fc6b650591029260eb718f9d8ce4deee75a691a88c03f4ee5abcd64fa8",
+            : "b4036e1eceb3c18a237cbf9d48ee023a39d5217665265e380a665296b9599948",
         packageHash: options.agentV1Release
             ? "boundary-1.3.2-flclaAI0EQBXh0WrWcNTh-CwL-m0RLPbRX8RBRxP9E95"
-            : "boundary-1.6.1-flclaPInHgBIqGD7uxEKhtaVdQOPRbAmLlh44QU3QZ6l",
+            : "boundary-1.6.1-flclaE0pHgC1I33KEuEcfwmoMEidT7fLonNkdqBIlfwf",
         root: options.agentV1Release
             ? "boundary-1.3.2"
-            : "boundary-8998d1bd12df65de2e7280d76197ce05e0deefc4",
+            : "boundary-4788bc152d2b0213e9c5c4e6544df1231e4b034d",
     }),
     world: Object.freeze({
         url: options.agentV1Release
             ? "https://github.com/tkersey/world/archive/refs/tags/v3.1.1.tar.gz"
-            : "https://github.com/tkersey/world/archive/35b809bedd05daf6e874e4c799218895ba119c18.tar.gz",
+            : "https://github.com/tkersey/world/archive/5d8fad6e76863312c19a5ba6988bf6307f29a783.tar.gz",
         sha256: options.agentV1Release
             ? "ebde48f0bc037678e79051e3f8c3cde2fa1964df0b14ff53ed9cef94ccb1f63c"
-            : "ec8fad1609f242d1f575cff411f3fb25c596cc10caa2dd88cd23ec6576563ff0",
+            : "7af0a97d5751bda62fc745855785ce9407bc5d556fd9054a32fbd2b609298057",
         packageHash: options.agentV1Release
             ? "world-3.1.1-XXTUeKXGBgAZhWa2YvUU9Sj4GE-E53Km85AcgecObJV6"
-            : "world-3.1.4-XXTUeO3GBgBXM2QC6Ky_n_seqlA5MariCfcD3L19Y_EP",
+            : "world-3.1.4-XXTUeO3GBgD8JA4s-vElnLKVnT11p5mv6MS0eV5nk-Fd",
         root: options.agentV1Release
             ? "world-3.1.1"
-            : "world-35b809bedd05daf6e874e4c799218895ba119c18",
+            : "world-5d8fad6e76863312c19a5ba6988bf6307f29a783",
     }),
 });
 

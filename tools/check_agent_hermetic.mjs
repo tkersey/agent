@@ -11,15 +11,15 @@ import { inspectTarGz } from "./reference_stack.mjs";
 const releases = Object.freeze({
     boundary: Object.freeze({
         version: "1.6.1",
-        root: "boundary-8998d1bd12df65de2e7280d76197ce05e0deefc4",
-        url: "https://github.com/tkersey/boundary/archive/8998d1bd12df65de2e7280d76197ce05e0deefc4.tar.gz",
-        sha256: "625b93fc6b650591029260eb718f9d8ce4deee75a691a88c03f4ee5abcd64fa8",
+        root: "boundary-4788bc152d2b0213e9c5c4e6544df1231e4b034d",
+        url: "https://github.com/tkersey/boundary/archive/4788bc152d2b0213e9c5c4e6544df1231e4b034d.tar.gz",
+        sha256: "b4036e1eceb3c18a237cbf9d48ee023a39d5217665265e380a665296b9599948",
     }),
     world: Object.freeze({
         version: "3.1.4",
-        root: "world-35b809bedd05daf6e874e4c799218895ba119c18",
-        url: "https://github.com/tkersey/world/archive/35b809bedd05daf6e874e4c799218895ba119c18.tar.gz",
-        sha256: "ec8fad1609f242d1f575cff411f3fb25c596cc10caa2dd88cd23ec6576563ff0",
+        root: "world-5d8fad6e76863312c19a5ba6988bf6307f29a783",
+        url: "https://github.com/tkersey/world/archive/5d8fad6e76863312c19a5ba6988bf6307f29a783.tar.gz",
+        sha256: "7af0a97d5751bda62fc745855785ce9407bc5d556fd9054a32fbd2b609298057",
     }),
 });
 

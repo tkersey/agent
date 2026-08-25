@@ -15,7 +15,12 @@ if (![zigExecutable, boundaryRootArgument, overrideArgument, kernelOutput, image
 const boundaryRoot = resolve(boundaryRootArgument);
 const temporary = await mkdtemp(join(tmpdir(), "agent-boundary-assets-"));
 try {
-  const result = spawnSync(resolve(zigExecutable), ["build", "emit-boundary-kernel-assets", "--prefix", temporary, "--summary", "all"], {
+  const selectedOverride = overrideArgument === "-" ? null : resolve(overrideArgument);
+  if (selectedOverride !== null) verifyKernel(await readFile(selectedOverride), "selected");
+  const buildStep = selectedOverride === null
+    ? "emit-boundary-kernel-assets"
+    : "emit-boundary-unrelated-pair";
+  const result = spawnSync(resolve(zigExecutable), ["build", buildStep, "--prefix", temporary, "--summary", "all"], {
     cwd: boundaryRoot,
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
@@ -23,10 +28,8 @@ try {
   });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`boundary_asset_build_failed:${result.status}:${result.stderr}`);
-  const rebuiltKernel = join(temporary, "boundary-machine-v2-kernel-v1.wasm");
-  verifyKernel(await readFile(rebuiltKernel), "rebuilt");
-  const selectedKernel = overrideArgument === "-" ? rebuiltKernel : resolve(overrideArgument);
-  verifyKernel(await readFile(selectedKernel), "selected");
+  const selectedKernel = selectedOverride ?? join(temporary, "boundary-machine-v2-kernel-v1.wasm");
+  if (selectedOverride === null) verifyKernel(await readFile(selectedKernel), "rebuilt");
   const unrelatedBpi1 = join(temporary, "one-effect.boundary-program-image");
   const unrelatedMv2p1 = join(temporary, "one-effect.machine-v2-profile");
   verifyDigest(await readFile(unrelatedBpi1), EXPECTED_UNRELATED_BPI1_SHA256, "unrelated_bpi1");

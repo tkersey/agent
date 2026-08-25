@@ -40,11 +40,41 @@ try {
         manifest: sha256File(join(boundaryRoot, "build.zig.zon")),
     });
     const globalCacheRoot = join(proofRoot, "zig-global-cache");
+    const hermeticHome = join(proofRoot, "home");
+    mkdirSync(hermeticHome);
+    const baseEnvironment = {
+        HOME: hermeticHome,
+        LANG: "C",
+        LC_ALL: "C",
+        LOGNAME: process.env.LOGNAME ?? "agent-hermetic",
+        NO_COLOR: "1",
+        PATH: `${dirname(options.zig)}:${process.env.PATH ?? ""}`,
+        SHELL: "/bin/sh",
+        TERM: "dumb",
+        TMPDIR: process.env.TMPDIR ?? tmpdir(),
+        USER: process.env.USER ?? "agent-hermetic",
+        XDG_CACHE_HOME: join(proofRoot, "xdg-cache"),
+        ZIG_GLOBAL_CACHE_DIR: globalCacheRoot,
+    };
+    const acquisitionEnvironment = { ...baseEnvironment };
+    for (const name of [
+        "ALL_PROXY",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
+        "SSL_CERT_DIR",
+        "SSL_CERT_FILE",
+    ]) {
+        if (process.env[name] !== undefined) {
+            acquisitionEnvironment[name] = process.env[name];
+        }
+    }
     prefetchDependencyTree(
         options.zig,
         boundaryRoot,
         join(proofRoot, "boundary-fetch-cache"),
         globalCacheRoot,
+        acquisitionEnvironment,
     );
     requireBoundaryBuildGraph(boundaryRoot, boundaryBuildGraph);
     const agentRoot = join(proofRoot, "agent");
@@ -56,24 +86,18 @@ try {
     replaceDependency(join(agentRoot, "build.zig.zon"), "world", '../world');
     replaceDependency(join(worldRoot, "build.zig.zon"), "boundary", '../boundary');
 
-    const hermeticHome = join(proofRoot, "home");
-    mkdirSync(hermeticHome);
     const environment = {
-        ...process.env,
+        ...baseEnvironment,
         AGENT_HERMETIC: "1",
         AGENT_ZIG_EXE: options.zig,
         AGENT_BOUNDARY_ROOT: boundaryRoot,
         AGENT_WORLD_ROOT: worldRoot,
-        HOME: hermeticHome,
-        PATH: `${dirname(options.zig)}:${process.env.PATH ?? ""}`,
-        XDG_CACHE_HOME: join(proofRoot, "xdg-cache"),
-        ZIG_GLOBAL_CACHE_DIR: globalCacheRoot,
         HTTP_PROXY: "http://127.0.0.1:1",
         HTTPS_PROXY: "http://127.0.0.1:1",
         ALL_PROXY: "http://127.0.0.1:1",
         NO_PROXY: "",
     };
-    for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "OPENAI_API_KEY"]) delete environment[name];
+    requireNoAmbientZigOverrides(environment);
     runNetworkIsolated(options.zig, [
         "build",
         "check-agent-semantic",
@@ -95,6 +119,7 @@ try {
     console.log(`agent_hermetic_world_sha256=${releases.world.sha256}`);
     console.log("agent_hermetic_boundary_build_graph_preserved=true");
     console.log("agent_hermetic_ambient_zig_cache_absent=true");
+    console.log("agent_hermetic_ambient_zig_overrides_absent=true");
     console.log("agent_hermetic_network_after_acquisition=false");
     console.log("agent_hermetic_check=pass");
     passed = true;
@@ -172,7 +197,16 @@ function runNetworkIsolated(command, args, cwd, env) {
     );
 }
 
-function prefetchDependencyTree(zig, root, cacheRoot, globalCacheRoot) {
+function requireNoAmbientZigOverrides(environment) {
+    const unexpected = Object.keys(environment).filter(
+        (name) => name.startsWith("ZIG_") && name !== "ZIG_GLOBAL_CACHE_DIR",
+    );
+    if (unexpected.length !== 0) {
+        throw new Error(`hermetic proof admitted Zig environment overrides: ${unexpected.join(",")}`);
+    }
+}
+
+function prefetchDependencyTree(zig, root, cacheRoot, globalCacheRoot, environment) {
     run(zig, [
         "build",
         "--fetch",
@@ -180,7 +214,7 @@ function prefetchDependencyTree(zig, root, cacheRoot, globalCacheRoot) {
         cacheRoot,
         "--global-cache-dir",
         globalCacheRoot,
-    ], root, process.env);
+    ], root, environment);
 }
 
 function parseArgs(argv) {

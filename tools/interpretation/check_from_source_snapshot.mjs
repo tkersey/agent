@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 
 import { inspectTarGz } from "../reference_stack.mjs";
+import { admitZigBinarySha256 } from "../zig_binary_identity.mjs";
 
 const EXPECTED_KERNEL_SHA256 =
   "12973fb655f126c2acd5693a84be47496649d1ab10bf22d565c9b675172e4f27";
@@ -25,12 +26,10 @@ const EXPECTED_UNRELATED_BPI1_SHA256 =
   "6564f37639bfd4cf33491582e71b4f6602f865ea619b9616627080d86f805f0e";
 const EXPECTED_UNRELATED_MV2P1_SHA256 =
   "08ad3c629f819e580c6bec364db9c88ad578f66e24a2cbb1e3c5424987fa7ec5";
-const EXPECTED_ZIG_SHA256 =
-  "71cc3995a7586753ebf82c66dfb8bef43df446517550678781834586a960f8c9";
 const EXPECTED_APPLICATION_WASM_SHA256 =
   "8f60b66adad465fbbe01ad4511c765c0e0e31929fea7717de1fa862ceff1d491";
 const EXPECTED_PROOF_INPUT_DIGEST =
-  "d3785aec7a3c853ee50f2b7ee2024b5d3aca9f9c12bd90e4a0f8115e86e51df4";
+  "7862169c6ecfcd7099550ae3cdbadaf3a685149961ab15d023aeef3f5bac04e9";
 const EXPECTED_BPI1_SHA256 =
   "7440076a8078220d9d4000b871423d981bbbee19aedba499afaa4a86239fe6a6";
 const EXPECTED_MV2P1_SHA256 =
@@ -426,10 +425,7 @@ function sha256(bytes) {
 }
 
 function requireZigBinary(zig) {
-  const actual = sha256(readFileSync(zig));
-  if (actual !== EXPECTED_ZIG_SHA256) {
-    throw new Error(`source-snapshot Zig binary digest mismatch: ${actual}`);
-  }
+  admitZigBinarySha256(sha256(readFileSync(zig)));
 }
 
 function requireCanonicalInnerReceipt(receipt) {

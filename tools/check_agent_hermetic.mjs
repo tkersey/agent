@@ -18,10 +18,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { inspectTarGz } from "./reference_stack.mjs";
-
-const EXPECTED_ZIG_VERSION = "0.16.0";
-const EXPECTED_ZIG_SHA256 =
-    "71cc3995a7586753ebf82c66dfb8bef43df446517550678781834586a960f8c9";
+import { admitZigBinarySha256, EXPECTED_ZIG_VERSION } from "./zig_binary_identity.mjs";
 
 const releases = Object.freeze({
     boundary: Object.freeze({
@@ -74,7 +71,7 @@ try {
         XDG_CACHE_HOME: join(proofRoot, "xdg-cache"),
         ZIG_GLOBAL_CACHE_DIR: globalCacheRoot,
     };
-    const zigVersion = requireZigCompiler(
+    const zigCompiler = requireZigCompiler(
         options.zig,
         proofRoot,
         globalCacheRoot,
@@ -192,8 +189,8 @@ try {
     console.log(`agent_hermetic_world_sha256=${releases.world.sha256}`);
     console.log(`agent_hermetic_agent_commit=${agentSource.head}`);
     console.log(`agent_hermetic_agent_archive_sha256=${agentSource.sha256}`);
-    console.log(`agent_hermetic_zig_version=${zigVersion}`);
-    console.log(`agent_hermetic_zig_sha256=${EXPECTED_ZIG_SHA256}`);
+    console.log(`agent_hermetic_zig_version=${zigCompiler.version}`);
+    console.log(`agent_hermetic_zig_sha256=${zigCompiler.sha256}`);
     console.log("agent_hermetic_zig_compiler_witness=true");
     console.log("agent_hermetic_agent_source_snapshot=true");
     console.log(`agent_hermetic_executed_agent_tree_sha256=${executedTrees.agent}`);
@@ -247,9 +244,7 @@ function requireReleaseBuildGraph(kind, root) {
 
 function requireZigCompiler(zig, root, globalCache, environment) {
     const digest = sha256File(zig);
-    if (digest !== EXPECTED_ZIG_SHA256) {
-        throw new Error(`hermetic Zig binary digest mismatch: ${digest}`);
-    }
+    admitZigBinarySha256(digest);
     const version = run(
         zig,
         ["version"],
@@ -286,7 +281,7 @@ function requireZigCompiler(zig, root, globalCache, environment) {
         environment,
         false,
     );
-    return version;
+    return Object.freeze({ version, sha256: digest });
 }
 
 function requireHermeticBuildTranscript(result) {

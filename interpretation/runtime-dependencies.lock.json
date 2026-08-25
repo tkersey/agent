@@ -29,9 +29,9 @@
       "packages/repository-workspace-actuality"
     ],
     "defaultArchive": {
-      "url": "https://github.com/tkersey/world-capabilities/archive/ccd06a2a1cff780f63205637c46c704c1dfd8227.tar.gz",
-      "sha256": "37daa93195e28fff4df1f0dba1266e020d276366dce5aeb0e45298ace216247f",
-      "root": "world-capabilities-ccd06a2a1cff780f63205637c46c704c1dfd8227"
+      "url": "https://github.com/tkersey/world-capabilities/archive/29a76f9d8a7fb9634b44d3d19fdaadf4210fd933.tar.gz",
+      "sha256": "c6f08971be44d56e4d7a116801b48e83c75f2aaca7b7cde5715dc6e03f9f3d5a",
+      "root": "world-capabilities-29a76f9d8a7fb9634b44d3d19fdaadf4210fd933"
     },
     "overrideArchives": []
   }

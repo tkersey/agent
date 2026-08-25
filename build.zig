@@ -737,6 +737,18 @@ pub fn build(b: *std.Build) void {
     reference_stack_lock.dependOn(&reference_stack_test_command.step);
     semantic_check.dependOn(reference_stack_lock);
 
+    const zig_binary_identity_test_command = b.addSystemCommand(&.{
+        "bun",
+        "test",
+        "./test/zig_binary_identity.test.mjs",
+    });
+    const zig_binary_identity = b.step(
+        "check-agent-zig-binary-identity",
+        "Authenticate the exact Zig 0.16.0 binary on every supported proof host",
+    );
+    zig_binary_identity.dependOn(&zig_binary_identity_test_command.step);
+    semantic_check.dependOn(zig_binary_identity);
+
     const format_check = b.addSystemCommand(&.{
         b.graph.zig_exe,
         "fmt",

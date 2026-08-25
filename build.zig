@@ -288,7 +288,11 @@ pub fn build(b: *std.Build) void {
     );
     acquire_boundary_assets.addArg(b.graph.zig_exe);
     acquire_boundary_assets.addDirectoryArg(boundary_dependency.path("."));
-    acquire_boundary_assets.addArg(boundary_kernel_wasm orelse "-");
+    if (boundary_kernel_wasm) |path| {
+        acquire_boundary_assets.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
+    } else {
+        acquire_boundary_assets.addArg("-");
+    }
     const interpretation_kernel_wasm = acquire_boundary_assets.addOutputFileArg(
         "boundary-machine-v2-kernel-v1.wasm",
     );
@@ -379,6 +383,9 @@ pub fn build(b: *std.Build) void {
     }
 
     const acquire_interpretation_runtime = b.addSystemCommand(&.{"bun"});
+    if (world_host_root != null or world_capabilities_root != null) {
+        acquire_interpretation_runtime.has_side_effects = true;
+    }
     acquire_interpretation_runtime.addFileArg(
         b.path("tools/interpretation/acquire_runtime_dependencies.mjs"),
     );
@@ -387,10 +394,12 @@ pub fn build(b: *std.Build) void {
         b.path("interpretation/runtime-dependencies.lock.json"),
     );
     if (world_host_root) |path| {
-        acquire_interpretation_runtime.addArgs(&.{ "--world-host-root", b.pathFromRoot(path) });
+        acquire_interpretation_runtime.addArg("--world-host-root");
+        acquire_interpretation_runtime.addDirectoryArg(.{ .cwd_relative = b.pathFromRoot(path) });
     }
     if (world_capabilities_root) |path| {
-        acquire_interpretation_runtime.addArgs(&.{ "--world-capabilities-root", b.pathFromRoot(path) });
+        acquire_interpretation_runtime.addArg("--world-capabilities-root");
+        acquire_interpretation_runtime.addDirectoryArg(.{ .cwd_relative = b.pathFromRoot(path) });
     }
     if (world_host_archive) |path| {
         acquire_interpretation_runtime.addArg("--world-host-archive");

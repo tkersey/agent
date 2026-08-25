@@ -14,10 +14,14 @@ describe("public reference stack lock", () => {
         expect(() => archiveEntrySize("not a tar inventory")).toThrow();
     });
 
-    test("binds exact stable public release URLs and checksums", () => {
+    test("binds exact public artifact provenance and checksums", () => {
         const lock = readReferenceStackLock(lockPath);
         expect(lock.worldHost.version).toBe("1.0.1");
         expect(lock.worldCapabilities.version).toBe("2.3.3");
+        expect(lock.worldHost.provenance).toBe("release");
+        expect(lock.worldCapabilities.provenance).toBe("source-build");
+        expect(lock.worldCapabilities.sha256).toBe("db047e63a18bf05b8258e65c7f0a503f47a191fe5e8790e9503f6bb056129f38");
+        expect(lock.worldCapabilities.distributionSha256).toBe("f24b1aa82d54a9a0144dab980b3ef72b9bbd7bad13ed64cb1d85bd7c8e39379a");
         expect(lock.worldHost.url).not.toContain("/releases/assets/");
         expect(lock.worldCapabilities.url).not.toContain("/releases/assets/");
     });

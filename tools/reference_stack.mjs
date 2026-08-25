@@ -9,6 +9,7 @@ const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
 const MAX_EXPANDED_BYTES = 256 * 1024 * 1024;
 const MAX_ENTRIES = 10_000;
 const ALLOWED_FINAL_HOSTS = new Set([
+    "codeload.github.com",
     "github.com",
     "release-assets.githubusercontent.com",
     "objects.githubusercontent.com",
@@ -17,13 +18,21 @@ const ALLOWED_FINAL_HOSTS = new Set([
 const KINDS = Object.freeze({
     worldHost: Object.freeze({
         repository: "tkersey/world-host",
-        root: (version) => `world-host-v${version}-runtime`,
-        required: Object.freeze(["LICENSE", "bin/world-host-v1.mjs", "src/v1/index.mjs"]),
+        root: (entry) => `world-host-v${entry.version}-runtime`,
+        required: () => Object.freeze(["LICENSE", "bin/world-host-v1.mjs", "src/v1/index.mjs"]),
     }),
     worldCapabilities: Object.freeze({
         repository: "tkersey/world-capabilities",
-        root: (version) => `world-capabilities-v${version}-deterministic`,
-        required: Object.freeze(["LICENSE", "src/v1/index.mjs", "packages/repository-repair-decision-fixture/manifest.json"]),
+        root: (entry) => entry.archiveRoot ?? `world-capabilities-v${entry.version}-deterministic`,
+        required: (entry) => entry.provenance === "source-build"
+            ? Object.freeze([
+                "LICENSE",
+                "package.json",
+                "scripts/build-public-deterministic-v1.mjs",
+                "src/v1/index.mjs",
+                "packages/repository-repair-decision-fixture/manifest.json",
+            ])
+            : Object.freeze(["LICENSE", "src/v1/index.mjs", "packages/repository-repair-decision-fixture/manifest.json"]),
     }),
 });
 
@@ -36,9 +45,20 @@ export function readReferenceStackLock(path) {
         if (!entry || entry.repository !== expected.repository) throw new Error(`${kind} repository mismatch`);
         if (!/^\d+\.\d+\.\d+$/.test(entry.version)) throw new Error(`${kind} version is not canonical`);
         if (!/^[0-9a-f]{64}$/.test(entry.sha256)) throw new Error(`${kind} checksum is not canonical SHA-256`);
-        const wanted = `https://github.com/${entry.repository}/releases/download/v${entry.version}/`;
+        const provenance = entry.provenance ?? "release";
         const url = validatedHttpsUrl(entry.url, `${kind} URL`);
-        if (!url.href.startsWith(wanted) || basename(url.pathname) === "") throw new Error(`${kind} version/URL mismatch`);
+        if (provenance === "release") {
+            const wanted = `https://github.com/${entry.repository}/releases/download/v${entry.version}/`;
+            if (!url.href.startsWith(wanted) || basename(url.pathname) === "") throw new Error(`${kind} version/URL mismatch`);
+        } else if (kind === "worldCapabilities" && provenance === "source-build") {
+            const match = url.href.match(/^https:\/\/github\.com\/tkersey\/world-capabilities\/archive\/([0-9a-f]{40})\.tar\.gz$/);
+            if (match === null || entry.archiveRoot !== `world-capabilities-${match[1]}` ||
+                !/^[0-9a-f]{64}$/.test(entry.distributionSha256 ?? "")) {
+                throw new Error(`${kind} source-build identity mismatch`);
+            }
+        } else {
+            throw new Error(`${kind} provenance is unsupported`);
+        }
         if (seen.has(url.href)) throw new Error("reference stack lock contains a duplicate asset");
         seen.add(url.href);
     }
@@ -78,9 +98,9 @@ export function materializeReferenceArtifact(kind, artifact, archiveRoot, extrac
     mkdirSync(extractionRoot, { recursive: true });
     const archivePath = join(archiveRoot, basename(new URL(artifact.entry.url).pathname));
     writeFileSync(archivePath, artifact.bytes, { flag: "wx" });
-    const expectedRoot = expected.root(artifact.entry.version);
+    const expectedRoot = expected.root(artifact.entry);
     const inventory = inspectTarGz(archivePath, expectedRoot);
-    for (const relative of expected.required) {
+    for (const relative of expected.required(artifact.entry)) {
         if (!inventory.paths.has(`${expectedRoot}/${relative}`)) throw new Error(`${kind} archive is missing ${relative}`);
     }
     run("tar", ["-xzf", archivePath, "-C", extractionRoot]);

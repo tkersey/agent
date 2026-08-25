@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -28,12 +29,18 @@ try {
     });
     const archives = join(proofRoot, "archives");
     const host = materializeReferenceArtifact("worldHost", acquired.worldHost, archives, join(proofRoot, "host-extracted"));
-    const capabilities = materializeReferenceArtifact(
+    const capabilitiesSource = materializeReferenceArtifact(
         "worldCapabilities",
         acquired.worldCapabilities,
         archives,
-        join(proofRoot, "capabilities-extracted"),
+        join(proofRoot, "capabilities-source-extracted"),
     );
+    const capabilities = acquired.worldCapabilities.entry.provenance === "source-build"
+        ? buildCapabilitiesDistribution(acquired.worldCapabilities, capabilitiesSource, archives, proofRoot)
+        : capabilitiesSource;
+    const capabilitiesArchiveSha256 = acquired.worldCapabilities.entry.provenance === "source-build"
+        ? acquired.worldCapabilities.entry.distributionSha256
+        : acquired.worldCapabilities.entry.sha256;
     const runtimeRoot = join(proofRoot, "runtime");
     const runtimeHost = join(runtimeRoot, "world-host");
     const runtimeCapabilities = join(runtimeRoot, "world-capabilities");
@@ -50,7 +57,7 @@ try {
     assert(zigProbe.error?.code === "ENOENT", "Zig unexpectedly resolves from runtime PATH");
 
     run(process.execPath, [join(host.root, "conformance/check-runtime.mjs"), "--root", host.root], host.root, runtimeEnvironment);
-    const capabilityChecksum = `${acquired.worldCapabilities.entry.sha256}  ${basename(capabilities.archivePath)}\n`;
+    const capabilityChecksum = `${capabilitiesArchiveSha256}  ${basename(capabilities.archivePath)}\n`;
     const capabilitySidecar = `${capabilities.archivePath}.sha256`;
     writeFileSync(capabilitySidecar, capabilityChecksum);
     const conformanceBin = join(proofRoot, "conformance-bin");
@@ -100,7 +107,8 @@ try {
         writeFileSync(options.receiptPath, `${JSON.stringify({
             format: "agent-reference-stack-receipt-v1",
             worldHostArchiveSha256: acquired.worldHost.entry.sha256,
-            worldCapabilitiesArchiveSha256: acquired.worldCapabilities.entry.sha256,
+            worldCapabilitiesArchiveSha256: capabilitiesArchiveSha256,
+            worldCapabilitiesSourceArchiveSha256: acquired.worldCapabilities.entry.sha256,
             deterministic: receipts.deterministic,
             retry: receipts.retry,
             replay: receipts.replay,
@@ -111,8 +119,14 @@ try {
 
     for (const [kind, artifact] of Object.entries(acquired)) {
         console.log(`${snake(kind)}_version=${artifact.entry.version}`);
-        console.log(`${snake(kind)}_archive_sha256=${artifact.entry.sha256}`);
-        console.log(`${snake(kind)}_artifact_source=${artifact.source}`);
+        if (kind === "worldCapabilities" && artifact.entry.provenance === "source-build") {
+            console.log(`world_capabilities_source_archive_sha256=${artifact.entry.sha256}`);
+            console.log(`world_capabilities_archive_sha256=${capabilitiesArchiveSha256}`);
+            console.log("world_capabilities_artifact_source=source-built");
+        } else {
+            console.log(`${snake(kind)}_archive_sha256=${artifact.entry.sha256}`);
+            console.log(`${snake(kind)}_artifact_source=${artifact.source}`);
+        }
         if (artifact.resolvedUrl !== null) console.log(`${snake(kind)}_resolved_url=${redactedUrl(artifact.resolvedUrl)}`);
     }
     console.log("github_authentication_required=false");
@@ -131,6 +145,40 @@ try {
 } finally {
     if (passed) rmSync(proofRoot, { recursive: true, force: true });
     else console.error(`agent_reference_stack_proof_root=${proofRoot}`);
+}
+
+function buildCapabilitiesDistribution(acquired, source, archives, proofRoot) {
+    const environment = {
+        ...process.env,
+        HOME: join(proofRoot, "capabilities-build-home"),
+        PATH: "/usr/bin:/bin",
+    };
+    mkdirSync(environment.HOME);
+    for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "OPENAI_API_KEY", "BUN_OPTIONS", "NODE_OPTIONS"]) {
+        delete environment[name];
+    }
+    run(process.execPath, [
+        join(source.root, "scripts/build-public-deterministic-v1.mjs"),
+    ], source.root, environment);
+    const archivePath = join(
+        source.root,
+        "zig-out/public-deterministic",
+        `world-capabilities-v${acquired.entry.version}-deterministic.tar.gz`,
+    );
+    const bytes = readFileSync(archivePath);
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    assert.equal(digest, acquired.entry.distributionSha256, "built capability distribution digest mismatch");
+    return materializeReferenceArtifact("worldCapabilities", {
+        entry: {
+            repository: acquired.entry.repository,
+            version: acquired.entry.version,
+            url: `https://github.com/tkersey/world-capabilities/releases/download/v${acquired.entry.version}/world-capabilities-v${acquired.entry.version}-deterministic.tar.gz`,
+            sha256: digest,
+        },
+        bytes,
+        resolvedUrl: null,
+        source: "source-built",
+    }, archives, join(proofRoot, "capabilities-extracted"));
 }
 
 function copyRuntime(source, destination, entries) {

@@ -24,7 +24,16 @@ if [ -n "${AGENT_WORLD_ROOT:-}" ]; then
     cp -R "$AGENT_WORLD_ROOT" "$clean_root/world"
 fi
 cd "$clean_root/consumer"
-zig build check --summary all
+if [ "${AGENT_HERMETIC:-}" = 1 ]; then
+    test -n "${AGENT_ZIG_EXE:-}"
+    test -x "$AGENT_ZIG_EXE"
+    test -n "${ZIG_GLOBAL_CACHE_DIR:-}"
+    "$AGENT_ZIG_EXE" build check \
+        --global-cache-dir "$ZIG_GLOBAL_CACHE_DIR" \
+        --summary all
+else
+    zig build check --summary all
+fi
 
 printf '%s\n' \
     'clean_room_agent_definition=true' \

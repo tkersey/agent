@@ -56,10 +56,18 @@ try {
     replaceDependency(join(agentRoot, "build.zig.zon"), "world", '../world');
     replaceDependency(join(worldRoot, "build.zig.zon"), "boundary", '../boundary');
 
+    const hermeticHome = join(proofRoot, "home");
+    mkdirSync(hermeticHome);
     const environment = {
         ...process.env,
+        AGENT_HERMETIC: "1",
+        AGENT_ZIG_EXE: options.zig,
         AGENT_BOUNDARY_ROOT: boundaryRoot,
         AGENT_WORLD_ROOT: worldRoot,
+        HOME: hermeticHome,
+        PATH: `${dirname(options.zig)}:${process.env.PATH ?? ""}`,
+        XDG_CACHE_HOME: join(proofRoot, "xdg-cache"),
+        ZIG_GLOBAL_CACHE_DIR: globalCacheRoot,
         HTTP_PROXY: "http://127.0.0.1:1",
         HTTPS_PROXY: "http://127.0.0.1:1",
         ALL_PROXY: "http://127.0.0.1:1",
@@ -78,11 +86,15 @@ try {
         "all",
     ], agentRoot, environment);
     requireBoundaryBuildGraph(boundaryRoot, boundaryBuildGraph);
+    if (existsSync(join(hermeticHome, ".cache", "zig"))) {
+        throw new Error("hermetic proof escaped into the temporary HOME Zig cache");
+    }
     console.log("agent_hermetic_boundary_version=1.6.1");
     console.log(`agent_hermetic_boundary_sha256=${releases.boundary.sha256}`);
     console.log("agent_hermetic_world_version=3.1.4");
     console.log(`agent_hermetic_world_sha256=${releases.world.sha256}`);
     console.log("agent_hermetic_boundary_build_graph_preserved=true");
+    console.log("agent_hermetic_ambient_zig_cache_absent=true");
     console.log("agent_hermetic_network_after_acquisition=false");
     console.log("agent_hermetic_check=pass");
     passed = true;

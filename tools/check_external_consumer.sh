@@ -3,7 +3,13 @@ set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 clean_root=$(mktemp -d "${TMPDIR:-/tmp}/agent-external-consumer.XXXXXX")
-trap 'rm -rf "$clean_root"' EXIT
+cleanup() {
+    cleanup_status=$?
+    chmod -R u+w "$clean_root" 2>/dev/null || true
+    rm -rf "$clean_root"
+    exit "$cleanup_status"
+}
+trap cleanup EXIT
 
 mkdir "$clean_root/agent" "$clean_root/consumer"
 tar \

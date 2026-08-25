@@ -231,7 +231,7 @@ try {
     console.log(`world_host_archive_sha256=${referenceStack.worldHost.entry.sha256}`);
     console.log("world_host_runtime_changed=false");
     console.log(`world_capabilities_version=${versions.capabilities}`);
-    console.log(`world_capabilities_archive_sha256=${referenceStack.worldCapabilities.entry.sha256}`);
+    console.log(`world_capabilities_source_archive_sha256=${referenceStack.worldCapabilities.entry.sourceSha256 ?? referenceStack.worldCapabilities.entry.sha256}`);
     console.log("github_authentication_required=false");
     console.log("github_cli_required=false");
     console.log("private_repository_permission_required=false");

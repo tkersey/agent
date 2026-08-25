@@ -83,7 +83,7 @@ zig build check
 # Compiler proof after exact archive acquisition with network disabled.
 zig build check-agent-hermetic
 
-# Anonymous deterministic host/capability lifecycle from lock-pinned releases.
+# Anonymous deterministic host/capability lifecycle from lock-pinned artifacts.
 zig build check-agent-reference-stack
 
 # Local deterministic ENF Actuality plus retry/replay/branch/migration.

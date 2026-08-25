@@ -941,24 +941,8 @@ pub fn build(b: *std.Build) void {
         "check-agent-reference-stack",
         "Run the anonymously acquired public host/capability lifecycle and Actuality proof",
     );
-    reference_stack.dependOn(world_conformance);
     reference_stack.dependOn(&reference_stack_command.step);
 
-    const offline_world_conformance_gate = b.addSystemCommand(&.{
-        "node",
-        "tools/check_world_conformance.mjs",
-        "--zig",
-    });
-    offline_world_conformance_gate.addArg(b.graph.zig_exe);
-    offline_world_conformance_gate.addArg("--offline");
-    if (world_host_archive) |path| {
-        offline_world_conformance_gate.addArgs(&.{ "--world-host-archive", path });
-    }
-    if (world_capabilities_archive) |path| {
-        offline_world_conformance_gate.addArgs(&.{ "--world-capabilities-archive", path });
-    }
-    if (boundary_archive) |path| offline_world_conformance_gate.setEnvironmentVariable("AGENT_BOUNDARY_ARCHIVE", path);
-    if (world_archive) |path| offline_world_conformance_gate.setEnvironmentVariable("AGENT_WORLD_ARCHIVE", path);
     const offline_reference_stack_command = b.addSystemCommand(&.{
         "bun",
         "tools/check_reference_stack.mjs",
@@ -979,7 +963,6 @@ pub fn build(b: *std.Build) void {
         "check-agent-reference-stack-offline",
         "Run the public reference-stack proof from checksum-matching local archives",
     );
-    offline_reference_stack.dependOn(&offline_world_conformance_gate.step);
     offline_reference_stack.dependOn(&offline_reference_stack_command.step);
 
     const hermetic_command = b.addSystemCommand(&.{

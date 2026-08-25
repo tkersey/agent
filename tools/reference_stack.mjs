@@ -53,7 +53,8 @@ export function readReferenceStackLock(path) {
         } else if (kind === "worldCapabilities" && provenance === "source-build") {
             const match = url.href.match(/^https:\/\/github\.com\/tkersey\/world-capabilities\/archive\/([0-9a-f]{40})\.tar\.gz$/);
             if (match === null || entry.archiveRoot !== `world-capabilities-${match[1]}` ||
-                !/^[0-9a-f]{64}$/.test(entry.distributionSha256 ?? "")) {
+                entry.distributionRoot !== `world-capabilities-v${entry.version}-deterministic` ||
+                !/^[0-9a-f]{64}$/.test(entry.sourceSha256 ?? "")) {
                 throw new Error(`${kind} source-build identity mismatch`);
             }
         } else {
@@ -85,7 +86,8 @@ export async function acquireReferenceStack(lock, options = {}) {
         }
         if (bytes.length > MAX_ARCHIVE_BYTES) throw new Error(`${kind} archive exceeds byte limit`);
         const actual = sha256(bytes);
-        if (actual !== entry.sha256) throw new Error(`${kind} checksum mismatch: expected=${entry.sha256} actual=${actual}`);
+        const expected = entry.provenance === "source-build" ? entry.sourceSha256 : entry.sha256;
+        if (actual !== expected) throw new Error(`${kind} checksum mismatch: expected=${expected} actual=${actual}`);
         result[kind] = Object.freeze({ entry, bytes, resolvedUrl, source });
     }
     return Object.freeze(result);

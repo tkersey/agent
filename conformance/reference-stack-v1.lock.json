@@ -12,8 +12,9 @@
     "version": "2.3.3",
     "provenance": "source-build",
     "url": "https://github.com/tkersey/world-capabilities/archive/58569cd32a33c4cd5e9cc60b0fd8a6be63b48e73.tar.gz",
-    "sha256": "db047e63a18bf05b8258e65c7f0a503f47a191fe5e8790e9503f6bb056129f38",
+    "sha256": "f24b1aa82d54a9a0144dab980b3ef72b9bbd7bad13ed64cb1d85bd7c8e39379a",
+    "sourceSha256": "db047e63a18bf05b8258e65c7f0a503f47a191fe5e8790e9503f6bb056129f38",
     "archiveRoot": "world-capabilities-58569cd32a33c4cd5e9cc60b0fd8a6be63b48e73",
-    "distributionSha256": "f24b1aa82d54a9a0144dab980b3ef72b9bbd7bad13ed64cb1d85bd7c8e39379a"
+    "distributionRoot": "world-capabilities-v2.3.3-deterministic"
   }
 }

@@ -39,7 +39,7 @@ try {
         ? buildCapabilitiesDistribution(acquired.worldCapabilities, capabilitiesSource, archives, proofRoot)
         : capabilitiesSource;
     const capabilitiesArchiveSha256 = acquired.worldCapabilities.entry.provenance === "source-build"
-        ? acquired.worldCapabilities.entry.distributionSha256
+        ? acquired.worldCapabilities.entry.sha256
         : acquired.worldCapabilities.entry.sha256;
     const runtimeRoot = join(proofRoot, "runtime");
     const runtimeHost = join(runtimeRoot, "world-host");
@@ -108,7 +108,7 @@ try {
             format: "agent-reference-stack-receipt-v1",
             worldHostArchiveSha256: acquired.worldHost.entry.sha256,
             worldCapabilitiesArchiveSha256: capabilitiesArchiveSha256,
-            worldCapabilitiesSourceArchiveSha256: acquired.worldCapabilities.entry.sha256,
+            worldCapabilitiesSourceArchiveSha256: acquired.worldCapabilities.entry.sourceSha256,
             deterministic: receipts.deterministic,
             retry: receipts.retry,
             replay: receipts.replay,
@@ -120,7 +120,7 @@ try {
     for (const [kind, artifact] of Object.entries(acquired)) {
         console.log(`${snake(kind)}_version=${artifact.entry.version}`);
         if (kind === "worldCapabilities" && artifact.entry.provenance === "source-build") {
-            console.log(`world_capabilities_source_archive_sha256=${artifact.entry.sha256}`);
+            console.log(`world_capabilities_source_archive_sha256=${artifact.entry.sourceSha256}`);
             console.log(`world_capabilities_archive_sha256=${capabilitiesArchiveSha256}`);
             console.log("world_capabilities_artifact_source=source-built");
         } else {
@@ -167,7 +167,7 @@ function buildCapabilitiesDistribution(acquired, source, archives, proofRoot) {
     );
     const bytes = readFileSync(archivePath);
     const digest = createHash("sha256").update(bytes).digest("hex");
-    assert.equal(digest, acquired.entry.distributionSha256, "built capability distribution digest mismatch");
+    assert.equal(digest, acquired.entry.sha256, "built capability distribution digest mismatch");
     return materializeReferenceArtifact("worldCapabilities", {
         entry: {
             repository: acquired.entry.repository,

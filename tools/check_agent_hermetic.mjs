@@ -1,6 +1,17 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+    chmodSync,
+    cpSync,
+    existsSync,
+    lstatSync,
+    mkdirSync,
+    mkdtempSync,
+    readFileSync,
+    readdirSync,
+    rmSync,
+    writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -87,6 +98,14 @@ try {
         globalCacheRoot,
         acquisitionEnvironment,
     );
+    const executedTrees = Object.freeze({
+        agent: digestExecutedTree(agentRoot),
+        boundary: digestExecutedTree(boundaryRoot),
+        world: digestExecutedTree(worldRoot),
+    });
+    for (const root of [agentRoot, boundaryRoot, worldRoot]) {
+        makeSourceTreeReadOnly(root);
+    }
     requireReleaseBuildGraph("boundary", boundaryRoot);
     requireReleaseBuildGraph("world", worldRoot);
     const agentSource = materializeAgentSource(
@@ -143,6 +162,9 @@ try {
         "--summary",
         "all",
     ], agentRoot, environment);
+    requireExecutedTree("agent", agentRoot, executedTrees.agent);
+    requireExecutedTree("boundary", boundaryRoot, executedTrees.boundary);
+    requireExecutedTree("world", worldRoot, executedTrees.world);
     requireAgentSourceUnchanged(
         sourceRoot,
         agentSource.head,
@@ -160,6 +182,10 @@ try {
     console.log(`agent_hermetic_agent_commit=${agentSource.head}`);
     console.log(`agent_hermetic_agent_archive_sha256=${agentSource.sha256}`);
     console.log("agent_hermetic_agent_source_snapshot=true");
+    console.log(`agent_hermetic_executed_agent_tree_sha256=${executedTrees.agent}`);
+    console.log(`agent_hermetic_executed_boundary_tree_sha256=${executedTrees.boundary}`);
+    console.log(`agent_hermetic_executed_world_tree_sha256=${executedTrees.world}`);
+    console.log("agent_hermetic_executed_source_trees_read_only=true");
     console.log("agent_hermetic_boundary_build_graph_preserved=true");
     console.log(`agent_hermetic_archive_tool=${tarExecutable}`);
     console.log("agent_hermetic_release_build_graph_bound=true");
@@ -170,7 +196,10 @@ try {
     console.log("agent_hermetic_check=pass");
     passed = true;
 } finally {
-    if (passed) rmSync(proofRoot, { recursive: true, force: true });
+    if (passed) {
+        makeTreeWritable(proofRoot);
+        rmSync(proofRoot, { recursive: true, force: true });
+    }
     else console.error(`agent_hermetic_proof_root=${proofRoot}`);
 }
 
@@ -199,6 +228,75 @@ function requireReleaseBuildGraph(kind, root) {
     if (sha256File(join(root, "build.zig")) !== expected.build ||
         sha256File(join(root, "build.zig.zon")) !== expected.manifest) {
         throw new Error(`${kind} build graph does not match the authenticated release`);
+    }
+}
+
+function digestExecutedTree(root) {
+    const files = [];
+    const visit = (directory) => {
+        for (const name of readdirSync(directory).sort(
+            (left, right) => left.localeCompare(right),
+        )) {
+            if ([".zig-cache", "zig-cache", "zig-out", "zig-pkg"].includes(name)) {
+                continue;
+            }
+            const full = join(directory, name);
+            const metadata = lstatSync(full);
+            if (metadata.isDirectory()) visit(full);
+            else if (metadata.isFile()) files.push(relative(root, full));
+            else throw new Error(`executed source tree contains a non-regular path: ${full}`);
+        }
+    };
+    visit(root);
+    const hasher = createHash("sha256");
+    hasher.update("agent-hermetic-executed-tree-v1\0");
+    for (const path of files) {
+        const encoded = Buffer.from(path, "utf8");
+        const bytes = readFileSync(join(root, path));
+        const lengths = Buffer.alloc(8);
+        lengths.writeUInt32LE(encoded.length, 0);
+        lengths.writeUInt32LE(bytes.length, 4);
+        hasher.update(lengths);
+        hasher.update(encoded);
+        hasher.update(bytes);
+    }
+    return hasher.digest("hex");
+}
+
+function requireExecutedTree(kind, root, expected) {
+    const actual = digestExecutedTree(root);
+    if (actual !== expected) {
+        throw new Error(`${kind} executed source tree changed during the hermetic proof`);
+    }
+}
+
+function makeSourceTreeReadOnly(root) {
+    const visit = (path) => {
+        const name = path.slice(path.lastIndexOf("/") + 1);
+        if ([".zig-cache", "zig-cache", "zig-out", "zig-pkg"].includes(name)) {
+            return;
+        }
+        const metadata = lstatSync(path);
+        if (metadata.isDirectory()) {
+            for (const child of readdirSync(path)) visit(join(path, child));
+            chmodSync(path, 0o555);
+        } else if (metadata.isFile()) {
+            chmodSync(path, metadata.mode & 0o111 ? 0o555 : 0o444);
+        } else {
+            throw new Error(`executed source tree contains a non-regular path: ${path}`);
+        }
+    };
+    visit(root);
+}
+
+function makeTreeWritable(root) {
+    if (!existsSync(root)) return;
+    const metadata = lstatSync(root);
+    if (metadata.isDirectory()) {
+        chmodSync(root, 0o700);
+        for (const name of readdirSync(root)) makeTreeWritable(join(root, name));
+    } else if (metadata.isFile()) {
+        chmodSync(root, 0o600);
     }
 }
 

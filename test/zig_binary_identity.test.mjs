@@ -22,7 +22,7 @@ test("Zig 0.16.0 binary admission is exact per supported host", () => {
     expect(() => admitZigBinarySha256(linuxX64, "freebsd", "x64")).toThrow("not admitted");
 });
 
-test("closed verifier PATH resolves Node, Bun, and Zig only through its private bin", async () => {
+test("closed verifier PATH resolves Node, Bun, Git, and Zig only through its private bin", async () => {
     const executables = resolveVerifierExecutables();
     const root = await mkdtemp(join(tmpdir(), "agent-verifier-bin-"));
     let bin;
@@ -32,6 +32,7 @@ test("closed verifier PATH resolves Node, Bun, and Zig only through its private 
         expect(path[0]).toBe(bin);
         expect(realpathSync(join(bin, "node"))).toBe(executables.node.real);
         expect(realpathSync(join(bin, "bun"))).toBe(executables.bun.real);
+        expect(realpathSync(join(bin, "git"))).toBe(executables.git.real);
         expect(realpathSync(join(bin, "zig"))).toBe(realpathSync(process.execPath));
     } finally {
         if (bin !== undefined) await chmod(bin, 0o700);

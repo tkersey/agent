@@ -12,7 +12,8 @@ import { delimiter, join } from "node:path";
 export function resolveVerifierExecutables() {
   return Object.freeze({
     node: admitExecutable(process.execPath, "node"),
-    bun: admitExecutable(findOnPath("bun"), "bun")
+    bun: admitExecutable(findOnPath("bun"), "bun"),
+    git: admitExecutable("/usr/bin/git", "git")
   });
 }
 
@@ -21,6 +22,7 @@ export function materializeVerifierBin(root, zig, executables) {
   mkdirSync(bin, { mode: 0o700 });
   for (const [name, target] of [
     ["bun", executables.bun.real],
+    ["git", executables.git.real],
     ["node", executables.node.real],
     ["zig", realpathSync(zig)]
   ]) {

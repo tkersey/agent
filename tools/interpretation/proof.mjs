@@ -1187,7 +1187,13 @@ function decodeInterpretedResult(value) {
 }
 
 async function initializeGit(cwd) {
-  await git(cwd, ["init", "--quiet"]);
+  const template = join(dirname(cwd), "git-empty-template");
+  await mkdir(template);
+  try {
+    await git(cwd, ["init", "--quiet", `--template=${template}`]);
+  } finally {
+    await rm(template, { recursive: true, force: true });
+  }
   await git(cwd, ["config", "user.name", "Agent Interpretation Fixture"]);
   await git(cwd, ["config", "user.email", "interpretation@example.invalid"]);
   await git(cwd, ["add", "--", "README.md", "package.json", "src/range.mjs", "test/range.test.mjs"]);
@@ -1262,7 +1268,23 @@ async function recursiveFiles(root, ignoredDirectories = new Set()) {
 }
 
 async function git(cwd, argv) {
-  const child = Bun.spawn(["git", ...argv], { cwd, stdout: "pipe", stderr: "pipe", env: { PATH: process.env.PATH } });
+  const child = Bun.spawn([
+    "git",
+    "-c", "core.attributesFile=/dev/null",
+    "-c", "core.fsmonitor=false",
+    "-c", "core.hooksPath=/dev/null",
+    ...argv
+  ], {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      GIT_ATTR_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+      PATH: process.env.PATH
+    }
+  });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited
   ]);

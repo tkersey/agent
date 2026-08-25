@@ -9,6 +9,7 @@ import {
     mkdtempSync,
     readFileSync,
     readdirSync,
+    realpathSync,
     rmSync,
     writeFileSync,
 } from "node:fs";
@@ -63,8 +64,10 @@ try {
     const hermeticHome = join(proofRoot, "home");
     mkdirSync(hermeticHome);
     const verifierExecutables = resolveVerifierExecutables();
-    admitZigBinarySha256(sha256File(options.zig));
-    const verifierBin = materializeVerifierBin(proofRoot, options.zig, verifierExecutables);
+    const admittedZigTarget = realpathSync(options.zig);
+    admitZigBinarySha256(sha256File(admittedZigTarget));
+    const verifierBin = materializeVerifierBin(proofRoot, admittedZigTarget, verifierExecutables);
+    const admittedZig = join(verifierBin, "zig");
     const baseEnvironment = {
         HOME: hermeticHome,
         LANG: "C",
@@ -80,7 +83,7 @@ try {
         ZIG_GLOBAL_CACHE_DIR: globalCacheRoot,
     };
     const zigCompiler = requireZigCompiler(
-        options.zig,
+        admittedZig,
         proofRoot,
         globalCacheRoot,
         baseEnvironment,
@@ -107,7 +110,7 @@ try {
         }
     }
     prefetchDependencyTree(
-        options.zig,
+        admittedZig,
         boundaryRoot,
         join(proofRoot, "boundary-fetch-cache"),
         globalCacheRoot,
@@ -139,7 +142,7 @@ try {
         relative(worldRoot, boundaryRoot),
     );
     prefetchDependencyTree(
-        options.zig,
+        admittedZig,
         agentRoot,
         join(proofRoot, "agent-fetch-cache"),
         globalCacheRoot,
@@ -157,7 +160,7 @@ try {
     const environment = {
         ...baseEnvironment,
         AGENT_HERMETIC: "1",
-        AGENT_ZIG_EXE: options.zig,
+        AGENT_ZIG_EXE: admittedZig,
         AGENT_BOUNDARY_ROOT: boundaryRoot,
         AGENT_WORLD_ROOT: worldRoot,
         HTTP_PROXY: "http://127.0.0.1:1",
@@ -166,7 +169,7 @@ try {
         NO_PROXY: "",
     };
     requireNoAmbientZigOverrides(environment);
-    const proofBuild = runNetworkIsolated(options.zig, [
+    const proofBuild = runNetworkIsolated(admittedZig, [
         "build",
         "check-agent-semantic",
         "lint",
@@ -470,15 +473,35 @@ function run(command, args, cwd, env, forward = true) {
 }
 
 function runNetworkIsolated(command, args, cwd, env) {
-    if (process.platform !== "darwin" || !existsSync("/usr/bin/sandbox-exec")) {
-        throw new Error("check-agent-hermetic requires an available OS network-isolation boundary");
+    if (process.platform === "darwin" && existsSync("/usr/bin/sandbox-exec")) {
+        return run(
+            "/usr/bin/sandbox-exec",
+            ["-p", "(version 1) (allow default) (deny network*)", command, ...args],
+            cwd,
+            env,
+        );
     }
-    return run(
-        "/usr/bin/sandbox-exec",
-        ["-p", "(version 1) (allow default) (deny network*)", command, ...args],
-        cwd,
-        env,
-    );
+    if (process.platform === "linux") {
+        const bubblewrap = ["/usr/bin/bwrap", "/bin/bwrap"].find(existsSync);
+        if (bubblewrap === undefined) {
+            throw new Error("check-agent-hermetic requires Bubblewrap on Linux");
+        }
+        const metadata = lstatSync(bubblewrap);
+        if (!metadata.isFile() || metadata.uid !== 0 || (metadata.mode & 0o022) !== 0) {
+            throw new Error(`check-agent-hermetic does not trust Bubblewrap: ${bubblewrap}`);
+        }
+        return run(bubblewrap, [
+            "--die-with-parent",
+            "--new-session",
+            "--unshare-net",
+            "--bind",
+            "/",
+            "/",
+            command,
+            ...args,
+        ], cwd, env);
+    }
+    throw new Error("check-agent-hermetic requires an available OS network-isolation boundary");
 }
 
 function requireNoAmbientZigOverrides(environment) {

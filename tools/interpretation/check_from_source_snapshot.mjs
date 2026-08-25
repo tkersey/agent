@@ -169,8 +169,10 @@ try {
   const home = join(proofRoot, "home");
   mkdirSync(home);
   const verifierExecutables = resolveVerifierExecutables();
-  requireZigBinary(options.zig);
-  const verifierBin = materializeVerifierBin(proofRoot, options.zig, verifierExecutables);
+  const admittedZigTarget = realpathSync(options.zig);
+  requireZigBinary(admittedZigTarget);
+  const verifierBin = materializeVerifierBin(proofRoot, admittedZigTarget, verifierExecutables);
+  const admittedZig = join(verifierBin, "zig");
   const environment = sourceSnapshotEnvironment(home, verifierBin);
   const boundaryInputs = snapshotBoundaryInputs(options, proofRoot);
   const binding = bindSource(options.agentRoot, gitExecutable, environment);
@@ -199,7 +201,7 @@ try {
   mkdirSync(packageScratch);
   makeReadOnly(sourceSnapshot, packageScratch);
   prefetchDependencyTree(
-    options.zig,
+    admittedZig,
     sourceSnapshot,
     join(proofRoot, "agent-fetch-cache"),
     options.globalCacheDir,
@@ -228,7 +230,7 @@ try {
     const value = boundaryInputs[key] ?? options[key];
     if (value !== undefined) command.push(`-D${name}=${value}`);
   }
-  run(options.zig, command, sourceSnapshot, environment);
+  run(admittedZig, command, sourceSnapshot, environment);
   requireSourceUnchanged(options.agentRoot, binding, gitExecutable, environment);
   const receiptPath = join(
     prefix,

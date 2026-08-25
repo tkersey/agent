@@ -16,10 +16,14 @@ application-specific WASM remains owned by World, and the interpreted runtime
 loads only the fixed Boundary kernel.
 
 The build exports a `boundary` module facade backed by Agent's exact dependency.
-A downstream consumer that also loads World resolves both packages to the same
-exact Boundary v1.6.0 archive. The focused shared-boundary gate proves Agent's
-facade retains nominal `Vector` and schema identity; the clean-room World gate
-proves the compiled Machine is admitted without a sibling checkout.
+Agent pins the Boundary owner-fix commit that makes static and caller-owned
+image emission one encoder; World v3.1.4 continues to pin the landed v1.6.0
+release commit. These are distinct archives with the same package version, not
+one nominal package instance. The focused shared-boundary gate proves only
+Agent's facade identity. Cross-archive compatibility is instead proved by the
+unchanged BPI1 bytes, Machine-v2 profile/manifest root binding, successful World
+application build, and byte-identical specialized/interpreted execution. The
+runtime kernel remains the exact Boundary v1.6.0 release artifact.
 
 Compiler limits are compile-only admission policy and are excluded from Machine
 semantic identity. Agent explicitly requests the bounded profile required by

@@ -6,10 +6,14 @@ compile-time provider binding or an external effect. World needs no prompt,
 Action, Observation, budget, history, or strategy knowledge.
 
 Agent has no World source dependency. Clean consumers materialize exact Agent
-and World archives independently and resolve both packages to the same exact
-Boundary v1.6.0 release. Agent exports its Boundary module for downstream
-source construction; World admits the resulting Machine structurally as ABI
-v2 without weakening its own Machine admission.
+and World archives independently. World pins the landed Boundary v1.6.0
+release commit, while Agent pins a later source-compatible Boundary owner fix
+under the same package version; consumers must not treat them as one nominal
+package instance. Agent exports its own Boundary module for downstream source
+construction. World admits the resulting Machine structurally as ABI v2, and
+the conformance and interpretation proofs bind the emitted program/profile,
+World manifest root, specialized trace, and fixed release kernel without
+weakening Machine admission.
 
 Exact released World v3.1.4 pins and records Boundary v1.6.0. The clean-room
 conformance gate compiles all four Research/Coding by ReAct/Reflective

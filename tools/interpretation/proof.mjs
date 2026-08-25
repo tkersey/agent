@@ -211,6 +211,7 @@ export async function proveAgentInterpretation(options) {
       application_id: interpreted.applicationId,
       decision_contract_digest: contract.subarray(-32).toString("hex"),
       effect_count: interpreted.effectCount,
+      effect_catalog_count: interpreted.effectCatalogCount,
       observed_effect_identity_count: new Set(
         interpreted.trace.map((entry) => entry.effectIdentity)
       ).size,

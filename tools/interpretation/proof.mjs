@@ -106,9 +106,11 @@ export async function proveAgentInterpretation(options) {
     const admittedCanary = join(runtimeRoot, "sandbox-admitted-canary");
     await writeFile(admittedCanary, "sandbox admitted\n", { flag: "wx" });
     const cleanInventory = await assertCleanRoom(runtimeRoot, runtime);
-    const interpretedOutput = join(runtimeRoot, "interpreted-result.json");
+    const runtimeInputDigest = await digestRuntimeInputs(runtime);
+    await setRuntimeInputsReadOnly(runtime);
+    const interpretedOutput = join(interpretedHome, "interpreted-result.json");
     const sandboxProfile = process.platform === "darwin"
-      ? await cleanRoomSandboxProfile(options, runtimeRoot)
+      ? await cleanRoomSandboxProfile(options, runtimeRoot, interpretedRoot, interpretedHome)
       : "";
     const sandboxEnvironment = {
       HOME: interpretedHome,
@@ -125,7 +127,8 @@ export async function proveAgentInterpretation(options) {
       sandboxEnvironment,
       runtimeRoot,
       admittedCanary,
-      outsideCanary
+      outsideCanary,
+      runtime.drive
     );
     const child = Bun.spawn(sandboxInvocation(options, sandboxProfile, runtimeRoot, [
       options.bunExecutable, runtime.drive,
@@ -159,8 +162,10 @@ export async function proveAgentInterpretation(options) {
       runtimeRoot,
       runtime,
       cleanInventory,
-      interpretedOutput
+      interpretedOutput,
+      runtimeInputDigest
     );
+    await setRuntimeInputsWritable(runtime);
     await verifyRuntimeDependenciesUnchanged(options, dependencyBindings);
     compareExecution(specialized, interpreted);
 
@@ -403,7 +408,8 @@ async function proveSandboxReadDenials(
   environment,
   runtimeRoot,
   admittedCanary,
-  outsideCanary
+  outsideCanary,
+  readOnlyRuntimeInput
 ) {
   const positive = await runSandboxProbe(
     options,
@@ -449,6 +455,17 @@ async function proveSandboxReadDenials(
     environment,
     runtimeRoot
   );
+  const writeProbe = await runSandboxProbe(
+    options,
+    sandboxProfile,
+    environment,
+    runtimeRoot,
+    `try { await Bun.write(${JSON.stringify(resolve(readOnlyRuntimeInput))}, "mutated\\n");` +
+    `process.stdout.write("SANDBOX_WRITE_ALLOWED\\n"); } catch {` +
+    `process.stderr.write("SANDBOX_WRITE_DENIED\\n"); process.exit(23); }`
+  );
+  denied.runtime_input_write = writeProbe.exitCode === 23 &&
+    writeProbe.stderr.includes("SANDBOX_WRITE_DENIED");
   if (Object.values(denied).some((value) => value !== true)) {
     throw new Error(`clean_room_sandbox_read_allowed:${JSON.stringify(denied)}`);
   }
@@ -547,7 +564,9 @@ function sandboxInvocation(options, profile, runtimeRoot, argv) {
       ]),
       ...systemFiles.flatMap((path) => ["--ro-bind", path, path]),
       ...bunPaths.flatMap((path) => ["--ro-bind", path, path]),
-      "--bind", resolve(runtimeRoot), resolve(runtimeRoot),
+      "--ro-bind", resolve(runtimeRoot), resolve(runtimeRoot),
+      "--bind", resolve(join(runtimeRoot, "workspace")), resolve(join(runtimeRoot, "workspace")),
+      "--bind", resolve(join(runtimeRoot, "home")), resolve(join(runtimeRoot, "home")),
       "--dev", "/dev",
       "--proc", "/proc",
       ...argv
@@ -580,7 +599,7 @@ function bubblewrapMountDirectories(directoryPaths, filePaths) {
     left.split("/").length - right.split("/").length || left.localeCompare(right));
 }
 
-async function cleanRoomSandboxProfile(options, runtimeRoot) {
+async function cleanRoomSandboxProfile(options, runtimeRoot, interpretedRoot, interpretedHome) {
   const bunExecutableReal = await realpath(options.bunExecutable);
   const declaredReadable = [
     "/System",
@@ -599,8 +618,10 @@ async function cleanRoomSandboxProfile(options, runtimeRoot) {
     ...await Promise.all(declaredReadable.map((path) => realpath(path)))
   ])];
   const writable = [...new Set([
-    runtimeRoot,
-    await realpath(runtimeRoot),
+    interpretedRoot,
+    await realpath(interpretedRoot),
+    interpretedHome,
+    await realpath(interpretedHome),
     "/dev",
     await realpath("/dev")
   ])];
@@ -813,6 +834,7 @@ async function prepareCleanRoom(
   return Object.freeze({
     artifacts,
     runner,
+    dependencies,
     drive: join(runner, "drive.mjs"),
     environment,
     interpretedRoot,
@@ -861,7 +883,8 @@ async function assertPostExecutionInventory(
   runtimeRoot,
   runtime,
   initialInventory,
-  interpretedOutput
+  interpretedOutput,
+  expectedRuntimeInputDigest
 ) {
   const finalInventory = await assertCleanRoom(runtimeRoot, runtime);
   const initial = new Set(initialInventory);
@@ -874,6 +897,55 @@ async function assertPostExecutionInventory(
   if (unexpected.length !== 0) {
     throw new Error(`clean_room_post_inventory:${unexpected.join(",")}`);
   }
+  const actualRuntimeInputDigest = await digestRuntimeInputs(runtime);
+  if (actualRuntimeInputDigest !== expectedRuntimeInputDigest) {
+    throw new Error(`clean_room_runtime_input_changed:${actualRuntimeInputDigest}`);
+  }
+}
+
+async function digestRuntimeInputs(runtime) {
+  const hasher = createHash("sha256");
+  hasher.update("agent-interpretation-clean-room-inputs-v1\0");
+  for (const [label, root] of [
+    ["artifacts", runtime.artifacts],
+    ["dependencies", runtime.dependencies],
+    ["runner", runtime.runner]
+  ]) {
+    for (const path of await recursiveFiles(root)) {
+      const labelBytes = Buffer.from(`${label}/${path}`, "utf8");
+      const bytes = await readFile(join(root, path));
+      const lengths = Buffer.alloc(8);
+      lengths.writeUInt32LE(labelBytes.length, 0);
+      lengths.writeUInt32LE(bytes.length, 4);
+      hasher.update(lengths);
+      hasher.update(labelBytes);
+      hasher.update(bytes);
+    }
+  }
+  return hasher.digest("hex");
+}
+
+async function setRuntimeInputsReadOnly(runtime) {
+  for (const root of [runtime.artifacts, runtime.dependencies, runtime.runner]) {
+    await setTreeMode(root, 0o555, 0o444);
+  }
+}
+
+async function setRuntimeInputsWritable(runtime) {
+  for (const root of [runtime.artifacts, runtime.dependencies, runtime.runner]) {
+    await setTreeMode(root, 0o700, 0o600);
+  }
+}
+
+async function setTreeMode(root, directoryMode, fileMode) {
+  const entries = await readdir(root, { withFileTypes: true });
+  for (const entry of entries) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) await setTreeMode(path, directoryMode, fileMode);
+    else if (entry.isFile()) await chmod(path, fileMode);
+    else throw new Error(`clean_room_runtime_input_non_regular:${path}`);
+  }
+  await chmod(root, directoryMode);
 }
 
 function compareExecution(specialized, interpreted) {
@@ -1034,6 +1106,7 @@ async function runNegativeGates(
     sandbox_outside_clean_room_read_rejected: sandboxDenials.outside_clean_room,
     sandbox_positive_control_passed: sandboxDenials.positive_control,
     sandbox_network_read_rejected: sandboxDenials.network,
+    sandbox_runtime_input_write_rejected: sandboxDenials.runtime_input_write,
     ...(process.platform === "linux"
       ? { sandbox_host_proc_root_read_rejected: sandboxDenials.host_proc_root }
       : {}),

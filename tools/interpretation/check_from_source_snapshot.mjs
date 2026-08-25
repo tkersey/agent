@@ -19,6 +19,7 @@ import { dirname, join, relative, resolve } from "node:path";
 
 import { inspectTarGz } from "../reference_stack.mjs";
 import { admitZigBinarySha256 } from "../zig_binary_identity.mjs";
+import { closedVerifierPath, resolveVerifierExecutables } from "../verifier_executables.mjs";
 
 const EXPECTED_KERNEL_SHA256 =
   "12973fb655f126c2acd5693a84be47496649d1ab10bf22d565c9b675172e4f27";
@@ -130,6 +131,7 @@ const NEGATIVE_GATE_FIELDS = Object.freeze([
   "sandbox_outside_clean_room_read_rejected",
   "sandbox_positive_control_passed",
   "sandbox_network_read_rejected",
+  "sandbox_runtime_input_write_rejected",
   ...(process.platform === "linux" ? ["sandbox_host_proc_root_read_rejected"] : []),
   "proof_input_mutation_detected"
 ]);
@@ -161,7 +163,8 @@ try {
   }
   const home = join(proofRoot, "home");
   mkdirSync(home);
-  const environment = sourceSnapshotEnvironment(options.zig, home);
+  const verifierExecutables = resolveVerifierExecutables();
+  const environment = sourceSnapshotEnvironment(options.zig, home, verifierExecutables);
   requireZigBinary(options.zig);
   const boundaryInputs = snapshotBoundaryInputs(options, proofRoot);
   const binding = bindSource(options.agentRoot, gitExecutable, environment);
@@ -358,22 +361,14 @@ function digestSourceTree(root) {
   return hasher.digest("hex");
 }
 
-function sourceSnapshotEnvironment(zig, home) {
+function sourceSnapshotEnvironment(zig, home, verifierExecutables) {
   const environment = {
     HOME: home,
     LANG: "C",
     LC_ALL: "C",
     LOGNAME: process.env.LOGNAME ?? "agent-interpretation",
     NO_COLOR: "1",
-    PATH: [...new Set([
-      dirname(zig),
-      "/opt/homebrew/bin",
-      "/usr/local/bin",
-      "/usr/bin",
-      "/bin",
-      "/usr/sbin",
-      "/sbin"
-    ])].join(":"),
+    PATH: closedVerifierPath(zig, verifierExecutables),
     SHELL: "/bin/sh",
     TERM: "dumb",
     TMPDIR: process.env.TMPDIR ?? tmpdir(),

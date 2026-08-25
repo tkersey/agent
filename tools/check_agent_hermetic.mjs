@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 
 import { inspectTarGz } from "./reference_stack.mjs";
 import { admitZigBinarySha256, EXPECTED_ZIG_VERSION } from "./zig_binary_identity.mjs";
+import { closedVerifierPath, resolveVerifierExecutables } from "./verifier_executables.mjs";
 
 const releases = Object.freeze({
     boundary: Object.freeze({
@@ -57,13 +58,14 @@ try {
     const globalCacheRoot = join(proofRoot, "zig-global-cache");
     const hermeticHome = join(proofRoot, "home");
     mkdirSync(hermeticHome);
+    const verifierExecutables = resolveVerifierExecutables();
     const baseEnvironment = {
         HOME: hermeticHome,
         LANG: "C",
         LC_ALL: "C",
         LOGNAME: process.env.LOGNAME ?? "agent-hermetic",
         NO_COLOR: "1",
-        PATH: closedVerifierPath(options.zig),
+        PATH: closedVerifierPath(options.zig, verifierExecutables),
         SHELL: "/bin/sh",
         TERM: "dumb",
         TMPDIR: process.env.TMPDIR ?? tmpdir(),
@@ -364,18 +366,6 @@ function makeTreeWritable(root) {
     } else if (metadata.isFile()) {
         chmodSync(root, 0o600);
     }
-}
-
-function closedVerifierPath(zig) {
-    return [...new Set([
-        dirname(zig),
-        "/opt/homebrew/bin",
-        "/usr/local/bin",
-        "/usr/bin",
-        "/bin",
-        "/usr/sbin",
-        "/sbin",
-    ])].join(":");
 }
 
 function materializeAgentSource(source, root, gitExecutable, tarExecutable, environment) {

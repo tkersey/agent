@@ -176,18 +176,16 @@ try {
   requireZigBinary(admittedZig);
   const environment = sourceSnapshotEnvironment(home, verifierBin);
   const boundaryInputs = snapshotBoundaryInputs(options, proofRoot);
-  requireSourceGitIsolation(options.agentRoot);
+  requireSourceGitIsolation(options.agentRoot, gitExecutable, environment);
   const binding = bindSource(options.agentRoot, gitExecutable, environment);
   const archive = join(proofRoot, "agent-source.tar.gz");
-  run(gitExecutable, [
-    "-C",
-    options.agentRoot,
+  git(options.agentRoot, gitExecutable, environment, [
     "archive",
     "--format=tar.gz",
     "--prefix=agent-source/",
     `--output=${archive}`,
     binding.head
-  ], options.agentRoot, environment);
+  ]);
   requireSourceUnchanged(options.agentRoot, binding, gitExecutable, environment);
   inspectTarGz(archive, "agent-source", { tarExecutable, environment });
   const archiveSha256 = sha256(readFileSync(archive));
@@ -314,6 +312,7 @@ function git(root, executable, environment, args) {
     "-c", "core.excludesFile=/dev/null",
     "-c", "core.fsmonitor=false",
     "-c", "core.hooksPath=/dev/null",
+    "-c", "tar.tar.gz.command=/usr/bin/gzip -cn",
     "-C", root,
     ...args
   ], root, {
@@ -321,15 +320,31 @@ function git(root, executable, environment, args) {
     GIT_ATTR_NOSYSTEM: "1",
     GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_CONFIG_NOSYSTEM: "1",
+    GIT_NO_REPLACE_OBJECTS: "1",
     GIT_OPTIONAL_LOCKS: "0"
   }, false).stdout.trim();
 }
 
-function requireSourceGitIsolation(root) {
-  const attributes = join(root, ".git", "info", "attributes");
+function requireSourceGitIsolation(root, executable, environment) {
+  const gitPath = (path) => {
+    const value = git(root, executable, environment, ["rev-parse", "--git-path", path]);
+    return resolve(root, value);
+  };
+  const attributes = gitPath("info/attributes");
   if (existsSync(attributes) && readFileSync(attributes, "utf8").trim().length !== 0) {
     throw new Error("source snapshot rejects non-tree Git attributes");
   }
+  const replacements = gitPath("refs/replace");
+  if (existsSync(replacements) && treeContainsFile(replacements)) {
+    throw new Error("source snapshot rejects Git replacement refs");
+  }
+}
+
+function treeContainsFile(root) {
+  const metadata = lstatSync(root);
+  if (metadata.isFile()) return true;
+  if (!metadata.isDirectory()) throw new Error(`source Git metadata is non-regular: ${root}`);
+  return readdirSync(root).some((name) => treeContainsFile(join(root, name)));
 }
 
 function makeReadOnly(root, writableScratch) {

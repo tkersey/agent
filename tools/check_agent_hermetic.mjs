@@ -379,17 +379,16 @@ function makeTreeWritable(root) {
 }
 
 function materializeAgentSource(source, root, gitExecutable, tarExecutable, environment) {
+    requireSourceGitIsolation(source, gitExecutable, environment);
     const head = bindAgentGitSource(source, gitExecutable, environment);
     const archive = join(root, "agent-source.tar.gz");
-    run(gitExecutable, [
-        "-C",
-        source,
+    git(source, gitExecutable, environment, [
         "archive",
         "--format=tar.gz",
         "--prefix=agent/",
         `--output=${archive}`,
         head,
-    ], source, environment, false);
+    ]);
     requireAgentSourceUnchanged(source, head, gitExecutable, environment);
     inspectTarGz(archive, "agent", { tarExecutable, environment });
     run(tarExecutable, ["-xzf", archive, "-C", root], root, environment, false);
@@ -405,33 +404,17 @@ function materializeAgentSource(source, root, gitExecutable, tarExecutable, envi
 }
 
 function bindAgentGitSource(source, gitExecutable, environment) {
-    const head = run(
-        gitExecutable,
-        ["-C", source, "rev-parse", "HEAD"],
-        source,
-        environment,
-        false,
-    ).stdout.trim();
+    const head = git(source, gitExecutable, environment, ["rev-parse", "HEAD"]);
     if (!/^[0-9a-f]{40}$/.test(head)) throw new Error("Agent Git head is invalid");
     requireAgentSourceUnchanged(source, head, gitExecutable, environment);
     return head;
 }
 
 function requireAgentSourceUnchanged(source, expectedHead, gitExecutable, environment) {
-    const head = run(
-        gitExecutable,
-        ["-C", source, "rev-parse", "HEAD"],
-        source,
-        environment,
-        false,
-    ).stdout.trim();
-    const status = run(
-        gitExecutable,
-        ["-C", source, "status", "--porcelain=v1", "--untracked-files=all"],
-        source,
-        environment,
-        false,
-    ).stdout.split("\n").filter(Boolean).filter((line) => {
+    const head = git(source, gitExecutable, environment, ["rev-parse", "HEAD"]);
+    const status = git(source, gitExecutable, environment, [
+        "status", "--porcelain=v1", "--untracked-files=all",
+    ]).split("\n").filter(Boolean).filter((line) => {
         const encoded = line.slice(3);
         const path = encoded.includes(" -> ")
             ? encoded.split(" -> ").at(-1)
@@ -441,6 +424,47 @@ function requireAgentSourceUnchanged(source, expectedHead, gitExecutable, enviro
     if (head !== expectedHead || status.length !== 0) {
         throw new Error("Agent source changed during snapshot-bound proof");
     }
+}
+
+function git(root, executable, environment, args) {
+    return run(executable, [
+        "-c", "core.attributesFile=/dev/null",
+        "-c", "core.excludesFile=/dev/null",
+        "-c", "core.fsmonitor=false",
+        "-c", "core.hooksPath=/dev/null",
+        "-c", "tar.tar.gz.command=/usr/bin/gzip -cn",
+        "-C", root,
+        ...args,
+    ], root, {
+        ...environment,
+        GIT_ATTR_NOSYSTEM: "1",
+        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_NO_REPLACE_OBJECTS: "1",
+        GIT_OPTIONAL_LOCKS: "0",
+    }, false).stdout.trim();
+}
+
+function requireSourceGitIsolation(root, executable, environment) {
+    const gitPath = (path) => {
+        const value = git(root, executable, environment, ["rev-parse", "--git-path", path]);
+        return resolve(root, value);
+    };
+    const attributes = gitPath("info/attributes");
+    if (existsSync(attributes) && readFileSync(attributes, "utf8").trim().length !== 0) {
+        throw new Error("Agent source snapshot rejects non-tree Git attributes");
+    }
+    const replacements = gitPath("refs/replace");
+    if (existsSync(replacements) && treeContainsFile(replacements)) {
+        throw new Error("Agent source snapshot rejects Git replacement refs");
+    }
+}
+
+function treeContainsFile(root) {
+    const metadata = lstatSync(root);
+    if (metadata.isFile()) return true;
+    if (!metadata.isDirectory()) throw new Error(`Agent Git metadata is non-regular: ${root}`);
+    return readdirSync(root).some((name) => treeContainsFile(join(root, name)));
 }
 
 function extractRelease(kind, archive, root, tarExecutable, environment) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { inspectTarGz } from "../reference_stack.mjs";
@@ -55,11 +55,8 @@ function prepareOutput(output) {
   mkdirSync(output, { recursive: true });
   const entries = readdirSync(output);
   const entriesOwned = entries.every((entry) => OWNED_OUTPUT_ENTRIES.has(entry));
-  const legacyGeneratedOutput = basename(output) === "runtime-dependencies" &&
-    /\/o\/[0-9a-f]{32}\/runtime-dependencies$/.test(output) &&
-    entries.length !== 0 && entriesOwned;
   if (!entriesOwned || (entries.length !== 0 &&
-      !entries.includes(OUTPUT_SENTINEL) && !legacyGeneratedOutput)) {
+      !entries.includes(OUTPUT_SENTINEL))) {
     throw new Error(`runtime dependency output is not owned: ${output}`);
   }
   for (const entry of entries) {

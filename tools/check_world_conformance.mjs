@@ -34,16 +34,16 @@ const releases = Object.freeze({
     boundary: Object.freeze({
         url: options.agentV1Release
             ? "https://github.com/tkersey/boundary/archive/refs/tags/v1.3.2.tar.gz"
-            : "https://github.com/tkersey/boundary/archive/41031eb826903bc7591698c55403ae044eb5178e.tar.gz",
+            : "https://github.com/tkersey/boundary/archive/f4e9268aa7b44842a8a3779fa9b6db167c8e90cb.tar.gz",
         sha256: options.agentV1Release
             ? "d33a682f92033fa287169e4bc42c5e96f891cf1fe307381efc6983361de3fe0d"
-            : "b57f02810b3d3b410240bbb9f6835169515eb8a0dfdd37faba66251de7a05051",
+            : "17b33ddd3223cd515aa8b3150753e4e523ce44c3526c593607ea3aebbd0a3f9f",
         packageHash: options.agentV1Release
             ? "boundary-1.3.2-flclaAI0EQBXh0WrWcNTh-CwL-m0RLPbRX8RBRxP9E95"
-            : "boundary-1.6.0-flclaPgqHgBFKPjRLOOhKRa3qszrnioAJmKmSau5_qEp",
+            : "boundary-1.6.0-flclaM8nHgDZhxPK5MqHPdvRNsac_7cUW6NJ_cIC-34Y",
         root: options.agentV1Release
             ? "boundary-1.3.2"
-            : "boundary-41031eb826903bc7591698c55403ae044eb5178e",
+            : "boundary-f4e9268aa7b44842a8a3779fa9b6db167c8e90cb",
     }),
     world: Object.freeze({
         url: options.agentV1Release

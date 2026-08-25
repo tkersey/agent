@@ -11,9 +11,9 @@ import { inspectTarGz } from "./reference_stack.mjs";
 const releases = Object.freeze({
     boundary: Object.freeze({
         version: "1.6.0",
-        root: "boundary-41031eb826903bc7591698c55403ae044eb5178e",
-        url: "https://github.com/tkersey/boundary/archive/41031eb826903bc7591698c55403ae044eb5178e.tar.gz",
-        sha256: "b57f02810b3d3b410240bbb9f6835169515eb8a0dfdd37faba66251de7a05051",
+        root: "boundary-f4e9268aa7b44842a8a3779fa9b6db167c8e90cb",
+        url: "https://github.com/tkersey/boundary/archive/f4e9268aa7b44842a8a3779fa9b6db167c8e90cb.tar.gz",
+        sha256: "17b33ddd3223cd515aa8b3150753e4e523ce44c3526c593607ea3aebbd0a3f9f",
     }),
     world: Object.freeze({
         version: "3.1.4",

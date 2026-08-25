@@ -8,9 +8,10 @@ Action, Observation, budget, history, or strategy knowledge.
 Agent has no World source dependency. Clean consumers materialize exact Agent
 and World archives independently. World pins the landed Boundary v1.6.0
 release commit, while Agent pins a later source-compatible Boundary owner fix
-under the same package version; consumers must not treat them as one nominal
-package instance. Agent exports its own Boundary module for downstream source
-construction. World admits the resulting Machine structurally as ABI v2, and
+under the same package version that changes no public Boundary API; consumers
+must not treat them as one nominal package instance. Agent exports its own
+Boundary module for downstream source construction. World admits the resulting
+Machine structurally as ABI v2, and
 the conformance and interpretation proofs bind the emitted program/profile,
 World manifest root, specialized trace, and fixed release kernel without
 weakening Machine admission.

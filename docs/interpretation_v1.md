@@ -13,6 +13,9 @@ Its SHA-256 is
 it imports nothing, and a fresh instance receives the complete BPI1,
 MachineV2Profile, canonical State, and auxiliary bytes for every command. The
 same kernel also validates an unrelated Boundary release image/profile pair.
+The proof receipt separately binds the exact Boundary compiler source commit
+and Zig package hash used to emit the Agent image; the fixed-kernel identity
+remains the published v1.6.0 release digest.
 
 External capabilities remain specialized receiver policy, not interpreter
 clauses. The generic resolver maps each validated BPI1 effect identity through

@@ -403,7 +403,7 @@ pub fn build(b: *std.Build) void {
     }
     acquire_interpretation_runtime.addArg("--output");
     const interpretation_runtime = acquire_interpretation_runtime.addOutputDirectoryArg(
-        "runtime-dependencies",
+        "runtime-dependencies-v1",
     );
 
     const interpretation_proof_command = b.addSystemCommand(&.{"bun"});

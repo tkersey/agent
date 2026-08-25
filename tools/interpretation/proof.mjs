@@ -184,7 +184,9 @@ export async function proveAgentInterpretation(options) {
       format: "agent-interpretation-v1",
       agent_commit: sourceBinding.head,
       agent_version: sourceBinding.version,
-      boundary_version: "1.6.0",
+      boundary_version: sourceBinding.boundaryVersion,
+      boundary_source_commit: sourceBinding.boundarySourceCommit,
+      boundary_package_hash: sourceBinding.boundaryPackageHash,
       kernel_wasm_sha256: options.kernelSha256,
       kernel_import_count: 0,
       world_host_runtime_sha256: dependencyBindings.worldHost.sha256,
@@ -230,7 +232,7 @@ export async function proveAgentInterpretation(options) {
 
 async function bindAgentSource(agentRoot) {
   const headBefore = await git(agentRoot, ["rev-parse", "HEAD"]);
-  const version = await bindAgentVersion(agentRoot);
+  const identity = await bindAgentIdentity(agentRoot);
   const child = Bun.spawn([
     "git",
     "status",
@@ -252,20 +254,17 @@ async function bindAgentSource(agentRoot) {
   }
   const headAfter = await git(agentRoot, ["rev-parse", "HEAD"]);
   if (headBefore !== headAfter) throw new Error("agent_source_head_changed_during_binding");
-  return Object.freeze({ head: headAfter, version });
+  return Object.freeze({ head: headAfter, ...identity });
 }
 
 async function assertAgentSourceUnchanged(agentRoot, expected) {
   const current = await bindAgentSource(agentRoot);
-  if (current.head !== expected.head || current.version !== expected.version) {
-    throw new Error(
-      `agent_source_binding_changed:${expected.head}:${expected.version}:` +
-      `${current.head}:${current.version}`
-    );
+  if (JSON.stringify(current) !== JSON.stringify(expected)) {
+    throw new Error(`agent_source_binding_changed:${JSON.stringify(expected)}:${JSON.stringify(current)}`);
   }
 }
 
-async function bindAgentVersion(agentRoot) {
+async function bindAgentIdentity(agentRoot) {
   const [packageSource, manifestSource] = await Promise.all([
     readFile(join(agentRoot, "build.zig.zon"), "utf8"),
     readFile(join(agentRoot, "src/manifest.zig"), "utf8")
@@ -277,7 +276,16 @@ async function bindAgentVersion(agentRoot) {
   if (!/^\d+\.\d+\.\d+$/.test(packageVersion ?? "") || packageVersion !== manifestVersion) {
     throw new Error(`agent_version_binding_invalid:${packageVersion}:${manifestVersion}`);
   }
-  return packageVersion;
+  const boundary = packageSource.match(
+    /\.boundary = \.\{\s*\.url = "https:\/\/github\.com\/tkersey\/boundary\/archive\/([0-9a-f]{40})\.tar\.gz",\s*\.hash = "(boundary-(\d+\.\d+\.\d+)-[^"]+)",\s*\}/s
+  );
+  if (boundary === null) throw new Error("boundary_dependency_binding_invalid");
+  return Object.freeze({
+    version: packageVersion,
+    boundarySourceCommit: boundary[1],
+    boundaryPackageHash: boundary[2],
+    boundaryVersion: boundary[3]
+  });
 }
 
 async function proveSandboxReadDenials(

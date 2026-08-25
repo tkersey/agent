@@ -279,6 +279,11 @@ async function bindAgentSource(
   expectedArchiveSha256,
   expectedTree
 ) {
+  const snapshotBindingSupplied = expectedHead !== undefined ||
+    expectedArchiveSha256 !== undefined || expectedTree !== undefined;
+  if (existsSync(join(agentRoot, ".git")) && snapshotBindingSupplied) {
+    throw new Error("agent_source_snapshot_requires_no_git_checkout");
+  }
   if (!existsSync(join(agentRoot, ".git"))) {
     if (!/^[0-9a-f]{40}$/.test(expectedHead ?? "") ||
         !/^[0-9a-f]{64}$/.test(expectedArchiveSha256 ?? "") ||

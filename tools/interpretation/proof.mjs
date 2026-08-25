@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, readlinkSync, realpathSync, statSync } from "node:fs";
-import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
@@ -246,8 +246,21 @@ export async function proveAgentInterpretation(options) {
     await writeFile(options.receiptOutput, `${JSON.stringify(receipt, null, 2)}\n`);
     return receipt;
   } finally {
-    if (!options.keepTemporary) await rm(temporaryRoot, { recursive: true, force: true });
+    if (!options.keepTemporary) {
+      await makeTreeWritable(temporaryRoot);
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
     else process.stderr.write(`temporary_root=${temporaryRoot}\n`);
+  }
+}
+
+async function makeTreeWritable(root) {
+  await chmod(root, 0o700);
+  const entries = await readdir(root, { withFileTypes: true });
+  for (const entry of entries) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) await makeTreeWritable(path);
+    else if (entry.isFile()) await chmod(path, 0o600);
   }
 }
 

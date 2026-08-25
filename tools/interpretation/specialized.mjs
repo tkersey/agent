@@ -29,6 +29,8 @@ export async function runSpecialized(options) {
   const manifest = host.decodeApplicationManifest(manifestBytes);
   const applicationId = Buffer.from(manifest.applicationId).toString("hex");
   const kernel = await compileKernel(kernelBytes);
+  const validation = await executeKernelCommand({ kernel, bpi1, mv2p1, command: 0 });
+  if (validation.outcome !== 0) throw new Error("specialized_image_validation_failed");
   const effects = readBpi1EffectCatalog(bpi1);
   const environment = await environmentModule.createEnvironment({
     capabilitiesRoot: options.capabilitiesRoot,

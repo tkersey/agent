@@ -180,6 +180,8 @@ export async function proveAgentInterpretation(options) {
     const bpi1 = await readFile(join(snapshotOptions.artifactRoot, "repository-repair.agent.bpi1"));
     const mv2p1 = await readFile(join(snapshotOptions.artifactRoot, "repository-repair.agent.mv2p1"));
     const contract = await readFile(join(snapshotOptions.artifactRoot, "repository-repair.decision-contract.bin"));
+    const unrelatedBpi1 = await readFile(snapshotOptions.unrelatedBpi1);
+    const unrelatedMv2p1 = await readFile(snapshotOptions.unrelatedMv2p1);
     const receipt = {
       format: "agent-interpretation-v1",
       agent_commit: sourceBinding.head,
@@ -193,6 +195,8 @@ export async function proveAgentInterpretation(options) {
       world_capabilities_runtime_sha256: dependencyBindings.worldCapabilities.sha256,
       bpi1_sha256: sha256(bpi1),
       mv2p1_sha256: sha256(mv2p1),
+      unrelated_bpi1_sha256: sha256(unrelatedBpi1),
+      unrelated_mv2p1_sha256: sha256(unrelatedMv2p1),
       program_transition_digest: bpi1.subarray(32, 64).toString("hex"),
       machine_v2_contract_digest: mv2p1.subarray(96, 128).toString("hex"),
       application_id: interpreted.applicationId,

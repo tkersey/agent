@@ -26,12 +26,18 @@ export async function runInterpreted(options) {
   )));
   const environmentModule = await import(pathToFileURL(options.environmentModule));
   const kernel = await compileKernel(artifacts.kernel);
-  const effects = readBpi1EffectCatalog(artifacts.bpi1);
   const manifest = hostProtocol.decodeApplicationManifest(artifacts.manifest);
   const applicationId = Buffer.from(manifest.applicationId).toString("hex");
   verifyArtifactBindings(artifacts, manifest);
   const decisionContractDigest = verifyDecisionContract(artifacts.decisionContract);
-  await executeKernelCommand({ kernel, bpi1: artifacts.bpi1, mv2p1: artifacts.mv2p1, command: 0 });
+  const validation = await executeKernelCommand({
+    kernel,
+    bpi1: artifacts.bpi1,
+    mv2p1: artifacts.mv2p1,
+    command: 0
+  });
+  if (validation.outcome !== 0) throw new Error("interpreted_image_validation_failed");
+  const effects = readBpi1EffectCatalog(artifacts.bpi1);
 
   const environment = await environmentModule.createEnvironment({
     capabilitiesRoot: options.capabilitiesRoot,

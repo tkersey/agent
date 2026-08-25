@@ -61,7 +61,9 @@ try {
   if (!existsSync(sourceSnapshot) || existsSync(join(sourceSnapshot, ".git"))) {
     throw new Error("Agent source snapshot is invalid");
   }
-  makeReadOnly(sourceSnapshot);
+  const packageScratch = join(sourceSnapshot, "zig-pkg");
+  mkdirSync(packageScratch);
+  makeReadOnly(sourceSnapshot, packageScratch);
 
   const prefix = join(proofRoot, "out");
   const command = [
@@ -142,8 +144,12 @@ function git(root, executable, environment, args) {
   return run(executable, ["-C", root, ...args], root, environment, false).stdout.trim();
 }
 
-function makeReadOnly(root) {
+function makeReadOnly(root, writableScratch) {
   const visit = (path) => {
+    if (path === writableScratch) {
+      chmodSync(path, 0o700);
+      return;
+    }
     const stat = lstatSync(path);
     if (stat.isDirectory()) {
       for (const name of readdirSync(path)) visit(join(path, name));

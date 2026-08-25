@@ -307,7 +307,10 @@ async function assertAgentSourceUnchanged(agentRoot, expected) {
 }
 
 async function digestAgentSourceTree(agentRoot) {
-  const files = await recursiveFiles(agentRoot);
+  const files = await recursiveFiles(
+    agentRoot,
+    new Set([".zig-cache", "zig-out", "zig-pkg"])
+  );
   const hasher = createHash("sha256");
   hasher.update("agent-source-snapshot-tree-v1\0");
   for (const path of files) {
@@ -1076,14 +1079,17 @@ function requiredRepositoryObservations(context) {
     context.preMutationTestFailed === true && context.lastTestPassed === true;
 }
 
-async function recursiveFiles(root) {
+async function recursiveFiles(root, ignoredDirectories = new Set()) {
   const result = [];
   async function walk(directory) {
     const entries = await readdir(directory, { withFileTypes: true });
     entries.sort((left, right) => left.name.localeCompare(right.name));
     for (const entry of entries) {
       const full = join(directory, entry.name);
-      if (entry.isDirectory()) await walk(full);
+      const path = relative(root, full);
+      if (entry.isDirectory()) {
+        if (!ignoredDirectories.has(path)) await walk(full);
+      }
       else if (entry.isFile()) result.push(relative(root, full));
       else throw new Error(`clean_room_non_regular:${relative(root, full)}`);
     }

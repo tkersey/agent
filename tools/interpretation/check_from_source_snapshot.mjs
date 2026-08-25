@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -53,7 +54,7 @@ try {
   const home = join(proofRoot, "home");
   mkdirSync(home);
   const environment = sourceSnapshotEnvironment(options.zig, home);
-  requireBoundaryInputs(options);
+  const boundaryInputs = snapshotBoundaryInputs(options, proofRoot);
   const binding = bindSource(options.agentRoot, gitExecutable, environment);
   const archive = join(proofRoot, "agent-source.tar.gz");
   run(gitExecutable, [
@@ -105,7 +106,8 @@ try {
     "all"
   ];
   for (const name of FORWARDED_OPTIONS) {
-    const value = options[toCamelCase(name)];
+    const key = toCamelCase(name);
+    const value = boundaryInputs[key] ?? options[key];
     if (value !== undefined) command.push(`-D${name}=${value}`);
   }
   run(options.zig, command, sourceSnapshot, environment);
@@ -120,7 +122,10 @@ try {
       receipt.agent_commit !== binding.head ||
       receipt.agent_source_git_tree !== binding.tree ||
       receipt.agent_source_archive_sha256 !== archiveSha256 ||
-      receipt.agent_source_tree_digest !== sourceTreeDigest) {
+      receipt.agent_source_tree_digest !== sourceTreeDigest ||
+      receipt.kernel_wasm_sha256 !== EXPECTED_KERNEL_SHA256 ||
+      receipt.unrelated_bpi1_sha256 !== EXPECTED_UNRELATED_BPI1_SHA256 ||
+      receipt.unrelated_mv2p1_sha256 !== EXPECTED_UNRELATED_MV2P1_SHA256) {
     throw new Error("snapshot proof receipt source binding mismatch");
   }
   const publicReceipt = {
@@ -309,17 +314,27 @@ function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-function requireBoundaryInputs(options) {
-  for (const [label, path, expected] of [
-    ["kernel", options.interpretationKernelWasm, EXPECTED_KERNEL_SHA256],
-    ["unrelated BPI1", options.interpretationUnrelatedBpi1, EXPECTED_UNRELATED_BPI1_SHA256],
-    ["unrelated MV2P1", options.interpretationUnrelatedMv2p1, EXPECTED_UNRELATED_MV2P1_SHA256]
+function snapshotBoundaryInputs(options, proofRoot) {
+  const root = join(proofRoot, "boundary-inputs");
+  mkdirSync(root);
+  const result = {};
+  for (const [key, label, path, expected, basename] of [
+    ["interpretationKernelWasm", "kernel", options.interpretationKernelWasm, EXPECTED_KERNEL_SHA256, "boundary-machine-v2-kernel-v1.wasm"],
+    ["interpretationUnrelatedBpi1", "unrelated BPI1", options.interpretationUnrelatedBpi1, EXPECTED_UNRELATED_BPI1_SHA256, "one-effect.boundary-program-image"],
+    ["interpretationUnrelatedMv2p1", "unrelated MV2P1", options.interpretationUnrelatedMv2p1, EXPECTED_UNRELATED_MV2P1_SHA256, "one-effect.machine-v2-profile"]
   ]) {
-    const actual = sha256(readFileSync(path));
-    if (actual !== expected) {
-      throw new Error(`${label} source-snapshot input digest mismatch: ${actual}`);
+    const before = sha256(readFileSync(path));
+    if (before !== expected) {
+      throw new Error(`${label} source-snapshot input digest mismatch: ${before}`);
     }
+    const snapshot = join(root, basename);
+    copyFileSync(path, snapshot);
+    chmodSync(snapshot, 0o444);
+    const after = sha256(readFileSync(snapshot));
+    if (after !== expected) throw new Error(`${label} snapshot digest mismatch: ${after}`);
+    result[key] = snapshot;
   }
+  return Object.freeze(result);
 }
 
 function toCamelCase(value) {

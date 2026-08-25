@@ -119,7 +119,15 @@ try {
   process.stdout.write("agent_source_snapshot_read_only=true\n");
   passed = true;
 } finally {
-  if (passed) rmSync(proofRoot, { recursive: true, force: true });
+  if (passed) {
+    makeWritable(proofRoot);
+    rmSync(proofRoot, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 50
+    });
+  }
   else process.stderr.write(`agent_source_snapshot_root=${proofRoot}\n`);
 }
 
@@ -174,6 +182,17 @@ function makeReadOnly(root, writableScratch) {
     }
   };
   visit(root);
+}
+
+function makeWritable(root) {
+  if (!existsSync(root)) return;
+  const stat = lstatSync(root);
+  if (stat.isDirectory()) {
+    chmodSync(root, 0o700);
+    for (const name of readdirSync(root)) makeWritable(join(root, name));
+  } else if (stat.isFile()) {
+    chmodSync(root, 0o600);
+  }
 }
 
 function sourceSnapshotEnvironment(zig, home) {

@@ -107,14 +107,14 @@ export async function runLiveActuality(options = {}) {
 
     const wasmBytes = await readFile(join(artifactRoot, "repository-repair-actuality.world.wasm"));
     const manifestBytes = await readFile(join(artifactRoot, "repository-repair-actuality.manifest.bin"));
-    applicationId = hex(host.decodeApplicationManifest(manifestBytes).applicationId);
-    const applicationIndex = openaiAdapter.ADMITTED_APPLICATION_IDS.indexOf(applicationId);
+    const manifestApplicationId = hex(host.decodeApplicationManifest(manifestBytes).applicationId);
+    const applicationIndex = openaiAdapter.ADMITTED_APPLICATION_IDS.indexOf(manifestApplicationId);
     if (applicationIndex < 0) throw new Error("application_identity_not_admitted");
     const decisionContractBytes = await readFile(join(
       artifactRoot,
       "repository-repair-decision-contract.bin"
     ));
-    decisionContractDigest = decisionContractBytes.subarray(-32).toString("hex");
+    decisionContractDigest = verifyDecisionContract(decisionContractBytes);
     const admittedContracts = [
       openaiAdapter.DECISION_CONTRACT_DIGEST,
       openaiAdapter.INTERPRETATION_DECISION_CONTRACT_DIGEST
@@ -129,9 +129,10 @@ export async function runLiveActuality(options = {}) {
       headStore: new host.MemoryBranchHeadStore(),
       workerFactory: () => new host.ApplicationWorker({ maximumMemoryBytes: WORKER_MEMORY_BYTES }),
       preflight: async (manifest) => ({
-        blockers: hex(manifest.applicationId) === applicationId ? [] : ["application_identity_mismatch"]
+        blockers: hex(manifest.applicationId) === manifestApplicationId ? [] : ["application_identity_mismatch"]
       })
     });
+    applicationId = manifestApplicationId;
     const router = new capabilities.CapabilityRouterV1({
       bindings: [
         capabilities.repositoryRepairOpenAIBinding(),
@@ -282,6 +283,17 @@ export async function runLiveActuality(options = {}) {
     if (!options.keepTemporary) await rm(temporaryRoot, { recursive: true, force: true });
     else process.stderr.write(`temporary_root=${temporaryRoot}\n`);
   }
+}
+
+export function verifyDecisionContract(value) {
+  const bytes = Buffer.from(value);
+  if (bytes.length < 40 || bytes.subarray(0, 8).toString("ascii") !== "AGT_DCT2") {
+    throw new Error("decision_contract_invalid");
+  }
+  const embedded = bytes.subarray(-32).toString("hex");
+  const computed = sha256(bytes.subarray(0, -32));
+  if (embedded !== computed) throw new Error("decision_contract_digest_invalid");
+  return embedded;
 }
 
 export function admitSuccessfulProviderClaims(result, effectStatus) {

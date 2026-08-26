@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 
 import {
   admitSuccessfulProviderClaims,
@@ -6,7 +7,8 @@ import {
   LiveActualityAttemptError,
   publicFailureCode,
   runLiveCommand,
-  assertLiveReceipt
+  assertLiveReceipt,
+  verifyDecisionContract
 } from "../tools/actuality/live.mjs";
 
 const EffectStatus = Object.freeze({ ok: 0, rejected: 1, failed: 2, deferred: 3, cancelled: 4 });
@@ -134,6 +136,15 @@ describe("live actuality failure receipts", () => {
       failureCode: "live_actuality_failed"
     });
     expect(derived.application_id).toBe("a".repeat(64));
+  });
+
+  test("validates the complete decision contract before trusting its digest suffix", () => {
+    const body = Buffer.concat([Buffer.from("AGT_DCT2"), Buffer.from("canonical contract body")]);
+    const contract = Buffer.concat([body, createHash("sha256").update(body).digest()]);
+    expect(verifyDecisionContract(contract)).toBe(contract.subarray(-32).toString("hex"));
+    const corrupted = Buffer.from(contract);
+    corrupted[8] ^= 1;
+    expect(() => verifyDecisionContract(corrupted)).toThrow("decision_contract_digest_invalid");
   });
 
   test("attempt errors require a module-owned receipt", () => {

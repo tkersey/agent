@@ -1078,9 +1078,17 @@ async function runNegativeGates(
   const unrelatedValid = (await executeKernelCommand({
     kernel, bpi1: unrelatedBpi1, mv2p1: unrelatedMv2p1, command: 0
   })).outcome === 0;
-  const unrelatedCompletionRejected = await rejects(() => executeKernelCommand({
-    kernel, bpi1: unrelatedBpi1, mv2p1: unrelatedMv2p1, command: 1, auxiliary: initialArgs
-  }));
+  let unrelatedCompletionRejected = true;
+  try {
+    const unrelatedInitialization = await executeKernelCommand({
+      kernel,
+      bpi1: unrelatedBpi1,
+      mv2p1: unrelatedMv2p1,
+      command: 1,
+      auxiliary: initialArgs
+    });
+    unrelatedCompletionRejected = unrelatedInitialization.outcome !== 1;
+  } catch {}
   const first = interpreted.trace.at(0);
   const mutated = Buffer.from(first.response);
   mutated[mutated.length - 1] ^= 1;

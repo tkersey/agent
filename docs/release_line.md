@@ -77,3 +77,11 @@ their metadata class as `agent.action.Class` before returning the descriptor
 type, so foreign enum values cannot bypass admission through Zig's lazy
 declaration analysis. Contextual enum literals and the default `.custom` class
 remain supported; Machine ABI v2 and `ABL_RNF2` remain unchanged.
+
+Agent v2.7.0 adds a second execution engine for the same compiled semantics:
+canonical BPI1 plus MachineV2Profile executed by Boundary v1.6.0's fixed,
+import-free Machine-v2 kernel. The repository-repair actuality proof compares
+specialized World execution and fixed-kernel interpretation at every external
+effect boundary. World v3.1.4 changes package identity only, and
+world-capabilities v2.3.3 admits both the prior and interpretation actuality
+identities without changing interface schemas or authority policy.

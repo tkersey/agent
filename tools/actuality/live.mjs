@@ -5,15 +5,6 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 
-const candidate = JSON.parse(await readFile(new URL(
-  "../../conformance/agent-v2/candidate.json",
-  import.meta.url,
-)));
-const APPLICATION_ID = admittedDigest(candidate.identities?.applicationId, "candidate_application_id");
-const DECISION_CONTRACT_DIGEST = admittedDigest(
-  candidate.identities?.decisionContractDigest,
-  "candidate_decision_contract_digest",
-);
 const WORKER_MEMORY_BYTES = 256 * 1024 * 1024;
 const FAILED_ATTEMPT_RECEIPT_BRAND = Symbol("failed-attempt-receipt");
 const LIVE_RECEIPT_BOOLEAN_FIELDS = Object.freeze([
@@ -80,6 +71,8 @@ export async function runLiveActuality(options = {}) {
   const capabilitiesRoot = resolve(options.capabilitiesRoot ?? process.env.AGENT_WORLD_CAPABILITIES_ROOT ?? join(agentRoot, "../world-capabilities"));
   const artifactRoot = resolve(options.artifactRoot ?? join(agentRoot, "zig-out/agent-actuality"));
   const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-actuality-live-"));
+  let applicationId = null;
+  let decisionContractDigest = null;
   let context;
   let genesisFrameId = null;
   let terminalFrameId = null;
@@ -99,6 +92,10 @@ export async function runLiveActuality(options = {}) {
       capabilitiesRoot,
       "packages/repository-workspace-actuality/adapter.mjs"
     )));
+    const openaiAdapter = await import(pathToFileURL(join(
+      capabilitiesRoot,
+      "packages/repository-repair-openai/adapter.mjs"
+    )));
     const workspaceRoot = join(temporaryRoot, "workspace");
     const temporaryHome = join(temporaryRoot, "home");
     await cp(join(agentRoot, "fixtures/repository-repair-v1"), workspaceRoot, {
@@ -109,6 +106,22 @@ export async function runLiveActuality(options = {}) {
     await initializeGit(workspaceRoot);
 
     const wasmBytes = await readFile(join(artifactRoot, "repository-repair-actuality.world.wasm"));
+    const manifestBytes = await readFile(join(artifactRoot, "repository-repair-actuality.manifest.bin"));
+    const manifestApplicationId = hex(host.decodeApplicationManifest(manifestBytes).applicationId);
+    const applicationIndex = openaiAdapter.ADMITTED_APPLICATION_IDS.indexOf(manifestApplicationId);
+    if (applicationIndex < 0) throw new Error("application_identity_not_admitted");
+    const decisionContractBytes = await readFile(join(
+      artifactRoot,
+      "repository-repair-decision-contract.bin"
+    ));
+    decisionContractDigest = verifyDecisionContract(decisionContractBytes);
+    const admittedContracts = [
+      openaiAdapter.DECISION_CONTRACT_DIGEST,
+      openaiAdapter.INTERPRETATION_DECISION_CONTRACT_DIGEST
+    ];
+    if (decisionContractDigest !== admittedContracts.at(applicationIndex)) {
+      throw new Error("decision_contract_identity_not_admitted");
+    }
     const initialArgsBytes = await readFile(join(artifactRoot, "initial-args.bin"));
     const controller = await host.RunControllerV1.create({
       wasmBytes,
@@ -116,9 +129,10 @@ export async function runLiveActuality(options = {}) {
       headStore: new host.MemoryBranchHeadStore(),
       workerFactory: () => new host.ApplicationWorker({ maximumMemoryBytes: WORKER_MEMORY_BYTES }),
       preflight: async (manifest) => ({
-        blockers: hex(manifest.applicationId) === APPLICATION_ID ? [] : ["application_identity_mismatch"]
+        blockers: hex(manifest.applicationId) === manifestApplicationId ? [] : ["application_identity_mismatch"]
       })
     });
+    applicationId = manifestApplicationId;
     const router = new capabilities.CapabilityRouterV1({
       bindings: [
         capabilities.repositoryRepairOpenAIBinding(),
@@ -126,7 +140,7 @@ export async function runLiveActuality(options = {}) {
       ]
     });
     context = {
-      applicationId: APPLICATION_ID,
+      applicationId,
       workspaceRoot,
       workspaceRootReal: await realpath(workspaceRoot),
       temporaryHome,
@@ -135,7 +149,7 @@ export async function runLiveActuality(options = {}) {
       secrets: { OPENAI_API_KEY: apiKey },
       openaiModel: model,
       allowedModels: [model],
-      decisionContractDigest: DECISION_CONTRACT_DIGEST,
+      decisionContractDigest,
       maximumModelCalls: 16,
       policy: { repositoryActuality: true, openaiRepositoryRepair: true }
     };
@@ -158,7 +172,7 @@ export async function runLiveActuality(options = {}) {
         const proposalDigest = workspaceAdapter.proposalDigest({ operation: "replace", ...proposal });
         const prior = await readFile(join(workspaceRoot, proposal.path), "utf8");
         process.stderr.write(
-          `\nApplication: ${APPLICATION_ID}\n` +
+          `\nApplication: ${applicationId}\n` +
           `EffectRequest: ${requestId}\n` +
           `Path: ${proposal.path}\n` +
           `Expected SHA-256: ${proposal.expectedSha256}\n` +
@@ -204,7 +218,7 @@ export async function runLiveActuality(options = {}) {
     const receipt = {
       agent_actuality_format: 1,
       agent_actuality_mode: "live",
-      application_id: APPLICATION_ID,
+      application_id: applicationId,
       application_wasm_sha256: sha256(wasmBytes),
       openai_responses_api: true,
       openai_model_requested_present: model.length > 0,
@@ -261,6 +275,7 @@ export async function runLiveActuality(options = {}) {
       interfaces,
       provider,
       evidenceDigests,
+      applicationId,
       failureCode: publicFailureCode(error)
     }));
   } finally {
@@ -268,6 +283,17 @@ export async function runLiveActuality(options = {}) {
     if (!options.keepTemporary) await rm(temporaryRoot, { recursive: true, force: true });
     else process.stderr.write(`temporary_root=${temporaryRoot}\n`);
   }
+}
+
+export function verifyDecisionContract(value) {
+  const bytes = Buffer.from(value);
+  if (bytes.length < 40 || bytes.subarray(0, 8).toString("ascii") !== "AGT_DCT2") {
+    throw new Error("decision_contract_invalid");
+  }
+  const embedded = bytes.subarray(-32).toString("hex");
+  const computed = sha256(bytes.subarray(0, -32));
+  if (embedded !== computed) throw new Error("decision_contract_digest_invalid");
+  return embedded;
 }
 
 export function admitSuccessfulProviderClaims(result, effectStatus) {
@@ -301,6 +327,7 @@ export function failedAttemptReceipt({
   interfaces,
   provider,
   evidenceDigests,
+  applicationId = null,
   failureCode
 }) {
   const modelCalls = context?.modelCalls ?? 0;
@@ -312,7 +339,7 @@ export function failedAttemptReceipt({
   const receipt = {
     agent_actuality_format: 1,
     agent_actuality_mode: "live",
-    application_id: APPLICATION_ID,
+    application_id: applicationId,
     openai_responses_api: true,
     openai_model_requested_present: typeof model === "string" && model.length > 0,
     openai_store: false,
@@ -352,13 +379,6 @@ export function publicFailureCode(error) {
 
 function safeCount(value) {
   return Number.isSafeInteger(value) && value >= 0;
-}
-
-function admittedDigest(value, label) {
-  if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) {
-    throw new Error(`${label}_invalid`);
-  }
-  return value;
 }
 
 export function assertLiveReceipt(receipt) {

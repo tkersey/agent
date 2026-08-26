@@ -21,8 +21,9 @@ effect replay, independent children from one parent, and migration with
 receiver preflight and no transferred secrets or approval.
 
 The anonymous public lane downloads exact lock-pinned world-host and
-world-capabilities artifacts, authenticates them before extraction, and runs
-without sibling source checkouts or GitHub credentials:
+world-capabilities artifacts, authenticates them before extraction, reproduces
+the digest-bound deterministic capability distribution, and runs without
+sibling source checkouts or GitHub credentials:
 
 ```sh
 zig build check-agent-reference-stack

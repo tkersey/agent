@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 
 import {
   admitSuccessfulProviderClaims,
@@ -6,7 +7,8 @@ import {
   LiveActualityAttemptError,
   publicFailureCode,
   runLiveCommand,
-  assertLiveReceipt
+  assertLiveReceipt,
+  verifyDecisionContract
 } from "../tools/actuality/live.mjs";
 
 const EffectStatus = Object.freeze({ ok: 0, rejected: 1, failed: 2, deferred: 3, cancelled: 4 });
@@ -61,6 +63,7 @@ describe("live actuality failure receipts", () => {
     expect(receipt.total_tokens).toBeNull();
     expect(receipt.private_evidence_digest).toMatch(/^[0-9a-f]{64}$/);
     expect(receipt.failure_code).toBe("model_effect_failed");
+    expect(receipt.application_id).toBeNull();
     expect(receipt.openai_api_key_recorded).toBe(false);
     expect(receipt.public_receipt_contains_raw_prompt).toBe(false);
     expect(receipt.public_receipt_contains_raw_repository_bytes).toBe(false);
@@ -107,6 +110,41 @@ describe("live actuality failure receipts", () => {
       write: (value) => { output += value; }
     })).rejects.toThrow("live_actuality_failed:model_effect_failed");
     expect(JSON.parse(output)).toEqual(receipt);
+  });
+
+  test("failed receipts claim an application identity only after derivation", () => {
+    const unresolved = failedAttemptReceipt({
+      model: "gpt-5.6-sol",
+      context: null,
+      genesisFrameId: null,
+      terminalFrameId: null,
+      interfaces: [],
+      provider: null,
+      evidenceDigests: [],
+      failureCode: "live_actuality_failed"
+    });
+    expect(unresolved.application_id).toBeNull();
+    const derived = failedAttemptReceipt({
+      model: "gpt-5.6-sol",
+      context: null,
+      genesisFrameId: null,
+      terminalFrameId: null,
+      interfaces: [],
+      provider: null,
+      evidenceDigests: [],
+      applicationId: "a".repeat(64),
+      failureCode: "live_actuality_failed"
+    });
+    expect(derived.application_id).toBe("a".repeat(64));
+  });
+
+  test("validates the complete decision contract before trusting its digest suffix", () => {
+    const body = Buffer.concat([Buffer.from("AGT_DCT2"), Buffer.from("canonical contract body")]);
+    const contract = Buffer.concat([body, createHash("sha256").update(body).digest()]);
+    expect(verifyDecisionContract(contract)).toBe(contract.subarray(-32).toString("hex"));
+    const corrupted = Buffer.from(contract);
+    corrupted[8] ^= 1;
+    expect(() => verifyDecisionContract(corrupted)).toThrow("decision_contract_digest_invalid");
   });
 
   test("attempt errors require a module-owned receipt", () => {

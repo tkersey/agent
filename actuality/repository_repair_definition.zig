@@ -245,13 +245,17 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
             .config = .{},
             .implementation = @import("repository_repair_epistemics.zig").WorkingSet(agent, @This()),
         });
-        pub const Compiled = agent.compile(Definition, Strategy, Epistemics, .{
-            .machine = .{
-                .maximum_frames = 32,
-                .maximum_state_bytes = 500 * 1024,
-                .maximum_machine_fuel = 4_000_000,
-            },
-        });
+        pub const machine_options: boundary.MachineOptions = .{
+            .maximum_frames = 32,
+            .maximum_state_bytes = 500 * 1024,
+            .maximum_machine_fuel = 4_000_000,
+        };
+        pub const Compiled = agent.compile(
+            Definition,
+            Strategy,
+            Epistemics,
+            .{ .machine = machine_options },
+        );
         pub const Machine = Compiled.Machine;
     };
 }

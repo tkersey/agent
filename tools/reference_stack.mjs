@@ -9,6 +9,7 @@ const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
 const MAX_EXPANDED_BYTES = 256 * 1024 * 1024;
 const MAX_ENTRIES = 10_000;
 const ALLOWED_FINAL_HOSTS = new Set([
+    "codeload.github.com",
     "github.com",
     "release-assets.githubusercontent.com",
     "objects.githubusercontent.com",
@@ -17,13 +18,21 @@ const ALLOWED_FINAL_HOSTS = new Set([
 const KINDS = Object.freeze({
     worldHost: Object.freeze({
         repository: "tkersey/world-host",
-        root: (version) => `world-host-v${version}-runtime`,
-        required: Object.freeze(["LICENSE", "bin/world-host-v1.mjs", "src/v1/index.mjs"]),
+        root: (entry) => `world-host-v${entry.version}-runtime`,
+        required: () => Object.freeze(["LICENSE", "bin/world-host-v1.mjs", "src/v1/index.mjs"]),
     }),
     worldCapabilities: Object.freeze({
         repository: "tkersey/world-capabilities",
-        root: (version) => `world-capabilities-v${version}-deterministic`,
-        required: Object.freeze(["LICENSE", "src/v1/index.mjs", "packages/repository-repair-decision-fixture/manifest.json"]),
+        root: (entry) => entry.archiveRoot ?? `world-capabilities-v${entry.version}-deterministic`,
+        required: (entry) => entry.provenance === "source-build"
+            ? Object.freeze([
+                "LICENSE",
+                "package.json",
+                "scripts/build-public-deterministic-v1.mjs",
+                "src/v1/index.mjs",
+                "packages/repository-repair-decision-fixture/manifest.json",
+            ])
+            : Object.freeze(["LICENSE", "src/v1/index.mjs", "packages/repository-repair-decision-fixture/manifest.json"]),
     }),
 });
 
@@ -36,9 +45,21 @@ export function readReferenceStackLock(path) {
         if (!entry || entry.repository !== expected.repository) throw new Error(`${kind} repository mismatch`);
         if (!/^\d+\.\d+\.\d+$/.test(entry.version)) throw new Error(`${kind} version is not canonical`);
         if (!/^[0-9a-f]{64}$/.test(entry.sha256)) throw new Error(`${kind} checksum is not canonical SHA-256`);
-        const wanted = `https://github.com/${entry.repository}/releases/download/v${entry.version}/`;
+        const provenance = entry.provenance ?? "release";
         const url = validatedHttpsUrl(entry.url, `${kind} URL`);
-        if (!url.href.startsWith(wanted) || basename(url.pathname) === "") throw new Error(`${kind} version/URL mismatch`);
+        if (provenance === "release") {
+            const wanted = `https://github.com/${entry.repository}/releases/download/v${entry.version}/`;
+            if (!url.href.startsWith(wanted) || basename(url.pathname) === "") throw new Error(`${kind} version/URL mismatch`);
+        } else if (kind === "worldCapabilities" && provenance === "source-build") {
+            const match = url.href.match(/^https:\/\/github\.com\/tkersey\/world-capabilities\/archive\/([0-9a-f]{40})\.tar\.gz$/);
+            if (match === null || entry.archiveRoot !== `world-capabilities-${match[1]}` ||
+                entry.distributionRoot !== `world-capabilities-v${entry.version}-deterministic` ||
+                !/^[0-9a-f]{64}$/.test(entry.sourceSha256 ?? "")) {
+                throw new Error(`${kind} source-build identity mismatch`);
+            }
+        } else {
+            throw new Error(`${kind} provenance is unsupported`);
+        }
         if (seen.has(url.href)) throw new Error("reference stack lock contains a duplicate asset");
         seen.add(url.href);
     }
@@ -65,7 +86,8 @@ export async function acquireReferenceStack(lock, options = {}) {
         }
         if (bytes.length > MAX_ARCHIVE_BYTES) throw new Error(`${kind} archive exceeds byte limit`);
         const actual = sha256(bytes);
-        if (actual !== entry.sha256) throw new Error(`${kind} checksum mismatch: expected=${entry.sha256} actual=${actual}`);
+        const expected = entry.provenance === "source-build" ? entry.sourceSha256 : entry.sha256;
+        if (actual !== expected) throw new Error(`${kind} checksum mismatch: expected=${expected} actual=${actual}`);
         result[kind] = Object.freeze({ entry, bytes, resolvedUrl, source });
     }
     return Object.freeze(result);
@@ -78,17 +100,67 @@ export function materializeReferenceArtifact(kind, artifact, archiveRoot, extrac
     mkdirSync(extractionRoot, { recursive: true });
     const archivePath = join(archiveRoot, basename(new URL(artifact.entry.url).pathname));
     writeFileSync(archivePath, artifact.bytes, { flag: "wx" });
-    const expectedRoot = expected.root(artifact.entry.version);
+    const expectedRoot = expected.root(artifact.entry);
     const inventory = inspectTarGz(archivePath, expectedRoot);
-    for (const relative of expected.required) {
+    for (const relative of expected.required(artifact.entry)) {
         if (!inventory.paths.has(`${expectedRoot}/${relative}`)) throw new Error(`${kind} archive is missing ${relative}`);
     }
     run("tar", ["-xzf", archivePath, "-C", extractionRoot]);
     return Object.freeze({ archivePath, root: join(extractionRoot, expectedRoot), inventory });
 }
 
-export function inspectTarGz(archivePath, expectedRoot) {
-    const listing = run("tar", ["-tzf", archivePath], false).stdout.split("\n").filter(Boolean);
+export function materializeWorldCapabilitiesArtifact(artifact, archiveRoot, extractionRoot, options = {}) {
+    const source = materializeReferenceArtifact(
+        "worldCapabilities",
+        artifact,
+        archiveRoot,
+        join(extractionRoot, "source"),
+    );
+    if (artifact.entry.provenance !== "source-build") return source;
+
+    const bunExecutable = options.bunExecutable ?? process.execPath;
+    const environment = options.environment ?? process.env;
+    const build = spawnSync(bunExecutable, [
+        join(source.root, "scripts/build-public-deterministic-v1.mjs"),
+    ], {
+        cwd: source.root,
+        env: environment,
+        encoding: "utf8",
+        maxBuffer: 128 * 1024 * 1024,
+    });
+    if (build.stdout) process.stdout.write(build.stdout);
+    if (build.stderr) process.stderr.write(build.stderr);
+    if (build.error) throw build.error;
+    if (build.status !== 0) throw new Error(`worldCapabilities distribution build failed with status ${build.status}`);
+
+    const builtPath = join(
+        source.root,
+        "zig-out/public-deterministic",
+        `world-capabilities-v${artifact.entry.version}-deterministic.tar.gz`,
+    );
+    const bytes = readFileSync(builtPath);
+    if (bytes.length > MAX_ARCHIVE_BYTES) throw new Error("worldCapabilities distribution archive exceeds byte limit");
+    const digest = sha256(bytes);
+    if (digest !== artifact.entry.sha256) {
+        throw new Error(`worldCapabilities distribution checksum mismatch: expected=${artifact.entry.sha256} actual=${digest}`);
+    }
+    return materializeReferenceArtifact("worldCapabilities", {
+        entry: {
+            repository: artifact.entry.repository,
+            version: artifact.entry.version,
+            url: `https://github.com/tkersey/world-capabilities/releases/download/v${artifact.entry.version}/world-capabilities-v${artifact.entry.version}-deterministic.tar.gz`,
+            sha256: digest,
+        },
+        bytes,
+        resolvedUrl: null,
+        source: "source-built",
+    }, archiveRoot, join(extractionRoot, "distribution"));
+}
+
+export function inspectTarGz(archivePath, expectedRoot, options = {}) {
+    const tarExecutable = options.tarExecutable ?? "tar";
+    const environment = options.environment ?? process.env;
+    const listing = run(tarExecutable, ["-tzf", archivePath], false, environment).stdout.split("\n").filter(Boolean);
     if (listing.length === 0 || listing.length > MAX_ENTRIES) throw new Error("reference archive entry count is invalid");
     const paths = new Set();
     for (const name of listing) {
@@ -101,7 +173,7 @@ export function inspectTarGz(archivePath, expectedRoot) {
         if (paths.has(normalized)) throw new Error(`duplicate archive path: ${name}`);
         paths.add(normalized);
     }
-    const verbose = run("tar", ["-tvzf", archivePath], false).stdout.split("\n").filter(Boolean);
+    const verbose = run(tarExecutable, ["-tvzf", archivePath], false, environment).stdout.split("\n").filter(Boolean);
     let expandedBytes = 0;
     for (const line of verbose) {
         if (line.startsWith("l") || line.startsWith("h")) throw new Error("reference archive links are forbidden");
@@ -151,8 +223,8 @@ function sha256(bytes) {
     return createHash("sha256").update(bytes).digest("hex");
 }
 
-function run(command, args, forward = true) {
-    const result = spawnSync(command, args, { encoding: "utf8", maxBuffer: 128 * 1024 * 1024 });
+function run(command, args, forward = true, environment = process.env) {
+    const result = spawnSync(command, args, { env: environment, encoding: "utf8", maxBuffer: 128 * 1024 * 1024 });
     if (forward && result.stdout) process.stdout.write(result.stdout);
     if (forward && result.stderr) process.stderr.write(result.stderr);
     if (result.error) throw result.error;

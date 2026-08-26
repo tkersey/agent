@@ -3,7 +3,13 @@ set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 clean_root=$(mktemp -d "${TMPDIR:-/tmp}/agent-external-consumer.XXXXXX")
-trap 'rm -rf "$clean_root"' EXIT
+cleanup() {
+    cleanup_status=$?
+    chmod -R u+w "$clean_root" 2>/dev/null || true
+    rm -rf "$clean_root"
+    exit "$cleanup_status"
+}
+trap cleanup EXIT
 
 mkdir "$clean_root/agent" "$clean_root/consumer"
 tar \
@@ -24,7 +30,16 @@ if [ -n "${AGENT_WORLD_ROOT:-}" ]; then
     cp -R "$AGENT_WORLD_ROOT" "$clean_root/world"
 fi
 cd "$clean_root/consumer"
-zig build check --summary all
+if [ "${AGENT_HERMETIC:-}" = 1 ]; then
+    test -n "${AGENT_ZIG_EXE:-}"
+    test -x "$AGENT_ZIG_EXE"
+    test -n "${ZIG_GLOBAL_CACHE_DIR:-}"
+    "$AGENT_ZIG_EXE" build check \
+        --global-cache-dir "$ZIG_GLOBAL_CACHE_DIR" \
+        --summary all
+else
+    zig build check --summary all
+fi
 
 printf '%s\n' \
     'clean_room_agent_definition=true' \

@@ -5,8 +5,13 @@
 ```text
 AgentDefinition + RuntimeStrategy + EpistemicStrategy
     -> one Boundary Program
-    -> one Boundary Machine ABI v2 reducer
+    -> specialized Machine-v2 reducer
     -> World application-specific WASM
+
+AgentDefinition + RuntimeStrategy + EpistemicStrategy
+    -> one Boundary Program
+    -> BPI1 + MachineV2Profile
+    -> fixed Boundary kernel WASM
 ```
 
 Agent v2 separates four objects:
@@ -64,10 +69,10 @@ pub const Compiled = agent.compile(Definition, Runtime, Epistemics, .{
 });
 ```
 
-The package targets Zig 0.16.0, Boundary v1.5.0, Machine ABI v2, World
-v3.1.3, Application ABI v1, and Frame v1. Agent definitions and strategies are
-compile-time inputs: there is no runtime definition loader, strategy registry,
-memory VM, provider-owned conversation, or second reducer.
+The package targets Zig 0.16.0, Boundary v1.6.1, Machine ABI v2, World
+v3.1.4, Application ABI v1, and Frame v1. Agent definitions and strategies are
+compile-time inputs: BPI1 is a post-compilation semantic image, not a runtime
+definition loader or strategy registry.
 
 ## Proof classes
 
@@ -78,11 +83,17 @@ zig build check
 # Compiler proof after exact archive acquisition with network disabled.
 zig build check-agent-hermetic
 
-# Anonymous deterministic host/capability lifecycle from lock-pinned releases.
+# Anonymous deterministic host/capability lifecycle from lock-pinned artifacts.
 zig build check-agent-reference-stack
 
 # Local deterministic ENF Actuality plus retry/replay/branch/migration.
 zig build check-agent-actuality-release
+
+# Fixed-kernel BPI1 execution plus byte-identical specialized trace.
+zig build check-agent-interpretation-v1 --summary all
+
+# Emit the interpretation inputs for inspection.
+zig build emit-agent-interpretation-v1-assets
 
 # Explicit credentialed and interactive provider proof.
 OPENAI_API_KEY=... OPENAI_MODEL=... zig build check-agent-actuality-live
@@ -96,7 +107,8 @@ See [Epistemic Normal Form](docs/epistemic_normal_form.md),
 [EpistemicStrategy](docs/epistemic_strategy.md),
 [DecisionContract](docs/decision_contract.md),
 [evidence and memory](docs/evidence_and_memory.md),
-[Actuality](docs/actuality.md), and the
+[Actuality](docs/actuality.md),
+[Interpretation v1](docs/interpretation_v1.md), and the
 [v1.1 migration guide](docs/migration_from_1_1.md).
 
 Licensed under the MIT License.

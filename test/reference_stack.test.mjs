@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { archiveEntrySize, readReferenceStackLock } from "../tools/reference_stack.mjs";
+import { archiveEntrySize, inspectTarGz, readReferenceStackLock } from "../tools/reference_stack.mjs";
 
 const lockPath = "conformance/reference-stack-v1.lock.json";
 
@@ -14,10 +14,39 @@ describe("public reference stack lock", () => {
         expect(() => archiveEntrySize("not a tar inventory")).toThrow();
     });
 
-    test("binds exact stable public release URLs and checksums", () => {
+    test("uses the admitted tar executable and environment", () => {
+        const root = mkdtempSync(join(tmpdir(), "agent-reference-tar-"));
+        const tarExecutable = join(root, "tar");
+        writeFileSync(tarExecutable, `#!/bin/sh
+set -eu
+test "\${TRUSTED_TAR_MARKER:-}" = admitted
+case "$1" in
+    -tzf) printf 'root/\\nroot/file\\n' ;;
+    -tvzf) printf '%s\\n' '-rw-r--r--  0 owner group 5 Aug 15 03:00 root/file' ;;
+    *) exit 92 ;;
+esac
+`);
+        chmodSync(tarExecutable, 0o755);
+        const inventory = inspectTarGz(join(root, "ignored.tar.gz"), "root", {
+            tarExecutable,
+            environment: { PATH: "/usr/bin:/bin", TRUSTED_TAR_MARKER: "admitted" },
+        });
+        expect(inventory.entryCount).toBe(2);
+        expect(inventory.expandedBytes).toBe(5);
+        expect(() => inspectTarGz(join(root, "ignored.tar.gz"), "root", {
+            tarExecutable,
+            environment: { PATH: "/usr/bin:/bin" },
+        })).toThrow();
+    });
+
+    test("binds exact public artifact provenance and checksums", () => {
         const lock = readReferenceStackLock(lockPath);
         expect(lock.worldHost.version).toBe("1.0.1");
-        expect(lock.worldCapabilities.version).toBe("2.2.2");
+        expect(lock.worldCapabilities.version).toBe("2.3.3");
+        expect(lock.worldHost.provenance).toBe("release");
+        expect(lock.worldCapabilities.provenance).toBe("source-build");
+        expect(lock.worldCapabilities.sha256).toBe("687c22e26be244d069fac34b90add2f0834ab814ba78cbbbe640be2e7bb4edbb");
+        expect(lock.worldCapabilities.sourceSha256).toBe("d1a05dd176078fb011ad2b61d888e188a777901e287ff49b3f43d6e3edc7b7c4");
         expect(lock.worldHost.url).not.toContain("/releases/assets/");
         expect(lock.worldCapabilities.url).not.toContain("/releases/assets/");
     });

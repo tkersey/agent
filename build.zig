@@ -6,12 +6,69 @@ pub const ActualityApplication = @import("actuality/application.zig").Applicatio
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const boundary_archive = b.option([]const u8, "boundary-archive", "Local Boundary v1.5.0 archive for offline proof");
-    const world_archive = b.option([]const u8, "world-archive", "Local World v3.1.3 archive for offline proof");
+    const boundary_archive = b.option([]const u8, "boundary-archive", "Local Boundary v1.6.1 archive for offline proof");
+    const boundary_kernel_wasm = b.option([]const u8, "boundary-kernel-wasm", "Exact local Boundary v1.6.0 fixed-kernel WASM override");
+    const world_archive = b.option([]const u8, "world-archive", "Local World v3.1.4 archive for offline proof");
     const world_host_archive = b.option([]const u8, "world-host-archive", "Local world-host v1.0.1 runtime archive");
-    const world_capabilities_archive = b.option([]const u8, "world-capabilities-archive", "Local lock-pinned world-capabilities deterministic archive");
-    const world_capabilities_root = b.option([]const u8, "world-capabilities-root", "Local world-capabilities v2.3.2 source or extracted release root for adequacy development");
+    const world_capabilities_archive = b.option([]const u8, "world-capabilities-archive", "Local lock-pinned world-capabilities archive");
+    const world_capabilities_root = b.option([]const u8, "world-capabilities-root", "Local world-capabilities v2.3.3 source or extracted release root for development proofs");
     const world_host_root = b.option([]const u8, "world-host-root", "Local world-host v1.0.1 source root for adequacy development");
+    const interpretation_source_snapshot = b.option(
+        bool,
+        "interpretation-source-snapshot",
+        "Internal: execute the interpretation proof inside an authenticated Agent source snapshot",
+    ) orelse false;
+    const agent_source_head = b.option(
+        []const u8,
+        "agent-source-head",
+        "Internal authenticated Agent source commit for a snapshot proof",
+    );
+    const agent_source_archive_sha256 = b.option(
+        []const u8,
+        "agent-source-archive-sha256",
+        "Internal authenticated Agent source archive digest for a snapshot proof",
+    );
+    const agent_source_tree = b.option(
+        []const u8,
+        "agent-source-tree",
+        "Internal authenticated Agent Git tree for a snapshot proof",
+    );
+    const interpretation_kernel_wasm_override = b.option(
+        []const u8,
+        "interpretation-kernel-wasm",
+        "Internal preverified fixed-kernel artifact for a source snapshot proof",
+    );
+    const interpretation_unrelated_bpi1_override = b.option(
+        []const u8,
+        "interpretation-unrelated-bpi1",
+        "Internal preverified unrelated BPI1 for a source snapshot proof",
+    );
+    const interpretation_unrelated_mv2p1_override = b.option(
+        []const u8,
+        "interpretation-unrelated-mv2p1",
+        "Internal preverified unrelated MV2P1 for a source snapshot proof",
+    );
+    const any_source_binding = agent_source_head != null or
+        agent_source_archive_sha256 != null or agent_source_tree != null;
+    const complete_source_binding = agent_source_head != null and
+        agent_source_archive_sha256 != null and agent_source_tree != null;
+    const any_preverified_boundary_input = interpretation_kernel_wasm_override != null or
+        interpretation_unrelated_bpi1_override != null or
+        interpretation_unrelated_mv2p1_override != null;
+    const complete_preverified_boundary_inputs =
+        interpretation_kernel_wasm_override != null and
+        interpretation_unrelated_bpi1_override != null and
+        interpretation_unrelated_mv2p1_override != null;
+    if ((interpretation_source_snapshot and !complete_source_binding) or
+        (!interpretation_source_snapshot and any_source_binding) or
+        (interpretation_source_snapshot and !complete_preverified_boundary_inputs) or
+        (!interpretation_source_snapshot and any_preverified_boundary_input))
+    {
+        std.process.fatal(
+            "internal interpretation snapshot mode requires complete source and Boundary input bindings",
+            .{},
+        );
+    }
 
     const boundary_dependency = b.dependency("boundary", .{
         .target = target,
@@ -179,6 +236,315 @@ pub fn build(b: *std.Build) void {
     );
     b.getInstallStep().dependOn(&install_initial_args.step);
 
+    const interpretation_actuality = b.createModule(.{
+        .root_source_file = b.path("examples/repository_repair_actuality.zig"),
+        .target = b.graph.host,
+        .optimize = .Debug,
+    });
+    interpretation_actuality.addImport("agent", agent_module);
+    interpretation_actuality.addImport("boundary", boundary_module);
+    interpretation_actuality.addImport(
+        "repository_repair_definition",
+        b.createModule(.{
+            .root_source_file = b.path("actuality/repository_repair_definition.zig"),
+            .target = b.graph.host,
+            .optimize = .Debug,
+        }),
+    );
+    const interpretation_artifact_module = b.createModule(.{
+        .root_source_file = b.path("interpretation/emit_repository_repair_artifact.zig"),
+        .target = b.graph.host,
+        .optimize = .Debug,
+    });
+    interpretation_artifact_module.addImport(
+        "repository_repair_actuality",
+        interpretation_actuality,
+    );
+    const interpretation_artifact_emitter = b.addExecutable(.{
+        .name = "emit-repository-repair-agent-artifact",
+        .root_module = interpretation_artifact_module,
+    });
+    const run_interpretation_bpi1 = b.addRunArtifact(
+        interpretation_artifact_emitter,
+    );
+    run_interpretation_bpi1.addArg("bpi1");
+    const interpretation_bpi1_output = run_interpretation_bpi1.captureStdOut(
+        .{ .basename = "repository-repair.agent.bpi1" },
+    );
+
+    const run_interpretation_mv2p1 = b.addRunArtifact(
+        interpretation_artifact_emitter,
+    );
+    run_interpretation_mv2p1.addArg("mv2p1");
+    const interpretation_mv2p1_output = run_interpretation_mv2p1.captureStdOut(
+        .{ .basename = "repository-repair.agent.mv2p1" },
+    );
+
+    const acquire_boundary_assets = b.addSystemCommand(&.{"node"});
+    acquire_boundary_assets.addFileArg(
+        b.path("tools/interpretation/acquire_kernel.mjs"),
+    );
+    acquire_boundary_assets.addArg(b.graph.zig_exe);
+    acquire_boundary_assets.addDirectoryArg(boundary_dependency.path("."));
+    if (boundary_kernel_wasm) |path| {
+        acquire_boundary_assets.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
+    } else {
+        acquire_boundary_assets.addArg("-");
+    }
+    const acquired_interpretation_kernel_wasm = acquire_boundary_assets.addOutputFileArg(
+        "boundary-machine-v2-kernel-v1.wasm",
+    );
+    const acquired_unrelated_bpi1 = acquire_boundary_assets.addOutputFileArg(
+        "one-effect.boundary-program-image",
+    );
+    const acquired_unrelated_mv2p1 = acquire_boundary_assets.addOutputFileArg(
+        "one-effect.machine-v2-profile",
+    );
+    const interpretation_kernel_wasm: std.Build.LazyPath =
+        if (interpretation_kernel_wasm_override) |path|
+            .{ .cwd_relative = b.pathFromRoot(path) }
+        else
+            acquired_interpretation_kernel_wasm;
+    const unrelated_bpi1: std.Build.LazyPath =
+        if (interpretation_unrelated_bpi1_override) |path|
+            .{ .cwd_relative = b.pathFromRoot(path) }
+        else
+            acquired_unrelated_bpi1;
+    const unrelated_mv2p1: std.Build.LazyPath =
+        if (interpretation_unrelated_mv2p1_override) |path|
+            .{ .cwd_relative = b.pathFromRoot(path) }
+        else
+            acquired_unrelated_mv2p1;
+
+    const interpretation_assets = b.step(
+        "emit-agent-interpretation-v1-assets",
+        "Emit the canonical repository-repair interpretation inputs",
+    );
+    const install_interpretation_bpi1 = b.addInstallFile(
+        interpretation_bpi1_output,
+        "agent-interpretation-v1/repository-repair.agent.bpi1",
+    );
+    const install_interpretation_mv2p1 = b.addInstallFile(
+        interpretation_mv2p1_output,
+        "agent-interpretation-v1/repository-repair.agent.mv2p1",
+    );
+    const install_interpretation_initial_args = b.addInstallFile(
+        initial_args_output,
+        "agent-interpretation-v1/repository-repair.initial-args.bin",
+    );
+    const install_interpretation_contract = b.addInstallFile(
+        contract_binary_output,
+        "agent-interpretation-v1/repository-repair.decision-contract.bin",
+    );
+    const install_interpretation_manifest = b.addInstallFile(
+        actuality_application.manifest,
+        "agent-interpretation-v1/repository-repair-actuality.manifest.bin",
+    );
+    const install_interpretation_kernel = b.addInstallFile(
+        interpretation_kernel_wasm,
+        "agent-interpretation-v1/boundary-machine-v2-kernel-v1.wasm",
+    );
+    for ([_]*std.Build.Step{
+        &install_interpretation_bpi1.step,
+        &install_interpretation_mv2p1.step,
+        &install_interpretation_initial_args.step,
+        &install_interpretation_contract.step,
+        &install_interpretation_manifest.step,
+        &install_interpretation_kernel.step,
+    }) |step| interpretation_assets.dependOn(step);
+
+    const interpretation_hashes = [_]struct {
+        input: std.Build.LazyPath,
+        basename: []const u8,
+        destination: []const u8,
+    }{
+        .{
+            .input = interpretation_bpi1_output,
+            .basename = "repository-repair.agent.bpi1.sha256",
+            .destination = "agent-interpretation-v1/repository-repair.agent.bpi1.sha256",
+        },
+        .{
+            .input = interpretation_mv2p1_output,
+            .basename = "repository-repair.agent.mv2p1.sha256",
+            .destination = "agent-interpretation-v1/repository-repair.agent.mv2p1.sha256",
+        },
+        .{
+            .input = initial_args_output,
+            .basename = "repository-repair.initial-args.bin.sha256",
+            .destination = "agent-interpretation-v1/repository-repair.initial-args.bin.sha256",
+        },
+        .{
+            .input = contract_binary_output,
+            .basename = "repository-repair.decision-contract.bin.sha256",
+            .destination = "agent-interpretation-v1/repository-repair.decision-contract.bin.sha256",
+        },
+        .{
+            .input = actuality_application.manifest,
+            .basename = "repository-repair-actuality.manifest.bin.sha256",
+            .destination = "agent-interpretation-v1/repository-repair-actuality.manifest.bin.sha256",
+        },
+        .{
+            .input = interpretation_kernel_wasm,
+            .basename = "boundary-machine-v2-kernel-v1.wasm.sha256",
+            .destination = "agent-interpretation-v1/boundary-machine-v2-kernel-v1.wasm.sha256",
+        },
+    };
+    for (interpretation_hashes) |hash| {
+        const output = sha256File(b, hash.input, hash.basename);
+        const installation = b.addInstallFile(output, hash.destination);
+        interpretation_assets.dependOn(&installation.step);
+    }
+
+    const interpretation_runtime_lock = b.path("interpretation/runtime-dependencies.lock.json");
+    const acquire_interpretation_runtime = b.addSystemCommand(&.{"bun"});
+    if (world_host_root != null or world_capabilities_root != null) {
+        acquire_interpretation_runtime.has_side_effects = true;
+    }
+    acquire_interpretation_runtime.addFileArg(
+        b.path("tools/interpretation/acquire_runtime_dependencies.mjs"),
+    );
+    acquire_interpretation_runtime.addArg("--lock");
+    acquire_interpretation_runtime.addFileArg(interpretation_runtime_lock);
+    if (world_host_root) |path| {
+        acquire_interpretation_runtime.addArg("--world-host-root");
+        acquire_interpretation_runtime.addDirectoryArg(.{ .cwd_relative = b.pathFromRoot(path) });
+    }
+    if (world_capabilities_root) |path| {
+        acquire_interpretation_runtime.addArg("--world-capabilities-root");
+        acquire_interpretation_runtime.addDirectoryArg(.{ .cwd_relative = b.pathFromRoot(path) });
+    }
+    if (world_host_archive) |path| {
+        acquire_interpretation_runtime.addArg("--world-host-archive");
+        acquire_interpretation_runtime.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
+    }
+    if (world_capabilities_archive) |path| {
+        acquire_interpretation_runtime.addArg("--world-capabilities-archive");
+        acquire_interpretation_runtime.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
+    }
+    acquire_interpretation_runtime.addArg("--output");
+    const interpretation_runtime = acquire_interpretation_runtime.addOutputDirectoryArg(
+        "runtime-dependencies-v1",
+    );
+
+    const interpretation_proof_command = b.addSystemCommand(&.{"bun"});
+    interpretation_proof_command.has_side_effects = true;
+    interpretation_proof_command.addFileArg(
+        b.path("tools/interpretation/proof.mjs"),
+    );
+    interpretation_proof_command.addArgs(&.{
+        "--agent-root",
+        b.pathFromRoot("."),
+        "--artifact-root",
+        b.getInstallPath(.prefix, "agent-interpretation-v1"),
+        "--application-wasm",
+    });
+    interpretation_proof_command.addFileArg(
+        actuality_application.wasm.getEmittedBin(),
+    );
+    interpretation_proof_command.addArg("--kernel-wasm");
+    interpretation_proof_command.addFileArg(interpretation_kernel_wasm);
+    interpretation_proof_command.addArg("--unrelated-bpi1");
+    interpretation_proof_command.addFileArg(unrelated_bpi1);
+    interpretation_proof_command.addArg("--unrelated-mv2p1");
+    interpretation_proof_command.addFileArg(unrelated_mv2p1);
+    interpretation_proof_command.addArgs(&.{
+        "--fixture-root",
+        b.pathFromRoot("fixtures/repository-repair-v1"),
+        "--world-host-root",
+    });
+    interpretation_proof_command.addDirectoryArg(
+        interpretation_runtime.path(b, "world-host"),
+    );
+    interpretation_proof_command.addArg("--capabilities-root");
+    interpretation_proof_command.addDirectoryArg(
+        interpretation_runtime.path(b, "world-capabilities"),
+    );
+    interpretation_proof_command.addArg("--runtime-lock");
+    interpretation_proof_command.addFileArg(interpretation_runtime_lock);
+    interpretation_proof_command.addArgs(&.{
+        "--interpretation-tools-root",
+        b.pathFromRoot("tools/interpretation"),
+        "--environment-module",
+        b.pathFromRoot("tools/interpretation/repository_repair_environment.mjs"),
+    });
+    if (agent_source_head) |head| {
+        interpretation_proof_command.addArgs(&.{ "--agent-source-head", head });
+        interpretation_proof_command.addArgs(&.{
+            "--agent-source-archive-sha256",
+            agent_source_archive_sha256.?,
+        });
+        interpretation_proof_command.addArgs(&.{
+            "--agent-source-tree",
+            agent_source_tree.?,
+        });
+    }
+    interpretation_proof_command.addArg("--receipt-output");
+    const direct_interpretation_receipt = interpretation_proof_command.addOutputFileArg(
+        "agent-interpretation-v1-receipt.json",
+    );
+    interpretation_proof_command.step.dependOn(interpretation_assets);
+    const install_direct_interpretation_receipt = b.addInstallFile(
+        direct_interpretation_receipt,
+        "agent-interpretation-v1/agent-interpretation-v1-receipt.json",
+    );
+    const interpretation_proof = b.step(
+        "check-agent-interpretation-v1",
+        "Prove fixed-kernel execution and specialized equivalence",
+    );
+    if (interpretation_source_snapshot) {
+        interpretation_proof.dependOn(
+            &install_direct_interpretation_receipt.step,
+        );
+    } else {
+        const snapshot_proof = b.addSystemCommand(&.{"node"});
+        snapshot_proof.has_side_effects = true;
+        snapshot_proof.addFileArg(
+            b.path("tools/interpretation/check_from_source_snapshot.mjs"),
+        );
+        snapshot_proof.addArg("--agent-root");
+        snapshot_proof.addDirectoryArg(b.path("."));
+        snapshot_proof.addArgs(&.{ "--zig", b.graph.zig_exe });
+        snapshot_proof.addArgs(&.{
+            "--global-cache-dir",
+            b.graph.global_cache_root.path orelse ".",
+        });
+        snapshot_proof.addArg("--interpretation-kernel-wasm");
+        snapshot_proof.addFileArg(interpretation_kernel_wasm);
+        snapshot_proof.addArg("--interpretation-unrelated-bpi1");
+        snapshot_proof.addFileArg(unrelated_bpi1);
+        snapshot_proof.addArg("--interpretation-unrelated-mv2p1");
+        snapshot_proof.addFileArg(unrelated_mv2p1);
+        if (boundary_archive) |path| {
+            snapshot_proof.addArg("--boundary-archive");
+            snapshot_proof.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
+        }
+        if (boundary_kernel_wasm) |path| {
+            snapshot_proof.addArg("--boundary-kernel-wasm");
+            snapshot_proof.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
+        }
+        if (world_archive) |path| {
+            snapshot_proof.addArg("--world-archive");
+            snapshot_proof.addFileArg(.{ .cwd_relative = b.pathFromRoot(path) });
+        }
+        snapshot_proof.addArg("--world-host-root");
+        snapshot_proof.addDirectoryArg(
+            interpretation_runtime.path(b, "world-host"),
+        );
+        snapshot_proof.addArg("--world-capabilities-root");
+        snapshot_proof.addDirectoryArg(
+            interpretation_runtime.path(b, "world-capabilities"),
+        );
+        snapshot_proof.addArg("--receipt-output");
+        const snapshot_receipt = snapshot_proof.addOutputFileArg(
+            "agent-interpretation-v1-receipt.json",
+        );
+        const install_snapshot_receipt = b.addInstallFile(
+            snapshot_receipt,
+            "agent-interpretation-v1/agent-interpretation-v1-receipt.json",
+        );
+        interpretation_proof.dependOn(&install_snapshot_receipt.step);
+    }
+
     const tests = b.addTest(.{ .root_module = agent_module });
     const run_tests = b.addRunArtifact(tests);
 
@@ -202,7 +568,7 @@ pub fn build(b: *std.Build) void {
 
     const actuality_world = b.step(
         "check-agent-actuality-world",
-        "Compile the exact World v3.1.3 repository-repair application",
+        "Compile the exact World v3.1.4 repository-repair application",
     );
     actuality_world.dependOn(actuality_application.check_step);
     semantic_check.dependOn(actuality_world);
@@ -265,6 +631,10 @@ pub fn build(b: *std.Build) void {
             "--mode",
             gate.mode,
         });
+        command.addArg("--world-host-root");
+        command.addDirectoryArg(interpretation_runtime.path(b, "world-host"));
+        command.addArg("--capabilities-root");
+        command.addDirectoryArg(interpretation_runtime.path(b, "world-capabilities"));
         command.step.dependOn(&install_actuality_wasm.step);
         command.step.dependOn(&install_actuality_manifest.step);
         command.step.dependOn(&install_initial_args.step);
@@ -284,6 +654,7 @@ pub fn build(b: *std.Build) void {
     actuality_live_command.step.dependOn(&install_actuality_wasm.step);
     actuality_live_command.step.dependOn(&install_actuality_manifest.step);
     actuality_live_command.step.dependOn(&install_initial_args.step);
+    actuality_live_command.step.dependOn(&install_contract_binary.step);
     const actuality_live = b.step(
         "check-agent-actuality-live",
         "Run the explicit OpenAI plus interactive-approval actuality proof",
@@ -357,6 +728,18 @@ pub fn build(b: *std.Build) void {
     );
     reference_stack_lock.dependOn(&reference_stack_test_command.step);
     semantic_check.dependOn(reference_stack_lock);
+
+    const zig_binary_identity_test_command = b.addSystemCommand(&.{
+        "bun",
+        "test",
+        "./test/zig_binary_identity.test.mjs",
+    });
+    const zig_binary_identity = b.step(
+        "check-agent-zig-binary-identity",
+        "Authenticate the exact Zig 0.16.0 binary on every supported proof host",
+    );
+    zig_binary_identity.dependOn(&zig_binary_identity_test_command.step);
+    semantic_check.dependOn(zig_binary_identity);
 
     const format_check = b.addSystemCommand(&.{
         b.graph.zig_exe,
@@ -672,7 +1055,7 @@ pub fn build(b: *std.Build) void {
     world_conformance_gate.addArg(b.graph.zig_exe);
     const world_conformance = b.step(
         "check-agent-world-conformance",
-        "Close four Agent Machines with exact released World v3.1.3",
+        "Close four Agent Machines with exact released World v3.1.4",
     );
     world_conformance.dependOn(&world_conformance_gate.step);
     const hosted_lifecycle = b.step(
@@ -709,24 +1092,8 @@ pub fn build(b: *std.Build) void {
         "check-agent-reference-stack",
         "Run the anonymously acquired public host/capability lifecycle and Actuality proof",
     );
-    reference_stack.dependOn(world_conformance);
     reference_stack.dependOn(&reference_stack_command.step);
 
-    const offline_world_conformance_gate = b.addSystemCommand(&.{
-        "node",
-        "tools/check_world_conformance.mjs",
-        "--zig",
-    });
-    offline_world_conformance_gate.addArg(b.graph.zig_exe);
-    offline_world_conformance_gate.addArg("--offline");
-    if (world_host_archive) |path| {
-        offline_world_conformance_gate.addArgs(&.{ "--world-host-archive", path });
-    }
-    if (world_capabilities_archive) |path| {
-        offline_world_conformance_gate.addArgs(&.{ "--world-capabilities-archive", path });
-    }
-    if (boundary_archive) |path| offline_world_conformance_gate.setEnvironmentVariable("AGENT_BOUNDARY_ARCHIVE", path);
-    if (world_archive) |path| offline_world_conformance_gate.setEnvironmentVariable("AGENT_WORLD_ARCHIVE", path);
     const offline_reference_stack_command = b.addSystemCommand(&.{
         "bun",
         "tools/check_reference_stack.mjs",
@@ -747,7 +1114,6 @@ pub fn build(b: *std.Build) void {
         "check-agent-reference-stack-offline",
         "Run the public reference-stack proof from checksum-matching local archives",
     );
-    offline_reference_stack.dependOn(&offline_world_conformance_gate.step);
     offline_reference_stack.dependOn(&offline_reference_stack_command.step);
 
     const hermetic_command = b.addSystemCommand(&.{
@@ -1019,6 +1385,7 @@ pub fn build(b: *std.Build) void {
     adequacy_release.dependOn(&adequacy_release_command.step);
 
     check.dependOn(semantic_check);
+    check.dependOn(interpretation_proof);
     check.dependOn(lint);
 }
 
@@ -1175,4 +1542,15 @@ fn addActualityDefinitionTest(
     step.dependOn(&run_tests.step);
     aggregate.dependOn(step);
     return step;
+}
+
+fn sha256File(
+    b: *std.Build,
+    input: std.Build.LazyPath,
+    basename: []const u8,
+) std.Build.LazyPath {
+    const command = b.addSystemCommand(&.{"bun"});
+    command.addFileArg(b.path("tools/sha256_file.mjs"));
+    command.addFileArg(input);
+    return command.captureStdOut(.{ .basename = basename });
 }

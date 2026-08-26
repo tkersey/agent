@@ -1,23 +1,51 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+    chmodSync,
+    cpSync,
+    existsSync,
+    lstatSync,
+    mkdirSync,
+    mkdtempSync,
+    readFileSync,
+    readdirSync,
+    realpathSync,
+    rmSync,
+    writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { inspectTarGz } from "./reference_stack.mjs";
+import { admitZigBinarySha256, EXPECTED_ZIG_VERSION } from "./zig_binary_identity.mjs";
+import {
+    closedVerifierPath,
+    materializeVerifierBin,
+    resolveVerifierExecutables,
+} from "./verifier_executables.mjs";
 
 const releases = Object.freeze({
     boundary: Object.freeze({
-        version: "1.5.0",
-        url: "https://github.com/tkersey/boundary/archive/refs/tags/v1.5.0.tar.gz",
-        sha256: "8bcf9cf4f289eb3e530cae37089411dfc0014963fb6e0978474fa08a39fcedea",
+        version: "1.6.1",
+        root: "boundary-4788bc152d2b0213e9c5c4e6544df1231e4b034d",
+        url: "https://github.com/tkersey/boundary/archive/4788bc152d2b0213e9c5c4e6544df1231e4b034d.tar.gz",
+        sha256: "b4036e1eceb3c18a237cbf9d48ee023a39d5217665265e380a665296b9599948",
+        buildGraph: Object.freeze({
+            build: "42bc915e1ea22141bd1db6297885eb4849ed7b3781a39d4f1f5f826526df3d6c",
+            manifest: "660271a04a0a35fd74e6dcfbb243e484e9c256bd351abeabe8c42e54f882ba88",
+        }),
     }),
     world: Object.freeze({
-        version: "3.1.3",
-        url: "https://github.com/tkersey/world/archive/refs/tags/v3.1.3.tar.gz",
-        sha256: "1333a27aa4538c255b8a6c515c9151987fd5402c0be43a9a2501703599d1a5a9",
+        version: "3.1.4",
+        root: "world-5d8fad6e76863312c19a5ba6988bf6307f29a783",
+        url: "https://github.com/tkersey/world/archive/5d8fad6e76863312c19a5ba6988bf6307f29a783.tar.gz",
+        sha256: "7af0a97d5751bda62fc745855785ce9407bc5d556fd9054a32fbd2b609298057",
+        buildGraph: Object.freeze({
+            build: "f0c015f313bdc4a04e80c269f57f25b87f2e04500d27688da7ba8e2414a3e90d",
+            manifest: "e36f34a9787706ea6842d3360933da5c8df67d7db61b7b7adbd593fe51c99745",
+        }),
     }),
 });
 
@@ -27,24 +55,113 @@ const proofRoot = mkdtempSync(join(tmpdir(), "agent-hermetic-"));
 let passed = false;
 
 try {
+    const gitExecutable = "/usr/bin/git";
+    const tarExecutable = "/usr/bin/tar";
+    if (!existsSync(gitExecutable) || !existsSync(tarExecutable)) {
+        throw new Error("trusted source-snapshot tools are unavailable");
+    }
+    const globalCacheRoot = join(proofRoot, "zig-global-cache");
+    const hermeticHome = join(proofRoot, "home");
+    mkdirSync(hermeticHome);
+    const verifierExecutables = resolveVerifierExecutables();
+    const admittedZigTarget = realpathSync(options.zig);
+    admitZigBinarySha256(sha256File(admittedZigTarget));
+    const verifierBin = materializeVerifierBin(proofRoot, admittedZigTarget, verifierExecutables);
+    const admittedZig = join(verifierBin, "zig");
+    admitZigBinarySha256(sha256File(admittedZig));
+    const baseEnvironment = {
+        HOME: hermeticHome,
+        LANG: "C",
+        LC_ALL: "C",
+        LOGNAME: process.env.LOGNAME ?? "agent-hermetic",
+        NO_COLOR: "1",
+        PATH: closedVerifierPath(verifierBin),
+        SHELL: "/bin/sh",
+        TERM: "dumb",
+        TMPDIR: process.env.TMPDIR ?? tmpdir(),
+        USER: process.env.USER ?? "agent-hermetic",
+        XDG_CACHE_HOME: join(proofRoot, "xdg-cache"),
+        ZIG_GLOBAL_CACHE_DIR: globalCacheRoot,
+    };
+    const zigCompiler = requireZigCompiler(
+        admittedZig,
+        proofRoot,
+        globalCacheRoot,
+        baseEnvironment,
+    );
     const archives = join(proofRoot, "archives");
     mkdirSync(archives);
     const boundaryArchive = await acquire("boundary", options.boundaryArchive, options.offline, archives);
     const worldArchive = await acquire("world", options.worldArchive, options.offline, archives);
-    const boundaryRoot = extractRelease("boundary", boundaryArchive, proofRoot);
-    const worldRoot = extractRelease("world", worldArchive, proofRoot);
-    installBoundaryModuleShim(boundaryRoot);
-    const agentRoot = join(proofRoot, "agent");
-    cpSync(sourceRoot, agentRoot, {
-        recursive: true,
-        filter: (path) => ![".git", ".ledger", "zig-cache", ".zig-cache", "zig-out", "zig-pkg"].includes(path.slice(path.lastIndexOf("/") + 1)),
+    const boundaryRoot = extractRelease("boundary", boundaryArchive, proofRoot, tarExecutable, baseEnvironment);
+    const worldRoot = extractRelease("world", worldArchive, proofRoot, tarExecutable, baseEnvironment);
+    requireReleaseBuildGraph("boundary", boundaryRoot);
+    requireReleaseBuildGraph("world", worldRoot);
+    const acquisitionEnvironment = { ...baseEnvironment };
+    for (const name of [
+        "ALL_PROXY",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
+        "SSL_CERT_DIR",
+        "SSL_CERT_FILE",
+    ]) {
+        if (process.env[name] !== undefined) {
+            acquisitionEnvironment[name] = process.env[name];
+        }
+    }
+    prefetchDependencyTree(
+        admittedZig,
+        boundaryRoot,
+        join(proofRoot, "boundary-fetch-cache"),
+        globalCacheRoot,
+        acquisitionEnvironment,
+    );
+    requireReleaseBuildGraph("boundary", boundaryRoot);
+    requireReleaseBuildGraph("world", worldRoot);
+    const agentSource = materializeAgentSource(
+        sourceRoot,
+        proofRoot,
+        gitExecutable,
+        tarExecutable,
+        baseEnvironment,
+    );
+    const agentRoot = agentSource.root;
+    replaceDependency(
+        join(agentRoot, "build.zig.zon"),
+        "boundary",
+        relative(agentRoot, boundaryRoot),
+    );
+    replaceDependency(
+        join(agentRoot, "build.zig.zon"),
+        "world",
+        relative(agentRoot, worldRoot),
+    );
+    replaceDependency(
+        join(worldRoot, "build.zig.zon"),
+        "boundary",
+        relative(worldRoot, boundaryRoot),
+    );
+    prefetchDependencyTree(
+        admittedZig,
+        agentRoot,
+        join(proofRoot, "agent-fetch-cache"),
+        globalCacheRoot,
+        acquisitionEnvironment,
+    );
+    const executedTrees = Object.freeze({
+        agent: digestExecutedTree(agentRoot),
+        boundary: digestExecutedTree(boundaryRoot),
+        world: digestExecutedTree(worldRoot),
     });
-    replaceDependency(join(agentRoot, "build.zig.zon"), "boundary", '../boundary');
-    replaceDependency(join(agentRoot, "build.zig.zon"), "world", '../world');
-    replaceDependency(join(worldRoot, "build.zig.zon"), "boundary", '../boundary');
+    for (const root of [agentRoot, boundaryRoot, worldRoot]) {
+        makeSourceTreeReadOnly(root);
+    }
 
     const environment = {
-        ...process.env,
+        ...baseEnvironment,
+        AGENT_HERMETIC: "1",
+        AGENT_ZIG_EXE: admittedZig,
         AGENT_BOUNDARY_ROOT: boundaryRoot,
         AGENT_WORLD_ROOT: worldRoot,
         HTTP_PROXY: "http://127.0.0.1:1",
@@ -52,28 +169,64 @@ try {
         ALL_PROXY: "http://127.0.0.1:1",
         NO_PROXY: "",
     };
-    for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "OPENAI_API_KEY"]) delete environment[name];
-    runNetworkIsolated(options.zig, [
+    requireNoAmbientZigOverrides(environment);
+    const proofBuild = runNetworkIsolated(admittedZig, [
         "build",
         "check-agent-semantic",
         "lint",
         "--cache-dir",
         join(proofRoot, "zig-cache"),
         "--global-cache-dir",
-        join(proofRoot, "zig-global-cache"),
+        globalCacheRoot,
         "--summary",
         "all",
     ], agentRoot, environment);
-    console.log("agent_hermetic_boundary_version=1.5.0");
+    requireHermeticBuildTranscript(proofBuild);
+    requireExecutedTree("agent", agentRoot, executedTrees.agent);
+    requireExecutedTree("boundary", boundaryRoot, executedTrees.boundary);
+    requireExecutedTree("world", worldRoot, executedTrees.world);
+    requireAgentSourceUnchanged(
+        sourceRoot,
+        agentSource.head,
+        gitExecutable,
+        baseEnvironment,
+    );
+    requireReleaseBuildGraph("boundary", boundaryRoot);
+    if (existsSync(join(hermeticHome, ".cache", "zig"))) {
+        throw new Error("hermetic proof escaped into the temporary HOME Zig cache");
+    }
+    console.log("agent_hermetic_boundary_version=1.6.1");
     console.log(`agent_hermetic_boundary_sha256=${releases.boundary.sha256}`);
-    console.log("agent_hermetic_world_version=3.1.3");
+    console.log("agent_hermetic_world_version=3.1.4");
     console.log(`agent_hermetic_world_sha256=${releases.world.sha256}`);
+    console.log(`agent_hermetic_agent_commit=${agentSource.head}`);
+    console.log(`agent_hermetic_agent_archive_sha256=${agentSource.sha256}`);
+    console.log(`agent_hermetic_zig_version=${zigCompiler.version}`);
+    console.log(`agent_hermetic_zig_sha256=${zigCompiler.sha256}`);
+    console.log("agent_hermetic_zig_compiler_witness=true");
+    console.log("agent_hermetic_agent_source_snapshot=true");
+    console.log(`agent_hermetic_executed_agent_tree_sha256=${executedTrees.agent}`);
+    console.log(`agent_hermetic_executed_boundary_tree_sha256=${executedTrees.boundary}`);
+    console.log(`agent_hermetic_executed_world_tree_sha256=${executedTrees.world}`);
+    console.log("agent_hermetic_executed_source_trees_read_only=true");
+    console.log("agent_hermetic_boundary_build_graph_preserved=true");
+    console.log(`agent_hermetic_archive_tool=${tarExecutable}`);
+    console.log("agent_hermetic_release_build_graph_bound=true");
+    console.log("agent_hermetic_ambient_zig_cache_absent=true");
+    console.log("agent_hermetic_ambient_zig_overrides_absent=true");
+    console.log("agent_hermetic_closed_verifier_path=true");
     console.log("agent_hermetic_network_after_acquisition=false");
     console.log("agent_hermetic_check=pass");
     passed = true;
 } finally {
-    if (passed) rmSync(proofRoot, { recursive: true, force: true });
-    else console.error(`agent_hermetic_proof_root=${proofRoot}`);
+    if (passed) {
+        makeTreeWritable(proofRoot);
+        rmSync(proofRoot, { recursive: true, force: true });
+    }
+    else {
+        makeTreeWritable(proofRoot);
+        console.error(`agent_hermetic_proof_root=${proofRoot}`);
+    }
 }
 
 async function acquire(kind, override, offline, archiveRoot) {
@@ -92,12 +245,237 @@ async function download(url) {
     return Buffer.from(await response.arrayBuffer());
 }
 
-function extractRelease(kind, archive, root) {
-    const expectedRoot = `${kind}-${releases[kind].version}`;
-    inspectTarGz(archive, expectedRoot);
+function sha256File(path) {
+    return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function requireReleaseBuildGraph(kind, root) {
+    const expected = releases[kind].buildGraph;
+    if (sha256File(join(root, "build.zig")) !== expected.build ||
+        sha256File(join(root, "build.zig.zon")) !== expected.manifest) {
+        throw new Error(`${kind} build graph does not match the authenticated release`);
+    }
+}
+
+function requireZigCompiler(zig, root, globalCache, environment) {
+    const digest = sha256File(zig);
+    admitZigBinarySha256(digest);
+    const version = run(
+        zig,
+        ["version"],
+        root,
+        environment,
+        false,
+    ).stdout.trim();
+    if (version !== EXPECTED_ZIG_VERSION) {
+        throw new Error(`hermetic proof requires Zig ${EXPECTED_ZIG_VERSION}, found: ${version}`);
+    }
+    const witnessRoot = join(root, "zig-compiler-witness");
+    mkdirSync(witnessRoot);
+    const source = join(witnessRoot, "main.zig");
+    const executable = join(witnessRoot, "zig-compiler-witness");
+    writeFileSync(source, "pub fn main() void {}\n");
+    run(zig, [
+        "build-exe",
+        source,
+        "-OReleaseSafe",
+        `-femit-bin=${executable}`,
+        "--cache-dir",
+        join(witnessRoot, "cache"),
+        "--global-cache-dir",
+        globalCache,
+    ], witnessRoot, environment, false);
+    if (!existsSync(executable) || !lstatSync(executable).isFile() ||
+        lstatSync(executable).size === 0) {
+        throw new Error("hermetic Zig compiler did not emit the witness executable");
+    }
+    run(
+        executable,
+        [],
+        witnessRoot,
+        environment,
+        false,
+    );
+    return Object.freeze({ version, sha256: digest });
+}
+
+function requireHermeticBuildTranscript(result) {
+    const transcript = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+    for (const marker of [
+        "Build Summary: 140/140 steps succeeded; 60/60 tests passed",
+        "check-agent-semantic success",
+        "lint success",
+    ]) {
+        if (!transcript.includes(marker)) {
+            throw new Error(`hermetic proof build transcript is missing: ${marker}`);
+        }
+    }
+}
+
+function digestExecutedTree(root) {
+    const files = [];
+    const visit = (directory) => {
+        for (const name of readdirSync(directory).sort(
+            (left, right) => left.localeCompare(right),
+        )) {
+            if ([".zig-cache", "zig-cache", "zig-out", "zig-pkg"].includes(name)) {
+                continue;
+            }
+            const full = join(directory, name);
+            const metadata = lstatSync(full);
+            if (metadata.isDirectory()) visit(full);
+            else if (metadata.isFile()) files.push(relative(root, full));
+            else throw new Error(`executed source tree contains a non-regular path: ${full}`);
+        }
+    };
+    visit(root);
+    const hasher = createHash("sha256");
+    hasher.update("agent-hermetic-executed-tree-v1\0");
+    for (const path of files) {
+        const encoded = Buffer.from(path, "utf8");
+        const bytes = readFileSync(join(root, path));
+        const lengths = Buffer.alloc(8);
+        lengths.writeUInt32LE(encoded.length, 0);
+        lengths.writeUInt32LE(bytes.length, 4);
+        hasher.update(lengths);
+        hasher.update(encoded);
+        hasher.update(bytes);
+    }
+    return hasher.digest("hex");
+}
+
+function requireExecutedTree(kind, root, expected) {
+    const actual = digestExecutedTree(root);
+    if (actual !== expected) {
+        throw new Error(`${kind} executed source tree changed during the hermetic proof`);
+    }
+}
+
+function makeSourceTreeReadOnly(root) {
+    const visit = (path) => {
+        const name = path.slice(path.lastIndexOf("/") + 1);
+        if ([".zig-cache", "zig-cache", "zig-out", "zig-pkg"].includes(name)) {
+            return;
+        }
+        const metadata = lstatSync(path);
+        if (metadata.isDirectory()) {
+            for (const child of readdirSync(path)) visit(join(path, child));
+            chmodSync(path, 0o555);
+        } else if (metadata.isFile()) {
+            chmodSync(path, metadata.mode & 0o111 ? 0o555 : 0o444);
+        } else {
+            throw new Error(`executed source tree contains a non-regular path: ${path}`);
+        }
+    };
+    visit(root);
+}
+
+function makeTreeWritable(root) {
+    if (!existsSync(root)) return;
+    const metadata = lstatSync(root);
+    if (metadata.isDirectory()) {
+        chmodSync(root, 0o700);
+        for (const name of readdirSync(root)) makeTreeWritable(join(root, name));
+    } else if (metadata.isFile()) {
+        chmodSync(root, 0o600);
+    }
+}
+
+function materializeAgentSource(source, root, gitExecutable, tarExecutable, environment) {
+    requireSourceGitIsolation(source, gitExecutable, environment);
+    const head = bindAgentGitSource(source, gitExecutable, environment);
+    const archive = join(root, "agent-source.tar.gz");
+    git(source, gitExecutable, environment, [
+        "archive",
+        "--format=tar.gz",
+        "--prefix=agent/",
+        `--output=${archive}`,
+        head,
+    ]);
+    requireAgentSourceUnchanged(source, head, gitExecutable, environment);
+    inspectTarGz(archive, "agent", { tarExecutable, environment });
+    run(tarExecutable, ["-xzf", archive, "-C", root], root, environment, false);
+    const snapshot = join(root, "agent");
+    if (!existsSync(snapshot) || existsSync(join(snapshot, ".git"))) {
+        throw new Error("authenticated Agent source snapshot is invalid");
+    }
+    return Object.freeze({
+        head,
+        root: snapshot,
+        sha256: sha256File(archive),
+    });
+}
+
+function bindAgentGitSource(source, gitExecutable, environment) {
+    const head = git(source, gitExecutable, environment, ["rev-parse", "HEAD"]);
+    if (!/^[0-9a-f]{40}$/.test(head)) throw new Error("Agent Git head is invalid");
+    requireAgentSourceUnchanged(source, head, gitExecutable, environment);
+    return head;
+}
+
+function requireAgentSourceUnchanged(source, expectedHead, gitExecutable, environment) {
+    const head = git(source, gitExecutable, environment, ["rev-parse", "HEAD"]);
+    const status = git(source, gitExecutable, environment, [
+        "status", "--porcelain=v1", "--untracked-files=all",
+    ]).split("\n").filter(Boolean).filter((line) => {
+        const encoded = line.slice(3);
+        const path = encoded.includes(" -> ")
+            ? encoded.split(" -> ").at(-1)
+            : encoded;
+        return !path.startsWith("zig-out/") && !path.startsWith("zig-pkg/");
+    });
+    if (head !== expectedHead || status.length !== 0) {
+        throw new Error("Agent source changed during snapshot-bound proof");
+    }
+}
+
+function git(root, executable, environment, args) {
+    return run(executable, [
+        "-c", "core.attributesFile=/dev/null",
+        "-c", "core.excludesFile=/dev/null",
+        "-c", "core.fsmonitor=false",
+        "-c", "core.hooksPath=/dev/null",
+        "-c", "tar.tar.gz.command=/usr/bin/gzip -cn",
+        "-C", root,
+        ...args,
+    ], root, {
+        ...environment,
+        GIT_ATTR_NOSYSTEM: "1",
+        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_NO_REPLACE_OBJECTS: "1",
+        GIT_OPTIONAL_LOCKS: "0",
+    }, false).stdout.trim();
+}
+
+function requireSourceGitIsolation(root, executable, environment) {
+    const gitPath = (path) => {
+        const value = git(root, executable, environment, ["rev-parse", "--git-path", path]);
+        return resolve(root, value);
+    };
+    const attributes = gitPath("info/attributes");
+    if (existsSync(attributes) && readFileSync(attributes, "utf8").trim().length !== 0) {
+        throw new Error("Agent source snapshot rejects non-tree Git attributes");
+    }
+    const replacements = gitPath("refs/replace");
+    if (existsSync(replacements) && treeContainsFile(replacements)) {
+        throw new Error("Agent source snapshot rejects Git replacement refs");
+    }
+}
+
+function treeContainsFile(root) {
+    const metadata = lstatSync(root);
+    if (metadata.isFile()) return true;
+    if (!metadata.isDirectory()) throw new Error(`Agent Git metadata is non-regular: ${root}`);
+    return readdirSync(root).some((name) => treeContainsFile(join(root, name)));
+}
+
+function extractRelease(kind, archive, root, tarExecutable, environment) {
+    const expectedRoot = releases[kind].root;
+    inspectTarGz(archive, expectedRoot, { tarExecutable, environment });
     const extracted = join(root, `${kind}-extracted`);
     mkdirSync(extracted);
-    run("tar", ["-xzf", archive, "-C", extracted], root, process.env, false);
+    run(tarExecutable, ["-xzf", archive, "-C", extracted], root, environment, false);
     const source = join(extracted, expectedRoot);
     const destination = join(root, kind);
     if (!existsSync(source)) throw new Error(`${kind} archive root is missing`);
@@ -123,70 +501,57 @@ function run(command, args, cwd, env, forward = true) {
 }
 
 function runNetworkIsolated(command, args, cwd, env) {
-    if (process.platform !== "darwin" || !existsSync("/usr/bin/sandbox-exec")) {
-        throw new Error("check-agent-hermetic requires an available OS network-isolation boundary");
+    if (process.platform === "darwin" && existsSync("/usr/bin/sandbox-exec")) {
+        return run(
+            "/usr/bin/sandbox-exec",
+            ["-p", `(version 1)
+                (allow default)
+                (deny network*)`, command, ...args],
+            cwd,
+            env,
+        );
     }
-    return run(
-        "/usr/bin/sandbox-exec",
-        ["-p", "(version 1) (allow default) (deny network*)", command, ...args],
-        cwd,
-        env,
+    if (process.platform === "linux") {
+        const bubblewrap = ["/usr/bin/bwrap", "/bin/bwrap"].find(existsSync);
+        if (bubblewrap === undefined) {
+            throw new Error("check-agent-hermetic requires Bubblewrap on Linux");
+        }
+        const metadata = lstatSync(bubblewrap);
+        if (!metadata.isFile() || metadata.uid !== 0 || (metadata.mode & 0o022) !== 0) {
+            throw new Error(`check-agent-hermetic does not trust Bubblewrap: ${bubblewrap}`);
+        }
+        return run(bubblewrap, [
+            "--die-with-parent",
+            "--new-session",
+            "--unshare-net",
+            "--bind",
+            "/",
+            "/",
+            command,
+            ...args,
+        ], cwd, env);
+    }
+    throw new Error("check-agent-hermetic requires an available OS network-isolation boundary");
+}
+
+function requireNoAmbientZigOverrides(environment) {
+    const unexpected = Object.keys(environment).filter(
+        (name) => name.startsWith("ZIG_") && name !== "ZIG_GLOBAL_CACHE_DIR",
     );
+    if (unexpected.length !== 0) {
+        throw new Error(`hermetic proof admitted Zig environment overrides: ${unexpected.join(",")}`);
+    }
 }
 
-function installBoundaryModuleShim(root) {
-    const zonPath = join(root, "build.zig.zon");
-    const zon = readFileSync(zonPath, "utf8");
-    const updatedZon = zon.replace(/    \.dependencies = \.\{[\s\S]*?    \},\n    \.minimum_zig_version/, "    .dependencies = .{},\n    .minimum_zig_version");
-    if (updatedZon === zon) throw new Error("Boundary package dependencies were not closed");
-    writeFileSync(zonPath, updatedZon);
-    writeFileSync(join(root, "build.zig"), boundaryModuleShim());
-}
-
-function boundaryModuleShim() {
-    return `const std = @import("std");
-
-const Core = struct {
-    agent_profile: *std.Build.Module,
-    control_ir: *std.Build.Module,
-    driver: *std.Build.Module,
-    effect_v2: *std.Build.Module,
-    machine: *std.Build.Module,
-    portable_value: *std.Build.Module,
-    program_v2: *std.Build.Module,
-};
-
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-    const control_ir = b.createModule(.{ .root_source_file = b.path("src/control_ir.zig"), .target = target, .optimize = optimize });
-    const portable_value = b.createModule(.{ .root_source_file = b.path("src/portable_value.zig"), .target = target, .optimize = optimize });
-    const machine = b.createModule(.{ .root_source_file = b.path("src/machine.zig"), .target = target, .optimize = optimize });
-    machine.addImport("portable_value", portable_value);
-    const rnf = b.createModule(.{ .root_source_file = b.path("src/rnf.zig"), .target = target, .optimize = optimize });
-    rnf.addImport("control_ir", control_ir);
-    const compiler = b.createModule(.{ .root_source_file = b.path("src/compiler.zig"), .target = target, .optimize = optimize });
-    compiler.addImport("control_ir", control_ir);
-    compiler.addImport("machine", machine);
-    compiler.addImport("portable_value", portable_value);
-    compiler.addImport("rnf", rnf);
-    const program_v2 = b.createModule(.{ .root_source_file = b.path("src/program_v2.zig"), .target = target, .optimize = optimize });
-    program_v2.addImport("compiler", compiler);
-    program_v2.addImport("machine", machine);
-    const driver = b.createModule(.{ .root_source_file = b.path("src/driver.zig"), .target = target, .optimize = optimize });
-    const effect_v2 = b.createModule(.{ .root_source_file = b.path("src/effect_v2.zig"), .target = target, .optimize = optimize });
-    const agent_profile = b.createModule(.{ .root_source_file = b.path("src/agent_profile.zig"), .target = target, .optimize = optimize });
-    agent_profile.addImport("program_v2", program_v2);
-    const boundary = b.addModule("boundary", .{ .root_source_file = b.path("src/root.zig"), .target = target, .optimize = optimize });
-    boundary.addImport("agent_profile", agent_profile);
-    boundary.addImport("control_ir", control_ir);
-    boundary.addImport("driver", driver);
-    boundary.addImport("effect_v2", effect_v2);
-    boundary.addImport("machine", machine);
-    boundary.addImport("portable_value", portable_value);
-    boundary.addImport("program_v2", program_v2);
-}
-`;
+function prefetchDependencyTree(zig, root, cacheRoot, globalCacheRoot, environment) {
+    run(zig, [
+        "build",
+        "--fetch",
+        "--cache-dir",
+        cacheRoot,
+        "--global-cache-dir",
+        globalCacheRoot,
+    ], root, environment);
 }
 
 function parseArgs(argv) {

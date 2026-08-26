@@ -21,6 +21,7 @@ build.zig
 examples/coding_agent.zig
 examples/repository_repair_actuality.zig
 examples/research_agent.zig
+interpretation/emit_repository_repair_artifact.zig
 src/action.zig
 src/boundary_package.zig
 src/budget.zig

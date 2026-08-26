@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import {
     acquireReferenceStack,
     materializeReferenceArtifact,
+    materializeWorldCapabilitiesArtifact,
     readReferenceStackLock,
 } from "./reference_stack.mjs";
 
@@ -28,12 +29,16 @@ try {
     });
     const archives = join(proofRoot, "archives");
     const host = materializeReferenceArtifact("worldHost", acquired.worldHost, archives, join(proofRoot, "host-extracted"));
-    const capabilities = materializeReferenceArtifact(
-        "worldCapabilities",
+    const capabilities = materializeWorldCapabilitiesArtifact(
         acquired.worldCapabilities,
         archives,
         join(proofRoot, "capabilities-extracted"),
+        {
+            bunExecutable: process.execPath,
+            environment: capabilitiesBuildEnvironment(proofRoot),
+        },
     );
+    const capabilitiesArchiveSha256 = acquired.worldCapabilities.entry.sha256;
     const runtimeRoot = join(proofRoot, "runtime");
     const runtimeHost = join(runtimeRoot, "world-host");
     const runtimeCapabilities = join(runtimeRoot, "world-capabilities");
@@ -50,7 +55,7 @@ try {
     assert(zigProbe.error?.code === "ENOENT", "Zig unexpectedly resolves from runtime PATH");
 
     run(process.execPath, [join(host.root, "conformance/check-runtime.mjs"), "--root", host.root], host.root, runtimeEnvironment);
-    const capabilityChecksum = `${acquired.worldCapabilities.entry.sha256}  ${basename(capabilities.archivePath)}\n`;
+    const capabilityChecksum = `${capabilitiesArchiveSha256}  ${basename(capabilities.archivePath)}\n`;
     const capabilitySidecar = `${capabilities.archivePath}.sha256`;
     writeFileSync(capabilitySidecar, capabilityChecksum);
     const conformanceBin = join(proofRoot, "conformance-bin");
@@ -100,7 +105,8 @@ try {
         writeFileSync(options.receiptPath, `${JSON.stringify({
             format: "agent-reference-stack-receipt-v1",
             worldHostArchiveSha256: acquired.worldHost.entry.sha256,
-            worldCapabilitiesArchiveSha256: acquired.worldCapabilities.entry.sha256,
+            worldCapabilitiesArchiveSha256: capabilitiesArchiveSha256,
+            worldCapabilitiesSourceArchiveSha256: acquired.worldCapabilities.entry.sourceSha256,
             deterministic: receipts.deterministic,
             retry: receipts.retry,
             replay: receipts.replay,
@@ -111,8 +117,14 @@ try {
 
     for (const [kind, artifact] of Object.entries(acquired)) {
         console.log(`${snake(kind)}_version=${artifact.entry.version}`);
-        console.log(`${snake(kind)}_archive_sha256=${artifact.entry.sha256}`);
-        console.log(`${snake(kind)}_artifact_source=${artifact.source}`);
+        if (kind === "worldCapabilities" && artifact.entry.provenance === "source-build") {
+            console.log(`world_capabilities_source_archive_sha256=${artifact.entry.sourceSha256}`);
+            console.log(`world_capabilities_archive_sha256=${capabilitiesArchiveSha256}`);
+            console.log("world_capabilities_artifact_source=source-built");
+        } else {
+            console.log(`${snake(kind)}_archive_sha256=${artifact.entry.sha256}`);
+            console.log(`${snake(kind)}_artifact_source=${artifact.source}`);
+        }
         if (artifact.resolvedUrl !== null) console.log(`${snake(kind)}_resolved_url=${redactedUrl(artifact.resolvedUrl)}`);
     }
     console.log("github_authentication_required=false");
@@ -131,6 +143,19 @@ try {
 } finally {
     if (passed) rmSync(proofRoot, { recursive: true, force: true });
     else console.error(`agent_reference_stack_proof_root=${proofRoot}`);
+}
+
+function capabilitiesBuildEnvironment(proofRoot) {
+    const environment = {
+        ...process.env,
+        HOME: join(proofRoot, "capabilities-build-home"),
+        PATH: "/usr/bin:/bin",
+    };
+    mkdirSync(environment.HOME);
+    for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "OPENAI_API_KEY", "BUN_OPTIONS", "NODE_OPTIONS"]) {
+        delete environment[name];
+    }
+    return environment;
 }
 
 function copyRuntime(source, destination, entries) {

@@ -19,39 +19,46 @@ import { fileURLToPath } from "node:url";
 import {
     acquireReferenceStack,
     materializeReferenceArtifact,
+    materializeWorldCapabilitiesArtifact,
     readReferenceStackLock,
 } from "./reference_stack.mjs";
 
 const options = parseArgs(process.argv.slice(2));
 const versions = Object.freeze({
-    agent: options.agentV1Release ? "1.1.2" : "2.6.0",
-    boundary: options.agentV1Release ? "1.3.2" : "1.5.0",
-    world: options.agentV1Release ? "3.1.1" : "3.1.3",
+    agent: options.agentV1Release ? "1.1.2" : "2.7.0",
+    boundary: options.agentV1Release ? "1.3.2" : "1.6.1",
+    world: options.agentV1Release ? "3.1.1" : "3.1.4",
     host: "1.0.1",
-    capabilities: options.agentV1Release ? "2.1.2" : "2.2.2",
+    capabilities: options.agentV1Release ? "2.1.2" : "2.3.3",
 });
 const releases = Object.freeze({
     boundary: Object.freeze({
         url: options.agentV1Release
             ? "https://github.com/tkersey/boundary/archive/refs/tags/v1.3.2.tar.gz"
-            : "https://github.com/tkersey/boundary/archive/refs/tags/v1.5.0.tar.gz",
+            : "https://github.com/tkersey/boundary/archive/4788bc152d2b0213e9c5c4e6544df1231e4b034d.tar.gz",
         sha256: options.agentV1Release
             ? "d33a682f92033fa287169e4bc42c5e96f891cf1fe307381efc6983361de3fe0d"
-            : "8bcf9cf4f289eb3e530cae37089411dfc0014963fb6e0978474fa08a39fcedea",
+            : "b4036e1eceb3c18a237cbf9d48ee023a39d5217665265e380a665296b9599948",
         packageHash: options.agentV1Release
             ? "boundary-1.3.2-flclaAI0EQBXh0WrWcNTh-CwL-m0RLPbRX8RBRxP9E95"
-            : "boundary-1.5.0-flclaGtSEQDH_RFNHovmN4QfnmRMnFoNfyYq_84rZrsr",
+            : "boundary-1.6.1-flclaE0pHgC1I33KEuEcfwmoMEidT7fLonNkdqBIlfwf",
+        root: options.agentV1Release
+            ? "boundary-1.3.2"
+            : "boundary-4788bc152d2b0213e9c5c4e6544df1231e4b034d",
     }),
     world: Object.freeze({
         url: options.agentV1Release
             ? "https://github.com/tkersey/world/archive/refs/tags/v3.1.1.tar.gz"
-            : "https://github.com/tkersey/world/archive/refs/tags/v3.1.3.tar.gz",
+            : "https://github.com/tkersey/world/archive/5d8fad6e76863312c19a5ba6988bf6307f29a783.tar.gz",
         sha256: options.agentV1Release
             ? "ebde48f0bc037678e79051e3f8c3cde2fa1964df0b14ff53ed9cef94ccb1f63c"
-            : "1333a27aa4538c255b8a6c515c9151987fd5402c0be43a9a2501703599d1a5a9",
+            : "7af0a97d5751bda62fc745855785ce9407bc5d556fd9054a32fbd2b609298057",
         packageHash: options.agentV1Release
             ? "world-3.1.1-XXTUeKXGBgAZhWa2YvUU9Sj4GE-E53Km85AcgecObJV6"
-            : "world-3.1.3-XXTUeKXGBgDDzZ7uarFCYSLwYD8pGNBMNdIYfgIcu23v",
+            : "world-3.1.4-XXTUeO3GBgD8JA4s-vElnLKVnT11p5mv6MS0eV5nk-Fd",
+        root: options.agentV1Release
+            ? "world-3.1.1"
+            : "world-5d8fad6e76863312c19a5ba6988bf6307f29a783",
     }),
 });
 
@@ -107,10 +114,10 @@ try {
     extractOneRoot(
         boundaryArchivePath,
         join(proofRoot, "boundary-extracted"),
-        `boundary-${versions.boundary}`,
+        releases.boundary.root,
         materializedBoundary,
     );
-    extractOneRoot(worldArchivePath, join(proofRoot, "world-extracted"), `world-${versions.world}`, materializedWorld);
+    extractOneRoot(worldArchivePath, join(proofRoot, "world-extracted"), releases.world.root, materializedWorld);
     useMaterializedBoundary(join(materializedAgent, "build.zig.zon"));
     useMaterializedBoundary(join(materializedWorld, "build.zig.zon"));
 
@@ -140,11 +147,11 @@ try {
         archiveRoot,
         join(proofRoot, "host-extracted"),
     );
-    const capabilitiesArtifact = materializeReferenceArtifact(
-        "worldCapabilities",
+    const capabilitiesArtifact = materializeWorldCapabilitiesArtifact(
         referenceStack.worldCapabilities,
         archiveRoot,
         join(proofRoot, "capabilities-extracted"),
+        { bunExecutable: process.execPath, environment: sourceBuildEnvironment(proofRoot) },
     );
     const hostReleaseRoot = hostArtifact.root;
     const capabilitiesReleaseRoot = capabilitiesArtifact.root;
@@ -153,6 +160,12 @@ try {
     mkdirSync(dirname(runtimeHost), { recursive: true });
     cpSync(join(hostReleaseRoot, "src/v1"), runtimeHost, { recursive: true });
     cpSync(capabilitiesReleaseRoot, runtimeCapabilities, { recursive: true });
+    if (referenceStack.worldCapabilities.entry.provenance === "source-build") {
+        if (existsSync(join(runtimeCapabilities, "scripts/build-public-deterministic-v1.mjs")) ||
+            existsSync(join(runtimeCapabilities, "zig-out"))) {
+            throw new Error("world-capabilities source/build tree leaked into runtime");
+        }
+    }
     assertCapabilityPack(runtimeCapabilities);
 
     const wasmNames = Object.freeze({
@@ -225,6 +238,7 @@ try {
     console.log(`world_host_archive_sha256=${referenceStack.worldHost.entry.sha256}`);
     console.log("world_host_runtime_changed=false");
     console.log(`world_capabilities_version=${versions.capabilities}`);
+    console.log(`world_capabilities_source_archive_sha256=${referenceStack.worldCapabilities.entry.sourceSha256 ?? referenceStack.worldCapabilities.entry.sha256}`);
     console.log(`world_capabilities_archive_sha256=${referenceStack.worldCapabilities.entry.sha256}`);
     console.log("github_authentication_required=false");
     console.log("github_cli_required=false");
@@ -247,6 +261,19 @@ try {
 } finally {
     if (passed) rmSync(proofRoot, { recursive: true, force: true });
     else console.error(`agent_world_conformance_proof_root=${proofRoot}`);
+}
+
+function sourceBuildEnvironment(proofRoot) {
+    const environment = {
+        ...process.env,
+        HOME: join(proofRoot, "capabilities-build-home"),
+        PATH: "/usr/bin:/bin",
+    };
+    mkdirSync(environment.HOME);
+    for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "OPENAI_API_KEY", "BUN_OPTIONS", "NODE_OPTIONS"]) {
+        delete environment[name];
+    }
+    return environment;
 }
 
 async function materializeAgent(stagingRoot, archiveRoot) {

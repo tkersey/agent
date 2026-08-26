@@ -3,13 +3,18 @@
   "worldHost": {
     "repository": "tkersey/world-host",
     "version": "1.0.1",
+    "provenance": "release",
     "url": "https://github.com/tkersey/world-host/releases/download/v1.0.1/world-host-v1.0.1-runtime.tar.gz",
     "sha256": "e501ab1fe540ed2ee5cbd1db5a027f00271f95694747160fe36fa64cffaab52d"
   },
   "worldCapabilities": {
     "repository": "tkersey/world-capabilities",
-    "version": "2.2.2",
-    "url": "https://github.com/tkersey/world-capabilities/releases/download/v2.2.2/world-capabilities-v2.2.2-deterministic.tar.gz",
-    "sha256": "928567e46defa3d3361ddc6c869cc9e4e582e2e6045a66ece54c7f2bdf079c2e"
+    "version": "2.3.3",
+    "provenance": "source-build",
+    "url": "https://github.com/tkersey/world-capabilities/archive/aee7583f7d2155eb7e424eaaf16933a95295147c.tar.gz",
+    "sha256": "687c22e26be244d069fac34b90add2f0834ab814ba78cbbbe640be2e7bb4edbb",
+    "sourceSha256": "d1a05dd176078fb011ad2b61d888e188a777901e287ff49b3f43d6e3edc7b7c4",
+    "archiveRoot": "world-capabilities-aee7583f7d2155eb7e424eaaf16933a95295147c",
+    "distributionRoot": "world-capabilities-v2.3.3-deterministic"
   }
 }

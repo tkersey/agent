@@ -21,6 +21,12 @@ const EXPECTED_EFFECTS = Object.freeze([
   "repo.test.v1", "model.decide.v1",
 ]);
 const EXPECTED_TREE = "0d9ac8802aac6597cb0a443245efb6f92a0249fe";
+const EXPECTED_EXISTING_IMAGE =
+  "7440076a8078220d9d4000b871423d981bbbee19aedba499afaa4a86239fe6a6";
+const EXPECTED_EXISTING_TERMINAL =
+  "6a473b2e74e2f8229d10061d1b613ad71ab2ad5b139c21bd9a898b7a2778f75c";
+const EXPECTED_EXISTING_TYPED_IO =
+  "bc3a65ec23bd18f166436a508da26d1e474d66a571ad7f8bb47d4cbac920e1b3";
 const CORRECTED_SOURCE = `export function normalizeRange(start, end) {
   if (start <= end) {
     return { start, end };
@@ -30,10 +36,14 @@ const CORRECTED_SOURCE = `export function normalizeRange(start, end) {
 `;
 
 const options = parseArgs(process.argv.slice(2));
+const legacyDecisionTurn = options.get("legacy-decision-turn") === "true";
 const [image, initialArgs] = await Promise.all([
-  readFile(required("image")),
-  readFile(required("initial-args")),
+  readCanonicalInput("image"),
+  readCanonicalInput("initial-args"),
 ]);
+if (legacyDecisionTurn && sha256(image) !== EXPECTED_EXISTING_IMAGE) {
+  throw new Error("existing_bpi1_identity_mismatch");
+}
 const kernelPath = required("kernel");
 const kernel = await compileProcessKernel(kernelPath);
 const capabilitiesRoot = resolve(required("capabilities-root"));
@@ -82,7 +92,12 @@ let pendingResult = null;
 let reductions = 0;
 let freshInstances = 0;
 let transferProved = false;
+let readAdmissionProved = false;
+let replacementAdmissionProved = false;
+let finalPathAdmissionProved = false;
+let finalDigestAdmissionProved = false;
 const trace = [];
+const typedIo = [];
 let terminal = null;
 while (reductions < 512 && terminal === null) {
   const outcome = await advanceFresh(kernel, image, current, isState, pendingResult);
@@ -120,6 +135,11 @@ while (reductions < 512 && terminal === null) {
       transferProved = true;
     }
     const response = await resolveEffect(request, trace.length);
+    typedIo.push(Object.freeze({
+      identity: request.identity,
+      payload_sha256: sha256(request.payload),
+      result_sha256: sha256(response),
+    }));
     trace.push(request.identity);
     pendingResult = encodeResult(request, response);
     continue;
@@ -136,6 +156,10 @@ if (JSON.stringify(trace) !== JSON.stringify(EXPECTED_EFFECTS)) {
   throw new Error(`effect_trace_mismatch:${JSON.stringify(trace)}`);
 }
 if (!transferProved) throw new Error("transfer_not_proved");
+if (!legacyDecisionTurn && (!readAdmissionProved || !replacementAdmissionProved ||
+    !finalPathAdmissionProved || !finalDigestAdmissionProved)) {
+  throw new Error("repository_admission_negatives_not_proved");
+}
 const finalResult = codecs.decodeFinalResult(terminal);
 const changedPaths = git(workspaceRoot, ["diff", "--name-only"])
   .split("\n").filter(Boolean);
@@ -150,9 +174,18 @@ if (finalTree !== EXPECTED_TREE || JSON.stringify(changedPaths) !== JSON.stringi
       testsPassed: finalResult.tests_passed,
       finalDigest: finalResult.final_source_sha256,
     })}`);
+if (legacyDecisionTurn && sha256(terminal) !== EXPECTED_EXISTING_TERMINAL) {
+  throw new Error("existing_bpi1_terminal_result_mismatch");
+}
+const typedIoDigest = sha256(JSON.stringify(typedIo));
+if (legacyDecisionTurn && typedIoDigest !== EXPECTED_EXISTING_TYPED_IO) {
+  throw new Error("existing_bpi1_typed_io_mismatch");
+}
 
 process.stdout.write(JSON.stringify({
-  format: "portable-agentic-system-proof/v1",
+  format: legacyDecisionTurn
+    ? "existing-bpi1-process-proof/v1"
+    : "portable-agentic-system-proof/v1",
   image_sha256: sha256(image),
   kernel_sha256: sha256(kernel.bytes),
   kernel_import_count: 0,
@@ -168,16 +201,58 @@ process.stdout.write(JSON.stringify({
   machine_v2_profile: false,
   application_specific_wasm: false,
   decision_contract_sidecar: false,
+  ...(legacyDecisionTurn ? {} : {
+    repository_read_admission: readAdmissionProved,
+    repository_replacement_admission: replacementAdmissionProved,
+    repository_final_path_admission: finalPathAdmissionProved,
+    repository_final_digest_admission: finalDigestAdmissionProved,
+  }),
+  typed_io: typedIo,
+  typed_io_digest: typedIoDigest,
+  terminal_result_sha256: sha256(terminal),
 }) + "\n");
 
 async function resolveEffect(request, boundaryIndex) {
   if (request.identity === "model.decide.v1") {
-    const { contractDigest, turn } = decodeDecisionEnvelope(request.payload);
+    const { contractDigest, turn } = decodeDecisionEnvelope(
+      request.payload,
+      legacyDecisionTurn,
+    );
     const decoded = codecs.decodeDecisionTurn(turn);
     if (decoded.contractDigest !== contractDigest) {
       throw new Error("decision_contract_digest_mismatch");
     }
-    return codecs.encodeAction(scriptedAction(decoded));
+    if (!legacyDecisionTurn && boundaryIndex === 0) {
+      await expectActionRejected(request, {
+        action: "read_file",
+        arguments: { role: "source", path: "test/range.test.mjs" },
+      });
+      readAdmissionProved = true;
+      await expectActionRejected(request, {
+        action: "replace_file",
+        arguments: {
+          path: "src/range.mjs",
+          expected_sha256: "0".repeat(64),
+          replacement: CORRECTED_SOURCE,
+          rationale: "Attempt replacement before observing the failing test.",
+        },
+      });
+      replacementAdmissionProved = true;
+    }
+    const selected = scriptedAction(decoded);
+    if (!legacyDecisionTurn && selected.action === "final") {
+      await expectActionRejected(request, action("final", {
+        ...selected.arguments,
+        changed_files: ["test/range.test.mjs"],
+      }));
+      finalPathAdmissionProved = true;
+      await expectActionRejected(request, action("final", {
+        ...selected.arguments,
+        final_source_sha256: "0".repeat(64),
+      }));
+      finalDigestAdmissionProved = true;
+    }
+    return codecs.encodeAction(selected);
   }
   const operation = new Map([
     ["repo.list.v1", "list"],
@@ -229,7 +304,34 @@ async function resolveEffect(request, boundaryIndex) {
   return response;
 }
 
-function decodeDecisionEnvelope(payload) {
+async function expectActionRejected(request, candidate) {
+  let state = current;
+  let result = encodeResult(request, codecs.encodeAction(candidate));
+  for (let reduction = 0; reduction < 32; reduction += 1) {
+    const outcome = await advanceFresh(kernel, image, state, true, result);
+    result = null;
+    if (outcome.kind === 0 || outcome.kind === 2) {
+      state = outcome.primary;
+      continue;
+    }
+    if (outcome.kind === 4) return;
+    if (outcome.kind === 1) {
+      throw new Error(`forbidden_action_emitted_effect:${candidate.action}`);
+    }
+    throw new Error(`forbidden_action_wrong_outcome:${candidate.action}:${outcome.kind}`);
+  }
+  throw new Error(`forbidden_action_not_rejected:${candidate.action}`);
+}
+
+function decodeDecisionEnvelope(payload, legacy) {
+  if (legacy) {
+    if (payload.length < 32) throw new Error("decision_turn_short");
+    return Object.freeze({
+      contractDigest: payload.subarray(0, 32).toString("hex"),
+      contract: Buffer.alloc(0),
+      turn: Buffer.from(payload),
+    });
+  }
   if (payload.length < 104) throw new Error("decision_envelope_short");
   const contractDigest = payload.subarray(0, 32).toString("hex");
   if (payload.subarray(32, 40).toString("ascii") !== "AGT_DCT2") {
@@ -246,6 +348,14 @@ function decodeDecisionEnvelope(payload) {
     });
   }
   throw new Error("decision_contract_not_self_contained");
+}
+
+async function readCanonicalInput(name) {
+  const direct = options.get(name);
+  if (direct) return readFile(direct);
+  const encoded = options.get(`${name}-base64`);
+  if (!encoded) throw new Error(`missing --${name} or --${name}-base64`);
+  return Buffer.from((await readFile(encoded, "utf8")).replaceAll(/\s/g, ""), "base64");
 }
 
 function scriptedAction(request) {

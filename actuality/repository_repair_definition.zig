@@ -112,6 +112,10 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
             failing_test_observed: bool,
             mutation_applied: bool,
             passing_test_observed: bool,
+            source_digest: DigestHex,
+            source_digest_known: bool,
+            applied_path: Path,
+            applied_digest: DigestHex,
         };
         pub const DecisionEvidence = struct {
             failing_test_observed: bool,

@@ -9,7 +9,7 @@ const Cycle = struct {
 };
 
 test "repository working set resource shapes remain inspectable" {
-    try std.testing.expect(@sizeOf(Machine.FrameType) <= 640 * 1024);
+    try std.testing.expect(@sizeOf(Machine.FrameType) <= 768 * 1024);
     try std.testing.expect(@sizeOf(actuality.Memory) <= 128 * 1024);
     try std.testing.expect(@sizeOf(actuality.DecisionView) <= 128 * 1024);
     try std.testing.expect(@sizeOf(actuality.TestResult) <= 9 * 1024);
@@ -86,7 +86,7 @@ fn listing() !actuality.ListResult {
         .kind = .file,
     });
     try entries.push(.{
-        .path = try actuality.Path.fromSlice("test/range.mjs"),
+        .path = try actuality.Path.fromSlice("test/range.test.mjs"),
         .kind = .file,
     });
     return .{ .entries = entries, .truncated = false };
@@ -96,7 +96,7 @@ fn readResult(role: actuality.DocumentRole) !actuality.ReadResult {
     const path = switch (role) {
         .package => "package.json",
         .source => "src/range.mjs",
-        .@"test" => "test/range.mjs",
+        .@"test" => "test/range.test.mjs",
     };
     return .{
         .role = role,
@@ -117,6 +117,12 @@ fn searchResult() !actuality.SearchResult {
     return .{ .hits = hits, .truncated = false };
 }
 
+fn newDigest() !actuality.DigestHex {
+    return actuality.DigestHex.fromSlice(
+        "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+    );
+}
+
 fn testResult(passed: bool) !actuality.TestResult {
     return .{
         .exit_code = if (passed) 0 else 1,
@@ -132,9 +138,7 @@ fn replacement() !actuality.ReplaceOutcome {
     return .{ .applied = .{
         .path = try actuality.Path.fromSlice("src/range.mjs"),
         .old_sha256 = try digest(),
-        .new_sha256 = try actuality.DigestHex.fromSlice(
-            "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
-        ),
+        .new_sha256 = try newDigest(),
         .already_applied = false,
     } };
 }
@@ -152,7 +156,7 @@ fn actionForRead(role: actuality.DocumentRole) !actuality.Action {
     const path = switch (role) {
         .package => "package.json",
         .source => "src/range.mjs",
-        .@"test" => "test/range.mjs",
+        .@"test" => "test/range.test.mjs",
     };
     return .{ .read_file = .{
         .role = role,
@@ -264,7 +268,7 @@ test "repository working set admits final result only after failing mutation pas
         .summary = try actuality.SummaryText.fromSlice("repaired fixture"),
         .changed_files = changed_files,
         .tests_passed = true,
-        .final_source_sha256 = try digest(),
+        .final_source_sha256 = try newDigest(),
     };
     const decision = try nextRequest(state);
     try resumeRequest(&state, decision, actuality.Action{ .final = result });
@@ -299,7 +303,7 @@ test "repository working set revokes passing evidence after a later failing test
         .summary = try actuality.SummaryText.fromSlice("repair no longer passes"),
         .changed_files = changed_files,
         .tests_passed = true,
-        .final_source_sha256 = try digest(),
+        .final_source_sha256 = try newDigest(),
     };
     const decision = try nextRequest(state);
     const view = switch (decision.value) {

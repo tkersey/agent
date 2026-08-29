@@ -621,11 +621,10 @@ pub fn build(b: *std.Build) void {
         "--summary",
         "all",
     });
-    const portable_proof = b.addSystemCommand(&.{
-        "bun",
-        "tools/portable/proof.mjs",
-        "--kernel",
-    });
+    const portable_proof = b.addSystemCommand(&.{"bun"});
+    portable_proof.addFileArg(b.path("tools/portable/proof.mjs"));
+    portable_proof.addFileInput(b.path("tools/portable/process_kernel_client.mjs"));
+    portable_proof.addArg("--kernel");
     portable_proof.addFileArg(process_kernel_output.path(b, "boundary-process-kernel-v1.wasm"));
     portable_proof.addArg("--image");
     portable_proof.addFileArg(portable_image);
@@ -645,6 +644,44 @@ pub fn build(b: *std.Build) void {
         "portable-agentic-system-v1-proof/receipt.json",
     );
     portable_agentic_check.dependOn(&install_portable_proof_receipt.step);
+    const existing_bpi1_proof = b.addSystemCommand(&.{"bun"});
+    existing_bpi1_proof.addFileArg(b.path("tools/portable/proof.mjs"));
+    existing_bpi1_proof.addFileInput(b.path(
+        "tools/portable/process_kernel_client.mjs",
+    ));
+    existing_bpi1_proof.addArg("--kernel");
+    existing_bpi1_proof.addFileArg(process_kernel_output.path(
+        b,
+        "boundary-process-kernel-v1.wasm",
+    ));
+    existing_bpi1_proof.addArg("--image-base64");
+    existing_bpi1_proof.addFileArg(boundary_dependency.path(
+        "conformance/process-v1/repository-repair.agent.bpi1.base64",
+    ));
+    existing_bpi1_proof.addArg("--initial-args-base64");
+    existing_bpi1_proof.addFileArg(boundary_dependency.path(
+        "conformance/process-v1/repository-repair.initial-args.bin.base64",
+    ));
+    existing_bpi1_proof.addArgs(&.{ "--legacy-decision-turn", "true" });
+    existing_bpi1_proof.addArg("--host-adapter");
+    existing_bpi1_proof.addFileArg(boundary_dependency.path(
+        "scripts/boundary-process-step.mjs",
+    ));
+    existing_bpi1_proof.addArg("--capabilities-root");
+    existing_bpi1_proof.addDirectoryArg(interpretation_runtime.path(
+        b,
+        "world-capabilities",
+    ));
+    existing_bpi1_proof.addArg("--fixture-root");
+    existing_bpi1_proof.addDirectoryArg(b.path("fixtures/repository-repair-v1"));
+    const existing_bpi1_proof_receipt = existing_bpi1_proof.captureStdOut(.{
+        .basename = "existing-bpi1-process-v1-receipt.json",
+    });
+    const install_existing_bpi1_proof_receipt = b.addInstallFile(
+        existing_bpi1_proof_receipt,
+        "portable-agentic-system-v1-proof/existing-bpi1-receipt.json",
+    );
+    portable_agentic_check.dependOn(&install_existing_bpi1_proof_receipt.step);
     semantic_check.dependOn(&run_tests.step);
 
     const no_runtime_gate = b.addSystemCommand(&.{

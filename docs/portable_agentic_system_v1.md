@@ -28,6 +28,13 @@ path, a complete SHA-256 digest, and nonempty replacement/rationale values, then
 emits `repo.replace.approved.v1`. The proposal effect is absent from the final
 residual catalog.
 
+The Agent-owned epistemic admission law rejects read paths outside the three
+admitted documents and rejects replacement before a failing test or when its
+path/digest differ from the latest admitted source read. Final admission binds
+the sole changed path and final digest to the typed applied replacement outcome.
+These checks execute inside BPI1 before an external effect or terminal result;
+the host adapter and capability implementation are not semantic fallbacks.
+
 ```sh
 zig build check-portable-agentic-system-v1 --summary all
 zig build emit-portable-agentic-system-v1
@@ -44,6 +51,12 @@ boundary-process-step.mjs
 system.bpi1
 initial-args.bin
 ```
+
+The aggregate also runs the exact landed Agent Interpretation v1 BPI1
+(`7440076a...`) with the same deterministic typed residual-effect resolver. Its
+separate receipt binds every request payload and supplied result digest, all 17
+external boundaries, the terminal result, transfer recovery, and the final Git
+tree without a MachineV2Profile.
 
 `agent.episode` retains bounded Agent v2 behavior and the World Application ABI
 v1 compatibility path. Portable Process execution does not claim portable

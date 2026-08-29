@@ -74,6 +74,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    const world_dependency = b.dependency("world", .{
+        .target = target,
+        .optimize = optimize,
+    });
 
     const agent_module = b.addModule("agent", .{
         .root_source_file = b.path("src/root.zig"),
@@ -88,6 +92,45 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     shared_boundary_module.addImport("agent_boundary_upstream", boundary_module);
+    const portable_system_module = b.createModule(.{
+        .root_source_file = b.path("actuality/portable_system.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    portable_system_module.addImport("agent", agent_module);
+    portable_system_module.addImport("boundary", boundary_module);
+    portable_system_module.addImport("world", world_dependency.module("world"));
+    portable_system_module.addImport(
+        "repository_repair_definition",
+        b.createModule(.{
+            .root_source_file = b.path("actuality/repository_repair_definition.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    );
+    const portable_emitter_module = b.createModule(.{
+        .root_source_file = b.path("actuality/emit_portable_system.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+    portable_emitter_module.addImport("portable_system", portable_system_module);
+    const portable_emitter = b.addExecutable(.{
+        .name = "emit-repository-repair-portable-system-v1",
+        .root_module = portable_emitter_module,
+    });
+    const run_portable_emitter = b.addRunArtifact(portable_emitter);
+    const portable_image = run_portable_emitter.captureStdOut(.{
+        .basename = "repository-repair-portable-system.bpi1",
+    });
+    const install_portable_image = b.addInstallFile(
+        portable_image,
+        "portable-agentic-system-v1/repository-repair-portable-system.bpi1",
+    );
+    const emit_portable_system = b.step(
+        "emit-portable-agentic-system-v1",
+        "Emit the closed World-linked repository-repair BPI1",
+    );
+    emit_portable_system.dependOn(&install_portable_image.step);
 
     const actuality_application = world_build.addApplicationWasm(b, .{
         .name = "repository-repair-actuality",
@@ -234,6 +277,11 @@ pub fn build(b: *std.Build) void {
         initial_args_output,
         "agent-actuality/initial-args.bin",
     );
+    const install_portable_initial_args = b.addInstallFile(
+        initial_args_output,
+        "portable-agentic-system-v1/initial-args.bin",
+    );
+    emit_portable_system.dependOn(&install_portable_initial_args.step);
     b.getInstallStep().dependOn(&install_initial_args.step);
 
     const interpretation_actuality = b.createModule(.{
@@ -553,6 +601,50 @@ pub fn build(b: *std.Build) void {
         "check-agent-semantic",
         "Run the public compiler, World packaging, parity, and malformed-input proof",
     );
+    const portable_agentic_check = b.step(
+        "check-portable-agentic-system-v1",
+        "Run the cross-stack portable Agent process and compatibility proof",
+    );
+    portable_agentic_check.dependOn(semantic_check);
+    const build_process_kernel = b.addSystemCommand(&.{
+        b.graph.zig_exe,
+        "build",
+        "--build-file",
+    });
+    build_process_kernel.addFileArg(boundary_dependency.path("build.zig"));
+    build_process_kernel.addArg("--prefix");
+    const process_kernel_output = build_process_kernel.addOutputDirectoryArg(
+        "boundary-process-kernel-v1",
+    );
+    build_process_kernel.addArgs(&.{
+        "emit-boundary-process-kernel-v1",
+        "--summary",
+        "all",
+    });
+    const portable_proof = b.addSystemCommand(&.{
+        "bun",
+        "tools/portable/proof.mjs",
+        "--kernel",
+    });
+    portable_proof.addFileArg(process_kernel_output.path(b, "boundary-process-kernel-v1.wasm"));
+    portable_proof.addArg("--image");
+    portable_proof.addFileArg(portable_image);
+    portable_proof.addArg("--initial-args");
+    portable_proof.addFileArg(initial_args_output);
+    portable_proof.addArg("--host-adapter");
+    portable_proof.addFileArg(boundary_dependency.path("scripts/boundary-process-step.mjs"));
+    portable_proof.addArg("--capabilities-root");
+    portable_proof.addDirectoryArg(interpretation_runtime.path(b, "world-capabilities"));
+    portable_proof.addArg("--fixture-root");
+    portable_proof.addDirectoryArg(b.path("fixtures/repository-repair-v1"));
+    const portable_proof_receipt = portable_proof.captureStdOut(.{
+        .basename = "portable-agentic-system-v1-receipt.json",
+    });
+    const install_portable_proof_receipt = b.addInstallFile(
+        portable_proof_receipt,
+        "portable-agentic-system-v1-proof/receipt.json",
+    );
+    portable_agentic_check.dependOn(&install_portable_proof_receipt.step);
     semantic_check.dependOn(&run_tests.step);
 
     const no_runtime_gate = b.addSystemCommand(&.{
@@ -771,6 +863,7 @@ pub fn build(b: *std.Build) void {
         .{ .path = "test/compile_fail/effect_without_history.zig", .message = "agent v2 Definition no longer accepts .history; choose an EpistemicStrategy" },
         .{ .path = "test/compile_fail/forged_runtime_strategy.zig", .message = "agent compile requires a RuntimeStrategy structural contract" },
         .{ .path = "test/compile_fail/open_action.zig", .message = "agent Action must be exhaustive" },
+        .{ .path = "test/compile_fail/process_budget.zig", .message = "agent process finite policy belongs in typed Memory and admission laws, not Budget" },
         .{ .path = "test/compile_fail/nonexistent_action_variant.zig", .message = "agent Action has no variant named 'missing'" },
         .{ .path = "test/compile_fail/fail_payload_mismatch.zig", .message = "agent fail action payload differs from Definition.Failure" },
         .{ .path = "test/compile_fail/missing_final_action.zig", .message = "agent action algebra requires a final action" },
@@ -814,6 +907,17 @@ pub fn build(b: *std.Build) void {
         "check-agent-definition",
         "Validate AgentDefinition admission",
         "test/definition.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addFocusedTest(
+        b,
+        "check-agent-process-definition",
+        "Compile an open Agent process without Budget or final action",
+        "test/process_definition.zig",
         agent_module,
         boundary_module,
         target,
@@ -930,6 +1034,14 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic_check,
     );
+    const portable_system_tests = b.addTest(.{ .root_module = portable_system_module });
+    const run_portable_system_tests = b.addRunArtifact(portable_system_tests);
+    const portable_system_check = b.step(
+        "check-agent-portable-system-link-v1",
+        "Link repository repair and its internal policy into one ordinary BPI1",
+    );
+    portable_system_check.dependOn(&run_portable_system_tests.step);
+    semantic_check.dependOn(portable_system_check);
     const working_set_check = addActualityDefinitionTest(
         b,
         "check-agent-epistemics-working-set",

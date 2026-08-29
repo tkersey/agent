@@ -167,9 +167,15 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
         const ReadFile = boundary.effect.site(2, "repo.read.v1", ReadRequest, ReadResult);
         const SearchText = boundary.effect.site(3, "repo.search.v1", SearchRequest, SearchResult);
         const RunTests = boundary.effect.site(4, "repo.test.v1", TestRequest, TestResult);
-        const ReplaceFile = boundary.effect.site(
+        pub const ApprovedReplace = boundary.effect.site(
             5,
             "repo.replace.approved.v1",
+            ReplaceRequest,
+            ReplaceOutcome,
+        );
+        pub const ProposeReplace = boundary.effect.site(
+            5,
+            "repository.propose_replace.v1",
             ReplaceRequest,
             ReplaceOutcome,
         );
@@ -182,7 +188,79 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
             "applied. Run the complete tests after mutation. Return final only after run_tests reports passed=true. " ++
             "Abort when the bounded task cannot be completed.";
 
-        pub const Definition = agent.define(.{
+        const action_prefix = .{
+            agent.action.effect(.list_repository, .list_repository, ListRepository, .{
+                .name = "list_repository",
+                .description = "List bounded admitted repository paths.",
+                .class = .tool,
+            }),
+            agent.action.effect(.read_file, .read_file, ReadFile, .{
+                .name = "read_file",
+                .description = "Read one admitted UTF-8 source or test file.",
+                .class = .tool,
+            }),
+            agent.action.effect(.search_text, .search_text, SearchText, .{
+                .name = "search_text",
+                .description = "Search admitted text files for one literal substring.",
+                .class = .tool,
+            }),
+            agent.action.effect(.run_tests, .run_tests, RunTests, .{
+                .name = "run_tests",
+                .description = "Execute the fixed repository test suite.",
+                .class = .tool,
+            }),
+        };
+        const episode_replace = .{agent.action.effect(
+            .replace_file,
+            .replace_file,
+            ApprovedReplace,
+            .{
+                .name = "replace_file",
+                .description = "Propose one complete source replacement; receiver approval is mandatory and tests or package files are not writable.",
+                .class = .human,
+            },
+        )};
+        const process_replace = .{agent.action.effect(
+            .replace_file,
+            .replace_file,
+            ProposeReplace,
+            .{
+                .name = "replace_file",
+                .description = "Submit one digest-bound portable replacement proposal to the linked policy program.",
+                .class = .custom,
+            },
+        )};
+        const action_suffix = .{
+            agent.action.final(.final, .{
+                .name = "final",
+                .description = "Return success only after an observed passing test result.",
+            }),
+            agent.action.fail(.abort, .{
+                .name = "abort",
+                .description = "Terminate with one authored failure.",
+            }),
+        };
+        const episode_action_descriptors = action_prefix ++ episode_replace ++ action_suffix;
+        const process_action_descriptors = action_prefix ++ process_replace ++ action_suffix;
+
+        pub const ProcessDefinition = agent.process.define(.{
+            .name = "repository-repair-process",
+            .version = "1.0.0",
+            .instructions = instructions,
+            .Goal = Goal,
+            .Action = Action,
+            .Observation = Observation,
+            .Result = FinalResult,
+            .Failure = Failure,
+            .decision = .{
+                .interface = "model.decide.v1",
+                .maximum_request_bytes = 192 * 1024,
+                .maximum_result_bytes = 40 * 1024,
+            },
+            .actions = process_action_descriptors,
+        });
+
+        pub const Definition = agent.episode.define(.{
             .name = "repository-repair-actuality",
             .version = "2.0.0",
             .instructions = instructions,
@@ -196,41 +274,7 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
                 .maximum_request_bytes = 160 * 1024,
                 .maximum_result_bytes = 40 * 1024,
             },
-            .actions = .{
-                agent.action.effect(.list_repository, .list_repository, ListRepository, .{
-                    .name = "list_repository",
-                    .description = "List bounded admitted repository paths.",
-                    .class = .tool,
-                }),
-                agent.action.effect(.read_file, .read_file, ReadFile, .{
-                    .name = "read_file",
-                    .description = "Read one admitted UTF-8 source or test file.",
-                    .class = .tool,
-                }),
-                agent.action.effect(.search_text, .search_text, SearchText, .{
-                    .name = "search_text",
-                    .description = "Search admitted text files for one literal substring.",
-                    .class = .tool,
-                }),
-                agent.action.effect(.run_tests, .run_tests, RunTests, .{
-                    .name = "run_tests",
-                    .description = "Execute the fixed repository test suite.",
-                    .class = .tool,
-                }),
-                agent.action.effect(.replace_file, .replace_file, ReplaceFile, .{
-                    .name = "replace_file",
-                    .description = "Propose one complete source replacement; receiver approval is mandatory and tests or package files are not writable.",
-                    .class = .human,
-                }),
-                agent.action.final(.final, .{
-                    .name = "final",
-                    .description = "Return success only after an observed passing test result.",
-                }),
-                agent.action.fail(.abort, .{
-                    .name = "abort",
-                    .description = "Terminate with one authored failure.",
-                }),
-            },
+            .actions = episode_action_descriptors,
             .budget = .{
                 .maximum_turns = 32,
                 .maximum_decisions = 32,
@@ -255,6 +299,11 @@ pub fn RepositoryRepair(comptime agent: type, comptime boundary: type) type {
             Strategy,
             Epistemics,
             .{ .machine = machine_options },
+        );
+        pub const ProcessCompiled = agent.process.compile(
+            ProcessDefinition,
+            Strategy,
+            Epistemics,
         );
         pub const Machine = Compiled.Machine;
     };

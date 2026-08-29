@@ -1,10 +1,10 @@
 # Boundary integration
 
-Agent exposes two execution forms over one compiled Boundary Program:
+Agent exposes one primary portable form and one bounded compatibility form:
 
 ```text
-agent.compile -> boundary.program -> Program.compile -> specialized Machine ABI v2
-agent.compile -> boundary.program -> BPI1 + MachineV2Profile -> fixed Boundary kernel
+agent.process.compile -> boundary.program -> BPI1 -> fixed Process kernel
+agent.episode.compile -> boundary.program -> specialized Machine ABI v2
 ```
 
 Agent compiles with exact Boundary v1.6.1. It uses public program, Control IR,
@@ -13,8 +13,9 @@ not import `boundary.Agent`, duplicate value codecs, reinterpret fuel, or
 author another state transition system. The asset build compiles one host
 emitter once and writes the exact repository-repair `Program.image().bytes`
 and MachineV2Profile bytes directly to standard output;
-application-specific WASM remains owned by World, and the interpreted runtime
-loads only the fixed Boundary kernel.
+application-specific WASM remains an optional World compatibility artifact. The
+portable runtime is only fixed Process-kernel WASM, BPI1, and Process State or
+InitialArgs; Agent owns none of those runtime formats or artifacts.
 
 The build exports a `boundary` module facade backed by Agent's exact dependency.
 Agent and World v3.1.4 pin the same implementation-only Boundary owner fix,

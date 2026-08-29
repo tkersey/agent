@@ -3,15 +3,14 @@
 `agent` is a Zig staged compiler for typed agent systems.
 
 ```text
-AgentDefinition + RuntimeStrategy + EpistemicStrategy
-    -> one Boundary Program
-    -> specialized Machine-v2 reducer
-    -> World application-specific WASM
+agent.process + RuntimeStrategy + EpistemicStrategy
+    -> one ordinary Boundary Program
+    -> World-linked closed BPI1
+    -> fixed import-free Boundary Process kernel
 
-AgentDefinition + RuntimeStrategy + EpistemicStrategy
+agent.episode + RuntimeStrategy + EpistemicStrategy
     -> one Boundary Program
-    -> BPI1 + MachineV2Profile
-    -> fixed Boundary kernel WASM
+    -> bounded Machine-v2 compatibility path
 ```
 
 Agent v2 separates four objects:
@@ -20,14 +19,13 @@ Agent v2 separates four objects:
 Evidence != Memory != DecisionView != DecisionContract
 ```
 
-world-host retains complete Frames and EffectResults as evidence. The Machine
-retains bounded typed Memory. An EpistemicStrategy deterministically folds each
+An EpistemicStrategy deterministically folds each
 Observation into Memory and projects a turn-specific DecisionView. The external
-decision provider admits one immutable, digest-bound DecisionContract and
-receives only the dynamic DecisionTurn.
+decision receiver gets a self-contained process request containing the immutable
+DecisionContract bytes and the dynamic DecisionTurn. No sidecar cache is required.
 
 ```zig
-const Definition = agent.define(.{
+const Definition = agent.episode.define(.{
     .name = "answer-agent",
     .version = "2.0.0",
     .instructions = "Return one typed answer.",
@@ -60,7 +58,7 @@ const Epistemics = agent.epistemics.verbatim(.{
     .final = agent.final_policy.none,
 });
 
-pub const Compiled = agent.compile(Definition, Runtime, Epistemics, .{
+pub const Compiled = agent.episode.compile(Definition, Runtime, Epistemics, .{
     .machine = .{
         .maximum_frames = 16,
         .maximum_state_bytes = 64 * 1024,
@@ -77,6 +75,12 @@ definition loader or strategy registry.
 ## Proof classes
 
 ```sh
+# Complete portable process, World linkage, fresh-instance transfer, and compatibility.
+zig build check-portable-agentic-system-v1 --summary all
+
+# Emit the closed BPI1 and InitialArgs; Agent emits no WASM or Process State.
+zig build emit-portable-agentic-system-v1
+
 # Public compiler semantics, packaging, native/WASM parity, malformed corpus.
 zig build check
 
@@ -108,6 +112,7 @@ See [Epistemic Normal Form](docs/epistemic_normal_form.md),
 [DecisionContract](docs/decision_contract.md),
 [evidence and memory](docs/evidence_and_memory.md),
 [Actuality](docs/actuality.md),
+[Portable Agentic System v1](docs/portable_agentic_system_v1.md),
 [Interpretation v1](docs/interpretation_v1.md), and the
 [v1.1 migration guide](docs/migration_from_1_1.md).
 

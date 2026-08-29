@@ -152,10 +152,27 @@ pub fn definition(comptime Definition: type) DefinitionManifest(Definition.actio
         hashDigest(&hasher, resume_digest);
         hashDigest(&hasher, effect_identity_digest);
     }
-    identity.unsigned(&hasher, Definition.budget.maximum_turns);
-    identity.unsigned(&hasher, Definition.budget.maximum_decisions);
-    identity.unsigned(&hasher, Definition.budget.maximum_effect_actions);
-    identity.unsigned(&hasher, Definition.budget.maximum_child_actions);
+    const maximum_turns = if (Definition.kind == .episode)
+        Definition.budget.maximum_turns
+    else
+        0;
+    const maximum_decisions = if (Definition.kind == .episode)
+        Definition.budget.maximum_decisions
+    else
+        0;
+    const maximum_effect_actions = if (Definition.kind == .episode)
+        Definition.budget.maximum_effect_actions
+    else
+        0;
+    const maximum_child_actions = if (Definition.kind == .episode)
+        Definition.budget.maximum_child_actions
+    else
+        0;
+    identity.bytes(&hasher, @tagName(Definition.kind));
+    identity.unsigned(&hasher, maximum_turns);
+    identity.unsigned(&hasher, maximum_decisions);
+    identity.unsigned(&hasher, maximum_effect_actions);
+    identity.unsigned(&hasher, maximum_child_actions);
     return .{
         .magic = "AGT_DEF2".*,
         .package_version_digest = identity.digestBytes(package_version),
@@ -172,10 +189,10 @@ pub fn definition(comptime Definition: type) DefinitionManifest(Definition.actio
         .maximum_request_bytes = Definition.decision.maximum_request_bytes,
         .maximum_result_bytes = Definition.decision.maximum_result_bytes,
         .actions = actions,
-        .maximum_turns = Definition.budget.maximum_turns,
-        .maximum_decisions = Definition.budget.maximum_decisions,
-        .maximum_effect_actions = Definition.budget.maximum_effect_actions,
-        .maximum_child_actions = Definition.budget.maximum_child_actions,
+        .maximum_turns = maximum_turns,
+        .maximum_decisions = maximum_decisions,
+        .maximum_effect_actions = maximum_effect_actions,
+        .maximum_child_actions = maximum_child_actions,
         .semantic_digest = identity.finish(&hasher),
     };
 }

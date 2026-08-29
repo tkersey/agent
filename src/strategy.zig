@@ -124,6 +124,13 @@ pub fn State(comptime Definition: type, comptime Epistemics: type) type {
     };
 }
 
+pub fn ProcessState(comptime Definition: type, comptime Epistemics: type) type {
+    return struct {
+        goal: Definition.Goal,
+        memory: Epistemics.MemoryType(Definition),
+    };
+}
+
 pub fn DecisionTurn(
     comptime Definition: type,
     comptime Strategy: type,
@@ -181,7 +188,9 @@ pub fn react(comptime config: anytype) type {
         pub const normalized_config = Config{};
 
         pub fn validate(comptime Definition: type) void {
-            _ = failureNamed(Definition, "budget_exhausted");
+            if (Definition.kind == .episode) {
+                _ = failureNamed(Definition, "budget_exhausted");
+            }
             _ = failureNamed(Definition, "arithmetic_overflow");
             _ = failureNamed(Definition, "invalid_variant");
             _ = failureNamed(Definition, "capacity_exceeded");
@@ -221,7 +230,9 @@ pub fn reflective(comptime config: anytype) type {
         };
 
         pub fn validate(comptime Definition: type) void {
-            _ = failureNamed(Definition, "budget_exhausted");
+            if (Definition.kind == .episode) {
+                _ = failureNamed(Definition, "budget_exhausted");
+            }
             _ = failureNamed(Definition, "arithmetic_overflow");
             _ = failureNamed(Definition, "invalid_variant");
             _ = failureNamed(Definition, "capacity_exceeded");

@@ -13,6 +13,11 @@ pub const DecisionProtocol = struct {
     maximum_result_bytes: usize,
 };
 
+pub const Kind = enum {
+    process,
+    episode,
+};
+
 fn taggedUnionInfo(comptime T: type, comptime surface: []const u8) std.builtin.Type.Union {
     return switch (@typeInfo(T)) {
         .@"union" => |info| blk: {
@@ -78,7 +83,7 @@ fn assertDefinitionPortable(comptime T: type, comptime surface: []const u8) void
     boundary.schema.assertPortable(T);
 }
 
-fn validateDefinition(comptime spec: anytype) void {
+fn validateDefinition(comptime spec: anytype, comptime kind: Kind) void {
     @setEvalBranchQuota(1_000_000);
     if (@hasField(@TypeOf(spec), "history")) {
         @compileError("agent v2 Definition no longer accepts .history; choose an EpistemicStrategy");
@@ -123,11 +128,20 @@ fn validateDefinition(comptime spec: anytype) void {
         );
     }
 
-    if (spec.budget.maximum_turns == 0) {
-        @compileError("agent maximum_turns must be positive");
-    }
-    if (spec.budget.maximum_decisions == 0) {
-        @compileError("agent maximum_decisions must be positive");
+    if (kind == .episode) {
+        if (!@hasField(@TypeOf(spec), "budget")) {
+            @compileError("agent episode requires Budget");
+        }
+        if (spec.budget.maximum_turns == 0) {
+            @compileError("agent maximum_turns must be positive");
+        }
+        if (spec.budget.maximum_decisions == 0) {
+            @compileError("agent maximum_decisions must be positive");
+        }
+    } else if (@hasField(@TypeOf(spec), "budget")) {
+        @compileError(
+            "agent process finite policy belongs in typed Memory and admission laws, not Budget",
+        );
     }
 
     var final_count: usize = 0;
@@ -189,12 +203,14 @@ fn validateDefinition(comptime spec: anytype) void {
         }
     }
 
-    if (final_count == 0) @compileError("agent action algebra requires a final action");
-    if (effect_count != 0 and spec.budget.maximum_effect_actions == 0) {
-        @compileError("agent maximum_effect_actions disables a declared effect action");
-    }
-    if (child_count != 0 and spec.budget.maximum_child_actions == 0) {
-        @compileError("agent maximum_child_actions disables a declared child_agent action");
+    if (kind == .episode) {
+        if (final_count == 0) @compileError("agent action algebra requires a final action");
+        if (effect_count != 0 and spec.budget.maximum_effect_actions == 0) {
+            @compileError("agent maximum_effect_actions disables a declared effect action");
+        }
+        if (child_count != 0 and spec.budget.maximum_child_actions == 0) {
+            @compileError("agent maximum_child_actions disables a declared child_agent action");
+        }
     }
 }
 
@@ -225,12 +241,13 @@ fn normalizedDescriptors(comptime spec: anytype) [spec.actions.len]type {
 }
 
 /// Admit immutable typed comptime agent data and close its Action algebra.
-pub fn define(comptime spec: anytype) type {
+pub fn defineEpisode(comptime spec: anytype) type {
     @setEvalBranchQuota(1_000_000);
-    comptime validateDefinition(spec);
+    comptime validateDefinition(spec, .episode);
     const descriptors = normalizedDescriptors(spec);
 
     return struct {
+        pub const kind = Kind.episode;
         pub const name = spec.name;
         pub const version = spec.version;
         pub const instructions = spec.instructions;
@@ -276,6 +293,55 @@ pub fn define(comptime spec: anytype) type {
         }
     };
 }
+
+/// Admit an open-ended Agent frontend definition with no universal horizon.
+pub fn defineProcess(comptime spec: anytype) type {
+    @setEvalBranchQuota(1_000_000);
+    comptime validateDefinition(spec, .process);
+    const descriptors = normalizedDescriptors(spec);
+
+    return struct {
+        pub const kind = Kind.process;
+        pub const name = spec.name;
+        pub const version = spec.version;
+        pub const instructions = spec.instructions;
+
+        pub const Goal = spec.Goal;
+        pub const Action = spec.Action;
+        pub const Observation = spec.Observation;
+        pub const Result = spec.Result;
+        pub const Failure = spec.Failure;
+        pub const actions = spec.actions;
+
+        pub const decision = DecisionProtocol{
+            .interface = spec.decision.interface,
+            .maximum_request_bytes = spec.decision.maximum_request_bytes,
+            .maximum_result_bytes = spec.decision.maximum_result_bytes,
+        };
+        pub const action_count = @typeInfo(Action).@"union".fields.len;
+
+        pub fn ActionDescriptor(comptime action_index: usize) type {
+            if (action_index >= descriptors.len) {
+                @compileError("agent Action descriptor index is out of bounds");
+            }
+            return descriptors[action_index];
+        }
+
+        pub fn actionIndex(comptime stable_name: []const u8) usize {
+            inline for (0..action_count) |index| {
+                if (comptime std.mem.eql(
+                    u8,
+                    ActionDescriptor(index).name,
+                    stable_name,
+                )) return index;
+            }
+            @compileError("agent action algebra has no stable name '" ++ stable_name ++ "'");
+        }
+    };
+}
+
+/// Compatibility alias for the bounded Agent v2 episode frontend.
+pub const define = defineEpisode;
 
 comptime {
     _ = action;

@@ -620,6 +620,10 @@ pub fn Flow(comptime config: anytype) type {
             return self.instruction(u32, .pure, .vector_length, .{vector});
         }
 
+        pub fn textLength(self: *Self, text: anytype) Value(u32) {
+            return self.instruction(u32, .pure, .text_length, .{text});
+        }
+
         pub fn vectorGet(
             self: *Self,
             vector: anytype,

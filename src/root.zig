@@ -1,12 +1,23 @@
 const boundary = @import("boundary");
 const budget_types = @import("budget.zig");
 const definition = @import("definition.zig");
+pub const DefinitionKind = definition.Kind;
 
 /// Agent package bootstrap version.
 pub const package_version = "2.7.0";
 
-/// Define immutable typed comptime agent data and close its Action algebra.
-pub const define = definition.define;
+/// Primary open-ended Agent frontend with no universal finite horizon.
+pub const process = struct {
+    pub const define = definition.defineProcess;
+    pub const compile = @import("compiler.zig").compileProcess;
+};
+/// Explicit bounded compatibility frontend preserving Agent v2 policy.
+pub const episode = struct {
+    pub const define = definition.defineEpisode;
+    pub const compile = @import("compiler.zig").compile;
+};
+/// Compatibility alias for `agent.episode.define`.
+pub const define = episode.define;
 /// Typed action-descriptor constructors.
 pub const action = @import("action.zig");
 /// Compiler-only final guards used by explicit EpistemicStrategies.
@@ -24,8 +35,8 @@ pub const Value = @import("flow.zig").Value;
 pub const strategy = @import("strategy.zig");
 /// Provider-neutral projections of the closed decision Action algebra.
 pub const decision = @import("decision_contract.zig");
-/// Specialize one definition, runtime strategy, and epistemic strategy into one Boundary Machine.
-pub const compile = @import("compiler.zig").compile;
+/// Compatibility alias for `agent.episode.compile`.
+pub const compile = episode.compile;
 
 pub const DefinitionManifest = @import("manifest.zig").DefinitionManifest;
 pub const StrategyManifest = @import("manifest.zig").StrategyManifest;
@@ -39,6 +50,7 @@ pub const DecisionPhase = budget_types.DecisionPhase;
 comptime {
     if (!@hasDecl(boundary, "program") or
         !@hasDecl(boundary, "image") or
+        !@hasDecl(boundary, "process_v1") or
         !@hasDecl(boundary, "machine_v2"))
     {
         @compileError("agent requires Boundary v1.6.1 program image and Machine-v2 compilation");

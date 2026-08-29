@@ -4,6 +4,8 @@ actuality/emit_decision_contract_binary.zig
 actuality/emit_decision_contract_digest.zig
 actuality/emit_first_decision_request.zig
 actuality/emit_initial_args.zig
+actuality/emit_portable_system.zig
+actuality/portable_system.zig
 actuality/repository_repair_definition.zig
 actuality/repository_repair_epistemics.zig
 adequacy/router-policy-v1/build.zig
@@ -70,6 +72,7 @@ test/compile_fail/nonportable_observation.zig
 test/compile_fail/nonportable_result.zig
 test/compile_fail/observation_payload_mismatch.zig
 test/compile_fail/open_action.zig
+test/compile_fail/process_budget.zig
 test/compile_fail/oversized_instructions.zig
 test/compile_fail/strategy_branching_decision_local.zig
 test/compile_fail/strategy_decision_request_nonportable.zig
@@ -93,6 +96,7 @@ test/final_policy_negative.zig
 test/flow.zig
 test/machine_native_wasm.zig
 test/malformed.zig
+test/process_definition.zig
 test/run_machine_native.zig
 test/shared_boundary.zig
 test/specialization_matrix.zig

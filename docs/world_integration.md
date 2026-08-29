@@ -1,9 +1,14 @@
 # World integration
 
-World consumes `CompiledAgent.Machine` structurally as Boundary Machine ABI v2.
-The application declares every residual decision and action site as either a
-compile-time provider binding or an external effect. World needs no prompt,
-Action, Observation, budget, history, or strategy knowledge.
+The canonical portable path gives `ProcessCompiled.Program` to `world.system`.
+World links internal handlers and leaves only typed residual effects in one
+ordinary BPI1. The repository-repair witness links a Boundary replacement-policy
+Program internally, so `repository.propose_replace.v1` disappears while
+`repo.replace.approved.v1` remains external. World needs no prompt, Action,
+Observation, Budget, history, or strategy knowledge at runtime.
+
+`CompiledAgent.Machine` and `world.application` remain the explicit bounded
+Application ABI v1 compatibility path.
 
 Agent has no World source dependency. Clean consumers materialize exact Agent
 and World archives independently, and both pin the same source-compatible

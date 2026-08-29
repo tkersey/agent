@@ -1,5 +1,6 @@
 const std = @import("std");
 const boundary = @import("boundary");
+const agent = @import("agent");
 const actuality = @import("repository_repair_actuality");
 
 test "repository repair actuality definition is closed and bounded" {
@@ -34,6 +35,17 @@ test "repository repair actuality definition is closed and bounded" {
         "repo.replace.approved.v1",
         actuality.Compiled.ActionSites[5].semantic_identity,
     );
+}
+
+test "repository repair has an open portable Process Program" {
+    try std.testing.expectEqual(
+        agent.DefinitionKind.process,
+        actuality.ProcessDefinition.kind,
+    );
+    try std.testing.expect(!@hasDecl(actuality.ProcessDefinition, "budget"));
+    try std.testing.expect(@hasDecl(actuality.ProcessCompiled, "Program"));
+    try std.testing.expect(!@hasDecl(actuality.ProcessCompiled, "Machine"));
+    try std.testing.expect(actuality.ProcessCompiled.Program.image().bytes.len > 0);
 }
 
 test "repository repair uses explicit working-set epistemics" {

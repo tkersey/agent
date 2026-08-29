@@ -6,6 +6,7 @@ pub const ir = upstream.ir;
 pub const program = upstream.program;
 pub const image = upstream.image;
 pub const machine_v2 = upstream.machine_v2;
+pub const process_v1 = upstream.process_v1;
 pub const Driver = upstream.Driver;
 pub const Agent = upstream.Agent;
 pub const Bytes = upstream.Bytes;

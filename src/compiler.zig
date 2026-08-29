@@ -38,8 +38,45 @@ fn decisionSiteType(
 ) type {
     return strategy.DecisionSiteFor(
         Definition,
-        strategy.DecisionTurn(Definition, Strategy, Epistemics),
+        decisionRequestType(Definition, Strategy, Epistemics),
     );
+}
+
+fn ProcessDecisionEnvelope(
+    comptime Definition: type,
+    comptime Strategy: type,
+    comptime Epistemics: type,
+) type {
+    const Contract = processDecisionContract(Definition, Strategy, Epistemics);
+    return struct {
+        contract_digest: [32]u8,
+        contract_bytes: [Contract.binary_bytes.len]u8,
+        turn: strategy.DecisionTurn(Definition, Strategy, Epistemics),
+    };
+}
+
+fn processDecisionContract(
+    comptime DefinitionType: type,
+    comptime StrategyType: type,
+    comptime EpistemicsType: type,
+) type {
+    const Context = struct {
+        pub const Definition = DefinitionType;
+        pub const Strategy = StrategyType;
+        pub const Epistemics = EpistemicsType;
+    };
+    return decision_contract.contract(Context);
+}
+
+fn decisionRequestType(
+    comptime Definition: type,
+    comptime Strategy: type,
+    comptime Epistemics: type,
+) type {
+    return if (Definition.kind == .process)
+        ProcessDecisionEnvelope(Definition, Strategy, Epistemics)
+    else
+        strategy.DecisionTurn(Definition, Strategy, Epistemics);
 }
 
 fn effectSites(
@@ -47,7 +84,10 @@ fn effectSites(
     comptime Strategy: type,
     comptime Epistemics: type,
 ) [1 + strategy.effectCount(Definition)]type {
-    return strategy.effectSites(Definition, Strategy, Epistemics);
+    return strategy.effectSitesFor(
+        Definition,
+        decisionRequestType(Definition, Strategy, Epistemics),
+    );
 }
 
 fn observationIndex(
@@ -79,6 +119,19 @@ fn hasVoidEffectAction(comptime Definition: type) bool {
 
 fn unitConstantIndex(comptime Epistemics: type, comptime Definition: type) u16 {
     return epistemic_constant_base + Epistemics.constantValues(Definition).len;
+}
+
+fn processContractBytesConstantIndex(
+    comptime Epistemics: type,
+    comptime Definition: type,
+) u16 {
+    const epistemic_count = if (Epistemics.is_verbatim)
+        2
+    else if (Epistemics.has_implementation_constant_values)
+        Epistemics.constantValues(Definition).len
+    else
+        1;
+    return epistemic_constant_base + epistemic_count + 4;
 }
 
 fn epistemicContext(comptime Definition: type, comptime Epistemics: type) type {
@@ -169,6 +222,54 @@ fn schemaTypes(
         else => {},
     }
     const state_offset = 13 + Definition.action_count + observationFieldCount(Definition);
+    const strategy_types = Strategy.StateSchemaTypes(Definition);
+    inline for (strategy_types, 0..) |StateType, index| {
+        result[state_offset + index] = StateType;
+    }
+    const epistemic_types = Epistemics.StateSchemaTypes(Definition);
+    inline for (epistemic_types, 0..) |StateType, index| {
+        result[state_offset + strategy_types.len + index] = StateType;
+    }
+    return result;
+}
+
+fn processSchemaTypes(
+    comptime Definition: type,
+    comptime Strategy: type,
+    comptime Epistemics: type,
+) [15 + Definition.action_count + observationFieldCount(Definition) + Strategy.StateSchemaTypes(Definition).len + Epistemics.StateSchemaTypes(Definition).len]type {
+    var result: [15 + Definition.action_count + observationFieldCount(Definition) + Strategy.StateSchemaTypes(Definition).len + Epistemics.StateSchemaTypes(Definition).len]type = undefined;
+    result[0..15].* = .{
+        Definition.Goal,
+        Definition.Action,
+        Definition.Observation,
+        Definition.Result,
+        Definition.Failure,
+        budget.Counters,
+        Epistemics.MemoryType(Definition),
+        strategy.ProcessState(Definition, Epistemics),
+        ProcessDecisionEnvelope(Definition, Strategy, Epistemics),
+        Epistemics.DecisionViewType(Definition),
+        budget.DecisionPhase,
+        Strategy.DecisionLocalType(Definition),
+        [32]u8,
+        strategy.DecisionTurn(Definition, Strategy, Epistemics),
+        @TypeOf(processDecisionContract(
+            Definition,
+            Strategy,
+            Epistemics,
+        ).binary_bytes),
+    };
+    inline for (@typeInfo(Definition.Action).@"union".fields, 0..) |field, index| {
+        result[15 + index] = field.type;
+    }
+    switch (@typeInfo(Definition.Observation)) {
+        .@"union" => |info| inline for (info.fields, 0..) |field, index| {
+            result[15 + Definition.action_count + index] = field.type;
+        },
+        else => {},
+    }
+    const state_offset = 15 + Definition.action_count + observationFieldCount(Definition);
     const strategy_types = Strategy.StateSchemaTypes(Definition);
     inline for (strategy_types, 0..) |StateType, index| {
         result[state_offset + index] = StateType;
@@ -547,6 +648,198 @@ fn emitFinalAction(
     flow.failValue(flow.constant(Definition.Failure, invalid_variant_constant));
     const accepted = flow.enter(accept);
     flow.returnValue(accepted[0]);
+}
+
+fn emitProcessEffectAction(
+    comptime Definition: type,
+    comptime Epistemics: type,
+    comptime action_index: usize,
+    flow: anytype,
+    action_value: flow_module.Value(Definition.Action),
+    state_value: flow_module.Value(strategy.ProcessState(Definition, Epistemics)),
+    loop_block: anytype,
+    comptime invalid_variant_constant: u16,
+    comptime unit_constant_index: u16,
+) void {
+    const Descriptor = Definition.ActionDescriptor(action_index);
+    const Site = ActionSite(Definition, action_index);
+    const payload = if (Descriptor.Site.Payload == void)
+        flow.constant(void, unit_constant_index)
+    else
+        flow.sumExtract(action_index, action_value);
+    const perform = flow.block(.segment, .{
+        Descriptor.Site.Payload,
+        strategy.ProcessState(Definition, Epistemics),
+    });
+    const after_admission = if (comptime epistemicCapacityCheckRequired(Epistemics))
+        flow.block(.segment, .{
+            Descriptor.Site.Payload,
+            strategy.ProcessState(Definition, Epistemics),
+        })
+    else
+        perform;
+    const admission = flow.block(.segment, .{
+        Definition.Action,
+        Descriptor.Site.Payload,
+        strategy.ProcessState(Definition, Epistemics),
+    });
+    flow.jump(admission, .{ action_value, payload, state_value });
+    const admitted = flow.enter(admission);
+    const allowed = emitEpistemicActionAllowed(
+        Definition,
+        Epistemics,
+        action_index,
+        flow,
+        flow.productExtract(1, admitted[2]),
+        admitted[0],
+    );
+    const reject = flow.block(.terminal_handoff, .{});
+    flow.branch(
+        allowed,
+        after_admission,
+        .{ admitted[1], admitted[2] },
+        reject,
+        .{},
+    );
+    _ = flow.enter(reject);
+    flow.failValue(flow.constant(Definition.Failure, invalid_variant_constant));
+
+    if (comptime epistemicCapacityCheckRequired(Epistemics)) {
+        const capacity_values = flow.enter(after_admission);
+        const full = flow.integerGreaterEqual(
+            flow.vectorLength(flow.productExtract(1, capacity_values[1])),
+            flow.constant(
+                u32,
+                epistemicContext(Definition, Epistemics).maximum_observations_index,
+            ),
+        );
+        const overflow = flow.block(.terminal_handoff, .{});
+        flow.branch(full, overflow, .{}, perform, capacity_values);
+        _ = flow.enter(overflow);
+        flow.failValue(flow.constant(
+            Definition.Failure,
+            epistemicContext(Definition, Epistemics).history_overflow_index,
+        ));
+    }
+
+    const performing = flow.enter(perform);
+    const performed = flow.perform(Site, performing[0], .{performing[1]});
+    const fold = flow.block(.segment, .{
+        strategy.ProcessState(Definition, Epistemics),
+        Descriptor.Site.Resume,
+    });
+    flow.jump(fold, .{ performed.carried[0], performed.value });
+    const folded = flow.enter(fold);
+    const next_memory = emitEpistemicObservePayload(
+        Definition,
+        Epistemics,
+        flow,
+        flow.productExtract(1, folded[0]),
+        observationIndex(Definition, Descriptor.observation_name),
+        folded[1],
+    );
+    flow.jump(loop_block, .{flow.productConstruct(
+        strategy.ProcessState(Definition, Epistemics),
+        .{ flow.productExtract(0, folded[0]), next_memory },
+    )});
+}
+
+fn emitProcessAction(
+    comptime Definition: type,
+    comptime Epistemics: type,
+    comptime action_index: usize,
+    flow: anytype,
+    action_value: flow_module.Value(Definition.Action),
+    state_value: flow_module.Value(strategy.ProcessState(Definition, Epistemics)),
+    loop_block: anytype,
+    comptime invalid_variant_constant: u16,
+    comptime unit_constant_index: u16,
+) void {
+    const Descriptor = Definition.ActionDescriptor(action_index);
+    switch (Descriptor.kind) {
+        .effect => emitProcessEffectAction(
+            Definition,
+            Epistemics,
+            action_index,
+            flow,
+            action_value,
+            state_value,
+            loop_block,
+            invalid_variant_constant,
+            unit_constant_index,
+        ),
+        .fail => flow.failValue(flow.sumExtract(action_index, action_value)),
+        .final => {
+            const result = flow.sumExtract(action_index, action_value);
+            const allowed = emitEpistemicFinalAllowed(
+                Definition,
+                Epistemics,
+                flow,
+                flow.productExtract(1, state_value),
+                result,
+            );
+            const accept = flow.block(.terminal_handoff, .{Definition.Result});
+            const reject = flow.block(.terminal_handoff, .{});
+            flow.branch(allowed, accept, .{result}, reject, .{});
+            _ = flow.enter(reject);
+            flow.failValue(flow.constant(Definition.Failure, invalid_variant_constant));
+            flow.returnValue(flow.enter(accept)[0]);
+        },
+    }
+}
+
+fn emitProcessDispatch(
+    comptime Definition: type,
+    comptime Epistemics: type,
+    flow: anytype,
+    action_value: flow_module.Value(Definition.Action),
+    state_value: flow_module.Value(strategy.ProcessState(Definition, Epistemics)),
+    loop_block: anytype,
+    comptime invalid_variant_constant: u16,
+    comptime unit_constant_index: u16,
+) void {
+    var current_state = state_value;
+    inline for (0..Definition.action_count) |index| {
+        if (index + 1 == Definition.action_count) {
+            emitProcessAction(
+                Definition,
+                Epistemics,
+                index,
+                flow,
+                action_value,
+                current_state,
+                loop_block,
+                invalid_variant_constant,
+                unit_constant_index,
+            );
+        } else {
+            const selected = flow.block(.segment, .{
+                strategy.ProcessState(Definition, Epistemics),
+            });
+            const next = flow.block(.segment, .{
+                strategy.ProcessState(Definition, Epistemics),
+            });
+            flow.branch(
+                flow.sumTagIs(index, action_value),
+                selected,
+                .{current_state},
+                next,
+                .{current_state},
+            );
+            emitProcessAction(
+                Definition,
+                Epistemics,
+                index,
+                flow,
+                action_value,
+                flow.enter(selected)[0],
+                loop_block,
+                invalid_variant_constant,
+                unit_constant_index,
+            );
+            current_state = flow.enter(next)[0];
+        }
+    }
 }
 
 fn emitDispatch(
@@ -970,6 +1263,165 @@ fn ReflectiveLowering(
     return flow.finish(Definition.Result);
 }
 
+fn ProcessReactLowering(
+    comptime Definition: type,
+    comptime Strategy: type,
+    comptime Epistemics: type,
+) type {
+    @setEvalBranchQuota(10_000_000);
+    const Builder = flow_module.Flow(.{
+        .schema_types = processSchemaTypes(Definition, Strategy, Epistemics),
+        .limits = generatedFlowLimits(Definition, Epistemics, false),
+    });
+    comptime var flow = Builder.init("agent-process-react-v1");
+    const goal = flow.begin(Definition.Goal);
+    const memory = emitEpistemicInitial(Definition, Epistemics, &flow, goal);
+    const state = flow.productConstruct(
+        strategy.ProcessState(Definition, Epistemics),
+        .{ goal, memory },
+    );
+    const loop = flow.block(.loop_header, .{
+        strategy.ProcessState(Definition, Epistemics),
+    });
+    flow.jump(loop, .{state});
+    const current = flow.enter(loop)[0];
+    const current_goal = flow.productExtract(0, current);
+    const current_memory = flow.productExtract(1, current);
+    const view = emitEpistemicProject(
+        Definition,
+        Epistemics,
+        &flow,
+        current_memory,
+    );
+    const zero = flow.constant(u32, @intFromEnum(Constant.zero));
+    const counters = flow.productConstruct(
+        budget.Counters,
+        .{ zero, zero, zero, zero },
+    );
+    const decision_local = if (Strategy.kind == .custom) custom: {
+        const before_suspensions = flow.suspensionSnapshot();
+        const before_control = flow.controlTopologySnapshot();
+        const value = Strategy.emitDecisionLocal(
+            Definition,
+            Epistemics,
+            &flow,
+            current_goal,
+            counters,
+            view,
+        );
+        if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
+            @compileError("agent custom RuntimeStrategy emitDecisionLocal must be effect-free");
+        }
+        if (!std.meta.eql(flow.controlTopologySnapshot(), before_control)) {
+            @compileError(
+                "agent custom RuntimeStrategy emitDecisionLocal must not alter compiler-owned control topology",
+            );
+        }
+        break :custom value;
+    } else flow.constant(void, unitConstantIndex(Epistemics, Definition));
+    const turn = flow.productConstruct(
+        strategy.DecisionTurn(Definition, Strategy, Epistemics),
+        .{
+            flow.constant([32]u8, @intFromEnum(Constant.decision_contract_digest)),
+            current_goal,
+            counters,
+            flow.constant(budget.DecisionPhase, @intFromEnum(Constant.initial_phase)),
+            view,
+            decision_local,
+        },
+    );
+    const request = flow.productConstruct(
+        ProcessDecisionEnvelope(Definition, Strategy, Epistemics),
+        .{
+            flow.constant([32]u8, @intFromEnum(Constant.decision_contract_digest)),
+            flow.constant(
+                @TypeOf(processDecisionContract(
+                    Definition,
+                    Strategy,
+                    Epistemics,
+                ).binary_bytes),
+                processContractBytesConstantIndex(Epistemics, Definition),
+            ),
+            turn,
+        },
+    );
+    const decision = flow.perform(
+        decisionSiteType(Definition, Strategy, Epistemics),
+        request,
+        .{current},
+    );
+    emitProcessDispatch(
+        Definition,
+        Epistemics,
+        &flow,
+        decision.value,
+        decision.carried[0],
+        loop,
+        @intFromEnum(Constant.invalid_variant),
+        unitConstantIndex(Epistemics, Definition),
+    );
+    return flow.finish(Definition.Result);
+}
+
+fn ProcessReactBody(
+    comptime Definition: type,
+    comptime Strategy: type,
+    comptime Epistemics: type,
+) type {
+    const Lowering = ProcessReactLowering(Definition, Strategy, Epistemics);
+    const invalid = strategy.failureNamed(Definition, "invalid_variant");
+    const contract_bytes = processDecisionContract(
+        Definition,
+        Strategy,
+        Epistemics,
+    ).binary_bytes;
+    const prefix = .{
+        @as(u32, 0),
+        @as(u32, 1),
+        @as(u32, 0),
+        @as(u32, 0),
+        @as(u32, 0),
+        @as(u32, 0),
+        budget.DecisionPhase.decide,
+        invalid,
+        invalid,
+        decision_contract.semanticDigest(Definition, Strategy, Epistemics),
+        Epistemics.initialMemory(Definition),
+        true,
+        false,
+        budget.DecisionPhase.reflect,
+        @as(u32, 0),
+    };
+    const tail = .{ @as(void, {}), @as(u8, 0), @as(u8, 1), @as(u8, 2) };
+    return struct {
+        pub const InitialArgs = Definition.Goal;
+        pub const Result = Definition.Result;
+        pub const Failure = Definition.Failure;
+        pub const constants = (if (Epistemics.is_verbatim)
+            prefix ++ .{
+                Epistemics.normalized_config.maximum_observations,
+                if (Epistemics.normalized_config.overflow == .fail)
+                    strategy.failureNamed(Definition, "history_overflow")
+                else
+                    @as(void, {}),
+            } ++ tail
+        else if (Epistemics.has_implementation_constant_values)
+            prefix ++ Epistemics.constantValues(Definition) ++ tail
+        else
+            prefix ++ .{@as(void, {})} ++ tail) ++ .{
+            contract_bytes,
+        };
+        pub const effect_sites = effectSites(Definition, Strategy, Epistemics);
+        pub const schema_types = Lowering.schema_types;
+        pub const control_ir = Lowering.control_ir;
+        pub const compiler_limits = generatedCompilerLimits(
+            control_ir,
+            false,
+            Epistemics.lowering_complexity,
+        );
+    };
+}
+
 fn ReactBody(
     comptime Definition: type,
     comptime Strategy: type,
@@ -1113,10 +1565,10 @@ fn assertEpistemics(
     Epistemics.validate(Definition);
     boundary.schema.assertPortable(Epistemics.MemoryType(Definition));
     boundary.schema.assertPortable(Epistemics.DecisionViewType(Definition));
-    const Turn = strategy.DecisionTurn(Definition, Strategy, Epistemics);
-    boundary.schema.assertPortable(Turn);
-    if (boundary.schema.maximumEncodedSize(Turn) > Definition.decision.maximum_request_bytes) {
-        @compileError("agent DecisionTurn exceeds decision.maximum_request_bytes");
+    const Request = decisionRequestType(Definition, Strategy, Epistemics);
+    boundary.schema.assertPortable(Request);
+    if (boundary.schema.maximumEncodedSize(Request) > Definition.decision.maximum_request_bytes) {
+        @compileError("agent decision request exceeds decision.maximum_request_bytes");
     }
 }
 
@@ -1167,6 +1619,65 @@ fn normalizeMachineOptions(comptime input: anytype) boundary.MachineOptions {
         }
     }
     return result;
+}
+
+/// Lower one open-ended Agent definition into an ordinary Boundary Program.
+pub fn compileProcess(
+    comptime DefinitionType: type,
+    comptime StrategyType: type,
+    comptime EpistemicsType: type,
+) type {
+    @setEvalBranchQuota(100_000_000);
+    if (DefinitionType.kind != .process) {
+        @compileError("agent.process.compile requires agent.process.define");
+    }
+    comptime assertStrategy(DefinitionType, StrategyType);
+    comptime assertEpistemics(DefinitionType, StrategyType, EpistemicsType);
+    if (StrategyType.kind == .reflective) {
+        @compileError("agent.process reflective lowering is not yet admitted");
+    }
+    if (StrategyType.kind == .custom and
+        StrategyType.selectedTopology(DefinitionType, EpistemicsType) != .react)
+    {
+        @compileError("agent.process custom strategy must select react topology");
+    }
+    const Body = ProcessReactBody(
+        DefinitionType,
+        StrategyType,
+        EpistemicsType,
+    );
+    comptime assertProgramBodyEffects(
+        DefinitionType,
+        StrategyType,
+        EpistemicsType,
+        Body,
+    );
+    const label = std.fmt.comptimePrint(
+        "{s}:{s}:process-v1",
+        .{ DefinitionType.name, StrategyType.semantic_identity },
+    );
+    const ProgramType = boundary.program(label, Body);
+    return struct {
+        pub const Definition = DefinitionType;
+        pub const Strategy = StrategyType;
+        pub const Epistemics = EpistemicsType;
+        pub const State = strategy.ProcessState(DefinitionType, EpistemicsType);
+        pub const SchemaTypes = Body.schema_types;
+        pub const Program = ProgramType;
+        pub const DecisionSite = decisionSiteType(
+            DefinitionType,
+            StrategyType,
+            EpistemicsType,
+        );
+        pub const ActionSites = effectSites(
+            DefinitionType,
+            StrategyType,
+            EpistemicsType,
+        );
+        pub const DecisionContract = decision_contract.contract(@This());
+        pub const DecisionContractBytes = DecisionContract.binary_bytes;
+        pub const DecisionContractJson = DecisionContract.json_bytes;
+    };
 }
 
 /// Specialize one typed definition and compile-time strategy into Boundary.

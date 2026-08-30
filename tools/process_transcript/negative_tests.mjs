@@ -38,6 +38,7 @@ const PAYLOAD_ERROR = "AGENT_TRANSCRIPT_PAYLOAD_INVALID";
 const RELEASE_ERROR = "AGENT_TRANSCRIPT_RELEASE_INVALID";
 const GENERATION_MODULE_URL = new URL("./generate.mjs", import.meta.url);
 const CHECK_RELEASE_COMMIT = "0123456789abcdef0123456789abcdef01234567";
+const CANONICAL_AGENT_HTTPS_ORIGIN = "https://github.com/tkersey/agent.git";
 
 export async function runNegativeTests(options = {}) {
   if (typeof options.gitExecutable !== "string" || options.gitExecutable.length === 0) {
@@ -361,9 +362,48 @@ async function producerTupleGates({ gate, proof, generation, gitExecutable }) {
       }), "package_version_missing");
   });
 
-  await withTemporaryRoot("agent-transcript-release-git-", async (agentRoot) => {
-    await writePackageSurfaces(agentRoot, "2.7.1", { decoys: true });
-    const releaseCommit = initializeReleaseRepository(agentRoot);
+  await withReleaseRepository("2.7.0", async ({ agentRoot, originRoot, releaseCommit }) => {
+    await proof("release_mode_admits_free_remote_v2_7_0", async () => {
+      const producer = await generation.validateProducerTuple({
+        agentRoot,
+        mode: "release",
+        releaseTag: "v2.7.0",
+        releaseCommit,
+        gitExecutable,
+      });
+      assertExact(producer.releaseTag, "v2.7.0", "free_remote_v2_7_0_not_admitted");
+    });
+    setBareTag(originRoot, "v2.7.0", releaseCommit);
+    await gate("release_mode_rejects_occupied_remote_selected_tag", () =>
+      generation.validateProducerTuple({
+        agentRoot,
+        mode: "release",
+        releaseTag: "v2.7.0",
+        releaseCommit,
+        gitExecutable,
+      }), "release_remote_tag_already_exists");
+  });
+
+  await withReleaseRepository("2.7.1", async ({ agentRoot, originRoot, releaseCommit }) => {
+    await gate("release_mode_rejects_v2_7_1_while_v2_7_0_is_free", () =>
+      generation.validateProducerTuple({
+        agentRoot,
+        mode: "release",
+        releaseTag: "v2.7.1",
+        releaseCommit,
+        gitExecutable,
+      }), "release_fallback_predecessor_missing");
+    setBareTag(originRoot, "v2.7.0", releaseCommit);
+    await proof("release_mode_admits_v2_7_1_after_v2_7_0_is_occupied", async () => {
+      const producer = await generation.validateProducerTuple({
+        agentRoot,
+        mode: "release",
+        releaseTag: "v2.7.1",
+        releaseCommit,
+        gitExecutable,
+      });
+      assertExact(producer.releaseTag, "v2.7.1", "occupied_v2_7_0_did_not_admit_v2_7_1");
+    });
     await withTemporaryRoot("agent-transcript-ambient-git-", async (redirectRoot) => {
       await writeFile(join(redirectRoot, "README.md"), "ambient redirect repository\n");
       const redirectCommit = initializeReleaseRepository(redirectRoot);
@@ -391,6 +431,18 @@ async function producerTupleGates({ gate, proof, generation, gitExecutable }) {
         "release_commit_head",
       ));
     });
+  });
+
+  await withReleaseRepository("2.7.0", async ({ agentRoot, releaseCommit }) => {
+    runGit(agentRoot, ["config", "remote.origin.url", "file:///tmp/not-tkersey-agent.git"]);
+    await gate("release_mode_rejects_noncanonical_origin", () =>
+      generation.validateProducerTuple({
+        agentRoot,
+        mode: "release",
+        releaseTag: "v2.7.0",
+        releaseCommit,
+        gitExecutable,
+      }), "release_origin_url");
   });
 }
 
@@ -921,7 +973,21 @@ async function writeDecoyOnlyPackageSurfaces(root) {
   ]);
 }
 
-function initializeReleaseRepository(root) {
+async function withReleaseRepository(version, operation) {
+  return withTemporaryRoot("agent-transcript-release-git-", async (agentRoot) =>
+    withTemporaryRoot("agent-transcript-release-origin-", async (originRoot) => {
+      await writePackageSurfaces(agentRoot, version, { decoys: true });
+      initializeBareRepository(originRoot);
+      const releaseCommit = initializeReleaseRepository(agentRoot, originRoot);
+      return operation({ agentRoot, originRoot, releaseCommit });
+    }));
+}
+
+function initializeBareRepository(root) {
+  runGit(root, ["init", "--bare", "-q"]);
+}
+
+function initializeReleaseRepository(root, originRoot = undefined) {
   runGit(root, ["init", "-q"]);
   runGit(root, ["symbolic-ref", "HEAD", "refs/heads/main"]);
   runGit(root, ["config", "user.name", "Transcript Negative Tests"]);
@@ -930,8 +996,19 @@ function initializeReleaseRepository(root) {
   runGit(root, ["add", "-A"]);
   runGit(root, ["commit", "-qm", "fixture"]);
   const head = runGit(root, ["rev-parse", "HEAD"]);
-  runGit(root, ["update-ref", "refs/remotes/origin/main", head]);
+  if (originRoot === undefined) {
+    runGit(root, ["update-ref", "refs/remotes/origin/main", head]);
+    return head;
+  }
+  runGit(root, ["remote", "add", "origin", CANONICAL_AGENT_HTTPS_ORIGIN]);
+  runGit(root, ["config", `url.${originRoot}.insteadOf`, CANONICAL_AGENT_HTTPS_ORIGIN]);
+  runGit(root, ["push", "-q", "origin", "refs/heads/main:refs/heads/main"]);
+  runGit(root, ["fetch", "-q", "origin", "+refs/heads/main:refs/remotes/origin/main"]);
   return head;
+}
+
+function setBareTag(originRoot, tag, commit) {
+  runGit(originRoot, ["update-ref", `refs/tags/${tag}`, commit]);
 }
 
 function runGit(root, args) {

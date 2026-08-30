@@ -90,6 +90,10 @@ const WORLD_CAPABILITIES_RUNTIME_SHA256 =
   "92067a800d42310b21d0ca417d2db9705d86c1050801e82335172f0740ead98b";
 const CHECK_RELEASE_COMMIT = "0123456789abcdef0123456789abcdef01234567";
 const AUTHORIZED_RELEASE_VERSIONS = new Set(["2.7.0", "2.7.1"]);
+const CANONICAL_AGENT_ORIGIN_URLS = new Set([
+  "git@github.com:tkersey/agent.git",
+  "https://github.com/tkersey/agent.git",
+]);
 const MAXIMUM_RESULT_BYTES = 40 * 1024;
 const ADMITTED_STATUS_MASK = 0b0000_0111;
 const VERSION_PATTERN = /^[0-9]+\.[0-9]+\.[0-9]+$/;
@@ -644,6 +648,35 @@ export async function validateProducerTuple(options) {
         "--untracked-files=no",
       ], environment);
       if (tracked.length !== 0) fail("dirty_tracked_source_tree", tracked);
+      const originUrl = git(
+        options.gitExecutable,
+        expectedRoot,
+        ["config", "--get", "remote.origin.url"],
+        environment,
+      );
+      if (!CANONICAL_AGENT_ORIGIN_URLS.has(originUrl)) {
+        fail("release_origin_url", originUrl);
+      }
+      const remoteSelectedTag = git(
+        options.gitExecutable,
+        expectedRoot,
+        ["ls-remote", "--tags", "--refs", "origin", `refs/tags/${releaseTag}`],
+        environment,
+      );
+      if (remoteSelectedTag.length !== 0) {
+        fail("release_remote_tag_already_exists", releaseTag);
+      }
+      if (releaseTag === "v2.7.1") {
+        const remotePredecessorTag = git(
+          options.gitExecutable,
+          expectedRoot,
+          ["ls-remote", "--tags", "--refs", "origin", "refs/tags/v2.7.0"],
+          environment,
+        );
+        if (remotePredecessorTag.length === 0) {
+          fail("release_fallback_predecessor_missing", "v2.7.0");
+        }
+      }
       const existingTag = git(
         options.gitExecutable,
         expectedRoot,

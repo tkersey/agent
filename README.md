@@ -92,6 +92,9 @@ zig build check-agent-actuality-release
 # Fixed-kernel BPI1 execution plus byte-identical specialized trace.
 zig build check-agent-interpretation-v1 --summary all
 
+# Immutable Boundary Process replay of the landed repository-repair BPI1.
+zig build check-agent-repository-repair-process-transcript-v1 --summary all
+
 # Emit the interpretation inputs for inspection.
 zig build emit-agent-interpretation-v1-assets
 
@@ -108,7 +111,9 @@ See [Epistemic Normal Form](docs/epistemic_normal_form.md),
 [DecisionContract](docs/decision_contract.md),
 [evidence and memory](docs/evidence_and_memory.md),
 [Actuality](docs/actuality.md),
-[Interpretation v1](docs/interpretation_v1.md), and the
+[Interpretation v1](docs/interpretation_v1.md),
+[repository-repair Process transcript v1](docs/repository_repair_process_transcript_v1.md),
+and the
 [v1.1 migration guide](docs/migration_from_1_1.md).
 
 Licensed under the MIT License.

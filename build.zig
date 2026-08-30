@@ -3,9 +3,164 @@ const world_build = @import("world");
 
 pub const ActualityApplication = @import("actuality/application.zig").Application;
 
+const ProcessTranscriptOutputs = struct {
+    command: *std.Build.Step.Run,
+    manifest: std.Build.LazyPath,
+    payload: std.Build.LazyPath,
+    receipt: std.Build.LazyPath,
+};
+
+fn addProcessTranscriptGeneration(
+    b: *std.Build,
+    mode: []const u8,
+    release_tag: []const u8,
+    release_commit: []const u8,
+    image: std.Build.LazyPath,
+    initial_args: std.Build.LazyPath,
+    kernel: std.Build.LazyPath,
+    capabilities_root: std.Build.LazyPath,
+    git_executable: []const u8,
+) ProcessTranscriptOutputs {
+    const command = b.addSystemCommand(&.{"bun"});
+    // Producer identity, tracked cleanliness, and dynamic fixture inputs are
+    // runtime proof obligations. Never satisfy them from a prior Run cache.
+    command.has_side_effects = true;
+    command.addFileArg(b.path("tools/process_transcript/generate.mjs"));
+    command.addArgs(&.{ "--mode", mode, "--agent-root" });
+    command.addDirectoryArg(b.path("."));
+    command.addArg("--image");
+    command.addFileArg(image);
+    command.addArg("--initial-args");
+    command.addFileArg(initial_args);
+    command.addArg("--kernel");
+    command.addFileArg(kernel);
+    command.addArg("--capabilities-root");
+    command.addDirectoryArg(capabilities_root);
+    command.addArg("--fixture-root");
+    command.addDirectoryArg(b.path("fixtures/repository-repair-v1"));
+    command.addArg("--git-executable");
+    command.addFileArg(.{ .cwd_relative = git_executable });
+    command.addArgs(&.{ "--release-tag", release_tag, "--release-commit", release_commit });
+    command.addArg("--manifest-out");
+    const manifest = command.addOutputFileArg(
+        "agent-repository-repair-process-v1-transcript.json",
+    );
+    command.addArg("--payload-out");
+    const payload = command.addOutputFileArg(
+        "agent-repository-repair-process-v1-transcript.bin",
+    );
+    command.addArg("--receipt-out");
+    const receipt = command.addOutputFileArg(
+        "agent-repository-repair-process-v1-generation-receipt.json",
+    );
+    for ([_][]const u8{
+        "tools/process_transcript/process_kernel_client.mjs",
+        "tools/process_transcript/transcript_format.mjs",
+        "tools/interpretation/repository_repair_environment.mjs",
+        "tools/interpretation/effect_resolver.mjs",
+        "tools/interpretation/runtime_dependency_lock.mjs",
+        "tools/interpretation/dependency_digest.mjs",
+        "interpretation/runtime-dependencies.lock.json",
+        "build.zig.zon",
+        "src/root.zig",
+        "src/manifest.zig",
+        "fixtures/repository-repair-v1/README.md",
+        "fixtures/repository-repair-v1/package.json",
+        "fixtures/repository-repair-v1/src/range.mjs",
+        "fixtures/repository-repair-v1/test/range.test.mjs",
+    }) |path| command.addFileInput(b.path(path));
+    return .{ .command = command, .manifest = manifest, .payload = payload, .receipt = receipt };
+}
+
+fn addProcessTranscriptIsolatedReplay(
+    b: *std.Build,
+    kernel: std.Build.LazyPath,
+    outputs: ProcessTranscriptOutputs,
+) *std.Build.Step.Run {
+    const command = b.addSystemCommand(&.{"bun"});
+    command.addFileArg(b.path("tools/process_transcript/isolated_replay.mjs"));
+    command.addArg("--agent-root");
+    command.addDirectoryArg(b.path("."));
+    command.addArg("--kernel");
+    command.addFileArg(kernel);
+    command.addArg("--manifest");
+    command.addFileArg(outputs.manifest);
+    command.addArg("--payload");
+    command.addFileArg(outputs.payload);
+    for ([_][]const u8{
+        "tools/process_transcript/process_kernel_client.mjs",
+        "tools/process_transcript/transcript_format.mjs",
+        "tools/process_transcript/replay.mjs",
+    }) |path| command.addFileInput(b.path(path));
+    return command;
+}
+
+fn addProcessTranscriptNegatives(
+    b: *std.Build,
+    kernel: std.Build.LazyPath,
+    image: std.Build.LazyPath,
+    initial_args: std.Build.LazyPath,
+    outputs: ProcessTranscriptOutputs,
+    git_executable: []const u8,
+) *std.Build.Step.Run {
+    const command = b.addSystemCommand(&.{"bun"});
+    command.addFileArg(b.path("tools/process_transcript/negative_tests.mjs"));
+    command.addArg("--kernel");
+    command.addFileArg(kernel);
+    command.addArg("--manifest");
+    command.addFileArg(outputs.manifest);
+    command.addArg("--payload");
+    command.addFileArg(outputs.payload);
+    command.addArg("--image");
+    command.addFileArg(image);
+    command.addArg("--initial-args");
+    command.addFileArg(initial_args);
+    command.addArg("--generation-receipt");
+    command.addFileArg(outputs.receipt);
+    command.addArg("--git-executable");
+    command.addFileArg(.{ .cwd_relative = git_executable });
+    for ([_][]const u8{
+        "tools/process_transcript/generate.mjs",
+        "tools/process_transcript/process_kernel_client.mjs",
+        "tools/process_transcript/transcript_format.mjs",
+        "tools/process_transcript/replay.mjs",
+        "tools/process_transcript/validate_generation_receipt.mjs",
+    }) |path| command.addFileInput(b.path(path));
+    return command;
+}
+
+fn addProcessTranscriptReceiptValidation(
+    b: *std.Build,
+    kernel: std.Build.LazyPath,
+    image: std.Build.LazyPath,
+    initial_args: std.Build.LazyPath,
+    outputs: ProcessTranscriptOutputs,
+) *std.Build.Step.Run {
+    const command = b.addSystemCommand(&.{"bun"});
+    command.addFileArg(
+        b.path("tools/process_transcript/validate_generation_receipt.mjs"),
+    );
+    command.addArg("--receipt");
+    command.addFileArg(outputs.receipt);
+    command.addArg("--manifest");
+    command.addFileArg(outputs.manifest);
+    command.addArg("--payload");
+    command.addFileArg(outputs.payload);
+    command.addArg("--image");
+    command.addFileArg(image);
+    command.addArg("--initial-args");
+    command.addFileArg(initial_args);
+    command.addArg("--kernel");
+    command.addFileArg(kernel);
+    command.addFileInput(b.path("tools/process_transcript/transcript_format.mjs"));
+    return command;
+}
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const git_executable = b.findProgram(&.{"git"}, &.{}) catch
+        std.process.fatal("an exact Git executable is required", .{});
     const boundary_archive = b.option([]const u8, "boundary-archive", "Local Boundary v1.6.1 archive for offline proof");
     const boundary_kernel_wasm = b.option([]const u8, "boundary-kernel-wasm", "Exact local Boundary v1.6.0 fixed-kernel WASM override");
     const world_archive = b.option([]const u8, "world-archive", "Local World v3.1.4 archive for offline proof");
@@ -13,6 +168,21 @@ pub fn build(b: *std.Build) void {
     const world_capabilities_archive = b.option([]const u8, "world-capabilities-archive", "Local lock-pinned world-capabilities archive");
     const world_capabilities_root = b.option([]const u8, "world-capabilities-root", "Local world-capabilities v2.3.3 source or extracted release root for development proofs");
     const world_host_root = b.option([]const u8, "world-host-root", "Local world-host v1.0.1 source root for adequacy development");
+    const boundary_process_kernel = b.option(
+        []const u8,
+        "boundary-process-kernel",
+        "Exact local Boundary v1.7.0 Process-kernel WASM override",
+    );
+    const agent_release_tag = b.option(
+        []const u8,
+        "agent-release-tag",
+        "Exact Agent release tag for transcript release emission",
+    );
+    const agent_release_commit = b.option(
+        []const u8,
+        "agent-release-commit",
+        "Exact 40-character Agent release commit for transcript emission",
+    );
     const interpretation_source_snapshot = b.option(
         bool,
         "interpretation-source-snapshot",
@@ -544,6 +714,120 @@ pub fn build(b: *std.Build) void {
         );
         interpretation_proof.dependOn(&install_snapshot_receipt.step);
     }
+
+    const acquire_process_kernel = b.addSystemCommand(&.{"node"});
+    acquire_process_kernel.addFileArg(
+        b.path("tools/process_transcript/acquire_kernel.mjs"),
+    );
+    if (boundary_process_kernel) |path| {
+        if (!std.fs.path.isAbsolute(path)) {
+            std.process.fatal(
+                "-Dboundary-process-kernel requires an absolute path",
+                .{},
+            );
+        }
+        acquire_process_kernel.addFileArg(.{ .cwd_relative = path });
+    } else {
+        acquire_process_kernel.addArg("-");
+    }
+    const process_kernel = acquire_process_kernel.addOutputFileArg(
+        "boundary-process-kernel-v1.wasm",
+    );
+
+    const check_transcript_outputs = addProcessTranscriptGeneration(
+        b,
+        "check",
+        "-",
+        "0123456789abcdef0123456789abcdef01234567",
+        interpretation_bpi1_output,
+        initial_args_output,
+        process_kernel,
+        interpretation_runtime.path(b, "world-capabilities"),
+        git_executable,
+    );
+    const check_transcript_isolated_replay = addProcessTranscriptIsolatedReplay(
+        b,
+        process_kernel,
+        check_transcript_outputs,
+    );
+    const check_transcript_negatives = addProcessTranscriptNegatives(
+        b,
+        process_kernel,
+        interpretation_bpi1_output,
+        initial_args_output,
+        check_transcript_outputs,
+        git_executable,
+    );
+    const check_transcript_receipt = addProcessTranscriptReceiptValidation(
+        b,
+        process_kernel,
+        interpretation_bpi1_output,
+        initial_args_output,
+        check_transcript_outputs,
+    );
+    const check_process_transcript = b.step(
+        "check-agent-repository-repair-process-transcript-v1",
+        "Generate, validate, and independently replay the immutable repository-repair Process transcript",
+    );
+    check_process_transcript.dependOn(&check_transcript_outputs.command.step);
+    check_process_transcript.dependOn(&check_transcript_isolated_replay.step);
+    check_process_transcript.dependOn(&check_transcript_negatives.step);
+    check_process_transcript.dependOn(&check_transcript_receipt.step);
+
+    const release_transcript_outputs = addProcessTranscriptGeneration(
+        b,
+        "release",
+        agent_release_tag orelse "-",
+        agent_release_commit orelse "-",
+        interpretation_bpi1_output,
+        initial_args_output,
+        process_kernel,
+        interpretation_runtime.path(b, "world-capabilities"),
+        git_executable,
+    );
+    const release_transcript_isolated_replay = addProcessTranscriptIsolatedReplay(
+        b,
+        process_kernel,
+        release_transcript_outputs,
+    );
+    const release_transcript_negatives = addProcessTranscriptNegatives(
+        b,
+        process_kernel,
+        interpretation_bpi1_output,
+        initial_args_output,
+        release_transcript_outputs,
+        git_executable,
+    );
+    const release_transcript_receipt = addProcessTranscriptReceiptValidation(
+        b,
+        process_kernel,
+        interpretation_bpi1_output,
+        initial_args_output,
+        release_transcript_outputs,
+    );
+    const install_transcript_manifest = b.addInstallFile(
+        release_transcript_outputs.manifest,
+        "agent-repository-repair-process-v1/agent-repository-repair-process-v1-transcript.json",
+    );
+    const install_transcript_payload = b.addInstallFile(
+        release_transcript_outputs.payload,
+        "agent-repository-repair-process-v1/agent-repository-repair-process-v1-transcript.bin",
+    );
+    const install_transcript_receipt = b.addInstallFile(
+        release_transcript_outputs.receipt,
+        "agent-repository-repair-process-v1/agent-repository-repair-process-v1-generation-receipt.json",
+    );
+    const emit_process_transcript = b.step(
+        "emit-agent-repository-repair-process-transcript-v1",
+        "Emit exact release candidates for the repository-repair Process transcript",
+    );
+    emit_process_transcript.dependOn(&release_transcript_outputs.command.step);
+    emit_process_transcript.dependOn(&release_transcript_isolated_replay.step);
+    emit_process_transcript.dependOn(&release_transcript_negatives.step);
+    emit_process_transcript.dependOn(&release_transcript_receipt.step);
+    emit_process_transcript.dependOn(&install_transcript_manifest.step);
+    emit_process_transcript.dependOn(&install_transcript_payload.step);
+    emit_process_transcript.dependOn(&install_transcript_receipt.step);
 
     const tests = b.addTest(.{ .root_module = agent_module });
     const run_tests = b.addRunArtifact(tests);

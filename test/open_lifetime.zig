@@ -375,6 +375,46 @@ fn expectFailureCases(cases: []const FailureCase) !void {
     }
 }
 
+fn expectTransportFailures(
+    kinds: []const agent.protocol.openaiResponsesV1.TransportFailureKind,
+) !void {
+    var initial_args: [boundary.schema.maximumEncodedSize(Goal)]u8 = undefined;
+    const initial_length = try boundary.schema.encode(
+        Goal,
+        try Goal.fromSlice("continue"),
+        &initial_args,
+    );
+    var pending_state: [128 * 1024]u8 = undefined;
+    var pending_request: [64 * 1024]u8 = undefined;
+    const pending = try advanceToRequest(
+        .{ .initial_args = initial_args[0..initial_length] },
+        null,
+        &pending_state,
+        &pending_request,
+    );
+    const request = try boundary.process_v1.effect.validateRequest(
+        pending_request[0..pending.request_len],
+        Image.program_transition_digest,
+    );
+    for (kinds) |kind| {
+        var response_output: [boundary.schema.maximumEncodedSize(Protocol.Response)]u8 = undefined;
+        var result_output: [2048]u8 = undefined;
+        const result = try encodeResponseResult(
+            request,
+            .{ .transport_failure = .{ .kind = kind } },
+            &response_output,
+            &result_output,
+        );
+        try std.testing.expectEqual(
+            Failure.transport,
+            try advanceToFailure(
+                pending_state[0..pending.state_len],
+                result,
+            ),
+        );
+    }
+}
+
 test "raw provider failures A cannot emit a local action" {
     try expectFailureCases(&[_]FailureCase{
         .{ .body = "{", .expected = .malformed },
@@ -430,6 +470,7 @@ test "raw provider failures B cannot emit a local action" {
         },
         .{ .body = "not-json", .status = 500, .expected = .http },
     });
+    try expectTransportFailures(&.{ .denied, .response_too_large });
 }
 
 test "reordered escaped provider output remains admissible" {

@@ -123,6 +123,25 @@ fn requestBaseValues(
     };
 }
 
+fn modelOpenVector(
+    comptime Body: type,
+    comptime models: anytype,
+    comptime prompts: anytype,
+) boundary.Vector(Body, models.len) {
+    const Opens = boundary.Vector(Body, models.len);
+    var result = Opens.empty();
+    inline for (models) |Model| {
+        const Open = json.SystemOpen(
+            Model.model_id,
+            Model.parameters,
+            prompts,
+        );
+        result.push(Body.fromSlice(&Open.value) catch unreachable) catch
+            unreachable;
+    }
+    return result;
+}
+
 fn maximumDynamicFragmentLength(
     comptime Action: type,
     comptime actions: anytype,
@@ -409,8 +428,7 @@ pub fn Profile(
     comptime Bytes: type,
     comptime Action: type,
     comptime actions: anytype,
-    comptime model_id: []const u8,
-    comptime model_parameters: anytype,
+    comptime models: anytype,
     comptime prompts: anytype,
     comptime skills: anytype,
     comptime failures: anytype,
@@ -425,11 +443,13 @@ pub fn Profile(
     const Fragment = boundary.Bytes(maximumDynamicFragmentLength(Action, actions, skills));
     const SkillFragments = boundary.Vector(Fragment, skills.len);
     const ToolFragments = boundary.Vector(Fragment, actions.len);
+    const ModelOpens = boundary.Vector(Protocol.RequestBody, models.len);
     return struct {
         pub const ProtocolType = Protocol;
         pub const FragmentType = Fragment;
         pub const SkillFragmentsType = SkillFragments;
         pub const ToolFragmentsType = ToolFragments;
+        pub const ModelOpensType = ModelOpens;
         pub fn schemaTypes() @TypeOf(.{
             Bytes,
             Text,
@@ -437,6 +457,7 @@ pub fn Profile(
             Fragment,
             SkillFragments,
             ToolFragments,
+            ModelOpens,
             request.ToolAppendState(Protocol.RequestBody),
             Protocol.Request,
             Protocol.RequestBody,
@@ -453,6 +474,7 @@ pub fn Profile(
                 Fragment,
                 SkillFragments,
                 ToolFragments,
+                ModelOpens,
                 request.ToolAppendState(Protocol.RequestBody),
                 Protocol.Request,
                 Protocol.RequestBody,
@@ -470,11 +492,12 @@ pub fn Profile(
                 fieldIndexValues(maximum_fields) ++
                 requestBaseValues(
                     Protocol.RequestBody,
-                    model_id,
-                    model_parameters,
+                    models[0].model_id,
+                    models[0].parameters,
                     prompts,
                 ) ++
                 .{
+                    modelOpenVector(Protocol.RequestBody, models, prompts),
                     skillFragmentVector(Fragment, skills, true),
                     skillFragmentVector(Fragment, skills, false),
                     toolFragmentVector(Fragment, Action, actions, false),
@@ -493,11 +516,12 @@ pub fn Profile(
                     fieldIndexValues(maximum_fields) ++
                     requestBaseValues(
                         Protocol.RequestBody,
-                        model_id,
-                        model_parameters,
+                        models[0].model_id,
+                        models[0].parameters,
                         prompts,
                     ) ++
                     .{
+                        modelOpenVector(Protocol.RequestBody, models, prompts),
                         skillFragmentVector(Fragment, skills, true),
                         skillFragmentVector(Fragment, skills, false),
                         toolFragmentVector(Fragment, Action, actions, false),
@@ -537,14 +561,15 @@ pub fn Profile(
             }
             inline for (requestBaseValues(
                 Protocol.RequestBody,
-                model_id,
-                model_parameters,
+                models[0].model_id,
+                models[0].parameters,
                 prompts,
             )) |value| {
                 result[next] = value;
                 next += 1;
             }
             inline for (.{
+                modelOpenVector(Protocol.RequestBody, models, prompts),
                 skillFragmentVector(Fragment, skills, true),
                 skillFragmentVector(Fragment, skills, false),
                 toolFragmentVector(Fragment, Action, actions, false),
@@ -715,11 +740,12 @@ pub fn Profile(
             pub const request_end_index: u16 = request_start + 4;
             pub const empty_request_bytes_index: u16 = request_start + 5;
             pub const comma_request_bytes_index: u16 = request_start + 6;
-            pub const skill_before_fragments_index: u16 = request_start + 7;
-            pub const skill_after_fragments_index: u16 = request_start + 8;
-            pub const tool_fragments_index: u16 = request_start + 9;
-            pub const comma_tool_fragments_index: u16 = request_start + 10;
-            const escape_start: u16 = request_start + 11;
+            pub const model_opens_index: u16 = request_start + 7;
+            pub const skill_before_fragments_index: u16 = request_start + 8;
+            pub const skill_after_fragments_index: u16 = request_start + 9;
+            pub const tool_fragments_index: u16 = request_start + 10;
+            pub const comma_tool_fragments_index: u16 = request_start + 11;
+            const escape_start: u16 = request_start + 12;
             pub const control_table_index: u16 = escape_start;
             pub const quote_escape_index: u16 = escape_start + 1;
             pub const backslash_escape_index: u16 = escape_start + 2;

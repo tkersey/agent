@@ -140,9 +140,10 @@ pub fn ReactBody(comptime source: anytype) type {
     {
         @compileError("Agent 3 ReAct representation requires request_bytes, response_bytes, and schema_types");
     }
-    const Model = source.models[0];
-    if (Model.protocol != @import("protocol/openai_responses_v1.zig").Profile) {
-        @compileError("Agent 3 ReAct milestone supports OpenAI Responses v1");
+    inline for (source.models) |DeclaredModel| {
+        if (DeclaredModel.protocol != @import("protocol/openai_responses_v1.zig").Profile) {
+            @compileError("Agent 3 ReAct milestone supports OpenAI Responses v1");
+        }
     }
     const ResponseBytes = boundary.Bytes(source.representation.response_bytes);
     const Profile = openai_profile.Profile(
@@ -150,8 +151,7 @@ pub fn ReactBody(comptime source: anytype) type {
         ResponseBytes,
         source.Action,
         source.actions,
-        Model.model_id,
-        Model.parameters,
+        source.models,
         source.prompts,
         source.skills,
         source.failures,
@@ -213,6 +213,12 @@ pub fn ReactBody(comptime source: anytype) type {
     const prompt = Epistemics.emitPrompt(source, &flow, current_goal, view, Context);
     const active_skills = activeSkills(source, Epistemics, &flow, current_memory, Context);
     const offered_actions = offeredActions(source, &flow, active_skills, Context);
+    const model_index = Epistemics.emitModelIndex(
+        source,
+        &flow,
+        current_memory,
+        Context,
+    );
     const active_mask = boolMask(&flow, active_skills, Context);
     const offered_mask = boolMask(&flow, offered_actions, Context);
     const model_request = if (Epistemics.prompt_is_json_escaped)
@@ -221,6 +227,7 @@ pub fn ReactBody(comptime source: anytype) type {
             &flow,
             request_helpers,
             prompt,
+            model_index,
             active_mask,
             offered_mask,
             Context,
@@ -231,6 +238,7 @@ pub fn ReactBody(comptime source: anytype) type {
             &flow,
             request_helpers,
             prompt,
+            model_index,
             active_mask,
             offered_mask,
             Context,

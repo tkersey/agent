@@ -413,6 +413,7 @@ pub fn emitSystem(
     flow: anytype,
     helpers: SystemHelpers(@TypeOf(flow.*), Profile),
     text: anytype,
+    model_index: @import("flow.zig").Value(u32),
     active_skills: @import("flow.zig").Value(u32),
     offered_actions: @import("flow.zig").Value(u32),
     comptime context: anytype,
@@ -422,6 +423,7 @@ pub fn emitSystem(
         flow,
         helpers,
         text,
+        model_index,
         active_skills,
         offered_actions,
         context,
@@ -434,6 +436,7 @@ pub fn emitSystemEscaped(
     flow: anytype,
     helpers: SystemHelpers(@TypeOf(flow.*), Profile),
     escaped: anytype,
+    model_index: @import("flow.zig").Value(u32),
     active_skills: @import("flow.zig").Value(u32),
     offered_actions: @import("flow.zig").Value(u32),
     comptime context: anytype,
@@ -443,6 +446,7 @@ pub fn emitSystemEscaped(
         flow,
         helpers,
         escaped,
+        model_index,
         active_skills,
         offered_actions,
         context,
@@ -455,6 +459,7 @@ fn emitSystemPrompt(
     flow: anytype,
     helpers: SystemHelpers(@TypeOf(flow.*), Profile),
     prompt: anytype,
+    model_index: @import("flow.zig").Value(u32),
     active_skills: @import("flow.zig").Value(u32),
     offered_actions: @import("flow.zig").Value(u32),
     comptime context: anytype,
@@ -466,7 +471,11 @@ fn emitSystemPrompt(
     var body = flow.bytesEmpty(Body);
     body = flow.bytesAppendOrFail(
         body,
-        flow.constant(Body, context.system_open_index),
+        flow.vectorGetOrFail(
+            flow.constant(Profile.ModelOpensType, context.model_opens_index),
+            model_index,
+            flow.constant(context.Failure, context.invalid_index_failure_index),
+        ),
         capacity_failure,
     );
     body = flow.call(

@@ -178,16 +178,29 @@ const dynamic_skills = .{
     }),
 };
 const DynamicBytes = boundary.Bytes(2048);
+const DynamicModels = .{ agent.model(.{
+    .name = "primary",
+    .protocol = agent.protocol.openaiResponsesV1.Profile,
+    .model = "dynamic-model-v1",
+    .parameters = .{
+        .max_output_tokens = @as(u32, 777),
+        .temperature = "0.2",
+    },
+}), agent.model(.{
+    .name = "fallback",
+    .protocol = agent.protocol.openaiResponsesV1.Profile,
+    .model = "fallback-model-v2",
+    .parameters = .{
+        .max_output_tokens = @as(u32, 888),
+        .temperature = "1",
+    },
+}) };
 const DynamicProfile = agent.openai_profile.Profile(
     DynamicFailure,
     DynamicBytes,
     Action,
     actions,
-    "dynamic-model-v1",
-    .{
-        .max_output_tokens = @as(u32, 777),
-        .temperature = "0.2",
-    },
+    DynamicModels,
     dynamic_prompts,
     dynamic_skills,
     dynamic_failures,
@@ -197,6 +210,7 @@ const DynamicProtocol = DynamicProfile.ProtocolType;
 const DynamicInput = struct {
     goal: Goal,
     conditional: bool,
+    model_index: u32,
 };
 
 fn DynamicLowered() type {
@@ -231,6 +245,7 @@ fn DynamicLowered() type {
         &flow,
         helpers,
         flow.productExtract(0, input),
+        flow.productExtract(2, input),
         active_mask,
         offered_mask,
         DynamicProfile.Context,
@@ -294,6 +309,7 @@ fn renderDynamic(conditional: bool) ![]const u8 {
     const state = try DynamicMachine.initialState(std.testing.allocator, .{
         .goal = Goal.fromSlice("dynamic task") catch unreachable,
         .conditional = conditional,
+        .model_index = @intFromBool(conditional),
     });
     defer DynamicMachine.deinitState(state);
     var fuel: u64 = 64 * 1024;
@@ -314,6 +330,7 @@ test "active skills determine prompt content and exact offered tools" {
     try std.testing.expect(std.mem.indexOf(u8, before, "\"name\":\"finish\"") == null);
     try std.testing.expect(std.mem.indexOf(u8, before, "\"max_output_tokens\":777") != null);
     try std.testing.expect(std.mem.indexOf(u8, before, "\"temperature\":0.2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, before, "\"model\":\"dynamic-model-v1\"") != null);
 
     const after = try renderDynamic(true);
     defer std.testing.allocator.free(after);
@@ -322,6 +339,9 @@ test "active skills determine prompt content and exact offered tools" {
     try std.testing.expect(std.mem.indexOf(u8, after, "\"name\":\"set_value\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, after, "\"name\":\"finish\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, after, "dynamic task") != null);
+    try std.testing.expect(std.mem.indexOf(u8, after, "\"model\":\"fallback-model-v2\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, after, "\"max_output_tokens\":888") != null);
+    try std.testing.expect(std.mem.indexOf(u8, after, "\"temperature\":1") != null);
 }
 
 comptime {

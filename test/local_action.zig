@@ -78,6 +78,13 @@ const ActivationEpistemics = struct {
     pub fn emitPrompt(comptime _: anytype, _: anytype, goal: anytype, _: anytype, comptime _: anytype) agent.Value(Goal) {
         return goal;
     }
+    pub fn emitModelIndex(comptime _: anytype, flow: anytype, memory: anytype, comptime context: anytype) agent.Value(u32) {
+        return flow.select(
+            memory,
+            flow.constant(u32, context.one_u32_index),
+            flow.constant(u32, context.zero_u32_index),
+        );
+    }
     pub fn emitSkillActive(comptime _: anytype, _: anytype, memory: anytype, comptime skill_index: usize, comptime _: anytype) agent.Value(bool) {
         if (skill_index != 1) unreachable;
         return memory;
@@ -98,12 +105,17 @@ const System = agent.system(.{
     .Observation = Observation,
     .Result = Result,
     .Failure = Failure,
-    .models = .{agent.model(.{
+    .models = .{ agent.model(.{
         .name = "primary",
         .protocol = agent.protocol.openaiResponsesV1.Profile,
         .model = "fixture-model-v1",
         .parameters = .{},
-    })},
+    }), agent.model(.{
+        .name = "fallback",
+        .protocol = agent.protocol.openaiResponsesV1.Profile,
+        .model = "fallback-model-v2",
+        .parameters = .{ .max_output_tokens = @as(u32, 321) },
+    }) },
     .prompts = .{agent.prompt.literal(.{
         .role = .user,
         .content = "Activate the closed skill, then finish.",
@@ -179,6 +191,8 @@ test "local skill activation lowers without a residual host effect" {
     };
     try std.testing.expectEqual(@as(usize, 1), effect_suspensions);
     const Image = System.Program.image();
+    try std.testing.expect(std.mem.indexOf(u8, &Image.bytes, "fixture-model-v1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, &Image.bytes, "fallback-model-v2") != null);
     var workspace: boundary.image.ValidationWorkspace = .{};
     const validated = try boundary.image.validateImageView(&Image.bytes, &workspace);
     try std.testing.expectEqual(@as(u32, 1), validated.catalogs.effect_count);

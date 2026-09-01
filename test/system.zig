@@ -97,13 +97,18 @@ const ProfileActions = .{
     agent.action.final(.set, .{ .name = "set_value", .description = "Set." }),
     agent.action.final(.finish, .{ .name = "finish", .description = "Finish." }),
 };
+const ProfileModels = .{agent.model(.{
+    .name = "primary",
+    .protocol = agent.protocol.openaiResponsesV1.Profile,
+    .model = "test-model",
+    .parameters = .{},
+})};
 const Profile = agent.openai_profile.Profile(
     ProfileFailure,
     boundary.Bytes(256),
     ProfileAction,
     ProfileActions,
-    "test-model",
-    .{},
+    ProfileModels,
     .{},
     .{},
     .{

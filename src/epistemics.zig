@@ -54,6 +54,9 @@ pub fn systemStateless(comptime config: anytype) type {
         pub fn emitPrompt(comptime source: anytype, _: anytype, goal: anytype, _: anytype, comptime _: anytype) @import("flow.zig").Value(source.Goal) {
             return goal;
         }
+        pub fn emitModelIndex(comptime _: anytype, flow: anytype, _: anytype, comptime context: anytype) @import("flow.zig").Value(u32) {
+            return flow.constant(u32, context.zero_u32_index);
+        }
         pub fn emitActionAllowed(comptime _: anytype, flow: anytype, _: anytype, _: anytype, comptime context: anytype) @import("flow.zig").Value(bool) {
             return flow.constant(bool, context.true_index);
         }
@@ -107,6 +110,25 @@ pub fn system(comptime spec: anytype) type {
         pub const emitObserve = Implementation.emitObserve;
         pub const emitProject = Implementation.emitProject;
         pub const emitPrompt = Implementation.emitPrompt;
+        pub fn emitModelIndex(
+            comptime source: anytype,
+            flow: anytype,
+            memory: anytype,
+            comptime context: anytype,
+        ) @import("flow.zig").Value(u32) {
+            if (@hasDecl(Implementation, "emitModelIndex")) {
+                return Implementation.emitModelIndex(
+                    source,
+                    flow,
+                    memory,
+                    context,
+                );
+            }
+            if (source.models.len != 1) {
+                @compileError("agent multi-model system epistemics must emit a deterministic model index");
+            }
+            return flow.constant(u32, context.zero_u32_index);
+        }
         pub const emitSkillActive = Implementation.emitSkillActive;
         pub const emitActionAllowed = Implementation.emitActionAllowed;
         pub const emitFinalAllowed = Implementation.emitFinalAllowed;

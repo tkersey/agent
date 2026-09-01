@@ -173,6 +173,11 @@ pub fn build(b: *std.Build) void {
         "boundary-process-kernel",
         "Exact local Boundary v1.7.0 Process-kernel WASM override",
     );
+    const world_process_root = b.option(
+        []const u8,
+        "world-process-root",
+        "Exact local World Process-host source root for Agent 3 development proof",
+    );
     const agent_release_tag = b.option(
         []const u8,
         "agent-release-tag",
@@ -1137,6 +1142,129 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic_check,
     );
+    addFocusedTest(
+        b,
+        "check-agent-protocol",
+        "Validate versioned raw model transport contracts",
+        "test/protocol.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    const staged_json_module = b.createModule(.{
+        .root_source_file = b.path("src/json.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    staged_json_module.addImport("boundary", boundary_module);
+    const staged_json_test_module = b.createModule(.{
+        .root_source_file = b.path("test/json.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    staged_json_test_module.addImport("agent", agent_module);
+    staged_json_test_module.addImport("boundary", boundary_module);
+    staged_json_test_module.addImport("agent_json", staged_json_module);
+    const staged_json_tests = b.addTest(.{ .root_module = staged_json_test_module });
+    const run_staged_json_tests = b.addRunArtifact(staged_json_tests);
+    const staged_json_step = b.step(
+        "check-agent-json",
+        "Validate staged request and strict tool schema generation",
+    );
+    staged_json_step.dependOn(&run_staged_json_tests.step);
+    semantic_check.dependOn(staged_json_step);
+    const staged_request_test_module = b.createModule(.{
+        .root_source_file = b.path("test/request.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    staged_request_test_module.addImport("agent", agent_module);
+    staged_request_test_module.addImport("boundary", boundary_module);
+    staged_request_test_module.addImport("agent_json", staged_json_module);
+    const staged_request_tests = b.addTest(.{
+        .root_module = staged_request_test_module,
+    });
+    const run_staged_request_tests = b.addRunArtifact(staged_request_tests);
+    const staged_request_step = b.step(
+        "check-agent-request",
+        "Execute complete dynamic provider request construction inside Boundary",
+    );
+    staged_request_step.dependOn(&run_staged_request_tests.step);
+    semantic_check.dependOn(staged_request_step);
+    const staged_json_parser_module = b.createModule(.{
+        .root_source_file = b.path("test/staged_json.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    staged_json_parser_module.addImport("agent", agent_module);
+    staged_json_parser_module.addImport("boundary", boundary_module);
+    staged_json_parser_module.addImport("agent_json", staged_json_module);
+    const staged_json_parser_tests = b.addTest(.{ .root_module = staged_json_parser_module });
+    const run_staged_json_parser_tests = b.addRunArtifact(staged_json_parser_tests);
+    const staged_json_parser_step = b.step(
+        "check-agent-staged-json",
+        "Execute in-image JSON string scanning and Unicode decoding",
+    );
+    staged_json_parser_step.dependOn(&run_staged_json_parser_tests.step);
+    semantic_check.dependOn(staged_json_parser_step);
+    const closed_turn_emitter_module = b.createModule(.{
+        .root_source_file = b.path("test/emit_closed_turn.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+    closed_turn_emitter_module.addImport("boundary", boundary_module);
+    closed_turn_emitter_module.addImport("closed_turn", staged_json_parser_module);
+    const closed_turn_emitter = b.addExecutable(.{
+        .name = "emit-agent-closed-turn",
+        .root_module = closed_turn_emitter_module,
+    });
+    const closed_turn_modes = .{
+        .{ "bpi1", "system.bpi1" },
+        .{ "initial", "initial.bin" },
+        .{ "model-set", "model-set.bin" },
+        .{ "model-finish", "model-finish.bin" },
+        .{ "tool-result", "tool-result.bin" },
+        .{ "expected-set", "expected-set.bin" },
+        .{ "expected-finish", "expected-finish.bin" },
+    };
+    var closed_turn_outputs: [closed_turn_modes.len]std.Build.LazyPath = undefined;
+    inline for (closed_turn_modes, 0..) |mode, index| {
+        const run = b.addRunArtifact(closed_turn_emitter);
+        run.addArg(mode[0]);
+        closed_turn_outputs[index] = run.captureStdOut(.{ .basename = mode[1] });
+    }
+    const closed_turn_world_step = b.step(
+        "check-agent-closed-turn-world",
+        "Execute complete request construction and raw-response Action decoding through World",
+    );
+    if (world_process_root) |root| {
+        const world_turn = b.addSystemCommand(&.{"node"});
+        world_turn.addFileArg(b.path("test/run_closed_turn_world.mjs"));
+        world_turn.addArgs(&.{ "--worldRoot", root, "--image" });
+        world_turn.addFileArg(closed_turn_outputs[0]);
+        world_turn.addArg("--initial");
+        world_turn.addFileArg(closed_turn_outputs[1]);
+        world_turn.addArg("--modelSet");
+        world_turn.addFileArg(closed_turn_outputs[2]);
+        world_turn.addArg("--modelFinish");
+        world_turn.addFileArg(closed_turn_outputs[3]);
+        world_turn.addArg("--toolResult");
+        world_turn.addFileArg(closed_turn_outputs[4]);
+        world_turn.addArg("--expectedSet");
+        world_turn.addFileArg(closed_turn_outputs[5]);
+        world_turn.addArg("--expectedFinish");
+        world_turn.addFileArg(closed_turn_outputs[6]);
+        closed_turn_world_step.dependOn(&world_turn.step);
+    } else {
+        const missing_world = b.addSystemCommand(&.{
+            "sh",
+            "-c",
+            "printf '%s\\n' 'check-agent-closed-turn-world requires -Dworld-process-root=/absolute/path' >&2; exit 1",
+        });
+        closed_turn_world_step.dependOn(&missing_world.step);
+    }
     addFocusedTest(
         b,
         "check-agent-compiler",

@@ -10,6 +10,7 @@ pub fn Value(comptime T: type) type {
 }
 
 pub const Limits = struct {
+    maximum_functions: usize = 32,
     maximum_values: usize = 256,
     maximum_blocks: usize = 128,
     maximum_instructions: usize = 512,
@@ -24,7 +25,9 @@ const TerminatorKind = enum {
     jump,
     branch,
     suspend_effect,
+    suspend_call,
     return_value,
+    return_to_caller,
     fail_value,
 };
 
@@ -38,6 +41,7 @@ const InstructionDraft = struct {
 
 const BlockDraft = struct {
     id: boundary.ir.BlockId,
+    function_id: boundary.ir.FunctionId = 0,
     role: boundary.ir.BlockRole = .segment,
     parameter_start: usize,
     parameter_count: usize = 0,
@@ -57,6 +61,10 @@ const BlockDraft = struct {
     else_argument_start: usize = 0,
     else_argument_count: usize = 0,
     site_id: u32 = 0,
+    callee_function: boundary.ir.FunctionId = 0,
+    callee_target: boundary.ir.BlockId = 0,
+    callee_argument_start: usize = 0,
+    callee_argument_count: usize = 0,
     request_start: usize = 0,
     request_count: usize = 0,
     continuation_target: boundary.ir.BlockId = 0,
@@ -64,6 +72,12 @@ const BlockDraft = struct {
     continuation_argument_count: usize = 0,
     resume_type: boundary.ir.ValueType = .{ .scalar = .unit },
     entered: bool = false,
+};
+
+const FunctionDraft = struct {
+    id: boundary.ir.FunctionId = 0,
+    entry: boundary.ir.BlockId = 0,
+    result_type: boundary.ir.ValueType = .{ .scalar = .unit },
 };
 
 fn SymbolicTuple(comptime Types: anytype) type {
@@ -76,6 +90,14 @@ fn Block(comptime Types: anytype) type {
     return struct {
         id: boundary.ir.BlockId,
         parameters: SymbolicTuple(Types),
+    };
+}
+
+fn Helper(comptime ParameterTypes: anytype, comptime Result: type) type {
+    return struct {
+        pub const ResultType = Result;
+        id: boundary.ir.FunctionId,
+        entry: Block(ParameterTypes),
     };
 }
 
@@ -119,6 +141,8 @@ pub fn Flow(comptime config: anytype) type {
         operand_count: usize = 0,
         blocks: [limits.maximum_blocks]BlockDraft = undefined,
         block_count: usize = 0,
+        functions: [limits.maximum_functions]FunctionDraft = undefined,
+        function_count: usize = 0,
         parameters: [limits.maximum_parameters]boundary.ir.ValueId = undefined,
         parameter_count: usize = 0,
         requests: [limits.maximum_requests]boundary.ir.ValueId = undefined,
@@ -126,6 +150,7 @@ pub fn Flow(comptime config: anytype) type {
         edge_arguments: [limits.maximum_edge_arguments]boundary.ir.EdgeArgument = undefined,
         edge_argument_count: usize = 0,
         current_block: boundary.ir.BlockId = 0,
+        current_function: boundary.ir.FunctionId = 0,
         started: bool = false,
         terminal_handoff_count: usize = 0,
         return_handoff_count: usize = 0,
@@ -174,6 +199,8 @@ pub fn Flow(comptime config: anytype) type {
         };
 
         const ControlTopologySnapshot = struct {
+            function_count: usize,
+            functions: [limits.maximum_functions]FunctionDraft,
             block_count: usize,
             blocks: [limits.maximum_blocks]BlockDraft,
             parameter_count: usize,
@@ -183,6 +210,7 @@ pub fn Flow(comptime config: anytype) type {
             edge_argument_count: usize,
             edge_arguments: [limits.maximum_edge_arguments]boundary.ir.EdgeArgument,
             current_block: boundary.ir.BlockId,
+            current_function: boundary.ir.FunctionId,
             started: bool,
         };
 
@@ -232,6 +260,8 @@ pub fn Flow(comptime config: anytype) type {
         /// value but cannot add, remove, or rewrite blocks and terminators.
         pub fn controlTopologySnapshot(self: *const Self) ControlTopologySnapshot {
             var result = ControlTopologySnapshot{
+                .function_count = self.function_count,
+                .functions = [_]FunctionDraft{.{}} ** limits.maximum_functions,
                 .block_count = self.block_count,
                 .blocks = [_]BlockDraft{.{
                     .id = 0,
@@ -245,8 +275,13 @@ pub fn Flow(comptime config: anytype) type {
                 .edge_argument_count = self.edge_argument_count,
                 .edge_arguments = [_]boundary.ir.EdgeArgument{.{ .value = 0 }} ** limits.maximum_edge_arguments,
                 .current_block = self.current_block,
+                .current_function = self.current_function,
                 .started = self.started,
             };
+            @memcpy(
+                result.functions[0..self.function_count],
+                self.functions[0..self.function_count],
+            );
             for (self.blocks[0..self.block_count], 0..) |draft, index| {
                 result.blocks[index] = draft;
                 result.blocks[index].instruction_start = 0;
@@ -293,13 +328,18 @@ pub fn Flow(comptime config: anytype) type {
             return .{ .id = id };
         }
 
-        fn addBlock(self: *Self, role: boundary.ir.BlockRole) boundary.ir.BlockId {
+        fn addBlock(
+            self: *Self,
+            role: boundary.ir.BlockRole,
+            function_id: boundary.ir.FunctionId,
+        ) boundary.ir.BlockId {
             if (self.block_count >= limits.maximum_blocks) {
                 failLimit("maximum_blocks exceeded");
             }
             const id: boundary.ir.BlockId = @intCast(self.block_count);
             self.blocks[self.block_count] = .{
                 .id = id,
+                .function_id = function_id,
                 .role = role,
                 .parameter_start = self.parameter_count,
                 .instruction_start = 0,
@@ -335,13 +375,16 @@ pub fn Flow(comptime config: anytype) type {
             draft.entered = true;
             draft.instruction_start = self.instruction_count;
             self.current_block = block_id;
+            self.current_function = draft.function_id;
         }
 
         /// Begin the root function with one typed InitialArgs parameter.
         pub fn begin(self: *Self, comptime InitialArgs: type) Value(InitialArgs) {
             if (self.started) @compileError("agent.Flow may begin only once");
-            const entry = self.addBlock(.loop_header);
             self.started = true;
+            self.function_count = 1;
+            const entry = self.addBlock(.loop_header, 0);
+            self.functions[0] = .{ .id = 0, .entry = entry };
             self.control_mutation_count += 1;
             self.enterRaw(entry);
             const input = self.addValue(InitialArgs);
@@ -355,7 +398,7 @@ pub fn Flow(comptime config: anytype) type {
             comptime role: boundary.ir.BlockRole,
             comptime ParameterTypes: anytype,
         ) Block(ParameterTypes) {
-            const id = self.addBlock(role);
+            const id = self.addBlock(role, self.current_function);
             self.control_mutation_count += 1;
             var result: Block(ParameterTypes) = .{
                 .id = id,
@@ -367,6 +410,46 @@ pub fn Flow(comptime config: anytype) type {
                 result.parameters[index] = parameter;
             }
             return result;
+        }
+
+        /// Declare one private typed helper function. Numeric function and
+        /// entry-block identities remain compiler-owned.
+        pub fn helper(
+            self: *Self,
+            comptime ParameterTypes: anytype,
+            comptime Result: type,
+        ) Helper(ParameterTypes, Result) {
+            if (!self.started) @compileError("agent.Flow must begin before declaring a helper");
+            if (self.function_count >= limits.maximum_functions) {
+                failLimit("maximum_functions exceeded");
+            }
+            const id: boundary.ir.FunctionId = @intCast(self.function_count);
+            const entry_id = self.addBlock(.segment, id);
+            var result: Helper(ParameterTypes, Result) = .{
+                .id = id,
+                .entry = .{ .id = entry_id, .parameters = undefined },
+            };
+            inline for (ParameterTypes, 0..) |T, index| {
+                const parameter = self.addValue(T);
+                self.addParameterTo(entry_id, parameter.id);
+                result.entry.parameters[index] = parameter;
+            }
+            self.functions[self.function_count] = .{
+                .id = id,
+                .entry = entry_id,
+                .result_type = loweredType(Result),
+            };
+            self.function_count += 1;
+            self.control_mutation_count += 1;
+            return result;
+        }
+
+        /// Compiler-only helper handle type for generic staged emitters.
+        pub fn HelperType(
+            comptime ParameterTypes: anytype,
+            comptime Result: type,
+        ) type {
+            return Helper(ParameterTypes, Result);
         }
 
         /// Enter a previously declared successor block for lexical emission.
@@ -495,12 +578,85 @@ pub fn Flow(comptime config: anytype) type {
             );
         }
 
+        pub fn sumExtractOrFail(
+            self: *Self,
+            comptime variant_index: u16,
+            sum: anytype,
+            invalid_variant: anytype,
+        ) Value(@typeInfo(@TypeOf(sum).Type).@"union".fields[variant_index].type) {
+            const Payload = @typeInfo(@TypeOf(sum).Type).@"union".fields[variant_index].type;
+            return self.instruction(
+                Payload,
+                .pure,
+                .{ .sum_extract = variant_index },
+                .{ sum, invalid_variant },
+            );
+        }
+
         pub fn integerAdd(self: *Self, left: anytype, right: @TypeOf(left)) @TypeOf(left) {
             return self.instruction(
                 @TypeOf(left).Type,
                 .pure,
                 .integer_add,
                 .{ left, right },
+            );
+        }
+
+        pub fn integerAddOrFail(
+            self: *Self,
+            left: anytype,
+            right: @TypeOf(left),
+            overflow_failure: anytype,
+        ) @TypeOf(left) {
+            return self.instruction(
+                @TypeOf(left).Type,
+                .pure,
+                .integer_add,
+                .{ left, right, overflow_failure },
+            );
+        }
+
+        pub fn integerMultiplyOrFail(
+            self: *Self,
+            left: anytype,
+            right: @TypeOf(left),
+            overflow_failure: anytype,
+        ) @TypeOf(left) {
+            return self.instruction(
+                @TypeOf(left).Type,
+                .pure,
+                .integer_multiply,
+                .{ left, right, overflow_failure },
+            );
+        }
+
+        pub fn integerDivideOrFail(
+            self: *Self,
+            left: anytype,
+            right: @TypeOf(left),
+            overflow_failure: anytype,
+            division_by_zero_failure: @TypeOf(overflow_failure),
+        ) @TypeOf(left) {
+            return self.instruction(
+                @TypeOf(left).Type,
+                .pure,
+                .integer_divide,
+                .{ left, right, overflow_failure, division_by_zero_failure },
+            );
+        }
+
+        pub fn integerRemainderOrFail(
+            self: *Self,
+            left: anytype,
+            right: @TypeOf(left),
+            overflow_failure: anytype,
+            division_by_zero_failure: @TypeOf(overflow_failure),
+        ) @TypeOf(left) {
+            return self.instruction(
+                @TypeOf(left).Type,
+                .pure,
+                .integer_remainder,
+                .{ left, right, overflow_failure, division_by_zero_failure },
             );
         }
 
@@ -525,6 +681,40 @@ pub fn Flow(comptime config: anytype) type {
             return self.instruction(bool, .pure, .integer_equal, .{ left, right });
         }
 
+        pub fn integerNotEqual(self: *Self, left: anytype, right: @TypeOf(left)) Value(bool) {
+            return self.instruction(bool, .pure, .integer_not_equal, .{ left, right });
+        }
+
+        pub fn integerLessThan(self: *Self, left: anytype, right: @TypeOf(left)) Value(bool) {
+            return self.instruction(bool, .pure, .integer_less_than, .{ left, right });
+        }
+
+        pub fn integerLessEqual(self: *Self, left: anytype, right: @TypeOf(left)) Value(bool) {
+            return self.instruction(bool, .pure, .integer_less_equal, .{ left, right });
+        }
+
+        pub fn integerGreaterThan(self: *Self, left: anytype, right: @TypeOf(left)) Value(bool) {
+            return self.instruction(bool, .pure, .integer_greater_than, .{ left, right });
+        }
+
+        pub fn integerBitAnd(self: *Self, left: anytype, right: @TypeOf(left)) @TypeOf(left) {
+            return self.instruction(
+                @TypeOf(left).Type,
+                .pure,
+                .integer_bit_and,
+                .{ left, right },
+            );
+        }
+
+        pub fn integerBitOr(self: *Self, left: anytype, right: @TypeOf(left)) @TypeOf(left) {
+            return self.instruction(
+                @TypeOf(left).Type,
+                .pure,
+                .integer_bit_or,
+                .{ left, right },
+            );
+        }
+
         /// Compare two bounded UTF-8 Text values using Boundary's canonical
         /// bytewise ordering. The result is negative, zero, or positive.
         pub fn textCompare(self: *Self, left: anytype, right: anytype) Value(i8) {
@@ -538,6 +728,91 @@ pub fn Flow(comptime config: anytype) type {
             return self.instruction(i8, .pure, .text_compare, .{ left, right });
         }
 
+        pub fn textEmpty(self: *Self, comptime Text: type) Value(Text) {
+            if (comptime !boundary.schema.isTextType(Text)) {
+                @compileError("agent.Flow textEmpty requires a Text type");
+            }
+            return self.instruction(Text, .pure, .text_empty, .{});
+        }
+
+        pub fn textLength(self: *Self, text: anytype) Value(u32) {
+            if (comptime !boundary.schema.isTextType(@TypeOf(text).Type)) {
+                @compileError("agent.Flow textLength requires a Text value");
+            }
+            return self.instruction(u32, .pure, .text_length, .{text});
+        }
+
+        pub fn textAppendScalarOrFail(
+            self: *Self,
+            text: anytype,
+            scalar: Value(u32),
+            capacity_failure: anytype,
+            utf8_failure: @TypeOf(capacity_failure),
+        ) @TypeOf(text) {
+            return self.instruction(
+                @TypeOf(text).Type,
+                .pure,
+                .text_append_scalar,
+                .{ text, scalar, capacity_failure, utf8_failure },
+            );
+        }
+
+        /// Project one canonical UTF-8 byte and map an invalid index to the
+        /// exact authored Failure value supplied by the caller.
+        pub fn textByteAt(
+            self: *Self,
+            text: anytype,
+            index: Value(u32),
+            invalid_index: anytype,
+        ) Value(u8) {
+            if (comptime !boundary.schema.isTextType(@TypeOf(text).Type)) {
+                @compileError("agent.Flow textByteAt requires a Text value");
+            }
+            return self.instruction(
+                u8,
+                .pure,
+                .text_byte_at,
+                .{ text, index, invalid_index },
+            );
+        }
+
+        pub fn textToBytes(
+            self: *Self,
+            comptime Bytes: type,
+            text: anytype,
+        ) Value(Bytes) {
+            const Text = @TypeOf(text).Type;
+            if (comptime !boundary.schema.isTextType(Text) or
+                !boundary.schema.isBytesType(Bytes) or
+                Bytes.maximum_length < Text.maximum_length)
+            {
+                @compileError("agent.Flow textToBytes requires capacity-compatible Text -> Bytes");
+            }
+            return self.instruction(Bytes, .pure, .text_to_bytes, .{text});
+        }
+
+        pub fn textCopyOrFail(
+            self: *Self,
+            comptime Result: type,
+            text: anytype,
+            start: Value(u32),
+            end: Value(u32),
+            capacity_failure: anytype,
+            utf8_failure: @TypeOf(capacity_failure),
+        ) Value(Result) {
+            if (comptime !boundary.schema.isTextType(Result) or
+                !boundary.schema.isTextType(@TypeOf(text).Type))
+            {
+                @compileError("agent.Flow textCopyOrFail requires Text types");
+            }
+            return self.instruction(
+                Result,
+                .pure,
+                .text_copy,
+                .{ text, start, end, capacity_failure, utf8_failure },
+            );
+        }
+
         pub fn integerConvert(
             self: *Self,
             comptime Result: type,
@@ -549,6 +824,25 @@ pub fn Flow(comptime config: anytype) type {
                 @compileError("agent.Flow integerConvert requires integer types");
             }
             return self.instruction(Result, .pure, .integer_convert, .{value});
+        }
+
+        pub fn integerConvertOrFail(
+            self: *Self,
+            comptime Result: type,
+            value: anytype,
+            overflow_failure: anytype,
+        ) Value(Result) {
+            if (comptime @typeInfo(Result) != .int or
+                @typeInfo(@TypeOf(value).Type) != .int)
+            {
+                @compileError("agent.Flow integerConvertOrFail requires integer types");
+            }
+            return self.instruction(
+                Result,
+                .pure,
+                .integer_convert,
+                .{ value, overflow_failure },
+            );
         }
 
         /// Project an exhaustive portable enum to the canonical u32 tag used
@@ -592,6 +886,14 @@ pub fn Flow(comptime config: anytype) type {
             comptime variant_index: u16,
             payload: anytype,
         ) Value(Sum) {
+            if (comptime @TypeOf(payload).Type == void) {
+                return self.instruction(
+                    Sum,
+                    .pure,
+                    .{ .sum_construct = variant_index },
+                    .{},
+                );
+            }
             return self.instruction(
                 Sum,
                 .pure,
@@ -633,6 +935,20 @@ pub fn Flow(comptime config: anytype) type {
             );
         }
 
+        pub fn vectorGetOrFail(
+            self: *Self,
+            vector: anytype,
+            index: Value(u32),
+            invalid_index: anytype,
+        ) Value(@TypeOf(vector).Type.ElementType) {
+            return self.instruction(
+                @TypeOf(vector).Type.ElementType,
+                .pure,
+                .vector_get,
+                .{ vector, index, invalid_index },
+            );
+        }
+
         pub fn vectorSet(
             self: *Self,
             vector: anytype,
@@ -656,6 +972,20 @@ pub fn Flow(comptime config: anytype) type {
             );
         }
 
+        pub fn vectorPushOrFail(
+            self: *Self,
+            vector: anytype,
+            element: anytype,
+            capacity_failure: anytype,
+        ) @TypeOf(vector) {
+            return self.instruction(
+                @TypeOf(vector).Type,
+                .pure,
+                .vector_push,
+                .{ vector, element, capacity_failure },
+            );
+        }
+
         pub fn vectorTruncate(
             self: *Self,
             vector: anytype,
@@ -666,6 +996,65 @@ pub fn Flow(comptime config: anytype) type {
                 .pure,
                 .vector_truncate,
                 .{ vector, length },
+            );
+        }
+
+        pub fn bytesEmpty(self: *Self, comptime Bytes: type) Value(Bytes) {
+            if (comptime !boundary.schema.isBytesType(Bytes)) {
+                @compileError("agent.Flow bytesEmpty requires a Bytes type");
+            }
+            return self.instruction(Bytes, .pure, .bytes_empty, .{});
+        }
+
+        pub fn bytesLength(self: *Self, bytes: anytype) Value(u32) {
+            if (comptime !boundary.schema.isBytesType(@TypeOf(bytes).Type)) {
+                @compileError("agent.Flow bytesLength requires a Bytes value");
+            }
+            return self.instruction(u32, .pure, .bytes_length, .{bytes});
+        }
+
+        pub fn bytesByteAt(
+            self: *Self,
+            bytes: anytype,
+            index: Value(u32),
+            invalid_index: anytype,
+        ) Value(u8) {
+            if (comptime !boundary.schema.isBytesType(@TypeOf(bytes).Type)) {
+                @compileError("agent.Flow bytesByteAt requires a Bytes value");
+            }
+            return self.instruction(
+                u8,
+                .pure,
+                .bytes_byte_at,
+                .{ bytes, index, invalid_index },
+            );
+        }
+
+        pub fn bytesAppendOrFail(
+            self: *Self,
+            bytes: anytype,
+            suffix: anytype,
+            capacity_failure: anytype,
+        ) @TypeOf(bytes) {
+            return self.instruction(
+                @TypeOf(bytes).Type,
+                .pure,
+                .bytes_append,
+                .{ bytes, suffix, capacity_failure },
+            );
+        }
+
+        pub fn bytesAppendScalarOrFail(
+            self: *Self,
+            bytes: anytype,
+            scalar: Value(u8),
+            capacity_failure: anytype,
+        ) @TypeOf(bytes) {
+            return self.instruction(
+                @TypeOf(bytes).Type,
+                .pure,
+                .bytes_append_scalar,
+                .{ bytes, scalar, capacity_failure },
             );
         }
 
@@ -765,7 +1154,7 @@ pub fn Flow(comptime config: anytype) type {
                 self.appendEdgeArgument(.{ .value = value.id });
             }
 
-            const continuation = self.addBlock(.after_handler);
+            const continuation = self.addBlock(.after_handler, self.current_function);
             var output: PerformOutput(Site.Resume, @TypeOf(carry)) = undefined;
             output.value = self.addValue(Site.Resume);
             self.addParameterTo(continuation, output.value.id);
@@ -791,6 +1180,60 @@ pub fn Flow(comptime config: anytype) type {
             return output;
         }
 
+        /// Call one declared private helper and enter its typed continuation.
+        pub fn call(
+            self: *Self,
+            helper_function: anytype,
+            arguments: anytype,
+            carry: anytype,
+        ) PerformOutput(@TypeOf(helper_function).ResultType, @TypeOf(carry)) {
+            const source_block = self.current_block;
+            if (self.current().terminator_kind != .unset) {
+                @compileError("agent.Flow call follows a terminated block");
+            }
+            if (helper_function.id == 0 or
+                @as(usize, helper_function.id) >= self.function_count)
+            {
+                @compileError("agent.Flow call requires one declared private helper");
+            }
+            const callee = self.appendValueArguments(
+                helper_function.entry,
+                arguments,
+            );
+            const continuation_argument_start = self.edge_argument_count;
+            self.appendEdgeArgument(.@"resume");
+            inline for (carry) |value| {
+                self.appendEdgeArgument(.{ .value = value.id });
+            }
+
+            const continuation = self.addBlock(.call_return, self.current_function);
+            const Resume = @TypeOf(helper_function).ResultType;
+            var output: PerformOutput(Resume, @TypeOf(carry)) = undefined;
+            output.value = self.addValue(Resume);
+            self.addParameterTo(continuation, output.value.id);
+            inline for (std.meta.fields(@TypeOf(carry))) |field| {
+                const old_value = @field(carry, field.name);
+                const new_value = self.addValue(@TypeOf(old_value).Type);
+                self.addParameterTo(continuation, new_value.id);
+                @field(output.carried, field.name) = new_value;
+            }
+
+            const draft = &self.blocks[@intCast(source_block)];
+            draft.terminator_kind = .suspend_call;
+            draft.callee_function = helper_function.id;
+            draft.callee_target = helper_function.entry.id;
+            draft.callee_argument_start = callee.start;
+            draft.callee_argument_count = callee.count;
+            draft.continuation_target = continuation;
+            draft.continuation_argument_start = continuation_argument_start;
+            draft.continuation_argument_count =
+                self.edge_argument_count - continuation_argument_start;
+            draft.resume_type = loweredType(Resume);
+            self.enterRaw(continuation);
+            self.control_mutation_count += 1;
+            return output;
+        }
+
         pub fn returnValue(self: *Self, value: anytype) void {
             if (self.current().terminator_kind != .unset) {
                 @compileError("agent.Flow block already has a terminator");
@@ -799,6 +1242,23 @@ pub fn Flow(comptime config: anytype) type {
             self.current().result_value = value.id;
             self.terminal_handoff_count += 1;
             self.return_handoff_count += 1;
+            self.control_mutation_count += 1;
+        }
+
+        /// Return one exact typed value from a private helper.
+        pub fn returnToCaller(self: *Self, value: anytype) void {
+            if (self.current_function == 0) {
+                @compileError("agent.Flow root function must use returnValue");
+            }
+            if (self.current().terminator_kind != .unset) {
+                @compileError("agent.Flow block already has a terminator");
+            }
+            const function = self.functions[@intCast(self.current_function)];
+            if (!loweredType(@TypeOf(value).Type).eql(function.result_type)) {
+                @compileError("agent.Flow helper return type mismatch");
+            }
+            self.current().terminator_kind = .return_to_caller;
+            self.current().result_value = value.id;
             self.control_mutation_count += 1;
         }
 
@@ -817,6 +1277,7 @@ pub fn Flow(comptime config: anytype) type {
             comptime snapshot: Self,
             operands: *const [snapshot.operand_count]boundary.ir.ValueId,
         ) [snapshot.instruction_count]boundary.ir.Instruction {
+            @setEvalBranchQuota(100_000_000);
             var result: [snapshot.instruction_count]boundary.ir.Instruction = undefined;
             for (snapshot.instructions[0..snapshot.instruction_count], 0..) |draft, index| {
                 result[index] = .{
@@ -836,6 +1297,7 @@ pub fn Flow(comptime config: anytype) type {
             requests: *const [snapshot.request_count]boundary.ir.ValueId,
             edge_arguments: *const [snapshot.edge_argument_count]boundary.ir.EdgeArgument,
         ) [snapshot.block_count]boundary.ir.Block {
+            @setEvalBranchQuota(100_000_000);
             var result: [snapshot.block_count]boundary.ir.Block = undefined;
             for (snapshot.blocks[0..snapshot.block_count], 0..) |draft, index| {
                 const terminator: boundary.ir.Terminator = switch (draft.terminator_kind) {
@@ -856,6 +1318,7 @@ pub fn Flow(comptime config: anytype) type {
                         },
                     } },
                     .return_value => .{ .return_value = draft.result_value },
+                    .return_to_caller => .{ .return_to_caller = draft.result_value },
                     .fail_value => .{ .fail_value = draft.failure_value },
                     .suspend_effect => .{ .@"suspend" = .{
                         .kind = .effect,
@@ -867,13 +1330,51 @@ pub fn Flow(comptime config: anytype) type {
                         },
                         .resume_type = draft.resume_type,
                     } },
+                    .suspend_call => .{ .@"suspend" = .{
+                        .kind = .call,
+                        .callee_function = draft.callee_function,
+                        .callee = .{
+                            .target = draft.callee_target,
+                            .arguments = edge_arguments[draft.callee_argument_start .. draft.callee_argument_start + draft.callee_argument_count],
+                        },
+                        .continuation = .{
+                            .target = draft.continuation_target,
+                            .arguments = edge_arguments[draft.continuation_argument_start .. draft.continuation_argument_start + draft.continuation_argument_count],
+                        },
+                        .resume_type = draft.resume_type,
+                    } },
                 };
                 result[index] = .{
                     .id = draft.id,
+                    .function_id = draft.function_id,
                     .role = draft.role,
                     .parameters = parameters[draft.parameter_start .. draft.parameter_start + draft.parameter_count],
                     .instructions = instructions[draft.instruction_start .. draft.instruction_start + draft.instruction_count],
                     .terminator = terminator,
+                };
+            }
+            return result;
+        }
+
+        fn finalizeFunctions(
+            comptime snapshot: Self,
+            comptime RootResult: type,
+        ) [if (snapshot.function_count == 1) 0 else snapshot.function_count]boundary.ir.Function {
+            @setEvalBranchQuota(100_000_000);
+            const count = if (snapshot.function_count == 1)
+                0
+            else
+                snapshot.function_count;
+            var result: [count]boundary.ir.Function = undefined;
+            if (count == 0) return result;
+            for (snapshot.functions[0..snapshot.function_count], 0..) |draft, index| {
+                result[index] = .{
+                    .id = draft.id,
+                    .entry = draft.entry,
+                    .result_type = if (index == 0)
+                        Self.loweredType(RootResult)
+                    else
+                        draft.result_type,
                 };
             }
             return result;
@@ -897,6 +1398,7 @@ pub fn Flow(comptime config: anytype) type {
                     &requests,
                     &edge_arguments,
                 );
+                const functions = snapshot.finalizeFunctions(Result);
 
                 pub const control_ir: boundary.ir.Program = .{
                     .label = snapshot.label,
@@ -904,6 +1406,7 @@ pub fn Flow(comptime config: anytype) type {
                     .blocks = &blocks,
                     .entry = 0,
                     .result_type = Self.loweredType(Result),
+                    .functions = &functions,
                 };
 
                 comptime {

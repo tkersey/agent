@@ -9,6 +9,7 @@ pub const package_version = "2.7.0";
 pub const define = definition.define;
 /// Typed action-descriptor constructors.
 pub const action = @import("action.zig");
+pub const action_decode = @import("action_decode.zig");
 /// Compiler-only final guards used by explicit EpistemicStrategies.
 pub const final_policy = @import("final_policy.zig");
 /// Explicit deterministic Memory, observation-fold, and DecisionView strategies.
@@ -20,10 +21,17 @@ pub const RuntimeFlow = @import("runtime_flow.zig").RuntimeFlow;
 pub const RuntimeTopology = @import("runtime_flow.zig").Topology;
 /// Compiler-only typed symbolic value.
 pub const Value = @import("flow.zig").Value;
+pub const FlowLimits = @import("flow.zig").Limits;
+pub const request = @import("request.zig");
+pub const response = @import("response.zig");
+pub const staged_json = @import("staged_json.zig");
+pub const openai_response = @import("openai_response.zig");
 /// Reusable compile-time RuntimeStrategies.
 pub const strategy = @import("strategy.zig");
 /// Provider-neutral projections of the closed decision Action algebra.
 pub const decision = @import("decision_contract.zig");
+/// Versioned Agent-owned model transport contracts.
+pub const protocol = @import("protocol.zig");
 /// Specialize one definition, runtime strategy, and epistemic strategy into one Boundary Machine.
 pub const compile = @import("compiler.zig").compile;
 

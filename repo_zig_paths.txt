@@ -115,6 +115,7 @@ test/machine_native_wasm.zig
 test/malformed.zig
 test/open_lifetime.zig
 test/protocol.zig
+test/repository_admission.zig
 test/request.zig
 test/run_machine_native.zig
 test/shared_boundary.zig

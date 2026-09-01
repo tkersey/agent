@@ -578,6 +578,7 @@ pub fn RepositoryRepairSystem(comptime agent: type, comptime boundary: type) typ
                 .unknown_action = Failure.unknown_action,
                 .transport = Failure.transport,
                 .http = Failure.http,
+                .policy_denied = Failure.policy_denied,
             },
             .representation = .{
                 .request_bytes = 64 * 1024,

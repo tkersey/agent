@@ -190,6 +190,13 @@ fn toolFragmentVector(
     return result;
 }
 
+fn policyDeniedFailure(comptime failures: anytype) @TypeOf(failures.invalid_variant) {
+    if (@hasField(@TypeOf(failures), "policy_denied")) {
+        return failures.policy_denied;
+    }
+    return failures.invalid_variant;
+}
+
 fn fixedValues(
     comptime Failure: type,
     comptime Bytes: type,
@@ -306,6 +313,7 @@ fn fixedValues(
     failures.unknown_action,
     failures.transport,
     failures.http,
+    policyDeniedFailure(failures),
 }) {
     _ = Failure;
     return .{
@@ -420,6 +428,7 @@ fn fixedValues(
         failures.unknown_action,
         failures.transport,
         failures.http,
+        policyDeniedFailure(failures),
     };
 }
 
@@ -698,7 +707,8 @@ pub fn Profile(
             pub const unknown_action_failure_index: u16 = 105;
             pub const transport_failure_index: u16 = 106;
             pub const http_failure_index: u16 = 107;
-            const action_start: u16 = 108;
+            pub const policy_denied_failure_index: u16 = 108;
+            const action_start: u16 = 109;
             pub const action_name_indices = blk: {
                 var result: [action_count]u16 = undefined;
                 for (&result, 0..) |*item, index| item.* = action_start + @as(u16, @intCast(index));

@@ -95,7 +95,11 @@ const receipt = {
     conditionalSkillVisible: proof.conditionalSkillVisible,
     processTransfersObserved: proof.processTransfers,
     transferPoints: admissionProof.transferPoints,
-    admissionNegatives: admissionProof.negativeResults,
+    admissionNegatives: [
+      ...admissionProof.negativeResults,
+      ...admissionProof.nativeNegativeResults,
+    ],
+    nativeProcessAdmissionProof: admissionProof.nativeProcessImageSemantics,
     dangerousRepositoryEffectsFromInvalidCandidates:
       admissionProof.dangerousRepositoryEffects,
     successfulPrematureCompletions:

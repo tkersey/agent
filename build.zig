@@ -190,11 +190,42 @@ pub fn build(b: *std.Build) void {
         outputs[index] = run.captureStdOut(.{ .basename = mode[1] });
         emit_repository.dependOn(&run.step);
     }
+    const repository_admission_files = b.addWriteFiles();
+    const repository_admission_source = repository_admission_files.addCopyFile(
+        b.path("test/repository_admission.zig"),
+        "repository_admission.zig",
+    );
+    _ = repository_admission_files.addCopyFile(
+        outputs[0],
+        "repository-system.bpi1",
+    );
+    _ = repository_admission_files.addCopyFile(
+        outputs[1],
+        "repository-system-initial.bin",
+    );
+    const repository_admission_module = b.createModule(.{
+        .root_source_file = repository_admission_source,
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    repository_admission_module.addImport("boundary", boundary_module);
+    const repository_admission_tests = b.addTest(.{
+        .root_module = repository_admission_module,
+    });
+    const run_repository_admission_tests = b.addRunArtifact(
+        repository_admission_tests,
+    );
+    const repository_admission_step = b.step(
+        "check-agent-repository-admission",
+        "Reject stale mutation and false completion from current portable State",
+    );
+    repository_admission_step.dependOn(&run_repository_admission_tests.step);
 
     const world_check = b.step(
         "check-agent-repository-system-world",
         "Execute the source-free closure distribution through released World",
     );
+    world_check.dependOn(repository_admission_step);
 
     const closure_check = b.step(
         "check-agent-system-closure-v1",

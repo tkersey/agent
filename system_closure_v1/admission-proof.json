@@ -2,7 +2,7 @@
   "format": "agent-system-closure-admission-negatives/v1",
   "result": "passed",
   "kernelSha256": "835a35fcad4d242ae6ab32244faf563032c5a63b2ff71e62511c410445d74139",
-  "imageSha256": "05f3fb2a84e7f3fc999fa12ab7dfe4a8f6e775eb805f59bc69857b59de1b6627",
+  "imageSha256": "0ba8ae188785a61d385c32503ffbe65a702cef9f19931bc717290a2d8356e42a",
   "negativeResults": [
     {
       "name": "pre-baseline-replacement",
@@ -19,6 +19,25 @@
   ],
   "dangerousRepositoryEffects": 0,
   "successfulPrematureCompletions": 0,
+  "nativeNegativeResults": [
+    {
+      "name": "stale-digest-replacement",
+      "failure": "policy_denied"
+    },
+    {
+      "name": "wrong-mutation-path",
+      "failure": "policy_denied"
+    },
+    {
+      "name": "wrong-final-path",
+      "failure": "policy_denied"
+    },
+    {
+      "name": "wrong-final-digest",
+      "failure": "policy_denied"
+    }
+  ],
+  "nativeProcessImageSemantics": true,
   "transferPoints": [
     "internal-response-parser",
     "pending-model-request",

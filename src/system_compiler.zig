@@ -342,7 +342,7 @@ pub fn ReactBody(comptime source: anytype) type {
         .{},
     );
     _ = flow.enter(denied);
-    flow.failValue(flow.constant(source.Failure, Context.malformed_failure_index));
+    flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
     var dispatch_values = flow.enter(dispatch);
     inline for (@typeInfo(source.Action).@"union".fields, 0..) |_, action_index| {
         const matched = flow.block(.segment, .{ source.Action, RuntimeState });

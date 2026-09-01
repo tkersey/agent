@@ -281,15 +281,23 @@ fn defineItem(
     );
 
     const dispatched = flow.enter(dispatch);
-    const is_type = textEquals(flow, dispatched[1], context.type_key_index, context);
+    const value = flow.call(
+        helpers.core.skip_whitespace,
+        .{dispatched[2]},
+        .{ dispatched[0], dispatched[1] },
+    );
+    const value_state = value.carried[0];
+    const value_key = value.carried[1];
+    const value_cursor = value.value;
+    const is_type = textEquals(flow, value_key, context.type_key_index, context);
     const type_member = flow.block(.segment, .{ State, staged.Cursor(Bytes) });
     const classify_status = flow.block(.segment, .{ State, Text, staged.Cursor(Bytes) });
     flow.branch(
         is_type,
         type_member,
-        .{ dispatched[0], dispatched[2] },
+        .{ value_state, value_cursor },
         classify_status,
-        dispatched,
+        .{ value_state, value_key, value_cursor },
     );
     const status_input = flow.enter(classify_status);
     const is_status = textEquals(flow, status_input[1], context.status_key_index, context);
@@ -871,14 +879,22 @@ fn defineResponse(
     );
 
     const dispatched = flow.enter(dispatch);
+    const value = flow.call(
+        helpers.core.skip_whitespace,
+        .{dispatched[2]},
+        .{ dispatched[0], dispatched[1] },
+    );
+    const value_state = value.carried[0];
+    const value_key = value.carried[1];
+    const value_cursor = value.value;
     const status_member = flow.block(.segment, .{ State, staged.Cursor(Bytes) });
     const classify_error = flow.block(.segment, .{ State, Text, staged.Cursor(Bytes) });
     flow.branch(
-        textEquals(flow, dispatched[1], context.status_key_index, context),
+        textEquals(flow, value_key, context.status_key_index, context),
         status_member,
-        .{ dispatched[0], dispatched[2] },
+        .{ value_state, value_cursor },
         classify_error,
-        dispatched,
+        .{ value_state, value_key, value_cursor },
     );
     const error_input = flow.enter(classify_error);
     const error_member = flow.block(.segment, .{ State, staged.Cursor(Bytes) });

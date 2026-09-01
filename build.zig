@@ -1177,17 +1177,44 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic_check,
     );
-    addFocusedTest(
+    const open_lifetime = addFilteredFocusedTest(
         b,
         "check-agent-open-lifetime",
         "Prove a no-final system has a repeatable canonical State cycle",
         "test/open_lifetime.zig",
+        &.{ "no-final system", "reordered escaped" },
         agent_module,
         boundary_module,
         target,
         optimize,
         semantic_check,
     );
+    const response_failures_a = addFilteredFocusedTest(
+        b,
+        "check-agent-response-failures-a",
+        "Reject malformed, duplicate, incomplete, error, and refusal responses",
+        "test/open_lifetime.zig",
+        &.{"raw provider failures A"},
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    response_failures_a.dependOn(open_lifetime);
+    const response_failures_b = addFilteredFocusedTest(
+        b,
+        "check-agent-response-failures-b",
+        "Reject unsupported, multiple, unknown, extra-field, and HTTP responses",
+        "test/open_lifetime.zig",
+        &.{"raw provider failures B"},
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    response_failures_b.dependOn(response_failures_a);
     addFocusedTest(
         b,
         "check-agent-repository-system",
@@ -1959,6 +1986,36 @@ fn addFocusedTest(
     const step = b.step(name, description);
     step.dependOn(&run_tests.step);
     aggregate.dependOn(step);
+}
+
+fn addFilteredFocusedTest(
+    b: *std.Build,
+    name: []const u8,
+    description: []const u8,
+    path: []const u8,
+    filters: []const []const u8,
+    agent_module: *std.Build.Module,
+    boundary_module: *std.Build.Module,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    aggregate: *std.Build.Step,
+) *std.Build.Step {
+    const module = b.createModule(.{
+        .root_source_file = b.path(path),
+        .target = target,
+        .optimize = optimize,
+    });
+    module.addImport("agent", agent_module);
+    module.addImport("boundary", boundary_module);
+    const tests = b.addTest(.{
+        .root_module = module,
+        .filters = filters,
+    });
+    const run_tests = b.addRunArtifact(tests);
+    const step = b.step(name, description);
+    step.dependOn(&run_tests.step);
+    aggregate.dependOn(step);
+    return step;
 }
 
 fn addActualityDefinitionTest(

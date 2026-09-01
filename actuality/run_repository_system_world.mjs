@@ -4,10 +4,14 @@ import { createHash } from "node:crypto";
 import {
   cp,
   lstat,
+  mkdir,
   mkdtemp,
   open,
   readFile,
   realpath,
+  rename,
+  rm,
+  writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -52,34 +56,67 @@ const host = await world.admitProcessKernel(kernel);
 const image = await readFile(options.image);
 const initial = await readFile(options.initial);
 const expectedFinal = await readFile(options.expectedFinal);
-const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-system-closure-v1-"));
+const temporaryRoot = options.workRoot === undefined
+  ? await mkdtemp(join(tmpdir(), "agent-system-closure-v1-"))
+  : resolve(options.workRoot);
+const checkpointPath = options.workRoot === undefined
+  ? undefined
+  : join(temporaryRoot, "checkpoint.json");
+let checkpoint;
+if (checkpointPath !== undefined) {
+  checkpoint = JSON.parse(await readFile(checkpointPath, "utf8").catch((error) => {
+    if (error?.code === "ENOENT") return "null";
+    throw error;
+  }));
+}
+if (checkpoint !== undefined && checkpoint !== null) {
+  assert.equal(checkpoint.format, "agent-system-closure-fixture-checkpoint/v1");
+  assert.equal(checkpoint.imageSha256, sha256(image));
+  assert.equal(checkpoint.initialArgsSha256, sha256(initial));
+}
 const workspaceRoot = join(temporaryRoot, "workspace");
-await cp(join(agentRoot, "fixtures/repository-repair-v1"), workspaceRoot, {
-  recursive: true,
-  errorOnExist: true,
-});
-initializeGit(workspaceRoot);
+if (checkpoint === undefined || checkpoint === null) {
+  if (options.workRoot !== undefined) await mkdir(temporaryRoot, { recursive: true });
+  await cp(join(agentRoot, "fixtures/repository-repair-v1"), workspaceRoot, {
+    recursive: true,
+    errorOnExist: true,
+  });
+  initializeGit(workspaceRoot);
+}
 const workspaceReal = await realpath(workspaceRoot);
-const initialTree = git(workspaceRoot, ["rev-parse", "HEAD^{tree}"]);
-const sourceBefore = await admittedRead("src/range.mjs");
-assert.equal(sha256(sourceBefore), EXPECTED_INITIAL_DIGEST);
+const initialTree = checkpoint?.initialTree ?? git(workspaceRoot, ["rev-parse", "HEAD^{tree}"]);
+if (checkpoint === undefined || checkpoint === null) {
+  const sourceBefore = await admittedRead("src/range.mjs");
+  assert.equal(sha256(sourceBefore), EXPECTED_INITIAL_DIGEST);
+}
 
-let instance = { initialArgs: initial };
-let effectResult;
-let reductions = 0;
-let modelDecision = 0;
-let baselineFailed = false;
-let mutationApplied = false;
-let postMutationPassed = false;
-let modelRequests = 0;
-let repositoryRequests = 0;
-const identities = [];
-const requestBodies = [];
+let instance = checkpoint === undefined || checkpoint === null
+  ? { initialArgs: initial }
+  : { state: Buffer.from(checkpoint.state, "base64") };
+let effectResult = checkpoint?.effectResult === null || checkpoint?.effectResult === undefined
+  ? undefined
+  : Buffer.from(checkpoint.effectResult, "base64");
+let reductions = checkpoint?.reductions ?? 0;
+let modelDecision = checkpoint?.modelDecision ?? 0;
+let baselineFailed = checkpoint?.baselineFailed ?? false;
+let mutationApplied = checkpoint?.mutationApplied ?? false;
+let postMutationPassed = checkpoint?.postMutationPassed ?? false;
+let modelRequests = checkpoint?.modelRequests ?? 0;
+let repositoryRequests = checkpoint?.repositoryRequests ?? 0;
+const identities = checkpoint?.identities ?? [];
+const requestBodies = checkpoint?.requestBodies ?? [];
+const maximumReductions = options.maximumReductions === undefined
+  ? undefined
+  : Number(options.maximumReductions);
+assert(maximumReductions === undefined ||
+  (Number.isSafeInteger(maximumReductions) && maximumReductions > 0));
+let chunkReductions = 0;
 let terminal;
 
 for (;;) {
   const outcome = await host.advance({ image, instance, effectResult });
   reductions += 1;
+  chunkReductions += 1;
   effectResult = undefined;
   if (reductions > 30_000) fail("reduction limit exceeded");
   switch (outcome.kind) {
@@ -108,7 +145,47 @@ for (;;) {
       fail(`unexpected Process outcome ${outcome.kind}`);
   }
   if (terminal !== undefined) break;
+  if (maximumReductions !== undefined && chunkReductions >= maximumReductions) {
+    assert(checkpointPath !== undefined);
+    assert(instance.state !== undefined);
+    const persisted = {
+      format: "agent-system-closure-fixture-checkpoint/v1",
+      imageSha256: sha256(image),
+      initialArgsSha256: sha256(initial),
+      initialTree,
+      state: Buffer.from(instance.state).toString("base64"),
+      effectResult: effectResult === undefined
+        ? null
+        : Buffer.from(effectResult).toString("base64"),
+      reductions,
+      modelDecision,
+      baselineFailed,
+      mutationApplied,
+      postMutationPassed,
+      modelRequests,
+      repositoryRequests,
+      identities,
+      requestBodies,
+    };
+    const replacement = `${checkpointPath}.next`;
+    await rm(replacement, { force: true });
+    await writeFile(replacement, `${JSON.stringify(persisted)}\n`, "utf8");
+    await rename(replacement, checkpointPath);
+    process.stdout.write(`${JSON.stringify({
+      format: "agent-system-closure-world-chunk/v1",
+      result: "checkpointed",
+      chunkReductions,
+      reductions,
+      modelDecision,
+      repositoryRequests,
+      checkpointPath,
+    })}\n`);
+    break;
+  }
 }
+
+if (terminal === undefined) process.exit(0);
+if (checkpointPath !== undefined) await rm(checkpointPath, { force: true });
 
 assert.deepEqual(Buffer.from(terminal), Buffer.from(expectedFinal));
 const finalResult = decodeFinalResult(terminal);
@@ -242,7 +319,9 @@ async function resolveEffect(request) {
         const current = await handle.readFile();
         assert.equal(sha256(current), proposal.expected_sha256);
         await handle.truncate(0);
-        await handle.writeFile(proposal.replacement, "utf8");
+        const replacement = Buffer.from(proposal.replacement, "utf8");
+        const written = await handle.write(replacement, 0, replacement.length, 0);
+        assert.equal(written.bytesWritten, replacement.length);
         await handle.sync();
       } finally {
         await handle.close();

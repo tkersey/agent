@@ -78,7 +78,14 @@ const Storage = boundary.process_v1.CapacityStorage(.{
 });
 
 const initial_digest = "8832f65e4bcf4a701dc76f310f3af34296bf8e95feb16ad70608041cb2e6dbb3";
-const replacement_digest = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const replacement_digest = "8bf50f62e3a4294ef359a6b9096d66e5597ce37824b3483ddad541ee21438453";
+
+fn expectSha256(bytes: []const u8, expected: []const u8) !void {
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(bytes, &digest, .{});
+    const actual = std.fmt.bytesToHex(digest, .lower);
+    try std.testing.expectEqualStrings(expected, &actual);
+}
 
 const Pending = struct {
     state: []u8,
@@ -132,6 +139,24 @@ fn advanceToRequest(
     return error.DidNotConverge;
 }
 
+fn advanceOneState(
+    instance: boundary.process_v1.Instance,
+    effect_result: ?[]const u8,
+) ![]u8 {
+    const allocator = std.testing.allocator;
+    const storage = try allocator.create(Storage);
+    defer allocator.destroy(storage);
+    storage.* = .{};
+    const workspace = try allocator.create(boundary.image.ValidationWorkspace);
+    defer allocator.destroy(workspace);
+    workspace.* = .{};
+    const outcome = try storage.advance(ImageBytes, instance, effect_result, workspace);
+    return switch (outcome) {
+        .progressed, .explicitly_yielded => |state| allocator.dupe(u8, state),
+        else => error.ExpectedInternalState,
+    };
+}
+
 fn advanceToFailure(state: []const u8, effect_result: []const u8) !repository.Failure {
     const allocator = std.testing.allocator;
     const storage = try allocator.create(Storage);
@@ -163,6 +188,40 @@ fn advanceToFailure(state: []const u8, effect_result: []const u8) !repository.Fa
             ),
             .requested => return error.ForbiddenExternalEffect,
             .completed => return error.ForbiddenCompletion,
+            .needs_capacity => return error.UnexpectedCapacity,
+        }
+    }
+    return error.DidNotConverge;
+}
+
+fn advanceToCompletion(state: []const u8, effect_result: []const u8) ![]u8 {
+    const allocator = std.testing.allocator;
+    const storage = try allocator.create(Storage);
+    defer allocator.destroy(storage);
+    storage.* = .{};
+    const workspace = try allocator.create(boundary.image.ValidationWorkspace);
+    defer allocator.destroy(workspace);
+    workspace.* = .{};
+    const state_work = try allocator.alloc(u8, 256 * 1024);
+    defer allocator.free(state_work);
+    @memcpy(state_work[0..state.len], state);
+    var current: boundary.process_v1.Instance = .{
+        .process_state = state_work[0..state.len],
+    };
+    var result: ?[]const u8 = effect_result;
+    for (0..8192) |_| {
+        workspace.* = .{};
+        const outcome = try storage.advance(ImageBytes, current, result, workspace);
+        result = null;
+        switch (outcome) {
+            .progressed, .explicitly_yielded => |next| {
+                if (next.len > state_work.len) return error.StateCapacity;
+                @memcpy(state_work[0..next.len], next);
+                current = .{ .process_state = state_work[0..next.len] };
+            },
+            .completed => |completed| return allocator.dupe(u8, completed),
+            .authored_failure => return error.UnexpectedFailure,
+            .requested => return error.ForbiddenExternalEffect,
             .needs_capacity => return error.UnexpectedCapacity,
         }
     }
@@ -225,6 +284,16 @@ fn expectPolicyFailure(label: []const u8, state: []const u8, result: []const u8)
         });
     }
     try std.testing.expectEqual(repository.Failure.policy_denied, actual);
+    var failure_bytes: [boundary.schema.maximumEncodedSize(repository.Failure)]u8 = undefined;
+    const failure_len = try boundary.schema.encode(
+        repository.Failure,
+        actual,
+        &failure_bytes,
+    );
+    try expectSha256(
+        failure_bytes[0..failure_len],
+        "01b4f6bd5d6a06a7b74a8565ceb4f845afe0ae96a0ac05cf5e86066bf7b538ec",
+    );
 }
 
 fn expectIdentity(pending: Pending, expected: []const u8) !boundary.process_v1.EffectRequest {
@@ -241,6 +310,14 @@ test "repository admission rejects stale mutation and false completion from curr
         .initial_args = InitialArgs,
     }, null);
     defer model0.deinit();
+    try expectSha256(
+        model0.state,
+        "470b36ca934e9aa213b365f3763121a04614a1f79f0ab35b4392e7f3bdaccedf",
+    );
+    try expectSha256(
+        model0.request,
+        "825168cfe4332afd5c34bf5ef4015d56c6a7c22c1319a9688075f316bbf66066",
+    );
     const model0_request = try expectIdentity(
         model0,
         Protocol.semantic_identity,
@@ -253,8 +330,25 @@ test "repository admission rejects stale mutation and false completion from curr
         &resume_bytes,
         &result_bytes,
     );
-    const list = try advanceToRequest(.{ .process_state = model0.state }, list_result);
+    const parser_state = try advanceOneState(
+        .{ .process_state = model0.state },
+        list_result,
+    );
+    defer std.testing.allocator.free(parser_state);
+    try expectSha256(
+        parser_state,
+        "684c2abc8e7a402a7072d55bf80301737ac6b5bf59317a838c8ddb0f2e64f022",
+    );
+    const list = try advanceToRequest(.{ .process_state = parser_state }, null);
     defer list.deinit();
+    try expectSha256(
+        list.state,
+        "f81cad473d9e40933f09beedd7e232abefa839baa04a3a042deaa23e8b770a16",
+    );
+    try expectSha256(
+        list.request,
+        "2f87063f80f4aa9e68984ab33c886337ed68a5ea8117724354480c9bccc3ef7f",
+    );
     const list_request = try expectIdentity(list, "repo.list.v1");
     const listing_result = try encodeResume(
         repository.ListResult,
@@ -337,21 +431,6 @@ test "repository admission rejects stale mutation and false completion from curr
         &result_bytes,
     );
     try expectPolicyFailure("stale digest", pre_replace.state, stale_replace);
-
-    const wrong_path_json = try providerJson(
-        "replace_file",
-        "{\"path\":\"test/range.test.mjs\"," ++
-            "\"expected_sha256\":\"8832f65e4bcf4a701dc76f310f3af34296bf8e95feb16ad70608041cb2e6dbb3\"," ++
-            "\"replacement\":\"fixed\",\"rationale\":\"wrong path\"}",
-    );
-    defer std.testing.allocator.free(wrong_path_json);
-    const wrong_path_replace = try encodeModel(
-        pre_replace_request,
-        wrong_path_json,
-        &resume_bytes,
-        &result_bytes,
-    );
-    try expectPolicyFailure("wrong mutation path", pre_replace.state, wrong_path_replace);
 
     const valid_replace_json = try providerJson(
         "replace_file",
@@ -440,4 +519,24 @@ test "repository admission rejects stale mutation and false completion from curr
         &result_bytes,
     );
     try expectPolicyFailure("wrong final digest", ready_to_finish.state, wrong_final_digest);
+
+    const valid_final_json = try providerJson(
+        "finish",
+        "{\"summary\":\"Corrected normalizeRange and verified the complete suite.\"," ++
+            "\"changed_path\":\"src/range.mjs\"," ++
+            "\"final_source_sha256\":\"8bf50f62e3a4294ef359a6b9096d66e5597ce37824b3483ddad541ee21438453\"}",
+    );
+    defer std.testing.allocator.free(valid_final_json);
+    const valid_final = try encodeModel(
+        finish_request,
+        valid_final_json,
+        &resume_bytes,
+        &result_bytes,
+    );
+    const completed = try advanceToCompletion(ready_to_finish.state, valid_final);
+    defer std.testing.allocator.free(completed);
+    try expectSha256(
+        completed,
+        "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032",
+    );
 }

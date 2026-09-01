@@ -100,6 +100,7 @@ const receipt = {
       ...admissionProof.nativeNegativeResults,
     ],
     nativeProcessAdmissionProof: admissionProof.nativeProcessImageSemantics,
+    nativeWasmParity: admissionProof.nativeWasmParity,
     dangerousRepositoryEffectsFromInvalidCandidates:
       admissionProof.dangerousRepositoryEffects,
     successfulPrematureCompletions:

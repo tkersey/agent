@@ -98,7 +98,11 @@ for (const candidate of invalidCases) {
   });
   const terminal = await advanceUntilTerminal(primary, initialModel.state, result);
   assert.equal(terminal.kind, "AuthoredFailure", `${candidate.name} did not fail locally`);
-  negativeResults.push({ name: candidate.name, terminal: terminal.kind });
+  negativeResults.push({
+    name: candidate.name,
+    terminal: terminal.kind,
+    failureSha256: sha256(terminal.failure),
+  });
 }
 
 process.stdout.write(`${JSON.stringify({
@@ -116,6 +120,13 @@ process.stdout.write(`${JSON.stringify({
   ],
   freshHostOutcomeEquality: true,
   repeatedPendingRequestEquality: true,
+  parity: {
+    pendingModelStateSha256: sha256(initialModel.state),
+    pendingModelRequestSha256: sha256(initialModel.request),
+    parserStateSha256: sha256(parserStep.state),
+    pendingRepositoryStateSha256: sha256(repositoryRequest.state),
+    pendingRepositoryRequestSha256: sha256(repositoryRequest.request),
+  },
 })}\n`);
 
 async function advanceUntilRequested(host, instance) {
@@ -186,6 +197,10 @@ function u32(value) {
 
 function concat(...parts) {
   return Buffer.concat(parts.map((part) => Buffer.from(part)));
+}
+
+function sha256(bytes) {
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 function parseArgs(args) {

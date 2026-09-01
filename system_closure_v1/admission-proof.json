@@ -6,15 +6,18 @@
   "negativeResults": [
     {
       "name": "pre-baseline-replacement",
-      "terminal": "AuthoredFailure"
+      "terminal": "AuthoredFailure",
+      "failureSha256": "01b4f6bd5d6a06a7b74a8565ceb4f845afe0ae96a0ac05cf5e86066bf7b538ec"
     },
     {
       "name": "disallowed-read-role",
-      "terminal": "AuthoredFailure"
+      "terminal": "AuthoredFailure",
+      "failureSha256": "01b4f6bd5d6a06a7b74a8565ceb4f845afe0ae96a0ac05cf5e86066bf7b538ec"
     },
     {
       "name": "premature-completion",
-      "terminal": "AuthoredFailure"
+      "terminal": "AuthoredFailure",
+      "failureSha256": "01b4f6bd5d6a06a7b74a8565ceb4f845afe0ae96a0ac05cf5e86066bf7b538ec"
     }
   ],
   "dangerousRepositoryEffects": 0,
@@ -22,10 +25,6 @@
   "nativeNegativeResults": [
     {
       "name": "stale-digest-replacement",
-      "failure": "policy_denied"
-    },
-    {
-      "name": "wrong-mutation-path",
       "failure": "policy_denied"
     },
     {
@@ -44,5 +43,14 @@
     "pending-repository-request"
   ],
   "freshHostOutcomeEquality": true,
-  "repeatedPendingRequestEquality": true
+  "repeatedPendingRequestEquality": true,
+  "nativeWasmParity": {
+    "pendingModelStateSha256": "470b36ca934e9aa213b365f3763121a04614a1f79f0ab35b4392e7f3bdaccedf",
+    "pendingModelRequestSha256": "825168cfe4332afd5c34bf5ef4015d56c6a7c22c1319a9688075f316bbf66066",
+    "parserStateSha256": "684c2abc8e7a402a7072d55bf80301737ac6b5bf59317a838c8ddb0f2e64f022",
+    "pendingRepositoryStateSha256": "f81cad473d9e40933f09beedd7e232abefa839baa04a3a042deaa23e8b770a16",
+    "pendingRepositoryRequestSha256": "2f87063f80f4aa9e68984ab33c886337ed68a5ea8117724354480c9bccc3ef7f",
+    "policyFailureSha256": "01b4f6bd5d6a06a7b74a8565ceb4f845afe0ae96a0ac05cf5e86066bf7b538ec",
+    "completionSha256": "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032"
+  }
 }

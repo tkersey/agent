@@ -151,6 +151,7 @@ pub fn ReactBody(comptime source: anytype) type {
         source.Action,
         source.actions,
         Model.model_id,
+        Model.parameters,
         source.prompts,
         source.skills,
         source.failures,

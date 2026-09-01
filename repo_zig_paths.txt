@@ -79,6 +79,8 @@ test/compile_fail/forged_runtime_strategy.zig
 test/compile_fail/invalid_history_limit.zig
 test/compile_fail/missing_action_descriptor.zig
 test/compile_fail/missing_final_action.zig
+test/compile_fail/model_noncanonical_temperature.zig
+test/compile_fail/model_unknown_parameter.zig
 test/compile_fail/nonexistent_action_variant.zig
 test/compile_fail/nonportable_action.zig
 test/compile_fail/nonportable_goal.zig

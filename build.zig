@@ -1072,6 +1072,8 @@ pub fn build(b: *std.Build) void {
         .{ .path = "test/compile_fail/nonportable_action.zig", .message = "agent Action must be Boundary-portable" },
         .{ .path = "test/compile_fail/nonportable_observation.zig", .message = "agent Observation must be Boundary-portable" },
         .{ .path = "test/compile_fail/nonportable_result.zig", .message = "agent Result must be Boundary-portable" },
+        .{ .path = "test/compile_fail/model_unknown_parameter.zig", .message = "agent model parameters contain unsupported field 'provider_magic'" },
+        .{ .path = "test/compile_fail/model_noncanonical_temperature.zig", .message = "agent model temperature must be a canonical decimal from 0 through 2" },
         .{ .path = "test/compile_fail/strategy_omits_action_variant.zig", .message = "agent RuntimeStrategy action coverage must contain every Action variant" },
         .{ .path = "test/compile_fail/strategy_decision_request_nonportable.zig", .message = "agent RuntimeStrategy DecisionLocalType must be Boundary-portable" },
         .{ .path = "test/compile_fail/strategy_runtime_callback.zig", .message = "agent RuntimeStrategy config cannot contain runtime callbacks or pointers" },

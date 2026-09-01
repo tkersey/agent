@@ -184,6 +184,10 @@ const DynamicProfile = agent.openai_profile.Profile(
     Action,
     actions,
     "dynamic-model-v1",
+    .{
+        .max_output_tokens = @as(u32, 777),
+        .temperature = "0.2",
+    },
     dynamic_prompts,
     dynamic_skills,
     dynamic_failures,
@@ -308,6 +312,8 @@ test "active skills determine prompt content and exact offered tools" {
     try std.testing.expect(std.mem.indexOf(u8, before, "Conditional skill instruction.") == null);
     try std.testing.expect(std.mem.indexOf(u8, before, "\"name\":\"set_value\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, before, "\"name\":\"finish\"") == null);
+    try std.testing.expect(std.mem.indexOf(u8, before, "\"max_output_tokens\":777") != null);
+    try std.testing.expect(std.mem.indexOf(u8, before, "\"temperature\":0.2") != null);
 
     const after = try renderDynamic(true);
     defer std.testing.allocator.free(after);

@@ -1,5 +1,44 @@
 const std = @import("std");
 
+fn parameterFieldAdmitted(comptime name: []const u8) bool {
+    return std.mem.eql(u8, name, "max_output_tokens") or
+        std.mem.eql(u8, name, "temperature");
+}
+
+fn canonicalTemperature(comptime value: []const u8) bool {
+    if (value.len == 0 or value[0] < '0' or value[0] > '2') return false;
+    if (value.len == 1) return true;
+    if (value[1] != '.' or value.len == 2 or value[value.len - 1] == '0') {
+        return false;
+    }
+    if (value[0] == '2') return false;
+    for (value[2..]) |byte| if (byte < '0' or byte > '9') return false;
+    return true;
+}
+
+fn validateParameters(comptime parameters: anytype) void {
+    if (@TypeOf(parameters) == void) return;
+    inline for (std.meta.fields(@TypeOf(parameters))) |field| {
+        if (!parameterFieldAdmitted(field.name)) {
+            @compileError("agent model parameters contain unsupported field '" ++ field.name ++ "'");
+        }
+    }
+    if (@hasField(@TypeOf(parameters), "max_output_tokens")) {
+        if (@TypeOf(parameters.max_output_tokens) != u32) {
+            @compileError("agent model max_output_tokens must be u32");
+        }
+        if (parameters.max_output_tokens == 0) {
+            @compileError("agent model max_output_tokens must be positive");
+        }
+    }
+    if (@hasField(@TypeOf(parameters), "temperature")) {
+        const value: []const u8 = parameters.temperature;
+        if (!canonicalTemperature(value)) {
+            @compileError("agent model temperature must be a canonical decimal from 0 through 2");
+        }
+    }
+}
+
 pub fn model(comptime spec: anytype) type {
     if (!@hasField(@TypeOf(spec), "name") or
         !@hasField(@TypeOf(spec), "protocol") or
@@ -20,6 +59,7 @@ pub fn model(comptime spec: anytype) type {
     const parameters_value: Parameters = if (@hasField(@TypeOf(spec), "parameters"))
         spec.parameters
     else {};
+    comptime validateParameters(parameters_value);
     return struct {
         pub const name = spec.name;
         pub const protocol = Protocol;

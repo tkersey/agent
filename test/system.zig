@@ -105,6 +105,7 @@ const Profile = agent.openai_profile.Profile(
     "test-model",
     .{},
     .{},
+    .{},
     .{
         .arithmetic_overflow = ProfileFailure.arithmetic_overflow,
         .capacity_exceeded = ProfileFailure.capacity_exceeded,

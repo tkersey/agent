@@ -108,9 +108,10 @@ fn fieldIndexValues(comptime count: usize) RepeatedTuple(u32, count) {
 fn requestBaseValues(
     comptime Body: type,
     comptime model_id: []const u8,
+    comptime model_parameters: anytype,
     comptime prompts: anytype,
 ) RepeatedTuple(Body, 7) {
-    const Open = json.SystemOpen(model_id, prompts);
+    const Open = json.SystemOpen(model_id, model_parameters, prompts);
     return .{
         Body.fromSlice(&Open.value) catch unreachable,
         Body.fromSlice(json.user_open) catch unreachable,
@@ -409,6 +410,7 @@ pub fn Profile(
     comptime Action: type,
     comptime actions: anytype,
     comptime model_id: []const u8,
+    comptime model_parameters: anytype,
     comptime prompts: anytype,
     comptime skills: anytype,
     comptime failures: anytype,
@@ -466,7 +468,12 @@ pub fn Profile(
                 actionNameValues(Text, actions) ++ payloadDefaultValues(Action) ++
                 seenValues(Action, Seen) ++ fieldNameValues(Action, Text) ++
                 fieldIndexValues(maximum_fields) ++
-                requestBaseValues(Protocol.RequestBody, model_id, prompts) ++
+                requestBaseValues(
+                    Protocol.RequestBody,
+                    model_id,
+                    model_parameters,
+                    prompts,
+                ) ++
                 .{
                     skillFragmentVector(Fragment, skills, true),
                     skillFragmentVector(Fragment, skills, false),
@@ -484,7 +491,12 @@ pub fn Profile(
                     actionNameValues(Text, actions) ++ payloadDefaultValues(Action) ++
                     seenValues(Action, Seen) ++ fieldNameValues(Action, Text) ++
                     fieldIndexValues(maximum_fields) ++
-                    requestBaseValues(Protocol.RequestBody, model_id, prompts) ++
+                    requestBaseValues(
+                        Protocol.RequestBody,
+                        model_id,
+                        model_parameters,
+                        prompts,
+                    ) ++
                     .{
                         skillFragmentVector(Fragment, skills, true),
                         skillFragmentVector(Fragment, skills, false),
@@ -523,7 +535,12 @@ pub fn Profile(
                 result[next] = value;
                 next += 1;
             }
-            inline for (requestBaseValues(Protocol.RequestBody, model_id, prompts)) |value| {
+            inline for (requestBaseValues(
+                Protocol.RequestBody,
+                model_id,
+                model_parameters,
+                prompts,
+            )) |value| {
                 result[next] = value;
                 next += 1;
             }

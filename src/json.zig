@@ -283,11 +283,23 @@ pub fn SystemRequestParts(
 
 fn writeSystemOpen(
     comptime model: []const u8,
+    comptime parameters: anytype,
     comptime prompts: anytype,
     writer: anytype,
 ) void {
     writer.raw("{\"model\":");
     writeString(writer, model);
+    if (@TypeOf(parameters) != void) {
+        if (@hasField(@TypeOf(parameters), "max_output_tokens")) {
+            writer.raw(",\"max_output_tokens\":");
+            writeUnsigned(writer, parameters.max_output_tokens);
+        }
+        if (@hasField(@TypeOf(parameters), "temperature")) {
+            const temperature: []const u8 = parameters.temperature;
+            writer.raw(",\"temperature\":");
+            writer.raw(temperature);
+        }
+    }
     writer.raw(",\"input\":[");
     inline for (prompts) |Prompt| {
         writeStaticMessage(Prompt.prompt_role, Prompt.content, writer);
@@ -327,15 +339,19 @@ fn Fragment(comptime length: usize, comptime bytes: [length]u8) type {
     };
 }
 
-pub fn SystemOpen(comptime model: []const u8, comptime prompts: anytype) type {
+pub fn SystemOpen(
+    comptime model: []const u8,
+    comptime parameters: anytype,
+    comptime prompts: anytype,
+) type {
     const length = comptime blk: {
         var writer = CountingWriter{};
-        writeSystemOpen(model, prompts, &writer);
+        writeSystemOpen(model, parameters, prompts, &writer);
         break :blk writer.length;
     };
     const bytes = comptime blk: {
         var writer = FixedWriter(length){};
-        writeSystemOpen(model, prompts, &writer);
+        writeSystemOpen(model, parameters, prompts, &writer);
         break :blk writer.finish();
     };
     return Fragment(length, bytes);

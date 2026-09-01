@@ -111,6 +111,46 @@ pub fn build(b: *std.Build) void {
     addExpectedCompileFailure(
         b,
         compile_fail,
+        "test/compile_fail/system_unknown_field.zig",
+        "agent.system unknown source field 'host_agent_loop'",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_missing_descriptor.zig",
+        "agent system requires exactly one descriptor per Action variant",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_duplicate_action_name.zig",
+        "agent system model-visible action name is duplicated",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_dangling_skill_action.zig",
+        "agent skill references an unknown model-visible action",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_effect_payload_mismatch.zig",
+        "agent system Action payload differs from its effect payload",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
         "test/compile_fail/model_unknown_parameter.zig",
         "agent model parameters contain unsupported field 'provider_magic'",
         agent_module,

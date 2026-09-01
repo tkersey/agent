@@ -98,6 +98,12 @@ test/compile_fail/strategy_omits_action_variant.zig
 test/compile_fail/strategy_runtime_callback.zig
 test/compile_fail/strategy_terminal_decision_local.zig
 test/compile_fail/strategy_undeclared_effect.zig
+test/compile_fail/system_dangling_skill_action.zig
+test/compile_fail/system_duplicate_action_name.zig
+test/compile_fail/system_effect_payload_mismatch.zig
+test/compile_fail/system_fixture_v3.zig
+test/compile_fail/system_missing_descriptor.zig
+test/compile_fail/system_unknown_field.zig
 test/compile_fail/unsupported_history_policy.zig
 test/compile_fail/zero_decision_budget.zig
 test/compile_fail/zero_turn_budget.zig

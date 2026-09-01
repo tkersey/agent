@@ -1177,6 +1177,17 @@ pub fn build(b: *std.Build) void {
     );
     addFocusedTest(
         b,
+        "check-agent-open-lifetime",
+        "Prove a no-final system has a repeatable canonical State cycle",
+        "test/open_lifetime.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addFocusedTest(
+        b,
         "check-agent-repository-system",
         "Compile the closed repository-repair system through the canonical Agent 3 path",
         "actuality/repository_repair_system_v1.zig",

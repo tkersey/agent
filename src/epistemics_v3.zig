@@ -6,6 +6,7 @@ pub fn systemStateless(comptime config: anytype) type {
     }
     return struct {
         pub const system_semantic_identity = "agent.epistemics.system-stateless.v1";
+        pub const prompt_is_json_escaped = false;
         pub fn MemoryType(comptime _: anytype) type {
             return void;
         }

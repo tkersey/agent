@@ -335,7 +335,7 @@ pub fn build(b: *std.Build) void {
     lint.dependOn(&paths.step);
 
     const check = b.step("check", "Compile and test Agent 3");
-    check.dependOn(semantic);
+    check.dependOn(closure_check);
     check.dependOn(lint);
 }
 

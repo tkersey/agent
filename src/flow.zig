@@ -124,6 +124,7 @@ fn PerformOutput(comptime Resume: type, comptime Carry: type) type {
 /// Flow assigns every numeric Control IR identity and continuation placeholder.
 /// Its output is one ordinary `boundary.ir.Program`; it owns no runtime meaning.
 pub fn Flow(comptime config: anytype) type {
+    @setEvalBranchQuota(10_000_000);
     const limits: Limits = if (@hasField(@TypeOf(config), "limits"))
         config.limits
     else
@@ -293,29 +294,51 @@ pub fn Flow(comptime config: anytype) type {
             return result;
         }
 
+        pub fn counts(self: *const Self) struct {
+            values: usize,
+            blocks: usize,
+            functions: usize,
+            instructions: usize,
+        } {
+            return .{
+                .values = self.value_count,
+                .blocks = self.block_count,
+                .functions = self.function_count,
+                .instructions = self.instruction_count,
+            };
+        }
+
         fn failLimit(comptime message: []const u8) noreturn {
             @compileError("agent.Flow " ++ message);
         }
 
+        fn LoweredType(comptime T: type) type {
+            return struct {
+                pub const value: boundary.ir.ValueType = blk: {
+                    boundary.schema.assertPortable(T);
+                    if (T == void) break :blk .{ .scalar = .unit };
+                    if (T == bool) break :blk .{ .scalar = .boolean };
+                    if (T == i8) break :blk .{ .scalar = .i8 };
+                    if (T == i16) break :blk .{ .scalar = .i16 };
+                    if (T == i32) break :blk .{ .scalar = .i32 };
+                    if (T == i64) break :blk .{ .scalar = .i64 };
+                    if (T == u8) break :blk .{ .scalar = .u8 };
+                    if (T == u16) break :blk .{ .scalar = .u16 };
+                    if (T == u32) break :blk .{ .scalar = .u32 };
+                    if (T == u64) break :blk .{ .scalar = .u64 };
+                    for (config.schema_types, 0..) |Schema, index| {
+                        if (T == Schema) break :blk .{ .schema = @intCast(index) };
+                    }
+                    @compileError(
+                        "agent.Flow structured type is absent from config.schema_types: " ++
+                            @typeName(T),
+                    );
+                };
+            };
+        }
+
         fn loweredType(comptime T: type) boundary.ir.ValueType {
-            boundary.schema.assertPortable(T);
-            if (T == void) return .{ .scalar = .unit };
-            if (T == bool) return .{ .scalar = .boolean };
-            if (T == i8) return .{ .scalar = .i8 };
-            if (T == i16) return .{ .scalar = .i16 };
-            if (T == i32) return .{ .scalar = .i32 };
-            if (T == i64) return .{ .scalar = .i64 };
-            if (T == u8) return .{ .scalar = .u8 };
-            if (T == u16) return .{ .scalar = .u16 };
-            if (T == u32) return .{ .scalar = .u32 };
-            if (T == u64) return .{ .scalar = .u64 };
-            inline for (config.schema_types, 0..) |Schema, index| {
-                if (T == Schema) return .{ .schema = @intCast(index) };
-            }
-            @compileError(
-                "agent.Flow structured type is absent from config.schema_types: " ++
-                    @typeName(T),
-            );
+            return LoweredType(T).value;
         }
 
         fn addValue(self: *Self, comptime T: type) Value(T) {
@@ -740,6 +763,67 @@ pub fn Flow(comptime config: anytype) type {
                 @compileError("agent.Flow textLength requires a Text value");
             }
             return self.instruction(u32, .pure, .text_length, .{text});
+        }
+
+        pub fn textAppendOrFail(
+            self: *Self,
+            text: anytype,
+            suffix: anytype,
+            capacity_failure: anytype,
+        ) @TypeOf(text) {
+            const Text = @TypeOf(text).Type;
+            const Suffix = @TypeOf(suffix).Type;
+            if (comptime !boundary.schema.isTextType(Text) or
+                !boundary.schema.isTextType(Suffix))
+            {
+                @compileError("agent.Flow textAppendOrFail requires Text values");
+            }
+            return self.instruction(
+                Text,
+                .pure,
+                .text_append,
+                .{ text, suffix, capacity_failure },
+            );
+        }
+
+        pub fn textAppendUnsignedOrFail(
+            self: *Self,
+            text: anytype,
+            value: anytype,
+            capacity_failure: anytype,
+        ) @TypeOf(text) {
+            const Integer = @TypeOf(value).Type;
+            if (comptime @typeInfo(Integer) != .int or
+                @typeInfo(Integer).int.signedness != .unsigned)
+            {
+                @compileError("agent.Flow textAppendUnsignedOrFail requires an unsigned integer");
+            }
+            return self.instruction(
+                @TypeOf(text).Type,
+                .pure,
+                .text_append_unsigned,
+                .{ text, value, capacity_failure },
+            );
+        }
+
+        pub fn textAppendSignedOrFail(
+            self: *Self,
+            text: anytype,
+            value: anytype,
+            capacity_failure: anytype,
+        ) @TypeOf(text) {
+            const Integer = @TypeOf(value).Type;
+            if (comptime @typeInfo(Integer) != .int or
+                @typeInfo(Integer).int.signedness != .signed)
+            {
+                @compileError("agent.Flow textAppendSignedOrFail requires a signed integer");
+            }
+            return self.instruction(
+                @TypeOf(text).Type,
+                .pure,
+                .text_append_signed,
+                .{ text, value, capacity_failure },
+            );
         }
 
         pub fn textAppendScalarOrFail(

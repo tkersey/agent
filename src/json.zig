@@ -149,6 +149,55 @@ fn writePrefix(comptime model: []const u8, writer: anytype) void {
     writer.raw(",\"input\":[{\"role\":\"user\",\"content\":\"");
 }
 
+fn roleName(comptime role: anytype) []const u8 {
+    return switch (role) {
+        .system => "system",
+        .developer => "developer",
+        .user => "user",
+    };
+}
+
+fn writeStaticMessage(
+    comptime role: anytype,
+    comptime content: []const u8,
+    writer: anytype,
+) void {
+    writeMessage(role, content, writer);
+    writer.byte(',');
+}
+
+fn writeMessage(
+    comptime role: anytype,
+    comptime content: []const u8,
+    writer: anytype,
+) void {
+    writer.raw("{\"role\":");
+    writeString(writer, roleName(role));
+    writer.raw(",\"content\":");
+    writeString(writer, content);
+    writer.byte('}');
+}
+
+fn writeSystemPrefix(
+    comptime model: []const u8,
+    comptime prompts: anytype,
+    comptime skills: anytype,
+    writer: anytype,
+) void {
+    writer.raw("{\"model\":");
+    writeString(writer, model);
+    writer.raw(",\"input\":[");
+    inline for (prompts) |Prompt| {
+        writeStaticMessage(Prompt.prompt_role, Prompt.content, writer);
+    }
+    inline for (skills) |Skill| {
+        if (Skill.activation == .always and Skill.position == .before_user) {
+            writeStaticMessage(Skill.role, Skill.instructions, writer);
+        }
+    }
+    writer.raw("{\"role\":\"user\",\"content\":\"");
+}
+
 fn writeSuffix(
     comptime Action: type,
     comptime actions: anytype,
@@ -196,3 +245,159 @@ pub fn RequestParts(
         pub const suffix = Suffix.fromSlice(&suffix_bytes) catch unreachable;
     };
 }
+
+pub fn SystemRequestParts(
+    comptime Action: type,
+    comptime actions: anytype,
+    comptime model: []const u8,
+    comptime prompts: anytype,
+    comptime skills: anytype,
+) type {
+    const prefix_length = comptime blk: {
+        var writer = CountingWriter{};
+        writeSystemPrefix(model, prompts, skills, &writer);
+        break :blk writer.length;
+    };
+    const suffix_length = comptime blk: {
+        var writer = CountingWriter{};
+        writeSuffix(Action, actions, &writer);
+        break :blk writer.length;
+    };
+    const prefix_bytes = comptime blk: {
+        var writer = FixedWriter(prefix_length){};
+        writeSystemPrefix(model, prompts, skills, &writer);
+        break :blk writer.finish();
+    };
+    const suffix_bytes = comptime blk: {
+        var writer = FixedWriter(suffix_length){};
+        writeSuffix(Action, actions, &writer);
+        break :blk writer.finish();
+    };
+    return struct {
+        pub const Prefix = boundary.Bytes(prefix_length);
+        pub const Suffix = boundary.Bytes(suffix_length);
+        pub const prefix = Prefix.fromSlice(&prefix_bytes) catch unreachable;
+        pub const suffix = Suffix.fromSlice(&suffix_bytes) catch unreachable;
+    };
+}
+
+fn writeSystemOpen(
+    comptime model: []const u8,
+    comptime prompts: anytype,
+    writer: anytype,
+) void {
+    writer.raw("{\"model\":");
+    writeString(writer, model);
+    writer.raw(",\"input\":[");
+    inline for (prompts) |Prompt| {
+        writeStaticMessage(Prompt.prompt_role, Prompt.content, writer);
+    }
+}
+
+fn writeSkillBefore(comptime Skill: type, writer: anytype) void {
+    if (Skill.position == .before_user) {
+        writeStaticMessage(Skill.role, Skill.instructions, writer);
+    }
+}
+
+fn writeSkillAfter(comptime Skill: type, writer: anytype) void {
+    if (Skill.position == .after_user) {
+        writer.byte(',');
+        writeMessage(Skill.role, Skill.instructions, writer);
+    }
+}
+
+fn writeTool(
+    comptime Action: type,
+    comptime Descriptor: type,
+    writer: anytype,
+) void {
+    writer.raw("{\"type\":\"function\",\"name\":");
+    writeString(writer, Descriptor.name);
+    writer.raw(",\"description\":");
+    writeString(writer, Descriptor.description);
+    writer.raw(",\"parameters\":");
+    writeSchema(actionPayload(Action, Descriptor.action_name), writer);
+    writer.raw(",\"strict\":true}");
+}
+
+fn Fragment(comptime length: usize, comptime bytes: [length]u8) type {
+    return struct {
+        pub const value = bytes;
+    };
+}
+
+pub fn SystemOpen(comptime model: []const u8, comptime prompts: anytype) type {
+    const length = comptime blk: {
+        var writer = CountingWriter{};
+        writeSystemOpen(model, prompts, &writer);
+        break :blk writer.length;
+    };
+    const bytes = comptime blk: {
+        var writer = FixedWriter(length){};
+        writeSystemOpen(model, prompts, &writer);
+        break :blk writer.finish();
+    };
+    return Fragment(length, bytes);
+}
+
+pub fn SkillBefore(comptime Skill: type) type {
+    const length = comptime blk: {
+        var writer = CountingWriter{};
+        writeSkillBefore(Skill, &writer);
+        break :blk writer.length;
+    };
+    const bytes = comptime blk: {
+        var writer = FixedWriter(length){};
+        writeSkillBefore(Skill, &writer);
+        break :blk writer.finish();
+    };
+    return Fragment(length, bytes);
+}
+
+pub fn SkillAfter(comptime Skill: type) type {
+    const length = comptime blk: {
+        var writer = CountingWriter{};
+        writeSkillAfter(Skill, &writer);
+        break :blk writer.length;
+    };
+    const bytes = comptime blk: {
+        var writer = FixedWriter(length){};
+        writeSkillAfter(Skill, &writer);
+        break :blk writer.finish();
+    };
+    return Fragment(length, bytes);
+}
+
+pub fn ToolFragment(comptime Action: type, comptime Descriptor: type) type {
+    const length = comptime blk: {
+        var writer = CountingWriter{};
+        writeTool(Action, Descriptor, &writer);
+        break :blk writer.length;
+    };
+    const bytes = comptime blk: {
+        var writer = FixedWriter(length){};
+        writeTool(Action, Descriptor, &writer);
+        break :blk writer.finish();
+    };
+    return Fragment(length, bytes);
+}
+
+pub fn ToolCommaFragment(comptime Action: type, comptime Descriptor: type) type {
+    const Tool = ToolFragment(Action, Descriptor);
+    const bytes = comptime blk: {
+        var writer = FixedWriter(Tool.value.len + 1){};
+        writer.byte(',');
+        writer.raw(&Tool.value);
+        break :blk writer.finish();
+    };
+    return Fragment(Tool.value.len + 1, bytes);
+}
+
+pub const user_open = "{\"role\":\"user\",\"content\":\"";
+pub const user_close = "\"}";
+pub const tools_open = "],\"tools\":[";
+pub const request_end =
+    "],\"tool_choice\":\"required\",\"parallel_tool_calls\":false," ++
+    "\"store\":false,\"stream\":false,\"background\":false," ++
+    "\"truncation\":\"disabled\"}";

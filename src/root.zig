@@ -7,9 +7,14 @@ pub const package_version = "2.7.0";
 
 /// Define immutable typed comptime agent data and close its Action algebra.
 pub const define = definition.define;
+pub const system = @import("system.zig").system;
+pub const model = @import("model.zig").model;
+pub const prompt = @import("prompt.zig");
+pub const skill = @import("skill.zig").skill;
 /// Typed action-descriptor constructors.
 pub const action = @import("action.zig");
 pub const action_decode = @import("action_decode.zig");
+pub const json = @import("json.zig");
 /// Compiler-only final guards used by explicit EpistemicStrategies.
 pub const final_policy = @import("final_policy.zig");
 /// Explicit deterministic Memory, observation-fold, and DecisionView strategies.
@@ -26,6 +31,7 @@ pub const request = @import("request.zig");
 pub const response = @import("response.zig");
 pub const staged_json = @import("staged_json.zig");
 pub const openai_response = @import("openai_response.zig");
+pub const openai_profile = @import("openai_profile.zig");
 /// Reusable compile-time RuntimeStrategies.
 pub const strategy = @import("strategy.zig");
 /// Provider-neutral projections of the closed decision Action algebra.

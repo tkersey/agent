@@ -171,6 +171,49 @@ const HelperArgs = struct {
 };
 const HelperFailure = enum { bad_index };
 
+const RenderText = boundary.Text(64);
+const RenderPart = boundary.Text(16);
+const RenderArgs = struct {
+    prefix: RenderPart,
+    suffix: RenderPart,
+    unsigned: u16,
+    signed: i16,
+};
+const RenderFailure = enum { capacity };
+
+fn RenderLowered() type {
+    const Builder = agent.Flow(.{
+        .schema_types = .{ RenderText, RenderPart, RenderArgs, RenderFailure },
+    });
+    comptime var flow = Builder.init("flow-text-render");
+    const args = flow.begin(RenderArgs);
+    var text = flow.textEmpty(RenderText);
+    const failure = flow.constant(RenderFailure, 0);
+    text = flow.textAppendOrFail(text, flow.productExtract(0, args), failure);
+    text = flow.textAppendOrFail(text, flow.productExtract(1, args), failure);
+    text = flow.textAppendUnsignedOrFail(text, flow.productExtract(2, args), failure);
+    text = flow.textAppendSignedOrFail(text, flow.productExtract(3, args), failure);
+    flow.returnValue(text);
+    return flow.finish(RenderText);
+}
+
+const RenderBody = struct {
+    const Lowering = RenderLowered();
+    pub const InitialArgs = RenderArgs;
+    pub const Result = RenderText;
+    pub const Failure = RenderFailure;
+    pub const constants = .{RenderFailure.capacity};
+    pub const effect_sites = boundary.effect.row(.{});
+    pub const schema_types = Lowering.schema_types;
+    pub const control_ir = Lowering.control_ir;
+};
+
+const RenderMachine = boundary.program("flow-text-render", RenderBody).compile(.{
+    .maximum_frames = 2,
+    .maximum_state_bytes = 2048,
+    .maximum_machine_fuel = 64,
+});
+
 fn HelperLowered() type {
     const Builder = agent.Flow(.{
         .schema_types = .{ HelperArgs, HelperText, HelperFailure },
@@ -311,6 +354,23 @@ test "Flow lowers private typed helpers and authored Text byte projection" {
         },
         else => return error.UnexpectedMachineStep,
     }
+}
+
+test "Flow renders dynamic Text and exact signed integers" {
+    const state = try RenderMachine.initialState(std.testing.allocator, .{
+        .prefix = RenderPart.fromSlice("count=") catch unreachable,
+        .suffix = RenderPart.fromSlice("") catch unreachable,
+        .unsigned = 42,
+        .signed = -7,
+    });
+    defer RenderMachine.deinitState(state);
+    var fuel: u64 = 64;
+    const done = switch (try RenderMachine.step(state, &fuel)) {
+        .done => |value| value,
+        else => return error.UnexpectedMachineStep,
+    };
+    defer done.deinit();
+    try std.testing.expectEqualStrings("count=42-7", try done.value().slice());
 }
 
 test "Flow preserves an authored failure value through Boundary Machine ABI v2" {

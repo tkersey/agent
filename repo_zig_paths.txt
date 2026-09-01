@@ -6,6 +6,7 @@ actuality/emit_first_decision_request.zig
 actuality/emit_initial_args.zig
 actuality/repository_repair_definition.zig
 actuality/repository_repair_epistemics.zig
+actuality/repository_repair_system_v1.zig
 adequacy/router-policy-v1/build.zig
 adequacy/router-policy-v1/reproducer/build.zig
 adequacy/router-policy-v1/reproducer/main.zig
@@ -35,15 +36,21 @@ src/flow.zig
 src/identity.zig
 src/json.zig
 src/manifest.zig
+src/model.zig
+src/openai_profile.zig
 src/openai_response.zig
+src/prompt.zig
 src/protocol.zig
 src/protocol/openai_responses_v1.zig
 src/request.zig
 src/response.zig
 src/root.zig
 src/runtime_flow.zig
+src/skill.zig
 src/staged_json.zig
 src/strategy.zig
+src/system.zig
+src/system_compiler.zig
 test/action_admission.zig
 test/action_algebra.zig
 test/actuality_definition.zig
@@ -110,6 +117,7 @@ test/shared_boundary.zig
 test/specialization_matrix.zig
 test/staged_json.zig
 test/strategy_reflective.zig
+test/system.zig
 test/void_effect_action.zig
 test/world_consumer/build.zig
 test/world_consumer/coding_application.zig

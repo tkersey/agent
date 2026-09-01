@@ -1153,12 +1153,28 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic_check,
     );
-    const staged_json_module = b.createModule(.{
-        .root_source_file = b.path("src/json.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    staged_json_module.addImport("boundary", boundary_module);
+    addFocusedTest(
+        b,
+        "check-agent-system-api",
+        "Validate the canonical Agent 3 unspecialized Program product",
+        "test/system.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addFocusedTest(
+        b,
+        "check-agent-repository-system",
+        "Compile the closed repository-repair system through the canonical Agent 3 path",
+        "actuality/repository_repair_system_v1.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
     const staged_json_test_module = b.createModule(.{
         .root_source_file = b.path("test/json.zig"),
         .target = target,
@@ -1166,7 +1182,6 @@ pub fn build(b: *std.Build) void {
     });
     staged_json_test_module.addImport("agent", agent_module);
     staged_json_test_module.addImport("boundary", boundary_module);
-    staged_json_test_module.addImport("agent_json", staged_json_module);
     const staged_json_tests = b.addTest(.{ .root_module = staged_json_test_module });
     const run_staged_json_tests = b.addRunArtifact(staged_json_tests);
     const staged_json_step = b.step(
@@ -1182,7 +1197,6 @@ pub fn build(b: *std.Build) void {
     });
     staged_request_test_module.addImport("agent", agent_module);
     staged_request_test_module.addImport("boundary", boundary_module);
-    staged_request_test_module.addImport("agent_json", staged_json_module);
     const staged_request_tests = b.addTest(.{
         .root_module = staged_request_test_module,
     });
@@ -1200,7 +1214,6 @@ pub fn build(b: *std.Build) void {
     });
     staged_json_parser_module.addImport("agent", agent_module);
     staged_json_parser_module.addImport("boundary", boundary_module);
-    staged_json_parser_module.addImport("agent_json", staged_json_module);
     const staged_json_parser_tests = b.addTest(.{ .root_module = staged_json_parser_module });
     const run_staged_json_parser_tests = b.addRunArtifact(staged_json_parser_tests);
     const staged_json_parser_step = b.step(

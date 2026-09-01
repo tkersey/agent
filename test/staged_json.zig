@@ -1,7 +1,7 @@
 const agent = @import("agent");
 const json = agent.staged_json;
 const openai = agent.openai_response;
-const request_json = @import("agent_json");
+const request_json = agent.json;
 const boundary = @import("boundary");
 const std = @import("std");
 
@@ -45,7 +45,6 @@ const actions = .{
 };
 pub const Prompt = boundary.Text(64);
 pub const Protocol = agent.protocol.openaiResponsesV1.Contract(2048, Input.maximum_length);
-const ModelSite = Protocol.Site(0);
 const Parts = request_json.RequestParts(Action, actions, "slice-model-v1");
 pub const set_response = Input.fromSlice(
     "{\"status\":\"completed\",\"error\":null,\"output\":[" ++
@@ -418,147 +417,114 @@ const Machine = Program.compile(.{
     .maximum_machine_fuel = 1_000_000,
 });
 
-fn OpenAILowered() type {
-    const Cursor = json.Cursor(Input);
-    const ResponseValue = @typeInfo(Protocol.Response).@"union".fields[0].type;
-    const Builder = agent.Flow(.{
-        .schema_types = .{
-            Input,
-            Prompt,
-            ParseFailure,
-            Action,
-            Observation,
-            SetPayload,
-            FinishPayload,
-            Message,
-            Seen,
-            Protocol.Request,
-            Protocol.RequestBody,
-            Protocol.Response,
-            ResponseValue,
-            Parts.Prefix,
-            Parts.Suffix,
-            agent.request.EscapeBytes,
-            agent.request.EscapeTable,
-            agent.request.ShortEscape,
-        } ++ openai.schemaTypes(Input),
-        .limits = agent.FlowLimits{
-            .maximum_functions = 16,
-            .maximum_values = 4096,
-            .maximum_blocks = 512,
-            .maximum_instructions = 8192,
-            .maximum_operands = 16_384,
-            .maximum_parameters = 8192,
-            .maximum_requests = 2,
-            .maximum_edge_arguments = 16_384,
-        },
-    });
-    comptime var flow = Builder.init("agent-openai-response-v1");
-    const input = flow.begin(Prompt);
-    const helpers = openai.declare(&flow, Input);
-    const model_request = agent.request.emit(
-        Parts,
-        Protocol,
-        &flow,
-        input,
-        Context,
-    );
-    const model = flow.perform(ModelSite, model_request, .{});
-    const response_path = flow.block(.segment, .{Protocol.Response});
-    const transport_failure = flow.block(.terminal_handoff, .{});
-    flow.branch(
-        flow.sumTagIs(0, model.value),
-        response_path,
-        .{model.value},
-        transport_failure,
-        .{},
-    );
-    _ = flow.enter(transport_failure);
-    flow.failValue(flow.constant(ParseFailure, Context.transport_failure_index));
-    const response_value = flow.enter(response_path)[0];
-    const response = flow.sumExtractOrFail(
-        0,
-        response_value,
-        flow.constant(ParseFailure, Context.malformed_failure_index),
-    );
-    const parse = flow.block(.segment, .{Input});
-    const http_failure = flow.block(.terminal_handoff, .{});
-    flow.branch(
-        flow.integerEqual(
-            flow.productExtract(0, response),
-            flow.constant(u16, Context.http_ok_index),
-        ),
-        parse,
-        .{flow.productExtract(1, response)},
-        http_failure,
-        .{},
-    );
-    _ = flow.enter(http_failure);
-    flow.failValue(flow.constant(ParseFailure, Context.http_failure_index));
-    const response_body = flow.enter(parse)[0];
-    const parsed = flow.call(
-        helpers.parse_response,
-        .{flow.productConstruct(Cursor, .{
-            response_body,
-            flow.constant(u32, Context.zero_u32_index),
-        })},
-        .{},
-    );
-    const action = agent.action_decode.emit(
-        &flow,
-        Action,
-        actions,
-        Input,
-        parsed.value,
-        helpers.core,
-        Context,
-    );
-    const set = flow.block(.segment, .{Action});
-    const finish = flow.block(.segment, .{Action});
-    flow.branch(flow.sumTagIs(0, action), set, .{action}, finish, .{action});
-    const set_action = flow.enter(set)[0];
-    const set_payload = flow.sumExtractOrFail(
-        0,
-        set_action,
-        flow.constant(ParseFailure, Context.invalid_variant_failure_index),
-    );
-    _ = flow.perform(SetSite, set_payload, .{});
-    flow.returnValue(flow.constant(FinishPayload, Context.set_result_index));
-    const finish_action = flow.enter(finish)[0];
-    flow.returnValue(flow.sumExtractOrFail(
-        1,
-        finish_action,
-        flow.constant(ParseFailure, Context.invalid_variant_failure_index),
-    ));
-    openai.define(&flow, Input, helpers, Context);
-    return flow.finish(FinishPayload);
-}
-
-const OpenAIBody = struct {
-    const Lowering = OpenAILowered();
-    pub const InitialArgs = Prompt;
-    pub const Result = FinishPayload;
-    pub const Failure = ParseFailure;
-    pub const constants = Body.constants;
-    pub const effect_sites = boundary.effect.row(.{ ModelSite, SetSite });
-    pub const schema_types = Lowering.schema_types;
-    pub const control_ir = Lowering.control_ir;
-    pub const compiler_limits: boundary.ir.CompilerLimits = .{
-        .maximum_values = control_ir.value_types.len,
-        .maximum_blocks = control_ir.blocks.len,
-        .maximum_constructors = 768,
-        .maximum_environment_fields = 256,
-        .maximum_invariant_terms = 128,
-        .maximum_generated_operations = 32_768,
-    };
+const ObservedSetEpistemics = struct {
+    pub fn MemoryType(comptime _: anytype) type {
+        return bool;
+    }
+    pub fn DecisionViewType(comptime _: anytype) type {
+        return bool;
+    }
+    pub fn schemaTypes(comptime _: anytype) @TypeOf(.{}) {
+        return .{};
+    }
+    pub fn emitInitial(comptime _: anytype, flow: anytype, _: anytype, comptime context: anytype) agent.Value(bool) {
+        return flow.constant(bool, context.false_index);
+    }
+    pub fn emitObserve(comptime _: anytype, flow: anytype, _: anytype, _: anytype, comptime context: anytype) agent.Value(bool) {
+        return flow.constant(bool, context.true_index);
+    }
+    pub fn emitProject(comptime _: anytype, flow: anytype, memory: anytype) agent.Value(bool) {
+        return flow.copy(memory);
+    }
+    pub fn emitPrompt(comptime source: anytype, _: anytype, goal: anytype, _: anytype, comptime _: anytype) agent.Value(source.Goal) {
+        return goal;
+    }
+    pub fn emitActionAllowed(comptime _: anytype, flow: anytype, _: anytype, _: anytype, comptime context: anytype) agent.Value(bool) {
+        return flow.constant(bool, context.true_index);
+    }
+    pub fn emitSkillActive(comptime _: anytype, flow: anytype, _: anytype, comptime _: usize, comptime context: anytype) agent.Value(bool) {
+        return flow.constant(bool, context.true_index);
+    }
+    pub fn emitFinalAllowed(comptime _: anytype, _: anytype, memory: anytype, _: anytype, comptime _: anytype) agent.Value(bool) {
+        return memory;
+    }
 };
 
-pub const OpenAIProgram = boundary.program("agent-openai-response-v1", OpenAIBody);
-const OpenAIMachine = OpenAIProgram.compile(.{
-    .maximum_frames = 64,
-    .maximum_state_bytes = 2 * 1024 * 1024,
-    .maximum_machine_fuel = 2_000_000,
+pub const ClosedSystem = agent.system(.{
+    .name = "closed-turn",
+    .version = "3.0.0",
+    .Goal = Prompt,
+    .Action = Action,
+    .Observation = Observation,
+    .Result = FinishPayload,
+    .Failure = ParseFailure,
+    .models = .{agent.model(.{
+        .name = "primary",
+        .protocol = agent.protocol.openaiResponsesV1.Profile,
+        .model = "slice-model-v1",
+        .parameters = .{},
+    })},
+    .prompts = .{agent.prompt.literal(.{
+        .role = .user,
+        .content = "Act on the supplied task using exactly one offered action.",
+    })},
+    .skills = .{agent.skill(.{
+        .id = "closed-turn-proof",
+        .description = "Exercise the closed model and typed action boundary.",
+        .instructions = "Select one admitted typed action.",
+        .role = .developer,
+        .position = .before_user,
+        .activation = .always,
+        .actions = .{ "set_value", "finish" },
+    })},
+    .actions = actions,
+    .strategy = agent.strategy.react(.{}),
+    .epistemics = agent.epistemics.system(.{
+        .semantic_identity = "agent.epistemics.observed-set-proof.v1",
+        .implementation = ObservedSetEpistemics,
+    }),
+    .failures = .{
+        .arithmetic_overflow = ParseFailure.arithmetic_overflow,
+        .capacity_exceeded = ParseFailure.capacity_exceeded,
+        .invalid_index = ParseFailure.invalid_index,
+        .invalid_utf8 = ParseFailure.invalid_utf8,
+        .malformed = ParseFailure.malformed,
+        .invalid_variant = ParseFailure.invalid_variant,
+        .incomplete = ParseFailure.incomplete,
+        .response_error = ParseFailure.response_error,
+        .unsupported = ParseFailure.unsupported,
+        .multiple_calls = ParseFailure.multiple_calls,
+        .refusal = ParseFailure.refusal,
+        .unknown_action = ParseFailure.unknown_action,
+        .transport = ParseFailure.transport,
+        .http = ParseFailure.http,
+    },
+    .representation = .{
+        .request_bytes = 2048,
+        .response_bytes = Input.maximum_length,
+        .flow_limits = agent.FlowLimits{
+            .maximum_functions = 16,
+            .maximum_values = 5000,
+            .maximum_blocks = 320,
+            .maximum_instructions = 4096,
+            .maximum_operands = 8192,
+            .maximum_parameters = 4096,
+            .maximum_requests = 32,
+            .maximum_edge_arguments = 8192,
+        },
+        .schema_types = .{
+            Prompt,
+            Action,
+            Observation,
+            FinishPayload,
+            ParseFailure,
+            SetPayload,
+            Message,
+        },
+    },
 });
+
+pub const OpenAIProgram = ClosedSystem.Program;
 
 fn expectParsed(source: []const u8, expected: []const u8) !void {
     const state = try Machine.initialState(
@@ -625,117 +591,4 @@ test "staged JSON string parser rejects malformed encodings" {
     try expectMalformed("\"line\nbreak\"");
     try expectMalformed("\"trailing\" x");
     try expectMalformed(&.{ '"', 0xc0, 0x80, '"' });
-}
-
-fn runOpenAI(source: []const u8) !OpenAIMachine.Outcome {
-    const state = try OpenAIMachine.initialState(
-        std.testing.allocator,
-        try Prompt.fromSlice("repair the fixture"),
-    );
-    defer OpenAIMachine.deinitState(state);
-    const model = switch (try nextOpenAI(state)) {
-        .request => |request| request,
-        else => return error.UnexpectedMachineOutcome,
-    };
-    switch (model.value) {
-        .s0 => |request| {
-            try std.testing.expectEqual(@as(u32, Input.maximum_length), request.maximum_response_bytes);
-            try std.testing.expect(std.mem.indexOf(
-                u8,
-                try request.body.slice(),
-                "\"name\":\"set_value\"",
-            ) != null);
-        },
-        else => return error.UnexpectedMachineOutcome,
-    }
-    {
-        const prepared_model = try OpenAIMachine.prepareResume(state, model);
-        defer OpenAIMachine.deinitPreparedResume(prepared_model);
-        try OpenAIMachine.@"resume"(prepared_model, Protocol.Response{ .response = .{
-            .http_status = 200,
-            .body = try Input.fromSlice(source),
-        } });
-    }
-    var outcome = try nextOpenAI(state);
-    switch (outcome) {
-        .request => |request| {
-            switch (request.value) {
-                .s1 => |payload| try std.testing.expectEqual(@as(u8, 7), payload.value),
-                else => return error.UnexpectedMachineOutcome,
-            }
-            {
-                const prepared_tool = try OpenAIMachine.prepareResume(state, request);
-                defer OpenAIMachine.deinitPreparedResume(prepared_tool);
-                try OpenAIMachine.@"resume"(prepared_tool, @as(u8, 9));
-            }
-            outcome = try nextOpenAI(state);
-        },
-        else => {},
-    }
-    return outcome;
-}
-
-fn nextOpenAI(state: OpenAIMachine.State) !OpenAIMachine.Outcome {
-    var fuel: u64 = 2_000_000;
-    for (0..8192) |_| {
-        switch (try OpenAIMachine.step(state, &fuel)) {
-            .yielded => fuel = 2_000_000,
-            else => |outcome| return outcome,
-        }
-    }
-    return error.ParserDidNotConverge;
-}
-
-test "staged Responses parser selects one function call from provider JSON" {
-    const outcome = try runOpenAI(
-        "{\"status\":\"completed\",\"x\":{\"a\":[1,true,null]}," ++
-            "\"error\":null,\"output\":[{\"type\":\"reasoning\"}," ++
-            "{\"arguments\":\"{\\\"value\\\":7}\",\"name\":\"set_value\"," ++
-            "\"status\":\"completed\",\"type\":\"function_call\"}]}",
-    );
-    const done = switch (outcome) {
-        .done => |value| value,
-        else => return error.UnexpectedMachineOutcome,
-    };
-    defer done.deinit();
-    try std.testing.expectEqualStrings("set", try done.value().message.slice());
-
-    const finish_outcome = try runOpenAI(
-        "{\"output\":[{\"arguments\":\"{\\\"message\\\":\\\"ok\\\"}\"," ++
-            "\"name\":\"finish\",\"type\":\"function_call\"," ++
-            "\"status\":\"completed\"}],\"error\":null,\"status\":\"completed\"}",
-    );
-    const finish = switch (finish_outcome) {
-        .done => |value| value,
-        else => return error.UnexpectedMachineOutcome,
-    };
-    defer finish.deinit();
-    try std.testing.expectEqualStrings("ok", try finish.value().message.slice());
-}
-
-fn expectOpenAIFailure(source: []const u8, expected: ParseFailure) !void {
-    switch (try runOpenAI(source)) {
-        .failed => |failure| switch (failure) {
-            .authored => |value| try std.testing.expectEqual(expected, value),
-            else => return error.UnexpectedMachineOutcome,
-        },
-        else => return error.UnexpectedMachineOutcome,
-    }
-}
-
-test "staged Responses parser rejects incomplete, refusal, and duplicate calls" {
-    const call = "{\"type\":\"function_call\",\"status\":\"completed\"," ++
-        "\"name\":\"x\",\"arguments\":\"{}\"}";
-    try expectOpenAIFailure(
-        "{\"status\":\"incomplete\",\"error\":null,\"output\":[" ++ call ++ "]}",
-        .incomplete,
-    );
-    try expectOpenAIFailure(
-        "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"message\"}]}",
-        .refusal,
-    );
-    try expectOpenAIFailure(
-        "{\"status\":\"completed\",\"error\":null,\"output\":[" ++ call ++ "," ++ call ++ "]}",
-        .multiple_calls,
-    );
 }

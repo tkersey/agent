@@ -11,12 +11,19 @@ const image = await readFile(options.image);
 const initial = await readFile(options.initial);
 const toolResult = await readFile(options.toolResult);
 
-const set = await run(await readFile(options.modelSet));
-assert.deepEqual(Buffer.from(set.result), Buffer.from(await readFile(options.expectedSet)));
-assert.deepEqual(set.identities, ["agent.model.openai.responses.v1", "slice.set.v1"]);
+const set = await run([
+  await readFile(options.modelSet),
+  await readFile(options.modelFinish),
+]);
+assert.deepEqual(Buffer.from(set.result), Buffer.from(await readFile(options.expectedFinish)));
+assert.deepEqual(set.identities, [
+  "agent.model.openai.responses.v1",
+  "slice.set.v1",
+  "agent.model.openai.responses.v1",
+]);
 
-const finish = await run(await readFile(options.modelFinish));
-assert.deepEqual(Buffer.from(finish.result), Buffer.from(await readFile(options.expectedFinish)));
+const finish = await run([await readFile(options.modelFinish)], true);
+assert.deepEqual(Buffer.from(finish.failure), Buffer.from([4, 0, 0, 0]));
 assert.deepEqual(finish.identities, ["agent.model.openai.responses.v1"]);
 
 process.stdout.write(`${JSON.stringify({
@@ -29,13 +36,15 @@ process.stdout.write(`${JSON.stringify({
   finishReductions: finish.reductions,
   setIdentities: set.identities,
   finishIdentities: finish.identities,
+  prematureFinishRejected: true,
 })}\n`);
 
-async function run(modelResult) {
+async function run(modelResults, expectFailure = false) {
   let instance = { initialArgs: initial };
   let effectResult;
   let reductions = 0;
   const identities = [];
+  let modelIndex = 0;
   for (;;) {
     const outcome = await host.advance({ image, instance, effectResult });
     reductions += 1;
@@ -46,7 +55,7 @@ async function run(modelResult) {
         const request = world.decodeEffectRequest(outcome.request);
         identities.push(request.effectSemanticIdentity);
         const resume = request.effectSemanticIdentity === "agent.model.openai.responses.v1"
-          ? modelResult
+          ? modelResults[modelIndex++] ?? fail("missing model fixture")
           : request.effectSemanticIdentity === "slice.set.v1"
             ? toolResult
             : fail(`unexpected effect ${request.effectSemanticIdentity}`);
@@ -54,8 +63,14 @@ async function run(modelResult) {
         instance = { state: outcome.state };
         break;
       }
-      case "Completed": return { result: outcome.result, reductions, identities };
-      case "AuthoredFailure": fail(`authored failure ${Buffer.from(outcome.failure).toString("hex")}`); break;
+      case "Completed": {
+        if (expectFailure) fail("expected authored failure");
+        return { result: outcome.result, reductions, identities };
+      }
+      case "AuthoredFailure": {
+        if (!expectFailure) fail(`authored failure ${Buffer.from(outcome.failure).toString("hex")}`);
+        return { failure: outcome.failure, reductions, identities };
+      }
       case "ExplicitlyYielded": instance = { state: outcome.state }; break;
       case "NeedsCapacity": fail("unexpected NeedsCapacity"); break;
       default: fail(`unexpected outcome ${outcome.kind}`);

@@ -1,5 +1,5 @@
 const agent = @import("agent");
-const json = @import("agent_json");
+const json = agent.json;
 const boundary = @import("boundary");
 const std = @import("std");
 

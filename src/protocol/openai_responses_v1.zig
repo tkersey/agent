@@ -1,6 +1,9 @@
 const boundary = @import("boundary");
 
 pub const semantic_identity = "agent.model.openai.responses.v1";
+pub const Profile = struct {
+    pub const semantic_identity = "agent.model.openai.responses.v1";
+};
 
 pub const TransportFailureKind = enum {
     unavailable,

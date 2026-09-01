@@ -21,6 +21,37 @@ pub fn Seen(comptime Action: type) type {
     return boundary.Vector(bool, maximumFields(Action));
 }
 
+pub fn ArgumentField(comptime Bytes: type) type {
+    return struct {
+        name: boundary.Text(Bytes.maximum_length),
+        start: u32,
+        end: u32,
+    };
+}
+
+pub fn ArgumentFields(comptime Action: type, comptime Bytes: type) type {
+    return boundary.Vector(ArgumentField(Bytes), maximumFields(Action));
+}
+
+pub fn ArgumentObject(comptime Action: type, comptime Bytes: type) type {
+    return struct {
+        bytes: Bytes,
+        fields: ArgumentFields(Action, Bytes),
+    };
+}
+
+pub fn schemaTypes(comptime Action: type, comptime Bytes: type) @TypeOf(.{
+    ArgumentField(Bytes),
+    ArgumentFields(Action, Bytes),
+    ArgumentObject(Action, Bytes),
+}) {
+    return .{
+        ArgumentField(Bytes),
+        ArgumentFields(Action, Bytes),
+        ArgumentObject(Action, Bytes),
+    };
+}
+
 fn ParsedValue(comptime T: type, comptime Bytes: type) type {
     return struct {
         cursor: @import("flow.zig").Value(staged.Cursor(Bytes)),
@@ -38,12 +69,36 @@ pub fn emit(
     comptime context: anytype,
 ) @import("flow.zig").Value(Action) {
     const Text = boundary.Text(Bytes.maximum_length);
+    const Object = ArgumentObject(Action, Bytes);
+    const parsed_object = emitObject(
+        flow,
+        Action,
+        Bytes,
+        flow.productExtract(1, call),
+        core,
+        context,
+    );
+    const call_name = flow.productExtract(0, call);
+    const trailing = flow.call(core.skip_whitespace, .{parsed_object.cursor}, .{parsed_object.value});
+    const complete = flow.block(.segment, .{ Text, Object });
+    const malformed = flow.block(.terminal_handoff, .{});
+    flow.branch(
+        flow.integerEqual(
+            flow.productExtract(1, trailing.value),
+            flow.bytesLength(flow.productExtract(0, trailing.value)),
+        ),
+        complete,
+        .{ call_name, trailing.carried[0] },
+        malformed,
+        .{},
+    );
+    const complete_values = flow.enter(complete);
+    var name = complete_values[0];
+    var object = complete_values[1];
     const join = flow.block(.segment, .{Action});
-    var name = flow.productExtract(0, call);
-    var arguments = flow.productExtract(1, call);
     inline for (actions, 0..) |_, action_index| {
-        const matched = flow.block(.segment, .{ Text, Bytes });
-        const next = flow.block(.segment, .{ Text, Bytes });
+        const matched = flow.block(.segment, .{ Text, Object });
+        const next = flow.block(.segment, .{ Text, Object });
         const equal = flow.integerEqual(
             flow.textCompare(
                 name,
@@ -51,13 +106,12 @@ pub fn emit(
             ),
             flow.constant(i8, context.zero_i8_index),
         );
-        flow.branch(equal, matched, .{ name, arguments }, next, .{ name, arguments });
+        flow.branch(equal, matched, .{ name, object }, next, .{ name, object });
         const values = flow.enter(matched);
         const Payload = payloadType(Action, action_index);
-        const parsed = emitValue(
+        const payload = emitStructProjection(
             flow,
             Action,
-            actions,
             Bytes,
             Payload,
             values[1],
@@ -65,72 +119,31 @@ pub fn emit(
             core,
             context,
         );
-        const trailing = flow.call(core.skip_whitespace, .{parsed.cursor}, .{});
-        const trailing_bytes = flow.productExtract(0, trailing.value);
-        const trailing_index = flow.productExtract(1, trailing.value);
-        const complete = flow.block(.segment, .{Payload});
-        const malformed = flow.block(.terminal_handoff, .{});
-        flow.branch(
-            flow.integerEqual(trailing_index, flow.bytesLength(trailing_bytes)),
-            complete,
-            .{parsed.value},
-            malformed,
-            .{},
-        );
-        const payload = flow.enter(complete)[0];
         flow.jump(join, .{flow.sumConstruct(Action, action_index, payload)});
-        _ = flow.enter(malformed);
-        flow.failValue(flow.constant(context.Failure, context.malformed_failure_index));
         const next_values = flow.enter(next);
         name = next_values[0];
-        arguments = next_values[1];
+        object = next_values[1];
     }
     flow.failValue(flow.constant(context.Failure, context.unknown_action_failure_index));
+    _ = flow.enter(malformed);
+    flow.failValue(flow.constant(context.Failure, context.malformed_failure_index));
     return flow.enter(join)[0];
 }
 
-fn emitValue(
-    flow: anytype,
-    comptime Action: type,
-    comptime actions: anytype,
-    comptime Bytes: type,
-    comptime T: type,
-    bytes: @import("flow.zig").Value(Bytes),
-    comptime action_index: usize,
-    core: staged.Helpers(@TypeOf(flow.*), Bytes),
-    comptime context: anytype,
-) ParsedValue(T, Bytes) {
-    _ = actions;
-    switch (@typeInfo(T)) {
-        .@"struct" => return emitStruct(
-            flow,
-            Action,
-            Bytes,
-            T,
-            bytes,
-            action_index,
-            core,
-            context,
-        ),
-        else => @compileError("agent action decoder currently requires struct payloads"),
-    }
-}
-
-fn emitStruct(
+fn emitObject(
     flow: anytype,
     comptime Action: type,
     comptime Bytes: type,
-    comptime T: type,
     bytes: @import("flow.zig").Value(Bytes),
-    comptime action_index: usize,
     core: staged.Helpers(@TypeOf(flow.*), Bytes),
     comptime context: anytype,
-) ParsedValue(T, Bytes) {
-    const Text = boundary.Text(Bytes.maximum_length);
-    const SeenType = Seen(Action);
-    const fields = @typeInfo(T).@"struct".fields;
+) ParsedValue(ArgumentObject(Action, Bytes), Bytes) {
+    const Cursor = staged.Cursor(Bytes);
+    const Field = ArgumentField(Bytes);
+    const Fields = ArgumentFields(Action, Bytes);
+    const Object = ArgumentObject(Action, Bytes);
     const zero = flow.constant(u32, context.zero_u32_index);
-    const initial_cursor = flow.productConstruct(staged.Cursor(Bytes), .{ bytes, zero });
+    const one = flow.constant(u32, context.one_u32_index);
     const opening = flow.bytesByteAt(
         bytes,
         zero,
@@ -145,207 +158,282 @@ fn emitStruct(
         malformed,
         .{},
     );
-    _ = initial_cursor;
     const started = flow.enter(begin);
-    const loop = flow.block(.loop_header, .{ staged.Cursor(Bytes), SeenType, T });
-    flow.jump(loop, .{
-        flow.productConstruct(staged.Cursor(Bytes), .{
-            started[0],
-            flow.integerAddOrFail(
-                started[1],
-                flow.constant(u32, context.one_u32_index),
-                flow.constant(context.Failure, context.arithmetic_failure_index),
-            ),
-        }),
-        flow.constant(SeenType, context.seen_indices[action_index]),
-        flow.constant(T, context.payload_default_indices[action_index]),
+    const initial_cursor = flow.productConstruct(Cursor, .{
+        started[0],
+        flow.integerAddOrFail(
+            started[1],
+            one,
+            flow.constant(context.Failure, context.arithmetic_failure_index),
+        ),
     });
-    const current = flow.enter(loop);
-    const spaced = flow.call(core.skip_whitespace, .{current[0]}, .{ current[1], current[2] });
-    const cursor_value = spaced.value;
-    const cursor_bytes = flow.productExtract(0, cursor_value);
-    const cursor_index = flow.productExtract(1, cursor_value);
-    const byte = flow.bytesByteAt(
-        cursor_bytes,
-        cursor_index,
+    const first = flow.call(
+        core.skip_whitespace,
+        .{initial_cursor},
+        .{flow.vectorEmpty(Fields)},
+    );
+    const first_byte = flow.bytesByteAt(
+        flow.productExtract(0, first.value),
+        flow.productExtract(1, first.value),
         flow.constant(context.Failure, context.malformed_failure_index),
     );
-    const finalize = flow.block(.segment, .{ staged.Cursor(Bytes), SeenType, T });
-    const member = flow.block(.segment, .{ staged.Cursor(Bytes), SeenType, T });
+    const done = flow.block(.segment, .{ Cursor, Fields });
+    const member = flow.block(.segment, .{ Cursor, Fields });
     flow.branch(
-        flow.integerEqual(byte, flow.constant(u8, context.right_brace_index)),
-        finalize,
+        flow.integerEqual(first_byte, flow.constant(u8, context.right_brace_index)),
+        done,
         .{
-            flow.productConstruct(staged.Cursor(Bytes), .{
-                cursor_bytes,
+            flow.productConstruct(Cursor, .{
+                flow.productExtract(0, first.value),
                 flow.integerAddOrFail(
-                    cursor_index,
-                    flow.constant(u32, context.one_u32_index),
+                    flow.productExtract(1, first.value),
+                    one,
                     flow.constant(context.Failure, context.arithmetic_failure_index),
                 ),
             }),
-            spaced.carried[0],
-            spaced.carried[1],
+            first.carried[0],
         },
         member,
-        .{ cursor_value, spaced.carried[0], spaced.carried[1] },
+        .{ first.value, first.carried[0] },
     );
-    const member_values = flow.enter(member);
-    const key = flow.call(core.parse_string, .{member_values[0]}, .{ member_values[1], member_values[2] });
+
+    const current = flow.enter(member);
+    const key = flow.call(core.parse_string, .{current[0]}, .{current[1]});
     const after_key = flow.call(
         core.skip_whitespace,
         .{flow.productExtract(0, key.value)},
-        .{ key.carried[0], key.carried[1], flow.productExtract(1, key.value) },
+        .{ key.carried[0], flow.productExtract(1, key.value) },
     );
-    const colon_cursor = after_key.value;
-    const colon_bytes = flow.productExtract(0, colon_cursor);
-    const colon_index = flow.productExtract(1, colon_cursor);
     const colon = flow.bytesByteAt(
-        colon_bytes,
-        colon_index,
+        flow.productExtract(0, after_key.value),
+        flow.productExtract(1, after_key.value),
         flow.constant(context.Failure, context.malformed_failure_index),
     );
-    const dispatch = flow.block(.segment, .{ staged.Cursor(Bytes), SeenType, T, Text });
+    const value = flow.block(.segment, .{ Cursor, Fields, boundary.Text(Bytes.maximum_length) });
     flow.branch(
         flow.integerEqual(colon, flow.constant(u8, context.colon_index)),
-        dispatch,
+        value,
         .{
-            flow.productConstruct(staged.Cursor(Bytes), .{
-                colon_bytes,
+            flow.productConstruct(Cursor, .{
+                flow.productExtract(0, after_key.value),
                 flow.integerAddOrFail(
-                    colon_index,
-                    flow.constant(u32, context.one_u32_index),
+                    flow.productExtract(1, after_key.value),
+                    one,
                     flow.constant(context.Failure, context.arithmetic_failure_index),
                 ),
             }),
             after_key.carried[0],
             after_key.carried[1],
-            after_key.carried[2],
         },
         malformed,
         .{},
     );
-    const after_value = flow.block(.segment, .{ staged.Cursor(Bytes), SeenType, T });
-    var dispatch_values = flow.enter(dispatch);
+    const value_state = flow.enter(value);
+    const value_start = flow.call(
+        core.skip_whitespace,
+        .{value_state[0]},
+        .{ value_state[1], value_state[2] },
+    );
+    const start = flow.productExtract(1, value_start.value);
+    const skipped = flow.call(
+        core.skip_value,
+        .{value_start.value},
+        .{ value_start.carried[0], value_start.carried[1], start },
+    );
+    const next_fields = flow.vectorPushOrFail(
+        skipped.carried[0],
+        flow.productConstruct(Field, .{
+            skipped.carried[1],
+            skipped.carried[2],
+            flow.productExtract(1, skipped.value),
+        }),
+        flow.constant(context.Failure, context.malformed_failure_index),
+    );
+    const delimiter = flow.call(
+        core.skip_whitespace,
+        .{skipped.value},
+        .{next_fields},
+    );
+    const delimiter_byte = flow.bytesByteAt(
+        flow.productExtract(0, delimiter.value),
+        flow.productExtract(1, delimiter.value),
+        flow.constant(context.Failure, context.malformed_failure_index),
+    );
+    const comma = flow.block(.segment, .{ Bytes, u32, Fields });
+    const close = flow.block(.segment, .{ Cursor, Fields, u8 });
+    flow.branch(
+        flow.integerEqual(delimiter_byte, flow.constant(u8, context.comma_index)),
+        comma,
+        .{
+            flow.productExtract(0, delimiter.value),
+            flow.productExtract(1, delimiter.value),
+            delimiter.carried[0],
+        },
+        close,
+        .{ delimiter.value, delimiter.carried[0], delimiter_byte },
+    );
+    const comma_state = flow.enter(comma);
+    const next_member = flow.call(
+        core.skip_whitespace,
+        .{flow.productConstruct(Cursor, .{
+            comma_state[0],
+            flow.integerAddOrFail(
+                comma_state[1],
+                one,
+                flow.constant(context.Failure, context.arithmetic_failure_index),
+            ),
+        })},
+        .{comma_state[2]},
+    );
+    flow.jump(member, .{ next_member.value, next_member.carried[0] });
+    const close_state = flow.enter(close);
+    flow.branch(
+        flow.integerEqual(close_state[2], flow.constant(u8, context.right_brace_index)),
+        done,
+        .{
+            flow.productConstruct(Cursor, .{
+                flow.productExtract(0, close_state[0]),
+                flow.integerAddOrFail(
+                    flow.productExtract(1, close_state[0]),
+                    one,
+                    flow.constant(context.Failure, context.arithmetic_failure_index),
+                ),
+            }),
+            close_state[1],
+        },
+        malformed,
+        .{},
+    );
+    _ = flow.enter(malformed);
+    flow.failValue(flow.constant(context.Failure, context.malformed_failure_index));
+    const finished = flow.enter(done);
+    return .{
+        .cursor = finished[0],
+        .value = flow.productConstruct(Object, .{
+            flow.productExtract(0, finished[0]),
+            finished[1],
+        }),
+    };
+}
+
+fn emitStructProjection(
+    flow: anytype,
+    comptime Action: type,
+    comptime Bytes: type,
+    comptime T: type,
+    object: @import("flow.zig").Value(ArgumentObject(Action, Bytes)),
+    comptime action_index: usize,
+    core: staged.Helpers(@TypeOf(flow.*), Bytes),
+    comptime context: anytype,
+) @import("flow.zig").Value(T) {
+    const fields = switch (@typeInfo(T)) {
+        .@"struct" => |info| info.fields,
+        else => @compileError("agent action decoder currently requires struct payloads"),
+    };
+    const Field = ArgumentField(Bytes);
+    const Fields = ArgumentFields(Action, Bytes);
+    const object_bytes = flow.productExtract(0, object);
+    const object_fields = flow.productExtract(1, object);
+    var expected_count = flow.constant(u32, context.zero_u32_index);
+    inline for (fields) |_| {
+        expected_count = flow.integerAdd(expected_count, flow.constant(u32, context.one_u32_index));
+    }
+    const count_ok = flow.block(.segment, .{ Bytes, Fields });
+    const malformed = flow.block(.terminal_handoff, .{});
+    flow.branch(
+        flow.integerEqual(flow.vectorLength(object_fields), expected_count),
+        count_ok,
+        .{ object_bytes, object_fields },
+        malformed,
+        .{},
+    );
+    const accepted = flow.enter(count_ok);
+    var result = flow.constant(T, context.payload_default_indices[action_index]);
     inline for (fields, 0..) |field, field_index| {
-        const matched = flow.block(.segment, .{ staged.Cursor(Bytes), SeenType, T });
-        const next = flow.block(.segment, .{ staged.Cursor(Bytes), SeenType, T, Text });
+        const loop = flow.block(.loop_header, .{ Bytes, Fields, u32, u32, T });
+        flow.jump(loop, .{
+            accepted[0],
+            accepted[1],
+            flow.constant(u32, context.zero_u32_index),
+            flow.vectorLength(accepted[1]),
+            result,
+        });
+        const state = flow.enter(loop);
+        const inspect = flow.block(.segment, .{ Bytes, Fields, u32, u32, T });
+        flow.branch(
+            flow.integerGreaterEqual(state[2], state[3]),
+            malformed,
+            .{},
+            inspect,
+            state,
+        );
+        const inspecting = flow.enter(inspect);
+        const candidate = flow.vectorGetOrFail(
+            inspecting[1],
+            inspecting[2],
+            flow.constant(context.Failure, context.invalid_index_failure_index),
+        );
+        const found = flow.block(.segment, .{ Bytes, Field, T });
+        const next = flow.block(.segment, .{ Bytes, Fields, u32, u32, T });
         const equal = flow.integerEqual(
             flow.textCompare(
-                dispatch_values[3],
-                flow.constant(Text, context.field_name_indices[action_index][field_index]),
+                flow.productExtract(0, candidate),
+                flow.constant(
+                    boundary.Text(Bytes.maximum_length),
+                    context.field_name_indices[action_index][field_index],
+                ),
             ),
             flow.constant(i8, context.zero_i8_index),
         );
         flow.branch(
             equal,
-            matched,
-            .{ dispatch_values[0], dispatch_values[1], dispatch_values[2] },
+            found,
+            .{ inspecting[0], candidate, inspecting[4] },
             next,
-            dispatch_values,
+            inspecting,
         );
-        const values = flow.enter(matched);
-        const unseen = flow.block(.segment, .{ staged.Cursor(Bytes), SeenType, T });
-        flow.branch(
-            flow.vectorGetOrFail(
-                values[1],
-                flow.constant(u32, context.field_index_indices[field_index]),
-                flow.constant(context.Failure, context.invalid_index_failure_index),
+        const next_state = flow.enter(next);
+        flow.jump(loop, .{
+            next_state[0],
+            next_state[1],
+            flow.integerAddOrFail(
+                next_state[2],
+                flow.constant(u32, context.one_u32_index),
+                flow.constant(context.Failure, context.arithmetic_failure_index),
             ),
-            malformed,
-            .{},
-            unseen,
-            values,
-        );
-        const accepted = flow.enter(unseen);
+            next_state[3],
+            next_state[4],
+        });
+        const selected = flow.enter(found);
         const parsed = emitField(
             flow,
             Bytes,
             field.type,
-            accepted[0],
+            flow.productConstruct(staged.Cursor(Bytes), .{
+                selected[0],
+                flow.productExtract(1, selected[1]),
+            }),
             core,
             context,
         );
-        const seen = flow.vectorSet(
-            accepted[1],
-            flow.constant(u32, context.field_index_indices[field_index]),
-            flow.constant(bool, context.true_index),
-        );
-        const value = flow.productReplace(field_index, accepted[2], parsed.value);
-        flow.jump(after_value, .{ parsed.cursor, seen, value });
-        dispatch_values = flow.enter(next);
-    }
-    flow.jump(malformed, .{});
-
-    const delimited = flow.enter(after_value);
-    const after_ws = flow.call(core.skip_whitespace, .{delimited[0]}, .{ delimited[1], delimited[2] });
-    const delimiter_cursor = after_ws.value;
-    const delimiter_bytes = flow.productExtract(0, delimiter_cursor);
-    const delimiter_index = flow.productExtract(1, delimiter_cursor);
-    const delimiter = flow.bytesByteAt(
-        delimiter_bytes,
-        delimiter_index,
-        flow.constant(context.Failure, context.malformed_failure_index),
-    );
-    const comma = flow.block(.segment, .{ Bytes, u32, SeenType, T });
-    const close = flow.block(.segment, .{ Bytes, u32, SeenType, T, u8 });
-    flow.branch(
-        flow.integerEqual(delimiter, flow.constant(u8, context.comma_index)),
-        comma,
-        .{ delimiter_bytes, delimiter_index, after_ws.carried[0], after_ws.carried[1] },
-        close,
-        .{ delimiter_bytes, delimiter_index, after_ws.carried[0], after_ws.carried[1], delimiter },
-    );
-    const next_member = flow.enter(comma);
-    flow.jump(loop, .{
-        flow.productConstruct(staged.Cursor(Bytes), .{
-            next_member[0],
-            flow.integerAddOrFail(
-                next_member[1],
-                flow.constant(u32, context.one_u32_index),
-                flow.constant(context.Failure, context.arithmetic_failure_index),
+        const valid = flow.block(.segment, .{T});
+        flow.branch(
+            flow.integerEqual(
+                flow.productExtract(1, parsed.cursor),
+                flow.productExtract(2, selected[1]),
             ),
-        }),
-        next_member[2],
-        next_member[3],
-    });
-    const closing = flow.enter(close);
-    flow.branch(
-        flow.integerEqual(closing[4], flow.constant(u8, context.right_brace_index)),
-        finalize,
-        .{
-            flow.productConstruct(staged.Cursor(Bytes), .{
-                closing[0],
-                flow.integerAddOrFail(
-                    closing[1],
-                    flow.constant(u32, context.one_u32_index),
-                    flow.constant(context.Failure, context.arithmetic_failure_index),
-                ),
-            }),
-            closing[2],
-            closing[3],
-        },
-        malformed,
-        .{},
-    );
-    const finished = flow.enter(finalize);
-    var all_seen = flow.constant(bool, context.true_index);
-    inline for (fields, 0..) |_, field_index| {
-        all_seen = flow.booleanAnd(
-            all_seen,
-            flow.vectorGetOrFail(
-                finished[1],
-                flow.constant(u32, context.field_index_indices[field_index]),
-                flow.constant(context.Failure, context.invalid_index_failure_index),
-            ),
+            valid,
+            .{flow.productReplace(field_index, selected[2], parsed.value)},
+            malformed,
+            .{},
         );
+        result = flow.enter(valid)[0];
     }
-    const done = flow.block(.segment, .{ staged.Cursor(Bytes), T });
-    flow.branch(all_seen, done, .{ finished[0], finished[2] }, malformed, .{});
+    const done = flow.block(.segment, .{T});
+    flow.jump(done, .{result});
     _ = flow.enter(malformed);
     flow.failValue(flow.constant(context.Failure, context.malformed_failure_index));
-    const result = flow.enter(done);
-    return .{ .cursor = result[0], .value = result[1] };
+    return flow.enter(done)[0];
 }
 
 fn emitField(

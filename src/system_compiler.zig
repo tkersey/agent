@@ -1,0 +1,382 @@
+const std = @import("std");
+const boundary = @import("boundary");
+const action = @import("action.zig");
+const action_decode = @import("action_decode.zig");
+const flow_module = @import("flow.zig");
+const openai_profile = @import("openai_profile.zig");
+const openai_response = @import("openai_response.zig");
+const request = @import("request.zig");
+
+fn effectCount(comptime source: anytype) usize {
+    var count: usize = 0;
+    inline for (source.actions) |Descriptor| {
+        if (Descriptor.kind == .effect) count += 1;
+    }
+    return count;
+}
+
+fn effectSites(comptime source: anytype, comptime Profile: type) [1 + effectCount(source)]type {
+    var result: [1 + effectCount(source)]type = undefined;
+    result[0] = Profile.ProtocolType.Site(0);
+    var next: usize = 1;
+    inline for (source.actions) |Descriptor| {
+        if (Descriptor.kind == .effect) {
+            result[next] = Descriptor.Site;
+            next += 1;
+        }
+    }
+    return result;
+}
+
+fn unionFieldIndex(comptime T: type, comptime name: []const u8) u16 {
+    inline for (@typeInfo(T).@"union".fields, 0..) |field, index| {
+        if (std.mem.eql(u8, field.name, name)) return @intCast(index);
+    }
+    @compileError("agent system union has no field named '" ++ name ++ "'");
+}
+
+fn skillReferencesAction(
+    comptime Skill: type,
+    comptime action_name: []const u8,
+) bool {
+    inline for (Skill.actions) |name| {
+        if (std.mem.eql(u8, name, action_name)) return true;
+    }
+    return false;
+}
+
+fn activeSkills(
+    comptime source: anytype,
+    comptime Epistemics: type,
+    flow: anytype,
+    memory: anytype,
+    comptime context: anytype,
+) [source.skills.len]flow_module.Value(bool) {
+    var result: [source.skills.len]flow_module.Value(bool) = undefined;
+    inline for (source.skills, 0..) |Skill, index| {
+        result[index] = if (Skill.activation == .always)
+            flow.constant(bool, context.true_index)
+        else
+            Epistemics.emitSkillActive(source, flow, memory, index, context);
+    }
+    return result;
+}
+
+fn offeredActions(
+    comptime source: anytype,
+    flow: anytype,
+    active_skills: [source.skills.len]flow_module.Value(bool),
+    comptime context: anytype,
+) [source.actions.len]flow_module.Value(bool) {
+    var result: [source.actions.len]flow_module.Value(bool) = undefined;
+    inline for (source.actions, 0..) |Descriptor, action_index| {
+        var offered = flow.constant(bool, if (source.skills.len == 0)
+            context.true_index
+        else
+            context.false_index);
+        inline for (source.skills, 0..) |Skill, skill_index| {
+            if (skillReferencesAction(Skill, Descriptor.name)) {
+                offered = flow.booleanOr(offered, active_skills[skill_index]);
+            }
+        }
+        result[action_index] = offered;
+    }
+    return result;
+}
+
+fn selectedWasOffered(
+    comptime source: anytype,
+    flow: anytype,
+    selected: anytype,
+    offered_mask: flow_module.Value(u32),
+    comptime context: anytype,
+) flow_module.Value(bool) {
+    var result = flow.constant(bool, context.false_index);
+    var bit = flow.constant(u32, context.one_u32_index);
+    inline for (0..source.actions.len) |index| {
+        const is_offered = flow.integerNotEqual(
+            flow.integerBitAnd(offered_mask, bit),
+            flow.constant(u32, context.zero_u32_index),
+        );
+        result = flow.booleanOr(
+            result,
+            flow.booleanAnd(flow.sumTagIs(index, selected), is_offered),
+        );
+        if (index + 1 < source.actions.len) {
+            bit = flow.integerAddOrFail(
+                bit,
+                bit,
+                flow.constant(context.Failure, context.arithmetic_failure_index),
+            );
+        }
+    }
+    return result;
+}
+
+fn boolMask(
+    flow: anytype,
+    values: anytype,
+    comptime context: anytype,
+) flow_module.Value(u32) {
+    var result = flow.constant(u32, context.zero_u32_index);
+    var bit = flow.constant(u32, context.one_u32_index);
+    inline for (values, 0..) |value, index| {
+        result = flow.integerBitOr(
+            result,
+            flow.select(value, bit, flow.constant(u32, context.zero_u32_index)),
+        );
+        if (index + 1 < values.len) bit = flow.integerAdd(bit, bit);
+    }
+    return result;
+}
+
+pub fn ReactBody(comptime source: anytype) type {
+    if (comptime !boundary.schema.isTextType(source.Goal)) {
+        @compileError("Agent 3 default ReAct currently requires a Text Goal prompt");
+    }
+    if (!@hasField(@TypeOf(source.representation), "request_bytes") or
+        !@hasField(@TypeOf(source.representation), "response_bytes") or
+        !@hasField(@TypeOf(source.representation), "schema_types"))
+    {
+        @compileError("Agent 3 ReAct representation requires request_bytes, response_bytes, and schema_types");
+    }
+    const Model = source.models[0];
+    if (Model.protocol != @import("protocol/openai_responses_v1.zig").Profile) {
+        @compileError("Agent 3 ReAct milestone supports OpenAI Responses v1");
+    }
+    const ResponseBytes = boundary.Bytes(source.representation.response_bytes);
+    const Profile = openai_profile.Profile(
+        source.Failure,
+        ResponseBytes,
+        source.Action,
+        source.actions,
+        Model.model_id,
+        source.prompts,
+        source.skills,
+        source.failures,
+        source.representation.request_bytes,
+    );
+    const Context = Profile.Context;
+    const Protocol = Profile.ProtocolType;
+    const Epistemics = source.epistemics;
+    const Memory = Epistemics.MemoryType(source);
+    const DecisionView = Epistemics.DecisionViewType(source);
+    const system_flow_limits: flow_module.Limits = if (@hasField(
+        @TypeOf(source.representation),
+        "flow_limits",
+    )) source.representation.flow_limits else .{
+        .maximum_functions = 32,
+        .maximum_values = 4096,
+        .maximum_blocks = 512,
+        .maximum_instructions = 8192,
+        .maximum_operands = 16_384,
+        .maximum_parameters = 8192,
+        .maximum_requests = 128,
+        .maximum_edge_arguments = 16_384,
+    };
+    const Builder = flow_module.Flow(.{
+        .schema_types = source.representation.schema_types ++
+            Epistemics.schemaTypes(source) ++ Profile.schemaTypes(),
+        .limits = system_flow_limits,
+    });
+    comptime var flow = Builder.init(source.name ++ ":react-v1");
+    const goal = flow.begin(source.Goal);
+    const helpers = openai_response.declare(&flow, ResponseBytes);
+    const request_helpers = request.declareSystem(&flow, Profile);
+    const memory = Epistemics.emitInitial(source, &flow, goal, Context);
+    const loop = flow.block(.loop_header, .{ source.Goal, Memory });
+    flow.jump(loop, .{ goal, memory });
+    const loop_values = flow.enter(loop);
+    const view: flow_module.Value(DecisionView) = Epistemics.emitProject(
+        source,
+        &flow,
+        loop_values[1],
+    );
+    const prompt = Epistemics.emitPrompt(source, &flow, loop_values[0], view, Context);
+    const active_skills = activeSkills(source, Epistemics, &flow, loop_values[1], Context);
+    const offered_actions = offeredActions(source, &flow, active_skills, Context);
+    const active_mask = boolMask(&flow, active_skills, Context);
+    const offered_mask = boolMask(&flow, offered_actions, Context);
+    const model_request = request.emitSystem(
+        Profile,
+        &flow,
+        request_helpers,
+        prompt,
+        active_mask,
+        offered_mask,
+        Context,
+    );
+    const model = flow.perform(
+        Protocol.Site(0),
+        model_request,
+        .{ loop_values[0], loop_values[1] },
+    );
+    const response_path = flow.block(.segment, .{ Protocol.Response, source.Goal, Memory });
+    const transport_failure = flow.block(.terminal_handoff, .{});
+    flow.branch(
+        flow.sumTagIs(0, model.value),
+        response_path,
+        .{ model.value, model.carried[0], model.carried[1] },
+        transport_failure,
+        .{},
+    );
+    _ = flow.enter(transport_failure);
+    flow.failValue(flow.constant(source.Failure, Context.transport_failure_index));
+    const response_values = flow.enter(response_path);
+    const response = flow.sumExtractOrFail(
+        0,
+        response_values[0],
+        flow.constant(source.Failure, Context.malformed_failure_index),
+    );
+    const parse = flow.block(.segment, .{ ResponseBytes, source.Goal, Memory });
+    const http_failure = flow.block(.terminal_handoff, .{});
+    flow.branch(
+        flow.integerEqual(
+            flow.productExtract(0, response),
+            flow.constant(u16, Context.http_ok_index),
+        ),
+        parse,
+        .{ flow.productExtract(1, response), response_values[1], response_values[2] },
+        http_failure,
+        .{},
+    );
+    _ = flow.enter(http_failure);
+    flow.failValue(flow.constant(source.Failure, Context.http_failure_index));
+    const parse_values = flow.enter(parse);
+    const parsed = flow.call(
+        helpers.parse_response,
+        .{flow.productConstruct(@import("staged_json.zig").Cursor(ResponseBytes), .{
+            parse_values[0],
+            flow.constant(u32, Context.zero_u32_index),
+        })},
+        .{ parse_values[1], parse_values[2] },
+    );
+    const selected = action_decode.emit(
+        &flow,
+        source.Action,
+        source.actions,
+        ResponseBytes,
+        parsed.value,
+        helpers.core,
+        Context,
+    );
+    const resumed_active_skills = activeSkills(
+        source,
+        Epistemics,
+        &flow,
+        parsed.carried[1],
+        Context,
+    );
+    const resumed_offered_actions = offeredActions(
+        source,
+        &flow,
+        resumed_active_skills,
+        Context,
+    );
+    const resumed_offered_mask = boolMask(&flow, resumed_offered_actions, Context);
+    const policy_allowed = Epistemics.emitActionAllowed(
+        source,
+        &flow,
+        parsed.carried[1],
+        selected,
+        Context,
+    );
+    const allowed = flow.booleanAnd(
+        selectedWasOffered(
+            source,
+            &flow,
+            selected,
+            resumed_offered_mask,
+            Context,
+        ),
+        policy_allowed,
+    );
+    const dispatch = flow.block(.segment, .{ source.Action, source.Goal, Memory });
+    const denied = flow.block(.terminal_handoff, .{});
+    flow.branch(
+        allowed,
+        dispatch,
+        .{ selected, parsed.carried[0], parsed.carried[1] },
+        denied,
+        .{},
+    );
+    _ = flow.enter(denied);
+    flow.failValue(flow.constant(source.Failure, Context.malformed_failure_index));
+    var dispatch_values = flow.enter(dispatch);
+    inline for (@typeInfo(source.Action).@"union".fields, 0..) |_, action_index| {
+        const matched = flow.block(.segment, .{ source.Action, source.Goal, Memory });
+        const next = flow.block(.segment, .{ source.Action, source.Goal, Memory });
+        flow.branch(
+            flow.sumTagIs(action_index, dispatch_values[0]),
+            matched,
+            dispatch_values,
+            next,
+            dispatch_values,
+        );
+        const values = flow.enter(matched);
+        const Descriptor = source.actions[action_index];
+        const payload = flow.sumExtractOrFail(
+            action_index,
+            values[0],
+            flow.constant(source.Failure, Context.invalid_variant_failure_index),
+        );
+        switch (Descriptor.kind) {
+            .effect => {
+                const performed = flow.perform(
+                    Descriptor.Site,
+                    payload,
+                    .{ values[1], values[2] },
+                );
+                const observation = flow.sumConstruct(
+                    source.Observation,
+                    unionFieldIndex(source.Observation, Descriptor.observation_name),
+                    performed.value,
+                );
+                const next_memory = Epistemics.emitObserve(
+                    source,
+                    &flow,
+                    performed.carried[1],
+                    observation,
+                    Context,
+                );
+                flow.jump(loop, .{ performed.carried[0], next_memory });
+            },
+            .final => {
+                const final_allowed = Epistemics.emitFinalAllowed(
+                    source,
+                    &flow,
+                    values[2],
+                    payload,
+                    Context,
+                );
+                const complete = flow.block(.terminal_handoff, .{source.Result});
+                flow.branch(final_allowed, complete, .{payload}, denied, .{});
+                flow.returnValue(flow.enter(complete)[0]);
+            },
+            .fail => flow.failValue(payload),
+        }
+        dispatch_values = flow.enter(next);
+    }
+    flow.failValue(flow.constant(source.Failure, Context.invalid_variant_failure_index));
+    request.defineSystem(&flow, Profile, request_helpers, Context);
+    openai_response.define(&flow, ResponseBytes, helpers, Context);
+    const Lowering = flow.finish(source.Result);
+    const sites = effectSites(source, Profile);
+    return struct {
+        pub const InitialArgs = source.Goal;
+        pub const Result = source.Result;
+        pub const Failure = source.Failure;
+        pub const constants = Profile.constantValues();
+        pub const effect_sites = boundary.effect.row(sites);
+        pub const schema_types = Lowering.schema_types;
+        pub const control_ir = Lowering.control_ir;
+        pub const compiler_limits: boundary.ir.CompilerLimits = .{
+            .maximum_values = control_ir.value_types.len,
+            .maximum_blocks = control_ir.blocks.len,
+            .maximum_constructors = 768,
+            .maximum_environment_fields = 256,
+            .maximum_invariant_terms = 128,
+            .maximum_generated_operations = 32_768,
+        };
+    };
+}

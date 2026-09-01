@@ -3,7 +3,7 @@ const budget_types = @import("budget.zig");
 const definition = @import("definition.zig");
 
 /// Agent package bootstrap version.
-pub const package_version = "2.7.0";
+pub const package_version = "3.0.0";
 
 /// Define immutable typed comptime agent data and close its Action algebra.
 pub const define = definition.define;
@@ -53,9 +53,9 @@ pub const DecisionPhase = budget_types.DecisionPhase;
 comptime {
     if (!@hasDecl(boundary, "program") or
         !@hasDecl(boundary, "image") or
-        !@hasDecl(boundary, "machine_v2"))
+        !@hasDecl(boundary, "process_v1"))
     {
-        @compileError("agent requires Boundary v1.6.1 program image and Machine-v2 compilation");
+        @compileError("agent requires the Boundary 1.8 Process-capable program and BPI1 surface");
     }
 }
 
@@ -66,4 +66,5 @@ test "bootstrap imports the exact Boundary public compiler" {
     try std.testing.expect(@hasDecl(boundary, "ir"));
     try std.testing.expect(@hasDecl(boundary, "effect"));
     try std.testing.expect(@hasDecl(boundary, "schema"));
+    try std.testing.expect(@hasDecl(boundary, "process_v1"));
 }

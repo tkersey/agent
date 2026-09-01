@@ -161,6 +161,10 @@ pub fn ReactBody(comptime source: anytype) type {
     const Epistemics = source.epistemics;
     const Memory = Epistemics.MemoryType(source);
     const DecisionView = Epistemics.DecisionViewType(source);
+    const RuntimeState = if (Epistemics.prompt_is_json_escaped)
+        Memory
+    else
+        struct { goal: source.Goal, memory: Memory };
     const system_flow_limits: flow_module.Limits = if (@hasField(
         @TypeOf(source.representation),
         "flow_limits",
@@ -176,7 +180,8 @@ pub fn ReactBody(comptime source: anytype) type {
     };
     const Builder = flow_module.Flow(.{
         .schema_types = source.representation.schema_types ++
-            Epistemics.schemaTypes(source) ++ Profile.schemaTypes(),
+            Epistemics.schemaTypes(source) ++ Profile.schemaTypes() ++
+            .{RuntimeState},
         .limits = system_flow_limits,
     });
     comptime var flow = Builder.init(source.name ++ ":react-v1");
@@ -184,39 +189,62 @@ pub fn ReactBody(comptime source: anytype) type {
     const helpers = openai_response.declare(&flow, ResponseBytes);
     const request_helpers = request.declareSystem(&flow, Profile);
     const memory = Epistemics.emitInitial(source, &flow, goal, Context);
-    const loop = flow.block(.loop_header, .{ source.Goal, Memory });
-    flow.jump(loop, .{ goal, memory });
-    const loop_values = flow.enter(loop);
+    const initial_state = if (Epistemics.prompt_is_json_escaped)
+        memory
+    else
+        flow.productConstruct(RuntimeState, .{ goal, memory });
+    const loop = flow.block(.loop_header, .{RuntimeState});
+    flow.jump(loop, .{initial_state});
+    const runtime_state = flow.enter(loop)[0];
+    const current_goal = if (Epistemics.prompt_is_json_escaped)
+        goal
+    else
+        flow.productExtract(0, runtime_state);
+    const current_memory = if (Epistemics.prompt_is_json_escaped)
+        runtime_state
+    else
+        flow.productExtract(1, runtime_state);
     const view: flow_module.Value(DecisionView) = Epistemics.emitProject(
         source,
         &flow,
-        loop_values[1],
+        current_memory,
     );
-    const prompt = Epistemics.emitPrompt(source, &flow, loop_values[0], view, Context);
-    const active_skills = activeSkills(source, Epistemics, &flow, loop_values[1], Context);
+    const prompt = Epistemics.emitPrompt(source, &flow, current_goal, view, Context);
+    const active_skills = activeSkills(source, Epistemics, &flow, current_memory, Context);
     const offered_actions = offeredActions(source, &flow, active_skills, Context);
     const active_mask = boolMask(&flow, active_skills, Context);
     const offered_mask = boolMask(&flow, offered_actions, Context);
-    const model_request = request.emitSystem(
-        Profile,
-        &flow,
-        request_helpers,
-        prompt,
-        active_mask,
-        offered_mask,
-        Context,
-    );
+    const model_request = if (Epistemics.prompt_is_json_escaped)
+        request.emitSystemEscaped(
+            Profile,
+            &flow,
+            request_helpers,
+            prompt,
+            active_mask,
+            offered_mask,
+            Context,
+        )
+    else
+        request.emitSystem(
+            Profile,
+            &flow,
+            request_helpers,
+            prompt,
+            active_mask,
+            offered_mask,
+            Context,
+        );
     const model = flow.perform(
         Protocol.Site(0),
         model_request,
-        .{ loop_values[0], loop_values[1] },
+        .{runtime_state},
     );
-    const response_path = flow.block(.segment, .{ Protocol.Response, source.Goal, Memory });
+    const response_path = flow.block(.segment, .{ Protocol.Response, RuntimeState });
     const transport_failure = flow.block(.terminal_handoff, .{});
     flow.branch(
         flow.sumTagIs(0, model.value),
         response_path,
-        .{ model.value, model.carried[0], model.carried[1] },
+        .{ model.value, model.carried[0] },
         transport_failure,
         .{},
     );
@@ -228,7 +256,7 @@ pub fn ReactBody(comptime source: anytype) type {
         response_values[0],
         flow.constant(source.Failure, Context.malformed_failure_index),
     );
-    const parse = flow.block(.segment, .{ ResponseBytes, source.Goal, Memory });
+    const parse = flow.block(.segment, .{ ResponseBytes, RuntimeState });
     const http_failure = flow.block(.terminal_handoff, .{});
     flow.branch(
         flow.integerEqual(
@@ -236,7 +264,7 @@ pub fn ReactBody(comptime source: anytype) type {
             flow.constant(u16, Context.http_ok_index),
         ),
         parse,
-        .{ flow.productExtract(1, response), response_values[1], response_values[2] },
+        .{ flow.productExtract(1, response), response_values[1] },
         http_failure,
         .{},
     );
@@ -249,7 +277,7 @@ pub fn ReactBody(comptime source: anytype) type {
             parse_values[0],
             flow.constant(u32, Context.zero_u32_index),
         })},
-        .{ parse_values[1], parse_values[2] },
+        .{parse_values[1]},
     );
     const selected = action_decode.emit(
         &flow,
@@ -260,11 +288,15 @@ pub fn ReactBody(comptime source: anytype) type {
         helpers.core,
         Context,
     );
+    const resumed_memory = if (Epistemics.prompt_is_json_escaped)
+        parsed.carried[0]
+    else
+        flow.productExtract(1, parsed.carried[0]);
     const resumed_active_skills = activeSkills(
         source,
         Epistemics,
         &flow,
-        parsed.carried[1],
+        resumed_memory,
         Context,
     );
     const resumed_offered_actions = offeredActions(
@@ -277,7 +309,7 @@ pub fn ReactBody(comptime source: anytype) type {
     const policy_allowed = Epistemics.emitActionAllowed(
         source,
         &flow,
-        parsed.carried[1],
+        resumed_memory,
         selected,
         Context,
     );
@@ -291,12 +323,12 @@ pub fn ReactBody(comptime source: anytype) type {
         ),
         policy_allowed,
     );
-    const dispatch = flow.block(.segment, .{ source.Action, source.Goal, Memory });
+    const dispatch = flow.block(.segment, .{ source.Action, RuntimeState });
     const denied = flow.block(.terminal_handoff, .{});
     flow.branch(
         allowed,
         dispatch,
-        .{ selected, parsed.carried[0], parsed.carried[1] },
+        .{ selected, parsed.carried[0] },
         denied,
         .{},
     );
@@ -304,8 +336,8 @@ pub fn ReactBody(comptime source: anytype) type {
     flow.failValue(flow.constant(source.Failure, Context.malformed_failure_index));
     var dispatch_values = flow.enter(dispatch);
     inline for (@typeInfo(source.Action).@"union".fields, 0..) |_, action_index| {
-        const matched = flow.block(.segment, .{ source.Action, source.Goal, Memory });
-        const next = flow.block(.segment, .{ source.Action, source.Goal, Memory });
+        const matched = flow.block(.segment, .{ source.Action, RuntimeState });
+        const next = flow.block(.segment, .{ source.Action, RuntimeState });
         flow.branch(
             flow.sumTagIs(action_index, dispatch_values[0]),
             matched,
@@ -325,27 +357,39 @@ pub fn ReactBody(comptime source: anytype) type {
                 const performed = flow.perform(
                     Descriptor.Site,
                     payload,
-                    .{ values[1], values[2] },
+                    .{values[1]},
                 );
                 const observation = flow.sumConstruct(
                     source.Observation,
                     unionFieldIndex(source.Observation, Descriptor.observation_name),
                     performed.value,
                 );
+                const performed_memory = if (Epistemics.prompt_is_json_escaped)
+                    performed.carried[0]
+                else
+                    flow.productExtract(1, performed.carried[0]);
                 const next_memory = Epistemics.emitObserve(
                     source,
                     &flow,
-                    performed.carried[1],
+                    performed_memory,
                     observation,
                     Context,
                 );
-                flow.jump(loop, .{ performed.carried[0], next_memory });
+                const next_state = if (Epistemics.prompt_is_json_escaped)
+                    next_memory
+                else
+                    flow.productReplace(1, performed.carried[0], next_memory);
+                flow.jump(loop, .{next_state});
             },
             .final => {
+                const final_memory = if (Epistemics.prompt_is_json_escaped)
+                    values[1]
+                else
+                    flow.productExtract(1, values[1]);
                 const final_allowed = Epistemics.emitFinalAllowed(
                     source,
                     &flow,
-                    values[2],
+                    final_memory,
                     payload,
                     Context,
                 );
@@ -378,5 +422,9 @@ pub fn ReactBody(comptime source: anytype) type {
             .maximum_invariant_terms = 128,
             .maximum_generated_operations = 32_768,
         };
+        pub const maximum_image_bytes: usize = if (@hasField(
+            @TypeOf(source.representation),
+            "image_bytes",
+        )) source.representation.image_bytes else 16 * 1024 * 1024;
     };
 }

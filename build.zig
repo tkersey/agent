@@ -1222,61 +1222,71 @@ pub fn build(b: *std.Build) void {
     );
     staged_json_parser_step.dependOn(&run_staged_json_parser_tests.step);
     semantic_check.dependOn(staged_json_parser_step);
-    const closed_turn_emitter_module = b.createModule(.{
-        .root_source_file = b.path("test/emit_closed_turn.zig"),
+    const repository_system_module = b.createModule(.{
+        .root_source_file = b.path("actuality/repository_repair_system_v1.zig"),
         .target = b.graph.host,
         .optimize = .ReleaseSafe,
     });
-    closed_turn_emitter_module.addImport("boundary", boundary_module);
-    closed_turn_emitter_module.addImport("closed_turn", staged_json_parser_module);
-    const closed_turn_emitter = b.addExecutable(.{
-        .name = "emit-agent-closed-turn",
-        .root_module = closed_turn_emitter_module,
+    repository_system_module.addImport("agent", agent_module);
+    repository_system_module.addImport("boundary", boundary_module);
+    const repository_system_emitter_module = b.createModule(.{
+        .root_source_file = b.path("actuality/emit_repository_system_v1.zig"),
+        .target = b.graph.host,
+        .optimize = .Debug,
     });
-    const closed_turn_modes = .{
-        .{ "bpi1", "system.bpi1" },
-        .{ "initial", "initial.bin" },
-        .{ "model-set", "model-set.bin" },
-        .{ "model-finish", "model-finish.bin" },
-        .{ "tool-result", "tool-result.bin" },
-        .{ "expected-set", "expected-set.bin" },
-        .{ "expected-finish", "expected-finish.bin" },
+    repository_system_emitter_module.addImport("agent", agent_module);
+    repository_system_emitter_module.addImport("boundary", boundary_module);
+    repository_system_emitter_module.addImport(
+        "repository_system",
+        repository_system_module,
+    );
+    const repository_system_emitter = b.addExecutable(.{
+        .name = "emit-agent-repository-system-v1",
+        .root_module = repository_system_emitter_module,
+    });
+    const repository_system_modes = .{
+        .{ "bpi1", "repository-system.bpi1" },
+        .{ "initial", "repository-system-initial.bin" },
+        .{ "expected-final", "repository-system-final.bin" },
     };
-    var closed_turn_outputs: [closed_turn_modes.len]std.Build.LazyPath = undefined;
-    inline for (closed_turn_modes, 0..) |mode, index| {
-        const run = b.addRunArtifact(closed_turn_emitter);
+    var repository_system_outputs: [repository_system_modes.len]std.Build.LazyPath = undefined;
+    const emit_repository_system_step = b.step(
+        "emit-agent-repository-system-v1",
+        "Emit the repository system BPI1, InitialArgs, and expected final result",
+    );
+    inline for (repository_system_modes, 0..) |mode, index| {
+        const run = b.addRunArtifact(repository_system_emitter);
         run.addArg(mode[0]);
-        closed_turn_outputs[index] = run.captureStdOut(.{ .basename = mode[1] });
+        repository_system_outputs[index] = run.captureStdOut(.{ .basename = mode[1] });
+        emit_repository_system_step.dependOn(&run.step);
     }
-    const closed_turn_world_step = b.step(
-        "check-agent-closed-turn-world",
-        "Execute complete request construction and raw-response Action decoding through World",
+    const repository_system_world_step = b.step(
+        "check-agent-repository-system-world",
+        "Execute the closed repository system through World with real fixture effects",
     );
     if (world_process_root) |root| {
-        const world_turn = b.addSystemCommand(&.{"node"});
-        world_turn.addFileArg(b.path("test/run_closed_turn_world.mjs"));
-        world_turn.addArgs(&.{ "--worldRoot", root, "--image" });
-        world_turn.addFileArg(closed_turn_outputs[0]);
-        world_turn.addArg("--initial");
-        world_turn.addFileArg(closed_turn_outputs[1]);
-        world_turn.addArg("--modelSet");
-        world_turn.addFileArg(closed_turn_outputs[2]);
-        world_turn.addArg("--modelFinish");
-        world_turn.addFileArg(closed_turn_outputs[3]);
-        world_turn.addArg("--toolResult");
-        world_turn.addFileArg(closed_turn_outputs[4]);
-        world_turn.addArg("--expectedSet");
-        world_turn.addFileArg(closed_turn_outputs[5]);
-        world_turn.addArg("--expectedFinish");
-        world_turn.addFileArg(closed_turn_outputs[6]);
-        closed_turn_world_step.dependOn(&world_turn.step);
+        const world_system = b.addSystemCommand(&.{"node"});
+        world_system.addFileArg(b.path("actuality/run_repository_system_world.mjs"));
+        world_system.addArgs(&.{
+            "--worldRoot",
+            root,
+            "--agentRoot",
+            b.pathFromRoot("."),
+            "--image",
+        });
+        world_system.addFileArg(repository_system_outputs[0]);
+        world_system.addArg("--initial");
+        world_system.addFileArg(repository_system_outputs[1]);
+        world_system.addArg("--expectedFinal");
+        world_system.addFileArg(repository_system_outputs[2]);
+        repository_system_world_step.dependOn(&world_system.step);
     } else {
         const missing_world = b.addSystemCommand(&.{
             "sh",
             "-c",
-            "printf '%s\\n' 'check-agent-closed-turn-world requires -Dworld-process-root=/absolute/path' >&2; exit 1",
+            "printf '%s\\n' 'check-agent-repository-system-world requires -Dworld-process-root=/absolute/path' >&2; exit 1",
         });
-        closed_turn_world_step.dependOn(&missing_world.step);
+        repository_system_world_step.dependOn(&missing_world.step);
     }
     addFocusedTest(
         b,

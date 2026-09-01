@@ -108,6 +108,7 @@ const Body = struct {
     pub const compiler_limits: boundary.ir.CompilerLimits = .{
         .maximum_values = control_ir.value_types.len,
         .maximum_blocks = control_ir.blocks.len,
+        .maximum_environment_fields = control_ir.value_types.len,
         .maximum_invariant_terms = 128,
         .maximum_generated_operations = 32_768,
     };
@@ -117,7 +118,7 @@ const Program = boundary.program("staged-openai-request-v1", Body);
 const Machine = Program.compile(.{
     .maximum_frames = 8,
     .maximum_state_bytes = 16 * 1024,
-    .maximum_machine_fuel = 4096,
+    .maximum_machine_fuel = 32 * 1024,
 });
 
 const DynamicFailure = enum {
@@ -256,7 +257,7 @@ const DynamicMachine = boundary.program(
 ).compile(.{
     .maximum_frames = 8,
     .maximum_state_bytes = 32 * 1024,
-    .maximum_machine_fuel = 8192,
+    .maximum_machine_fuel = 64 * 1024,
 });
 
 test "dynamic prompt escaping is image computation" {
@@ -267,7 +268,7 @@ test "dynamic prompt escaping is image computation" {
     const goal = Goal.fromSlice("quote=\" slash=\\ line=\n utf8=é") catch unreachable;
     const state = try Machine.initialState(std.testing.allocator, goal);
     defer Machine.deinitState(state);
-    var fuel: u64 = 4096;
+    var fuel: u64 = 32 * 1024;
     const done = switch (try Machine.step(state, &fuel)) {
         .done => |value| value,
         else => return error.UnexpectedMachineStep,
@@ -291,7 +292,7 @@ fn renderDynamic(conditional: bool) ![]const u8 {
         .conditional = conditional,
     });
     defer DynamicMachine.deinitState(state);
-    var fuel: u64 = 8192;
+    var fuel: u64 = 64 * 1024;
     const done = switch (try DynamicMachine.step(state, &fuel)) {
         .done => |value| value,
         else => return error.UnexpectedMachineStep,

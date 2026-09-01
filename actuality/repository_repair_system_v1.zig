@@ -4,6 +4,7 @@ pub fn RepositoryRepairSystem(comptime agent: type, comptime boundary: type) typ
     return struct {
         pub const Goal = boundary.Text(2048);
         pub const Prompt = boundary.Text(8 * 1024);
+        pub const EscapedPrompt = boundary.Bytes(48 * 1024);
         pub const Path = boundary.Text(256);
         pub const Digest = boundary.Text(64);
         pub const Query = boundary.Text(256);
@@ -80,7 +81,7 @@ pub fn RepositoryRepairSystem(comptime agent: type, comptime boundary: type) typ
             replace_file: ReplaceResult,
         };
         pub const Memory = struct {
-            context: Prompt,
+            context: EscapedPrompt,
             source_document: MaybeReadResult,
             replacement: MaybeReplaceResult,
             failing_test_observed: bool,
@@ -124,6 +125,10 @@ pub fn RepositoryRepairSystem(comptime agent: type, comptime boundary: type) typ
 
         fn WorkingSet() type {
             return struct {
+                pub const prompt_is_json_escaped = true;
+                const EscapeProtocol = struct {
+                    pub const RequestBody = EscapedPrompt;
+                };
                 pub fn MemoryType(comptime _: anytype) type {
                     return Memory;
                 }
@@ -157,9 +162,15 @@ pub fn RepositoryRepairSystem(comptime agent: type, comptime boundary: type) typ
                         MaybeReplaceResult,
                     };
                 }
-                pub fn emitInitial(comptime _: anytype, flow: anytype, _: anytype, comptime context: anytype) agent.Value(Memory) {
+                pub fn emitInitial(comptime _: anytype, flow: anytype, goal: anytype, comptime context: anytype) agent.Value(Memory) {
                     return flow.productConstruct(Memory, .{
-                        flow.textEmpty(Prompt),
+                        agent.request.appendEscaped(
+                            EscapeProtocol,
+                            flow,
+                            flow.bytesEmpty(EscapedPrompt),
+                            goal,
+                            context,
+                        ),
                         flow.sumConstruct(MaybeReadResult, 0, flow.constant(void, context.unit_index)),
                         flow.sumConstruct(MaybeReplaceResult, 0, flow.constant(void, context.unit_index)),
                         flow.constant(bool, context.false_index),
@@ -173,24 +184,41 @@ pub fn RepositoryRepairSystem(comptime agent: type, comptime boundary: type) typ
                 }
 
                 fn appendEvidence(flow: anytype, memory: anytype, text: anytype, comptime context: anytype) agent.Value(Memory) {
-                    var rendered = flow.textAppendScalarOrFail(
-                        flow.productExtract(0, memory),
+                    const newline = flow.vectorGetOrFail(
+                        flow.constant(agent.request.EscapeTable, context.control_table_index),
                         flow.constant(u32, context.newline_scalar_index),
+                        flow.constant(Failure, context.invalid_index_failure_index),
+                    );
+                    const rendered = flow.bytesAppendOrFail(
+                        flow.productExtract(0, memory),
+                        newline,
+                        flow.constant(Failure, context.capacity_failure_index),
+                    );
+                    const escaped = agent.request.appendEscaped(
+                        EscapeProtocol,
+                        flow,
+                        rendered,
+                        text,
+                        context,
+                    );
+                    return replace(flow, memory, 0, escaped);
+                }
+
+                fn evidenceText(flow: anytype, text: anytype, comptime context: anytype) agent.Value(FileText) {
+                    return flow.textCopyOrFail(
+                        FileText,
+                        text,
+                        flow.constant(u32, context.zero_u32_index),
+                        flow.textLength(text),
                         flow.constant(Failure, context.capacity_failure_index),
                         flow.constant(Failure, context.invalid_utf8_failure_index),
                     );
-                    rendered = flow.textAppendOrFail(
-                        rendered,
-                        text,
-                        flow.constant(Failure, context.capacity_failure_index),
-                    );
-                    return replace(flow, memory, 0, rendered);
                 }
 
-                fn observeTest(flow: anytype, memory: anytype, result: anytype, comptime context: anytype) agent.Value(Memory) {
+                fn observeTest(flow: anytype, memory: anytype, result: anytype, comptime _: anytype) agent.Value(Memory) {
                     const passed = flow.productExtract(0, result);
                     const mutated = flow.productExtract(4, memory);
-                    var next = appendEvidence(flow, memory, flow.productExtract(1, result), context);
+                    var next = memory;
                     next = replace(flow, next, 3, flow.booleanOr(
                         flow.productExtract(3, memory),
                         flow.booleanAnd(flow.booleanNot(passed), flow.booleanNot(mutated)),
@@ -204,8 +232,7 @@ pub fn RepositoryRepairSystem(comptime agent: type, comptime boundary: type) typ
 
                 fn observeReplacement(flow: anytype, memory: anytype, result: anytype, comptime context: anytype) agent.Value(Memory) {
                     const applied = flow.productExtract(0, result);
-                    var next = appendEvidence(flow, memory, flow.productExtract(4, result), context);
-                    next = appendEvidence(flow, next, flow.productExtract(3, result), context);
+                    var next = memory;
                     next = replace(flow, next, 2, flow.sumConstruct(MaybeReplaceResult, 1, result));
                     next = replace(flow, next, 4, flow.booleanOr(flow.productExtract(4, memory), applied));
                     next = replace(flow, next, 5, flow.select(
@@ -228,7 +255,7 @@ pub fn RepositoryRepairSystem(comptime agent: type, comptime boundary: type) typ
                         flow.integerLessEqual(role, two),
                         valid,
                         .{
-                            appendEvidence(flow, memory, flow.productExtract(3, result), context),
+                            memory,
                             result,
                             role,
                         },
@@ -260,7 +287,7 @@ pub fn RepositoryRepairSystem(comptime agent: type, comptime boundary: type) typ
                 }
 
                 pub fn emitObserve(comptime _: anytype, flow: anytype, memory: anytype, observation: anytype, comptime context: anytype) agent.Value(Memory) {
-                    const joined = flow.block(.segment, .{Memory});
+                    const observed = flow.block(.segment, .{ Memory, FileText });
                     var current_memory = memory;
                     var current_observation = observation;
                     inline for (0..5) |index| {
@@ -277,47 +304,62 @@ pub fn RepositoryRepairSystem(comptime agent: type, comptime boundary: type) typ
                             const values = flow.enter(matched);
                             const payload = flow.sumExtract(index, values[1]);
                             const next_memory = switch (index) {
-                                0 => appendEvidence(flow, values[0], flow.productExtract(0, payload), context),
+                                0, 2 => values[0],
                                 1 => observeRead(flow, values[0], payload, context),
-                                2 => appendEvidence(flow, values[0], flow.productExtract(0, payload), context),
                                 3 => observeTest(flow, values[0], payload, context),
                                 else => unreachable,
                             };
-                            flow.jump(joined, .{next_memory});
+                            const evidence = switch (index) {
+                                0, 2 => evidenceText(
+                                    flow,
+                                    flow.productExtract(0, payload),
+                                    context,
+                                ),
+                                1 => flow.productExtract(3, payload),
+                                3 => evidenceText(
+                                    flow,
+                                    flow.productExtract(1, payload),
+                                    context,
+                                ),
+                                else => unreachable,
+                            };
+                            flow.jump(observed, .{ next_memory, evidence });
                             const next_values = flow.enter(next);
                             current_memory = next_values[0];
                             current_observation = next_values[1];
                         } else {
-                            flow.jump(joined, .{observeReplacement(
+                            const payload = flow.sumExtract(4, current_observation);
+                            var evidence = evidenceText(
                                 flow,
-                                current_memory,
-                                flow.sumExtract(4, current_observation),
+                                flow.productExtract(4, payload),
                                 context,
-                            )});
+                            );
+                            evidence = flow.textAppendOrFail(
+                                evidence,
+                                flow.productExtract(3, payload),
+                                flow.constant(Failure, context.capacity_failure_index),
+                            );
+                            flow.jump(observed, .{
+                                observeReplacement(
+                                    flow,
+                                    current_memory,
+                                    payload,
+                                    context,
+                                ),
+                                evidence,
+                            });
                         }
                     }
-                    return flow.enter(joined)[0];
+                    const values = flow.enter(observed);
+                    return appendEvidence(flow, values[0], values[1], context);
                 }
 
                 pub fn emitProject(comptime _: anytype, flow: anytype, memory: anytype) agent.Value(DecisionView) {
                     return flow.copy(memory);
                 }
 
-                pub fn emitPrompt(comptime _: anytype, flow: anytype, goal: anytype, view: anytype, comptime context: anytype) agent.Value(Prompt) {
-                    var prompt = flow.textCopyOrFail(
-                        Prompt,
-                        goal,
-                        flow.constant(u32, context.zero_u32_index),
-                        flow.textLength(goal),
-                        flow.constant(Failure, context.capacity_failure_index),
-                        flow.constant(Failure, context.invalid_utf8_failure_index),
-                    );
-                    prompt = flow.textAppendOrFail(
-                        prompt,
-                        flow.productExtract(0, view),
-                        flow.constant(Failure, context.capacity_failure_index),
-                    );
-                    return prompt;
+                pub fn emitPrompt(comptime _: anytype, flow: anytype, _: anytype, view: anytype, comptime _: anytype) agent.Value(EscapedPrompt) {
+                    return flow.copy(flow.productExtract(0, view));
                 }
 
                 fn textEqual(flow: anytype, left: anytype, right: anytype, comptime context: anytype) agent.Value(bool) {
@@ -540,6 +582,7 @@ pub fn RepositoryRepairSystem(comptime agent: type, comptime boundary: type) typ
             .representation = .{
                 .request_bytes = 64 * 1024,
                 .response_bytes = 32 * 1024,
+                .image_bytes = 512 * 1024,
                 .flow_limits = agent.FlowLimits{
                     .maximum_functions = 32,
                     .maximum_values = 4096,
@@ -553,6 +596,7 @@ pub fn RepositoryRepairSystem(comptime agent: type, comptime boundary: type) typ
                 .schema_types = .{
                     Goal,
                     Prompt,
+                    EscapedPrompt,
                     Path,
                     Digest,
                     Query,

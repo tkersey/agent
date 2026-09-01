@@ -96,6 +96,10 @@ pub fn system(comptime spec: anytype) type {
     }
     return struct {
         pub const system_semantic_identity = spec.semantic_identity;
+        pub const prompt_is_json_escaped = if (@hasDecl(
+            Implementation,
+            "prompt_is_json_escaped",
+        )) Implementation.prompt_is_json_escaped else false;
         pub const MemoryType = Implementation.MemoryType;
         pub const DecisionViewType = Implementation.DecisionViewType;
         pub const schemaTypes = Implementation.schemaTypes;

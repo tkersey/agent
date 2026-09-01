@@ -1,4 +1,5 @@
 actuality/application.zig
+actuality/emit_repository_system_v1.zig
 actuality/emit_decision_contract.zig
 actuality/emit_decision_contract_binary.zig
 actuality/emit_decision_contract_digest.zig
@@ -100,7 +101,6 @@ test/compiler.zig
 test/custom_strategy.zig
 test/decision_contract.zig
 test/definition.zig
-test/emit_closed_turn.zig
 test/epistemics_working_set.zig
 test/external_consumer/build.zig
 test/external_consumer/main.zig

@@ -1266,7 +1266,7 @@ pub fn build(b: *std.Build) void {
     );
     if (world_process_root) |root| {
         const world_system = b.addSystemCommand(&.{"node"});
-        world_system.addFileArg(b.path("actuality/run_repository_system_world.mjs"));
+        world_system.addFileArg(b.path("actuality/run_repository_system_chunks.mjs"));
         world_system.addArgs(&.{
             "--worldRoot",
             root,

@@ -1,6 +1,6 @@
 .{
     .name = .agent,
-    .version = "2.7.0",
+    .version = "3.0.0",
     .dependencies = .{
         .boundary = .{
             .url = "https://github.com/tkersey/boundary/archive/4788bc152d2b0213e9c5c4e6544df1231e4b034d.tar.gz",
@@ -24,6 +24,7 @@
         "fixtures",
         "test",
         "tools",
+        "system_closure_v1",
     },
     .fingerprint = 0x268b9c9d84371874,
 }

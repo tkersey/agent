@@ -193,32 +193,8 @@ pub fn build(b: *std.Build) void {
 
     const world_check = b.step(
         "check-agent-repository-system-world",
-        "Execute the repository fixture through released World",
+        "Execute the source-free closure distribution through released World",
     );
-    if (world_process_root) |root| {
-        const run = b.addSystemCommand(&.{"node"});
-        run.addFileArg(b.path("actuality/run_repository_system_chunks.mjs"));
-        run.addArgs(&.{
-            "--worldRoot",
-            root,
-            "--agentRoot",
-            b.pathFromRoot("."),
-            "--image",
-        });
-        run.addFileArg(outputs[0]);
-        run.addArg("--initial");
-        run.addFileArg(outputs[1]);
-        run.addArg("--expectedFinal");
-        run.addFileArg(outputs[2]);
-        world_check.dependOn(&run.step);
-    } else {
-        const missing = b.addSystemCommand(&.{
-            "sh",
-            "-c",
-            "printf '%s\\n' 'check-agent-repository-system-world requires -Dworld-process-root=/absolute/path' >&2; exit 1",
-        });
-        world_check.dependOn(&missing.step);
-    }
 
     const closure_check = b.step(
         "check-agent-system-closure-v1",
@@ -228,9 +204,95 @@ pub fn build(b: *std.Build) void {
     if (world_process_root != null) closure_check.dependOn(world_check);
     const emit_closure = b.step(
         "emit-agent-system-closure-v1",
-        "Emit the Agent System Closure v1 example inputs",
+        "Emit the Agent System Closure v1 distribution and receipt",
     );
-    emit_closure.dependOn(emit_repository);
+    const package_closure = b.addSystemCommand(&.{ "node", "tools/emit_agent_system_closure_v1.mjs" });
+    package_closure.addFileInput(b.path("tools/emit_agent_system_closure_v1.mjs"));
+    package_closure.addArg("--agent-root");
+    package_closure.addDirectoryArg(b.path("."));
+    package_closure.addArg("--image");
+    package_closure.addFileArg(outputs[0]);
+    package_closure.addArg("--initial-args");
+    package_closure.addFileArg(outputs[1]);
+    package_closure.addArg("--archive");
+    const closure_archive = package_closure.addOutputFileArg(
+        "agent-v3.0.0-system-closure-v1.tar.gz",
+    );
+    package_closure.addArg("--checksum");
+    const closure_checksum = package_closure.addOutputFileArg(
+        "agent-v3.0.0-system-closure-v1.tar.gz.sha256",
+    );
+    package_closure.addArg("--receipt");
+    const closure_receipt = package_closure.addOutputFileArg(
+        "agent-v3.0.0-system-closure-v1-receipt.json",
+    );
+    for ([_][]const u8{
+        "LICENSE",
+        "system_closure_v1/README.md",
+        "system_closure_v1/run.mjs",
+        "system_closure_v1/runtime.mjs",
+        "system_closure_v1/model_transport.mjs",
+        "system_closure_v1/fixture_model_server.mjs",
+        "system_closure_v1/repository_environment.mjs",
+        "system_closure_v1/fixture-proof.json",
+        "fixtures/repository-repair-v1/README.md",
+        "fixtures/repository-repair-v1/package.json",
+        "fixtures/repository-repair-v1/src/range.mjs",
+        "fixtures/repository-repair-v1/test/range.test.mjs",
+    }) |path| package_closure.addFileInput(b.path(path));
+    const install_closure_archive = b.addInstallFile(
+        closure_archive,
+        "agent-v3.0.0-system-closure-v1.tar.gz",
+    );
+    const install_closure_checksum = b.addInstallFile(
+        closure_checksum,
+        "agent-v3.0.0-system-closure-v1.tar.gz.sha256",
+    );
+    const install_closure_receipt = b.addInstallFile(
+        closure_receipt,
+        "agent-v3.0.0-system-closure-v1-receipt.json",
+    );
+    emit_closure.dependOn(&install_closure_archive.step);
+    emit_closure.dependOn(&install_closure_checksum.step);
+    emit_closure.dependOn(&install_closure_receipt.step);
+
+    const check_distribution = b.addSystemCommand(&.{
+        "node",
+        "tools/check_agent_system_closure_distribution.mjs",
+    });
+    check_distribution.addArg("--archive");
+    check_distribution.addFileArg(closure_archive);
+    check_distribution.addArg("--checksum");
+    check_distribution.addFileArg(closure_checksum);
+    check_distribution.addArg("--receipt");
+    check_distribution.addFileArg(closure_receipt);
+    check_distribution.addFileInput(
+        b.path("tools/check_agent_system_closure_distribution.mjs"),
+    );
+    closure_check.dependOn(&check_distribution.step);
+
+    if (world_process_root) |root| {
+        const run = b.addSystemCommand(&.{
+            "node",
+            "tools/check_agent_system_closure_distribution.mjs",
+        });
+        run.addArg("--archive");
+        run.addFileArg(closure_archive);
+        run.addArg("--checksum");
+        run.addFileArg(closure_checksum);
+        run.addArg("--receipt");
+        run.addFileArg(closure_receipt);
+        run.addArgs(&.{ "--world-root", root });
+        run.addFileInput(b.path("tools/check_agent_system_closure_distribution.mjs"));
+        world_check.dependOn(&run.step);
+    } else {
+        const missing = b.addSystemCommand(&.{
+            "sh",
+            "-c",
+            "printf '%s\\n' 'check-agent-repository-system-world requires -Dworld-process-root=/absolute/path' >&2; exit 1",
+        });
+        world_check.dependOn(&missing.step);
+    }
 
     const format = b.addSystemCommand(&.{
         b.graph.zig_exe,

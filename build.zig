@@ -247,6 +247,7 @@ pub fn build(b: *std.Build) void {
         "system_closure_v1/fixture_model_server.mjs",
         "system_closure_v1/repository_environment.mjs",
         "system_closure_v1/fixture-proof.json",
+        "system_closure_v1/admission-proof.json",
         "fixtures/repository-repair-v1/README.md",
         "fixtures/repository-repair-v1/package.json",
         "fixtures/repository-repair-v1/src/range.mjs",
@@ -297,6 +298,18 @@ pub fn build(b: *std.Build) void {
         run.addArgs(&.{ "--world-root", root });
         run.addFileInput(b.path("tools/check_agent_system_closure_distribution.mjs"));
         world_check.dependOn(&run.step);
+        const negatives = b.addSystemCommand(&.{
+            "node",
+            "tools/check_agent_system_admission_negatives.mjs",
+        });
+        negatives.addArgs(&.{ "--world-root", root, "--image" });
+        negatives.addFileArg(outputs[0]);
+        negatives.addArg("--initial");
+        negatives.addFileArg(outputs[1]);
+        negatives.addFileInput(
+            b.path("tools/check_agent_system_admission_negatives.mjs"),
+        );
+        world_check.dependOn(&negatives.step);
     } else {
         const missing = b.addSystemCommand(&.{
             "sh",

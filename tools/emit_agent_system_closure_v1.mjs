@@ -12,12 +12,17 @@ const agentRoot = resolve(options.agentRoot);
 const image = await readFile(options.image);
 const initialArgs = await readFile(options.initialArgs);
 const proof = JSON.parse(await readFile(join(agentRoot, "system_closure_v1/fixture-proof.json"), "utf8"));
+const admissionProof = JSON.parse(await readFile(join(agentRoot, "system_closure_v1/admission-proof.json"), "utf8"));
 assert.equal(proof.format, "agent-system-closure-world-proof/v1");
 assert.equal(proof.result, "passed");
 assert.equal(sha256(image), proof.imageSha256, "fixture proof image digest is stale");
 assert.equal(image.byteLength, proof.imageByteLength, "fixture proof image length is stale");
 assert.equal(sha256(initialArgs), proof.initialArgsSha256, "fixture proof InitialArgs digest is stale");
 assert.equal(initialArgs.byteLength, proof.initialArgsByteLength, "fixture proof InitialArgs length is stale");
+assert.equal(admissionProof.format, "agent-system-closure-admission-negatives/v1");
+assert.equal(admissionProof.result, "passed");
+assert.equal(admissionProof.imageSha256, proof.imageSha256, "admission proof image digest is stale");
+assert.equal(admissionProof.kernelSha256, proof.kernelSha256, "admission proof kernel digest is stale");
 assert.equal(image.subarray(0, 8).toString("ascii"), "ABL_BPI1");
 
 const files = new Map();
@@ -89,6 +94,12 @@ const receipt = {
     rawHttpResponsePreserved: proof.rawHttpResponsePreserved,
     conditionalSkillVisible: proof.conditionalSkillVisible,
     processTransfersObserved: proof.processTransfers,
+    transferPoints: admissionProof.transferPoints,
+    admissionNegatives: admissionProof.negativeResults,
+    dangerousRepositoryEffectsFromInvalidCandidates:
+      admissionProof.dangerousRepositoryEffects,
+    successfulPrematureCompletions:
+      admissionProof.successfulPrematureCompletions,
     openCycleProof: "passed",
     sourceAbsenceRuntimePath: "passed",
   },

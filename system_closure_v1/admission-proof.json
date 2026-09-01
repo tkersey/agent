@@ -1,0 +1,29 @@
+{
+  "format": "agent-system-closure-admission-negatives/v1",
+  "result": "passed",
+  "kernelSha256": "835a35fcad4d242ae6ab32244faf563032c5a63b2ff71e62511c410445d74139",
+  "imageSha256": "05f3fb2a84e7f3fc999fa12ab7dfe4a8f6e775eb805f59bc69857b59de1b6627",
+  "negativeResults": [
+    {
+      "name": "pre-baseline-replacement",
+      "terminal": "AuthoredFailure"
+    },
+    {
+      "name": "disallowed-read-role",
+      "terminal": "AuthoredFailure"
+    },
+    {
+      "name": "premature-completion",
+      "terminal": "AuthoredFailure"
+    }
+  ],
+  "dangerousRepositoryEffects": 0,
+  "successfulPrematureCompletions": 0,
+  "transferPoints": [
+    "internal-response-parser",
+    "pending-model-request",
+    "pending-repository-request"
+  ],
+  "freshHostOutcomeEquality": true,
+  "repeatedPendingRequestEquality": true
+}

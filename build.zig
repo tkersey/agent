@@ -1166,6 +1166,17 @@ pub fn build(b: *std.Build) void {
     );
     addFocusedTest(
         b,
+        "check-agent-local-action",
+        "Prove internal actions execute in-image without residual effects",
+        "test/local_action.zig",
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic_check,
+    );
+    addFocusedTest(
+        b,
         "check-agent-repository-system",
         "Compile the closed repository-repair system through the canonical Agent 3 path",
         "actuality/repository_repair_system_v1.zig",

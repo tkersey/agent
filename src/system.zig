@@ -110,6 +110,27 @@ fn validate(comptime spec: anytype) void {
                     @compileError("agent system Observation payload differs from effect Resume");
                 }
             },
+            .local => {
+                if (!@hasDecl(Descriptor.Local, "Payload") or
+                    !@hasDecl(Descriptor.Local, "Observation") or
+                    !@hasDecl(Descriptor.Local, "emit"))
+                {
+                    @compileError("agent system local action implementation is incomplete");
+                }
+                if (Payload != Descriptor.Local.Payload) {
+                    @compileError("agent system local Action payload differs from its implementation Payload");
+                }
+                const ObservationPayload = unionFieldType(
+                    spec.Observation,
+                    Descriptor.observation_name,
+                    "Observation",
+                );
+                if (ObservationPayload != Descriptor.Local.Observation) {
+                    @compileError("agent system local Observation payload differs from its implementation Observation");
+                }
+                boundary.schema.assertPortable(Descriptor.Local.Payload);
+                boundary.schema.assertPortable(Descriptor.Local.Observation);
+            },
             .final => if (Payload != spec.Result) {
                 @compileError("agent system final Action payload differs from Result");
             },

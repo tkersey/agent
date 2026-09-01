@@ -108,6 +108,7 @@ test/final_policy.zig
 test/final_policy_negative.zig
 test/flow.zig
 test/json.zig
+test/local_action.zig
 test/machine_native_wasm.zig
 test/malformed.zig
 test/protocol.zig

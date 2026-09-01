@@ -381,6 +381,34 @@ pub fn ReactBody(comptime source: anytype) type {
                     flow.productReplace(1, performed.carried[0], next_memory);
                 flow.jump(loop, .{next_state});
             },
+            .local => {
+                const local_payload = Descriptor.Local.emit(
+                    &flow,
+                    payload,
+                    Context,
+                );
+                const observation = flow.sumConstruct(
+                    source.Observation,
+                    unionFieldIndex(source.Observation, Descriptor.observation_name),
+                    local_payload,
+                );
+                const local_memory = if (Epistemics.prompt_is_json_escaped)
+                    values[1]
+                else
+                    flow.productExtract(1, values[1]);
+                const next_memory = Epistemics.emitObserve(
+                    source,
+                    &flow,
+                    local_memory,
+                    observation,
+                    Context,
+                );
+                const next_state = if (Epistemics.prompt_is_json_escaped)
+                    next_memory
+                else
+                    flow.productReplace(1, values[1], next_memory);
+                flow.jump(loop, .{next_state});
+            },
             .final => {
                 const final_memory = if (Epistemics.prompt_is_json_escaped)
                     values[1]

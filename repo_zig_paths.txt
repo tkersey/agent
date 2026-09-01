@@ -1,10 +1,10 @@
 actuality/application.zig
-actuality/emit_repository_system_v1.zig
 actuality/emit_decision_contract.zig
 actuality/emit_decision_contract_binary.zig
 actuality/emit_decision_contract_digest.zig
 actuality/emit_first_decision_request.zig
 actuality/emit_initial_args.zig
+actuality/emit_repository_system_v1.zig
 actuality/repository_repair_definition.zig
 actuality/repository_repair_epistemics.zig
 actuality/repository_repair_system_v1.zig

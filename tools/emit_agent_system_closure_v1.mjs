@@ -66,7 +66,7 @@ const receipt = {
   programTransitionIdentity: image.subarray(32, 64).toString("hex"),
   initialArgsSha256: proof.initialArgsSha256,
   initialArgsByteLength: proof.initialArgsByteLength,
-  configuredModel: "fixture-responses-model-v1",
+  configuredModel: "gpt-5.4-mini-2026-03-17",
   modelProtocol: "agent.model.openai.responses.v1",
   observedModelRequestCount: proof.modelRequests,
   observedModelRequestBodySha256: proof.requestBodySha256,

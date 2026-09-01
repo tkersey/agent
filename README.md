@@ -98,6 +98,20 @@ test command. It is deterministic model-environment evidence, not a live-model
 quality claim. The portable process is forkable data and does not itself imply
 exactly-once side effects or a hostile-host authenticity guarantee.
 
+The same archive has an explicitly invoked live mode using the image-fixed
+`gpt-5.4-mini-2026-03-17` snapshot documented by
+[OpenAI](https://developers.openai.com/api/docs/models/gpt-5.4-mini):
+
+```sh
+OPENAI_API_KEY=... node run.mjs \
+  --world-root /path/to/world-runtime \
+  --mode live \
+  --endpoint https://api.openai.com/v1/responses \
+  --work-dir /path/to/empty-work-directory
+```
+
+Live mode accepts no model, prompt, skill, tool-catalog, or strategy override.
+
 Agent 2.7 tags and published transcript artifacts remain frozen historical
 evidence. They are not an alternate Agent 3 compiler or runtime path.
 

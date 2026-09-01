@@ -42,7 +42,7 @@ export async function startFixtureModelServer(startDecision = 0) {
       const bodyBytes = Buffer.concat(chunks);
       captures.push(bodyBytes);
       const body = JSON.parse(bodyBytes.toString("utf8"));
-      assert.equal(body.model, "fixture-responses-model-v1");
+      assert.equal(body.model, "gpt-5.4-mini-2026-03-17");
       assert.equal(body.tool_choice, "required");
       assert.equal(body.parallel_tool_calls, false);
       assert.equal(body.store, false);

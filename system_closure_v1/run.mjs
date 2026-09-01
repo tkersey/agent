@@ -5,7 +5,11 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const options = parseArgs(process.argv.slice(2));
-assert.equal(options.mode, "fixture", "this distribution currently supports fixture mode");
+assert(["fixture", "live"].includes(options.mode), "--mode must be fixture or live");
+if (options.mode === "live") {
+  assert(options.endpoint !== undefined, "live mode requires --endpoint");
+  assert(process.env.OPENAI_API_KEY, "live mode requires OPENAI_API_KEY");
+}
 const workDir = resolve(options.workDir);
 const workEntries = (await readdir(workDir)).sort();
 if (workEntries.length !== 0) {
@@ -18,13 +22,15 @@ if (workEntries.length !== 0) {
 const runtime = join(dirname(fileURLToPath(import.meta.url)), "runtime.mjs");
 
 for (let chunk = 0; chunk < 16; chunk += 1) {
-  const result = spawnSync(process.execPath, [
+  const runtimeArgs = [
     runtime,
     "--worldRoot", resolve(options.worldRoot),
     "--workDir", workDir,
     "--mode", options.mode,
     "--maximumReductions", "3000",
-  ], {
+  ];
+  if (options.endpoint !== undefined) runtimeArgs.push("--endpoint", options.endpoint);
+  const result = spawnSync(process.execPath, runtimeArgs, {
     encoding: "utf8",
     env: process.env,
     maxBuffer: 4 * 1024 * 1024,

@@ -9,20 +9,28 @@ const failureKinds = Object.freeze({
 
 export async function performModelRequest(payload, options) {
   const request = decodeModelRequest(payload);
+  const endpoint = new URL(options.endpoint);
+  assert(
+    endpoint.protocol === "https:" ||
+      (endpoint.protocol === "http:" && ["127.0.0.1", "::1", "localhost"].includes(endpoint.hostname)),
+    "model endpoint must use HTTPS or loopback HTTP",
+  );
   const headers = { "content-type": "application/json" };
   if (options.apiKey !== undefined) headers.authorization = `Bearer ${options.apiKey}`;
   try {
-    const response = await fetch(options.endpoint, {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers,
       body: request.body,
       redirect: "error",
       signal: options.signal,
     });
-    const body = Buffer.from(await response.arrayBuffer());
-    if (body.byteLength > request.maximumResponseBytes) {
+    const declaredLength = response.headers.get("content-length");
+    if (declaredLength !== null && Number(declaredLength) > request.maximumResponseBytes) {
       return encodeTransportFailure("response_too_large");
     }
+    const body = await readBoundedBody(response, request.maximumResponseBytes);
+    if (body === null) return encodeTransportFailure("response_too_large");
     return encodeResponse(response.status, body);
   } catch (error) {
     if (error?.name === "AbortError") return encodeTransportFailure("interrupted");
@@ -30,6 +38,24 @@ export async function performModelRequest(payload, options) {
       return encodeTransportFailure("denied");
     }
     return encodeTransportFailure("unavailable");
+  }
+}
+
+async function readBoundedBody(response, maximumBytes) {
+  if (response.body === null) return Buffer.alloc(0);
+  const reader = response.body.getReader();
+  const chunks = [];
+  let length = 0;
+  for (;;) {
+    const next = await reader.read();
+    if (next.done) return Buffer.concat(chunks, length);
+    const chunk = Buffer.from(next.value);
+    length += chunk.byteLength;
+    if (length > maximumBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(chunk);
   }
 }
 

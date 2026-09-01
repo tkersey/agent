@@ -16,7 +16,11 @@ import {
 } from "./repository_environment.mjs";
 
 const options = parseArgs(process.argv.slice(2));
-assert.equal(options.mode, "fixture");
+assert(["fixture", "live"].includes(options.mode));
+if (options.mode === "live") {
+  assert(options.endpoint !== undefined, "live mode requires --endpoint");
+  assert(process.env.OPENAI_API_KEY, "live mode requires OPENAI_API_KEY");
+}
 const distributionRoot = dirname(fileURLToPath(import.meta.url));
 const worldRoot = resolve(options.worldRoot);
 const workRoot = resolve(options.workDir);
@@ -47,7 +51,9 @@ const repository = await createRepositoryEnvironment(workspaceRoot, checkpoint ?
 if (checkpoint === null) {
   assert.equal(sha256(await repository.admittedRead("src/range.mjs")), EXPECTED_INITIAL_DIGEST);
 }
-const fixtureModel = await startFixtureModelServer(checkpoint?.modelDecision ?? 0);
+const fixtureModel = options.mode === "fixture"
+  ? await startFixtureModelServer(checkpoint?.modelDecision ?? 0)
+  : null;
 let instance = checkpoint === null
   ? { initialArgs: initial }
   : { state: Buffer.from(checkpoint.state, "base64") };
@@ -84,11 +90,18 @@ try {
           modelRequests += 1;
           const decoded = decodeModelRequest(request.payload);
           assert.equal(decoded.maximumResponseBytes, 32 * 1024);
-          const captureIndex = fixtureModel.captures.length;
-          resume = await performModelRequest(request.payload, { endpoint: fixtureModel.endpoint });
-          assert.equal(fixtureModel.captures.length, captureIndex + 1);
-          assert.deepEqual(fixtureModel.captures[captureIndex], decoded.body);
-          httpBodyEqualityCount += 1;
+          if (fixtureModel !== null) {
+            const captureIndex = fixtureModel.captures.length;
+            resume = await performModelRequest(request.payload, { endpoint: fixtureModel.endpoint });
+            assert.equal(fixtureModel.captures.length, captureIndex + 1);
+            assert.deepEqual(fixtureModel.captures[captureIndex], decoded.body);
+            httpBodyEqualityCount += 1;
+          } else {
+            resume = await performModelRequest(request.payload, {
+              endpoint: options.endpoint,
+              apiKey: process.env.OPENAI_API_KEY,
+            });
+          }
           requestBodySha256.push(sha256(decoded.body));
         } else {
           resume = await repository.resolveEffect(request);
@@ -110,7 +123,7 @@ try {
     if (terminal !== undefined || chunkReductions >= maximumReductions) break;
   }
 } finally {
-  await fixtureModel.close();
+  if (fixtureModel !== null) await fixtureModel.close();
 }
 
 const repositoryState = repository.snapshot();
@@ -124,7 +137,7 @@ if (terminal === undefined) {
     state: Buffer.from(instance.state).toString("base64"),
     effectResult: effectResult === undefined ? null : Buffer.from(effectResult).toString("base64"),
     reductions,
-    modelDecision: fixtureModel.decision,
+    modelDecision: fixtureModel?.decision,
     modelRequests,
     httpBodyEqualityCount,
     identities,
@@ -140,7 +153,7 @@ if (terminal === undefined) {
     result: "checkpointed",
     chunkReductions,
     reductions,
-    modelDecision: fixtureModel.decision,
+    modelDecision: fixtureModel?.decision,
     repositoryRequests: repositoryState.repositoryRequests,
   })}\n`);
   process.exit(0);
@@ -156,7 +169,7 @@ assert.deepEqual(finalResult, {
 assert.equal(repositoryState.baselineFailed, true);
 assert.equal(repositoryState.mutationApplied, true);
 assert.equal(repositoryState.postMutationPassed, true);
-assert.equal(fixtureModel.decision, 8);
+if (fixtureModel !== null) assert.equal(fixtureModel.decision, 8);
 const sourceAfter = await repository.admittedRead("src/range.mjs");
 assert.equal(sha256(sourceAfter), EXPECTED_FINAL_DIGEST);
 assert.equal(sourceAfter.toString("utf8"), CORRECT_SOURCE);
@@ -164,7 +177,7 @@ git(workspaceRoot, ["add", "--", "src/range.mjs"]);
 const finalTree = git(workspaceRoot, ["write-tree"]);
 assert.equal(finalTree, EXPECTED_FINAL_TREE);
 assert.deepEqual(git(workspaceRoot, ["diff", "--cached", "--name-only"]).split("\n"), ["src/range.mjs"]);
-assert.equal(httpBodyEqualityCount, modelRequests);
+if (fixtureModel !== null) assert.equal(httpBodyEqualityCount, modelRequests);
 
 process.stdout.write(`${JSON.stringify({
   format: "agent-system-closure-world-proof/v1",
@@ -189,7 +202,7 @@ process.stdout.write(`${JSON.stringify({
   terminalSha256: sha256(terminal),
   realFilesystemEffects: true,
   realTestProcesses: 2,
-  liveModelTestStatus: "not-run",
+  liveModelTestStatus: options.mode === "live" ? "passed" : "not-run",
 })}\n`);
 
 function initializeGit(cwd) {

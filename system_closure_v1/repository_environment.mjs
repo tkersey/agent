@@ -39,8 +39,22 @@ export async function createRepositoryEnvironment(workspaceRoot, restored = {}) 
         const contents = await admittedRead(path);
         return concat(Buffer.from([role]), encodeText(path), encodeText(sha256(contents)), encodeText(contents));
       }
-      case "repo.search.v1":
-        throw new Error("nominal fixture must not require search");
+      case "repo.search.v1": {
+        const cursor = { value: 0 };
+        const query = decodeText(request.payload, cursor);
+        assert.equal(cursor.value, request.payload.length);
+        assert(query.length > 0);
+        const matches = [];
+        for (const path of ["README.md", "package.json", "src/range.mjs", "test/range.test.mjs"]) {
+          const contents = (await admittedRead(path)).toString("utf8");
+          for (const [index, line] of contents.split("\n").entries()) {
+            if (line.includes(query)) matches.push(`${path}:${index + 1}:${line}`);
+          }
+        }
+        const encoded = matches.join("\n");
+        assert(Buffer.byteLength(encoded) <= 1900, "search result exceeds admitted evidence bound");
+        return encodeText(encoded);
+      }
       case "repo.test.v1": {
         assert.equal(request.payload.length, 0);
         const result = spawnSync("bun", ["test"], {

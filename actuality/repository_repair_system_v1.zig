@@ -524,7 +524,7 @@ pub fn RepositoryRepairSystem(comptime agent: type, comptime boundary: type) typ
             .models = .{agent.model(.{
                 .name = "primary",
                 .protocol = agent.protocol.openaiResponsesV1.Profile,
-                .model = "fixture-responses-model-v1",
+                .model = "gpt-5.4-mini-2026-03-17",
                 .parameters = .{},
             })},
             .prompts = .{

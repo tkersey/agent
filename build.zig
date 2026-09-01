@@ -115,7 +115,7 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic,
     );
-    response_a.dependOn(open_lifetime);
+    response_a.dependOn(previous);
     const response_b = addFilteredFocusedTest(
         b,
         .{
@@ -130,7 +130,7 @@ pub fn build(b: *std.Build) void {
         optimize,
         semantic,
     );
-    response_b.dependOn(response_a);
+    response_b.dependOn(previous);
 
     const compile_fail = b.step(
         "compile-fail",
@@ -152,7 +152,7 @@ pub fn build(b: *std.Build) void {
         agent_module,
         boundary_module,
     );
-    compile_fail.dependOn(response_b);
+    compile_fail.dependOn(previous);
     semantic.dependOn(compile_fail);
 
     const repository_module = b.createModule(.{
@@ -201,6 +201,18 @@ pub fn build(b: *std.Build) void {
         "Run deterministic Agent System Closure v1 checks",
     );
     closure_check.dependOn(semantic);
+    const model_transport_test = b.addSystemCommand(&.{
+        "node",
+        "--test",
+        "system_closure_v1/model_transport.test.mjs",
+    });
+    model_transport_test.addFileInput(
+        b.path("system_closure_v1/model_transport.test.mjs"),
+    );
+    model_transport_test.addFileInput(
+        b.path("system_closure_v1/model_transport.mjs"),
+    );
+    closure_check.dependOn(&model_transport_test.step);
     if (world_process_root != null) closure_check.dependOn(world_check);
     const emit_closure = b.step(
         "emit-agent-system-closure-v1",

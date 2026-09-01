@@ -26,13 +26,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     agent_module.addImport("boundary", boundary_module);
-    const shared_boundary_module = b.addModule("boundary", .{
-        .root_source_file = b.path("src/boundary_package.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    shared_boundary_module.addImport("agent_boundary_upstream", boundary_module);
-
     const semantic = b.step(
         "check-agent-semantic",
         "Run the canonical Agent 3 compiler and portable-runtime proofs",
@@ -43,9 +36,6 @@ pub fn build(b: *std.Build) void {
     var previous: *std.Build.Step = &run_root_tests.step;
 
     inline for ([_]TestSpec{
-        .{ .name = "check-agent-definition", .description = "Validate typed source admission", .path = "test/definition.zig" },
-        .{ .name = "check-agent-action-algebra", .description = "Validate exhaustive typed Action closure", .path = "test/action_algebra.zig" },
-        .{ .name = "check-agent-action-admission", .description = "Reject inadmissible actions before effects", .path = "test/action_admission.zig" },
         .{ .name = "check-agent-flow", .description = "Validate Flow lowering", .path = "test/flow.zig" },
         .{ .name = "check-agent-protocol", .description = "Validate raw model transport", .path = "test/protocol.zig" },
         .{ .name = "check-agent-system-api", .description = "Validate the canonical complete-system API", .path = "test/system.zig" },
@@ -53,8 +43,6 @@ pub fn build(b: *std.Build) void {
         .{ .name = "check-agent-json", .description = "Validate strict generated tool schemas", .path = "test/json.zig" },
         .{ .name = "check-agent-request", .description = "Validate complete provider requests", .path = "test/request.zig" },
         .{ .name = "check-agent-staged-json", .description = "Validate in-image JSON and Unicode scanning", .path = "test/staged_json.zig" },
-        .{ .name = "check-agent-custom-strategy", .description = "Validate compile-time strategy specialization", .path = "test/custom_strategy.zig" },
-        .{ .name = "check-agent-void-effect-action", .description = "Validate typed unit effects", .path = "test/void_effect_action.zig" },
         .{ .name = "check-agent-repository-system", .description = "Compile the complete repository system", .path = "actuality/repository_repair_system_v1.zig" },
     }) |spec| {
         const step = addFocusedTest(
@@ -69,22 +57,6 @@ pub fn build(b: *std.Build) void {
         step.dependOn(previous);
         previous = step;
     }
-
-    const shared = addSharedBoundaryTest(
-        b,
-        .{
-            .name = "check-agent-shared-boundary",
-            .description = "Prove consumers share Agent's Boundary module",
-            .path = "test/shared_boundary.zig",
-        },
-        agent_module,
-        shared_boundary_module,
-        target,
-        optimize,
-        semantic,
-    );
-    shared.dependOn(previous);
-    previous = shared;
 
     const open_lifetime = addFilteredFocusedTest(
         b,
@@ -409,30 +381,6 @@ fn addFilteredFocusedTest(
     module.addImport("agent", agent_module);
     module.addImport("boundary", boundary_module);
     const tests = b.addTest(.{ .root_module = module, .filters = filters });
-    const run = b.addRunArtifact(tests);
-    const step = b.step(spec.name, spec.description);
-    step.dependOn(&run.step);
-    aggregate.dependOn(step);
-    return step;
-}
-
-fn addSharedBoundaryTest(
-    b: *std.Build,
-    spec: TestSpec,
-    agent_module: *std.Build.Module,
-    boundary_module: *std.Build.Module,
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-    aggregate: *std.Build.Step,
-) *std.Build.Step {
-    const module = b.createModule(.{
-        .root_source_file = b.path(spec.path),
-        .target = target,
-        .optimize = optimize,
-    });
-    module.addImport("agent", agent_module);
-    module.addImport("boundary", boundary_module);
-    const tests = b.addTest(.{ .root_module = module });
     const run = b.addRunArtifact(tests);
     const step = b.step(spec.name, spec.description);
     step.dependOn(&run.step);

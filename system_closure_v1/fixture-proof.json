@@ -7,9 +7,19 @@
   "imageByteLength": 247380,
   "initialArgsSha256": "409722c8728e6c5c1212ad0e7bda5558d3604aa4f489ad74a57aa8b25b51ef10",
   "initialArgsByteLength": 275,
-  "reductions": 22054,
+  "reductions": 19888,
   "modelRequests": 8,
   "repositoryRequests": 7,
+  "requestBodySha256": [
+    "4ad9f7cfa6d76f36ff15b791fdc362dc39d5afc101d8669a6249d0c086249e27",
+    "34fbe5ce72a5e7ce586758736b871c4f9dbc45846ef9b6eae328631dd97a7213",
+    "26cb2dfeaf76e47f0e471af632282635a4c51893f50da0197bde33b76ab6bce8",
+    "82e906380a2e71ceba3f01150c74b1816139bb8f838f84fa06665e369eebd6bf",
+    "b4139b51803ad5de76f95e8748dc51f964d8b4e3dae5aef2514fc836eba65c14",
+    "2fd27d5f7fb4ad0fbd906ccbeb67a655ba5e11e1768048f85ca366330d989318",
+    "952a93c923f6efac9bac4df47ed548d6fedcc6ccf64d80713af1e11048a2649b",
+    "3aebfdab5e50e7643ea3ad5c9d94b59c079bd642d04fa93508b79b7a4d33c032"
+  ],
   "conditionalSkillVisible": true,
   "httpBodyEqualityCount": 8,
   "rawHttpResponsePreserved": true,
@@ -19,6 +29,6 @@
   "terminalSha256": "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032",
   "realFilesystemEffects": true,
   "realTestProcesses": 2,
-  "processTransfers": 5,
+  "processTransfers": 6,
   "liveModelTestStatus": "not-run"
 }

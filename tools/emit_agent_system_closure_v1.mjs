@@ -69,6 +69,7 @@ const receipt = {
   configuredModel: "fixture-responses-model-v1",
   modelProtocol: "agent.model.openai.responses.v1",
   observedModelRequestCount: proof.modelRequests,
+  observedModelRequestBodySha256: proof.requestBodySha256,
   observedRepositoryRequestCount: proof.repositoryRequests,
   observedReductionCount: proof.reductions,
   terminalKind: "completed",

@@ -79,6 +79,10 @@ try {
     assert.equal(execution.kernelSha256, receipt.boundary.kernelSha256);
     assert.equal(execution.reductions, receipt.observedReductionCount);
     assert.equal(execution.modelRequests, receipt.observedModelRequestCount);
+    assert.deepEqual(
+      execution.requestBodySha256,
+      receipt.observedModelRequestBodySha256,
+    );
     assert.equal(execution.repositoryRequests, receipt.observedRepositoryRequestCount);
     assert.equal(execution.finalTree, receipt.repository.finalTree);
     assert.equal(execution.terminalSha256, receipt.terminalResultSha256);

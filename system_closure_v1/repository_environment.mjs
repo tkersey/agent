@@ -49,7 +49,6 @@ export async function createRepositoryEnvironment(workspaceRoot, restored = {}) 
           env: { PATH: process.env.PATH ?? "" },
         });
         const passed = result.status === 0;
-        const output = clipUtf8(`${result.stdout ?? ""}${result.stderr ?? ""}`, 1900);
         if (!mutationApplied) {
           assert.equal(passed, false);
           baselineFailed = true;
@@ -57,7 +56,10 @@ export async function createRepositoryEnvironment(workspaceRoot, restored = {}) 
           assert.equal(passed, true);
           postMutationPassed = true;
         }
-        return concat(Buffer.from([Number(passed)]), encodeText(output));
+        const observation = passed
+          ? "complete fixture test suite passed"
+          : "complete fixture test suite failed";
+        return concat(Buffer.from([Number(passed)]), encodeText(observation));
       }
       case "repo.replace.approved.v1": {
         assert.equal(baselineFailed, true);
@@ -181,10 +183,4 @@ function u32(value) {
 
 function concat(...parts) {
   return Buffer.concat(parts.map((part) => Buffer.from(part)));
-}
-
-function clipUtf8(value, maximumBytes) {
-  const source = Buffer.from(value);
-  if (source.length <= maximumBytes) return value;
-  return source.subarray(0, maximumBytes).toString("utf8");
 }

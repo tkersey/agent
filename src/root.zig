@@ -12,7 +12,7 @@ pub const prompt = @import("prompt.zig");
 pub const skill = @import("skill.zig").skill;
 /// Typed action-descriptor constructors.
 pub const action = @import("action.zig");
-pub const json = @import("json.zig");
+pub const toolSchema = @import("json.zig").ToolSchema;
 /// Explicit deterministic Memory, observation-fold, and DecisionView strategies.
 pub const epistemics = @import("epistemics_v3.zig");
 /// Compiler-only structured authoring surface for RuntimeStrategies.

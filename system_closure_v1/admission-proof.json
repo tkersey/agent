@@ -2,7 +2,7 @@
   "format": "agent-system-closure-admission-negatives/v1",
   "result": "passed",
   "kernelSha256": "f76f38b26542534b44f5fa4f2dc71dd2ff0941c378d66d9239398afc603028bf",
-  "imageSha256": "9ec38096063eec13937424249a54fa7c1140bc197a4a46ca3814ee063f77c016",
+  "imageSha256": "dfb11bda1e0c4df0b6980550a4238c4d8da5eb5608e0147a6c39f16cbc604bfd",
   "negativeResults": [
     {
       "name": "pre-baseline-replacement",
@@ -45,11 +45,11 @@
   "freshHostOutcomeEquality": true,
   "repeatedPendingRequestEquality": true,
   "nativeWasmParity": {
-    "pendingModelStateSha256": "ef042a9fe4383e23e6d569c415f2227d40329a67b3f3d41805a3f4e84756c4a7",
-    "pendingModelRequestSha256": "e2d0401f3fc88e5741d0ad5c65951970937e41bb2c32e22beb48153f3f897f7e",
-    "parserStateSha256": "5c8829933d993f12e9283f7f0107eedb19ecc16a4ab06907f5437aa0d40ef137",
-    "pendingRepositoryStateSha256": "0635a582bfaea2e7c144bff341bedafa2193ad7d1ebe7b94058a55494fa27bc3",
-    "pendingRepositoryRequestSha256": "3e36f27145bbfa46261948b66b9dbaea945acf506eb606c55dc9b23d84623a35",
+    "pendingModelStateSha256": "d3ba21c98385f42d33bfcf11227fb92d4617942a4a6dc28b94135c06ed0b3878",
+    "pendingModelRequestSha256": "b7d789ea373329c9fc4da452628caa6b53c42a5cadef1813f0a4f555fe008a53",
+    "parserStateSha256": "83abfb0a8868559dae1f52ce458dccaa8238ad93818295b2f429ea647aa2d624",
+    "pendingRepositoryStateSha256": "2ba871e6fedc7e3435795231230bfcbf5ca1831008592ff076c4d44982cd8c91",
+    "pendingRepositoryRequestSha256": "3d5fec2fa7d6754ad13a36f362b06d70d7762aaebe98089ad867d3bebad22cdd",
     "policyFailureSha256": "01b4f6bd5d6a06a7b74a8565ceb4f845afe0ae96a0ac05cf5e86066bf7b538ec",
     "completionSha256": "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032"
   }

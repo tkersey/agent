@@ -12,6 +12,8 @@ pub const Value = @import("flow.zig").Value;
 pub const FlowLimits = @import("flow.zig").Limits;
 pub const FlowPhase = @import("flow.zig").Phase;
 pub const ReactBody = @import("system_compiler.zig").ReactBody;
+pub const ReactBodyNoToolEconomy =
+    @import("system_compiler.zig").ReactBodyNoToolEconomy;
 pub const ReactBodyActionDecodeAblation =
     @import("system_compiler.zig").ReactBodyActionDecodeAblation;
 

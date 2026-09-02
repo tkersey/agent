@@ -164,7 +164,7 @@ try {
           modelRequests += 1;
           modelInvocationSha256.push(sha256(request.payload));
           const decoded = decodeModelInvocation(request.payload);
-          assert.equal(decoded.maximumProviderResponseBytes, 32 * 1024);
+          assert.equal(decoded.maximumProviderResponseBytes, 64 * 1024);
           const expectedBody = encodeOpenAIResponsesRequest(decoded);
           if (fixtureModel !== null) {
             const captureIndex = fixtureModel.captures.length;

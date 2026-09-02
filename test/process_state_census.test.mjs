@@ -35,6 +35,10 @@ assert.equal(report.stateBearingOutcomeCount, 2);
 assert.equal(report.maximumProgressedBetweenResidualBoundaries, 1);
 assert.equal(report.rows[0].identicalEnvironmentBlobCopies, 1);
 assert.equal(report.rows[0].duplicatedEnvironmentBytes, 5_000);
+assert.equal(
+  report.rows[0].phase,
+  sourceMap.segments.find((segment) => segment.segmentId === 0).phaseSpans[0].phase,
+);
 assert.equal(report.phaseMaxima.pending_model_request.requestBytes, 100);
 assert.equal(report.summary.stateBytes.minimum, state.byteLength);
 assert.throws(() => decodeProcessState(Buffer.from("not-a-state")));

@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 const ROOT = "agent-v3.0.0-system-closure-v1";
+const MAXIMUM_EXPANDED_ARCHIVE_BYTES = 2 * 1024 * 1024;
 const expectedFiles = new Set([
   "LICENSE",
   "README.md",
@@ -37,7 +38,9 @@ assert.equal(receipt.archiveByteLength, archive.byteLength);
 
 const extractionRoot = await mkdtemp(join(tmpdir(), "agent-system-closure-distribution-"));
 try {
-  const files = parseTar(gunzipSync(archive));
+  const files = parseTar(gunzipSync(archive, {
+    maxOutputLength: MAXIMUM_EXPANDED_ARCHIVE_BYTES,
+  }));
   assert.deepEqual(new Set(files.keys()), expectedFiles);
   for (const [name, bytes] of files) {
     const destination = join(extractionRoot, ROOT, name);

@@ -99,13 +99,30 @@ fn actionPayload(comptime Action: type, comptime index: usize) type {
     return @typeInfo(Action).@"union".fields[index].type;
 }
 
+fn actionTag(comptime Action: type, comptime index: usize) u32 {
+    const info = @typeInfo(Action).@"union";
+    const Tag = info.tag_type.?;
+    return @intCast(@intFromEnum(@field(Tag, info.fields[index].name)));
+}
+
 fn maximumToolSchemaLength(
     comptime Action: type,
     comptime actions: anytype,
 ) usize {
     var maximum: usize = 2;
     inline for (actions, 0..) |_, index| {
-        maximum = @max(maximum, json.Schema(actionPayload(Action, index)).value.len);
+        maximum = @max(maximum, json.ToolSchema(actionPayload(Action, index)).value.len);
+    }
+    return maximum;
+}
+
+fn maximumArgumentsJsonLength(comptime Action: type) usize {
+    var maximum: usize = 2;
+    inline for (@typeInfo(Action).@"union".fields) |field| {
+        maximum = @max(
+            maximum,
+            json.maximumToolArgumentsByteLength(field.type),
+        );
     }
     return maximum;
 }
@@ -121,6 +138,26 @@ fn messageRole(comptime role: anytype) MessageRole {
 pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
     if (comptime !boundary.schema.isTextType(Prompt)) {
         @compileError("Agent semantic model invocation requires a Text prompt");
+    }
+    const minimum_arguments_json_bytes = maximumArgumentsJsonLength(source.Action);
+    const maximum_arguments_json_bytes = if (@hasField(
+        @TypeOf(source.representation),
+        "maximum_arguments_json_bytes",
+    )) source.representation.maximum_arguments_json_bytes else source.representation.response_bytes;
+    if (maximum_arguments_json_bytes < minimum_arguments_json_bytes) {
+        @compileError(std.fmt.comptimePrint(
+            "Agent maximum_arguments_json_bytes must be at least {d} bytes for admitted Action JSON",
+            .{minimum_arguments_json_bytes},
+        ));
+    }
+    const maximum_provider_response_bytes = if (@hasField(
+        @TypeOf(source.representation),
+        "maximum_provider_response_bytes",
+    )) source.representation.maximum_provider_response_bytes else source.representation.response_bytes + 4096;
+    if (maximum_provider_response_bytes == 0 or
+        maximum_provider_response_bytes > std.math.maxInt(u32))
+    {
+        @compileError("Agent maximum_provider_response_bytes must fit positive u32");
     }
     const ModelId = boundary.Text(maximumModelIdLength(source.models));
     const ProtocolIdentity = boundary.Text(
@@ -140,7 +177,7 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
         source.Action,
         source.actions,
     ));
-    const ArgumentsJson = boundary.Bytes(source.representation.response_bytes);
+    const ArgumentsJson = boundary.Bytes(maximum_arguments_json_bytes);
     const ResultText = boundary.Text(source.representation.response_bytes);
     const CallId = boundary.Text(256);
 
@@ -184,6 +221,7 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
 
     const ToolDeclaration = struct {
         action_ordinal: u32,
+        action_tag: u32,
         name: ToolName,
         description: ToolDescription,
         input_schema_json: ToolSchema,
@@ -244,7 +282,7 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
     const OutputItems = boundary.Vector(OutputItem, 32);
     const ModelOutput = struct {
         items: OutputItems,
-        provider_response_digest: [32]u8,
+        normalized_output_digest: [32]u8,
     };
     const ProviderFailure = struct {
         kind: ProviderFailureKind,
@@ -468,12 +506,13 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
             inline for (source.actions, 0..) |Descriptor, index| {
                 result.push(.{
                     .action_ordinal = @intCast(index),
+                    .action_tag = actionTag(source.Action, index),
                     .name = ToolName.fromSlice(Descriptor.name) catch unreachable,
                     .description = ToolDescription.fromSlice(
                         Descriptor.description,
                     ) catch unreachable,
                     .input_schema_json = ToolSchema.fromSlice(
-                        &json.Schema(actionPayload(source.Action, index)).value,
+                        &json.ToolSchema(actionPayload(source.Action, index)).value,
                     ) catch unreachable,
                     .strict = true,
                     .argument_codec = ActionProfile.codecValue(index),
@@ -524,7 +563,7 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
                     .maximum_argument_fields = ArgumentCodec.maximum_length,
                     .maximum_result_text_bytes = ResultText.maximum_length,
                 },
-                @as(u32, source.representation.response_bytes),
+                @as(u32, maximum_provider_response_bytes),
                 MessageRole.user,
             },
         ) {
@@ -553,7 +592,7 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
                     .maximum_argument_fields = ArgumentCodec.maximum_length,
                     .maximum_result_text_bytes = ResultText.maximum_length,
                 },
-                @as(u32, source.representation.response_bytes),
+                @as(u32, maximum_provider_response_bytes),
                 MessageRole.user,
             });
             var result: Result = undefined;
@@ -587,7 +626,7 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
                     .maximum_argument_fields = ArgumentCodec.maximum_length,
                     .maximum_result_text_bytes = ResultText.maximum_length,
                 },
-                @as(u32, source.representation.response_bytes),
+                @as(u32, maximum_provider_response_bytes),
                 MessageRole.user,
             }) |value| {
                 result[next] = value;

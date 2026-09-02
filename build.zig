@@ -37,7 +37,6 @@ pub fn build(b: *std.Build) void {
         .{ .name = "check-agent-flow", .description = "Validate Flow lowering", .path = "test/flow.zig" },
         .{ .name = "check-agent-system-api", .description = "Validate the canonical complete-system API", .path = "test/system.zig" },
         .{ .name = "check-agent-local-action", .description = "Prove image-owned local actions", .path = "test/local_action.zig" },
-        .{ .name = "check-agent-json", .description = "Validate strict generated tool schemas", .path = "test/json.zig" },
         .{ .name = "check-agent-repository-system", .description = "Compile the complete repository system", .path = "actuality/repository_repair_system_v1.zig" },
     }) |spec| {
         _ = addFocusedTest(
@@ -132,14 +131,6 @@ pub fn build(b: *std.Build) void {
     addExpectedCompileFailure(
         b,
         compile_fail,
-        "test/compile_fail/system_nonproduct_action_payload.zig",
-        "agent OpenAI Responses v2 requires struct Action payloads; 'abort' uses system_nonproduct_action_payload.ActionFailure",
-        agent_module,
-        boundary_module,
-    );
-    addExpectedCompileFailure(
-        b,
-        compile_fail,
         "test/compile_fail/system_actionless.zig",
         "agent system requires at least one Action variant",
         agent_module,
@@ -150,6 +141,14 @@ pub fn build(b: *std.Build) void {
         compile_fail,
         "test/compile_fail/system_forged_strategy.zig",
         "agent system strategy must be one staged Agent 3 strategy",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_zero_response_bytes.zig",
+        "Agent 3 ReAct response_bytes must be positive",
         agent_module,
         boundary_module,
     );
@@ -508,6 +507,9 @@ pub fn build(b: *std.Build) void {
         });
         for (admission_outputs) |output| merge_admission.addFileArg(output);
         merge_admission.addFileArg(repository_admission_proof);
+        merge_admission.addFileArg(
+            b.path("system_closure_v1/fixture-proof.json"),
+        );
         merge_admission.addFileInput(
             b.path("tools/merge_agent_system_admission_proofs.mjs"),
         );

@@ -29,7 +29,7 @@ pub fn emit(
         );
         flow.branch(
             flow.integerEqual(
-                flow.textCompare(call_name, flow.productExtract(1, expected_tool)),
+                flow.textCompare(call_name, flow.productExtract(2, expected_tool)),
                 flow.constant(i8, context.zero_i8_index),
             ),
             matched,
@@ -84,7 +84,7 @@ pub fn emitNameOnly(
         );
         flow.branch(
             flow.integerEqual(
-                flow.textCompare(call_name, flow.productExtract(1, expected_tool)),
+                flow.textCompare(call_name, flow.productExtract(2, expected_tool)),
                 flow.constant(i8, context.zero_i8_index),
             ),
             matched,

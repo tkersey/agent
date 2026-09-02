@@ -952,6 +952,8 @@ fn RepositoryRepairSystemDefinition(
             },
             .representation = .{
                 .response_bytes = 32 * 1024,
+                .maximum_arguments_json_bytes = 36 * 1024,
+                .maximum_provider_response_bytes = 64 * 1024,
                 .image_bytes = 512 * 1024,
                 .flow_limits = agent.FlowLimits{
                     .maximum_functions = 32,

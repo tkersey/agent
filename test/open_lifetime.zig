@@ -283,7 +283,7 @@ fn outputResult(
     }
     return .{ .output = .{
         .items = items,
-        .provider_response_digest = [_]u8{0} ** 32,
+        .normalized_output_digest = [_]u8{0} ** 32,
     } };
 }
 

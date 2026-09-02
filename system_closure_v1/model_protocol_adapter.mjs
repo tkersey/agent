@@ -104,6 +104,7 @@ export function decodeModelInvocation(input) {
   }));
   const tools = decodeVector(bytes, cursor, () => ({
     actionOrdinal: readU32(bytes, cursor),
+    actionTag: readU32(bytes, cursor),
     name: decodeText(bytes, cursor),
     description: decodeText(bytes, cursor),
     inputSchemaJson: decodeBytes(bytes, cursor),
@@ -115,9 +116,12 @@ export function decodeModelInvocation(input) {
         "signed_integer",
         "unsigned_integer",
         "boolean",
+        "enumeration",
       ]),
       bitWidth: readU16(bytes, cursor),
       maximumBytes: readU32(bytes, cursor),
+      enumNames: decodeVector(bytes, cursor, () => decodeText(bytes, cursor)),
+      enumTags: decodeVector(bytes, cursor, () => readU32(bytes, cursor)),
     })),
   }));
   const selection = Object.freeze({
@@ -172,9 +176,10 @@ export function encodeOpenAIResponsesRequest(invocation) {
     field("max_output_tokens", invocation.parameters.maxOutputTokens);
   }
   if (invocation.parameters.temperature !== null) {
-    const temperature = Number(invocation.parameters.temperature);
-    assert(Number.isFinite(temperature));
-    field("temperature", temperature);
+    assert(/^(?:[01](?:\.\d*[1-9])?|2)$/.test(
+      invocation.parameters.temperature,
+    ));
+    fields.push(`"temperature":${invocation.parameters.temperature}`);
   }
   if (invocation.parameters.reasoning !== null) {
     field("reasoning", Object.fromEntries(Object.entries({
@@ -287,8 +292,8 @@ export function normalizeOpenAIResponses(body, limits, tools = []) {
     return encodeUnsupported("normalization_limit");
   }
   const encodedItems = encodeOutputItems(items);
-  const semanticDigest = createHash("sha256").update(encodedItems).digest();
-  return encodeOutput(items, semanticDigest);
+  const normalizedOutputDigest = createHash("sha256").update(encodedItems).digest();
+  return encodeOutput(items, normalizedOutputDigest);
 }
 
 function decodeParameters(bytes, cursor) {
@@ -324,7 +329,7 @@ function decodeActionArguments(text, toolName, tools, limits) {
     return Object.freeze({
       kind: "decoded",
       toolOrdinalClaim: tool.actionOrdinal,
-      actionBytes: Buffer.concat([u32(tool.actionOrdinal), encodedPayload]),
+      actionBytes: Buffer.concat([u32(tool.actionTag), encodedPayload]),
     });
   } catch (error) {
     return Object.freeze({
@@ -384,6 +389,15 @@ function encodeTypedPayload(fields, codec) {
       case "boolean": {
         if (value.kind !== "boolean") throw new ArgumentDecodeError("wrong_type");
         encoded.push(Buffer.from([value.value ? 1 : 0]));
+        break;
+      }
+      case "enumeration": {
+        if (value.kind !== "text") throw new ArgumentDecodeError("wrong_type");
+        const index = contract.enumNames.indexOf(value.value);
+        if (index < 0 || index >= contract.enumTags.length) {
+          throw new ArgumentDecodeError("wrong_type");
+        }
+        encoded.push(u32(contract.enumTags[index]));
         break;
       }
       default: throw new ArgumentDecodeError("wrong_type");
@@ -752,8 +766,8 @@ class ArgumentScanner extends JsonScanner {
     if (lexeme === "true") return Object.freeze({ kind: "boolean", value: true });
     if (lexeme === "false") return Object.freeze({ kind: "boolean", value: false });
     if (lexeme === "null") return Object.freeze({ kind: "null" });
-    if (/[.eE]/.test(lexeme)) return Object.freeze({ kind: "non_integer_number" });
-    const value = BigInt(lexeme);
+    const value = integerFromJsonLexeme(lexeme);
+    if (value === null) return Object.freeze({ kind: "non_integer_number" });
     if (value < 0n) {
       if (value < -(1n << 63n)) return Object.freeze({ kind: "non_integer_number" });
       return Object.freeze({ kind: "signed", value });
@@ -763,4 +777,32 @@ class ArgumentScanner extends JsonScanner {
     }
     return Object.freeze({ kind: "unsigned", value });
   }
+}
+
+function integerFromJsonLexeme(lexeme) {
+  const match = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(lexeme);
+  if (match === null) return null;
+  const negative = match[1] === "-";
+  const fraction = match[3] ?? "";
+  const exponent = Number(match[4] ?? "0");
+  if (!Number.isSafeInteger(exponent)) {
+    if ((match[4] ?? "").startsWith("-")) return null;
+    return negative ? -(1n << 65n) : 1n << 65n;
+  }
+  let digits = `${match[2]}${fraction}`.replace(/^0+/, "");
+  if (digits.length === 0) return 0n;
+  const scale = exponent - fraction.length;
+  if (scale >= 0) {
+    if (digits.length + scale > 21) {
+      return negative ? -(1n << 65n) : 1n << 65n;
+    }
+    digits += "0".repeat(scale);
+  } else {
+    const fractionalDigits = -scale;
+    if (fractionalDigits > digits.length) return null;
+    if (!digits.endsWith("0".repeat(fractionalDigits))) return null;
+    digits = digits.slice(0, digits.length - fractionalDigits) || "0";
+  }
+  const value = BigInt(digits);
+  return negative ? -value : value;
 }

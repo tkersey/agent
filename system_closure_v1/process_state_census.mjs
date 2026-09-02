@@ -50,7 +50,7 @@ export class ProcessStateCensus {
     assert(segmentId !== undefined, "State constructor is absent from BPI1");
     const segment = this.segments.get(segmentId);
     assert(segment !== undefined, "State segment is absent from source map");
-    const phase = segment.phaseSpans.at(-1)?.phase ?? segment.terminatorPhase;
+    const phase = segment.phaseSpans[0]?.phase ?? segment.terminatorPhase;
     const environmentGroups = new Map();
     let totalEnvironmentBytes = 0;
     let largestEnvironmentBytes = 0;

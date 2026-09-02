@@ -60,12 +60,16 @@ const flow_limits = agent.FlowLimits{
 
 fn representation(comptime Action: type) @TypeOf(.{
     .response_bytes = @as(u32, 1024),
+    .maximum_arguments_json_bytes = @as(u32, 1024),
+    .maximum_provider_response_bytes = @as(u32, 8 * 1024),
     .image_bytes = @as(u32, 256 * 1024),
     .flow_limits = flow_limits,
     .schema_types = .{ Goal, Result, Action, Observation, Failure },
 }) {
     return .{
         .response_bytes = 1024,
+        .maximum_arguments_json_bytes = 1024,
+        .maximum_provider_response_bytes = 8 * 1024,
         .image_bytes = 256 * 1024,
         .flow_limits = flow_limits,
         .schema_types = .{ Goal, Result, Action, Observation, Failure },
@@ -96,7 +100,7 @@ fn NoToolProgram(comptime DynamicGoal: type) type {
     };
     return boundary.program(
         "agent-economy-scaling-no-tools:tooling-only",
-        agent.ReactBody(source),
+        agent.ReactBodyNoToolEconomy(source),
     );
 }
 

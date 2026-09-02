@@ -11,6 +11,7 @@ pub fn assertSupportedActionPayloads(comptime Action: type) void {
     inline for (@typeInfo(Action).@"union".fields) |variant| {
         const fields = switch (@typeInfo(variant.type)) {
             .@"struct" => |info| info.fields,
+            .@"enum" => continue,
             else => @compileError(
                 "agent OpenAI Responses v2 requires struct Action payloads; '" ++
                     variant.name ++ "' uses " ++ @typeName(variant.type),
@@ -19,7 +20,7 @@ pub fn assertSupportedActionPayloads(comptime Action: type) void {
         inline for (fields) |field| {
             if (comptime boundary.schema.isTextType(field.type)) continue;
             switch (@typeInfo(field.type)) {
-                .bool, .int => {},
+                .bool, .int, .@"enum" => {},
                 else => @compileError(
                     "agent OpenAI Responses v2 Action field '" ++ variant.name ++
                         "." ++ field.name ++ "' has unsupported type " ++
@@ -84,7 +85,30 @@ fn indexValues(comptime count: usize) RepeatedTuple(u32, count) {
 fn maximumFields(comptime Action: type) usize {
     var maximum: usize = 1;
     inline for (@typeInfo(Action).@"union".fields) |field| {
-        maximum = @max(maximum, @typeInfo(field.type).@"struct".fields.len);
+        maximum = @max(maximum, switch (@typeInfo(field.type)) {
+            .@"struct" => |info| info.fields.len,
+            .@"enum" => 1,
+            else => 0,
+        });
+    }
+    return maximum;
+}
+
+fn maximumEnumValues(comptime Action: type) usize {
+    var maximum: usize = 1;
+    inline for (@typeInfo(Action).@"union".fields) |variant| {
+        switch (@typeInfo(variant.type)) {
+            .@"enum" => |info| maximum = @max(maximum, info.fields.len),
+            .@"struct" => |info| inline for (info.fields) |field| {
+                if (@typeInfo(field.type) == .@"enum") {
+                    maximum = @max(
+                        maximum,
+                        @typeInfo(field.type).@"enum".fields.len,
+                    );
+                }
+            },
+            else => {},
+        }
     }
     return maximum;
 }
@@ -157,12 +181,17 @@ pub fn Profile(
         signed_integer,
         unsigned_integer,
         boolean,
+        enumeration,
     };
+    const EnumNames = boundary.Vector(FieldName, maximumEnumValues(Action));
+    const EnumTags = boundary.Vector(u32, maximumEnumValues(Action));
     const FieldContract = struct {
         name: FieldName,
         kind: FieldKind,
         bit_width: u16,
         maximum_bytes: u32,
+        enum_names: EnumNames,
+        enum_tags: EnumTags,
     };
     const ArgumentCodec = boundary.Vector(FieldContract, maximumFields(Action));
     const DecodeFailure = enum {
@@ -190,6 +219,8 @@ pub fn Profile(
         pub fn schemaTypes() @TypeOf(.{
             FieldName,
             FieldKind,
+            EnumNames,
+            EnumTags,
             FieldContract,
             ArgumentCodec,
             DecodeFailure,
@@ -198,6 +229,8 @@ pub fn Profile(
             return .{
                 FieldName,
                 FieldKind,
+                EnumNames,
+                EnumTags,
                 FieldContract,
                 ArgumentCodec,
                 DecodeFailure,
@@ -205,35 +238,56 @@ pub fn Profile(
             };
         }
 
+        fn fieldContract(comptime name: []const u8, comptime T: type) FieldContract {
+            const kind: FieldKind = if (comptime boundary.schema.isTextType(T))
+                .text
+            else switch (@typeInfo(T)) {
+                .bool => .boolean,
+                .int => |info| if (info.signedness == .signed)
+                    .signed_integer
+                else
+                    .unsigned_integer,
+                .@"enum" => .enumeration,
+                else => @compileError(
+                    "agent typed action codec field type is not implemented: " ++
+                        @typeName(T),
+                ),
+            };
+            var enum_names = EnumNames.empty();
+            var enum_tags = EnumTags.empty();
+            if (@typeInfo(T) == .@"enum") {
+                inline for (@typeInfo(T).@"enum".fields) |field| {
+                    enum_names.push(
+                        FieldName.fromSlice(field.name) catch unreachable,
+                    ) catch unreachable;
+                    enum_tags.push(@intCast(field.value)) catch unreachable;
+                }
+            }
+            return .{
+                .name = FieldName.fromSlice(name) catch unreachable,
+                .kind = kind,
+                .bit_width = switch (@typeInfo(T)) {
+                    .int => @bitSizeOf(T),
+                    else => 0,
+                },
+                .maximum_bytes = if (comptime boundary.schema.isTextType(T))
+                    T.maximum_length
+                else
+                    0,
+                .enum_names = enum_names,
+                .enum_tags = enum_tags,
+            };
+        }
+
         pub fn codecValue(comptime action_index: usize) ArgumentCodec {
             const Payload = @typeInfo(Action).@"union".fields[action_index].type;
             var result = ArgumentCodec.empty();
-            inline for (@typeInfo(Payload).@"struct".fields) |field| {
-                const kind: FieldKind = if (comptime boundary.schema.isTextType(field.type))
-                    .text
-                else switch (@typeInfo(field.type)) {
-                    .bool => .boolean,
-                    .int => |info| if (info.signedness == .signed)
-                        .signed_integer
-                    else
-                        .unsigned_integer,
-                    else => @compileError(
-                        "agent typed action codec field type is not implemented: " ++
-                            @typeName(field.type),
-                    ),
-                };
-                result.push(.{
-                    .name = FieldName.fromSlice(field.name) catch unreachable,
-                    .kind = kind,
-                    .bit_width = switch (@typeInfo(field.type)) {
-                        .int => @bitSizeOf(field.type),
-                        else => 0,
-                    },
-                    .maximum_bytes = if (comptime boundary.schema.isTextType(field.type))
-                        field.type.maximum_length
-                    else
-                        0,
-                }) catch unreachable;
+            switch (@typeInfo(Payload)) {
+                .@"struct" => |info| inline for (info.fields) |field| {
+                    result.push(fieldContract(field.name, field.type)) catch unreachable;
+                },
+                .@"enum" => result.push(fieldContract("value", Payload)) catch unreachable,
+                else => unreachable,
             }
             return result;
         }

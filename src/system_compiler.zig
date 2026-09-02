@@ -568,6 +568,7 @@ fn selectedFunctionCall(
 fn ReactBodyMode(
     comptime source: anytype,
     comptime ablate_action_argument_decode: bool,
+    comptime allow_empty_tooling_model_request: bool,
 ) type {
     if (comptime !boundary.schema.isTextType(source.Goal)) {
         @compileError("Agent 3 default ReAct currently requires a Text Goal prompt");
@@ -576,6 +577,9 @@ fn ReactBodyMode(
         !@hasField(@TypeOf(source.representation), "schema_types"))
     {
         @compileError("Agent 3 ReAct representation requires response_bytes and schema_types");
+    }
+    if (source.representation.response_bytes == 0) {
+        @compileError("Agent 3 ReAct response_bytes must be positive");
     }
     inline for (source.models) |DeclaredModel| {
         if (DeclaredModel.protocol != @import("protocol/openai_responses_v2.zig").Profile) {
@@ -673,17 +677,21 @@ fn ReactBodyMode(
         model_index,
         flow.constant(Context.Failure, Context.invalid_index_failure_index),
     );
-    const selection = flow.select(
-        flow.integerGreaterEqual(
-            flow.vectorLength(tools),
-            flow.constant(u32, Context.one_u32_index),
-        ),
-        flow.constant(Profile.ToolSelectionPolicyType, Profile.selection_index),
-        flow.constant(
-            Profile.ToolSelectionPolicyType,
-            Profile.optional_selection_index,
-        ),
+    const has_tools = flow.integerGreaterEqual(
+        flow.vectorLength(tools),
+        flow.constant(u32, Context.one_u32_index),
     );
+    const selection = if (allow_empty_tooling_model_request)
+        flow.select(
+            has_tools,
+            flow.constant(Profile.ToolSelectionPolicyType, Profile.selection_index),
+            flow.constant(
+                Profile.ToolSelectionPolicyType,
+                Profile.optional_selection_index,
+            ),
+        )
+    else
+        flow.constant(Profile.ToolSelectionPolicyType, Profile.selection_index);
     const model_request = flow.productConstruct(Profile.ModelInvocationType, .{
         flow.constant(Profile.ProtocolIdentityType, Profile.protocol_index),
         flow.productExtract(0, selected_model),
@@ -695,11 +703,33 @@ fn ReactBodyMode(
         flow.constant(Profile.NormalizationLimitsType, Profile.normalization_limits_index),
         flow.constant(u32, Profile.maximum_response_bytes_index),
     });
-    const model = flow.perform(
-        Profile.SiteType,
-        model_request,
-        .{runtime_state},
-    );
+    const model = if (allow_empty_tooling_model_request)
+        flow.perform(Profile.SiteType, model_request, .{runtime_state})
+    else blk: {
+        const ready = flow.block(.segment, .{
+            Profile.ModelInvocationType,
+            RuntimeState,
+        });
+        const empty = flow.block(.terminal_handoff, .{});
+        flow.branch(
+            has_tools,
+            ready,
+            .{ model_request, runtime_state },
+            empty,
+            .{},
+        );
+        _ = flow.enter(empty);
+        flow.failValue(flow.constant(
+            Context.Failure,
+            Context.incomplete_failure_index,
+        ));
+        const ready_values = flow.enter(ready);
+        break :blk flow.perform(
+            Profile.SiteType,
+            ready_values[0],
+            .{ready_values[1]},
+        );
+    };
     flow.setPhase(.agent_model_resume);
     const response_path = flow.block(.segment, .{
         Profile.ModelResultType,
@@ -879,10 +909,7 @@ fn ReactBodyMode(
                         unionFieldIndex(source.Observation, Descriptor.observation_name),
                         performed.value,
                     );
-                    const performed_memory = if (Epistemics.prompt_is_json_escaped)
-                        performed.carried[0]
-                    else
-                        flow.productExtract(1, performed.carried[0]);
+                    const performed_memory = flow.productExtract(1, performed.carried[0]);
                     const before_observe_suspensions = flow.suspensionSnapshot();
                     const before_observe_returns = flow.returnSnapshot();
                     const next_memory = Epistemics.emitObserve(
@@ -893,10 +920,7 @@ fn ReactBodyMode(
                         Context,
                     );
                     assertEffectFree("agent epistemics emitObserve", &flow, before_observe_suspensions, before_observe_returns);
-                    const next_state = if (Epistemics.prompt_is_json_escaped)
-                        next_memory
-                    else
-                        flow.productReplace(1, performed.carried[0], next_memory);
+                    const next_state = flow.productReplace(1, performed.carried[0], next_memory);
                     if (source.strategy.repeat_after_observation) {
                         flow.jump(loop, .{next_state});
                     } else {
@@ -919,10 +943,7 @@ fn ReactBodyMode(
                         unionFieldIndex(source.Observation, Descriptor.observation_name),
                         local_payload,
                     );
-                    const local_memory = if (Epistemics.prompt_is_json_escaped)
-                        values[1]
-                    else
-                        flow.productExtract(1, values[1]);
+                    const local_memory = flow.productExtract(1, values[1]);
                     const before_observe_suspensions = flow.suspensionSnapshot();
                     const before_observe_returns = flow.returnSnapshot();
                     const next_memory = Epistemics.emitObserve(
@@ -933,10 +954,7 @@ fn ReactBodyMode(
                         Context,
                     );
                     assertEffectFree("agent epistemics emitObserve", &flow, before_observe_suspensions, before_observe_returns);
-                    const next_state = if (Epistemics.prompt_is_json_escaped)
-                        next_memory
-                    else
-                        flow.productReplace(1, values[1], next_memory);
+                    const next_state = flow.productReplace(1, values[1], next_memory);
                     if (source.strategy.repeat_after_observation) {
                         flow.jump(loop, .{next_state});
                     } else {
@@ -948,10 +966,7 @@ fn ReactBodyMode(
                     if (!source.strategy.allow_completion) {
                         flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
                     } else {
-                        const final_memory = if (Epistemics.prompt_is_json_escaped)
-                            values[1]
-                        else
-                            flow.productExtract(1, values[1]);
+                        const final_memory = flow.productExtract(1, values[1]);
                         const before_final_suspensions = flow.suspensionSnapshot();
                         const before_final_returns = flow.returnSnapshot();
                         const final_allowed = Epistemics.emitFinalAllowed(
@@ -1002,10 +1017,14 @@ fn ReactBodyMode(
 }
 
 pub fn ReactBody(comptime source: anytype) type {
-    return ReactBodyMode(source, false);
+    return ReactBodyMode(source, false, false);
 }
 
 /// Tooling-only compiler path. It is not reachable through `agent.system`.
 pub fn ReactBodyActionDecodeAblation(comptime source: anytype) type {
-    return ReactBodyMode(source, true);
+    return ReactBodyMode(source, true, false);
+}
+
+pub fn ReactBodyNoToolEconomy(comptime source: anytype) type {
+    return ReactBodyMode(source, false, true);
 }

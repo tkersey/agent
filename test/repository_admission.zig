@@ -131,7 +131,7 @@ const ModelProtocol = struct {
     pub const OutputItems = boundary.Vector(OutputItem, 32);
     pub const ModelOutput = struct {
         items: OutputItems,
-        provider_response_digest: [32]u8,
+        normalized_output_digest: [32]u8,
     };
     pub const ProviderFailure = struct {
         kind: ProviderFailureKind,
@@ -159,10 +159,15 @@ const initial_digest = "8832f65e4bcf4a701dc76f310f3af34296bf8e95feb16ad70608041c
 const replacement_digest = "8bf50f62e3a4294ef359a6b9096d66e5597ce37824b3483ddad541ee21438453";
 
 fn expectSha256(bytes: []const u8, expected: []const u8) !void {
-    var digest: [32]u8 = undefined;
-    std.crypto.hash.sha2.Sha256.hash(bytes, &digest, .{});
+    const digest = sha256(bytes);
     const actual = std.fmt.bytesToHex(digest, .lower);
     try std.testing.expectEqualStrings(expected, &actual);
+}
+
+fn sha256(bytes: []const u8) [32]u8 {
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(bytes, &digest, .{});
+    return digest;
 }
 
 const Pending = struct {
@@ -337,12 +342,18 @@ fn encodeModel(
         .tool_ordinal_claim = decoded.ordinal,
         .decoded_action = .{ .decoded = decoded.action },
     } });
+    const items_len = try boundary.schema.encode(
+        ModelProtocol.OutputItems,
+        items,
+        resume_output,
+    );
+    const normalized_output_digest = sha256(resume_output[0..items_len]);
     return encodeResume(
         ModelProtocol.ModelResult,
         request,
         .{ .output = .{
             .items = items,
-            .provider_response_digest = [_]u8{0} ** 32,
+            .normalized_output_digest = normalized_output_digest,
         } },
         resume_output,
         result_output,
@@ -406,7 +417,7 @@ fn decodeFixtureAction(
     return error.UnsupportedFixtureAction;
 }
 
-fn expectPolicyFailure(label: []const u8, state: []const u8, result: []const u8) !void {
+fn expectPolicyFailure(label: []const u8, state: []const u8, result: []const u8) ![32]u8 {
     const actual = try advanceToFailure(state, result);
     if (actual != repository.Failure.policy_denied) {
         std.debug.print("{s}: expected policy_denied, observed {s}\n", .{
@@ -425,6 +436,7 @@ fn expectPolicyFailure(label: []const u8, state: []const u8, result: []const u8)
         failure_bytes[0..failure_len],
         "01b4f6bd5d6a06a7b74a8565ceb4f845afe0ae96a0ac05cf5e86066bf7b538ec",
     );
+    return sha256(failure_bytes[0..failure_len]);
 }
 
 const PolicyCheck = struct {
@@ -432,11 +444,17 @@ const PolicyCheck = struct {
     state: []const u8,
     result: []const u8,
     failure: ?anyerror = null,
+    failure_digest: [32]u8 = [_]u8{0} ** 32,
 };
 
 fn runPolicyCheck(check: *PolicyCheck) void {
-    expectPolicyFailure(check.label, check.state, check.result) catch |err| {
+    check.failure_digest = expectPolicyFailure(
+        check.label,
+        check.state,
+        check.result,
+    ) catch |err| {
         check.failure = err;
+        return;
     };
 }
 
@@ -451,7 +469,17 @@ fn expectIdentity(pending: Pending, expected: []const u8) !boundary.process_v1.E
     return request;
 }
 
-fn proveNativeAdmission() ![32]u8 {
+const NativeProof = struct {
+    pending_model_state: [32]u8,
+    pending_model_request: [32]u8,
+    parser_state: [32]u8,
+    pending_repository_state: [32]u8,
+    pending_repository_request: [32]u8,
+    policy_failure: [32]u8,
+    completion: [32]u8,
+};
+
+fn proveNativeAdmission() !NativeProof {
     var resume_bytes: [128 * 1024]u8 = undefined;
     var result_bytes: [256 * 1024]u8 = undefined;
 
@@ -673,7 +701,15 @@ fn proveNativeAdmission() ![32]u8 {
     try joinPolicyCheck(stale_thread, &stale_check);
     try joinPolicyCheck(wrong_path_thread, &wrong_path_check);
     try joinPolicyCheck(wrong_digest_thread, &wrong_digest_check);
-    return completion_digest;
+    return .{
+        .pending_model_state = sha256(model0.state),
+        .pending_model_request = sha256(model0.request),
+        .parser_state = sha256(parser_state),
+        .pending_repository_state = sha256(list.state),
+        .pending_repository_request = sha256(list.request),
+        .policy_failure = stale_check.failure_digest,
+        .completion = completion_digest,
+    };
 }
 
 test "repository admission rejects stale mutation and false completion from current State" {
@@ -681,16 +717,31 @@ test "repository admission rejects stale mutation and false completion from curr
 }
 
 pub fn main(init: std.process.Init) !void {
-    const completion_digest = try proveNativeAdmission();
+    const proof = try proveNativeAdmission();
     var image_digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(ImageBytes, &image_digest, .{});
     const image_sha256 = std.fmt.bytesToHex(image_digest, .lower);
-    const completion_sha256 = std.fmt.bytesToHex(completion_digest, .lower);
+    const pending_model_state = std.fmt.bytesToHex(proof.pending_model_state, .lower);
+    const pending_model_request = std.fmt.bytesToHex(proof.pending_model_request, .lower);
+    const parser_state = std.fmt.bytesToHex(proof.parser_state, .lower);
+    const pending_repository_state = std.fmt.bytesToHex(proof.pending_repository_state, .lower);
+    const pending_repository_request = std.fmt.bytesToHex(proof.pending_repository_request, .lower);
+    const policy_failure = std.fmt.bytesToHex(proof.policy_failure, .lower);
+    const completion_sha256 = std.fmt.bytesToHex(proof.completion, .lower);
     var buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(init.io, &buffer);
     try stdout.interface.print(
-        "{{\"format\":\"agent-system-native-admission-proof/v1\",\"result\":\"passed\",\"imageSha256\":\"{s}\",\"completionSha256\":\"{s}\",\"negativeResults\":[{{\"name\":\"stale-digest-replacement\",\"failure\":\"policy_denied\"}},{{\"name\":\"wrong-final-path\",\"failure\":\"policy_denied\"}},{{\"name\":\"wrong-final-digest\",\"failure\":\"policy_denied\"}}],\"nativeProcessImageSemantics\":true}}\n",
-        .{ &image_sha256, &completion_sha256 },
+        "{{\"format\":\"agent-system-native-admission-proof/v1\",\"result\":\"passed\",\"imageSha256\":\"{s}\",\"parity\":{{\"pendingModelStateSha256\":\"{s}\",\"pendingModelRequestSha256\":\"{s}\",\"parserStateSha256\":\"{s}\",\"pendingRepositoryStateSha256\":\"{s}\",\"pendingRepositoryRequestSha256\":\"{s}\",\"policyFailureSha256\":\"{s}\",\"completionSha256\":\"{s}\"}},\"negativeResults\":[{{\"name\":\"stale-digest-replacement\",\"failure\":\"policy_denied\"}},{{\"name\":\"wrong-final-path\",\"failure\":\"policy_denied\"}},{{\"name\":\"wrong-final-digest\",\"failure\":\"policy_denied\"}}],\"nativeProcessImageSemantics\":true}}\n",
+        .{
+            &image_sha256,
+            &pending_model_state,
+            &pending_model_request,
+            &parser_state,
+            &pending_repository_state,
+            &pending_repository_request,
+            &policy_failure,
+            &completion_sha256,
+        },
     );
     try stdout.interface.flush();
 }

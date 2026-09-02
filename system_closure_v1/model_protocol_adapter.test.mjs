@@ -28,6 +28,7 @@ test("decodes one self-contained semantic invocation", () => {
     inputSchemaJson: inputSchemaJson.toString("utf8"),
   })), [{
     actionOrdinal: 0,
+    actionTag: 0,
     name: "choose",
     description: "Choose one value.",
     inputSchemaJson: '{"type":"object","properties":{"value":{"type":"integer"}},"required":["value"],"additionalProperties":false}',
@@ -58,6 +59,14 @@ test("provider request preserves 64-bit schema bound lexemes", () => {
   ).toString("utf8");
   assert(request.includes(`"maximum":${maximum}`));
   assert(!request.includes('"maximum":18446744073709552000'));
+});
+
+test("provider request preserves canonical temperature lexemes", () => {
+  const temperature = "0.12345678901234567890123456789";
+  const request = encodeOpenAIResponsesRequest(
+    decodeModelInvocation(invocationBytes(undefined, 0, temperature)),
+  ).toString("utf8");
+  assert(request.includes(`"temperature":${temperature}`));
 });
 
 test("normalization preserves every call and ignores irrelevant envelope size", () => {
@@ -106,12 +115,34 @@ test("typed Action codec preserves raw bytes and rejects every structural violat
   assert.equal(valid.actionTag, 0);
   assert.equal(valid.i32, -2147483648);
 
+  assert.equal(decode('{"value":1.0}').i32, 1);
+  assert.equal(decode('{"value":1e0}').i32, 1);
+
   assert.equal(decode('{"value":1,"value":2}').failure, 1);
   assert.equal(decode('{"value":1,"extra":2}').failure, 2);
   assert.equal(decode('{}').failure, 3);
   assert.equal(decode('{"value":"1"}').failure, 4);
   assert.equal(decode('{"value":2147483648}').failure, 5);
   assert.equal(decode('{"value":1,}').failure, 0);
+});
+
+test("typed Action encoding preserves explicit tags and enum payloads", () => {
+  const tools = decodeModelInvocation(enumInvocationBytes()).tools;
+  const encoded = normalizeOpenAIResponses(Buffer.from(JSON.stringify({
+    status: "completed",
+    error: null,
+    output: [{
+      type: "function_call",
+      status: "completed",
+      call_id: "call",
+      name: "abort",
+      arguments: '{"value":"rejected"}',
+    }],
+  })), limits, tools);
+  const decoded = decodeSingleCall(encoded);
+  assert.equal(decoded.toolOrdinal, 0);
+  assert.equal(decoded.actionTag, 7);
+  assert.equal(decoded.i32, 9);
 });
 
 test("malformed, duplicate, mixed refusal, and unsupported shapes fail typed", () => {
@@ -207,17 +238,24 @@ test("generic adapter source contains no repository-repair configuration", async
   }
 });
 
-function invocationBytes(schemaText = '{"type":"object","properties":{"value":{"type":"integer"}},"required":["value"],"additionalProperties":false}') {
+function invocationBytes(
+  schemaText = '{"type":"object","properties":{"value":{"type":"integer"}},"required":["value"],"additionalProperties":false}',
+  actionTag = 0,
+  temperature = null,
+) {
   const schema = Buffer.from(schemaText);
   return Buffer.concat([
     text("agent.model.protocol.openai-responses-v2"),
     text("fixture-model"),
-    Buffer.from([0, 0, 0]),
+    temperature === null
+      ? Buffer.from([0, 0, 0])
+      : Buffer.concat([Buffer.from([0, 1]), text(temperature), Buffer.from([0])]),
     u32(1),
     u32(2),
     text("decide"),
     u32(1),
     u32(0),
+    u32(actionTag),
     text("choose"),
     text("Choose one value."),
     bytes(schema),
@@ -227,6 +265,51 @@ function invocationBytes(schemaText = '{"type":"object","properties":{"value":{"
     u32(1),
     u16(32),
     u32(0),
+    u32(0),
+    u32(0),
+    u32(1),
+    u32(1),
+    Buffer.from([0]),
+    Buffer.from([0, 0, 0]),
+    u32(0),
+    u32(32),
+    u32(256),
+    u32(64),
+    u32(32 * 1024),
+    u32(256),
+    u32(64),
+    u32(32 * 1024),
+    u32(32 * 1024),
+  ]);
+}
+
+function enumInvocationBytes() {
+  const schema = Buffer.from('{"type":"object","properties":{"value":{"type":"string","enum":["cancelled","rejected"]}},"required":["value"],"additionalProperties":false}');
+  return Buffer.concat([
+    text("agent.model.protocol.openai-responses-v2"),
+    text("fixture-model"),
+    Buffer.from([0, 0, 0]),
+    u32(1),
+    u32(2),
+    text("decide"),
+    u32(1),
+    u32(0),
+    u32(7),
+    text("abort"),
+    text("Abort with one authored failure."),
+    bytes(schema),
+    Buffer.from([1]),
+    u32(1),
+    text("value"),
+    u32(4),
+    u16(0),
+    u32(0),
+    u32(2),
+    text("cancelled"),
+    text("rejected"),
+    u32(2),
+    u32(3),
+    u32(9),
     u32(1),
     u32(1),
     Buffer.from([0]),

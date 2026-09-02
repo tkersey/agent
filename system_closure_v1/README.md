@@ -33,6 +33,13 @@ node run.mjs --world-root /path/to/world-runtime --mode fixture \
 execution does not read them, and their image/transition digests must match the
 canonical `system.bpi1` before census collection begins.
 
+The model invocation carries distinct image-selected bounds for normalized
+result text, Action argument JSON, and the complete provider response envelope.
+Tool schemas expose standard `maxLength`; the generic adapter additionally
+enforces the corresponding UTF-8 byte capacity. Canonical decimal parameters
+and integer schema bounds are spliced as validated JSON number lexemes, without
+binary floating-point conversion.
+
 Live mode uses the same image and scheduling path. It accepts only the service
 endpoint, credential, World runtime, and isolated workspace authority:
 

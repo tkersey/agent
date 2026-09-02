@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const paths = process.argv.slice(2);
-assert.equal(paths.length, 5, "expected transfer, portable negatives, and native proof");
+assert.equal(paths.length, 6, "expected transfer, portable negatives, native, and fixture proofs");
 const proofs = await Promise.all(
   paths.map(async (path) => JSON.parse(await readFile(path, "utf8"))),
 );
@@ -10,14 +10,19 @@ const transfers = proofs.find((proof) =>
   proof.format === "agent-system-closure-admission-transfers/v1");
 const nativeProof = proofs.find((proof) =>
   proof.format === "agent-system-native-admission-proof/v1");
+const fixtureProof = proofs.find((proof) =>
+  proof.format === "agent-system-closure-world-proof/v1");
 const negativeCases = proofs.filter((proof) =>
   proof.format === "agent-system-closure-admission-negative-case/v1");
 assert(transfers !== undefined, "transfer proof is missing");
 assert(nativeProof !== undefined, "native admission proof is missing");
+assert(fixtureProof !== undefined, "World fixture proof is missing");
 assert.equal(transfers.format, "agent-system-closure-admission-transfers/v1");
 assert.equal(transfers.result, "passed");
 assert.equal(nativeProof.result, "passed");
 assert.equal(nativeProof.imageSha256, transfers.imageSha256);
+assert.equal(fixtureProof.imageSha256, transfers.imageSha256);
+assert.equal(fixtureProof.kernelSha256, transfers.kernelSha256);
 const expectedNames = [
   "pre-baseline-replacement",
   "disallowed-read-role",
@@ -41,6 +46,13 @@ const negativeResults = negativeCases.map((proof) => proof.negativeResult);
 const policyFailureSha256 = negativeResults.find(
   (entry) => entry.name === "disallowed-read-role",
 ).failureSha256;
+const wasmParity = {
+  ...transfers.parity,
+  policyFailureSha256,
+  completionSha256: fixtureProof.terminalSha256,
+};
+assert.deepEqual(nativeProof.parity, wasmParity,
+  "native and WASM Agent outcomes differ");
 
 process.stdout.write(`${JSON.stringify({
   format: "agent-system-closure-admission-negatives/v1",
@@ -61,9 +73,5 @@ process.stdout.write(`${JSON.stringify({
   transferPoints: transfers.transferPoints,
   freshHostOutcomeEquality: transfers.freshHostOutcomeEquality,
   repeatedPendingRequestEquality: transfers.repeatedPendingRequestEquality,
-  nativeWasmParity: {
-    ...transfers.parity,
-    policyFailureSha256,
-    completionSha256: nativeProof.completionSha256,
-  },
+  nativeWasmParity: nativeProof.parity,
 }, null, 2)}\n`);

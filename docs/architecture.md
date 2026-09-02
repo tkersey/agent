@@ -56,6 +56,14 @@ and Observation correspondence derive from the same closed Action descriptors.
 Local and completion actions do not become environmental effects. External
 actions retain distinct Boundary effect contracts.
 
+The semantic model handler is a trusted effect handler for faithful protocol
+normalization, just as a repository handler is trusted to return the bytes it
+actually read. It may not choose an Action or substitute decoded fields. The
+image independently checks the returned call name, declaration ordinal, Action
+tag, offered set, and policy before dispatch. Retained raw argument bytes are
+audit provenance; arbitrary or malicious effect-result forgery is outside the
+handler contract and can forge any declared effect result.
+
 ## Lifetime and portability
 
 The canonical Agent 3 path has no mandatory Budget, final action, generation

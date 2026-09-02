@@ -10,6 +10,16 @@ test "agent.system returns one ordinary unspecialized Boundary Program" {
     try std.testing.expect(AlternateStaged.Program.image().bytes.len > 0);
 }
 
+test "tool schemas expose bounded Text capacity" {
+    const Text = boundary.Text(17);
+    const schema = &agent.toolSchema(struct { value: Text }).value;
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        schema,
+        "\"maxLength\":17",
+    ) != null);
+}
+
 const AlternateGoal = boundary.Text(64);
 const AlternateResult = struct { answer: AlternateGoal };
 const AlternateAction = union(enum) { done: AlternateResult };
@@ -110,6 +120,40 @@ const AlternateReact = alternateSystem(agent.strategy.react(.{}));
 const AlternateStaged = alternateSystem(agent.strategy.staged(.{
     .semantic_identity = "agent.strategy.alternate-system-proof.v1",
 }));
+const FailureActionTag = enum(u32) { abort = 7 };
+const FailureAction = union(FailureActionTag) { abort: AlternateFailure };
+const FailureSystem = agent.system(.{
+    .name = "authored-failure-system-proof",
+    .version = "3.0.0",
+    .Goal = AlternateGoal,
+    .Action = FailureAction,
+    .Observation = AlternateObservation,
+    .Result = AlternateResult,
+    .Failure = AlternateFailure,
+    .models = alternate_models,
+    .prompts = alternate_prompts,
+    .skills = .{},
+    .actions = .{agent.action.fail(.abort, .{
+        .name = "abort",
+        .description = "Return one typed authored failure.",
+    })},
+    .strategy = agent.strategy.react(.{}),
+    .epistemics = agent.epistemics.systemStateless(.{}),
+    .failures = alternate_failures,
+    .representation = .{
+        .response_bytes = 1024,
+        .maximum_provider_response_bytes = 4096,
+        .image_bytes = 256 * 1024,
+        .flow_limits = alternate_representation.flow_limits,
+        .schema_types = .{
+            AlternateGoal,
+            AlternateResult,
+            FailureAction,
+            AlternateObservation,
+            AlternateFailure,
+        },
+    },
+});
 
 test "alternate staged identity preserves the canonical closed runtime" {
     try std.testing.expectEqual(AlternateReact.Goal, AlternateStaged.Goal);
@@ -124,4 +168,8 @@ test "alternate staged identity preserves the canonical closed runtime" {
     try std.testing.expect(AlternateStaged.Source.strategy.allow_completion);
     try std.testing.expect(!@hasDecl(AlternateReact, "Machine"));
     try std.testing.expect(!@hasDecl(AlternateStaged, "Machine"));
+}
+
+test "canonical systems encode authored failure actions" {
+    try std.testing.expect(FailureSystem.Program.image().bytes.len > 0);
 }

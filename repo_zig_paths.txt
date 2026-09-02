@@ -107,8 +107,8 @@ test/compile_fail/system_fixture_v3.zig
 test/compile_fail/system_forged_strategy.zig
 test/compile_fail/system_invalid_action_name.zig
 test/compile_fail/system_missing_descriptor.zig
-test/compile_fail/system_nonproduct_action_payload.zig
 test/compile_fail/system_unknown_field.zig
+test/compile_fail/system_zero_response_bytes.zig
 test/compile_fail/unsupported_history_policy.zig
 test/compile_fail/zero_decision_budget.zig
 test/compile_fail/zero_turn_budget.zig
@@ -122,7 +122,6 @@ test/external_consumer/main.zig
 test/final_policy.zig
 test/final_policy_negative.zig
 test/flow.zig
-test/json.zig
 test/local_action.zig
 test/machine_native_wasm.zig
 test/malformed.zig

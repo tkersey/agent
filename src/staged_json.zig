@@ -1347,7 +1347,7 @@ fn emitObject(
         .{},
     );
     const next = flow.enter(comma);
-    flow.jump(loop, .{cursor(
+    const next_spaced = flow.call(helpers.skip_whitespace, .{cursor(
         flow,
         Bytes,
         next[0],
@@ -1356,7 +1356,21 @@ fn emitObject(
             flow.constant(u32, context.one_u32_index),
             flow.constant(context.Failure, context.arithmetic_failure_index),
         ),
-    )});
+    )}, .{});
+    const next_byte = flow.bytesByteAt(
+        flow.productExtract(0, next_spaced.value),
+        flow.productExtract(1, next_spaced.value),
+        flow.constant(context.Failure, context.malformed_failure_index),
+    );
+    const next_member = flow.block(.segment, .{Cursor(Bytes)});
+    flow.branch(
+        flow.integerEqual(next_byte, flow.constant(u8, context.right_brace_index)),
+        invalid,
+        .{},
+        next_member,
+        .{next_spaced.value},
+    );
+    flow.jump(loop, flow.enter(next_member));
 }
 
 fn emitArray(
@@ -1441,7 +1455,7 @@ fn emitArray(
         .{},
     );
     const next = flow.enter(comma);
-    flow.jump(loop, .{cursor(
+    const next_spaced = flow.call(helpers.skip_whitespace, .{cursor(
         flow,
         Bytes,
         next[0],
@@ -1450,7 +1464,21 @@ fn emitArray(
             flow.constant(u32, context.one_u32_index),
             flow.constant(context.Failure, context.arithmetic_failure_index),
         ),
-    )});
+    )}, .{});
+    const next_byte = flow.bytesByteAt(
+        flow.productExtract(0, next_spaced.value),
+        flow.productExtract(1, next_spaced.value),
+        flow.constant(context.Failure, context.malformed_failure_index),
+    );
+    const next_value = flow.block(.segment, .{Cursor(Bytes)});
+    flow.branch(
+        flow.integerEqual(next_byte, flow.constant(u8, context.right_bracket_index)),
+        invalid,
+        .{},
+        next_value,
+        .{next_spaced.value},
+    );
+    flow.jump(loop, flow.enter(next_value));
 }
 
 fn defineUnsigned(

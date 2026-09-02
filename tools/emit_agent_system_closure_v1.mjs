@@ -40,6 +40,8 @@ for (const name of [
   files.set(name, await readFile(join(agentRoot, "system_closure_v1", name)));
 }
 await addTree(files, join(agentRoot, "fixtures/repository-repair-v1"), "fixture");
+const runtimeInputSha256 = digestRuntimeInputs(files);
+assert.equal(proof.runtimeInputSha256, runtimeInputSha256, "fixture proof runtime inputs are stale");
 const inventory = [...files.keys()].sort(compareUtf8);
 const checksums = inventory.map((name) => `${sha256(files.get(name))}  ${name}`).join("\n") + "\n";
 files.set("checksums.sha256", Buffer.from(checksums));
@@ -56,15 +58,15 @@ const receipt = {
   agentSourceClean: git.clean,
   boundary: {
     version: "1.8.0-candidate",
-    sourceCommit: "79a17edafab2ce751a441cfabc7f9f3881474d51",
+    sourceCommit: proof.boundarySourceCommit,
     kernelSha256: proof.kernelSha256,
     kernelByteLength: proof.kernelByteLength,
   },
   world: {
-    version: "4.1.0-candidate",
-    sourceCommit: "622735238addc1c2612b060a6f6d9c2eb17a7abd",
-    runtimeArchiveSha256: "ff2d0ae55fb778444f4610c8abcaab01202693ff026fbed3c2c07c8e3c7943ab",
-    runtimeArchiveByteLength: 1485957,
+    version: `${proof.worldVersion}-candidate`,
+    sourceCommit: proof.worldSourceCommit,
+    runtimeArchiveSha256: proof.worldRuntimeArchiveSha256,
+    runtimeArchiveByteLength: proof.worldRuntimeArchiveByteLength,
   },
   imageSha256: proof.imageSha256,
   imageByteLength: proof.imageByteLength,
@@ -107,6 +109,12 @@ const receipt = {
       admissionProof.successfulPrematureCompletions,
     openCycleProof: "passed",
     sourceAbsenceRuntimePath: "passed",
+  },
+  measurements: {
+    peakStateBytes: proof.peakStateBytes,
+    renderingMilliseconds: proof.renderingMilliseconds,
+    decodingMilliseconds: proof.decodingMilliseconds,
+    offlineRuntimeMilliseconds: proof.offlineRuntimeMilliseconds,
   },
   archiveName: ARCHIVE_NAME,
   archiveSha256,
@@ -202,6 +210,14 @@ async function writeOutput(path, bytes) {
 
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+function digestRuntimeInputs(files) {
+  const records = [...files.entries()]
+    .filter(([name]) => name.endsWith(".mjs") || name.startsWith("fixture/"))
+    .sort(([left], [right]) => compareUtf8(left, right))
+    .map(([name, bytes]) => [name, sha256(bytes)]);
+  return sha256(Buffer.from(JSON.stringify(records)));
 }
 
 function compareUtf8(left, right) {

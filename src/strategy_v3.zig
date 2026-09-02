@@ -1,23 +1,22 @@
-/// Admit one custom staged Agent 3 runtime. The implementation returns an
-/// ordinary Boundary Program Body at compile time; no runtime callback or
-/// strategy registry survives in the image.
+/// Select one alternate staged identity while retaining the compiler-owned
+/// closed-system runtime, decoder, admission, and dispatch path.
 pub fn staged(comptime spec: anytype) type {
-    if (!@hasField(@TypeOf(spec), "semantic_identity") or
-        !@hasField(@TypeOf(spec), "implementation"))
-    {
-        @compileError("agent.strategy.staged requires semantic_identity and implementation");
+    inline for (@import("std").meta.fields(@TypeOf(spec))) |field| {
+        if (!@import("std").mem.eql(u8, field.name, "semantic_identity")) {
+            @compileError("agent.strategy.staged unknown field '" ++ field.name ++ "'");
+        }
     }
+    if (!@hasField(@TypeOf(spec), "semantic_identity"))
+        @compileError("agent.strategy.staged requires semantic_identity");
     if (spec.semantic_identity.len == 0) {
         @compileError("agent staged strategy semantic identity must not be empty");
     }
-    const Implementation = spec.implementation;
-    if (!@hasDecl(Implementation, "ProgramBody")) {
-        @compileError("agent staged strategy implementation requires ProgramBody");
-    }
     return struct {
         pub const system_semantic_identity = spec.semantic_identity;
+        pub const repeat_after_observation = false;
+        pub const allow_completion = false;
         pub fn ProgramBody(comptime source: anytype) type {
-            return Implementation.ProgramBody(source);
+            return @import("system_compiler.zig").ReactBody(source);
         }
     };
 }
@@ -29,6 +28,8 @@ pub fn react(comptime config: anytype) type {
     }
     return struct {
         pub const system_semantic_identity = "agent.strategy.react.v3";
+        pub const repeat_after_observation = true;
+        pub const allow_completion = true;
         pub fn ProgramBody(comptime source: anytype) type {
             return @import("system_compiler.zig").ReactBody(source);
         }

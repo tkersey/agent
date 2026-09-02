@@ -5,6 +5,13 @@ fn parameterFieldAdmitted(comptime name: []const u8) bool {
         std.mem.eql(u8, name, "temperature");
 }
 
+fn modelFieldAdmitted(comptime name: []const u8) bool {
+    return std.mem.eql(u8, name, "name") or
+        std.mem.eql(u8, name, "protocol") or
+        std.mem.eql(u8, name, "model") or
+        std.mem.eql(u8, name, "parameters");
+}
+
 fn canonicalTemperature(comptime value: []const u8) bool {
     if (value.len == 0 or value[0] < '0' or value[0] > '2') return false;
     if (value.len == 1) return true;
@@ -40,6 +47,11 @@ fn validateParameters(comptime parameters: anytype) void {
 }
 
 pub fn model(comptime spec: anytype) type {
+    inline for (std.meta.fields(@TypeOf(spec))) |field| {
+        if (!modelFieldAdmitted(field.name)) {
+            @compileError("agent.model unknown source field '" ++ field.name ++ "'");
+        }
+    }
     if (!@hasField(@TypeOf(spec), "name") or
         !@hasField(@TypeOf(spec), "protocol") or
         !@hasField(@TypeOf(spec), "model"))

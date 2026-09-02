@@ -33,8 +33,6 @@ pub fn build(b: *std.Build) void {
     const root_tests = b.addTest(.{ .root_module = agent_module });
     const run_root_tests = b.addRunArtifact(root_tests);
     semantic.dependOn(&run_root_tests.step);
-    var previous: *std.Build.Step = &run_root_tests.step;
-
     inline for ([_]TestSpec{
         .{ .name = "check-agent-flow", .description = "Validate Flow lowering", .path = "test/flow.zig" },
         .{ .name = "check-agent-protocol", .description = "Validate raw model transport", .path = "test/protocol.zig" },
@@ -45,7 +43,7 @@ pub fn build(b: *std.Build) void {
         .{ .name = "check-agent-staged-json", .description = "Validate in-image JSON and Unicode scanning", .path = "test/staged_json.zig" },
         .{ .name = "check-agent-repository-system", .description = "Compile the complete repository system", .path = "actuality/repository_repair_system_v1.zig" },
     }) |spec| {
-        const step = addFocusedTest(
+        _ = addFocusedTest(
             b,
             spec,
             agent_module,
@@ -54,55 +52,9 @@ pub fn build(b: *std.Build) void {
             optimize,
             semantic,
         );
-        step.dependOn(previous);
-        previous = step;
     }
 
-    const open_lifetime = addFilteredFocusedTest(
-        b,
-        .{
-            .name = "check-agent-open-lifetime",
-            .description = "Prove a no-final canonical State cycle",
-            .path = "test/open_lifetime.zig",
-        },
-        &.{ "no-final system", "reordered escaped" },
-        agent_module,
-        boundary_module,
-        target,
-        optimize,
-        semantic,
-    );
-    open_lifetime.dependOn(previous);
-    const response_a = addFilteredFocusedTest(
-        b,
-        .{
-            .name = "check-agent-response-failures-a",
-            .description = "Reject malformed, duplicate, incomplete, error, and refusal responses",
-            .path = "test/open_lifetime.zig",
-        },
-        &.{"raw provider failures A"},
-        agent_module,
-        boundary_module,
-        target,
-        optimize,
-        semantic,
-    );
-    response_a.dependOn(previous);
-    const response_b = addFilteredFocusedTest(
-        b,
-        .{
-            .name = "check-agent-response-failures-b",
-            .description = "Reject unsupported, multiple, unknown, HTTP, and transport failures",
-            .path = "test/open_lifetime.zig",
-        },
-        &.{"raw provider failures B"},
-        agent_module,
-        boundary_module,
-        target,
-        optimize,
-        semantic,
-    );
-    response_b.dependOn(previous);
+    addOpenLifetimeTests(b, agent_module, boundary_module, target, semantic);
 
     const compile_fail = b.step(
         "compile-fail",
@@ -159,12 +111,27 @@ pub fn build(b: *std.Build) void {
     addExpectedCompileFailure(
         b,
         compile_fail,
+        "test/compile_fail/model_unknown_field.zig",
+        "agent.model unknown source field 'paramters'",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_invalid_action_name.zig",
+        "agent system model-visible action name must match [A-Za-z0-9_-]{1,64}",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
         "test/compile_fail/model_noncanonical_temperature.zig",
         "agent model temperature must be a canonical decimal from 0 through 2",
         agent_module,
         boundary_module,
     );
-    compile_fail.dependOn(previous);
     semantic.dependOn(compile_fail);
 
     const repository_module = b.createModule(.{
@@ -326,7 +293,7 @@ pub fn build(b: *std.Build) void {
     check_distribution.addFileInput(
         b.path("tools/check_agent_system_closure_distribution.mjs"),
     );
-    closure_check.dependOn(&check_distribution.step);
+    emit_closure.dependOn(&check_distribution.step);
 
     if (world_process_root) |root| {
         const run = b.addSystemCommand(&.{
@@ -447,4 +414,49 @@ fn addExpectedCompileFailure(
     const compilation = b.addTest(.{ .root_module = module });
     compilation.expect_errors = .{ .contains = expected_error };
     step.dependOn(&compilation.step);
+}
+
+fn addOpenLifetimeTests(
+    b: *std.Build,
+    agent_module: *std.Build.Module,
+    boundary_module: *std.Build.Module,
+    target: std.Build.ResolvedTarget,
+    aggregate: *std.Build.Step,
+) void {
+    const module = b.createModule(.{
+        .root_source_file = b.path("test/open_lifetime.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    module.addImport("agent", agent_module);
+    module.addImport("boundary", boundary_module);
+    const tests = b.addTest(.{
+        .root_module = module,
+        .test_runner = .{ .path = b.path("test/selective_runner.zig"), .mode = .simple },
+    });
+    inline for ([_]struct {
+        name: []const u8,
+        description: []const u8,
+        selector: []const u8,
+    }{
+        .{ .name = "check-agent-open-lifetime", .description = "Prove a no-final canonical State cycle", .selector = "no-final system" },
+        .{ .name = "check-agent-response-failures-a", .description = "Reject malformed, duplicate, incomplete, error, and refusal responses", .selector = "raw provider failures A" },
+        .{ .name = "check-agent-response-unsupported", .description = "Reject unsupported output", .selector = "failure B unsupported" },
+        .{ .name = "check-agent-response-multiple", .description = "Reject multiple function calls", .selector = "failure B multiple" },
+        .{ .name = "check-agent-response-unknown", .description = "Reject unknown actions", .selector = "failure B unknown" },
+        .{ .name = "check-agent-response-extra-argument", .description = "Reject extra action fields", .selector = "failure B extra" },
+        .{ .name = "check-agent-response-trailing-top", .description = "Reject a trailing top-level member", .selector = "failure B trailing top" },
+        .{ .name = "check-agent-response-trailing-output", .description = "Reject a trailing output item", .selector = "failure B trailing output" },
+        .{ .name = "check-agent-response-trailing-object", .description = "Reject a trailing skipped object member", .selector = "failure B trailing skipped object" },
+        .{ .name = "check-agent-response-trailing-array", .description = "Reject a trailing skipped array item", .selector = "failure B trailing skipped array" },
+        .{ .name = "check-agent-response-http", .description = "Reject non-2xx responses", .selector = "failure B non-2xx" },
+        .{ .name = "check-agent-response-transport", .description = "Distinguish transport failures", .selector = "failure B transport" },
+        .{ .name = "check-agent-response-reordered", .description = "Admit reordered escaped output and signed integer minima", .selector = "reordered escaped" },
+    }) |spec| {
+        const run = b.addRunArtifact(tests);
+        run.addArg(spec.selector);
+        const step = b.step(spec.name, spec.description);
+        step.dependOn(&run.step);
+        aggregate.dependOn(step);
+    }
 }

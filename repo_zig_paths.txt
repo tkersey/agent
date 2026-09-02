@@ -82,6 +82,7 @@ test/compile_fail/invalid_history_limit.zig
 test/compile_fail/missing_action_descriptor.zig
 test/compile_fail/missing_final_action.zig
 test/compile_fail/model_noncanonical_temperature.zig
+test/compile_fail/model_unknown_field.zig
 test/compile_fail/model_unknown_parameter.zig
 test/compile_fail/nonexistent_action_variant.zig
 test/compile_fail/nonportable_action.zig
@@ -102,6 +103,7 @@ test/compile_fail/system_dangling_skill_action.zig
 test/compile_fail/system_duplicate_action_name.zig
 test/compile_fail/system_effect_payload_mismatch.zig
 test/compile_fail/system_fixture_v3.zig
+test/compile_fail/system_invalid_action_name.zig
 test/compile_fail/system_missing_descriptor.zig
 test/compile_fail/system_unknown_field.zig
 test/compile_fail/unsupported_history_policy.zig
@@ -126,6 +128,7 @@ test/protocol.zig
 test/repository_admission.zig
 test/request.zig
 test/run_machine_native.zig
+test/selective_runner.zig
 test/shared_boundary.zig
 test/specialization_matrix.zig
 test/staged_json.zig

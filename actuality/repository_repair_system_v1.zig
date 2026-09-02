@@ -394,7 +394,10 @@ pub fn RepositoryRepairSystem(comptime agent: type, comptime boundary: type) typ
                     const payload = flow.sumExtract(4, comparable[1]);
                     const source = flow.sumExtract(1, comparable[2]);
                     flow.jump(joined, .{flow.booleanAnd(
-                        flow.productExtract(3, comparable[0]),
+                        flow.booleanAnd(
+                            flow.productExtract(3, comparable[0]),
+                            flow.booleanNot(flow.productExtract(4, comparable[0])),
+                        ),
                         flow.booleanAnd(
                             textEqual(
                                 flow,

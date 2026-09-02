@@ -7,6 +7,20 @@ const openai_profile = @import("openai_profile.zig");
 const openai_response = @import("openai_response.zig");
 const request = @import("request.zig");
 
+fn assertEffectFree(
+    comptime label: []const u8,
+    flow: anytype,
+    before_suspensions: anytype,
+    before_returns: anytype,
+) void {
+    if (!std.meta.eql(flow.suspensionCount(), before_suspensions)) {
+        @compileError(label ++ " must not introduce a residual effect");
+    }
+    if (!std.meta.eql(flow.returnHandoffCount(), before_returns)) {
+        @compileError(label ++ " must not return the enclosing system");
+    }
+}
+
 fn effectCount(comptime source: anytype) usize {
     var count: usize = 0;
     inline for (source.actions) |Descriptor| {
@@ -54,10 +68,18 @@ fn activeSkills(
 ) [source.skills.len]flow_module.Value(bool) {
     var result: [source.skills.len]flow_module.Value(bool) = undefined;
     inline for (source.skills, 0..) |Skill, index| {
+        const before_suspensions = flow.suspensionCount();
+        const before_returns = flow.returnHandoffCount();
         result[index] = if (Skill.activation == .always)
             flow.constant(bool, context.true_index)
         else
             Epistemics.emitSkillActive(source, flow, memory, index, context);
+        assertEffectFree(
+            "agent epistemics emitSkillActive",
+            flow,
+            before_suspensions,
+            before_returns,
+        );
     }
     return result;
 }
@@ -189,7 +211,10 @@ pub fn ReactBody(comptime source: anytype) type {
     const goal = flow.begin(source.Goal);
     const helpers = openai_response.declare(&flow, ResponseBytes);
     const request_helpers = request.declareSystem(&flow, Profile);
+    const before_initial_suspensions = flow.suspensionCount();
+    const before_initial_returns = flow.returnHandoffCount();
     const memory = Epistemics.emitInitial(source, &flow, goal, Context);
+    assertEffectFree("agent epistemics emitInitial", &flow, before_initial_suspensions, before_initial_returns);
     const initial_state = if (Epistemics.prompt_is_json_escaped)
         memory
     else
@@ -205,20 +230,29 @@ pub fn ReactBody(comptime source: anytype) type {
         runtime_state
     else
         flow.productExtract(1, runtime_state);
+    const before_project_suspensions = flow.suspensionCount();
+    const before_project_returns = flow.returnHandoffCount();
     const view: flow_module.Value(DecisionView) = Epistemics.emitProject(
         source,
         &flow,
         current_memory,
     );
+    assertEffectFree("agent epistemics emitProject", &flow, before_project_suspensions, before_project_returns);
+    const before_prompt_suspensions = flow.suspensionCount();
+    const before_prompt_returns = flow.returnHandoffCount();
     const prompt = Epistemics.emitPrompt(source, &flow, current_goal, view, Context);
+    assertEffectFree("agent epistemics emitPrompt", &flow, before_prompt_suspensions, before_prompt_returns);
     const active_skills = activeSkills(source, Epistemics, &flow, current_memory, Context);
     const offered_actions = offeredActions(source, &flow, active_skills, Context);
+    const before_model_suspensions = flow.suspensionCount();
+    const before_model_returns = flow.returnHandoffCount();
     const model_index = Epistemics.emitModelIndex(
         source,
         &flow,
         current_memory,
         Context,
     );
+    assertEffectFree("agent epistemics emitModelIndex", &flow, before_model_suspensions, before_model_returns);
     const active_mask = boolMask(&flow, active_skills, Context);
     const offered_mask = boolMask(&flow, offered_actions, Context);
     const model_request = if (Epistemics.prompt_is_json_escaped)
@@ -315,6 +349,8 @@ pub fn ReactBody(comptime source: anytype) type {
         Context,
     );
     const resumed_offered_mask = boolMask(&flow, resumed_offered_actions, Context);
+    const before_policy_suspensions = flow.suspensionCount();
+    const before_policy_returns = flow.returnHandoffCount();
     const policy_allowed = Epistemics.emitActionAllowed(
         source,
         &flow,
@@ -322,6 +358,7 @@ pub fn ReactBody(comptime source: anytype) type {
         selected,
         Context,
     );
+    assertEffectFree("agent epistemics emitActionAllowed", &flow, before_policy_suspensions, before_policy_returns);
     const allowed = flow.booleanAnd(
         selectedWasOffered(
             source,
@@ -377,6 +414,8 @@ pub fn ReactBody(comptime source: anytype) type {
                     performed.carried[0]
                 else
                     flow.productExtract(1, performed.carried[0]);
+                const before_observe_suspensions = flow.suspensionCount();
+                const before_observe_returns = flow.returnHandoffCount();
                 const next_memory = Epistemics.emitObserve(
                     source,
                     &flow,
@@ -384,18 +423,26 @@ pub fn ReactBody(comptime source: anytype) type {
                     observation,
                     Context,
                 );
+                assertEffectFree("agent epistemics emitObserve", &flow, before_observe_suspensions, before_observe_returns);
                 const next_state = if (Epistemics.prompt_is_json_escaped)
                     next_memory
                 else
                     flow.productReplace(1, performed.carried[0], next_memory);
-                flow.jump(loop, .{next_state});
+                if (source.strategy.repeat_after_observation) {
+                    flow.jump(loop, .{next_state});
+                } else {
+                    flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
+                }
             },
             .local => {
+                const before_local_suspensions = flow.suspensionCount();
+                const before_local_returns = flow.returnHandoffCount();
                 const local_payload = Descriptor.Local.emit(
                     &flow,
                     payload,
                     Context,
                 );
+                assertEffectFree("agent local action emit", &flow, before_local_suspensions, before_local_returns);
                 const observation = flow.sumConstruct(
                     source.Observation,
                     unionFieldIndex(source.Observation, Descriptor.observation_name),
@@ -405,6 +452,8 @@ pub fn ReactBody(comptime source: anytype) type {
                     values[1]
                 else
                     flow.productExtract(1, values[1]);
+                const before_observe_suspensions = flow.suspensionCount();
+                const before_observe_returns = flow.returnHandoffCount();
                 const next_memory = Epistemics.emitObserve(
                     source,
                     &flow,
@@ -412,27 +461,39 @@ pub fn ReactBody(comptime source: anytype) type {
                     observation,
                     Context,
                 );
+                assertEffectFree("agent epistemics emitObserve", &flow, before_observe_suspensions, before_observe_returns);
                 const next_state = if (Epistemics.prompt_is_json_escaped)
                     next_memory
                 else
                     flow.productReplace(1, values[1], next_memory);
-                flow.jump(loop, .{next_state});
+                if (source.strategy.repeat_after_observation) {
+                    flow.jump(loop, .{next_state});
+                } else {
+                    flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
+                }
             },
             .final => {
-                const final_memory = if (Epistemics.prompt_is_json_escaped)
-                    values[1]
-                else
-                    flow.productExtract(1, values[1]);
-                const final_allowed = Epistemics.emitFinalAllowed(
-                    source,
-                    &flow,
-                    final_memory,
-                    payload,
-                    Context,
-                );
-                const complete = flow.block(.terminal_handoff, .{source.Result});
-                flow.branch(final_allowed, complete, .{payload}, denied, .{});
-                flow.returnValue(flow.enter(complete)[0]);
+                if (!source.strategy.allow_completion) {
+                    flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
+                } else {
+                    const final_memory = if (Epistemics.prompt_is_json_escaped)
+                        values[1]
+                    else
+                        flow.productExtract(1, values[1]);
+                    const before_final_suspensions = flow.suspensionCount();
+                    const before_final_returns = flow.returnHandoffCount();
+                    const final_allowed = Epistemics.emitFinalAllowed(
+                        source,
+                        &flow,
+                        final_memory,
+                        payload,
+                        Context,
+                    );
+                    assertEffectFree("agent epistemics emitFinalAllowed", &flow, before_final_suspensions, before_final_returns);
+                    const complete = flow.block(.terminal_handoff, .{source.Result});
+                    flow.branch(final_allowed, complete, .{payload}, denied, .{});
+                    flow.returnValue(flow.enter(complete)[0]);
+                }
             },
             .fail => flow.failValue(payload),
         }

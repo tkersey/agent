@@ -54,6 +54,15 @@ fn actionNameExists(comptime actions: anytype, comptime name: []const u8) bool {
     return false;
 }
 
+fn validFunctionName(comptime name: []const u8) bool {
+    if (name.len == 0 or name.len > 64) return false;
+    for (name) |byte| switch (byte) {
+        'a'...'z', 'A'...'Z', '0'...'9', '_', '-' => {},
+        else => return false,
+    };
+    return true;
+}
+
 fn validate(comptime spec: anytype) void {
     inline for (std.meta.fields(@TypeOf(spec))) |field| {
         if (!fieldAdmitted(field.name)) {
@@ -85,7 +94,10 @@ fn validate(comptime spec: anytype) void {
         if (!std.mem.eql(u8, Descriptor.action_name, action_info.fields[index].name)) {
             @compileError("agent system descriptors must follow Action declaration order");
         }
-        if (Descriptor.name.len == 0 or Descriptor.description.len == 0) {
+        if (!validFunctionName(Descriptor.name) or Descriptor.description.len == 0) {
+            if (!validFunctionName(Descriptor.name)) {
+                @compileError("agent system model-visible action name must match [A-Za-z0-9_-]{1,64}");
+            }
             @compileError("agent system action names and descriptions must not be empty");
         }
         inline for (spec.actions, 0..) |Earlier, earlier_index| {
@@ -167,7 +179,11 @@ pub fn system(comptime spec: anytype) type {
         @compileError("agent system strategy Body disagrees with Goal, Result, or Failure");
     }
     const ProgramType = boundary.program(
-        std.fmt.comptimePrint("{s}:{s}", .{ spec.name, Strategy.system_semantic_identity }),
+        std.fmt.comptimePrint("{s}:{s}:{s}", .{
+            spec.name,
+            spec.version,
+            Strategy.system_semantic_identity,
+        }),
         Body,
     );
     return struct {

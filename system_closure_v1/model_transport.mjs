@@ -18,12 +18,13 @@ export async function performModelRequest(payload, options) {
   const headers = { "content-type": "application/json" };
   if (options.apiKey !== undefined) headers.authorization = `Bearer ${options.apiKey}`;
   try {
+    const signal = options.signal ?? AbortSignal.timeout(120_000);
     const response = await fetch(endpoint, {
       method: "POST",
       headers,
       body: request.body,
       redirect: "error",
-      signal: options.signal,
+      signal,
     });
     const declaredLength = response.headers.get("content-length");
     if (declaredLength !== null && Number(declaredLength) > request.maximumResponseBytes) {
@@ -33,7 +34,9 @@ export async function performModelRequest(payload, options) {
     if (body === null) return encodeTransportFailure("response_too_large");
     return encodeResponse(response.status, body);
   } catch (error) {
-    if (error?.name === "AbortError") return encodeTransportFailure("interrupted");
+    if (error?.name === "AbortError" || error?.name === "TimeoutError") {
+      return encodeTransportFailure("interrupted");
+    }
     if (error?.cause?.code === "EACCES" || error?.cause?.code === "EPERM") {
       return encodeTransportFailure("denied");
     }

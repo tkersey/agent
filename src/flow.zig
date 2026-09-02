@@ -692,6 +692,20 @@ pub fn Flow(comptime config: anytype) type {
             );
         }
 
+        pub fn integerSubtractOrFail(
+            self: *Self,
+            left: anytype,
+            right: @TypeOf(left),
+            overflow_failure: anytype,
+        ) @TypeOf(left) {
+            return self.instruction(
+                @TypeOf(left).Type,
+                .pure,
+                .integer_subtract,
+                .{ left, right, overflow_failure },
+            );
+        }
+
         pub fn integerGreaterEqual(
             self: *Self,
             left: anytype,

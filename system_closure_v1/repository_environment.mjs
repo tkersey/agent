@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { lstat, open, realpath } from "node:fs/promises";
+import { lstat, open, realpath, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 export const EXPECTED_INITIAL_DIGEST = "8832f65e4bcf4a701dc76f310f3af34296bf8e95feb16ad70608041cb2e6dbb3";
@@ -84,17 +84,26 @@ export async function createRepositoryEnvironment(workspaceRoot, restored = {}) 
           replacement: CORRECT_SOURCE,
           rationale: "Correct ascending preservation and descending normalization.",
         });
-        const handle = await admittedFile(proposal.path, "r+");
+        const handle = await admittedFile(proposal.path, "r");
+        const absolute = join(workspaceRoot, proposal.path);
+        const temporary = `${absolute}.agent-replacement`;
         try {
           const current = await handle.readFile();
           assert.equal(sha256(current), proposal.expected_sha256);
-          await handle.truncate(0);
           const replacement = Buffer.from(proposal.replacement, "utf8");
-          const written = await handle.write(replacement, 0, replacement.length, 0);
-          assert.equal(written.bytesWritten, replacement.length);
-          await handle.sync();
+          await rm(temporary, { force: true });
+          const replacementHandle = await open(temporary, "wx", 0o644);
+          try {
+            const written = await replacementHandle.write(replacement, 0, replacement.length, 0);
+            assert.equal(written.bytesWritten, replacement.length);
+            await replacementHandle.sync();
+          } finally {
+            await replacementHandle.close();
+          }
+          await rename(temporary, absolute);
         } finally {
           await handle.close();
+          await rm(temporary, { force: true });
         }
         mutationApplied = true;
         return concat(

@@ -171,18 +171,20 @@ fn appendActiveFragments(
     const Fragment = Profile.FragmentType;
     const zero = flow.constant(u32, context.zero_u32_index);
     const one = flow.constant(u32, context.one_u32_index);
-    const loop = flow.block(.loop_header, .{ Body, u32, Fragments, u32, u32, u32 });
+    const zero_mask = flow.integerConvert(u64, zero);
+    const one_mask = flow.integerConvert(u64, one);
+    const loop = flow.block(.loop_header, .{ Body, u64, Fragments, u32, u32, u64 });
     flow.jump(loop, .{
         initial_body,
-        active_mask,
+        flow.integerConvert(u64, active_mask),
         fragments,
         zero,
         flow.vectorLength(fragments),
-        one,
+        one_mask,
     });
     const state = flow.enter(loop);
     const done = flow.block(.segment, .{Body});
-    const append = flow.block(.segment, .{ Body, u32, Fragments, u32, u32, u32 });
+    const append = flow.block(.segment, .{ Body, u64, Fragments, u32, u32, u64 });
     flow.branch(
         flow.integerGreaterEqual(state[3], state[4]),
         done,
@@ -193,7 +195,7 @@ fn appendActiveFragments(
     const values = flow.enter(append);
     const enabled = flow.integerNotEqual(
         flow.integerBitAnd(values[1], values[5]),
-        zero,
+        zero_mask,
     );
     const fragment = flow.vectorGetOrFail(
         values[2],
@@ -325,37 +327,39 @@ fn appendOfferedTools(
     const Fragment = Profile.FragmentType;
     const zero = flow.constant(u32, context.zero_u32_index);
     const one = flow.constant(u32, context.one_u32_index);
+    const zero_mask = flow.integerConvert(u64, zero);
+    const one_mask = flow.integerConvert(u64, one);
     const no = flow.constant(bool, context.false_index);
     const loop = flow.block(.loop_header, .{
         Body,
-        u32,
+        u64,
         Fragments,
         Fragments,
         u32,
         u32,
-        u32,
+        u64,
         bool,
     });
     flow.jump(loop, .{
         initial_body,
-        offered_mask,
+        flow.integerConvert(u64, offered_mask),
         tools,
         comma_tools,
         zero,
         flow.vectorLength(tools),
-        one,
+        one_mask,
         no,
     });
     const state = flow.enter(loop);
     const done = flow.block(.segment, .{ Body, bool });
     const append = flow.block(.segment, .{
         Body,
-        u32,
+        u64,
         Fragments,
         Fragments,
         u32,
         u32,
-        u32,
+        u64,
         bool,
     });
     flow.branch(
@@ -368,7 +372,7 @@ fn appendOfferedTools(
     const values = flow.enter(append);
     const enabled = flow.integerNotEqual(
         flow.integerBitAnd(values[1], values[6]),
-        zero,
+        zero_mask,
     );
     const first = flow.vectorGetOrFail(
         values[2],

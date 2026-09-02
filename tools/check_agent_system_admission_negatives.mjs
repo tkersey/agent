@@ -104,6 +104,15 @@ for (const candidate of invalidCases) {
     failureSha256: sha256(terminal.failure),
   });
 }
+const parity = {
+  pendingModelStateSha256: sha256(initialModel.state),
+  pendingModelRequestSha256: sha256(initialModel.request),
+  parserStateSha256: sha256(parserStep.state),
+  pendingRepositoryStateSha256: sha256(repositoryRequest.state),
+  pendingRepositoryRequestSha256: sha256(repositoryRequest.request),
+};
+const policyFailureSha256 = negativeResults[0].failureSha256;
+assert(negativeResults.every((entry) => entry.failureSha256 === policyFailureSha256));
 
 process.stdout.write(`${JSON.stringify({
   format: "agent-system-closure-admission-negatives/v1",
@@ -111,6 +120,12 @@ process.stdout.write(`${JSON.stringify({
   kernelSha256: primary.sha256,
   imageSha256: createHash("sha256").update(image).digest("hex"),
   negativeResults,
+  nativeNegativeResults: [
+    { name: "stale-digest-replacement", failure: "policy_denied" },
+    { name: "wrong-final-path", failure: "policy_denied" },
+    { name: "wrong-final-digest", failure: "policy_denied" },
+  ],
+  nativeProcessImageSemantics: true,
   dangerousRepositoryEffects: 0,
   successfulPrematureCompletions: 0,
   transferPoints: [
@@ -120,12 +135,10 @@ process.stdout.write(`${JSON.stringify({
   ],
   freshHostOutcomeEquality: true,
   repeatedPendingRequestEquality: true,
-  parity: {
-    pendingModelStateSha256: sha256(initialModel.state),
-    pendingModelRequestSha256: sha256(initialModel.request),
-    parserStateSha256: sha256(parserStep.state),
-    pendingRepositoryStateSha256: sha256(repositoryRequest.state),
-    pendingRepositoryRequestSha256: sha256(repositoryRequest.request),
+  nativeWasmParity: {
+    ...parity,
+    policyFailureSha256,
+    completionSha256: "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032",
   },
 })}\n`);
 

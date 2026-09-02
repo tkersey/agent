@@ -538,13 +538,31 @@ fn emitObjectDelimiter(
         .{ spaced.carried[0], bytes, index, byte },
     );
     const next = flow.enter(comma);
+    const next_spaced = flow.call(
+        helpers.core.skip_whitespace,
+        .{cursor(flow, Bytes, next[1], addOne(flow, next[2], context))},
+        .{next[0]},
+    );
+    const next_byte = flow.bytesByteAt(
+        flow.productExtract(0, next_spaced.value),
+        flow.productExtract(1, next_spaced.value),
+        flow.constant(context.Failure, context.malformed_failure_index),
+    );
+    const next_member = flow.block(.segment, .{@TypeOf(state).Type});
+    flow.branch(
+        flow.integerEqual(next_byte, flow.constant(u8, context.right_brace_index)),
+        malformed,
+        .{},
+        next_member,
+        next_spaced.carried,
+    );
     flow.jump(
         loop,
         .{replace(
             flow,
-            next[0],
+            flow.enter(next_member)[0],
             0,
-            cursor(flow, Bytes, next[1], addOne(flow, next[2], context)),
+            next_spaced.value,
         )},
     );
     const close = flow.enter(classify_close);
@@ -746,12 +764,25 @@ fn defineOutput(
         .{ delimited.carried[0], delimiter_bytes, delimiter_index, delimiter },
     );
     const next = flow.enter(comma);
-    flow.jump(loop, .{replace(
-        flow,
-        next[0],
-        0,
-        cursor(flow, Bytes, next[1], addOne(flow, next[2], context)),
-    )});
+    const next_spaced = flow.call(
+        helpers.core.skip_whitespace,
+        .{cursor(flow, Bytes, next[1], addOne(flow, next[2], context))},
+        .{next[0]},
+    );
+    const next_byte = flow.bytesByteAt(
+        flow.productExtract(0, next_spaced.value),
+        flow.productExtract(1, next_spaced.value),
+        flow.constant(context.Failure, context.malformed_failure_index),
+    );
+    const next_item = flow.block(.segment, .{State});
+    flow.branch(
+        flow.integerEqual(next_byte, flow.constant(u8, context.right_bracket_index)),
+        malformed,
+        .{},
+        next_item,
+        next_spaced.carried,
+    );
+    flow.jump(loop, .{replace(flow, flow.enter(next_item)[0], 0, next_spaced.value)});
     const close = flow.enter(classify_close);
     flow.branch(
         flow.integerEqual(close[3], flow.constant(u8, context.right_bracket_index)),

@@ -2,74 +2,12 @@ const agent = @import("agent");
 const boundary = @import("boundary");
 const std = @import("std");
 
-const Action = union(enum) { done: u32 };
-const Observation = union(enum) { noop: void };
-const SystemFailure = enum { rejected };
-const actions = .{agent.action.final(.done, .{
-    .name = "done",
-    .description = "Return the exact result.",
-})};
-
-const Body = struct {
-    pub const InitialArgs = u32;
-    pub const Result = u32;
-    pub const Failure = SystemFailure;
-    pub const constants = .{};
-    pub const effect_sites = .{};
-    pub const schema_types = .{SystemFailure};
-    pub const control_ir: boundary.ir.Program = .{
-        .label = "agent-system-api-v1",
-        .value_types = &.{.{ .scalar = .u32 }},
-        .blocks = &.{.{
-            .id = 0,
-            .parameters = &.{0},
-            .terminator = .{ .return_value = 0 },
-        }},
-        .entry = 0,
-        .result_type = .{ .scalar = .u32 },
-    };
-};
-
-const Implementation = struct {
-    pub fn ProgramBody(comptime _: anytype) type {
-        return Body;
-    }
-};
-
-const System = agent.system(.{
-    .name = "system-api-proof",
-    .version = "3.0.0",
-    .Goal = u32,
-    .Action = Action,
-    .Observation = Observation,
-    .Result = u32,
-    .Failure = SystemFailure,
-    .models = .{agent.model(.{
-        .name = "primary",
-        .protocol = agent.protocol.openaiResponsesV1.Profile,
-        .model = "test-model",
-    })},
-    .prompts = .{agent.prompt.literal(.{
-        .role = .user,
-        .content = "Return the input.",
-    })},
-    .skills = .{},
-    .actions = actions,
-    .strategy = agent.strategy.staged(.{
-        .semantic_identity = "agent.strategy.system-api-proof.v1",
-        .implementation = Implementation,
-    }),
-    .epistemics = struct {},
-    .failures = .{},
-    .representation = .{},
-});
-
 test "agent.system returns one ordinary unspecialized Boundary Program" {
-    try std.testing.expect(System.InitialArgs == u32);
-    try std.testing.expect(System.Result == u32);
-    try std.testing.expect(@hasDecl(System, "Program"));
-    try std.testing.expect(!@hasDecl(System, "Machine"));
-    try std.testing.expect(System.Program.image().bytes.len > 0);
+    try std.testing.expect(AlternateStaged.InitialArgs == AlternateGoal);
+    try std.testing.expect(AlternateStaged.Result == AlternateResult);
+    try std.testing.expect(@hasDecl(AlternateStaged, "Program"));
+    try std.testing.expect(!@hasDecl(AlternateStaged, "Machine"));
+    try std.testing.expect(AlternateStaged.Program.image().bytes.len > 0);
 }
 
 const ProfileFailure = enum {
@@ -224,40 +162,6 @@ const alternate_representation = .{
     .schema_types = .{ AlternateGoal, AlternateResult, AlternateAction, AlternateObservation, AlternateFailure },
 };
 
-fn AlternateStagedBody() type {
-    const Builder = agent.Flow(.{
-        .schema_types = .{ AlternateGoal, AlternateResult, AlternateFailure },
-        .limits = agent.FlowLimits{
-            .maximum_values = 8,
-            .maximum_blocks = 4,
-            .maximum_instructions = 8,
-            .maximum_operands = 8,
-            .maximum_parameters = 8,
-            .maximum_requests = 1,
-            .maximum_edge_arguments = 8,
-        },
-    });
-    comptime var flow = Builder.init("alternate-system-staged-v1");
-    const goal = flow.begin(AlternateGoal);
-    flow.returnValue(flow.productConstruct(AlternateResult, .{goal}));
-    const Lowering = flow.finish(AlternateResult);
-    return struct {
-        pub const InitialArgs = AlternateGoal;
-        pub const Result = AlternateResult;
-        pub const Failure = AlternateFailure;
-        pub const constants = .{};
-        pub const effect_sites = boundary.effect.row(.{});
-        pub const schema_types = Lowering.schema_types;
-        pub const control_ir = Lowering.control_ir;
-    };
-}
-
-const AlternateImplementation = struct {
-    pub fn ProgramBody(comptime _: anytype) type {
-        return AlternateStagedBody();
-    }
-};
-
 fn alternateSystem(comptime Strategy: type) type {
     return agent.system(.{
         .name = "alternate-system-proof",
@@ -278,20 +182,20 @@ fn alternateSystem(comptime Strategy: type) type {
     });
 }
 
+const AlternateReact = alternateSystem(agent.strategy.react(.{}));
+const AlternateStaged = alternateSystem(agent.strategy.staged(.{
+    .semantic_identity = "agent.strategy.alternate-system-proof.v1",
+}));
+
 test "one complete source admits default and alternate staged strategies" {
-    const React = alternateSystem(agent.strategy.react(.{}));
-    const Staged = alternateSystem(agent.strategy.staged(.{
-        .semantic_identity = "agent.strategy.alternate-system-proof.v1",
-        .implementation = AlternateImplementation,
-    }));
-    try std.testing.expectEqual(React.Goal, Staged.Goal);
-    try std.testing.expectEqual(React.Action, Staged.Action);
-    try std.testing.expectEqual(React.Result, Staged.Result);
+    try std.testing.expectEqual(AlternateReact.Goal, AlternateStaged.Goal);
+    try std.testing.expectEqual(AlternateReact.Action, AlternateStaged.Action);
+    try std.testing.expectEqual(AlternateReact.Result, AlternateStaged.Result);
     try std.testing.expect(!std.mem.eql(
         u8,
-        &React.Program.image().bytes,
-        &Staged.Program.image().bytes,
+        &AlternateReact.Program.image().bytes,
+        &AlternateStaged.Program.image().bytes,
     ));
-    try std.testing.expect(!@hasDecl(React, "Machine"));
-    try std.testing.expect(!@hasDecl(Staged, "Machine"));
+    try std.testing.expect(!@hasDecl(AlternateReact, "Machine"));
+    try std.testing.expect(!@hasDecl(AlternateStaged, "Machine"));
 }

@@ -285,7 +285,20 @@ fn emitObject(
         })},
         .{comma_state[2]},
     );
-    flow.jump(member, .{ next_member.value, next_member.carried[0] });
+    const next_member_byte = flow.bytesByteAt(
+        flow.productExtract(0, next_member.value),
+        flow.productExtract(1, next_member.value),
+        flow.constant(context.Failure, context.malformed_failure_index),
+    );
+    const valid_next_member = flow.block(.segment, .{ Cursor, Fields });
+    flow.branch(
+        flow.integerEqual(next_member_byte, flow.constant(u8, context.right_brace_index)),
+        malformed,
+        .{},
+        valid_next_member,
+        .{ next_member.value, next_member.carried[0] },
+    );
+    flow.jump(member, flow.enter(valid_next_member));
     const close_state = flow.enter(close);
     flow.branch(
         flow.integerEqual(close_state[2], flow.constant(u8, context.right_brace_index)),
@@ -413,6 +426,7 @@ fn emitStructProjection(
                 selected[0],
                 flow.productExtract(1, selected[1]),
             }),
+            flow.productExtract(field_index, selected[2]),
             core,
             context,
         );
@@ -441,18 +455,134 @@ fn emitField(
     comptime Bytes: type,
     comptime T: type,
     cursor_value: @import("flow.zig").Value(staged.Cursor(Bytes)),
+    default_value: @import("flow.zig").Value(T),
     core: staged.Helpers(@TypeOf(flow.*), Bytes),
     comptime context: anytype,
 ) ParsedValue(T, Bytes) {
     if (comptime @typeInfo(T) == .int) {
-        const parsed = flow.call(core.parse_unsigned, .{cursor_value}, .{});
-        return .{
-            .cursor = flow.productExtract(0, parsed.value),
-            .value = flow.integerConvertOrFail(
-                T,
-                flow.productExtract(1, parsed.value),
+        if (comptime @typeInfo(T).int.signedness == .unsigned) {
+            const parsed = flow.call(core.parse_unsigned, .{cursor_value}, .{});
+            return .{
+                .cursor = flow.productExtract(0, parsed.value),
+                .value = flow.integerConvertOrFail(
+                    T,
+                    flow.productExtract(1, parsed.value),
+                    flow.constant(context.Failure, context.arithmetic_failure_index),
+                ),
+            };
+        }
+        const leading = flow.call(core.skip_whitespace, .{cursor_value}, .{});
+        const bytes = flow.productExtract(0, leading.value);
+        const index = flow.productExtract(1, leading.value);
+        const first = flow.bytesByteAt(
+            bytes,
+            index,
+            flow.constant(context.Failure, context.malformed_failure_index),
+        );
+        const negative = flow.integerEqual(first, flow.constant(u8, context.minus_index));
+        const positive = flow.block(.segment, .{staged.Cursor(Bytes)});
+        const negative_start = flow.block(.segment, .{ Bytes, u32, T });
+        flow.branch(
+            negative,
+            negative_start,
+            .{
+                bytes,
+                flow.integerAddOrFail(
+                    index,
+                    flow.constant(u32, context.one_u32_index),
+                    flow.constant(context.Failure, context.arithmetic_failure_index),
+                ),
+                default_value,
+            },
+            positive,
+            .{leading.value},
+        );
+        const parsed = flow.call(core.parse_unsigned, .{flow.enter(positive)[0]}, .{});
+        const positive_value = flow.integerConvertOrFail(
+            T,
+            flow.productExtract(1, parsed.value),
+            flow.constant(context.Failure, context.arithmetic_failure_index),
+        );
+        const joined = flow.block(.segment, .{ staged.Cursor(Bytes), T });
+        flow.jump(joined, .{ flow.productExtract(0, parsed.value), positive_value });
+
+        const negative_values = flow.enter(negative_start);
+        const loop = flow.block(.loop_header, .{ Bytes, u32, T, bool });
+        flow.jump(loop, .{
+            negative_values[0],
+            negative_values[1],
+            negative_values[2],
+            flow.constant(bool, context.false_index),
+        });
+        const current = flow.enter(loop);
+        const done = flow.block(.segment, .{ Bytes, u32, T, bool });
+        const inspect = flow.block(.segment, .{ Bytes, u32, T, bool });
+        flow.branch(
+            flow.integerGreaterEqual(current[1], flow.bytesLength(current[0])),
+            done,
+            current,
+            inspect,
+            current,
+        );
+        const inspecting = flow.enter(inspect);
+        const byte = flow.bytesByteAt(
+            inspecting[0],
+            inspecting[1],
+            flow.constant(context.Failure, context.malformed_failure_index),
+        );
+        const digit = flow.booleanAnd(
+            flow.integerGreaterEqual(byte, flow.constant(u8, context.zero_char_index)),
+            flow.integerLessEqual(byte, flow.constant(u8, context.nine_char_index)),
+        );
+        const consume = flow.block(.segment, .{ Bytes, u32, T, u8 });
+        flow.branch(
+            digit,
+            consume,
+            .{ inspecting[0], inspecting[1], inspecting[2], byte },
+            done,
+            inspecting,
+        );
+        const consumed = flow.enter(consume);
+        const digit_value = flow.integerConvert(
+            T,
+            flow.integerSubtract(consumed[3], flow.constant(u8, context.zero_char_index)),
+        );
+        const accumulated = flow.integerSubtractOrFail(
+            flow.integerMultiplyOrFail(
+                consumed[2],
+                flow.integerConvert(T, flow.constant(u64, context.ten_u64_index)),
                 flow.constant(context.Failure, context.arithmetic_failure_index),
             ),
+            digit_value,
+            flow.constant(context.Failure, context.arithmetic_failure_index),
+        );
+        flow.jump(loop, .{
+            consumed[0],
+            flow.integerAddOrFail(
+                consumed[1],
+                flow.constant(u32, context.one_u32_index),
+                flow.constant(context.Failure, context.arithmetic_failure_index),
+            ),
+            accumulated,
+            flow.constant(bool, context.true_index),
+        });
+        const finished = flow.enter(done);
+        const valid_negative = flow.block(.segment, .{ staged.Cursor(Bytes), T });
+        const invalid_negative = flow.block(.terminal_handoff, .{});
+        flow.branch(
+            finished[3],
+            valid_negative,
+            .{ flow.productConstruct(staged.Cursor(Bytes), .{ finished[0], finished[1] }), finished[2] },
+            invalid_negative,
+            .{},
+        );
+        flow.jump(joined, flow.enter(valid_negative));
+        _ = flow.enter(invalid_negative);
+        flow.failValue(flow.constant(context.Failure, context.malformed_failure_index));
+        const result = flow.enter(joined);
+        return .{
+            .cursor = result[0],
+            .value = result[1],
         };
     }
     if (comptime boundary.schema.isTextType(T)) {

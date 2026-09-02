@@ -4,8 +4,9 @@ const std = @import("std");
 
 const Goal = boundary.Text(64);
 const Empty = struct {};
-const Action = union(enum) { continue_work: Empty };
-const Observation = union(enum) { continued: Empty };
+const ContinuePayload = struct { delta: i8 };
+const Action = union(enum) { continue_work: ContinuePayload };
+const Observation = union(enum) { continued: ContinuePayload };
 const Failure = enum {
     arithmetic_overflow,
     capacity_exceeded,
@@ -24,11 +25,11 @@ const Failure = enum {
 };
 
 const Continue = struct {
-    pub const Payload = Empty;
-    pub const Observation = Empty;
+    pub const Payload = ContinuePayload;
+    pub const Observation = ContinuePayload;
 
-    pub fn emit(flow: anytype, _: anytype, _: anytype) agent.Value(Empty) {
-        return flow.productConstruct(Empty, .{});
+    pub fn emit(flow: anytype, payload: anytype, _: anytype) agent.Value(ContinuePayload) {
+        return flow.copy(payload);
     }
 };
 
@@ -136,7 +137,7 @@ const System = agent.system(.{
             .maximum_requests = 32,
             .maximum_edge_arguments = 8192,
         },
-        .schema_types = .{ Goal, Empty, Action, Observation, Failure },
+        .schema_types = .{ Goal, Empty, ContinuePayload, Action, Observation, Failure },
     },
 });
 
@@ -291,7 +292,7 @@ test "no-final system returns to byte-identical pending State" {
     const provider_json =
         "{\"status\":\"completed\",\"error\":null,\"output\":[{" ++
         "\"type\":\"function_call\",\"status\":\"completed\"," ++
-        "\"name\":\"continue_work\",\"arguments\":\"{}\"}]}";
+        "\"name\":\"continue_work\",\"arguments\":\"{\\\"delta\\\":-128}\"}]}";
     const response_body = try Protocol.ResponseBody.fromSlice(provider_json);
     const response: Protocol.Response = .{ .response = .{
         .http_status = 200,
@@ -441,35 +442,34 @@ test "raw provider failures A cannot emit a local action" {
     });
 }
 
-test "raw provider failures B cannot emit a local action" {
-    try expectFailureCases(&[_]FailureCase{
-        .{
-            .body = "{\"status\":\"completed\",\"error\":null,\"output\":[" ++
-                "{\"type\":\"future_action\"}]}",
-            .expected = .unsupported,
-        },
-        .{
-            .body = "{\"status\":\"completed\",\"error\":null,\"output\":[" ++
-                "{\"type\":\"function_call\",\"status\":\"completed\"," ++
-                "\"name\":\"continue_work\",\"arguments\":\"{}\"}," ++
-                "{\"type\":\"function_call\",\"status\":\"completed\"," ++
-                "\"name\":\"continue_work\",\"arguments\":\"{}\"}]}",
-            .expected = .multiple_calls,
-        },
-        .{
-            .body = "{\"status\":\"completed\",\"error\":null,\"output\":[" ++
-                "{\"type\":\"function_call\",\"status\":\"completed\"," ++
-                "\"name\":\"unknown\",\"arguments\":\"{}\"}]}",
-            .expected = .unknown_action,
-        },
-        .{
-            .body = "{\"status\":\"completed\",\"error\":null,\"output\":[" ++
-                "{\"type\":\"function_call\",\"status\":\"completed\"," ++
-                "\"name\":\"continue_work\",\"arguments\":\"{\\\"extra\\\":1}\"}]}",
-            .expected = .malformed,
-        },
-        .{ .body = "not-json", .status = 500, .expected = .http },
-    });
+test "raw provider failure B unsupported output" {
+    try expectFailureCases(&.{.{ .body = "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"future_action\"}]}", .expected = .unsupported }});
+}
+test "raw provider failure B multiple calls" {
+    try expectFailureCases(&.{.{ .body = "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"name\":\"continue_work\",\"arguments\":\"{}\"},{\"type\":\"function_call\",\"status\":\"completed\",\"name\":\"continue_work\",\"arguments\":\"{}\"}]}", .expected = .multiple_calls }});
+}
+test "raw provider failure B unknown action" {
+    try expectFailureCases(&.{.{ .body = "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"name\":\"unknown\",\"arguments\":\"{}\"}]}", .expected = .unknown_action }});
+}
+test "raw provider failure B extra argument" {
+    try expectFailureCases(&.{.{ .body = "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"name\":\"continue_work\",\"arguments\":\"{\\\"extra\\\":1}\"}]}", .expected = .malformed }});
+}
+test "raw provider failure B trailing top member" {
+    try expectFailureCases(&.{.{ .body = "{\"status\":\"completed\",\"error\":null,\"output\":[],}", .expected = .malformed }});
+}
+test "raw provider failure B trailing output item" {
+    try expectFailureCases(&.{.{ .body = "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"name\":\"continue_work\",\"arguments\":\"{}\"},]}", .expected = .malformed }});
+}
+test "raw provider failure B trailing skipped object member" {
+    try expectFailureCases(&.{.{ .body = "{\"status\":\"completed\",\"error\":null,\"metadata\":{\"x\":1,},\"output\":[]}", .expected = .malformed }});
+}
+test "raw provider failure B trailing skipped array item" {
+    try expectFailureCases(&.{.{ .body = "{\"status\":\"completed\",\"error\":null,\"metadata\":[1,],\"output\":[]}", .expected = .malformed }});
+}
+test "raw provider failure B non-2xx status" {
+    try expectFailureCases(&.{.{ .body = "not-json", .status = 500, .expected = .http }});
+}
+test "raw provider failure B transport errors" {
     try expectTransportFailures(&.{ .denied, .response_too_large });
 }
 
@@ -493,7 +493,7 @@ test "reordered escaped provider output remains admissible" {
         Image.program_transition_digest,
     );
     const provider_json =
-        " { \"output\" : [ { \"arguments\" : \"{}\", " ++
+        " { \"output\" : [ { \"arguments\" : \"{\\\"delta\\\":-128}\", " ++
         "\"name\" : \"continue\\u005fwork\", \"status\" : \"completed\", " ++
         "\"type\" : \"function_call\" } ], \"error\" : null, " ++
         "\"status\" : \"completed\" } ";

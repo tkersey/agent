@@ -37,7 +37,7 @@ const ProfileActions = .{
 };
 const ProfileModels = .{agent.model(.{
     .name = "primary",
-    .protocol = agent.protocol.openaiResponsesV1.Profile,
+    .protocol = agent.protocol.openaiResponsesV2.Profile,
     .model = "test-model",
     .parameters = .{},
 })};
@@ -112,7 +112,7 @@ const alternate_actions = .{agent.action.final(.done, .{
 })};
 const alternate_models = .{agent.model(.{
     .name = "primary",
-    .protocol = agent.protocol.openaiResponsesV1.Profile,
+    .protocol = agent.protocol.openaiResponsesV2.Profile,
     .model = "alternate-model-v1",
     .parameters = .{},
 })};

@@ -195,6 +195,51 @@ pub fn build(b: *std.Build) void {
         _ = run_ablation_emitter.captureStdOut(.{ .basename = mode[1] });
         emit_repository_ablation.dependOn(&run_ablation_emitter.step);
     }
+    const scaling_emitter_module = b.createModule(.{
+        .root_source_file = b.path("actuality/emit_economy_scaling_v1.zig"),
+        .target = b.graph.host,
+        .optimize = .Debug,
+    });
+    scaling_emitter_module.addImport("agent", agent_module);
+    scaling_emitter_module.addImport("boundary", boundary_module);
+    const scaling_emitter = b.addExecutable(.{
+        .name = "emit-agent-economy-scaling-v1",
+        .root_module = scaling_emitter_module,
+    });
+    const scaling_modes = .{
+        "prompt-1k",
+        "prompt-8k",
+        "prompt-16k",
+        "skill-base",
+        "skill-4k",
+        "tool-base",
+        "tool-extra",
+        "model-fixed-no-tools",
+        "model-dynamic-goal",
+        "six-tools-no-decode",
+        "six-tools-decode",
+    };
+    var scaling_outputs: [scaling_modes.len]std.Build.LazyPath = undefined;
+    inline for (scaling_modes, 0..) |mode, index| {
+        const run = b.addRunArtifact(scaling_emitter);
+        run.addArg(mode);
+        scaling_outputs[index] = run.captureStdOut(.{
+            .basename = b.fmt("{s}.bpi1", .{mode}),
+        });
+    }
+    const economy_check_command = b.addSystemCommand(&.{
+        "node",
+        "tools/check_agent_system_economy_v1.mjs",
+    });
+    for (scaling_outputs) |output| economy_check_command.addFileArg(output);
+    economy_check_command.addFileInput(
+        b.path("tools/check_agent_system_economy_v1.mjs"),
+    );
+    const economy_check = b.step(
+        "check-agent-system-economy-v1",
+        "Validate Agent image, execution, and marginal economy gates",
+    );
+    economy_check.dependOn(&economy_check_command.step);
     const process_state_census_test = b.addSystemCommand(&.{
         "node",
         "test/process_state_census.test.mjs",
@@ -407,6 +452,8 @@ pub fn build(b: *std.Build) void {
         "test",
         "actuality/repository_repair_system_v1.zig",
         "actuality/emit_repository_system_v1.zig",
+        "actuality/emit_repository_system_ablation_v1.zig",
+        "actuality/emit_economy_scaling_v1.zig",
     });
     const paths = b.addSystemCommand(&.{ "sh", "tools/check_zig_paths.sh" });
     const lint = b.step("lint", "Check Zig formatting and source inventory");
@@ -415,6 +462,7 @@ pub fn build(b: *std.Build) void {
 
     const check = b.step("check", "Compile and test Agent 3");
     check.dependOn(closure_check);
+    check.dependOn(economy_check);
     check.dependOn(lint);
 }
 

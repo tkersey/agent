@@ -11,7 +11,7 @@ pub const Strategy = agent.strategy.staged(.{
 });
 pub const Model = agent.model(.{
     .name = "primary",
-    .protocol = agent.protocol.openaiResponsesV1.Profile,
+    .protocol = agent.protocol.openaiResponsesV2.Profile,
     .model = "compile-fail-model-v1",
     .parameters = .{},
 });

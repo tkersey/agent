@@ -595,6 +595,14 @@ pub fn Flow(comptime config: anytype) type {
             comptime Product: type,
             fields: anytype,
         ) Value(Product) {
+            const expected = @typeInfo(Product).@"struct".fields.len;
+            const observed = @typeInfo(@TypeOf(fields)).@"struct".fields.len;
+            if (expected != observed) {
+                @compileError(std.fmt.comptimePrint(
+                    "agent.Flow productConstruct {s} expected {d} fields, observed {d}",
+                    .{ @typeName(Product), expected, observed },
+                ));
+            }
             return self.instruction(Product, .pure, .product_construct, fields);
         }
 

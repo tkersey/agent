@@ -3,8 +3,8 @@
     .version = "3.0.0",
     .dependencies = .{
         .boundary = .{
-            .url = "https://github.com/tkersey/boundary/archive/bc0f22eddfc051b24b16df5a41c3d65365d9d33b.tar.gz",
-            .hash = "boundary-1.8.0-flclaPxGJwAwn5MqcteC7sL9rbOLSAFA_rZBedLP8u9g",
+            .url = "https://github.com/tkersey/boundary/archive/bc43989e7ea1371649cd85b219f69b86e1c8ccf9.tar.gz",
+            .hash = "boundary-1.8.0-flclaLGkJgAczV_xsWF5hna6zBSc3fQp_EgIpzH8XF-m",
         },
     },
     .minimum_zig_version = "0.16.0",

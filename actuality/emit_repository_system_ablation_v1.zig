@@ -9,17 +9,25 @@ pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     if (args.len != 2) return error.InvalidArguments;
     const allocator = init.arena.allocator();
-    const image = try allocator.alloc(
+    const image = if (comptime @hasDecl(
+        repository.System.Program,
+        "ImageEncodingWorkspace",
+    )) try allocator.alloc(
         u8,
         repository.System.Source.representation.image_bytes,
-    );
-    const encoding_workspace = try allocator.create(
-        repository.System.Program.ImageEncodingWorkspace,
-    );
-    const length = try repository.System.Program.encodeImage(
-        image,
-        encoding_workspace,
-    );
+    ) else @constCast(&repository.System.Program.image().bytes);
+    const length = if (comptime @hasDecl(
+        repository.System.Program,
+        "ImageEncodingWorkspace",
+    )) blk: {
+        const encoding_workspace = try allocator.create(
+            repository.System.Program.ImageEncodingWorkspace,
+        );
+        break :blk try repository.System.Program.encodeImage(
+            image,
+            encoding_workspace,
+        );
+    } else image.len;
     const validation_workspace = try allocator.create(
         boundary.image.ValidationWorkspace,
     );

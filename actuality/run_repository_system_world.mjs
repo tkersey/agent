@@ -268,7 +268,7 @@ process.stdout.write(`${JSON.stringify({
 })}\n`);
 
 async function resolveEffect(request) {
-  if (request.effectSemanticIdentity === "agent.model.invoke.v1") {
+  if (request.effectSemanticIdentity === "agent.model.invoke.v2") {
     modelRequests += 1;
     modelInvocationSha256.push(sha256(request.payload));
     const decoded = decodeModelInvocation(request.payload);
@@ -306,7 +306,11 @@ async function resolveEffect(request) {
         arguments: JSON.stringify(action[1]),
       }],
     }));
-    return normalizeOpenAIResponses(providerBody, decoded.normalizationLimits);
+    return normalizeOpenAIResponses(
+      providerBody,
+      decoded.normalizationLimits,
+      decoded.tools,
+    );
   }
 
   repositoryRequests += 1;

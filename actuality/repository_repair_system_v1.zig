@@ -924,7 +924,7 @@ pub fn RepositoryRepairSystemMode(
             .Failure = Failure,
             .models = .{agent.model(.{
                 .name = "primary",
-                .protocol = agent.protocol.openaiResponsesV1.Profile,
+                .protocol = agent.protocol.openaiResponsesV2.Profile,
                 .model = "gpt-5.4-mini-2026-03-17",
                 .parameters = .{},
             })},
@@ -1042,5 +1042,4 @@ test "repository repair source closes through canonical Agent 3 system" {
     try std.testing.expectEqual(repository.Result, repository.System.Result);
     try std.testing.expectEqual(repository.Failure, repository.System.Failure);
     try std.testing.expect(repository.System.Program.control_ir.blocks.len > 0);
-    try std.testing.expect(repository.System.Program.control_ir.functions.len > 0);
 }

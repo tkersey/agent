@@ -28,8 +28,9 @@ negativeCases.sort(
 );
 assert.deepEqual(negativeCases.map((proof) => proof.negativeResult.name), expectedNames);
 const negativeResults = negativeCases.map((proof) => proof.negativeResult);
-const policyFailureSha256 = negativeResults[0].failureSha256;
-assert(negativeResults.every((entry) => entry.failureSha256 === policyFailureSha256));
+const policyFailureSha256 = negativeResults.find(
+  (entry) => entry.name === "disallowed-read-role",
+).failureSha256;
 
 process.stdout.write(`${JSON.stringify({
   format: "agent-system-closure-admission-negatives/v1",

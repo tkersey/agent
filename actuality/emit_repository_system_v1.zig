@@ -51,6 +51,12 @@ pub fn main(init: std.process.Init) !void {
 }
 
 fn encodedImage(allocator: std.mem.Allocator) ![]const u8 {
+    if (comptime !@hasDecl(
+        repository.System.Program,
+        "ImageEncodingWorkspace",
+    )) {
+        return &repository.System.Program.image().bytes;
+    }
     const image = try allocator.alloc(
         u8,
         repository.System.Source.representation.image_bytes,

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 
-const PROTOCOL = "agent.model.protocol.openai-responses-v1";
+const PROTOCOL = "agent.model.protocol.openai-responses-v2";
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "[::1]", "localhost"]);
 
 const transportFailures = Object.freeze({
@@ -24,6 +24,15 @@ const unsupportedResponses = Object.freeze({
   unsupported_output_item: 5,
   mixed_refusal: 6,
   normalization_limit: 7,
+});
+const argumentDecodeFailures = Object.freeze({
+  malformed: 0,
+  duplicate_field: 1,
+  unknown_field: 2,
+  missing_field: 3,
+  wrong_type: 4,
+  integer_range: 5,
+  capacity: 6,
 });
 
 export async function performModelInvocation(payload, options) {
@@ -67,7 +76,11 @@ export async function performModelInvocation(payload, options) {
     if (response.status < 200 || response.status >= 300) {
       return encodeProviderFailure("http_status", response.status);
     }
-    return normalizeOpenAIResponses(body, invocation.normalizationLimits);
+    return normalizeOpenAIResponses(
+      body,
+      invocation.normalizationLimits,
+      invocation.tools,
+    );
   } catch (error) {
     if (error?.name === "AbortError" || error?.name === "TimeoutError") {
       return encodeTransportFailure("interrupted");
@@ -95,6 +108,17 @@ export function decodeModelInvocation(input) {
     description: decodeText(bytes, cursor),
     inputSchemaJson: decodeBytes(bytes, cursor),
     strict: readBool(bytes, cursor),
+    argumentCodec: decodeVector(bytes, cursor, () => ({
+      name: decodeText(bytes, cursor),
+      kind: decodeEnum(bytes, cursor, [
+        "text",
+        "signed_integer",
+        "unsigned_integer",
+        "boolean",
+      ]),
+      bitWidth: readU16(bytes, cursor),
+      maximumBytes: readU32(bytes, cursor),
+    })),
   }));
   const selection = Object.freeze({
     minimumCalls: readU32(bytes, cursor),
@@ -112,6 +136,8 @@ export function decodeModelInvocation(input) {
     maximumCallIdBytes: readU32(bytes, cursor),
     maximumNameBytes: readU32(bytes, cursor),
     maximumArgumentsBytes: readU32(bytes, cursor),
+    maximumArgumentNameBytes: readU32(bytes, cursor),
+    maximumArgumentFields: readU32(bytes, cursor),
     maximumResultTextBytes: readU32(bytes, cursor),
   });
   const maximumProviderResponseBytes = readU32(bytes, cursor);
@@ -175,7 +201,7 @@ export function encodeOpenAIResponsesRequest(invocation) {
   return Buffer.from(JSON.stringify(body));
 }
 
-export function normalizeOpenAIResponses(body, limits) {
+export function normalizeOpenAIResponses(body, limits, tools = []) {
   let text;
   try {
     text = fatalUtf8(body);
@@ -212,11 +238,20 @@ export function normalizeOpenAIResponses(body, limits) {
         requireTextLimit(item.call_id, limits.maximumCallIdBytes);
         requireTextLimit(item.name, limits.maximumNameBytes);
         requireTextLimit(item.arguments, limits.maximumArgumentsBytes);
+        const argumentsJson = Buffer.from(item.arguments);
+        const decodedAction = decodeActionArguments(
+          item.arguments,
+          item.name,
+          tools,
+          limits,
+        );
         items.push({
           kind: "function_call",
           callId: item.call_id,
           name: item.name,
-          argumentsJson: Buffer.from(item.arguments),
+          argumentsJson,
+          toolOrdinalClaim: decodedAction.toolOrdinalClaim,
+          decodedAction,
         });
       } else if (item?.type === "message" && item.status === "completed" &&
           item.role === "assistant" && Array.isArray(item.content) &&
@@ -236,9 +271,8 @@ export function normalizeOpenAIResponses(body, limits) {
   } catch {
     return encodeUnsupported("normalization_limit");
   }
-  const semanticDigest = createHash("sha256")
-    .update(Buffer.from(JSON.stringify(items)))
-    .digest();
+  const encodedItems = encodeOutputItems(items);
+  const semanticDigest = createHash("sha256").update(encodedItems).digest();
   return encodeOutput(items, semanticDigest);
 }
 
@@ -260,19 +294,132 @@ function decodeParameters(bytes, cursor) {
   return Object.freeze({ maxOutputTokens, temperature, reasoning });
 }
 
-function encodeOutput(items, digest) {
-  const encoded = [u32(0), u32(items.length)];
+function decodeActionArguments(text, toolName, tools, limits) {
+  const tool = tools.find((candidate) => candidate.name === toolName);
+  if (tool === undefined) {
+    return Object.freeze({
+      kind: "invalid",
+      failure: "unknown_field",
+      toolOrdinalClaim: 0xffff_ffff,
+    });
+  }
+  try {
+    const fields = new ArgumentScanner(text, limits).objectFields();
+    const encodedPayload = encodeTypedPayload(fields, tool.argumentCodec);
+    return Object.freeze({
+      kind: "decoded",
+      toolOrdinalClaim: tool.actionOrdinal,
+      actionBytes: Buffer.concat([u32(tool.actionOrdinal), encodedPayload]),
+    });
+  } catch (error) {
+    return Object.freeze({
+      kind: "invalid",
+      failure: error instanceof ArgumentDecodeError ? error.code : "malformed",
+      toolOrdinalClaim: tool.actionOrdinal,
+    });
+  }
+}
+
+class ArgumentDecodeError extends Error {
+  constructor(code) {
+    super(code);
+    this.code = code;
+  }
+}
+
+function encodeTypedPayload(fields, codec) {
+  const admitted = new Set(codec.map((field) => field.name));
+  if (fields.some((field) => !admitted.has(field.name))) {
+    throw new ArgumentDecodeError("unknown_field");
+  }
+  const encoded = [];
+  for (const contract of codec) {
+    const matches = fields.filter((field) => field.name === contract.name);
+    if (matches.length === 0) throw new ArgumentDecodeError("missing_field");
+    if (matches.length !== 1) throw new ArgumentDecodeError("duplicate_field");
+    const value = matches[0].value;
+    switch (contract.kind) {
+      case "text": {
+        if (value.kind !== "text") throw new ArgumentDecodeError("wrong_type");
+        if (Buffer.byteLength(value.value) > contract.maximumBytes) {
+          throw new ArgumentDecodeError("capacity");
+        }
+        encoded.push(encodeText(value.value));
+        break;
+      }
+      case "signed_integer": {
+        if (value.kind !== "signed" && value.kind !== "unsigned") {
+          throw new ArgumentDecodeError("wrong_type");
+        }
+        const minimum = -(1n << BigInt(contract.bitWidth - 1));
+        const maximum = (1n << BigInt(contract.bitWidth - 1)) - 1n;
+        if (value.value < minimum || value.value > maximum) {
+          throw new ArgumentDecodeError("integer_range");
+        }
+        encoded.push(encodeIntegerWidth(value.value, contract.bitWidth));
+        break;
+      }
+      case "unsigned_integer": {
+        if (value.kind !== "unsigned") throw new ArgumentDecodeError("wrong_type");
+        const maximum = (1n << BigInt(contract.bitWidth)) - 1n;
+        if (value.value > maximum) throw new ArgumentDecodeError("integer_range");
+        encoded.push(encodeIntegerWidth(value.value, contract.bitWidth));
+        break;
+      }
+      case "boolean": {
+        if (value.kind !== "boolean") throw new ArgumentDecodeError("wrong_type");
+        encoded.push(Buffer.from([value.value ? 1 : 0]));
+        break;
+      }
+      default: throw new ArgumentDecodeError("wrong_type");
+    }
+  }
+  return Buffer.concat(encoded);
+}
+
+function encodeIntegerWidth(value, bitWidth) {
+  if (!Number.isInteger(bitWidth) || bitWidth <= 0 || bitWidth > 64 || bitWidth % 8 !== 0) {
+    throw new ArgumentDecodeError("integer_range");
+  }
+  let remaining = BigInt.asUintN(bitWidth, BigInt(value));
+  const bytes = Buffer.alloc(bitWidth / 8);
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = Number(remaining & 0xffn);
+    remaining >>= 8n;
+  }
+  return bytes;
+}
+
+function encodeOutputItems(items) {
+  const encoded = [u32(items.length)];
   for (const item of items) {
     if (item.kind === "function_call") {
-      encoded.push(u32(0), encodeText(item.callId), encodeText(item.name), encodeBytes(item.argumentsJson));
+      encoded.push(
+        u32(0),
+        encodeText(item.callId),
+        encodeText(item.name),
+        encodeBytes(item.argumentsJson),
+        u32(item.toolOrdinalClaim),
+        encodeDecodedAction(item.decodedAction),
+      );
     } else if (item.kind === "message") {
       encoded.push(u32(1), u32(3), encodeText(item.content));
     } else {
       encoded.push(u32(2), encodeText(item.summary));
     }
   }
-  encoded.push(Buffer.from(digest));
   return Buffer.concat(encoded);
+}
+
+function encodeOutput(items, digest) {
+  return Buffer.concat([u32(0), encodeOutputItems(items), Buffer.from(digest)]);
+}
+
+function encodeDecodedAction(decoded) {
+  if (decoded.kind === "decoded") {
+    return Buffer.concat([u32(0), decoded.actionBytes]);
+  }
+  return Buffer.concat([u32(1), u32(argumentDecodeFailures[decoded.failure])]);
 }
 
 function encodeRefusal(text) {
@@ -378,6 +525,13 @@ function readU32(bytes, cursor) {
   return value;
 }
 
+function readU16(bytes, cursor) {
+  assert(cursor.value + 2 <= bytes.byteLength, "u16 exceeds input");
+  const value = bytes.readUInt16LE(cursor.value);
+  cursor.value += 2;
+  return value;
+}
+
 function encodeText(value) {
   return encodeBytes(Buffer.from(value));
 }
@@ -396,6 +550,18 @@ function u16(value) {
 function u32(value) {
   const bytes = Buffer.alloc(4);
   bytes.writeUInt32LE(value);
+  return bytes;
+}
+
+function i64(value) {
+  const bytes = Buffer.alloc(8);
+  bytes.writeBigInt64LE(BigInt(value));
+  return bytes;
+}
+
+function u64(value) {
+  const bytes = Buffer.alloc(8);
+  bytes.writeBigUInt64LE(BigInt(value));
   return bytes;
 }
 
@@ -484,5 +650,83 @@ class JsonScanner {
       }
     }
     return JSON.parse(this.text.slice(start, this.index));
+  }
+}
+
+class ArgumentScanner extends JsonScanner {
+  constructor(text, limits) {
+    super(text);
+    this.limits = limits;
+  }
+
+  objectFields() {
+    this.whitespace();
+    if (this.text[this.index] !== "{") throw new ArgumentDecodeError("malformed");
+    this.index += 1;
+    this.whitespace();
+    const observedFields = [];
+    if (this.text[this.index] === "}") {
+      this.index += 1;
+    } else {
+      for (;;) {
+        if (observedFields.length >= this.limits.maximumArgumentFields) {
+          throw new ArgumentDecodeError("capacity");
+        }
+        assert.equal(this.text[this.index], '"', "argument field name is not a string");
+        const name = this.string();
+        requireTextLimit(name, this.limits.maximumArgumentNameBytes);
+        assert.equal(fatalUtf8(Buffer.from(name)), name, "argument field name is not portable UTF-8");
+        this.whitespace();
+        assert.equal(this.text[this.index++], ":", "argument field colon is missing");
+        observedFields.push(Object.freeze({ name, value: this.argumentValue() }));
+        this.whitespace();
+        const delimiter = this.text[this.index++];
+        if (delimiter === "}") break;
+        assert.equal(delimiter, ",", "argument object delimiter is invalid");
+        this.whitespace();
+        assert.notEqual(this.text[this.index], "}", "argument object trailing comma");
+      }
+    }
+    this.whitespace();
+    assert.equal(this.index, this.text.length, "arguments JSON has trailing bytes");
+    return Object.freeze(observedFields);
+  }
+
+  argumentValue() {
+    this.whitespace();
+    const byte = this.text[this.index];
+    if (byte === '"') {
+      const value = this.string();
+      requireTextLimit(value, this.limits.maximumArgumentsBytes);
+      assert.equal(fatalUtf8(Buffer.from(value)), value, "argument text is not portable UTF-8");
+      return Object.freeze({ kind: "text", value });
+    }
+    if (byte === "{") {
+      this.object();
+      return Object.freeze({ kind: "object" });
+    }
+    if (byte === "[") {
+      this.array();
+      return Object.freeze({ kind: "array" });
+    }
+    const match = this.text.slice(this.index).match(
+      /^(?:true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/,
+    );
+    assert(match, "invalid argument JSON value");
+    const lexeme = match[0];
+    this.index += lexeme.length;
+    if (lexeme === "true") return Object.freeze({ kind: "boolean", value: true });
+    if (lexeme === "false") return Object.freeze({ kind: "boolean", value: false });
+    if (lexeme === "null") return Object.freeze({ kind: "null" });
+    if (/[.eE]/.test(lexeme)) return Object.freeze({ kind: "non_integer_number" });
+    const value = BigInt(lexeme);
+    if (value < 0n) {
+      if (value < -(1n << 63n)) return Object.freeze({ kind: "non_integer_number" });
+      return Object.freeze({ kind: "signed", value });
+    }
+    if (value > (1n << 64n) - 1n) {
+      return Object.freeze({ kind: "non_integer_number" });
+    }
+    return Object.freeze({ kind: "unsigned", value });
   }
 }

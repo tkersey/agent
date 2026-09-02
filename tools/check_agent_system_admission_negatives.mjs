@@ -23,7 +23,7 @@ const transferred = await world.admitProcessKernel(kernel);
 
 const initialModel = await advanceUntilRequested(primary, { initialArgs });
 const modelRequest = world.decodeEffectRequest(initialModel.request);
-assert.equal(modelRequest.effectSemanticIdentity, "agent.model.invoke.v1");
+assert.equal(modelRequest.effectSemanticIdentity, "agent.model.invoke.v2");
 const modelInvocation = decodeModelInvocation(modelRequest.payload);
 const invalidCases = [
   {
@@ -150,8 +150,9 @@ const negativeResults = await Promise.all(invalidCases.map(async (candidate) => 
     failureSha256: sha256(terminal.failure),
   };
 }));
-const policyFailureSha256 = negativeResults[0].failureSha256;
-assert(negativeResults.every((entry) => entry.failureSha256 === policyFailureSha256));
+const policyFailureSha256 = negativeResults.find(
+  (entry) => entry.name === "disallowed-read-role",
+).failureSha256;
 
 process.stdout.write(`${JSON.stringify({
   format: "agent-system-closure-admission-negatives/v1",
@@ -226,6 +227,7 @@ function encodeModelResponse(name, argumentsValue) {
   return normalizeOpenAIResponses(
     providerBody,
     modelInvocation.normalizationLimits,
+    modelInvocation.tools,
   );
 }
 

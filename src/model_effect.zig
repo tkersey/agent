@@ -1,12 +1,12 @@
-const action_profile = @import("action_profile.zig");
+const action_profile = @import("typed_action_profile.zig");
 const boundary = @import("boundary");
 const json = @import("json.zig");
 const model = @import("model.zig");
 const std = @import("std");
 
-pub const semantic_identity = "agent.model.invoke.v1";
+pub const semantic_identity = "agent.model.invoke.v2";
 pub const openai_responses_protocol_identity =
-    "agent.model.protocol.openai-responses-v1";
+    "agent.model.protocol.openai-responses-v2";
 
 pub const MessageRole = enum {
     system,
@@ -170,20 +170,27 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
     const PromptMessages = boundary.Vector(Message, source.prompts.len);
     const SkillMessages = boundary.Vector(Message, source.skills.len);
 
+    const ActionProfile = action_profile.Profile(
+        source.Failure,
+        source.Action,
+        source.failures,
+    );
+    const ArgumentFieldName = ActionProfile.FieldNameType;
+    const ArgumentFieldKind = ActionProfile.FieldKindType;
+    const ArgumentFieldContract = ActionProfile.FieldContractType;
+    const ArgumentCodec = ActionProfile.ArgumentCodecType;
+    const ArgumentDecodeFailure = ActionProfile.DecodeFailureType;
+    const DecodedAction = ActionProfile.DecodedActionType;
+
     const ToolDeclaration = struct {
         action_ordinal: u32,
         name: ToolName,
         description: ToolDescription,
         input_schema_json: ToolSchema,
         strict: bool,
+        argument_codec: ArgumentCodec,
     };
     const Tools = boundary.Vector(ToolDeclaration, source.actions.len);
-    const ToolDescriptions = boundary.Vector(
-        ToolDescription,
-        source.actions.len,
-    );
-    const ToolSchemas = boundary.Vector(ToolSchema, source.actions.len);
-    const ActionOrdinals = boundary.Vector(u32, source.actions.len);
 
     const ToolSelectionPolicy = struct {
         minimum_calls: u32,
@@ -201,6 +208,8 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
         maximum_call_id_bytes: u32,
         maximum_name_bytes: u32,
         maximum_arguments_bytes: u32,
+        maximum_argument_name_bytes: u32,
+        maximum_argument_fields: u32,
         maximum_result_text_bytes: u32,
     };
     const ModelInvocation = struct {
@@ -219,6 +228,8 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
         call_id: CallId,
         name: ToolName,
         arguments_json: ArgumentsJson,
+        tool_ordinal_claim: u32,
+        decoded_action: DecodedAction,
     };
     const OutputMessage = struct {
         role: MessageRole,
@@ -252,14 +263,6 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
         ModelInvocation,
         ModelResult,
     );
-    const ActionProfile = action_profile.Profile(
-        source.Failure,
-        ArgumentsJson,
-        ToolName,
-        source.Action,
-        source.actions,
-        source.failures,
-    );
 
     return struct {
         pub const ModelIdType = ModelId;
@@ -282,9 +285,12 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
         pub const SkillMessagesType = SkillMessages;
         pub const ToolDeclarationType = ToolDeclaration;
         pub const ToolsType = Tools;
-        pub const ToolDescriptionsType = ToolDescriptions;
-        pub const ToolSchemasType = ToolSchemas;
-        pub const ActionOrdinalsType = ActionOrdinals;
+        pub const ArgumentFieldNameType = ArgumentFieldName;
+        pub const ArgumentFieldKindType = ArgumentFieldKind;
+        pub const ArgumentFieldContractType = ArgumentFieldContract;
+        pub const ArgumentCodecType = ArgumentCodec;
+        pub const ArgumentDecodeFailureType = ArgumentDecodeFailure;
+        pub const DecodedActionType = DecodedAction;
         pub const ToolSelectionPolicyType = ToolSelectionPolicy;
         pub const ResponsePolicyType = ResponsePolicy;
         pub const NormalizationLimitsType = NormalizationLimits;
@@ -330,9 +336,6 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
                 SkillMessages,
                 ToolDeclaration,
                 Tools,
-                ToolDescriptions,
-                ToolSchemas,
-                ActionOrdinals,
                 ToolSelectionPolicy,
                 ResponsePolicy,
                 NormalizationLimits,
@@ -375,9 +378,6 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
                 SkillMessages,
                 ToolDeclaration,
                 Tools,
-                ToolDescriptions,
-                ToolSchemas,
-                ActionOrdinals,
                 ToolSelectionPolicy,
                 ResponsePolicy,
                 NormalizationLimits,
@@ -463,30 +463,21 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
             return result;
         }
 
-        fn descriptionsValue() ToolDescriptions {
-            var result = ToolDescriptions.empty();
-            inline for (source.actions) |Descriptor| {
-                result.push(ToolDescription.fromSlice(
-                    Descriptor.description,
-                ) catch unreachable) catch unreachable;
-            }
-            return result;
-        }
-
-        fn schemasValue() ToolSchemas {
-            var result = ToolSchemas.empty();
-            inline for (source.actions, 0..) |_, index| {
-                result.push(ToolSchema.fromSlice(
-                    &json.Schema(actionPayload(source.Action, index)).value,
-                ) catch unreachable) catch unreachable;
-            }
-            return result;
-        }
-
-        fn ordinalsValue() ActionOrdinals {
-            var result = ActionOrdinals.empty();
-            inline for (0..source.actions.len) |index| {
-                result.push(@intCast(index)) catch unreachable;
+        fn toolDeclarationsValue() Tools {
+            var result = Tools.empty();
+            inline for (source.actions, 0..) |Descriptor, index| {
+                result.push(.{
+                    .action_ordinal = @intCast(index),
+                    .name = ToolName.fromSlice(Descriptor.name) catch unreachable,
+                    .description = ToolDescription.fromSlice(
+                        Descriptor.description,
+                    ) catch unreachable,
+                    .input_schema_json = ToolSchema.fromSlice(
+                        &json.Schema(actionPayload(source.Action, index)).value,
+                    ) catch unreachable,
+                    .strict = true,
+                    .argument_codec = ActionProfile.codecValue(index),
+                }) catch unreachable;
             }
             return result;
         }
@@ -499,9 +490,7 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
                 modelsValue(),
                 promptsValue(),
                 skillsValue(),
-                descriptionsValue(),
-                schemasValue(),
-                ordinalsValue(),
+                toolDeclarationsValue(),
                 ToolSelectionPolicy{
                     .minimum_calls = 1,
                     .maximum_calls = 1,
@@ -518,6 +507,8 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
                     .maximum_call_id_bytes = CallId.maximum_length,
                     .maximum_name_bytes = ToolName.maximum_length,
                     .maximum_arguments_bytes = ArgumentsJson.maximum_length,
+                    .maximum_argument_name_bytes = ArgumentFieldName.maximum_length,
+                    .maximum_argument_fields = ArgumentCodec.maximum_length,
                     .maximum_result_text_bytes = ResultText.maximum_length,
                 },
                 @as(u32, source.representation.response_bytes),
@@ -531,9 +522,7 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
                 modelsValue(),
                 promptsValue(),
                 skillsValue(),
-                descriptionsValue(),
-                schemasValue(),
-                ordinalsValue(),
+                toolDeclarationsValue(),
                 ToolSelectionPolicy{
                     .minimum_calls = 1,
                     .maximum_calls = 1,
@@ -550,6 +539,8 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
                     .maximum_call_id_bytes = CallId.maximum_length,
                     .maximum_name_bytes = ToolName.maximum_length,
                     .maximum_arguments_bytes = ArgumentsJson.maximum_length,
+                    .maximum_argument_name_bytes = ArgumentFieldName.maximum_length,
+                    .maximum_argument_fields = ArgumentCodec.maximum_length,
                     .maximum_result_text_bytes = ResultText.maximum_length,
                 },
                 @as(u32, source.representation.response_bytes),
@@ -568,9 +559,7 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
                 modelsValue(),
                 promptsValue(),
                 skillsValue(),
-                descriptionsValue(),
-                schemasValue(),
-                ordinalsValue(),
+                toolDeclarationsValue(),
                 ToolSelectionPolicy{
                     .minimum_calls = 1,
                     .maximum_calls = 1,
@@ -587,6 +576,8 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
                     .maximum_call_id_bytes = CallId.maximum_length,
                     .maximum_name_bytes = ToolName.maximum_length,
                     .maximum_arguments_bytes = ArgumentsJson.maximum_length,
+                    .maximum_argument_name_bytes = ArgumentFieldName.maximum_length,
+                    .maximum_argument_fields = ArgumentCodec.maximum_length,
                     .maximum_result_text_bytes = ResultText.maximum_length,
                 },
                 @as(u32, source.representation.response_bytes),
@@ -603,13 +594,11 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
         pub const models_index: u16 = semantic_start + 1;
         pub const prompts_index: u16 = semantic_start + 2;
         pub const skills_index: u16 = semantic_start + 3;
-        pub const descriptions_index: u16 = semantic_start + 4;
-        pub const schemas_index: u16 = semantic_start + 5;
-        pub const ordinals_index: u16 = semantic_start + 6;
-        pub const selection_index: u16 = semantic_start + 7;
-        pub const response_policy_index: u16 = semantic_start + 8;
-        pub const normalization_limits_index: u16 = semantic_start + 9;
-        pub const maximum_response_bytes_index: u16 = semantic_start + 10;
-        pub const user_role_index: u16 = semantic_start + 11;
+        pub const tool_declarations_index: u16 = semantic_start + 4;
+        pub const selection_index: u16 = semantic_start + 5;
+        pub const response_policy_index: u16 = semantic_start + 6;
+        pub const normalization_limits_index: u16 = semantic_start + 7;
+        pub const maximum_response_bytes_index: u16 = semantic_start + 8;
+        pub const user_role_index: u16 = semantic_start + 9;
     };
 }

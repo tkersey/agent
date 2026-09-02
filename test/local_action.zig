@@ -107,12 +107,12 @@ const System = agent.system(.{
     .Failure = Failure,
     .models = .{ agent.model(.{
         .name = "primary",
-        .protocol = agent.protocol.openaiResponsesV1.Profile,
+        .protocol = agent.protocol.openaiResponsesV2.Profile,
         .model = "fixture-model-v1",
         .parameters = .{},
     }), agent.model(.{
         .name = "fallback",
-        .protocol = agent.protocol.openaiResponsesV1.Profile,
+        .protocol = agent.protocol.openaiResponsesV2.Profile,
         .model = "fallback-model-v2",
         .parameters = .{ .max_output_tokens = @as(u32, 321) },
     }) },

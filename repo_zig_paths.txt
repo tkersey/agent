@@ -2,6 +2,7 @@ actuality/application.zig
 actuality/emit_decision_contract.zig
 actuality/emit_decision_contract_binary.zig
 actuality/emit_decision_contract_digest.zig
+actuality/emit_economy_scaling_v1.zig
 actuality/emit_first_decision_request.zig
 actuality/emit_initial_args.zig
 actuality/emit_repository_system_ablation_v1.zig
@@ -27,7 +28,6 @@ examples/research_agent.zig
 interpretation/emit_repository_repair_artifact.zig
 src/action.zig
 src/action_decode.zig
-src/action_profile.zig
 src/boundary_package.zig
 src/budget.zig
 src/compiler.zig
@@ -47,6 +47,7 @@ src/openai_response.zig
 src/prompt.zig
 src/protocol.zig
 src/protocol/openai_responses_v1.zig
+src/protocol/openai_responses_v2.zig
 src/request.zig
 src/response.zig
 src/root.zig
@@ -57,6 +58,8 @@ src/strategy.zig
 src/strategy_v3.zig
 src/system.zig
 src/system_compiler.zig
+src/typed_action_decode.zig
+src/typed_action_profile.zig
 test/action_admission.zig
 test/action_algebra.zig
 test/actuality_definition.zig

@@ -49,20 +49,20 @@ const world = await import(pathToFileURL(join(worldRoot, "src/process_v1/index.m
 const kernel = await readFile(join(worldRoot, "boundary-process-kernel-v1.wasm"));
 const worldManifest = JSON.parse(await readFile(join(worldRoot, "runtime-manifest.json"), "utf8"));
 assert.equal(worldManifest.format, "world-process-host-runtime/v1");
-assert.equal(worldManifest.sourceCommit, "622735238addc1c2612b060a6f6d9c2eb17a7abd");
-assert.equal(worldManifest.boundaryCommit, "79a17edafab2ce751a441cfabc7f9f3881474d51");
+assert.equal(worldManifest.sourceCommit, "073e0b0f024a32d3c7b3cd9008d73d76ecbad981");
+assert.equal(worldManifest.boundaryCommit, "bc43989e7ea1371649cd85b219f69b86e1c8ccf9");
 const worldArchive = await readFile(
   join(worldRoot, "dist/world-v4.1.0-process-host-runtime.tar.gz"),
 ).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
 if (worldArchive !== null) {
-  assert.equal(sha256(worldArchive), "ff2d0ae55fb778444f4610c8abcaab01202693ff026fbed3c2c07c8e3c7943ab");
-  assert.equal(worldArchive.byteLength, 1_485_957);
+  assert.equal(sha256(worldArchive), "0b470db5184b657c2c225e138ea8bcf8028b732e92284473f1623fa04b6b83cd");
+  assert.equal(worldArchive.byteLength, 806_995);
 }
 const host = await world.admitProcessKernel(kernel);
 assert.equal(worldManifest.kernelSha256, host.sha256);
 assert.equal(worldManifest.kernelByteLength, host.byteLength);
 const authorityIdentity = options.mode === "fixture"
-  ? "fixture:model-responses-v1"
+  ? "fixture:model-responses-v2"
   : `live:${sha256(Buffer.from(new URL(options.endpoint).href))}`;
 const checkpoint = JSON.parse(await readFile(checkpointPath, "utf8").catch((error) => {
   if (error?.code === "ENOENT") return "null";
@@ -141,7 +141,7 @@ try {
         });
         identities.push(request.effectSemanticIdentity);
         let resume;
-        if (request.effectSemanticIdentity === "agent.model.invoke.v1") {
+        if (request.effectSemanticIdentity === "agent.model.invoke.v2") {
           modelRequests += 1;
           modelInvocationSha256.push(sha256(request.payload));
           const decoded = decodeModelInvocation(request.payload);

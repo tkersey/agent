@@ -11,6 +11,28 @@ const repository = struct {
     pub const FileText = boundary.Text(4 * 1024);
     pub const EvidenceText = boundary.Text(2 * 1024);
     pub const Summary = boundary.Text(1024);
+    pub const Empty = struct {};
+    pub const ReadPayload = struct { role: u8 };
+    pub const SearchPayload = struct { query: boundary.Text(256) };
+    pub const ReplacePayload = struct {
+        path: Path,
+        expected_sha256: Digest,
+        replacement: FileText,
+        rationale: Summary,
+    };
+    pub const Result = struct {
+        summary: Summary,
+        changed_path: Path,
+        final_source_sha256: Digest,
+    };
+    pub const Action = union(enum) {
+        list_repository: Empty,
+        read_file: ReadPayload,
+        search_text: SearchPayload,
+        run_tests: Empty,
+        replace_file: ReplacePayload,
+        finish: Result,
+    };
     pub const ListResult = struct { listing: EvidenceText };
     pub const ReadResult = struct {
         role: u8,
@@ -49,7 +71,7 @@ const repository = struct {
 };
 
 const ModelProtocol = struct {
-    pub const semantic_identity = "agent.model.invoke.v1";
+    pub const semantic_identity = "agent.model.invoke.v2";
     pub const MessageRole = enum { system, developer, user, assistant };
     pub const TransportFailure = enum {
         unavailable,
@@ -76,10 +98,25 @@ const ModelProtocol = struct {
     pub const ResultText = boundary.Text(32 * 1024);
     pub const CallId = boundary.Text(256);
     pub const ToolName = boundary.Text(15);
+    pub const ArgumentDecodeFailure = enum {
+        malformed,
+        duplicate_field,
+        unknown_field,
+        missing_field,
+        wrong_type,
+        integer_range,
+        capacity,
+    };
+    pub const DecodedAction = union(enum) {
+        decoded: repository.Action,
+        invalid: ArgumentDecodeFailure,
+    };
     pub const FunctionCall = struct {
         call_id: CallId,
         name: ToolName,
         arguments_json: ArgumentsJson,
+        tool_ordinal_claim: u32,
+        decoded_action: DecodedAction,
     };
     pub const OutputMessage = struct {
         role: MessageRole,
@@ -291,11 +328,14 @@ fn encodeModel(
     resume_output: []u8,
     result_output: []u8,
 ) ![]const u8 {
+    const decoded = try decodeFixtureAction(name, arguments_json);
     var items = ModelProtocol.OutputItems.empty();
     try items.push(.{ .function_call = .{
         .call_id = try ModelProtocol.CallId.fromSlice("fixture-call"),
         .name = try ModelProtocol.ToolName.fromSlice(name),
         .arguments_json = try ModelProtocol.ArgumentsJson.fromSlice(arguments_json),
+        .tool_ordinal_claim = decoded.ordinal,
+        .decoded_action = .{ .decoded = decoded.action },
     } });
     return encodeResume(
         ModelProtocol.ModelResult,
@@ -307,6 +347,63 @@ fn encodeModel(
         resume_output,
         result_output,
     );
+}
+
+fn decodeFixtureAction(
+    name: []const u8,
+    arguments_json: []const u8,
+) !struct { ordinal: u32, action: repository.Action } {
+    if (std.mem.eql(u8, name, "list_repository")) {
+        return .{ .ordinal = 0, .action = .{ .list_repository = .{} } };
+    }
+    if (std.mem.eql(u8, name, "run_tests")) {
+        return .{ .ordinal = 3, .action = .{ .run_tests = .{} } };
+    }
+    if (std.mem.eql(u8, name, "read_file")) {
+        return .{ .ordinal = 1, .action = .{ .read_file = .{ .role = 1 } } };
+    }
+    if (std.mem.eql(u8, name, "replace_file")) {
+        return .{ .ordinal = 4, .action = .{ .replace_file = .{
+            .path = try repository.Path.fromSlice("src/range.mjs"),
+            .expected_sha256 = try repository.Digest.fromSlice(
+                if (std.mem.indexOf(u8, arguments_json, initial_digest) != null)
+                    initial_digest
+                else
+                    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            ),
+            .replacement = try repository.FileText.fromSlice("fixed"),
+            .rationale = try repository.Summary.fromSlice(
+                if (std.mem.indexOf(u8, arguments_json, "stale") != null)
+                    "stale"
+                else
+                    "repair",
+            ),
+        } } };
+    }
+    if (std.mem.eql(u8, name, "finish")) {
+        const digest = if (std.mem.indexOf(u8, arguments_json, replacement_digest) != null)
+            replacement_digest
+        else if (std.mem.indexOf(u8, arguments_json, "aaaaaaaa") != null)
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        else
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        return .{ .ordinal = 5, .action = .{ .finish = .{
+            .summary = try repository.Summary.fromSlice(
+                if (std.mem.indexOf(u8, arguments_json, "Corrected normalizeRange") != null)
+                    "Corrected normalizeRange and verified the complete suite."
+                else
+                    "done",
+            ),
+            .changed_path = try repository.Path.fromSlice(
+                if (std.mem.indexOf(u8, arguments_json, "test/range.test.mjs") != null)
+                    "test/range.test.mjs"
+                else
+                    "src/range.mjs",
+            ),
+            .final_source_sha256 = try repository.Digest.fromSlice(digest),
+        } } };
+    }
+    return error.UnsupportedFixtureAction;
 }
 
 fn expectPolicyFailure(label: []const u8, state: []const u8, result: []const u8) !void {

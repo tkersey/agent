@@ -1,10 +1,9 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const action = @import("action.zig");
-const action_decode = @import("action_decode.zig");
 const flow_module = @import("flow.zig");
 const model_effect = @import("model_effect.zig");
-const staged_json = @import("staged_json.zig");
+const typed_action_decode = @import("typed_action_decode.zig");
 
 fn assertEffectFree(
     comptime label: []const u8,
@@ -372,34 +371,11 @@ fn semanticTools(
 ) flow_module.Value(Profile.ToolsType) {
     var tools = flow.vectorEmpty(Profile.ToolsType);
     inline for (source.actions, 0..) |Descriptor, index| {
-        const ordinal = flow.vectorGetOrFail(
-            flow.constant(Profile.ActionOrdinalsType, Profile.ordinals_index),
-            compileIndex(flow, index, context),
+        const tool = flow.vectorGetOrFail(
+            flow.constant(Profile.ToolsType, Profile.tool_declarations_index),
+            flow.constant(u32, context.action_index_indices[index]),
             flow.constant(context.Failure, context.invalid_index_failure_index),
         );
-        const description = flow.vectorGetOrFail(
-            flow.constant(
-                Profile.ToolDescriptionsType,
-                Profile.descriptions_index,
-            ),
-            ordinal,
-            flow.constant(context.Failure, context.invalid_index_failure_index),
-        );
-        const schema = flow.vectorGetOrFail(
-            flow.constant(Profile.ToolSchemasType, Profile.schemas_index),
-            ordinal,
-            flow.constant(context.Failure, context.invalid_index_failure_index),
-        );
-        const tool = flow.productConstruct(Profile.ToolDeclarationType, .{
-            ordinal,
-            flow.constant(
-                Profile.ToolNameType,
-                context.action_name_indices[index],
-            ),
-            description,
-            schema,
-            flow.constant(bool, context.true_index),
-        });
         tools = if (actionAlwaysOffered(source, Descriptor.name))
             appendStaticTool(
                 Profile,
@@ -439,6 +415,15 @@ fn selectedFunctionCall(
         flow.textEmpty(Profile.CallIdType),
         flow.textEmpty(Profile.ToolNameType),
         flow.bytesEmpty(Profile.ArgumentsJsonType),
+        flow.constant(u32, context.zero_u32_index),
+        flow.sumConstruct(
+            Profile.DecodedActionType,
+            1,
+            flow.constant(
+                Profile.ArgumentDecodeFailureType,
+                context.decode_failure_index,
+            ),
+        ),
     });
     flow.jump(loop, .{
         flow.constant(u32, context.zero_u32_index),
@@ -590,8 +575,8 @@ pub fn ReactBody(comptime source: anytype) type {
         @compileError("Agent 3 ReAct representation requires response_bytes and schema_types");
     }
     inline for (source.models) |DeclaredModel| {
-        if (DeclaredModel.protocol != @import("protocol/openai_responses_v1.zig").Profile) {
-            @compileError("Agent 3 ReAct milestone supports OpenAI Responses v1");
+        if (DeclaredModel.protocol != @import("protocol/openai_responses_v2.zig").Profile) {
+            @compileError("Agent 3 ReAct milestone supports OpenAI Responses v2");
         }
     }
     const Epistemics = source.epistemics;
@@ -626,12 +611,6 @@ pub fn ReactBody(comptime source: anytype) type {
     comptime var flow = Builder.init(source.name ++ ":react-v1");
     flow.setPhase(.agent_initialization);
     const goal = flow.begin(source.Goal);
-    const ablate_action_argument_decode = comptime @hasField(@TypeOf(source.representation), "ablate_action_argument_decode") and
-        source.representation.ablate_action_argument_decode;
-    const argument_helpers = if (!ablate_action_argument_decode) blk: {
-        flow.setPhase(.agent_action_argument_decode);
-        break :blk staged_json.declare(&flow, Profile.ArgumentsJsonType);
-    } else {};
     flow.setPhase(.agent_initialization);
     const before_initial_suspensions = flow.suspensionCount();
     const before_initial_returns = flow.returnHandoffCount();
@@ -767,212 +746,210 @@ pub fn ReactBody(comptime source: anytype) type {
         flow.constant(Context.Failure, Context.malformed_failure_index),
     );
     const call = selectedFunctionCall(Profile, &flow, output, Context);
-    const selected = if (ablate_action_argument_decode)
-        action_decode.emitNameOnly(
+    if (comptime source.actions.len == 0) {
+        flow.failValue(flow.constant(source.Failure, Context.unknown_action_failure_index));
+    } else {
+        flow.setPhase(.agent_action_argument_decode);
+        const selected = if (comptime @hasField(
+            @TypeOf(source.representation),
+            "ablate_action_argument_decode",
+        ) and source.representation.ablate_action_argument_decode)
+            typed_action_decode.emitNameOnly(
+                &flow,
+                Profile,
+                source.Action,
+                source.actions,
+                call,
+                Context,
+            )
+        else
+            typed_action_decode.emit(
+                &flow,
+                Profile,
+                source.Action,
+                source.actions,
+                call,
+                Context,
+            );
+        flow.setPhase(.agent_action_admission);
+        const resumed_memory = flow.productExtract(1, response_values[1]);
+        const resumed_active_skills = activeSkills(
+            source,
+            Epistemics,
             &flow,
-            source.Action,
-            source.actions,
-            Profile.ArgumentsJsonType,
-            call,
-            Context,
-        )
-    else
-        action_decode.emit(
-            &flow,
-            source.Action,
-            source.actions,
-            Profile.ArgumentsJsonType,
-            call,
-            argument_helpers,
+            resumed_memory,
             Context,
         );
-    flow.setPhase(.agent_action_admission);
-    const resumed_memory = flow.productExtract(1, response_values[1]);
-    const resumed_active_skills = activeSkills(
-        source,
-        Epistemics,
-        &flow,
-        resumed_memory,
-        Context,
-    );
-    const resumed_offered_actions = offeredActions(
-        source,
-        &flow,
-        resumed_active_skills,
-        Context,
-    );
-    const resumed_offered_mask = boolMask(
-        source,
-        &flow,
-        resumed_offered_actions,
-        Context,
-    );
-    const before_policy_suspensions = flow.suspensionCount();
-    const before_policy_returns = flow.returnHandoffCount();
-    const policy_allowed = Epistemics.emitActionAllowed(
-        source,
-        &flow,
-        resumed_memory,
-        selected,
-        Context,
-    );
-    assertEffectFree("agent epistemics emitActionAllowed", &flow, before_policy_suspensions, before_policy_returns);
-    const allowed = flow.booleanAnd(
-        selectedWasOffered(
+        const resumed_offered_actions = offeredActions(
             source,
             &flow,
-            selected,
-            resumed_offered_mask,
+            resumed_active_skills,
             Context,
-        ),
-        policy_allowed,
-    );
-    const dispatch = flow.block(.segment, .{ source.Action, RuntimeState });
-    const denied = flow.block(.terminal_handoff, .{});
-    flow.branch(
-        allowed,
-        dispatch,
-        .{ selected, response_values[1] },
-        denied,
-        .{},
-    );
-    _ = flow.enter(denied);
-    flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
-    flow.setPhase(.agent_tool_dispatch);
-    var dispatch_values = flow.enter(dispatch);
-    inline for (@typeInfo(source.Action).@"union".fields, 0..) |_, action_index| {
-        const matched = flow.block(.segment, .{ source.Action, RuntimeState });
-        const next = flow.block(.segment, .{ source.Action, RuntimeState });
+        );
+        const resumed_offered_mask = boolMask(
+            source,
+            &flow,
+            resumed_offered_actions,
+            Context,
+        );
+        const before_policy_suspensions = flow.suspensionCount();
+        const before_policy_returns = flow.returnHandoffCount();
+        const policy_allowed = Epistemics.emitActionAllowed(
+            source,
+            &flow,
+            resumed_memory,
+            selected,
+            Context,
+        );
+        assertEffectFree("agent epistemics emitActionAllowed", &flow, before_policy_suspensions, before_policy_returns);
+        const allowed = flow.booleanAnd(
+            selectedWasOffered(
+                source,
+                &flow,
+                selected,
+                resumed_offered_mask,
+                Context,
+            ),
+            policy_allowed,
+        );
+        const dispatch = flow.block(.segment, .{ source.Action, RuntimeState });
+        const denied = flow.block(.terminal_handoff, .{});
         flow.branch(
-            flow.sumTagIs(action_index, dispatch_values[0]),
-            matched,
-            dispatch_values,
-            next,
-            dispatch_values,
+            allowed,
+            dispatch,
+            .{ selected, response_values[1] },
+            denied,
+            .{},
         );
-        const values = flow.enter(matched);
-        const Descriptor = source.actions[action_index];
-        const payload = flow.sumExtractOrFail(
-            action_index,
-            values[0],
-            flow.constant(source.Failure, Context.invalid_variant_failure_index),
-        );
-        switch (Descriptor.kind) {
-            .effect => {
-                flow.setPhase(.agent_tool_dispatch);
-                const performed = flow.perform(
-                    Descriptor.Site,
-                    payload,
-                    .{values[1]},
-                );
-                flow.setPhase(.agent_observation_fold);
-                const observation = flow.sumConstruct(
-                    source.Observation,
-                    unionFieldIndex(source.Observation, Descriptor.observation_name),
-                    performed.value,
-                );
-                const performed_memory = if (Epistemics.prompt_is_json_escaped)
-                    performed.carried[0]
-                else
-                    flow.productExtract(1, performed.carried[0]);
-                const before_observe_suspensions = flow.suspensionCount();
-                const before_observe_returns = flow.returnHandoffCount();
-                const next_memory = Epistemics.emitObserve(
-                    source,
-                    &flow,
-                    performed_memory,
-                    observation,
-                    Context,
-                );
-                assertEffectFree("agent epistemics emitObserve", &flow, before_observe_suspensions, before_observe_returns);
-                const next_state = if (Epistemics.prompt_is_json_escaped)
-                    next_memory
-                else
-                    flow.productReplace(1, performed.carried[0], next_memory);
-                if (source.strategy.repeat_after_observation) {
-                    flow.jump(loop, .{next_state});
-                } else {
-                    flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
-                }
-            },
-            .local => {
-                flow.setPhase(.agent_tool_dispatch);
-                const before_local_suspensions = flow.suspensionCount();
-                const before_local_returns = flow.returnHandoffCount();
-                const local_payload = Descriptor.Local.emit(
-                    &flow,
-                    payload,
-                    Context,
-                );
-                assertEffectFree("agent local action emit", &flow, before_local_suspensions, before_local_returns);
-                flow.setPhase(.agent_observation_fold);
-                const observation = flow.sumConstruct(
-                    source.Observation,
-                    unionFieldIndex(source.Observation, Descriptor.observation_name),
-                    local_payload,
-                );
-                const local_memory = if (Epistemics.prompt_is_json_escaped)
-                    values[1]
-                else
-                    flow.productExtract(1, values[1]);
-                const before_observe_suspensions = flow.suspensionCount();
-                const before_observe_returns = flow.returnHandoffCount();
-                const next_memory = Epistemics.emitObserve(
-                    source,
-                    &flow,
-                    local_memory,
-                    observation,
-                    Context,
-                );
-                assertEffectFree("agent epistemics emitObserve", &flow, before_observe_suspensions, before_observe_returns);
-                const next_state = if (Epistemics.prompt_is_json_escaped)
-                    next_memory
-                else
-                    flow.productReplace(1, values[1], next_memory);
-                if (source.strategy.repeat_after_observation) {
-                    flow.jump(loop, .{next_state});
-                } else {
-                    flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
-                }
-            },
-            .final => {
-                flow.setPhase(.agent_final_admission);
-                if (!source.strategy.allow_completion) {
-                    flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
-                } else {
-                    const final_memory = if (Epistemics.prompt_is_json_escaped)
-                        values[1]
+        _ = flow.enter(denied);
+        flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
+        flow.setPhase(.agent_tool_dispatch);
+        var dispatch_values = flow.enter(dispatch);
+        inline for (@typeInfo(source.Action).@"union".fields, 0..) |_, action_index| {
+            const matched = flow.block(.segment, .{ source.Action, RuntimeState });
+            const next = flow.block(.segment, .{ source.Action, RuntimeState });
+            flow.branch(
+                flow.sumTagIs(action_index, dispatch_values[0]),
+                matched,
+                dispatch_values,
+                next,
+                dispatch_values,
+            );
+            const values = flow.enter(matched);
+            const Descriptor = source.actions[action_index];
+            const payload = flow.sumExtractOrFail(
+                action_index,
+                values[0],
+                flow.constant(source.Failure, Context.invalid_variant_failure_index),
+            );
+            switch (Descriptor.kind) {
+                .effect => {
+                    flow.setPhase(.agent_tool_dispatch);
+                    const performed = flow.perform(
+                        Descriptor.Site,
+                        payload,
+                        .{values[1]},
+                    );
+                    flow.setPhase(.agent_observation_fold);
+                    const observation = flow.sumConstruct(
+                        source.Observation,
+                        unionFieldIndex(source.Observation, Descriptor.observation_name),
+                        performed.value,
+                    );
+                    const performed_memory = if (Epistemics.prompt_is_json_escaped)
+                        performed.carried[0]
                     else
-                        flow.productExtract(1, values[1]);
-                    const before_final_suspensions = flow.suspensionCount();
-                    const before_final_returns = flow.returnHandoffCount();
-                    const final_allowed = Epistemics.emitFinalAllowed(
+                        flow.productExtract(1, performed.carried[0]);
+                    const before_observe_suspensions = flow.suspensionCount();
+                    const before_observe_returns = flow.returnHandoffCount();
+                    const next_memory = Epistemics.emitObserve(
                         source,
                         &flow,
-                        final_memory,
+                        performed_memory,
+                        observation,
+                        Context,
+                    );
+                    assertEffectFree("agent epistemics emitObserve", &flow, before_observe_suspensions, before_observe_returns);
+                    const next_state = if (Epistemics.prompt_is_json_escaped)
+                        next_memory
+                    else
+                        flow.productReplace(1, performed.carried[0], next_memory);
+                    if (source.strategy.repeat_after_observation) {
+                        flow.jump(loop, .{next_state});
+                    } else {
+                        flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
+                    }
+                },
+                .local => {
+                    flow.setPhase(.agent_tool_dispatch);
+                    const before_local_suspensions = flow.suspensionCount();
+                    const before_local_returns = flow.returnHandoffCount();
+                    const local_payload = Descriptor.Local.emit(
+                        &flow,
                         payload,
                         Context,
                     );
-                    assertEffectFree("agent epistemics emitFinalAllowed", &flow, before_final_suspensions, before_final_returns);
-                    const complete = flow.block(.terminal_handoff, .{source.Result});
-                    flow.branch(final_allowed, complete, .{payload}, denied, .{});
-                    flow.setPhase(.agent_completion);
-                    flow.returnValue(flow.enter(complete)[0]);
-                }
-            },
-            .fail => flow.failValue(payload),
+                    assertEffectFree("agent local action emit", &flow, before_local_suspensions, before_local_returns);
+                    flow.setPhase(.agent_observation_fold);
+                    const observation = flow.sumConstruct(
+                        source.Observation,
+                        unionFieldIndex(source.Observation, Descriptor.observation_name),
+                        local_payload,
+                    );
+                    const local_memory = if (Epistemics.prompt_is_json_escaped)
+                        values[1]
+                    else
+                        flow.productExtract(1, values[1]);
+                    const before_observe_suspensions = flow.suspensionCount();
+                    const before_observe_returns = flow.returnHandoffCount();
+                    const next_memory = Epistemics.emitObserve(
+                        source,
+                        &flow,
+                        local_memory,
+                        observation,
+                        Context,
+                    );
+                    assertEffectFree("agent epistemics emitObserve", &flow, before_observe_suspensions, before_observe_returns);
+                    const next_state = if (Epistemics.prompt_is_json_escaped)
+                        next_memory
+                    else
+                        flow.productReplace(1, values[1], next_memory);
+                    if (source.strategy.repeat_after_observation) {
+                        flow.jump(loop, .{next_state});
+                    } else {
+                        flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
+                    }
+                },
+                .final => {
+                    flow.setPhase(.agent_final_admission);
+                    if (!source.strategy.allow_completion) {
+                        flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
+                    } else {
+                        const final_memory = if (Epistemics.prompt_is_json_escaped)
+                            values[1]
+                        else
+                            flow.productExtract(1, values[1]);
+                        const before_final_suspensions = flow.suspensionCount();
+                        const before_final_returns = flow.returnHandoffCount();
+                        const final_allowed = Epistemics.emitFinalAllowed(
+                            source,
+                            &flow,
+                            final_memory,
+                            payload,
+                            Context,
+                        );
+                        assertEffectFree("agent epistemics emitFinalAllowed", &flow, before_final_suspensions, before_final_returns);
+                        const complete = flow.block(.terminal_handoff, .{source.Result});
+                        flow.branch(final_allowed, complete, .{payload}, denied, .{});
+                        flow.setPhase(.agent_completion);
+                        flow.returnValue(flow.enter(complete)[0]);
+                    }
+                },
+                .fail => flow.failValue(payload),
+            }
+            dispatch_values = flow.enter(next);
         }
-        dispatch_values = flow.enter(next);
-    }
-    flow.failValue(flow.constant(source.Failure, Context.invalid_variant_failure_index));
-    if (!ablate_action_argument_decode) {
-        flow.setPhase(.agent_action_argument_decode);
-        staged_json.define(
-            &flow,
-            Profile.ArgumentsJsonType,
-            argument_helpers,
-            Context,
-        );
+        flow.failValue(flow.constant(source.Failure, Context.invalid_variant_failure_index));
     }
     const Lowering = flow.finish(source.Result);
     const sites = effectSites(source, Profile);
@@ -989,8 +966,8 @@ pub fn ReactBody(comptime source: anytype) type {
         pub const compiler_limits: boundary.ir.CompilerLimits = .{
             .maximum_values = control_ir.value_types.len,
             .maximum_blocks = control_ir.blocks.len,
-            .maximum_constructors = 768,
-            .maximum_environment_fields = 256,
+            .maximum_constructors = 256,
+            .maximum_environment_fields = @min(128, control_ir.value_types.len),
             .maximum_invariant_terms = 128,
             .maximum_generated_operations = 32_768,
         };

@@ -58,8 +58,8 @@ const archiveSha256 = sha256(archive);
 const git = gitFacts(agentRoot);
 const receipt = {
   format: "agent-system-closure-receipt/v1",
-  status: "blocked-economy",
-  publicationStatus: "not-authorized",
+  status: "release-candidate",
+  publicationStatus: "pending-owner-authorization",
   agentVersion: "3.0.0",
   agentSourceCommit: git.commit,
   agentSourceClean: git.clean,
@@ -84,7 +84,7 @@ const receipt = {
   runtimeInputSha256,
   configuredModel: "gpt-5.4-mini-2026-03-17",
   modelEffect: proof.semanticModelEffectIdentity,
-  modelProtocol: "agent.model.protocol.openai-responses-v1",
+  modelProtocol: "agent.model.protocol.openai-responses-v2",
   observedModelRequestCount: proof.modelRequests,
   observedModelInvocationSha256: proof.modelInvocationSha256,
   observedProviderRequestBodySha256: proof.providerRequestBodySha256,

@@ -76,7 +76,7 @@ const System = agent.system(.{
     .Failure = Failure,
     .models = .{agent.model(.{
         .name = "primary",
-        .protocol = agent.protocol.openaiResponsesV1.Profile,
+        .protocol = agent.protocol.openaiResponsesV2.Profile,
         .model = "fixture-model-v1",
         .parameters = .{},
     })},
@@ -277,12 +277,32 @@ fn outputResult(
             .call_id = try ModelProfile.CallIdType.fromSlice(call_id),
             .name = try ModelProfile.ToolNameType.fromSlice(name),
             .arguments_json = try ModelProfile.ArgumentsJsonType.fromSlice(argument),
+            .tool_ordinal_claim = 0,
+            .decoded_action = decodedAction(argument),
         } });
     }
     return .{ .output = .{
         .items = items,
         .provider_response_digest = [_]u8{0} ** 32,
     } };
+}
+
+fn decodedAction(argument: []const u8) ModelProfile.DecodedActionType {
+    if (std.mem.eql(u8, argument, "{}")) return .{ .invalid = .missing_field };
+    if (std.mem.eql(u8, argument, "{\"delta\":-128}")) {
+        return .{ .decoded = .{ .continue_work = .{ .delta = -128 } } };
+    }
+    if (std.mem.eql(u8, argument, "{\"delta\":1}") or
+        std.mem.eql(u8, argument, "{\"delta\":2}"))
+    {
+        return .{ .decoded = .{ .continue_work = .{
+            .delta = if (std.mem.indexOfScalar(u8, argument, '2') != null) 2 else 1,
+        } } };
+    }
+    if (std.mem.eql(u8, argument, "{\"delta\":1,\"extra\":1}")) {
+        return .{ .invalid = .unknown_field };
+    }
+    return .{ .invalid = .malformed };
 }
 
 test "no-final system returns to byte-identical pending State" {

@@ -5,6 +5,9 @@ import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const options = parseArgs(process.argv.slice(2));
+options.mode ??= "full";
+assert(["full", "transfers", "negative"].includes(options.mode), "invalid admission-check mode");
+if (options.mode === "negative") assert(options.case !== undefined, "negative mode requires --case");
 const worldRoot = resolve(options.worldRoot);
 const world = await import(pathToFileURL(join(worldRoot, "src/process_v1/index.mjs")));
 const kernel = await readFile(join(worldRoot, "boundary-process-kernel-v1.wasm"));
@@ -16,54 +19,6 @@ const transferred = await world.admitProcessKernel(kernel);
 const initialModel = await advanceUntilRequested(primary, { initialArgs });
 const modelRequest = world.decodeEffectRequest(initialModel.request);
 assert.equal(modelRequest.effectSemanticIdentity, "agent.model.openai.responses.v1");
-
-const repeatedPrimary = await primary.advance({
-  image,
-  instance: { state: initialModel.state },
-});
-const repeatedTransferred = await transferred.advance({
-  image,
-  instance: { state: initialModel.state },
-});
-assertOutcomeEqual(initialModel, repeatedPrimary);
-assertOutcomeEqual(initialModel, repeatedTransferred);
-
-const listResult = world.encodeEffectResult({
-  request: initialModel.request,
-  resume: encodeModelResponse("list_repository", {}),
-});
-const parserStep = await primary.advance({
-  image,
-  instance: { state: initialModel.state },
-  effectResult: listResult,
-});
-assert(["Progressed", "ExplicitlyYielded"].includes(parserStep.kind));
-const parserPrimary = await primary.advance({
-  image,
-  instance: { state: parserStep.state },
-});
-const parserTransferred = await transferred.advance({
-  image,
-  instance: { state: parserStep.state },
-});
-assertOutcomeEqual(parserPrimary, parserTransferred);
-
-const repositoryRequest = await advanceUntilRequested(primary, {
-  state: parserStep.state,
-});
-const decodedRepository = world.decodeEffectRequest(repositoryRequest.request);
-assert.equal(decodedRepository.effectSemanticIdentity, "repo.list.v1");
-const repeatedRepositoryPrimary = await primary.advance({
-  image,
-  instance: { state: repositoryRequest.state },
-});
-const repeatedRepositoryTransferred = await transferred.advance({
-  image,
-  instance: { state: repositoryRequest.state },
-});
-assertOutcomeEqual(repositoryRequest, repeatedRepositoryPrimary);
-assertOutcomeEqual(repositoryRequest, repeatedRepositoryTransferred);
-
 const invalidCases = [
   {
     name: "pre-baseline-replacement",
@@ -90,20 +45,67 @@ const invalidCases = [
     },
   },
 ];
-const negativeResults = [];
-for (const candidate of invalidCases) {
+
+if (options.mode === "negative") {
+  const candidate = invalidCases.find((entry) => entry.name === options.case);
+  assert(candidate !== undefined, "unknown admission-negative case");
   const result = world.encodeEffectResult({
     request: initialModel.request,
     resume: encodeModelResponse(candidate.action, candidate.arguments),
   });
   const terminal = await advanceUntilTerminal(primary, initialModel.state, result);
   assert.equal(terminal.kind, "AuthoredFailure", `${candidate.name} did not fail locally`);
-  negativeResults.push({
-    name: candidate.name,
-    terminal: terminal.kind,
-    failureSha256: sha256(terminal.failure),
-  });
+  process.stdout.write(`${JSON.stringify({
+    format: "agent-system-closure-admission-negative-case/v1",
+    result: "passed",
+    kernelSha256: primary.sha256,
+    imageSha256: sha256(image),
+    negativeResult: {
+      name: candidate.name,
+      terminal: terminal.kind,
+      failureSha256: sha256(terminal.failure),
+    },
+    dangerousRepositoryEffects: 0,
+    successfulPrematureCompletions: 0,
+  })}\n`);
+  process.exit(0);
 }
+
+const [repeatedPrimary, repeatedTransferred] = await Promise.all([
+  primary.advance({ image, instance: { state: initialModel.state } }),
+  transferred.advance({ image, instance: { state: initialModel.state } }),
+]);
+assertOutcomeEqual(initialModel, repeatedPrimary);
+assertOutcomeEqual(initialModel, repeatedTransferred);
+
+const listResult = world.encodeEffectResult({
+  request: initialModel.request,
+  resume: encodeModelResponse("list_repository", {}),
+});
+const parserStep = await primary.advance({
+  image,
+  instance: { state: initialModel.state },
+  effectResult: listResult,
+});
+assert(["Progressed", "ExplicitlyYielded"].includes(parserStep.kind));
+const [parserPrimary, parserTransferred] = await Promise.all([
+  primary.advance({ image, instance: { state: parserStep.state } }),
+  transferred.advance({ image, instance: { state: parserStep.state } }),
+]);
+assertOutcomeEqual(parserPrimary, parserTransferred);
+
+const repositoryRequest = await advanceUntilRequested(primary, {
+  state: parserStep.state,
+});
+const decodedRepository = world.decodeEffectRequest(repositoryRequest.request);
+assert.equal(decodedRepository.effectSemanticIdentity, "repo.list.v1");
+const [repeatedRepositoryPrimary, repeatedRepositoryTransferred] = await Promise.all([
+  primary.advance({ image, instance: { state: repositoryRequest.state } }),
+  transferred.advance({ image, instance: { state: repositoryRequest.state } }),
+]);
+assertOutcomeEqual(repositoryRequest, repeatedRepositoryPrimary);
+assertOutcomeEqual(repositoryRequest, repeatedRepositoryTransferred);
+
 const parity = {
   pendingModelStateSha256: sha256(initialModel.state),
   pendingModelRequestSha256: sha256(initialModel.request),
@@ -111,6 +113,37 @@ const parity = {
   pendingRepositoryStateSha256: sha256(repositoryRequest.state),
   pendingRepositoryRequestSha256: sha256(repositoryRequest.request),
 };
+if (options.mode === "transfers") {
+  process.stdout.write(`${JSON.stringify({
+    format: "agent-system-closure-admission-transfers/v1",
+    result: "passed",
+    kernelSha256: primary.sha256,
+    imageSha256: sha256(image),
+    transferPoints: [
+      "internal-response-parser",
+      "pending-model-request",
+      "pending-repository-request",
+    ],
+    freshHostOutcomeEquality: true,
+    repeatedPendingRequestEquality: true,
+    parity,
+  })}\n`);
+  process.exit(0);
+}
+
+const negativeResults = await Promise.all(invalidCases.map(async (candidate) => {
+  const result = world.encodeEffectResult({
+    request: initialModel.request,
+    resume: encodeModelResponse(candidate.action, candidate.arguments),
+  });
+  const terminal = await advanceUntilTerminal(primary, initialModel.state, result);
+  assert.equal(terminal.kind, "AuthoredFailure", `${candidate.name} did not fail locally`);
+  return {
+    name: candidate.name,
+    terminal: terminal.kind,
+    failureSha256: sha256(terminal.failure),
+  };
+}));
 const policyFailureSha256 = negativeResults[0].failureSha256;
 assert(negativeResults.every((entry) => entry.failureSha256 === policyFailureSha256));
 

@@ -2,7 +2,7 @@
   "format": "agent-system-closure-admission-negatives/v1",
   "result": "passed",
   "kernelSha256": "835a35fcad4d242ae6ab32244faf563032c5a63b2ff71e62511c410445d74139",
-  "imageSha256": "0ba8ae188785a61d385c32503ffbe65a702cef9f19931bc717290a2d8356e42a",
+  "imageSha256": "cec599592476e13faa4b5f12d723a9d395fdfb0435727b0149da354b398fae63",
   "negativeResults": [
     {
       "name": "pre-baseline-replacement",
@@ -20,8 +20,6 @@
       "failureSha256": "01b4f6bd5d6a06a7b74a8565ceb4f845afe0ae96a0ac05cf5e86066bf7b538ec"
     }
   ],
-  "dangerousRepositoryEffects": 0,
-  "successfulPrematureCompletions": 0,
   "nativeNegativeResults": [
     {
       "name": "stale-digest-replacement",
@@ -37,6 +35,8 @@
     }
   ],
   "nativeProcessImageSemantics": true,
+  "dangerousRepositoryEffects": 0,
+  "successfulPrematureCompletions": 0,
   "transferPoints": [
     "internal-response-parser",
     "pending-model-request",
@@ -45,11 +45,11 @@
   "freshHostOutcomeEquality": true,
   "repeatedPendingRequestEquality": true,
   "nativeWasmParity": {
-    "pendingModelStateSha256": "470b36ca934e9aa213b365f3763121a04614a1f79f0ab35b4392e7f3bdaccedf",
-    "pendingModelRequestSha256": "825168cfe4332afd5c34bf5ef4015d56c6a7c22c1319a9688075f316bbf66066",
-    "parserStateSha256": "684c2abc8e7a402a7072d55bf80301737ac6b5bf59317a838c8ddb0f2e64f022",
-    "pendingRepositoryStateSha256": "f81cad473d9e40933f09beedd7e232abefa839baa04a3a042deaa23e8b770a16",
-    "pendingRepositoryRequestSha256": "2f87063f80f4aa9e68984ab33c886337ed68a5ea8117724354480c9bccc3ef7f",
+    "pendingModelStateSha256": "eb191c090b661f6a899720ba62bf84bbd8ca2af847d20588f35ff1bb130cb658",
+    "pendingModelRequestSha256": "aa5e199a56c4f23566d55d0718f84d83725ab380dff678192f244e45487f7c2f",
+    "parserStateSha256": "766d7d90ea780ce8a6bb16dd18637e17c8a758ca9ff4cdb96976930ee0c11f23",
+    "pendingRepositoryStateSha256": "0bf1b9a47da747fab778c68b992b269763e0af6425b50b9adbf2c7ba95243ecd",
+    "pendingRepositoryRequestSha256": "36dbdf653e769dcf2e90c30b9e9674401ef73bc4a3b95129183a458235a8b920",
     "policyFailureSha256": "01b4f6bd5d6a06a7b74a8565ceb4f845afe0ae96a0ac05cf5e86066bf7b538ec",
     "completionSha256": "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032"
   }

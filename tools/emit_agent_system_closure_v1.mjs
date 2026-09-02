@@ -9,6 +9,10 @@ const ARCHIVE_NAME = "agent-v3.0.0-system-closure-v1.tar.gz";
 const ROOT = "agent-v3.0.0-system-closure-v1";
 const options = parseArgs(process.argv.slice(2));
 const agentRoot = resolve(options.agentRoot);
+const buildManifest = await readFile(join(agentRoot, "build.zig.zon"), "utf8");
+const boundarySourceMatch = buildManifest.match(/boundary\/archive\/([0-9a-f]{40})\.tar\.gz/);
+assert(boundarySourceMatch !== null, "Boundary source commit is absent from build.zig.zon");
+const boundarySourceCommit = boundarySourceMatch[1];
 const image = await readFile(options.image);
 const initialArgs = await readFile(options.initialArgs);
 const proof = JSON.parse(await readFile(join(agentRoot, "system_closure_v1/fixture-proof.json"), "utf8"));
@@ -58,7 +62,8 @@ const receipt = {
   agentSourceClean: git.clean,
   boundary: {
     version: "1.8.0-candidate",
-    sourceCommit: proof.boundarySourceCommit,
+    sourceCommit: boundarySourceCommit,
+    kernelSourceCommit: proof.kernelBoundarySourceCommit,
     kernelSha256: proof.kernelSha256,
     kernelByteLength: proof.kernelByteLength,
   },
@@ -111,10 +116,13 @@ const receipt = {
     sourceAbsenceRuntimePath: "passed",
   },
   measurements: {
+    coldAggregateMilliseconds: proof.coldAggregateMilliseconds,
+    imageEmissionMilliseconds: proof.imageEmissionMilliseconds,
     peakStateBytes: proof.peakStateBytes,
     renderingMilliseconds: proof.renderingMilliseconds,
     decodingMilliseconds: proof.decodingMilliseconds,
     offlineRuntimeMilliseconds: proof.offlineRuntimeMilliseconds,
+    longIntegrationWallMilliseconds: proof.longIntegrationWallMilliseconds,
   },
   archiveName: ARCHIVE_NAME,
   archiveSha256,

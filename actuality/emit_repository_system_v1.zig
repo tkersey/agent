@@ -17,10 +17,22 @@ pub fn main(init: std.process.Init) !void {
     var buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writer(init.io, &buffer);
     if (std.mem.eql(u8, args[1], "bpi1")) {
-        const image = repository.System.Program.image();
-        var workspace: boundary.image.ValidationWorkspace = .{};
-        _ = try boundary.image.validateImageView(&image.bytes, &workspace);
-        try output.interface.writeAll(&image.bytes);
+        const allocator = init.arena.allocator();
+        const image = try allocator.alloc(
+            u8,
+            repository.System.Source.representation.image_bytes,
+        );
+        const encoding_workspace = try allocator.create(
+            repository.System.Program.ImageEncodingWorkspace,
+        );
+        const length = try repository.System.Program.encodeImage(
+            image,
+            encoding_workspace,
+        );
+        const workspace = try allocator.create(boundary.image.ValidationWorkspace);
+        workspace.* = .{};
+        _ = try boundary.image.validateImageView(image[0..length], workspace);
+        try output.interface.writeAll(image[0..length]);
     } else if (std.mem.eql(u8, args[1], "initial")) {
         try writeValue(
             repository.Goal,

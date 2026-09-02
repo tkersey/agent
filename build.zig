@@ -309,18 +309,40 @@ pub fn build(b: *std.Build) void {
         run.addArgs(&.{ "--world-root", root });
         run.addFileInput(b.path("tools/check_agent_system_closure_distribution.mjs"));
         world_check.dependOn(&run.step);
-        const negatives = b.addSystemCommand(&.{
+        const admission_specs = .{
+            .{ "transfers", "" },
+            .{ "negative", "pre-baseline-replacement" },
+            .{ "negative", "disallowed-read-role" },
+            .{ "negative", "premature-completion" },
+        };
+        var admission_outputs: [admission_specs.len]std.Build.LazyPath = undefined;
+        inline for (admission_specs, 0..) |spec, index| {
+            const shard = b.addSystemCommand(&.{
+                "node",
+                "tools/check_agent_system_admission_negatives.mjs",
+            });
+            shard.addArgs(&.{ "--world-root", root, "--image" });
+            shard.addFileArg(outputs[0]);
+            shard.addArg("--initial");
+            shard.addFileArg(outputs[1]);
+            shard.addArgs(&.{ "--mode", spec[0] });
+            if (spec[1].len != 0) shard.addArgs(&.{ "--case", spec[1] });
+            shard.addFileInput(
+                b.path("tools/check_agent_system_admission_negatives.mjs"),
+            );
+            admission_outputs[index] = shard.captureStdOut(.{
+                .basename = b.fmt("admission-{d}.json", .{index}),
+            });
+        }
+        const merge_admission = b.addSystemCommand(&.{
             "node",
-            "tools/check_agent_system_admission_negatives.mjs",
+            "tools/merge_agent_system_admission_proofs.mjs",
         });
-        negatives.addArgs(&.{ "--world-root", root, "--image" });
-        negatives.addFileArg(outputs[0]);
-        negatives.addArg("--initial");
-        negatives.addFileArg(outputs[1]);
-        negatives.addFileInput(
-            b.path("tools/check_agent_system_admission_negatives.mjs"),
+        for (admission_outputs) |output| merge_admission.addFileArg(output);
+        merge_admission.addFileInput(
+            b.path("tools/merge_agent_system_admission_proofs.mjs"),
         );
-        world_check.dependOn(&negatives.step);
+        world_check.dependOn(&merge_admission.step);
     } else {
         const missing = b.addSystemCommand(&.{
             "sh",

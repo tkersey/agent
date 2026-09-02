@@ -296,6 +296,24 @@ fn expectPolicyFailure(label: []const u8, state: []const u8, result: []const u8)
     );
 }
 
+const PolicyCheck = struct {
+    label: []const u8,
+    state: []const u8,
+    result: []const u8,
+    failure: ?anyerror = null,
+};
+
+fn runPolicyCheck(check: *PolicyCheck) void {
+    expectPolicyFailure(check.label, check.state, check.result) catch |err| {
+        check.failure = err;
+    };
+}
+
+fn joinPolicyCheck(thread: std.Thread, check: *const PolicyCheck) !void {
+    thread.join();
+    if (check.failure) |err| return err;
+}
+
 fn expectIdentity(pending: Pending, expected: []const u8) !boundary.process_v1.EffectRequest {
     const request = try pending.effect();
     try std.testing.expectEqualStrings(expected, request.effect_semantic_identity);
@@ -312,11 +330,11 @@ test "repository admission rejects stale mutation and false completion from curr
     defer model0.deinit();
     try expectSha256(
         model0.state,
-        "470b36ca934e9aa213b365f3763121a04614a1f79f0ab35b4392e7f3bdaccedf",
+        "eb191c090b661f6a899720ba62bf84bbd8ca2af847d20588f35ff1bb130cb658",
     );
     try expectSha256(
         model0.request,
-        "825168cfe4332afd5c34bf5ef4015d56c6a7c22c1319a9688075f316bbf66066",
+        "aa5e199a56c4f23566d55d0718f84d83725ab380dff678192f244e45487f7c2f",
     );
     const model0_request = try expectIdentity(
         model0,
@@ -337,17 +355,17 @@ test "repository admission rejects stale mutation and false completion from curr
     defer std.testing.allocator.free(parser_state);
     try expectSha256(
         parser_state,
-        "684c2abc8e7a402a7072d55bf80301737ac6b5bf59317a838c8ddb0f2e64f022",
+        "766d7d90ea780ce8a6bb16dd18637e17c8a758ca9ff4cdb96976930ee0c11f23",
     );
     const list = try advanceToRequest(.{ .process_state = parser_state }, null);
     defer list.deinit();
     try expectSha256(
         list.state,
-        "f81cad473d9e40933f09beedd7e232abefa839baa04a3a042deaa23e8b770a16",
+        "0bf1b9a47da747fab778c68b992b269763e0af6425b50b9adbf2c7ba95243ecd",
     );
     try expectSha256(
         list.request,
-        "2f87063f80f4aa9e68984ab33c886337ed68a5ea8117724354480c9bccc3ef7f",
+        "36dbdf653e769dcf2e90c30b9e9674401ef73bc4a3b95129183a458235a8b920",
     );
     const list_request = try expectIdentity(list, "repo.list.v1");
     const listing_result = try encodeResume(
@@ -430,7 +448,15 @@ test "repository admission rejects stale mutation and false completion from curr
         &resume_bytes,
         &result_bytes,
     );
-    try expectPolicyFailure("stale digest", pre_replace.state, stale_replace);
+    const stale_result = try std.testing.allocator.dupe(u8, stale_replace);
+    defer std.testing.allocator.free(stale_result);
+    var stale_check: PolicyCheck = .{
+        .label = "stale digest",
+        .state = pre_replace.state,
+        .result = stale_result,
+    };
+    const stale_thread = try std.Thread.spawn(.{}, runPolicyCheck, .{&stale_check});
+    errdefer stale_thread.join();
 
     const valid_replace_json = try providerJson(
         "replace_file",
@@ -504,7 +530,15 @@ test "repository admission rejects stale mutation and false completion from curr
         &resume_bytes,
         &result_bytes,
     );
-    try expectPolicyFailure("wrong final path", ready_to_finish.state, wrong_final_path);
+    const wrong_path_result = try std.testing.allocator.dupe(u8, wrong_final_path);
+    defer std.testing.allocator.free(wrong_path_result);
+    var wrong_path_check: PolicyCheck = .{
+        .label = "wrong final path",
+        .state = ready_to_finish.state,
+        .result = wrong_path_result,
+    };
+    const wrong_path_thread = try std.Thread.spawn(.{}, runPolicyCheck, .{&wrong_path_check});
+    errdefer wrong_path_thread.join();
 
     const wrong_final_digest_json = try providerJson(
         "finish",
@@ -518,7 +552,15 @@ test "repository admission rejects stale mutation and false completion from curr
         &resume_bytes,
         &result_bytes,
     );
-    try expectPolicyFailure("wrong final digest", ready_to_finish.state, wrong_final_digest);
+    const wrong_digest_result = try std.testing.allocator.dupe(u8, wrong_final_digest);
+    defer std.testing.allocator.free(wrong_digest_result);
+    var wrong_digest_check: PolicyCheck = .{
+        .label = "wrong final digest",
+        .state = ready_to_finish.state,
+        .result = wrong_digest_result,
+    };
+    const wrong_digest_thread = try std.Thread.spawn(.{}, runPolicyCheck, .{&wrong_digest_check});
+    errdefer wrong_digest_thread.join();
 
     const valid_final_json = try providerJson(
         "finish",
@@ -539,4 +581,7 @@ test "repository admission rejects stale mutation and false completion from curr
         completed,
         "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032",
     );
+    try joinPolicyCheck(stale_thread, &stale_check);
+    try joinPolicyCheck(wrong_path_thread, &wrong_path_check);
+    try joinPolicyCheck(wrong_digest_thread, &wrong_digest_check);
 }

@@ -229,7 +229,7 @@ process.stdout.write(`${JSON.stringify({
   worldSourceCommit: worldManifest.sourceCommit,
   worldRuntimeArchiveSha256: worldArchive === null ? null : sha256(worldArchive),
   worldRuntimeArchiveByteLength: worldArchive?.byteLength ?? null,
-  boundarySourceCommit: worldManifest.boundaryCommit,
+  kernelBoundarySourceCommit: worldManifest.boundaryCommit,
   imageSha256: sha256(image),
   imageByteLength: image.byteLength,
   initialArgsSha256: sha256(initial),

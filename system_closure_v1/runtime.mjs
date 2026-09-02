@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { startFixtureModelServer } from "./fixture_model_server.mjs";
 import { decodeModelRequest, performModelRequest } from "./model_transport.mjs";
+import { ProcessStateCensus } from "./process_state_census.mjs";
 import {
   CORRECT_SOURCE,
   EXPECTED_FINAL_DIGEST,
@@ -26,9 +27,20 @@ const worldRoot = resolve(options.worldRoot);
 const workRoot = resolve(options.workDir);
 const checkpointPath = join(workRoot, "checkpoint.json");
 const workspaceRoot = join(workRoot, "workspace");
-const image = await readFile(join(distributionRoot, "system.bpi1"));
-const initial = await readFile(join(distributionRoot, "initial-args.bin"));
-const runtimeInputSha256 = await digestRuntimeInputs(distributionRoot);
+const image = await readFile(options.image === undefined
+  ? join(distributionRoot, "system.bpi1")
+  : resolve(options.image));
+const initial = await readFile(options.initialArgs === undefined
+  ? join(distributionRoot, "initial-args.bin")
+  : resolve(options.initialArgs));
+const fixtureRoot = options.fixtureRoot === undefined
+  ? join(distributionRoot, "fixture")
+  : resolve(options.fixtureRoot);
+const sourceMap = options.sourceMap === undefined
+  ? null
+  : JSON.parse(await readFile(resolve(options.sourceMap), "utf8"));
+const census = sourceMap === null ? null : new ProcessStateCensus({ image, sourceMap });
+const runtimeInputSha256 = await digestRuntimeInputs(distributionRoot, fixtureRoot);
 const world = await import(pathToFileURL(join(worldRoot, "src/process_v1/index.mjs")));
 const kernel = await readFile(join(worldRoot, "boundary-process-kernel-v1.wasm"));
 const worldManifest = JSON.parse(await readFile(join(worldRoot, "runtime-manifest.json"), "utf8"));
@@ -52,6 +64,8 @@ const checkpoint = JSON.parse(await readFile(checkpointPath, "utf8").catch((erro
   if (error?.code === "ENOENT") return "null";
   throw error;
 }));
+assert(sourceMap === null || checkpoint === null,
+  "Process State census requires one fresh uninterrupted execution");
 
 if (checkpoint !== null) {
   assert.equal(checkpoint.format, "agent-system-closure-fixture-checkpoint/v1");
@@ -62,7 +76,7 @@ if (checkpoint !== null) {
   assert.equal(checkpoint.runtimeInputSha256, runtimeInputSha256, "checkpoint runtime inputs changed");
 } else {
   await mkdir(workRoot, { recursive: true });
-  await cp(join(distributionRoot, "fixture"), workspaceRoot, { recursive: true, errorOnExist: true });
+  await cp(fixtureRoot, workspaceRoot, { recursive: true, errorOnExist: true });
   initializeGit(workspaceRoot);
 }
 
@@ -111,10 +125,15 @@ try {
     switch (outcome.kind) {
       case "Progressed":
       case "ExplicitlyYielded":
+        census?.observe({ outcome });
         instance = { state: outcome.state };
         break;
       case "Requested": {
         const request = world.decodeEffectRequest(outcome.request);
+        census?.observe({
+          outcome,
+          effectSemanticIdentity: request.effectSemanticIdentity,
+        });
         identities.push(request.effectSemanticIdentity);
         let resume;
         if (request.effectSemanticIdentity === "agent.model.openai.responses.v1") {
@@ -144,11 +163,14 @@ try {
         break;
       }
       case "Completed":
+        census?.observe({ outcome });
         terminal = outcome.result;
         break;
       case "AuthoredFailure":
+        census?.observe({ outcome });
         throw new Error(`authored failure ${Buffer.from(outcome.failure).toString("hex")}`);
       case "NeedsCapacity":
+        census?.observe({ outcome });
         throw new Error("unexpected NeedsCapacity");
       default:
         throw new Error(`unexpected Process outcome ${outcome.kind}`);
@@ -220,6 +242,17 @@ assert.equal(finalTree, EXPECTED_FINAL_TREE);
 assert.deepEqual(git(workspaceRoot, ["diff", "--cached", "--name-only"]).split("\n"), ["src/range.mjs"]);
 if (fixtureModel !== null) assert.equal(httpBodyEqualityCount, modelRequests);
 
+const stateCensus = census?.report() ?? null;
+let stateCensusReceipt = stateCensus;
+if (stateCensus !== null && options.censusOutput !== undefined) {
+  await writeFile(resolve(options.censusOutput), `${JSON.stringify(stateCensus, null, 2)}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+  });
+  const { rows: _, ...summary } = stateCensus;
+  stateCensusReceipt = { ...summary, receiptPath: resolve(options.censusOutput) };
+}
+
 process.stdout.write(`${JSON.stringify({
   format: "agent-system-closure-world-proof/v1",
   result: "passed",
@@ -254,16 +287,19 @@ process.stdout.write(`${JSON.stringify({
   realFilesystemEffects: true,
   realTestProcesses: 2,
   liveModelTestStatus: options.mode === "live" ? "passed" : "not-run",
+  stateCensus: stateCensusReceipt,
 })}\n`);
 
-async function digestRuntimeInputs(root) {
-  const names = [
+async function digestRuntimeInputs(root, fixture) {
+  const runtimeNames = [
     "run.mjs",
     "runtime.mjs",
     "model_transport.mjs",
     "fixture_model_server.mjs",
     "repository_environment.mjs",
+    "process_state_census.mjs",
   ];
+  const records = [];
   async function addTree(directory, prefix) {
     for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
       const path = join(directory, entry.name);
@@ -271,13 +307,15 @@ async function digestRuntimeInputs(root) {
       const stat = await lstat(path);
       assert(!stat.isSymbolicLink(), `runtime input link is forbidden: ${name}`);
       if (entry.isDirectory()) await addTree(path, name);
-      else if (entry.isFile()) names.push(name);
+      else if (entry.isFile()) records.push([name, sha256(await readFile(path))]);
       else throw new Error(`unsupported runtime input: ${name}`);
     }
   }
-  await addTree(join(root, "fixture"), "fixture");
-  const records = [];
-  for (const name of names.sort()) records.push([name, sha256(await readFile(join(root, name)))]);
+  await addTree(fixture, "fixture");
+  for (const name of runtimeNames) {
+    records.push([name, sha256(await readFile(join(root, name)))]);
+  }
+  records.sort(([left], [right]) => Buffer.compare(Buffer.from(left), Buffer.from(right)));
   return sha256(Buffer.from(JSON.stringify(records)));
 }
 

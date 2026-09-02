@@ -157,6 +157,7 @@ pub fn build(b: *std.Build) void {
         .{ "bpi1", "repository-system.bpi1" },
         .{ "initial", "repository-system-initial.bin" },
         .{ "expected-final", "repository-system-final.bin" },
+        .{ "source-map", "repository-system.source-map.json" },
     };
     var outputs: [modes.len]std.Build.LazyPath = undefined;
     const emit_repository = b.step(
@@ -169,6 +170,23 @@ pub fn build(b: *std.Build) void {
         outputs[index] = run.captureStdOut(.{ .basename = mode[1] });
         emit_repository.dependOn(&run.step);
     }
+    const process_state_census_test = b.addSystemCommand(&.{
+        "node",
+        "test/process_state_census.test.mjs",
+    });
+    process_state_census_test.addFileArg(outputs[0]);
+    process_state_census_test.addFileArg(outputs[3]);
+    process_state_census_test.addFileInput(
+        b.path("test/process_state_census.test.mjs"),
+    );
+    process_state_census_test.addFileInput(
+        b.path("system_closure_v1/process_state_census.mjs"),
+    );
+    const process_state_census_step = b.step(
+        "check-agent-process-state-census",
+        "Validate source-independent Process State census accounting.",
+    );
+    process_state_census_step.dependOn(&process_state_census_test.step);
     const repository_admission_files = b.addWriteFiles();
     const repository_admission_source = repository_admission_files.addCopyFile(
         b.path("test/repository_admission.zig"),
@@ -237,6 +255,8 @@ pub fn build(b: *std.Build) void {
     package_closure.addFileArg(outputs[0]);
     package_closure.addArg("--initial-args");
     package_closure.addFileArg(outputs[1]);
+    package_closure.addArg("--source-map");
+    package_closure.addFileArg(outputs[3]);
     package_closure.addArg("--archive");
     const closure_archive = package_closure.addOutputFileArg(
         "agent-v3.0.0-system-closure-v1.tar.gz",
@@ -255,6 +275,7 @@ pub fn build(b: *std.Build) void {
         "system_closure_v1/run.mjs",
         "system_closure_v1/runtime.mjs",
         "system_closure_v1/model_transport.mjs",
+        "system_closure_v1/process_state_census.mjs",
         "system_closure_v1/fixture_model_server.mjs",
         "system_closure_v1/repository_environment.mjs",
         "system_closure_v1/fixture-proof.json",

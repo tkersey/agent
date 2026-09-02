@@ -19,6 +19,20 @@ and digest-bound replacement, and the fixture's fixed `bun test` command. It
 prints one JSON proof receipt and leaves the repaired Git working tree in
 `WORK_DIR/workspace` for independent inspection.
 
+For an uninterrupted source-independent Process State census, add an output
+path. This uses the same image, adapter, fixture, and World runtime while
+recording every State-bearing outcome against the nonsemantic source map:
+
+```sh
+node run.mjs --world-root /path/to/world-runtime --mode fixture \
+  --work-dir /path/to/empty-work-directory \
+  --census-output /path/to/process-census.json
+```
+
+`source-map.json` and `process_state_census.mjs` are diagnostic only. Normal
+execution does not read them, and their image/transition digests must match the
+canonical `system.bpi1` before census collection begins.
+
 Live mode uses the same image and scheduling path. It accepts only the service
 endpoint, credential, World runtime, and isolated workspace authority:
 

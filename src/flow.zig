@@ -20,6 +20,48 @@ pub const Limits = struct {
     maximum_edge_arguments: usize = 512,
 };
 
+pub const Phase = enum {
+    agent_initialization,
+    agent_memory_projection,
+    agent_prompt_render,
+    agent_skill_activation,
+    agent_tool_selection,
+    agent_model_request,
+    agent_model_resume,
+    agent_action_name_match,
+    agent_action_argument_decode,
+    agent_action_admission,
+    agent_tool_dispatch,
+    agent_observation_fold,
+    agent_final_admission,
+    agent_completion,
+    boundary_control,
+    boundary_call,
+    boundary_return,
+
+    pub fn label(self: Phase) []const u8 {
+        return switch (self) {
+            .agent_initialization => "agent.initialization",
+            .agent_memory_projection => "agent.memory_projection",
+            .agent_prompt_render => "agent.prompt_render",
+            .agent_skill_activation => "agent.skill_activation",
+            .agent_tool_selection => "agent.tool_selection",
+            .agent_model_request => "agent.model_request",
+            .agent_model_resume => "agent.model_resume",
+            .agent_action_name_match => "agent.action_name_match",
+            .agent_action_argument_decode => "agent.action_argument_decode",
+            .agent_action_admission => "agent.action_admission",
+            .agent_tool_dispatch => "agent.tool_dispatch",
+            .agent_observation_fold => "agent.observation_fold",
+            .agent_final_admission => "agent.final_admission",
+            .agent_completion => "agent.completion",
+            .boundary_control => "boundary.control",
+            .boundary_call => "boundary.call",
+            .boundary_return => "boundary.return",
+        };
+    }
+};
+
 const TerminatorKind = enum {
     unset,
     jump,
@@ -37,6 +79,7 @@ const InstructionDraft = struct {
     operand_start: usize,
     operand_count: usize,
     operation: boundary.ir.InstructionOperation,
+    phase: Phase,
 };
 
 const BlockDraft = struct {
@@ -71,6 +114,7 @@ const BlockDraft = struct {
     continuation_argument_start: usize = 0,
     continuation_argument_count: usize = 0,
     resume_type: boundary.ir.ValueType = .{ .scalar = .unit },
+    terminator_phase: Phase = .boundary_control,
     entered: bool = false,
 };
 
@@ -156,10 +200,17 @@ pub fn Flow(comptime config: anytype) type {
         terminal_handoff_count: usize = 0,
         return_handoff_count: usize = 0,
         control_mutation_count: usize = 0,
+        current_phase: Phase = .boundary_control,
 
         pub fn init(comptime label: []const u8) Self {
             if (label.len == 0) @compileError("agent.Flow label must not be empty");
             return .{ .label = label };
+        }
+
+        /// Set compiler-only attribution for subsequently emitted instructions
+        /// and terminators. It never changes Control IR or BPI1 bytes.
+        pub fn setPhase(self: *Self, comptime phase: Phase) void {
+            self.current_phase = phase;
         }
 
         /// Number of external-effect suspensions emitted so far. Compiler-owned
@@ -515,6 +566,7 @@ pub fn Flow(comptime config: anytype) type {
                 .operand_start = operand_start,
                 .operand_count = self.operand_count - operand_start,
                 .operation = operation,
+                .phase = self.current_phase,
             };
             self.instruction_count += 1;
             self.current().instruction_count += 1;
@@ -1200,6 +1252,7 @@ pub fn Flow(comptime config: anytype) type {
             }
             const edge = self.appendValueArguments(target, arguments);
             self.current().terminator_kind = .jump;
+            self.current().terminator_phase = self.current_phase;
             self.current().jump_target = target.id;
             self.current().jump_argument_start = edge.start;
             self.current().jump_argument_count = edge.count;
@@ -1221,6 +1274,7 @@ pub fn Flow(comptime config: anytype) type {
             const then_edge = self.appendValueArguments(then_target, then_arguments);
             const else_edge = self.appendValueArguments(else_target, else_arguments);
             self.current().terminator_kind = .branch;
+            self.current().terminator_phase = self.current_phase;
             self.current().condition = condition.id;
             self.current().then_target = then_target.id;
             self.current().then_argument_start = then_edge.start;
@@ -1264,6 +1318,7 @@ pub fn Flow(comptime config: anytype) type {
             }
 
             self.blocks[@intCast(source_block)].terminator_kind = .suspend_effect;
+            self.blocks[@intCast(source_block)].terminator_phase = self.current_phase;
             self.blocks[@intCast(source_block)].site_id = Site.site_id;
             self.blocks[@intCast(source_block)].request_start = request_start;
             self.blocks[@intCast(source_block)].request_count = 1;
@@ -1318,6 +1373,7 @@ pub fn Flow(comptime config: anytype) type {
 
             const draft = &self.blocks[@intCast(source_block)];
             draft.terminator_kind = .suspend_call;
+            draft.terminator_phase = self.current_phase;
             draft.callee_function = helper_function.id;
             draft.callee_target = helper_function.entry.id;
             draft.callee_argument_start = callee.start;
@@ -1337,6 +1393,7 @@ pub fn Flow(comptime config: anytype) type {
                 @compileError("agent.Flow block already has a terminator");
             }
             self.current().terminator_kind = .return_value;
+            self.current().terminator_phase = self.current_phase;
             self.current().result_value = value.id;
             self.terminal_handoff_count += 1;
             self.return_handoff_count += 1;
@@ -1356,6 +1413,7 @@ pub fn Flow(comptime config: anytype) type {
                 @compileError("agent.Flow helper return type mismatch");
             }
             self.current().terminator_kind = .return_to_caller;
+            self.current().terminator_phase = self.current_phase;
             self.current().result_value = value.id;
             self.control_mutation_count += 1;
         }
@@ -1366,6 +1424,7 @@ pub fn Flow(comptime config: anytype) type {
                 @compileError("agent.Flow block already has a terminator");
             }
             self.current().terminator_kind = .fail_value;
+            self.current().terminator_phase = self.current_phase;
             self.current().failure_value = failure.id;
             self.terminal_handoff_count += 1;
             self.control_mutation_count += 1;
@@ -1497,6 +1556,55 @@ pub fn Flow(comptime config: anytype) type {
                     &edge_arguments,
                 );
                 const functions = snapshot.finalizeFunctions(Result);
+                const instruction_phases = blk: {
+                    @setEvalBranchQuota(100_000_000);
+                    var result: [snapshot.instruction_count]Phase = undefined;
+                    for (
+                        snapshot.instructions[0..snapshot.instruction_count],
+                        0..,
+                    ) |draft, index| {
+                        result[index] = draft.phase;
+                    }
+                    break :blk result;
+                };
+                const block_instruction_starts = blk: {
+                    @setEvalBranchQuota(100_000_000);
+                    var result: [snapshot.block_count]u32 = undefined;
+                    for (snapshot.blocks[0..snapshot.block_count], 0..) |draft, index| {
+                        result[index] = @intCast(draft.instruction_start);
+                    }
+                    break :blk result;
+                };
+                const block_instruction_counts = blk: {
+                    @setEvalBranchQuota(100_000_000);
+                    var result: [snapshot.block_count]u32 = undefined;
+                    for (snapshot.blocks[0..snapshot.block_count], 0..) |draft, index| {
+                        result[index] = @intCast(draft.instruction_count);
+                    }
+                    break :blk result;
+                };
+                const block_terminator_phases = blk: {
+                    @setEvalBranchQuota(100_000_000);
+                    var result: [snapshot.block_count]Phase = undefined;
+                    for (snapshot.blocks[0..snapshot.block_count], 0..) |draft, index| {
+                        result[index] = draft.terminator_phase;
+                    }
+                    break :blk result;
+                };
+
+                pub const SourcePhaseMap = struct {
+                    instruction_phases: [snapshot.instruction_count]Phase,
+                    block_instruction_starts: [snapshot.block_count]u32,
+                    block_instruction_counts: [snapshot.block_count]u32,
+                    block_terminator_phases: [snapshot.block_count]Phase,
+                };
+
+                pub const source_phase_map: SourcePhaseMap = .{
+                    .instruction_phases = instruction_phases,
+                    .block_instruction_starts = block_instruction_starts,
+                    .block_instruction_counts = block_instruction_counts,
+                    .block_terminator_phases = block_terminator_phases,
+                };
 
                 pub const control_ir: boundary.ir.Program = .{
                     .label = snapshot.label,

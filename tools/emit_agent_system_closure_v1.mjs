@@ -15,6 +15,7 @@ assert(boundarySourceMatch !== null, "Boundary source commit is absent from buil
 const boundarySourceCommit = boundarySourceMatch[1];
 const image = await readFile(options.image);
 const initialArgs = await readFile(options.initialArgs);
+const sourceMap = await readFile(options.sourceMap);
 const proof = JSON.parse(await readFile(join(agentRoot, "system_closure_v1/fixture-proof.json"), "utf8"));
 const admissionProof = JSON.parse(await readFile(join(agentRoot, "system_closure_v1/admission-proof.json"), "utf8"));
 assert.equal(proof.format, "agent-system-closure-world-proof/v1");
@@ -32,6 +33,7 @@ assert.equal(image.subarray(0, 8).toString("ascii"), "ABL_BPI1");
 const files = new Map();
 files.set("system.bpi1", image);
 files.set("initial-args.bin", initialArgs);
+files.set("source-map.json", sourceMap);
 files.set("LICENSE", await readFile(join(agentRoot, "LICENSE")));
 files.set("README.md", await readFile(join(agentRoot, "system_closure_v1/README.md")));
 for (const name of [
@@ -40,6 +42,7 @@ for (const name of [
   "model_transport.mjs",
   "fixture_model_server.mjs",
   "repository_environment.mjs",
+  "process_state_census.mjs",
 ]) {
   files.set(name, await readFile(join(agentRoot, "system_closure_v1", name)));
 }
@@ -78,6 +81,7 @@ const receipt = {
   programTransitionIdentity: image.subarray(32, 64).toString("hex"),
   initialArgsSha256: proof.initialArgsSha256,
   initialArgsByteLength: proof.initialArgsByteLength,
+  runtimeInputSha256,
   configuredModel: "gpt-5.4-mini-2026-03-17",
   modelProtocol: "agent.model.openai.responses.v1",
   observedModelRequestCount: proof.modelRequests,
@@ -240,7 +244,15 @@ function parseArgs(args) {
     assert(key?.startsWith("--") && value !== undefined, "invalid arguments");
     result[toCamel(key.slice(2))] = value;
   }
-  for (const key of ["agentRoot", "image", "initialArgs", "archive", "checksum", "receipt"]) {
+  for (const key of [
+    "agentRoot",
+    "image",
+    "initialArgs",
+    "sourceMap",
+    "archive",
+    "checksum",
+    "receipt",
+  ]) {
     assert(key in result, `missing --${key}`);
   }
   return result;

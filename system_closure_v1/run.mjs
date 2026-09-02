@@ -27,9 +27,16 @@ for (let chunk = 0; chunk < 16; chunk += 1) {
     "--worldRoot", resolve(options.worldRoot),
     "--workDir", workDir,
     "--mode", options.mode,
-    "--maximumReductions", "3000",
+    "--maximumReductions", options.censusOutput === undefined ? "3000" : "30000",
   ];
   if (options.endpoint !== undefined) runtimeArgs.push("--endpoint", options.endpoint);
+  if (options.censusOutput !== undefined) {
+    runtimeArgs.push(
+      "--sourceMap",
+      join(dirname(fileURLToPath(import.meta.url)), "source-map.json"),
+    );
+    runtimeArgs.push("--censusOutput", resolve(options.censusOutput));
+  }
   const result = spawnSync(process.execPath, runtimeArgs, {
     encoding: "utf8",
     env: process.env,

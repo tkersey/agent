@@ -208,9 +208,13 @@ pub fn ReactBody(comptime source: anytype) type {
         .limits = system_flow_limits,
     });
     comptime var flow = Builder.init(source.name ++ ":react-v1");
+    flow.setPhase(.agent_initialization);
     const goal = flow.begin(source.Goal);
+    flow.setPhase(.agent_model_resume);
     const helpers = openai_response.declare(&flow, ResponseBytes);
+    flow.setPhase(.agent_model_request);
     const request_helpers = request.declareSystem(&flow, Profile);
+    flow.setPhase(.agent_initialization);
     const before_initial_suspensions = flow.suspensionCount();
     const before_initial_returns = flow.returnHandoffCount();
     const memory = Epistemics.emitInitial(source, &flow, goal, Context);
@@ -230,6 +234,7 @@ pub fn ReactBody(comptime source: anytype) type {
         runtime_state
     else
         flow.productExtract(1, runtime_state);
+    flow.setPhase(.agent_memory_projection);
     const before_project_suspensions = flow.suspensionCount();
     const before_project_returns = flow.returnHandoffCount();
     const view: flow_module.Value(DecisionView) = Epistemics.emitProject(
@@ -238,12 +243,16 @@ pub fn ReactBody(comptime source: anytype) type {
         current_memory,
     );
     assertEffectFree("agent epistemics emitProject", &flow, before_project_suspensions, before_project_returns);
+    flow.setPhase(.agent_prompt_render);
     const before_prompt_suspensions = flow.suspensionCount();
     const before_prompt_returns = flow.returnHandoffCount();
     const prompt = Epistemics.emitPrompt(source, &flow, current_goal, view, Context);
     assertEffectFree("agent epistemics emitPrompt", &flow, before_prompt_suspensions, before_prompt_returns);
+    flow.setPhase(.agent_skill_activation);
     const active_skills = activeSkills(source, Epistemics, &flow, current_memory, Context);
+    flow.setPhase(.agent_tool_selection);
     const offered_actions = offeredActions(source, &flow, active_skills, Context);
+    flow.setPhase(.agent_model_request);
     const before_model_suspensions = flow.suspensionCount();
     const before_model_returns = flow.returnHandoffCount();
     const model_index = Epistemics.emitModelIndex(
@@ -282,6 +291,7 @@ pub fn ReactBody(comptime source: anytype) type {
         model_request,
         .{runtime_state},
     );
+    flow.setPhase(.agent_model_resume);
     const response_path = flow.block(.segment, .{ Protocol.Response, RuntimeState });
     const transport_failure = flow.block(.terminal_handoff, .{});
     flow.branch(
@@ -331,6 +341,7 @@ pub fn ReactBody(comptime source: anytype) type {
         helpers.core,
         Context,
     );
+    flow.setPhase(.agent_action_admission);
     const resumed_memory = if (Epistemics.prompt_is_json_escaped)
         parsed.carried[0]
     else
@@ -380,6 +391,7 @@ pub fn ReactBody(comptime source: anytype) type {
     );
     _ = flow.enter(denied);
     flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
+    flow.setPhase(.agent_tool_dispatch);
     var dispatch_values = flow.enter(dispatch);
     inline for (@typeInfo(source.Action).@"union".fields, 0..) |_, action_index| {
         const matched = flow.block(.segment, .{ source.Action, RuntimeState });
@@ -400,11 +412,13 @@ pub fn ReactBody(comptime source: anytype) type {
         );
         switch (Descriptor.kind) {
             .effect => {
+                flow.setPhase(.agent_tool_dispatch);
                 const performed = flow.perform(
                     Descriptor.Site,
                     payload,
                     .{values[1]},
                 );
+                flow.setPhase(.agent_observation_fold);
                 const observation = flow.sumConstruct(
                     source.Observation,
                     unionFieldIndex(source.Observation, Descriptor.observation_name),
@@ -435,6 +449,7 @@ pub fn ReactBody(comptime source: anytype) type {
                 }
             },
             .local => {
+                flow.setPhase(.agent_tool_dispatch);
                 const before_local_suspensions = flow.suspensionCount();
                 const before_local_returns = flow.returnHandoffCount();
                 const local_payload = Descriptor.Local.emit(
@@ -443,6 +458,7 @@ pub fn ReactBody(comptime source: anytype) type {
                     Context,
                 );
                 assertEffectFree("agent local action emit", &flow, before_local_suspensions, before_local_returns);
+                flow.setPhase(.agent_observation_fold);
                 const observation = flow.sumConstruct(
                     source.Observation,
                     unionFieldIndex(source.Observation, Descriptor.observation_name),
@@ -473,6 +489,7 @@ pub fn ReactBody(comptime source: anytype) type {
                 }
             },
             .final => {
+                flow.setPhase(.agent_final_admission);
                 if (!source.strategy.allow_completion) {
                     flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
                 } else {
@@ -492,6 +509,7 @@ pub fn ReactBody(comptime source: anytype) type {
                     assertEffectFree("agent epistemics emitFinalAllowed", &flow, before_final_suspensions, before_final_returns);
                     const complete = flow.block(.terminal_handoff, .{source.Result});
                     flow.branch(final_allowed, complete, .{payload}, denied, .{});
+                    flow.setPhase(.agent_completion);
                     flow.returnValue(flow.enter(complete)[0]);
                 }
             },
@@ -500,7 +518,9 @@ pub fn ReactBody(comptime source: anytype) type {
         dispatch_values = flow.enter(next);
     }
     flow.failValue(flow.constant(source.Failure, Context.invalid_variant_failure_index));
+    flow.setPhase(.agent_model_request);
     request.defineSystem(&flow, Profile, request_helpers, Context);
+    flow.setPhase(.agent_model_resume);
     openai_response.define(&flow, ResponseBytes, helpers, Context);
     const Lowering = flow.finish(source.Result);
     const sites = effectSites(source, Profile);
@@ -512,6 +532,8 @@ pub fn ReactBody(comptime source: anytype) type {
         pub const effect_sites = boundary.effect.row(sites);
         pub const schema_types = Lowering.schema_types;
         pub const control_ir = Lowering.control_ir;
+        pub const SourcePhaseMap = Lowering.SourcePhaseMap;
+        pub const source_phase_map = Lowering.source_phase_map;
         pub const compiler_limits: boundary.ir.CompilerLimits = .{
             .maximum_values = control_ir.value_types.len,
             .maximum_blocks = control_ir.blocks.len,

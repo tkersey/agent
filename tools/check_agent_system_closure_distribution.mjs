@@ -18,9 +18,11 @@ const expectedFiles = new Set([
   "fixture_model_server.mjs",
   "initial-args.bin",
   "model_transport.mjs",
+  "process_state_census.mjs",
   "repository_environment.mjs",
   "run.mjs",
   "runtime.mjs",
+  "source-map.json",
   "system.bpi1",
 ]);
 const options = parseArgs(process.argv.slice(2));
@@ -53,6 +55,10 @@ try {
   assert.equal(files.get("system.bpi1").byteLength, receipt.imageByteLength);
   assert.equal(sha256(files.get("initial-args.bin")), receipt.initialArgsSha256);
   assert.equal(files.get("initial-args.bin").byteLength, receipt.initialArgsByteLength);
+  const sourceMap = JSON.parse(files.get("source-map.json").toString("utf8"));
+  assert.equal(sourceMap.format, "agent-bpi1-source-map/v1");
+  assert.equal(sourceMap.imageSha256, receipt.imageSha256);
+  assert.equal(sourceMap.programTransitionDigest, receipt.programTransitionIdentity);
   let execution = null;
   if (options.worldRoot !== undefined) {
     const workDir = join(extractionRoot, "work");
@@ -76,6 +82,7 @@ try {
     assert.equal(execution.result, "passed");
     assert.equal(execution.imageSha256, receipt.imageSha256);
     assert.equal(execution.initialArgsSha256, receipt.initialArgsSha256);
+    assert.equal(execution.runtimeInputSha256, receipt.runtimeInputSha256);
     assert.equal(execution.kernelSha256, receipt.boundary.kernelSha256);
     assert.equal(execution.reductions, receipt.observedReductionCount);
     assert.equal(execution.modelRequests, receipt.observedModelRequestCount);

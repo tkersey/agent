@@ -195,5 +195,7 @@ pub fn system(comptime spec: anytype) type {
         pub const Failure = spec.Failure;
         pub const InitialArgs = Goal;
         pub const Program = ProgramType;
+        pub const SourcePhaseMap = Body.SourcePhaseMap;
+        pub const source_phase_map = Body.source_phase_map;
     };
 }

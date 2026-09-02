@@ -18,6 +18,7 @@ pub const Flow = @import("flow.zig").Flow;
 /// Compiler-only typed symbolic value.
 pub const Value = @import("flow.zig").Value;
 pub const FlowLimits = @import("flow.zig").Limits;
+pub const FlowPhase = @import("flow.zig").Phase;
 pub const request = @import("request.zig");
 pub const response = @import("response.zig");
 pub const staged_json = @import("staged_json.zig");

@@ -17,6 +17,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { ProcessStateCensus } from "../system_closure_v1/process_state_census.mjs";
+
 const EXPECTED_INITIAL_DIGEST = "8832f65e4bcf4a701dc76f310f3af34296bf8e95feb16ad70608041cb2e6dbb3";
 const EXPECTED_FINAL_DIGEST = "8bf50f62e3a4294ef359a6b9096d66e5597ce37824b3483ddad541ee21438453";
 const EXPECTED_FINAL_TREE = "0d9ac8802aac6597cb0a443245efb6f92a0249fe";
@@ -56,6 +58,10 @@ const host = await world.admitProcessKernel(kernel);
 const image = await readFile(options.image);
 const initial = await readFile(options.initial);
 const expectedFinal = await readFile(options.expectedFinal);
+const sourceMap = options.sourceMap === undefined
+  ? null
+  : JSON.parse(await readFile(options.sourceMap, "utf8"));
+const census = sourceMap === null ? null : new ProcessStateCensus({ image, sourceMap });
 const temporaryRoot = options.workRoot === undefined
   ? await mkdtemp(join(tmpdir(), "agent-system-closure-v1-"))
   : resolve(options.workRoot);
@@ -110,6 +116,8 @@ const maximumReductions = options.maximumReductions === undefined
   : Number(options.maximumReductions);
 assert(maximumReductions === undefined ||
   (Number.isSafeInteger(maximumReductions) && maximumReductions > 0));
+assert(census === null || maximumReductions === undefined,
+  "State census requires one uninterrupted fixture execution");
 let chunkReductions = 0;
 let terminal;
 
@@ -122,10 +130,15 @@ for (;;) {
   switch (outcome.kind) {
     case "Progressed":
     case "ExplicitlyYielded":
+      census?.observe({ outcome });
       instance = { state: outcome.state };
       break;
     case "Requested": {
       const request = world.decodeEffectRequest(outcome.request);
+      census?.observe({
+        outcome,
+        effectSemanticIdentity: request.effectSemanticIdentity,
+      });
       identities.push(request.effectSemanticIdentity);
       const resume = await resolveEffect(request);
       effectResult = world.encodeEffectResult({ request: outcome.request, resume });
@@ -133,12 +146,15 @@ for (;;) {
       break;
     }
     case "Completed":
+      census?.observe({ outcome });
       terminal = outcome.result;
       break;
     case "AuthoredFailure":
+      census?.observe({ outcome });
       fail(`authored failure ${Buffer.from(outcome.failure).toString("hex")}`);
       break;
     case "NeedsCapacity":
+      census?.observe({ outcome });
       fail("unexpected NeedsCapacity");
       break;
     default:
@@ -206,6 +222,17 @@ const finalTree = git(workspaceRoot, ["write-tree"]);
 assert.equal(finalTree, EXPECTED_FINAL_TREE);
 assert.deepEqual(git(workspaceRoot, ["diff", "--cached", "--name-only"]).split("\n"), ["src/range.mjs"]);
 
+const stateCensus = census?.report() ?? null;
+let stateCensusReceipt = stateCensus;
+if (stateCensus !== null && options.censusOutput !== undefined) {
+  await writeFile(options.censusOutput, `${JSON.stringify(stateCensus, null, 2)}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+  });
+  const { rows: _, ...summary } = stateCensus;
+  stateCensusReceipt = { ...summary, receiptPath: options.censusOutput };
+}
+
 process.stdout.write(`${JSON.stringify({
   format: "agent-system-closure-world-proof/v1",
   result: "passed",
@@ -228,6 +255,7 @@ process.stdout.write(`${JSON.stringify({
   realFilesystemEffects: true,
   realTestProcesses: 2,
   liveModelTestStatus: "not-run",
+  stateCensus: stateCensusReceipt,
 })}\n`);
 
 async function resolveEffect(request) {
@@ -237,7 +265,7 @@ async function resolveEffect(request) {
     assert.equal(decoded.maximum_response_bytes, 32 * 1024);
     const body = JSON.parse(decoded.body.toString("utf8"));
     requestBodies.push(decoded.body.toString("utf8"));
-    assert.equal(body.model, "fixture-responses-model-v1");
+    assert.equal(body.model, "gpt-5.4-mini-2026-03-17");
     assert.equal(body.tool_choice, "required");
     assert.equal(body.parallel_tool_calls, false);
     assert.equal(body.store, false);

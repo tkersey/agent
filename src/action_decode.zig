@@ -68,6 +68,7 @@ pub fn emit(
     core: staged.Helpers(@TypeOf(flow.*), Bytes),
     comptime context: anytype,
 ) @import("flow.zig").Value(Action) {
+    flow.setPhase(.agent_action_argument_decode);
     const Text = boundary.Text(Bytes.maximum_length);
     const Object = ArgumentObject(Action, Bytes);
     const parsed_object = emitObject(
@@ -97,6 +98,7 @@ pub fn emit(
     var object = complete_values[1];
     const join = flow.block(.segment, .{Action});
     inline for (actions, 0..) |_, action_index| {
+        flow.setPhase(.agent_action_name_match);
         const matched = flow.block(.segment, .{ Text, Object });
         const next = flow.block(.segment, .{ Text, Object });
         const equal = flow.integerEqual(
@@ -108,6 +110,7 @@ pub fn emit(
         );
         flow.branch(equal, matched, .{ name, object }, next, .{ name, object });
         const values = flow.enter(matched);
+        flow.setPhase(.agent_action_argument_decode);
         const Payload = payloadType(Action, action_index);
         const payload = emitStructProjection(
             flow,

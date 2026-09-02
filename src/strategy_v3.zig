@@ -1,3 +1,10 @@
+const CanonicalStrategySeal = struct {};
+
+pub fn isAdmitted(comptime Strategy: type) bool {
+    return @hasDecl(Strategy, "agent_strategy_seal") and
+        Strategy.agent_strategy_seal == CanonicalStrategySeal;
+}
+
 /// Select one alternate staged identity while retaining the compiler-owned
 /// closed-system runtime, decoder, admission, and dispatch path.
 pub fn staged(comptime spec: anytype) type {
@@ -12,9 +19,10 @@ pub fn staged(comptime spec: anytype) type {
         @compileError("agent staged strategy semantic identity must not be empty");
     }
     return struct {
+        const agent_strategy_seal = CanonicalStrategySeal;
         pub const system_semantic_identity = spec.semantic_identity;
         pub const requires_typed_action_product_payloads = true;
-        pub const repeat_after_observation = false;
+        pub const repeat_after_observation = true;
         pub const allow_completion = true;
         pub fn ProgramBody(comptime source: anytype) type {
             return @import("system_compiler.zig").ReactBody(source);
@@ -28,6 +36,7 @@ pub fn react(comptime config: anytype) type {
         @compileError("agent.strategy.react accepts only an empty config");
     }
     return struct {
+        const agent_strategy_seal = CanonicalStrategySeal;
         pub const system_semantic_identity = "agent.strategy.react.v3";
         pub const requires_typed_action_product_payloads = true;
         pub const repeat_after_observation = true;

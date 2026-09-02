@@ -451,7 +451,7 @@ fn expectIdentity(pending: Pending, expected: []const u8) !boundary.process_v1.E
     return request;
 }
 
-fn proveNativeAdmission() !void {
+fn proveNativeAdmission() ![32]u8 {
     var resume_bytes: [128 * 1024]u8 = undefined;
     var result_bytes: [256 * 1024]u8 = undefined;
 
@@ -664,6 +664,8 @@ fn proveNativeAdmission() !void {
     );
     const completed = try advanceToCompletion(ready_to_finish.state, valid_final);
     defer std.heap.page_allocator.free(completed);
+    var completion_digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(completed, &completion_digest, .{});
     try expectSha256(
         completed,
         "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032",
@@ -671,22 +673,24 @@ fn proveNativeAdmission() !void {
     try joinPolicyCheck(stale_thread, &stale_check);
     try joinPolicyCheck(wrong_path_thread, &wrong_path_check);
     try joinPolicyCheck(wrong_digest_thread, &wrong_digest_check);
+    return completion_digest;
 }
 
 test "repository admission rejects stale mutation and false completion from current State" {
-    try proveNativeAdmission();
+    _ = try proveNativeAdmission();
 }
 
 pub fn main(init: std.process.Init) !void {
-    try proveNativeAdmission();
+    const completion_digest = try proveNativeAdmission();
     var image_digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(ImageBytes, &image_digest, .{});
     const image_sha256 = std.fmt.bytesToHex(image_digest, .lower);
+    const completion_sha256 = std.fmt.bytesToHex(completion_digest, .lower);
     var buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(init.io, &buffer);
     try stdout.interface.print(
-        "{{\"format\":\"agent-system-native-admission-proof/v1\",\"result\":\"passed\",\"imageSha256\":\"{s}\",\"negativeResults\":[{{\"name\":\"stale-digest-replacement\",\"failure\":\"policy_denied\"}},{{\"name\":\"wrong-final-path\",\"failure\":\"policy_denied\"}},{{\"name\":\"wrong-final-digest\",\"failure\":\"policy_denied\"}}],\"nativeProcessImageSemantics\":true}}\n",
-        .{&image_sha256},
+        "{{\"format\":\"agent-system-native-admission-proof/v1\",\"result\":\"passed\",\"imageSha256\":\"{s}\",\"completionSha256\":\"{s}\",\"negativeResults\":[{{\"name\":\"stale-digest-replacement\",\"failure\":\"policy_denied\"}},{{\"name\":\"wrong-final-path\",\"failure\":\"policy_denied\"}},{{\"name\":\"wrong-final-digest\",\"failure\":\"policy_denied\"}}],\"nativeProcessImageSemantics\":true}}\n",
+        .{ &image_sha256, &completion_sha256 },
     );
     try stdout.interface.flush();
 }

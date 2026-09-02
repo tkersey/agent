@@ -841,34 +841,6 @@ fn RepositoryRepairSystemDefinition(
                     return flow.enter(joined)[0];
                 }
 
-                fn finishAllowed(
-                    flow: anytype,
-                    memory: anytype,
-                    selected: anytype,
-                    comptime context: anytype,
-                ) agent.Value(bool) {
-                    const inspect = flow.block(.segment, .{ Memory, Action });
-                    const reject = flow.block(.segment, .{});
-                    const joined = flow.block(.segment, .{bool});
-                    flow.branch(
-                        flow.sumTagIs(5, selected),
-                        inspect,
-                        .{ memory, selected },
-                        reject,
-                        .{},
-                    );
-                    const values = flow.enter(inspect);
-                    flow.jump(joined, .{completionAllowed(
-                        flow,
-                        values[0],
-                        flow.sumExtract(5, values[1]),
-                        context,
-                    )});
-                    _ = flow.enter(reject);
-                    flow.jump(joined, .{flow.constant(bool, context.false_index)});
-                    return flow.enter(joined)[0];
-                }
-
                 pub fn emitActionAllowed(
                     comptime _: anytype,
                     flow: anytype,
@@ -883,23 +855,13 @@ fn RepositoryRepairSystemDefinition(
                         selected,
                         context,
                     );
-                    const finish_ok = finishAllowed(
-                        flow,
-                        memory,
-                        selected,
-                        context,
-                    );
                     return flow.select(
                         flow.sumTagIs(1, selected),
                         read_ok,
                         flow.select(
                             flow.sumTagIs(4, selected),
                             replace_ok,
-                            flow.select(
-                                flow.sumTagIs(5, selected),
-                                finish_ok,
-                                flow.constant(bool, context.true_index),
-                            ),
+                            flow.constant(bool, context.true_index),
                         ),
                     );
                 }

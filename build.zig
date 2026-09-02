@@ -35,12 +35,9 @@ pub fn build(b: *std.Build) void {
     semantic.dependOn(&run_root_tests.step);
     inline for ([_]TestSpec{
         .{ .name = "check-agent-flow", .description = "Validate Flow lowering", .path = "test/flow.zig" },
-        .{ .name = "check-agent-protocol", .description = "Validate raw model transport", .path = "test/protocol.zig" },
         .{ .name = "check-agent-system-api", .description = "Validate the canonical complete-system API", .path = "test/system.zig" },
         .{ .name = "check-agent-local-action", .description = "Prove image-owned local actions", .path = "test/local_action.zig" },
         .{ .name = "check-agent-json", .description = "Validate strict generated tool schemas", .path = "test/json.zig" },
-        .{ .name = "check-agent-request", .description = "Validate complete provider requests", .path = "test/request.zig" },
-        .{ .name = "check-agent-staged-json", .description = "Validate in-image JSON and Unicode scanning", .path = "test/staged_json.zig" },
         .{ .name = "check-agent-repository-system", .description = "Compile the complete repository system", .path = "actuality/repository_repair_system_v1.zig" },
     }) |spec| {
         _ = addFocusedTest(
@@ -140,6 +137,22 @@ pub fn build(b: *std.Build) void {
         agent_module,
         boundary_module,
     );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_actionless.zig",
+        "agent system requires at least one Action variant",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_forged_strategy.zig",
+        "agent system strategy must be one staged Agent 3 strategy",
+        agent_module,
+        boundary_module,
+    );
     semantic.dependOn(compile_fail);
 
     const repository_module = b.createModule(.{
@@ -183,9 +196,25 @@ pub fn build(b: *std.Build) void {
         .target = b.graph.host,
         .optimize = .Debug,
     });
-    ablation_emitter_module.addImport("agent", agent_module);
+    const economy_agent_module = b.createModule(.{
+        .root_source_file = b.path("src/economy_tooling_root.zig"),
+        .target = b.graph.host,
+        .optimize = .Debug,
+    });
+    economy_agent_module.addImport("boundary", boundary_module);
+    const repository_economy_module = b.createModule(.{
+        .root_source_file = b.path("actuality/repository_repair_system_v1.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+    repository_economy_module.addImport("agent", economy_agent_module);
+    repository_economy_module.addImport("boundary", boundary_module);
+    ablation_emitter_module.addImport("agent", economy_agent_module);
     ablation_emitter_module.addImport("boundary", boundary_module);
-    ablation_emitter_module.addImport("repository_system", repository_module);
+    ablation_emitter_module.addImport(
+        "repository_system",
+        repository_economy_module,
+    );
     const ablation_emitter = b.addExecutable(.{
         .name = "emit-agent-repository-system-ablation-v1",
         .root_module = ablation_emitter_module,
@@ -208,7 +237,7 @@ pub fn build(b: *std.Build) void {
         .target = b.graph.host,
         .optimize = .Debug,
     });
-    scaling_emitter_module.addImport("agent", agent_module);
+    scaling_emitter_module.addImport("agent", economy_agent_module);
     scaling_emitter_module.addImport("boundary", boundary_module);
     const scaling_emitter = b.addExecutable(.{
         .name = "emit-agent-economy-scaling-v1",
@@ -330,6 +359,18 @@ pub fn build(b: *std.Build) void {
         b.path("system_closure_v1/model_protocol_adapter.mjs"),
     );
     closure_check.dependOn(&model_protocol_adapter_test.step);
+    inline for (.{
+        "system_closure_v1/run.mjs",
+        "system_closure_v1/runtime.mjs",
+        "system_closure_v1/model_protocol_adapter.mjs",
+        "system_closure_v1/process_state_census.mjs",
+        "system_closure_v1/fixture_model_server.mjs",
+        "system_closure_v1/repository_environment.mjs",
+    }) |runtime_path| {
+        const syntax = b.addSystemCommand(&.{ "node", "--check", runtime_path });
+        syntax.addFileInput(b.path(runtime_path));
+        closure_check.dependOn(&syntax.step);
+    }
     if (world_process_root != null) closure_check.dependOn(world_check);
     const emit_closure = b.step(
         "emit-agent-system-closure-v1",

@@ -19,6 +19,7 @@ const state = encodeState(sourceMap.programTransitionDigest, [
 const decoded = decodeProcessState(state);
 assert.equal(decoded.frames.length, 2);
 assert.equal(decoded.frames[0].environment.byteLength, 5_000);
+assert.throws(() => decodeProcessState(state, Buffer.alloc(32)));
 
 const census = new ProcessStateCensus({ image, sourceMap });
 census.observe({ outcome: { kind: "Progressed", state } });

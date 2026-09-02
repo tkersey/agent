@@ -10,82 +10,6 @@ test "agent.system returns one ordinary unspecialized Boundary Program" {
     try std.testing.expect(AlternateStaged.Program.image().bytes.len > 0);
 }
 
-const ProfileFailure = enum {
-    arithmetic_overflow,
-    capacity_exceeded,
-    invalid_index,
-    invalid_utf8,
-    malformed,
-    invalid_variant,
-    incomplete,
-    response_error,
-    unsupported,
-    multiple_calls,
-    refusal,
-    unknown_action,
-    transport,
-    http,
-};
-const ProfileText = boundary.Text(32);
-const ProfileAction = union(enum) {
-    set: struct { value: u8 },
-    finish: struct { message: ProfileText },
-};
-const ProfileActions = .{
-    agent.action.final(.set, .{ .name = "set_value", .description = "Set." }),
-    agent.action.final(.finish, .{ .name = "finish", .description = "Finish." }),
-};
-const ProfileModels = .{agent.model(.{
-    .name = "primary",
-    .protocol = agent.protocol.openaiResponsesV2.Profile,
-    .model = "test-model",
-    .parameters = .{},
-})};
-const Profile = agent.openai_profile.Profile(
-    ProfileFailure,
-    boundary.Bytes(256),
-    ProfileAction,
-    ProfileActions,
-    ProfileModels,
-    .{},
-    .{},
-    .{
-        .arithmetic_overflow = ProfileFailure.arithmetic_overflow,
-        .capacity_exceeded = ProfileFailure.capacity_exceeded,
-        .invalid_index = ProfileFailure.invalid_index,
-        .invalid_utf8 = ProfileFailure.invalid_utf8,
-        .malformed = ProfileFailure.malformed,
-        .invalid_variant = ProfileFailure.invalid_variant,
-        .incomplete = ProfileFailure.incomplete,
-        .response_error = ProfileFailure.response_error,
-        .unsupported = ProfileFailure.unsupported,
-        .multiple_calls = ProfileFailure.multiple_calls,
-        .refusal = ProfileFailure.refusal,
-        .unknown_action = ProfileFailure.unknown_action,
-        .transport = ProfileFailure.transport,
-        .http = ProfileFailure.http,
-    },
-    2048,
-);
-
-test "OpenAI profile derives action and field constants from one algebra" {
-    const values = comptime Profile.constantValues();
-    try std.testing.expectEqualStrings(
-        "set_value",
-        try values[Profile.Context.action_name_indices[0]].slice(),
-    );
-    try std.testing.expectEqualStrings(
-        "message",
-        try values[Profile.Context.field_name_indices[1][0]].slice(),
-    );
-    try std.testing.expectEqual(@as(u8, 0), values[
-        Profile.Context.payload_default_indices[0]
-    ].value);
-    try std.testing.expectEqual(@as(u32, 1), try values[
-        Profile.Context.seen_indices[1]
-    ].len());
-}
-
 const AlternateGoal = boundary.Text(64);
 const AlternateResult = struct { answer: AlternateGoal };
 const AlternateAction = union(enum) { done: AlternateResult };
@@ -196,6 +120,8 @@ test "alternate staged identity preserves the canonical closed runtime" {
         &AlternateReact.Program.image().bytes,
         &AlternateStaged.Program.image().bytes,
     ));
+    try std.testing.expect(AlternateStaged.Source.strategy.repeat_after_observation);
+    try std.testing.expect(AlternateStaged.Source.strategy.allow_completion);
     try std.testing.expect(!@hasDecl(AlternateReact, "Machine"));
     try std.testing.expect(!@hasDecl(AlternateStaged, "Machine"));
 }

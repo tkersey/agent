@@ -64,6 +64,6 @@ process.stdout.write(`${JSON.stringify({
   nativeWasmParity: {
     ...transfers.parity,
     policyFailureSha256,
-    completionSha256: "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032",
+    completionSha256: nativeProof.completionSha256,
   },
 }, null, 2)}\n`);

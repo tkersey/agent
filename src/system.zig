@@ -2,6 +2,7 @@ const std = @import("std");
 const boundary = @import("boundary");
 const model = @import("model.zig");
 const skill = @import("skill.zig");
+const strategy = @import("strategy_v3.zig");
 const typed_action_profile = @import("typed_action_profile.zig");
 
 const admitted_fields = .{
@@ -84,6 +85,9 @@ fn validate(comptime spec: anytype) void {
     boundary.schema.assertPortable(spec.Result);
     boundary.schema.assertPortable(spec.Failure);
     const action_info = taggedUnion(spec.Action, "Action");
+    if (action_info.fields.len == 0) {
+        @compileError("agent system requires at least one Action variant");
+    }
     _ = taggedUnion(spec.Observation, "Observation");
     if (spec.actions.len != action_info.fields.len) {
         @compileError("agent system requires exactly one descriptor per Action variant");
@@ -162,7 +166,8 @@ fn validate(comptime spec: anytype) void {
     model.validateUnique(spec.models);
     skill.validateUnique(spec.skills);
     const Strategy = spec.strategy;
-    if (!@hasDecl(Strategy, "system_semantic_identity") or
+    if (!strategy.isAdmitted(Strategy) or
+        !@hasDecl(Strategy, "system_semantic_identity") or
         !@hasDecl(Strategy, "ProgramBody"))
     {
         @compileError("agent system strategy must be one staged Agent 3 strategy");

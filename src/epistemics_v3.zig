@@ -38,7 +38,7 @@ pub fn systemStateless(comptime config: anytype) type {
             return flow.constant(bool, context.true_index);
         }
         pub fn emitSkillActive(comptime _: anytype, flow: anytype, _: anytype, comptime _: usize, comptime context: anytype) @import("flow.zig").Value(bool) {
-            return flow.constant(bool, context.true_index);
+            return flow.constant(bool, context.false_index);
         }
         pub fn emitFinalAllowed(comptime _: anytype, flow: anytype, _: anytype, _: anytype, comptime context: anytype) @import("flow.zig").Value(bool) {
             return flow.constant(bool, context.true_index);

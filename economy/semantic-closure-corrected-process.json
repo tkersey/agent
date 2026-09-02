@@ -1,15 +1,15 @@
 {
   "format": "agent-process-state-census/v1",
-  "imageSha256": "e2b779bad7b89b75de02e49a94584a7808555e3be92eccecdd24f02d93c68595",
-  "programTransitionDigest": "5197daffc5e663cf6fd7db122772b8a2d269dc9f7f9c8969bc8881eb195b72a0",
-  "reductionCount": 408,
-  "stateBearingOutcomeCount": 407,
-  "maximumProgressedBetweenResidualBoundaries": 34,
+  "imageSha256": "9ec38096063eec13937424249a54fa7c1140bc197a4a46ca3814ee063f77c016",
+  "programTransitionDigest": "0c4b4cac388c9b908c575b11c2196ad49bdeb70f8a69d7de2d501e478b734f22",
+  "reductionCount": 390,
+  "stateBearingOutcomeCount": 389,
+  "maximumProgressedBetweenResidualBoundaries": 30,
   "summary": {
     "stateBytes": {
       "minimum": 346,
-      "median": 2847,
-      "p95": 14085,
+      "median": 2850,
+      "p95": 14301,
       "maximum": 17871
     },
     "frameCount": {
@@ -20,14 +20,14 @@
     },
     "environmentBytes": {
       "minimum": 297,
-      "median": 2799,
-      "p95": 14037,
+      "median": 2801,
+      "p95": 14253,
       "maximum": 17822
     },
     "largestFrame": {
       "minimum": 297,
-      "median": 2799,
-      "p95": 14037,
+      "median": 2801,
+      "p95": 14253,
       "maximum": 17822
     },
     "requestBytes": {
@@ -507,45 +507,19 @@
     },
     {
       "reductionIndex": 33,
-      "phase": "agent.action_admission",
+      "phase": "agent.tool_dispatch",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
-      "stateByteLength": 464,
+      "stateByteLength": 535,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 416,
-      "largestFrameEnvironmentBytes": 416,
+      "totalFrameEnvironmentBytes": 487,
+      "largestFrameEnvironmentBytes": 487,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
     },
     {
       "reductionIndex": 34,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 465,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 417,
-      "largestFrameEnvironmentBytes": 417,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 35,
-      "phase": "agent.tool_dispatch",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 538,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 490,
-      "largestFrameEnvironmentBytes": 490,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 36,
       "phase": "agent.tool_dispatch",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -558,7 +532,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 37,
+      "reductionIndex": 35,
       "phase": "agent.tool_dispatch",
       "phaseCategory": "pending_repository_request",
       "outcomeKind": "Requested",
@@ -571,7 +545,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 38,
+      "reductionIndex": 36,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -584,7 +558,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 39,
+      "reductionIndex": 37,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -597,7 +571,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 40,
+      "reductionIndex": 38,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -610,7 +584,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 41,
+      "reductionIndex": 39,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -623,7 +597,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 42,
+      "reductionIndex": 40,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -631,6 +605,32 @@
       "frameCount": 1,
       "totalFrameEnvironmentBytes": 1689,
       "largestFrameEnvironmentBytes": 1689,
+      "pendingRequestByteLength": 0,
+      "identicalEnvironmentBlobCopies": 0,
+      "duplicatedEnvironmentBytes": 0
+    },
+    {
+      "reductionIndex": 41,
+      "phase": "agent.prompt_render",
+      "phaseCategory": null,
+      "outcomeKind": "Progressed",
+      "stateByteLength": 933,
+      "frameCount": 1,
+      "totalFrameEnvironmentBytes": 885,
+      "largestFrameEnvironmentBytes": 885,
+      "pendingRequestByteLength": 0,
+      "identicalEnvironmentBlobCopies": 0,
+      "duplicatedEnvironmentBytes": 0
+    },
+    {
+      "reductionIndex": 42,
+      "phase": "agent.prompt_render",
+      "phaseCategory": null,
+      "outcomeKind": "Progressed",
+      "stateByteLength": 933,
+      "frameCount": 1,
+      "totalFrameEnvironmentBytes": 885,
+      "largestFrameEnvironmentBytes": 885,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -676,32 +676,6 @@
     },
     {
       "reductionIndex": 46,
-      "phase": "agent.prompt_render",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 933,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 885,
-      "largestFrameEnvironmentBytes": 885,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 47,
-      "phase": "agent.prompt_render",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 933,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 885,
-      "largestFrameEnvironmentBytes": 885,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 48,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -714,7 +688,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 49,
+      "reductionIndex": 47,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -727,7 +701,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 50,
+      "reductionIndex": 48,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -740,7 +714,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 51,
+      "reductionIndex": 49,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -753,7 +727,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 52,
+      "reductionIndex": 50,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -766,7 +740,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 53,
+      "reductionIndex": 51,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -779,7 +753,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 54,
+      "reductionIndex": 52,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -792,7 +766,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 55,
+      "reductionIndex": 53,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -805,7 +779,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 56,
+      "reductionIndex": 54,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -818,7 +792,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 57,
+      "reductionIndex": 55,
       "phase": "agent.model_request",
       "phaseCategory": "pending_model_request",
       "outcomeKind": "Requested",
@@ -831,7 +805,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 58,
+      "reductionIndex": 56,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -844,7 +818,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 59,
+      "reductionIndex": 57,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -857,7 +831,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 60,
+      "reductionIndex": 58,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -870,7 +844,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 61,
+      "reductionIndex": 59,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -883,7 +857,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 62,
+      "reductionIndex": 60,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -896,7 +870,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 63,
+      "reductionIndex": 61,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -909,7 +883,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 64,
+      "reductionIndex": 62,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -922,7 +896,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 65,
+      "reductionIndex": 63,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -935,7 +909,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 66,
+      "reductionIndex": 64,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -948,7 +922,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 67,
+      "reductionIndex": 65,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -961,7 +935,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 68,
+      "reductionIndex": 66,
       "phase": "agent.action_argument_decode",
       "phaseCategory": "action_argument_decode",
       "outcomeKind": "Progressed",
@@ -974,7 +948,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 69,
+      "reductionIndex": 67,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -987,7 +961,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 70,
+      "reductionIndex": 68,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1000,7 +974,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 71,
+      "reductionIndex": 69,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1013,7 +987,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 72,
+      "reductionIndex": 70,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1026,7 +1000,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 73,
+      "reductionIndex": 71,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1034,77 +1008,51 @@
       "frameCount": 1,
       "totalFrameEnvironmentBytes": 537,
       "largestFrameEnvironmentBytes": 537,
+      "pendingRequestByteLength": 0,
+      "identicalEnvironmentBlobCopies": 0,
+      "duplicatedEnvironmentBytes": 0
+    },
+    {
+      "reductionIndex": 72,
+      "phase": "agent.tool_dispatch",
+      "phaseCategory": null,
+      "outcomeKind": "Progressed",
+      "stateByteLength": 656,
+      "frameCount": 1,
+      "totalFrameEnvironmentBytes": 608,
+      "largestFrameEnvironmentBytes": 608,
+      "pendingRequestByteLength": 0,
+      "identicalEnvironmentBlobCopies": 0,
+      "duplicatedEnvironmentBytes": 0
+    },
+    {
+      "reductionIndex": 73,
+      "phase": "agent.observation_fold",
+      "phaseCategory": "observation_fold",
+      "outcomeKind": "Progressed",
+      "stateByteLength": 419,
+      "frameCount": 1,
+      "totalFrameEnvironmentBytes": 371,
+      "largestFrameEnvironmentBytes": 371,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
     },
     {
       "reductionIndex": 74,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
+      "phase": "agent.observation_fold",
+      "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
-      "stateByteLength": 585,
+      "stateByteLength": 419,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 537,
-      "largestFrameEnvironmentBytes": 537,
+      "totalFrameEnvironmentBytes": 371,
+      "largestFrameEnvironmentBytes": 371,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
     },
     {
       "reductionIndex": 75,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 586,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 538,
-      "largestFrameEnvironmentBytes": 538,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 76,
-      "phase": "agent.tool_dispatch",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 659,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 611,
-      "largestFrameEnvironmentBytes": 611,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 77,
-      "phase": "agent.observation_fold",
-      "phaseCategory": "observation_fold",
-      "outcomeKind": "Progressed",
-      "stateByteLength": 419,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 371,
-      "largestFrameEnvironmentBytes": 371,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 78,
-      "phase": "agent.observation_fold",
-      "phaseCategory": "observation_fold",
-      "outcomeKind": "Progressed",
-      "stateByteLength": 419,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 371,
-      "largestFrameEnvironmentBytes": 371,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 79,
       "phase": "agent.observation_fold",
       "phaseCategory": "pending_repository_request",
       "outcomeKind": "Requested",
@@ -1117,7 +1065,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 80,
+      "reductionIndex": 76,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -1130,11 +1078,11 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 81,
+      "reductionIndex": 77,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
-      "stateByteLength": 926,
+      "stateByteLength": 925,
       "frameCount": 1,
       "totalFrameEnvironmentBytes": 877,
       "largestFrameEnvironmentBytes": 877,
@@ -1143,7 +1091,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 82,
+      "reductionIndex": 78,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -1156,7 +1104,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 83,
+      "reductionIndex": 79,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -1169,7 +1117,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 84,
+      "reductionIndex": 80,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -1182,7 +1130,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 85,
+      "reductionIndex": 81,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1195,7 +1143,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 86,
+      "reductionIndex": 82,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1208,7 +1156,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 87,
+      "reductionIndex": 83,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1221,7 +1169,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 88,
+      "reductionIndex": 84,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1234,7 +1182,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 89,
+      "reductionIndex": 85,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1247,59 +1195,59 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
+      "reductionIndex": 86,
+      "phase": "agent.prompt_render",
+      "phaseCategory": null,
+      "outcomeKind": "Progressed",
+      "stateByteLength": 1757,
+      "frameCount": 1,
+      "totalFrameEnvironmentBytes": 1709,
+      "largestFrameEnvironmentBytes": 1709,
+      "pendingRequestByteLength": 0,
+      "identicalEnvironmentBlobCopies": 0,
+      "duplicatedEnvironmentBytes": 0
+    },
+    {
+      "reductionIndex": 87,
+      "phase": "agent.prompt_render",
+      "phaseCategory": null,
+      "outcomeKind": "Progressed",
+      "stateByteLength": 1757,
+      "frameCount": 1,
+      "totalFrameEnvironmentBytes": 1709,
+      "largestFrameEnvironmentBytes": 1709,
+      "pendingRequestByteLength": 0,
+      "identicalEnvironmentBlobCopies": 0,
+      "duplicatedEnvironmentBytes": 0
+    },
+    {
+      "reductionIndex": 88,
+      "phase": "agent.prompt_render",
+      "phaseCategory": null,
+      "outcomeKind": "Progressed",
+      "stateByteLength": 1757,
+      "frameCount": 1,
+      "totalFrameEnvironmentBytes": 1709,
+      "largestFrameEnvironmentBytes": 1709,
+      "pendingRequestByteLength": 0,
+      "identicalEnvironmentBlobCopies": 0,
+      "duplicatedEnvironmentBytes": 0
+    },
+    {
+      "reductionIndex": 89,
+      "phase": "agent.prompt_render",
+      "phaseCategory": null,
+      "outcomeKind": "Progressed",
+      "stateByteLength": 1757,
+      "frameCount": 1,
+      "totalFrameEnvironmentBytes": 1709,
+      "largestFrameEnvironmentBytes": 1709,
+      "pendingRequestByteLength": 0,
+      "identicalEnvironmentBlobCopies": 0,
+      "duplicatedEnvironmentBytes": 0
+    },
+    {
       "reductionIndex": 90,
-      "phase": "agent.prompt_render",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 1757,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 1709,
-      "largestFrameEnvironmentBytes": 1709,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 91,
-      "phase": "agent.prompt_render",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 1757,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 1709,
-      "largestFrameEnvironmentBytes": 1709,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 92,
-      "phase": "agent.prompt_render",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 1757,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 1709,
-      "largestFrameEnvironmentBytes": 1709,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 93,
-      "phase": "agent.prompt_render",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 1757,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 1709,
-      "largestFrameEnvironmentBytes": 1709,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 94,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -1312,7 +1260,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 95,
+      "reductionIndex": 91,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -1325,7 +1273,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 96,
+      "reductionIndex": 92,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -1338,7 +1286,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 97,
+      "reductionIndex": 93,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -1351,7 +1299,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 98,
+      "reductionIndex": 94,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -1364,7 +1312,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 99,
+      "reductionIndex": 95,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -1377,7 +1325,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 100,
+      "reductionIndex": 96,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -1390,7 +1338,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 101,
+      "reductionIndex": 97,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -1403,7 +1351,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 102,
+      "reductionIndex": 98,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -1416,7 +1364,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 103,
+      "reductionIndex": 99,
       "phase": "agent.model_request",
       "phaseCategory": "pending_model_request",
       "outcomeKind": "Requested",
@@ -1429,7 +1377,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 104,
+      "reductionIndex": 100,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -1442,7 +1390,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 105,
+      "reductionIndex": 101,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -1455,7 +1403,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 106,
+      "reductionIndex": 102,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -1468,7 +1416,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 107,
+      "reductionIndex": 103,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -1481,7 +1429,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 108,
+      "reductionIndex": 104,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -1494,7 +1442,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 109,
+      "reductionIndex": 105,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -1507,7 +1455,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 110,
+      "reductionIndex": 106,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -1520,7 +1468,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 111,
+      "reductionIndex": 107,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -1533,7 +1481,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 112,
+      "reductionIndex": 108,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1546,7 +1494,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 113,
+      "reductionIndex": 109,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1559,7 +1507,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 114,
+      "reductionIndex": 110,
       "phase": "agent.action_argument_decode",
       "phaseCategory": "action_argument_decode",
       "outcomeKind": "Progressed",
@@ -1572,7 +1520,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 115,
+      "reductionIndex": 111,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1585,7 +1533,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 116,
+      "reductionIndex": 112,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1598,7 +1546,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 117,
+      "reductionIndex": 113,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1611,7 +1559,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 118,
+      "reductionIndex": 114,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1624,7 +1572,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 119,
+      "reductionIndex": 115,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1637,46 +1585,20 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 120,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 1001,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 953,
-      "largestFrameEnvironmentBytes": 953,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 121,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 1002,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 954,
-      "largestFrameEnvironmentBytes": 954,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 122,
+      "reductionIndex": 116,
       "phase": "agent.tool_dispatch",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
-      "stateByteLength": 1075,
+      "stateByteLength": 1072,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 1027,
-      "largestFrameEnvironmentBytes": 1027,
+      "totalFrameEnvironmentBytes": 1024,
+      "largestFrameEnvironmentBytes": 1024,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 123,
+      "reductionIndex": 117,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -1689,7 +1611,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 124,
+      "reductionIndex": 118,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -1702,7 +1624,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 125,
+      "reductionIndex": 119,
       "phase": "agent.observation_fold",
       "phaseCategory": "pending_repository_request",
       "outcomeKind": "Requested",
@@ -1715,7 +1637,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 126,
+      "reductionIndex": 120,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -1728,11 +1650,11 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 127,
+      "reductionIndex": 121,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
-      "stateByteLength": 1378,
+      "stateByteLength": 1377,
       "frameCount": 1,
       "totalFrameEnvironmentBytes": 1329,
       "largestFrameEnvironmentBytes": 1329,
@@ -1741,7 +1663,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 128,
+      "reductionIndex": 122,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -1754,7 +1676,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 129,
+      "reductionIndex": 123,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -1767,7 +1689,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 130,
+      "reductionIndex": 124,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -1780,7 +1702,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 131,
+      "reductionIndex": 125,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -1793,7 +1715,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 132,
+      "reductionIndex": 126,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1806,7 +1728,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 133,
+      "reductionIndex": 127,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1819,7 +1741,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 134,
+      "reductionIndex": 128,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1832,7 +1754,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 135,
+      "reductionIndex": 129,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1845,7 +1767,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 136,
+      "reductionIndex": 130,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1858,7 +1780,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 137,
+      "reductionIndex": 131,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1871,7 +1793,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 138,
+      "reductionIndex": 132,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1884,7 +1806,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 139,
+      "reductionIndex": 133,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1897,7 +1819,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 140,
+      "reductionIndex": 134,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1910,7 +1832,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 141,
+      "reductionIndex": 135,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -1923,7 +1845,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 142,
+      "reductionIndex": 136,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -1936,7 +1858,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 143,
+      "reductionIndex": 137,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -1949,7 +1871,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 144,
+      "reductionIndex": 138,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -1962,7 +1884,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 145,
+      "reductionIndex": 139,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -1975,7 +1897,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 146,
+      "reductionIndex": 140,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -1988,7 +1910,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 147,
+      "reductionIndex": 141,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -2001,7 +1923,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 148,
+      "reductionIndex": 142,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -2014,7 +1936,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 149,
+      "reductionIndex": 143,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -2027,7 +1949,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 150,
+      "reductionIndex": 144,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -2040,7 +1962,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 151,
+      "reductionIndex": 145,
       "phase": "agent.model_request",
       "phaseCategory": "pending_model_request",
       "outcomeKind": "Requested",
@@ -2053,7 +1975,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 152,
+      "reductionIndex": 146,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2066,7 +1988,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 153,
+      "reductionIndex": 147,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2079,7 +2001,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 154,
+      "reductionIndex": 148,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2092,7 +2014,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 155,
+      "reductionIndex": 149,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2105,7 +2027,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 156,
+      "reductionIndex": 150,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2118,7 +2040,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 157,
+      "reductionIndex": 151,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2131,7 +2053,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 158,
+      "reductionIndex": 152,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2144,7 +2066,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 159,
+      "reductionIndex": 153,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2157,7 +2079,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 160,
+      "reductionIndex": 154,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2170,7 +2092,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 161,
+      "reductionIndex": 155,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2183,7 +2105,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 162,
+      "reductionIndex": 156,
       "phase": "agent.action_argument_decode",
       "phaseCategory": "action_argument_decode",
       "outcomeKind": "Progressed",
@@ -2196,7 +2118,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 163,
+      "reductionIndex": 157,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2209,7 +2131,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 164,
+      "reductionIndex": 158,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2222,7 +2144,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 165,
+      "reductionIndex": 159,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2235,7 +2157,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 166,
+      "reductionIndex": 160,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2248,7 +2170,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 167,
+      "reductionIndex": 161,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2261,46 +2183,20 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 168,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 1453,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 1405,
-      "largestFrameEnvironmentBytes": 1405,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 169,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 1454,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 1406,
-      "largestFrameEnvironmentBytes": 1406,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 170,
+      "reductionIndex": 162,
       "phase": "agent.tool_dispatch",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
-      "stateByteLength": 1527,
+      "stateByteLength": 1524,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 1479,
-      "largestFrameEnvironmentBytes": 1479,
+      "totalFrameEnvironmentBytes": 1476,
+      "largestFrameEnvironmentBytes": 1476,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 171,
+      "reductionIndex": 163,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -2313,7 +2209,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 172,
+      "reductionIndex": 164,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -2326,7 +2222,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 173,
+      "reductionIndex": 165,
       "phase": "agent.observation_fold",
       "phaseCategory": "pending_repository_request",
       "outcomeKind": "Requested",
@@ -2339,7 +2235,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 174,
+      "reductionIndex": 166,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -2352,11 +2248,11 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 175,
+      "reductionIndex": 167,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
-      "stateByteLength": 2772,
+      "stateByteLength": 2771,
       "frameCount": 1,
       "totalFrameEnvironmentBytes": 2723,
       "largestFrameEnvironmentBytes": 2723,
@@ -2365,7 +2261,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 176,
+      "reductionIndex": 168,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -2378,7 +2274,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 177,
+      "reductionIndex": 169,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -2391,7 +2287,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 178,
+      "reductionIndex": 170,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -2404,7 +2300,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 179,
+      "reductionIndex": 171,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -2417,7 +2313,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 180,
+      "reductionIndex": 172,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -2430,7 +2326,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 181,
+      "reductionIndex": 173,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2443,7 +2339,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 182,
+      "reductionIndex": 174,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2456,7 +2352,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 183,
+      "reductionIndex": 175,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2469,7 +2365,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 184,
+      "reductionIndex": 176,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2482,7 +2378,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 185,
+      "reductionIndex": 177,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2495,7 +2391,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 186,
+      "reductionIndex": 178,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2508,7 +2404,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 187,
+      "reductionIndex": 179,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2521,7 +2417,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 188,
+      "reductionIndex": 180,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2534,7 +2430,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 189,
+      "reductionIndex": 181,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2547,7 +2443,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 190,
+      "reductionIndex": 182,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2560,7 +2456,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 191,
+      "reductionIndex": 183,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2573,7 +2469,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 192,
+      "reductionIndex": 184,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -2586,7 +2482,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 193,
+      "reductionIndex": 185,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -2599,7 +2495,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 194,
+      "reductionIndex": 186,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -2612,7 +2508,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 195,
+      "reductionIndex": 187,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -2625,7 +2521,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 196,
+      "reductionIndex": 188,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -2638,7 +2534,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 197,
+      "reductionIndex": 189,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -2651,7 +2547,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 198,
+      "reductionIndex": 190,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -2664,7 +2560,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 199,
+      "reductionIndex": 191,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -2677,7 +2573,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 200,
+      "reductionIndex": 192,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -2690,7 +2586,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 201,
+      "reductionIndex": 193,
       "phase": "agent.model_request",
       "phaseCategory": "pending_model_request",
       "outcomeKind": "Requested",
@@ -2703,7 +2599,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 202,
+      "reductionIndex": 194,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2716,7 +2612,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 203,
+      "reductionIndex": 195,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2729,7 +2625,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 204,
+      "reductionIndex": 196,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2742,7 +2638,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 205,
+      "reductionIndex": 197,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2755,7 +2651,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 206,
+      "reductionIndex": 198,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2768,7 +2664,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 207,
+      "reductionIndex": 199,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2781,7 +2677,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 208,
+      "reductionIndex": 200,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2794,7 +2690,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 209,
+      "reductionIndex": 201,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -2807,7 +2703,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 210,
+      "reductionIndex": 202,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2820,7 +2716,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 211,
+      "reductionIndex": 203,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2833,7 +2729,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 212,
+      "reductionIndex": 204,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2846,7 +2742,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 213,
+      "reductionIndex": 205,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2859,7 +2755,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 214,
+      "reductionIndex": 206,
       "phase": "agent.action_argument_decode",
       "phaseCategory": "action_argument_decode",
       "outcomeKind": "Progressed",
@@ -2872,7 +2768,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 215,
+      "reductionIndex": 207,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2885,7 +2781,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 216,
+      "reductionIndex": 208,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2898,7 +2794,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 217,
+      "reductionIndex": 209,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2911,7 +2807,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 218,
+      "reductionIndex": 210,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2924,7 +2820,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 219,
+      "reductionIndex": 211,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -2937,46 +2833,20 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 220,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 2846,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 2798,
-      "largestFrameEnvironmentBytes": 2798,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 221,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 2847,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 2799,
-      "largestFrameEnvironmentBytes": 2799,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 222,
+      "reductionIndex": 212,
       "phase": "agent.tool_dispatch",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
-      "stateByteLength": 2920,
+      "stateByteLength": 2917,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 2872,
-      "largestFrameEnvironmentBytes": 2872,
+      "totalFrameEnvironmentBytes": 2869,
+      "largestFrameEnvironmentBytes": 2869,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 223,
+      "reductionIndex": 213,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -2989,7 +2859,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 224,
+      "reductionIndex": 214,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3002,7 +2872,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 225,
+      "reductionIndex": 215,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3015,7 +2885,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 226,
+      "reductionIndex": 216,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3028,11 +2898,11 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 227,
+      "reductionIndex": 217,
       "phase": "agent.observation_fold",
       "phaseCategory": "pending_repository_request",
       "outcomeKind": "Requested",
-      "stateByteLength": 1550,
+      "stateByteLength": 1549,
       "frameCount": 1,
       "totalFrameEnvironmentBytes": 1501,
       "largestFrameEnvironmentBytes": 1501,
@@ -3041,7 +2911,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 228,
+      "reductionIndex": 218,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3054,7 +2924,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 229,
+      "reductionIndex": 219,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3067,7 +2937,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 230,
+      "reductionIndex": 220,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3080,7 +2950,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 231,
+      "reductionIndex": 221,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3093,7 +2963,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 232,
+      "reductionIndex": 222,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3106,7 +2976,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 233,
+      "reductionIndex": 223,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3119,7 +2989,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 234,
+      "reductionIndex": 224,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3132,7 +3002,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 235,
+      "reductionIndex": 225,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3145,7 +3015,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 236,
+      "reductionIndex": 226,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3158,7 +3028,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 237,
+      "reductionIndex": 227,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3171,7 +3041,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 238,
+      "reductionIndex": 228,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3184,7 +3054,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 239,
+      "reductionIndex": 229,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3197,7 +3067,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 240,
+      "reductionIndex": 230,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3210,7 +3080,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 241,
+      "reductionIndex": 231,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3223,7 +3093,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 242,
+      "reductionIndex": 232,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3236,7 +3106,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 243,
+      "reductionIndex": 233,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3249,7 +3119,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 244,
+      "reductionIndex": 234,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3262,7 +3132,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 245,
+      "reductionIndex": 235,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -3275,7 +3145,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 246,
+      "reductionIndex": 236,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -3288,7 +3158,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 247,
+      "reductionIndex": 237,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -3301,7 +3171,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 248,
+      "reductionIndex": 238,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -3314,7 +3184,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 249,
+      "reductionIndex": 239,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -3327,7 +3197,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 250,
+      "reductionIndex": 240,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -3340,7 +3210,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 251,
+      "reductionIndex": 241,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -3353,7 +3223,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 252,
+      "reductionIndex": 242,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -3366,7 +3236,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 253,
+      "reductionIndex": 243,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -3379,7 +3249,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 254,
+      "reductionIndex": 244,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -3392,7 +3262,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 255,
+      "reductionIndex": 245,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -3405,7 +3275,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 256,
+      "reductionIndex": 246,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -3418,7 +3288,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 257,
+      "reductionIndex": 247,
       "phase": "agent.model_request",
       "phaseCategory": "pending_model_request",
       "outcomeKind": "Requested",
@@ -3431,7 +3301,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 258,
+      "reductionIndex": 248,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -3444,7 +3314,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 259,
+      "reductionIndex": 249,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -3457,7 +3327,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 260,
+      "reductionIndex": 250,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -3470,7 +3340,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 261,
+      "reductionIndex": 251,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -3483,7 +3353,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 262,
+      "reductionIndex": 252,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -3496,7 +3366,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 263,
+      "reductionIndex": 253,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -3509,7 +3379,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 264,
+      "reductionIndex": 254,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -3522,7 +3392,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 265,
+      "reductionIndex": 255,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -3535,7 +3405,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 266,
+      "reductionIndex": 256,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3548,7 +3418,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 267,
+      "reductionIndex": 257,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3561,7 +3431,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 268,
+      "reductionIndex": 258,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3574,7 +3444,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 269,
+      "reductionIndex": 259,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3587,7 +3457,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 270,
+      "reductionIndex": 260,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3600,7 +3470,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 271,
+      "reductionIndex": 261,
       "phase": "agent.action_argument_decode",
       "phaseCategory": "action_argument_decode",
       "outcomeKind": "Progressed",
@@ -3613,7 +3483,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 272,
+      "reductionIndex": 262,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3626,7 +3496,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 273,
+      "reductionIndex": 263,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3639,7 +3509,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 274,
+      "reductionIndex": 264,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3652,7 +3522,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 275,
+      "reductionIndex": 265,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3665,7 +3535,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 276,
+      "reductionIndex": 266,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3678,46 +3548,20 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 277,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 3214,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 3166,
-      "largestFrameEnvironmentBytes": 3166,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 278,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 3215,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 3167,
-      "largestFrameEnvironmentBytes": 3167,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 279,
+      "reductionIndex": 267,
       "phase": "agent.tool_dispatch",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
-      "stateByteLength": 3288,
+      "stateByteLength": 3285,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 3240,
-      "largestFrameEnvironmentBytes": 3240,
+      "totalFrameEnvironmentBytes": 3237,
+      "largestFrameEnvironmentBytes": 3237,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 280,
+      "reductionIndex": 268,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3730,7 +3574,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 281,
+      "reductionIndex": 269,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3743,7 +3587,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 282,
+      "reductionIndex": 270,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3756,7 +3600,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 283,
+      "reductionIndex": 271,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3769,11 +3613,11 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 284,
+      "reductionIndex": 272,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
-      "stateByteLength": 1879,
+      "stateByteLength": 1878,
       "frameCount": 1,
       "totalFrameEnvironmentBytes": 1830,
       "largestFrameEnvironmentBytes": 1830,
@@ -3782,7 +3626,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 285,
+      "reductionIndex": 273,
       "phase": "agent.observation_fold",
       "phaseCategory": "pending_repository_request",
       "outcomeKind": "Requested",
@@ -3795,7 +3639,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 286,
+      "reductionIndex": 274,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3808,7 +3652,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 287,
+      "reductionIndex": 275,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3821,7 +3665,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 288,
+      "reductionIndex": 276,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3834,7 +3678,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 289,
+      "reductionIndex": 277,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3847,7 +3691,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 290,
+      "reductionIndex": 278,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -3860,7 +3704,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 291,
+      "reductionIndex": 279,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3873,7 +3717,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 292,
+      "reductionIndex": 280,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3886,7 +3730,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 293,
+      "reductionIndex": 281,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3899,7 +3743,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 294,
+      "reductionIndex": 282,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3912,7 +3756,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 295,
+      "reductionIndex": 283,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3925,7 +3769,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 296,
+      "reductionIndex": 284,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3938,7 +3782,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 297,
+      "reductionIndex": 285,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3951,7 +3795,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 298,
+      "reductionIndex": 286,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3964,7 +3808,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 299,
+      "reductionIndex": 287,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3977,7 +3821,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 300,
+      "reductionIndex": 288,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -3990,7 +3834,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 301,
+      "reductionIndex": 289,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4003,7 +3847,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 302,
+      "reductionIndex": 290,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4016,7 +3860,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 303,
+      "reductionIndex": 291,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4029,7 +3873,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 304,
+      "reductionIndex": 292,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4042,7 +3886,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 305,
+      "reductionIndex": 293,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4055,7 +3899,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 306,
+      "reductionIndex": 294,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4068,7 +3912,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 307,
+      "reductionIndex": 295,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4081,7 +3925,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 308,
+      "reductionIndex": 296,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4094,7 +3938,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 309,
+      "reductionIndex": 297,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4107,7 +3951,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 310,
+      "reductionIndex": 298,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4120,7 +3964,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 311,
+      "reductionIndex": 299,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4133,7 +3977,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 312,
+      "reductionIndex": 300,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4146,7 +3990,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 313,
+      "reductionIndex": 301,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4159,7 +4003,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 314,
+      "reductionIndex": 302,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4172,7 +4016,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 315,
+      "reductionIndex": 303,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4185,7 +4029,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 316,
+      "reductionIndex": 304,
       "phase": "agent.model_request",
       "phaseCategory": "pending_model_request",
       "outcomeKind": "Requested",
@@ -4198,7 +4042,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 317,
+      "reductionIndex": 305,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -4211,7 +4055,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 318,
+      "reductionIndex": 306,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -4224,7 +4068,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 319,
+      "reductionIndex": 307,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -4237,7 +4081,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 320,
+      "reductionIndex": 308,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -4250,7 +4094,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 321,
+      "reductionIndex": 309,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -4263,7 +4107,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 322,
+      "reductionIndex": 310,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -4276,7 +4120,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 323,
+      "reductionIndex": 311,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -4289,7 +4133,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 324,
+      "reductionIndex": 312,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -4302,7 +4146,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 325,
+      "reductionIndex": 313,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4315,7 +4159,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 326,
+      "reductionIndex": 314,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4328,7 +4172,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 327,
+      "reductionIndex": 315,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4341,7 +4185,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 328,
+      "reductionIndex": 316,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4354,7 +4198,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 329,
+      "reductionIndex": 317,
       "phase": "agent.action_argument_decode",
       "phaseCategory": "action_argument_decode",
       "outcomeKind": "Progressed",
@@ -4367,7 +4211,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 330,
+      "reductionIndex": 318,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4380,7 +4224,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 331,
+      "reductionIndex": 319,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4393,7 +4237,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 332,
+      "reductionIndex": 320,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4406,7 +4250,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 333,
+      "reductionIndex": 321,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4419,7 +4263,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 334,
+      "reductionIndex": 322,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4432,46 +4276,20 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 335,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 3278,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 3230,
-      "largestFrameEnvironmentBytes": 3230,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 336,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 3279,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 3231,
-      "largestFrameEnvironmentBytes": 3231,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 337,
+      "reductionIndex": 323,
       "phase": "agent.tool_dispatch",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
-      "stateByteLength": 3352,
+      "stateByteLength": 3349,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 3304,
-      "largestFrameEnvironmentBytes": 3304,
+      "totalFrameEnvironmentBytes": 3301,
+      "largestFrameEnvironmentBytes": 3301,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 338,
+      "reductionIndex": 324,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -4484,7 +4302,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 339,
+      "reductionIndex": 325,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -4497,7 +4315,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 340,
+      "reductionIndex": 326,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -4510,7 +4328,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 341,
+      "reductionIndex": 327,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -4523,11 +4341,11 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 342,
+      "reductionIndex": 328,
       "phase": "agent.observation_fold",
       "phaseCategory": "pending_repository_request",
       "outcomeKind": "Requested",
-      "stateByteLength": 1766,
+      "stateByteLength": 1765,
       "frameCount": 1,
       "totalFrameEnvironmentBytes": 1717,
       "largestFrameEnvironmentBytes": 1717,
@@ -4536,7 +4354,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 343,
+      "reductionIndex": 329,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -4549,7 +4367,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 344,
+      "reductionIndex": 330,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -4562,7 +4380,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 345,
+      "reductionIndex": 331,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -4575,7 +4393,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 346,
+      "reductionIndex": 332,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -4588,7 +4406,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 347,
+      "reductionIndex": 333,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -4601,7 +4419,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 348,
+      "reductionIndex": 334,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4614,7 +4432,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 349,
+      "reductionIndex": 335,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4627,7 +4445,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 350,
+      "reductionIndex": 336,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4640,7 +4458,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 351,
+      "reductionIndex": 337,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4653,7 +4471,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 352,
+      "reductionIndex": 338,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4666,7 +4484,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 353,
+      "reductionIndex": 339,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4679,7 +4497,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 354,
+      "reductionIndex": 340,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4692,7 +4510,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 355,
+      "reductionIndex": 341,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4705,7 +4523,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 356,
+      "reductionIndex": 342,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4718,7 +4536,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 357,
+      "reductionIndex": 343,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4731,7 +4549,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 358,
+      "reductionIndex": 344,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4744,7 +4562,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 359,
+      "reductionIndex": 345,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4757,7 +4575,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 360,
+      "reductionIndex": 346,
       "phase": "agent.prompt_render",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -4770,7 +4588,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 361,
+      "reductionIndex": 347,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4783,7 +4601,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 362,
+      "reductionIndex": 348,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4796,7 +4614,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 363,
+      "reductionIndex": 349,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4809,7 +4627,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 364,
+      "reductionIndex": 350,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4822,7 +4640,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 365,
+      "reductionIndex": 351,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4835,7 +4653,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 366,
+      "reductionIndex": 352,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4848,7 +4666,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 367,
+      "reductionIndex": 353,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4861,7 +4679,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 368,
+      "reductionIndex": 354,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4874,7 +4692,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 369,
+      "reductionIndex": 355,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4887,7 +4705,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 370,
+      "reductionIndex": 356,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4900,7 +4718,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 371,
+      "reductionIndex": 357,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4913,7 +4731,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 372,
+      "reductionIndex": 358,
       "phase": "agent.model_request",
       "phaseCategory": "before_model_request",
       "outcomeKind": "Progressed",
@@ -4926,7 +4744,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 373,
+      "reductionIndex": 359,
       "phase": "agent.model_request",
       "phaseCategory": "pending_model_request",
       "outcomeKind": "Requested",
@@ -4939,7 +4757,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 374,
+      "reductionIndex": 360,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -4952,7 +4770,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 375,
+      "reductionIndex": 361,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -4965,7 +4783,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 376,
+      "reductionIndex": 362,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -4978,7 +4796,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 377,
+      "reductionIndex": 363,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -4991,7 +4809,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 378,
+      "reductionIndex": 364,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -5004,7 +4822,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 379,
+      "reductionIndex": 365,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -5017,7 +4835,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 380,
+      "reductionIndex": 366,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -5030,7 +4848,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 381,
+      "reductionIndex": 367,
       "phase": "agent.model_resume",
       "phaseCategory": "model_resume",
       "outcomeKind": "Progressed",
@@ -5043,7 +4861,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 382,
+      "reductionIndex": 368,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -5056,7 +4874,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 383,
+      "reductionIndex": 369,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -5069,7 +4887,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 384,
+      "reductionIndex": 370,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -5082,7 +4900,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 385,
+      "reductionIndex": 371,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -5095,7 +4913,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 386,
+      "reductionIndex": 372,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -5108,7 +4926,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 387,
+      "reductionIndex": 373,
       "phase": "agent.action_name_match",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -5121,7 +4939,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 388,
+      "reductionIndex": 374,
       "phase": "agent.action_argument_decode",
       "phaseCategory": "action_argument_decode",
       "outcomeKind": "Progressed",
@@ -5134,7 +4952,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 389,
+      "reductionIndex": 375,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -5147,7 +4965,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 390,
+      "reductionIndex": 376,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -5160,7 +4978,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 391,
+      "reductionIndex": 377,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -5173,7 +4991,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 392,
+      "reductionIndex": 378,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -5186,7 +5004,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 393,
+      "reductionIndex": 379,
       "phase": "agent.action_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -5199,72 +5017,20 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 394,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 5012,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 4964,
-      "largestFrameEnvironmentBytes": 4964,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 395,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 5339,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 5291,
-      "largestFrameEnvironmentBytes": 5291,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 396,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 5547,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 5499,
-      "largestFrameEnvironmentBytes": 5499,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 397,
-      "phase": "agent.action_admission",
-      "phaseCategory": null,
-      "outcomeKind": "Progressed",
-      "stateByteLength": 3425,
-      "frameCount": 1,
-      "totalFrameEnvironmentBytes": 3377,
-      "largestFrameEnvironmentBytes": 3377,
-      "pendingRequestByteLength": 0,
-      "identicalEnvironmentBlobCopies": 0,
-      "duplicatedEnvironmentBytes": 0
-    },
-    {
-      "reductionIndex": 398,
+      "reductionIndex": 380,
       "phase": "agent.tool_dispatch",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
-      "stateByteLength": 3498,
+      "stateByteLength": 3495,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 3450,
-      "largestFrameEnvironmentBytes": 3450,
+      "totalFrameEnvironmentBytes": 3447,
+      "largestFrameEnvironmentBytes": 3447,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 399,
+      "reductionIndex": 381,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -5277,7 +5043,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 400,
+      "reductionIndex": 382,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -5290,7 +5056,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 401,
+      "reductionIndex": 383,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -5303,7 +5069,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 402,
+      "reductionIndex": 384,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -5316,7 +5082,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 403,
+      "reductionIndex": 385,
       "phase": "agent.observation_fold",
       "phaseCategory": "observation_fold",
       "outcomeKind": "Progressed",
@@ -5329,7 +5095,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 404,
+      "reductionIndex": 386,
       "phase": "agent.final_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -5342,7 +5108,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 405,
+      "reductionIndex": 387,
       "phase": "agent.final_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -5355,7 +5121,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 406,
+      "reductionIndex": 388,
       "phase": "agent.final_admission",
       "phaseCategory": null,
       "outcomeKind": "Progressed",
@@ -5368,7 +5134,7 @@
       "duplicatedEnvironmentBytes": 0
     },
     {
-      "reductionIndex": 407,
+      "reductionIndex": 389,
       "phase": "agent.completion",
       "phaseCategory": "completion",
       "outcomeKind": "Progressed",

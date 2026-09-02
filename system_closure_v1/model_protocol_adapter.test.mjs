@@ -50,6 +50,16 @@ test("zero offered tools use a non-required provider policy", () => {
   assert.equal(request.parallel_tool_calls, false);
 });
 
+test("provider request preserves 64-bit schema bound lexemes", () => {
+  const maximum = "18446744073709551615";
+  const schema = `{"type":"object","properties":{"value":{"type":"integer","maximum":${maximum}}},"required":["value"],"additionalProperties":false}`;
+  const request = encodeOpenAIResponsesRequest(
+    decodeModelInvocation(invocationBytes(schema)),
+  ).toString("utf8");
+  assert(request.includes(`"maximum":${maximum}`));
+  assert(!request.includes('"maximum":18446744073709552000'));
+});
+
 test("normalization preserves every call and ignores irrelevant envelope size", () => {
   const tools = decodeModelInvocation(invocationBytes()).tools;
   const output = [
@@ -197,8 +207,8 @@ test("generic adapter source contains no repository-repair configuration", async
   }
 });
 
-function invocationBytes() {
-  const schema = Buffer.from('{"type":"object","properties":{"value":{"type":"integer"}},"required":["value"],"additionalProperties":false}');
+function invocationBytes(schemaText = '{"type":"object","properties":{"value":{"type":"integer"}},"required":["value"],"additionalProperties":false}') {
+  const schema = Buffer.from(schemaText);
   return Buffer.concat([
     text("agent.model.protocol.openai-responses-v2"),
     text("fixture-model"),

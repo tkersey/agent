@@ -33,6 +33,10 @@ assert.equal(proof.httpBodyEqualityCount, proof.modelRequests,
   "fixture proof did not observe every provider request body");
 assert(Number.isSafeInteger(proof.processTransfers) && proof.processTransfers >= 0,
   "fixture proof process transfer count is invalid");
+assert(Number.isSafeInteger(proof.peakStateBytes) && proof.peakStateBytes > 0);
+assert(Number.isSafeInteger(proof.p95StateBytes) && proof.p95StateBytes > 0);
+assert(proof.p95StateBytes <= proof.peakStateBytes,
+  "fixture proof p95 State bytes exceeds its maximum");
 
 const files = new Map();
 files.set("system.bpi1", image);
@@ -124,7 +128,6 @@ const receipt = {
       admissionProof.dangerousRepositoryEffects,
     successfulPrematureCompletions:
       admissionProof.successfulPrematureCompletions,
-    openCycleProof: "passed",
     sourceAbsenceRuntimePath: "passed",
   },
   measurements: {

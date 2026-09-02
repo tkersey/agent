@@ -72,9 +72,9 @@ fn representation(comptime Action: type) @TypeOf(.{
     };
 }
 
-fn NoToolSystem(comptime DynamicGoal: type) type {
+fn NoToolProgram(comptime DynamicGoal: type) type {
     const Action = union(enum) {};
-    return agent.system(.{
+    const source = .{
         .name = "agent-economy-scaling-no-tools",
         .version = "1.0.0",
         .Goal = DynamicGoal,
@@ -93,7 +93,11 @@ fn NoToolSystem(comptime DynamicGoal: type) type {
         .epistemics = agent.epistemics.systemStateless(.{}),
         .failures = failures,
         .representation = representation(Action),
-    });
+    };
+    return boundary.program(
+        "agent-economy-scaling-no-tools:tooling-only",
+        agent.ReactBody(source),
+    );
 }
 
 fn OneToolSystem(
@@ -216,7 +220,7 @@ fn SixToolSystem() type {
     return agent.system(six_source);
 }
 
-const SixToolAblatedBody = agent.economy_tooling.ReactBodyActionDecodeAblation(
+const SixToolAblatedBody = agent.ReactBodyActionDecodeAblation(
     six_source,
 );
 const SixToolAblatedProgram = boundary.program(
@@ -252,9 +256,9 @@ pub fn main(init: std.process.Init) !void {
     } else if (std.mem.eql(u8, args[1], "tool-extra")) {
         try writeImage(TwoToolSystem(), &stdout.interface);
     } else if (std.mem.eql(u8, args[1], "model-fixed-no-tools")) {
-        try writeImage(NoToolSystem(boundary.Text(1)), &stdout.interface);
+        try writeProgramImage(NoToolProgram(boundary.Text(1)), &stdout.interface);
     } else if (std.mem.eql(u8, args[1], "model-dynamic-goal")) {
-        try writeImage(NoToolSystem(Goal), &stdout.interface);
+        try writeProgramImage(NoToolProgram(Goal), &stdout.interface);
     } else if (std.mem.eql(u8, args[1], "six-tools-no-decode")) {
         try writeProgramImage(SixToolAblatedProgram, &stdout.interface);
     } else if (std.mem.eql(u8, args[1], "six-tools-decode")) {

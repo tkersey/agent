@@ -5,7 +5,7 @@ const repository = @import("repository_system")
 const std = @import("std");
 const artifacts = @import("emit_repository_system_v1.zig");
 
-const AblatedBody = agent.economy_tooling.ReactBodyActionDecodeAblation(
+const AblatedBody = agent.ReactBodyActionDecodeAblation(
     repository.Source,
 );
 const AblatedProgram = boundary.program(

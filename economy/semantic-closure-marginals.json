@@ -2,17 +2,17 @@
   "format": "agent-system-economy-marginals/v1",
   "boundaryCommit": "bc43989e7ea1371649cd85b219f69b86e1c8ccf9",
   "images": {
-    "prompt-1k": 14381,
-    "prompt-8k": 21581,
-    "prompt-16k": 29773,
-    "skill-base": 13378,
-    "skill-4k": 17887,
-    "tool-base": 13378,
-    "tool-extra": 16794,
-    "model-fixed-no-tools": 8507,
-    "model-dynamic-goal": 8507,
-    "six-tools-no-decode": 28445,
-    "six-tools-decode": 30292
+    "prompt-1k": 14629,
+    "prompt-8k": 21829,
+    "prompt-16k": 30021,
+    "skill-base": 13626,
+    "skill-4k": 18135,
+    "tool-base": 13626,
+    "tool-extra": 17042,
+    "model-fixed-no-tools": 8755,
+    "model-dynamic-goal": 8755,
+    "six-tools-no-decode": 28693,
+    "six-tools-decode": 30540
   },
   "deltas": {
     "prompt1To8": 7200,

@@ -11,10 +11,10 @@ fn assertEffectFree(
     before_suspensions: anytype,
     before_returns: anytype,
 ) void {
-    if (!std.meta.eql(flow.suspensionCount(), before_suspensions)) {
+    if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
         @compileError(label ++ " must not introduce a residual effect");
     }
-    if (!std.meta.eql(flow.returnHandoffCount(), before_returns)) {
+    if (!std.meta.eql(flow.returnSnapshot(), before_returns)) {
         @compileError(label ++ " must not return the enclosing system");
     }
 }
@@ -78,8 +78,8 @@ fn activeSkills(
 ) [source.skills.len]flow_module.Value(bool) {
     var result: [source.skills.len]flow_module.Value(bool) = undefined;
     inline for (source.skills, 0..) |Skill, index| {
-        const before_suspensions = flow.suspensionCount();
-        const before_returns = flow.returnHandoffCount();
+        const before_suspensions = flow.suspensionSnapshot();
+        const before_returns = flow.returnSnapshot();
         result[index] = if (Skill.activation == .always)
             flow.constant(bool, context.true_index)
         else
@@ -615,8 +615,8 @@ fn ReactBodyMode(
     flow.setPhase(.agent_initialization);
     const goal = flow.begin(source.Goal);
     flow.setPhase(.agent_initialization);
-    const before_initial_suspensions = flow.suspensionCount();
-    const before_initial_returns = flow.returnHandoffCount();
+    const before_initial_suspensions = flow.suspensionSnapshot();
+    const before_initial_returns = flow.returnSnapshot();
     const memory = Epistemics.emitInitial(source, &flow, goal, Context);
     assertEffectFree("agent epistemics emitInitial", &flow, before_initial_suspensions, before_initial_returns);
     const initial_state = flow.productConstruct(RuntimeState, .{ goal, memory });
@@ -626,8 +626,8 @@ fn ReactBodyMode(
     const current_goal = flow.productExtract(0, runtime_state);
     const current_memory = flow.productExtract(1, runtime_state);
     flow.setPhase(.agent_memory_projection);
-    const before_project_suspensions = flow.suspensionCount();
-    const before_project_returns = flow.returnHandoffCount();
+    const before_project_suspensions = flow.suspensionSnapshot();
+    const before_project_returns = flow.returnSnapshot();
     const view: flow_module.Value(DecisionView) = Epistemics.emitProject(
         source,
         &flow,
@@ -635,8 +635,8 @@ fn ReactBodyMode(
     );
     assertEffectFree("agent epistemics emitProject", &flow, before_project_suspensions, before_project_returns);
     flow.setPhase(.agent_prompt_render);
-    const before_prompt_suspensions = flow.suspensionCount();
-    const before_prompt_returns = flow.returnHandoffCount();
+    const before_prompt_suspensions = flow.suspensionSnapshot();
+    const before_prompt_returns = flow.returnSnapshot();
     const prompt = Epistemics.emitPrompt(source, &flow, current_goal, view, Context);
     assertEffectFree("agent epistemics emitPrompt", &flow, before_prompt_suspensions, before_prompt_returns);
     flow.setPhase(.agent_skill_activation);
@@ -644,8 +644,8 @@ fn ReactBodyMode(
     flow.setPhase(.agent_tool_selection);
     const offered_actions = offeredActions(source, &flow, active_skills, Context);
     flow.setPhase(.agent_model_request);
-    const before_model_suspensions = flow.suspensionCount();
-    const before_model_returns = flow.returnHandoffCount();
+    const before_model_suspensions = flow.suspensionSnapshot();
+    const before_model_returns = flow.returnSnapshot();
     const model_index = Epistemics.emitModelIndex(
         source,
         &flow,
@@ -740,17 +740,29 @@ fn ReactBodyMode(
     _ = flow.enter(transport_failure);
     flow.failValue(flow.constant(Context.Failure, Context.transport_failure_index));
     const provider_value = flow.enter(provider_or_unsupported)[0];
-    const provider_failure = flow.block(.terminal_handoff, .{});
+    const provider_failure = flow.block(.terminal_handoff, .{Profile.ModelResultType});
     const unsupported_failure = flow.block(.terminal_handoff, .{});
     flow.branch(
         flow.sumTagIs(3, provider_value),
         provider_failure,
-        .{},
+        .{provider_value},
         unsupported_failure,
         .{},
     );
-    _ = flow.enter(provider_failure);
-    flow.failValue(flow.constant(Context.Failure, Context.response_error_failure_index));
+    const provider_failure_value = flow.enter(provider_failure)[0];
+    const provider_failure_payload = flow.sumExtractOrFail(
+        3,
+        provider_failure_value,
+        flow.constant(Context.Failure, Context.malformed_failure_index),
+    );
+    flow.failValue(flow.select(
+        flow.integerEqual(
+            flow.enumToU32(flow.productExtract(0, provider_failure_payload)),
+            flow.constant(u32, Context.zero_u32_index),
+        ),
+        flow.constant(Context.Failure, Context.http_failure_index),
+        flow.constant(Context.Failure, Context.response_error_failure_index),
+    ));
     _ = flow.enter(unsupported_failure);
     flow.failValue(flow.constant(Context.Failure, Context.unsupported_failure_index));
     const response_values = flow.enter(response_path);
@@ -803,8 +815,8 @@ fn ReactBodyMode(
             resumed_offered_actions,
             Context,
         );
-        const before_policy_suspensions = flow.suspensionCount();
-        const before_policy_returns = flow.returnHandoffCount();
+        const before_policy_suspensions = flow.suspensionSnapshot();
+        const before_policy_returns = flow.returnSnapshot();
         const policy_allowed = Epistemics.emitActionAllowed(
             source,
             &flow,
@@ -871,8 +883,8 @@ fn ReactBodyMode(
                         performed.carried[0]
                     else
                         flow.productExtract(1, performed.carried[0]);
-                    const before_observe_suspensions = flow.suspensionCount();
-                    const before_observe_returns = flow.returnHandoffCount();
+                    const before_observe_suspensions = flow.suspensionSnapshot();
+                    const before_observe_returns = flow.returnSnapshot();
                     const next_memory = Epistemics.emitObserve(
                         source,
                         &flow,
@@ -893,8 +905,8 @@ fn ReactBodyMode(
                 },
                 .local => {
                     flow.setPhase(.agent_tool_dispatch);
-                    const before_local_suspensions = flow.suspensionCount();
-                    const before_local_returns = flow.returnHandoffCount();
+                    const before_local_suspensions = flow.suspensionSnapshot();
+                    const before_local_returns = flow.returnSnapshot();
                     const local_payload = Descriptor.Local.emit(
                         &flow,
                         payload,
@@ -911,8 +923,8 @@ fn ReactBodyMode(
                         values[1]
                     else
                         flow.productExtract(1, values[1]);
-                    const before_observe_suspensions = flow.suspensionCount();
-                    const before_observe_returns = flow.returnHandoffCount();
+                    const before_observe_suspensions = flow.suspensionSnapshot();
+                    const before_observe_returns = flow.returnSnapshot();
                     const next_memory = Epistemics.emitObserve(
                         source,
                         &flow,
@@ -940,8 +952,8 @@ fn ReactBodyMode(
                             values[1]
                         else
                             flow.productExtract(1, values[1]);
-                        const before_final_suspensions = flow.suspensionCount();
-                        const before_final_returns = flow.returnHandoffCount();
+                        const before_final_suspensions = flow.suspensionSnapshot();
+                        const before_final_returns = flow.returnSnapshot();
                         const final_allowed = Epistemics.emitFinalAllowed(
                             source,
                             &flow,

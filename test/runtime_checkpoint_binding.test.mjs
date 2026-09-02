@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { appendFile, cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { appendFile, cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -36,6 +36,18 @@ try {
     "utf8",
   ));
   assert.match(checkpoint.workspaceSha256, /^[0-9a-f]{64}$/);
+  assert.match(checkpoint.kernelSha256, /^[0-9a-f]{64}$/);
+  assert.equal(checkpoint.worldProductionSourceSha256,
+    "8450ef58c83283fae6863b53728a7a8cfc28c61897ff6f077b076c84e1ab8b1e");
+  const checkpointPath = join(checkpointWork, "checkpoint.json");
+  await writeFile(checkpointPath, `${JSON.stringify({
+    ...checkpoint,
+    kernelSha256: "0".repeat(64),
+  })}\n`);
+  const changedKernel = run(worldRoot, checkpointWork);
+  assert.notEqual(changedKernel.status, 0);
+  assert.match(changedKernel.stderr, /checkpoint Boundary kernel changed/);
+  await writeFile(checkpointPath, `${JSON.stringify(checkpoint)}\n`);
   await appendFile(
     join(checkpointWork, "workspace/test/range.test.mjs"),
     "\n// unauthorized post-checkpoint mutation\n",

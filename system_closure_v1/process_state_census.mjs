@@ -15,6 +15,11 @@ export class ProcessStateCensus {
     this.sourceMap = sourceMap;
     assert.equal(sourceMap?.format, "agent-bpi1-source-map/v1");
     assert.equal(sourceMap.imageSha256, sha256(this.image));
+    this.programTransitionDigest = Buffer.from(
+      sourceMap.programTransitionDigest,
+      "hex",
+    );
+    assert.equal(this.programTransitionDigest.byteLength, 32);
     this.constructorSegments = decodeConstructorSegments(this.image);
     this.segments = new Map(sourceMap.segments.map((segment) => [segment.segmentId, segment]));
     this.rows = [];
@@ -36,7 +41,10 @@ export class ProcessStateCensus {
     }
     if (outcome.state === undefined) return;
 
-    const state = decodeProcessState(outcome.state);
+    const state = decodeProcessState(
+      outcome.state,
+      this.programTransitionDigest,
+    );
     const top = state.frames.at(-1);
     const segmentId = this.constructorSegments.get(top.constructorId);
     assert(segmentId !== undefined, "State constructor is absent from BPI1");
@@ -121,12 +129,19 @@ export class ProcessStateCensus {
   }
 }
 
-export function decodeProcessState(input) {
+export function decodeProcessState(input, expectedProgramTransitionDigest = null) {
   const bytes = Buffer.from(input);
   assert(bytes.byteLength >= STATE_HEADER_BYTES + 1, "PST1 is truncated");
   assert(bytes.subarray(0, 8).equals(STATE_MAGIC), "PST1 magic is invalid");
   assert.equal(bytes.readUInt16LE(8), 1, "PST1 version is unsupported");
   assert.equal(bytes.readUInt16LE(10), 0, "PST1 flags are unsupported");
+  const programTransitionDigest = Buffer.from(bytes.subarray(12, 44));
+  if (expectedProgramTransitionDigest !== null) {
+    assert(
+      programTransitionDigest.equals(Buffer.from(expectedProgramTransitionDigest)),
+      "PST1 program-transition digest differs from the source map",
+    );
+  }
   const cursor = { value: STATE_HEADER_BYTES };
   const frameCount = readNatural(bytes, cursor);
   assert(frameCount > 0, "PST1 must contain a frame");
@@ -143,7 +158,7 @@ export function decodeProcessState(input) {
     frames.push(Object.freeze({ constructorId, environment }));
   }
   assert.equal(cursor.value, bytes.byteLength, "PST1 has trailing bytes");
-  return Object.freeze({ bytes, frames });
+  return Object.freeze({ bytes, programTransitionDigest, frames });
 }
 
 function decodeConstructorSegments(image) {

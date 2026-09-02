@@ -3,21 +3,21 @@
   "boundaryCommit": "bc43989e7ea1371649cd85b219f69b86e1c8ccf9",
   "rows": {
     "A": {"system": "prior landed Agent Interpretation image", "imageByteLength": 23431, "reductions": 96},
-    "B": {"system": "semantic model effect, fixed message, no tools", "imageByteLength": 8507},
-    "C": {"system": "B with bounded Text Goal", "imageByteLength": 8507},
-    "D": {"system": "one-tool system with one 4 KiB always-active skill", "imageByteLength": 17887},
-    "E": {"system": "one simple final tool", "imageByteLength": 13378},
-    "F": {"system": "six simple actions, Action verification ablated", "imageByteLength": 28445},
-    "G": {"system": "F with strict typed Action verification", "imageByteLength": 30292},
-    "H": {"system": "repository Memory and admission, Action verification ablated", "imageByteLength": 93858},
-    "I": {"system": "full corrected repository-repair system", "imageByteLength": 95641, "gzip9ByteLength": 25033, "reductions": 408, "peakStateBytes": 17871},
+    "B": {"system": "semantic model effect, fixed message, no tools", "imageByteLength": 8755},
+    "C": {"system": "B with bounded Text Goal", "imageByteLength": 8755},
+    "D": {"system": "one-tool system with one 4 KiB always-active skill", "imageByteLength": 18135},
+    "E": {"system": "one simple final tool", "imageByteLength": 13626},
+    "F": {"system": "six simple actions, Action verification ablated", "imageByteLength": 28693},
+    "G": {"system": "F with strict typed Action verification", "imageByteLength": 30540},
+    "H": {"system": "repository Memory and admission, Action verification ablated", "imageByteLength": 86768},
+    "I": {"system": "full corrected repository-repair system", "imageByteLength": 88551, "gzip9ByteLength": 24311, "reductions": 390, "peakStateBytes": 17871},
     "J": {"system": "provider-wire-closure baseline", "imageByteLength": 253427, "gzip9ByteLength": 84556, "reductions": 20133}
   },
   "dominantTerms": {
-    "repositoryMemoryAndAdmissionOverSixToolDecoderBytes": 63566,
+    "repositoryMemoryAndAdmissionOverSixToolDecoderBytes": 56228,
     "strictRepositoryActionVerificationBytes": 1783,
-    "providerWireRemovalBytes": 157786,
-    "providerWireRemovalReductions": 19725
+    "providerWireRemovalBytes": 164876,
+    "providerWireRemovalReductions": 19743
   },
   "detailReceipts": {
     "baselineImage": "wire-closure-baseline-image.json",

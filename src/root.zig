@@ -12,7 +12,6 @@ pub const prompt = @import("prompt.zig");
 pub const skill = @import("skill.zig").skill;
 /// Typed action-descriptor constructors.
 pub const action = @import("action.zig");
-pub const action_decode = @import("action_decode.zig");
 pub const json = @import("json.zig");
 /// Explicit deterministic Memory, observation-fold, and DecisionView strategies.
 pub const epistemics = @import("epistemics_v3.zig");
@@ -22,21 +21,10 @@ pub const Flow = @import("flow.zig").Flow;
 pub const Value = @import("flow.zig").Value;
 pub const FlowLimits = @import("flow.zig").Limits;
 pub const FlowPhase = @import("flow.zig").Phase;
-pub const request = @import("request.zig");
-pub const response = @import("response.zig");
-pub const staged_json = @import("staged_json.zig");
-pub const openai_response = @import("openai_response.zig");
-pub const openai_profile = @import("openai_profile.zig");
 /// Reusable compile-time Agent 3 runtime strategies.
 pub const strategy = @import("strategy_v3.zig");
 /// Versioned Agent-owned model transport contracts.
 pub const protocol = @import("protocol.zig");
-/// Nonsemantic compiler measurements. These functions are not admitted by
-/// `agent.system` and cannot produce a runnable system through the public API.
-pub const economy_tooling = struct {
-    pub const ReactBodyActionDecodeAblation =
-        @import("system_compiler.zig").ReactBodyActionDecodeAblation;
-};
 
 comptime {
     if (!@hasDecl(boundary, "program") or

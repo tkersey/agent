@@ -159,46 +159,48 @@ export function decodeModelInvocation(input) {
 }
 
 export function encodeOpenAIResponsesRequest(invocation) {
-  const body = {
-    model: invocation.model,
-    input: invocation.messages.map((message) => ({
-      role: message.role,
-      content: message.content,
-    })),
-  };
+  const fields = [];
+  const field = (name, value) => fields.push(
+    `${JSON.stringify(name)}:${JSON.stringify(value)}`,
+  );
+  field("model", invocation.model);
+  field("input", invocation.messages.map((message) => ({
+    role: message.role,
+    content: message.content,
+  })));
   if (invocation.parameters.maxOutputTokens !== null) {
-    body.max_output_tokens = invocation.parameters.maxOutputTokens;
+    field("max_output_tokens", invocation.parameters.maxOutputTokens);
   }
   if (invocation.parameters.temperature !== null) {
     const temperature = Number(invocation.parameters.temperature);
     assert(Number.isFinite(temperature));
-    body.temperature = temperature;
+    field("temperature", temperature);
   }
   if (invocation.parameters.reasoning !== null) {
-    body.reasoning = Object.fromEntries(Object.entries({
+    field("reasoning", Object.fromEntries(Object.entries({
       effort: invocation.parameters.reasoning.effort,
       summary: invocation.parameters.reasoning.summary,
-    }).filter(([, value]) => value !== null));
+    }).filter(([, value]) => value !== null)));
   }
-  body.tools = invocation.tools.map((tool) => {
+  const tools = invocation.tools.map((tool) => {
     const schemaText = fatalUtf8(tool.inputSchemaJson);
     const parameters = parseJsonStrict(schemaText);
     assert(parameters !== null && typeof parameters === "object" && !Array.isArray(parameters));
-    return {
+    const prefix = JSON.stringify({
       type: "function",
       name: tool.name,
       description: tool.description,
-      parameters,
-      strict: tool.strict,
-    };
+    }).slice(0, -1);
+    return `${prefix},"parameters":${schemaText},"strict":${JSON.stringify(tool.strict)}}`;
   });
-  body.tool_choice = invocation.selection.minimumCalls > 0 ? "required" : "auto";
-  body.parallel_tool_calls = invocation.selection.parallelCalls;
-  body.store = invocation.responsePolicy.store;
-  body.stream = invocation.responsePolicy.stream;
-  body.background = invocation.responsePolicy.background;
-  body.truncation = invocation.responsePolicy.truncation;
-  return Buffer.from(JSON.stringify(body));
+  fields.push(`"tools":[${tools.join(",")}]`);
+  field("tool_choice", invocation.selection.minimumCalls > 0 ? "required" : "auto");
+  field("parallel_tool_calls", invocation.selection.parallelCalls);
+  field("store", invocation.responsePolicy.store);
+  field("stream", invocation.responsePolicy.stream);
+  field("background", invocation.responsePolicy.background);
+  field("truncation", invocation.responsePolicy.truncation);
+  return Buffer.from(`{${fields.join(",")}}`);
 }
 
 export function normalizeOpenAIResponses(body, limits, tools = []) {

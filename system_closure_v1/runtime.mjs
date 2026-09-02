@@ -85,6 +85,13 @@ if (checkpoint !== null) {
   assert.equal(checkpoint.mode, options.mode, "checkpoint execution mode changed");
   assert.equal(checkpoint.authorityIdentity, authorityIdentity, "checkpoint model authority changed");
   assert.equal(checkpoint.runtimeInputSha256, runtimeInputSha256, "checkpoint runtime inputs changed");
+  assert.equal(checkpoint.kernelSha256, host.sha256, "checkpoint Boundary kernel changed");
+  assert.equal(checkpoint.kernelByteLength, host.byteLength, "checkpoint Boundary kernel length changed");
+  assert.equal(
+    checkpoint.worldProductionSourceSha256,
+    worldProductionSourceSha256,
+    "checkpoint World production source changed",
+  );
   assert.equal(
     checkpoint.workspaceSha256,
     await digestWorkspace(workspaceRoot),
@@ -210,6 +217,9 @@ if (terminal === undefined) {
     mode: options.mode,
     authorityIdentity,
     runtimeInputSha256,
+    kernelSha256: host.sha256,
+    kernelByteLength: host.byteLength,
+    worldProductionSourceSha256,
     workspaceSha256: await digestWorkspace(workspaceRoot),
     initialTree,
     state: Buffer.from(instance.state).toString("base64"),

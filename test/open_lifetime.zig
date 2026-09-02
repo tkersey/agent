@@ -419,6 +419,13 @@ test "normalized model failures cannot emit a local action" {
         .response_error,
     );
     try expectModelFailure(
+        .{ .provider_failure = .{
+            .kind = .http_status,
+            .http_status = 429,
+        } },
+        .http,
+    );
+    try expectModelFailure(
         .{ .unsupported_response = .malformed_json },
         .unsupported,
     );

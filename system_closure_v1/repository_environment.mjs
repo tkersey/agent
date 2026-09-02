@@ -62,6 +62,9 @@ export async function createRepositoryEnvironment(workspaceRoot, restored = {}) 
           encoding: "utf8",
           env: { PATH: process.env.PATH ?? "" },
         });
+        if (result.error !== undefined) throw result.error;
+        assert.equal(result.signal, null, "repository test process was killed");
+        assert(Number.isInteger(result.status), "repository test process has no exit status");
         const passed = result.status === 0;
         if (!mutationApplied) {
           assert.equal(passed, false);

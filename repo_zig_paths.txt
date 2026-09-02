@@ -4,6 +4,7 @@ actuality/emit_decision_contract_binary.zig
 actuality/emit_decision_contract_digest.zig
 actuality/emit_first_decision_request.zig
 actuality/emit_initial_args.zig
+actuality/emit_repository_system_ablation_v1.zig
 actuality/emit_repository_system_v1.zig
 actuality/repository_repair_definition.zig
 actuality/repository_repair_epistemics.zig
@@ -26,6 +27,7 @@ examples/research_agent.zig
 interpretation/emit_repository_repair_artifact.zig
 src/action.zig
 src/action_decode.zig
+src/action_profile.zig
 src/boundary_package.zig
 src/budget.zig
 src/compiler.zig
@@ -39,6 +41,7 @@ src/identity.zig
 src/json.zig
 src/manifest.zig
 src/model.zig
+src/model_effect.zig
 src/openai_profile.zig
 src/openai_response.zig
 src/prompt.zig

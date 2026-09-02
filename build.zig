@@ -170,6 +170,31 @@ pub fn build(b: *std.Build) void {
         outputs[index] = run.captureStdOut(.{ .basename = mode[1] });
         emit_repository.dependOn(&run.step);
     }
+    const ablation_emitter_module = b.createModule(.{
+        .root_source_file = b.path("actuality/emit_repository_system_ablation_v1.zig"),
+        .target = b.graph.host,
+        .optimize = .Debug,
+    });
+    ablation_emitter_module.addImport("agent", agent_module);
+    ablation_emitter_module.addImport("boundary", boundary_module);
+    ablation_emitter_module.addImport("repository_system", repository_module);
+    const ablation_emitter = b.addExecutable(.{
+        .name = "emit-agent-repository-system-ablation-v1",
+        .root_module = ablation_emitter_module,
+    });
+    const emit_repository_ablation = b.step(
+        "emit-agent-repository-system-ablation-v1",
+        "Emit the repository system with Action argument decoding ablated",
+    );
+    inline for (.{
+        .{ "bpi1", "repository-system-no-action-decode.bpi1" },
+        .{ "source-map", "repository-system-no-action-decode.source-map.json" },
+    }) |mode| {
+        const run_ablation_emitter = b.addRunArtifact(ablation_emitter);
+        run_ablation_emitter.addArg(mode[0]);
+        _ = run_ablation_emitter.captureStdOut(.{ .basename = mode[1] });
+        emit_repository_ablation.dependOn(&run_ablation_emitter.step);
+    }
     const process_state_census_test = b.addSystemCommand(&.{
         "node",
         "test/process_state_census.test.mjs",
@@ -229,18 +254,18 @@ pub fn build(b: *std.Build) void {
         "Run deterministic Agent System Closure v1 checks",
     );
     closure_check.dependOn(semantic);
-    const model_transport_test = b.addSystemCommand(&.{
+    const model_protocol_adapter_test = b.addSystemCommand(&.{
         "node",
         "--test",
-        "system_closure_v1/model_transport.test.mjs",
+        "system_closure_v1/model_protocol_adapter.test.mjs",
     });
-    model_transport_test.addFileInput(
-        b.path("system_closure_v1/model_transport.test.mjs"),
+    model_protocol_adapter_test.addFileInput(
+        b.path("system_closure_v1/model_protocol_adapter.test.mjs"),
     );
-    model_transport_test.addFileInput(
-        b.path("system_closure_v1/model_transport.mjs"),
+    model_protocol_adapter_test.addFileInput(
+        b.path("system_closure_v1/model_protocol_adapter.mjs"),
     );
-    closure_check.dependOn(&model_transport_test.step);
+    closure_check.dependOn(&model_protocol_adapter_test.step);
     if (world_process_root != null) closure_check.dependOn(world_check);
     const emit_closure = b.step(
         "emit-agent-system-closure-v1",
@@ -274,7 +299,7 @@ pub fn build(b: *std.Build) void {
         "system_closure_v1/README.md",
         "system_closure_v1/run.mjs",
         "system_closure_v1/runtime.mjs",
-        "system_closure_v1/model_transport.mjs",
+        "system_closure_v1/model_protocol_adapter.mjs",
         "system_closure_v1/process_state_census.mjs",
         "system_closure_v1/fixture_model_server.mjs",
         "system_closure_v1/repository_environment.mjs",
@@ -483,18 +508,9 @@ fn addOpenLifetimeTests(
         selector: []const u8,
     }{
         .{ .name = "check-agent-open-lifetime", .description = "Prove a no-final canonical State cycle", .selector = "no-final system" },
-        .{ .name = "check-agent-response-failures-a", .description = "Reject malformed, duplicate, incomplete, error, and refusal responses", .selector = "raw provider failures A" },
-        .{ .name = "check-agent-response-unsupported", .description = "Reject unsupported output", .selector = "failure B unsupported" },
-        .{ .name = "check-agent-response-multiple", .description = "Reject multiple function calls", .selector = "failure B multiple" },
-        .{ .name = "check-agent-response-unknown", .description = "Reject unknown actions", .selector = "failure B unknown" },
-        .{ .name = "check-agent-response-extra-argument", .description = "Reject extra action fields", .selector = "failure B extra" },
-        .{ .name = "check-agent-response-trailing-top", .description = "Reject a trailing top-level member", .selector = "failure B trailing top" },
-        .{ .name = "check-agent-response-trailing-output", .description = "Reject a trailing output item", .selector = "failure B trailing output" },
-        .{ .name = "check-agent-response-trailing-object", .description = "Reject a trailing skipped object member", .selector = "failure B trailing skipped object" },
-        .{ .name = "check-agent-response-trailing-array", .description = "Reject a trailing skipped array item", .selector = "failure B trailing skipped array" },
-        .{ .name = "check-agent-response-http", .description = "Reject non-2xx responses", .selector = "failure B non-2xx" },
-        .{ .name = "check-agent-response-transport", .description = "Distinguish transport failures", .selector = "failure B transport" },
-        .{ .name = "check-agent-response-reordered", .description = "Admit reordered escaped output and signed integer minima", .selector = "reordered escaped" },
+        .{ .name = "check-agent-model-failures", .description = "Map normalized model failures without dispatch", .selector = "normalized model failures" },
+        .{ .name = "check-agent-multiple-calls", .description = "Reject multiple normalized function calls", .selector = "multiple normalized" },
+        .{ .name = "check-agent-action-validation", .description = "Reject unknown actions and malformed arguments", .selector = "unknown actions" },
     }) |spec| {
         const run = b.addRunArtifact(tests);
         run.addArg(spec.selector);

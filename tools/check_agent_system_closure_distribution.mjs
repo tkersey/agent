@@ -17,7 +17,7 @@ const expectedFiles = new Set([
   "fixture/test/range.test.mjs",
   "fixture_model_server.mjs",
   "initial-args.bin",
-  "model_transport.mjs",
+  "model_protocol_adapter.mjs",
   "process_state_census.mjs",
   "repository_environment.mjs",
   "run.mjs",
@@ -87,8 +87,12 @@ try {
     assert.equal(execution.reductions, receipt.observedReductionCount);
     assert.equal(execution.modelRequests, receipt.observedModelRequestCount);
     assert.deepEqual(
-      execution.requestBodySha256,
-      receipt.observedModelRequestBodySha256,
+      execution.modelInvocationSha256,
+      receipt.observedModelInvocationSha256,
+    );
+    assert.deepEqual(
+      execution.providerRequestBodySha256,
+      receipt.observedProviderRequestBodySha256,
     );
     assert.equal(execution.repositoryRequests, receipt.observedRepositoryRequestCount);
     assert.equal(execution.finalTree, receipt.repository.finalTree);

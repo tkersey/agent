@@ -5,6 +5,9 @@ pub const package_version = "3.0.0";
 
 pub const system = @import("system.zig").system;
 pub const model = @import("model.zig").model;
+pub const ReasoningEffort = @import("model.zig").ReasoningEffort;
+pub const ReasoningSummary = @import("model.zig").ReasoningSummary;
+pub const model_effect = @import("model_effect.zig");
 pub const prompt = @import("prompt.zig");
 pub const skill = @import("skill.zig").skill;
 /// Typed action-descriptor constructors.

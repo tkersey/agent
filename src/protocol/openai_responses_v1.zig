@@ -1,8 +1,10 @@
 const boundary = @import("boundary");
 
-pub const semantic_identity = "agent.model.openai.responses.v1";
+pub const protocol_identity = "agent.model.protocol.openai-responses-v1";
+pub const semantic_identity = protocol_identity;
+pub const legacy_wire_semantic_identity = "agent.model.openai.responses.v1";
 pub const Profile = struct {
-    pub const semantic_identity = "agent.model.openai.responses.v1";
+    pub const semantic_identity = protocol_identity;
 };
 
 pub const TransportFailureKind = enum {
@@ -45,7 +47,7 @@ pub fn Contract(
         pub fn Site(comptime site_id: u32) type {
             return boundary.effect.site(
                 site_id,
-                semantic_identity,
+                legacy_wire_semantic_identity,
                 Request,
                 Response,
             );

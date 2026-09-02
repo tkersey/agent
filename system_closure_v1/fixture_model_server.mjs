@@ -62,6 +62,8 @@ export async function startFixtureModelServer(startDecision = 0) {
         error: null,
         output: [{
           type: "function_call",
+          id: `fc_${decision}`,
+          call_id: `call_${decision}`,
           status: "completed",
           name: selected[0],
           arguments: JSON.stringify(selected[1]),

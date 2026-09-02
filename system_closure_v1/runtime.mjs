@@ -4,7 +4,11 @@ import { cp, lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } 
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { startFixtureModelServer } from "./fixture_model_server.mjs";
-import { decodeModelRequest, performModelRequest } from "./model_transport.mjs";
+import {
+  decodeModelInvocation,
+  encodeOpenAIResponsesRequest,
+  performModelInvocation,
+} from "./model_protocol_adapter.mjs";
 import { ProcessStateCensus } from "./process_state_census.mjs";
 import {
   CORRECT_SOURCE,
@@ -103,7 +107,8 @@ let decodingMilliseconds = checkpoint?.decodingMilliseconds ?? 0;
 let offlineRuntimeMilliseconds = checkpoint?.offlineRuntimeMilliseconds ?? 0;
 let phase = checkpoint?.phase ?? "rendering";
 const identities = checkpoint?.identities ?? [];
-const requestBodySha256 = checkpoint?.requestBodySha256 ?? [];
+const modelInvocationSha256 = checkpoint?.modelInvocationSha256 ?? [];
+const providerRequestBodySha256 = checkpoint?.providerRequestBodySha256 ?? [];
 const maximumReductions = Number(options.maximumReductions);
 assert(Number.isSafeInteger(maximumReductions) && maximumReductions > 0);
 let chunkReductions = 0;
@@ -136,23 +141,25 @@ try {
         });
         identities.push(request.effectSemanticIdentity);
         let resume;
-        if (request.effectSemanticIdentity === "agent.model.openai.responses.v1") {
+        if (request.effectSemanticIdentity === "agent.model.invoke.v1") {
           modelRequests += 1;
-          const decoded = decodeModelRequest(request.payload);
-          assert.equal(decoded.maximumResponseBytes, 32 * 1024);
+          modelInvocationSha256.push(sha256(request.payload));
+          const decoded = decodeModelInvocation(request.payload);
+          assert.equal(decoded.maximumProviderResponseBytes, 32 * 1024);
+          const expectedBody = encodeOpenAIResponsesRequest(decoded);
           if (fixtureModel !== null) {
             const captureIndex = fixtureModel.captures.length;
-            resume = await performModelRequest(request.payload, { endpoint: fixtureModel.endpoint });
+            resume = await performModelInvocation(request.payload, { endpoint: fixtureModel.endpoint });
             assert.equal(fixtureModel.captures.length, captureIndex + 1);
-            assert.deepEqual(fixtureModel.captures[captureIndex], decoded.body);
+            assert.deepEqual(fixtureModel.captures[captureIndex], expectedBody);
             httpBodyEqualityCount += 1;
           } else {
-            resume = await performModelRequest(request.payload, {
+            resume = await performModelInvocation(request.payload, {
               endpoint: options.endpoint,
               apiKey: process.env.OPENAI_API_KEY,
             });
           }
-          requestBodySha256.push(sha256(decoded.body));
+          providerRequestBodySha256.push(sha256(expectedBody));
           phase = "decoding";
         } else {
           resume = await repository.resolveEffect(request);
@@ -204,7 +211,8 @@ if (terminal === undefined) {
     offlineRuntimeMilliseconds,
     phase,
     identities,
-    requestBodySha256,
+    modelInvocationSha256,
+    providerRequestBodySha256,
     ...repositoryState,
   };
   const replacement = `${checkpointPath}.next`;
@@ -271,10 +279,12 @@ process.stdout.write(`${JSON.stringify({
   modelRequests,
   repositoryRequests: repositoryState.repositoryRequests,
   orderedIdentities: identities,
-  requestBodySha256,
+  modelInvocationSha256,
+  providerRequestBodySha256,
   conditionalSkillVisible: true,
   httpBodyEqualityCount,
-  rawHttpResponsePreserved: true,
+  providerWireCodeInImage: false,
+  normalizedProviderResult: true,
   runtimeInputSha256,
   peakStateBytes,
   renderingMilliseconds: Math.round(renderingMilliseconds),
@@ -294,7 +304,7 @@ async function digestRuntimeInputs(root, fixture) {
   const runtimeNames = [
     "run.mjs",
     "runtime.mjs",
-    "model_transport.mjs",
+    "model_protocol_adapter.mjs",
     "fixture_model_server.mjs",
     "repository_environment.mjs",
     "process_state_census.mjs",

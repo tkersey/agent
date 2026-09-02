@@ -42,6 +42,7 @@ pub fn main(init: std.process.Init) !void {
         );
     } else if (std.mem.eql(u8, args[1], "source-map")) {
         try writeSourceMap(
+            repository,
             try encodedImage(init.arena.allocator()),
             &output.interface,
         );
@@ -67,10 +68,14 @@ fn encodedImage(allocator: std.mem.Allocator) ![]const u8 {
     return image[0..length];
 }
 
-fn writeSourceMap(image: []const u8, output: *std.Io.Writer) !void {
-    const Program = repository.System.Program;
+pub fn writeSourceMap(
+    comptime Repository: type,
+    image: []const u8,
+    output: *std.Io.Writer,
+) !void {
+    const Program = Repository.System.Program;
     const control = Program.control_ir;
-    const PhaseMap = repository.System.source_phase_map;
+    const PhaseMap = Repository.System.source_phase_map;
     const Reachability = boundary.ir.Reachability(
         Program.compiler_limits.maximum_blocks,
     );
@@ -118,7 +123,7 @@ fn writeSourceMap(image: []const u8, output: *std.Io.Writer) !void {
                 function_source_to_dense[block.function_id].?,
             },
         );
-        try writePhaseSpans(source_segment, output);
+        try writePhaseSpans(Repository, source_segment, output);
         try output.print(
             "],\"terminatorPhase\":\"{s}\"}}",
             .{PhaseMap.block_terminator_phases[source_segment].label()},
@@ -141,14 +146,24 @@ fn writeSourceMap(image: []const u8, output: *std.Io.Writer) !void {
                 reachability.denseId(source_entry).?,
             },
         );
-        try writeFunctionPhases(source_function, control, reachability, output);
+        try writeFunctionPhases(
+            Repository,
+            source_function,
+            control,
+            reachability,
+            output,
+        );
         try output.writeAll("]}");
     }
     try output.writeAll("]}\n");
 }
 
-fn writePhaseSpans(source_segment: u16, output: *std.Io.Writer) !void {
-    const map = repository.System.source_phase_map;
+fn writePhaseSpans(
+    comptime Repository: type,
+    source_segment: u16,
+    output: *std.Io.Writer,
+) !void {
+    const map = Repository.System.source_phase_map;
     const start = map.block_instruction_starts[source_segment];
     const count = map.block_instruction_counts[source_segment];
     var index: u32 = 0;
@@ -171,6 +186,7 @@ fn writePhaseSpans(source_segment: u16, output: *std.Io.Writer) !void {
 }
 
 fn writeFunctionPhases(
+    comptime Repository: type,
     source_function: u16,
     control: boundary.ir.Program,
     reachability: anytype,
@@ -178,7 +194,7 @@ fn writeFunctionPhases(
 ) !void {
     const phase_count = @typeInfo(agent.FlowPhase).@"enum".fields.len;
     var phases = [_]bool{false} ** phase_count;
-    const map = repository.System.source_phase_map;
+    const map = Repository.System.source_phase_map;
     for (control.blocks) |block| {
         if (block.function_id != source_function or
             !reachability.contains(block.id)) continue;

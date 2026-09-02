@@ -112,6 +112,25 @@ fn writeSchema(comptime T: type, writer: anytype) void {
     }
 }
 
+/// Canonical provider-neutral JSON Schema bytes for one strict Action payload.
+pub fn Schema(comptime T: type) type {
+    const length = comptime blk: {
+        @setEvalBranchQuota(100_000);
+        var writer = CountingWriter{};
+        writeSchema(T, &writer);
+        break :blk writer.length;
+    };
+    const bytes = comptime blk: {
+        @setEvalBranchQuota(100_000);
+        var writer = FixedWriter(length){};
+        writeSchema(T, &writer);
+        break :blk writer.finish();
+    };
+    return struct {
+        pub const value = bytes;
+    };
+}
+
 fn actionPayload(
     comptime Action: type,
     comptime action_name: []const u8,

@@ -18,6 +18,11 @@ import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { ProcessStateCensus } from "../system_closure_v1/process_state_census.mjs";
+import {
+  decodeModelInvocation,
+  encodeOpenAIResponsesRequest,
+  normalizeOpenAIResponses,
+} from "../system_closure_v1/model_protocol_adapter.mjs";
 
 const EXPECTED_INITIAL_DIGEST = "8832f65e4bcf4a701dc76f310f3af34296bf8e95feb16ad70608041cb2e6dbb3";
 const EXPECTED_FINAL_DIGEST = "8bf50f62e3a4294ef359a6b9096d66e5597ce37824b3483ddad541ee21438453";
@@ -111,6 +116,7 @@ let modelRequests = checkpoint?.modelRequests ?? 0;
 let repositoryRequests = checkpoint?.repositoryRequests ?? 0;
 const identities = checkpoint?.identities ?? [];
 const requestBodies = checkpoint?.requestBodies ?? [];
+const modelInvocationSha256 = checkpoint?.modelInvocationSha256 ?? [];
 const maximumReductions = options.maximumReductions === undefined
   ? undefined
   : Number(options.maximumReductions);
@@ -182,6 +188,7 @@ for (;;) {
       repositoryRequests,
       identities,
       requestBodies,
+      modelInvocationSha256,
     };
     const replacement = `${checkpointPath}.next`;
     await rm(replacement, { force: true });
@@ -246,6 +253,8 @@ process.stdout.write(`${JSON.stringify({
   modelRequests,
   repositoryRequests,
   orderedIdentities: identities,
+  modelInvocationSha256,
+  providerRequestBodySha256: requestBodies.map((body) => sha256(Buffer.from(body))),
   conditionalSkillVisible: requestBodies.slice(5).every((body) =>
     body.includes("After the baseline failure")),
   initialTree,
@@ -259,12 +268,14 @@ process.stdout.write(`${JSON.stringify({
 })}\n`);
 
 async function resolveEffect(request) {
-  if (request.effectSemanticIdentity === "agent.model.openai.responses.v1") {
+  if (request.effectSemanticIdentity === "agent.model.invoke.v1") {
     modelRequests += 1;
-    const decoded = decodeModelRequest(request.payload);
-    assert.equal(decoded.maximum_response_bytes, 32 * 1024);
-    const body = JSON.parse(decoded.body.toString("utf8"));
-    requestBodies.push(decoded.body.toString("utf8"));
+    modelInvocationSha256.push(sha256(request.payload));
+    const decoded = decodeModelInvocation(request.payload);
+    assert.equal(decoded.maximumProviderResponseBytes, 32 * 1024);
+    const requestBody = encodeOpenAIResponsesRequest(decoded);
+    const body = JSON.parse(requestBody);
+    requestBodies.push(requestBody.toString("utf8"));
     assert.equal(body.model, "gpt-5.4-mini-2026-03-17");
     assert.equal(body.tool_choice, "required");
     assert.equal(body.parallel_tool_calls, false);
@@ -288,12 +299,14 @@ async function resolveEffect(request) {
       error: null,
       output: [{
         type: "function_call",
+        id: `fc_${modelDecision}`,
+        call_id: `call_${modelDecision}`,
         status: "completed",
         name: action[0],
         arguments: JSON.stringify(action[1]),
       }],
     }));
-    return encodeModelResponse(200, providerBody);
+    return normalizeOpenAIResponses(providerBody, decoded.normalizationLimits);
   }
 
   repositoryRequests += 1;
@@ -387,14 +400,6 @@ async function admittedFile(relativePath, flags) {
   return open(absolute, flags);
 }
 
-function decodeModelRequest(bytes) {
-  const cursor = { value: 0 };
-  const body = decodeBytes(bytes, cursor);
-  const maximum_response_bytes = readU32(bytes, cursor);
-  assert.equal(cursor.value, bytes.length);
-  return { body, maximum_response_bytes };
-}
-
 function decodeReplaceRequest(bytes) {
   const cursor = { value: 0 };
   const result = {
@@ -416,10 +421,6 @@ function decodeFinalResult(bytes) {
   };
   assert.equal(cursor.value, bytes.length);
   return result;
-}
-
-function encodeModelResponse(status, body) {
-  return concat(u32(0), u16(status), encodeBytes(body));
 }
 
 function encodeText(value) {
@@ -448,12 +449,6 @@ function readU32(bytes, cursor) {
   const value = Buffer.from(bytes).readUInt32LE(cursor.value);
   cursor.value += 4;
   return value;
-}
-
-function u16(value) {
-  const bytes = Buffer.alloc(2);
-  bytes.writeUInt16LE(value);
-  return bytes;
 }
 
 function u32(value) {

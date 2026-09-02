@@ -4,6 +4,11 @@ import { readFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import {
+  decodeModelInvocation,
+  normalizeOpenAIResponses,
+} from "../system_closure_v1/model_protocol_adapter.mjs";
+
 const options = parseArgs(process.argv.slice(2));
 options.mode ??= "full";
 assert(["full", "transfers", "negative"].includes(options.mode), "invalid admission-check mode");
@@ -18,7 +23,8 @@ const transferred = await world.admitProcessKernel(kernel);
 
 const initialModel = await advanceUntilRequested(primary, { initialArgs });
 const modelRequest = world.decodeEffectRequest(initialModel.request);
-assert.equal(modelRequest.effectSemanticIdentity, "agent.model.openai.responses.v1");
+assert.equal(modelRequest.effectSemanticIdentity, "agent.model.invoke.v1");
+const modelInvocation = decodeModelInvocation(modelRequest.payload);
 const invalidCases = [
   {
     name: "pre-baseline-replacement",
@@ -120,7 +126,7 @@ if (options.mode === "transfers") {
     kernelSha256: primary.sha256,
     imageSha256: sha256(image),
     transferPoints: [
-      "internal-response-parser",
+      "normalized-model-resume",
       "pending-model-request",
       "pending-repository-request",
     ],
@@ -162,7 +168,7 @@ process.stdout.write(`${JSON.stringify({
   dangerousRepositoryEffects: 0,
   successfulPrematureCompletions: 0,
   transferPoints: [
-    "internal-response-parser",
+    "normalized-model-resume",
     "pending-model-request",
     "pending-repository-request",
   ],
@@ -210,12 +216,17 @@ function encodeModelResponse(name, argumentsValue) {
     error: null,
     output: [{
       type: "function_call",
+      id: "fixture-function-call",
+      call_id: "fixture-call",
       status: "completed",
       name,
       arguments: JSON.stringify(argumentsValue),
     }],
   }));
-  return concat(u32(0), u16(200), u32(providerBody.byteLength), providerBody);
+  return normalizeOpenAIResponses(
+    providerBody,
+    modelInvocation.normalizationLimits,
+  );
 }
 
 function assertOutcomeEqual(left, right) {
@@ -227,22 +238,6 @@ function assertOutcomeEqual(left, right) {
       assert.deepEqual(Buffer.from(right[field]), Buffer.from(left[field]), `${left.kind}.${field}`);
     }
   }
-}
-
-function u16(value) {
-  const bytes = Buffer.alloc(2);
-  bytes.writeUInt16LE(value);
-  return bytes;
-}
-
-function u32(value) {
-  const bytes = Buffer.alloc(4);
-  bytes.writeUInt32LE(value);
-  return bytes;
-}
-
-function concat(...parts) {
-  return Buffer.concat(parts.map((part) => Buffer.from(part)));
 }
 
 function sha256(bytes) {

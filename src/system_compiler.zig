@@ -3,9 +3,8 @@ const boundary = @import("boundary");
 const action = @import("action.zig");
 const action_decode = @import("action_decode.zig");
 const flow_module = @import("flow.zig");
-const openai_profile = @import("openai_profile.zig");
-const openai_response = @import("openai_response.zig");
-const request = @import("request.zig");
+const model_effect = @import("model_effect.zig");
+const staged_json = @import("staged_json.zig");
 
 fn assertEffectFree(
     comptime label: []const u8,
@@ -31,7 +30,7 @@ fn effectCount(comptime source: anytype) usize {
 
 fn effectSites(comptime source: anytype, comptime Profile: type) [1 + effectCount(source)]type {
     var result: [1 + effectCount(source)]type = undefined;
-    result[0] = Profile.ProtocolType.Site(0);
+    result[0] = Profile.SiteType;
     var next: usize = 1;
     inline for (source.actions) |Descriptor| {
         if (Descriptor.kind == .effect) {
@@ -55,6 +54,18 @@ fn skillReferencesAction(
 ) bool {
     inline for (Skill.actions) |name| {
         if (std.mem.eql(u8, name, action_name)) return true;
+    }
+    return false;
+}
+
+fn actionAlwaysOffered(
+    comptime source: anytype,
+    comptime action_name: []const u8,
+) bool {
+    if (source.skills.len == 0) return true;
+    inline for (source.skills) |Skill| {
+        if (Skill.activation == .always and
+            skillReferencesAction(Skill, action_name)) return true;
     }
     return false;
 }
@@ -92,13 +103,20 @@ fn offeredActions(
 ) [source.actions.len]flow_module.Value(bool) {
     var result: [source.actions.len]flow_module.Value(bool) = undefined;
     inline for (source.actions, 0..) |Descriptor, action_index| {
-        var offered = flow.constant(bool, if (source.skills.len == 0)
-            context.true_index
-        else
-            context.false_index);
-        inline for (source.skills, 0..) |Skill, skill_index| {
-            if (skillReferencesAction(Skill, Descriptor.name)) {
-                offered = flow.booleanOr(offered, active_skills[skill_index]);
+        var offered = flow.constant(
+            bool,
+            if (actionAlwaysOffered(source, Descriptor.name))
+                context.true_index
+            else
+                context.false_index,
+        );
+        if (!actionAlwaysOffered(source, Descriptor.name)) {
+            inline for (source.skills, 0..) |Skill, skill_index| {
+                if (Skill.activation != .always and
+                    skillReferencesAction(Skill, Descriptor.name))
+                {
+                    offered = flow.booleanOr(offered, active_skills[skill_index]);
+                }
             }
         }
         result[action_index] = offered;
@@ -116,10 +134,16 @@ fn selectedWasOffered(
     var result = flow.constant(bool, context.false_index);
     var bit = flow.constant(u32, context.one_u32_index);
     inline for (0..source.actions.len) |index| {
-        const is_offered = flow.integerNotEqual(
-            flow.integerBitAnd(offered_mask, bit),
-            flow.constant(u32, context.zero_u32_index),
-        );
+        const is_offered = if (actionAlwaysOffered(
+            source,
+            source.actions[index].name,
+        ))
+            flow.constant(bool, context.true_index)
+        else
+            flow.integerNotEqual(
+                flow.integerBitAnd(offered_mask, bit),
+                flow.constant(u32, context.zero_u32_index),
+            );
         result = flow.booleanOr(
             result,
             flow.booleanAnd(flow.sumTagIs(index, selected), is_offered),
@@ -136,6 +160,7 @@ fn selectedWasOffered(
 }
 
 fn boolMask(
+    comptime source: anytype,
     flow: anytype,
     values: anytype,
     comptime context: anytype,
@@ -145,49 +170,440 @@ fn boolMask(
     inline for (values, 0..) |value, index| {
         result = flow.integerBitOr(
             result,
-            flow.select(value, bit, flow.constant(u32, context.zero_u32_index)),
+            if (actionAlwaysOffered(source, source.actions[index].name))
+                bit
+            else
+                flow.select(
+                    value,
+                    bit,
+                    flow.constant(u32, context.zero_u32_index),
+                ),
         );
         if (index + 1 < values.len) bit = flow.integerAdd(bit, bit);
     }
     return result;
 }
 
+fn compileIndex(
+    flow: anytype,
+    comptime index: usize,
+    comptime context: anytype,
+) flow_module.Value(u32) {
+    var result = flow.constant(u32, context.zero_u32_index);
+    inline for (0..index) |_| {
+        result = flow.integerAdd(
+            result,
+            flow.constant(u32, context.one_u32_index),
+        );
+    }
+    return result;
+}
+
+fn appendConditionalMessage(
+    comptime Profile: type,
+    flow: anytype,
+    messages: flow_module.Value(Profile.MessagesType),
+    enabled: flow_module.Value(bool),
+    message: flow_module.Value(Profile.MessageType),
+    comptime context: anytype,
+) flow_module.Value(Profile.MessagesType) {
+    const append = flow.block(.segment, .{Profile.MessagesType});
+    const joined = flow.block(.segment, .{Profile.MessagesType});
+    flow.branch(enabled, append, .{messages}, joined, .{messages});
+    const next = flow.vectorPushOrFail(
+        flow.enter(append)[0],
+        message,
+        flow.constant(context.Failure, context.capacity_failure_index),
+    );
+    flow.jump(joined, .{next});
+    return flow.enter(joined)[0];
+}
+
+fn appendStaticMessage(
+    comptime Profile: type,
+    flow: anytype,
+    messages: flow_module.Value(Profile.MessagesType),
+    message: flow_module.Value(Profile.MessageType),
+    comptime context: anytype,
+) flow_module.Value(Profile.MessagesType) {
+    const next = flow.vectorPushOrFail(
+        messages,
+        message,
+        flow.constant(context.Failure, context.capacity_failure_index),
+    );
+    const joined = flow.block(.segment, .{Profile.MessagesType});
+    flow.jump(joined, .{next});
+    return flow.enter(joined)[0];
+}
+
+fn semanticMessages(
+    comptime source: anytype,
+    comptime Profile: type,
+    flow: anytype,
+    prompt: anytype,
+    active_skills: [source.skills.len]flow_module.Value(bool),
+    comptime context: anytype,
+) flow_module.Value(Profile.MessagesType) {
+    var messages = flow.vectorEmpty(Profile.MessagesType);
+    inline for (source.prompts, 0..) |_, index| {
+        const message = flow.vectorGetOrFail(
+            flow.constant(Profile.PromptMessagesType, Profile.prompts_index),
+            compileIndex(flow, index, context),
+            flow.constant(context.Failure, context.invalid_index_failure_index),
+        );
+        messages = flow.vectorPushOrFail(
+            messages,
+            message,
+            flow.constant(context.Failure, context.capacity_failure_index),
+        );
+    }
+    inline for (source.skills, 0..) |Skill, index| {
+        if (Skill.position != .before_user) continue;
+        const message = flow.vectorGetOrFail(
+            flow.constant(Profile.SkillMessagesType, Profile.skills_index),
+            compileIndex(flow, index, context),
+            flow.constant(context.Failure, context.invalid_index_failure_index),
+        );
+        messages = if (Skill.activation == .always)
+            appendStaticMessage(
+                Profile,
+                flow,
+                messages,
+                message,
+                context,
+            )
+        else
+            appendConditionalMessage(
+                Profile,
+                flow,
+                messages,
+                active_skills[index],
+                message,
+                context,
+            );
+    }
+    const rendered_prompt = flow.textCopyOrFail(
+        Profile.MessageTextType,
+        prompt,
+        flow.constant(u32, context.zero_u32_index),
+        flow.textLength(prompt),
+        flow.constant(context.Failure, context.capacity_failure_index),
+        flow.constant(context.Failure, context.invalid_utf8_failure_index),
+    );
+    messages = flow.vectorPushOrFail(
+        messages,
+        flow.productConstruct(Profile.MessageType, .{
+            flow.constant(model_effect.MessageRole, Profile.user_role_index),
+            rendered_prompt,
+        }),
+        flow.constant(context.Failure, context.capacity_failure_index),
+    );
+    inline for (source.skills, 0..) |Skill, index| {
+        if (Skill.position != .after_user) continue;
+        const message = flow.vectorGetOrFail(
+            flow.constant(Profile.SkillMessagesType, Profile.skills_index),
+            compileIndex(flow, index, context),
+            flow.constant(context.Failure, context.invalid_index_failure_index),
+        );
+        messages = if (Skill.activation == .always)
+            appendStaticMessage(
+                Profile,
+                flow,
+                messages,
+                message,
+                context,
+            )
+        else
+            appendConditionalMessage(
+                Profile,
+                flow,
+                messages,
+                active_skills[index],
+                message,
+                context,
+            );
+    }
+    return messages;
+}
+
+fn appendConditionalTool(
+    comptime Profile: type,
+    flow: anytype,
+    tools: flow_module.Value(Profile.ToolsType),
+    enabled: flow_module.Value(bool),
+    tool: flow_module.Value(Profile.ToolDeclarationType),
+    comptime context: anytype,
+) flow_module.Value(Profile.ToolsType) {
+    const append = flow.block(.segment, .{Profile.ToolsType});
+    const joined = flow.block(.segment, .{Profile.ToolsType});
+    flow.branch(enabled, append, .{tools}, joined, .{tools});
+    const next = flow.vectorPushOrFail(
+        flow.enter(append)[0],
+        tool,
+        flow.constant(context.Failure, context.capacity_failure_index),
+    );
+    flow.jump(joined, .{next});
+    return flow.enter(joined)[0];
+}
+
+fn appendStaticTool(
+    comptime Profile: type,
+    flow: anytype,
+    tools: flow_module.Value(Profile.ToolsType),
+    tool: flow_module.Value(Profile.ToolDeclarationType),
+    comptime context: anytype,
+) flow_module.Value(Profile.ToolsType) {
+    const next = flow.vectorPushOrFail(
+        tools,
+        tool,
+        flow.constant(context.Failure, context.capacity_failure_index),
+    );
+    const joined = flow.block(.segment, .{Profile.ToolsType});
+    flow.jump(joined, .{next});
+    return flow.enter(joined)[0];
+}
+
+fn semanticTools(
+    comptime source: anytype,
+    comptime Profile: type,
+    flow: anytype,
+    offered_actions: [source.actions.len]flow_module.Value(bool),
+    comptime context: anytype,
+) flow_module.Value(Profile.ToolsType) {
+    var tools = flow.vectorEmpty(Profile.ToolsType);
+    inline for (source.actions, 0..) |Descriptor, index| {
+        const ordinal = flow.vectorGetOrFail(
+            flow.constant(Profile.ActionOrdinalsType, Profile.ordinals_index),
+            compileIndex(flow, index, context),
+            flow.constant(context.Failure, context.invalid_index_failure_index),
+        );
+        const description = flow.vectorGetOrFail(
+            flow.constant(
+                Profile.ToolDescriptionsType,
+                Profile.descriptions_index,
+            ),
+            ordinal,
+            flow.constant(context.Failure, context.invalid_index_failure_index),
+        );
+        const schema = flow.vectorGetOrFail(
+            flow.constant(Profile.ToolSchemasType, Profile.schemas_index),
+            ordinal,
+            flow.constant(context.Failure, context.invalid_index_failure_index),
+        );
+        const tool = flow.productConstruct(Profile.ToolDeclarationType, .{
+            ordinal,
+            flow.constant(
+                Profile.ToolNameType,
+                context.action_name_indices[index],
+            ),
+            description,
+            schema,
+            flow.constant(bool, context.true_index),
+        });
+        tools = if (actionAlwaysOffered(source, Descriptor.name))
+            appendStaticTool(
+                Profile,
+                flow,
+                tools,
+                tool,
+                context,
+            )
+        else
+            appendConditionalTool(
+                Profile,
+                flow,
+                tools,
+                offered_actions[index],
+                tool,
+                context,
+            );
+    }
+    return tools;
+}
+
+fn selectedFunctionCall(
+    comptime Profile: type,
+    flow: anytype,
+    output: flow_module.Value(Profile.ModelOutputType),
+    comptime context: anytype,
+) flow_module.Value(Profile.FunctionCallType) {
+    const items = flow.productExtract(0, output);
+    const loop = flow.block(.loop_header, .{
+        u32,
+        u32,
+        bool,
+        Profile.FunctionCallType,
+        Profile.OutputItemsType,
+    });
+    const empty_call = flow.productConstruct(Profile.FunctionCallType, .{
+        flow.textEmpty(Profile.CallIdType),
+        flow.textEmpty(Profile.ToolNameType),
+        flow.bytesEmpty(Profile.ArgumentsJsonType),
+    });
+    flow.jump(loop, .{
+        flow.constant(u32, context.zero_u32_index),
+        flow.constant(u32, context.zero_u32_index),
+        flow.constant(bool, context.false_index),
+        empty_call,
+        items,
+    });
+    const state = flow.enter(loop);
+    const done = flow.block(.segment, .{
+        u32,
+        bool,
+        Profile.FunctionCallType,
+    });
+    const inspect = flow.block(.segment, .{
+        u32,
+        u32,
+        bool,
+        Profile.FunctionCallType,
+        Profile.OutputItemsType,
+    });
+    flow.branch(
+        flow.integerGreaterEqual(state[0], flow.vectorLength(state[4])),
+        done,
+        .{ state[1], state[2], state[3] },
+        inspect,
+        state,
+    );
+    const inspecting = flow.enter(inspect);
+    const item = flow.vectorGetOrFail(
+        inspecting[4],
+        inspecting[0],
+        flow.constant(context.Failure, context.invalid_index_failure_index),
+    );
+    const found = flow.block(.segment, .{
+        u32,
+        u32,
+        bool,
+        Profile.FunctionCallType,
+        Profile.OutputItemsType,
+        Profile.OutputItemType,
+    });
+    const next = flow.block(.segment, .{
+        u32,
+        u32,
+        bool,
+        Profile.FunctionCallType,
+        Profile.OutputItemsType,
+    });
+    flow.branch(
+        flow.sumTagIs(0, item),
+        found,
+        .{
+            inspecting[0],
+            inspecting[1],
+            inspecting[2],
+            inspecting[3],
+            inspecting[4],
+            item,
+        },
+        next,
+        inspecting,
+    );
+    const found_values = flow.enter(found);
+    const call = flow.sumExtractOrFail(
+        0,
+        found_values[5],
+        flow.constant(context.Failure, context.invalid_variant_failure_index),
+    );
+    flow.jump(next, .{
+        found_values[0],
+        flow.integerAddOrFail(
+            found_values[1],
+            flow.constant(u32, context.one_u32_index),
+            flow.constant(context.Failure, context.arithmetic_failure_index),
+        ),
+        flow.constant(bool, context.true_index),
+        call,
+        found_values[4],
+    });
+    const next_values = flow.enter(next);
+    flow.jump(loop, .{
+        flow.integerAddOrFail(
+            next_values[0],
+            flow.constant(u32, context.one_u32_index),
+            flow.constant(context.Failure, context.arithmetic_failure_index),
+        ),
+        next_values[1],
+        next_values[2],
+        next_values[3],
+        next_values[4],
+    });
+
+    const finished = flow.enter(done);
+    const exactly_one = flow.block(.segment, .{
+        bool,
+        Profile.FunctionCallType,
+    });
+    const wrong_count = flow.block(.terminal_handoff, .{u32});
+    flow.branch(
+        flow.integerEqual(
+            finished[0],
+            flow.constant(u32, context.one_u32_index),
+        ),
+        exactly_one,
+        .{ finished[1], finished[2] },
+        wrong_count,
+        .{finished[0]},
+    );
+    const wrong = flow.enter(wrong_count)[0];
+    const multiple = flow.block(.terminal_handoff, .{});
+    const absent = flow.block(.terminal_handoff, .{});
+    flow.branch(
+        flow.integerGreaterEqual(
+            wrong,
+            flow.constant(u32, context.one_u32_index),
+        ),
+        multiple,
+        .{},
+        absent,
+        .{},
+    );
+    _ = flow.enter(multiple);
+    flow.failValue(flow.constant(context.Failure, context.multiple_calls_failure_index));
+    _ = flow.enter(absent);
+    flow.failValue(flow.constant(context.Failure, context.incomplete_failure_index));
+    const selected = flow.enter(exactly_one);
+    const present = flow.block(.segment, .{Profile.FunctionCallType});
+    const missing = flow.block(.terminal_handoff, .{});
+    flow.branch(
+        selected[0],
+        present,
+        .{selected[1]},
+        missing,
+        .{},
+    );
+    _ = flow.enter(missing);
+    flow.failValue(flow.constant(context.Failure, context.incomplete_failure_index));
+    return flow.enter(present)[0];
+}
+
 pub fn ReactBody(comptime source: anytype) type {
     if (comptime !boundary.schema.isTextType(source.Goal)) {
         @compileError("Agent 3 default ReAct currently requires a Text Goal prompt");
     }
-    if (!@hasField(@TypeOf(source.representation), "request_bytes") or
-        !@hasField(@TypeOf(source.representation), "response_bytes") or
+    if (!@hasField(@TypeOf(source.representation), "response_bytes") or
         !@hasField(@TypeOf(source.representation), "schema_types"))
     {
-        @compileError("Agent 3 ReAct representation requires request_bytes, response_bytes, and schema_types");
+        @compileError("Agent 3 ReAct representation requires response_bytes and schema_types");
     }
     inline for (source.models) |DeclaredModel| {
         if (DeclaredModel.protocol != @import("protocol/openai_responses_v1.zig").Profile) {
             @compileError("Agent 3 ReAct milestone supports OpenAI Responses v1");
         }
     }
-    const ResponseBytes = boundary.Bytes(source.representation.response_bytes);
-    const Profile = openai_profile.Profile(
-        source.Failure,
-        ResponseBytes,
-        source.Action,
-        source.actions,
-        source.models,
-        source.prompts,
-        source.skills,
-        source.failures,
-        source.representation.request_bytes,
-    );
-    const Context = Profile.Context;
-    const Protocol = Profile.ProtocolType;
     const Epistemics = source.epistemics;
+    if (Epistemics.prompt_is_json_escaped) {
+        @compileError("Agent semantic model invocation forbids provider-escaped epistemic prompts");
+    }
     const Memory = Epistemics.MemoryType(source);
     const DecisionView = Epistemics.DecisionViewType(source);
-    const RuntimeState = if (Epistemics.prompt_is_json_escaped)
-        Memory
-    else
-        struct { goal: source.Goal, memory: Memory };
+    const Prompt = Epistemics.PromptType(source);
+    const Profile = model_effect.Profile(source, Prompt);
+    const Context = Profile.ActionContext;
+    const RuntimeState = struct { goal: source.Goal, memory: Memory };
     const system_flow_limits: flow_module.Limits = if (@hasField(
         @TypeOf(source.representation),
         "flow_limits",
@@ -210,30 +626,23 @@ pub fn ReactBody(comptime source: anytype) type {
     comptime var flow = Builder.init(source.name ++ ":react-v1");
     flow.setPhase(.agent_initialization);
     const goal = flow.begin(source.Goal);
-    flow.setPhase(.agent_model_resume);
-    const helpers = openai_response.declare(&flow, ResponseBytes);
-    flow.setPhase(.agent_model_request);
-    const request_helpers = request.declareSystem(&flow, Profile);
+    const ablate_action_argument_decode = comptime @hasField(@TypeOf(source.representation), "ablate_action_argument_decode") and
+        source.representation.ablate_action_argument_decode;
+    const argument_helpers = if (!ablate_action_argument_decode) blk: {
+        flow.setPhase(.agent_action_argument_decode);
+        break :blk staged_json.declare(&flow, Profile.ArgumentsJsonType);
+    } else {};
     flow.setPhase(.agent_initialization);
     const before_initial_suspensions = flow.suspensionCount();
     const before_initial_returns = flow.returnHandoffCount();
     const memory = Epistemics.emitInitial(source, &flow, goal, Context);
     assertEffectFree("agent epistemics emitInitial", &flow, before_initial_suspensions, before_initial_returns);
-    const initial_state = if (Epistemics.prompt_is_json_escaped)
-        memory
-    else
-        flow.productConstruct(RuntimeState, .{ goal, memory });
+    const initial_state = flow.productConstruct(RuntimeState, .{ goal, memory });
     const loop = flow.block(.loop_header, .{RuntimeState});
     flow.jump(loop, .{initial_state});
     const runtime_state = flow.enter(loop)[0];
-    const current_goal = if (Epistemics.prompt_is_json_escaped)
-        goal
-    else
-        flow.productExtract(0, runtime_state);
-    const current_memory = if (Epistemics.prompt_is_json_escaped)
-        runtime_state
-    else
-        flow.productExtract(1, runtime_state);
+    const current_goal = flow.productExtract(0, runtime_state);
+    const current_memory = flow.productExtract(1, runtime_state);
     flow.setPhase(.agent_memory_projection);
     const before_project_suspensions = flow.suspensionCount();
     const before_project_returns = flow.returnHandoffCount();
@@ -262,90 +671,123 @@ pub fn ReactBody(comptime source: anytype) type {
         Context,
     );
     assertEffectFree("agent epistemics emitModelIndex", &flow, before_model_suspensions, before_model_returns);
-    const active_mask = boolMask(&flow, active_skills, Context);
-    const offered_mask = boolMask(&flow, offered_actions, Context);
-    const model_request = if (Epistemics.prompt_is_json_escaped)
-        request.emitSystemEscaped(
-            Profile,
-            &flow,
-            request_helpers,
-            prompt,
-            model_index,
-            active_mask,
-            offered_mask,
-            Context,
-        )
-    else
-        request.emitSystem(
-            Profile,
-            &flow,
-            request_helpers,
-            prompt,
-            model_index,
-            active_mask,
-            offered_mask,
-            Context,
-        );
+    const messages = semanticMessages(
+        source,
+        Profile,
+        &flow,
+        prompt,
+        active_skills,
+        Context,
+    );
+    const tools = semanticTools(
+        source,
+        Profile,
+        &flow,
+        offered_actions,
+        Context,
+    );
+    const selected_model = flow.vectorGetOrFail(
+        flow.constant(Profile.ModelsType, Profile.models_index),
+        model_index,
+        flow.constant(Context.Failure, Context.invalid_index_failure_index),
+    );
+    const model_request = flow.productConstruct(Profile.ModelInvocationType, .{
+        flow.constant(Profile.ProtocolIdentityType, Profile.protocol_index),
+        flow.productExtract(0, selected_model),
+        flow.productExtract(1, selected_model),
+        messages,
+        tools,
+        flow.constant(Profile.ToolSelectionPolicyType, Profile.selection_index),
+        flow.constant(Profile.ResponsePolicyType, Profile.response_policy_index),
+        flow.constant(Profile.NormalizationLimitsType, Profile.normalization_limits_index),
+        flow.constant(u32, Profile.maximum_response_bytes_index),
+    });
     const model = flow.perform(
-        Protocol.Site(0),
+        Profile.SiteType,
         model_request,
         .{runtime_state},
     );
     flow.setPhase(.agent_model_resume);
-    const response_path = flow.block(.segment, .{ Protocol.Response, RuntimeState });
-    const transport_failure = flow.block(.terminal_handoff, .{});
+    const response_path = flow.block(.segment, .{
+        Profile.ModelResultType,
+        RuntimeState,
+    });
+    const non_output = flow.block(.segment, .{Profile.ModelResultType});
     flow.branch(
         flow.sumTagIs(0, model.value),
         response_path,
         .{ model.value, model.carried[0] },
+        non_output,
+        .{model.value},
+    );
+    const non_output_value = flow.enter(non_output)[0];
+    const refusal_failure = flow.block(.terminal_handoff, .{});
+    const transport_or_later = flow.block(.segment, .{Profile.ModelResultType});
+    flow.branch(
+        flow.sumTagIs(1, non_output_value),
+        refusal_failure,
+        .{},
+        transport_or_later,
+        .{non_output_value},
+    );
+    _ = flow.enter(refusal_failure);
+    flow.failValue(flow.constant(Context.Failure, Context.refusal_failure_index));
+    const transport_value = flow.enter(transport_or_later)[0];
+    const transport_failure = flow.block(.terminal_handoff, .{});
+    const provider_or_unsupported = flow.block(.segment, .{
+        Profile.ModelResultType,
+    });
+    flow.branch(
+        flow.sumTagIs(2, transport_value),
         transport_failure,
         .{},
+        provider_or_unsupported,
+        .{transport_value},
     );
     _ = flow.enter(transport_failure);
-    flow.failValue(flow.constant(source.Failure, Context.transport_failure_index));
-    const response_values = flow.enter(response_path);
-    const response = flow.sumExtractOrFail(
-        0,
-        response_values[0],
-        flow.constant(source.Failure, Context.malformed_failure_index),
-    );
-    const parse = flow.block(.segment, .{ ResponseBytes, RuntimeState });
-    const http_failure = flow.block(.terminal_handoff, .{});
+    flow.failValue(flow.constant(Context.Failure, Context.transport_failure_index));
+    const provider_value = flow.enter(provider_or_unsupported)[0];
+    const provider_failure = flow.block(.terminal_handoff, .{});
+    const unsupported_failure = flow.block(.terminal_handoff, .{});
     flow.branch(
-        flow.integerEqual(
-            flow.productExtract(0, response),
-            flow.constant(u16, Context.http_ok_index),
-        ),
-        parse,
-        .{ flow.productExtract(1, response), response_values[1] },
-        http_failure,
+        flow.sumTagIs(3, provider_value),
+        provider_failure,
+        .{},
+        unsupported_failure,
         .{},
     );
-    _ = flow.enter(http_failure);
-    flow.failValue(flow.constant(source.Failure, Context.http_failure_index));
-    const parse_values = flow.enter(parse);
-    const parsed = flow.call(
-        helpers.parse_response,
-        .{flow.productConstruct(@import("staged_json.zig").Cursor(ResponseBytes), .{
-            parse_values[0],
-            flow.constant(u32, Context.zero_u32_index),
-        })},
-        .{parse_values[1]},
+    _ = flow.enter(provider_failure);
+    flow.failValue(flow.constant(Context.Failure, Context.response_error_failure_index));
+    _ = flow.enter(unsupported_failure);
+    flow.failValue(flow.constant(Context.Failure, Context.unsupported_failure_index));
+    const response_values = flow.enter(response_path);
+    const output = flow.sumExtractOrFail(
+        0,
+        response_values[0],
+        flow.constant(Context.Failure, Context.malformed_failure_index),
     );
-    const selected = action_decode.emit(
-        &flow,
-        source.Action,
-        source.actions,
-        ResponseBytes,
-        parsed.value,
-        helpers.core,
-        Context,
-    );
-    flow.setPhase(.agent_action_admission);
-    const resumed_memory = if (Epistemics.prompt_is_json_escaped)
-        parsed.carried[0]
+    const call = selectedFunctionCall(Profile, &flow, output, Context);
+    const selected = if (ablate_action_argument_decode)
+        action_decode.emitNameOnly(
+            &flow,
+            source.Action,
+            source.actions,
+            Profile.ArgumentsJsonType,
+            call,
+            Context,
+        )
     else
-        flow.productExtract(1, parsed.carried[0]);
+        action_decode.emit(
+            &flow,
+            source.Action,
+            source.actions,
+            Profile.ArgumentsJsonType,
+            call,
+            argument_helpers,
+            Context,
+        );
+    flow.setPhase(.agent_action_admission);
+    const resumed_memory = flow.productExtract(1, response_values[1]);
     const resumed_active_skills = activeSkills(
         source,
         Epistemics,
@@ -359,7 +801,12 @@ pub fn ReactBody(comptime source: anytype) type {
         resumed_active_skills,
         Context,
     );
-    const resumed_offered_mask = boolMask(&flow, resumed_offered_actions, Context);
+    const resumed_offered_mask = boolMask(
+        source,
+        &flow,
+        resumed_offered_actions,
+        Context,
+    );
     const before_policy_suspensions = flow.suspensionCount();
     const before_policy_returns = flow.returnHandoffCount();
     const policy_allowed = Epistemics.emitActionAllowed(
@@ -385,7 +832,7 @@ pub fn ReactBody(comptime source: anytype) type {
     flow.branch(
         allowed,
         dispatch,
-        .{ selected, parsed.carried[0] },
+        .{ selected, response_values[1] },
         denied,
         .{},
     );
@@ -518,10 +965,15 @@ pub fn ReactBody(comptime source: anytype) type {
         dispatch_values = flow.enter(next);
     }
     flow.failValue(flow.constant(source.Failure, Context.invalid_variant_failure_index));
-    flow.setPhase(.agent_model_request);
-    request.defineSystem(&flow, Profile, request_helpers, Context);
-    flow.setPhase(.agent_model_resume);
-    openai_response.define(&flow, ResponseBytes, helpers, Context);
+    if (!ablate_action_argument_decode) {
+        flow.setPhase(.agent_action_argument_decode);
+        staged_json.define(
+            &flow,
+            Profile.ArgumentsJsonType,
+            argument_helpers,
+            Context,
+        );
+    }
     const Lowering = flow.finish(source.Result);
     const sites = effectSites(source, Profile);
     return struct {

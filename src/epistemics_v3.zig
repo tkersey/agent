@@ -13,6 +13,9 @@ pub fn systemStateless(comptime config: anytype) type {
         pub fn DecisionViewType(comptime _: anytype) type {
             return void;
         }
+        pub fn PromptType(comptime source: anytype) type {
+            return source.Goal;
+        }
         pub fn schemaTypes(comptime _: anytype) @TypeOf(.{}) {
             return .{};
         }
@@ -79,6 +82,12 @@ pub fn system(comptime spec: anytype) type {
         )) Implementation.prompt_is_json_escaped else false;
         pub const MemoryType = Implementation.MemoryType;
         pub const DecisionViewType = Implementation.DecisionViewType;
+        pub fn PromptType(comptime source: anytype) type {
+            if (@hasDecl(Implementation, "PromptType")) {
+                return Implementation.PromptType(source);
+            }
+            return source.Goal;
+        }
         pub const schemaTypes = Implementation.schemaTypes;
         pub const emitInitial = Implementation.emitInitial;
         pub const emitObserve = Implementation.emitObserve;

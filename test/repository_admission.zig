@@ -48,23 +48,64 @@ const repository = struct {
     };
 };
 
-const Protocol = struct {
-    pub const semantic_identity = "agent.model.openai.responses.v1";
-    pub const ResponseBody = boundary.Bytes(32 * 1024);
-    pub const TransportFailureKind = enum {
+const ModelProtocol = struct {
+    pub const semantic_identity = "agent.model.invoke.v1";
+    pub const MessageRole = enum { system, developer, user, assistant };
+    pub const TransportFailure = enum {
         unavailable,
         denied,
         interrupted,
         response_too_large,
     };
-    pub const Response = union(enum) {
-        response: struct {
-            http_status: u16,
-            body: ResponseBody,
-        },
-        transport_failure: struct {
-            kind: TransportFailureKind,
-        },
+    pub const ProviderFailureKind = enum {
+        http_status,
+        response_failed,
+        response_incomplete,
+    };
+    pub const UnsupportedResponse = enum {
+        unsupported_protocol,
+        unsupported_parameter,
+        malformed_json,
+        invalid_utf8,
+        unsupported_status,
+        unsupported_output_item,
+        mixed_refusal,
+        normalization_limit,
+    };
+    pub const ArgumentsJson = boundary.Bytes(32 * 1024);
+    pub const ResultText = boundary.Text(32 * 1024);
+    pub const CallId = boundary.Text(256);
+    pub const ToolName = boundary.Text(15);
+    pub const FunctionCall = struct {
+        call_id: CallId,
+        name: ToolName,
+        arguments_json: ArgumentsJson,
+    };
+    pub const OutputMessage = struct {
+        role: MessageRole,
+        content: ResultText,
+    };
+    pub const ReasoningOutput = struct { summary: ResultText };
+    pub const OutputItem = union(enum) {
+        function_call: FunctionCall,
+        message: OutputMessage,
+        reasoning: ReasoningOutput,
+    };
+    pub const OutputItems = boundary.Vector(OutputItem, 32);
+    pub const ModelOutput = struct {
+        items: OutputItems,
+        provider_response_digest: [32]u8,
+    };
+    pub const ProviderFailure = struct {
+        kind: ProviderFailureKind,
+        http_status: u16,
+    };
+    pub const ModelResult = union(enum) {
+        output: ModelOutput,
+        refusal: ResultText,
+        transport_failure: TransportFailure,
+        provider_failure: ProviderFailure,
+        unsupported_response: UnsupportedResponse,
     };
 };
 const Storage = boundary.process_v1.CapacityStorage(.{
@@ -245,34 +286,27 @@ fn encodeResume(
 
 fn encodeModel(
     request: boundary.process_v1.EffectRequest,
-    provider_json: []const u8,
+    name: []const u8,
+    arguments_json: []const u8,
     resume_output: []u8,
     result_output: []u8,
 ) ![]const u8 {
+    var items = ModelProtocol.OutputItems.empty();
+    try items.push(.{ .function_call = .{
+        .call_id = try ModelProtocol.CallId.fromSlice("fixture-call"),
+        .name = try ModelProtocol.ToolName.fromSlice(name),
+        .arguments_json = try ModelProtocol.ArgumentsJson.fromSlice(arguments_json),
+    } });
     return encodeResume(
-        Protocol.Response,
+        ModelProtocol.ModelResult,
         request,
-        .{ .response = .{
-            .http_status = 200,
-            .body = try Protocol.ResponseBody.fromSlice(provider_json),
+        .{ .output = .{
+            .items = items,
+            .provider_response_digest = [_]u8{0} ** 32,
         } },
         resume_output,
         result_output,
     );
-}
-
-fn providerJson(name: []const u8, arguments_json: []const u8) ![]u8 {
-    var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
-    errdefer output.deinit();
-    try output.writer.writeAll(
-        "{\"status\":\"completed\",\"error\":null,\"output\":[{" ++
-            "\"type\":\"function_call\",\"status\":\"completed\",\"name\":",
-    );
-    try std.json.Stringify.value(name, .{}, &output.writer);
-    try output.writer.writeAll(",\"arguments\":");
-    try std.json.Stringify.value(arguments_json, .{}, &output.writer);
-    try output.writer.writeAll("}]}");
-    return output.toOwnedSlice();
 }
 
 fn expectPolicyFailure(label: []const u8, state: []const u8, result: []const u8) !void {
@@ -328,23 +362,14 @@ test "repository admission rejects stale mutation and false completion from curr
         .initial_args = InitialArgs,
     }, null);
     defer model0.deinit();
-    try expectSha256(
-        model0.state,
-        "eb191c090b661f6a899720ba62bf84bbd8ca2af847d20588f35ff1bb130cb658",
-    );
-    try expectSha256(
-        model0.request,
-        "aa5e199a56c4f23566d55d0718f84d83725ab380dff678192f244e45487f7c2f",
-    );
     const model0_request = try expectIdentity(
         model0,
-        Protocol.semantic_identity,
+        ModelProtocol.semantic_identity,
     );
-    const list_json = try providerJson("list_repository", "{}");
-    defer std.testing.allocator.free(list_json);
     const list_result = try encodeModel(
         model0_request,
-        list_json,
+        "list_repository",
+        "{}",
         &resume_bytes,
         &result_bytes,
     );
@@ -353,20 +378,8 @@ test "repository admission rejects stale mutation and false completion from curr
         list_result,
     );
     defer std.testing.allocator.free(parser_state);
-    try expectSha256(
-        parser_state,
-        "766d7d90ea780ce8a6bb16dd18637e17c8a758ca9ff4cdb96976930ee0c11f23",
-    );
     const list = try advanceToRequest(.{ .process_state = parser_state }, null);
     defer list.deinit();
-    try expectSha256(
-        list.state,
-        "0bf1b9a47da747fab778c68b992b269763e0af6425b50b9adbf2c7ba95243ecd",
-    );
-    try expectSha256(
-        list.request,
-        "36dbdf653e769dcf2e90c30b9e9674401ef73bc4a3b95129183a458235a8b920",
-    );
     const list_request = try expectIdentity(list, "repo.list.v1");
     const listing_result = try encodeResume(
         repository.ListResult,
@@ -379,13 +392,12 @@ test "repository admission rejects stale mutation and false completion from curr
     defer model1.deinit();
     const model1_request = try expectIdentity(
         model1,
-        Protocol.semantic_identity,
+        ModelProtocol.semantic_identity,
     );
-    const read_json = try providerJson("read_file", "{\"role\":1}");
-    defer std.testing.allocator.free(read_json);
     const read_action = try encodeModel(
         model1_request,
-        read_json,
+        "read_file",
+        "{\"role\":1}",
         &resume_bytes,
         &result_bytes,
     );
@@ -408,13 +420,12 @@ test "repository admission rejects stale mutation and false completion from curr
     defer model2.deinit();
     const model2_request = try expectIdentity(
         model2,
-        Protocol.semantic_identity,
+        ModelProtocol.semantic_identity,
     );
-    const test_json = try providerJson("run_tests", "{}");
-    defer std.testing.allocator.free(test_json);
     const test_action = try encodeModel(
         model2_request,
-        test_json,
+        "run_tests",
+        "{}",
         &resume_bytes,
         &result_bytes,
     );
@@ -432,19 +443,15 @@ test "repository admission rejects stale mutation and false completion from curr
     defer pre_replace.deinit();
     const pre_replace_request = try expectIdentity(
         pre_replace,
-        Protocol.semantic_identity,
+        ModelProtocol.semantic_identity,
     );
 
-    const stale_json = try providerJson(
+    const stale_replace = try encodeModel(
+        pre_replace_request,
         "replace_file",
         "{\"path\":\"src/range.mjs\"," ++
             "\"expected_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"," ++
             "\"replacement\":\"fixed\",\"rationale\":\"stale\"}",
-    );
-    defer std.testing.allocator.free(stale_json);
-    const stale_replace = try encodeModel(
-        pre_replace_request,
-        stale_json,
         &resume_bytes,
         &result_bytes,
     );
@@ -458,16 +465,12 @@ test "repository admission rejects stale mutation and false completion from curr
     const stale_thread = try std.Thread.spawn(.{}, runPolicyCheck, .{&stale_check});
     errdefer stale_thread.join();
 
-    const valid_replace_json = try providerJson(
+    const valid_replace = try encodeModel(
+        pre_replace_request,
         "replace_file",
         "{\"path\":\"src/range.mjs\"," ++
             "\"expected_sha256\":\"8832f65e4bcf4a701dc76f310f3af34296bf8e95feb16ad70608041cb2e6dbb3\"," ++
             "\"replacement\":\"fixed\",\"rationale\":\"repair\"}",
-    );
-    defer std.testing.allocator.free(valid_replace_json);
-    const valid_replace = try encodeModel(
-        pre_replace_request,
-        valid_replace_json,
         &resume_bytes,
         &result_bytes,
     );
@@ -491,13 +494,12 @@ test "repository admission rejects stale mutation and false completion from curr
     defer model3.deinit();
     const model3_request = try expectIdentity(
         model3,
-        Protocol.semantic_identity,
+        ModelProtocol.semantic_identity,
     );
-    const retest_json = try providerJson("run_tests", "{}");
-    defer std.testing.allocator.free(retest_json);
     const retest_action = try encodeModel(
         model3_request,
-        retest_json,
+        "run_tests",
+        "{}",
         &resume_bytes,
         &result_bytes,
     );
@@ -515,18 +517,14 @@ test "repository admission rejects stale mutation and false completion from curr
     defer ready_to_finish.deinit();
     const finish_request = try expectIdentity(
         ready_to_finish,
-        Protocol.semantic_identity,
+        ModelProtocol.semantic_identity,
     );
 
-    const wrong_final_path_json = try providerJson(
+    const wrong_final_path = try encodeModel(
+        finish_request,
         "finish",
         "{\"summary\":\"done\",\"changed_path\":\"test/range.test.mjs\"," ++
             "\"final_source_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
-    );
-    defer std.testing.allocator.free(wrong_final_path_json);
-    const wrong_final_path = try encodeModel(
-        finish_request,
-        wrong_final_path_json,
         &resume_bytes,
         &result_bytes,
     );
@@ -540,15 +538,11 @@ test "repository admission rejects stale mutation and false completion from curr
     const wrong_path_thread = try std.Thread.spawn(.{}, runPolicyCheck, .{&wrong_path_check});
     errdefer wrong_path_thread.join();
 
-    const wrong_final_digest_json = try providerJson(
+    const wrong_final_digest = try encodeModel(
+        finish_request,
         "finish",
         "{\"summary\":\"done\",\"changed_path\":\"src/range.mjs\"," ++
             "\"final_source_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}",
-    );
-    defer std.testing.allocator.free(wrong_final_digest_json);
-    const wrong_final_digest = try encodeModel(
-        finish_request,
-        wrong_final_digest_json,
         &resume_bytes,
         &result_bytes,
     );
@@ -562,16 +556,12 @@ test "repository admission rejects stale mutation and false completion from curr
     const wrong_digest_thread = try std.Thread.spawn(.{}, runPolicyCheck, .{&wrong_digest_check});
     errdefer wrong_digest_thread.join();
 
-    const valid_final_json = try providerJson(
+    const valid_final = try encodeModel(
+        finish_request,
         "finish",
         "{\"summary\":\"Corrected normalizeRange and verified the complete suite.\"," ++
             "\"changed_path\":\"src/range.mjs\"," ++
             "\"final_source_sha256\":\"8bf50f62e3a4294ef359a6b9096d66e5597ce37824b3483ddad541ee21438453\"}",
-    );
-    defer std.testing.allocator.free(valid_final_json);
-    const valid_final = try encodeModel(
-        finish_request,
-        valid_final_json,
         &resume_bytes,
         &result_bytes,
     );

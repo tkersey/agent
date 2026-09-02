@@ -1,8 +1,25 @@
 const std = @import("std");
 
+pub const ReasoningEffort = enum {
+    none,
+    minimal,
+    low,
+    medium,
+    high,
+    xhigh,
+    max,
+};
+
+pub const ReasoningSummary = enum {
+    auto,
+    concise,
+    detailed,
+};
+
 fn parameterFieldAdmitted(comptime name: []const u8) bool {
     return std.mem.eql(u8, name, "max_output_tokens") or
-        std.mem.eql(u8, name, "temperature");
+        std.mem.eql(u8, name, "temperature") or
+        std.mem.eql(u8, name, "reasoning");
 }
 
 fn modelFieldAdmitted(comptime name: []const u8) bool {
@@ -21,6 +38,35 @@ fn canonicalTemperature(comptime value: []const u8) bool {
     if (value[0] == '2') return false;
     for (value[2..]) |byte| if (byte < '0' or byte > '9') return false;
     return true;
+}
+
+fn validateReasoning(comptime reasoning: anytype) void {
+    if (@typeInfo(@TypeOf(reasoning)) != .@"struct") {
+        @compileError("agent model reasoning configuration must be a struct");
+    }
+    inline for (std.meta.fields(@TypeOf(reasoning))) |field| {
+        if (!std.mem.eql(u8, field.name, "effort") and
+            !std.mem.eql(u8, field.name, "summary"))
+        {
+            @compileError(
+                "agent model reasoning contains unsupported field '" ++
+                    field.name ++ "'",
+            );
+        }
+    }
+    if (!@hasField(@TypeOf(reasoning), "effort") and
+        !@hasField(@TypeOf(reasoning), "summary"))
+    {
+        @compileError("agent model reasoning configuration must not be empty");
+    }
+    if (@hasField(@TypeOf(reasoning), "effort")) {
+        const effort: ReasoningEffort = reasoning.effort;
+        _ = effort;
+    }
+    if (@hasField(@TypeOf(reasoning), "summary")) {
+        const summary: ReasoningSummary = reasoning.summary;
+        _ = summary;
+    }
 }
 
 fn validateParameters(comptime parameters: anytype) void {
@@ -43,6 +89,9 @@ fn validateParameters(comptime parameters: anytype) void {
         if (!canonicalTemperature(value)) {
             @compileError("agent model temperature must be a canonical decimal from 0 through 2");
         }
+    }
+    if (@hasField(@TypeOf(parameters), "reasoning")) {
+        validateReasoning(parameters.reasoning);
     }
 }
 

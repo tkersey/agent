@@ -1,7 +1,7 @@
 # Agent System Closure v1 fixture
 
 This archive contains one ordinary Boundary Program Image, its InitialArgs, a
-small World Process scheduler, a byte-preserving loopback model transport, and
+small World Process scheduler, a generic semantic model protocol adapter, and
 the isolated repository fixture that realizes the declared external effects.
 It contains no Agent compiler, Boundary source, Agent-specific interpreter,
 Machine profile, prompt sidecar, tool catalog, or skill installation.

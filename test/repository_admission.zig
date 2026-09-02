@@ -170,8 +170,8 @@ const Pending = struct {
     request: []u8,
 
     fn deinit(self: @This()) void {
-        std.testing.allocator.free(self.state);
-        std.testing.allocator.free(self.request);
+        std.heap.page_allocator.free(self.state);
+        std.heap.page_allocator.free(self.request);
     }
 
     fn effect(self: @This()) !boundary.process_v1.EffectRequest {
@@ -186,7 +186,7 @@ fn advanceToRequest(
     instance: boundary.process_v1.Instance,
     effect_result: ?[]const u8,
 ) !Pending {
-    const allocator = std.testing.allocator;
+    const allocator = std.heap.page_allocator;
     const storage = try allocator.create(Storage);
     defer allocator.destroy(storage);
     storage.* = .{};
@@ -221,7 +221,7 @@ fn advanceOneState(
     instance: boundary.process_v1.Instance,
     effect_result: ?[]const u8,
 ) ![]u8 {
-    const allocator = std.testing.allocator;
+    const allocator = std.heap.page_allocator;
     const storage = try allocator.create(Storage);
     defer allocator.destroy(storage);
     storage.* = .{};
@@ -236,7 +236,7 @@ fn advanceOneState(
 }
 
 fn advanceToFailure(state: []const u8, effect_result: []const u8) !repository.Failure {
-    const allocator = std.testing.allocator;
+    const allocator = std.heap.page_allocator;
     const storage = try allocator.create(Storage);
     defer allocator.destroy(storage);
     storage.* = .{};
@@ -273,7 +273,7 @@ fn advanceToFailure(state: []const u8, effect_result: []const u8) !repository.Fa
 }
 
 fn advanceToCompletion(state: []const u8, effect_result: []const u8) ![]u8 {
-    const allocator = std.testing.allocator;
+    const allocator = std.heap.page_allocator;
     const storage = try allocator.create(Storage);
     defer allocator.destroy(storage);
     storage.* = .{};
@@ -451,7 +451,7 @@ fn expectIdentity(pending: Pending, expected: []const u8) !boundary.process_v1.E
     return request;
 }
 
-test "repository admission rejects stale mutation and false completion from current State" {
+fn proveNativeAdmission() !void {
     var resume_bytes: [128 * 1024]u8 = undefined;
     var result_bytes: [256 * 1024]u8 = undefined;
 
@@ -474,7 +474,7 @@ test "repository admission rejects stale mutation and false completion from curr
         .{ .process_state = model0.state },
         list_result,
     );
-    defer std.testing.allocator.free(parser_state);
+    defer std.heap.page_allocator.free(parser_state);
     const list = try advanceToRequest(.{ .process_state = parser_state }, null);
     defer list.deinit();
     const list_request = try expectIdentity(list, "repo.list.v1");
@@ -552,8 +552,8 @@ test "repository admission rejects stale mutation and false completion from curr
         &resume_bytes,
         &result_bytes,
     );
-    const stale_result = try std.testing.allocator.dupe(u8, stale_replace);
-    defer std.testing.allocator.free(stale_result);
+    const stale_result = try std.heap.page_allocator.dupe(u8, stale_replace);
+    defer std.heap.page_allocator.free(stale_result);
     var stale_check: PolicyCheck = .{
         .label = "stale digest",
         .state = pre_replace.state,
@@ -625,8 +625,8 @@ test "repository admission rejects stale mutation and false completion from curr
         &resume_bytes,
         &result_bytes,
     );
-    const wrong_path_result = try std.testing.allocator.dupe(u8, wrong_final_path);
-    defer std.testing.allocator.free(wrong_path_result);
+    const wrong_path_result = try std.heap.page_allocator.dupe(u8, wrong_final_path);
+    defer std.heap.page_allocator.free(wrong_path_result);
     var wrong_path_check: PolicyCheck = .{
         .label = "wrong final path",
         .state = ready_to_finish.state,
@@ -643,8 +643,8 @@ test "repository admission rejects stale mutation and false completion from curr
         &resume_bytes,
         &result_bytes,
     );
-    const wrong_digest_result = try std.testing.allocator.dupe(u8, wrong_final_digest);
-    defer std.testing.allocator.free(wrong_digest_result);
+    const wrong_digest_result = try std.heap.page_allocator.dupe(u8, wrong_final_digest);
+    defer std.heap.page_allocator.free(wrong_digest_result);
     var wrong_digest_check: PolicyCheck = .{
         .label = "wrong final digest",
         .state = ready_to_finish.state,
@@ -663,7 +663,7 @@ test "repository admission rejects stale mutation and false completion from curr
         &result_bytes,
     );
     const completed = try advanceToCompletion(ready_to_finish.state, valid_final);
-    defer std.testing.allocator.free(completed);
+    defer std.heap.page_allocator.free(completed);
     try expectSha256(
         completed,
         "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032",
@@ -671,4 +671,22 @@ test "repository admission rejects stale mutation and false completion from curr
     try joinPolicyCheck(stale_thread, &stale_check);
     try joinPolicyCheck(wrong_path_thread, &wrong_path_check);
     try joinPolicyCheck(wrong_digest_thread, &wrong_digest_check);
+}
+
+test "repository admission rejects stale mutation and false completion from current State" {
+    try proveNativeAdmission();
+}
+
+pub fn main(init: std.process.Init) !void {
+    try proveNativeAdmission();
+    var image_digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(ImageBytes, &image_digest, .{});
+    const image_sha256 = std.fmt.bytesToHex(image_digest, .lower);
+    var buffer: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(init.io, &buffer);
+    try stdout.interface.print(
+        "{{\"format\":\"agent-system-native-admission-proof/v1\",\"result\":\"passed\",\"imageSha256\":\"{s}\",\"negativeResults\":[{{\"name\":\"stale-digest-replacement\",\"failure\":\"policy_denied\"}},{{\"name\":\"wrong-final-path\",\"failure\":\"policy_denied\"}},{{\"name\":\"wrong-final-digest\",\"failure\":\"policy_denied\"}}],\"nativeProcessImageSemantics\":true}}\n",
+        .{&image_sha256},
+    );
+    try stdout.interface.flush();
 }

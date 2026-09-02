@@ -227,7 +227,15 @@ export function normalizeOpenAIResponses(body, limits, tools = []) {
   if (response.output.length > limits.maximumOutputItems) {
     return encodeUnsupported("normalization_limit");
   }
-  const refusal = refusalOnly(response.output, limits);
+  if (containsUnfinishedRefusal(response.output)) {
+    return encodeUnsupported("unsupported_output_item");
+  }
+  let refusal;
+  try {
+    refusal = refusalOnly(response.output, limits);
+  } catch {
+    return encodeUnsupported("normalization_limit");
+  }
   if (refusal !== null) return encodeRefusal(refusal);
   if (containsRefusal(response.output)) return encodeUnsupported("mixed_refusal");
 
@@ -260,10 +268,15 @@ export function normalizeOpenAIResponses(body, limits, tools = []) {
           item.content[0].annotations.length === 0) {
         requireTextLimit(item.content[0].text, limits.maximumResultTextBytes);
         items.push({ kind: "message", role: "assistant", content: item.content[0].text });
-      } else if (item?.type === "reasoning" && Array.isArray(item.summary) &&
-          item.summary.length === 1 && item.summary[0]?.type === "summary_text") {
-        requireTextLimit(item.summary[0].text, limits.maximumResultTextBytes);
-        items.push({ kind: "reasoning", summary: item.summary[0].text });
+      } else if (item?.type === "reasoning" &&
+          (item.status === undefined || item.status === "completed")) {
+        items.push({
+          kind: "reasoning",
+          summary: normalizeReasoningSummary(
+            item.summary,
+            limits.maximumResultTextBytes,
+          ),
+        });
       } else {
         return encodeUnsupported("unsupported_output_item");
       }
@@ -441,11 +454,30 @@ function encodeUnsupported(kind) {
 function refusalOnly(output, limits) {
   if (output.length !== 1) return null;
   const item = output[0];
-  if (item?.type !== "message" || item.role !== "assistant" ||
+  if (item?.type !== "message" || item.status !== "completed" ||
+      item.role !== "assistant" ||
       !Array.isArray(item.content) || item.content.length !== 1 ||
       item.content[0]?.type !== "refusal") return null;
   requireTextLimit(item.content[0].refusal, limits.maximumResultTextBytes);
   return item.content[0].refusal;
+}
+
+function containsUnfinishedRefusal(output) {
+  return output.some((item) => item?.status !== "completed" &&
+    Array.isArray(item?.content) &&
+    item.content.some((part) => part?.type === "refusal"));
+}
+
+function normalizeReasoningSummary(summary, maximumBytes) {
+  assert(Array.isArray(summary));
+  const parts = summary.map((part) => {
+    assert.equal(part?.type, "summary_text");
+    assert.equal(typeof part.text, "string");
+    return part.text;
+  });
+  const text = parts.join("\n");
+  requireTextLimit(text, maximumBytes);
+  return text;
 }
 
 function containsRefusal(output) {

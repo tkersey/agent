@@ -132,6 +132,14 @@ pub fn build(b: *std.Build) void {
         agent_module,
         boundary_module,
     );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_nonproduct_action_payload.zig",
+        "agent OpenAI Responses v2 requires struct Action payloads; 'abort' uses system_nonproduct_action_payload.ActionFailure",
+        agent_module,
+        boundary_module,
+    );
     semantic.dependOn(compile_fail);
 
     const repository_module = b.createModule(.{
@@ -282,11 +290,22 @@ pub fn build(b: *std.Build) void {
     const run_repository_admission_tests = b.addRunArtifact(
         repository_admission_tests,
     );
+    const repository_admission_proof_executable = b.addExecutable(.{
+        .name = "emit-agent-native-admission-proof-v1",
+        .root_module = repository_admission_module,
+    });
+    const run_repository_admission_proof = b.addRunArtifact(
+        repository_admission_proof_executable,
+    );
+    const repository_admission_proof = run_repository_admission_proof.captureStdOut(.{
+        .basename = "native-admission-proof.json",
+    });
     const repository_admission_step = b.step(
         "check-agent-repository-admission",
         "Reject stale mutation and false completion from current portable State",
     );
     repository_admission_step.dependOn(&run_repository_admission_tests.step);
+    repository_admission_step.dependOn(&run_repository_admission_proof.step);
 
     const world_check = b.step(
         "check-agent-repository-system-world",
@@ -387,6 +406,23 @@ pub fn build(b: *std.Build) void {
     emit_closure.dependOn(&check_distribution.step);
 
     if (world_process_root) |root| {
+        const runtime_binding_test = b.addSystemCommand(&.{
+            "node",
+            "test/runtime_checkpoint_binding.test.mjs",
+        });
+        runtime_binding_test.addFileInput(
+            b.path("test/runtime_checkpoint_binding.test.mjs"),
+        );
+        runtime_binding_test.addFileArg(
+            b.path("system_closure_v1/runtime.mjs"),
+        );
+        runtime_binding_test.addArg(root);
+        runtime_binding_test.addFileArg(outputs[0]);
+        runtime_binding_test.addFileArg(outputs[1]);
+        runtime_binding_test.addDirectoryArg(
+            b.path("fixtures/repository-repair-v1"),
+        );
+        world_check.dependOn(&runtime_binding_test.step);
         const run = b.addSystemCommand(&.{
             "node",
             "tools/check_agent_system_closure_distribution.mjs",
@@ -430,6 +466,7 @@ pub fn build(b: *std.Build) void {
             "tools/merge_agent_system_admission_proofs.mjs",
         });
         for (admission_outputs) |output| merge_admission.addFileArg(output);
+        merge_admission.addFileArg(repository_admission_proof);
         merge_admission.addFileInput(
             b.path("tools/merge_agent_system_admission_proofs.mjs"),
         );
@@ -463,6 +500,7 @@ pub fn build(b: *std.Build) void {
     const check = b.step("check", "Compile and test Agent 3");
     check.dependOn(closure_check);
     check.dependOn(economy_check);
+    check.dependOn(repository_admission_step);
     check.dependOn(lint);
 }
 

@@ -45,12 +45,19 @@ const sourceMap = options.sourceMap === undefined
   : JSON.parse(await readFile(resolve(options.sourceMap), "utf8"));
 const census = sourceMap === null ? null : new ProcessStateCensus({ image, sourceMap });
 const runtimeInputSha256 = await digestRuntimeInputs(distributionRoot, fixtureRoot);
-const world = await import(pathToFileURL(join(worldRoot, "src/process_v1/index.mjs")));
 const kernel = await readFile(join(worldRoot, "boundary-process-kernel-v1.wasm"));
 const worldManifest = JSON.parse(await readFile(join(worldRoot, "runtime-manifest.json"), "utf8"));
 assert.equal(worldManifest.format, "world-process-host-runtime/v1");
 assert.equal(worldManifest.sourceCommit, "073e0b0f024a32d3c7b3cd9008d73d76ecbad981");
 assert.equal(worldManifest.boundaryCommit, "bc43989e7ea1371649cd85b219f69b86e1c8ccf9");
+const worldProductionSourceSha256 = await digestWorldProductionSource(worldRoot);
+assert.equal(
+  worldProductionSourceSha256,
+  "8450ef58c83283fae6863b53728a7a8cfc28c61897ff6f077b076c84e1ab8b1e",
+  "executed World production source differs from the pinned release",
+);
+assert.equal(worldManifest.productionSourceSha256, worldProductionSourceSha256);
+const world = await import(pathToFileURL(join(worldRoot, "src/process_v1/index.mjs")));
 const worldArchive = await readFile(
   join(worldRoot, "dist/world-v4.1.0-process-host-runtime.tar.gz"),
 ).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
@@ -78,6 +85,11 @@ if (checkpoint !== null) {
   assert.equal(checkpoint.mode, options.mode, "checkpoint execution mode changed");
   assert.equal(checkpoint.authorityIdentity, authorityIdentity, "checkpoint model authority changed");
   assert.equal(checkpoint.runtimeInputSha256, runtimeInputSha256, "checkpoint runtime inputs changed");
+  assert.equal(
+    checkpoint.workspaceSha256,
+    await digestWorkspace(workspaceRoot),
+    "checkpoint workspace changed after suspension",
+  );
 } else {
   await mkdir(workRoot, { recursive: true });
   await cp(fixtureRoot, workspaceRoot, { recursive: true, errorOnExist: true });
@@ -198,6 +210,7 @@ if (terminal === undefined) {
     mode: options.mode,
     authorityIdentity,
     runtimeInputSha256,
+    workspaceSha256: await digestWorkspace(workspaceRoot),
     initialTree,
     state: Buffer.from(instance.state).toString("base64"),
     effectResult: effectResult === undefined ? null : Buffer.from(effectResult).toString("base64"),
@@ -268,6 +281,7 @@ process.stdout.write(`${JSON.stringify({
   kernelByteLength: host.byteLength,
   worldVersion: worldManifest.worldVersion,
   worldSourceCommit: worldManifest.sourceCommit,
+  worldProductionSourceSha256,
   worldRuntimeArchiveSha256: worldArchive === null ? null : sha256(worldArchive),
   worldRuntimeArchiveByteLength: worldArchive?.byteLength ?? null,
   kernelBoundarySourceCommit: worldManifest.boundaryCommit,
@@ -327,6 +341,53 @@ async function digestRuntimeInputs(root, fixture) {
   }
   records.sort(([left], [right]) => Buffer.compare(Buffer.from(left), Buffer.from(right)));
   return sha256(Buffer.from(JSON.stringify(records)));
+}
+
+async function digestWorldProductionSource(root) {
+  const records = [];
+  async function addTree(directory, prefix) {
+    for (const entry of (await readdir(directory, { withFileTypes: true }))
+      .sort((left, right) => left.name.localeCompare(right.name))) {
+      const path = join(directory, entry.name);
+      const name = `${prefix}/${entry.name}`;
+      const stat = await lstat(path);
+      assert(!stat.isSymbolicLink(), `World production source link is forbidden: ${name}`);
+      if (entry.isDirectory()) await addTree(path, name);
+      else if (entry.isFile()) records.push([name, await readFile(path)]);
+      else throw new Error(`unsupported World production source: ${name}`);
+    }
+  }
+  records.push(["bin/world.mjs", await readFile(join(root, "bin/world.mjs"))]);
+  await addTree(join(root, "src/process_v1"), "src/process_v1");
+  const chunks = [Buffer.from("world-production-source/v1\0")];
+  records.sort(([left], [right]) => Buffer.compare(Buffer.from(left), Buffer.from(right)));
+  for (const [name, bytes] of records) {
+    chunks.push(Buffer.from(`${name}\0`), bytes, Buffer.from([0]));
+  }
+  return sha256(Buffer.concat(chunks));
+}
+
+async function digestWorkspace(root) {
+  const records = [];
+  async function addTree(directory, prefix) {
+    for (const entry of (await readdir(directory, { withFileTypes: true }))
+      .sort((left, right) => left.name.localeCompare(right.name))) {
+      if (prefix.length === 0 && entry.name === ".git") continue;
+      const path = join(directory, entry.name);
+      const name = prefix.length === 0 ? entry.name : `${prefix}/${entry.name}`;
+      const stat = await lstat(path);
+      assert(!stat.isSymbolicLink(), `checkpoint workspace link is forbidden: ${name}`);
+      if (entry.isDirectory()) await addTree(path, name);
+      else if (entry.isFile()) records.push([name, await readFile(path)]);
+      else throw new Error(`unsupported checkpoint workspace entry: ${name}`);
+    }
+  }
+  await addTree(root, "");
+  const chunks = [Buffer.from("agent-checkpoint-workspace/v1\0")];
+  for (const [name, bytes] of records) {
+    chunks.push(Buffer.from(`${name}\0`), bytes, Buffer.from([0]));
+  }
+  return sha256(Buffer.concat(chunks));
 }
 
 function initializeGit(cwd) {

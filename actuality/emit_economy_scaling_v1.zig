@@ -58,24 +58,18 @@ const flow_limits = agent.FlowLimits{
     .maximum_edge_arguments = 4096,
 };
 
-fn representationWithDecode(comptime Action: type, comptime ablate_decode: bool) @TypeOf(.{
-    .ablate_action_argument_decode = ablate_decode,
+fn representation(comptime Action: type) @TypeOf(.{
     .response_bytes = @as(u32, 1024),
     .image_bytes = @as(u32, 256 * 1024),
     .flow_limits = flow_limits,
     .schema_types = .{ Goal, Result, Action, Observation, Failure },
 }) {
     return .{
-        .ablate_action_argument_decode = ablate_decode,
         .response_bytes = 1024,
         .image_bytes = 256 * 1024,
         .flow_limits = flow_limits,
         .schema_types = .{ Goal, Result, Action, Observation, Failure },
     };
-}
-
-fn representation(comptime Action: type) @TypeOf(representationWithDecode(Action, false)) {
-    return representationWithDecode(Action, false);
 }
 
 fn NoToolSystem(comptime DynamicGoal: type) type {
@@ -176,52 +170,66 @@ fn TwoToolSystem() type {
     });
 }
 
-fn SixToolSystem(comptime ablate_decode: bool) type {
-    const Action = union(enum) {
-        one: Result,
-        two: Result,
-        three: Result,
-        four: Result,
-        five: Result,
-        six: Result,
-    };
-    const actions = .{
-        agent.action.final(.one, .{ .name = "one", .description = "Return through action one." }),
-        agent.action.final(.two, .{ .name = "two", .description = "Return through action two." }),
-        agent.action.final(.three, .{ .name = "three", .description = "Return through action three." }),
-        agent.action.final(.four, .{ .name = "four", .description = "Return through action four." }),
-        agent.action.final(.five, .{ .name = "five", .description = "Return through action five." }),
-        agent.action.final(.six, .{ .name = "six", .description = "Return through action six." }),
-    };
-    return agent.system(.{
-        .name = "agent-economy-scaling-six-tools",
-        .version = "1.0.0",
-        .Goal = Goal,
-        .Action = Action,
-        .Observation = Observation,
-        .Result = Result,
-        .Failure = Failure,
-        .models = .{model},
-        .prompts = .{agent.prompt.literal(.{ .role = .system, .content = "p" })},
-        .skills = .{agent.skill(.{
-            .id = "economy-skill",
-            .description = "One scaling skill.",
-            .instructions = "s",
-            .role = .developer,
-            .position = .before_user,
-            .activation = .always,
-            .actions = .{ "one", "two", "three", "four", "five", "six" },
-        })},
-        .actions = actions,
-        .strategy = agent.strategy.react(.{}),
-        .epistemics = agent.epistemics.systemStateless(.{}),
-        .failures = failures,
-        .representation = representationWithDecode(Action, ablate_decode),
-    });
+const SixAction = union(enum) {
+    one: Result,
+    two: Result,
+    three: Result,
+    four: Result,
+    five: Result,
+    six: Result,
+};
+const six_actions = .{
+    agent.action.final(.one, .{ .name = "one", .description = "Return through action one." }),
+    agent.action.final(.two, .{ .name = "two", .description = "Return through action two." }),
+    agent.action.final(.three, .{ .name = "three", .description = "Return through action three." }),
+    agent.action.final(.four, .{ .name = "four", .description = "Return through action four." }),
+    agent.action.final(.five, .{ .name = "five", .description = "Return through action five." }),
+    agent.action.final(.six, .{ .name = "six", .description = "Return through action six." }),
+};
+const six_source = .{
+    .name = "agent-economy-scaling-six-tools",
+    .version = "1.0.0",
+    .Goal = Goal,
+    .Action = SixAction,
+    .Observation = Observation,
+    .Result = Result,
+    .Failure = Failure,
+    .models = .{model},
+    .prompts = .{agent.prompt.literal(.{ .role = .system, .content = "p" })},
+    .skills = .{agent.skill(.{
+        .id = "economy-skill",
+        .description = "One scaling skill.",
+        .instructions = "s",
+        .role = .developer,
+        .position = .before_user,
+        .activation = .always,
+        .actions = .{ "one", "two", "three", "four", "five", "six" },
+    })},
+    .actions = six_actions,
+    .strategy = agent.strategy.react(.{}),
+    .epistemics = agent.epistemics.systemStateless(.{}),
+    .failures = failures,
+    .representation = representation(SixAction),
+};
+
+fn SixToolSystem() type {
+    return agent.system(six_source);
 }
+
+const SixToolAblatedBody = agent.economy_tooling.ReactBodyActionDecodeAblation(
+    six_source,
+);
+const SixToolAblatedProgram = boundary.program(
+    "agent-economy-scaling-six-tools:action-decode-ablation",
+    SixToolAblatedBody,
+);
 
 fn writeImage(comptime System: type, output: *std.Io.Writer) !void {
     try output.writeAll(&System.Program.image().bytes);
+}
+
+fn writeProgramImage(comptime Program: type, output: *std.Io.Writer) !void {
+    try output.writeAll(&Program.image().bytes);
 }
 
 pub fn main(init: std.process.Init) !void {
@@ -248,9 +256,9 @@ pub fn main(init: std.process.Init) !void {
     } else if (std.mem.eql(u8, args[1], "model-dynamic-goal")) {
         try writeImage(NoToolSystem(Goal), &stdout.interface);
     } else if (std.mem.eql(u8, args[1], "six-tools-no-decode")) {
-        try writeImage(SixToolSystem(true), &stdout.interface);
+        try writeProgramImage(SixToolAblatedProgram, &stdout.interface);
     } else if (std.mem.eql(u8, args[1], "six-tools-decode")) {
-        try writeImage(SixToolSystem(false), &stdout.interface);
+        try writeImage(SixToolSystem(), &stdout.interface);
     } else return error.InvalidArguments;
     try stdout.interface.flush();
 }

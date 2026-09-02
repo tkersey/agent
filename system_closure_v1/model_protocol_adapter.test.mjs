@@ -40,6 +40,16 @@ test("decodes one self-contained semantic invocation", () => {
   assert.deepEqual(request.tools.map((tool) => tool.name), ["choose"]);
 });
 
+test("zero offered tools use a non-required provider policy", () => {
+  const invocation = decodeModelInvocation(noToolInvocationBytes());
+  assert.deepEqual(invocation.tools, []);
+  assert.equal(invocation.selection.minimumCalls, 0);
+  const request = JSON.parse(encodeOpenAIResponsesRequest(invocation));
+  assert.deepEqual(request.tools, []);
+  assert.equal(request.tool_choice, "auto");
+  assert.equal(request.parallel_tool_calls, false);
+});
+
 test("normalization preserves every call and ignores irrelevant envelope size", () => {
   const tools = decodeModelInvocation(invocationBytes()).tools;
   const output = [
@@ -119,6 +129,50 @@ test("malformed, duplicate, mixed refusal, and unsupported shapes fail typed", (
   })), limits);
   assert.equal(mixed.readUInt32LE(0), 4);
   assert.equal(mixed.readUInt32LE(4), 6);
+
+  for (const refusal of [42, "x".repeat(limits.maximumResultTextBytes + 1)]) {
+    const invalid = normalizeOpenAIResponses(Buffer.from(JSON.stringify({
+      status: "completed",
+      error: null,
+      output: [{
+        type: "message",
+        status: "completed",
+        role: "assistant",
+        content: [{ type: "refusal", refusal }],
+      }],
+    })), limits);
+    assert.equal(invalid.readUInt32LE(0), 4);
+    assert.equal(invalid.readUInt32LE(4), 7);
+  }
+
+  const unfinished = normalizeOpenAIResponses(Buffer.from(JSON.stringify({
+    status: "completed",
+    error: null,
+    output: [{
+      type: "message",
+      status: "in_progress",
+      role: "assistant",
+      content: [{ type: "refusal", refusal: "not terminal" }],
+    }],
+  })), limits);
+  assert.equal(unfinished.readUInt32LE(0), 4);
+  assert.equal(unfinished.readUInt32LE(4), 5);
+});
+
+test("reasoning normalization admits absent and multipart summaries", () => {
+  const normalize = (summary) => normalizeOpenAIResponses(Buffer.from(JSON.stringify({
+    status: "completed",
+    error: null,
+    output: [{ type: "reasoning", status: "completed", summary }],
+  })), limits);
+  const empty = normalize([]);
+  assert.equal(empty.readUInt32LE(0), 0);
+  assert.equal(empty.readUInt32LE(4), 1);
+  const multipart = normalize([
+    { type: "summary_text", text: "first" },
+    { type: "summary_text", text: "second" },
+  ]);
+  assert(multipart.includes(Buffer.from("first\nsecond")));
 });
 
 test("generic adapter source contains no repository-repair configuration", async () => {
@@ -164,6 +218,31 @@ function invocationBytes() {
     u16(32),
     u32(0),
     u32(1),
+    u32(1),
+    Buffer.from([0]),
+    Buffer.from([0, 0, 0]),
+    u32(0),
+    u32(32),
+    u32(256),
+    u32(64),
+    u32(32 * 1024),
+    u32(256),
+    u32(64),
+    u32(32 * 1024),
+    u32(32 * 1024),
+  ]);
+}
+
+function noToolInvocationBytes() {
+  return Buffer.concat([
+    text("agent.model.protocol.openai-responses-v2"),
+    text("fixture-model"),
+    Buffer.from([0, 0, 0]),
+    u32(1),
+    u32(2),
+    text("decide"),
+    u32(0),
+    u32(0),
     u32(1),
     Buffer.from([0]),
     Buffer.from([0, 0, 0]),

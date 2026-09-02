@@ -31,6 +31,12 @@ pub const openai_profile = @import("openai_profile.zig");
 pub const strategy = @import("strategy_v3.zig");
 /// Versioned Agent-owned model transport contracts.
 pub const protocol = @import("protocol.zig");
+/// Nonsemantic compiler measurements. These functions are not admitted by
+/// `agent.system` and cannot produce a runnable system through the public API.
+pub const economy_tooling = struct {
+    pub const ReactBodyActionDecodeAblation =
+        @import("system_compiler.zig").ReactBodyActionDecodeAblation;
+};
 
 comptime {
     if (!@hasDecl(boundary, "program") or

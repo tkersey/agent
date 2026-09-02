@@ -482,6 +482,22 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
             return result;
         }
 
+        fn requiredSelectionValue() ToolSelectionPolicy {
+            return .{
+                .minimum_calls = 1,
+                .maximum_calls = 1,
+                .parallel_calls = false,
+            };
+        }
+
+        fn optionalSelectionValue() ToolSelectionPolicy {
+            return .{
+                .minimum_calls = 0,
+                .maximum_calls = 1,
+                .parallel_calls = false,
+            };
+        }
+
         pub fn constantValues() @TypeOf(
             ActionProfile.constantValues() ++ .{
                 ProtocolIdentity.fromSlice(
@@ -491,11 +507,8 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
                 promptsValue(),
                 skillsValue(),
                 toolDeclarationsValue(),
-                ToolSelectionPolicy{
-                    .minimum_calls = 1,
-                    .maximum_calls = 1,
-                    .parallel_calls = false,
-                },
+                requiredSelectionValue(),
+                optionalSelectionValue(),
                 ResponsePolicy{
                     .store = false,
                     .stream = false,
@@ -523,11 +536,8 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
                 promptsValue(),
                 skillsValue(),
                 toolDeclarationsValue(),
-                ToolSelectionPolicy{
-                    .minimum_calls = 1,
-                    .maximum_calls = 1,
-                    .parallel_calls = false,
-                },
+                requiredSelectionValue(),
+                optionalSelectionValue(),
                 ResponsePolicy{
                     .store = false,
                     .stream = false,
@@ -560,11 +570,8 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
                 promptsValue(),
                 skillsValue(),
                 toolDeclarationsValue(),
-                ToolSelectionPolicy{
-                    .minimum_calls = 1,
-                    .maximum_calls = 1,
-                    .parallel_calls = false,
-                },
+                requiredSelectionValue(),
+                optionalSelectionValue(),
                 ResponsePolicy{
                     .store = false,
                     .stream = false,
@@ -596,9 +603,10 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
         pub const skills_index: u16 = semantic_start + 3;
         pub const tool_declarations_index: u16 = semantic_start + 4;
         pub const selection_index: u16 = semantic_start + 5;
-        pub const response_policy_index: u16 = semantic_start + 6;
-        pub const normalization_limits_index: u16 = semantic_start + 7;
-        pub const maximum_response_bytes_index: u16 = semantic_start + 8;
-        pub const user_role_index: u16 = semantic_start + 9;
+        pub const optional_selection_index: u16 = semantic_start + 6;
+        pub const response_policy_index: u16 = semantic_start + 7;
+        pub const normalization_limits_index: u16 = semantic_start + 8;
+        pub const maximum_response_bytes_index: u16 = semantic_start + 9;
+        pub const user_role_index: u16 = semantic_start + 10;
     };
 }

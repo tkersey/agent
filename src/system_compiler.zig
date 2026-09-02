@@ -565,7 +565,10 @@ fn selectedFunctionCall(
     return flow.enter(present)[0];
 }
 
-pub fn ReactBody(comptime source: anytype) type {
+fn ReactBodyMode(
+    comptime source: anytype,
+    comptime ablate_action_argument_decode: bool,
+) type {
     if (comptime !boundary.schema.isTextType(source.Goal)) {
         @compileError("Agent 3 default ReAct currently requires a Text Goal prompt");
     }
@@ -670,13 +673,24 @@ pub fn ReactBody(comptime source: anytype) type {
         model_index,
         flow.constant(Context.Failure, Context.invalid_index_failure_index),
     );
+    const selection = flow.select(
+        flow.integerGreaterEqual(
+            flow.vectorLength(tools),
+            flow.constant(u32, Context.one_u32_index),
+        ),
+        flow.constant(Profile.ToolSelectionPolicyType, Profile.selection_index),
+        flow.constant(
+            Profile.ToolSelectionPolicyType,
+            Profile.optional_selection_index,
+        ),
+    );
     const model_request = flow.productConstruct(Profile.ModelInvocationType, .{
         flow.constant(Profile.ProtocolIdentityType, Profile.protocol_index),
         flow.productExtract(0, selected_model),
         flow.productExtract(1, selected_model),
         messages,
         tools,
-        flow.constant(Profile.ToolSelectionPolicyType, Profile.selection_index),
+        selection,
         flow.constant(Profile.ResponsePolicyType, Profile.response_policy_index),
         flow.constant(Profile.NormalizationLimitsType, Profile.normalization_limits_index),
         flow.constant(u32, Profile.maximum_response_bytes_index),
@@ -750,10 +764,7 @@ pub fn ReactBody(comptime source: anytype) type {
         flow.failValue(flow.constant(source.Failure, Context.unknown_action_failure_index));
     } else {
         flow.setPhase(.agent_action_argument_decode);
-        const selected = if (comptime @hasField(
-            @TypeOf(source.representation),
-            "ablate_action_argument_decode",
-        ) and source.representation.ablate_action_argument_decode)
+        const selected = if (comptime ablate_action_argument_decode)
             typed_action_decode.emitNameOnly(
                 &flow,
                 Profile,
@@ -976,4 +987,13 @@ pub fn ReactBody(comptime source: anytype) type {
             "image_bytes",
         )) source.representation.image_bytes else 16 * 1024 * 1024;
     };
+}
+
+pub fn ReactBody(comptime source: anytype) type {
+    return ReactBodyMode(source, false);
+}
+
+/// Tooling-only compiler path. It is not reachable through `agent.system`.
+pub fn ReactBodyActionDecodeAblation(comptime source: anytype) type {
+    return ReactBodyMode(source, true);
 }

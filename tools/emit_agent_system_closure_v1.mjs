@@ -29,6 +29,10 @@ assert.equal(admissionProof.result, "passed");
 assert.equal(admissionProof.imageSha256, proof.imageSha256, "admission proof image digest is stale");
 assert.equal(admissionProof.kernelSha256, proof.kernelSha256, "admission proof kernel digest is stale");
 assert.equal(image.subarray(0, 8).toString("ascii"), "ABL_BPI1");
+assert.equal(proof.httpBodyEqualityCount, proof.modelRequests,
+  "fixture proof did not observe every provider request body");
+assert(Number.isSafeInteger(proof.processTransfers) && proof.processTransfers >= 0,
+  "fixture proof process transfer count is invalid");
 
 const files = new Map();
 files.set("system.bpi1", image);
@@ -75,6 +79,7 @@ const receipt = {
     sourceCommit: proof.worldSourceCommit,
     runtimeArchiveSha256: proof.worldRuntimeArchiveSha256,
     runtimeArchiveByteLength: proof.worldRuntimeArchiveByteLength,
+    productionSourceSha256: proof.worldProductionSourceSha256,
   },
   imageSha256: proof.imageSha256,
   imageByteLength: proof.imageByteLength,
@@ -103,7 +108,7 @@ const receipt = {
   },
   closureEvidence: {
     genericProtocolAdapterExercised: true,
-    providerRequestBodyEqualityCount: proof.modelRequests,
+    providerRequestBodyEqualityCount: proof.httpBodyEqualityCount,
     providerWireCodeInImage: proof.providerWireCodeInImage,
     normalizedProviderResult: proof.normalizedProviderResult,
     conditionalSkillVisible: proof.conditionalSkillVisible,

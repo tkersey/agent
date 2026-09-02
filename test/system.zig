@@ -187,11 +187,11 @@ const AlternateStaged = alternateSystem(agent.strategy.staged(.{
     .semantic_identity = "agent.strategy.alternate-system-proof.v1",
 }));
 
-test "one complete source admits default and alternate staged strategies" {
+test "alternate staged identity preserves the canonical closed runtime" {
     try std.testing.expectEqual(AlternateReact.Goal, AlternateStaged.Goal);
     try std.testing.expectEqual(AlternateReact.Action, AlternateStaged.Action);
     try std.testing.expectEqual(AlternateReact.Result, AlternateStaged.Result);
-    try std.testing.expect(!std.mem.eql(
+    try std.testing.expect(std.mem.eql(
         u8,
         &AlternateReact.Program.image().bytes,
         &AlternateStaged.Program.image().bytes,

@@ -2,6 +2,7 @@ const std = @import("std");
 const boundary = @import("boundary");
 const model = @import("model.zig");
 const skill = @import("skill.zig");
+const typed_action_profile = @import("typed_action_profile.zig");
 
 const admitted_fields = .{
     "name",
@@ -165,6 +166,11 @@ fn validate(comptime spec: anytype) void {
         !@hasDecl(Strategy, "ProgramBody"))
     {
         @compileError("agent system strategy must be one staged Agent 3 strategy");
+    }
+    if (@hasDecl(Strategy, "requires_typed_action_product_payloads") and
+        Strategy.requires_typed_action_product_payloads)
+    {
+        typed_action_profile.assertSupportedActionPayloads(spec.Action);
     }
 }
 

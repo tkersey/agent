@@ -2,12 +2,22 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const paths = process.argv.slice(2);
-assert.equal(paths.length, 4, "expected one transfer proof and three negative proofs");
-const [transfers, ...negativeCases] = await Promise.all(
+assert.equal(paths.length, 5, "expected transfer, portable negatives, and native proof");
+const proofs = await Promise.all(
   paths.map(async (path) => JSON.parse(await readFile(path, "utf8"))),
 );
+const transfers = proofs.find((proof) =>
+  proof.format === "agent-system-closure-admission-transfers/v1");
+const nativeProof = proofs.find((proof) =>
+  proof.format === "agent-system-native-admission-proof/v1");
+const negativeCases = proofs.filter((proof) =>
+  proof.format === "agent-system-closure-admission-negative-case/v1");
+assert(transfers !== undefined, "transfer proof is missing");
+assert(nativeProof !== undefined, "native admission proof is missing");
 assert.equal(transfers.format, "agent-system-closure-admission-transfers/v1");
 assert.equal(transfers.result, "passed");
+assert.equal(nativeProof.result, "passed");
+assert.equal(nativeProof.imageSha256, transfers.imageSha256);
 const expectedNames = [
   "pre-baseline-replacement",
   "disallowed-read-role",
@@ -38,12 +48,8 @@ process.stdout.write(`${JSON.stringify({
   kernelSha256: transfers.kernelSha256,
   imageSha256: transfers.imageSha256,
   negativeResults,
-  nativeNegativeResults: [
-    { name: "stale-digest-replacement", failure: "policy_denied" },
-    { name: "wrong-final-path", failure: "policy_denied" },
-    { name: "wrong-final-digest", failure: "policy_denied" },
-  ],
-  nativeProcessImageSemantics: true,
+  nativeNegativeResults: nativeProof.negativeResults,
+  nativeProcessImageSemantics: nativeProof.nativeProcessImageSemantics,
   dangerousRepositoryEffects: negativeCases.reduce(
     (sum, proof) => sum + proof.dangerousRepositoryEffects,
     0,

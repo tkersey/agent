@@ -1,13 +1,20 @@
 const std = @import("std");
 
 pub fn RepositoryRepairSystem(comptime agent: type, comptime boundary: type) type {
-    return RepositoryRepairSystemMode(agent, boundary, false);
+    return RepositoryRepairSystemDefinition(agent, boundary, true);
 }
 
-pub fn RepositoryRepairSystemMode(
+pub fn RepositoryRepairEconomySource(
     comptime agent: type,
     comptime boundary: type,
-    comptime ablate_action_argument_decode: bool,
+) type {
+    return RepositoryRepairSystemDefinition(agent, boundary, false);
+}
+
+fn RepositoryRepairSystemDefinition(
+    comptime agent: type,
+    comptime boundary: type,
+    comptime build_system: bool,
 ) type {
     return struct {
         pub const Goal = boundary.Text(2048);
@@ -914,7 +921,7 @@ pub fn RepositoryRepairSystemMode(
             };
         }
 
-        pub const System = agent.system(.{
+        pub const Source = .{
             .name = "repository-repair-system-closure-v1",
             .version = "3.0.0",
             .Goal = Goal,
@@ -982,7 +989,6 @@ pub fn RepositoryRepairSystemMode(
                 .policy_denied = Failure.policy_denied,
             },
             .representation = .{
-                .ablate_action_argument_decode = ablate_action_argument_decode,
                 .response_bytes = 32 * 1024,
                 .image_bytes = 512 * 1024,
                 .flow_limits = agent.FlowLimits{
@@ -1026,7 +1032,8 @@ pub fn RepositoryRepairSystemMode(
                     DecisionView,
                 },
             },
-        });
+        };
+        pub const System = if (build_system) agent.system(Source) else void;
 
         comptime {
             _ = std.mem.eql;

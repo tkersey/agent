@@ -7,6 +7,29 @@ fn RepeatedTuple(comptime T: type, comptime count: usize) type {
     return std.meta.Tuple(&types);
 }
 
+pub fn assertSupportedActionPayloads(comptime Action: type) void {
+    inline for (@typeInfo(Action).@"union".fields) |variant| {
+        const fields = switch (@typeInfo(variant.type)) {
+            .@"struct" => |info| info.fields,
+            else => @compileError(
+                "agent OpenAI Responses v2 requires struct Action payloads; '" ++
+                    variant.name ++ "' uses " ++ @typeName(variant.type),
+            ),
+        };
+        inline for (fields) |field| {
+            if (comptime boundary.schema.isTextType(field.type)) continue;
+            switch (@typeInfo(field.type)) {
+                .bool, .int => {},
+                else => @compileError(
+                    "agent OpenAI Responses v2 Action field '" ++ variant.name ++
+                        "." ++ field.name ++ "' has unsupported type " ++
+                        @typeName(field.type),
+                ),
+            }
+        }
+    }
+}
+
 fn PayloadTuple(comptime Action: type) type {
     const fields = @typeInfo(Action).@"union".fields;
     var types: [fields.len]type = undefined;
@@ -126,6 +149,7 @@ pub fn Profile(
     comptime Action: type,
     comptime failures: anytype,
 ) type {
+    comptime assertSupportedActionPayloads(Action);
     const action_count = @typeInfo(Action).@"union".fields.len;
     const FieldName = boundary.Text(256);
     const FieldKind = enum {

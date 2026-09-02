@@ -34,7 +34,7 @@ const System = agent.system(.{
     .Failure = Failure,
     .models = .{agent.model(.{
         .name = "primary",
-        .protocol = agent.protocol.openaiResponsesV1.Profile,
+        .protocol = agent.protocol.openaiResponsesV2.Profile,
         .model = "configured-model-id",
         .parameters = .{},
     })},

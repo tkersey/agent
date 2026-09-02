@@ -19,7 +19,7 @@ manifest or second executable format.
 | Owner | Owns |
 |---|---|
 | Boundary | Portable values, generic typed effects and handlers, BPI1, Process State, request/result identity, and the fixed evaluator |
-| Agent | Complete system authoring, model requests, raw response parsing, prompts, skills, typed action selection, epistemics, admission, and lowering |
+| Agent | Complete system authoring, semantic model requests, faithful normalized-result interpretation, prompts, skills, typed action selection, epistemics, admission, and lowering |
 | World | Fixed-kernel admission, fresh-instance one-reduction execution, Process codecs, and byte relay |
 | Environment | Credentials, endpoint and workspace authority, network transport, and actual typed external results |
 
@@ -46,8 +46,8 @@ The default ReAct lowering preserves the ENF flow:
 ```text
 Observation -> observe(Memory, Observation) -> Memory
 Memory -> project(Memory) -> DecisionView
-DecisionView + image constants -> complete provider request bytes
-raw provider response -> typed Action -> offered-set/current-policy admission
+DecisionView + image constants -> complete semantic model invocation
+faithfully normalized model result -> typed Action -> offered-set/current-policy admission
     -> local computation, typed external effect, authored failure, or completion
 ```
 

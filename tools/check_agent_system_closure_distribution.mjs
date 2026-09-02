@@ -95,6 +95,18 @@ try {
       receipt.observedProviderRequestBodySha256,
     );
     assert.equal(execution.repositoryRequests, receipt.observedRepositoryRequestCount);
+    assert.equal(
+      execution.httpBodyEqualityCount,
+      receipt.closureEvidence.providerRequestBodyEqualityCount,
+    );
+    assert.equal(
+      execution.processTransfers,
+      receipt.closureEvidence.processTransfersObserved,
+    );
+    assert.equal(
+      execution.worldProductionSourceSha256,
+      receipt.world.productionSourceSha256,
+    );
     assert.equal(execution.finalTree, receipt.repository.finalTree);
     assert.equal(execution.terminalSha256, receipt.terminalResultSha256);
   }

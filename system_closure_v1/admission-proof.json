@@ -1,1 +1,56 @@
-{"format":"agent-system-closure-admission-negatives/v1","result":"passed","kernelSha256":"f76f38b26542534b44f5fa4f2dc71dd2ff0941c378d66d9239398afc603028bf","imageSha256":"766a61b46e6bb7a6179eb0b6528d299f30718843c4e52fb6ee0a08ca8711247c","negativeResults":[{"name":"pre-baseline-replacement","terminal":"AuthoredFailure","failureSha256":"fb5e512425fc9449316ec95969ebe71e2d576dbab833d61e2a5b9330fd70ee02"},{"name":"disallowed-read-role","terminal":"AuthoredFailure","failureSha256":"01b4f6bd5d6a06a7b74a8565ceb4f845afe0ae96a0ac05cf5e86066bf7b538ec"},{"name":"premature-completion","terminal":"AuthoredFailure","failureSha256":"fb5e512425fc9449316ec95969ebe71e2d576dbab833d61e2a5b9330fd70ee02"}],"nativeNegativeResults":[{"name":"stale-digest-replacement","failure":"policy_denied"},{"name":"wrong-final-path","failure":"policy_denied"},{"name":"wrong-final-digest","failure":"policy_denied"}],"nativeProcessImageSemantics":true,"dangerousRepositoryEffects":0,"successfulPrematureCompletions":0,"transferPoints":["normalized-model-resume","pending-model-request","pending-repository-request"],"freshHostOutcomeEquality":true,"repeatedPendingRequestEquality":true,"nativeWasmParity":{"pendingModelStateSha256":"f2c595d2fc3560506e5abdda58cd4ac9308ac74583837efe8a86195ec37d605b","pendingModelRequestSha256":"7f95a33dfa95207ae4a74ccf26d1225a496b58253668011fa11a91b3396b3bba","parserStateSha256":"fc823334f3947dfa9971035883ef404302287c2a37438be39e61c0ad9800b6f3","pendingRepositoryStateSha256":"5347978ad07daafdf82ed87bf424f8bfab8f38c966d170496cc4b5a380d462ef","pendingRepositoryRequestSha256":"bf453d31fc71dde13ff275d92cad00111f318643e6a55d47495ca82fd76f52ce","policyFailureSha256":"01b4f6bd5d6a06a7b74a8565ceb4f845afe0ae96a0ac05cf5e86066bf7b538ec","completionSha256":"36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032"}}
+{
+  "format": "agent-system-closure-admission-negatives/v1",
+  "result": "passed",
+  "kernelSha256": "f76f38b26542534b44f5fa4f2dc71dd2ff0941c378d66d9239398afc603028bf",
+  "imageSha256": "e2b779bad7b89b75de02e49a94584a7808555e3be92eccecdd24f02d93c68595",
+  "negativeResults": [
+    {
+      "name": "pre-baseline-replacement",
+      "terminal": "AuthoredFailure",
+      "failureSha256": "fb5e512425fc9449316ec95969ebe71e2d576dbab833d61e2a5b9330fd70ee02"
+    },
+    {
+      "name": "disallowed-read-role",
+      "terminal": "AuthoredFailure",
+      "failureSha256": "01b4f6bd5d6a06a7b74a8565ceb4f845afe0ae96a0ac05cf5e86066bf7b538ec"
+    },
+    {
+      "name": "premature-completion",
+      "terminal": "AuthoredFailure",
+      "failureSha256": "fb5e512425fc9449316ec95969ebe71e2d576dbab833d61e2a5b9330fd70ee02"
+    }
+  ],
+  "nativeNegativeResults": [
+    {
+      "name": "stale-digest-replacement",
+      "failure": "policy_denied"
+    },
+    {
+      "name": "wrong-final-path",
+      "failure": "policy_denied"
+    },
+    {
+      "name": "wrong-final-digest",
+      "failure": "policy_denied"
+    }
+  ],
+  "nativeProcessImageSemantics": true,
+  "dangerousRepositoryEffects": 0,
+  "successfulPrematureCompletions": 0,
+  "transferPoints": [
+    "normalized-model-resume",
+    "pending-model-request",
+    "pending-repository-request"
+  ],
+  "freshHostOutcomeEquality": true,
+  "repeatedPendingRequestEquality": true,
+  "nativeWasmParity": {
+    "pendingModelStateSha256": "c5c02a1b927b47be8266ba653702648a45d66e68b2767373b7359504f4ab29ca",
+    "pendingModelRequestSha256": "529d88b235009760fcd5ab5fdd6226ef553c634da4b547b25a6c856d93edf3e5",
+    "parserStateSha256": "eddc4b6f1747bf1f1b63741a1057bc7213cb2f8a55ed46537f701c370ae60689",
+    "pendingRepositoryStateSha256": "e86fd5b227b58842f6770035f4d5ae3b44b7ca7780485981e3bbdbaabc9950bc",
+    "pendingRepositoryRequestSha256": "2f6b35600ab871a9a38ae8b922645de49e21fa314dfbf33c90bc0fac6ab66536",
+    "policyFailureSha256": "01b4f6bd5d6a06a7b74a8565ceb4f845afe0ae96a0ac05cf5e86066bf7b538ec",
+    "completionSha256": "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032"
+  }
+}

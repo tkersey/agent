@@ -284,7 +284,6 @@ if (terminal === undefined) {
   process.exit(0);
 }
 
-await rm(checkpointPath, { force: true });
 const finalResult = decodeFinalResult(terminal);
 assert.deepEqual(finalResult, {
   summary: "Corrected normalizeRange and verified the complete suite.",
@@ -315,7 +314,7 @@ if (stateCensus !== null && options.censusOutput !== undefined) {
   stateCensusReceipt = { ...summary, receiptPath: resolve(options.censusOutput) };
 }
 
-process.stdout.write(`${JSON.stringify({
+await writeStdout(`${JSON.stringify({
   format: "agent-system-closure-world-proof/v1",
   result: "passed",
   kernelSha256: host.sha256,
@@ -354,6 +353,7 @@ process.stdout.write(`${JSON.stringify({
   liveModelTestStatus: options.mode === "live" ? "passed" : "not-run",
   stateCensus: stateCensusReceipt,
 })}\n`);
+await rm(checkpointPath, { force: true });
 
 async function digestRuntimeInputs(root, fixture) {
   const runtimeNames = [
@@ -451,6 +451,12 @@ function git(cwd, args) {
 
 function checkpointAuthentication(checkpoint, key) {
   return createHmac("sha256", key).update(JSON.stringify(checkpoint)).digest();
+}
+
+function writeStdout(value) {
+  return new Promise((resolve, reject) => {
+    process.stdout.write(value, (error) => error ? reject(error) : resolve());
+  });
 }
 
 function parseArgs(args) {

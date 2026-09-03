@@ -439,6 +439,18 @@ pub fn build(b: *std.Build) void {
         b.path("system_closure_v1/model_protocol_adapter.mjs"),
     );
     closure_check.dependOn(&model_protocol_adapter_test.step);
+    const run_argument_admission_test = b.addSystemCommand(&.{
+        "node",
+        "--test",
+        "test/run_argument_admission.test.mjs",
+    });
+    run_argument_admission_test.addFileInput(
+        b.path("test/run_argument_admission.test.mjs"),
+    );
+    run_argument_admission_test.addFileInput(
+        b.path("system_closure_v1/run.mjs"),
+    );
+    closure_check.dependOn(&run_argument_admission_test.step);
     const emission_source_custody_test = b.addSystemCommand(&.{
         "node",
         "--test",

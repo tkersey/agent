@@ -54,6 +54,15 @@ try {
   assert.notEqual(alternateImage.status, 0);
   assert.match(alternateImage.stderr, /unknown runtime argument --image/);
 
+  const duplicateMode = run(
+    worldRoot,
+    join(root, "duplicate-mode-work"),
+    1,
+    ["--mode", "fixture"],
+  );
+  assert.notEqual(duplicateMode.status, 0);
+  assert.match(duplicateMode.stderr, /duplicate runtime argument --mode/);
+
   const checkpointWork = join(root, "checkpoint-work");
   const first = run(worldRoot, checkpointWork);
   assert.equal(first.status, 0, first.stderr);

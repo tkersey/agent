@@ -468,6 +468,7 @@ function parseArgs(args) {
     assert(key?.startsWith("--") && value !== undefined, "invalid arguments");
     const name = key.slice(2);
     assert(admitted.has(name), `unknown runtime argument --${name}`);
+    assert(!(name in result), `duplicate runtime argument --${name}`);
     result[name] = value;
   }
   for (const key of ["worldRoot", "workDir", "mode", "maximumReductions"]) {

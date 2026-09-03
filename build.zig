@@ -399,6 +399,8 @@ pub fn build(b: *std.Build) void {
     package_closure.addDirectoryArg(b.path("."));
     package_closure.addArg("--boundary-root");
     package_closure.addDirectoryArg(boundary_dependency.path("."));
+    package_closure.addArg("--zig-executable");
+    package_closure.addArg(b.graph.zig_exe);
     package_closure.addArg("--image");
     package_closure.addFileArg(outputs[0]);
     package_closure.addArg("--initial-args");

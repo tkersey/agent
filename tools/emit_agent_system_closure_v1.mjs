@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
-import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { basename, join, relative, resolve } from "node:path";
 
 const ARCHIVE_NAME = "agent-v3.0.0-system-closure-v1.tar.gz";
@@ -14,6 +15,23 @@ const buildManifest = await readFile(join(agentRoot, "build.zig.zon"), "utf8");
 const boundarySourceMatch = buildManifest.match(/boundary\/archive\/([0-9a-f]{40})\.tar\.gz/);
 assert(boundarySourceMatch !== null, "Boundary source commit is absent from build.zig.zon");
 const boundarySourceCommit = boundarySourceMatch[1];
+const boundaryHashMatch = buildManifest.match(/\.hash = "(boundary-[^"]+)"/);
+assert(boundaryHashMatch !== null, "Boundary package hash is absent from build.zig.zon");
+const boundaryPackageHash = boundaryHashMatch[1];
+const boundaryHashCache = await mkdtemp(join(tmpdir(), "agent-boundary-hash-"));
+let activeBoundaryPackageHash;
+try {
+  activeBoundaryPackageHash = run(options.zigExecutable, [
+    "fetch",
+    "--global-cache-dir",
+    boundaryHashCache,
+    boundaryRoot,
+  ], agentRoot).trim();
+} finally {
+  await rm(boundaryHashCache, { recursive: true, force: true });
+}
+assert.equal(activeBoundaryPackageHash, boundaryPackageHash,
+  "active Boundary package contents differ from the locked package hash");
 const boundaryGit = await lstat(join(boundaryRoot, ".git")).then(
   () => gitFacts(boundaryRoot),
   (error) => error?.code === "ENOENT" ? null : Promise.reject(error),
@@ -95,6 +113,7 @@ const receipt = {
   boundary: {
     version: "1.8.0-candidate",
     sourceCommit: boundarySourceCommit,
+    packageHash: boundaryPackageHash,
     sourceResolution: boundaryGit === null ? "locked-package" : "exact-clean-git",
     kernelSourceCommit: proof.kernelBoundarySourceCommit,
     kernelSha256: proof.kernelSha256,
@@ -277,6 +296,7 @@ function parseArgs(args) {
   for (const key of [
     "agentRoot",
     "boundaryRoot",
+    "zigExecutable",
     "image",
     "initialArgs",
     "sourceMap",

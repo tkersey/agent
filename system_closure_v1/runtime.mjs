@@ -101,7 +101,17 @@ if (checkpoint !== null) {
   );
 } else {
   await mkdir(workRoot, { recursive: true });
-  await cp(fixtureRoot, workspaceRoot, { recursive: true, errorOnExist: true });
+  await lstat(workspaceRoot).then(
+    () => assert.fail("workspace already exists"),
+    (error) => {
+      if (error?.code !== "ENOENT") throw error;
+    },
+  );
+  await cp(fixtureRoot, workspaceRoot, {
+    recursive: true,
+    errorOnExist: true,
+    force: false,
+  });
   initializeGit(workspaceRoot);
 }
 

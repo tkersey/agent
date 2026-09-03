@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { appendFile, cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -55,6 +55,15 @@ try {
   const resumed = run(worldRoot, checkpointWork);
   assert.notEqual(resumed.status, 0);
   assert.match(resumed.stderr, /checkpoint workspace changed after suspension/);
+
+  const existingWork = join(root, "existing-work");
+  const existingSource = join(existingWork, "workspace/src/range.mjs");
+  await mkdir(join(existingWork, "workspace/src"), { recursive: true });
+  await writeFile(existingSource, "must survive\n");
+  const overwrite = run(worldRoot, existingWork);
+  assert.notEqual(overwrite.status, 0);
+  assert.match(overwrite.stderr, /workspace already exists/);
+  assert.equal(await readFile(existingSource, "utf8"), "must survive\n");
 
   const changedWorld = join(root, "changed-world");
   await cp(worldRoot, changedWorld, { recursive: true });

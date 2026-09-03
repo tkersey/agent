@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -19,6 +19,12 @@ test("emission rejects a modified tracked Agent source", async (context) => {
   assertDirtyRejected(root);
 });
 
+test("emission rejects an ignored fixture source", async (context) => {
+  const root = await cleanRepository(context);
+  await writeFile(join(root, "fixtures/repository-repair-v1/generated.ignored"), "hidden\n");
+  assertEmissionRejected(root, /archive source is not tracked/);
+});
+
 async function cleanRepository(context) {
   const root = await mkdtemp(join(tmpdir(), "agent-emission-custody-"));
   context.after(() => rm(root, { recursive: true, force: true }));
@@ -26,12 +32,19 @@ async function cleanRepository(context) {
   run("git", ["config", "user.email", "test@example.invalid"], root);
   run("git", ["config", "user.name", "Agent Test"], root);
   await writeFile(join(root, "tracked.zig"), "const original = true;\n");
-  run("git", ["add", "tracked.zig"], root);
+  await mkdir(join(root, "fixtures/repository-repair-v1"), { recursive: true });
+  await writeFile(join(root, "fixtures/repository-repair-v1/README.md"), "tracked\n");
+  await writeFile(join(root, ".gitignore"), "*.ignored\n");
+  run("git", ["add", ".gitignore", "tracked.zig", "fixtures/repository-repair-v1/README.md"], root);
   run("git", ["commit", "--quiet", "-m", "fixture"], root);
   return root;
 }
 
 function assertDirtyRejected(agentRoot) {
+  assertEmissionRejected(agentRoot, /active Agent source tree contains uncommitted changes/);
+}
+
+function assertEmissionRejected(agentRoot, pattern) {
   const result = spawnSync(process.execPath, [
     emitter,
     "--agent-root", agentRoot,
@@ -45,7 +58,7 @@ function assertDirtyRejected(agentRoot) {
     "--receipt", "missing",
   ], { encoding: "utf8" });
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /active Agent source tree contains uncommitted changes/);
+  assert.match(result.stderr, pattern);
   assert.doesNotMatch(result.stderr, /ENOENT/);
 }
 

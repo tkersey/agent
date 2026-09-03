@@ -98,6 +98,7 @@ fn validate(comptime spec: anytype) void {
     if (spec.actions.len > 32 or spec.skills.len > 32) {
         @compileError("agent system supports at most 32 actions and 32 skills per closed system");
     }
+    comptime var next_effect_site_id: u32 = 1;
     inline for (spec.actions, 0..) |Descriptor, index| {
         if (!std.mem.eql(u8, Descriptor.action_name, action_info.fields[index].name)) {
             @compileError("agent system descriptors must follow Action declaration order");
@@ -116,9 +117,6 @@ fn validate(comptime spec: anytype) void {
         const Payload = action_info.fields[index].type;
         switch (Descriptor.kind) {
             .effect => {
-                if (Descriptor.Site.site_id == 0) {
-                    @compileError("agent system external action site 0 is reserved for the model protocol");
-                }
                 if (std.mem.eql(
                     u8,
                     Descriptor.Site.semantic_identity,
@@ -126,6 +124,10 @@ fn validate(comptime spec: anytype) void {
                 )) {
                     @compileError("agent system external action identity is reserved for the model protocol");
                 }
+                if (Descriptor.Site.site_id != next_effect_site_id) {
+                    @compileError("agent system external action site ID must equal its dense effect ordinal");
+                }
+                next_effect_site_id += 1;
                 inline for (spec.actions, 0..) |Earlier, earlier_index| {
                     if (earlier_index < index and Earlier.kind == .effect and
                         std.mem.eql(

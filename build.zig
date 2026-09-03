@@ -179,6 +179,14 @@ pub fn build(b: *std.Build) void {
     addExpectedCompileFailure(
         b,
         compile_fail,
+        "test/compile_fail/system_effect_site_ordinal.zig",
+        "agent system external action site ID must equal its dense effect ordinal",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
         "test/compile_fail/system_forged_prompt.zig",
         "agent system prompt must be constructed by agent.prompt.literal",
         agent_module,

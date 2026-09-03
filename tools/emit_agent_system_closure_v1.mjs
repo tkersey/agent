@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 
 const ARCHIVE_NAME = "agent-v3.0.0-system-closure-v1.tar.gz";
 const ROOT = "agent-v3.0.0-system-closure-v1";
@@ -14,6 +14,7 @@ const boundaryRoot = resolve(options.boundaryRoot);
 const agentGit = gitFacts(agentRoot);
 assert.equal(agentGit.clean, true,
   "active Agent source tree contains uncommitted changes");
+await assertTreeTracked(agentRoot, "fixtures/repository-repair-v1");
 const buildManifest = await readFile(join(agentRoot, "build.zig.zon"), "utf8");
 const boundarySourceMatch = buildManifest.match(/boundary\/archive\/([0-9a-f]{40})\.tar\.gz/);
 assert(boundarySourceMatch !== null, "Boundary source commit is absent from build.zig.zon");
@@ -118,6 +119,24 @@ async function addTree(target, sourceRoot, archiveRoot) {
     else if (entry.isFile()) target.set(destination, await readFile(source));
     else throw new Error(`unsupported archive source: ${source}`);
   }
+}
+
+async function assertTreeTracked(root, relativeRoot) {
+  const tracked = new Set(run("git", ["ls-files", "-z", "--", relativeRoot], root)
+    .split("\0").filter(Boolean));
+  async function visit(directory) {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const source = join(directory, entry.name);
+      const stat = await lstat(source);
+      assert(!stat.isSymbolicLink(), `archive source link is forbidden: ${source}`);
+      if (entry.isDirectory()) await visit(source);
+      else if (entry.isFile()) {
+        const path = relative(root, source);
+        assert(tracked.has(path), `archive source is not tracked: ${path}`);
+      } else throw new Error(`unsupported archive source: ${source}`);
+    }
+  }
+  await visit(join(root, relativeRoot));
 }
 
 function buildTar(files) {

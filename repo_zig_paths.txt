@@ -104,6 +104,7 @@ test/compile_fail/system_dangling_skill_action.zig
 test/compile_fail/system_duplicate_action_name.zig
 test/compile_fail/system_duplicate_effect_identity.zig
 test/compile_fail/system_effect_payload_mismatch.zig
+test/compile_fail/system_effect_site_ordinal.zig
 test/compile_fail/system_fixture_v3.zig
 test/compile_fail/system_forged_epistemics.zig
 test/compile_fail/system_forged_model.zig

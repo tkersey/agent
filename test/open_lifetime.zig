@@ -141,7 +141,7 @@ const System = agent.system(.{
 });
 
 const Image = System.Program.image();
-const ModelProfile = agent.model_effect.Profile(System.Source, Goal);
+const ModelProfile = System.ModelEffect;
 const Storage = boundary.process_v1.CapacityStorage(.{
     .input = 512 * 1024,
     .output = 512 * 1024,
@@ -325,7 +325,7 @@ test "no-final system returns to byte-identical pending State" {
         Image.program_transition_digest,
     );
     try std.testing.expectEqualStrings(
-        agent.model_effect.semantic_identity,
+        "agent.model.invoke.v2",
         request.effect_semantic_identity,
     );
 

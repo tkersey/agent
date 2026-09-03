@@ -9,15 +9,33 @@ const ARCHIVE_NAME = "agent-v3.0.0-system-closure-v1.tar.gz";
 const ROOT = "agent-v3.0.0-system-closure-v1";
 const options = parseArgs(process.argv.slice(2));
 const agentRoot = resolve(options.agentRoot);
+const boundaryRoot = resolve(options.boundaryRoot);
 const buildManifest = await readFile(join(agentRoot, "build.zig.zon"), "utf8");
 const boundarySourceMatch = buildManifest.match(/boundary\/archive\/([0-9a-f]{40})\.tar\.gz/);
 assert(boundarySourceMatch !== null, "Boundary source commit is absent from build.zig.zon");
 const boundarySourceCommit = boundarySourceMatch[1];
+const boundaryGit = await lstat(join(boundaryRoot, ".git")).then(
+  () => gitFacts(boundaryRoot),
+  (error) => error?.code === "ENOENT" ? null : Promise.reject(error),
+);
+if (boundaryGit !== null) {
+  assert.equal(boundaryGit.commit, boundarySourceCommit,
+    "active Boundary fork commit differs from the locked dependency");
+  assert.equal(boundaryGit.clean, true,
+    "active Boundary fork contains uncommitted compiler changes");
+} else {
+  assert(boundaryRoot.includes("/zig-pkg/boundary-"),
+    "unversioned Boundary dependency root is not admissible for emission");
+}
 const image = await readFile(options.image);
 const initialArgs = await readFile(options.initialArgs);
 const sourceMap = await readFile(options.sourceMap);
 const proof = JSON.parse(await readFile(join(agentRoot, "system_closure_v1/fixture-proof.json"), "utf8"));
 const admissionProof = JSON.parse(await readFile(join(agentRoot, "system_closure_v1/admission-proof.json"), "utf8"));
+const censusProof = JSON.parse(await readFile(
+  join(agentRoot, "economy/semantic-closure-corrected-process.json"),
+  "utf8",
+));
 assert.equal(proof.format, "agent-system-closure-world-proof/v1");
 assert.equal(proof.result, "passed");
 assert.equal(sha256(image), proof.imageSha256, "fixture proof image digest is stale");
@@ -29,6 +47,9 @@ assert.equal(admissionProof.result, "passed");
 assert.equal(admissionProof.imageSha256, proof.imageSha256, "admission proof image digest is stale");
 assert.equal(admissionProof.kernelSha256, proof.kernelSha256, "admission proof kernel digest is stale");
 assert.equal(image.subarray(0, 8).toString("ascii"), "ABL_BPI1");
+assert.equal(censusProof.format, "agent-process-state-census/v1");
+assert.equal(censusProof.imageSha256, proof.imageSha256);
+assert.equal(censusProof.reductionCount, proof.reductions);
 assert.equal(proof.httpBodyEqualityCount, proof.modelRequests,
   "fixture proof did not observe every provider request body");
 assert(Number.isSafeInteger(proof.processTransfers) && proof.processTransfers >= 0,
@@ -74,6 +95,7 @@ const receipt = {
   boundary: {
     version: "1.8.0-candidate",
     sourceCommit: boundarySourceCommit,
+    sourceResolution: boundaryGit === null ? "locked-package" : "exact-clean-git",
     kernelSourceCommit: proof.kernelBoundarySourceCommit,
     kernelSha256: proof.kernelSha256,
     kernelByteLength: proof.kernelByteLength,
@@ -131,10 +153,10 @@ const receipt = {
     sourceAbsenceRuntimePath: "passed",
   },
   measurements: {
-    peakStateBytes: proof.peakStateBytes,
-    p95StateBytes: proof.p95StateBytes,
+    peakStateBytes: censusProof.summary.stateBytes.maximum,
+    p95StateBytes: censusProof.summary.stateBytes.p95,
     maximumProgressedBetweenResidualBoundaries:
-      proof.maximumProgressedBetweenResidualBoundaries,
+      censusProof.maximumProgressedBetweenResidualBoundaries,
   },
   archiveName: ARCHIVE_NAME,
   archiveSha256,
@@ -254,6 +276,7 @@ function parseArgs(args) {
   }
   for (const key of [
     "agentRoot",
+    "boundaryRoot",
     "image",
     "initialArgs",
     "sourceMap",

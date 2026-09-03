@@ -62,11 +62,14 @@ fn actionAlwaysOffered(
     comptime action_name: []const u8,
 ) bool {
     if (source.skills.len == 0) return true;
+    var referenced = false;
     inline for (source.skills) |Skill| {
-        if (Skill.activation == .always and
-            skillReferencesAction(Skill, action_name)) return true;
+        if (skillReferencesAction(Skill, action_name)) {
+            referenced = true;
+            if (Skill.activation == .always) return true;
+        }
     }
-    return false;
+    return !referenced;
 }
 
 fn activeSkills(
@@ -1001,6 +1004,7 @@ fn ReactBodyMode(
         pub const control_ir = Lowering.control_ir;
         pub const SourcePhaseMap = Lowering.SourcePhaseMap;
         pub const source_phase_map = Lowering.source_phase_map;
+        pub const ModelEffect = Profile;
         pub const compiler_limits: boundary.ir.CompilerLimits = .{
             .maximum_values = control_ir.value_types.len,
             .maximum_blocks = control_ir.blocks.len,

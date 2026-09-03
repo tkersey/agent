@@ -104,9 +104,11 @@ test/compile_fail/system_dangling_skill_action.zig
 test/compile_fail/system_duplicate_action_name.zig
 test/compile_fail/system_effect_payload_mismatch.zig
 test/compile_fail/system_fixture_v3.zig
+test/compile_fail/system_forged_model.zig
 test/compile_fail/system_forged_strategy.zig
 test/compile_fail/system_invalid_action_name.zig
 test/compile_fail/system_missing_descriptor.zig
+test/compile_fail/system_reserved_model_effect.zig
 test/compile_fail/system_unknown_field.zig
 test/compile_fail/system_zero_response_bytes.zig
 test/compile_fail/unsupported_history_policy.zig

@@ -70,7 +70,9 @@ assert.equal(worldManifest.kernelSha256, host.sha256);
 assert.equal(worldManifest.kernelByteLength, host.byteLength);
 const authorityIdentity = options.mode === "fixture"
   ? "fixture:model-responses-v2"
-  : `live:${sha256(Buffer.from(new URL(options.endpoint).href))}`;
+  : `live:${sha256(Buffer.from(new URL(options.endpoint).href))}:credential:${
+    sha256(Buffer.from(process.env.OPENAI_API_KEY))
+  }`;
 const checkpoint = JSON.parse(await readFile(checkpointPath, "utf8").catch((error) => {
   if (error?.code === "ENOENT") return "null";
   throw error;

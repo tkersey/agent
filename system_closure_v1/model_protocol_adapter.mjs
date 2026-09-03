@@ -468,8 +468,13 @@ function encodeUnsupported(kind) {
 }
 
 function refusalOnly(output, limits) {
-  if (output.length !== 1) return null;
-  const item = output[0];
+  const actionable = output.filter((item) => item?.type !== "reasoning");
+  if (actionable.length !== 1) return null;
+  for (const reasoning of output.filter((item) => item?.type === "reasoning")) {
+    assert(reasoning.status === undefined || reasoning.status === "completed");
+    normalizeReasoningSummary(reasoning.summary, limits.maximumResultTextBytes);
+  }
+  const item = actionable[0];
   if (item?.type !== "message" || item.status !== "completed" ||
       item.role !== "assistant" ||
       !Array.isArray(item.content) || item.content.length !== 1 ||

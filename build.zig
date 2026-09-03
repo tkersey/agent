@@ -152,6 +152,22 @@ pub fn build(b: *std.Build) void {
         agent_module,
         boundary_module,
     );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_forged_model.zig",
+        "agent system model must be constructed by agent.model",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_reserved_model_effect.zig",
+        "agent system external action identity is reserved for the model protocol",
+        agent_module,
+        boundary_module,
+    );
     semantic.dependOn(compile_fail);
 
     const repository_module = b.createModule(.{
@@ -346,6 +362,7 @@ pub fn build(b: *std.Build) void {
         "Run deterministic Agent System Closure v1 checks",
     );
     closure_check.dependOn(semantic);
+    closure_check.dependOn(process_state_census_step);
     const model_protocol_adapter_test = b.addSystemCommand(&.{
         "node",
         "--test",
@@ -380,6 +397,8 @@ pub fn build(b: *std.Build) void {
     package_closure.addFileInput(b.path("tools/emit_agent_system_closure_v1.mjs"));
     package_closure.addArg("--agent-root");
     package_closure.addDirectoryArg(b.path("."));
+    package_closure.addArg("--boundary-root");
+    package_closure.addDirectoryArg(boundary_dependency.path("."));
     package_closure.addArg("--image");
     package_closure.addFileArg(outputs[0]);
     package_closure.addArg("--initial-args");
@@ -409,6 +428,7 @@ pub fn build(b: *std.Build) void {
         "system_closure_v1/repository_environment.mjs",
         "system_closure_v1/fixture-proof.json",
         "system_closure_v1/admission-proof.json",
+        "economy/semantic-closure-corrected-process.json",
         "fixtures/repository-repair-v1/README.md",
         "fixtures/repository-repair-v1/package.json",
         "fixtures/repository-repair-v1/src/range.mjs",

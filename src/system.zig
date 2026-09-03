@@ -1,6 +1,7 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const model = @import("model.zig");
+const model_effect = @import("model_effect.zig");
 const skill = @import("skill.zig");
 const strategy = @import("strategy_v3.zig");
 const typed_action_profile = @import("typed_action_profile.zig");
@@ -116,6 +117,13 @@ fn validate(comptime spec: anytype) void {
                 if (Descriptor.Site.site_id == 0) {
                     @compileError("agent system external action site 0 is reserved for the model protocol");
                 }
+                if (std.mem.eql(
+                    u8,
+                    Descriptor.Site.semantic_identity,
+                    model_effect.semantic_identity,
+                )) {
+                    @compileError("agent system external action identity is reserved for the model protocol");
+                }
                 if (Payload != Descriptor.Site.Payload) {
                     @compileError("agent system Action payload differs from its effect payload");
                 }
@@ -206,6 +214,7 @@ pub fn system(comptime spec: anytype) type {
         pub const Failure = spec.Failure;
         pub const InitialArgs = Goal;
         pub const Program = ProgramType;
+        pub const ModelEffect = Body.ModelEffect;
         pub const SourcePhaseMap = Body.SourcePhaseMap;
         pub const source_phase_map = Body.source_phase_map;
     };

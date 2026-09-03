@@ -198,6 +198,21 @@ test("malformed, duplicate, mixed refusal, and unsupported shapes fail typed", (
   })), limits);
   assert.equal(unfinished.readUInt32LE(0), 4);
   assert.equal(unfinished.readUInt32LE(4), 5);
+
+  const reasonedRefusal = normalizeOpenAIResponses(Buffer.from(JSON.stringify({
+    status: "completed",
+    error: null,
+    output: [
+      { type: "reasoning", status: "completed", summary: [] },
+      {
+        type: "message",
+        status: "completed",
+        role: "assistant",
+        content: [{ type: "refusal", refusal: "no" }],
+      },
+    ],
+  })), limits);
+  assert.equal(reasonedRefusal.readUInt32LE(0), 1);
 });
 
 test("reasoning normalization admits absent and multipart summaries", () => {

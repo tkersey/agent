@@ -1,5 +1,12 @@
 const std = @import("std");
 
+const CanonicalModelSeal = struct {};
+
+pub fn isAdmitted(comptime Model: type) bool {
+    return @hasDecl(Model, "agent_model_seal") and
+        Model.agent_model_seal == CanonicalModelSeal;
+}
+
 pub const ReasoningEffort = enum {
     none,
     minimal,
@@ -122,6 +129,7 @@ pub fn model(comptime spec: anytype) type {
     else {};
     comptime validateParameters(parameters_value);
     return struct {
+        const agent_model_seal = CanonicalModelSeal;
         pub const name = spec.name;
         pub const protocol = Protocol;
         pub const model_id = spec.model;
@@ -133,6 +141,9 @@ pub fn model(comptime spec: anytype) type {
 pub fn validateUnique(comptime models: anytype) void {
     if (models.len == 0) @compileError("agent system requires at least one model");
     inline for (models, 0..) |Model, index| {
+        if (!isAdmitted(Model)) {
+            @compileError("agent system model must be constructed by agent.model");
+        }
         _ = Model.protocol.semantic_identity;
         inline for (models, 0..) |Earlier, earlier_index| {
             if (earlier_index < index and std.mem.eql(u8, Earlier.name, Model.name)) {

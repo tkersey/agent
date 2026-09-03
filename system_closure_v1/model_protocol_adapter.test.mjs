@@ -247,6 +247,19 @@ test("message normalization preserves ordered multipart output text", () => {
   })), limits);
   assert.equal(normalized.readUInt32LE(0), 0);
   assert(normalized.includes(Buffer.from("first second")));
+
+  const missingText = normalizeOpenAIResponses(Buffer.from(JSON.stringify({
+    status: "completed",
+    error: null,
+    output: [{
+      type: "message",
+      status: "completed",
+      role: "assistant",
+      content: [{ type: "output_text", annotations: [] }],
+    }],
+  })), limits);
+  assert.equal(missingText.readUInt32LE(0), 4);
+  assert.equal(missingText.readUInt32LE(4), 5);
 });
 
 test("normalization rejects lone surrogates in every semantic Text field", () => {

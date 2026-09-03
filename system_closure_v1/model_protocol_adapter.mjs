@@ -272,7 +272,7 @@ export function normalizeOpenAIResponses(body, limits, tools = []) {
           item.role === "assistant" && Array.isArray(item.content) &&
           item.content.length > 0 && item.content.every((part) =>
             part?.type === "output_text" && Array.isArray(part.annotations) &&
-            part.annotations.length === 0)) {
+            part.annotations.length === 0 && typeof part.text === "string")) {
         const content = item.content.map((part) => part.text).join("");
         requireTextLimit(content, limits.maximumResultTextBytes);
         items.push({ kind: "message", role: "assistant", content });

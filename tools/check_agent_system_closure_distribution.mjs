@@ -92,8 +92,6 @@ try {
     assert.equal(execution.modelRequests, 8);
     assert.equal(execution.repositoryRequests, 7);
     assert.equal(execution.httpBodyEqualityCount, execution.modelRequests);
-    assert.equal(execution.providerWireCodeInImage, false);
-    assert.equal(execution.normalizedProviderResult, true);
     assert.equal(execution.finalTree, "0d9ac8802aac6597cb0a443245efb6f92a0249fe");
     assert.equal(execution.terminalSha256,
       "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032");

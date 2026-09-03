@@ -331,8 +331,6 @@ await writeStdout(`${JSON.stringify({
   providerRequestBodySha256,
   conditionalSkillVisible: true,
   httpBodyEqualityCount,
-  providerWireCodeInImage: false,
-  normalizedProviderResult: true,
   runtimeInputSha256,
   peakStateBytes,
   renderingMilliseconds: Math.round(renderingMilliseconds),

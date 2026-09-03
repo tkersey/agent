@@ -69,7 +69,9 @@ fn writeUnsigned(writer: anytype, comptime value: anytype) void {
 
 fn writeSchema(comptime T: type, writer: anytype) void {
     if (comptime boundary.schema.isTextType(T)) {
-        writer.raw("{\"type\":\"string\",\"maxLength\":");
+        writer.raw("{\"type\":\"string\",\"description\":\"UTF-8 encoding must not exceed ");
+        writeUnsigned(writer, T.maximum_length);
+        writer.raw(" bytes; maxLength is an additional character-count bound.\",\"maxLength\":");
         writeUnsigned(writer, T.maximum_length);
         writer.byte('}');
         return;

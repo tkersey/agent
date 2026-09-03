@@ -2,21 +2,57 @@
   "format": "agent-system-economy-ablation/v1",
   "boundaryCommit": "bc43989e7ea1371649cd85b219f69b86e1c8ccf9",
   "rows": {
-    "A": {"system": "prior landed Agent Interpretation image", "imageByteLength": 23431, "reductions": 96},
-    "B": {"system": "semantic model effect, fixed message, no tools", "imageByteLength": 8799},
-    "C": {"system": "B with bounded Text Goal", "imageByteLength": 8799},
-    "D": {"system": "one-tool system with one 4 KiB always-active skill", "imageByteLength": 18864},
-    "E": {"system": "one simple final tool", "imageByteLength": 14527},
-    "F": {"system": "six simple actions, Action verification ablated", "imageByteLength": 29498},
-    "G": {"system": "F with strict typed Action verification", "imageByteLength": 31345},
-    "H": {"system": "repository Memory and admission, Action verification ablated", "imageByteLength": 87828},
-    "I": {"system": "full corrected repository-repair system", "imageByteLength": 89611, "gzip9ByteLength": 24437, "reductions": 398, "peakStateBytes": 17871},
-    "J": {"system": "provider-wire-closure baseline", "imageByteLength": 253427, "gzip9ByteLength": 84556, "reductions": 20133}
+    "A": {
+      "system": "prior landed Agent Interpretation image",
+      "imageByteLength": 23431,
+      "reductions": 96
+    },
+    "B": {
+      "system": "semantic model effect, fixed message, no tools",
+      "imageByteLength": 8799
+    },
+    "C": {
+      "system": "B with bounded Text Goal",
+      "imageByteLength": 8799
+    },
+    "D": {
+      "system": "one-tool system with one 4 KiB always-active skill",
+      "imageByteLength": 18864
+    },
+    "E": {
+      "system": "one simple final tool",
+      "imageByteLength": 14527
+    },
+    "F": {
+      "system": "six simple actions, Action verification ablated",
+      "imageByteLength": 29498
+    },
+    "G": {
+      "system": "F with strict typed Action verification",
+      "imageByteLength": 31345
+    },
+    "H": {
+      "system": "repository Memory and admission, Action verification ablated",
+      "imageByteLength": 87828
+    },
+    "I": {
+      "system": "full corrected repository-repair system",
+      "imageByteLength": 90476,
+      "gzip9ByteLength": 24519,
+      "reductions": 398,
+      "peakStateBytes": 17945
+    },
+    "J": {
+      "system": "provider-wire-closure baseline",
+      "imageByteLength": 253427,
+      "gzip9ByteLength": 84556,
+      "reductions": 20133
+    }
   },
   "dominantTerms": {
     "repositoryMemoryAndAdmissionOverSixToolDecoderBytes": 56483,
-    "strictRepositoryActionVerificationBytes": 1783,
-    "providerWireRemovalBytes": 163816,
+    "strictRepositoryActionVerificationBytes": 2648,
+    "providerWireRemovalBytes": 162951,
     "providerWireRemovalReductions": 19735
   },
   "detailReceipts": {

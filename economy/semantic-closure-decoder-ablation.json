@@ -2,8 +2,8 @@
   "format": "agent-system-decoder-ablation/v1",
   "boundaryCommit": "bc43989e7ea1371649cd85b219f69b86e1c8ccf9",
   "fullRepositorySystem": {
-    "imageSha256": "dfb11bda1e0c4df0b6980550a4238c4d8da5eb5608e0147a6c39f16cbc604bfd",
-    "imageByteLength": 89611
+    "imageSha256": "31ec3ce1599c95af6d0fc7e7c9791d4798bcf92b2c93f37bf8664311da2b2581",
+    "imageByteLength": 90476
   },
   "withoutActionDecode": {
     "imageSha256": "557a77507b3d2385ef8195ca7840cabbd7fb4738bd3a95ae926b4d4c0a8fee01",
@@ -16,7 +16,7 @@
       "constructorsBytes": 52484
     }
   },
-  "decoderImageByteDelta": 1783,
+  "decoderImageByteDelta": 2648,
   "sixSimpleTools": {
     "withoutActionDecodeBytes": 29498,
     "withActionDecodeBytes": 31345,

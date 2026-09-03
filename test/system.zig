@@ -10,9 +10,14 @@ test "agent.system returns one ordinary unspecialized Boundary Program" {
     try std.testing.expect(AlternateStaged.Program.image().bytes.len > 0);
 }
 
-test "tool schemas expose bounded Text capacity" {
+test "tool schemas distinguish Text byte and character bounds" {
     const Text = boundary.Text(17);
     const schema = &agent.toolSchema(struct { value: Text }).value;
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        schema,
+        "UTF-8 encoding must not exceed 17 bytes",
+    ) != null);
     try std.testing.expect(std.mem.indexOf(
         u8,
         schema,

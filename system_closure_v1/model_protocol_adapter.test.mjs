@@ -231,6 +231,24 @@ test("reasoning normalization admits absent and multipart summaries", () => {
   assert(multipart.includes(Buffer.from("first\nsecond")));
 });
 
+test("message normalization preserves ordered multipart output text", () => {
+  const normalized = normalizeOpenAIResponses(Buffer.from(JSON.stringify({
+    status: "completed",
+    error: null,
+    output: [{
+      type: "message",
+      status: "completed",
+      role: "assistant",
+      content: [
+        { type: "output_text", text: "first", annotations: [] },
+        { type: "output_text", text: " second", annotations: [] },
+      ],
+    }],
+  })), limits);
+  assert.equal(normalized.readUInt32LE(0), 0);
+  assert(normalized.includes(Buffer.from("first second")));
+});
+
 test("normalization rejects lone surrogates in every semantic Text field", () => {
   const tools = decodeModelInvocation(invocationBytes()).tools;
   const lone = "\ud800";

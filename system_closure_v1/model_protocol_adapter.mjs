@@ -270,11 +270,12 @@ export function normalizeOpenAIResponses(body, limits, tools = []) {
         });
       } else if (item?.type === "message" && item.status === "completed" &&
           item.role === "assistant" && Array.isArray(item.content) &&
-          item.content.length === 1 && item.content[0]?.type === "output_text" &&
-          Array.isArray(item.content[0].annotations) &&
-          item.content[0].annotations.length === 0) {
-        requireTextLimit(item.content[0].text, limits.maximumResultTextBytes);
-        items.push({ kind: "message", role: "assistant", content: item.content[0].text });
+          item.content.length > 0 && item.content.every((part) =>
+            part?.type === "output_text" && Array.isArray(part.annotations) &&
+            part.annotations.length === 0)) {
+        const content = item.content.map((part) => part.text).join("");
+        requireTextLimit(content, limits.maximumResultTextBytes);
+        items.push({ kind: "message", role: "assistant", content });
       } else if (item?.type === "reasoning" &&
           (item.status === undefined || item.status === "completed")) {
         items.push({

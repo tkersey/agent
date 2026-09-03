@@ -399,13 +399,14 @@ pub fn build(b: *std.Build) void {
         syntax.addFileInput(b.path(runtime_path));
         closure_check.dependOn(&syntax.step);
     }
-    if (world_process_root != null) closure_check.dependOn(world_check);
     const emit_closure = b.step(
         "emit-agent-system-closure-v1",
         "Emit the Agent System Closure v1 distribution and receipt",
     );
     const package_closure = b.addSystemCommand(&.{ "node", "tools/emit_agent_system_closure_v1.mjs" });
     package_closure.has_side_effects = true;
+    package_closure.step.dependOn(closure_check);
+    package_closure.step.dependOn(repository_admission_step);
     package_closure.addFileInput(b.path("tools/emit_agent_system_closure_v1.mjs"));
     package_closure.addArg("--agent-root");
     package_closure.addDirectoryArg(b.path("."));

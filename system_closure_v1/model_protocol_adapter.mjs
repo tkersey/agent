@@ -240,8 +240,8 @@ export function normalizeOpenAIResponses(body, limits, tools = []) {
   let refusal;
   try {
     refusal = refusalOnly(response.output, limits);
-  } catch {
-    return encodeUnsupported("normalization_limit");
+  } catch (error) {
+    return encodeUnsupported(normalizationFailure(error));
   }
   if (refusal !== null) return encodeRefusal(refusal);
   if (containsRefusal(response.output)) return encodeUnsupported("mixed_refusal");
@@ -288,8 +288,8 @@ export function normalizeOpenAIResponses(body, limits, tools = []) {
         return encodeUnsupported("unsupported_output_item");
       }
     }
-  } catch {
-    return encodeUnsupported("normalization_limit");
+  } catch (error) {
+    return encodeUnsupported(normalizationFailure(error));
   }
   const encodedItems = encodeOutputItems(items);
   const normalizedOutputDigest = createHash("sha256").update(encodedItems).digest();
@@ -508,7 +508,19 @@ function containsRefusal(output) {
 
 function requireTextLimit(value, maximumBytes) {
   assert.equal(typeof value, "string");
-  assert(Buffer.byteLength(value) <= maximumBytes);
+  const encoded = Buffer.from(value, "utf8");
+  if (encoded.toString("utf8") !== value) {
+    const error = new Error("text contains a non-scalar Unicode value");
+    error.code = "INVALID_UNICODE_SCALAR";
+    throw error;
+  }
+  assert(encoded.byteLength <= maximumBytes);
+}
+
+function normalizationFailure(error) {
+  return error?.code === "INVALID_UNICODE_SCALAR"
+    ? "invalid_utf8"
+    : "normalization_limit";
 }
 
 async function readBoundedBody(response, maximumBytes) {

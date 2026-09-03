@@ -2,11 +2,12 @@ const action_profile = @import("typed_action_profile.zig");
 const boundary = @import("boundary");
 const json = @import("json.zig");
 const model = @import("model.zig");
+const openai_responses_v2 = @import("protocol/openai_responses_v2.zig");
 const std = @import("std");
 
 pub const semantic_identity = "agent.model.invoke.v2";
 pub const openai_responses_protocol_identity =
-    "agent.model.protocol.openai-responses-v2";
+    openai_responses_v2.protocol_identity;
 
 pub const MessageRole = enum {
     system,

@@ -219,9 +219,9 @@ pub fn Flow(comptime config: anytype) type {
             return self.request_count;
         }
 
-        /// Number of authored terminal handoffs emitted so far. Pure strategy
-        /// and epistemic hooks may elaborate local deterministic control flow,
-        /// but they may not return or fail the enclosing Agent program.
+        /// Number of authored terminal handoffs emitted so far. Admission
+        /// surfaces use the exact topology snapshots below to select which
+        /// terminal kinds they permit.
         pub fn terminalHandoffCount(self: *const Self) usize {
             return self.terminal_handoff_count;
         }

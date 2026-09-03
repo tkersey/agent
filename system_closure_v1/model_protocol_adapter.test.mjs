@@ -231,6 +231,28 @@ test("reasoning normalization admits absent and multipart summaries", () => {
   assert(multipart.includes(Buffer.from("first\nsecond")));
 });
 
+test("normalization rejects lone surrogates in every semantic Text field", () => {
+  const tools = decodeModelInvocation(invocationBytes()).tools;
+  const lone = "\ud800";
+  const cases = [
+    [{ type: "function_call", status: "completed", call_id: lone, name: "choose", arguments: '{"value":1}' }, tools],
+    [{ type: "function_call", status: "completed", call_id: "call", name: lone, arguments: '{"value":1}' }, tools],
+    [{ type: "function_call", status: "completed", call_id: "call", name: "choose", arguments: `{"value":"${lone}"}` }, tools],
+    [{ type: "message", status: "completed", role: "assistant", content: [{ type: "output_text", text: lone, annotations: [] }] }, []],
+    [{ type: "message", status: "completed", role: "assistant", content: [{ type: "refusal", refusal: lone }] }, []],
+    [{ type: "reasoning", status: "completed", summary: [{ type: "summary_text", text: lone }] }, []],
+  ];
+  for (const [item, offeredTools] of cases) {
+    const normalized = normalizeOpenAIResponses(Buffer.from(JSON.stringify({
+      status: "completed",
+      error: null,
+      output: [item],
+    })), limits, offeredTools);
+    assert.equal(normalized.readUInt32LE(0), 4);
+    assert.equal(normalized.readUInt32LE(4), 3);
+  }
+});
+
 test("generic adapter source contains no repository-repair configuration", async () => {
   const source = await readFile(
     new URL("./model_protocol_adapter.mjs", import.meta.url),

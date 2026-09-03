@@ -171,7 +171,6 @@ const receipt = {
       admissionProof.dangerousRepositoryEffects,
     successfulPrematureCompletions:
       admissionProof.successfulPrematureCompletions,
-    sourceAbsenceRuntimePath: "passed",
   },
   measurements: {
     peakStateBytes: censusProof.summary.stateBytes.maximum,

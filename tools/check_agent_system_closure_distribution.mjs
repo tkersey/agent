@@ -35,6 +35,8 @@ assert.equal(checksum, `${archiveSha256}  agent-v3.0.0-system-closure-v1.tar.gz\
 assert.equal(receipt.format, "agent-system-closure-receipt/v1");
 assert.equal(receipt.archiveSha256, archiveSha256);
 assert.equal(receipt.archiveByteLength, archive.byteLength);
+assert(!("sourceAbsenceRuntimePath" in receipt.closureEvidence),
+  "packaging receipt cannot claim source-free execution without an extracted run");
 
 const extractionRoot = await mkdtemp(join(tmpdir(), "agent-system-closure-distribution-"));
 try {

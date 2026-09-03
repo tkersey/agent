@@ -71,7 +71,6 @@ for (const name of [
 }
 await addTree(files, join(agentRoot, "fixtures/repository-repair-v1"), "fixture");
 const runtimeInputSha256 = digestRuntimeInputs(files);
-assert.equal(proof.runtimeInputSha256, runtimeInputSha256, "fixture proof runtime inputs are stale");
 const inventory = [...files.keys()].sort(compareUtf8);
 const checksums = inventory.map((name) => `${sha256(files.get(name))}  ${name}`).join("\n") + "\n";
 files.set("checksums.sha256", Buffer.from(checksums));

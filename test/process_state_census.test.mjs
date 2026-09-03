@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 import {
+  MODEL_EFFECT_IDENTITY,
   ProcessStateCensus,
   decodeProcessState,
 } from "../system_closure_v1/process_state_census.mjs";
@@ -27,7 +28,7 @@ const census = new ProcessStateCensus({ image, sourceMap, sourceMapBytes });
 census.observe({ outcome: { kind: "Progressed", state } });
 census.observe({
   outcome: { kind: "Requested", state, request: Buffer.alloc(100) },
-  effectSemanticIdentity: "agent.model.openai.responses.v1",
+  effectSemanticIdentity: MODEL_EFFECT_IDENTITY,
 });
 census.observe({ outcome: { kind: "Completed", result: Buffer.alloc(0) } });
 const report = census.report();
@@ -45,6 +46,22 @@ assert.equal(
 assert.equal(report.phaseMaxima.pending_model_request.requestBytes, 100);
 assert.equal(report.summary.stateBytes.minimum, state.byteLength);
 assert.throws(() => decodeProcessState(Buffer.from("not-a-state")));
+
+const prefixedNonModelCensus = new ProcessStateCensus({
+  image,
+  sourceMap,
+  sourceMapBytes,
+});
+prefixedNonModelCensus.observe({
+  outcome: { kind: "Requested", state, request: Buffer.alloc(101) },
+  effectSemanticIdentity: "agent.model.cache.v1",
+});
+const prefixedNonModelReport = prefixedNonModelCensus.report();
+assert.equal(prefixedNonModelReport.phaseMaxima.pending_model_request, null);
+assert.equal(
+  prefixedNonModelReport.phaseMaxima.pending_repository_request.requestBytes,
+  101,
+);
 
 const mixedSourceMap = structuredClone(sourceMap);
 const mixedSegment = mixedSourceMap.segments.find((segment) => segment.segmentId === 0);

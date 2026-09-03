@@ -8,6 +8,7 @@ const IMAGE_FIXED_PREFIX_BYTES = 76;
 const IMAGE_SECTION_DESCRIPTOR_BYTES = 24;
 const CONSTRUCTORS_SECTION_INDEX = 8;
 const DUPLICATE_ENVIRONMENT_THRESHOLD = 4 * 1024;
+export const MODEL_EFFECT_IDENTITY = "agent.model.invoke.v2";
 
 export class ProcessStateCensus {
   constructor({ image, sourceMap, sourceMapBytes }) {
@@ -244,7 +245,7 @@ function nearestRank(sorted, quantile) {
 
 function phaseCategories(outcomeKind, phases, effectSemanticIdentity) {
   if (outcomeKind === "Requested") {
-    return [effectSemanticIdentity?.startsWith("agent.model.")
+    return [effectSemanticIdentity === MODEL_EFFECT_IDENTITY
       ? "pending_model_request"
       : "pending_repository_request"];
   }

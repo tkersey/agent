@@ -10,7 +10,10 @@ import {
   encodeOpenAIResponsesRequest,
   performModelInvocation,
 } from "./model_protocol_adapter.mjs";
-import { ProcessStateCensus } from "./process_state_census.mjs";
+import {
+  MODEL_EFFECT_IDENTITY,
+  ProcessStateCensus,
+} from "./process_state_census.mjs";
 import {
   CORRECT_SOURCE,
   EXPECTED_FINAL_DIGEST,
@@ -184,7 +187,7 @@ try {
         });
         identities.push(request.effectSemanticIdentity);
         let resume;
-        if (request.effectSemanticIdentity === "agent.model.invoke.v2") {
+        if (request.effectSemanticIdentity === MODEL_EFFECT_IDENTITY) {
           modelRequests += 1;
           modelInvocationSha256.push(sha256(request.payload));
           const decoded = decodeModelInvocation(request.payload);

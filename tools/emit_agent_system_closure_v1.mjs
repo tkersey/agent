@@ -11,6 +11,9 @@ const ROOT = "agent-v3.0.0-system-closure-v1";
 const options = parseArgs(process.argv.slice(2));
 const agentRoot = resolve(options.agentRoot);
 const boundaryRoot = resolve(options.boundaryRoot);
+const agentGit = gitFacts(agentRoot);
+assert.equal(agentGit.clean, true,
+  "active Agent source tree contains uncommitted changes");
 const buildManifest = await readFile(join(agentRoot, "build.zig.zon"), "utf8");
 const boundarySourceMatch = buildManifest.match(/boundary\/archive\/([0-9a-f]{40})\.tar\.gz/);
 assert(boundarySourceMatch !== null, "Boundary source commit is absent from build.zig.zon");
@@ -102,14 +105,13 @@ files.set("checksums.sha256", Buffer.from(checksums));
 
 const archive = gzipSync(buildTar(files), { level: 9, mtime: 0 });
 const archiveSha256 = sha256(archive);
-const git = gitFacts(agentRoot);
 const receipt = {
   format: "agent-system-closure-receipt/v1",
   status: "release-candidate",
   publicationStatus: "pending-owner-authorization",
   agentVersion: "3.0.0",
-  agentSourceCommit: git.commit,
-  agentSourceClean: git.clean,
+  agentSourceCommit: agentGit.commit,
+  agentSourceClean: agentGit.clean,
   boundary: {
     version: "1.8.0-candidate",
     sourceCommit: boundarySourceCommit,

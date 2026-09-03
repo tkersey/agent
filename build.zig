@@ -375,6 +375,18 @@ pub fn build(b: *std.Build) void {
         b.path("system_closure_v1/model_protocol_adapter.mjs"),
     );
     closure_check.dependOn(&model_protocol_adapter_test.step);
+    const emission_source_custody_test = b.addSystemCommand(&.{
+        "node",
+        "--test",
+        "test/emission_source_custody.test.mjs",
+    });
+    emission_source_custody_test.addFileInput(
+        b.path("test/emission_source_custody.test.mjs"),
+    );
+    emission_source_custody_test.addFileInput(
+        b.path("tools/emit_agent_system_closure_v1.mjs"),
+    );
+    closure_check.dependOn(&emission_source_custody_test.step);
     inline for (.{
         "system_closure_v1/run.mjs",
         "system_closure_v1/runtime.mjs",

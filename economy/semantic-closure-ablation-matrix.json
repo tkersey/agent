@@ -9,38 +9,38 @@
     },
     "B": {
       "system": "semantic model effect, fixed message, no tools",
-      "imageByteLength": 8799
+      "imageByteLength": 8859
     },
     "C": {
       "system": "B with bounded Text Goal",
-      "imageByteLength": 8799
+      "imageByteLength": 8859
     },
     "D": {
       "system": "one-tool system with one 4 KiB always-active skill",
-      "imageByteLength": 18864
+      "imageByteLength": 19482
     },
     "E": {
       "system": "one simple final tool",
-      "imageByteLength": 14527
+      "imageByteLength": 15069
     },
     "F": {
       "system": "six simple actions, Action verification ablated",
-      "imageByteLength": 29498
+      "imageByteLength": 33376
     },
     "G": {
       "system": "F with strict typed Action verification",
-      "imageByteLength": 31345
+      "imageByteLength": 35223
     },
     "H": {
       "system": "repository Memory and admission, Action verification ablated",
-      "imageByteLength": 87828
+      "imageByteLength": 91573
     },
     "I": {
       "system": "full corrected repository-repair system",
-      "imageByteLength": 90476,
-      "gzip9ByteLength": 24519,
+      "imageByteLength": 93356,
+      "gzip9ByteLength": 24678,
       "reductions": 398,
-      "peakStateBytes": 17945
+      "peakStateBytes": 19456
     },
     "J": {
       "system": "provider-wire-closure baseline",
@@ -50,9 +50,9 @@
     }
   },
   "dominantTerms": {
-    "repositoryMemoryAndAdmissionOverSixToolDecoderBytes": 56483,
-    "strictRepositoryActionVerificationBytes": 2648,
-    "providerWireRemovalBytes": 162951,
+    "repositoryMemoryAndAdmissionOverSixToolDecoderBytes": 56350,
+    "strictRepositoryActionVerificationBytes": 1783,
+    "providerWireRemovalBytes": 160071,
     "providerWireRemovalReductions": 19735
   },
   "detailReceipts": {

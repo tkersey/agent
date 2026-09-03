@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 import {
+  admitModelEndpoint,
   decodeModelInvocation,
   encodeOpenAIResponsesRequest,
   normalizeOpenAIResponses,
@@ -16,6 +17,25 @@ const limits = Object.freeze({
   maximumArgumentNameBytes: 256,
   maximumArgumentFields: 64,
   maximumResultTextBytes: 32 * 1024,
+});
+
+test("credentialed transport is bound to the exact OpenAI Responses endpoint", () => {
+  assert.equal(
+    admitModelEndpoint("https://api.openai.com/v1/responses", true).href,
+    "https://api.openai.com/v1/responses",
+  );
+  assert.throws(
+    () => admitModelEndpoint("https://example.com/v1/responses", true),
+    /credentialed model endpoint must be the OpenAI Responses endpoint/,
+  );
+  assert.throws(
+    () => admitModelEndpoint("http://127.0.0.1:9000/v1/responses", true),
+    /credentialed model endpoint must be the OpenAI Responses endpoint/,
+  );
+  assert.equal(
+    admitModelEndpoint("http://127.0.0.1:9000/v1/responses", false).href,
+    "http://127.0.0.1:9000/v1/responses",
+  );
 });
 
 test("decodes one self-contained semantic invocation", () => {

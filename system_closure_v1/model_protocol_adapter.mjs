@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 
 const PROTOCOL = "agent.model.protocol.openai-responses-v2";
+const OPENAI_RESPONSES_ENDPOINT = "https://api.openai.com/v1/responses";
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "[::1]", "localhost"]);
 
 const transportFailures = Object.freeze({
@@ -46,11 +47,9 @@ export async function performModelInvocation(payload, options) {
   } catch {
     return encodeUnsupported("unsupported_parameter");
   }
-  const endpoint = new URL(options.endpoint);
-  assert(
-    endpoint.protocol === "https:" ||
-      (endpoint.protocol === "http:" && LOOPBACK_HOSTS.has(endpoint.hostname)),
-    "model endpoint must use HTTPS or loopback HTTP",
+  const endpoint = admitModelEndpoint(
+    options.endpoint,
+    options.apiKey !== undefined,
   );
   const headers = { "content-type": "application/json" };
   if (options.apiKey !== undefined) headers.authorization = `Bearer ${options.apiKey}`;
@@ -90,6 +89,23 @@ export async function performModelInvocation(payload, options) {
     }
     return encodeTransportFailure("unavailable");
   }
+}
+
+export function admitModelEndpoint(endpointText, credentialed) {
+  const endpoint = new URL(endpointText);
+  assert(
+    endpoint.protocol === "https:" ||
+      (endpoint.protocol === "http:" && LOOPBACK_HOSTS.has(endpoint.hostname)),
+    "model endpoint must use HTTPS or loopback HTTP",
+  );
+  if (credentialed) {
+    assert.equal(
+      endpoint.href,
+      OPENAI_RESPONSES_ENDPOINT,
+      "credentialed model endpoint must be the OpenAI Responses endpoint",
+    );
+  }
+  return endpoint;
 }
 
 export function decodeModelInvocation(input) {

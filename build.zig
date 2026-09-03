@@ -115,6 +115,30 @@ pub fn build(b: *std.Build) void {
     addExpectedCompileFailure(
         b,
         compile_fail,
+        "test/compile_fail/skill_unknown_field.zig",
+        "agent.skill unknown source field 'actons'",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/prompt_unknown_field.zig",
+        "agent.prompt.literal unknown source field 'contents'",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/epistemics_unknown_field.zig",
+        "agent.epistemics.system unknown source field 'implementaton'",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
         "test/compile_fail/system_invalid_action_name.zig",
         "agent system model-visible action name must match [A-Za-z0-9_-]{1,64}",
         agent_module,

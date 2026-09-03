@@ -1,3 +1,5 @@
+const std = @import("std");
+
 const CanonicalSystemEpistemicsSeal = struct {};
 
 pub fn isAdmitted(comptime Epistemics: type) bool {
@@ -61,6 +63,13 @@ pub fn system(comptime spec: anytype) type {
         !@hasField(@TypeOf(spec), "implementation"))
     {
         @compileError("agent.epistemics.system requires semantic_identity and implementation");
+    }
+    inline for (std.meta.fields(@TypeOf(spec))) |field| {
+        if (!std.mem.eql(u8, field.name, "semantic_identity") and
+            !std.mem.eql(u8, field.name, "implementation"))
+        {
+            @compileError("agent.epistemics.system unknown source field '" ++ field.name ++ "'");
+        }
     }
     if (spec.semantic_identity.len == 0) {
         @compileError("agent system epistemics semantic identity must not be empty");

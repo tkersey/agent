@@ -21,6 +21,18 @@ pub fn skill(comptime spec: anytype) type {
     {
         @compileError("agent.skill requires id, description, instructions, role, position, activation, and actions");
     }
+    inline for (std.meta.fields(@TypeOf(spec))) |field| {
+        if (!std.mem.eql(u8, field.name, "id") and
+            !std.mem.eql(u8, field.name, "description") and
+            !std.mem.eql(u8, field.name, "instructions") and
+            !std.mem.eql(u8, field.name, "role") and
+            !std.mem.eql(u8, field.name, "position") and
+            !std.mem.eql(u8, field.name, "activation") and
+            !std.mem.eql(u8, field.name, "actions"))
+        {
+            @compileError("agent.skill unknown source field '" ++ field.name ++ "'");
+        }
+    }
     const activation_value: Activation = spec.activation;
     const role_value: prompt.Role = spec.role;
     const position_value: RenderPosition = spec.position;

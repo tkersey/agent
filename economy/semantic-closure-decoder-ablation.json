@@ -2,24 +2,24 @@
   "format": "agent-system-decoder-ablation/v1",
   "boundaryCommit": "bc43989e7ea1371649cd85b219f69b86e1c8ccf9",
   "fullRepositorySystem": {
-    "imageSha256": "31ec3ce1599c95af6d0fc7e7c9791d4798bcf92b2c93f37bf8664311da2b2581",
-    "imageByteLength": 90476
+    "imageSha256": "8c9257b584b638dd7084c43059d864f3bb840437c3d102d47f774c8ba8b45906",
+    "imageByteLength": 93356
   },
   "withoutActionDecode": {
-    "imageSha256": "557a77507b3d2385ef8195ca7840cabbd7fb4738bd3a95ae926b4d4c0a8fee01",
-    "imageByteLength": 87828,
+    "imageSha256": "fe6b4f06671dbfbb7b5c576a1a9394128a8b86d80919b0c995faf6caaf7f380d",
+    "imageByteLength": 91573,
     "sections": {
       "schemasBytes": 1784,
-      "constantsBytes": 3166,
-      "valuesBytes": 4244,
-      "segmentsBytes": 22170,
-      "constructorsBytes": 52484
+      "constantsBytes": 4031,
+      "valuesBytes": 4248,
+      "segmentsBytes": 22178,
+      "constructorsBytes": 55352
     }
   },
-  "decoderImageByteDelta": 2648,
+  "decoderImageByteDelta": 1783,
   "sixSimpleTools": {
-    "withoutActionDecodeBytes": 29498,
-    "withActionDecodeBytes": 31345,
+    "withoutActionDecodeBytes": 33376,
+    "withActionDecodeBytes": 35223,
     "decoderImageByteDelta": 1847
   },
   "conclusion": "Strict typed Action verification is not the dominant remaining image term."

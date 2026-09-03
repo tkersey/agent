@@ -136,16 +136,10 @@ fn selectedWasOffered(
     var result = flow.constant(bool, context.false_index);
     var bit = flow.constant(u32, context.one_u32_index);
     inline for (0..source.actions.len) |index| {
-        const is_offered = if (actionAlwaysOffered(
-            source,
-            source.actions[index].name,
-        ))
-            flow.constant(bool, context.true_index)
-        else
-            flow.integerNotEqual(
-                flow.integerBitAnd(offered_mask, bit),
-                flow.constant(u32, context.zero_u32_index),
-            );
+        const is_offered = flow.integerNotEqual(
+            flow.integerBitAnd(offered_mask, bit),
+            flow.constant(u32, context.zero_u32_index),
+        );
         result = flow.booleanOr(
             result,
             flow.booleanAnd(flow.sumTagIs(index, selected), is_offered),
@@ -650,6 +644,7 @@ fn ReactBodyMode(
     const active_skills = activeSkills(source, Epistemics, &flow, current_memory, Context);
     flow.setPhase(.agent_tool_selection);
     const offered_actions = offeredActions(source, &flow, active_skills, Context);
+    const offered_mask = boolMask(source, &flow, offered_actions, Context);
     flow.setPhase(.agent_model_request);
     const before_model_suspensions = flow.suspensionSnapshot();
     const before_model_returns = flow.returnSnapshot();
@@ -707,17 +702,18 @@ fn ReactBodyMode(
         flow.constant(u32, Profile.maximum_response_bytes_index),
     });
     const model = if (allow_empty_tooling_model_request)
-        flow.perform(Profile.SiteType, model_request, .{runtime_state})
+        flow.perform(Profile.SiteType, model_request, .{ runtime_state, offered_mask })
     else blk: {
         const ready = flow.block(.segment, .{
             Profile.ModelInvocationType,
             RuntimeState,
+            u32,
         });
         const empty = flow.block(.terminal_handoff, .{});
         flow.branch(
             has_tools,
             ready,
-            .{ model_request, runtime_state },
+            .{ model_request, runtime_state, offered_mask },
             empty,
             .{},
         );
@@ -730,19 +726,20 @@ fn ReactBodyMode(
         break :blk flow.perform(
             Profile.SiteType,
             ready_values[0],
-            .{ready_values[1]},
+            .{ ready_values[1], ready_values[2] },
         );
     };
     flow.setPhase(.agent_model_resume);
     const response_path = flow.block(.segment, .{
         Profile.ModelResultType,
         RuntimeState,
+        u32,
     });
     const non_output = flow.block(.segment, .{Profile.ModelResultType});
     flow.branch(
         flow.sumTagIs(0, model.value),
         response_path,
-        .{ model.value, model.carried[0] },
+        .{ model.value, model.carried[0], model.carried[1] },
         non_output,
         .{model.value},
     );
@@ -828,26 +825,8 @@ fn ReactBodyMode(
                 Context,
             );
         flow.setPhase(.agent_action_admission);
-        const resumed_memory = flow.productExtract(1, response_values[1]);
-        const resumed_active_skills = activeSkills(
-            source,
-            Epistemics,
-            &flow,
-            resumed_memory,
-            Context,
-        );
-        const resumed_offered_actions = offeredActions(
-            source,
-            &flow,
-            resumed_active_skills,
-            Context,
-        );
-        const resumed_offered_mask = boolMask(
-            source,
-            &flow,
-            resumed_offered_actions,
-            Context,
-        );
+        const resumed_state = response_values[1];
+        const resumed_memory = flow.productExtract(1, resumed_state);
         const before_policy_suspensions = flow.suspensionSnapshot();
         const before_policy_returns = flow.returnSnapshot();
         const policy_allowed = Epistemics.emitActionAllowed(
@@ -863,7 +842,7 @@ fn ReactBodyMode(
                 source,
                 &flow,
                 selected,
-                resumed_offered_mask,
+                response_values[2],
                 Context,
             ),
             policy_allowed,
@@ -873,7 +852,7 @@ fn ReactBodyMode(
         flow.branch(
             allowed,
             dispatch,
-            .{ selected, response_values[1] },
+            .{ selected, resumed_state },
             denied,
             .{},
         );

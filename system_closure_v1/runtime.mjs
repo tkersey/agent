@@ -36,15 +36,9 @@ assert.match(checkpointKeyHex ?? "", /^[0-9a-f]{64}$/,
   "runtime requires one scheduler-owned checkpoint key");
 const checkpointKey = Buffer.from(checkpointKeyHex, "hex");
 const workspaceRoot = join(workRoot, "workspace");
-const image = await readFile(options.image === undefined
-  ? join(distributionRoot, "system.bpi1")
-  : resolve(options.image));
-const initial = await readFile(options.initialArgs === undefined
-  ? join(distributionRoot, "initial-args.bin")
-  : resolve(options.initialArgs));
-const fixtureRoot = options.fixtureRoot === undefined
-  ? join(distributionRoot, "fixture")
-  : resolve(options.fixtureRoot);
+const image = await readFile(join(distributionRoot, "system.bpi1"));
+const initial = await readFile(join(distributionRoot, "initial-args.bin"));
+const fixtureRoot = join(distributionRoot, "fixture");
 const sourceMapBytes = options.sourceMap === undefined
   ? null
   : await readFile(resolve(options.sourceMap));
@@ -349,7 +343,7 @@ await writeStdout(`${JSON.stringify({
   finalSourceSha256: EXPECTED_FINAL_DIGEST,
   terminalSha256: sha256(terminal),
   realFilesystemEffects: true,
-  realTestProcesses: 2,
+  realTestProcesses: repositoryState.realTestProcesses,
   liveModelTestStatus: options.mode === "live" ? "passed" : "not-run",
   stateCensus: stateCensusReceipt,
 })}\n`);
@@ -460,12 +454,23 @@ function writeStdout(value) {
 }
 
 function parseArgs(args) {
+  const admitted = new Set([
+    "worldRoot",
+    "workDir",
+    "mode",
+    "maximumReductions",
+    "endpoint",
+    "sourceMap",
+    "censusOutput",
+  ]);
   const result = {};
   for (let index = 0; index < args.length; index += 2) {
     const key = args[index];
     const value = args[index + 1];
     assert(key?.startsWith("--") && value !== undefined, "invalid arguments");
-    result[key.slice(2)] = value;
+    const name = key.slice(2);
+    assert(admitted.has(name), `unknown runtime argument --${name}`);
+    result[name] = value;
   }
   for (const key of ["worldRoot", "workDir", "mode", "maximumReductions"]) {
     assert(key in result, `missing --${key}`);

@@ -21,6 +21,7 @@ export async function createRepositoryEnvironment(workspaceRoot, restored = {}) 
   let mutationApplied = restored.mutationApplied ?? false;
   let postMutationPassed = restored.postMutationPassed ?? false;
   let requestCount = restored.repositoryRequests ?? 0;
+  let testProcessCount = restored.realTestProcesses ?? 0;
 
   async function resolveEffect(request) {
     requestCount += 1;
@@ -57,6 +58,7 @@ export async function createRepositoryEnvironment(workspaceRoot, restored = {}) 
       }
       case "repo.test.v1": {
         assert.equal(request.payload.length, 0);
+        testProcessCount += 1;
         const result = spawnSync("bun", ["test"], {
           cwd: workspaceRoot,
           encoding: "utf8",
@@ -145,7 +147,13 @@ export async function createRepositoryEnvironment(workspaceRoot, restored = {}) 
     resolveEffect,
     admittedRead,
     snapshot() {
-      return Object.freeze({ baselineFailed, mutationApplied, postMutationPassed, repositoryRequests: requestCount });
+      return Object.freeze({
+        baselineFailed,
+        mutationApplied,
+        postMutationPassed,
+        repositoryRequests: requestCount,
+        realTestProcesses: testProcessCount,
+      });
     },
   });
 }

@@ -1,24 +1,23 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { appendFile, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, copyFile, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const [runtime, worldRoot, image, initial, fixture] = process.argv
   .slice(2)
   .map((value) => resolve(value));
 const checkpointKey = "7f".repeat(32);
+let runtimeUnderTest;
 
-function run(selectedWorld, workDir, maximumReductions = 1) {
+function run(selectedWorld, workDir, maximumReductions = 1, extra = []) {
   return spawnSync(process.execPath, [
-    runtime,
+    runtimeUnderTest,
     "--worldRoot", selectedWorld,
     "--workDir", workDir,
     "--mode", "fixture",
     "--maximumReductions", String(maximumReductions),
-    "--image", image,
-    "--initialArgs", initial,
-    "--fixtureRoot", fixture,
+    ...extra,
   ], {
     encoding: "utf8",
     env: { ...process.env, AGENT_SYSTEM_CHECKPOINT_KEY: checkpointKey },
@@ -29,6 +28,32 @@ function run(selectedWorld, workDir, maximumReductions = 1) {
 
 const root = await mkdtemp(join(tmpdir(), "agent-runtime-binding-"));
 try {
+  const distributionRoot = join(root, "distribution");
+  await mkdir(distributionRoot);
+  for (const name of [
+    "run.mjs",
+    "runtime.mjs",
+    "model_protocol_adapter.mjs",
+    "fixture_model_server.mjs",
+    "repository_environment.mjs",
+    "process_state_census.mjs",
+  ]) {
+    await copyFile(join(dirname(runtime), name), join(distributionRoot, name));
+  }
+  await copyFile(image, join(distributionRoot, "system.bpi1"));
+  await copyFile(initial, join(distributionRoot, "initial-args.bin"));
+  await cp(fixture, join(distributionRoot, "fixture"), { recursive: true });
+  runtimeUnderTest = join(distributionRoot, "runtime.mjs");
+
+  const alternateImage = run(
+    worldRoot,
+    join(root, "alternate-image-work"),
+    1,
+    ["--image", image],
+  );
+  assert.notEqual(alternateImage.status, 0);
+  assert.match(alternateImage.stderr, /unknown runtime argument --image/);
+
   const checkpointWork = join(root, "checkpoint-work");
   const first = run(worldRoot, checkpointWork);
   assert.equal(first.status, 0, first.stderr);

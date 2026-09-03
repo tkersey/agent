@@ -50,7 +50,12 @@ export class ProcessStateCensus {
     assert(segmentId !== undefined, "State constructor is absent from BPI1");
     const segment = this.segments.get(segmentId);
     assert(segment !== undefined, "State segment is absent from source map");
-    const phase = segment.phaseSpans[0]?.phase ?? segment.terminatorPhase;
+    const phases = [...new Set([
+      ...segment.phaseSpans.map((span) => span.phase),
+      segment.terminatorPhase,
+    ])];
+    const phase = phases.length === 1 ? phases[0] : null;
+    const categories = phaseCategories(outcome.kind, phases, effectSemanticIdentity);
     const environmentGroups = new Map();
     let totalEnvironmentBytes = 0;
     let largestEnvironmentBytes = 0;
@@ -72,7 +77,9 @@ export class ProcessStateCensus {
     this.rows.push(Object.freeze({
       reductionIndex: this.reductions,
       phase,
-      phaseCategory: phaseCategory(outcome.kind, phase, effectSemanticIdentity),
+      phases,
+      phaseCategory: categories.length === 1 ? categories[0] : null,
+      phaseCategories: categories,
       outcomeKind: outcome.kind,
       stateByteLength: state.bytes.byteLength,
       frameCount: state.frames.length,
@@ -106,7 +113,7 @@ export class ProcessStateCensus {
       "observation_fold",
       "completion",
     ]) {
-      const rows = this.rows.filter((row) => row.phaseCategory === category);
+      const rows = this.rows.filter((row) => row.phaseCategories.includes(category));
       phaseMaxima[category] = rows.length === 0 ? null : Object.fromEntries(
         Object.entries(metrics).map(([name, field]) => [
           name,
@@ -232,19 +239,20 @@ function nearestRank(sorted, quantile) {
   return sorted[Math.max(0, Math.ceil(quantile * sorted.length) - 1)];
 }
 
-function phaseCategory(outcomeKind, phase, effectSemanticIdentity) {
+function phaseCategories(outcomeKind, phases, effectSemanticIdentity) {
   if (outcomeKind === "Requested") {
-    return effectSemanticIdentity?.startsWith("agent.model.")
+    return [effectSemanticIdentity?.startsWith("agent.model.")
       ? "pending_model_request"
-      : "pending_repository_request";
+      : "pending_repository_request"];
   }
-  return {
+  const categoryByPhase = {
     "agent.model_request": "before_model_request",
     "agent.model_resume": "model_resume",
     "agent.action_argument_decode": "action_argument_decode",
     "agent.observation_fold": "observation_fold",
     "agent.completion": "completion",
-  }[phase] ?? null;
+  };
+  return [...new Set(phases.map((phase) => categoryByPhase[phase]).filter(Boolean))];
 }
 
 function sha256(value) {

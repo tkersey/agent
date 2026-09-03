@@ -39,10 +39,10 @@
   },
   "phaseMaxima": {
     "before_model_request": {
-      "stateBytes": 16152,
+      "stateBytes": 17871,
       "frameCount": 1,
-      "environmentBytes": 16104,
-      "largestFrame": 16104,
+      "environmentBytes": 17822,
+      "largestFrame": 17822,
       "requestBytes": 0
     },
     "pending_model_request": {
@@ -91,8 +91,14 @@
   "rows": [
     {
       "reductionIndex": 1,
-      "phase": "agent.initialization",
+      "phase": null,
+      "phases": [
+        "agent.initialization",
+        "agent.memory_projection",
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 691,
       "frameCount": 1,
@@ -105,7 +111,11 @@
     {
       "reductionIndex": 2,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1274,
       "frameCount": 1,
@@ -118,7 +128,11 @@
     {
       "reductionIndex": 3,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 696,
       "frameCount": 1,
@@ -131,7 +145,11 @@
     {
       "reductionIndex": 4,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 696,
       "frameCount": 1,
@@ -144,7 +162,11 @@
     {
       "reductionIndex": 5,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 696,
       "frameCount": 1,
@@ -157,7 +179,11 @@
     {
       "reductionIndex": 6,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 696,
       "frameCount": 1,
@@ -170,7 +196,11 @@
     {
       "reductionIndex": 7,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 696,
       "frameCount": 1,
@@ -182,8 +212,16 @@
     },
     {
       "reductionIndex": 8,
-      "phase": "agent.skill_activation",
-      "phaseCategory": null,
+      "phase": null,
+      "phases": [
+        "agent.skill_activation",
+        "agent.tool_selection",
+        "agent.model_request"
+      ],
+      "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 696,
       "frameCount": 1,
@@ -196,7 +234,13 @@
     {
       "reductionIndex": 9,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3079,
       "frameCount": 1,
@@ -209,7 +253,13 @@
     {
       "reductionIndex": 10,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1644,
       "frameCount": 1,
@@ -222,7 +272,13 @@
     {
       "reductionIndex": 11,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 4678,
       "frameCount": 1,
@@ -235,7 +291,13 @@
     {
       "reductionIndex": 12,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 5204,
       "frameCount": 1,
@@ -248,7 +310,13 @@
     {
       "reductionIndex": 13,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 5686,
       "frameCount": 1,
@@ -261,7 +329,13 @@
     {
       "reductionIndex": 14,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 6000,
       "frameCount": 1,
@@ -274,7 +348,13 @@
     {
       "reductionIndex": 15,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 4136,
       "frameCount": 1,
@@ -287,7 +367,13 @@
     {
       "reductionIndex": 16,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3314,
       "frameCount": 1,
@@ -300,7 +386,13 @@
     {
       "reductionIndex": 17,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 5181,
       "frameCount": 1,
@@ -313,7 +405,13 @@
     {
       "reductionIndex": 18,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "pending_model_request",
+      "phaseCategories": [
+        "pending_model_request"
+      ],
       "outcomeKind": "Requested",
       "stateByteLength": 5181,
       "frameCount": 1,
@@ -326,7 +424,13 @@
     {
       "reductionIndex": 19,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 445,
       "frameCount": 1,
@@ -339,7 +443,13 @@
     {
       "reductionIndex": 20,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 648,
       "frameCount": 1,
@@ -352,7 +462,13 @@
     {
       "reductionIndex": 21,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 446,
       "frameCount": 1,
@@ -365,7 +481,13 @@
     {
       "reductionIndex": 22,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 472,
       "frameCount": 1,
@@ -378,7 +500,13 @@
     {
       "reductionIndex": 23,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 528,
       "frameCount": 1,
@@ -391,7 +519,13 @@
     {
       "reductionIndex": 24,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 477,
       "frameCount": 1,
@@ -404,7 +538,13 @@
     {
       "reductionIndex": 25,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 469,
       "frameCount": 1,
@@ -417,7 +557,13 @@
     {
       "reductionIndex": 26,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 410,
       "frameCount": 1,
@@ -429,8 +575,15 @@
     },
     {
       "reductionIndex": 27,
-      "phase": "agent.action_argument_decode",
+      "phase": null,
+      "phases": [
+        "agent.action_argument_decode",
+        "agent.action_name_match"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 402,
       "frameCount": 1,
@@ -443,7 +596,13 @@
     {
       "reductionIndex": 28,
       "phase": "agent.action_argument_decode",
+      "phases": [
+        "agent.action_argument_decode"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2468,
       "frameCount": 1,
@@ -456,7 +615,11 @@
     {
       "reductionIndex": 29,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 374,
       "frameCount": 1,
@@ -469,7 +632,11 @@
     {
       "reductionIndex": 30,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 462,
       "frameCount": 1,
@@ -482,7 +649,11 @@
     {
       "reductionIndex": 31,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 463,
       "frameCount": 1,
@@ -495,7 +666,11 @@
     {
       "reductionIndex": 32,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 470,
       "frameCount": 1,
@@ -508,7 +683,11 @@
     {
       "reductionIndex": 33,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 464,
       "frameCount": 1,
@@ -521,7 +700,11 @@
     {
       "reductionIndex": 34,
       "phase": "agent.tool_dispatch",
+      "phases": [
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 535,
       "frameCount": 1,
@@ -534,7 +717,11 @@
     {
       "reductionIndex": 35,
       "phase": "agent.tool_dispatch",
+      "phases": [
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 358,
       "frameCount": 1,
@@ -547,7 +734,13 @@
     {
       "reductionIndex": 36,
       "phase": "agent.tool_dispatch",
+      "phases": [
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": "pending_repository_request",
+      "phaseCategories": [
+        "pending_repository_request"
+      ],
       "outcomeKind": "Requested",
       "stateByteLength": 358,
       "frameCount": 1,
@@ -560,7 +753,13 @@
     {
       "reductionIndex": 37,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 509,
       "frameCount": 1,
@@ -573,7 +772,13 @@
     {
       "reductionIndex": 38,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 664,
       "frameCount": 1,
@@ -585,8 +790,14 @@
     },
     {
       "reductionIndex": 39,
-      "phase": "agent.initialization",
+      "phase": null,
+      "phases": [
+        "agent.initialization",
+        "agent.memory_projection",
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 811,
       "frameCount": 1,
@@ -599,7 +810,11 @@
     {
       "reductionIndex": 40,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1514,
       "frameCount": 1,
@@ -612,7 +827,11 @@
     {
       "reductionIndex": 41,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1737,
       "frameCount": 1,
@@ -625,7 +844,11 @@
     {
       "reductionIndex": 42,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 933,
       "frameCount": 1,
@@ -638,7 +861,11 @@
     {
       "reductionIndex": 43,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 933,
       "frameCount": 1,
@@ -651,7 +878,11 @@
     {
       "reductionIndex": 44,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 933,
       "frameCount": 1,
@@ -664,7 +895,11 @@
     {
       "reductionIndex": 45,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 933,
       "frameCount": 1,
@@ -677,7 +912,11 @@
     {
       "reductionIndex": 46,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 933,
       "frameCount": 1,
@@ -689,8 +928,16 @@
     },
     {
       "reductionIndex": 47,
-      "phase": "agent.skill_activation",
-      "phaseCategory": null,
+      "phase": null,
+      "phases": [
+        "agent.skill_activation",
+        "agent.tool_selection",
+        "agent.model_request"
+      ],
+      "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 933,
       "frameCount": 1,
@@ -703,7 +950,13 @@
     {
       "reductionIndex": 48,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3256,
       "frameCount": 1,
@@ -716,7 +969,13 @@
     {
       "reductionIndex": 49,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1821,
       "frameCount": 1,
@@ -729,7 +988,13 @@
     {
       "reductionIndex": 50,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 5026,
       "frameCount": 1,
@@ -742,7 +1007,13 @@
     {
       "reductionIndex": 51,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 5552,
       "frameCount": 1,
@@ -755,7 +1026,13 @@
     {
       "reductionIndex": 52,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 6034,
       "frameCount": 1,
@@ -768,7 +1045,13 @@
     {
       "reductionIndex": 53,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 6348,
       "frameCount": 1,
@@ -781,7 +1064,13 @@
     {
       "reductionIndex": 54,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 4484,
       "frameCount": 1,
@@ -794,7 +1083,13 @@
     {
       "reductionIndex": 55,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3662,
       "frameCount": 1,
@@ -807,7 +1102,13 @@
     {
       "reductionIndex": 56,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 5526,
       "frameCount": 1,
@@ -820,7 +1121,13 @@
     {
       "reductionIndex": 57,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "pending_model_request",
+      "phaseCategories": [
+        "pending_model_request"
+      ],
       "outcomeKind": "Requested",
       "stateByteLength": 5526,
       "frameCount": 1,
@@ -833,7 +1140,13 @@
     {
       "reductionIndex": 58,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 508,
       "frameCount": 1,
@@ -846,7 +1159,13 @@
     {
       "reductionIndex": 59,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 717,
       "frameCount": 1,
@@ -859,7 +1178,13 @@
     {
       "reductionIndex": 60,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 509,
       "frameCount": 1,
@@ -872,7 +1197,13 @@
     {
       "reductionIndex": 61,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 538,
       "frameCount": 1,
@@ -885,7 +1216,13 @@
     {
       "reductionIndex": 62,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 597,
       "frameCount": 1,
@@ -898,7 +1235,13 @@
     {
       "reductionIndex": 63,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 543,
       "frameCount": 1,
@@ -911,7 +1254,13 @@
     {
       "reductionIndex": 64,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 535,
       "frameCount": 1,
@@ -924,7 +1273,13 @@
     {
       "reductionIndex": 65,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 473,
       "frameCount": 1,
@@ -936,8 +1291,15 @@
     },
     {
       "reductionIndex": 66,
-      "phase": "agent.action_argument_decode",
+      "phase": null,
+      "phases": [
+        "agent.action_argument_decode",
+        "agent.action_name_match"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 465,
       "frameCount": 1,
@@ -950,7 +1312,11 @@
     {
       "reductionIndex": 67,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2526,
       "frameCount": 1,
@@ -963,7 +1329,13 @@
     {
       "reductionIndex": 68,
       "phase": "agent.action_argument_decode",
+      "phases": [
+        "agent.action_argument_decode"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2582,
       "frameCount": 1,
@@ -976,7 +1348,11 @@
     {
       "reductionIndex": 69,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 436,
       "frameCount": 1,
@@ -989,7 +1365,11 @@
     {
       "reductionIndex": 70,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 588,
       "frameCount": 1,
@@ -1002,7 +1382,11 @@
     {
       "reductionIndex": 71,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 607,
       "frameCount": 1,
@@ -1015,7 +1399,11 @@
     {
       "reductionIndex": 72,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 591,
       "frameCount": 1,
@@ -1028,7 +1416,11 @@
     {
       "reductionIndex": 73,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 585,
       "frameCount": 1,
@@ -1041,7 +1433,11 @@
     {
       "reductionIndex": 74,
       "phase": "agent.tool_dispatch",
+      "phases": [
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 656,
       "frameCount": 1,
@@ -1054,7 +1450,13 @@
     {
       "reductionIndex": 75,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 419,
       "frameCount": 1,
@@ -1066,8 +1468,15 @@
     },
     {
       "reductionIndex": 76,
-      "phase": "agent.observation_fold",
+      "phase": null,
+      "phases": [
+        "agent.observation_fold",
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 419,
       "frameCount": 1,
@@ -1079,8 +1488,15 @@
     },
     {
       "reductionIndex": 77,
-      "phase": "agent.observation_fold",
+      "phase": null,
+      "phases": [
+        "agent.observation_fold",
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": "pending_repository_request",
+      "phaseCategories": [
+        "pending_repository_request"
+      ],
       "outcomeKind": "Requested",
       "stateByteLength": 420,
       "frameCount": 1,
@@ -1093,7 +1509,13 @@
     {
       "reductionIndex": 78,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 925,
       "frameCount": 1,
@@ -1106,7 +1528,13 @@
     {
       "reductionIndex": 79,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 925,
       "frameCount": 1,
@@ -1119,7 +1547,13 @@
     {
       "reductionIndex": 80,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 932,
       "frameCount": 1,
@@ -1132,7 +1566,13 @@
     {
       "reductionIndex": 81,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1437,
       "frameCount": 1,
@@ -1145,7 +1585,13 @@
     {
       "reductionIndex": 82,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 714,
       "frameCount": 1,
@@ -1157,8 +1603,14 @@
     },
     {
       "reductionIndex": 83,
-      "phase": "agent.initialization",
+      "phase": null,
+      "phases": [
+        "agent.initialization",
+        "agent.memory_projection",
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1288,
       "frameCount": 1,
@@ -1171,7 +1623,11 @@
     {
       "reductionIndex": 84,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2138,
       "frameCount": 1,
@@ -1184,7 +1640,11 @@
     {
       "reductionIndex": 85,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2361,
       "frameCount": 1,
@@ -1197,7 +1657,11 @@
     {
       "reductionIndex": 86,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1765,
       "frameCount": 1,
@@ -1210,7 +1674,11 @@
     {
       "reductionIndex": 87,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5499,
       "frameCount": 1,
@@ -1223,7 +1691,11 @@
     {
       "reductionIndex": 88,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1757,
       "frameCount": 1,
@@ -1236,7 +1708,11 @@
     {
       "reductionIndex": 89,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1757,
       "frameCount": 1,
@@ -1249,7 +1725,11 @@
     {
       "reductionIndex": 90,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1757,
       "frameCount": 1,
@@ -1262,7 +1742,11 @@
     {
       "reductionIndex": 91,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1757,
       "frameCount": 1,
@@ -1274,8 +1758,16 @@
     },
     {
       "reductionIndex": 92,
-      "phase": "agent.skill_activation",
-      "phaseCategory": null,
+      "phase": null,
+      "phases": [
+        "agent.skill_activation",
+        "agent.tool_selection",
+        "agent.model_request"
+      ],
+      "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1757,
       "frameCount": 1,
@@ -1288,7 +1780,13 @@
     {
       "reductionIndex": 93,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3872,
       "frameCount": 1,
@@ -1301,7 +1799,13 @@
     {
       "reductionIndex": 94,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2437,
       "frameCount": 1,
@@ -1314,7 +1818,13 @@
     {
       "reductionIndex": 95,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 6242,
       "frameCount": 1,
@@ -1327,7 +1837,13 @@
     {
       "reductionIndex": 96,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 6768,
       "frameCount": 1,
@@ -1340,7 +1856,13 @@
     {
       "reductionIndex": 97,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 7250,
       "frameCount": 1,
@@ -1353,7 +1875,13 @@
     {
       "reductionIndex": 98,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 7564,
       "frameCount": 1,
@@ -1366,7 +1894,13 @@
     {
       "reductionIndex": 99,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 5700,
       "frameCount": 1,
@@ -1379,7 +1913,13 @@
     {
       "reductionIndex": 100,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 4878,
       "frameCount": 1,
@@ -1392,7 +1932,13 @@
     {
       "reductionIndex": 101,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 6734,
       "frameCount": 1,
@@ -1405,7 +1951,13 @@
     {
       "reductionIndex": 102,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "pending_model_request",
+      "phaseCategories": [
+        "pending_model_request"
+      ],
       "outcomeKind": "Requested",
       "stateByteLength": 6734,
       "frameCount": 1,
@@ -1418,7 +1970,13 @@
     {
       "reductionIndex": 103,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 716,
       "frameCount": 1,
@@ -1431,7 +1989,13 @@
     {
       "reductionIndex": 104,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 925,
       "frameCount": 1,
@@ -1444,7 +2008,13 @@
     {
       "reductionIndex": 105,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 717,
       "frameCount": 1,
@@ -1457,7 +2027,13 @@
     {
       "reductionIndex": 106,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 746,
       "frameCount": 1,
@@ -1470,7 +2046,13 @@
     {
       "reductionIndex": 107,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 805,
       "frameCount": 1,
@@ -1483,7 +2065,13 @@
     {
       "reductionIndex": 108,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 751,
       "frameCount": 1,
@@ -1496,7 +2084,13 @@
     {
       "reductionIndex": 109,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 743,
       "frameCount": 1,
@@ -1509,7 +2103,13 @@
     {
       "reductionIndex": 110,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 681,
       "frameCount": 1,
@@ -1521,8 +2121,15 @@
     },
     {
       "reductionIndex": 111,
-      "phase": "agent.action_argument_decode",
+      "phase": null,
+      "phases": [
+        "agent.action_argument_decode",
+        "agent.action_name_match"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 673,
       "frameCount": 1,
@@ -1535,7 +2142,11 @@
     {
       "reductionIndex": 112,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2734,
       "frameCount": 1,
@@ -1548,7 +2159,13 @@
     {
       "reductionIndex": 113,
       "phase": "agent.action_argument_decode",
+      "phases": [
+        "agent.action_argument_decode"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2790,
       "frameCount": 1,
@@ -1561,7 +2178,11 @@
     {
       "reductionIndex": 114,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 644,
       "frameCount": 1,
@@ -1574,7 +2195,11 @@
     {
       "reductionIndex": 115,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1004,
       "frameCount": 1,
@@ -1587,7 +2212,11 @@
     {
       "reductionIndex": 116,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1023,
       "frameCount": 1,
@@ -1600,7 +2229,11 @@
     {
       "reductionIndex": 117,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1007,
       "frameCount": 1,
@@ -1613,7 +2246,11 @@
     {
       "reductionIndex": 118,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1001,
       "frameCount": 1,
@@ -1626,7 +2263,11 @@
     {
       "reductionIndex": 119,
       "phase": "agent.tool_dispatch",
+      "phases": [
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1072,
       "frameCount": 1,
@@ -1639,7 +2280,13 @@
     {
       "reductionIndex": 120,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 627,
       "frameCount": 1,
@@ -1651,8 +2298,15 @@
     },
     {
       "reductionIndex": 121,
-      "phase": "agent.observation_fold",
+      "phase": null,
+      "phases": [
+        "agent.observation_fold",
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 627,
       "frameCount": 1,
@@ -1664,8 +2318,15 @@
     },
     {
       "reductionIndex": 122,
-      "phase": "agent.observation_fold",
+      "phase": null,
+      "phases": [
+        "agent.observation_fold",
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": "pending_repository_request",
+      "phaseCategories": [
+        "pending_repository_request"
+      ],
       "outcomeKind": "Requested",
       "stateByteLength": 628,
       "frameCount": 1,
@@ -1678,7 +2339,13 @@
     {
       "reductionIndex": 123,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1377,
       "frameCount": 1,
@@ -1691,7 +2358,13 @@
     {
       "reductionIndex": 124,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1377,
       "frameCount": 1,
@@ -1704,7 +2377,13 @@
     {
       "reductionIndex": 125,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1390,
       "frameCount": 1,
@@ -1717,7 +2396,13 @@
     {
       "reductionIndex": 126,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1384,
       "frameCount": 1,
@@ -1730,7 +2415,13 @@
     {
       "reductionIndex": 127,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2133,
       "frameCount": 1,
@@ -1743,7 +2434,13 @@
     {
       "reductionIndex": 128,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1148,
       "frameCount": 1,
@@ -1755,8 +2452,14 @@
     },
     {
       "reductionIndex": 129,
-      "phase": "agent.initialization",
+      "phase": null,
+      "phases": [
+        "agent.initialization",
+        "agent.memory_projection",
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1948,
       "frameCount": 1,
@@ -1769,7 +2472,11 @@
     {
       "reductionIndex": 130,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2816,
       "frameCount": 1,
@@ -1782,7 +2489,11 @@
     {
       "reductionIndex": 131,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3039,
       "frameCount": 1,
@@ -1795,7 +2506,11 @@
     {
       "reductionIndex": 132,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2443,
       "frameCount": 1,
@@ -1808,7 +2523,11 @@
     {
       "reductionIndex": 133,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 6177,
       "frameCount": 1,
@@ -1821,7 +2540,11 @@
     {
       "reductionIndex": 134,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2661,
       "frameCount": 1,
@@ -1834,7 +2557,11 @@
     {
       "reductionIndex": 135,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 8071,
       "frameCount": 1,
@@ -1847,7 +2574,11 @@
     {
       "reductionIndex": 136,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2653,
       "frameCount": 1,
@@ -1860,7 +2591,11 @@
     {
       "reductionIndex": 137,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2653,
       "frameCount": 1,
@@ -1873,7 +2608,11 @@
     {
       "reductionIndex": 138,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2653,
       "frameCount": 1,
@@ -1885,8 +2624,16 @@
     },
     {
       "reductionIndex": 139,
-      "phase": "agent.skill_activation",
-      "phaseCategory": null,
+      "phase": null,
+      "phases": [
+        "agent.skill_activation",
+        "agent.tool_selection",
+        "agent.model_request"
+      ],
+      "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2653,
       "frameCount": 1,
@@ -1899,7 +2646,13 @@
     {
       "reductionIndex": 140,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 4542,
       "frameCount": 1,
@@ -1912,7 +2665,13 @@
     {
       "reductionIndex": 141,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3107,
       "frameCount": 1,
@@ -1925,7 +2684,13 @@
     {
       "reductionIndex": 142,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 7566,
       "frameCount": 1,
@@ -1938,7 +2703,13 @@
     {
       "reductionIndex": 143,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 8092,
       "frameCount": 1,
@@ -1951,7 +2722,13 @@
     {
       "reductionIndex": 144,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 8574,
       "frameCount": 1,
@@ -1964,7 +2741,13 @@
     {
       "reductionIndex": 145,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 8888,
       "frameCount": 1,
@@ -1977,7 +2760,13 @@
     {
       "reductionIndex": 146,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 7024,
       "frameCount": 1,
@@ -1990,7 +2779,13 @@
     {
       "reductionIndex": 147,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 6202,
       "frameCount": 1,
@@ -2003,7 +2798,13 @@
     {
       "reductionIndex": 148,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 8050,
       "frameCount": 1,
@@ -2016,7 +2817,13 @@
     {
       "reductionIndex": 149,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "pending_model_request",
+      "phaseCategories": [
+        "pending_model_request"
+      ],
       "outcomeKind": "Requested",
       "stateByteLength": 8050,
       "frameCount": 1,
@@ -2029,7 +2836,13 @@
     {
       "reductionIndex": 150,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 942,
       "frameCount": 1,
@@ -2042,7 +2855,13 @@
     {
       "reductionIndex": 151,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1151,
       "frameCount": 1,
@@ -2055,7 +2874,13 @@
     {
       "reductionIndex": 152,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 943,
       "frameCount": 1,
@@ -2068,7 +2893,13 @@
     {
       "reductionIndex": 153,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 972,
       "frameCount": 1,
@@ -2081,7 +2912,13 @@
     {
       "reductionIndex": 154,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1031,
       "frameCount": 1,
@@ -2094,7 +2931,13 @@
     {
       "reductionIndex": 155,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 977,
       "frameCount": 1,
@@ -2107,7 +2950,13 @@
     {
       "reductionIndex": 156,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 969,
       "frameCount": 1,
@@ -2120,7 +2969,13 @@
     {
       "reductionIndex": 157,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 907,
       "frameCount": 1,
@@ -2132,8 +2987,15 @@
     },
     {
       "reductionIndex": 158,
-      "phase": "agent.action_argument_decode",
+      "phase": null,
+      "phases": [
+        "agent.action_argument_decode",
+        "agent.action_name_match"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 899,
       "frameCount": 1,
@@ -2146,7 +3008,11 @@
     {
       "reductionIndex": 159,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2960,
       "frameCount": 1,
@@ -2159,7 +3025,13 @@
     {
       "reductionIndex": 160,
       "phase": "agent.action_argument_decode",
+      "phases": [
+        "agent.action_argument_decode"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3016,
       "frameCount": 1,
@@ -2172,7 +3044,11 @@
     {
       "reductionIndex": 161,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 870,
       "frameCount": 1,
@@ -2185,7 +3061,11 @@
     {
       "reductionIndex": 162,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1456,
       "frameCount": 1,
@@ -2198,7 +3078,11 @@
     {
       "reductionIndex": 163,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1475,
       "frameCount": 1,
@@ -2211,7 +3095,11 @@
     {
       "reductionIndex": 164,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1685,
       "frameCount": 1,
@@ -2224,7 +3112,11 @@
     {
       "reductionIndex": 165,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1453,
       "frameCount": 1,
@@ -2237,7 +3129,11 @@
     {
       "reductionIndex": 166,
       "phase": "agent.tool_dispatch",
+      "phases": [
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1524,
       "frameCount": 1,
@@ -2250,7 +3146,13 @@
     {
       "reductionIndex": 167,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 853,
       "frameCount": 1,
@@ -2262,8 +3164,15 @@
     },
     {
       "reductionIndex": 168,
-      "phase": "agent.observation_fold",
+      "phase": null,
+      "phases": [
+        "agent.observation_fold",
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 853,
       "frameCount": 1,
@@ -2275,8 +3184,15 @@
     },
     {
       "reductionIndex": 169,
-      "phase": "agent.observation_fold",
+      "phase": null,
+      "phases": [
+        "agent.observation_fold",
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": "pending_repository_request",
+      "phaseCategories": [
+        "pending_repository_request"
+      ],
       "outcomeKind": "Requested",
       "stateByteLength": 854,
       "frameCount": 1,
@@ -2289,7 +3205,13 @@
     {
       "reductionIndex": 170,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2771,
       "frameCount": 1,
@@ -2302,7 +3224,13 @@
     {
       "reductionIndex": 171,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2771,
       "frameCount": 1,
@@ -2315,7 +3243,13 @@
     {
       "reductionIndex": 172,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2784,
       "frameCount": 1,
@@ -2328,7 +3262,13 @@
     {
       "reductionIndex": 173,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2779,
       "frameCount": 1,
@@ -2341,7 +3281,13 @@
     {
       "reductionIndex": 174,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2779,
       "frameCount": 1,
@@ -2354,7 +3300,13 @@
     {
       "reductionIndex": 175,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 4695,
       "frameCount": 1,
@@ -2367,7 +3319,13 @@
     {
       "reductionIndex": 176,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2071,
       "frameCount": 1,
@@ -2379,8 +3337,14 @@
     },
     {
       "reductionIndex": 177,
-      "phase": "agent.initialization",
+      "phase": null,
+      "phases": [
+        "agent.initialization",
+        "agent.memory_projection",
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3568,
       "frameCount": 1,
@@ -2393,7 +3357,11 @@
     {
       "reductionIndex": 178,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4907,
       "frameCount": 1,
@@ -2406,7 +3374,11 @@
     {
       "reductionIndex": 179,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5130,
       "frameCount": 1,
@@ -2419,7 +3391,11 @@
     {
       "reductionIndex": 180,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4534,
       "frameCount": 1,
@@ -2432,7 +3408,11 @@
     {
       "reductionIndex": 181,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 8268,
       "frameCount": 1,
@@ -2445,7 +3425,11 @@
     {
       "reductionIndex": 182,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4752,
       "frameCount": 1,
@@ -2458,7 +3442,11 @@
     {
       "reductionIndex": 183,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 10162,
       "frameCount": 1,
@@ -2471,7 +3459,11 @@
     {
       "reductionIndex": 184,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5441,
       "frameCount": 1,
@@ -2484,7 +3476,11 @@
     {
       "reductionIndex": 185,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 14503,
       "frameCount": 1,
@@ -2497,7 +3493,11 @@
     {
       "reductionIndex": 186,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5433,
       "frameCount": 1,
@@ -2510,7 +3510,11 @@
     {
       "reductionIndex": 187,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5433,
       "frameCount": 1,
@@ -2522,8 +3526,16 @@
     },
     {
       "reductionIndex": 188,
-      "phase": "agent.skill_activation",
-      "phaseCategory": null,
+      "phase": null,
+      "phases": [
+        "agent.skill_activation",
+        "agent.tool_selection",
+        "agent.model_request"
+      ],
+      "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 5433,
       "frameCount": 1,
@@ -2536,7 +3548,13 @@
     {
       "reductionIndex": 189,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 6625,
       "frameCount": 1,
@@ -2549,7 +3567,13 @@
     {
       "reductionIndex": 190,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 5190,
       "frameCount": 1,
@@ -2562,7 +3586,13 @@
     {
       "reductionIndex": 191,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 11716,
       "frameCount": 1,
@@ -2575,7 +3605,13 @@
     {
       "reductionIndex": 192,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 12242,
       "frameCount": 1,
@@ -2588,7 +3624,13 @@
     {
       "reductionIndex": 193,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 12724,
       "frameCount": 1,
@@ -2601,7 +3643,13 @@
     {
       "reductionIndex": 194,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 13038,
       "frameCount": 1,
@@ -2614,7 +3662,13 @@
     {
       "reductionIndex": 195,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 11174,
       "frameCount": 1,
@@ -2627,7 +3681,13 @@
     {
       "reductionIndex": 196,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 10352,
       "frameCount": 1,
@@ -2640,7 +3700,13 @@
     {
       "reductionIndex": 197,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 12192,
       "frameCount": 1,
@@ -2653,7 +3719,13 @@
     {
       "reductionIndex": 198,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "pending_model_request",
+      "phaseCategories": [
+        "pending_model_request"
+      ],
       "outcomeKind": "Requested",
       "stateByteLength": 12192,
       "frameCount": 1,
@@ -2666,7 +3738,13 @@
     {
       "reductionIndex": 199,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1630,
       "frameCount": 1,
@@ -2679,7 +3757,13 @@
     {
       "reductionIndex": 200,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1821,
       "frameCount": 1,
@@ -2692,7 +3776,13 @@
     {
       "reductionIndex": 201,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1631,
       "frameCount": 1,
@@ -2705,7 +3795,13 @@
     {
       "reductionIndex": 202,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1651,
       "frameCount": 1,
@@ -2718,7 +3814,13 @@
     {
       "reductionIndex": 203,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1701,
       "frameCount": 1,
@@ -2731,7 +3833,13 @@
     {
       "reductionIndex": 204,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1656,
       "frameCount": 1,
@@ -2744,7 +3852,13 @@
     {
       "reductionIndex": 205,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1648,
       "frameCount": 1,
@@ -2757,7 +3871,13 @@
     {
       "reductionIndex": 206,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1595,
       "frameCount": 1,
@@ -2769,8 +3889,15 @@
     },
     {
       "reductionIndex": 207,
-      "phase": "agent.action_argument_decode",
+      "phase": null,
+      "phases": [
+        "agent.action_argument_decode",
+        "agent.action_name_match"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1587,
       "frameCount": 1,
@@ -2783,7 +3910,11 @@
     {
       "reductionIndex": 208,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3647,
       "frameCount": 1,
@@ -2796,7 +3927,11 @@
     {
       "reductionIndex": 209,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3753,
       "frameCount": 1,
@@ -2809,7 +3944,11 @@
     {
       "reductionIndex": 210,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3733,
       "frameCount": 1,
@@ -2822,7 +3961,13 @@
     {
       "reductionIndex": 211,
       "phase": "agent.action_argument_decode",
+      "phases": [
+        "agent.action_argument_decode"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3606,
       "frameCount": 1,
@@ -2835,7 +3980,11 @@
     {
       "reductionIndex": 212,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1565,
       "frameCount": 1,
@@ -2848,7 +3997,11 @@
     {
       "reductionIndex": 213,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2844,
       "frameCount": 1,
@@ -2861,7 +4014,11 @@
     {
       "reductionIndex": 214,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2845,
       "frameCount": 1,
@@ -2874,7 +4031,11 @@
     {
       "reductionIndex": 215,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3078,
       "frameCount": 1,
@@ -2887,7 +4048,11 @@
     {
       "reductionIndex": 216,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2846,
       "frameCount": 1,
@@ -2900,7 +4065,11 @@
     {
       "reductionIndex": 217,
       "phase": "agent.tool_dispatch",
+      "phases": [
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2917,
       "frameCount": 1,
@@ -2913,7 +4082,13 @@
     {
       "reductionIndex": 218,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1549,
       "frameCount": 1,
@@ -2926,7 +4101,13 @@
     {
       "reductionIndex": 219,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1549,
       "frameCount": 1,
@@ -2939,7 +4120,13 @@
     {
       "reductionIndex": 220,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1549,
       "frameCount": 1,
@@ -2951,8 +4138,15 @@
     },
     {
       "reductionIndex": 221,
-      "phase": "agent.observation_fold",
+      "phase": null,
+      "phases": [
+        "agent.observation_fold",
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1549,
       "frameCount": 1,
@@ -2964,8 +4158,15 @@
     },
     {
       "reductionIndex": 222,
-      "phase": "agent.observation_fold",
+      "phase": null,
+      "phases": [
+        "agent.observation_fold",
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": "pending_repository_request",
+      "phaseCategories": [
+        "pending_repository_request"
+      ],
       "outcomeKind": "Requested",
       "stateByteLength": 1550,
       "frameCount": 1,
@@ -2978,7 +4179,13 @@
     {
       "reductionIndex": 223,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2850,
       "frameCount": 1,
@@ -2991,7 +4198,13 @@
     {
       "reductionIndex": 224,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2850,
       "frameCount": 1,
@@ -3004,7 +4217,13 @@
     {
       "reductionIndex": 225,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2850,
       "frameCount": 1,
@@ -3017,7 +4236,13 @@
     {
       "reductionIndex": 226,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2850,
       "frameCount": 1,
@@ -3030,7 +4255,13 @@
     {
       "reductionIndex": 227,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 6685,
       "frameCount": 1,
@@ -3042,8 +4273,14 @@
     },
     {
       "reductionIndex": 228,
-      "phase": "agent.initialization",
+      "phase": null,
+      "phases": [
+        "agent.initialization",
+        "agent.memory_projection",
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4343,
       "frameCount": 1,
@@ -3056,7 +4293,11 @@
     {
       "reductionIndex": 229,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5024,
       "frameCount": 1,
@@ -3069,7 +4310,11 @@
     {
       "reductionIndex": 230,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5247,
       "frameCount": 1,
@@ -3082,7 +4327,11 @@
     {
       "reductionIndex": 231,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4651,
       "frameCount": 1,
@@ -3095,7 +4344,11 @@
     {
       "reductionIndex": 232,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 8385,
       "frameCount": 1,
@@ -3108,7 +4361,11 @@
     {
       "reductionIndex": 233,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4869,
       "frameCount": 1,
@@ -3121,7 +4378,11 @@
     {
       "reductionIndex": 234,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 10279,
       "frameCount": 1,
@@ -3134,7 +4395,11 @@
     {
       "reductionIndex": 235,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5558,
       "frameCount": 1,
@@ -3147,7 +4412,11 @@
     {
       "reductionIndex": 236,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 14620,
       "frameCount": 1,
@@ -3160,7 +4429,11 @@
     {
       "reductionIndex": 237,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5550,
       "frameCount": 1,
@@ -3173,7 +4446,11 @@
     {
       "reductionIndex": 238,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5589,
       "frameCount": 1,
@@ -3186,7 +4463,11 @@
     {
       "reductionIndex": 239,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 8631,
       "frameCount": 1,
@@ -3198,8 +4479,16 @@
     },
     {
       "reductionIndex": 240,
-      "phase": "agent.skill_activation",
-      "phaseCategory": null,
+      "phase": null,
+      "phases": [
+        "agent.skill_activation",
+        "agent.tool_selection",
+        "agent.model_request"
+      ],
+      "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 5585,
       "frameCount": 1,
@@ -3212,7 +4501,13 @@
     {
       "reductionIndex": 241,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 6738,
       "frameCount": 1,
@@ -3225,7 +4520,13 @@
     {
       "reductionIndex": 242,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 5970,
       "frameCount": 1,
@@ -3238,7 +4539,13 @@
     {
       "reductionIndex": 243,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 6193,
       "frameCount": 1,
@@ -3251,7 +4558,13 @@
     {
       "reductionIndex": 244,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 12380,
       "frameCount": 1,
@@ -3264,7 +4577,13 @@
     {
       "reductionIndex": 245,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 12906,
       "frameCount": 1,
@@ -3277,7 +4596,13 @@
     {
       "reductionIndex": 246,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 13388,
       "frameCount": 1,
@@ -3290,7 +4615,13 @@
     {
       "reductionIndex": 247,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 13702,
       "frameCount": 1,
@@ -3303,7 +4634,13 @@
     {
       "reductionIndex": 248,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 14264,
       "frameCount": 1,
@@ -3316,7 +4653,13 @@
     {
       "reductionIndex": 249,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 14824,
       "frameCount": 1,
@@ -3329,7 +4672,13 @@
     {
       "reductionIndex": 250,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 13920,
       "frameCount": 1,
@@ -3342,7 +4691,13 @@
     {
       "reductionIndex": 251,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 14516,
       "frameCount": 1,
@@ -3355,7 +4710,13 @@
     {
       "reductionIndex": 252,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 15155,
       "frameCount": 1,
@@ -3368,7 +4729,13 @@
     {
       "reductionIndex": 253,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "pending_model_request",
+      "phaseCategories": [
+        "pending_model_request"
+      ],
       "outcomeKind": "Requested",
       "stateByteLength": 15155,
       "frameCount": 1,
@@ -3381,7 +4748,13 @@
     {
       "reductionIndex": 254,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2304,
       "frameCount": 1,
@@ -3394,7 +4767,13 @@
     {
       "reductionIndex": 255,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3765,
       "frameCount": 1,
@@ -3407,7 +4786,13 @@
     {
       "reductionIndex": 256,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2305,
       "frameCount": 1,
@@ -3420,7 +4805,13 @@
     {
       "reductionIndex": 257,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2960,
       "frameCount": 1,
@@ -3433,7 +4824,13 @@
     {
       "reductionIndex": 258,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3645,
       "frameCount": 1,
@@ -3446,7 +4843,13 @@
     {
       "reductionIndex": 259,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2965,
       "frameCount": 1,
@@ -3459,7 +4862,13 @@
     {
       "reductionIndex": 260,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2957,
       "frameCount": 1,
@@ -3472,7 +4881,13 @@
     {
       "reductionIndex": 261,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2269,
       "frameCount": 1,
@@ -3484,8 +4899,15 @@
     },
     {
       "reductionIndex": 262,
-      "phase": "agent.action_argument_decode",
+      "phase": null,
+      "phases": [
+        "agent.action_argument_decode",
+        "agent.action_name_match"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2261,
       "frameCount": 1,
@@ -3498,7 +4920,11 @@
     {
       "reductionIndex": 263,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4614,
       "frameCount": 1,
@@ -3511,7 +4937,11 @@
     {
       "reductionIndex": 264,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4720,
       "frameCount": 1,
@@ -3524,7 +4954,11 @@
     {
       "reductionIndex": 265,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4700,
       "frameCount": 1,
@@ -3537,7 +4971,11 @@
     {
       "reductionIndex": 266,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4614,
       "frameCount": 1,
@@ -3550,7 +4988,13 @@
     {
       "reductionIndex": 267,
       "phase": "agent.action_argument_decode",
+      "phases": [
+        "agent.action_argument_decode"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 4346,
       "frameCount": 1,
@@ -3563,7 +5007,11 @@
     {
       "reductionIndex": 268,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2184,
       "frameCount": 1,
@@ -3576,7 +5024,11 @@
     {
       "reductionIndex": 269,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3212,
       "frameCount": 1,
@@ -3589,7 +5041,11 @@
     {
       "reductionIndex": 270,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3213,
       "frameCount": 1,
@@ -3602,7 +5058,11 @@
     {
       "reductionIndex": 271,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4998,
       "frameCount": 1,
@@ -3615,7 +5075,11 @@
     {
       "reductionIndex": 272,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5696,
       "frameCount": 1,
@@ -3628,7 +5092,11 @@
     {
       "reductionIndex": 273,
       "phase": "agent.tool_dispatch",
+      "phases": [
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3285,
       "frameCount": 1,
@@ -3641,7 +5109,13 @@
     {
       "reductionIndex": 274,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1878,
       "frameCount": 1,
@@ -3654,7 +5128,13 @@
     {
       "reductionIndex": 275,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1878,
       "frameCount": 1,
@@ -3667,7 +5147,13 @@
     {
       "reductionIndex": 276,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1878,
       "frameCount": 1,
@@ -3680,7 +5166,13 @@
     {
       "reductionIndex": 277,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1878,
       "frameCount": 1,
@@ -3692,8 +5184,15 @@
     },
     {
       "reductionIndex": 278,
-      "phase": "agent.observation_fold",
+      "phase": null,
+      "phases": [
+        "agent.observation_fold",
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1879,
       "frameCount": 1,
@@ -3705,8 +5204,15 @@
     },
     {
       "reductionIndex": 279,
-      "phase": "agent.observation_fold",
+      "phase": null,
+      "phases": [
+        "agent.observation_fold",
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": "pending_repository_request",
+      "phaseCategories": [
+        "pending_repository_request"
+      ],
       "outcomeKind": "Requested",
       "stateByteLength": 2169,
       "frameCount": 1,
@@ -3719,7 +5225,13 @@
     {
       "reductionIndex": 280,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3204,
       "frameCount": 1,
@@ -3732,7 +5244,13 @@
     {
       "reductionIndex": 281,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3204,
       "frameCount": 1,
@@ -3745,7 +5263,13 @@
     {
       "reductionIndex": 282,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3204,
       "frameCount": 1,
@@ -3758,7 +5282,13 @@
     {
       "reductionIndex": 283,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3204,
       "frameCount": 1,
@@ -3771,7 +5301,13 @@
     {
       "reductionIndex": 284,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 7705,
       "frameCount": 1,
@@ -3783,8 +5319,14 @@
     },
     {
       "reductionIndex": 285,
-      "phase": "agent.initialization",
+      "phase": null,
+      "phases": [
+        "agent.initialization",
+        "agent.memory_projection",
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4736,
       "frameCount": 1,
@@ -3797,7 +5339,11 @@
     {
       "reductionIndex": 286,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5555,
       "frameCount": 1,
@@ -3810,7 +5356,11 @@
     {
       "reductionIndex": 287,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5778,
       "frameCount": 1,
@@ -3823,7 +5373,11 @@
     {
       "reductionIndex": 288,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5182,
       "frameCount": 1,
@@ -3836,7 +5390,11 @@
     {
       "reductionIndex": 289,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 8916,
       "frameCount": 1,
@@ -3849,7 +5407,11 @@
     {
       "reductionIndex": 290,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5400,
       "frameCount": 1,
@@ -3862,7 +5424,11 @@
     {
       "reductionIndex": 291,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 10810,
       "frameCount": 1,
@@ -3875,7 +5441,11 @@
     {
       "reductionIndex": 292,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 6089,
       "frameCount": 1,
@@ -3888,7 +5458,11 @@
     {
       "reductionIndex": 293,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 15151,
       "frameCount": 1,
@@ -3901,7 +5475,11 @@
     {
       "reductionIndex": 294,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 6081,
       "frameCount": 1,
@@ -3914,7 +5492,11 @@
     {
       "reductionIndex": 295,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 6120,
       "frameCount": 1,
@@ -3927,7 +5509,11 @@
     {
       "reductionIndex": 296,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 9162,
       "frameCount": 1,
@@ -3940,7 +5526,11 @@
     {
       "reductionIndex": 297,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 6293,
       "frameCount": 1,
@@ -3952,8 +5542,16 @@
     },
     {
       "reductionIndex": 298,
-      "phase": "agent.skill_activation",
-      "phaseCategory": null,
+      "phase": null,
+      "phases": [
+        "agent.skill_activation",
+        "agent.tool_selection",
+        "agent.model_request"
+      ],
+      "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 17871,
       "frameCount": 1,
@@ -3966,7 +5564,13 @@
     {
       "reductionIndex": 299,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 7256,
       "frameCount": 1,
@@ -3979,7 +5583,13 @@
     {
       "reductionIndex": 300,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 6488,
       "frameCount": 1,
@@ -3992,7 +5602,13 @@
     {
       "reductionIndex": 301,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 6711,
       "frameCount": 1,
@@ -4005,7 +5621,13 @@
     {
       "reductionIndex": 302,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 13390,
       "frameCount": 1,
@@ -4018,7 +5640,13 @@
     {
       "reductionIndex": 303,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 13916,
       "frameCount": 1,
@@ -4031,7 +5659,13 @@
     {
       "reductionIndex": 304,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 14398,
       "frameCount": 1,
@@ -4044,7 +5678,13 @@
     {
       "reductionIndex": 305,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 14712,
       "frameCount": 1,
@@ -4057,7 +5697,13 @@
     {
       "reductionIndex": 306,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 15274,
       "frameCount": 1,
@@ -4070,7 +5716,13 @@
     {
       "reductionIndex": 307,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 15834,
       "frameCount": 1,
@@ -4083,7 +5735,13 @@
     {
       "reductionIndex": 308,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 14930,
       "frameCount": 1,
@@ -4096,7 +5754,13 @@
     {
       "reductionIndex": 309,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 15349,
       "frameCount": 1,
@@ -4109,7 +5773,13 @@
     {
       "reductionIndex": 310,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 16152,
       "frameCount": 1,
@@ -4122,7 +5792,13 @@
     {
       "reductionIndex": 311,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "pending_model_request",
+      "phaseCategories": [
+        "pending_model_request"
+      ],
       "outcomeKind": "Requested",
       "stateByteLength": 16152,
       "frameCount": 1,
@@ -4135,7 +5811,13 @@
     {
       "reductionIndex": 312,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1846,
       "frameCount": 1,
@@ -4148,7 +5830,13 @@
     {
       "reductionIndex": 313,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2037,
       "frameCount": 1,
@@ -4161,7 +5849,13 @@
     {
       "reductionIndex": 314,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1847,
       "frameCount": 1,
@@ -4174,7 +5868,13 @@
     {
       "reductionIndex": 315,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1867,
       "frameCount": 1,
@@ -4187,7 +5887,13 @@
     {
       "reductionIndex": 316,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1917,
       "frameCount": 1,
@@ -4200,7 +5906,13 @@
     {
       "reductionIndex": 317,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1872,
       "frameCount": 1,
@@ -4213,7 +5925,13 @@
     {
       "reductionIndex": 318,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1864,
       "frameCount": 1,
@@ -4226,7 +5944,13 @@
     {
       "reductionIndex": 319,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1811,
       "frameCount": 1,
@@ -4238,8 +5962,15 @@
     },
     {
       "reductionIndex": 320,
-      "phase": "agent.action_argument_decode",
+      "phase": null,
+      "phases": [
+        "agent.action_argument_decode",
+        "agent.action_name_match"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1803,
       "frameCount": 1,
@@ -4252,7 +5983,11 @@
     {
       "reductionIndex": 321,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3863,
       "frameCount": 1,
@@ -4265,7 +6000,11 @@
     {
       "reductionIndex": 322,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3969,
       "frameCount": 1,
@@ -4278,7 +6017,11 @@
     {
       "reductionIndex": 323,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3949,
       "frameCount": 1,
@@ -4291,7 +6034,13 @@
     {
       "reductionIndex": 324,
       "phase": "agent.action_argument_decode",
+      "phases": [
+        "agent.action_argument_decode"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3822,
       "frameCount": 1,
@@ -4304,7 +6053,11 @@
     {
       "reductionIndex": 325,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 1781,
       "frameCount": 1,
@@ -4317,7 +6070,11 @@
     {
       "reductionIndex": 326,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3276,
       "frameCount": 1,
@@ -4330,7 +6087,11 @@
     {
       "reductionIndex": 327,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3277,
       "frameCount": 1,
@@ -4343,7 +6104,11 @@
     {
       "reductionIndex": 328,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3510,
       "frameCount": 1,
@@ -4356,7 +6121,11 @@
     {
       "reductionIndex": 329,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3278,
       "frameCount": 1,
@@ -4369,7 +6138,11 @@
     {
       "reductionIndex": 330,
       "phase": "agent.tool_dispatch",
+      "phases": [
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3349,
       "frameCount": 1,
@@ -4382,7 +6155,13 @@
     {
       "reductionIndex": 331,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1765,
       "frameCount": 1,
@@ -4395,7 +6174,13 @@
     {
       "reductionIndex": 332,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1765,
       "frameCount": 1,
@@ -4408,7 +6193,13 @@
     {
       "reductionIndex": 333,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1765,
       "frameCount": 1,
@@ -4420,8 +6211,15 @@
     },
     {
       "reductionIndex": 334,
-      "phase": "agent.observation_fold",
+      "phase": null,
+      "phases": [
+        "agent.observation_fold",
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1765,
       "frameCount": 1,
@@ -4433,8 +6231,15 @@
     },
     {
       "reductionIndex": 335,
-      "phase": "agent.observation_fold",
+      "phase": null,
+      "phases": [
+        "agent.observation_fold",
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": "pending_repository_request",
+      "phaseCategories": [
+        "pending_repository_request"
+      ],
       "outcomeKind": "Requested",
       "stateByteLength": 1766,
       "frameCount": 1,
@@ -4447,7 +6252,13 @@
     {
       "reductionIndex": 336,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3282,
       "frameCount": 1,
@@ -4460,7 +6271,13 @@
     {
       "reductionIndex": 337,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3282,
       "frameCount": 1,
@@ -4473,7 +6290,13 @@
     {
       "reductionIndex": 338,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3282,
       "frameCount": 1,
@@ -4486,7 +6309,13 @@
     {
       "reductionIndex": 339,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3282,
       "frameCount": 1,
@@ -4499,7 +6328,13 @@
     {
       "reductionIndex": 340,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 7648,
       "frameCount": 1,
@@ -4511,8 +6346,14 @@
     },
     {
       "reductionIndex": 341,
-      "phase": "agent.initialization",
+      "phase": null,
+      "phases": [
+        "agent.initialization",
+        "agent.memory_projection",
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4913,
       "frameCount": 1,
@@ -4525,7 +6366,11 @@
     {
       "reductionIndex": 342,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5555,
       "frameCount": 1,
@@ -4538,7 +6383,11 @@
     {
       "reductionIndex": 343,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5778,
       "frameCount": 1,
@@ -4551,7 +6400,11 @@
     {
       "reductionIndex": 344,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5182,
       "frameCount": 1,
@@ -4564,7 +6417,11 @@
     {
       "reductionIndex": 345,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 8916,
       "frameCount": 1,
@@ -4577,7 +6434,11 @@
     {
       "reductionIndex": 346,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 5400,
       "frameCount": 1,
@@ -4590,7 +6451,11 @@
     {
       "reductionIndex": 347,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 10810,
       "frameCount": 1,
@@ -4603,7 +6468,11 @@
     {
       "reductionIndex": 348,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 6089,
       "frameCount": 1,
@@ -4616,7 +6485,11 @@
     {
       "reductionIndex": 349,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 15151,
       "frameCount": 1,
@@ -4629,7 +6502,11 @@
     {
       "reductionIndex": 350,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 6081,
       "frameCount": 1,
@@ -4642,7 +6519,11 @@
     {
       "reductionIndex": 351,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 6120,
       "frameCount": 1,
@@ -4655,7 +6536,11 @@
     {
       "reductionIndex": 352,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 9162,
       "frameCount": 1,
@@ -4668,7 +6553,11 @@
     {
       "reductionIndex": 353,
       "phase": "agent.prompt_render",
+      "phases": [
+        "agent.prompt_render"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 6293,
       "frameCount": 1,
@@ -4680,8 +6569,16 @@
     },
     {
       "reductionIndex": 354,
-      "phase": "agent.skill_activation",
-      "phaseCategory": null,
+      "phase": null,
+      "phases": [
+        "agent.skill_activation",
+        "agent.tool_selection",
+        "agent.model_request"
+      ],
+      "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 17871,
       "frameCount": 1,
@@ -4694,7 +6591,13 @@
     {
       "reductionIndex": 355,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 7256,
       "frameCount": 1,
@@ -4707,7 +6610,13 @@
     {
       "reductionIndex": 356,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 6488,
       "frameCount": 1,
@@ -4720,7 +6629,13 @@
     {
       "reductionIndex": 357,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 6711,
       "frameCount": 1,
@@ -4733,7 +6648,13 @@
     {
       "reductionIndex": 358,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 13390,
       "frameCount": 1,
@@ -4746,7 +6667,13 @@
     {
       "reductionIndex": 359,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 13916,
       "frameCount": 1,
@@ -4759,7 +6686,13 @@
     {
       "reductionIndex": 360,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 14398,
       "frameCount": 1,
@@ -4772,7 +6705,13 @@
     {
       "reductionIndex": 361,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 14712,
       "frameCount": 1,
@@ -4785,7 +6724,13 @@
     {
       "reductionIndex": 362,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 15274,
       "frameCount": 1,
@@ -4798,7 +6743,13 @@
     {
       "reductionIndex": 363,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 15834,
       "frameCount": 1,
@@ -4811,7 +6762,13 @@
     {
       "reductionIndex": 364,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 14930,
       "frameCount": 1,
@@ -4824,7 +6781,13 @@
     {
       "reductionIndex": 365,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 15349,
       "frameCount": 1,
@@ -4837,7 +6800,13 @@
     {
       "reductionIndex": 366,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "before_model_request",
+      "phaseCategories": [
+        "before_model_request"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 16152,
       "frameCount": 1,
@@ -4850,7 +6819,13 @@
     {
       "reductionIndex": 367,
       "phase": "agent.model_request",
+      "phases": [
+        "agent.model_request"
+      ],
       "phaseCategory": "pending_model_request",
+      "phaseCategories": [
+        "pending_model_request"
+      ],
       "outcomeKind": "Requested",
       "stateByteLength": 16152,
       "frameCount": 1,
@@ -4863,7 +6838,13 @@
     {
       "reductionIndex": 368,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2178,
       "frameCount": 1,
@@ -4876,7 +6857,13 @@
     {
       "reductionIndex": 369,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 3033,
       "frameCount": 1,
@@ -4889,7 +6876,13 @@
     {
       "reductionIndex": 370,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2179,
       "frameCount": 1,
@@ -4902,7 +6895,13 @@
     {
       "reductionIndex": 371,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2531,
       "frameCount": 1,
@@ -4915,7 +6914,13 @@
     {
       "reductionIndex": 372,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2913,
       "frameCount": 1,
@@ -4928,7 +6933,13 @@
     {
       "reductionIndex": 373,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2536,
       "frameCount": 1,
@@ -4941,7 +6952,13 @@
     {
       "reductionIndex": 374,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2528,
       "frameCount": 1,
@@ -4954,7 +6971,13 @@
     {
       "reductionIndex": 375,
       "phase": "agent.model_resume",
+      "phases": [
+        "agent.model_resume"
+      ],
       "phaseCategory": "model_resume",
+      "phaseCategories": [
+        "model_resume"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2143,
       "frameCount": 1,
@@ -4966,8 +6989,15 @@
     },
     {
       "reductionIndex": 376,
-      "phase": "agent.action_argument_decode",
+      "phase": null,
+      "phases": [
+        "agent.action_argument_decode",
+        "agent.action_name_match"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 2135,
       "frameCount": 1,
@@ -4980,7 +7010,11 @@
     {
       "reductionIndex": 377,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4338,
       "frameCount": 1,
@@ -4993,7 +7027,11 @@
     {
       "reductionIndex": 378,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4444,
       "frameCount": 1,
@@ -5006,7 +7044,11 @@
     {
       "reductionIndex": 379,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4424,
       "frameCount": 1,
@@ -5019,7 +7061,11 @@
     {
       "reductionIndex": 380,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4338,
       "frameCount": 1,
@@ -5032,7 +7078,11 @@
     {
       "reductionIndex": 381,
       "phase": "agent.action_name_match",
+      "phases": [
+        "agent.action_name_match"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 4746,
       "frameCount": 1,
@@ -5045,7 +7095,13 @@
     {
       "reductionIndex": 382,
       "phase": "agent.action_argument_decode",
+      "phases": [
+        "agent.action_argument_decode"
+      ],
       "phaseCategory": "action_argument_decode",
+      "phaseCategories": [
+        "action_argument_decode"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 4283,
       "frameCount": 1,
@@ -5058,7 +7114,11 @@
     {
       "reductionIndex": 383,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2073,
       "frameCount": 1,
@@ -5071,7 +7131,11 @@
     {
       "reductionIndex": 384,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3422,
       "frameCount": 1,
@@ -5084,7 +7148,11 @@
     {
       "reductionIndex": 385,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3423,
       "frameCount": 1,
@@ -5097,7 +7165,11 @@
     {
       "reductionIndex": 386,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3656,
       "frameCount": 1,
@@ -5110,7 +7182,11 @@
     {
       "reductionIndex": 387,
       "phase": "agent.action_admission",
+      "phases": [
+        "agent.action_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3424,
       "frameCount": 1,
@@ -5123,7 +7199,11 @@
     {
       "reductionIndex": 388,
       "phase": "agent.tool_dispatch",
+      "phases": [
+        "agent.tool_dispatch"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3495,
       "frameCount": 1,
@@ -5136,7 +7216,13 @@
     {
       "reductionIndex": 389,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1911,
       "frameCount": 1,
@@ -5149,7 +7235,13 @@
     {
       "reductionIndex": 390,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1911,
       "frameCount": 1,
@@ -5162,7 +7254,13 @@
     {
       "reductionIndex": 391,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1911,
       "frameCount": 1,
@@ -5175,7 +7273,13 @@
     {
       "reductionIndex": 392,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1911,
       "frameCount": 1,
@@ -5188,7 +7292,13 @@
     {
       "reductionIndex": 393,
       "phase": "agent.observation_fold",
+      "phases": [
+        "agent.observation_fold"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1912,
       "frameCount": 1,
@@ -5200,8 +7310,15 @@
     },
     {
       "reductionIndex": 394,
-      "phase": "agent.observation_fold",
+      "phase": null,
+      "phases": [
+        "agent.observation_fold",
+        "agent.final_admission"
+      ],
       "phaseCategory": "observation_fold",
+      "phaseCategories": [
+        "observation_fold"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 1912,
       "frameCount": 1,
@@ -5214,7 +7331,11 @@
     {
       "reductionIndex": 395,
       "phase": "agent.final_admission",
+      "phases": [
+        "agent.final_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 3823,
       "frameCount": 1,
@@ -5227,7 +7348,11 @@
     {
       "reductionIndex": 396,
       "phase": "agent.final_admission",
+      "phases": [
+        "agent.final_admission"
+      ],
       "phaseCategory": null,
+      "phaseCategories": [],
       "outcomeKind": "Progressed",
       "stateByteLength": 2468,
       "frameCount": 1,
@@ -5240,7 +7365,13 @@
     {
       "reductionIndex": 397,
       "phase": "agent.completion",
+      "phases": [
+        "agent.completion"
+      ],
       "phaseCategory": "completion",
+      "phaseCategories": [
+        "completion"
+      ],
       "outcomeKind": "Progressed",
       "stateByteLength": 346,
       "frameCount": 1,

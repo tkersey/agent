@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 const [runtime, worldRoot, image, initial, fixture] = process.argv
   .slice(2)
   .map((value) => resolve(value));
+const checkpointKey = "7f".repeat(32);
 
 function run(selectedWorld, workDir, maximumReductions = 1) {
   return spawnSync(process.execPath, [
@@ -20,6 +21,7 @@ function run(selectedWorld, workDir, maximumReductions = 1) {
     "--fixtureRoot", fixture,
   ], {
     encoding: "utf8",
+    env: { ...process.env, AGENT_SYSTEM_CHECKPOINT_KEY: checkpointKey },
     timeout: 5 * 60 * 1000,
     maxBuffer: 4 * 1024 * 1024,
   });
@@ -46,7 +48,14 @@ try {
   })}\n`);
   const changedKernel = run(worldRoot, checkpointWork);
   assert.notEqual(changedKernel.status, 0);
-  assert.match(changedKernel.stderr, /checkpoint Boundary kernel changed/);
+  assert.match(changedKernel.stderr, /checkpoint integrity check failed/);
+  await writeFile(checkpointPath, `${JSON.stringify({
+    ...checkpoint,
+    baselineFailed: true,
+  })}\n`);
+  const forgedEvidence = run(worldRoot, checkpointWork);
+  assert.notEqual(forgedEvidence.status, 0);
+  assert.match(forgedEvidence.stderr, /checkpoint integrity check failed/);
   await writeFile(checkpointPath, `${JSON.stringify(checkpoint)}\n`);
   await appendFile(
     join(checkpointWork, "workspace/test/range.test.mjs"),

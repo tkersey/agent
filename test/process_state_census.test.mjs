@@ -43,6 +43,29 @@ assert.equal(report.phaseMaxima.pending_model_request.requestBytes, 100);
 assert.equal(report.summary.stateBytes.minimum, state.byteLength);
 assert.throws(() => decodeProcessState(Buffer.from("not-a-state")));
 
+const mixedSourceMap = structuredClone(sourceMap);
+const mixedSegment = mixedSourceMap.segments.find((segment) => segment.segmentId === 0);
+mixedSegment.phaseSpans = [
+  { phase: "agent.model_request", firstInstruction: 0, instructionCount: 1 },
+  { phase: "agent.action_argument_decode", firstInstruction: 1, instructionCount: 1 },
+];
+mixedSegment.terminatorPhase = "agent.action_name_match";
+const mixedCensus = new ProcessStateCensus({ image, sourceMap: mixedSourceMap });
+mixedCensus.observe({ outcome: { kind: "Progressed", state } });
+const mixedReport = mixedCensus.report();
+assert.equal(mixedReport.rows[0].phase, null);
+assert.deepEqual(mixedReport.rows[0].phases, [
+  "agent.model_request",
+  "agent.action_argument_decode",
+  "agent.action_name_match",
+]);
+assert.deepEqual(mixedReport.rows[0].phaseCategories, [
+  "before_model_request",
+  "action_argument_decode",
+]);
+assert.equal(mixedReport.phaseMaxima.before_model_request.stateBytes, state.byteLength);
+assert.equal(mixedReport.phaseMaxima.action_argument_decode.stateBytes, state.byteLength);
+
 function encodeState(digestHex, frames) {
   const parts = [
     Buffer.from("ABL_PST1"),

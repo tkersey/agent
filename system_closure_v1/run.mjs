@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,14 +13,9 @@ if (options.mode === "live") {
 }
 const workDir = resolve(options.workDir);
 const workEntries = (await readdir(workDir)).sort();
-if (workEntries.length !== 0) {
-  assert.deepEqual(
-    workEntries,
-    ["checkpoint.json", "workspace"],
-    "--work-dir must be empty or contain one resumable fixture checkpoint",
-  );
-}
+assert.deepEqual(workEntries, [], "--work-dir must be empty");
 const runtime = join(dirname(fileURLToPath(import.meta.url)), "runtime.mjs");
+const checkpointKey = randomBytes(32).toString("hex");
 
 for (let chunk = 0; chunk < 16; chunk += 1) {
   const runtimeArgs = [
@@ -39,7 +35,7 @@ for (let chunk = 0; chunk < 16; chunk += 1) {
   }
   const result = spawnSync(process.execPath, runtimeArgs, {
     encoding: "utf8",
-    env: process.env,
+    env: { ...process.env, AGENT_SYSTEM_CHECKPOINT_KEY: checkpointKey },
     maxBuffer: 4 * 1024 * 1024,
   });
   if (result.stderr.length !== 0) process.stderr.write(result.stderr);

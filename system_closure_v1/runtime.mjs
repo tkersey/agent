@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { cp, lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -30,6 +31,10 @@ const distributionRoot = dirname(fileURLToPath(import.meta.url));
 const worldRoot = resolve(options.worldRoot);
 const workRoot = resolve(options.workDir);
 const checkpointPath = join(workRoot, "checkpoint.json");
+const checkpointKeyHex = process.env.AGENT_SYSTEM_CHECKPOINT_KEY;
+assert.match(checkpointKeyHex ?? "", /^[0-9a-f]{64}$/,
+  "runtime requires one scheduler-owned checkpoint key");
+const checkpointKey = Buffer.from(checkpointKeyHex, "hex");
 const workspaceRoot = join(workRoot, "workspace");
 const image = await readFile(options.image === undefined
   ? join(distributionRoot, "system.bpi1")
@@ -73,7 +78,7 @@ const authorityIdentity = options.mode === "fixture"
   : `live:${sha256(Buffer.from(new URL(options.endpoint).href))}:credential:${
     sha256(Buffer.from(process.env.OPENAI_API_KEY))
   }`;
-const checkpoint = JSON.parse(await readFile(checkpointPath, "utf8").catch((error) => {
+let checkpoint = JSON.parse(await readFile(checkpointPath, "utf8").catch((error) => {
   if (error?.code === "ENOENT") return "null";
   throw error;
 }));
@@ -81,6 +86,14 @@ assert(sourceMap === null || checkpoint === null,
   "Process State census requires one fresh uninterrupted execution");
 
 if (checkpoint !== null) {
+  const { checkpointMac, ...checkpointPayload } = checkpoint;
+  assert.match(checkpointMac ?? "", /^[0-9a-f]{64}$/,
+    "checkpoint integrity check failed");
+  const observedMac = Buffer.from(checkpointMac, "hex");
+  const expectedMac = checkpointAuthentication(checkpointPayload, checkpointKey);
+  assert(observedMac.byteLength === expectedMac.byteLength &&
+    timingSafeEqual(observedMac, expectedMac), "checkpoint integrity check failed");
+  checkpoint = checkpointPayload;
   assert.equal(checkpoint.format, "agent-system-closure-fixture-checkpoint/v1");
   assert.equal(checkpoint.imageSha256, sha256(image));
   assert.equal(checkpoint.initialArgsSha256, sha256(initial));
@@ -252,7 +265,8 @@ if (terminal === undefined) {
   };
   const replacement = `${checkpointPath}.next`;
   await rm(replacement, { force: true });
-  await writeFile(replacement, `${JSON.stringify(persisted)}\n`, "utf8");
+  const checkpointMac = checkpointAuthentication(persisted, checkpointKey).toString("hex");
+  await writeFile(replacement, `${JSON.stringify({ ...persisted, checkpointMac })}\n`, "utf8");
   await rename(replacement, checkpointPath);
   process.stdout.write(`${JSON.stringify({
     format: "agent-system-closure-world-chunk/v1",
@@ -428,6 +442,10 @@ function git(cwd, args) {
   });
   if (result.status !== 0) throw new Error(`git ${args[0]} failed: ${result.stderr}`);
   return result.stdout.trim();
+}
+
+function checkpointAuthentication(checkpoint, key) {
+  return createHmac("sha256", key).update(JSON.stringify(checkpoint)).digest();
 }
 
 function parseArgs(args) {

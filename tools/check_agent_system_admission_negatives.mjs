@@ -10,8 +10,8 @@ import {
 } from "../system_closure_v1/model_protocol_adapter.mjs";
 
 const options = parseArgs(process.argv.slice(2));
-options.mode ??= "full";
-assert(["full", "transfers", "negative"].includes(options.mode), "invalid admission-check mode");
+options.mode ??= "transfers";
+assert(["transfers", "negative"].includes(options.mode), "invalid admission-check mode");
 if (options.mode === "negative") assert(options.case !== undefined, "negative mode requires --case");
 const worldRoot = resolve(options.worldRoot);
 const world = await import(pathToFileURL(join(worldRoot, "src/process_v1/index.mjs")));
@@ -136,51 +136,6 @@ if (options.mode === "transfers") {
   })}\n`);
   process.exit(0);
 }
-
-const negativeResults = await Promise.all(invalidCases.map(async (candidate) => {
-  const result = world.encodeEffectResult({
-    request: initialModel.request,
-    resume: encodeModelResponse(candidate.action, candidate.arguments),
-  });
-  const terminal = await advanceUntilTerminal(primary, initialModel.state, result);
-  assert.equal(terminal.kind, "AuthoredFailure", `${candidate.name} did not fail locally`);
-  return {
-    name: candidate.name,
-    terminal: terminal.kind,
-    failureSha256: sha256(terminal.failure),
-  };
-}));
-const policyFailureSha256 = negativeResults.find(
-  (entry) => entry.name === "disallowed-read-role",
-).failureSha256;
-
-process.stdout.write(`${JSON.stringify({
-  format: "agent-system-closure-admission-negatives/v1",
-  result: "passed",
-  kernelSha256: primary.sha256,
-  imageSha256: createHash("sha256").update(image).digest("hex"),
-  negativeResults,
-  nativeNegativeResults: [
-    { name: "stale-digest-replacement", failure: "policy_denied" },
-    { name: "wrong-final-path", failure: "policy_denied" },
-    { name: "wrong-final-digest", failure: "policy_denied" },
-  ],
-  nativeProcessImageSemantics: true,
-  dangerousRepositoryEffects: 0,
-  successfulPrematureCompletions: 0,
-  transferPoints: [
-    "normalized-model-resume",
-    "pending-model-request",
-    "pending-repository-request",
-  ],
-  freshHostOutcomeEquality: true,
-  repeatedPendingRequestEquality: true,
-  nativeWasmParity: {
-    ...parity,
-    policyFailureSha256,
-    completionSha256: "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032",
-  },
-})}\n`);
 
 async function advanceUntilRequested(host, instance) {
   let current = instance;

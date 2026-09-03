@@ -45,10 +45,15 @@ const initial = await readFile(options.initialArgs === undefined
 const fixtureRoot = options.fixtureRoot === undefined
   ? join(distributionRoot, "fixture")
   : resolve(options.fixtureRoot);
-const sourceMap = options.sourceMap === undefined
+const sourceMapBytes = options.sourceMap === undefined
   ? null
-  : JSON.parse(await readFile(resolve(options.sourceMap), "utf8"));
-const census = sourceMap === null ? null : new ProcessStateCensus({ image, sourceMap });
+  : await readFile(resolve(options.sourceMap));
+const sourceMap = sourceMapBytes === null
+  ? null
+  : JSON.parse(sourceMapBytes.toString("utf8"));
+const census = sourceMap === null
+  ? null
+  : new ProcessStateCensus({ image, sourceMap, sourceMapBytes });
 const runtimeInputSha256 = await digestRuntimeInputs(distributionRoot, fixtureRoot);
 const kernel = await readFile(join(worldRoot, "boundary-process-kernel-v1.wasm"));
 const worldManifest = JSON.parse(await readFile(join(worldRoot, "runtime-manifest.json"), "utf8"));

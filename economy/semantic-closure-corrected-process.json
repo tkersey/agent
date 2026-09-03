@@ -1,6 +1,7 @@
 {
   "format": "agent-process-state-census/v1",
   "imageSha256": "dfb11bda1e0c4df0b6980550a4238c4d8da5eb5608e0147a6c39f16cbc604bfd",
+  "sourceMapSha256": "2605101ccbae00377ce1a7eb783d623562d32392b8bdae4fc5fbe91a10429c14",
   "programTransitionDigest": "ebbc5c4162825195d73e48cbbec42ef4ea5baa89cc255583c20854d625e0daf3",
   "reductionCount": 398,
   "stateBearingOutcomeCount": 397,

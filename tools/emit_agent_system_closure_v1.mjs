@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join, relative, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 const ARCHIVE_NAME = "agent-v3.0.0-system-closure-v1.tar.gz";
 const ROOT = "agent-v3.0.0-system-closure-v1";
@@ -51,34 +51,7 @@ if (boundaryGit !== null) {
 const image = await readFile(options.image);
 const initialArgs = await readFile(options.initialArgs);
 const sourceMap = await readFile(options.sourceMap);
-const proof = JSON.parse(await readFile(join(agentRoot, "system_closure_v1/fixture-proof.json"), "utf8"));
-const admissionProof = JSON.parse(await readFile(join(agentRoot, "system_closure_v1/admission-proof.json"), "utf8"));
-const censusProof = JSON.parse(await readFile(
-  join(agentRoot, "economy/semantic-closure-corrected-process.json"),
-  "utf8",
-));
-assert.equal(proof.format, "agent-system-closure-world-proof/v1");
-assert.equal(proof.result, "passed");
-assert.equal(sha256(image), proof.imageSha256, "fixture proof image digest is stale");
-assert.equal(image.byteLength, proof.imageByteLength, "fixture proof image length is stale");
-assert.equal(sha256(initialArgs), proof.initialArgsSha256, "fixture proof InitialArgs digest is stale");
-assert.equal(initialArgs.byteLength, proof.initialArgsByteLength, "fixture proof InitialArgs length is stale");
-assert.equal(admissionProof.format, "agent-system-closure-admission-negatives/v1");
-assert.equal(admissionProof.result, "passed");
-assert.equal(admissionProof.imageSha256, proof.imageSha256, "admission proof image digest is stale");
-assert.equal(admissionProof.kernelSha256, proof.kernelSha256, "admission proof kernel digest is stale");
 assert.equal(image.subarray(0, 8).toString("ascii"), "ABL_BPI1");
-assert.equal(censusProof.format, "agent-process-state-census/v1");
-assert.equal(censusProof.imageSha256, proof.imageSha256);
-assert.equal(censusProof.reductionCount, proof.reductions);
-assert.equal(proof.httpBodyEqualityCount, proof.modelRequests,
-  "fixture proof did not observe every provider request body");
-assert(Number.isSafeInteger(proof.processTransfers) && proof.processTransfers >= 0,
-  "fixture proof process transfer count is invalid");
-assert(Number.isSafeInteger(proof.peakStateBytes) && proof.peakStateBytes > 0);
-assert(Number.isSafeInteger(proof.p95StateBytes) && proof.p95StateBytes > 0);
-assert(proof.p95StateBytes <= proof.peakStateBytes,
-  "fixture proof p95 State bytes exceeds its maximum");
 
 const files = new Map();
 files.set("system.bpi1", image);
@@ -106,8 +79,8 @@ files.set("checksums.sha256", Buffer.from(checksums));
 const archive = gzipSync(buildTar(files), { level: 9, mtime: 0 });
 const archiveSha256 = sha256(archive);
 const receipt = {
-  format: "agent-system-closure-receipt/v1",
-  status: "release-candidate",
+  format: "agent-system-closure-artifact-receipt/v1",
+  status: "artifact-built",
   publicationStatus: "pending-owner-authorization",
   agentVersion: "3.0.0",
   agentSourceCommit: agentGit.commit,
@@ -117,71 +90,17 @@ const receipt = {
     sourceCommit: boundarySourceCommit,
     packageHash: boundaryPackageHash,
     sourceResolution: boundaryGit === null ? "locked-package" : "exact-clean-git",
-    kernelSourceCommit: proof.kernelBoundarySourceCommit,
-    kernelSha256: proof.kernelSha256,
-    kernelByteLength: proof.kernelByteLength,
   },
-  world: {
-    version: `${proof.worldVersion}-candidate`,
-    sourceCommit: proof.worldSourceCommit,
-    runtimeArchiveSha256: proof.worldRuntimeArchiveSha256,
-    runtimeArchiveByteLength: proof.worldRuntimeArchiveByteLength,
-    productionSourceSha256: proof.worldProductionSourceSha256,
-  },
-  imageSha256: proof.imageSha256,
-  imageByteLength: proof.imageByteLength,
+  imageSha256: sha256(image),
+  imageByteLength: image.byteLength,
   programTransitionIdentity: image.subarray(32, 64).toString("hex"),
-  initialArgsSha256: proof.initialArgsSha256,
-  initialArgsByteLength: proof.initialArgsByteLength,
+  initialArgsSha256: sha256(initialArgs),
+  initialArgsByteLength: initialArgs.byteLength,
+  sourceMapSha256: sha256(sourceMap),
   runtimeInputSha256,
-  configuredModel: "gpt-5.4-mini-2026-03-17",
-  modelEffect: proof.semanticModelEffectIdentity,
-  modelProtocol: "agent.model.protocol.openai-responses-v2",
-  observedModelRequestCount: proof.modelRequests,
-  observedModelInvocationSha256: proof.modelInvocationSha256,
-  observedProviderRequestBodySha256: proof.providerRequestBodySha256,
-  observedRepositoryRequestCount: proof.repositoryRequests,
-  observedReductionCount: proof.reductions,
-  terminalKind: "completed",
-  terminalResultSha256: proof.terminalSha256,
-  repository: {
-    initialTree: proof.initialTree,
-    finalTree: proof.finalTree,
-    changedPaths: ["src/range.mjs"],
-    finalSourceSha256: proof.finalSourceSha256,
-    baselineTests: "failed",
-    postMutationTests: "passed",
-    realFilesystemEffects: proof.realFilesystemEffects,
-  },
-  closureEvidence: {
-    genericProtocolAdapterExercised: true,
-    providerRequestBodyEqualityCount: proof.httpBodyEqualityCount,
-    providerWireCodeInImage: proof.providerWireCodeInImage,
-    normalizedProviderResult: proof.normalizedProviderResult,
-    conditionalSkillVisible: proof.conditionalSkillVisible,
-    processTransfersObserved: proof.processTransfers,
-    transferPoints: admissionProof.transferPoints,
-    admissionNegatives: [
-      ...admissionProof.negativeResults,
-      ...admissionProof.nativeNegativeResults,
-    ],
-    nativeProcessAdmissionProof: admissionProof.nativeProcessImageSemantics,
-    nativeWasmParity: admissionProof.nativeWasmParity,
-    dangerousRepositoryEffectsFromInvalidCandidates:
-      admissionProof.dangerousRepositoryEffects,
-    successfulPrematureCompletions:
-      admissionProof.successfulPrematureCompletions,
-  },
-  measurements: {
-    peakStateBytes: censusProof.summary.stateBytes.maximum,
-    p95StateBytes: censusProof.summary.stateBytes.p95,
-    maximumProgressedBetweenResidualBoundaries:
-      censusProof.maximumProgressedBetweenResidualBoundaries,
-  },
   archiveName: ARCHIVE_NAME,
   archiveSha256,
   archiveByteLength: archive.byteLength,
-  liveModelTestStatus: proof.liveModelTestStatus,
 };
 const receiptBytes = Buffer.from(`${JSON.stringify(receipt, null, 2)}\n`);
 await Promise.all([

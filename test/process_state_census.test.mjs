@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 import {
@@ -9,7 +10,8 @@ import {
 const [imagePath, sourceMapPath] = process.argv.slice(2);
 assert(imagePath && sourceMapPath, "expected image and source-map paths");
 const image = await readFile(imagePath);
-const sourceMap = JSON.parse(await readFile(sourceMapPath, "utf8"));
+const sourceMapBytes = await readFile(sourceMapPath);
+const sourceMap = JSON.parse(sourceMapBytes.toString("utf8"));
 const environment = Buffer.alloc(5_000, 0x5a);
 const state = encodeState(sourceMap.programTransitionDigest, [
   { constructorId: 0, environment },
@@ -21,7 +23,7 @@ assert.equal(decoded.frames.length, 2);
 assert.equal(decoded.frames[0].environment.byteLength, 5_000);
 assert.throws(() => decodeProcessState(state, Buffer.alloc(32)));
 
-const census = new ProcessStateCensus({ image, sourceMap });
+const census = new ProcessStateCensus({ image, sourceMap, sourceMapBytes });
 census.observe({ outcome: { kind: "Progressed", state } });
 census.observe({
   outcome: { kind: "Requested", state, request: Buffer.alloc(100) },
@@ -30,6 +32,7 @@ census.observe({
 census.observe({ outcome: { kind: "Completed", result: Buffer.alloc(0) } });
 const report = census.report();
 assert.equal(report.format, "agent-process-state-census/v1");
+assert.equal(report.sourceMapSha256, sha256(sourceMapBytes));
 assert.equal(report.reductionCount, 3);
 assert.equal(report.stateBearingOutcomeCount, 2);
 assert.equal(report.maximumProgressedBetweenResidualBoundaries, 1);
@@ -50,7 +53,12 @@ mixedSegment.phaseSpans = [
   { phase: "agent.action_argument_decode", firstInstruction: 1, instructionCount: 1 },
 ];
 mixedSegment.terminatorPhase = "agent.action_name_match";
-const mixedCensus = new ProcessStateCensus({ image, sourceMap: mixedSourceMap });
+const mixedSourceMapBytes = Buffer.from(JSON.stringify(mixedSourceMap));
+const mixedCensus = new ProcessStateCensus({
+  image,
+  sourceMap: mixedSourceMap,
+  sourceMapBytes: mixedSourceMapBytes,
+});
 mixedCensus.observe({ outcome: { kind: "Progressed", state } });
 const mixedReport = mixedCensus.report();
 assert.equal(mixedReport.rows[0].phase, null);
@@ -98,4 +106,8 @@ function u16(value) {
   const bytes = Buffer.alloc(2);
   bytes.writeUInt16LE(value);
   return bytes;
+}
+
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
 }

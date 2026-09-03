@@ -32,11 +32,10 @@ const checksum = await readFile(options.checksum, "utf8");
 const receipt = JSON.parse(await readFile(options.receipt, "utf8"));
 const archiveSha256 = sha256(archive);
 assert.equal(checksum, `${archiveSha256}  agent-v3.0.0-system-closure-v1.tar.gz\n`);
-assert.equal(receipt.format, "agent-system-closure-receipt/v1");
+assert.equal(receipt.format, "agent-system-closure-artifact-receipt/v1");
+assert.equal(receipt.status, "artifact-built");
 assert.equal(receipt.archiveSha256, archiveSha256);
 assert.equal(receipt.archiveByteLength, archive.byteLength);
-assert(!("sourceAbsenceRuntimePath" in receipt.closureEvidence),
-  "packaging receipt cannot claim source-free execution without an extracted run");
 
 const extractionRoot = await mkdtemp(join(tmpdir(), "agent-system-closure-distribution-"));
 try {
@@ -61,6 +60,7 @@ try {
   assert.equal(sha256(files.get("initial-args.bin")), receipt.initialArgsSha256);
   assert.equal(files.get("initial-args.bin").byteLength, receipt.initialArgsByteLength);
   const sourceMap = JSON.parse(files.get("source-map.json").toString("utf8"));
+  assert.equal(sha256(files.get("source-map.json")), receipt.sourceMapSha256);
   assert.equal(sourceMap.format, "agent-bpi1-source-map/v1");
   assert.equal(sourceMap.imageSha256, receipt.imageSha256);
   assert.equal(sourceMap.programTransitionDigest, receipt.programTransitionIdentity);
@@ -88,32 +88,15 @@ try {
     assert.equal(execution.imageSha256, receipt.imageSha256);
     assert.equal(execution.initialArgsSha256, receipt.initialArgsSha256);
     assert.equal(execution.runtimeInputSha256, receipt.runtimeInputSha256);
-    assert.equal(execution.kernelSha256, receipt.boundary.kernelSha256);
-    assert.equal(execution.reductions, receipt.observedReductionCount);
-    assert.equal(execution.modelRequests, receipt.observedModelRequestCount);
-    assert.deepEqual(
-      execution.modelInvocationSha256,
-      receipt.observedModelInvocationSha256,
-    );
-    assert.deepEqual(
-      execution.providerRequestBodySha256,
-      receipt.observedProviderRequestBodySha256,
-    );
-    assert.equal(execution.repositoryRequests, receipt.observedRepositoryRequestCount);
-    assert.equal(
-      execution.httpBodyEqualityCount,
-      receipt.closureEvidence.providerRequestBodyEqualityCount,
-    );
-    assert.equal(
-      execution.processTransfers,
-      receipt.closureEvidence.processTransfersObserved,
-    );
-    assert.equal(
-      execution.worldProductionSourceSha256,
-      receipt.world.productionSourceSha256,
-    );
-    assert.equal(execution.finalTree, receipt.repository.finalTree);
-    assert.equal(execution.terminalSha256, receipt.terminalResultSha256);
+    assert(execution.reductions <= 512);
+    assert.equal(execution.modelRequests, 8);
+    assert.equal(execution.repositoryRequests, 7);
+    assert.equal(execution.httpBodyEqualityCount, execution.modelRequests);
+    assert.equal(execution.providerWireCodeInImage, false);
+    assert.equal(execution.normalizedProviderResult, true);
+    assert.equal(execution.finalTree, "0d9ac8802aac6597cb0a443245efb6f92a0249fe");
+    assert.equal(execution.terminalSha256,
+      "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032");
   }
   process.stdout.write(`${JSON.stringify({
     format: "agent-system-closure-distribution-check/v1",

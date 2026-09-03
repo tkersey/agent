@@ -1,3 +1,10 @@
+const CanonicalSystemEpistemicsSeal = struct {};
+
+pub fn isAdmitted(comptime Epistemics: type) bool {
+    return @hasDecl(Epistemics, "agent_system_epistemics_seal") and
+        Epistemics.agent_system_epistemics_seal == CanonicalSystemEpistemicsSeal;
+}
+
 /// Open, non-accumulating Agent 3 epistemics for systems whose Goal already is
 /// the complete decision prompt. It introduces no lifetime counter or budget.
 pub fn systemStateless(comptime config: anytype) type {
@@ -5,6 +12,7 @@ pub fn systemStateless(comptime config: anytype) type {
         @compileError("agent.epistemics.systemStateless accepts only an empty config");
     }
     return struct {
+        const agent_system_epistemics_seal = CanonicalSystemEpistemicsSeal;
         pub const system_semantic_identity = "agent.epistemics.system-stateless.v1";
         pub const prompt_is_json_escaped = false;
         pub fn MemoryType(comptime _: anytype) type {
@@ -75,6 +83,7 @@ pub fn system(comptime spec: anytype) type {
         }
     }
     return struct {
+        const agent_system_epistemics_seal = CanonicalSystemEpistemicsSeal;
         pub const system_semantic_identity = spec.semantic_identity;
         pub const prompt_is_json_escaped = if (@hasDecl(
             Implementation,

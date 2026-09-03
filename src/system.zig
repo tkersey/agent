@@ -1,7 +1,9 @@
 const std = @import("std");
 const boundary = @import("boundary");
+const epistemics = @import("epistemics_v3.zig");
 const model = @import("model.zig");
 const model_effect = @import("model_effect.zig");
+const prompt = @import("prompt.zig");
 const skill = @import("skill.zig");
 const strategy = @import("strategy_v3.zig");
 const typed_action_profile = @import("typed_action_profile.zig");
@@ -124,6 +126,17 @@ fn validate(comptime spec: anytype) void {
                 )) {
                     @compileError("agent system external action identity is reserved for the model protocol");
                 }
+                inline for (spec.actions, 0..) |Earlier, earlier_index| {
+                    if (earlier_index < index and Earlier.kind == .effect and
+                        std.mem.eql(
+                            u8,
+                            Earlier.Site.semantic_identity,
+                            Descriptor.Site.semantic_identity,
+                        ))
+                    {
+                        @compileError("agent system external action semantic identity is duplicated");
+                    }
+                }
                 if (Payload != Descriptor.Site.Payload) {
                     @compileError("agent system Action payload differs from its effect payload");
                 }
@@ -179,6 +192,19 @@ fn validate(comptime spec: anytype) void {
         !@hasDecl(Strategy, "ProgramBody"))
     {
         @compileError("agent system strategy must be one staged Agent 3 strategy");
+    }
+    inline for (spec.prompts) |Prompt| {
+        if (!prompt.isAdmitted(Prompt)) {
+            @compileError("agent system prompt must be constructed by agent.prompt.literal");
+        }
+    }
+    inline for (spec.skills) |Skill| {
+        if (!skill.isAdmitted(Skill)) {
+            @compileError("agent system skill must be constructed by agent.skill");
+        }
+    }
+    if (!epistemics.isAdmitted(spec.epistemics)) {
+        @compileError("agent system epistemics must be constructed by agent.epistemics");
     }
     if (@hasDecl(Strategy, "requires_typed_action_product_payloads") and
         Strategy.requires_typed_action_product_payloads)

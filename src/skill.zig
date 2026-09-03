@@ -3,6 +3,12 @@ const prompt = @import("prompt.zig");
 
 pub const Activation = enum { always, conditional, explicit };
 pub const RenderPosition = enum { before_user, after_user };
+const CanonicalSkillSeal = struct {};
+
+pub fn isAdmitted(comptime Skill: type) bool {
+    return @hasDecl(Skill, "agent_skill_seal") and
+        Skill.agent_skill_seal == CanonicalSkillSeal;
+}
 
 pub fn skill(comptime spec: anytype) type {
     if (!@hasField(@TypeOf(spec), "id") or
@@ -22,6 +28,7 @@ pub fn skill(comptime spec: anytype) type {
         @compileError("agent skill identity and content must not be empty");
     }
     return struct {
+        const agent_skill_seal = CanonicalSkillSeal;
         pub const id = spec.id;
         pub const description = spec.description;
         pub const instructions = spec.instructions;

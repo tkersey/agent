@@ -168,6 +168,38 @@ pub fn build(b: *std.Build) void {
         agent_module,
         boundary_module,
     );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_duplicate_effect_identity.zig",
+        "agent system external action semantic identity is duplicated",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_forged_prompt.zig",
+        "agent system prompt must be constructed by agent.prompt.literal",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_forged_skill.zig",
+        "agent system skill must be constructed by agent.skill",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_forged_epistemics.zig",
+        "agent system epistemics must be constructed by agent.epistemics",
+        agent_module,
+        boundary_module,
+    );
     semantic.dependOn(compile_fail);
 
     const repository_module = b.createModule(.{
@@ -441,9 +473,6 @@ pub fn build(b: *std.Build) void {
         "system_closure_v1/process_state_census.mjs",
         "system_closure_v1/fixture_model_server.mjs",
         "system_closure_v1/repository_environment.mjs",
-        "system_closure_v1/fixture-proof.json",
-        "system_closure_v1/admission-proof.json",
-        "economy/semantic-closure-corrected-process.json",
         "fixtures/repository-repair-v1/README.md",
         "fixtures/repository-repair-v1/package.json",
         "fixtures/repository-repair-v1/src/range.mjs",
@@ -510,6 +539,9 @@ pub fn build(b: *std.Build) void {
         run.addFileArg(closure_receipt);
         run.addArgs(&.{ "--world-root", root });
         run.addFileInput(b.path("tools/check_agent_system_closure_distribution.mjs"));
+        const world_execution_proof = run.captureStdOut(.{
+            .basename = "world-execution-proof.json",
+        });
         world_check.dependOn(&run.step);
         const admission_specs = .{
             .{ "transfers", "" },
@@ -542,9 +574,7 @@ pub fn build(b: *std.Build) void {
         });
         for (admission_outputs) |output| merge_admission.addFileArg(output);
         merge_admission.addFileArg(repository_admission_proof);
-        merge_admission.addFileArg(
-            b.path("system_closure_v1/fixture-proof.json"),
-        );
+        merge_admission.addFileArg(world_execution_proof);
         merge_admission.addFileInput(
             b.path("tools/merge_agent_system_admission_proofs.mjs"),
         );

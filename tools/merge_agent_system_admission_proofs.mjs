@@ -10,13 +10,15 @@ const transfers = proofs.find((proof) =>
   proof.format === "agent-system-closure-admission-transfers/v1");
 const nativeProof = proofs.find((proof) =>
   proof.format === "agent-system-native-admission-proof/v1");
-const fixtureProof = proofs.find((proof) =>
-  proof.format === "agent-system-closure-world-proof/v1");
+const distributionProof = proofs.find((proof) =>
+  proof.format === "agent-system-closure-distribution-check/v1");
+const fixtureProof = distributionProof?.execution;
 const negativeCases = proofs.filter((proof) =>
   proof.format === "agent-system-closure-admission-negative-case/v1");
 assert(transfers !== undefined, "transfer proof is missing");
 assert(nativeProof !== undefined, "native admission proof is missing");
 assert(fixtureProof !== undefined, "World fixture proof is missing");
+assert.equal(distributionProof.result, "passed");
 assert.equal(transfers.format, "agent-system-closure-admission-transfers/v1");
 assert.equal(transfers.result, "passed");
 assert.equal(nativeProof.result, "passed");

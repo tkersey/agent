@@ -10,9 +10,11 @@ const CONSTRUCTORS_SECTION_INDEX = 8;
 const DUPLICATE_ENVIRONMENT_THRESHOLD = 4 * 1024;
 
 export class ProcessStateCensus {
-  constructor({ image, sourceMap }) {
+  constructor({ image, sourceMap, sourceMapBytes }) {
     this.image = Buffer.from(image);
     this.sourceMap = sourceMap;
+    this.sourceMapBytes = Buffer.from(sourceMapBytes);
+    assert.deepEqual(JSON.parse(this.sourceMapBytes.toString("utf8")), sourceMap);
     assert.equal(sourceMap?.format, "agent-bpi1-source-map/v1");
     assert.equal(sourceMap.imageSha256, sha256(this.image));
     this.programTransitionDigest = Buffer.from(
@@ -124,6 +126,7 @@ export class ProcessStateCensus {
     return Object.freeze({
       format: "agent-process-state-census/v1",
       imageSha256: sha256(this.image),
+      sourceMapSha256: sha256(this.sourceMapBytes),
       programTransitionDigest: this.sourceMap.programTransitionDigest,
       reductionCount: this.reductions,
       stateBearingOutcomeCount: this.rows.length,

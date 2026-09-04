@@ -321,7 +321,12 @@ function assertNoIgnoredSourceInputs(root) {
 }
 
 function run(command, args, cwd) {
-  const result = spawnSync(command, args, { cwd, encoding: "utf8", env: { PATH: process.env.PATH ?? "" } });
+  const result = spawnSync(command, args, {
+    cwd,
+    encoding: "utf8",
+    env: { PATH: process.env.PATH ?? "" },
+    maxBuffer: 64 * 1024 * 1024,
+  });
   if (result.status !== 0) throw new Error(`${command} failed: ${result.stderr}`);
   return result.stdout;
 }

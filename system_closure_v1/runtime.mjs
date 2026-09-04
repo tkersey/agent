@@ -31,6 +31,12 @@ if (options.mode === "live") {
   assert(process.env.OPENAI_API_KEY, "live mode requires OPENAI_API_KEY");
 }
 const distributionRoot = dirname(fileURLToPath(import.meta.url));
+const releaseIdentity = JSON.parse(await readFile(
+  join(distributionRoot, "release_identity.json"),
+  "utf8",
+));
+assert.equal(releaseIdentity.format, "agent-system-closure-release-identity/v1");
+assert.equal(releaseIdentity.agentVersion, "3.0.0");
 const worldRoot = resolve(options.worldRoot);
 const workRoot = resolve(options.workDir);
 const checkpointPath = join(workRoot, "checkpoint.json");
@@ -55,23 +61,22 @@ const runtimeInputSha256 = await digestRuntimeInputs(distributionRoot, fixtureRo
 const kernel = await readFile(join(worldRoot, "boundary-process-kernel-v1.wasm"));
 const worldManifest = JSON.parse(await readFile(join(worldRoot, "runtime-manifest.json"), "utf8"));
 assert.equal(worldManifest.format, "world-process-host-runtime/v1");
-assert.equal(worldManifest.sourceCommit, "073e0b0f024a32d3c7b3cd9008d73d76ecbad981");
-assert.equal(worldManifest.boundaryCommit, "bc43989e7ea1371649cd85b219f69b86e1c8ccf9");
+assert.equal(worldManifest.worldVersion, releaseIdentity.world.version);
+assert.equal(worldManifest.sourceCommit, releaseIdentity.world.sourceCommit);
+assert.equal(worldManifest.boundaryVersion, releaseIdentity.boundary.version);
+assert.equal(worldManifest.boundaryCommit, releaseIdentity.boundary.sourceCommit);
+assert.equal(worldManifest.kernelSha256, releaseIdentity.kernel.sha256);
+assert.equal(worldManifest.kernelByteLength, releaseIdentity.kernel.byteLength);
+assert.equal(worldManifest.kernelImportCount, releaseIdentity.kernel.importCount);
+assert.equal(worldManifest.processKernelAbiVersion, releaseIdentity.kernel.abiVersion);
 const worldProductionSourceSha256 = await digestWorldProductionSource(worldRoot);
 assert.equal(
   worldProductionSourceSha256,
-  "8450ef58c83283fae6863b53728a7a8cfc28c61897ff6f077b076c84e1ab8b1e",
+  releaseIdentity.world.productionSourceSha256,
   "executed World production source differs from the pinned release",
 );
 assert.equal(worldManifest.productionSourceSha256, worldProductionSourceSha256);
 const world = await import(pathToFileURL(join(worldRoot, "src/process_v1/index.mjs")));
-const worldArchive = await readFile(
-  join(worldRoot, "dist/world-v4.1.0-process-host-runtime.tar.gz"),
-).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
-if (worldArchive !== null) {
-  assert.equal(sha256(worldArchive), "0b470db5184b657c2c225e138ea8bcf8028b732e92284473f1623fa04b6b83cd");
-  assert.equal(worldArchive.byteLength, 806_995);
-}
 const host = await world.admitProcessKernel(kernel);
 assert.equal(worldManifest.kernelSha256, host.sha256);
 assert.equal(worldManifest.kernelByteLength, host.byteLength);
@@ -319,8 +324,8 @@ await writeStdout(`${JSON.stringify({
   worldVersion: worldManifest.worldVersion,
   worldSourceCommit: worldManifest.sourceCommit,
   worldProductionSourceSha256,
-  worldRuntimeArchiveSha256: worldArchive === null ? null : sha256(worldArchive),
-  worldRuntimeArchiveByteLength: worldArchive?.byteLength ?? null,
+  worldRuntimeArchiveSha256: releaseIdentity.world.archiveSha256,
+  worldRuntimeArchiveByteLength: releaseIdentity.world.archiveByteLength,
   kernelBoundarySourceCommit: worldManifest.boundaryCommit,
   imageSha256: sha256(image),
   imageByteLength: image.byteLength,
@@ -358,6 +363,9 @@ async function digestRuntimeInputs(root, fixture) {
     "fixture_model_server.mjs",
     "repository_environment.mjs",
     "process_state_census.mjs",
+    "public_negatives.mjs",
+    "public_verify.mjs",
+    "release_identity.json",
   ];
   const records = [];
   async function addTree(directory, prefix) {
@@ -395,12 +403,11 @@ async function digestWorldProductionSource(root) {
   }
   records.push(["bin/world.mjs", await readFile(join(root, "bin/world.mjs"))]);
   await addTree(join(root, "src/process_v1"), "src/process_v1");
-  const chunks = [Buffer.from("world-production-source/v1\0")];
   records.sort(([left], [right]) => Buffer.compare(Buffer.from(left), Buffer.from(right)));
-  for (const [name, bytes] of records) {
-    chunks.push(Buffer.from(`${name}\0`), bytes, Buffer.from([0]));
-  }
-  return sha256(Buffer.concat(chunks));
+  return sha256(Buffer.from(JSON.stringify([
+    "world-production-source/v2",
+    records.map(([name, bytes]) => [name, sha256(bytes)]),
+  ])));
 }
 
 async function digestWorkspace(root) {

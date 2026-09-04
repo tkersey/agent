@@ -49,6 +49,8 @@ function assertEmissionRejected(agentRoot, pattern) {
     emitter,
     "--agent-root", agentRoot,
     "--boundary-root", agentRoot,
+    "--world-root", agentRoot,
+    "--world-archive", "missing",
     "--zig-executable", "zig",
     "--image", "missing",
     "--initial-args", "missing",

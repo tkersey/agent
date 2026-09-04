@@ -63,16 +63,20 @@ runtime/test consumer, not a compiler dependency.
 ```sh
 zig build check --summary all
 zig build check-agent-system-closure-v1 --summary all
-zig build emit-agent-system-closure-v1 --summary all
+zig build emit-agent-system-closure-v1 \
+  -Dworld-process-root=/path/to/extracted-world-runtime \
+  -Dworld-process-archive=/path/to/world-v4.1.0-process-host-runtime.tar.gz \
+  --summary all
 ```
 
 During candidate development, an exact verified Boundary source tree can be
 supplied with Zig's package fork option. The World integration proof is
-explicit and consumes a verified runtime root:
+explicit and consumes the extracted runtime plus the exact released archive:
 
 ```sh
 zig build --fork=/path/to/boundary \
   -Dworld-process-root=/path/to/world-runtime \
+  -Dworld-process-archive=/path/to/world-v4.1.0-process-host-runtime.tar.gz \
   check-agent-repository-system-world --summary all
 ```
 

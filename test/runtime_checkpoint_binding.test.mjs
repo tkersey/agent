@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { appendFile, copyFile, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-const [runtime, worldRoot, image, initial, fixture] = process.argv
+const [runtime, worldRoot, worldArchive, image, initial, fixture] = process.argv
   .slice(2)
   .map((value) => resolve(value));
 const checkpointKey = "7f".repeat(32);
@@ -37,6 +38,9 @@ try {
     "fixture_model_server.mjs",
     "repository_environment.mjs",
     "process_state_census.mjs",
+    "public_negatives.mjs",
+    "public_verify.mjs",
+    "release_identity.json",
   ]) {
     await copyFile(join(dirname(runtime), name), join(distributionRoot, name));
   }
@@ -44,6 +48,14 @@ try {
   await copyFile(initial, join(distributionRoot, "initial-args.bin"));
   await cp(fixture, join(distributionRoot, "fixture"), { recursive: true });
   runtimeUnderTest = join(distributionRoot, "runtime.mjs");
+  const releaseIdentity = JSON.parse(await readFile(
+    join(distributionRoot, "release_identity.json"),
+    "utf8",
+  ));
+  assert.equal(
+    createHash("sha256").update(await readFile(worldArchive)).digest("hex"),
+    releaseIdentity.world.archiveSha256,
+  );
 
   const alternateImage = run(
     worldRoot,
@@ -74,7 +86,7 @@ try {
   assert.match(checkpoint.workspaceSha256, /^[0-9a-f]{64}$/);
   assert.match(checkpoint.kernelSha256, /^[0-9a-f]{64}$/);
   assert.equal(checkpoint.worldProductionSourceSha256,
-    "8450ef58c83283fae6863b53728a7a8cfc28c61897ff6f077b076c84e1ab8b1e");
+    "f7ef570c8cdbda76c962d283d00c29162158c8dbf25767bea4f915dcccb234eb");
   const checkpointPath = join(checkpointWork, "checkpoint.json");
   await writeFile(checkpointPath, `${JSON.stringify({
     ...checkpoint,

@@ -4,24 +4,37 @@ import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 
 const ARCHIVE_NAME = "agent-v3.0.0-system-closure-v1.tar.gz";
 const ROOT = "agent-v3.0.0-system-closure-v1";
 const options = parseArgs(process.argv.slice(2));
 const agentRoot = resolve(options.agentRoot);
 const boundaryRoot = resolve(options.boundaryRoot);
+const worldRoot = resolve(options.worldRoot);
+const worldArchivePath = resolve(options.worldArchive);
 const agentGit = gitFacts(agentRoot);
 assert.equal(agentGit.clean, true,
   "active Agent source tree contains uncommitted changes");
 await assertTreeTracked(agentRoot, "fixtures/repository-repair-v1");
 const buildManifest = await readFile(join(agentRoot, "build.zig.zon"), "utf8");
+const releaseIdentityBytes = await readFile(
+  join(agentRoot, "system_closure_v1/release_identity.json"),
+);
+const releaseIdentity = parseReleaseIdentity(releaseIdentityBytes);
 const boundarySourceMatch = buildManifest.match(/boundary\/archive\/([0-9a-f]{40})\.tar\.gz/);
 assert(boundarySourceMatch !== null, "Boundary source commit is absent from build.zig.zon");
 const boundarySourceCommit = boundarySourceMatch[1];
+assert.equal(boundarySourceCommit, releaseIdentity.boundary.sourceCommit,
+  "Boundary source commit differs from the release identity");
 const boundaryHashMatch = buildManifest.match(/\.hash = "(boundary-[^"]+)"/);
 assert(boundaryHashMatch !== null, "Boundary package hash is absent from build.zig.zon");
 const boundaryPackageHash = boundaryHashMatch[1];
+assert.equal(boundaryPackageHash, releaseIdentity.boundary.packageHash,
+  "Boundary package hash differs from the release identity");
+assert(buildManifest.includes(
+  '.url = "' + releaseIdentity.boundary.packageUrl + '"',
+), "Boundary package URL differs from the release identity");
 const boundaryHashCache = await mkdtemp(join(tmpdir(), "agent-boundary-hash-"));
 let activeBoundaryPackageHash;
 try {
@@ -49,6 +62,47 @@ if (boundaryGit !== null) {
   assert(boundaryRoot.includes("/zig-pkg/boundary-"),
     "unversioned Boundary dependency root is not admissible for emission");
 }
+const worldArchive = await readFile(worldArchivePath);
+assert.equal(basename(worldArchivePath), releaseIdentity.world.archiveName,
+  "World archive name differs from the release identity");
+assert.equal(worldArchive.byteLength, releaseIdentity.world.archiveByteLength,
+  "World archive length differs from the release identity");
+assert.equal(sha256(worldArchive), releaseIdentity.world.archiveSha256,
+  "World archive digest differs from the release identity");
+const worldManifest = JSON.parse(await readFile(
+  join(worldRoot, "runtime-manifest.json"),
+  "utf8",
+));
+assert.deepEqual(worldManifest, {
+  format: "world-process-host-runtime/v1",
+  worldVersion: releaseIdentity.world.version,
+  processKernelAbiVersion: releaseIdentity.kernel.abiVersion,
+  boundaryVersion: releaseIdentity.boundary.version,
+  boundaryCommit: releaseIdentity.boundary.sourceCommit,
+  kernelSha256: releaseIdentity.kernel.sha256,
+  kernelByteLength: releaseIdentity.kernel.byteLength,
+  kernelImportCount: releaseIdentity.kernel.importCount,
+  sourceCommit: releaseIdentity.world.sourceCommit,
+  productionSourceSha256: releaseIdentity.world.productionSourceSha256,
+});
+assert.equal(
+  await digestWorldProductionSource(worldRoot),
+  releaseIdentity.world.productionSourceSha256,
+  "World production source differs from the release identity",
+);
+const worldKernel = await readFile(join(worldRoot, "boundary-process-kernel-v1.wasm"));
+assert.equal(worldKernel.byteLength, releaseIdentity.kernel.byteLength);
+assert.equal(sha256(worldKernel), releaseIdentity.kernel.sha256);
+const worldKernelModule = await WebAssembly.compile(worldKernel);
+assert.equal(
+  WebAssembly.Module.imports(worldKernelModule).length,
+  releaseIdentity.kernel.importCount,
+);
+const worldKernelInstance = await WebAssembly.instantiate(worldKernelModule, {});
+assert.equal(
+  worldKernelInstance.exports.boundary_process_kernel_abi_version(),
+  releaseIdentity.kernel.abiVersion,
+);
 const image = await readFile(options.image);
 const initialArgs = await readFile(options.initialArgs);
 const sourceMap = await readFile(options.sourceMap);
@@ -58,6 +112,7 @@ const files = new Map();
 files.set("system.bpi1", image);
 files.set("initial-args.bin", initialArgs);
 files.set("source-map.json", sourceMap);
+files.set("release_identity.json", releaseIdentityBytes);
 files.set("LICENSE", await readFile(join(agentRoot, "LICENSE")));
 files.set("README.md", await readFile(join(agentRoot, "system_closure_v1/README.md")));
 for (const name of [
@@ -67,6 +122,8 @@ for (const name of [
   "fixture_model_server.mjs",
   "repository_environment.mjs",
   "process_state_census.mjs",
+  "public_negatives.mjs",
+  "public_verify.mjs",
 ]) {
   files.set(name, await readFile(join(agentRoot, "system_closure_v1", name)));
 }
@@ -83,7 +140,25 @@ const receipt = {
   status: "artifact-built",
   publicationStatus: "pending-owner-authorization",
   agentVersion: "3.0.0",
-  provenanceClaims: "none; source provenance is owned by the invoking build verifier",
+  agentSourceCommit: agentGit.commit,
+  releaseIdentitySha256: sha256(releaseIdentityBytes),
+  boundaryVersion: releaseIdentity.boundary.version,
+  boundaryReleaseTag: releaseIdentity.boundary.releaseTag,
+  boundarySourceCommit,
+  boundaryPackageUrl: releaseIdentity.boundary.packageUrl,
+  boundaryPackageHash,
+  worldVersion: releaseIdentity.world.version,
+  worldReleaseTag: releaseIdentity.world.releaseTag,
+  worldSourceCommit: releaseIdentity.world.sourceCommit,
+  worldProductionSourceSha256: releaseIdentity.world.productionSourceSha256,
+  worldRuntimeArchiveName: releaseIdentity.world.archiveName,
+  worldRuntimeArchiveSha256: releaseIdentity.world.archiveSha256,
+  worldRuntimeArchiveByteLength: releaseIdentity.world.archiveByteLength,
+  kernelSha256: releaseIdentity.kernel.sha256,
+  kernelByteLength: releaseIdentity.kernel.byteLength,
+  kernelImportCount: releaseIdentity.kernel.importCount,
+  kernelAbiVersion: releaseIdentity.kernel.abiVersion,
+  liveModelTestStatus: "not-run",
   imageSha256: sha256(image),
   imageByteLength: image.byteLength,
   programTransitionIdentity: image.subarray(32, 64).toString("hex"),
@@ -206,10 +281,63 @@ function sha256(bytes) {
 
 function digestRuntimeInputs(files) {
   const records = [...files.entries()]
-    .filter(([name]) => name.endsWith(".mjs") || name.startsWith("fixture/"))
+    .filter(([name]) =>
+      name.endsWith(".mjs") ||
+      name === "release_identity.json" ||
+      name.startsWith("fixture/")
+    )
     .sort(([left], [right]) => compareUtf8(left, right))
     .map(([name, bytes]) => [name, sha256(bytes)]);
   return sha256(Buffer.from(JSON.stringify(records)));
+}
+
+async function digestWorldProductionSource(root) {
+  const records = [];
+  async function addTree(sourceRoot, prefix) {
+    for (const entry of (await readdir(sourceRoot, { withFileTypes: true }))
+      .sort((left, right) => compareUtf8(left.name, right.name))) {
+      const source = join(sourceRoot, entry.name);
+      const name = prefix + "/" + entry.name;
+      const stat = await lstat(source);
+      assert(!stat.isSymbolicLink(), "World production source link is forbidden: " + name);
+      if (entry.isDirectory()) await addTree(source, name);
+      else if (entry.isFile()) records.push([name, sha256(await readFile(source))]);
+      else throw new Error("unsupported World production source: " + name);
+    }
+  }
+  records.push(["bin/world.mjs", sha256(await readFile(join(root, "bin/world.mjs")))]);
+  await addTree(join(root, "src/process_v1"), "src/process_v1");
+  records.sort(([left], [right]) => compareUtf8(left, right));
+  return sha256(Buffer.from(JSON.stringify([
+    "world-production-source/v2",
+    records,
+  ])));
+}
+
+function parseReleaseIdentity(bytes) {
+  const identity = JSON.parse(bytes.toString("utf8"));
+  assert.equal(identity.format, "agent-system-closure-release-identity/v1");
+  assert.equal(identity.agentVersion, "3.0.0");
+  assert.deepEqual(Object.keys(identity).sort(), [
+    "agentVersion", "boundary", "format", "kernel", "world",
+  ]);
+  assert.deepEqual(Object.keys(identity.boundary).sort(), [
+    "packageHash", "packageUrl", "releaseTag", "sourceCommit", "version",
+  ]);
+  assert.deepEqual(Object.keys(identity.world).sort(), [
+    "archiveByteLength", "archiveName", "archiveSha256",
+    "productionSourceSha256", "releaseTag", "sourceCommit", "version",
+  ]);
+  assert.deepEqual(Object.keys(identity.kernel).sort(), [
+    "abiVersion", "byteLength", "importCount", "sha256",
+  ]);
+  assert.match(identity.boundary.sourceCommit, /^[0-9a-f]{40}$/);
+  assert.match(identity.boundary.packageHash, /^boundary-/);
+  assert.match(identity.world.sourceCommit, /^[0-9a-f]{40}$/);
+  assert.match(identity.world.archiveSha256, /^[0-9a-f]{64}$/);
+  assert.match(identity.world.productionSourceSha256, /^[0-9a-f]{64}$/);
+  assert.match(identity.kernel.sha256, /^[0-9a-f]{64}$/);
+  return Object.freeze(identity);
 }
 
 function compareUtf8(left, right) {
@@ -227,6 +355,8 @@ function parseArgs(args) {
   for (const key of [
     "agentRoot",
     "boundaryRoot",
+    "worldRoot",
+    "worldArchive",
     "zigExecutable",
     "image",
     "initialArgs",

@@ -1,0 +1,26 @@
+{
+  "format": "agent-system-closure-release-identity/v1",
+  "agentVersion": "3.0.0",
+  "boundary": {
+    "version": "1.8.0",
+    "releaseTag": "v1.8.0",
+    "sourceCommit": "9772a22838c3243c746379e292de01230cb60eda",
+    "packageUrl": "https://github.com/tkersey/boundary/archive/9772a22838c3243c746379e292de01230cb60eda.tar.gz",
+    "packageHash": "boundary-1.8.0-flclaHUzJwClex2Cw3PhwBDpPKXLYvX-w5q5NGXELIV4"
+  },
+  "world": {
+    "version": "4.1.0",
+    "releaseTag": "v4.1.0",
+    "sourceCommit": "f310cf65baa177a88237d9f24a33709a4384d65e",
+    "archiveName": "world-v4.1.0-process-host-runtime.tar.gz",
+    "archiveSha256": "9c81dca6a07d9a2358f8a24a42f37e89f932b009f5f6cd6db74247d69abd53e0",
+    "archiveByteLength": 784462,
+    "productionSourceSha256": "f7ef570c8cdbda76c962d283d00c29162158c8dbf25767bea4f915dcccb234eb"
+  },
+  "kernel": {
+    "byteLength": 682943,
+    "sha256": "4da38268f12e8a2749a266480748da5460b5030dadfc10804f79ba3a3bb8013e",
+    "importCount": 0,
+    "abiVersion": 1
+  }
+}

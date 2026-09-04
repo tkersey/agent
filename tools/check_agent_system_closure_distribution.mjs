@@ -20,6 +20,9 @@ const expectedFiles = new Set([
   "initial-args.bin",
   "model_protocol_adapter.mjs",
   "process_state_census.mjs",
+  "public_negatives.mjs",
+  "public_verify.mjs",
+  "release_identity.json",
   "repository_environment.mjs",
   "run.mjs",
   "runtime.mjs",
@@ -36,6 +39,8 @@ assert.equal(receipt.format, "agent-system-closure-artifact-receipt/v1");
 assert.equal(receipt.status, "artifact-built");
 assert.equal(receipt.archiveSha256, archiveSha256);
 assert.equal(receipt.archiveByteLength, archive.byteLength);
+assert.match(receipt.agentSourceCommit, /^[0-9a-f]{40}$/);
+assert.equal(receipt.liveModelTestStatus, "not-run");
 
 const extractionRoot = await mkdtemp(join(tmpdir(), "agent-system-closure-distribution-"));
 try {
@@ -60,12 +65,38 @@ try {
   assert.equal(sha256(files.get("initial-args.bin")), receipt.initialArgsSha256);
   assert.equal(files.get("initial-args.bin").byteLength, receipt.initialArgsByteLength);
   const sourceMap = JSON.parse(files.get("source-map.json").toString("utf8"));
+  const releaseIdentityBytes = files.get("release_identity.json");
+  const releaseIdentity = JSON.parse(releaseIdentityBytes.toString("utf8"));
+  assert.equal(sha256(releaseIdentityBytes), receipt.releaseIdentitySha256);
+  assert.equal(releaseIdentity.format, "agent-system-closure-release-identity/v1");
+  assert.equal(releaseIdentity.agentVersion, receipt.agentVersion);
+  assert.equal(releaseIdentity.boundary.version, receipt.boundaryVersion);
+  assert.equal(releaseIdentity.boundary.releaseTag, receipt.boundaryReleaseTag);
+  assert.equal(releaseIdentity.boundary.sourceCommit, receipt.boundarySourceCommit);
+  assert.equal(releaseIdentity.boundary.packageUrl, receipt.boundaryPackageUrl);
+  assert.equal(releaseIdentity.boundary.packageHash, receipt.boundaryPackageHash);
+  assert.equal(releaseIdentity.world.version, receipt.worldVersion);
+  assert.equal(releaseIdentity.world.releaseTag, receipt.worldReleaseTag);
+  assert.equal(releaseIdentity.world.sourceCommit, receipt.worldSourceCommit);
+  assert.equal(releaseIdentity.world.productionSourceSha256, receipt.worldProductionSourceSha256);
+  assert.equal(releaseIdentity.world.archiveName, receipt.worldRuntimeArchiveName);
+  assert.equal(releaseIdentity.world.archiveSha256, receipt.worldRuntimeArchiveSha256);
+  assert.equal(releaseIdentity.world.archiveByteLength, receipt.worldRuntimeArchiveByteLength);
+  assert.equal(releaseIdentity.kernel.sha256, receipt.kernelSha256);
+  assert.equal(releaseIdentity.kernel.byteLength, receipt.kernelByteLength);
+  assert.equal(releaseIdentity.kernel.importCount, receipt.kernelImportCount);
+  assert.equal(releaseIdentity.kernel.abiVersion, receipt.kernelAbiVersion);
   assert.equal(sha256(files.get("source-map.json")), receipt.sourceMapSha256);
   assert.equal(sourceMap.format, "agent-bpi1-source-map/v1");
   assert.equal(sourceMap.imageSha256, receipt.imageSha256);
   assert.equal(sourceMap.programTransitionDigest, receipt.programTransitionIdentity);
   let execution = null;
+  let publicVerification = null;
   if (options.worldRoot !== undefined) {
+    assert(options.worldArchive !== undefined, "--world-root requires --world-archive");
+    const worldArchive = await readFile(resolve(options.worldArchive));
+    assert.equal(worldArchive.byteLength, receipt.worldRuntimeArchiveByteLength);
+    assert.equal(sha256(worldArchive), receipt.worldRuntimeArchiveSha256);
     const workDir = join(extractionRoot, "work");
     await mkdir(workDir);
     const result = spawnSync(process.execPath, [
@@ -88,6 +119,14 @@ try {
     assert.equal(execution.imageSha256, receipt.imageSha256);
     assert.equal(execution.initialArgsSha256, receipt.initialArgsSha256);
     assert.equal(execution.runtimeInputSha256, receipt.runtimeInputSha256);
+    assert.equal(execution.worldVersion, receipt.worldVersion);
+    assert.equal(execution.worldSourceCommit, receipt.worldSourceCommit);
+    assert.equal(execution.worldProductionSourceSha256, receipt.worldProductionSourceSha256);
+    assert.equal(execution.worldRuntimeArchiveSha256, receipt.worldRuntimeArchiveSha256);
+    assert.equal(execution.worldRuntimeArchiveByteLength, receipt.worldRuntimeArchiveByteLength);
+    assert.equal(execution.kernelBoundarySourceCommit, receipt.boundarySourceCommit);
+    assert.equal(execution.kernelSha256, receipt.kernelSha256);
+    assert.equal(execution.kernelByteLength, receipt.kernelByteLength);
     assert(execution.reductions <= 512);
     assert.equal(execution.modelRequests, 8);
     assert.equal(execution.repositoryRequests, 7);
@@ -95,6 +134,35 @@ try {
     assert.equal(execution.finalTree, "0d9ac8802aac6597cb0a443245efb6f92a0249fe");
     assert.equal(execution.terminalSha256,
       "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032");
+    const publicWork = join(extractionRoot, "public-verification-work");
+    await mkdir(publicWork);
+    const publicResult = spawnSync(process.execPath, [
+      join(root, "public_verify.mjs"),
+      "--world-root", resolve(options.worldRoot),
+      "--world-archive", resolve(options.worldArchive),
+      "--agent-archive", resolve(options.archive),
+      "--agent-receipt", resolve(options.receipt),
+      "--work-root", publicWork,
+      "--census-output", join(extractionRoot, "public-census.json"),
+      "--negative-output", join(extractionRoot, "public-negatives.json"),
+    ], {
+      cwd: root,
+      encoding: "utf8",
+      env: { PATH: process.env.PATH ?? "" },
+      timeout: 30 * 60 * 1000,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    if (publicResult.status !== 0) {
+      throw new Error("public source-free verification failed: " + publicResult.stderr);
+    }
+    publicVerification = JSON.parse(
+      publicResult.stdout.trim().split("\n").filter(Boolean).at(-1),
+    );
+    assert.equal(publicVerification.result, "passed");
+    assert.equal(publicVerification.publicNegativeResult, "passed");
+    assert.equal(publicVerification.dangerousRepositoryEffects, 0);
+    assert.equal(publicVerification.prematureSuccessfulCompletions, 0);
+    assert.equal(publicVerification.liveModelTestStatus, "not-run");
   }
   process.stdout.write(`${JSON.stringify({
     format: "agent-system-closure-distribution-check/v1",
@@ -105,6 +173,7 @@ try {
     sourceIndependentInventory: true,
     safeExtraction: true,
     execution,
+    publicVerification,
   })}\n`);
 } finally {
   await rm(extractionRoot, { recursive: true, force: true });
@@ -177,13 +246,23 @@ function sha256(bytes) {
 
 function parseArgs(args) {
   const result = {};
+  const admitted = new Set(["archive", "checksum", "receipt", "worldRoot", "worldArchive"]);
   for (let index = 0; index < args.length; index += 2) {
     const key = args[index];
     const value = args[index + 1];
     assert(key?.startsWith("--") && value !== undefined, "invalid arguments");
-    result[toCamel(key.slice(2))] = value;
+    const name = toCamel(key.slice(2));
+    assert(admitted.has(name), "unknown distribution-check argument --" + key.slice(2));
+    assert(!(name in result), "duplicate distribution-check argument --" + key.slice(2));
+    result[name] = value;
   }
-  for (const key of ["archive", "checksum", "receipt"]) assert(key in result, `missing --${key}`);
+  for (const key of ["archive", "checksum", "receipt"]) {
+    assert(key in result, "missing --" + key);
+  }
+  assert(
+    (result.worldRoot === undefined) === (result.worldArchive === undefined),
+    "--world-root and --world-archive must be supplied together",
+  );
   return result;
 }
 

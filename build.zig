@@ -14,6 +14,19 @@ pub fn build(b: *std.Build) void {
         "world-process-root",
         "Exact released World Process-host runtime root for integration proof",
     );
+    const world_process_archive = b.option(
+        []const u8,
+        "world-process-archive",
+        "Exact released World Process-host runtime archive for provenance proof",
+    );
+    if (world_process_archive) |path| {
+        if (!std.Io.Dir.path.isAbsolute(path)) {
+            std.process.fatal(
+                "-Dworld-process-archive must be an absolute path: {s}",
+                .{path},
+            );
+        }
+    }
 
     const boundary_dependency = b.dependency("boundary", .{
         .target = target,
@@ -470,6 +483,8 @@ pub fn build(b: *std.Build) void {
         "system_closure_v1/process_state_census.mjs",
         "system_closure_v1/fixture_model_server.mjs",
         "system_closure_v1/repository_environment.mjs",
+        "system_closure_v1/public_negatives.mjs",
+        "system_closure_v1/public_verify.mjs",
     }) |runtime_path| {
         const syntax = b.addSystemCommand(&.{ "node", "--check", runtime_path });
         syntax.addFileInput(b.path(runtime_path));
@@ -517,6 +532,9 @@ pub fn build(b: *std.Build) void {
         "system_closure_v1/process_state_census.mjs",
         "system_closure_v1/fixture_model_server.mjs",
         "system_closure_v1/repository_environment.mjs",
+        "system_closure_v1/public_negatives.mjs",
+        "system_closure_v1/public_verify.mjs",
+        "system_closure_v1/release_identity.json",
         "fixtures/repository-repair-v1/README.md",
         "fixtures/repository-repair-v1/package.json",
         "fixtures/repository-repair-v1/src/range.mjs",
@@ -553,7 +571,13 @@ pub fn build(b: *std.Build) void {
     );
     emit_closure.dependOn(&check_distribution.step);
 
-    if (world_process_root) |root| {
+    if (world_process_root != null and world_process_archive != null) {
+        const root = world_process_root.?;
+        const archive = world_process_archive.?;
+        package_closure.addArgs(&.{ "--world-root", root, "--world-archive", archive });
+        package_closure.addFileInput(.{ .cwd_relative = archive });
+        check_distribution.addArgs(&.{ "--world-root", root, "--world-archive", archive });
+        check_distribution.addFileInput(.{ .cwd_relative = archive });
         const runtime_binding_test = b.addSystemCommand(&.{
             "node",
             "test/runtime_checkpoint_binding.test.mjs",
@@ -565,6 +589,7 @@ pub fn build(b: *std.Build) void {
             b.path("system_closure_v1/runtime.mjs"),
         );
         runtime_binding_test.addArg(root);
+        runtime_binding_test.addArg(archive);
         runtime_binding_test.addFileArg(outputs[0]);
         runtime_binding_test.addFileArg(outputs[1]);
         runtime_binding_test.addDirectoryArg(
@@ -581,7 +606,8 @@ pub fn build(b: *std.Build) void {
         run.addFileArg(closure_checksum);
         run.addArg("--receipt");
         run.addFileArg(closure_receipt);
-        run.addArgs(&.{ "--world-root", root });
+        run.addArgs(&.{ "--world-root", root, "--world-archive", archive });
+        run.addFileInput(.{ .cwd_relative = archive });
         run.addFileInput(b.path("tools/check_agent_system_closure_distribution.mjs"));
         const world_execution_proof = run.captureStdOut(.{
             .basename = "world-execution-proof.json",
@@ -627,9 +653,10 @@ pub fn build(b: *std.Build) void {
         const missing = b.addSystemCommand(&.{
             "sh",
             "-c",
-            "printf '%s\\n' 'check-agent-repository-system-world requires -Dworld-process-root=/absolute/path' >&2; exit 1",
+            "printf '%s\\n' 'World-bound Agent proof and emission require -Dworld-process-root=/absolute/path and -Dworld-process-archive=/absolute/path' >&2; exit 1",
         });
         world_check.dependOn(&missing.step);
+        package_closure.step.dependOn(&missing.step);
     }
 
     const format = b.addSystemCommand(&.{

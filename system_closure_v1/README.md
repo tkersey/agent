@@ -33,6 +33,27 @@ node run.mjs --world-root /path/to/world-runtime --mode fixture \
 execution does not read them, and their image/transition digests must match the
 canonical `system.bpi1` before census collection begins.
 
+After anonymously downloading the World and Agent release archives and the
+Agent receipt, verify their public fixture, census, and admitted negative paths
+from an otherwise empty directory:
+
+```sh
+node public_verify.mjs \\
+  --world-root /path/to/extracted-world-runtime \\
+  --world-archive /path/to/world-v4.1.0-process-host-runtime.tar.gz \\
+  --agent-archive /path/to/agent-v3.0.0-system-closure-v1.tar.gz \\
+  --agent-receipt /path/to/agent-v3.0.0-system-closure-v1-receipt.json \\
+  --work-root /path/to/empty-verification-work \\
+  --census-output /path/to/public-census.json \\
+  --negative-output /path/to/public-negatives.json
+```
+
+The public verifier rejects stale or unoffered Actions, malformed and multiple
+calls, false completion and replacement claims, host model/prompt/tool
+substitution, checkpoint mode changes, and unknown or duplicate scheduler
+controls. It reports zero dangerous effects for every rejected input and never
+runs live-model mode.
+
 The model invocation carries distinct image-selected bounds for normalized
 result text, Action argument JSON, and the complete provider response envelope.
 Tool schemas expose standard `maxLength`; the generic adapter additionally

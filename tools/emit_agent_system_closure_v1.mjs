@@ -305,18 +305,21 @@ function assertNoHiddenIndexFlags(root) {
 function assertNoIgnoredSourceInputs(root) {
   const ignored = run(
     "git",
-    ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"],
+    [
+      "ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--",
+      ":(glob)**/*.json", ":(glob)**/*.mjs", ":(glob)**/*.zig",
+      ":(glob)**/*.zon", ":(glob)fixtures/**",
+      ":(glob,exclude).ledger/**", ":(glob,exclude).uv-cache/**",
+      ":(glob,exclude).zig-cache/**", ":(glob,exclude).zig-global-cache/**",
+      ":(glob,exclude)dist/**", ":(glob,exclude)zig-out/**",
+      ":(glob,exclude)zig-pkg/**", ":(glob,exclude)**/.ledger/**",
+      ":(glob,exclude)**/.uv-cache/**", ":(glob,exclude)**/.zig-cache/**",
+      ":(glob,exclude)**/.zig-global-cache/**", ":(glob,exclude)**/dist/**",
+      ":(glob,exclude)**/zig-out/**", ":(glob,exclude)**/zig-pkg/**",
+    ],
     root,
   ).split("\0").filter(Boolean);
-  const infrastructure = [
-    ".ledger/", ".uv-cache/", ".zig-cache/", ".zig-global-cache/", "dist/",
-    "zig-out/", "zig-pkg/",
-  ];
-  const unsafe = ignored.filter((path) =>
-    !infrastructure.some((prefix) => path.startsWith(prefix)) &&
-    (/\.(json|mjs|zig|zon)$/.test(path) || path.startsWith("fixtures/"))
-  );
-  assert.deepEqual(unsafe, [],
+  assert.deepEqual(ignored, [],
     "ignored source-like files are forbidden during release emission");
 }
 

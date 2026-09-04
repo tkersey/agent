@@ -1,6 +1,6 @@
 {
   "format": "agent-system-economy-ablation/v1",
-  "boundaryCommit": "bc43989e7ea1371649cd85b219f69b86e1c8ccf9",
+  "boundaryCommit": "9772a22838c3243c746379e292de01230cb60eda",
   "rows": {
     "A": {
       "system": "prior landed Agent Interpretation image",

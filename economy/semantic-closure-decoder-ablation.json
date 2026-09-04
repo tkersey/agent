@@ -1,6 +1,6 @@
 {
   "format": "agent-system-decoder-ablation/v1",
-  "boundaryCommit": "bc43989e7ea1371649cd85b219f69b86e1c8ccf9",
+  "boundaryCommit": "9772a22838c3243c746379e292de01230cb60eda",
   "fullRepositorySystem": {
     "imageSha256": "8c9257b584b638dd7084c43059d864f3bb840437c3d102d47f774c8ba8b45906",
     "imageByteLength": 93356
@@ -11,9 +11,20 @@
     "sections": {
       "schemasBytes": 1784,
       "constantsBytes": 4031,
+      "constantPayloadBytes": 3691,
+      "effectsBytes": 603,
       "valuesBytes": 4248,
+      "valueCount": 1061,
+      "functionsBytes": 12,
+      "functionCount": 1,
       "segmentsBytes": 22178,
-      "constructorsBytes": 55352
+      "segmentCount": 171,
+      "instructionCount": 817,
+      "operandCount": 947,
+      "constructorsBytes": 55352,
+      "constructorCount": 233,
+      "environmentFieldCount": 2127,
+      "invariantTermCount": 1800
     }
   },
   "decoderImageByteDelta": 1783,

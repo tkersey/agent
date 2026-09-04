@@ -57,17 +57,17 @@
     "largeDuplicateLiveEnvironment": "pass"
   },
   "boundary": {
-    "commit": "bc43989e7ea1371649cd85b219f69b86e1c8ccf9",
-    "kernelSha256": "f76f38b26542534b44f5fa4f2dc71dd2ff0941c378d66d9239398afc603028bf",
-    "kernelByteLength": 711615,
-    "growthFromBoundary170Bytes": 64142,
-    "growthFromBoundary170Percent": 9.91,
+    "commit": "9772a22838c3243c746379e292de01230cb60eda",
+    "kernelSha256": "4da38268f12e8a2749a266480748da5460b5030dadfc10804f79ba3a3bb8013e",
+    "kernelByteLength": 682943,
+    "growthFromBoundary170Bytes": 35470,
+    "growthFromBoundary170Percent": 5.48,
     "compilerMaximumValues": 1280,
     "compilerMaximumBlocks": 192
   },
   "world": {
-    "commit": "073e0b0f024a32d3c7b3cd9008d73d76ecbad981",
-    "runtimeArchiveSha256": "0b470db5184b657c2c225e138ea8bcf8028b732e92284473f1623fa04b6b83cd",
-    "runtimeArchiveByteLength": 806995
+    "commit": "f310cf65baa177a88237d9f24a33709a4384d65e",
+    "runtimeArchiveSha256": "9c81dca6a07d9a2358f8a24a42f37e89f932b009f5f6cd6db74247d69abd53e0",
+    "runtimeArchiveByteLength": 784462
   }
 }

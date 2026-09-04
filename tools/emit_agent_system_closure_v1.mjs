@@ -107,6 +107,19 @@ const image = await readFile(options.image);
 const initialArgs = await readFile(options.initialArgs);
 const sourceMap = await readFile(options.sourceMap);
 assert.equal(image.subarray(0, 8).toString("ascii"), "ABL_BPI1");
+const agentArtifacts = {
+  imageSha256: sha256(image),
+  imageByteLength: image.byteLength,
+  initialArgsSha256: sha256(initialArgs),
+  initialArgsByteLength: initialArgs.byteLength,
+  sourceMapSha256: sha256(sourceMap),
+  programTransitionDigest: image.subarray(32, 64).toString("hex"),
+};
+assert.deepEqual(
+  agentArtifacts,
+  releaseIdentity.agentArtifacts,
+  "emitted Agent artifacts differ from the clean commit release identity",
+);
 
 const files = new Map();
 files.set("system.bpi1", image);
@@ -132,6 +145,7 @@ const runtimeInputSha256 = digestRuntimeInputs(files);
 const inventory = [...files.keys()].sort(compareUtf8);
 const checksums = inventory.map((name) => `${sha256(files.get(name))}  ${name}`).join("\n") + "\n";
 files.set("checksums.sha256", Buffer.from(checksums));
+const checksumsSha256 = sha256(files.get("checksums.sha256"));
 
 const archive = gzipSync(buildTar(files), { level: 9, mtime: 0 });
 const archiveSha256 = sha256(archive);
@@ -159,13 +173,15 @@ const receipt = {
   kernelImportCount: releaseIdentity.kernel.importCount,
   kernelAbiVersion: releaseIdentity.kernel.abiVersion,
   liveModelTestStatus: "not-run",
-  imageSha256: sha256(image),
-  imageByteLength: image.byteLength,
-  programTransitionIdentity: image.subarray(32, 64).toString("hex"),
-  initialArgsSha256: sha256(initialArgs),
-  initialArgsByteLength: initialArgs.byteLength,
-  sourceMapSha256: sha256(sourceMap),
+  imageSha256: agentArtifacts.imageSha256,
+  imageByteLength: agentArtifacts.imageByteLength,
+  programTransitionIdentity: agentArtifacts.programTransitionDigest,
+  initialArgsSha256: agentArtifacts.initialArgsSha256,
+  initialArgsByteLength: agentArtifacts.initialArgsByteLength,
+  sourceMapSha256: agentArtifacts.sourceMapSha256,
   runtimeInputSha256,
+  inventoryCount: files.size,
+  checksumsSha256,
   archiveName: ARCHIVE_NAME,
   archiveSha256,
   archiveByteLength: archive.byteLength,
@@ -319,7 +335,11 @@ function parseReleaseIdentity(bytes) {
   assert.equal(identity.format, "agent-system-closure-release-identity/v1");
   assert.equal(identity.agentVersion, "3.0.0");
   assert.deepEqual(Object.keys(identity).sort(), [
-    "agentVersion", "boundary", "format", "kernel", "world",
+    "agentArtifacts", "agentVersion", "boundary", "format", "kernel", "world",
+  ]);
+  assert.deepEqual(Object.keys(identity.agentArtifacts).sort(), [
+    "imageByteLength", "imageSha256", "initialArgsByteLength",
+    "initialArgsSha256", "programTransitionDigest", "sourceMapSha256",
   ]);
   assert.deepEqual(Object.keys(identity.boundary).sort(), [
     "packageHash", "packageUrl", "releaseTag", "sourceCommit", "version",
@@ -332,6 +352,10 @@ function parseReleaseIdentity(bytes) {
     "abiVersion", "byteLength", "importCount", "sha256",
   ]);
   assert.match(identity.boundary.sourceCommit, /^[0-9a-f]{40}$/);
+  assert.match(identity.agentArtifacts.imageSha256, /^[0-9a-f]{64}$/);
+  assert.match(identity.agentArtifacts.initialArgsSha256, /^[0-9a-f]{64}$/);
+  assert.match(identity.agentArtifacts.sourceMapSha256, /^[0-9a-f]{64}$/);
+  assert.match(identity.agentArtifacts.programTransitionDigest, /^[0-9a-f]{64}$/);
   assert.match(identity.boundary.packageHash, /^boundary-/);
   assert.match(identity.world.sourceCommit, /^[0-9a-f]{40}$/);
   assert.match(identity.world.archiveSha256, /^[0-9a-f]{64}$/);

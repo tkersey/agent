@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { gunzipSync } from "node:zlib";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -41,6 +41,7 @@ assert.equal(receipt.archiveSha256, archiveSha256);
 assert.equal(receipt.archiveByteLength, archive.byteLength);
 assert.match(receipt.agentSourceCommit, /^[0-9a-f]{40}$/);
 assert.equal(receipt.liveModelTestStatus, "not-run");
+assert.equal(receipt.inventoryCount, expectedFiles.size);
 
 const extractionRoot = await mkdtemp(join(tmpdir(), "agent-system-closure-distribution-"));
 try {
@@ -55,6 +56,7 @@ try {
   }
   const root = join(extractionRoot, ROOT);
   const checksums = parseChecksums(files.get("checksums.sha256"));
+  assert.equal(sha256(files.get("checksums.sha256")), receipt.checksumsSha256);
   assert.equal(checksums.size, expectedFiles.size - 1);
   for (const name of expectedFiles) {
     if (name === "checksums.sha256") continue;
@@ -70,6 +72,15 @@ try {
   assert.equal(sha256(releaseIdentityBytes), receipt.releaseIdentitySha256);
   assert.equal(releaseIdentity.format, "agent-system-closure-release-identity/v1");
   assert.equal(releaseIdentity.agentVersion, receipt.agentVersion);
+  assert.equal(releaseIdentity.agentArtifacts.imageSha256, receipt.imageSha256);
+  assert.equal(releaseIdentity.agentArtifacts.imageByteLength, receipt.imageByteLength);
+  assert.equal(releaseIdentity.agentArtifacts.initialArgsSha256, receipt.initialArgsSha256);
+  assert.equal(releaseIdentity.agentArtifacts.initialArgsByteLength, receipt.initialArgsByteLength);
+  assert.equal(releaseIdentity.agentArtifacts.sourceMapSha256, receipt.sourceMapSha256);
+  assert.equal(
+    releaseIdentity.agentArtifacts.programTransitionDigest,
+    receipt.programTransitionIdentity,
+  );
   assert.equal(releaseIdentity.boundary.version, receipt.boundaryVersion);
   assert.equal(releaseIdentity.boundary.releaseTag, receipt.boundaryReleaseTag);
   assert.equal(releaseIdentity.boundary.sourceCommit, receipt.boundarySourceCommit);
@@ -92,6 +103,7 @@ try {
   assert.equal(sourceMap.programTransitionDigest, receipt.programTransitionIdentity);
   let execution = null;
   let publicVerification = null;
+  let extractionBindingNegative = null;
   if (options.worldRoot !== undefined) {
     assert(options.worldArchive !== undefined, "--world-root requires --world-archive");
     const worldArchive = await readFile(resolve(options.worldArchive));
@@ -163,6 +175,32 @@ try {
     assert.equal(publicVerification.dangerousRepositoryEffects, 0);
     assert.equal(publicVerification.prematureSuccessfulCompletions, 0);
     assert.equal(publicVerification.liveModelTestStatus, "not-run");
+
+    const tamperedInitial = Buffer.from(files.get("initial-args.bin"));
+    tamperedInitial[tamperedInitial.length - 1] ^= 1;
+    await writeFile(join(root, "initial-args.bin"), tamperedInitial);
+    const tamperedWork = join(extractionRoot, "tampered-extraction-work");
+    await mkdir(tamperedWork);
+    const tamperedResult = spawnSync(process.execPath, [
+      join(root, "public_verify.mjs"),
+      "--world-root", resolve(options.worldRoot),
+      "--world-archive", resolve(options.worldArchive),
+      "--agent-archive", resolve(options.archive),
+      "--agent-receipt", resolve(options.receipt),
+      "--work-root", tamperedWork,
+      "--census-output", join(extractionRoot, "tampered-census.json"),
+      "--negative-output", join(extractionRoot, "tampered-negatives.json"),
+    ], {
+      cwd: root,
+      encoding: "utf8",
+      env: { PATH: process.env.PATH ?? "" },
+      timeout: 30 * 60 * 1000,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    assert.notEqual(tamperedResult.status, 0, "tampered extraction was admitted");
+    assert.match(tamperedResult.stderr, /distribution checksum mismatch: initial-args\.bin/);
+    assert.deepEqual(await readdir(tamperedWork), []);
+    extractionBindingNegative = "passed";
   }
   process.stdout.write(`${JSON.stringify({
     format: "agent-system-closure-distribution-check/v1",
@@ -172,6 +210,7 @@ try {
     inventoryCount: expectedFiles.size,
     sourceIndependentInventory: true,
     safeExtraction: true,
+    extractionBindingNegative,
     execution,
     publicVerification,
   })}\n`);

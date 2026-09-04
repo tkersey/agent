@@ -137,6 +137,12 @@ test("typed Action codec preserves raw bytes and rejects every structural violat
 
   assert.equal(decode('{"value":1.0}').i32, 1);
   assert.equal(decode('{"value":1e0}').i32, 1);
+  const hugeExponent = "9".repeat(24);
+  assert.equal(decode(`{"value":0e${hugeExponent}}`).i32, 0);
+  assert.equal(decode(`{"value":-0e${hugeExponent}}`).i32, 0);
+  assert.equal(decode(`{"value":0e-${hugeExponent}}`).i32, 0);
+  assert.notEqual(decode(`{"value":1e${hugeExponent}}`).failure, undefined);
+  assert.notEqual(decode(`{"value":1e-${hugeExponent}}`).failure, undefined);
 
   assert.equal(decode('{"value":1,"value":2}').failure, 1);
   assert.equal(decode('{"value":1,"extra":2}').failure, 2);

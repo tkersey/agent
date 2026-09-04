@@ -818,13 +818,13 @@ function integerFromJsonLexeme(lexeme) {
   if (match === null) return null;
   const negative = match[1] === "-";
   const fraction = match[3] ?? "";
+  let digits = `${match[2]}${fraction}`.replace(/^0+/, "");
+  if (digits.length === 0) return 0n;
   const exponent = Number(match[4] ?? "0");
   if (!Number.isSafeInteger(exponent)) {
     if ((match[4] ?? "").startsWith("-")) return null;
     return negative ? -(1n << 65n) : 1n << 65n;
   }
-  let digits = `${match[2]}${fraction}`.replace(/^0+/, "");
-  if (digits.length === 0) return 0n;
   const scale = exponent - fraction.length;
   if (scale >= 0) {
     if (digits.length + scale > 21) {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,6 +26,33 @@ assert.equal(sha256(worldArchive), identity.world.archiveSha256);
 assert.equal(worldArchive.byteLength, identity.world.archiveByteLength);
 assert.equal(receipt.worldRuntimeArchiveSha256, identity.world.archiveSha256);
 assert.equal(receipt.worldRuntimeArchiveByteLength, identity.world.archiveByteLength);
+const checksumsBytes = await readFile(join(distributionRoot, "checksums.sha256"));
+assert.equal(
+  sha256(checksumsBytes),
+  receipt.checksumsSha256,
+  "distribution checksums differ from the supplied Agent receipt",
+);
+const distributionChecksums = parseChecksums(checksumsBytes);
+assert.equal(distributionChecksums.size, receipt.inventoryCount - 1);
+for (const [name, digest] of distributionChecksums) {
+  const path = join(distributionRoot, name);
+  const stat = await lstat(path);
+  assert(stat.isFile() && !stat.isSymbolicLink(), `distribution file is not regular: ${name}`);
+  assert.equal(
+    sha256(await readFile(path)),
+    digest,
+    `distribution checksum mismatch: ${name}`,
+  );
+}
+assert.equal(identity.agentArtifacts.imageSha256, receipt.imageSha256);
+assert.equal(identity.agentArtifacts.imageByteLength, receipt.imageByteLength);
+assert.equal(identity.agentArtifacts.initialArgsSha256, receipt.initialArgsSha256);
+assert.equal(identity.agentArtifacts.initialArgsByteLength, receipt.initialArgsByteLength);
+assert.equal(identity.agentArtifacts.sourceMapSha256, receipt.sourceMapSha256);
+assert.equal(
+  identity.agentArtifacts.programTransitionDigest,
+  receipt.programTransitionIdentity,
+);
 
 const fixtureWork = join(workRoot, "fixture");
 await mkdir(fixtureWork);
@@ -176,6 +203,26 @@ function runJson(args, label) {
 
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+function parseChecksums(bytes) {
+  const result = new Map();
+  for (const line of bytes.toString("utf8").trimEnd().split("\n")) {
+    const match = /^([0-9a-f]{64})  ([^\0\r\n]+)$/.exec(line);
+    assert(match, "invalid distribution checksum line");
+    const name = match[2];
+    assert(!name.startsWith("/") && !name.includes("\\"));
+    assert(!name.split("/").includes(".."));
+    assert(name !== "checksums.sha256");
+    assert(!result.has(name), `duplicate distribution checksum: ${name}`);
+    result.set(name, match[1]);
+  }
+  for (const required of [
+    "system.bpi1", "initial-args.bin", "source-map.json",
+    "release_identity.json", "run.mjs", "runtime.mjs",
+    "model_protocol_adapter.mjs", "repository_environment.mjs",
+  ]) assert(result.has(required), `missing distribution checksum: ${required}`);
+  return result;
 }
 
 function parseArgs(args) {

@@ -70,13 +70,21 @@ for (const field of [
 ]) assert.deepEqual(publicFixture[field], fixture[field], `fixture disagreement: ${field}`);
 
 const imageSha256 = sha256(image);
+assert.deepEqual(releaseIdentity.agentArtifacts, {
+  imageSha256,
+  imageByteLength: image.byteLength,
+  initialArgsSha256: fixture.initialArgsSha256,
+  initialArgsByteLength: fixture.initialArgsByteLength,
+  sourceMapSha256: sha256(await readFile(resolve(options.sourceMap))),
+  programTransitionDigest: sourceMap.programTransitionDigest,
+});
 assert.equal(imageSha256, imageEconomy.imageSha256);
 assert.equal(image.byteLength, imageEconomy.imageByteLength);
 assert.equal(imageSha256, fixture.imageSha256);
 assert.equal(imageSha256, census.imageSha256);
 assert.equal(imageSha256, sourceMap.imageSha256);
 assert.equal(imageSha256, admission.imageSha256);
-assert.equal(sha256(await readFile(resolve(options.sourceMap))), receipt.sourceMapSha256);
+assert.equal(releaseIdentity.agentArtifacts.sourceMapSha256, receipt.sourceMapSha256);
 assert.equal(receipt.imageSha256, imageSha256);
 assert.equal(receipt.archiveSha256, distribution.archiveSha256);
 assert.equal(receipt.archiveByteLength, distribution.archiveByteLength);

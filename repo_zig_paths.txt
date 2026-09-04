@@ -22,6 +22,7 @@ adequacy/router-policy-v1/src/epistemics.zig
 adequacy/router-policy-v1/src/epistemics_test.zig
 adequacy/router-policy-v1/src/wasm_main.zig
 build.zig
+economy_tooling_root.zig
 examples/coding_agent.zig
 examples/repository_repair_actuality.zig
 examples/research_agent.zig
@@ -32,7 +33,6 @@ src/budget.zig
 src/compiler.zig
 src/decision_contract.zig
 src/definition.zig
-src/economy_tooling_root.zig
 src/epistemics.zig
 src/epistemics_v3.zig
 src/final_policy.zig

@@ -15,7 +15,12 @@ export const CORRECT_SOURCE = `export function normalizeRange(start, end) {
 }
 `;
 
-export async function createRepositoryEnvironment(workspaceRoot, restored = {}) {
+export async function createRepositoryEnvironment(
+  workspaceRoot,
+  restored = {},
+  mode = "fixture",
+) {
+  assert(["fixture", "live"].includes(mode));
   const workspaceReal = await realpath(workspaceRoot);
   let baselineFailed = restored.baselineFailed ?? false;
   let mutationApplied = restored.mutationApplied ?? false;
@@ -44,7 +49,7 @@ export async function createRepositoryEnvironment(workspaceRoot, restored = {}) 
         const cursor = { value: 0 };
         const query = decodeText(request.payload, cursor);
         assert.equal(cursor.value, request.payload.length);
-        assert(query.length > 0);
+        if (query.length === 0) return encodeText("");
         const matches = [];
         for (const path of ["README.md", "package.json", "src/range.mjs", "test/range.test.mjs"]) {
           const contents = (await admittedRead(path)).toString("utf8");
@@ -83,12 +88,19 @@ export async function createRepositoryEnvironment(workspaceRoot, restored = {}) 
       case "repo.replace.approved.v1": {
         assert.equal(baselineFailed, true);
         const proposal = decodeReplaceRequest(request.payload);
-        assert.deepEqual(proposal, {
+        const expected = {
           path: "src/range.mjs",
           expected_sha256: EXPECTED_INITIAL_DIGEST,
           replacement: CORRECT_SOURCE,
           rationale: "Correct ascending preservation and descending normalization.",
-        });
+        };
+        if (mode === "fixture") {
+          assert.deepEqual(proposal, expected);
+        } else {
+          assert.equal(proposal.path, expected.path);
+          assert.equal(proposal.expected_sha256, expected.expected_sha256);
+          assert.equal(proposal.replacement, expected.replacement);
+        }
         const handle = await admittedFile(proposal.path, "r");
         const absolute = join(workspaceRoot, proposal.path);
         const temporary = `${absolute}.agent-replacement`;
@@ -169,6 +181,21 @@ export function decodeFinalResult(bytes) {
   return result;
 }
 
+export function validateFinalResult(result, mode) {
+  assert(["fixture", "live"].includes(mode));
+  const expected = {
+    summary: "Corrected normalizeRange and verified the complete suite.",
+    changed_path: "src/range.mjs",
+    final_source_sha256: EXPECTED_FINAL_DIGEST,
+  };
+  if (mode === "fixture") {
+    assert.deepEqual(result, expected);
+  } else {
+    assert.equal(result.changed_path, expected.changed_path);
+    assert.equal(result.final_source_sha256, expected.final_source_sha256);
+  }
+}
+
 export function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -191,7 +218,9 @@ function encodeText(value) {
 }
 
 function decodeText(bytes, cursor) {
-  return new TextDecoder("utf-8", { fatal: true }).decode(decodeBytes(bytes, cursor));
+  return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
+    decodeBytes(bytes, cursor),
+  );
 }
 
 function decodeBytes(bytes, cursor) {

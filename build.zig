@@ -289,7 +289,7 @@ pub fn build(b: *std.Build) void {
         .optimize = .Debug,
     });
     const economy_agent_module = b.createModule(.{
-        .root_source_file = b.path("src/economy_tooling_root.zig"),
+        .root_source_file = b.path("economy_tooling_root.zig"),
         .target = b.graph.host,
         .optimize = .Debug,
     });
@@ -452,6 +452,18 @@ pub fn build(b: *std.Build) void {
         b.path("system_closure_v1/model_protocol_adapter.mjs"),
     );
     closure_check.dependOn(&model_protocol_adapter_test.step);
+    const repository_environment_test = b.addSystemCommand(&.{
+        "node",
+        "--test",
+        "test/repository_environment.test.mjs",
+    });
+    repository_environment_test.addFileInput(
+        b.path("test/repository_environment.test.mjs"),
+    );
+    repository_environment_test.addFileInput(
+        b.path("system_closure_v1/repository_environment.mjs"),
+    );
+    closure_check.dependOn(&repository_environment_test.step);
     const run_argument_admission_test = b.addSystemCommand(&.{
         "node",
         "--test",

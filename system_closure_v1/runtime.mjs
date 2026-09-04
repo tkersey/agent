@@ -22,6 +22,7 @@ import {
   createRepositoryEnvironment,
   decodeFinalResult,
   sha256,
+  validateFinalResult,
 } from "./repository_environment.mjs";
 
 const options = parseArgs(process.argv.slice(2));
@@ -136,7 +137,11 @@ if (checkpoint !== null) {
 }
 
 const initialTree = checkpoint?.initialTree ?? git(workspaceRoot, ["rev-parse", "HEAD^{tree}"]);
-const repository = await createRepositoryEnvironment(workspaceRoot, checkpoint ?? {});
+const repository = await createRepositoryEnvironment(
+  workspaceRoot,
+  checkpoint ?? {},
+  options.mode,
+);
 if (checkpoint === null) {
   assert.equal(sha256(await repository.admittedRead("src/range.mjs")), EXPECTED_INITIAL_DIGEST);
 }
@@ -287,11 +292,7 @@ if (terminal === undefined) {
 }
 
 const finalResult = decodeFinalResult(terminal);
-assert.deepEqual(finalResult, {
-  summary: "Corrected normalizeRange and verified the complete suite.",
-  changed_path: "src/range.mjs",
-  final_source_sha256: EXPECTED_FINAL_DIGEST,
-});
+validateFinalResult(finalResult, options.mode);
 assert.equal(repositoryState.baselineFailed, true);
 assert.equal(repositoryState.mutationApplied, true);
 assert.equal(repositoryState.postMutationPassed, true);

@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { readBoundedRegularFile } from "../system_closure_v1/world_archive_binding.mjs";
 
 const options = parseArgs(process.argv.slice(2));
 const root = resolve(options.outputRoot ?? ".");
@@ -364,8 +365,11 @@ function sha256(bytes) {
 }
 
 async function readJson(path) {
-  const bytes = await readFile(resolve(path));
-  assert(bytes.byteLength <= 16 * 1024 * 1024, `JSON input is too large: ${path}`);
+  const bytes = await readBoundedRegularFile(
+    resolve(path),
+    16 * 1024 * 1024,
+    `JSON input ${path}`,
+  );
   return JSON.parse(bytes);
 }
 

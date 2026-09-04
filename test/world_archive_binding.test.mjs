@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
-import { appendFile, cp, mkdir, mkdtemp, open, rm, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  chmod,
+  cp,
+  mkdir,
+  mkdtemp,
+  open,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -26,6 +35,30 @@ test("the executed World root must equal the authenticated archive", async (cont
   await assert.rejects(
     assertWorldRootMatchesArchive({ worldRoot: changed, archiveBytes, worldVersion: "4.1.0" }),
     /executed bytes differ from archive/,
+  );
+
+  const extraDirectory = join(root, "extra-directory");
+  await cp(worldRoot, extraDirectory, { recursive: true });
+  await mkdir(join(extraDirectory, "unsigned-empty-directory"));
+  await assert.rejects(
+    assertWorldRootMatchesArchive({
+      worldRoot: extraDirectory,
+      archiveBytes,
+      worldVersion: "4.1.0",
+    }),
+    /inventory differs from the authenticated archive/,
+  );
+
+  const changedDirectoryMode = join(root, "changed-directory-mode");
+  await cp(worldRoot, changedDirectoryMode, { recursive: true });
+  await chmod(join(changedDirectoryMode, "src"), 0o700);
+  await assert.rejects(
+    assertWorldRootMatchesArchive({
+      worldRoot: changedDirectoryMode,
+      archiveBytes,
+      worldVersion: "4.1.0",
+    }),
+    /executed mode differs from archive: src/,
   );
 });
 

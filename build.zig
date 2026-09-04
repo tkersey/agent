@@ -313,6 +313,7 @@ pub fn build(b: *std.Build) void {
     });
     external_consumer.addArg(b.graph.zig_exe);
     external_consumer.addArg(b.pathFromRoot("."));
+    external_consumer.addDirectoryArg(boundary_dependency.path("."));
     external_consumer.addArg(
         b.graph.global_cache_root.path orelse @panic("global cache path is absent"),
     );
@@ -706,7 +707,9 @@ pub fn build(b: *std.Build) void {
     check_distribution.addFileInput(
         b.path("system_closure_v1/world_archive_binding.mjs"),
     );
-    emit_closure.dependOn(&check_distribution.step);
+    install_closure_archive.step.dependOn(&check_distribution.step);
+    install_closure_checksum.step.dependOn(&check_distribution.step);
+    install_closure_receipt.step.dependOn(&check_distribution.step);
 
     if (world_process_root != null and world_process_archive != null) {
         const root = world_process_root.?;
@@ -729,6 +732,7 @@ pub fn build(b: *std.Build) void {
         runtime_binding_test.addArg(archive);
         runtime_binding_test.addFileArg(outputs[0]);
         runtime_binding_test.addFileArg(outputs[1]);
+        runtime_binding_test.addFileArg(outputs[3]);
         runtime_binding_test.addDirectoryArg(
             b.path("fixtures/repository-repair-v1"),
         );

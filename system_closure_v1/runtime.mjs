@@ -6,6 +6,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { startFixtureModelServer } from "./fixture_model_server.mjs";
 import {
+  admitModelEndpoint,
   decodeModelInvocation,
   encodeOpenAIResponsesRequest,
   performModelInvocation,
@@ -34,6 +35,7 @@ assert(["fixture", "live"].includes(options.mode));
 if (options.mode === "live") {
   assert(options.endpoint !== undefined, "live mode requires --endpoint");
   assert(process.env.OPENAI_API_KEY, "live mode requires OPENAI_API_KEY");
+  admitModelEndpoint(options.endpoint, true);
 }
 const distributionRoot = dirname(fileURLToPath(import.meta.url));
 const releaseIdentity = JSON.parse((await readBoundedRegularFile(
@@ -95,7 +97,18 @@ assert.equal(sha256(initial), releaseIdentity.agentArtifacts.initialArgsSha256,
 const fixtureRoot = join(distributionRoot, "fixture");
 const sourceMapBytes = options.sourceMap === undefined
   ? null
-  : await readFile(resolve(options.sourceMap));
+  : await readBoundedRegularFile(
+    options.sourceMap,
+    16 * 1024 * 1024,
+    "Agent source map",
+  );
+if (sourceMapBytes !== null) {
+  assert.equal(
+    sha256(sourceMapBytes),
+    releaseIdentity.agentArtifacts.sourceMapSha256,
+    "Agent source-map digest differs from release identity",
+  );
+}
 const sourceMap = sourceMapBytes === null
   ? null
   : JSON.parse(sourceMapBytes.toString("utf8"));

@@ -171,7 +171,13 @@ fn boolMask(
                     flow.constant(u32, context.zero_u32_index),
                 ),
         );
-        if (index + 1 < values.len) bit = flow.integerAdd(bit, bit);
+        if (index + 1 < values.len) {
+            bit = flow.integerAddOrFail(
+                bit,
+                bit,
+                flow.constant(context.Failure, context.arithmetic_failure_index),
+            );
+        }
     }
     return result;
 }
@@ -183,9 +189,10 @@ fn compileIndex(
 ) flow_module.Value(u32) {
     var result = flow.constant(u32, context.zero_u32_index);
     inline for (0..index) |_| {
-        result = flow.integerAdd(
+        result = flow.integerAddOrFail(
             result,
             flow.constant(u32, context.one_u32_index),
+            flow.constant(context.Failure, context.arithmetic_failure_index),
         );
     }
     return result;

@@ -27,10 +27,13 @@ test "tool schemas distinguish Text byte and character bounds" {
 
 const AlternateGoal = boundary.Text(64);
 const AlternateResult = struct { answer: AlternateGoal };
-const AlternateAction = union(enum) { done: AlternateResult };
+const AlternateAction = union(enum) {
+    done: AlternateResult,
+    again: AlternateResult,
+};
 const AlternateObservation = union(enum) { noop: void };
 const AlternateFailure = enum {
-    arithmetic_overflow,
+    overflow,
     capacity_exceeded,
     invalid_index,
     invalid_utf8,
@@ -45,10 +48,16 @@ const AlternateFailure = enum {
     transport,
     http,
 };
-const alternate_actions = .{agent.action.final(.done, .{
-    .name = "done",
-    .description = "Return the exact bounded answer.",
-})};
+const alternate_actions = .{
+    agent.action.final(.done, .{
+        .name = "done",
+        .description = "Return the exact bounded answer.",
+    }),
+    agent.action.final(.again, .{
+        .name = "again",
+        .description = "Return another exact bounded answer.",
+    }),
+};
 const alternate_models = .{agent.model(.{
     .name = "primary",
     .protocol = agent.protocol.openaiResponsesV2.Profile,
@@ -69,7 +78,7 @@ const alternate_skills = .{agent.skill(.{
     .actions = .{"done"},
 })};
 const alternate_failures = .{
-    .arithmetic_overflow = AlternateFailure.arithmetic_overflow,
+    .arithmetic_overflow = AlternateFailure.overflow,
     .capacity_exceeded = AlternateFailure.capacity_exceeded,
     .invalid_index = AlternateFailure.invalid_index,
     .invalid_utf8 = AlternateFailure.invalid_utf8,

@@ -65,8 +65,11 @@ export async function assertRootMatchesArchive({
     "executed root inventory differs from the authenticated archive");
   for (const [name, archived] of files) {
     const actual = disk.get(name);
+    assert.equal(actual.kind, archived.kind, `executed type differs from archive: ${name}`);
     assert.equal(actual.mode, archived.mode, `executed mode differs from archive: ${name}`);
-    assert.deepEqual(actual.bytes, archived.bytes, `executed bytes differ from archive: ${name}`);
+    if (archived.kind === "file") {
+      assert.deepEqual(actual.bytes, archived.bytes, `executed bytes differ from archive: ${name}`);
+    }
   }
   return disk;
 }
@@ -95,16 +98,38 @@ function parseTar(bytes, root, maximumExpandedBytes) {
     assert(size <= bytes.length - offset, "truncated World archive entry");
     if (type === "0") {
       assert(!files.has(relative), `duplicate World archive path: ${relative}`);
+      addImplicitDirectories(files, relative);
       expanded += size;
       assert(expanded <= maximumExpandedBytes, "World archive expansion limit exceeded");
-      files.set(relative, { mode, bytes: Buffer.from(bytes.subarray(offset, offset + size)) });
+      files.set(relative, {
+        kind: "file",
+        mode,
+        bytes: Buffer.from(bytes.subarray(offset, offset + size)),
+      });
     } else {
       assert.equal(type, "5", `World archive special entry is forbidden: ${name}`);
       assert.equal(size, 0);
+      const existing = files.get(relative);
+      assert(existing === undefined || existing.implicit === true,
+        `duplicate World archive path: ${relative}`);
+      files.set(relative, { kind: "directory", mode, implicit: false });
     }
     offset += Math.ceil(size / 512) * 512;
   }
   return new Map([...files].sort(([left], [right]) => compareUtf8(left, right)));
+}
+
+function addImplicitDirectories(files, relative) {
+  const components = relative.split("/");
+  for (let length = 1; length < components.length; length += 1) {
+    const name = components.slice(0, length).join("/");
+    const existing = files.get(name);
+    assert(existing === undefined || existing.kind === "directory",
+      `World archive path crosses a file: ${relative}`);
+    if (existing === undefined) {
+      files.set(name, { kind: "directory", mode: 0o755, implicit: true });
+    }
+  }
 }
 
 async function readTree(root, maximumEntries, maximumBytes, maximumDepth) {
@@ -123,12 +148,15 @@ async function readTree(root, maximumEntries, maximumBytes, maximumDepth) {
       const path = join(root, ...name.split("/"));
       const stat = await lstat(path);
       assert(!stat.isSymbolicLink(), `executed World link is forbidden: ${name}`);
-      if (stat.isDirectory()) await walk(name, depth + 1);
-      else {
+      if (stat.isDirectory()) {
+        files.push([name, { kind: "directory", mode: stat.mode & 0o777 }]);
+        await walk(name, depth + 1);
+      } else {
         assert(stat.isFile(), `executed World entry is not regular: ${name}`);
         bytesSeen += Number(stat.size);
         assert(bytesSeen <= maximumBytes, "executed tree aggregate size limit exceeded");
         files.push([name, {
+          kind: "file",
           mode: stat.mode & 0o777,
           bytes: await readBoundedRegularFile(path, maximumBytes, `executed file ${name}`),
         }]);

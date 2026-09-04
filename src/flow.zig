@@ -1002,21 +1002,6 @@ pub fn Flow(comptime config: anytype) type {
             );
         }
 
-        pub fn textToBytes(
-            self: *Self,
-            comptime Bytes: type,
-            text: anytype,
-        ) Value(Bytes) {
-            const Text = @TypeOf(text).Type;
-            if (comptime !boundary.schema.isTextType(Text) or
-                !boundary.schema.isBytesType(Bytes) or
-                Bytes.maximum_length < Text.maximum_length)
-            {
-                @compileError("agent.Flow textToBytes requires capacity-compatible Text -> Bytes");
-            }
-            return self.instruction(Bytes, .pure, .text_to_bytes, .{text});
-        }
-
         pub fn textCopyOrFail(
             self: *Self,
             comptime Result: type,

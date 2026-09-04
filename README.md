@@ -92,7 +92,8 @@ After extracting the archive, run the source-independent fixture with released
 World and an existing empty work directory:
 
 ```sh
-node run.mjs --world-root /path/to/world-runtime --mode fixture \
+node run.mjs --world-root /path/to/world-runtime \
+  --world-archive /path/to/world-runtime.tar.gz --mode fixture \
   --work-dir /path/to/empty-work-directory
 ```
 
@@ -109,6 +110,7 @@ The same archive has an explicitly invoked live mode using the image-fixed
 ```sh
 OPENAI_API_KEY=... node run.mjs \
   --world-root /path/to/world-runtime \
+  --world-archive /path/to/world-runtime.tar.gz \
   --mode live \
   --endpoint https://api.openai.com/v1/responses \
   --work-dir /path/to/empty-work-directory

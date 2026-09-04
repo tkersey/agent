@@ -35,6 +35,20 @@ const agentFile = (path) => {
 const buildManifest = agentFile("build.zig.zon").toString("utf8");
 const releaseIdentityBytes = agentFile("system_closure_v1/release_identity.json");
 const releaseIdentity = parseReleaseIdentity(releaseIdentityBytes);
+assertPublicReleaseTag(
+  "tkersey/boundary",
+  releaseIdentity.boundary.version,
+  releaseIdentity.boundary.releaseTag,
+  releaseIdentity.boundary.sourceCommit,
+  agentRoot,
+);
+assertPublicReleaseTag(
+  "tkersey/world",
+  releaseIdentity.world.version,
+  releaseIdentity.world.releaseTag,
+  releaseIdentity.world.sourceCommit,
+  agentRoot,
+);
 assert.equal(
   agentSourceSha256FromTree(agentTree),
   releaseIdentity.agentSourceSha256,
@@ -294,6 +308,24 @@ function gitFacts(cwd) {
   return Object.freeze({ commit, clean: status.length === 0 });
 }
 
+function assertPublicReleaseTag(repository, version, tag, commit, cwd) {
+  assert.match(version, /^\d+\.\d+\.\d+$/);
+  assert.equal(tag, `v${version}`);
+  const ref = `refs/tags/${tag}`;
+  const records = run(
+    "git",
+    ["ls-remote", `https://github.com/${repository}.git`, ref, `${ref}^{}`],
+    cwd,
+  ).trim().split("\n").filter(Boolean).map((line) => line.split("\t"));
+  const refs = new Map(records.map(([oid, name]) => [name, oid]));
+  assert(refs.has(ref), `public release tag is absent: ${repository}@${tag}`);
+  assert.equal(
+    refs.get(`${ref}^{}`) ?? refs.get(ref),
+    commit,
+    `public release tag targets the wrong commit: ${repository}@${tag}`,
+  );
+}
+
 function assertNoHiddenIndexFlags(root) {
   const records = run("git", ["ls-files", "-v", "-z"], root)
     .split("\0").filter(Boolean);
@@ -329,6 +361,7 @@ function run(command, args, cwd) {
     encoding: "utf8",
     env: { PATH: process.env.PATH ?? "" },
     maxBuffer: 64 * 1024 * 1024,
+    timeout: 5 * 60 * 1000,
   });
   if (result.status !== 0) throw new Error(`${command} failed: ${result.stderr}`);
   return result.stdout;

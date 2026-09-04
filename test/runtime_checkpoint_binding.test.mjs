@@ -16,24 +16,28 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-const [runtime, worldRoot, worldArchive, image, initial, fixture] = process.argv
+const [runtime, worldRoot, worldArchive, image, initial, sourceMap, fixture] = process.argv
   .slice(2)
   .map((value) => resolve(value));
 const checkpointKey = "7f".repeat(32);
 let runtimeUnderTest;
 
-function run(selectedWorld, workDir, maximumReductions = 1, extra = []) {
+function run(selectedWorld, workDir, maximumReductions = 1, extra = [], mode = "fixture") {
   return spawnSync(process.execPath, [
     runtimeUnderTest,
     "--worldRoot", selectedWorld,
     "--worldArchive", worldArchive,
     "--workDir", workDir,
-    "--mode", "fixture",
+    "--mode", mode,
     "--maximumReductions", String(maximumReductions),
     ...extra,
   ], {
     encoding: "utf8",
-    env: { ...process.env, AGENT_SYSTEM_CHECKPOINT_KEY: checkpointKey },
+    env: {
+      ...process.env,
+      AGENT_SYSTEM_CHECKPOINT_KEY: checkpointKey,
+      OPENAI_API_KEY: "runtime-preflight-test-key",
+    },
     timeout: 5 * 60 * 1000,
     maxBuffer: 4 * 1024 * 1024,
   });
@@ -99,6 +103,36 @@ try {
     (error) => assert.equal(error?.code, "ENOENT"),
   );
   await writeFile(imagePath, originalImage);
+
+  const directEndpointWork = join(root, "direct-endpoint-work");
+  const rejectedEndpoint = run(
+    worldRoot,
+    directEndpointWork,
+    1,
+    ["--endpoint", "https://example.com/v1/responses"],
+    "live",
+  );
+  assert.notEqual(rejectedEndpoint.status, 0);
+  assert.match(rejectedEndpoint.stderr, /credentialed model endpoint must be/);
+  await lstat(directEndpointWork).then(
+    () => assert.fail("invalid direct endpoint reached workspace creation"),
+    (error) => assert.equal(error?.code, "ENOENT"),
+  );
+
+  const tamperedSourceMap = join(root, "tampered-source-map.json");
+  const sourceMapBytes = await readFile(sourceMap);
+  await writeFile(tamperedSourceMap, Buffer.concat([sourceMapBytes, Buffer.from(" ")]));
+  const tamperedSourceMapWork = join(root, "tampered-source-map-work");
+  const rejectedSourceMap = run(worldRoot, tamperedSourceMapWork, 1, [
+    "--sourceMap", tamperedSourceMap,
+    "--censusOutput", join(root, "tampered-census.json"),
+  ]);
+  assert.notEqual(rejectedSourceMap.status, 0);
+  assert.match(rejectedSourceMap.stderr, /Agent source-map digest differs/);
+  await lstat(tamperedSourceMapWork).then(
+    () => assert.fail("tampered source map reached workspace creation"),
+    (error) => assert.equal(error?.code, "ENOENT"),
+  );
 
   const alternateImage = run(
     worldRoot,

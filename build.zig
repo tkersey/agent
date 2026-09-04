@@ -313,10 +313,16 @@ pub fn build(b: *std.Build) void {
     });
     external_consumer.addArg(b.graph.zig_exe);
     external_consumer.addArg(b.pathFromRoot("."));
-    external_consumer.addDirectoryArg(boundary_dependency.path("."));
     external_consumer.addArg(
         b.graph.global_cache_root.path orelse @panic("global cache path is absent"),
     );
+    const resolved_packages = @import("root").dependencies.packages;
+    inline for (@typeInfo(resolved_packages).@"struct".decls) |decl| {
+        const package = @field(resolved_packages, decl.name);
+        if (@hasDecl(package, "build_root")) {
+            external_consumer.addDirectoryArg(.{ .cwd_relative = package.build_root });
+        }
+    }
     external_consumer.addFileInput(b.path("test/external_consumer.test.mjs"));
     external_consumer.addFileInput(b.path("test/external_consumer/build.zig"));
     external_consumer.addFileInput(b.path("test/external_consumer/main.zig"));
@@ -359,92 +365,97 @@ pub fn build(b: *std.Build) void {
         outputs[index] = run.captureStdOut(.{ .basename = mode[1] });
         emit_repository.dependOn(&run.step);
     }
-    const ablation_emitter_module = b.createModule(.{
-        .root_source_file = b.path("actuality/emit_repository_system_ablation_v1.zig"),
-        .target = b.graph.host,
-        .optimize = .Debug,
-    });
-    const economy_agent_module = b.createModule(.{
-        .root_source_file = b.path("economy_tooling_root.zig"),
-        .target = b.graph.host,
-        .optimize = .Debug,
-    });
-    economy_agent_module.addImport("boundary", boundary_module);
-    const repository_economy_module = b.createModule(.{
-        .root_source_file = b.path("actuality/repository_repair_system_v1.zig"),
-        .target = b.graph.host,
-        .optimize = .ReleaseSafe,
-    });
-    repository_economy_module.addImport("agent", economy_agent_module);
-    repository_economy_module.addImport("boundary", boundary_module);
-    ablation_emitter_module.addImport("agent", economy_agent_module);
-    ablation_emitter_module.addImport("boundary", boundary_module);
-    ablation_emitter_module.addImport(
-        "repository_system",
-        repository_economy_module,
-    );
-    const ablation_emitter = b.addExecutable(.{
-        .name = "emit-agent-repository-system-ablation-v1",
-        .root_module = ablation_emitter_module,
-    });
-    const emit_repository_ablation = b.step(
-        "emit-agent-repository-system-ablation-v1",
-        "Emit the repository system with Action argument decoding ablated",
-    );
-    inline for (.{
-        .{ "bpi1", "repository-system-no-action-decode.bpi1" },
-        .{ "source-map", "repository-system-no-action-decode.source-map.json" },
-    }) |mode| {
-        const run_ablation_emitter = b.addRunArtifact(ablation_emitter);
-        run_ablation_emitter.addArg(mode[0]);
-        _ = run_ablation_emitter.captureStdOut(.{ .basename = mode[1] });
-        emit_repository_ablation.dependOn(&run_ablation_emitter.step);
-    }
-    const scaling_emitter_module = b.createModule(.{
-        .root_source_file = b.path("actuality/emit_economy_scaling_v1.zig"),
-        .target = b.graph.host,
-        .optimize = .Debug,
-    });
-    scaling_emitter_module.addImport("agent", economy_agent_module);
-    scaling_emitter_module.addImport("boundary", boundary_module);
-    const scaling_emitter = b.addExecutable(.{
-        .name = "emit-agent-economy-scaling-v1",
-        .root_module = scaling_emitter_module,
-    });
-    const scaling_modes = .{
-        "prompt-1k",
-        "prompt-8k",
-        "prompt-16k",
-        "skill-base",
-        "skill-4k",
-        "tool-base",
-        "tool-extra",
-        "model-fixed-no-tools",
-        "model-dynamic-goal",
-        "six-tools-no-decode",
-        "six-tools-decode",
-    };
-    var scaling_outputs: [scaling_modes.len]std.Build.LazyPath = undefined;
-    inline for (scaling_modes, 0..) |mode, index| {
-        const run = b.addRunArtifact(scaling_emitter);
-        run.addArg(mode);
-        scaling_outputs[index] = run.captureStdOut(.{
-            .basename = b.fmt("{s}.bpi1", .{mode}),
+    const economy_check: ?*std.Build.Step = economy: {
+        b.build_root.handle.access(b.graph.io, "economy_tooling_root.zig", .{}) catch
+            break :economy null;
+        const ablation_emitter_module = b.createModule(.{
+            .root_source_file = b.path("actuality/emit_repository_system_ablation_v1.zig"),
+            .target = b.graph.host,
+            .optimize = .Debug,
         });
-    }
-    const economy_check_command = b.addSystemCommand(&.{
-        "node",
-        "tools/check_agent_system_economy_v1.mjs",
-    });
-    for (scaling_outputs) |output| economy_check_command.addFileArg(output);
-    economy_check_command.addFileInput(
-        b.path("tools/check_agent_system_economy_v1.mjs"),
-    );
-    const economy_check = b.step(
-        "check-agent-system-economy-v1",
-        "Validate Agent image, execution, and marginal economy gates",
-    );
-    economy_check.dependOn(&economy_check_command.step);
+        const economy_agent_module = b.createModule(.{
+            .root_source_file = b.path("economy_tooling_root.zig"),
+            .target = b.graph.host,
+            .optimize = .Debug,
+        });
+        economy_agent_module.addImport("boundary", boundary_module);
+        const repository_economy_module = b.createModule(.{
+            .root_source_file = b.path("actuality/repository_repair_system_v1.zig"),
+            .target = b.graph.host,
+            .optimize = .ReleaseSafe,
+        });
+        repository_economy_module.addImport("agent", economy_agent_module);
+        repository_economy_module.addImport("boundary", boundary_module);
+        ablation_emitter_module.addImport("agent", economy_agent_module);
+        ablation_emitter_module.addImport("boundary", boundary_module);
+        ablation_emitter_module.addImport(
+            "repository_system",
+            repository_economy_module,
+        );
+        const ablation_emitter = b.addExecutable(.{
+            .name = "emit-agent-repository-system-ablation-v1",
+            .root_module = ablation_emitter_module,
+        });
+        const emit_repository_ablation = b.step(
+            "emit-agent-repository-system-ablation-v1",
+            "Emit the repository system with Action argument decoding ablated",
+        );
+        inline for (.{
+            .{ "bpi1", "repository-system-no-action-decode.bpi1" },
+            .{ "source-map", "repository-system-no-action-decode.source-map.json" },
+        }) |mode| {
+            const run_ablation_emitter = b.addRunArtifact(ablation_emitter);
+            run_ablation_emitter.addArg(mode[0]);
+            _ = run_ablation_emitter.captureStdOut(.{ .basename = mode[1] });
+            emit_repository_ablation.dependOn(&run_ablation_emitter.step);
+        }
+        const scaling_emitter_module = b.createModule(.{
+            .root_source_file = b.path("actuality/emit_economy_scaling_v1.zig"),
+            .target = b.graph.host,
+            .optimize = .Debug,
+        });
+        scaling_emitter_module.addImport("agent", economy_agent_module);
+        scaling_emitter_module.addImport("boundary", boundary_module);
+        const scaling_emitter = b.addExecutable(.{
+            .name = "emit-agent-economy-scaling-v1",
+            .root_module = scaling_emitter_module,
+        });
+        const scaling_modes = .{
+            "prompt-1k",
+            "prompt-8k",
+            "prompt-16k",
+            "skill-base",
+            "skill-4k",
+            "tool-base",
+            "tool-extra",
+            "model-fixed-no-tools",
+            "model-dynamic-goal",
+            "six-tools-no-decode",
+            "six-tools-decode",
+        };
+        var scaling_outputs: [scaling_modes.len]std.Build.LazyPath = undefined;
+        inline for (scaling_modes, 0..) |mode, index| {
+            const run = b.addRunArtifact(scaling_emitter);
+            run.addArg(mode);
+            scaling_outputs[index] = run.captureStdOut(.{
+                .basename = b.fmt("{s}.bpi1", .{mode}),
+            });
+        }
+        const economy_check_command = b.addSystemCommand(&.{
+            "node",
+            "tools/check_agent_system_economy_v1.mjs",
+        });
+        for (scaling_outputs) |output| economy_check_command.addFileArg(output);
+        economy_check_command.addFileInput(
+            b.path("tools/check_agent_system_economy_v1.mjs"),
+        );
+        const economy_step = b.step(
+            "check-agent-system-economy-v1",
+            "Validate Agent image, execution, and marginal economy gates",
+        );
+        economy_step.dependOn(&economy_check_command.step);
+        break :economy economy_step;
+    };
     const process_state_census_test = b.addSystemCommand(&.{
         "node",
         "test/process_state_census.test.mjs",
@@ -834,15 +845,7 @@ pub fn build(b: *std.Build) void {
 
     const check = b.step("check", "Compile and test Agent 3");
     check.dependOn(closure_check);
-    const repository_economy_available = blk: {
-        b.build_root.handle.access(
-            b.graph.io,
-            "economy_tooling_root.zig",
-            .{},
-        ) catch break :blk false;
-        break :blk true;
-    };
-    if (repository_economy_available) check.dependOn(economy_check);
+    if (economy_check) |step| check.dependOn(step);
     check.dependOn(repository_admission_step);
     check.dependOn(lint);
 }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
-import { lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import {
@@ -35,19 +35,17 @@ const agentFile = (path) => {
 const buildManifest = agentFile("build.zig.zon").toString("utf8");
 const releaseIdentityBytes = agentFile("system_closure_v1/release_identity.json");
 const releaseIdentity = parseReleaseIdentity(releaseIdentityBytes);
-assertPublicReleaseTag(
+await assertPublicReleaseTag(
   "tkersey/boundary",
   releaseIdentity.boundary.version,
   releaseIdentity.boundary.releaseTag,
   releaseIdentity.boundary.sourceCommit,
-  agentRoot,
 );
-assertPublicReleaseTag(
+await assertPublicReleaseTag(
   "tkersey/world",
   releaseIdentity.world.version,
   releaseIdentity.world.releaseTag,
   releaseIdentity.world.sourceCommit,
-  agentRoot,
 );
 assert.equal(
   agentSourceSha256FromTree(agentTree),
@@ -308,15 +306,26 @@ function gitFacts(cwd) {
   return Object.freeze({ commit, clean: status.length === 0 });
 }
 
-function assertPublicReleaseTag(repository, version, tag, commit, cwd) {
+async function assertPublicReleaseTag(repository, version, tag, commit) {
   assert.match(version, /^\d+\.\d+\.\d+$/);
   assert.equal(tag, `v${version}`);
   const ref = `refs/tags/${tag}`;
-  const records = run(
-    "git",
-    ["ls-remote", `https://github.com/${repository}.git`, ref, `${ref}^{}`],
-    cwd,
-  ).trim().split("\n").filter(Boolean).map((line) => line.split("\t"));
+  const isolatedRoot = await mkdtemp(join(tmpdir(), "agent-public-tag-"));
+  let records;
+  try {
+    records = run(
+      "git",
+      ["ls-remote", `https://github.com/${repository}.git`, ref, `${ref}^{}`],
+      isolatedRoot,
+      {
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_CEILING_DIRECTORIES: await realpath(isolatedRoot),
+      },
+    ).trim().split("\n").filter(Boolean).map((line) => line.split("\t"));
+  } finally {
+    await rm(isolatedRoot, { recursive: true, force: true });
+  }
   const refs = new Map(records.map(([oid, name]) => [name, oid]));
   assert(refs.has(ref), `public release tag is absent: ${repository}@${tag}`);
   assert.equal(
@@ -355,11 +364,11 @@ function assertNoIgnoredSourceInputs(root) {
     "ignored source-like files are forbidden during release emission");
 }
 
-function run(command, args, cwd) {
+function run(command, args, cwd, extraEnv = {}) {
   const result = spawnSync(command, args, {
     cwd,
     encoding: "utf8",
-    env: { PATH: process.env.PATH ?? "" },
+    env: { PATH: process.env.PATH ?? "", ...extraEnv },
     maxBuffer: 64 * 1024 * 1024,
     timeout: 5 * 60 * 1000,
   });

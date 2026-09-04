@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { gunzipSync } from "node:zlib";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import {
@@ -69,10 +69,15 @@ try {
   for (const [name, bytes] of files) {
     const destination = join(extractionRoot, ROOT, name);
     await mkdir(dirname(destination), { recursive: true });
+    for (let directory = dirname(destination); directory !== extractionRoot;
+      directory = dirname(directory)) {
+      await chmod(directory, 0o755);
+    }
     await writeFile(destination, bytes, {
       flag: "wx",
       mode: name === "run.mjs" ? 0o755 : 0o644,
     });
+    await chmod(destination, name === "run.mjs" ? 0o755 : 0o644);
   }
   const root = join(extractionRoot, ROOT);
   const checksums = parseChecksums(files.get("checksums.sha256"));

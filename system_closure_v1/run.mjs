@@ -8,6 +8,8 @@ import { admitModelEndpoint } from "./model_protocol_adapter.mjs";
 
 const options = parseArgs(process.argv.slice(2));
 assert(["fixture", "live"].includes(options.mode), "--mode must be fixture or live");
+assert(options.mode !== "fixture" || options.endpoint === undefined,
+  "fixture mode does not accept --endpoint");
 if (options.mode === "live") {
   assert(options.endpoint !== undefined, "live mode requires --endpoint");
   assert(process.env.OPENAI_API_KEY, "live mode requires OPENAI_API_KEY");

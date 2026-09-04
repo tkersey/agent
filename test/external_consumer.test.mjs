@@ -1,26 +1,21 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFile, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const [zig, sourceRootInput, boundaryRootInput, globalCacheInput] = process.argv.slice(2);
+const [zig, sourceRootInput, globalCacheInput, ...resolvedRoots] = process.argv.slice(2);
 assert(
-  zig && sourceRootInput && boundaryRootInput && globalCacheInput,
-  "expected Zig, Agent root, Boundary root, and cache",
+  zig && sourceRootInput && globalCacheInput,
+  "expected Zig, Agent root, cache, and resolved dependency roots",
 );
 const sourceRoot = resolve(sourceRootInput);
-const boundaryRoot = resolve(boundaryRootInput);
 const globalCache = resolve(globalCacheInput);
 const fixtureRoot = join(dirname(fileURLToPath(import.meta.url)), "external_consumer");
-const packageEntries = (await readdir(join(sourceRoot, "zig-pkg"), {
-  withFileTypes: true,
-})).filter((entry) => entry.isDirectory() && !entry.name.startsWith("agent-"));
-assert(packageEntries.length <= 16, "resolved dependency inventory exceeds its bound");
-const forks = await Promise.all(packageEntries.map((entry) =>
-  realpath(join(sourceRoot, "zig-pkg", entry.name))));
-assert(forks.includes(await realpath(boundaryRoot)), "resolved Boundary fork is absent");
+assert(resolvedRoots.length > 0 && resolvedRoots.length <= 16,
+  "resolved dependency inventory exceeds its bound");
+const forks = await Promise.all(resolvedRoots.map((path) => realpath(path)));
 const root = await mkdtemp(join(tmpdir(), "agent-external-consumer-"));
 try {
   await Promise.all([

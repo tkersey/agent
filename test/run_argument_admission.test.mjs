@@ -31,6 +31,24 @@ test("scheduler rejects duplicate arguments before execution", () => {
   assert.match(result.stderr, /duplicate scheduler argument --mode/);
 });
 
+test("fixture endpoint overrides reject at both entry points before effects", () => {
+  for (const name of ["run.mjs", "runtime.mjs"]) {
+    const entry = fileURLToPath(new URL(`../system_closure_v1/${name}`, import.meta.url));
+    const result = spawnSync(process.execPath, [
+      entry,
+      "--worldRoot", "unused-world",
+      "--worldArchive", "unused-archive",
+      "--workDir", "unused-work",
+      "--mode", "fixture",
+      "--endpoint", "https://api.openai.com/v1/responses",
+      ...(name === "runtime.mjs" ? ["--maximumReductions", "1"] : []),
+    ], { encoding: "utf8", timeout: 10_000 });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /fixture mode does not accept --endpoint/);
+    assert.doesNotMatch(result.stderr, /ENOENT/);
+  }
+});
+
 test("live endpoint admission precedes workspace effects", () => {
   const work = mkdtempSync(join(tmpdir(), "agent-endpoint-preflight-"));
   try {

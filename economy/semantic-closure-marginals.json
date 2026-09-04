@@ -8,17 +8,17 @@
     "skill-base": 15069,
     "skill-4k": 19482,
     "tool-base": 15069,
-    "tool-extra": 18925,
+    "tool-extra": 19043,
     "model-fixed-no-tools": 8859,
     "model-dynamic-goal": 8859,
-    "six-tools-no-decode": 33376,
-    "six-tools-decode": 35223
+    "six-tools-no-decode": 34566,
+    "six-tools-decode": 36413
   },
   "deltas": {
     "prompt1To8": 7200,
     "prompt8To16": 8192,
     "skill4k": 4413,
-    "extraTool": 3856,
+    "extraTool": 3974,
     "sixToolDecoder": 1847
   },
   "gates": {

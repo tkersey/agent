@@ -1,8 +1,8 @@
 {
   "format": "agent-process-state-census/v1",
-  "imageSha256": "8c9257b584b638dd7084c43059d864f3bb840437c3d102d47f774c8ba8b45906",
-  "sourceMapSha256": "e77d78f727f03e116e08552a5dc00486a5666288a46ab6b48e8b10a3c013ffd7",
-  "programTransitionDigest": "b2456500cd52dd00fda1310b3e88d8b8315fde18dc85a9adcdcd26fba75c401c",
+  "imageSha256": "51cc746c20cda6aa3f643a4d916a70f7066c0270c5fcda6fc0e582080852210d",
+  "sourceMapSha256": "ebd0b76d3e10455c87575537258a233ecb88e7276387eae3fc3c69061190b002",
+  "programTransitionDigest": "8e3e13d5ff08c3a846cc45605e3df6345e96f2112e45b4ba66afe320d23d8336",
   "reductionCount": 398,
   "stateBearingOutcomeCount": 397,
   "maximumProgressedBetweenResidualBoundaries": 31,
@@ -10,8 +10,8 @@
     "stateBytes": {
       "minimum": 346,
       "median": 2961,
-      "p95": 15861,
-      "maximum": 19456
+      "p95": 15881,
+      "maximum": 19476
     },
     "frameCount": {
       "minimum": 1,
@@ -22,14 +22,14 @@
     "environmentBytes": {
       "minimum": 297,
       "median": 2913,
-      "p95": 15813,
-      "maximum": 19407
+      "p95": 15833,
+      "maximum": 19427
     },
     "largestFrame": {
       "minimum": 297,
       "median": 2913,
-      "p95": 15813,
-      "maximum": 19407
+      "p95": 15833,
+      "maximum": 19427
     },
     "requestBytes": {
       "minimum": 0,
@@ -40,17 +40,17 @@
   },
   "phaseMaxima": {
     "before_model_request": {
-      "stateBytes": 19456,
+      "stateBytes": 19476,
       "frameCount": 1,
-      "environmentBytes": 19407,
-      "largestFrame": 19407,
+      "environmentBytes": 19427,
+      "largestFrame": 19427,
       "requestBytes": 0
     },
     "pending_model_request": {
-      "stateBytes": 19394,
+      "stateBytes": 19414,
       "frameCount": 1,
-      "environmentBytes": 19345,
-      "largestFrame": 19345,
+      "environmentBytes": 19365,
+      "largestFrame": 19365,
       "requestBytes": 5454
     },
     "model_resume": {
@@ -243,10 +243,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 3147,
+      "stateByteLength": 3171,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 3099,
-      "largestFrameEnvironmentBytes": 3099,
+      "totalFrameEnvironmentBytes": 3123,
+      "largestFrameEnvironmentBytes": 3123,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -262,10 +262,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 1712,
+      "stateByteLength": 1732,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 1664,
-      "largestFrameEnvironmentBytes": 1664,
+      "totalFrameEnvironmentBytes": 1684,
+      "largestFrameEnvironmentBytes": 1684,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -281,10 +281,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 5611,
+      "stateByteLength": 5631,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 5563,
-      "largestFrameEnvironmentBytes": 5563,
+      "totalFrameEnvironmentBytes": 5583,
+      "largestFrameEnvironmentBytes": 5583,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -300,10 +300,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 6137,
+      "stateByteLength": 6157,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 6089,
-      "largestFrameEnvironmentBytes": 6089,
+      "totalFrameEnvironmentBytes": 6109,
+      "largestFrameEnvironmentBytes": 6109,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -319,10 +319,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 6835,
+      "stateByteLength": 6855,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 6787,
-      "largestFrameEnvironmentBytes": 6787,
+      "totalFrameEnvironmentBytes": 6807,
+      "largestFrameEnvironmentBytes": 6807,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -338,10 +338,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 7149,
+      "stateByteLength": 7169,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 7101,
-      "largestFrameEnvironmentBytes": 7101,
+      "totalFrameEnvironmentBytes": 7121,
+      "largestFrameEnvironmentBytes": 7121,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -357,10 +357,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 4420,
+      "stateByteLength": 4440,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 4372,
-      "largestFrameEnvironmentBytes": 4372,
+      "totalFrameEnvironmentBytes": 4392,
+      "largestFrameEnvironmentBytes": 4392,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -376,10 +376,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 3492,
+      "stateByteLength": 3512,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 3444,
-      "largestFrameEnvironmentBytes": 3444,
+      "totalFrameEnvironmentBytes": 3464,
+      "largestFrameEnvironmentBytes": 3464,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -395,10 +395,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 5501,
+      "stateByteLength": 5521,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 5453,
-      "largestFrameEnvironmentBytes": 5453,
+      "totalFrameEnvironmentBytes": 5473,
+      "largestFrameEnvironmentBytes": 5473,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -414,10 +414,10 @@
         "pending_model_request"
       ],
       "outcomeKind": "Requested",
-      "stateByteLength": 5501,
+      "stateByteLength": 5521,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 5453,
-      "largestFrameEnvironmentBytes": 5453,
+      "totalFrameEnvironmentBytes": 5473,
+      "largestFrameEnvironmentBytes": 5473,
       "pendingRequestByteLength": 2071,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -959,10 +959,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 3324,
+      "stateByteLength": 3348,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 3276,
-      "largestFrameEnvironmentBytes": 3276,
+      "totalFrameEnvironmentBytes": 3300,
+      "largestFrameEnvironmentBytes": 3300,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -978,10 +978,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 1889,
+      "stateByteLength": 1909,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 1841,
-      "largestFrameEnvironmentBytes": 1841,
+      "totalFrameEnvironmentBytes": 1861,
+      "largestFrameEnvironmentBytes": 1861,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -997,10 +997,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 5959,
+      "stateByteLength": 5979,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 5911,
-      "largestFrameEnvironmentBytes": 5911,
+      "totalFrameEnvironmentBytes": 5931,
+      "largestFrameEnvironmentBytes": 5931,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1016,10 +1016,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 6485,
+      "stateByteLength": 6505,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 6437,
-      "largestFrameEnvironmentBytes": 6437,
+      "totalFrameEnvironmentBytes": 6457,
+      "largestFrameEnvironmentBytes": 6457,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1035,10 +1035,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 7183,
+      "stateByteLength": 7203,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 7135,
-      "largestFrameEnvironmentBytes": 7135,
+      "totalFrameEnvironmentBytes": 7155,
+      "largestFrameEnvironmentBytes": 7155,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1054,10 +1054,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 7497,
+      "stateByteLength": 7517,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 7449,
-      "largestFrameEnvironmentBytes": 7449,
+      "totalFrameEnvironmentBytes": 7469,
+      "largestFrameEnvironmentBytes": 7469,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1073,10 +1073,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 4768,
+      "stateByteLength": 4788,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 4720,
-      "largestFrameEnvironmentBytes": 4720,
+      "totalFrameEnvironmentBytes": 4740,
+      "largestFrameEnvironmentBytes": 4740,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1092,10 +1092,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 3840,
+      "stateByteLength": 3860,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 3792,
-      "largestFrameEnvironmentBytes": 3792,
+      "totalFrameEnvironmentBytes": 3812,
+      "largestFrameEnvironmentBytes": 3812,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1111,10 +1111,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 5906,
+      "stateByteLength": 5926,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 5858,
-      "largestFrameEnvironmentBytes": 5858,
+      "totalFrameEnvironmentBytes": 5878,
+      "largestFrameEnvironmentBytes": 5878,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1130,10 +1130,10 @@
         "pending_model_request"
       ],
       "outcomeKind": "Requested",
-      "stateByteLength": 5906,
+      "stateByteLength": 5926,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 5858,
-      "largestFrameEnvironmentBytes": 5858,
+      "totalFrameEnvironmentBytes": 5878,
+      "largestFrameEnvironmentBytes": 5878,
       "pendingRequestByteLength": 2128,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1789,10 +1789,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 3940,
+      "stateByteLength": 3964,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 3892,
-      "largestFrameEnvironmentBytes": 3892,
+      "totalFrameEnvironmentBytes": 3916,
+      "largestFrameEnvironmentBytes": 3916,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1808,10 +1808,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 2505,
+      "stateByteLength": 2525,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 2457,
-      "largestFrameEnvironmentBytes": 2457,
+      "totalFrameEnvironmentBytes": 2477,
+      "largestFrameEnvironmentBytes": 2477,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1827,10 +1827,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 7175,
+      "stateByteLength": 7195,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 7127,
-      "largestFrameEnvironmentBytes": 7127,
+      "totalFrameEnvironmentBytes": 7147,
+      "largestFrameEnvironmentBytes": 7147,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1846,10 +1846,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 7701,
+      "stateByteLength": 7721,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 7653,
-      "largestFrameEnvironmentBytes": 7653,
+      "totalFrameEnvironmentBytes": 7673,
+      "largestFrameEnvironmentBytes": 7673,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1865,10 +1865,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 8399,
+      "stateByteLength": 8419,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 8351,
-      "largestFrameEnvironmentBytes": 8351,
+      "totalFrameEnvironmentBytes": 8371,
+      "largestFrameEnvironmentBytes": 8371,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1884,10 +1884,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 8713,
+      "stateByteLength": 8733,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 8665,
-      "largestFrameEnvironmentBytes": 8665,
+      "totalFrameEnvironmentBytes": 8685,
+      "largestFrameEnvironmentBytes": 8685,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1903,10 +1903,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 5984,
+      "stateByteLength": 6004,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 5936,
-      "largestFrameEnvironmentBytes": 5936,
+      "totalFrameEnvironmentBytes": 5956,
+      "largestFrameEnvironmentBytes": 5956,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1922,10 +1922,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 5056,
+      "stateByteLength": 5076,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 5008,
-      "largestFrameEnvironmentBytes": 5008,
+      "totalFrameEnvironmentBytes": 5028,
+      "largestFrameEnvironmentBytes": 5028,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1941,10 +1941,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 7322,
+      "stateByteLength": 7342,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 7274,
-      "largestFrameEnvironmentBytes": 7274,
+      "totalFrameEnvironmentBytes": 7294,
+      "largestFrameEnvironmentBytes": 7294,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -1960,10 +1960,10 @@
         "pending_model_request"
       ],
       "outcomeKind": "Requested",
-      "stateByteLength": 7322,
+      "stateByteLength": 7342,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 7274,
-      "largestFrameEnvironmentBytes": 7274,
+      "totalFrameEnvironmentBytes": 7294,
+      "largestFrameEnvironmentBytes": 7294,
       "pendingRequestByteLength": 2328,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -2655,10 +2655,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 4610,
+      "stateByteLength": 4634,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 4562,
-      "largestFrameEnvironmentBytes": 4562,
+      "totalFrameEnvironmentBytes": 4586,
+      "largestFrameEnvironmentBytes": 4586,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -2674,10 +2674,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 3175,
+      "stateByteLength": 3195,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 3127,
-      "largestFrameEnvironmentBytes": 3127,
+      "totalFrameEnvironmentBytes": 3147,
+      "largestFrameEnvironmentBytes": 3147,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -2693,10 +2693,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 8499,
+      "stateByteLength": 8519,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 8451,
-      "largestFrameEnvironmentBytes": 8451,
+      "totalFrameEnvironmentBytes": 8471,
+      "largestFrameEnvironmentBytes": 8471,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -2712,10 +2712,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 9025,
+      "stateByteLength": 9045,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 8977,
-      "largestFrameEnvironmentBytes": 8977,
+      "totalFrameEnvironmentBytes": 8997,
+      "largestFrameEnvironmentBytes": 8997,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -2731,10 +2731,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 9723,
+      "stateByteLength": 9743,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 9675,
-      "largestFrameEnvironmentBytes": 9675,
+      "totalFrameEnvironmentBytes": 9695,
+      "largestFrameEnvironmentBytes": 9695,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -2750,10 +2750,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 10037,
+      "stateByteLength": 10057,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 9989,
-      "largestFrameEnvironmentBytes": 9989,
+      "totalFrameEnvironmentBytes": 10009,
+      "largestFrameEnvironmentBytes": 10009,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -2769,10 +2769,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 7308,
+      "stateByteLength": 7328,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 7260,
-      "largestFrameEnvironmentBytes": 7260,
+      "totalFrameEnvironmentBytes": 7280,
+      "largestFrameEnvironmentBytes": 7280,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -2788,10 +2788,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 6380,
+      "stateByteLength": 6400,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 6332,
-      "largestFrameEnvironmentBytes": 6332,
+      "totalFrameEnvironmentBytes": 6352,
+      "largestFrameEnvironmentBytes": 6352,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -2807,10 +2807,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 8864,
+      "stateByteLength": 8884,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 8816,
-      "largestFrameEnvironmentBytes": 8816,
+      "totalFrameEnvironmentBytes": 8836,
+      "largestFrameEnvironmentBytes": 8836,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -2826,10 +2826,10 @@
         "pending_model_request"
       ],
       "outcomeKind": "Requested",
-      "stateByteLength": 8864,
+      "stateByteLength": 8884,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 8816,
-      "largestFrameEnvironmentBytes": 8816,
+      "totalFrameEnvironmentBytes": 8836,
+      "largestFrameEnvironmentBytes": 8836,
       "pendingRequestByteLength": 2546,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -3557,10 +3557,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 6693,
+      "stateByteLength": 6717,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 6645,
-      "largestFrameEnvironmentBytes": 6645,
+      "totalFrameEnvironmentBytes": 6669,
+      "largestFrameEnvironmentBytes": 6669,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -3576,10 +3576,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 5258,
+      "stateByteLength": 5278,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 5210,
-      "largestFrameEnvironmentBytes": 5210,
+      "totalFrameEnvironmentBytes": 5230,
+      "largestFrameEnvironmentBytes": 5230,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -3595,10 +3595,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 12649,
+      "stateByteLength": 12669,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 12601,
-      "largestFrameEnvironmentBytes": 12601,
+      "totalFrameEnvironmentBytes": 12621,
+      "largestFrameEnvironmentBytes": 12621,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -3614,10 +3614,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 13175,
+      "stateByteLength": 13195,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 13127,
-      "largestFrameEnvironmentBytes": 13127,
+      "totalFrameEnvironmentBytes": 13147,
+      "largestFrameEnvironmentBytes": 13147,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -3633,10 +3633,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 13873,
+      "stateByteLength": 13893,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 13825,
-      "largestFrameEnvironmentBytes": 13825,
+      "totalFrameEnvironmentBytes": 13845,
+      "largestFrameEnvironmentBytes": 13845,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -3652,10 +3652,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 14187,
+      "stateByteLength": 14207,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 14139,
-      "largestFrameEnvironmentBytes": 14139,
+      "totalFrameEnvironmentBytes": 14159,
+      "largestFrameEnvironmentBytes": 14159,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -3671,10 +3671,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 11458,
+      "stateByteLength": 11478,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 11410,
-      "largestFrameEnvironmentBytes": 11410,
+      "totalFrameEnvironmentBytes": 11430,
+      "largestFrameEnvironmentBytes": 11430,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -3690,10 +3690,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 10530,
+      "stateByteLength": 10550,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 10482,
-      "largestFrameEnvironmentBytes": 10482,
+      "totalFrameEnvironmentBytes": 10502,
+      "largestFrameEnvironmentBytes": 10502,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -3709,10 +3709,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 13703,
+      "stateByteLength": 13723,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 13655,
-      "largestFrameEnvironmentBytes": 13655,
+      "totalFrameEnvironmentBytes": 13675,
+      "largestFrameEnvironmentBytes": 13675,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -3728,10 +3728,10 @@
         "pending_model_request"
       ],
       "outcomeKind": "Requested",
-      "stateByteLength": 13703,
+      "stateByteLength": 13723,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 13655,
-      "largestFrameEnvironmentBytes": 13655,
+      "totalFrameEnvironmentBytes": 13675,
+      "largestFrameEnvironmentBytes": 13675,
       "pendingRequestByteLength": 3235,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -4510,10 +4510,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 6806,
+      "stateByteLength": 6830,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 6758,
-      "largestFrameEnvironmentBytes": 6758,
+      "totalFrameEnvironmentBytes": 6782,
+      "largestFrameEnvironmentBytes": 6782,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -4529,10 +4529,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 6038,
+      "stateByteLength": 6062,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 5990,
-      "largestFrameEnvironmentBytes": 5990,
+      "totalFrameEnvironmentBytes": 6014,
+      "largestFrameEnvironmentBytes": 6014,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -4548,10 +4548,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 6261,
+      "stateByteLength": 6285,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 6213,
-      "largestFrameEnvironmentBytes": 6213,
+      "totalFrameEnvironmentBytes": 6237,
+      "largestFrameEnvironmentBytes": 6237,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -4567,10 +4567,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 13313,
+      "stateByteLength": 13333,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 13265,
-      "largestFrameEnvironmentBytes": 13265,
+      "totalFrameEnvironmentBytes": 13285,
+      "largestFrameEnvironmentBytes": 13285,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -4586,10 +4586,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 13839,
+      "stateByteLength": 13859,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 13791,
-      "largestFrameEnvironmentBytes": 13791,
+      "totalFrameEnvironmentBytes": 13811,
+      "largestFrameEnvironmentBytes": 13811,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -4605,10 +4605,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 14537,
+      "stateByteLength": 14557,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 14489,
-      "largestFrameEnvironmentBytes": 14489,
+      "totalFrameEnvironmentBytes": 14509,
+      "largestFrameEnvironmentBytes": 14509,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -4624,10 +4624,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 14851,
+      "stateByteLength": 14871,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 14803,
-      "largestFrameEnvironmentBytes": 14803,
+      "totalFrameEnvironmentBytes": 14823,
+      "largestFrameEnvironmentBytes": 14823,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -4643,10 +4643,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 15846,
+      "stateByteLength": 15866,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 15798,
-      "largestFrameEnvironmentBytes": 15798,
+      "totalFrameEnvironmentBytes": 15818,
+      "largestFrameEnvironmentBytes": 15818,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -4662,10 +4662,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 16842,
+      "stateByteLength": 16862,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 16793,
-      "largestFrameEnvironmentBytes": 16793,
+      "totalFrameEnvironmentBytes": 16813,
+      "largestFrameEnvironmentBytes": 16813,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -4681,10 +4681,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 15720,
+      "stateByteLength": 15740,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 15672,
-      "largestFrameEnvironmentBytes": 15672,
+      "totalFrameEnvironmentBytes": 15692,
+      "largestFrameEnvironmentBytes": 15692,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -4700,10 +4700,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 18446,
+      "stateByteLength": 18466,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 18397,
-      "largestFrameEnvironmentBytes": 18397,
+      "totalFrameEnvironmentBytes": 18417,
+      "largestFrameEnvironmentBytes": 18417,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -4719,10 +4719,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 18220,
+      "stateByteLength": 18240,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 18171,
-      "largestFrameEnvironmentBytes": 18171,
+      "totalFrameEnvironmentBytes": 18191,
+      "largestFrameEnvironmentBytes": 18191,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -4738,10 +4738,10 @@
         "pending_model_request"
       ],
       "outcomeKind": "Requested",
-      "stateByteLength": 18220,
+      "stateByteLength": 18240,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 18171,
-      "largestFrameEnvironmentBytes": 18171,
+      "totalFrameEnvironmentBytes": 18191,
+      "largestFrameEnvironmentBytes": 18191,
       "pendingRequestByteLength": 5290,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -5573,10 +5573,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 7324,
+      "stateByteLength": 7348,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 7276,
-      "largestFrameEnvironmentBytes": 7276,
+      "totalFrameEnvironmentBytes": 7300,
+      "largestFrameEnvironmentBytes": 7300,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -5592,10 +5592,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 6556,
+      "stateByteLength": 6580,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 6508,
-      "largestFrameEnvironmentBytes": 6508,
+      "totalFrameEnvironmentBytes": 6532,
+      "largestFrameEnvironmentBytes": 6532,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -5611,10 +5611,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 6779,
+      "stateByteLength": 6803,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 6731,
-      "largestFrameEnvironmentBytes": 6731,
+      "totalFrameEnvironmentBytes": 6755,
+      "largestFrameEnvironmentBytes": 6755,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -5630,10 +5630,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 14323,
+      "stateByteLength": 14343,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 14275,
-      "largestFrameEnvironmentBytes": 14275,
+      "totalFrameEnvironmentBytes": 14295,
+      "largestFrameEnvironmentBytes": 14295,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -5649,10 +5649,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 14849,
+      "stateByteLength": 14869,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 14801,
-      "largestFrameEnvironmentBytes": 14801,
+      "totalFrameEnvironmentBytes": 14821,
+      "largestFrameEnvironmentBytes": 14821,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -5668,10 +5668,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 15547,
+      "stateByteLength": 15567,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 15499,
-      "largestFrameEnvironmentBytes": 15499,
+      "totalFrameEnvironmentBytes": 15519,
+      "largestFrameEnvironmentBytes": 15519,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -5687,10 +5687,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 15861,
+      "stateByteLength": 15881,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 15813,
-      "largestFrameEnvironmentBytes": 15813,
+      "totalFrameEnvironmentBytes": 15833,
+      "largestFrameEnvironmentBytes": 15833,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -5706,10 +5706,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 16857,
+      "stateByteLength": 16877,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 16808,
-      "largestFrameEnvironmentBytes": 16808,
+      "totalFrameEnvironmentBytes": 16828,
+      "largestFrameEnvironmentBytes": 16828,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -5725,10 +5725,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 17852,
+      "stateByteLength": 17872,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 17803,
-      "largestFrameEnvironmentBytes": 17803,
+      "totalFrameEnvironmentBytes": 17823,
+      "largestFrameEnvironmentBytes": 17823,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -5744,10 +5744,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 16731,
+      "stateByteLength": 16751,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 16682,
-      "largestFrameEnvironmentBytes": 16682,
+      "totalFrameEnvironmentBytes": 16702,
+      "largestFrameEnvironmentBytes": 16702,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -5763,10 +5763,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 19456,
+      "stateByteLength": 19476,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 19407,
-      "largestFrameEnvironmentBytes": 19407,
+      "totalFrameEnvironmentBytes": 19427,
+      "largestFrameEnvironmentBytes": 19427,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -5782,10 +5782,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 19394,
+      "stateByteLength": 19414,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 19345,
-      "largestFrameEnvironmentBytes": 19345,
+      "totalFrameEnvironmentBytes": 19365,
+      "largestFrameEnvironmentBytes": 19365,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -5801,10 +5801,10 @@
         "pending_model_request"
       ],
       "outcomeKind": "Requested",
-      "stateByteLength": 19394,
+      "stateByteLength": 19414,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 19345,
-      "largestFrameEnvironmentBytes": 19345,
+      "totalFrameEnvironmentBytes": 19365,
+      "largestFrameEnvironmentBytes": 19365,
       "pendingRequestByteLength": 5454,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -6600,10 +6600,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 7324,
+      "stateByteLength": 7348,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 7276,
-      "largestFrameEnvironmentBytes": 7276,
+      "totalFrameEnvironmentBytes": 7300,
+      "largestFrameEnvironmentBytes": 7300,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -6619,10 +6619,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 6556,
+      "stateByteLength": 6580,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 6508,
-      "largestFrameEnvironmentBytes": 6508,
+      "totalFrameEnvironmentBytes": 6532,
+      "largestFrameEnvironmentBytes": 6532,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -6638,10 +6638,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 6779,
+      "stateByteLength": 6803,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 6731,
-      "largestFrameEnvironmentBytes": 6731,
+      "totalFrameEnvironmentBytes": 6755,
+      "largestFrameEnvironmentBytes": 6755,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -6657,10 +6657,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 14323,
+      "stateByteLength": 14343,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 14275,
-      "largestFrameEnvironmentBytes": 14275,
+      "totalFrameEnvironmentBytes": 14295,
+      "largestFrameEnvironmentBytes": 14295,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -6676,10 +6676,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 14849,
+      "stateByteLength": 14869,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 14801,
-      "largestFrameEnvironmentBytes": 14801,
+      "totalFrameEnvironmentBytes": 14821,
+      "largestFrameEnvironmentBytes": 14821,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -6695,10 +6695,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 15547,
+      "stateByteLength": 15567,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 15499,
-      "largestFrameEnvironmentBytes": 15499,
+      "totalFrameEnvironmentBytes": 15519,
+      "largestFrameEnvironmentBytes": 15519,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -6714,10 +6714,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 15861,
+      "stateByteLength": 15881,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 15813,
-      "largestFrameEnvironmentBytes": 15813,
+      "totalFrameEnvironmentBytes": 15833,
+      "largestFrameEnvironmentBytes": 15833,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -6733,10 +6733,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 16857,
+      "stateByteLength": 16877,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 16808,
-      "largestFrameEnvironmentBytes": 16808,
+      "totalFrameEnvironmentBytes": 16828,
+      "largestFrameEnvironmentBytes": 16828,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -6752,10 +6752,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 17852,
+      "stateByteLength": 17872,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 17803,
-      "largestFrameEnvironmentBytes": 17803,
+      "totalFrameEnvironmentBytes": 17823,
+      "largestFrameEnvironmentBytes": 17823,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -6771,10 +6771,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 16731,
+      "stateByteLength": 16751,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 16682,
-      "largestFrameEnvironmentBytes": 16682,
+      "totalFrameEnvironmentBytes": 16702,
+      "largestFrameEnvironmentBytes": 16702,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -6790,10 +6790,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 19456,
+      "stateByteLength": 19476,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 19407,
-      "largestFrameEnvironmentBytes": 19407,
+      "totalFrameEnvironmentBytes": 19427,
+      "largestFrameEnvironmentBytes": 19427,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -6809,10 +6809,10 @@
         "before_model_request"
       ],
       "outcomeKind": "Progressed",
-      "stateByteLength": 19394,
+      "stateByteLength": 19414,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 19345,
-      "largestFrameEnvironmentBytes": 19345,
+      "totalFrameEnvironmentBytes": 19365,
+      "largestFrameEnvironmentBytes": 19365,
       "pendingRequestByteLength": 0,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0
@@ -6828,10 +6828,10 @@
         "pending_model_request"
       ],
       "outcomeKind": "Requested",
-      "stateByteLength": 19394,
+      "stateByteLength": 19414,
       "frameCount": 1,
-      "totalFrameEnvironmentBytes": 19345,
-      "largestFrameEnvironmentBytes": 19345,
+      "totalFrameEnvironmentBytes": 19365,
+      "largestFrameEnvironmentBytes": 19365,
       "pendingRequestByteLength": 5454,
       "identicalEnvironmentBlobCopies": 0,
       "duplicatedEnvironmentBytes": 0

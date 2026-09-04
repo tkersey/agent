@@ -25,22 +25,22 @@
     },
     "F": {
       "system": "six simple actions, Action verification ablated",
-      "imageByteLength": 33376
+      "imageByteLength": 34566
     },
     "G": {
       "system": "F with strict typed Action verification",
-      "imageByteLength": 35223
+      "imageByteLength": 36413
     },
     "H": {
       "system": "repository Memory and admission, Action verification ablated",
-      "imageByteLength": 91573
+      "imageByteLength": 93725
     },
     "I": {
       "system": "full corrected repository-repair system",
-      "imageByteLength": 93356,
-      "gzip9ByteLength": 24678,
+      "imageByteLength": 95508,
+      "gzip9ByteLength": 24801,
       "reductions": 398,
-      "peakStateBytes": 19456
+      "peakStateBytes": 19476
     },
     "J": {
       "system": "provider-wire-closure baseline",
@@ -50,9 +50,9 @@
     }
   },
   "dominantTerms": {
-    "repositoryMemoryAndAdmissionOverSixToolDecoderBytes": 56350,
+    "repositoryMemoryAndAdmissionOverSixToolDecoderBytes": 57312,
     "strictRepositoryActionVerificationBytes": 1783,
-    "providerWireBaselineToCorrectedBytes": 160071,
+    "providerWireBaselineToCorrectedBytes": 157919,
     "providerWireBaselineToCorrectedReductions": 19735
   },
   "detailReceipts": {

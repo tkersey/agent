@@ -405,6 +405,11 @@ pub fn build(b: *std.Build) void {
         .optimize = .ReleaseFast,
     });
     repository_admission_module.addImport("boundary", boundary_module);
+    repository_admission_module.addImport("agent", agent_module);
+    repository_admission_module.addImport(
+        "repository_system",
+        repository_module,
+    );
     const repository_admission_tests = b.addTest(.{
         .root_module = repository_admission_module,
     });
@@ -690,7 +695,15 @@ pub fn build(b: *std.Build) void {
 
     const check = b.step("check", "Compile and test Agent 3");
     check.dependOn(closure_check);
-    check.dependOn(economy_check);
+    const repository_economy_available = blk: {
+        b.build_root.handle.access(
+            b.graph.io,
+            "economy_tooling_root.zig",
+            .{},
+        ) catch break :blk false;
+        break :blk true;
+    };
+    if (repository_economy_available) check.dependOn(economy_check);
     check.dependOn(repository_admission_step);
     check.dependOn(lint);
 }

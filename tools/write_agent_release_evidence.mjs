@@ -212,9 +212,9 @@ ablation.dominantTerms = {
     ablation.rows.H.imageByteLength - ablation.rows.G.imageByteLength,
   strictRepositoryActionVerificationBytes:
     ablation.rows.I.imageByteLength - ablation.rows.H.imageByteLength,
-  providerWireRemovalBytes:
+  providerWireBaselineToCorrectedBytes:
     ablation.rows.J.imageByteLength - ablation.rows.I.imageByteLength,
-  providerWireRemovalReductions:
+  providerWireBaselineToCorrectedReductions:
     ablation.rows.J.reductions - ablation.rows.I.reductions,
 };
 

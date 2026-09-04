@@ -25,6 +25,13 @@ test("emission rejects an ignored fixture source", async (context) => {
   assertEmissionRejected(root, /archive source is not tracked/);
 });
 
+test("emission rejects index flags that hide tracked changes", async (context) => {
+  const root = await cleanRepository(context);
+  run("git", ["update-index", "--assume-unchanged", "tracked.zig"], root);
+  await writeFile(join(root, "tracked.zig"), "const hidden = true;\n");
+  assertEmissionRejected(root, /Git index flags hide worktree changes/);
+});
+
 async function cleanRepository(context) {
   const root = await mkdtemp(join(tmpdir(), "agent-emission-custody-"));
   context.after(() => rm(root, { recursive: true, force: true }));

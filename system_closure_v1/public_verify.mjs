@@ -34,6 +34,11 @@ assert.equal(
 );
 const distributionChecksums = parseChecksums(checksumsBytes);
 assert.equal(distributionChecksums.size, receipt.inventoryCount - 1);
+assert.deepEqual(
+  await distributionInventory(distributionRoot),
+  [...distributionChecksums.keys(), "checksums.sha256"].sort(compareUtf8),
+  "distribution inventory differs from the supplied Agent receipt",
+);
 for (const [name, digest] of distributionChecksums) {
   const path = join(distributionRoot, name);
   const stat = await lstat(path);
@@ -67,6 +72,8 @@ assert(fixture.reductions <= 512);
 assert.equal(fixture.modelRequests, 8);
 assert.equal(fixture.repositoryRequests, 7);
 assert.equal(fixture.imageSha256, receipt.imageSha256);
+assert.equal(fixture.initialArgsSha256, receipt.initialArgsSha256);
+assert.equal(fixture.runtimeInputSha256, receipt.runtimeInputSha256);
 assert.equal(fixture.worldSourceCommit, identity.world.sourceCommit);
 assert.equal(fixture.worldRuntimeArchiveSha256, identity.world.archiveSha256);
 assert.equal(fixture.kernelSha256, identity.kernel.sha256);
@@ -83,6 +90,7 @@ const census = runJson([
 ], "public census");
 assert.equal(census.result, "passed");
 assert(census.stateCensus !== null);
+assert.equal(census.stateCensus.sourceMapSha256, receipt.sourceMapSha256);
 assert(census.stateCensus.summary.stateBytes.maximum <= 131_072);
 assert(census.stateCensus.maximumProgressedBetweenResidualBoundaries <= 64);
 
@@ -223,6 +231,29 @@ function parseChecksums(bytes) {
     "model_protocol_adapter.mjs", "repository_environment.mjs",
   ]) assert(result.has(required), `missing distribution checksum: ${required}`);
   return result;
+}
+
+async function distributionInventory(root) {
+  const files = [];
+  async function addTree(directory, prefix) {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      const name = prefix.length === 0 ? entry.name : `${prefix}/${entry.name}`;
+      const stat = await lstat(path);
+      assert(!stat.isSymbolicLink(), `distribution link is forbidden: ${name}`);
+      if (entry.isDirectory()) await addTree(path, name);
+      else if (entry.isFile()) {
+        files.push(name);
+        assert(files.length <= 64, "distribution file limit exceeded");
+      } else throw new Error(`unsupported distribution entry: ${name}`);
+    }
+  }
+  await addTree(root, "");
+  return files.sort(compareUtf8);
+}
+
+function compareUtf8(left, right) {
+  return Buffer.compare(Buffer.from(left), Buffer.from(right));
 }
 
 function parseArgs(args) {

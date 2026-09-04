@@ -5,145 +5,20 @@ const ImageBytes = @embedFile("repository-system.bpi1");
 const InitialArgs = @embedFile("repository-system-initial.bin");
 const ProgramTransitionDigest = ImageBytes[32..64].*;
 
-const repository = struct {
-    pub const Path = boundary.Text(256);
-    pub const Digest = boundary.Text(64);
-    pub const FileText = boundary.Text(4 * 1024);
-    pub const EvidenceText = boundary.Text(2 * 1024);
-    pub const Summary = boundary.Text(1024);
-    pub const Empty = struct {};
-    pub const ReadPayload = struct { role: u8 };
-    pub const SearchPayload = struct { query: boundary.Text(256) };
-    pub const ReplacePayload = struct {
-        path: Path,
-        expected_sha256: Digest,
-        replacement: FileText,
-        rationale: Summary,
-    };
-    pub const Result = struct {
-        summary: Summary,
-        changed_path: Path,
-        final_source_sha256: Digest,
-    };
-    pub const Action = union(enum) {
-        list_repository: Empty,
-        read_file: ReadPayload,
-        search_text: SearchPayload,
-        run_tests: Empty,
-        replace_file: ReplacePayload,
-        finish: Result,
-    };
-    pub const ListResult = struct { listing: EvidenceText };
-    pub const ReadResult = struct {
-        role: u8,
-        path: Path,
-        sha256: Digest,
-        contents: FileText,
-    };
-    pub const TestResult = struct {
-        passed: bool,
-        output: EvidenceText,
-    };
-    pub const ReplaceResult = struct {
-        applied: bool,
-        path: Path,
-        old_sha256: Digest,
-        new_sha256: Digest,
-        detail: Summary,
-    };
-    pub const Failure = enum {
-        arithmetic_overflow,
-        capacity_exceeded,
-        invalid_index,
-        invalid_utf8,
-        malformed,
-        invalid_variant,
-        incomplete,
-        response_error,
-        unsupported,
-        multiple_calls,
-        refusal,
-        unknown_action,
-        transport,
-        http,
-        policy_denied,
-    };
-};
-
+const agent = @import("agent");
+const RepositorySystem = @import("repository_system").RepositoryRepairSystem(
+    agent,
+    boundary,
+);
+const repository = RepositorySystem;
+const ProductionModelProtocol = RepositorySystem.System.ModelEffect;
 const ModelProtocol = struct {
     pub const semantic_identity = "agent.model.invoke.v2";
-    pub const MessageRole = enum { system, developer, user, assistant };
-    pub const TransportFailure = enum {
-        unavailable,
-        denied,
-        interrupted,
-        response_too_large,
-    };
-    pub const ProviderFailureKind = enum {
-        http_status,
-        response_failed,
-        response_incomplete,
-    };
-    pub const UnsupportedResponse = enum {
-        unsupported_protocol,
-        unsupported_parameter,
-        malformed_json,
-        invalid_utf8,
-        unsupported_status,
-        unsupported_output_item,
-        mixed_refusal,
-        normalization_limit,
-    };
-    pub const ArgumentsJson = boundary.Bytes(32 * 1024);
-    pub const ResultText = boundary.Text(32 * 1024);
-    pub const CallId = boundary.Text(256);
-    pub const ToolName = boundary.Text(15);
-    pub const ArgumentDecodeFailure = enum {
-        malformed,
-        duplicate_field,
-        unknown_field,
-        missing_field,
-        wrong_type,
-        integer_range,
-        capacity,
-    };
-    pub const DecodedAction = union(enum) {
-        decoded: repository.Action,
-        invalid: ArgumentDecodeFailure,
-    };
-    pub const FunctionCall = struct {
-        call_id: CallId,
-        name: ToolName,
-        arguments_json: ArgumentsJson,
-        tool_ordinal_claim: u32,
-        decoded_action: DecodedAction,
-    };
-    pub const OutputMessage = struct {
-        role: MessageRole,
-        content: ResultText,
-    };
-    pub const ReasoningOutput = struct { summary: ResultText };
-    pub const OutputItem = union(enum) {
-        function_call: FunctionCall,
-        message: OutputMessage,
-        reasoning: ReasoningOutput,
-    };
-    pub const OutputItems = boundary.Vector(OutputItem, 32);
-    pub const ModelOutput = struct {
-        items: OutputItems,
-        normalized_output_digest: [32]u8,
-    };
-    pub const ProviderFailure = struct {
-        kind: ProviderFailureKind,
-        http_status: u16,
-    };
-    pub const ModelResult = union(enum) {
-        output: ModelOutput,
-        refusal: ResultText,
-        transport_failure: TransportFailure,
-        provider_failure: ProviderFailure,
-        unsupported_response: UnsupportedResponse,
-    };
+    pub const ArgumentsJson = ProductionModelProtocol.ArgumentsJsonType;
+    pub const CallId = ProductionModelProtocol.CallIdType;
+    pub const ToolName = ProductionModelProtocol.ToolNameType;
+    pub const OutputItems = ProductionModelProtocol.OutputItemsType;
+    pub const ModelResult = ProductionModelProtocol.ModelResultType;
 };
 const Storage = boundary.process_v1.CapacityStorage(.{
     .input = 1024 * 1024,

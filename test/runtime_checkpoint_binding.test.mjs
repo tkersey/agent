@@ -111,6 +111,26 @@ try {
   assert.notEqual(resumed.status, 0);
   assert.match(resumed.stderr, /checkpoint workspace changed after suspension/);
 
+  const collisionWork = join(root, "workspace-framing-work");
+  const collisionFirst = run(worldRoot, collisionWork);
+  assert.equal(collisionFirst.status, 0, collisionFirst.stderr);
+  const collisionWorkspace = join(collisionWork, "workspace");
+  const readmePath = join(collisionWorkspace, "README.md");
+  const packagePath = join(collisionWorkspace, "package.json");
+  const [readme, packageBytes] = await Promise.all([
+    readFile(readmePath),
+    readFile(packagePath),
+  ]);
+  await writeFile(readmePath, Buffer.concat([
+    readme,
+    Buffer.from("\0package.json\0"),
+    packageBytes,
+  ]));
+  await rm(packagePath);
+  const boundaryShift = run(worldRoot, collisionWork);
+  assert.notEqual(boundaryShift.status, 0);
+  assert.match(boundaryShift.stderr, /checkpoint workspace changed after suspension/);
+
   const existingWork = join(root, "existing-work");
   const existingSource = join(existingWork, "workspace/src/range.mjs");
   await mkdir(join(existingWork, "workspace/src"), { recursive: true });

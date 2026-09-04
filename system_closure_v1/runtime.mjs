@@ -422,16 +422,16 @@ async function digestWorkspace(root) {
       const stat = await lstat(path);
       assert(!stat.isSymbolicLink(), `checkpoint workspace link is forbidden: ${name}`);
       if (entry.isDirectory()) await addTree(path, name);
-      else if (entry.isFile()) records.push([name, await readFile(path)]);
+      else if (entry.isFile()) records.push([name, sha256(await readFile(path))]);
       else throw new Error(`unsupported checkpoint workspace entry: ${name}`);
     }
   }
   await addTree(root, "");
-  const chunks = [Buffer.from("agent-checkpoint-workspace/v1\0")];
-  for (const [name, bytes] of records) {
-    chunks.push(Buffer.from(`${name}\0`), bytes, Buffer.from([0]));
-  }
-  return sha256(Buffer.concat(chunks));
+  records.sort(([left], [right]) => Buffer.compare(Buffer.from(left), Buffer.from(right)));
+  return sha256(Buffer.from(JSON.stringify([
+    "agent-checkpoint-workspace/v2",
+    records,
+  ])));
 }
 
 function initializeGit(cwd) {

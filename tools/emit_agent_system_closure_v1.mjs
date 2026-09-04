@@ -16,6 +16,7 @@ const worldArchivePath = resolve(options.worldArchive);
 const agentGit = gitFacts(agentRoot);
 assert.equal(agentGit.clean, true,
   "active Agent source tree contains uncommitted changes");
+assertNoHiddenIndexFlags(agentRoot);
 await assertTreeTracked(agentRoot, "fixtures/repository-repair-v1");
 const buildManifest = await readFile(join(agentRoot, "build.zig.zon"), "utf8");
 const releaseIdentityBytes = await readFile(
@@ -278,6 +279,14 @@ function gitFacts(cwd) {
   const commit = run("git", ["rev-parse", "HEAD"], cwd).trim();
   const status = run("git", ["status", "--porcelain", "--untracked-files=all"], cwd);
   return Object.freeze({ commit, clean: status.length === 0 });
+}
+
+function assertNoHiddenIndexFlags(root) {
+  const records = run("git", ["ls-files", "-v", "-z"], root)
+    .split("\0").filter(Boolean);
+  const hidden = records.filter((record) => record[0] !== "H");
+  assert.deepEqual(hidden, [],
+    "Git index flags hide worktree changes from release source custody");
 }
 
 function run(command, args, cwd) {

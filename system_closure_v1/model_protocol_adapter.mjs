@@ -65,6 +65,7 @@ export async function performModelInvocation(payload, options) {
     const declaredLength = response.headers.get("content-length");
     if (declaredLength !== null &&
         Number(declaredLength) > invocation.maximumProviderResponseBytes) {
+      await response.body?.cancel();
       return encodeTransportFailure("response_too_large");
     }
     const body = await readBoundedBody(

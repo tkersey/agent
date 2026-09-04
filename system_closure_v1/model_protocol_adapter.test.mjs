@@ -7,6 +7,7 @@ import {
   decodeModelInvocation,
   encodeOpenAIResponsesRequest,
   normalizeOpenAIResponses,
+  performModelInvocation,
 } from "./model_protocol_adapter.mjs";
 
 const limits = Object.freeze({
@@ -36,6 +37,32 @@ test("credentialed transport is bound to the exact OpenAI Responses endpoint", (
     admitModelEndpoint("http://127.0.0.1:9000/v1/responses", false).href,
     "http://127.0.0.1:9000/v1/responses",
   );
+});
+
+test("declared oversized responses cancel their unread body", async () => {
+  const originalFetch = globalThis.fetch;
+  let cancelled = false;
+  globalThis.fetch = async () => ({
+    status: 200,
+    headers: {
+      get(name) {
+        return name === "content-length" ? String(128 * 1024) : null;
+      },
+    },
+    body: {
+      async cancel() {
+        cancelled = true;
+      },
+    },
+  });
+  try {
+    await performModelInvocation(invocationBytes(), {
+      endpoint: "http://127.0.0.1:1/v1/responses",
+    });
+    assert.equal(cancelled, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("decodes one self-contained semantic invocation", () => {

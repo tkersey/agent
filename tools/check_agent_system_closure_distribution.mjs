@@ -104,6 +104,7 @@ try {
   let execution = null;
   let publicVerification = null;
   let extractionBindingNegative = null;
+  let extractionInventoryNegative = null;
   if (options.worldRoot !== undefined) {
     assert(options.worldArchive !== undefined, "--world-root requires --world-archive");
     const worldArchive = await readFile(resolve(options.worldArchive));
@@ -201,6 +202,32 @@ try {
     assert.match(tamperedResult.stderr, /distribution checksum mismatch: initial-args\.bin/);
     assert.deepEqual(await readdir(tamperedWork), []);
     extractionBindingNegative = "passed";
+
+    await writeFile(join(root, "initial-args.bin"), files.get("initial-args.bin"));
+    await writeFile(join(root, "fixture/test/unsigned.test.mjs"),
+      "throw new Error('unsigned fixture code executed');\n");
+    const unsignedWork = join(extractionRoot, "unsigned-extraction-work");
+    await mkdir(unsignedWork);
+    const unsignedResult = spawnSync(process.execPath, [
+      join(root, "public_verify.mjs"),
+      "--world-root", resolve(options.worldRoot),
+      "--world-archive", resolve(options.worldArchive),
+      "--agent-archive", resolve(options.archive),
+      "--agent-receipt", resolve(options.receipt),
+      "--work-root", unsignedWork,
+      "--census-output", join(extractionRoot, "unsigned-census.json"),
+      "--negative-output", join(extractionRoot, "unsigned-negatives.json"),
+    ], {
+      cwd: root,
+      encoding: "utf8",
+      env: { PATH: process.env.PATH ?? "" },
+      timeout: 30 * 60 * 1000,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    assert.notEqual(unsignedResult.status, 0, "unsigned extraction file was admitted");
+    assert.match(unsignedResult.stderr, /distribution inventory differs/);
+    assert.deepEqual(await readdir(unsignedWork), []);
+    extractionInventoryNegative = "passed";
   }
   process.stdout.write(`${JSON.stringify({
     format: "agent-system-closure-distribution-check/v1",
@@ -211,6 +238,7 @@ try {
     sourceIndependentInventory: true,
     safeExtraction: true,
     extractionBindingNegative,
+    extractionInventoryNegative,
     execution,
     publicVerification,
   })}\n`);

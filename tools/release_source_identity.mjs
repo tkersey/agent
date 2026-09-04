@@ -59,12 +59,27 @@ function git(root, args, maxBuffer) {
 }
 
 function isReleaseSource(path) {
-  if (path.startsWith("economy/")) return false;
-  return ![
+  if ([
     "system_closure_v1/admission-proof.json",
     "system_closure_v1/fixture-proof.json",
     "system_closure_v1/release_identity.json",
-  ].includes(path);
+  ].includes(path)) return false;
+  if ([
+    ".gitignore",
+    "LICENSE",
+    "README.md",
+    "build.zig",
+    "build.zig.zon",
+    "economy_tooling_root.zig",
+    "repo_zig_paths.txt",
+  ].includes(path)) return true;
+  return [
+    "actuality/",
+    "fixtures/repository-repair-v1/",
+    "src/",
+    "system_closure_v1/",
+    "tools/",
+  ].some((prefix) => path.startsWith(prefix));
 }
 
 function sha256(bytes) {

@@ -40,6 +40,7 @@ try {
     "process_state_census.mjs",
     "public_negatives.mjs",
     "public_verify.mjs",
+    "world_archive_binding.mjs",
     "release_identity.json",
   ]) {
     await copyFile(join(dirname(runtime), name), join(distributionRoot, name));

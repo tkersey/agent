@@ -16,6 +16,10 @@ test("source identity changes with source but not generated evidence", async (co
   await writeFile(join(root, "economy/generated.json"), "{\"v\":2}\n");
   commit(root, "generated evidence");
   assert.equal(agentSourceSha256(root), initial);
+  await mkdir(join(root, "test"));
+  await writeFile(join(root, "test/source.test.zig"), "test {}\n");
+  commit(root, "test-only change");
+  assert.equal(agentSourceSha256(root), initial);
   await writeFile(join(root, "src/main.zig"), "const value = 2;\n");
   commit(root, "source change");
   assert.notEqual(agentSourceSha256(root), initial);

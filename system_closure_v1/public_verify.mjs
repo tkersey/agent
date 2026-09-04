@@ -26,12 +26,15 @@ const agentArchive = await readBoundedRegularFile(
   2 * 1024 * 1024,
   "Agent archive",
 );
-const distributionFiles = await assertRootMatchesArchive({
+const distributionTree = await assertRootMatchesArchive({
   root: distributionRoot,
   archiveBytes: agentArchive,
   archiveRoot: "agent-v3.0.0-system-closure-v1",
   maximumExpandedBytes: 2 * 1024 * 1024,
 });
+const distributionFiles = new Map(
+  [...distributionTree].filter(([, entry]) => entry.kind === "file"),
+);
 const identityBytes = distributionFiles.get("release_identity.json").bytes;
 const identity = JSON.parse(identityBytes.toString("utf8"));
 const worldArchive = await readBoundedRegularFile(

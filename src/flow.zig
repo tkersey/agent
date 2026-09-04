@@ -357,7 +357,11 @@ pub fn Flow(comptime config: anytype) type {
                 self.parameter_count < before.parameter_count or
                 self.request_count < before.request_count or
                 self.edge_argument_count < before.edge_argument_count or
-                self.current_phase != before.current_phase)
+                self.current_phase != before.current_phase or
+                (self.current_block != before.current_block and
+                    self.current_block < before.block_count) or
+                self.current_function != before.current_function or
+                self.started != before.started)
             {
                 return false;
             }
@@ -376,8 +380,22 @@ pub fn Flow(comptime config: anytype) type {
                 if (!std.meta.eql(value, before.functions[index])) return false;
             }
             for (self.blocks[0..before.block_count], 0..) |value, index| {
-                if (value.id == before.current_block) continue;
-                if (!std.meta.eql(value, before.blocks[index])) return false;
+                if (index == before.current_block) {
+                    if (value.instruction_count < before.blocks[index].instruction_count) {
+                        return false;
+                    }
+                    const prior = before.blocks[index];
+                    if (value.id != prior.id or
+                        value.function_id != prior.function_id or
+                        value.role != prior.role or
+                        value.parameter_start != prior.parameter_start or
+                        value.parameter_count != prior.parameter_count or
+                        value.instruction_start != prior.instruction_start or
+                        value.entered != prior.entered)
+                    {
+                        return false;
+                    }
+                } else if (!std.meta.eql(value, before.blocks[index])) return false;
             }
             if (!std.mem.eql(
                 boundary.ir.ValueId,

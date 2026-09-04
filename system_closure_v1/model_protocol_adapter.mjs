@@ -496,10 +496,14 @@ function refusalOnly(output, limits) {
   const item = actionable[0];
   if (item?.type !== "message" || item.status !== "completed" ||
       item.role !== "assistant" ||
-      !Array.isArray(item.content) || item.content.length !== 1 ||
-      item.content[0]?.type !== "refusal") return null;
-  requireTextLimit(item.content[0].refusal, limits.maximumResultTextBytes);
-  return item.content[0].refusal;
+      !Array.isArray(item.content) || item.content.length === 0 ||
+      !item.content.every((part) => part?.type === "refusal")) return null;
+  const refusal = item.content.map((part) => {
+    requireTextLimit(part.refusal, limits.maximumResultTextBytes);
+    return part.refusal;
+  }).join("");
+  requireTextLimit(refusal, limits.maximumResultTextBytes);
+  return refusal;
 }
 
 function containsUnfinishedRefusal(output) {

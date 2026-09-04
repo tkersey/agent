@@ -219,6 +219,7 @@ process.stdout.write(JSON.stringify({
   kernelSha256: identity.kernel.sha256,
   fixture,
   census: census.stateCensus,
+  semanticResults: semanticNegatives.negativeResults,
   negativeCaseCount: semanticNegatives.negativeResults.length + schedulerResults.length,
   publicNegativeResult: "passed",
   dangerousRepositoryEffects: 0,

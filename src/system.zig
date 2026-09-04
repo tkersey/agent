@@ -96,7 +96,10 @@ fn validate(comptime spec: anytype) void {
         @compileError("agent system requires exactly one descriptor per Action variant");
     }
     if (spec.actions.len > 32 or spec.skills.len > 32) {
-        @compileError("agent system supports at most 32 actions and 32 skills per closed system");
+        @compileError(
+            "agent system u32 masks encode at most 32 actions and 32 skills; " ++
+                "each generated system must also fit its representation and Boundary compiler limits",
+        );
     }
     comptime var next_effect_site_id: u32 = 1;
     inline for (spec.actions, 0..) |Descriptor, index| {

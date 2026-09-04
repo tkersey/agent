@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cp, lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { startFixtureModelServer } from "./fixture_model_server.mjs";
 import {
@@ -59,9 +59,13 @@ await assertWorldRootMatchesArchive({
 const workRoot = resolve(options.workDir);
 const checkpointPath = join(workRoot, "checkpoint.json");
 if (options.censusOutput !== undefined) {
+  const [censusPath, canonicalCheckpointPath] = await Promise.all([
+    canonicalPathForCreation(options.censusOutput),
+    canonicalPathForCreation(checkpointPath),
+  ]);
   assert.notEqual(
-    resolve(options.censusOutput),
-    checkpointPath,
+    censusPath,
+    canonicalCheckpointPath,
     "--census-output must not alias the runtime checkpoint",
   );
 }
@@ -70,8 +74,24 @@ assert.match(checkpointKeyHex ?? "", /^[0-9a-f]{64}$/,
   "runtime requires one scheduler-owned checkpoint key");
 const checkpointKey = Buffer.from(checkpointKeyHex, "hex");
 const workspaceRoot = join(workRoot, "workspace");
-const image = await readFile(join(distributionRoot, "system.bpi1"));
-const initial = await readFile(join(distributionRoot, "initial-args.bin"));
+const image = await readBoundedRegularFile(
+  join(distributionRoot, "system.bpi1"),
+  releaseIdentity.agentArtifacts.imageByteLength,
+  "Agent Program Image",
+);
+assert.equal(image.byteLength, releaseIdentity.agentArtifacts.imageByteLength,
+  "Agent Program Image length differs from release identity");
+assert.equal(sha256(image), releaseIdentity.agentArtifacts.imageSha256,
+  "Agent Program Image digest differs from release identity");
+const initial = await readBoundedRegularFile(
+  join(distributionRoot, "initial-args.bin"),
+  releaseIdentity.agentArtifacts.initialArgsByteLength,
+  "Agent InitialArgs",
+);
+assert.equal(initial.byteLength, releaseIdentity.agentArtifacts.initialArgsByteLength,
+  "Agent InitialArgs length differs from release identity");
+assert.equal(sha256(initial), releaseIdentity.agentArtifacts.initialArgsSha256,
+  "Agent InitialArgs digest differs from release identity");
 const fixtureRoot = join(distributionRoot, "fixture");
 const sourceMapBytes = options.sourceMap === undefined
   ? null
@@ -379,6 +399,22 @@ await writeStdout(`${JSON.stringify({
   stateCensus: stateCensusReceipt,
 })}\n`);
 await rm(checkpointPath, { force: true });
+
+async function canonicalPathForCreation(candidate) {
+  let current = resolve(candidate);
+  const missing = [];
+  for (;;) {
+    try {
+      return join(await realpath(current), ...missing.reverse());
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      const parent = dirname(current);
+      assert.notEqual(parent, current, `cannot canonicalize path: ${candidate}`);
+      missing.push(basename(current));
+      current = parent;
+    }
+  }
+}
 
 async function digestRuntimeInputs(root, fixture) {
   const runtimeNames = [

@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFile, copyFile, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  copyFile,
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -58,6 +69,36 @@ try {
     createHash("sha256").update(await readFile(worldArchive)).digest("hex"),
     releaseIdentity.world.archiveSha256,
   );
+
+  const initialPath = join(distributionRoot, "initial-args.bin");
+  const originalInitial = await readFile(initialPath);
+  const tamperedInitial = Buffer.from(originalInitial);
+  tamperedInitial[tamperedInitial.length - 1] ^= 1;
+  await writeFile(initialPath, tamperedInitial);
+  const tamperedInitialWork = join(root, "tampered-initial-work");
+  const rejectedInitial = run(worldRoot, tamperedInitialWork);
+  assert.notEqual(rejectedInitial.status, 0);
+  assert.match(rejectedInitial.stderr, /Agent InitialArgs digest differs/);
+  await lstat(tamperedInitialWork).then(
+    () => assert.fail("tampered InitialArgs reached workspace creation"),
+    (error) => assert.equal(error?.code, "ENOENT"),
+  );
+  await writeFile(initialPath, originalInitial);
+
+  const imagePath = join(distributionRoot, "system.bpi1");
+  const originalImage = await readFile(imagePath);
+  const tamperedImage = Buffer.from(originalImage);
+  tamperedImage[tamperedImage.length - 1] ^= 1;
+  await writeFile(imagePath, tamperedImage);
+  const tamperedImageWork = join(root, "tampered-image-work");
+  const rejectedImage = run(worldRoot, tamperedImageWork);
+  assert.notEqual(rejectedImage.status, 0);
+  assert.match(rejectedImage.stderr, /Agent Program Image digest differs/);
+  await lstat(tamperedImageWork).then(
+    () => assert.fail("tampered Program Image reached workspace creation"),
+    (error) => assert.equal(error?.code, "ENOENT"),
+  );
+  await writeFile(imagePath, originalImage);
 
   const alternateImage = run(
     worldRoot,
@@ -139,6 +180,19 @@ try {
   ]);
   assert.notEqual(aliasedOutput.status, 0);
   assert.match(aliasedOutput.stderr, /census-output must not alias the runtime checkpoint/);
+
+  const realAliasRoot = join(root, "canonical-census-root");
+  const linkedAliasRoot = join(root, "linked-census-root");
+  await mkdir(realAliasRoot);
+  await symlink(realAliasRoot, linkedAliasRoot, "dir");
+  const aliasedParentOutput = run(worldRoot, join(linkedAliasRoot, "work"), 1, [
+    "--censusOutput", join(realAliasRoot, "work/checkpoint.json"),
+  ]);
+  assert.notEqual(aliasedParentOutput.status, 0);
+  assert.match(
+    aliasedParentOutput.stderr,
+    /census-output must not alias the runtime checkpoint/,
+  );
 
   const existingWork = join(root, "existing-work");
   const existingSource = join(existingWork, "workspace/src/range.mjs");

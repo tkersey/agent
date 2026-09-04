@@ -245,6 +245,14 @@ pub fn build(b: *std.Build) void {
     addExpectedCompileFailure(
         b,
         compile_fail,
+        "test/compile_fail/system_epistemics_rewrites_current_block.zig",
+        "agent epistemics emitPrompt must not rewrite compiler-owned data carriers",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
         "test/compile_fail/system_forged_model.zig",
         "agent system model must be constructed by agent.model",
         agent_module,
@@ -299,19 +307,53 @@ pub fn build(b: *std.Build) void {
         boundary_module,
     );
     semantic.dependOn(compile_fail);
+    const external_consumer_files = b.addWriteFiles();
+    _ = external_consumer_files.addCopyFile(
+        b.path("test/external_consumer/main.zig"),
+        "main.zig",
+    );
+    _ = external_consumer_files.add("build.zig",
+        \\const std = @import("std");
+        \\
+        \\pub fn build(b: *std.Build) void {
+        \\    const target = b.standardTargetOptions(.{});
+        \\    const optimize = b.standardOptimizeOption(.{});
+        \\    const dependency = b.dependency("agent", .{
+        \\        .target = target,
+        \\        .optimize = optimize,
+        \\    });
+        \\    const consumer = b.createModule(.{
+        \\        .root_source_file = b.path("main.zig"),
+        \\        .target = target,
+        \\        .optimize = optimize,
+        \\    });
+        \\    consumer.addImport("agent", dependency.module("agent"));
+        \\    consumer.addImport("boundary", dependency.module("boundary"));
+        \\    const tests = b.addTest(.{ .root_module = consumer });
+        \\    b.step("check", "Compile a clean-room Agent consumer")
+        \\        .dependOn(&b.addRunArtifact(tests).step);
+        \\}
+    );
+    _ = external_consumer_files.add("build.zig.zon",
+        \\.{
+        \\    .name = .agent_external_consumer,
+        \\    .version = "0.0.0",
+        \\    .dependencies = .{ .agent = .{ .path = "../../.." } },
+        \\    .minimum_zig_version = "0.16.0",
+        \\    .paths = .{ "build.zig", "build.zig.zon", "main.zig" },
+        \\    .fingerprint = 0xb44d50a79d4246cc,
+        \\}
+    );
     const external_consumer = b.addSystemCommand(&.{
         b.graph.zig_exe,
         "build",
         "check",
         "--cache-dir",
-        "../../.zig-cache/external-consumer",
+        b.pathFromRoot(".zig-cache/external-consumer"),
         "--summary",
         "all",
     });
-    external_consumer.setCwd(b.path("test/external_consumer"));
-    external_consumer.addFileInput(b.path("test/external_consumer/build.zig"));
-    external_consumer.addFileInput(b.path("test/external_consumer/build.zig.zon"));
-    external_consumer.addFileInput(b.path("test/external_consumer/main.zig"));
+    external_consumer.setCwd(external_consumer_files.getDirectory());
     semantic.dependOn(&external_consumer.step);
 
     const repository_module = b.createModule(.{

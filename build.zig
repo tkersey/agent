@@ -307,53 +307,19 @@ pub fn build(b: *std.Build) void {
         boundary_module,
     );
     semantic.dependOn(compile_fail);
-    const external_consumer_files = b.addWriteFiles();
-    _ = external_consumer_files.addCopyFile(
-        b.path("test/external_consumer/main.zig"),
-        "main.zig",
-    );
-    _ = external_consumer_files.add("build.zig",
-        \\const std = @import("std");
-        \\
-        \\pub fn build(b: *std.Build) void {
-        \\    const target = b.standardTargetOptions(.{});
-        \\    const optimize = b.standardOptimizeOption(.{});
-        \\    const dependency = b.dependency("agent", .{
-        \\        .target = target,
-        \\        .optimize = optimize,
-        \\    });
-        \\    const consumer = b.createModule(.{
-        \\        .root_source_file = b.path("main.zig"),
-        \\        .target = target,
-        \\        .optimize = optimize,
-        \\    });
-        \\    consumer.addImport("agent", dependency.module("agent"));
-        \\    consumer.addImport("boundary", dependency.module("boundary"));
-        \\    const tests = b.addTest(.{ .root_module = consumer });
-        \\    b.step("check", "Compile a clean-room Agent consumer")
-        \\        .dependOn(&b.addRunArtifact(tests).step);
-        \\}
-    );
-    _ = external_consumer_files.add("build.zig.zon",
-        \\.{
-        \\    .name = .agent_external_consumer,
-        \\    .version = "0.0.0",
-        \\    .dependencies = .{ .agent = .{ .path = "../../.." } },
-        \\    .minimum_zig_version = "0.16.0",
-        \\    .paths = .{ "build.zig", "build.zig.zon", "main.zig" },
-        \\    .fingerprint = 0xb44d50a79d4246cc,
-        \\}
-    );
     const external_consumer = b.addSystemCommand(&.{
-        b.graph.zig_exe,
-        "build",
-        "check",
-        "--cache-dir",
-        b.pathFromRoot(".zig-cache/external-consumer"),
-        "--summary",
-        "all",
+        "node",
+        "test/external_consumer.test.mjs",
     });
-    external_consumer.setCwd(external_consumer_files.getDirectory());
+    external_consumer.addArg(b.graph.zig_exe);
+    external_consumer.addArg(b.pathFromRoot("."));
+    external_consumer.addArg(
+        b.graph.global_cache_root.path orelse @panic("global cache path is absent"),
+    );
+    external_consumer.addFileInput(b.path("test/external_consumer.test.mjs"));
+    external_consumer.addFileInput(b.path("test/external_consumer/build.zig"));
+    external_consumer.addFileInput(b.path("test/external_consumer/main.zig"));
+    external_consumer.has_side_effects = true;
     semantic.dependOn(&external_consumer.step);
 
     const repository_module = b.createModule(.{

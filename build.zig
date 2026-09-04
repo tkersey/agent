@@ -33,6 +33,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     const boundary_module = boundary_dependency.module("boundary");
+    b.modules.put(
+        b.graph.arena,
+        b.dupe("boundary"),
+        boundary_module,
+    ) catch @panic("OOM");
     const agent_module = b.addModule("agent", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
@@ -201,7 +206,7 @@ pub fn build(b: *std.Build) void {
         b,
         compile_fail,
         "test/compile_fail/system_provider_envelope_too_small.zig",
-        "Agent maximum_provider_response_bytes must contain every admitted response payload and fit u32",
+        "Agent 3 ReAct representation requires response_bytes, maximum_provider_response_bytes, and schema_types",
         agent_module,
         boundary_module,
     );
@@ -218,6 +223,22 @@ pub fn build(b: *std.Build) void {
         compile_fail,
         "test/compile_fail/system_image_bytes_limit.zig",
         "Agent Program image exceeds representation.image_bytes",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_unknown_failure_mapping.zig",
+        "Agent failure mapping contains unknown field 'policy_deneid'",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_epistemics_rewrites_flow.zig",
+        "agent epistemics emitPrompt must not rewrite compiler-owned data carriers",
         agent_module,
         boundary_module,
     );
@@ -278,6 +299,20 @@ pub fn build(b: *std.Build) void {
         boundary_module,
     );
     semantic.dependOn(compile_fail);
+    const external_consumer = b.addSystemCommand(&.{
+        b.graph.zig_exe,
+        "build",
+        "check",
+        "--cache-dir",
+        "../../.zig-cache/external-consumer",
+        "--summary",
+        "all",
+    });
+    external_consumer.setCwd(b.path("test/external_consumer"));
+    external_consumer.addFileInput(b.path("test/external_consumer/build.zig"));
+    external_consumer.addFileInput(b.path("test/external_consumer/build.zig.zon"));
+    external_consumer.addFileInput(b.path("test/external_consumer/main.zig"));
+    semantic.dependOn(&external_consumer.step);
 
     const repository_module = b.createModule(.{
         .root_source_file = b.path("actuality/repository_repair_system_v1.zig"),
@@ -513,6 +548,30 @@ pub fn build(b: *std.Build) void {
         b.path("system_closure_v1/run.mjs"),
     );
     closure_check.dependOn(&run_argument_admission_test.step);
+    const admission_argument_test = b.addSystemCommand(&.{
+        "node",
+        "--test",
+        "test/admission_argument_admission.test.mjs",
+    });
+    admission_argument_test.addFileInput(
+        b.path("test/admission_argument_admission.test.mjs"),
+    );
+    admission_argument_test.addFileInput(
+        b.path("tools/check_agent_system_admission_negatives.mjs"),
+    );
+    closure_check.dependOn(&admission_argument_test.step);
+    const admission_merge_test = b.addSystemCommand(&.{
+        "node",
+        "--test",
+        "test/merge_admission_proofs.test.mjs",
+    });
+    admission_merge_test.addFileInput(
+        b.path("test/merge_admission_proofs.test.mjs"),
+    );
+    admission_merge_test.addFileInput(
+        b.path("tools/merge_agent_system_admission_proofs.mjs"),
+    );
+    closure_check.dependOn(&admission_merge_test.step);
     const emission_source_custody_test = b.addSystemCommand(&.{
         "node",
         "--test",

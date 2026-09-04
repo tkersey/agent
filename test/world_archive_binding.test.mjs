@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFile, cp, mkdtemp, open, rm } from "node:fs/promises";
+import { appendFile, cp, mkdir, mkdtemp, open, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -25,7 +25,26 @@ test("the executed World root must equal the authenticated archive", async (cont
   await appendFile(join(changed, "README.md"), "changed\n");
   await assert.rejects(
     assertWorldRootMatchesArchive({ worldRoot: changed, archiveBytes, worldVersion: "4.1.0" }),
-    /executed World bytes differ from archive/,
+    /executed bytes differ from archive/,
+  );
+});
+
+test("World root traversal rejects excess entries within its fixed bound", async (context) => {
+  const archiveBytes = await readBoundedRegularFile(
+    worldArchive,
+    16 * 1024 * 1024,
+    "World archive",
+  );
+  const root = await mkdtemp(join(tmpdir(), "agent-world-entry-bound-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const changed = join(root, "world");
+  await cp(worldRoot, changed, { recursive: true });
+  await mkdir(join(changed, "extra"));
+  await Promise.all(Array.from({ length: 260 }, (_, index) =>
+    writeFile(join(changed, "extra", String(index)), "")));
+  await assert.rejects(
+    assertWorldRootMatchesArchive({ worldRoot: changed, archiveBytes, worldVersion: "4.1.0" }),
+    /entry limit exceeded/,
   );
 });
 

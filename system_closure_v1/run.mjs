@@ -4,12 +4,14 @@ import { randomBytes } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { admitModelEndpoint } from "./model_protocol_adapter.mjs";
 
 const options = parseArgs(process.argv.slice(2));
 assert(["fixture", "live"].includes(options.mode), "--mode must be fixture or live");
 if (options.mode === "live") {
   assert(options.endpoint !== undefined, "live mode requires --endpoint");
   assert(process.env.OPENAI_API_KEY, "live mode requires OPENAI_API_KEY");
+  admitModelEndpoint(options.endpoint, true);
 }
 const workDir = resolve(options.workDir);
 const workEntries = (await readdir(workDir)).sort();
@@ -21,6 +23,7 @@ for (let chunk = 0; chunk < 16; chunk += 1) {
   const runtimeArgs = [
     runtime,
     "--worldRoot", resolve(options.worldRoot),
+    "--worldArchive", resolve(options.worldArchive),
     "--workDir", workDir,
     "--mode", options.mode,
     "--maximumReductions", options.censusOutput === undefined ? "3000" : "30000",
@@ -58,6 +61,7 @@ function writeStdout(value) {
 function parseArgs(args) {
   const admitted = new Set([
     "worldRoot",
+    "worldArchive",
     "workDir",
     "mode",
     "endpoint",
@@ -73,7 +77,9 @@ function parseArgs(args) {
     assert(!(name in result), `duplicate scheduler argument --${key.slice(2)}`);
     result[name] = value;
   }
-  for (const key of ["worldRoot", "workDir", "mode"]) assert(key in result, `missing --${key}`);
+  for (const key of ["worldRoot", "worldArchive", "workDir", "mode"]) {
+    assert(key in result, `missing --${key}`);
+  }
   return result;
 }
 

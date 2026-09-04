@@ -25,7 +25,8 @@ const agentGit = gitFacts(agentRoot);
 assert.equal(agentGit.clean, true,
   "active Agent source tree contains uncommitted changes");
 assertNoHiddenIndexFlags(agentRoot);
-const agentTree = gitRegularTree(agentRoot);
+assertNoIgnoredSourceInputs(agentRoot);
+const agentTree = gitRegularTree(agentRoot, undefined, agentGit.commit);
 const agentFile = (path) => {
   const bytes = agentTree.get(path);
   assert(bytes !== undefined, `release source is absent from HEAD: ${path}`);
@@ -299,6 +300,24 @@ function assertNoHiddenIndexFlags(root) {
   const hidden = records.filter((record) => record[0] !== "H");
   assert.deepEqual(hidden, [],
     "Git index flags hide worktree changes from release source custody");
+}
+
+function assertNoIgnoredSourceInputs(root) {
+  const ignored = run(
+    "git",
+    ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"],
+    root,
+  ).split("\0").filter(Boolean);
+  const infrastructure = [
+    ".ledger/", ".uv-cache/", ".zig-cache/", ".zig-global-cache/", "dist/",
+    "zig-out/", "zig-pkg/",
+  ];
+  const unsafe = ignored.filter((path) =>
+    !infrastructure.some((prefix) => path.startsWith(prefix)) &&
+    (/\.(json|mjs|zig|zon)$/.test(path) || path.startsWith("fixtures/"))
+  );
+  assert.deepEqual(unsafe, [],
+    "ignored source-like files are forbidden during release emission");
 }
 
 function run(command, args, cwd) {

@@ -22,7 +22,32 @@ pub const Failure = enum {
 pub const Action = union(enum) { done: Result };
 pub const Observation = union(enum) { noop: void };
 
+pub const failures = .{
+    .arithmetic_overflow = Failure.arithmetic_overflow,
+    .capacity_exceeded = Failure.capacity_exceeded,
+    .invalid_index = Failure.invalid_index,
+    .invalid_utf8 = Failure.invalid_utf8,
+    .malformed = Failure.malformed,
+    .invalid_variant = Failure.invalid_variant,
+    .incomplete = Failure.incomplete,
+    .response_error = Failure.response_error,
+    .unsupported = Failure.unsupported,
+    .multiple_calls = Failure.multiple_calls,
+    .refusal = Failure.refusal,
+    .unknown_action = Failure.unknown_action,
+    .transport = Failure.transport,
+    .http = Failure.http,
+};
+
 pub fn System(comptime representation_config: anytype, comptime Epistemics: type) type {
+    return SystemWithFailures(representation_config, Epistemics, failures);
+}
+
+pub fn SystemWithFailures(
+    comptime representation_config: anytype,
+    comptime Epistemics: type,
+    comptime failure_mapping: anytype,
+) type {
     return agent.system(.{
         .name = "invalid-react-system",
         .version = "3.0.0",
@@ -48,22 +73,7 @@ pub fn System(comptime representation_config: anytype, comptime Epistemics: type
         })},
         .strategy = agent.strategy.react(.{}),
         .epistemics = Epistemics,
-        .failures = .{
-            .arithmetic_overflow = Failure.arithmetic_overflow,
-            .capacity_exceeded = Failure.capacity_exceeded,
-            .invalid_index = Failure.invalid_index,
-            .invalid_utf8 = Failure.invalid_utf8,
-            .malformed = Failure.malformed,
-            .invalid_variant = Failure.invalid_variant,
-            .incomplete = Failure.incomplete,
-            .response_error = Failure.response_error,
-            .unsupported = Failure.unsupported,
-            .multiple_calls = Failure.multiple_calls,
-            .refusal = Failure.refusal,
-            .unknown_action = Failure.unknown_action,
-            .transport = Failure.transport,
-            .http = Failure.http,
-        },
+        .failures = failure_mapping,
         .representation = representation_config,
     });
 }
@@ -120,5 +130,27 @@ pub const WrongPrompt = agent.epistemics.system(.{
         pub fn emitFinalAllowed(comptime _: anytype, flow: anytype, _: anytype, _: anytype, comptime context: anytype) agent.Value(bool) {
             return flow.constant(bool, context.true_index);
         }
+    },
+});
+
+pub const MutatingFlow = agent.epistemics.system(.{
+    .semantic_identity = "fixture.mutating-flow.v1",
+    .implementation = struct {
+        pub const MemoryType = WrongPrompt.MemoryType;
+        pub const DecisionViewType = WrongPrompt.DecisionViewType;
+        pub fn PromptType(comptime _: anytype) type {
+            return Goal;
+        }
+        pub const schemaTypes = WrongPrompt.schemaTypes;
+        pub const emitInitial = WrongPrompt.emitInitial;
+        pub const emitObserve = WrongPrompt.emitObserve;
+        pub const emitProject = WrongPrompt.emitProject;
+        pub fn emitPrompt(comptime _: anytype, flow: anytype, goal: anytype, _: anytype, comptime _: anytype) agent.Value(Goal) {
+            flow.operands[0] ^= 1;
+            return goal;
+        }
+        pub const emitSkillActive = WrongPrompt.emitSkillActive;
+        pub const emitActionAllowed = WrongPrompt.emitActionAllowed;
+        pub const emitFinalAllowed = WrongPrompt.emitFinalAllowed;
     },
 });

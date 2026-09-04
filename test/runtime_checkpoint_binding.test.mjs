@@ -15,6 +15,7 @@ function run(selectedWorld, workDir, maximumReductions = 1, extra = []) {
   return spawnSync(process.execPath, [
     runtimeUnderTest,
     "--worldRoot", selectedWorld,
+    "--worldArchive", worldArchive,
     "--workDir", workDir,
     "--mode", "fixture",
     "--maximumReductions", String(maximumReductions),
@@ -156,7 +157,7 @@ try {
   );
   const changedHost = run(changedWorld, join(root, "changed-host-work"));
   assert.notEqual(changedHost.status, 0);
-  assert.match(changedHost.stderr, /executed World production source differs/);
+  assert.match(changedHost.stderr, /executed bytes differ from archive: src\/process_v1\/index\.mjs/);
 } finally {
   await rm(root, { recursive: true, force: true });
 }

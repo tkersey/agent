@@ -24,6 +24,10 @@ import {
   sha256,
   validateFinalResult,
 } from "./repository_environment.mjs";
+import {
+  assertWorldRootMatchesArchive,
+  readBoundedRegularFile,
+} from "./world_archive_binding.mjs";
 
 const options = parseArgs(process.argv.slice(2));
 assert(["fixture", "live"].includes(options.mode));
@@ -32,13 +36,26 @@ if (options.mode === "live") {
   assert(process.env.OPENAI_API_KEY, "live mode requires OPENAI_API_KEY");
 }
 const distributionRoot = dirname(fileURLToPath(import.meta.url));
-const releaseIdentity = JSON.parse(await readFile(
+const releaseIdentity = JSON.parse((await readBoundedRegularFile(
   join(distributionRoot, "release_identity.json"),
-  "utf8",
-));
+  64 * 1024,
+  "Agent release identity",
+)).toString("utf8"));
 assert.equal(releaseIdentity.format, "agent-system-closure-release-identity/v1");
 assert.equal(releaseIdentity.agentVersion, "3.0.0");
 const worldRoot = resolve(options.worldRoot);
+const worldArchive = await readBoundedRegularFile(
+  options.worldArchive,
+  16 * 1024 * 1024,
+  "World archive",
+);
+assert.equal(worldArchive.byteLength, releaseIdentity.world.archiveByteLength);
+assert.equal(sha256(worldArchive), releaseIdentity.world.archiveSha256);
+await assertWorldRootMatchesArchive({
+  worldRoot,
+  archiveBytes: worldArchive,
+  worldVersion: releaseIdentity.world.version,
+});
 const workRoot = resolve(options.workDir);
 const checkpointPath = join(workRoot, "checkpoint.json");
 if (options.censusOutput !== undefined) {
@@ -473,6 +490,7 @@ function writeStdout(value) {
 function parseArgs(args) {
   const admitted = new Set([
     "worldRoot",
+    "worldArchive",
     "workDir",
     "mode",
     "maximumReductions",
@@ -490,7 +508,9 @@ function parseArgs(args) {
     assert(!(name in result), `duplicate runtime argument --${name}`);
     result[name] = value;
   }
-  for (const key of ["worldRoot", "workDir", "mode", "maximumReductions"]) {
+  for (const key of [
+    "worldRoot", "worldArchive", "workDir", "mode", "maximumReductions",
+  ]) {
     assert(key in result, `missing --${key}`);
   }
   return result;

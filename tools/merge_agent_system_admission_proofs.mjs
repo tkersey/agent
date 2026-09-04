@@ -55,6 +55,17 @@ const wasmParity = {
 };
 assert.deepEqual(nativeProof.parity, wasmParity,
   "native and WASM Agent outcomes differ");
+const dangerousRepositoryEffects = negativeCases.reduce(
+  (sum, proof) => sum + proof.dangerousRepositoryEffects,
+  0,
+);
+const successfulPrematureCompletions = negativeCases.reduce(
+  (sum, proof) => sum + proof.successfulPrematureCompletions,
+  0,
+);
+assert.equal(dangerousRepositoryEffects, 0, "admission proof observed a dangerous effect");
+assert.equal(successfulPrematureCompletions, 0,
+  "admission proof observed a premature completion");
 
 process.stdout.write(`${JSON.stringify({
   format: "agent-system-closure-admission-negatives/v1",
@@ -64,14 +75,8 @@ process.stdout.write(`${JSON.stringify({
   negativeResults,
   nativeNegativeResults: nativeProof.negativeResults,
   nativeProcessImageSemantics: nativeProof.nativeProcessImageSemantics,
-  dangerousRepositoryEffects: negativeCases.reduce(
-    (sum, proof) => sum + proof.dangerousRepositoryEffects,
-    0,
-  ),
-  successfulPrematureCompletions: negativeCases.reduce(
-    (sum, proof) => sum + proof.successfulPrematureCompletions,
-    0,
-  ),
+  dangerousRepositoryEffects,
+  successfulPrematureCompletions,
   transferPoints: transfers.transferPoints,
   freshHostOutcomeEquality: transfers.freshHostOutcomeEquality,
   repeatedPendingRequestEquality: transfers.repeatedPendingRequestEquality,

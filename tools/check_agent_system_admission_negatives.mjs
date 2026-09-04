@@ -208,12 +208,16 @@ function writeStdout(value) {
 }
 
 function parseArgs(args) {
+  const admitted = new Set(["worldRoot", "image", "initial", "mode", "case"]);
   const result = {};
   for (let index = 0; index < args.length; index += 2) {
     const key = args[index];
     const value = args[index + 1];
     assert(key?.startsWith("--") && value !== undefined, "invalid arguments");
-    result[toCamel(key.slice(2))] = value;
+    const name = toCamel(key.slice(2));
+    assert(admitted.has(name), `unknown admission-check argument --${key.slice(2)}`);
+    assert(!(name in result), `duplicate admission-check argument --${key.slice(2)}`);
+    result[name] = value;
   }
   for (const key of ["worldRoot", "image", "initial"]) assert(key in result, `missing --${key}`);
   return result;

@@ -56,6 +56,8 @@ assert.equal(marginalsInput.format, "agent-system-economy-marginals/v1");
 assert.equal(sourceMap.format, "agent-bpi1-source-map/v1");
 assert.equal(admission.format, "agent-system-closure-admission-negatives/v1");
 assert.equal(admission.result, "passed");
+assert.equal(admission.dangerousRepositoryEffects, 0);
+assert.equal(admission.successfulPrematureCompletions, 0);
 assert.equal(historicalEvidence.format, "agent-system-economy-obstruction/v1");
 
 const fixture = distribution.execution;

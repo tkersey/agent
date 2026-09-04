@@ -142,6 +142,7 @@ try {
     const result = spawnSync(process.execPath, [
       join(root, "run.mjs"),
       "--world-root", resolve(options.worldRoot),
+      "--world-archive", resolve(options.worldArchive),
       "--mode", "fixture",
       "--work-dir", workDir,
     ], {
@@ -226,7 +227,7 @@ try {
       maxBuffer: 8 * 1024 * 1024,
     });
     assert.notEqual(tamperedResult.status, 0, "tampered extraction was admitted");
-    assert.match(tamperedResult.stderr, /distribution checksum mismatch: initial-args\.bin/);
+    assert.match(tamperedResult.stderr, /executed bytes differ from archive: initial-args\.bin/);
     assert.deepEqual(await readdir(tamperedWork), []);
     extractionBindingNegative = "passed";
 
@@ -252,7 +253,7 @@ try {
       maxBuffer: 8 * 1024 * 1024,
     });
     assert.notEqual(unsignedResult.status, 0, "unsigned extraction file was admitted");
-    assert.match(unsignedResult.stderr, /distribution inventory differs/);
+    assert.match(unsignedResult.stderr, /executed root inventory differs from the authenticated archive/);
     assert.deepEqual(await readdir(unsignedWork), []);
     extractionInventoryNegative = "passed";
   }

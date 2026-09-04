@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -9,6 +12,7 @@ function run(extra) {
   return spawnSync(process.execPath, [
     runner,
     "--world-root", "unused-world",
+    "--world-archive", "unused-archive",
     "--work-dir", "unused-work",
     "--mode", "fixture",
     ...extra,
@@ -25,4 +29,26 @@ test("scheduler rejects duplicate arguments before execution", () => {
   const result = run(["--mode", "fixture"]);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /duplicate scheduler argument --mode/);
+});
+
+test("live endpoint admission precedes workspace effects", () => {
+  const work = mkdtempSync(join(tmpdir(), "agent-endpoint-preflight-"));
+  try {
+    const result = spawnSync(process.execPath, [
+      runner,
+      "--world-root", "unused-world",
+      "--world-archive", "unused-archive",
+      "--work-dir", work,
+      "--mode", "live",
+      "--endpoint", "https://example.com/v1/responses",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, OPENAI_API_KEY: "fixture-secret" },
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /credentialed model endpoint must be the OpenAI Responses endpoint/);
+    assert.deepEqual(readdirSync(work), []);
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
 });

@@ -109,6 +109,7 @@ test/compile_fail/system_duplicate_action_name.zig
 test/compile_fail/system_duplicate_effect_identity.zig
 test/compile_fail/system_effect_payload_mismatch.zig
 test/compile_fail/system_effect_site_ordinal.zig
+test/compile_fail/system_epistemics_rewrites_flow.zig
 test/compile_fail/system_fixture_v3.zig
 test/compile_fail/system_forged_epistemics.zig
 test/compile_fail/system_forged_model.zig
@@ -121,6 +122,7 @@ test/compile_fail/system_missing_descriptor.zig
 test/compile_fail/system_prompt_type_mismatch.zig
 test/compile_fail/system_provider_envelope_too_small.zig
 test/compile_fail/system_reserved_model_effect.zig
+test/compile_fail/system_unknown_failure_mapping.zig
 test/compile_fail/system_unknown_field.zig
 test/compile_fail/system_unknown_representation_field.zig
 test/compile_fail/system_zero_response_bytes.zig

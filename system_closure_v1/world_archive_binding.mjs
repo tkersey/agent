@@ -38,18 +38,37 @@ export async function assertWorldRootMatchesArchive({
   worldVersion,
   maximumExpandedBytes = 32 * 1024 * 1024,
 }) {
-  const archiveRoot = `world-v${worldVersion}-process-host-runtime`;
+  return assertRootMatchesArchive({
+    root: worldRoot,
+    archiveBytes,
+    archiveRoot: `world-v${worldVersion}-process-host-runtime`,
+    maximumExpandedBytes,
+  });
+}
+
+export async function assertRootMatchesArchive({
+  root,
+  archiveBytes,
+  archiveRoot,
+  maximumExpandedBytes,
+}) {
   const files = parseTar(gunzipSync(archiveBytes, {
     maxOutputLength: maximumExpandedBytes,
   }), archiveRoot, maximumExpandedBytes);
-  const disk = await readTree(resolve(worldRoot));
+  const disk = await readTree(
+    resolve(root),
+    256,
+    maximumExpandedBytes,
+    16,
+  );
   assert.deepEqual([...disk.keys()], [...files.keys()],
-    "executed World root inventory differs from the authenticated archive");
+    "executed root inventory differs from the authenticated archive");
   for (const [name, archived] of files) {
     const actual = disk.get(name);
-    assert.equal(actual.mode, archived.mode, `executed World mode differs from archive: ${name}`);
-    assert.deepEqual(actual.bytes, archived.bytes, `executed World bytes differ from archive: ${name}`);
+    assert.equal(actual.mode, archived.mode, `executed mode differs from archive: ${name}`);
+    assert.deepEqual(actual.bytes, archived.bytes, `executed bytes differ from archive: ${name}`);
   }
+  return disk;
 }
 
 function parseTar(bytes, root, maximumExpandedBytes) {
@@ -88,29 +107,35 @@ function parseTar(bytes, root, maximumExpandedBytes) {
   return new Map([...files].sort(([left], [right]) => compareUtf8(left, right)));
 }
 
-async function readTree(root) {
+async function readTree(root, maximumEntries, maximumBytes, maximumDepth) {
   const files = [];
-  async function walk(relative) {
+  let entriesSeen = 0;
+  let bytesSeen = 0;
+  async function walk(relative, depth) {
+    assert(depth <= maximumDepth, "executed tree depth limit exceeded");
     const directory = relative === "" ? root : join(root, ...relative.split("/"));
     const entries = await readdir(directory, { withFileTypes: true });
     entries.sort((left, right) => compareUtf8(left.name, right.name));
     for (const entry of entries) {
+      assert(entriesSeen++ < maximumEntries, "executed tree entry limit exceeded");
       const name = relative === "" ? entry.name : `${relative}/${entry.name}`;
       assert(safeRelative(name), `unsafe executed World path: ${name}`);
       const path = join(root, ...name.split("/"));
       const stat = await lstat(path);
       assert(!stat.isSymbolicLink(), `executed World link is forbidden: ${name}`);
-      if (stat.isDirectory()) await walk(name);
+      if (stat.isDirectory()) await walk(name, depth + 1);
       else {
         assert(stat.isFile(), `executed World entry is not regular: ${name}`);
+        bytesSeen += Number(stat.size);
+        assert(bytesSeen <= maximumBytes, "executed tree aggregate size limit exceeded");
         files.push([name, {
           mode: stat.mode & 0o777,
-          bytes: await readBoundedRegularFile(path, 16 * 1024 * 1024, `World file ${name}`),
+          bytes: await readBoundedRegularFile(path, maximumBytes, `executed file ${name}`),
         }]);
       }
     }
   }
-  await walk("");
+  await walk("", 0);
   return new Map(files.sort(([left], [right]) => compareUtf8(left, right)));
 }
 

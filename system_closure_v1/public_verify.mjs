@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  assertRootMatchesArchive,
   assertWorldRootMatchesArchive,
   readBoundedRegularFile,
 } from "./world_archive_binding.mjs";
@@ -15,8 +16,6 @@ const worldRoot = resolve(options.worldRoot);
 const workRoot = resolve(options.workRoot);
 assert.deepEqual(await readdir(workRoot), [], "--work-root must be empty");
 
-const identityBytes = await readFile(join(distributionRoot, "release_identity.json"));
-const identity = JSON.parse(identityBytes.toString("utf8"));
 const receipt = JSON.parse((await readBoundedRegularFile(
   options.agentReceipt,
   64 * 1024,
@@ -27,6 +26,14 @@ const agentArchive = await readBoundedRegularFile(
   2 * 1024 * 1024,
   "Agent archive",
 );
+const distributionFiles = await assertRootMatchesArchive({
+  root: distributionRoot,
+  archiveBytes: agentArchive,
+  archiveRoot: "agent-v3.0.0-system-closure-v1",
+  maximumExpandedBytes: 2 * 1024 * 1024,
+});
+const identityBytes = distributionFiles.get("release_identity.json").bytes;
+const identity = JSON.parse(identityBytes.toString("utf8"));
 const worldArchive = await readBoundedRegularFile(
   options.worldArchive,
   16 * 1024 * 1024,
@@ -48,7 +55,7 @@ await assertWorldRootMatchesArchive({
   archiveBytes: worldArchive,
   worldVersion: identity.world.version,
 });
-const checksumsBytes = await readFile(join(distributionRoot, "checksums.sha256"));
+const checksumsBytes = distributionFiles.get("checksums.sha256").bytes;
 assert.equal(
   sha256(checksumsBytes),
   receipt.checksumsSha256,
@@ -57,16 +64,13 @@ assert.equal(
 const distributionChecksums = parseChecksums(checksumsBytes);
 assert.equal(distributionChecksums.size, receipt.inventoryCount - 1);
 assert.deepEqual(
-  await distributionInventory(distributionRoot),
+  [...distributionFiles.keys()],
   [...distributionChecksums.keys(), "checksums.sha256"].sort(compareUtf8),
   "distribution inventory differs from the supplied Agent receipt",
 );
 for (const [name, digest] of distributionChecksums) {
-  const path = join(distributionRoot, name);
-  const stat = await lstat(path);
-  assert(stat.isFile() && !stat.isSymbolicLink(), `distribution file is not regular: ${name}`);
   assert.equal(
-    sha256(await readFile(path)),
+    sha256(distributionFiles.get(name).bytes),
     digest,
     `distribution checksum mismatch: ${name}`,
   );
@@ -86,6 +90,7 @@ await mkdir(fixtureWork);
 const fixture = runJson([
   join(distributionRoot, "run.mjs"),
   "--world-root", worldRoot,
+  "--world-archive", resolve(options.worldArchive),
   "--mode", "fixture",
   "--work-dir", fixtureWork,
 ], "public fixture");
@@ -106,6 +111,7 @@ await mkdir(censusWork);
 const census = runJson([
   join(distributionRoot, "run.mjs"),
   "--world-root", worldRoot,
+  "--world-archive", resolve(options.worldArchive),
   "--mode", "fixture",
   "--work-dir", censusWork,
   "--census-output", resolve(options.censusOutput),
@@ -153,6 +159,7 @@ const checkpointKey = "7f".repeat(32);
 const first = spawnSync(process.execPath, [
   join(distributionRoot, "runtime.mjs"),
   "--worldRoot", worldRoot,
+  "--worldArchive", resolve(options.worldArchive),
   "--workDir", checkpointWork,
   "--mode", "fixture",
   "--maximumReductions", "1",
@@ -168,6 +175,7 @@ assert.equal(checkpoint.repositoryRequests, 0);
 const resumed = spawnSync(process.execPath, [
   join(distributionRoot, "runtime.mjs"),
   "--worldRoot", worldRoot,
+  "--worldArchive", resolve(options.worldArchive),
   "--workDir", checkpointWork,
   "--mode", "live",
   "--maximumReductions", "1",
@@ -253,25 +261,6 @@ function parseChecksums(bytes) {
     "model_protocol_adapter.mjs", "repository_environment.mjs",
   ]) assert(result.has(required), `missing distribution checksum: ${required}`);
   return result;
-}
-
-async function distributionInventory(root) {
-  const files = [];
-  async function addTree(directory, prefix) {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      const path = join(directory, entry.name);
-      const name = prefix.length === 0 ? entry.name : `${prefix}/${entry.name}`;
-      const stat = await lstat(path);
-      assert(!stat.isSymbolicLink(), `distribution link is forbidden: ${name}`);
-      if (entry.isDirectory()) await addTree(path, name);
-      else if (entry.isFile()) {
-        files.push(name);
-        assert(files.length <= 64, "distribution file limit exceeded");
-      } else throw new Error(`unsupported distribution entry: ${name}`);
-    }
-  }
-  await addTree(root, "");
-  return files.sort(compareUtf8);
 }
 
 function compareUtf8(left, right) {

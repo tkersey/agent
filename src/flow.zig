@@ -345,6 +345,56 @@ pub fn Flow(comptime config: anytype) type {
             return result;
         }
 
+        pub fn dataPrefixIsPreserved(
+            self: *const Self,
+            before: *const Self,
+        ) bool {
+            if (self.value_count < before.value_count or
+                self.instruction_count < before.instruction_count or
+                self.operand_count < before.operand_count or
+                self.block_count < before.block_count or
+                self.function_count < before.function_count or
+                self.parameter_count < before.parameter_count or
+                self.request_count < before.request_count or
+                self.edge_argument_count < before.edge_argument_count or
+                self.current_phase != before.current_phase)
+            {
+                return false;
+            }
+            for (self.value_types[0..before.value_count], 0..) |value, index| {
+                if (!std.meta.eql(value, before.value_types[index])) return false;
+            }
+            for (self.instructions[0..before.instruction_count], 0..) |value, index| {
+                if (!std.meta.eql(value, before.instructions[index])) return false;
+            }
+            if (!std.mem.eql(
+                boundary.ir.ValueId,
+                self.operands[0..before.operand_count],
+                before.operands[0..before.operand_count],
+            )) return false;
+            for (self.functions[0..before.function_count], 0..) |value, index| {
+                if (!std.meta.eql(value, before.functions[index])) return false;
+            }
+            for (self.blocks[0..before.block_count], 0..) |value, index| {
+                if (value.id == before.current_block) continue;
+                if (!std.meta.eql(value, before.blocks[index])) return false;
+            }
+            if (!std.mem.eql(
+                boundary.ir.ValueId,
+                self.parameters[0..before.parameter_count],
+                before.parameters[0..before.parameter_count],
+            )) return false;
+            if (!std.mem.eql(
+                boundary.ir.ValueId,
+                self.requests[0..before.request_count],
+                before.requests[0..before.request_count],
+            )) return false;
+            for (self.edge_arguments[0..before.edge_argument_count], 0..) |value, index| {
+                if (!std.meta.eql(value, before.edge_arguments[index])) return false;
+            }
+            return true;
+        }
+
         pub fn counts(self: *const Self) struct {
             values: usize,
             blocks: usize,

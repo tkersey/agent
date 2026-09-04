@@ -2,6 +2,7 @@ const fixture = @import("react_system_fixture.zig");
 
 const Invalid = fixture.System(.{
     .response_bytes = 1024,
+    .maximum_provider_response_bytes = 8192,
     .maximum_provider_response_byets = 8192,
     .image_bytes = 256 * 1024,
     .schema_types = .{ fixture.Goal, fixture.Result, fixture.Action, fixture.Observation, fixture.Failure },

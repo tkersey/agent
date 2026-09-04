@@ -164,6 +164,7 @@ const System = agent.system(.{
     },
     .representation = .{
         .response_bytes = 1024,
+        .maximum_provider_response_bytes = 8192,
         .image_bytes = 256 * 1024,
         .flow_limits = agent.FlowLimits{
             .maximum_functions = 16,

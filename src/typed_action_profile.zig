@@ -118,6 +118,30 @@ fn policyDeniedFailure(comptime failures: anytype) @TypeOf(failures.invalid_vari
     return failures.invalid_variant;
 }
 
+fn assertFailureFields(comptime failures: anytype) void {
+    inline for (std.meta.fields(@TypeOf(failures))) |field| {
+        if (!std.mem.eql(u8, field.name, "arithmetic_overflow") and
+            !std.mem.eql(u8, field.name, "capacity_exceeded") and
+            !std.mem.eql(u8, field.name, "invalid_index") and
+            !std.mem.eql(u8, field.name, "invalid_utf8") and
+            !std.mem.eql(u8, field.name, "malformed") and
+            !std.mem.eql(u8, field.name, "invalid_variant") and
+            !std.mem.eql(u8, field.name, "incomplete") and
+            !std.mem.eql(u8, field.name, "response_error") and
+            !std.mem.eql(u8, field.name, "unsupported") and
+            !std.mem.eql(u8, field.name, "multiple_calls") and
+            !std.mem.eql(u8, field.name, "refusal") and
+            !std.mem.eql(u8, field.name, "unknown_action") and
+            !std.mem.eql(u8, field.name, "transport") and
+            !std.mem.eql(u8, field.name, "http") and
+            !std.mem.eql(u8, field.name, "policy_denied"))
+        {
+            @compileError("Agent failure mapping contains unknown field '" ++
+                field.name ++ "'");
+        }
+    }
+}
+
 fn fixedValues(comptime failures: anytype) @TypeOf(.{
     failures.arithmetic_overflow,
     failures.capacity_exceeded,
@@ -174,6 +198,7 @@ pub fn Profile(
     comptime failures: anytype,
 ) type {
     comptime assertSupportedActionPayloads(Action);
+    comptime assertFailureFields(failures);
     const action_count = @typeInfo(Action).@"union".fields.len;
     const FieldName = boundary.Text(256);
     const FieldKind = enum {

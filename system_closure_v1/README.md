@@ -10,7 +10,8 @@ With the released World runtime extracted separately, create an empty work
 directory and run:
 
 ```sh
-node run.mjs --world-root /path/to/world-runtime --mode fixture \
+node run.mjs --world-root /path/to/world-runtime \
+  --world-archive /path/to/world-v4.1.0-process-host-runtime.tar.gz --mode fixture \
   --work-dir /path/to/empty-work-directory
 ```
 
@@ -24,7 +25,8 @@ path. This uses the same image, adapter, fixture, and World runtime while
 recording every State-bearing outcome against the nonsemantic source map:
 
 ```sh
-node run.mjs --world-root /path/to/world-runtime --mode fixture \
+node run.mjs --world-root /path/to/world-runtime \
+  --world-archive /path/to/world-v4.1.0-process-host-runtime.tar.gz --mode fixture \
   --work-dir /path/to/empty-work-directory \
   --census-output /path/to/process-census.json
 ```
@@ -67,6 +69,7 @@ endpoint, credential, World runtime, and isolated workspace authority:
 ```sh
 OPENAI_API_KEY=... node run.mjs \
   --world-root /path/to/world-runtime \
+  --world-archive /path/to/world-v4.1.0-process-host-runtime.tar.gz \
   --mode live \
   --endpoint https://api.openai.com/v1/responses \
   --work-dir /path/to/empty-work-directory

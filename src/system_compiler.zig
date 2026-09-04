@@ -5,17 +5,15 @@ const flow_module = @import("flow.zig");
 const model_effect = @import("model_effect.zig");
 const typed_action_decode = @import("typed_action_decode.zig");
 
-fn assertEffectFree(
-    comptime label: []const u8,
-    flow: anytype,
-    before_suspensions: anytype,
-    before_returns: anytype,
-) void {
-    if (!std.meta.eql(flow.suspensionSnapshot(), before_suspensions)) {
+fn assertEffectFree(comptime label: []const u8, flow: anytype, before: anytype) void {
+    if (!std.meta.eql(flow.suspensionSnapshot(), before.suspensionSnapshot())) {
         @compileError(label ++ " must not introduce a residual effect");
     }
-    if (!std.meta.eql(flow.returnSnapshot(), before_returns)) {
+    if (!std.meta.eql(flow.returnSnapshot(), before.returnSnapshot())) {
         @compileError(label ++ " must not return the enclosing system");
+    }
+    if (!flow.dataPrefixIsPreserved(before)) {
+        @compileError(label ++ " must not rewrite compiler-owned data carriers");
     }
 }
 
@@ -81,8 +79,7 @@ fn activeSkills(
 ) [source.skills.len]flow_module.Value(bool) {
     var result: [source.skills.len]flow_module.Value(bool) = undefined;
     inline for (source.skills, 0..) |Skill, index| {
-        const before_suspensions = flow.suspensionSnapshot();
-        const before_returns = flow.returnSnapshot();
+        const before = flow.*;
         result[index] = if (Skill.activation == .always)
             flow.constant(bool, context.true_index)
         else
@@ -90,8 +87,7 @@ fn activeSkills(
         assertEffectFree(
             "agent epistemics emitSkillActive",
             flow,
-            before_suspensions,
-            before_returns,
+            &before,
         );
     }
     return result;
@@ -571,9 +567,10 @@ fn ReactBodyMode(
         @compileError("Agent 3 default ReAct currently requires a Text Goal prompt");
     }
     if (!@hasField(@TypeOf(source.representation), "response_bytes") or
+        !@hasField(@TypeOf(source.representation), "maximum_provider_response_bytes") or
         !@hasField(@TypeOf(source.representation), "schema_types"))
     {
-        @compileError("Agent 3 ReAct representation requires response_bytes and schema_types");
+        @compileError("Agent 3 ReAct representation requires response_bytes, maximum_provider_response_bytes, and schema_types");
     }
     inline for (std.meta.fields(@TypeOf(source.representation))) |field| {
         if (!std.mem.eql(u8, field.name, "response_bytes") and
@@ -628,10 +625,9 @@ fn ReactBodyMode(
     flow.setPhase(.agent_initialization);
     const goal = flow.begin(source.Goal);
     flow.setPhase(.agent_initialization);
-    const before_initial_suspensions = flow.suspensionSnapshot();
-    const before_initial_returns = flow.returnSnapshot();
+    const before_initial = flow;
     const memory = Epistemics.emitInitial(source, &flow, goal, Context);
-    assertEffectFree("agent epistemics emitInitial", &flow, before_initial_suspensions, before_initial_returns);
+    assertEffectFree("agent epistemics emitInitial", &flow, &before_initial);
     const initial_state = flow.productConstruct(RuntimeState, .{ goal, memory });
     const loop = flow.block(.loop_header, .{RuntimeState});
     flow.jump(loop, .{initial_state});
@@ -639,17 +635,15 @@ fn ReactBodyMode(
     const current_goal = flow.productExtract(0, runtime_state);
     const current_memory = flow.productExtract(1, runtime_state);
     flow.setPhase(.agent_memory_projection);
-    const before_project_suspensions = flow.suspensionSnapshot();
-    const before_project_returns = flow.returnSnapshot();
+    const before_project = flow;
     const view: flow_module.Value(DecisionView) = Epistemics.emitProject(
         source,
         &flow,
         current_memory,
     );
-    assertEffectFree("agent epistemics emitProject", &flow, before_project_suspensions, before_project_returns);
+    assertEffectFree("agent epistemics emitProject", &flow, &before_project);
     flow.setPhase(.agent_prompt_render);
-    const before_prompt_suspensions = flow.suspensionSnapshot();
-    const before_prompt_returns = flow.returnSnapshot();
+    const before_prompt = flow;
     const emitted_prompt = Epistemics.emitPrompt(
         source,
         &flow,
@@ -661,22 +655,21 @@ fn ReactBodyMode(
         @compileError("agent epistemics emitPrompt result differs from PromptType");
     }
     const prompt: flow_module.Value(Prompt) = emitted_prompt;
-    assertEffectFree("agent epistemics emitPrompt", &flow, before_prompt_suspensions, before_prompt_returns);
+    assertEffectFree("agent epistemics emitPrompt", &flow, &before_prompt);
     flow.setPhase(.agent_skill_activation);
     const active_skills = activeSkills(source, Epistemics, &flow, current_memory, Context);
     flow.setPhase(.agent_tool_selection);
     const offered_actions = offeredActions(source, &flow, active_skills, Context);
     const offered_mask = boolMask(source, &flow, offered_actions, Context);
     flow.setPhase(.agent_model_request);
-    const before_model_suspensions = flow.suspensionSnapshot();
-    const before_model_returns = flow.returnSnapshot();
+    const before_model = flow;
     const model_index = Epistemics.emitModelIndex(
         source,
         &flow,
         current_memory,
         Context,
     );
-    assertEffectFree("agent epistemics emitModelIndex", &flow, before_model_suspensions, before_model_returns);
+    assertEffectFree("agent epistemics emitModelIndex", &flow, &before_model);
     const messages = semanticMessages(
         source,
         Profile,
@@ -849,8 +842,7 @@ fn ReactBodyMode(
         flow.setPhase(.agent_action_admission);
         const resumed_state = response_values[1];
         const resumed_memory = flow.productExtract(1, resumed_state);
-        const before_policy_suspensions = flow.suspensionSnapshot();
-        const before_policy_returns = flow.returnSnapshot();
+        const before_policy = flow;
         const policy_allowed = Epistemics.emitActionAllowed(
             source,
             &flow,
@@ -858,7 +850,7 @@ fn ReactBodyMode(
             selected,
             Context,
         );
-        assertEffectFree("agent epistemics emitActionAllowed", &flow, before_policy_suspensions, before_policy_returns);
+        assertEffectFree("agent epistemics emitActionAllowed", &flow, &before_policy);
         const allowed = flow.booleanAnd(
             selectedWasOffered(
                 source,
@@ -914,8 +906,7 @@ fn ReactBodyMode(
                         performed.value,
                     );
                     const performed_memory = flow.productExtract(1, performed.carried[0]);
-                    const before_observe_suspensions = flow.suspensionSnapshot();
-                    const before_observe_returns = flow.returnSnapshot();
+                    const before_observe = flow;
                     const next_memory = Epistemics.emitObserve(
                         source,
                         &flow,
@@ -923,7 +914,7 @@ fn ReactBodyMode(
                         observation,
                         Context,
                     );
-                    assertEffectFree("agent epistemics emitObserve", &flow, before_observe_suspensions, before_observe_returns);
+                    assertEffectFree("agent epistemics emitObserve", &flow, &before_observe);
                     const next_state = flow.productReplace(1, performed.carried[0], next_memory);
                     if (source.strategy.repeat_after_observation) {
                         flow.jump(loop, .{next_state});
@@ -933,14 +924,13 @@ fn ReactBodyMode(
                 },
                 .local => {
                     flow.setPhase(.agent_tool_dispatch);
-                    const before_local_suspensions = flow.suspensionSnapshot();
-                    const before_local_returns = flow.returnSnapshot();
+                    const before_local = flow;
                     const local_payload = Descriptor.Local.emit(
                         &flow,
                         payload,
                         Context,
                     );
-                    assertEffectFree("agent local action emit", &flow, before_local_suspensions, before_local_returns);
+                    assertEffectFree("agent local action emit", &flow, &before_local);
                     flow.setPhase(.agent_observation_fold);
                     const observation = flow.sumConstruct(
                         source.Observation,
@@ -948,8 +938,7 @@ fn ReactBodyMode(
                         local_payload,
                     );
                     const local_memory = flow.productExtract(1, values[1]);
-                    const before_observe_suspensions = flow.suspensionSnapshot();
-                    const before_observe_returns = flow.returnSnapshot();
+                    const before_observe = flow;
                     const next_memory = Epistemics.emitObserve(
                         source,
                         &flow,
@@ -957,7 +946,7 @@ fn ReactBodyMode(
                         observation,
                         Context,
                     );
-                    assertEffectFree("agent epistemics emitObserve", &flow, before_observe_suspensions, before_observe_returns);
+                    assertEffectFree("agent epistemics emitObserve", &flow, &before_observe);
                     const next_state = flow.productReplace(1, values[1], next_memory);
                     if (source.strategy.repeat_after_observation) {
                         flow.jump(loop, .{next_state});
@@ -971,8 +960,7 @@ fn ReactBodyMode(
                         flow.failValue(flow.constant(source.Failure, Context.policy_denied_failure_index));
                     } else {
                         const final_memory = flow.productExtract(1, values[1]);
-                        const before_final_suspensions = flow.suspensionSnapshot();
-                        const before_final_returns = flow.returnSnapshot();
+                        const before_final = flow;
                         const final_allowed = Epistemics.emitFinalAllowed(
                             source,
                             &flow,
@@ -980,7 +968,7 @@ fn ReactBodyMode(
                             payload,
                             Context,
                         );
-                        assertEffectFree("agent epistemics emitFinalAllowed", &flow, before_final_suspensions, before_final_returns);
+                        assertEffectFree("agent epistemics emitFinalAllowed", &flow, &before_final);
                         const complete = flow.block(.terminal_handoff, .{source.Result});
                         flow.branch(final_allowed, complete, .{payload}, denied, .{});
                         flow.setPhase(.agent_completion);

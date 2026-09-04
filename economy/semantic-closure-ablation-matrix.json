@@ -52,8 +52,8 @@
   "dominantTerms": {
     "repositoryMemoryAndAdmissionOverSixToolDecoderBytes": 56350,
     "strictRepositoryActionVerificationBytes": 1783,
-    "providerWireRemovalBytes": 160071,
-    "providerWireRemovalReductions": 19735
+    "providerWireBaselineToCorrectedBytes": 160071,
+    "providerWireBaselineToCorrectedReductions": 19735
   },
   "detailReceipts": {
     "baselineImage": "wire-closure-baseline-image.json",

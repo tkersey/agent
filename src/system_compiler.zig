@@ -575,6 +575,18 @@ fn ReactBodyMode(
     {
         @compileError("Agent 3 ReAct representation requires response_bytes and schema_types");
     }
+    inline for (std.meta.fields(@TypeOf(source.representation))) |field| {
+        if (!std.mem.eql(u8, field.name, "response_bytes") and
+            !std.mem.eql(u8, field.name, "maximum_arguments_json_bytes") and
+            !std.mem.eql(u8, field.name, "maximum_provider_response_bytes") and
+            !std.mem.eql(u8, field.name, "image_bytes") and
+            !std.mem.eql(u8, field.name, "flow_limits") and
+            !std.mem.eql(u8, field.name, "schema_types"))
+        {
+            @compileError("Agent 3 ReAct representation contains unknown field '" ++
+                field.name ++ "'");
+        }
+    }
     if (source.representation.response_bytes == 0) {
         @compileError("Agent 3 ReAct response_bytes must be positive");
     }
@@ -638,7 +650,17 @@ fn ReactBodyMode(
     flow.setPhase(.agent_prompt_render);
     const before_prompt_suspensions = flow.suspensionSnapshot();
     const before_prompt_returns = flow.returnSnapshot();
-    const prompt = Epistemics.emitPrompt(source, &flow, current_goal, view, Context);
+    const emitted_prompt = Epistemics.emitPrompt(
+        source,
+        &flow,
+        current_goal,
+        view,
+        Context,
+    );
+    if (@TypeOf(emitted_prompt) != flow_module.Value(Prompt)) {
+        @compileError("agent epistemics emitPrompt result differs from PromptType");
+    }
+    const prompt: flow_module.Value(Prompt) = emitted_prompt;
     assertEffectFree("agent epistemics emitPrompt", &flow, before_prompt_suspensions, before_prompt_returns);
     flow.setPhase(.agent_skill_activation);
     const active_skills = activeSkills(source, Epistemics, &flow, current_memory, Context);

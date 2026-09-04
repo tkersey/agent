@@ -163,7 +163,6 @@ const System = agent.system(.{
         .http = Failure.http,
     },
     .representation = .{
-        .request_bytes = 4096,
         .response_bytes = 1024,
         .image_bytes = 256 * 1024,
         .flow_limits = agent.FlowLimits{

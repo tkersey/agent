@@ -61,7 +61,7 @@ if (options.mode === "negative") {
   });
   const terminal = await advanceUntilTerminal(primary, initialModel.state, result);
   assert.equal(terminal.kind, "AuthoredFailure", `${candidate.name} did not fail locally`);
-  process.stdout.write(`${JSON.stringify({
+  await writeStdout(`${JSON.stringify({
     format: "agent-system-closure-admission-negative-case/v1",
     result: "passed",
     kernelSha256: primary.sha256,
@@ -120,7 +120,7 @@ const parity = {
   pendingRepositoryRequestSha256: sha256(repositoryRequest.request),
 };
 if (options.mode === "transfers") {
-  process.stdout.write(`${JSON.stringify({
+  await writeStdout(`${JSON.stringify({
     format: "agent-system-closure-admission-transfers/v1",
     result: "passed",
     kernelSha256: primary.sha256,
@@ -199,6 +199,12 @@ function assertOutcomeEqual(left, right) {
 
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+function writeStdout(value) {
+  return new Promise((resolve, reject) => {
+    process.stdout.write(value, (error) => error ? reject(error) : resolve());
+  });
 }
 
 function parseArgs(args) {

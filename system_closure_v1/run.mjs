@@ -42,12 +42,18 @@ for (let chunk = 0; chunk < 16; chunk += 1) {
   if (result.status !== 0) throw new Error(`closure runtime chunk failed with status ${result.status}`);
   const receipt = JSON.parse(result.stdout.trim().split("\n").filter(Boolean).at(-1));
   if (receipt.result === "passed") {
-    process.stdout.write(`${JSON.stringify({ ...receipt, processTransfers: chunk })}\n`);
+    await writeStdout(`${JSON.stringify({ ...receipt, processTransfers: chunk })}\n`);
     process.exit(0);
   }
   assert.equal(receipt.result, "checkpointed");
 }
 throw new Error("closure runtime exceeded chunk limit");
+
+function writeStdout(value) {
+  return new Promise((resolve, reject) => {
+    process.stdout.write(value, (error) => error ? reject(error) : resolve());
+  });
+}
 
 function parseArgs(args) {
   const admitted = new Set([

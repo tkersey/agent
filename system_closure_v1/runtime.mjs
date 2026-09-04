@@ -41,6 +41,13 @@ assert.equal(releaseIdentity.agentVersion, "3.0.0");
 const worldRoot = resolve(options.worldRoot);
 const workRoot = resolve(options.workDir);
 const checkpointPath = join(workRoot, "checkpoint.json");
+if (options.censusOutput !== undefined) {
+  assert.notEqual(
+    resolve(options.censusOutput),
+    checkpointPath,
+    "--census-output must not alias the runtime checkpoint",
+  );
+}
 const checkpointKeyHex = process.env.AGENT_SYSTEM_CHECKPOINT_KEY;
 assert.match(checkpointKeyHex ?? "", /^[0-9a-f]{64}$/,
   "runtime requires one scheduler-owned checkpoint key");
@@ -280,7 +287,7 @@ if (terminal === undefined) {
   const checkpointMac = checkpointAuthentication(persisted, checkpointKey).toString("hex");
   await writeFile(replacement, `${JSON.stringify({ ...persisted, checkpointMac })}\n`, "utf8");
   await rename(replacement, checkpointPath);
-  process.stdout.write(`${JSON.stringify({
+  await writeStdout(`${JSON.stringify({
     format: "agent-system-closure-world-chunk/v1",
     result: "checkpointed",
     chunkReductions,
@@ -366,6 +373,7 @@ async function digestRuntimeInputs(root, fixture) {
     "process_state_census.mjs",
     "public_negatives.mjs",
     "public_verify.mjs",
+    "world_archive_binding.mjs",
     "release_identity.json",
   ];
   const records = [];

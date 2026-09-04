@@ -151,14 +151,23 @@ pub fn Profile(comptime source: anytype, comptime Prompt: type) type {
             .{minimum_arguments_json_bytes},
         ));
     }
+    const response_payload_bytes: u64 = source.representation.response_bytes;
+    const arguments_payload_bytes: u64 = maximum_arguments_json_bytes;
+    if (response_payload_bytes > std.math.maxInt(u32) - 4096 or
+        arguments_payload_bytes > std.math.maxInt(u32) - 4096)
+    {
+        @compileError("Agent provider response payload bounds exceed u32 envelope capacity");
+    }
+    const minimum_provider_response_bytes: u64 =
+        @max(response_payload_bytes, arguments_payload_bytes) + @as(u64, 4096);
     const maximum_provider_response_bytes = if (@hasField(
         @TypeOf(source.representation),
         "maximum_provider_response_bytes",
-    )) source.representation.maximum_provider_response_bytes else source.representation.response_bytes + 4096;
-    if (maximum_provider_response_bytes == 0 or
+    )) source.representation.maximum_provider_response_bytes else minimum_provider_response_bytes;
+    if (maximum_provider_response_bytes < minimum_provider_response_bytes or
         maximum_provider_response_bytes > std.math.maxInt(u32))
     {
-        @compileError("Agent maximum_provider_response_bytes must fit positive u32");
+        @compileError("Agent maximum_provider_response_bytes must contain every admitted response payload and fit u32");
     }
     const ModelId = boundary.Text(maximumModelIdLength(source.models));
     const ProtocolIdentity = boundary.Text(

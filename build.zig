@@ -192,6 +192,38 @@ pub fn build(b: *std.Build) void {
     addExpectedCompileFailure(
         b,
         compile_fail,
+        "test/compile_fail/system_unknown_representation_field.zig",
+        "Agent 3 ReAct representation contains unknown field 'maximum_provider_response_byets'",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_provider_envelope_too_small.zig",
+        "Agent maximum_provider_response_bytes must contain every admitted response payload and fit u32",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_prompt_type_mismatch.zig",
+        "agent epistemics emitPrompt result differs from PromptType",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_image_bytes_limit.zig",
+        "Agent Program image exceeds representation.image_bytes",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
         "test/compile_fail/system_forged_model.zig",
         "agent system model must be constructed by agent.model",
         agent_module,
@@ -492,7 +524,22 @@ pub fn build(b: *std.Build) void {
     emission_source_custody_test.addFileInput(
         b.path("tools/emit_agent_system_closure_v1.mjs"),
     );
+    emission_source_custody_test.addFileInput(
+        b.path("tools/release_source_identity.mjs"),
+    );
     closure_check.dependOn(&emission_source_custody_test.step);
+    const release_source_identity_test = b.addSystemCommand(&.{
+        "node",
+        "--test",
+        "test/release_source_identity.test.mjs",
+    });
+    release_source_identity_test.addFileInput(
+        b.path("test/release_source_identity.test.mjs"),
+    );
+    release_source_identity_test.addFileInput(
+        b.path("tools/release_source_identity.mjs"),
+    );
+    closure_check.dependOn(&release_source_identity_test.step);
     inline for (.{
         "system_closure_v1/run.mjs",
         "system_closure_v1/runtime.mjs",
@@ -502,6 +549,7 @@ pub fn build(b: *std.Build) void {
         "system_closure_v1/repository_environment.mjs",
         "system_closure_v1/public_negatives.mjs",
         "system_closure_v1/public_verify.mjs",
+        "system_closure_v1/world_archive_binding.mjs",
     }) |runtime_path| {
         const syntax = b.addSystemCommand(&.{ "node", "--check", runtime_path });
         syntax.addFileInput(b.path(runtime_path));
@@ -516,6 +564,7 @@ pub fn build(b: *std.Build) void {
     package_closure.step.dependOn(closure_check);
     package_closure.step.dependOn(repository_admission_step);
     package_closure.addFileInput(b.path("tools/emit_agent_system_closure_v1.mjs"));
+    package_closure.addFileInput(b.path("tools/release_source_identity.mjs"));
     package_closure.addArg("--agent-root");
     package_closure.addDirectoryArg(b.path("."));
     package_closure.addArg("--boundary-root");
@@ -551,6 +600,7 @@ pub fn build(b: *std.Build) void {
         "system_closure_v1/repository_environment.mjs",
         "system_closure_v1/public_negatives.mjs",
         "system_closure_v1/public_verify.mjs",
+        "system_closure_v1/world_archive_binding.mjs",
         "system_closure_v1/release_identity.json",
         "fixtures/repository-repair-v1/README.md",
         "fixtures/repository-repair-v1/package.json",
@@ -586,6 +636,9 @@ pub fn build(b: *std.Build) void {
     check_distribution.addFileInput(
         b.path("tools/check_agent_system_closure_distribution.mjs"),
     );
+    check_distribution.addFileInput(
+        b.path("system_closure_v1/world_archive_binding.mjs"),
+    );
     emit_closure.dependOn(&check_distribution.step);
 
     if (world_process_root != null and world_process_archive != null) {
@@ -613,6 +666,20 @@ pub fn build(b: *std.Build) void {
             b.path("fixtures/repository-repair-v1"),
         );
         world_check.dependOn(&runtime_binding_test.step);
+        const world_archive_binding_test = b.addSystemCommand(&.{
+            "node",
+            "test/world_archive_binding.test.mjs",
+        });
+        world_archive_binding_test.addFileInput(
+            b.path("test/world_archive_binding.test.mjs"),
+        );
+        world_archive_binding_test.addFileInput(
+            b.path("system_closure_v1/world_archive_binding.mjs"),
+        );
+        world_archive_binding_test.addArg(root);
+        world_archive_binding_test.addArg(archive);
+        world_archive_binding_test.addFileInput(.{ .cwd_relative = archive });
+        world_check.dependOn(&world_archive_binding_test.step);
         const run = b.addSystemCommand(&.{
             "node",
             "tools/check_agent_system_closure_distribution.mjs",
@@ -626,6 +693,7 @@ pub fn build(b: *std.Build) void {
         run.addArgs(&.{ "--world-root", root, "--world-archive", archive });
         run.addFileInput(.{ .cwd_relative = archive });
         run.addFileInput(b.path("tools/check_agent_system_closure_distribution.mjs"));
+        run.addFileInput(b.path("system_closure_v1/world_archive_binding.mjs"));
         const world_execution_proof = run.captureStdOut(.{
             .basename = "world-execution-proof.json",
         });

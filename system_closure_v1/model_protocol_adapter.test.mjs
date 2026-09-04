@@ -65,6 +65,26 @@ test("declared oversized responses cancel their unread body", async () => {
   }
 });
 
+test("oversized HTTP failures retain their provider status class", async () => {
+  const originalFetch = globalThis.fetch;
+  let cancelled = false;
+  globalThis.fetch = async () => ({
+    status: 503,
+    headers: { get: () => String(128 * 1024) },
+    body: { async cancel() { cancelled = true; } },
+  });
+  try {
+    const result = await performModelInvocation(invocationBytes(), {
+      endpoint: "http://127.0.0.1:1/v1/responses",
+    });
+    assert.equal(cancelled, true);
+    assert.equal(result.readUInt32LE(0), 3);
+    assert.equal(result.readUInt16LE(8), 503);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("decodes one self-contained semantic invocation", () => {
   const invocation = decodeModelInvocation(invocationBytes());
   assert.equal(invocation.protocol, "agent.model.protocol.openai-responses-v2");

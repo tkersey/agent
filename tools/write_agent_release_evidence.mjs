@@ -35,6 +35,7 @@ const [
 const image = await readFile(resolve(options.image));
 
 assert.equal(releaseIdentity.format, "agent-system-closure-release-identity/v1");
+assert.match(releaseIdentity.agentSourceSha256, /^[0-9a-f]{64}$/);
 assert.equal(distribution.format, "agent-system-closure-distribution-check/v1");
 assert.equal(distribution.result, "passed");
 assert.equal(distribution.publicVerification?.result, "passed");
@@ -314,6 +315,7 @@ function assertTuple(identity, fixtureProof, artifactReceipt, admissionProof) {
     [fixtureProof.worldRuntimeArchiveSha256, identity.world.archiveSha256],
     [fixtureProof.worldRuntimeArchiveByteLength, identity.world.archiveByteLength],
     [artifactReceipt.boundarySourceCommit, identity.boundary.sourceCommit],
+    [artifactReceipt.agentSourceSha256, identity.agentSourceSha256],
     [artifactReceipt.worldSourceCommit, identity.world.sourceCommit],
     [artifactReceipt.worldRuntimeArchiveSha256, identity.world.archiveSha256],
     [artifactReceipt.kernelSha256, identity.kernel.sha256],

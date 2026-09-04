@@ -233,6 +233,12 @@ pub fn system(comptime spec: anytype) type {
         }),
         Body,
     );
+    if (comptime @hasDecl(Body, "maximum_image_bytes") and
+        !@hasDecl(ProgramType, "ImageEncodingWorkspace") and
+        ProgramType.image().bytes.len > Body.maximum_image_bytes)
+    {
+        @compileError("Agent Program image exceeds representation.image_bytes");
+    }
     return struct {
         pub const Source = spec;
         pub const Goal = spec.Goal;

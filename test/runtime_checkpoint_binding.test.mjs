@@ -131,6 +131,13 @@ try {
   assert.notEqual(boundaryShift.status, 0);
   assert.match(boundaryShift.stderr, /checkpoint workspace changed after suspension/);
 
+  const aliasWork = join(root, "census-checkpoint-alias");
+  const aliasedOutput = run(worldRoot, aliasWork, 1, [
+    "--censusOutput", join(aliasWork, "checkpoint.json"),
+  ]);
+  assert.notEqual(aliasedOutput.status, 0);
+  assert.match(aliasedOutput.stderr, /census-output must not alias the runtime checkpoint/);
+
   const existingWork = join(root, "existing-work");
   const existingSource = join(existingWork, "workspace/src/range.mjs");
   await mkdir(join(existingWork, "workspace/src"), { recursive: true });

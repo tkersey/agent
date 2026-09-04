@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
+import { gitRegularTree } from "../tools/release_source_identity.mjs";
 
 const emitter = resolve("tools/emit_agent_system_closure_v1.mjs");
 
@@ -19,10 +20,13 @@ test("emission rejects a modified tracked Agent source", async (context) => {
   assertDirtyRejected(root);
 });
 
-test("emission rejects an ignored fixture source", async (context) => {
+test("Git-owned emission excludes an ignored fixture source", async (context) => {
   const root = await cleanRepository(context);
   await writeFile(join(root, "fixtures/repository-repair-v1/generated.ignored"), "hidden\n");
-  assertEmissionRejected(root, /archive source is not tracked/);
+  assert.equal(
+    gitRegularTree(root).has("fixtures/repository-repair-v1/generated.ignored"),
+    false,
+  );
 });
 
 test("emission rejects index flags that hide tracked changes", async (context) => {

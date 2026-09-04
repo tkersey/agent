@@ -62,6 +62,10 @@ export async function performModelInvocation(payload, options) {
       redirect: "error",
       signal,
     });
+    if (response.status < 200 || response.status >= 300) {
+      await response.body?.cancel();
+      return encodeProviderFailure("http_status", response.status);
+    }
     const declaredLength = response.headers.get("content-length");
     if (declaredLength !== null &&
         Number(declaredLength) > invocation.maximumProviderResponseBytes) {
@@ -73,9 +77,6 @@ export async function performModelInvocation(payload, options) {
       invocation.maximumProviderResponseBytes,
     );
     if (body === null) return encodeTransportFailure("response_too_large");
-    if (response.status < 200 || response.status >= 300) {
-      return encodeProviderFailure("http_status", response.status);
-    }
     return normalizeOpenAIResponses(
       body,
       invocation.normalizationLimits,

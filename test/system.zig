@@ -85,7 +85,6 @@ const alternate_failures = .{
     .http = AlternateFailure.http,
 };
 const alternate_representation = .{
-    .request_bytes = 4096,
     .response_bytes = 1024,
     .image_bytes = 256 * 1024,
     .flow_limits = agent.FlowLimits{
@@ -147,7 +146,7 @@ const FailureSystem = agent.system(.{
     .failures = alternate_failures,
     .representation = .{
         .response_bytes = 1024,
-        .maximum_provider_response_bytes = 4096,
+        .maximum_provider_response_bytes = 8192,
         .image_bytes = 256 * 1024,
         .flow_limits = alternate_representation.flow_limits,
         .schema_types = .{

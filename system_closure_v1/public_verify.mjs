@@ -4,6 +4,10 @@ import { createHash } from "node:crypto";
 import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  assertWorldRootMatchesArchive,
+  readBoundedRegularFile,
+} from "./world_archive_binding.mjs";
 
 const options = parseArgs(process.argv.slice(2));
 const distributionRoot = dirname(fileURLToPath(import.meta.url));
@@ -13,19 +17,37 @@ assert.deepEqual(await readdir(workRoot), [], "--work-root must be empty");
 
 const identityBytes = await readFile(join(distributionRoot, "release_identity.json"));
 const identity = JSON.parse(identityBytes.toString("utf8"));
-const receipt = JSON.parse(await readFile(resolve(options.agentReceipt), "utf8"));
-const agentArchive = await readFile(resolve(options.agentArchive));
-const worldArchive = await readFile(resolve(options.worldArchive));
+const receipt = JSON.parse((await readBoundedRegularFile(
+  options.agentReceipt,
+  64 * 1024,
+  "Agent receipt",
+)).toString("utf8"));
+const agentArchive = await readBoundedRegularFile(
+  options.agentArchive,
+  2 * 1024 * 1024,
+  "Agent archive",
+);
+const worldArchive = await readBoundedRegularFile(
+  options.worldArchive,
+  16 * 1024 * 1024,
+  "World archive",
+);
 assert.equal(receipt.format, "agent-system-closure-artifact-receipt/v1");
 assert.equal(receipt.status, "artifact-built");
 assert.equal(receipt.liveModelTestStatus, "not-run");
 assert.equal(sha256(agentArchive), receipt.archiveSha256);
 assert.equal(agentArchive.byteLength, receipt.archiveByteLength);
 assert.equal(sha256(identityBytes), receipt.releaseIdentitySha256);
+assert.equal(receipt.agentSourceSha256, identity.agentSourceSha256);
 assert.equal(sha256(worldArchive), identity.world.archiveSha256);
 assert.equal(worldArchive.byteLength, identity.world.archiveByteLength);
 assert.equal(receipt.worldRuntimeArchiveSha256, identity.world.archiveSha256);
 assert.equal(receipt.worldRuntimeArchiveByteLength, identity.world.archiveByteLength);
+await assertWorldRootMatchesArchive({
+  worldRoot,
+  archiveBytes: worldArchive,
+  worldVersion: identity.world.version,
+});
 const checksumsBytes = await readFile(join(distributionRoot, "checksums.sha256"));
 assert.equal(
   sha256(checksumsBytes),

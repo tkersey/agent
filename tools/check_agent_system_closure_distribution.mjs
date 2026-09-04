@@ -5,6 +5,10 @@ import { gunzipSync } from "node:zlib";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import {
+  assertWorldRootMatchesArchive,
+  readBoundedRegularFile,
+} from "../system_closure_v1/world_archive_binding.mjs";
 
 const ROOT = "agent-v3.0.0-system-closure-v1";
 const MAXIMUM_EXPANDED_ARCHIVE_BYTES = 2 * 1024 * 1024;
@@ -28,11 +32,24 @@ const expectedFiles = new Set([
   "runtime.mjs",
   "source-map.json",
   "system.bpi1",
+  "world_archive_binding.mjs",
 ]);
 const options = parseArgs(process.argv.slice(2));
-const archive = await readFile(options.archive);
-const checksum = await readFile(options.checksum, "utf8");
-const receipt = JSON.parse(await readFile(options.receipt, "utf8"));
+const archive = await readBoundedRegularFile(
+  options.archive,
+  2 * 1024 * 1024,
+  "Agent archive",
+);
+const checksum = (await readBoundedRegularFile(
+  options.checksum,
+  4096,
+  "Agent archive checksum",
+)).toString("utf8");
+const receipt = JSON.parse((await readBoundedRegularFile(
+  options.receipt,
+  64 * 1024,
+  "Agent receipt",
+)).toString("utf8"));
 const archiveSha256 = sha256(archive);
 assert.equal(checksum, `${archiveSha256}  agent-v3.0.0-system-closure-v1.tar.gz\n`);
 assert.equal(receipt.format, "agent-system-closure-artifact-receipt/v1");
@@ -72,6 +89,7 @@ try {
   assert.equal(sha256(releaseIdentityBytes), receipt.releaseIdentitySha256);
   assert.equal(releaseIdentity.format, "agent-system-closure-release-identity/v1");
   assert.equal(releaseIdentity.agentVersion, receipt.agentVersion);
+  assert.equal(releaseIdentity.agentSourceSha256, receipt.agentSourceSha256);
   assert.equal(releaseIdentity.agentArtifacts.imageSha256, receipt.imageSha256);
   assert.equal(releaseIdentity.agentArtifacts.imageByteLength, receipt.imageByteLength);
   assert.equal(releaseIdentity.agentArtifacts.initialArgsSha256, receipt.initialArgsSha256);
@@ -107,9 +125,18 @@ try {
   let extractionInventoryNegative = null;
   if (options.worldRoot !== undefined) {
     assert(options.worldArchive !== undefined, "--world-root requires --world-archive");
-    const worldArchive = await readFile(resolve(options.worldArchive));
+    const worldArchive = await readBoundedRegularFile(
+      options.worldArchive,
+      16 * 1024 * 1024,
+      "World archive",
+    );
     assert.equal(worldArchive.byteLength, receipt.worldRuntimeArchiveByteLength);
     assert.equal(sha256(worldArchive), receipt.worldRuntimeArchiveSha256);
+    await assertWorldRootMatchesArchive({
+      worldRoot: options.worldRoot,
+      archiveBytes: worldArchive,
+      worldVersion: releaseIdentity.world.version,
+    });
     const workDir = join(extractionRoot, "work");
     await mkdir(workDir);
     const result = spawnSync(process.execPath, [

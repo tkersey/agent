@@ -4,7 +4,15 @@ import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join, relative, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
+import {
+  agentSourceSha256FromTree,
+  gitRegularTree,
+} from "./release_source_identity.mjs";
+import {
+  assertWorldRootMatchesArchive,
+  readBoundedRegularFile,
+} from "../system_closure_v1/world_archive_binding.mjs";
 
 const ARCHIVE_NAME = "agent-v3.0.0-system-closure-v1.tar.gz";
 const ROOT = "agent-v3.0.0-system-closure-v1";
@@ -17,12 +25,20 @@ const agentGit = gitFacts(agentRoot);
 assert.equal(agentGit.clean, true,
   "active Agent source tree contains uncommitted changes");
 assertNoHiddenIndexFlags(agentRoot);
-await assertTreeTracked(agentRoot, "fixtures/repository-repair-v1");
-const buildManifest = await readFile(join(agentRoot, "build.zig.zon"), "utf8");
-const releaseIdentityBytes = await readFile(
-  join(agentRoot, "system_closure_v1/release_identity.json"),
-);
+const agentTree = gitRegularTree(agentRoot);
+const agentFile = (path) => {
+  const bytes = agentTree.get(path);
+  assert(bytes !== undefined, `release source is absent from HEAD: ${path}`);
+  return bytes;
+};
+const buildManifest = agentFile("build.zig.zon").toString("utf8");
+const releaseIdentityBytes = agentFile("system_closure_v1/release_identity.json");
 const releaseIdentity = parseReleaseIdentity(releaseIdentityBytes);
+assert.equal(
+  agentSourceSha256FromTree(agentTree),
+  releaseIdentity.agentSourceSha256,
+  "Agent source domain differs from the committed release identity",
+);
 const boundarySourceMatch = buildManifest.match(/boundary\/archive\/([0-9a-f]{40})\.tar\.gz/);
 assert(boundarySourceMatch !== null, "Boundary source commit is absent from build.zig.zon");
 const boundarySourceCommit = boundarySourceMatch[1];
@@ -63,13 +79,22 @@ if (boundaryGit !== null) {
   assert(boundaryRoot.includes("/zig-pkg/boundary-"),
     "unversioned Boundary dependency root is not admissible for emission");
 }
-const worldArchive = await readFile(worldArchivePath);
+const worldArchive = await readBoundedRegularFile(
+  worldArchivePath,
+  releaseIdentity.world.archiveByteLength,
+  "World runtime archive",
+);
 assert.equal(basename(worldArchivePath), releaseIdentity.world.archiveName,
   "World archive name differs from the release identity");
 assert.equal(worldArchive.byteLength, releaseIdentity.world.archiveByteLength,
   "World archive length differs from the release identity");
 assert.equal(sha256(worldArchive), releaseIdentity.world.archiveSha256,
   "World archive digest differs from the release identity");
+await assertWorldRootMatchesArchive({
+  worldRoot,
+  archiveBytes: worldArchive,
+  worldVersion: releaseIdentity.world.version,
+});
 const worldManifest = JSON.parse(await readFile(
   join(worldRoot, "runtime-manifest.json"),
   "utf8",
@@ -104,9 +129,21 @@ assert.equal(
   worldKernelInstance.exports.boundary_process_kernel_abi_version(),
   releaseIdentity.kernel.abiVersion,
 );
-const image = await readFile(options.image);
-const initialArgs = await readFile(options.initialArgs);
-const sourceMap = await readFile(options.sourceMap);
+const image = await readBoundedRegularFile(
+  options.image,
+  16 * 1024 * 1024,
+  "Agent Program image",
+);
+const initialArgs = await readBoundedRegularFile(
+  options.initialArgs,
+  1024 * 1024,
+  "Agent InitialArgs",
+);
+const sourceMap = await readBoundedRegularFile(
+  options.sourceMap,
+  16 * 1024 * 1024,
+  "Agent source map",
+);
 assert.equal(image.subarray(0, 8).toString("ascii"), "ABL_BPI1");
 const agentArtifacts = {
   imageSha256: sha256(image),
@@ -127,8 +164,8 @@ files.set("system.bpi1", image);
 files.set("initial-args.bin", initialArgs);
 files.set("source-map.json", sourceMap);
 files.set("release_identity.json", releaseIdentityBytes);
-files.set("LICENSE", await readFile(join(agentRoot, "LICENSE")));
-files.set("README.md", await readFile(join(agentRoot, "system_closure_v1/README.md")));
+files.set("LICENSE", agentFile("LICENSE"));
+files.set("README.md", agentFile("system_closure_v1/README.md"));
 for (const name of [
   "run.mjs",
   "runtime.mjs",
@@ -138,10 +175,14 @@ for (const name of [
   "process_state_census.mjs",
   "public_negatives.mjs",
   "public_verify.mjs",
+  "world_archive_binding.mjs",
 ]) {
-  files.set(name, await readFile(join(agentRoot, "system_closure_v1", name)));
+  files.set(name, agentFile(`system_closure_v1/${name}`));
 }
-await addTree(files, join(agentRoot, "fixtures/repository-repair-v1"), "fixture");
+for (const [path, bytes] of agentTree) {
+  const prefix = "fixtures/repository-repair-v1/";
+  if (path.startsWith(prefix)) files.set(`fixture/${path.slice(prefix.length)}`, bytes);
+}
 const runtimeInputSha256 = digestRuntimeInputs(files);
 const inventory = [...files.keys()].sort(compareUtf8);
 const checksums = inventory.map((name) => `${sha256(files.get(name))}  ${name}`).join("\n") + "\n";
@@ -156,6 +197,7 @@ const receipt = {
   publicationStatus: "pending-owner-authorization",
   agentVersion: "3.0.0",
   agentSourceCommit: agentGit.commit,
+  agentSourceSha256: releaseIdentity.agentSourceSha256,
   releaseIdentitySha256: sha256(releaseIdentityBytes),
   boundaryVersion: releaseIdentity.boundary.version,
   boundaryReleaseTag: releaseIdentity.boundary.releaseTag,
@@ -193,36 +235,6 @@ await Promise.all([
   writeOutput(options.checksum, Buffer.from(`${archiveSha256}  ${ARCHIVE_NAME}\n`)),
   writeOutput(options.receipt, receiptBytes),
 ]);
-
-async function addTree(target, sourceRoot, archiveRoot) {
-  for (const entry of (await readdir(sourceRoot, { withFileTypes: true })).sort((a, b) => compareUtf8(a.name, b.name))) {
-    const source = join(sourceRoot, entry.name);
-    const destination = `${archiveRoot}/${entry.name}`;
-    const stat = await lstat(source);
-    assert(!stat.isSymbolicLink(), `archive source link is forbidden: ${source}`);
-    if (entry.isDirectory()) await addTree(target, source, destination);
-    else if (entry.isFile()) target.set(destination, await readFile(source));
-    else throw new Error(`unsupported archive source: ${source}`);
-  }
-}
-
-async function assertTreeTracked(root, relativeRoot) {
-  const tracked = new Set(run("git", ["ls-files", "-z", "--", relativeRoot], root)
-    .split("\0").filter(Boolean));
-  async function visit(directory) {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      const source = join(directory, entry.name);
-      const stat = await lstat(source);
-      assert(!stat.isSymbolicLink(), `archive source link is forbidden: ${source}`);
-      if (entry.isDirectory()) await visit(source);
-      else if (entry.isFile()) {
-        const path = relative(root, source);
-        assert(tracked.has(path), `archive source is not tracked: ${path}`);
-      } else throw new Error(`unsupported archive source: ${source}`);
-    }
-  }
-  await visit(join(root, relativeRoot));
-}
 
 function buildTar(files) {
   const chunks = [];
@@ -344,7 +356,8 @@ function parseReleaseIdentity(bytes) {
   assert.equal(identity.format, "agent-system-closure-release-identity/v1");
   assert.equal(identity.agentVersion, "3.0.0");
   assert.deepEqual(Object.keys(identity).sort(), [
-    "agentArtifacts", "agentVersion", "boundary", "format", "kernel", "world",
+    "agentArtifacts", "agentSourceSha256", "agentVersion", "boundary", "format",
+    "kernel", "world",
   ]);
   assert.deepEqual(Object.keys(identity.agentArtifacts).sort(), [
     "imageByteLength", "imageSha256", "initialArgsByteLength",
@@ -361,6 +374,7 @@ function parseReleaseIdentity(bytes) {
     "abiVersion", "byteLength", "importCount", "sha256",
   ]);
   assert.match(identity.boundary.sourceCommit, /^[0-9a-f]{40}$/);
+  assert.match(identity.agentSourceSha256, /^[0-9a-f]{64}$/);
   assert.match(identity.agentArtifacts.imageSha256, /^[0-9a-f]{64}$/);
   assert.match(identity.agentArtifacts.initialArgsSha256, /^[0-9a-f]{64}$/);
   assert.match(identity.agentArtifacts.sourceMapSha256, /^[0-9a-f]{64}$/);

@@ -69,7 +69,10 @@ try {
   for (const [name, bytes] of files) {
     const destination = join(extractionRoot, ROOT, name);
     await mkdir(dirname(destination), { recursive: true });
-    await writeFile(destination, bytes, { flag: "wx" });
+    await writeFile(destination, bytes, {
+      flag: "wx",
+      mode: name === "run.mjs" ? 0o755 : 0o644,
+    });
   }
   const root = join(extractionRoot, ROOT);
   const checksums = parseChecksums(files.get("checksums.sha256"));

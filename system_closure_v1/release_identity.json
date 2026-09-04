@@ -3,12 +3,12 @@
   "agentVersion": "3.0.0",
   "agentSourceSha256": "35559e7c330d761815e3ce6711d50d97caf6f22923bd57c9b25e11b3fb9867df",
   "agentArtifacts": {
-    "imageSha256": "8c9257b584b638dd7084c43059d864f3bb840437c3d102d47f774c8ba8b45906",
-    "imageByteLength": 93356,
+    "imageSha256": "51cc746c20cda6aa3f643a4d916a70f7066c0270c5fcda6fc0e582080852210d",
+    "imageByteLength": 95508,
     "initialArgsSha256": "409722c8728e6c5c1212ad0e7bda5558d3604aa4f489ad74a57aa8b25b51ef10",
     "initialArgsByteLength": 275,
-    "sourceMapSha256": "e77d78f727f03e116e08552a5dc00486a5666288a46ab6b48e8b10a3c013ffd7",
-    "programTransitionDigest": "b2456500cd52dd00fda1310b3e88d8b8315fde18dc85a9adcdcd26fba75c401c"
+    "sourceMapSha256": "ebd0b76d3e10455c87575537258a233ecb88e7276387eae3fc3c69061190b002",
+    "programTransitionDigest": "8e3e13d5ff08c3a846cc45605e3df6345e96f2112e45b4ba66afe320d23d8336"
   },
   "boundary": {
     "version": "1.8.0",

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import childProcess from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
 import { cp, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -122,6 +124,34 @@ test("repository observations preserve a failing post-replacement test", async (
   assert.equal(repository.snapshot().realTestProcesses, 2);
 });
 
+test("launch failure and absent or incomplete reports are not test observations", async (context) => {
+  const workspace = await fixtureWorkspace(context);
+  const spawn = childProcess.spawnSync;
+  try {
+    for (const [status, report] of [
+      [71, ""], [1, ""], [0, ""],
+      [1, '<?xml version="1.0" encoding="UTF-8"?>\n<testsuites name="bun test" tests="4">'],
+      [0, '<?xml version="1.0" encoding="UTF-8"?>\n<testsuites name="bun test" tests="0"></testsuites>'],
+    ]) {
+      childProcess.spawnSync = () => ({
+        status, signal: null, stdout: "", stderr: "sandbox_apply: Operation not permitted",
+        output: [null, "", "", report],
+      });
+      syncBuiltinESMExports();
+      const repository = await createRepositoryEnvironment(workspace);
+      await assert.rejects(repository.resolveEffect({
+        effectSemanticIdentity: "repo.test.v1", payload: Buffer.alloc(0),
+      }), /did not report completed tests/);
+      assert.equal(repository.snapshot().baselineFailed, false);
+      assert.equal(repository.snapshot().realTestProcesses, 0);
+      assert.equal(repository.snapshot().postMutationPassed, false);
+    }
+  } finally {
+    childProcess.spawnSync = spawn;
+    syncBuiltinESMExports();
+  }
+});
+
 test("replacement still checks the actual digest before changing the file", async (context) => {
   const workspace = await fixtureWorkspace(context);
   const sourcePath = join(workspace, "src/range.mjs");
@@ -141,6 +171,7 @@ test("replacement still checks the actual digest before changing the file", asyn
 test("replacement code cannot exit, forge output, mock assertions, or pass matcher objects", async (context) => {
   const workspace = await fixtureWorkspace(context);
   const replacements = [
+    "export function normalizeRange(",
     "export function normalizeRange() { return {}; } process.exit(0);",
     "export function normalizeRange() { return {}; } console.log('4 pass\\n0 fail\\n4 expect() calls'); process.exit(0);",
     "import {mock} from 'bun:test'; mock.module('bun:test', () => ({})); export function normalizeRange(){return {};}",

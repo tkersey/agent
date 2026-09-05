@@ -63,16 +63,24 @@ export async function createRepositoryEnvironment(
       }
       case "repo.test.v1": {
         assert.equal(request.payload.length, 0);
-        testProcessCount += 1;
         const command = await repositoryTestCommand(workspaceReal);
         const result = spawnSync(command[0], command.slice(1), {
           cwd: workspaceReal,
           encoding: "utf8",
           env: { AGENT_REPOSITORY_TEST_PRELOAD: "1" },
+          stdio: ["ignore", "pipe", "pipe", "pipe"],
         });
         if (result.error !== undefined) throw result.error;
         assert.equal(result.signal, null, "repository test process was killed");
         assert(Number.isInteger(result.status), "repository test process has no exit status");
+        // Only Bun's completed report establishes test execution. A sandbox or
+        // loader failure has an exit status too, but is not baseline evidence.
+        const report = result.output[3] ?? "";
+        assert(report.startsWith('<?xml version="1.0" encoding="UTF-8"?>\n') &&
+          /<testsuites name="bun test" tests="[1-9][0-9]*"/.test(report) &&
+          report.trimEnd().endsWith("</testsuites>"),
+        "repository test runner did not report completed tests");
+        testProcessCount += 1;
         const passed = result.status === 0;
         if (!mutationApplied) {
           baselineFailed ||= !passed;
@@ -161,7 +169,8 @@ async function repositoryTestCommand(workspace) {
   const bun = await executablePath("bun");
   const preload = await realpath(fileURLToPath(import.meta.url));
   const command = [bun, "--no-install", "--no-env-file", "--no-addons", "--no-macros",
-    "--config=/dev/null", "test", "--preload", preload, "./test/range.test.mjs"];
+    "--config=/dev/null", "test", "--preload", preload,
+    "--reporter=junit", "--reporter-outfile=/dev/fd/3", "./test/range.test.mjs"];
   if (process.platform === "darwin" && existsSync("/usr/bin/sandbox-exec")) {
     const readable = ["/System/Library", "/usr/lib", "/usr/share", "/dev",
       "/private/etc", "/private/var/db/timezone", workspace, bun, preload]
@@ -181,7 +190,7 @@ async function repositoryTestCommand(workspace) {
       (deny network*)
       (deny file-read* (require-all ${allowed.map((rule) => `(require-not ${rule})`).join(" ")}))
       (deny file-read-data (require-all ${data.map((rule) => `(require-not ${rule})`).join(" ")}))
-      (deny file-write*)
+      (deny file-write* (require-not (literal "/dev/fd/3")))
       (deny process-fork)
       (deny process-exec (require-not (literal ${JSON.stringify(bun)})))`;
     return ["/usr/bin/sandbox-exec", "-p", profile, ...command];
@@ -268,20 +277,23 @@ if (process.env.AGENT_REPOSITORY_TEST_PRELOAD === "1") {
         apply(namespace.normalizeRange, undefined, parse(args)), new SetType()));
     })()`
   ).runInContext(context);
-  const module = new SourceTextModule(await readFile(source, "utf8"), {
-    context,
-    identifier: pathToFileURL(source).href,
-    // Do not leak a host Error object into the replacement's realm.
-    importModuleDynamically() { throw null; },
-  });
+  let module;
+  let evaluationFailed = false;
   try {
+    module = new SourceTextModule(await readFile(source, "utf8"), {
+      context,
+      identifier: pathToFileURL(source).href,
+      // Do not leak a host Error object into the replacement's realm.
+      importModuleDynamically() { throw null; },
+    });
     await module.link(() => { throw null; });
     await module.evaluate();
   } catch {
-    throw new Error("repository replacement evaluation failed");
+    evaluationFailed = true;
   }
   mock.module(source, () => ({
     normalizeRange(...args) {
+      if (evaluationFailed) throw new Error("repository replacement evaluation failed");
       let result;
       try { result = invoke(module.namespace, JSON.stringify(args)); }
       catch { throw new Error("repository replacement invocation failed"); }

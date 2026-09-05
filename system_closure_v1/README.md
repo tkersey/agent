@@ -30,6 +30,8 @@ properties are evaluated inside that context; only their acyclic data values
 cross back into assertions, never executable callbacks or matchers. This tests
 the fixture's data-returning function without
 giving replacement code control of the test runner or its passing observation.
+Bun's completed test report travels over a dedicated pipe. Sandbox and loader
+startup failures produce execution errors, never baseline-test evidence.
 
 For an uninterrupted source-independent Process State census, add an output
 path. This uses the same image, adapter, fixture, and World runtime while

@@ -35,6 +35,33 @@ test("repository search is total for empty Text and preserves a leading BOM", as
   assert.equal(decodeText(bom), "");
 });
 
+test("search accepts the full declared EvidenceText capacity", async (context) => {
+  const workspace = await fixtureWorkspace(context);
+  const repository = await createRepositoryEnvironment(workspace, { baselineFailed: true });
+  let digest = EXPECTED_INITIAL_DIGEST;
+  for (const length of [1900, 1901, 2047, 2048, 2049]) {
+    const prefix = `src/range.mjs:${CORRECT_SOURCE.split("\n").length}://`;
+    const replacement = CORRECT_SOURCE + "//" + "Q".repeat(length - prefix.length) + "\n";
+    assert(Buffer.byteLength(replacement) <= 4096);
+    await repository.resolveEffect({
+      effectSemanticIdentity: "repo.replace.approved.v1",
+      payload: Buffer.concat([
+        encodeText("src/range.mjs"), encodeText(digest), encodeText(replacement),
+        encodeText("Correct repair plus searchable comment."),
+      ]),
+    });
+    digest = sha256(replacement);
+    const result = repository.resolveEffect({
+      effectSemanticIdentity: "repo.search.v1", payload: encodeText("Q"),
+    });
+    if (length > 2048) {
+      await assert.rejects(result, /search result exceeds admitted evidence bound/);
+    } else {
+      assert.equal(decodeText(await result), prefix + "Q".repeat(length - prefix.length));
+    }
+  }
+});
+
 test("live replacement and completion accept free-form explanatory text", async (context) => {
   const workspace = await fixtureWorkspace(context);
   const repository = await createRepositoryEnvironment(
@@ -254,6 +281,56 @@ test("valid accessor and proxy repairs retain their fixture observations", async
     const repository = await createRepositoryEnvironment(workspace, { mutationApplied: true });
     const response = await repository.resolveEffect({effectSemanticIdentity:"repo.test.v1",payload:Buffer.alloc(0)});
     assert.equal(response[0], 1, source);
+  }
+});
+
+test("isolated fixture equality preserves native Bun value semantics", async (context) => {
+  const workspace = await fixtureWorkspace(context);
+  const fields = "{start:Math.min(a,b),end:Math.max(a,b)}";
+  const values = [
+    fields,
+    `Object.assign(Object.create(null),${fields})`,
+    `Object.assign(new(class Result{})(),${fields})`,
+    `Object.assign(new Date(0),${fields})`,
+    `Object.assign(Object.setPrototypeOf(new Date(0),null),${fields})`,
+    `Object.assign(Object.defineProperty(new Date(0),Symbol.toStringTag,{value:'Object'}),${fields})`,
+    `Object.assign(/x/,${fields})`,
+    `Object.assign(new Map(),${fields})`,
+    `Object.assign(new Set(),${fields})`,
+    `Object.assign([],${fields})`,
+    `Object.assign(new Number(0),${fields})`,
+    `Object.assign(new String(''),${fields})`,
+    `Object.assign(new Boolean(false),${fields})`,
+    `Object.assign(new Uint8Array(),${fields})`,
+    `new Proxy(${fields},{})`,
+    `new Proxy(Object.assign(new Date(0),${fields}),{})`,
+    "{get start(){return Math.min(a,b)},get end(){return Math.max(a,b)}}",
+    `Object.defineProperty(${fields},Symbol.toStringTag,{value:'Date'})`,
+    "{start:a,end:b}",
+    `({...${fields},unused:undefined})`,
+    `({...${fields},toJSON(){return {};}})`,
+  ];
+  for (const value of values) {
+    await writeFile(join(workspace, "src/range.mjs"),
+      `export function normalizeRange(a,b){return ${value};}\n`);
+    // These finite, test-owned controls run without the replacement adapter.
+    const direct = childProcess.spawnSync("bun", [
+      "--no-install", "--no-env-file", "--no-addons", "--no-macros",
+      "--config=/dev/null", "test", "./test/range.test.mjs",
+    ], {
+      cwd: workspace, env: { PATH: process.env.PATH }, encoding: "utf8",
+      timeout: 10000, killSignal: "SIGKILL",
+    });
+    assert.equal(direct.error, undefined, value);
+    assert.equal(direct.signal, null, value);
+    assert([0, 1].includes(direct.status), value);
+    assert((direct.stdout + direct.stderr).includes("Ran 4 tests across 1 file."), value);
+    const repository = await createRepositoryEnvironment(workspace, { mutationApplied: true });
+    const response = await repository.resolveEffect({
+      effectSemanticIdentity: "repo.test.v1", payload: Buffer.alloc(0),
+    });
+    assert.equal(response[0], Number(direct.status === 0), value);
+    assert.equal(repository.snapshot().postMutationPassed, direct.status === 0, value);
   }
 });
 

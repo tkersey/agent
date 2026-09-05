@@ -25,12 +25,13 @@ installation on Linux. They run without network access, with filesystem writes
 limited to one private test-report file,
 and cannot read host files outside the fixture, that report, and their declared runtime dependencies
 (including root and preload-directory entries needed by the module loader).
-The unchanged Bun fixture assertions load the replacement in a separate
-JavaScript module context without host APIs or imports. Getters and Proxy
-properties are evaluated inside that context; only their acyclic data values
-cross back into assertions, never executable callbacks or matchers. This tests
-the fixture's data-returning function without
-giving replacement code control of the test runner or its passing observation.
+The unchanged fixture loads the replacement in a separate JavaScript module
+context without host APIs or imports. Its results are held privately: each
+fixture `toEqual` comparison uses Bun's native equality operation on the original
+result and expected data constructed in that context. Only the comparison boolean
+reaches Bun's assertion and report formatting, not authored objects or callbacks.
+This preserves observable value kinds, getters, and Proxy behavior without
+giving replacement code the test runner's objects or control of its verdict.
 Bun writes its completed test report to that file, which the environment reads
 with a size bound and removes after each test run. Sandbox and loader startup
 failures produce execution errors, never baseline-test evidence.

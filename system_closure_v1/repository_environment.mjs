@@ -59,7 +59,8 @@ export async function createRepositoryEnvironment(
           }
         }
         const encoded = matches.join("\n");
-        assert(Buffer.byteLength(encoded) <= 1900, "search result exceeds admitted evidence bound");
+        // SearchResult.matches is the wire contract's EvidenceText(2048).
+        assert(Buffer.byteLength(encoded) <= 2048, "search result exceeds admitted evidence bound");
         return encodeText(encoded);
       }
       case "repo.test.v1": {
@@ -253,46 +254,31 @@ async function executablePath(name) {
   throw new Error(`repository test executable unavailable: ${name}`);
 }
 
-// Bun retains the actual fixture assertions and suite verdict. The replacement
-// gets only its own JavaScript realm, not Bun, process, module mocks, or host
-// objects. The OS sandbox above remains the filesystem/network boundary.
+// Bun retains the fixture tests and suite verdict. The replacement gets only
+// its own JavaScript realm, not Bun, process, module mocks, or host objects.
+// The OS sandbox above remains the filesystem/network boundary.
 if (process.env.AGENT_REPOSITORY_TEST_PRELOAD === "1") {
-  const { mock } = await import("bun:test");
+  const testApi = { ...await import("bun:test") };
+  const { mock, expect: nativeExpect } = testApi;
+  const deepEquals = Bun.deepEquals;
   const { createContext, Script, SourceTextModule } = await import("node:vm");
   const source = resolve("src/range.mjs");
   const context = createContext(Object.create(null), {
     codeGeneration: { strings: false, wasm: false },
   });
-  // Resolve authored properties inside their own realm. Only resulting data,
-  // never getters, Proxy traps, or matchers, enters Bun's assertion realm.
+  // Keep original values for the native equality operation. Copying a value
+  // into JSON can change the outcome of the fixture's toEqual assertion.
   const invoke = new Script(`"use strict";
     (() => {
-      const parse = JSON.parse, stringify = JSON.stringify, apply = Reflect.apply;
-      const keys = Reflect.ownKeys, get = Reflect.get, descriptor = Object.getOwnPropertyDescriptor;
-      const create = Object.create, array = Array.isArray, prototype = Object.setPrototypeOf;
-      const SetType = Set, has = Set.prototype.has, add = Set.prototype.add, remove = Set.prototype.delete;
-      function data(value, seen) {
-        if (value === null || typeof value !== 'object') {
-          switch (typeof value) { case 'function': case 'symbol': case 'bigint': throw null; }
-          return value;
-        }
-        if (apply(has, seen, [value])) throw null;
-        apply(add, seen, [value]);
-        const output = array(value) ? prototype([], null) : create(null);
-        const names = keys(value);
-        for (let i = 0; i < names.length; i += 1) {
-          const key = names[i], item = descriptor(value, key);
-          if (!item || !item.enumerable) continue;
-          if (typeof key !== 'string') throw null;
-          output[key] = data(get(value, key), seen);
-        }
-        apply(remove, seen, [value]);
-        return output;
-      }
-      return (namespace, args) => stringify(data(
-        apply(namespace.normalizeRange, undefined, parse(args)), new SetType()));
+      const parse = JSON.parse, apply = Reflect.apply;
+      return (namespace, args) => apply(namespace.normalizeRange, undefined, parse(args));
     })()`
   ).runInContext(context);
+  const expectedValue = new Script(`(() => {
+    const parse = JSON.parse;
+    return encoded => parse(encoded);
+  })()`).runInContext(context);
+  const results = new WeakMap();
   let module;
   let evaluationFailed = false;
   try {
@@ -313,8 +299,29 @@ if (process.env.AGENT_REPOSITORY_TEST_PRELOAD === "1") {
       let result;
       try { result = invoke(module.namespace, JSON.stringify(args)); }
       catch { throw new Error("repository replacement invocation failed"); }
-      return result === undefined ? undefined : JSON.parse(result);
+      const handle = Object.freeze(Object.create(null));
+      results.set(handle, result);
+      return handle;
     },
+  }));
+  mock.module("bun:test", () => ({
+    ...testApi,
+    expect: new Proxy(nativeExpect, {
+      apply(target, receiver, args) {
+        if (!results.has(args[0])) return Reflect.apply(target, receiver, args);
+        const actual = results.get(args[0]);
+        return {
+          toEqual(expected) {
+            let passed = false;
+            try { passed = deepEquals(actual, expectedValue(JSON.stringify(expected))); }
+            catch {}
+            // Bun records the assertion, but cannot call an authored formatter
+            // or expose its host-owned expected object to an authored matcher.
+            return nativeExpect(passed).toBe(true);
+          },
+        };
+      },
+    }),
   }));
 }
 

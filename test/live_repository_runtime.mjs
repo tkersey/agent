@@ -22,8 +22,15 @@ if (basename(process.argv[1]) === "runtime.mjs") installOfflineProvider();
 else await checkRuntime();
 
 function installOfflineProvider() {
-  const broken = process.env.AGENT_OFFLINE_REPAIR_CASE === "broken";
-  const replacement = broken ? "export function normalizeRange() { return {}; }\n" : source;
+  const replacements = {
+    valid: source,
+    broken: "export function normalizeRange() { return {}; }\n",
+    "early-exit": "export function normalizeRange() { return {}; } process.exit(0);\n",
+    "external-write": `import {writeFileSync} from 'node:fs';
+      writeFileSync(${JSON.stringify(process.env.AGENT_OFFLINE_ESCAPE_MARKER)}, 'escaped');\n${source}`,
+  };
+  const replacement = replacements[process.env.AGENT_OFFLINE_REPAIR_CASE];
+  assert(replacement);
   const digest = createHash("sha256").update(replacement).digest("hex");
   const actions = [
     ["list_repository", {}], ["read_file", { role: 0 }],
@@ -63,7 +70,8 @@ async function checkRuntime() {
   assert(root && worldRoot && worldArchive, "supply extracted Agent, World, and World archive");
   const workRoot = await mkdtemp(join(tmpdir(), "agent-offline-live-path-"));
   try {
-    for (const name of ["valid", "broken"]) {
+    const marker = join(workRoot, "outside-workspace-marker");
+    for (const name of ["valid", "broken", "early-exit", "external-write"]) {
       const work = join(workRoot, name);
       await mkdir(work);
       const result = spawnSync(process.execPath, [
@@ -76,13 +84,15 @@ async function checkRuntime() {
         env: {
           PATH: process.env.PATH ?? "", OPENAI_API_KEY: "offline-test-not-a-credential",
           AGENT_SYSTEM_CHECKPOINT_KEY: "ab".repeat(32), AGENT_OFFLINE_REPAIR_CASE: name,
+          AGENT_OFFLINE_ESCAPE_MARKER: marker,
         },
       });
       assert.equal(result.error, undefined);
-      if (name === "broken") {
+      if (name !== "valid") {
         assert.notEqual(result.status, 0);
         assert.match(result.stderr, /authored failure/);
         assert(!result.stdout.includes('"result":"passed"'));
+        await assert.rejects(readFile(marker), { code: "ENOENT" });
         continue;
       }
       assert.equal(result.status, 0, result.stderr);
@@ -103,6 +113,7 @@ async function checkRuntime() {
     }
     console.log(JSON.stringify({
       result: "passed", nonGoldenRepair: "passed", failedRepairCompletion: "rejected",
+      earlyExitCompletion: "rejected", workspaceEscape: "rejected",
       simulatedProvider: true, credentialedLiveModelTestStatus: "not-run",
     }));
   } finally {

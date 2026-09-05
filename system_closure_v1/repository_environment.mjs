@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { lstat, open, realpath, rename, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { constants, existsSync } from "node:fs";
+import { access, lstat, open, readFile, readlink, realpath, rename, rm } from "node:fs/promises";
+import { delimiter, dirname, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { types } from "node:util";
 
 export const EXPECTED_INITIAL_DIGEST = "8832f65e4bcf4a701dc76f310f3af34296bf8e95feb16ad70608041cb2e6dbb3";
 export const EXPECTED_FINAL_DIGEST = "8bf50f62e3a4294ef359a6b9096d66e5597ce37824b3483ddad541ee21438453";
@@ -62,10 +65,11 @@ export async function createRepositoryEnvironment(
       case "repo.test.v1": {
         assert.equal(request.payload.length, 0);
         testProcessCount += 1;
-        const result = spawnSync("bun", ["test"], {
-          cwd: workspaceRoot,
+        const command = await repositoryTestCommand(workspaceReal);
+        const result = spawnSync(command[0], command.slice(1), {
+          cwd: workspaceReal,
           encoding: "utf8",
-          env: { PATH: process.env.PATH ?? "" },
+          env: { AGENT_REPOSITORY_TEST_PRELOAD: "1" },
         });
         if (result.error !== undefined) throw result.error;
         assert.equal(result.signal, null, "repository test process was killed");
@@ -152,6 +156,135 @@ export async function createRepositoryEnvironment(
       });
     },
   });
+}
+
+async function repositoryTestCommand(workspace) {
+  const bun = await executablePath("bun");
+  const preload = await realpath(fileURLToPath(import.meta.url));
+  const command = [bun, "--no-install", "--no-env-file", "--no-addons", "--no-macros",
+    "--config=/dev/null", "test", "--preload", preload, "./test/range.test.mjs"];
+  if (process.platform === "darwin" && existsSync("/usr/bin/sandbox-exec")) {
+    const readable = ["/System/Library", "/usr/lib", "/usr/share", "/dev",
+      "/private/etc", "/private/var/db/timezone", workspace, bun, preload]
+      .filter(existsSync);
+    const paths = [...new Set(await Promise.all(readable.map((path) => realpath(path))))];
+    const ancestors = new Set(["/"]);
+    for (const path of paths) {
+      for (let parent = dirname(path); parent !== "/"; parent = dirname(parent)) ancestors.add(parent);
+    }
+    const allowed = [...paths.map((path) => `(subpath ${JSON.stringify(path)})`),
+      ...[...ancestors].map((path) => `(literal ${JSON.stringify(path)})`)];
+    const profile = `(version 1)
+      (allow default)
+      (deny network*)
+      (deny file-read* (require-all ${allowed.map((rule) => `(require-not ${rule})`).join(" ")}))
+      (deny file-write*)
+      (deny process-fork)
+      (deny process-exec (require-not (literal ${JSON.stringify(bun)})))`;
+    return ["/usr/bin/sandbox-exec", "-p", profile, ...command];
+  }
+  if (process.platform === "linux") {
+    const selected = ["/usr/bin/bwrap", "/bin/bwrap"].find(existsSync);
+    assert(selected, "repository tests require Bubblewrap");
+    const bwrap = await realpath(selected);
+    const stat = await lstat(bwrap);
+    assert(stat.isFile() && stat.uid === 0 && (stat.mode & 0o022) === 0, "untrusted Bubblewrap");
+    const directories = ["/usr", "/nix/store", "/run/current-system/sw"].filter(existsSync);
+    const links = [];
+    for (const path of ["/bin", "/sbin", "/lib", "/lib64"].filter(existsSync)) {
+      if ((await lstat(path)).isSymbolicLink()) links.push([await readlink(path), path]);
+      else directories.push(path);
+    }
+    const files = ["/etc/ld.so.cache", "/etc/localtime", bun, preload].filter(existsSync);
+    const mounts = [...directories, workspace];
+    const parents = new Set();
+    for (const path of [...mounts, ...files.map(dirname)]) {
+      for (let parent = path; parent !== "/"; parent = dirname(parent)) parents.add(parent);
+    }
+    return [bwrap, "--die-with-parent", "--new-session", "--unshare-all", "--clearenv",
+      ...[...parents].sort((a, b) => a.length - b.length).flatMap((path) => ["--dir", path]),
+      ...mounts.flatMap((path) => ["--ro-bind", path, path]),
+      ...links.flatMap(([target, path]) => ["--symlink", target, path]),
+      ...files.filter((path) => !mounts.some((root) => path.startsWith(`${root}/`)))
+        .flatMap((path) => ["--ro-bind", path, path]),
+      "--dev", "/dev", "--proc", "/proc", "--chdir", workspace,
+      "--setenv", "AGENT_REPOSITORY_TEST_PRELOAD", "1", ...command];
+  }
+  throw new Error("repository tests require an OS sandbox");
+}
+
+async function executablePath(name) {
+  for (const directory of (process.env.PATH ?? "").split(delimiter)) {
+    if (!directory) continue;
+    const path = resolve(directory, name);
+    try {
+      await access(path, constants.X_OK);
+      if ((await lstat(await realpath(path))).isFile()) return realpath(path);
+    } catch {}
+  }
+  throw new Error(`repository test executable unavailable: ${name}`);
+}
+
+// Bun retains the actual fixture assertions and suite verdict. The replacement
+// gets only its own JavaScript realm, not Bun, process, module mocks, or host
+// objects. The OS sandbox above remains the filesystem/network boundary.
+if (process.env.AGENT_REPOSITORY_TEST_PRELOAD === "1") {
+  const { mock } = await import("bun:test");
+  const { createContext, Script, SourceTextModule } = await import("node:vm");
+  const source = resolve("src/range.mjs");
+  const context = createContext(Object.create(null), {
+    codeGeneration: { strings: false, wasm: false },
+  });
+  // Only data crosses into the assertions. In particular, a replacement's
+  // getters, prototypes, or asymmetric matchers never enter Bun's test realm.
+  const invoke = new Script(`"use strict";
+    (() => {
+      const parse = JSON.parse, apply = Reflect.apply;
+      return (namespace, args) => apply(namespace.normalizeRange, undefined, parse(args));
+    })()`
+  ).runInContext(context);
+  const module = new SourceTextModule(await readFile(source, "utf8"), {
+    context,
+    identifier: pathToFileURL(source).href,
+    // Do not leak a host Error object into the replacement's realm.
+    importModuleDynamically() { throw null; },
+  });
+  try {
+    await module.link(() => { throw null; });
+    await module.evaluate();
+  } catch {
+    throw new Error("repository replacement evaluation failed");
+  }
+  mock.module(source, () => ({
+    normalizeRange(...args) {
+      let result;
+      try { result = invoke(module.namespace, JSON.stringify(args)); }
+      catch { throw new Error("repository replacement invocation failed"); }
+      return testData(result);
+    },
+  }));
+}
+
+function testData(value, seen = new Set()) {
+  if (value === null || typeof value !== "object") {
+    assert(!["function", "symbol", "bigint"].includes(typeof value), "test result must be data");
+    return value;
+  }
+  // Inspect data without executing authored Proxy traps, accessors, toJSON,
+  // iterators, or matchers in the test runner's realm.
+  assert(!types.isProxy(value) && !seen.has(value), "test result must be acyclic data");
+  seen.add(value);
+  const output = Array.isArray(value) ? [] : Object.create(null);
+  for (const key of Reflect.ownKeys(value)) {
+    const item = Object.getOwnPropertyDescriptor(value, key);
+    if (!item.enumerable) continue;
+    assert(typeof key === "string" && Object.hasOwn(item, "value"), "test result must have data properties");
+    Object.defineProperty(output, key, {
+      value: testData(item.value, seen), enumerable: true, writable: true, configurable: true,
+    });
+  }
+  seen.delete(value);
+  return output;
 }
 
 export function decodeFinalResult(bytes) {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -135,6 +136,60 @@ test("replacement still checks the actual digest before changing the file", asyn
   }));
   assert.deepEqual(await readFile(sourcePath), before);
   assert.equal(repository.snapshot().mutationApplied, false);
+});
+
+test("replacement code cannot exit, forge output, mock assertions, or pass matcher objects", async (context) => {
+  const workspace = await fixtureWorkspace(context);
+  const replacements = [
+    "export function normalizeRange() { return {}; } process.exit(0);",
+    "export function normalizeRange() { return {}; } console.log('4 pass\\n0 fail\\n4 expect() calls'); process.exit(0);",
+    "import {mock} from 'bun:test'; mock.module('bun:test', () => ({})); export function normalizeRange(){return {};}",
+    "export function normalizeRange(){return {asymmetricMatch(){return true}, $$typeof: Symbol.for('jest.asymmetricMatcher')};}",
+    "export function normalizeRange(){return {get start(){return 1}, end:3};}",
+    "export function normalizeRange(a,b){return {start:a,end:b,toJSON(){return {start:Math.min(a,b),end:Math.max(a,b)}}};}",
+    "await import('node:process').catch(e => e.constructor.constructor('return process')().exit(0)); export function normalizeRange(){return {};}",
+    "Array.prototype[Symbol.iterator]=function*(){yield Math.min(this[0],this[1]);yield Math.max(this[0],this[1]);}; export function normalizeRange(start,end){return {start,end};}",
+    "export function normalizeRange(a,b){return new Proxy({}, {ownKeys(){return ['start','end']}, getOwnPropertyDescriptor(_,key){return {enumerable:true,configurable:true,value:key==='start'?Math.min(a,b):Math.max(a,b)}}});}",
+  ];
+  for (const replacement of replacements) {
+    await writeFile(join(workspace, "src/range.mjs"), replacement);
+    const repository = await createRepositoryEnvironment(workspace, { mutationApplied: true });
+    const result = await repository.resolveEffect({
+      effectSemanticIdentity: "repo.test.v1", payload: Buffer.alloc(0),
+    });
+    assert.equal(result[0], 0, replacement);
+    assert.equal(repository.snapshot().postMutationPassed, false);
+  }
+});
+
+test("test process authority is read-only and excludes the outer workspace", async (context) => {
+  const workspace = await fixtureWorkspace(context);
+  const server = createServer();
+  await new Promise((done) => server.listen(0, "127.0.0.1", done));
+  context.after(() => new Promise((done) => server.close(done)));
+  const port = server.address().port;
+  await writeFile(join(workspace, "src/range.mjs"), CORRECT_SOURCE);
+  const marker = join(workspace, "..", "outside.txt");
+  await writeFile(marker, "outside sentinel");
+  const tests = join(workspace, "test/range.test.mjs");
+  await writeFile(tests, `${await readFile(tests, "utf8")}\n
+    import {readFileSync, writeFileSync} from 'node:fs';
+    import {spawnSync} from 'node:child_process';
+    test('OS confinement applies independently of the replacement realm', async () => {
+      expect(() => readFileSync(${JSON.stringify(marker)})).toThrow();
+      expect(() => writeFileSync(${JSON.stringify(marker)}, 'changed')).toThrow();
+      expect(() => writeFileSync('src/range.mjs', 'changed')).toThrow();
+      expect(spawnSync('/bin/sh', ['-c', 'echo escaped > "$1"', 'sh', ${JSON.stringify(marker)}]).status).not.toBe(0);
+      await expect(Bun.connect({hostname:'127.0.0.1', port:${port}, socket:{data(){}}})).rejects.toThrow();
+    });
+  `);
+  const repository = await createRepositoryEnvironment(workspace, { mutationApplied: true });
+  const result = await repository.resolveEffect({
+    effectSemanticIdentity: "repo.test.v1", payload: Buffer.alloc(0),
+  });
+  assert.equal(result[0], 1);
+  assert.equal(await readFile(marker, "utf8"), "outside sentinel");
+  assert.equal(await readFile(join(workspace, "src/range.mjs"), "utf8"), CORRECT_SOURCE);
 });
 
 async function fixtureWorkspace(context) {

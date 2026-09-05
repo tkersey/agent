@@ -20,6 +20,15 @@ and digest-bound replacement, and the fixture's fixed `bun test` command. It
 prints one JSON proof receipt and leaves the repaired Git working tree in
 `WORK_DIR/workspace` for independent inspection.
 
+Repository tests require `sandbox-exec` on macOS or a root-owned Bubblewrap
+installation on Linux. They run without network or filesystem write authority,
+and cannot read outside the fixture and their declared runtime dependencies.
+The unchanged Bun fixture assertions load the replacement in a separate
+JavaScript module context without host APIs or imports. Only acyclic data
+properties cross back into assertions; executable matchers, accessors, and
+Proxy objects do not. This tests the fixture's data-returning function without
+giving replacement code control of the test runner or its passing observation.
+
 For an uninterrupted source-independent Process State census, add an output
 path. This uses the same image, adapter, fixture, and World runtime while
 recording every State-bearing outcome against the nonsemantic source map:

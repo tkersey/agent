@@ -190,6 +190,15 @@ try {
   assert.match(resumed.stderr, /checkpoint workspace changed after suspension/);
 
   const unmodifiedWork = join(root, "unmodified-checkpoint-work");
+  for (const value of ["0", "-1", "0.5", "not-a-number", "Infinity", "9007199254740992", ""]) {
+    const rejected = run(worldRoot, unmodifiedWork, value);
+    assert.notEqual(rejected.status, 0);
+    assert.match(rejected.stderr, /--maximumReductions must be a positive safe integer/);
+    await lstat(unmodifiedWork).then(
+      () => assert.fail("invalid reduction limit reached workspace creation"),
+      (error) => assert.equal(error?.code, "ENOENT"),
+    );
+  }
   const unmodifiedStart = run(worldRoot, unmodifiedWork);
   assert.equal(unmodifiedStart.status, 0, unmodifiedStart.stderr);
   const unmodifiedResume = run(worldRoot, unmodifiedWork, 512);

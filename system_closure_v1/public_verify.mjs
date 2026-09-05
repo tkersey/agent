@@ -159,6 +159,35 @@ for (const [name, extra, expected] of [
 const checkpointWork = join(workRoot, "checkpoint-mode-mismatch");
 await mkdir(checkpointWork);
 const checkpointKey = "7f".repeat(32);
+for (const [name, value] of [
+  ["zero", "0"],
+  ["negative", "-1"],
+  ["fractional", "0.5"],
+  ["nonnumeric", "not-a-number"],
+  ["nonfinite", "Infinity"],
+  ["unsafe-integer", "9007199254740992"],
+  ["empty", ""],
+]) {
+  const rejected = spawnSync(process.execPath, [
+    join(distributionRoot, "runtime.mjs"),
+    "--worldRoot", worldRoot,
+    "--worldArchive", resolve(options.worldArchive),
+    "--workDir", checkpointWork,
+    "--mode", "fixture",
+    "--maximumReductions", value,
+  ], {
+    encoding: "utf8",
+    env: { PATH: process.env.PATH ?? "", AGENT_SYSTEM_CHECKPOINT_KEY: checkpointKey },
+  });
+  assert.notEqual(rejected.status, 0, name + " reduction limit was admitted");
+  assert.match(rejected.stderr, /--maximumReductions must be a positive safe integer/);
+  assert.deepEqual(await readdir(checkpointWork), [], name + " reduction limit performed an effect");
+  schedulerResults.push({
+    name: "invalid-reduction-limit-" + name,
+    result: "passed",
+    dangerousRepositoryEffects: 0,
+  });
+}
 const first = spawnSync(process.execPath, [
   join(distributionRoot, "runtime.mjs"),
   "--worldRoot", worldRoot,

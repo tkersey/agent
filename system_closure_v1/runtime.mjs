@@ -31,6 +31,9 @@ import {
 } from "./world_archive_binding.mjs";
 
 const options = parseArgs(process.argv.slice(2));
+const maximumReductions = Number(options.maximumReductions);
+assert(Number.isSafeInteger(maximumReductions) && maximumReductions > 0,
+  "--maximumReductions must be a positive safe integer");
 assert(["fixture", "live"].includes(options.mode));
 assert(options.mode !== "fixture" || options.endpoint === undefined,
   "fixture mode does not accept --endpoint");
@@ -224,8 +227,6 @@ let phase = checkpoint?.phase ?? "rendering";
 const identities = checkpoint?.identities ?? [];
 const modelInvocationSha256 = checkpoint?.modelInvocationSha256 ?? [];
 const providerRequestBodySha256 = checkpoint?.providerRequestBodySha256 ?? [];
-const maximumReductions = Number(options.maximumReductions);
-assert(Number.isSafeInteger(maximumReductions) && maximumReductions > 0);
 let chunkReductions = 0;
 let terminal;
 

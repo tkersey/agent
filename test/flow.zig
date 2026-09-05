@@ -455,3 +455,59 @@ test "Flow branches with typed successor parameters" {
         try std.testing.expectEqual(fixture[1], done.value().*);
     }
 }
+
+test "pure hook admission preserves local branches, helpers, and authored failures" {
+    comptime {
+        const Builder = agent.Flow(.{ .schema_types = .{AuthoredFailure} });
+        var flow = Builder.init("pure-hook-extension");
+        const initial = flow.begin(bool);
+        const before = flow;
+        const helper = flow.helper(.{bool}, bool);
+        const call_path = flow.block(.segment, .{});
+        const failure_path = flow.block(.segment, .{});
+        const exit = flow.block(.segment, .{bool});
+        flow.branch(initial, call_path, .{}, failure_path, .{});
+        _ = flow.enter(failure_path);
+        flow.failValue(flow.constant(AuthoredFailure, 0));
+        const parameters = flow.enter(helper.entry);
+        flow.returnToCaller(parameters[0]);
+        _ = flow.enter(call_path);
+        const called = flow.call(helper, .{initial}, .{});
+        const continuation_id = flow.current_block;
+        flow.jump(exit, .{called.value});
+        _ = flow.enter(exit);
+        try flow.validateEffectFreeExtension(&before);
+
+        // Both arms and every call endpoint obey the same ownership rule.
+        for (.{ "then_target", "else_target" }) |field| {
+            var changed = flow;
+            @field(changed.blocks[before.current_block], field) = before.current_block;
+            try std.testing.expectError(error.ControlEscape, changed.validateEffectFreeExtension(&before));
+        }
+        for (.{ "callee_target", "continuation_target" }) |field| {
+            var changed = flow;
+            @field(changed.blocks[call_path.id], field) = before.current_block;
+            try std.testing.expectError(error.ControlEscape, changed.validateEffectFreeExtension(&before));
+        }
+        var changed = flow;
+        changed.blocks[continuation_id].jump_target = before.current_block;
+        try std.testing.expectError(error.ControlEscape, changed.validateEffectFreeExtension(&before));
+        changed = flow;
+        changed.functions[helper.id].entry = before.current_block;
+        try std.testing.expectError(error.ControlEscape, changed.validateEffectFreeExtension(&before));
+        changed = flow;
+        changed.blocks[call_path.id].callee_function = 0;
+        try std.testing.expectError(error.ControlEscape, changed.validateEffectFreeExtension(&before));
+        changed = flow;
+        changed.blocks[call_path.id].terminator_kind = .return_to_caller;
+        try std.testing.expectError(error.ControlEscape, changed.validateEffectFreeExtension(&before));
+        changed = flow;
+        changed.blocks[helper.entry.id].terminator_kind = .suspend_effect;
+        try std.testing.expectError(error.ResidualEffect, changed.validateEffectFreeExtension(&before));
+        changed = flow;
+        changed.blocks[helper.entry.id].terminator_kind = .return_value;
+        try std.testing.expectError(error.SystemReturn, changed.validateEffectFreeExtension(&before));
+        flow.returnValue(exit.parameters[0]);
+        _ = flow.finish(bool);
+    }
+}

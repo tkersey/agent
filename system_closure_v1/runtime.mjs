@@ -488,24 +488,31 @@ async function digestWorldProductionSource(root) {
 }
 
 async function digestWorkspace(root) {
-  const records = [];
+  // Git config, attributes, hooks, objects, and index are executable inputs too.
+  // Bind the entire workspace, including permissions, before any resumed effect.
+  const rootStat = await lstat(root);
+  assert(rootStat.isDirectory() && !rootStat.isSymbolicLink(),
+    "checkpoint workspace root must be a real directory");
+  const records = [["", "directory", rootStat.mode & 0o7777]];
   async function addTree(directory, prefix) {
     for (const entry of (await readdir(directory, { withFileTypes: true }))
       .sort((left, right) => left.name.localeCompare(right.name))) {
-      if (prefix.length === 0 && entry.name === ".git") continue;
       const path = join(directory, entry.name);
       const name = prefix.length === 0 ? entry.name : `${prefix}/${entry.name}`;
       const stat = await lstat(path);
       assert(!stat.isSymbolicLink(), `checkpoint workspace link is forbidden: ${name}`);
-      if (entry.isDirectory()) await addTree(path, name);
-      else if (entry.isFile()) records.push([name, sha256(await readFile(path))]);
-      else throw new Error(`unsupported checkpoint workspace entry: ${name}`);
+      if (stat.isDirectory()) {
+        records.push([name, "directory", stat.mode & 0o7777]);
+        await addTree(path, name);
+      } else if (stat.isFile()) {
+        records.push([name, "file", stat.mode & 0o7777, sha256(await readFile(path))]);
+      } else throw new Error(`unsupported checkpoint workspace entry: ${name}`);
     }
   }
   await addTree(root, "");
   records.sort(([left], [right]) => Buffer.compare(Buffer.from(left), Buffer.from(right)));
   return sha256(Buffer.from(JSON.stringify([
-    "agent-checkpoint-workspace/v2",
+    "agent-checkpoint-workspace/v3",
     records,
   ])));
 }

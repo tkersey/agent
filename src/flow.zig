@@ -413,6 +413,81 @@ pub fn Flow(comptime config: anytype) type {
             return true;
         }
 
+        const HookError = error{ DataRewrite, ResidualEffect, SystemReturn, ControlEscape };
+
+        /// Admit a pure extension, not an arbitrary edit of the enclosing graph.
+        /// The entry may append instructions; every new edge stays in the hook's
+        /// new blocks/functions. Only its open exit returns to compiler emission.
+        pub fn validateEffectFreeExtension(self: *const Self, before: *const Self) HookError!void {
+            if (!self.dataPrefixIsPreserved(before)) return error.DataRewrite;
+            if (before.blocks[before.current_block].terminator_kind != .unset or
+                self.blocks[self.current_block].terminator_kind != .unset or
+                self.blocks[self.current_block].function_id != before.current_function)
+            {
+                return error.ControlEscape;
+            }
+            const added_functions = self.functions[before.function_count..self.function_count];
+            for (added_functions, before.function_count..) |function, index| {
+                if (function.id != index or
+                    !self.hookTarget(before, function.entry, function.id))
+                {
+                    return error.ControlEscape;
+                }
+            }
+            try self.validateHookBlock(before, before.current_block);
+            for (before.block_count..self.block_count) |index| {
+                try self.validateHookBlock(before, index);
+            }
+        }
+
+        fn hookTarget(
+            self: *const Self,
+            before: *const Self,
+            target: boundary.ir.BlockId,
+            function: boundary.ir.FunctionId,
+        ) bool {
+            return target >= before.block_count and target < self.block_count and
+                self.blocks[target].function_id == function;
+        }
+
+        fn validateHookBlock(self: *const Self, before: *const Self, index: usize) HookError!void {
+            const draft = self.blocks[index];
+            if (draft.id != index or draft.function_id >= self.function_count or
+                (draft.function_id != before.current_function and
+                    draft.function_id < before.function_count)) return error.ControlEscape;
+            switch (draft.terminator_kind) {
+                .unset => if (index != self.current_block) return error.ControlEscape,
+                .suspend_effect => return error.ResidualEffect,
+                .return_value => return error.SystemReturn,
+                .fail_value => {},
+                .return_to_caller => {
+                    if (draft.function_id < before.function_count) return error.ControlEscape;
+                },
+                .jump => {
+                    if (!self.hookTarget(before, draft.jump_target, draft.function_id)) {
+                        return error.ControlEscape;
+                    }
+                },
+                .branch => {
+                    if (!self.hookTarget(before, draft.then_target, draft.function_id) or
+                        !self.hookTarget(before, draft.else_target, draft.function_id))
+                    {
+                        return error.ControlEscape;
+                    }
+                },
+                .suspend_call => {
+                    if (draft.callee_function < before.function_count or
+                        draft.callee_function >= self.function_count or
+                        draft.callee_target != self.functions[draft.callee_function].entry or
+                        !self.hookTarget(before, draft.callee_target, draft.callee_function) or
+                        !self.hookTarget(before, draft.continuation_target, draft.function_id))
+                    {
+                        return error.ControlEscape;
+                    }
+                },
+            }
+        }
+
         pub fn counts(self: *const Self) struct {
             values: usize,
             blocks: usize,

@@ -6,15 +6,12 @@ const model_effect = @import("model_effect.zig");
 const typed_action_decode = @import("typed_action_decode.zig");
 
 fn assertEffectFree(comptime label: []const u8, flow: anytype, before: anytype) void {
-    if (!std.meta.eql(flow.suspensionSnapshot(), before.suspensionSnapshot())) {
-        @compileError(label ++ " must not introduce a residual effect");
-    }
-    if (!std.meta.eql(flow.returnSnapshot(), before.returnSnapshot())) {
-        @compileError(label ++ " must not return the enclosing system");
-    }
-    if (!flow.dataPrefixIsPreserved(before)) {
-        @compileError(label ++ " must not rewrite compiler-owned data carriers");
-    }
+    flow.validateEffectFreeExtension(before) catch |err| switch (err) {
+        error.DataRewrite => @compileError(label ++ " must not rewrite compiler-owned data carriers"),
+        error.ResidualEffect => @compileError(label ++ " must not introduce a residual effect"),
+        error.SystemReturn => @compileError(label ++ " must not return the enclosing system"),
+        error.ControlEscape => @compileError(label ++ " must not escape hook-owned control flow"),
+    };
 }
 
 fn effectCount(comptime source: anytype) usize {

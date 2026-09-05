@@ -109,6 +109,7 @@ test/compile_fail/system_duplicate_action_name.zig
 test/compile_fail/system_duplicate_effect_identity.zig
 test/compile_fail/system_effect_payload_mismatch.zig
 test/compile_fail/system_effect_site_ordinal.zig
+test/compile_fail/system_epistemics_escapes_control.zig
 test/compile_fail/system_epistemics_rewrites_current_block.zig
 test/compile_fail/system_epistemics_rewrites_flow.zig
 test/compile_fail/system_fixture_v3.zig

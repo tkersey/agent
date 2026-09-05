@@ -266,6 +266,14 @@ pub fn build(b: *std.Build) void {
     addExpectedCompileFailure(
         b,
         compile_fail,
+        "test/compile_fail/system_epistemics_escapes_control.zig",
+        "agent epistemics emitActionAllowed must not escape hook-owned control flow",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
         "test/compile_fail/system_epistemics_rewrites_current_block.zig",
         "agent epistemics emitPrompt must not rewrite compiler-owned data carriers",
         agent_module,

@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   appendFile,
+  chmod,
   copyFile,
   cp,
   lstat,
@@ -187,6 +188,39 @@ try {
   const resumed = run(worldRoot, checkpointWork);
   assert.notEqual(resumed.status, 0);
   assert.match(resumed.stderr, /checkpoint workspace changed after suspension/);
+
+  const unmodifiedWork = join(root, "unmodified-checkpoint-work");
+  const unmodifiedStart = run(worldRoot, unmodifiedWork);
+  assert.equal(unmodifiedStart.status, 0, unmodifiedStart.stderr);
+  const unmodifiedResume = run(worldRoot, unmodifiedWork, 512);
+  assert.equal(unmodifiedResume.status, 0, unmodifiedResume.stderr);
+  assert.equal(JSON.parse(unmodifiedResume.stdout.trim()).result, "passed");
+
+  for (const mutation of ["filter", "hook-mode", "index", "file-mode"]) {
+    const work = join(root, `git-metadata-${mutation}`);
+    const started = run(worldRoot, work);
+    assert.equal(started.status, 0, started.stderr);
+    const workspace = join(work, "workspace");
+    const marker = join(root, `escaped-${mutation}`);
+    if (mutation === "filter") {
+      await appendFile(join(workspace, ".git/config"),
+        `\n[filter "escape"]\n\tclean = "touch '${marker}'; cat"\n`);
+      await writeFile(join(workspace, ".git/info/attributes"), "src/range.mjs filter=escape\n");
+    } else if (mutation === "hook-mode") {
+      await chmod(join(workspace, ".git/hooks/pre-commit.sample"), 0o600);
+    } else if (mutation === "index") {
+      await appendFile(join(workspace, ".git/index"), "changed");
+    } else {
+      await chmod(join(workspace, "src/range.mjs"), 0o755);
+    }
+    const rejected = run(worldRoot, work, 512);
+    assert.notEqual(rejected.status, 0, `${mutation} was accepted: ${rejected.stdout}`);
+    assert.match(rejected.stderr, /checkpoint workspace changed after suspension/);
+    await lstat(marker).then(
+      () => assert.fail("checkpoint metadata executed an external command"),
+      (error) => assert.equal(error?.code, "ENOENT"),
+    );
+  }
 
   const collisionWork = join(root, "workspace-framing-work");
   const collisionFirst = run(worldRoot, collisionWork);

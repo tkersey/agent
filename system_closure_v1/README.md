@@ -56,6 +56,10 @@ substitution, checkpoint mode changes, and unknown or duplicate scheduler
 controls. It reports zero dangerous effects for every rejected input and never
 runs live-model mode.
 
+Checkpoint authentication binds workspace file contents, paths, and permissions,
+including Git metadata. Changing Git configuration, attributes, hooks, objects,
+or the index between chunks invalidates resumption before repository effects.
+
 The model invocation carries distinct image-selected bounds for normalized
 result text, Action argument JSON, and the complete provider response envelope.
 Tool schemas expose standard `maxLength`; the generic adapter additionally

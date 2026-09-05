@@ -943,6 +943,8 @@ fn addFilteredFocusedTest(
         .root_source_file = b.path(spec.path),
         .target = target,
         .optimize = optimize,
+        // Test-only binary: keep Debug checks without native debug symbols.
+        .strip = true,
     });
     module.addImport("agent", agent_module);
     module.addImport("boundary", boundary_module);

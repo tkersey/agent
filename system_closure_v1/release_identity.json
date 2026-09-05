@@ -1,7 +1,7 @@
 {
   "format": "agent-system-closure-release-identity/v1",
   "agentVersion": "3.0.0",
-  "agentSourceSha256": "694d60a434b8587fed38da15a3673270fe39daba09c6e5d375b179a2894c2992",
+  "agentSourceSha256": "9a4ffdded09071c6319e96c44e996c3c36dde60c1a26df8d9c1d5e318e70ed37",
   "agentArtifacts": {
     "imageSha256": "51cc746c20cda6aa3f643a4d916a70f7066c0270c5fcda6fc0e582080852210d",
     "imageByteLength": 95508,

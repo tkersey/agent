@@ -11,7 +11,7 @@ directory and run:
 
 ```sh
 node run.mjs --world-root /path/to/world-runtime \
-  --world-archive /path/to/world-v4.1.1-process-host-runtime.tar.gz --mode fixture \
+  --world-archive /path/to/world-v4.1.2-process-host-runtime.tar.gz --mode fixture \
   --work-dir /path/to/empty-work-directory
 ```
 
@@ -26,7 +26,7 @@ recording every State-bearing outcome against the nonsemantic source map:
 
 ```sh
 node run.mjs --world-root /path/to/world-runtime \
-  --world-archive /path/to/world-v4.1.1-process-host-runtime.tar.gz --mode fixture \
+  --world-archive /path/to/world-v4.1.2-process-host-runtime.tar.gz --mode fixture \
   --work-dir /path/to/empty-work-directory \
   --census-output /path/to/process-census.json
 ```
@@ -42,7 +42,7 @@ from an otherwise empty directory:
 ```sh
 node public_verify.mjs \
   --world-root /path/to/extracted-world-runtime \
-  --world-archive /path/to/world-v4.1.1-process-host-runtime.tar.gz \
+  --world-archive /path/to/world-v4.1.2-process-host-runtime.tar.gz \
   --agent-archive /path/to/agent-v3.0.0-system-closure-v1.tar.gz \
   --agent-receipt /path/to/agent-v3.0.0-system-closure-v1-receipt.json \
   --work-root /path/to/empty-verification-work \
@@ -69,7 +69,7 @@ endpoint, credential, World runtime, and isolated workspace authority:
 ```sh
 OPENAI_API_KEY=... node run.mjs \
   --world-root /path/to/world-runtime \
-  --world-archive /path/to/world-v4.1.1-process-host-runtime.tar.gz \
+  --world-archive /path/to/world-v4.1.2-process-host-runtime.tar.gz \
   --mode live \
   --endpoint https://api.openai.com/v1/responses \
   --work-dir /path/to/empty-work-directory

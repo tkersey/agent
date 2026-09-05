@@ -55,7 +55,6 @@ pub fn build(b: *std.Build) void {
         .{ .name = "check-agent-flow", .description = "Validate Flow lowering", .path = "test/flow.zig" },
         .{ .name = "check-agent-system-api", .description = "Validate the canonical complete-system API", .path = "test/system.zig" },
         .{ .name = "check-agent-local-action", .description = "Prove image-owned local actions", .path = "test/local_action.zig" },
-        .{ .name = "check-agent-repository-system", .description = "Compile the complete repository system", .path = "actuality/repository_repair_system_v1.zig" },
     }) |spec| {
         _ = addFocusedTest(
             b,
@@ -67,6 +66,20 @@ pub fn build(b: *std.Build) void {
             semantic,
         );
     }
+
+    const repository_system_check = addFocusedTest(
+        b,
+        .{
+            .name = "check-agent-repository-system",
+            .description = "Compile the complete repository system",
+            .path = "actuality/repository_repair_system_v1.zig",
+        },
+        agent_module,
+        boundary_module,
+        target,
+        optimize,
+        semantic,
+    );
 
     addOpenLifetimeTests(b, agent_module, boundary_module, target, semantic);
 
@@ -222,7 +235,15 @@ pub fn build(b: *std.Build) void {
         b,
         compile_fail,
         "test/compile_fail/system_image_bytes_limit.zig",
-        "Agent Program image exceeds representation.image_bytes",
+        "Boundary Program image exceeds maximum_image_bytes",
+        agent_module,
+        boundary_module,
+    );
+    addExpectedCompileFailure(
+        b,
+        compile_fail,
+        "test/compile_fail/system_image_bytes_one_short.zig",
+        "Boundary Program image exceeds maximum_image_bytes",
         agent_module,
         boundary_module,
     );
@@ -361,6 +382,7 @@ pub fn build(b: *std.Build) void {
         "emit-agent-repository-system-v1",
         "Emit ordinary BPI1 and InitialArgs",
     );
+    repository_system_check.dependOn(emit_repository);
     inline for (modes, 0..) |mode, index| {
         const run = b.addRunArtifact(emitter);
         run.addArg(mode[0]);

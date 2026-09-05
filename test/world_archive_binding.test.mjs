@@ -26,14 +26,14 @@ test("the executed World root must equal the authenticated archive", async (cont
     16 * 1024 * 1024,
     "World archive",
   );
-  await assertWorldRootMatchesArchive({ worldRoot, archiveBytes, worldVersion: "4.1.1" });
+  await assertWorldRootMatchesArchive({ worldRoot, archiveBytes, worldVersion: "4.1.2" });
   const root = await mkdtemp(join(tmpdir(), "agent-world-binding-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const changed = join(root, "world");
   await cp(worldRoot, changed, { recursive: true });
   await appendFile(join(changed, "README.md"), "changed\n");
   await assert.rejects(
-    assertWorldRootMatchesArchive({ worldRoot: changed, archiveBytes, worldVersion: "4.1.1" }),
+    assertWorldRootMatchesArchive({ worldRoot: changed, archiveBytes, worldVersion: "4.1.2" }),
     /executed bytes differ from archive/,
   );
 
@@ -44,7 +44,7 @@ test("the executed World root must equal the authenticated archive", async (cont
     assertWorldRootMatchesArchive({
       worldRoot: extraDirectory,
       archiveBytes,
-      worldVersion: "4.1.1",
+      worldVersion: "4.1.2",
     }),
     /inventory differs from the authenticated archive/,
   );
@@ -56,7 +56,7 @@ test("the executed World root must equal the authenticated archive", async (cont
     assertWorldRootMatchesArchive({
       worldRoot: changedDirectoryMode,
       archiveBytes,
-      worldVersion: "4.1.1",
+      worldVersion: "4.1.2",
     }),
     /executed mode differs from archive: src/,
   );
@@ -76,7 +76,7 @@ test("World root traversal rejects excess entries within its fixed bound", async
   await Promise.all(Array.from({ length: 260 }, (_, index) =>
     writeFile(join(changed, "extra", String(index)), "")));
   await assert.rejects(
-    assertWorldRootMatchesArchive({ worldRoot: changed, archiveBytes, worldVersion: "4.1.1" }),
+    assertWorldRootMatchesArchive({ worldRoot: changed, archiveBytes, worldVersion: "4.1.2" }),
     /entry limit exceeded/,
   );
 });

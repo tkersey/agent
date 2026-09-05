@@ -7,7 +7,44 @@ test "agent.system returns one ordinary unspecialized Boundary Program" {
     try std.testing.expect(AlternateStaged.Result == AlternateResult);
     try std.testing.expect(@hasDecl(AlternateStaged, "Program"));
     try std.testing.expect(!@hasDecl(AlternateStaged, "Machine"));
-    try std.testing.expect(AlternateStaged.Program.image().bytes.len > 0);
+    const image = try encodeSystem(AlternateStaged);
+    defer std.testing.allocator.free(image);
+    try std.testing.expect(image.len > 0);
+}
+
+test "exact image capacity preserves canonical bytes" {
+    const fixture = @import("compile_fail/react_system_fixture.zig");
+    const Valid = fixture.System(fixture.representation(), fixture.Stateless);
+    const expected = Valid.Program.image().bytes;
+    const Exact = fixture.System(.{
+        .response_bytes = 1024,
+        .maximum_provider_response_bytes = 8192,
+        .image_bytes = expected.len,
+        .schema_types = .{
+            fixture.Goal,
+            fixture.Result,
+            fixture.Action,
+            fixture.Observation,
+            fixture.Failure,
+        },
+    }, fixture.Stateless);
+    const actual = try encodeSystem(Exact);
+    defer std.testing.allocator.free(actual);
+    try std.testing.expectEqualSlices(u8, &expected, actual);
+}
+
+fn encodeSystem(comptime System: type) ![]u8 {
+    const allocator = std.testing.allocator;
+    const bytes = try allocator.alloc(u8, System.Source.representation.image_bytes);
+    errdefer allocator.free(bytes);
+    const encoding = try allocator.create(System.Program.ImageEncodingWorkspace);
+    defer allocator.destroy(encoding);
+    const length = try System.Program.encodeImage(bytes, encoding);
+    const validation = try allocator.create(boundary.image.ValidationWorkspace);
+    defer allocator.destroy(validation);
+    validation.* = .{};
+    _ = try boundary.image.validateImageView(bytes[0..length], validation);
+    return try allocator.realloc(bytes, length);
 }
 
 test "tool schemas distinguish Text byte and character bounds" {
@@ -173,11 +210,11 @@ test "alternate staged identity preserves the canonical closed runtime" {
     try std.testing.expectEqual(AlternateReact.Goal, AlternateStaged.Goal);
     try std.testing.expectEqual(AlternateReact.Action, AlternateStaged.Action);
     try std.testing.expectEqual(AlternateReact.Result, AlternateStaged.Result);
-    try std.testing.expect(std.mem.eql(
-        u8,
-        &AlternateReact.Program.image().bytes,
-        &AlternateStaged.Program.image().bytes,
-    ));
+    const react_image = try encodeSystem(AlternateReact);
+    defer std.testing.allocator.free(react_image);
+    const staged_image = try encodeSystem(AlternateStaged);
+    defer std.testing.allocator.free(staged_image);
+    try std.testing.expectEqualSlices(u8, react_image, staged_image);
     try std.testing.expect(AlternateStaged.Source.strategy.repeat_after_observation);
     try std.testing.expect(AlternateStaged.Source.strategy.allow_completion);
     try std.testing.expect(!@hasDecl(AlternateReact, "Machine"));
@@ -185,5 +222,7 @@ test "alternate staged identity preserves the canonical closed runtime" {
 }
 
 test "canonical systems encode authored failure actions" {
-    try std.testing.expect(FailureSystem.Program.image().bytes.len > 0);
+    const image = try encodeSystem(FailureSystem);
+    defer std.testing.allocator.free(image);
+    try std.testing.expect(image.len > 0);
 }

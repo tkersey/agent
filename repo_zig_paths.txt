@@ -118,6 +118,7 @@ test/compile_fail/system_forged_prompt.zig
 test/compile_fail/system_forged_skill.zig
 test/compile_fail/system_forged_strategy.zig
 test/compile_fail/system_image_bytes_limit.zig
+test/compile_fail/system_image_bytes_one_short.zig
 test/compile_fail/system_invalid_action_name.zig
 test/compile_fail/system_missing_descriptor.zig
 test/compile_fail/system_prompt_type_mismatch.zig

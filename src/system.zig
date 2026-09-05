@@ -228,20 +228,6 @@ pub fn system(comptime spec: anytype) type {
     {
         @compileError("agent system strategy Body disagrees with Goal, Result, or Failure");
     }
-    const ProgramType = boundary.program(
-        std.fmt.comptimePrint("{s}:{s}:{s}", .{
-            spec.name,
-            spec.version,
-            Strategy.system_semantic_identity,
-        }),
-        Body,
-    );
-    if (comptime @hasDecl(Body, "maximum_image_bytes") and
-        !@hasDecl(ProgramType, "ImageEncodingWorkspace") and
-        ProgramType.image().bytes.len > Body.maximum_image_bytes)
-    {
-        @compileError("Agent Program image exceeds representation.image_bytes");
-    }
     return struct {
         pub const Source = spec;
         pub const Goal = spec.Goal;
@@ -250,7 +236,14 @@ pub fn system(comptime spec: anytype) type {
         pub const Result = spec.Result;
         pub const Failure = spec.Failure;
         pub const InitialArgs = Goal;
-        pub const Program = ProgramType;
+        pub const Program = boundary.program(
+            std.fmt.comptimePrint("{s}:{s}:{s}", .{
+                spec.name,
+                spec.version,
+                Strategy.system_semantic_identity,
+            }),
+            Body,
+        );
         pub const ModelEffect = Body.ModelEffect;
         pub const SourcePhaseMap = Body.SourcePhaseMap;
         pub const source_phase_map = Body.source_phase_map;

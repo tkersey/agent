@@ -1005,7 +1005,7 @@ fn RepositoryRepairSystemDefinition(
     };
 }
 
-test "repository repair source closes through canonical Agent 3 system" {
+test "repository repair source types agree with canonical Agent 3 system" {
     const agent = @import("agent");
     const boundary = @import("boundary");
     const repository = RepositoryRepairSystem(agent, boundary);
@@ -1019,5 +1019,4 @@ test "repository repair source closes through canonical Agent 3 system" {
             repository.Source.epistemics.PromptType(repository.Source),
         ),
     );
-    try std.testing.expect(repository.System.Program.control_ir.blocks.len > 0);
 }

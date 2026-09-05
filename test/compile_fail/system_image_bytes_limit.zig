@@ -8,5 +8,5 @@ const Invalid = fixture.System(.{
 }, fixture.Stateless);
 
 comptime {
-    _ = Invalid.Program;
+    _ = Invalid.Program.image();
 }

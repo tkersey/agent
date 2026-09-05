@@ -1,7 +1,7 @@
 {
   "format": "agent-system-closure-release-identity/v1",
   "agentVersion": "3.0.0",
-  "agentSourceSha256": "a671e299da72aa480987678c825ec703012988f8c1d6c713bcad4f055b413d59",
+  "agentSourceSha256": "c06b6ba17bf521d9f50332b0f818af3b90d76c71130bd06d9ff8103306bc6162",
   "agentArtifacts": {
     "imageSha256": "51cc746c20cda6aa3f643a4d916a70f7066c0270c5fcda6fc0e582080852210d",
     "imageByteLength": 95508,
@@ -11,20 +11,20 @@
     "programTransitionDigest": "8e3e13d5ff08c3a846cc45605e3df6345e96f2112e45b4ba66afe320d23d8336"
   },
   "boundary": {
-    "version": "1.8.1",
-    "releaseTag": "v1.8.1",
-    "sourceCommit": "09d3dbe2004d20e9e29f7c3d4b635cd32857b101",
-    "packageUrl": "https://github.com/tkersey/boundary/archive/09d3dbe2004d20e9e29f7c3d4b635cd32857b101.tar.gz",
-    "packageHash": "boundary-1.8.1-flclaO5TJwACb0xn09dK0nXAvEvnjJgPnhObJam2D5OY"
+    "version": "1.8.2",
+    "releaseTag": "v1.8.2",
+    "sourceCommit": "999e936c4a865cd31948b52b2af2baeacf84c9f1",
+    "packageUrl": "https://github.com/tkersey/boundary/archive/999e936c4a865cd31948b52b2af2baeacf84c9f1.tar.gz",
+    "packageHash": "boundary-1.8.2-flclaABjJwANIa-_Lf1KKfm-MCbC01AhOLC95VX5lZCk"
   },
   "world": {
-    "version": "4.1.1",
-    "releaseTag": "v4.1.1",
-    "sourceCommit": "73d37ad7a727c487c6da7ec89d990f9657b535bc",
-    "archiveName": "world-v4.1.1-process-host-runtime.tar.gz",
-    "archiveSha256": "016982320a7c844cc785f178b9df962f6a8cb1da02edd161298fa28727ea54d4",
+    "version": "4.1.2",
+    "releaseTag": "v4.1.2",
+    "sourceCommit": "a55154eb43d19cba83c0bf1869cfd38704905ff1",
+    "archiveName": "world-v4.1.2-process-host-runtime.tar.gz",
+    "archiveSha256": "422f1779b8804b38e23c2610673059cfd1dc6dde5f156050032e9931e35bfbea",
     "archiveByteLength": 784462,
-    "productionSourceSha256": "7f74d52f65ea2b29794fbf04b91c154844c359f7bfed42ca488a839aa947bd90"
+    "productionSourceSha256": "7254df7071bea1daa67d6843d4a32bd1371e1ae9327af3efa5f2dbf35b431b0b"
   },
   "kernel": {
     "byteLength": 682943,

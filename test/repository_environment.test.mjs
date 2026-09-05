@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -172,13 +172,15 @@ test("test process authority is read-only and excludes the outer workspace", asy
   const port = server.address().port;
   await writeFile(join(workspace, "src/range.mjs"), CORRECT_SOURCE);
   const marker = join(workspace, "..", "outside.txt");
+  const outside = await realpath(join(workspace, ".."));
   await writeFile(marker, "outside sentinel");
   const tests = join(workspace, "test/range.test.mjs");
   await writeFile(tests, `${await readFile(tests, "utf8")}\n
-    import {readFileSync, writeFileSync} from 'node:fs';
+    import {readFileSync, writeFileSync, readdirSync} from 'node:fs';
     import {spawnSync} from 'node:child_process';
     test('OS confinement applies independently of the replacement realm', async () => {
       expect(() => readFileSync(${JSON.stringify(marker)})).toThrow();
+      expect(() => readdirSync(${JSON.stringify(outside)})).toThrow();
       expect(() => writeFileSync(${JSON.stringify(marker)}, 'changed')).toThrow();
       expect(() => writeFileSync('src/range.mjs', 'changed')).toThrow();
       expect(spawnSync('/bin/sh', ['-c', 'echo escaped > "$1"', 'sh', ${JSON.stringify(marker)}]).status).not.toBe(0);

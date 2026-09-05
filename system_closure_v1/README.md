@@ -22,7 +22,8 @@ prints one JSON proof receipt and leaves the repaired Git working tree in
 
 Repository tests require `sandbox-exec` on macOS or a root-owned Bubblewrap
 installation on Linux. They run without network or filesystem write authority,
-and cannot read outside the fixture and their declared runtime dependencies.
+and cannot read outside the fixture and their declared runtime dependencies
+(including root and preload-directory entries needed by the module loader).
 The unchanged Bun fixture assertions load the replacement in a separate
 JavaScript module context without host APIs or imports. Getters and Proxy
 properties are evaluated inside that context; only their acyclic data values

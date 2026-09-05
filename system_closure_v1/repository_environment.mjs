@@ -173,10 +173,14 @@ async function repositoryTestCommand(workspace) {
     }
     const allowed = [...paths.map((path) => `(subpath ${JSON.stringify(path)})`),
       ...[...ancestors].map((path) => `(literal ${JSON.stringify(path)})`)];
+    // The loader needs root and preload-directory entries, not workspace ancestors.
+    const data = [...paths.map((path) => `(subpath ${JSON.stringify(path)})`),
+      '(literal "/")', `(literal ${JSON.stringify(dirname(preload))})`];
     const profile = `(version 1)
       (allow default)
       (deny network*)
       (deny file-read* (require-all ${allowed.map((rule) => `(require-not ${rule})`).join(" ")}))
+      (deny file-read-data (require-all ${data.map((rule) => `(require-not ${rule})`).join(" ")}))
       (deny file-write*)
       (deny process-fork)
       (deny process-exec (require-not (literal ${JSON.stringify(bun)})))`;

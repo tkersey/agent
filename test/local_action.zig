@@ -190,10 +190,15 @@ test "local skill activation lowers without a residual host effect" {
         else => {},
     };
     try std.testing.expectEqual(@as(usize, 1), effect_suspensions);
-    const Image = System.Program.image();
-    try std.testing.expect(std.mem.indexOf(u8, &Image.bytes, "fixture-model-v1") != null);
-    try std.testing.expect(std.mem.indexOf(u8, &Image.bytes, "fallback-model-v2") != null);
+    const bytes = try std.testing.allocator.alloc(u8, System.Source.representation.image_bytes);
+    defer std.testing.allocator.free(bytes);
+    const encoding = try std.testing.allocator.create(System.Program.ImageEncodingWorkspace);
+    defer std.testing.allocator.destroy(encoding);
+    const length = try System.Program.encodeImage(bytes, encoding);
+    const image = bytes[0..length];
+    try std.testing.expect(std.mem.indexOf(u8, image, "fixture-model-v1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, image, "fallback-model-v2") != null);
     var workspace: boundary.image.ValidationWorkspace = .{};
-    const validated = try boundary.image.validateImageView(&Image.bytes, &workspace);
+    const validated = try boundary.image.validateImageView(image, &workspace);
     try std.testing.expectEqual(@as(u32, 1), validated.catalogs.effect_count);
 }

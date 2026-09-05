@@ -33,7 +33,7 @@ test "exact image capacity preserves canonical bytes" {
     try std.testing.expectEqualSlices(u8, &expected, actual);
 }
 
-test "public strategy bodies preserve admitted system image bytes" {
+test "public strategy bodies preserve the admitted system Program" {
     inline for (.{ AlternateReact, AlternateStaged }) |System| {
         const Direct = struct {
             pub const Source = System.Source;
@@ -46,11 +46,7 @@ test "public strategy bodies preserve admitted system image bytes" {
                 Source.strategy.ProgramBody(Source),
             );
         };
-        const expected = try encodeSystem(System);
-        defer std.testing.allocator.free(expected);
-        const actual = try encodeSystem(Direct);
-        defer std.testing.allocator.free(actual);
-        try std.testing.expectEqualSlices(u8, expected, actual);
+        try std.testing.expect(Direct.Program == System.Program);
     }
 }
 

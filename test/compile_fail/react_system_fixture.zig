@@ -43,27 +43,6 @@ pub fn System(comptime representation_config: anytype, comptime Epistemics: type
     return SystemWithFailures(representation_config, Epistemics, failures);
 }
 
-pub fn ImageCapacitySystem(comptime image_bytes: usize) type {
-    return System(.{
-        .response_bytes = 1024,
-        .maximum_provider_response_bytes = 8192,
-        .image_bytes = image_bytes,
-        // This fixed fixture emits 192 values and 34 blocks. Keep capacity
-        // proofs small without changing the image or the compiler defaults.
-        .flow_limits = agent.FlowLimits{
-            .maximum_functions = 4,
-            .maximum_values = 256,
-            .maximum_blocks = 64,
-            .maximum_instructions = 512,
-            .maximum_operands = 1024,
-            .maximum_parameters = 256,
-            .maximum_requests = 8,
-            .maximum_edge_arguments = 512,
-        },
-        .schema_types = .{ Goal, Result, Action, Observation, Failure },
-    }, Stateless);
-}
-
 pub fn SystemWithFailures(
     comptime representation_config: anytype,
     comptime Epistemics: type,

@@ -47,6 +47,7 @@ const prompt_1k = [_]u8{'p'} ** 1024;
 const prompt_8k = [_]u8{'p'} ** (8 * 1024);
 const prompt_16k = [_]u8{'p'} ** (16 * 1024);
 const skill_4k = [_]u8{'s'} ** (4 * 1024);
+const maximum_image_bytes = 256 * 1024;
 const flow_limits = agent.FlowLimits{
     .maximum_functions = 8,
     .maximum_values = 1024,
@@ -62,7 +63,7 @@ fn representation(comptime Action: type) @TypeOf(.{
     .response_bytes = @as(u32, 1024),
     .maximum_arguments_json_bytes = @as(u32, 1024),
     .maximum_provider_response_bytes = @as(u32, 8 * 1024),
-    .image_bytes = @as(u32, 256 * 1024),
+    .image_bytes = @as(u32, maximum_image_bytes),
     .flow_limits = flow_limits,
     .schema_types = .{ Goal, Result, Action, Observation, Failure },
 }) {
@@ -70,7 +71,7 @@ fn representation(comptime Action: type) @TypeOf(.{
         .response_bytes = 1024,
         .maximum_arguments_json_bytes = 1024,
         .maximum_provider_response_bytes = 8 * 1024,
-        .image_bytes = 256 * 1024,
+        .image_bytes = maximum_image_bytes,
         .flow_limits = flow_limits,
         .schema_types = .{ Goal, Result, Action, Observation, Failure },
     };
@@ -233,39 +234,53 @@ const SixToolAblatedProgram = boundary.program(
 );
 
 fn writeImage(comptime System: type, output: *std.Io.Writer) !void {
-    try output.writeAll(&System.Program.image().bytes);
+    try writeProgramImage(System.Program, output);
 }
 
 fn writeProgramImage(comptime Program: type, output: *std.Io.Writer) !void {
-    try output.writeAll(&Program.image().bytes);
+    if (comptime !@hasDecl(Program, "ImageEncodingWorkspace")) {
+        return output.writeAll(&Program.image().bytes);
+    }
+    const allocator = std.heap.page_allocator;
+    const image = try allocator.alloc(u8, maximum_image_bytes);
+    defer allocator.free(image);
+    const encoding_workspace = try allocator.create(Program.ImageEncodingWorkspace);
+    defer allocator.destroy(encoding_workspace);
+    const length = try Program.encodeImage(image, encoding_workspace);
+    const validation_workspace = try allocator.create(boundary.image.ValidationWorkspace);
+    defer allocator.destroy(validation_workspace);
+    validation_workspace.* = .{};
+    _ = try boundary.image.validateImageView(image[0..length], validation_workspace);
+    try output.writeAll(image[0..length]);
 }
 
 pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
-    if (args.len != 2) return error.InvalidArguments;
+    const mode = @import("scaling_options").mode;
+    if (args.len != 2 or !std.mem.eql(u8, args[1], mode)) return error.InvalidArguments;
     var buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(init.io, &buffer);
-    if (std.mem.eql(u8, args[1], "prompt-1k")) {
+    if (comptime std.mem.eql(u8, mode, "prompt-1k")) {
         try writeImage(OneToolSystem(&prompt_1k, null), &stdout.interface);
-    } else if (std.mem.eql(u8, args[1], "prompt-8k")) {
+    } else if (comptime std.mem.eql(u8, mode, "prompt-8k")) {
         try writeImage(OneToolSystem(&prompt_8k, null), &stdout.interface);
-    } else if (std.mem.eql(u8, args[1], "prompt-16k")) {
+    } else if (comptime std.mem.eql(u8, mode, "prompt-16k")) {
         try writeImage(OneToolSystem(&prompt_16k, null), &stdout.interface);
-    } else if (std.mem.eql(u8, args[1], "skill-base")) {
+    } else if (comptime std.mem.eql(u8, mode, "skill-base")) {
         try writeImage(OneToolSystem("p", null), &stdout.interface);
-    } else if (std.mem.eql(u8, args[1], "skill-4k")) {
+    } else if (comptime std.mem.eql(u8, mode, "skill-4k")) {
         try writeImage(OneToolSystem("p", &skill_4k), &stdout.interface);
-    } else if (std.mem.eql(u8, args[1], "tool-base")) {
+    } else if (comptime std.mem.eql(u8, mode, "tool-base")) {
         try writeImage(OneToolSystem("p", null), &stdout.interface);
-    } else if (std.mem.eql(u8, args[1], "tool-extra")) {
+    } else if (comptime std.mem.eql(u8, mode, "tool-extra")) {
         try writeImage(TwoToolSystem(), &stdout.interface);
-    } else if (std.mem.eql(u8, args[1], "model-fixed-no-tools")) {
+    } else if (comptime std.mem.eql(u8, mode, "model-fixed-no-tools")) {
         try writeProgramImage(NoToolProgram(boundary.Text(1)), &stdout.interface);
-    } else if (std.mem.eql(u8, args[1], "model-dynamic-goal")) {
+    } else if (comptime std.mem.eql(u8, mode, "model-dynamic-goal")) {
         try writeProgramImage(NoToolProgram(Goal), &stdout.interface);
-    } else if (std.mem.eql(u8, args[1], "six-tools-no-decode")) {
+    } else if (comptime std.mem.eql(u8, mode, "six-tools-no-decode")) {
         try writeProgramImage(SixToolAblatedProgram, &stdout.interface);
-    } else if (std.mem.eql(u8, args[1], "six-tools-decode")) {
+    } else if (comptime std.mem.eql(u8, mode, "six-tools-decode")) {
         try writeImage(SixToolSystem(), &stdout.interface);
     } else return error.InvalidArguments;
     try stdout.interface.flush();

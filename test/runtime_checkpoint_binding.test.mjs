@@ -163,7 +163,7 @@ try {
   assert.match(checkpoint.workspaceSha256, /^[0-9a-f]{64}$/);
   assert.match(checkpoint.kernelSha256, /^[0-9a-f]{64}$/);
   assert.equal(checkpoint.worldProductionSourceSha256,
-    "f7ef570c8cdbda76c962d283d00c29162158c8dbf25767bea4f915dcccb234eb");
+    "7f74d52f65ea2b29794fbf04b91c154844c359f7bfed42ca488a839aa947bd90");
   const checkpointPath = join(checkpointWork, "checkpoint.json");
   await writeFile(checkpointPath, `${JSON.stringify({
     ...checkpoint,

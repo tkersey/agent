@@ -1012,5 +1012,12 @@ test "repository repair source closes through canonical Agent 3 system" {
     try std.testing.expectEqual(repository.Goal, repository.System.InitialArgs);
     try std.testing.expectEqual(repository.Result, repository.System.Result);
     try std.testing.expectEqual(repository.Failure, repository.System.Failure);
+    try std.testing.expectEqual(
+        repository.System.ModelEffect,
+        agent.protocol.modelInvokeV2.Profile(
+            repository.Source,
+            repository.Source.epistemics.PromptType(repository.Source),
+        ),
+    );
     try std.testing.expect(repository.System.Program.control_ir.blocks.len > 0);
 }

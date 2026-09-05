@@ -340,6 +340,8 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("actuality/emit_repository_system_v1.zig"),
         .target = b.graph.host,
         .optimize = .Debug,
+        // Build-only binary; retain runtime checks without native debug symbols.
+        .strip = true,
     });
     emitter_module.addImport("agent", agent_module);
     emitter_module.addImport("boundary", boundary_module);
@@ -409,17 +411,6 @@ pub fn build(b: *std.Build) void {
             _ = run_ablation_emitter.captureStdOut(.{ .basename = mode[1] });
             emit_repository_ablation.dependOn(&run_ablation_emitter.step);
         }
-        const scaling_emitter_module = b.createModule(.{
-            .root_source_file = b.path("actuality/emit_economy_scaling_v1.zig"),
-            .target = b.graph.host,
-            .optimize = .Debug,
-        });
-        scaling_emitter_module.addImport("agent", economy_agent_module);
-        scaling_emitter_module.addImport("boundary", boundary_module);
-        const scaling_emitter = b.addExecutable(.{
-            .name = "emit-agent-economy-scaling-v1",
-            .root_module = scaling_emitter_module,
-        });
         const scaling_modes = .{
             "prompt-1k",
             "prompt-8k",
@@ -435,6 +426,20 @@ pub fn build(b: *std.Build) void {
         };
         var scaling_outputs: [scaling_modes.len]std.Build.LazyPath = undefined;
         inline for (scaling_modes, 0..) |mode, index| {
+            const scaling_emitter_module = b.createModule(.{
+                .root_source_file = b.path("actuality/emit_economy_scaling_v1.zig"),
+                .target = b.graph.host,
+                .optimize = .Debug,
+            });
+            scaling_emitter_module.addImport("agent", economy_agent_module);
+            scaling_emitter_module.addImport("boundary", boundary_module);
+            const options = b.addOptions();
+            options.addOption([]const u8, "mode", mode);
+            scaling_emitter_module.addOptions("scaling_options", options);
+            const scaling_emitter = b.addExecutable(.{
+                .name = b.fmt("emit-agent-economy-{s}", .{mode}),
+                .root_module = scaling_emitter_module,
+            });
             const run = b.addRunArtifact(scaling_emitter);
             run.addArg(mode);
             scaling_outputs[index] = run.captureStdOut(.{

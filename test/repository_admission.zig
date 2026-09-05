@@ -6,12 +6,17 @@ const InitialArgs = @embedFile("repository-system-initial.bin");
 const ProgramTransitionDigest = ImageBytes[32..64].*;
 
 const agent = @import("agent");
-const RepositorySystem = @import("repository_system").RepositoryRepairSystem(
+const RepositorySystem = @import("repository_system").RepositoryRepairEconomySource(
     agent,
     boundary,
 );
 const repository = RepositorySystem;
-const ProductionModelProtocol = RepositorySystem.System.ModelEffect;
+// The image is already embedded above. Derive its protocol from the same source
+// and profile factory without re-running the complete program compiler.
+const ProductionModelProtocol = agent.protocol.modelInvokeV2.Profile(
+    RepositorySystem.Source,
+    RepositorySystem.Source.epistemics.PromptType(RepositorySystem.Source),
+);
 const ModelProtocol = struct {
     pub const semantic_identity = "agent.model.invoke.v2";
     pub const ArgumentsJson = ProductionModelProtocol.ArgumentsJsonType;

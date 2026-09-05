@@ -4,7 +4,7 @@ const action = @import("action.zig");
 const identity = @import("identity.zig");
 
 pub const package_version = "3.0.0";
-pub const boundary_package_identity = "tkersey/boundary@v1.8.0";
+pub const boundary_package_identity = "tkersey/boundary@v1.8.1";
 
 pub const DefinitionAction = struct {
     kind: action.Kind,

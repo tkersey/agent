@@ -18,9 +18,7 @@ export const CORRECT_SOURCE = `export function normalizeRange(start, end) {
 export async function createRepositoryEnvironment(
   workspaceRoot,
   restored = {},
-  mode = "fixture",
 ) {
-  assert(["fixture", "live"].includes(mode));
   const workspaceReal = await realpath(workspaceRoot);
   let baselineFailed = restored.baselineFailed ?? false;
   let mutationApplied = restored.mutationApplied ?? false;
@@ -74,11 +72,9 @@ export async function createRepositoryEnvironment(
         assert(Number.isInteger(result.status), "repository test process has no exit status");
         const passed = result.status === 0;
         if (!mutationApplied) {
-          assert.equal(passed, false);
-          baselineFailed = true;
+          baselineFailed ||= !passed;
         } else {
-          assert.equal(passed, true);
-          postMutationPassed = true;
+          postMutationPassed = passed;
         }
         const observation = passed
           ? "complete fixture test suite passed"
@@ -86,28 +82,16 @@ export async function createRepositoryEnvironment(
         return concat(Buffer.from([Number(passed)]), encodeText(observation));
       }
       case "repo.replace.approved.v1": {
-        assert.equal(baselineFailed, true);
         const proposal = decodeReplaceRequest(request.payload);
-        const expected = {
-          path: "src/range.mjs",
-          expected_sha256: EXPECTED_INITIAL_DIGEST,
-          replacement: CORRECT_SOURCE,
-          rationale: "Correct ascending preservation and descending normalization.",
-        };
-        if (mode === "fixture") {
-          assert.deepEqual(proposal, expected);
-        } else {
-          assert.equal(proposal.path, expected.path);
-          assert.equal(proposal.expected_sha256, expected.expected_sha256);
-          assert.equal(proposal.replacement, expected.replacement);
-        }
+        // Filesystem authority is narrower than the image's Agent policy.
+        assert.equal(proposal.path, "src/range.mjs");
+        const replacement = Buffer.from(proposal.replacement, "utf8");
         const handle = await admittedFile(proposal.path, "r");
         const absolute = join(workspaceRoot, proposal.path);
         const temporary = `${absolute}.agent-replacement`;
         try {
           const current = await handle.readFile();
           assert.equal(sha256(current), proposal.expected_sha256);
-          const replacement = Buffer.from(proposal.replacement, "utf8");
           await rm(temporary, { force: true });
           const replacementHandle = await open(temporary, "wx", 0o644);
           try {
@@ -126,8 +110,8 @@ export async function createRepositoryEnvironment(
         return concat(
           Buffer.from([1]),
           encodeText(proposal.path),
-          encodeText(EXPECTED_INITIAL_DIGEST),
-          encodeText(EXPECTED_FINAL_DIGEST),
+          encodeText(proposal.expected_sha256),
+          encodeText(sha256(replacement)),
           encodeText("replacement applied"),
         );
       }
@@ -181,19 +165,21 @@ export function decodeFinalResult(bytes) {
   return result;
 }
 
-export function validateFinalResult(result, mode) {
+export function validateFinalResult(result, mode, sourceBytes) {
   assert(["fixture", "live"].includes(mode));
-  const expected = {
-    summary: "Corrected normalizeRange and verified the complete suite.",
-    changed_path: "src/range.mjs",
-    final_source_sha256: EXPECTED_FINAL_DIGEST,
-  };
+  const sourceDigest = sha256(sourceBytes);
+  assert.equal(result.changed_path, "src/range.mjs");
+  assert.equal(result.final_source_sha256, sourceDigest);
+  // The deterministic answer is a fixture oracle, never effect admission.
   if (mode === "fixture") {
-    assert.deepEqual(result, expected);
-  } else {
-    assert.equal(result.changed_path, expected.changed_path);
-    assert.equal(result.final_source_sha256, expected.final_source_sha256);
+    assert.deepEqual(result, {
+      summary: "Corrected normalizeRange and verified the complete suite.",
+      changed_path: "src/range.mjs",
+      final_source_sha256: EXPECTED_FINAL_DIGEST,
+    });
+    assert.deepEqual(Buffer.from(sourceBytes), Buffer.from(CORRECT_SOURCE));
   }
+  return sourceDigest;
 }
 
 export function sha256(value) {

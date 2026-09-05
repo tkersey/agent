@@ -771,6 +771,7 @@ pub fn build(b: *std.Build) void {
     check_distribution.addFileInput(
         b.path("system_closure_v1/world_archive_binding.mjs"),
     );
+    check_distribution.addFileInput(b.path("test/live_repository_runtime.mjs"));
     install_closure_archive.step.dependOn(&check_distribution.step);
     install_closure_checksum.step.dependOn(&check_distribution.step);
     install_closure_receipt.step.dependOn(&check_distribution.step);
@@ -829,6 +830,9 @@ pub fn build(b: *std.Build) void {
         run.addFileInput(.{ .cwd_relative = archive });
         run.addFileInput(b.path("tools/check_agent_system_closure_distribution.mjs"));
         run.addFileInput(b.path("system_closure_v1/world_archive_binding.mjs"));
+        run.addFileInput(b.path("test/live_repository_runtime.mjs"));
+        // The extracted runtime and process environment are execution inputs.
+        run.has_side_effects = true;
         const world_execution_proof = run.captureStdOut(.{
             .basename = "world-execution-proof.json",
         });
@@ -854,6 +858,7 @@ pub fn build(b: *std.Build) void {
             shard.addFileInput(
                 b.path("tools/check_agent_system_admission_negatives.mjs"),
             );
+            shard.has_side_effects = true;
             admission_outputs[index] = shard.captureStdOut(.{
                 .basename = b.fmt("admission-{d}.json", .{index}),
             });

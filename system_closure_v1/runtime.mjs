@@ -16,8 +16,6 @@ import {
   ProcessStateCensus,
 } from "./process_state_census.mjs";
 import {
-  CORRECT_SOURCE,
-  EXPECTED_FINAL_DIGEST,
   EXPECTED_FINAL_TREE,
   EXPECTED_INITIAL_DIGEST,
   createRepositoryEnvironment,
@@ -202,7 +200,6 @@ const initialTree = checkpoint?.initialTree ?? git(workspaceRoot, ["rev-parse", 
 const repository = await createRepositoryEnvironment(
   workspaceRoot,
   checkpoint ?? {},
-  options.mode,
 );
 if (checkpoint === null) {
   assert.equal(sha256(await repository.admittedRead("src/range.mjs")), EXPECTED_INITIAL_DIGEST);
@@ -352,17 +349,15 @@ if (terminal === undefined) {
 }
 
 const finalResult = decodeFinalResult(terminal);
-validateFinalResult(finalResult, options.mode);
+const sourceAfter = await repository.admittedRead("src/range.mjs");
+const finalSourceSha256 = validateFinalResult(finalResult, options.mode, sourceAfter);
 assert.equal(repositoryState.baselineFailed, true);
 assert.equal(repositoryState.mutationApplied, true);
 assert.equal(repositoryState.postMutationPassed, true);
 if (fixtureModel !== null) assert.equal(fixtureModel.decision, 8);
-const sourceAfter = await repository.admittedRead("src/range.mjs");
-assert.equal(sha256(sourceAfter), EXPECTED_FINAL_DIGEST);
-assert.equal(sourceAfter.toString("utf8"), CORRECT_SOURCE);
 git(workspaceRoot, ["add", "--", "src/range.mjs"]);
 const finalTree = git(workspaceRoot, ["write-tree"]);
-assert.equal(finalTree, EXPECTED_FINAL_TREE);
+if (fixtureModel !== null) assert.equal(finalTree, EXPECTED_FINAL_TREE);
 assert.deepEqual(git(workspaceRoot, ["diff", "--cached", "--name-only"]).split("\n"), ["src/range.mjs"]);
 if (fixtureModel !== null) assert.equal(httpBodyEqualityCount, modelRequests);
 
@@ -407,7 +402,7 @@ await writeStdout(`${JSON.stringify({
   offlineRuntimeMilliseconds: Math.round(offlineRuntimeMilliseconds),
   initialTree,
   finalTree,
-  finalSourceSha256: EXPECTED_FINAL_DIGEST,
+  finalSourceSha256,
   terminalSha256: sha256(terminal),
   realFilesystemEffects: true,
   realTestProcesses: repositoryState.realTestProcesses,

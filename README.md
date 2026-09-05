@@ -80,6 +80,13 @@ zig build --fork=/path/to/boundary \
   check-agent-repository-system-world --summary all
 ```
 
+Check that captured World and admission proofs execute again on a warm build:
+
+```sh
+node test/world_proof_freshness.mjs /path/to/world-runtime \
+  /path/to/world-v4.1.2-process-host-runtime.tar.gz
+```
+
 The emit command installs these release-candidate assets under `zig-out/`:
 
 ```text

@@ -5,6 +5,7 @@ import { gunzipSync } from "node:zlib";
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   assertWorldRootMatchesArchive,
   readBoundedRegularFile,
@@ -129,6 +130,7 @@ try {
   assert.equal(sourceMap.programTransitionDigest, receipt.programTransitionIdentity);
   let execution = null;
   let publicVerification = null;
+  let offlineLivePath = null;
   let extractionBindingNegative = null;
   let extractionInventoryNegative = null;
   if (options.worldRoot !== undefined) {
@@ -213,6 +215,18 @@ try {
     assert.equal(publicVerification.prematureSuccessfulCompletions, 0);
     assert.equal(publicVerification.liveModelTestStatus, "not-run");
 
+    const livePath = spawnSync(process.execPath, [
+      fileURLToPath(new URL("../test/live_repository_runtime.mjs", import.meta.url)),
+      root, resolve(options.worldRoot), resolve(options.worldArchive),
+    ], {
+      encoding: "utf8", env: { PATH: process.env.PATH ?? "" },
+      timeout: 300_000, maxBuffer: 4 * 1024 * 1024,
+    });
+    assert.equal(livePath.status, 0, livePath.stderr);
+    offlineLivePath = JSON.parse(livePath.stdout);
+    assert.equal(offlineLivePath.result, "passed");
+    assert.equal(offlineLivePath.credentialedLiveModelTestStatus, "not-run");
+
     const tamperedInitial = Buffer.from(files.get("initial-args.bin"));
     tamperedInitial[tamperedInitial.length - 1] ^= 1;
     await writeFile(join(root, "initial-args.bin"), tamperedInitial);
@@ -277,6 +291,7 @@ try {
     extractionInventoryNegative,
     execution,
     publicVerification,
+    offlineLivePath,
   })}\n`);
 } finally {
   await rm(extractionRoot, { recursive: true, force: true });

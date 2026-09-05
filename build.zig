@@ -119,6 +119,24 @@ pub fn build(b: *std.Build) void {
         agent_module,
         boundary_module,
     );
+    inline for (.{ "react", "staged" }) |strategy_name| {
+        addExpectedCompileFailure(
+            b,
+            compile_fail,
+            "test/compile_fail/strategy_" ++ strategy_name ++ "_dangling_skill.zig",
+            "agent skill references an unknown model-visible action",
+            agent_module,
+            boundary_module,
+        );
+        addExpectedCompileFailure(
+            b,
+            compile_fail,
+            "test/compile_fail/strategy_" ++ strategy_name ++ "_forged_prompt.zig",
+            "agent system prompt must be constructed by agent.prompt.literal",
+            agent_module,
+            boundary_module,
+        );
+    }
     addExpectedCompileFailure(
         b,
         compile_fail,

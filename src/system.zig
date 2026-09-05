@@ -68,7 +68,7 @@ fn validFunctionName(comptime name: []const u8) bool {
     return true;
 }
 
-fn validate(comptime spec: anytype) void {
+pub fn validate(comptime spec: anytype) void {
     inline for (std.meta.fields(@TypeOf(spec))) |field| {
         if (!fieldAdmitted(field.name)) {
             @compileError("agent.system unknown source field '" ++ field.name ++ "'");

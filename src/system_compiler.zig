@@ -1014,6 +1014,7 @@ fn ReactBodyMode(
 }
 
 pub fn ReactBody(comptime source: anytype) type {
+    comptime @import("system.zig").validate(source);
     return ReactBodyMode(source, false, false);
 }
 

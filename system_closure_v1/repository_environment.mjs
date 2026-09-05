@@ -5,7 +5,6 @@ import { constants, existsSync } from "node:fs";
 import { access, lstat, open, readFile, readlink, realpath, rename, rm } from "node:fs/promises";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { types } from "node:util";
 
 export const EXPECTED_INITIAL_DIGEST = "8832f65e4bcf4a701dc76f310f3af34296bf8e95feb16ad70608041cb2e6dbb3";
 export const EXPECTED_FINAL_DIGEST = "8bf50f62e3a4294ef359a6b9096d66e5597ce37824b3483ddad541ee21438453";
@@ -235,12 +234,34 @@ if (process.env.AGENT_REPOSITORY_TEST_PRELOAD === "1") {
   const context = createContext(Object.create(null), {
     codeGeneration: { strings: false, wasm: false },
   });
-  // Only data crosses into the assertions. In particular, a replacement's
-  // getters, prototypes, or asymmetric matchers never enter Bun's test realm.
+  // Resolve authored properties inside their own realm. Only resulting data,
+  // never getters, Proxy traps, or matchers, enters Bun's assertion realm.
   const invoke = new Script(`"use strict";
     (() => {
-      const parse = JSON.parse, apply = Reflect.apply;
-      return (namespace, args) => apply(namespace.normalizeRange, undefined, parse(args));
+      const parse = JSON.parse, stringify = JSON.stringify, apply = Reflect.apply;
+      const keys = Reflect.ownKeys, get = Reflect.get, descriptor = Object.getOwnPropertyDescriptor;
+      const create = Object.create, array = Array.isArray, prototype = Object.setPrototypeOf;
+      const SetType = Set, has = Set.prototype.has, add = Set.prototype.add, remove = Set.prototype.delete;
+      function data(value, seen) {
+        if (value === null || typeof value !== 'object') {
+          switch (typeof value) { case 'function': case 'symbol': case 'bigint': throw null; }
+          return value;
+        }
+        if (apply(has, seen, [value])) throw null;
+        apply(add, seen, [value]);
+        const output = array(value) ? prototype([], null) : create(null);
+        const names = keys(value);
+        for (let i = 0; i < names.length; i += 1) {
+          const key = names[i], item = descriptor(value, key);
+          if (!item || !item.enumerable) continue;
+          if (typeof key !== 'string') throw null;
+          output[key] = data(get(value, key), seen);
+        }
+        apply(remove, seen, [value]);
+        return output;
+      }
+      return (namespace, args) => stringify(data(
+        apply(namespace.normalizeRange, undefined, parse(args)), new SetType()));
     })()`
   ).runInContext(context);
   const module = new SourceTextModule(await readFile(source, "utf8"), {
@@ -260,31 +281,9 @@ if (process.env.AGENT_REPOSITORY_TEST_PRELOAD === "1") {
       let result;
       try { result = invoke(module.namespace, JSON.stringify(args)); }
       catch { throw new Error("repository replacement invocation failed"); }
-      return testData(result);
+      return result === undefined ? undefined : JSON.parse(result);
     },
   }));
-}
-
-function testData(value, seen = new Set()) {
-  if (value === null || typeof value !== "object") {
-    assert(!["function", "symbol", "bigint"].includes(typeof value), "test result must be data");
-    return value;
-  }
-  // Inspect data without executing authored Proxy traps, accessors, toJSON,
-  // iterators, or matchers in the test runner's realm.
-  assert(!types.isProxy(value) && !seen.has(value), "test result must be acyclic data");
-  seen.add(value);
-  const output = Array.isArray(value) ? [] : Object.create(null);
-  for (const key of Reflect.ownKeys(value)) {
-    const item = Object.getOwnPropertyDescriptor(value, key);
-    if (!item.enumerable) continue;
-    assert(typeof key === "string" && Object.hasOwn(item, "value"), "test result must have data properties");
-    Object.defineProperty(output, key, {
-      value: testData(item.value, seen), enumerable: true, writable: true, configurable: true,
-    });
-  }
-  seen.delete(value);
-  return output;
 }
 
 export function decodeFinalResult(bytes) {

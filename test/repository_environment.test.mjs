@@ -148,6 +148,8 @@ test("replacement code cannot exit, forge output, mock assertions, or pass match
     "export function normalizeRange(){return {get start(){return 1}, end:3};}",
     "export function normalizeRange(a,b){return {start:a,end:b,toJSON(){return {start:Math.min(a,b),end:Math.max(a,b)}}};}",
     "await import('node:process').catch(e => e.constructor.constructor('return process')().exit(0)); export function normalizeRange(){return {};}",
+    "const p=import('node:process'); p.catch(()=>{}); p.constructor.constructor('return process')().exit(0); export function normalizeRange(){return {};}",
+    "globalThis.constructor.constructor('return process')().exit(0); export function normalizeRange(){return {};}",
     "Array.prototype[Symbol.iterator]=function*(){yield Math.min(this[0],this[1]);yield Math.max(this[0],this[1]);}; export function normalizeRange(start,end){return {start,end};}",
     "export function normalizeRange(a,b){return new Proxy({}, {ownKeys(){return ['start','end']}, getOwnPropertyDescriptor(_,key){return {enumerable:true,configurable:true,value:key==='start'?Math.min(a,b):Math.max(a,b)}}});}",
   ];
@@ -199,6 +201,19 @@ async function fixtureWorkspace(context) {
   await cp(fixture, workspace, { recursive: true });
   return workspace;
 }
+
+test("valid accessor and proxy repairs retain their fixture observations", async (context) => {
+  const workspace = await fixtureWorkspace(context);
+  for (const source of [
+    "export function normalizeRange(a,b){return {get start(){return Math.min(a,b)}, get end(){return Math.max(a,b)}};}",
+    "export function normalizeRange(a,b){return new Proxy({start:Math.min(a,b),end:Math.max(a,b)}, {});}",
+  ]) {
+    await writeFile(join(workspace, "src/range.mjs"), source);
+    const repository = await createRepositoryEnvironment(workspace, { mutationApplied: true });
+    const response = await repository.resolveEffect({effectSemanticIdentity:"repo.test.v1",payload:Buffer.alloc(0)});
+    assert.equal(response[0], 1, source);
+  }
+});
 
 function encodeText(value) {
   const valueBytes = Buffer.from(value);

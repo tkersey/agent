@@ -24,9 +24,10 @@ Repository tests require `sandbox-exec` on macOS or a root-owned Bubblewrap
 installation on Linux. They run without network or filesystem write authority,
 and cannot read outside the fixture and their declared runtime dependencies.
 The unchanged Bun fixture assertions load the replacement in a separate
-JavaScript module context without host APIs or imports. Only acyclic data
-properties cross back into assertions; executable matchers, accessors, and
-Proxy objects do not. This tests the fixture's data-returning function without
+JavaScript module context without host APIs or imports. Getters and Proxy
+properties are evaluated inside that context; only their acyclic data values
+cross back into assertions, never executable callbacks or matchers. This tests
+the fixture's data-returning function without
 giving replacement code control of the test runner or its passing observation.
 
 For an uninterrupted source-independent Process State census, add an output

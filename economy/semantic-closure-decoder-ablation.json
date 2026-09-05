@@ -1,6 +1,6 @@
 {
   "format": "agent-system-decoder-ablation/v1",
-  "boundaryCommit": "9772a22838c3243c746379e292de01230cb60eda",
+  "boundaryCommit": "999e936c4a865cd31948b52b2af2baeacf84c9f1",
   "fullRepositorySystem": {
     "imageSha256": "51cc746c20cda6aa3f643a4d916a70f7066c0270c5fcda6fc0e582080852210d",
     "imageByteLength": 95508

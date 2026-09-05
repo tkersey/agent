@@ -1,6 +1,6 @@
 {
   "format": "agent-system-economy-marginals/v1",
-  "boundaryCommit": "9772a22838c3243c746379e292de01230cb60eda",
+  "boundaryCommit": "999e936c4a865cd31948b52b2af2baeacf84c9f1",
   "images": {
     "prompt-1k": 16072,
     "prompt-8k": 23272,

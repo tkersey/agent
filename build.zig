@@ -478,6 +478,8 @@ pub fn build(b: *std.Build) void {
                 .root_source_file = b.path("actuality/emit_economy_scaling_v1.zig"),
                 .target = b.graph.host,
                 .optimize = .Debug,
+                // Build-only binary; the emitted image has its own source map.
+                .strip = true,
             });
             scaling_emitter_module.addImport("agent", economy_agent_module);
             scaling_emitter_module.addImport("boundary", boundary_module);

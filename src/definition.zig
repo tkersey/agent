@@ -175,6 +175,9 @@ fn validateDefinition(comptime spec: anytype) void {
                     @compileError("agent observation payload differs from EffectSite.Resume");
                 }
             },
+            .local => @compileError(
+                "agent v2 definitions do not admit Agent 3 local actions",
+            ),
             .final => {
                 final_count += 1;
                 if (ActionPayload != spec.Result) {

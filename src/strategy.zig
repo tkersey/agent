@@ -15,6 +15,30 @@ pub const ReflectiveConfig = struct {
     reflection_rounds: u32,
 };
 
+/// Admit one custom staged Agent 3 runtime while preserving the canonical
+/// `agent.system` product. The implementation returns an ordinary Program Body;
+/// it is compile-time source lowering, never a serialized callback registry.
+pub fn staged(comptime spec: anytype) type {
+    if (!@hasField(@TypeOf(spec), "semantic_identity") or
+        !@hasField(@TypeOf(spec), "implementation"))
+    {
+        @compileError("agent.strategy.staged requires semantic_identity and implementation");
+    }
+    if (spec.semantic_identity.len == 0) {
+        @compileError("agent staged strategy semantic identity must not be empty");
+    }
+    const Implementation = spec.implementation;
+    if (!@hasDecl(Implementation, "ProgramBody")) {
+        @compileError("agent staged strategy implementation requires ProgramBody");
+    }
+    return struct {
+        pub const system_semantic_identity = spec.semantic_identity;
+        pub fn ProgramBody(comptime source: anytype) type {
+            return Implementation.ProgramBody(source);
+        }
+    };
+}
+
 pub fn effectCount(comptime Definition: type) usize {
     var result: usize = 0;
     inline for (0..Definition.action_count) |index| {
@@ -175,10 +199,15 @@ pub fn react(comptime config: anytype) type {
         @compileError("agent.strategy.react v1 accepts only an empty config");
     }
     return struct {
+        pub const system_semantic_identity = "agent.strategy.react.v3";
         pub const semantic_identity = "agent.strategy.react.v2";
         pub const kind = Kind.react;
         pub const Config = ReactConfig;
         pub const normalized_config = Config{};
+
+        pub fn ProgramBody(comptime source: anytype) type {
+            return @import("system_compiler.zig").ReactBody(source);
+        }
 
         pub fn validate(comptime Definition: type) void {
             _ = failureNamed(Definition, "budget_exhausted");

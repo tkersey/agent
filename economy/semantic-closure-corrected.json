@@ -1,0 +1,73 @@
+{
+  "format": "agent-system-economy/v1",
+  "status": "passed",
+  "providerWireBaseline": {
+    "imageSha256": "cec599592476e13faa4b5f12d723a9d395fdfb0435727b0149da354b398fae63",
+    "imageByteLength": 253427,
+    "gzip9ByteLength": 84556,
+    "reductions": 20133,
+    "modelRequests": 8,
+    "repositoryRequests": 7
+  },
+  "semanticClosure": {
+    "effectIdentity": "agent.model.invoke.v2",
+    "protocolIdentity": "agent.model.protocol.openai-responses-v2",
+    "imageSha256": "51cc746c20cda6aa3f643a4d916a70f7066c0270c5fcda6fc0e582080852210d",
+    "imageByteLength": 95508,
+    "gzip9ByteLength": 24801,
+    "reductions": 398,
+    "modelRequests": 8,
+    "repositoryRequests": 7,
+    "maximumProgressedBetweenResidualBoundaries": 31,
+    "peakStateBytes": 19476,
+    "p95StateBytes": 15881,
+    "largestRequestBytes": 5454,
+    "duplicateEnvironmentBlobCopies": 0,
+    "duplicatedEnvironmentBytes": 0,
+    "terminalSha256": "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032",
+    "finalTree": "0d9ac8802aac6597cb0a443245efb6f92a0249fe"
+  },
+  "sections": {
+    "schemasBytes": 1784,
+    "constantsBytes": 3958,
+    "constantPayloadBytes": 3658,
+    "effectsBytes": 603,
+    "valuesBytes": 4480,
+    "valueCount": 1119,
+    "functionsBytes": 12,
+    "functionCount": 1,
+    "segmentsBytes": 23032,
+    "segmentCount": 172,
+    "instructionCount": 851,
+    "operandCount": 992,
+    "constructorsBytes": 58202,
+    "constructorCount": 239,
+    "environmentFieldCount": 2250,
+    "invariantTermCount": 1905
+  },
+  "gates": {
+    "rawImageMaximumBytes": 98304,
+    "rawImage": "pass",
+    "reductionMaximum": 512,
+    "reductions": "pass",
+    "betweenEffectMaximum": 64,
+    "betweenEffectWork": "pass",
+    "peakStateMaximumBytes": 131072,
+    "peakState": "pass",
+    "largeDuplicateLiveEnvironment": "pass"
+  },
+  "boundary": {
+    "commit": "999e936c4a865cd31948b52b2af2baeacf84c9f1",
+    "kernelSha256": "4da38268f12e8a2749a266480748da5460b5030dadfc10804f79ba3a3bb8013e",
+    "kernelByteLength": 682943,
+    "growthFromBoundary170Bytes": 35470,
+    "growthFromBoundary170Percent": 5.48,
+    "compilerMaximumValues": 1280,
+    "compilerMaximumBlocks": 192
+  },
+  "world": {
+    "commit": "a55154eb43d19cba83c0bf1869cfd38704905ff1",
+    "runtimeArchiveSha256": "422f1779b8804b38e23c2610673059cfd1dc6dde5f156050032e9931e35bfbea",
+    "runtimeArchiveByteLength": 784462
+  }
+}

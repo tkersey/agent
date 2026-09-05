@@ -1,0 +1,5470 @@
+{
+  "format": "agent-wire-closure-baseline-phases/v1",
+  "baselineBinding": {
+    "format": "agent-wire-closure-baseline-binding/v1",
+    "agentHead": "3f0e4a4e0c2e13b41729207187edc1d5abc625f6",
+    "boundaryHead": "bc0f22eddfc051b24b16df5a41c3d65365d9d33b",
+    "worldHead": "622735238addc1c2612b060a6f6d9c2eb17a7abd",
+    "imageSha256": "cec599592476e13faa4b5f12d723a9d395fdfb0435727b0149da354b398fae63",
+    "imageByteLength": 253427,
+    "reductions": 20133,
+    "modelRequests": 8,
+    "repositoryRequests": 7
+  },
+  "sourceMap": {
+    "format": "agent-bpi1-source-map/v1",
+    "imageSha256": "cec599592476e13faa4b5f12d723a9d395fdfb0435727b0149da354b398fae63",
+    "programTransitionDigest": "7ffbd25fa961bc97010993a0b4b5426d24983f6f02f60c55d59148b54114a376",
+    "segments": [
+      {
+        "segmentId": 0,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.initialization",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.initialization"
+      },
+      {
+        "segmentId": 1,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.initialization",
+            "firstInstruction": 0,
+            "instructionCount": 8
+          }
+        ],
+        "terminatorPhase": "agent.initialization"
+      },
+      {
+        "segmentId": 2,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.initialization",
+            "firstInstruction": 0,
+            "instructionCount": 31
+          }
+        ],
+        "terminatorPhase": "agent.initialization"
+      },
+      {
+        "segmentId": 3,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.memory_projection",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          },
+          {
+            "phase": "agent.prompt_render",
+            "firstInstruction": 1,
+            "instructionCount": 2
+          },
+          {
+            "phase": "agent.skill_activation",
+            "firstInstruction": 3,
+            "instructionCount": 2
+          },
+          {
+            "phase": "agent.tool_selection",
+            "firstInstruction": 5,
+            "instructionCount": 12
+          },
+          {
+            "phase": "agent.model_request",
+            "firstInstruction": 17,
+            "instructionCount": 42
+          }
+        ],
+        "terminatorPhase": "agent.model_request"
+      },
+      {
+        "segmentId": 4,
+        "functionId": 1,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_request",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_request"
+      },
+      {
+        "segmentId": 5,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_request",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_request"
+      },
+      {
+        "segmentId": 6,
+        "functionId": 1,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_request",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_request"
+      },
+      {
+        "segmentId": 7,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_request",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_request"
+      },
+      {
+        "segmentId": 8,
+        "functionId": 1,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_request"
+      },
+      {
+        "segmentId": 9,
+        "functionId": 1,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_request",
+            "firstInstruction": 0,
+            "instructionCount": 12
+          }
+        ],
+        "terminatorPhase": "agent.model_request"
+      },
+      {
+        "segmentId": 10,
+        "functionId": 2,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_request",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.model_request"
+      },
+      {
+        "segmentId": 11,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_request",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_request"
+      },
+      {
+        "segmentId": 12,
+        "functionId": 2,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_request",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_request"
+      },
+      {
+        "segmentId": 13,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_request",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_request"
+      },
+      {
+        "segmentId": 14,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_request",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_request"
+      },
+      {
+        "segmentId": 15,
+        "functionId": 2,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_request",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_request"
+      },
+      {
+        "segmentId": 16,
+        "functionId": 2,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_request",
+            "firstInstruction": 0,
+            "instructionCount": 16
+          }
+        ],
+        "terminatorPhase": "agent.model_request"
+      },
+      {
+        "segmentId": 17,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 18,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 19,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 20,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 21,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 22,
+        "functionId": 3,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 23,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 24,
+        "functionId": 4,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 25,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 26,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 27,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 28,
+        "functionId": 4,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 29,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 11
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 30,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 31,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 11
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 32,
+        "functionId": 4,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 33,
+        "functionId": 4,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 14
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 34,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 35,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 36,
+        "functionId": 0,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 37,
+        "functionId": 4,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 38,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 39,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 40,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 41,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 42,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 5
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 43,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 44,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_name_match",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.action_name_match"
+      },
+      {
+        "segmentId": 45,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 46,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 47,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 48,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 11
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 49,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 50,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 51,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 5
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 52,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_name_match",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.action_name_match"
+      },
+      {
+        "segmentId": 53,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 54,
+        "functionId": 0,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 55,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 56,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 57,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 58,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 59,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 60,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 61,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_name_match",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.action_name_match"
+      },
+      {
+        "segmentId": 62,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 63,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 64,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 65,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 66,
+        "functionId": 3,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 67,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 68,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 69,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 70,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 71,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_name_match",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.action_name_match"
+      },
+      {
+        "segmentId": 72,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 5
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 73,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 74,
+        "functionId": 6,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 75,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 76,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 77,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 78,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_admission",
+            "firstInstruction": 0,
+            "instructionCount": 45
+          }
+        ],
+        "terminatorPhase": "agent.action_admission"
+      },
+      {
+        "segmentId": 79,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 80,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 81,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 82,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 5
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 83,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_name_match",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.action_name_match"
+      },
+      {
+        "segmentId": 84,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 85,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 86,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 87,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 8
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 88,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 89,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 90,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 91,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_admission",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.action_admission"
+      },
+      {
+        "segmentId": 92,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_admission",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_admission"
+      },
+      {
+        "segmentId": 93,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 94,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 95,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 96,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 97,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 13
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 98,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_name_match",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.action_name_match"
+      },
+      {
+        "segmentId": 99,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 100,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 35
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 101,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 102,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 103,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 104,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 105,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 106,
+        "functionId": 3,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 107,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 108,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 109,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_admission",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_admission"
+      },
+      {
+        "segmentId": 110,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 111,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 112,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 113,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 114,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 115,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 116,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 11
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 117,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 118,
+        "functionId": 7,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 119,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 13
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 120,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 121,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 122,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 123,
+        "functionId": 6,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 124,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 125,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 126,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 127,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 35
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 128,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 129,
+        "functionId": 3,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 130,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_admission",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.action_admission"
+      },
+      {
+        "segmentId": 131,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_admission",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_admission"
+      },
+      {
+        "segmentId": 132,
+        "functionId": 8,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 133,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 8
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 134,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 135,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 136,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 137,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 138,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 139,
+        "functionId": 7,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 140,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 141,
+        "functionId": 5,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 142,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 143,
+        "functionId": 9,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 144,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 145,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 146,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 147,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 148,
+        "functionId": 0,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 149,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 150,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 151,
+        "functionId": 3,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 152,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 153,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_admission",
+            "firstInstruction": 0,
+            "instructionCount": 18
+          }
+        ],
+        "terminatorPhase": "agent.action_admission"
+      },
+      {
+        "segmentId": 154,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_admission",
+            "firstInstruction": 0,
+            "instructionCount": 59
+          }
+        ],
+        "terminatorPhase": "agent.action_admission"
+      },
+      {
+        "segmentId": 155,
+        "functionId": 8,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 156,
+        "functionId": 0,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 157,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 11
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 158,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 159,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 160,
+        "functionId": 7,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 161,
+        "functionId": 7,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 162,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 163,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 164,
+        "functionId": 9,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 165,
+        "functionId": 9,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 166,
+        "functionId": 6,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 167,
+        "functionId": 6,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 168,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 169,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 170,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 171,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 172,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 173,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.tool_dispatch",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.tool_dispatch"
+      },
+      {
+        "segmentId": 174,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_admission",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_admission"
+      },
+      {
+        "segmentId": 175,
+        "functionId": 8,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 176,
+        "functionId": 8,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 5
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 177,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 178,
+        "functionId": 0,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 179,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 180,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 181,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 182,
+        "functionId": 7,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 183,
+        "functionId": 7,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 5
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 184,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 185,
+        "functionId": 9,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 13
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 186,
+        "functionId": 9,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 187,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 188,
+        "functionId": 6,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 189,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 34
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 190,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 191,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 192,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 5
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 193,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 194,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 195,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.tool_dispatch",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.tool_dispatch"
+      },
+      {
+        "segmentId": 196,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 197,
+        "functionId": 8,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 198,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 199,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 11
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 200,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 201,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 202,
+        "functionId": 7,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 11
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 203,
+        "functionId": 7,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 204,
+        "functionId": 7,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 5
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 205,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 206,
+        "functionId": 9,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 22
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 207,
+        "functionId": 9,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 13
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 208,
+        "functionId": 9,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 209,
+        "functionId": 6,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 210,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 211,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 42
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 212,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 213,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 214,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 215,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 216,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.tool_dispatch"
+      },
+      {
+        "segmentId": 217,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 218,
+        "functionId": 8,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 219,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 220,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 11
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 221,
+        "functionId": 7,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 222,
+        "functionId": 7,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 223,
+        "functionId": 5,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 12
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 224,
+        "functionId": 9,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 225,
+        "functionId": 9,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 18
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 226,
+        "functionId": 9,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 13
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 227,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 228,
+        "functionId": 6,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 229,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 34
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 230,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 9
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 231,
+        "functionId": 3,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 232,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 233,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 234,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 235,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 236,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.tool_dispatch"
+      },
+      {
+        "segmentId": 237,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 238,
+        "functionId": 8,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 239,
+        "functionId": 8,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 240,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 241,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 242,
+        "functionId": 9,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 243,
+        "functionId": 9,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 22
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 244,
+        "functionId": 9,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 18
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 245,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 246,
+        "functionId": 6,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 247,
+        "functionId": 6,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 248,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 249,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 250,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 251,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 252,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 253,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 254,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 255,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 256,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.tool_dispatch"
+      },
+      {
+        "segmentId": 257,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 258,
+        "functionId": 8,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 11
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 259,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 260,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 261,
+        "functionId": 9,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 262,
+        "functionId": 9,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 18
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 263,
+        "functionId": 6,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 264,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 265,
+        "functionId": 11,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 266,
+        "functionId": 6,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 267,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 5
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 268,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 269,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 270,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 271,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 31
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 272,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 273,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 274,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 275,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 276,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 277,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 278,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 279,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 280,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 281,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 282,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.tool_dispatch"
+      },
+      {
+        "segmentId": 283,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 284,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 285,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 286,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 287,
+        "functionId": 9,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 22
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 288,
+        "functionId": 6,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 289,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 290,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 291,
+        "functionId": 11,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 292,
+        "functionId": 11,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 293,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 12
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 294,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 295,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 296,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 297,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 298,
+        "functionId": 0,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 299,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 19
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 300,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 20
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 301,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 302,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 31
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 303,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 304,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 305,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 306,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 307,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 308,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 309,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 310,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 311,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 312,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 313,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          },
+          {
+            "phase": "agent.final_admission",
+            "firstInstruction": 2,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.final_admission"
+      },
+      {
+        "segmentId": 314,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.completion",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.completion"
+      },
+      {
+        "segmentId": 315,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 11
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 316,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 317,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 318,
+        "functionId": 9,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 319,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 320,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 321,
+        "functionId": 11,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 322,
+        "functionId": 11,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 323,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 324,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 325,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 326,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 327,
+        "functionId": 10,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 328,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 329,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 330,
+        "functionId": 0,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 331,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 19
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 332,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 20
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 333,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 334,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 31
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 335,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 336,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 337,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 338,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 339,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 340,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 341,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 342,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 343,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 344,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.final_admission",
+            "firstInstruction": 0,
+            "instructionCount": 20
+          }
+        ],
+        "terminatorPhase": "agent.final_admission"
+      },
+      {
+        "segmentId": 345,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.final_admission",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.final_admission"
+      },
+      {
+        "segmentId": 346,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 347,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 11
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 348,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 349,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 350,
+        "functionId": 6,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 351,
+        "functionId": 11,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 352,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 353,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 354,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 355,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 356,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 357,
+        "functionId": 0,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 358,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 19
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 359,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 20
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 360,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 361,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 31
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 362,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 363,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 364,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 365,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 366,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 367,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 368,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 369,
+        "functionId": 0,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.final_admission"
+      },
+      {
+        "segmentId": 370,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 371,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 372,
+        "functionId": 6,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 373,
+        "functionId": 11,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 374,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 375,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 376,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 377,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 5
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 378,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 379,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 380,
+        "functionId": 0,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 381,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 19
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 382,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 20
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 383,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 384,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 31
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 385,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 386,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 387,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 388,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 389,
+        "functionId": 0,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.completion"
+      },
+      {
+        "segmentId": 390,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 391,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 392,
+        "functionId": 6,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 393,
+        "functionId": 11,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 13
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 394,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 5
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 395,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 396,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 397,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 398,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 399,
+        "functionId": 0,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 400,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 19
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 401,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 20
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 402,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 403,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 404,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 405,
+        "functionId": 11,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 406,
+        "functionId": 11,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 78
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 407,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 408,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 409,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 410,
+        "functionId": 10,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 411,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.observation_fold",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.observation_fold"
+      },
+      {
+        "segmentId": 412,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 11
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 413,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 414,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 415,
+        "functionId": 11,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 416,
+        "functionId": 11,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 417,
+        "functionId": 11,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 418,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 8
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 419,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 420,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 421,
+        "functionId": 12,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 422,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 2
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 423,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 11
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 424,
+        "functionId": 11,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 425,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 426,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 427,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 428,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 429,
+        "functionId": 0,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 430,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 431,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 432,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 433,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 434,
+        "functionId": 12,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 435,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 436,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 437,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 438,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 3
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 439,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 440,
+        "functionId": 12,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 441,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 442,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 443,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 11
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 444,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 445,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 10
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 446,
+        "functionId": 12,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 447,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 448,
+        "functionId": 12,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 449,
+        "functionId": 0,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 450,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 451,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 452,
+        "functionId": 12,
+        "phaseSpans": [],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 453,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 454,
+        "functionId": 0,
+        "phaseSpans": [
+          {
+            "phase": "agent.action_argument_decode",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.action_argument_decode"
+      },
+      {
+        "segmentId": 455,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 4
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 456,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 5
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 457,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 7
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 458,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 6
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      },
+      {
+        "segmentId": 459,
+        "functionId": 12,
+        "phaseSpans": [
+          {
+            "phase": "agent.model_resume",
+            "firstInstruction": 0,
+            "instructionCount": 1
+          }
+        ],
+        "terminatorPhase": "agent.model_resume"
+      }
+    ],
+    "functions": [
+      {
+        "functionId": 0,
+        "entrySegmentId": 0,
+        "phases": [
+          "agent.initialization",
+          "agent.memory_projection",
+          "agent.prompt_render",
+          "agent.skill_activation",
+          "agent.tool_selection",
+          "agent.model_request",
+          "agent.model_resume",
+          "agent.action_name_match",
+          "agent.action_argument_decode",
+          "agent.action_admission",
+          "agent.tool_dispatch",
+          "agent.observation_fold",
+          "agent.final_admission",
+          "agent.completion"
+        ]
+      },
+      {
+        "functionId": 1,
+        "entrySegmentId": 4,
+        "phases": [
+          "agent.model_request"
+        ]
+      },
+      {
+        "functionId": 2,
+        "entrySegmentId": 10,
+        "phases": [
+          "agent.model_request"
+        ]
+      },
+      {
+        "functionId": 3,
+        "entrySegmentId": 22,
+        "phases": [
+          "agent.model_resume"
+        ]
+      },
+      {
+        "functionId": 4,
+        "entrySegmentId": 24,
+        "phases": [
+          "agent.model_resume"
+        ]
+      },
+      {
+        "functionId": 5,
+        "entrySegmentId": 40,
+        "phases": [
+          "agent.model_resume"
+        ]
+      },
+      {
+        "functionId": 6,
+        "entrySegmentId": 74,
+        "phases": [
+          "agent.model_resume"
+        ]
+      },
+      {
+        "functionId": 7,
+        "entrySegmentId": 118,
+        "phases": [
+          "agent.model_resume"
+        ]
+      },
+      {
+        "functionId": 8,
+        "entrySegmentId": 132,
+        "phases": [
+          "agent.model_resume"
+        ]
+      },
+      {
+        "functionId": 9,
+        "entrySegmentId": 143,
+        "phases": [
+          "agent.model_resume"
+        ]
+      },
+      {
+        "functionId": 10,
+        "entrySegmentId": 171,
+        "phases": [
+          "agent.model_resume"
+        ]
+      },
+      {
+        "functionId": 11,
+        "entrySegmentId": 265,
+        "phases": [
+          "agent.model_resume"
+        ]
+      },
+      {
+        "functionId": 12,
+        "entrySegmentId": 268,
+        "phases": [
+          "agent.model_resume"
+        ]
+      }
+    ]
+  },
+  "phaseRows": [
+    {
+      "phase": "agent.action_admission",
+      "outcomes": 41,
+      "progressed": 41,
+      "firstReduction": 1287,
+      "lastReduction": 20122,
+      "maximumStateBytes": 5102,
+      "maximumRequestBytes": 0
+    },
+    {
+      "phase": "agent.action_argument_decode",
+      "outcomes": 231,
+      "progressed": 231,
+      "firstReduction": 1271,
+      "lastReduction": 20117,
+      "maximumStateBytes": 3718,
+      "maximumRequestBytes": 0
+    },
+    {
+      "phase": "agent.action_name_match",
+      "outcomes": 26,
+      "progressed": 26,
+      "firstReduction": 1283,
+      "lastReduction": 19137,
+      "maximumStateBytes": 3283,
+      "maximumRequestBytes": 0
+    },
+    {
+      "phase": "agent.completion",
+      "outcomes": 1,
+      "progressed": 1,
+      "firstReduction": 20132,
+      "lastReduction": 20132,
+      "maximumStateBytes": 346,
+      "maximumRequestBytes": 0
+    },
+    {
+      "phase": "agent.final_admission",
+      "outcomes": 3,
+      "progressed": 3,
+      "firstReduction": 20129,
+      "lastReduction": 20131,
+      "maximumStateBytes": 3048,
+      "maximumRequestBytes": 0
+    },
+    {
+      "phase": "agent.initialization",
+      "outcomes": 272,
+      "progressed": 272,
+      "firstReduction": 1,
+      "lastReduction": 272,
+      "maximumStateBytes": 2385,
+      "maximumRequestBytes": 0
+    },
+    {
+      "phase": "agent.model_request",
+      "outcomes": 280,
+      "progressed": 272,
+      "firstReduction": 273,
+      "lastReduction": 15560,
+      "maximumStateBytes": 29141,
+      "maximumRequestBytes": 4470
+    },
+    {
+      "phase": "agent.model_resume",
+      "outcomes": 18133,
+      "progressed": 18133,
+      "firstReduction": 308,
+      "lastReduction": 20114,
+      "maximumStateBytes": 12927,
+      "maximumRequestBytes": 0
+    },
+    {
+      "phase": "agent.observation_fold",
+      "outcomes": 1135,
+      "progressed": 1129,
+      "firstReduction": 1295,
+      "lastReduction": 20128,
+      "maximumStateBytes": 12073,
+      "maximumRequestBytes": 553
+    },
+    {
+      "phase": "agent.tool_dispatch",
+      "outcomes": 10,
+      "progressed": 9,
+      "firstReduction": 1292,
+      "lastReduction": 20123,
+      "maximumStateBytes": 2443,
+      "maximumRequestBytes": 250
+    }
+  ]
+}

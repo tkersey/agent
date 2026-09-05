@@ -1,0 +1,66 @@
+{
+  "format": "agent-system-economy-ablation/v1",
+  "boundaryCommit": "999e936c4a865cd31948b52b2af2baeacf84c9f1",
+  "rows": {
+    "A": {
+      "system": "prior landed Agent Interpretation image",
+      "imageByteLength": 23431,
+      "reductions": 96
+    },
+    "B": {
+      "system": "semantic model effect, fixed message, no tools",
+      "imageByteLength": 8859
+    },
+    "C": {
+      "system": "B with bounded Text Goal",
+      "imageByteLength": 8859
+    },
+    "D": {
+      "system": "one-tool system with one 4 KiB always-active skill",
+      "imageByteLength": 19482
+    },
+    "E": {
+      "system": "one simple final tool",
+      "imageByteLength": 15069
+    },
+    "F": {
+      "system": "six simple actions, Action verification ablated",
+      "imageByteLength": 34566
+    },
+    "G": {
+      "system": "F with strict typed Action verification",
+      "imageByteLength": 36413
+    },
+    "H": {
+      "system": "repository Memory and admission, Action verification ablated",
+      "imageByteLength": 93725
+    },
+    "I": {
+      "system": "full corrected repository-repair system",
+      "imageByteLength": 95508,
+      "gzip9ByteLength": 24801,
+      "reductions": 398,
+      "peakStateBytes": 19476
+    },
+    "J": {
+      "system": "provider-wire-closure baseline",
+      "imageByteLength": 253427,
+      "gzip9ByteLength": 84556,
+      "reductions": 20133
+    }
+  },
+  "dominantTerms": {
+    "repositoryMemoryAndAdmissionOverSixToolDecoderBytes": 57312,
+    "strictRepositoryActionVerificationBytes": 1783,
+    "providerWireBaselineToCorrectedBytes": 157919,
+    "providerWireBaselineToCorrectedReductions": 19735
+  },
+  "detailReceipts": {
+    "baselineImage": "wire-closure-baseline-image.json",
+    "baselineProcess": "wire-closure-baseline-process.json",
+    "correctedImage": "semantic-closure-corrected-image.json",
+    "correctedProcess": "semantic-closure-corrected-process.json",
+    "marginals": "semantic-closure-marginals.json",
+    "decoder": "semantic-closure-decoder-ablation.json"
+  }
+}

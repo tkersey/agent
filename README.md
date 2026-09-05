@@ -1,119 +1,131 @@
 # agent
 
-`agent` is a Zig staged compiler for typed agent systems.
+`agent` is a Zig staged compiler for complete typed agent systems.
 
 ```text
-AgentDefinition + RuntimeStrategy + EpistemicStrategy
-    -> one Boundary Program
-    -> specialized Machine-v2 reducer
-    -> World application-specific WASM
+complete immutable Agent source
+    -> Agent frontend and generic Boundary composition
+    -> one ordinary Boundary Program
+    -> one BPI1 image
 
-AgentDefinition + RuntimeStrategy + EpistemicStrategy
-    -> one Boundary Program
-    -> BPI1 + MachineV2Profile
-    -> fixed Boundary kernel WASM
+fixed Boundary Process kernel WASM
+    + BPI1
+    + portable Process State and explicit EffectResults
+    -> Process outcome
 ```
 
-Agent v2 separates four objects:
+Agent owns model configuration, prompt construction, embedded skills, the
+closed typed action algebra, raw provider-response interpretation, epistemic
+state transitions, admission, and runtime control flow. Boundary owns portable
+values, generic effects and handlers, BPI1, Process State, and the fixed
+evaluator. World admits that evaluator and relays Process bytes. Environment
+adapters perform only the explicit model transport and typed external effects.
 
-```text
-Evidence != Memory != DecisionView != DecisionContract
-```
-
-world-host retains complete Frames and EffectResults as evidence. The Machine
-retains bounded typed Memory. An EpistemicStrategy deterministically folds each
-Observation into Memory and projects a turn-specific DecisionView. The external
-decision provider admits one immutable, digest-bound DecisionContract and
-receives only the dynamic DecisionTurn.
+The canonical Agent 3 authoring entry point is `agent.system(comptime spec)`:
 
 ```zig
-const Definition = agent.define(.{
+const System = agent.system(.{
     .name = "answer-agent",
-    .version = "2.0.0",
-    .instructions = "Return one typed answer.",
-    .Goal = u32,
-    .Action = union(enum) { final: u32 },
-    .Observation = void,
-    .Result = u32,
-    .Failure = enum { budget_exhausted, history_overflow, arithmetic_overflow, invalid_variant, capacity_exceeded },
-    .decision = .{
-        .interface = "model.decide.v1",
-        .maximum_request_bytes = 4096,
-        .maximum_result_bytes = 64,
-    },
-    .actions = .{agent.action.final(.final, .{
-        .name = "final",
-        .description = "Return the answer.",
+    .version = "3.0.0",
+    .Goal = Goal,
+    .Action = Action,
+    .Observation = Observation,
+    .Result = Result,
+    .Failure = Failure,
+    .models = .{agent.model(.{
+        .name = "primary",
+        .protocol = agent.protocol.openaiResponsesV2.Profile,
+        .model = "configured-model-id",
+        .parameters = .{},
     })},
-    .budget = .{
-        .maximum_turns = 1,
-        .maximum_decisions = 1,
-        .maximum_effect_actions = 0,
-        .maximum_child_actions = 0,
-    },
+    .prompts = prompts,
+    .skills = skills,
+    .actions = actions,
+    .strategy = agent.strategy.react(.{}),
+    .epistemics = epistemics,
+    .failures = failures,
+    .representation = representation,
 });
 
-const Runtime = agent.strategy.react(.{});
-const Epistemics = agent.epistemics.verbatim(.{
-    .maximum_observations = 0,
-    .overflow = .fail,
-    .final = agent.final_policy.none,
-});
-
-pub const Compiled = agent.compile(Definition, Runtime, Epistemics, .{
-    .machine = .{
-        .maximum_frames = 16,
-        .maximum_state_bytes = 64 * 1024,
-        .maximum_machine_fuel = 4096,
-    },
-});
+const image = System.Program.image().bytes;
 ```
 
-The package targets Zig 0.16.0, Boundary v1.6.1, Machine ABI v2, World
-v3.1.4, Application ABI v1, and Frame v1. Agent definitions and strategies are
-compile-time inputs: BPI1 is a post-compilation semantic image, not a runtime
-definition loader or strategy registry.
+`System.Program` is an ordinary Boundary program. Agent does not emit an
+Agent-specific WASM module, require a Machine profile, or ask World to link an
+application graph. Static meaning is reachable image computation; dynamic
+meaning is in InitialArgs, Process State, or explicit effect results.
 
-## Proof classes
+## Deterministic checks and emission
+
+Agent targets Zig 0.16.0 and the Process-capable Boundary line. World is a
+runtime/test consumer, not a compiler dependency.
 
 ```sh
-# Public compiler semantics, packaging, native/WASM parity, malformed corpus.
-zig build check
-
-# Compiler proof after exact archive acquisition with network disabled.
-zig build check-agent-hermetic
-
-# Anonymous deterministic host/capability lifecycle from lock-pinned artifacts.
-zig build check-agent-reference-stack
-
-# Local deterministic ENF Actuality plus retry/replay/branch/migration.
-zig build check-agent-actuality-release
-
-# Fixed-kernel BPI1 execution plus byte-identical specialized trace.
-zig build check-agent-interpretation-v1 --summary all
-
-# Immutable Boundary Process replay of the landed repository-repair BPI1.
-zig build check-agent-repository-repair-process-transcript-v1 --summary all
-
-# Emit the interpretation inputs for inspection.
-zig build emit-agent-interpretation-v1-assets
-
-# Explicit credentialed and interactive provider proof.
-OPENAI_API_KEY=... OPENAI_MODEL=... zig build check-agent-actuality-live
+zig build check --summary all
+zig build check-agent-system-closure-v1 --summary all
+zig build emit-agent-system-closure-v1 \
+  -Dworld-process-root=/path/to/extracted-world-runtime \
+  -Dworld-process-archive=/path/to/world-v4.1.2-process-host-runtime.tar.gz \
+  --summary all
 ```
 
-The live lane is never part of `zig build check` or the anonymous public proof.
-Reference implementations do not imply exactly-once effects, hostile-host
-protection, universal receiver policy, or credential-free live model access.
+During candidate development, an exact verified Boundary source tree can be
+supplied with Zig's package fork option. The World integration proof is
+explicit and consumes the extracted runtime plus the exact released archive:
 
-See [Epistemic Normal Form](docs/epistemic_normal_form.md),
-[EpistemicStrategy](docs/epistemic_strategy.md),
-[DecisionContract](docs/decision_contract.md),
-[evidence and memory](docs/evidence_and_memory.md),
-[Actuality](docs/actuality.md),
-[Interpretation v1](docs/interpretation_v1.md),
-[repository-repair Process transcript v1](docs/repository_repair_process_transcript_v1.md),
-and the
-[v1.1 migration guide](docs/migration_from_1_1.md).
+```sh
+zig build --fork=/path/to/boundary \
+  -Dworld-process-root=/path/to/world-runtime \
+  -Dworld-process-archive=/path/to/world-v4.1.2-process-host-runtime.tar.gz \
+  check-agent-repository-system-world --summary all
+```
+
+Check that captured World and admission proofs execute again on a warm build:
+
+```sh
+node test/world_proof_freshness.mjs /path/to/world-runtime \
+  /path/to/world-v4.1.2-process-host-runtime.tar.gz
+```
+
+The emit command installs these release-candidate assets under `zig-out/`:
+
+```text
+agent-v3.0.0-system-closure-v1.tar.gz
+agent-v3.0.0-system-closure-v1.tar.gz.sha256
+agent-v3.0.0-system-closure-v1-receipt.json
+```
+
+After extracting the archive, run the source-independent fixture with released
+World and an existing empty work directory:
+
+```sh
+node run.mjs --world-root /path/to/world-runtime \
+  --world-archive /path/to/world-runtime.tar.gz --mode fixture \
+  --work-dir /path/to/empty-work-directory
+```
+
+Fixture mode uses provider-shaped raw JSON over real loopback HTTP transport,
+real repository reads, one digest-bound replacement, and the fixture's fixed
+test command. It is deterministic model-environment evidence, not a live-model
+quality claim. The portable process is forkable data and does not itself imply
+exactly-once side effects or a hostile-host authenticity guarantee.
+
+The same archive has an explicitly invoked live mode using the image-fixed
+`gpt-5.4-mini-2026-03-17` snapshot documented by
+[OpenAI](https://developers.openai.com/api/docs/models/gpt-5.4-mini):
+
+```sh
+OPENAI_API_KEY=... node run.mjs \
+  --world-root /path/to/world-runtime \
+  --world-archive /path/to/world-runtime.tar.gz \
+  --mode live \
+  --endpoint https://api.openai.com/v1/responses \
+  --work-dir /path/to/empty-work-directory
+```
+
+Live mode accepts no model, prompt, skill, tool-catalog, or strategy override.
+
+Agent 2.7 tags and published transcript artifacts remain frozen historical
+evidence. They are not an alternate Agent 3 compiler or runtime path.
 
 Licensed under the MIT License.

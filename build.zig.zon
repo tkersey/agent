@@ -1,14 +1,10 @@
 .{
     .name = .agent,
-    .version = "2.7.0",
+    .version = "3.0.0",
     .dependencies = .{
         .boundary = .{
-            .url = "https://github.com/tkersey/boundary/archive/4788bc152d2b0213e9c5c4e6544df1231e4b034d.tar.gz",
-            .hash = "boundary-1.6.1-flclaE0pHgC1I33KEuEcfwmoMEidT7fLonNkdqBIlfwf",
-        },
-        .world = .{
-            .url = "https://github.com/tkersey/world/archive/5d8fad6e76863312c19a5ba6988bf6307f29a783.tar.gz",
-            .hash = "world-3.1.4-XXTUeO3GBgD8JA4s-vElnLKVnT11p5mv6MS0eV5nk-Fd",
+            .url = "https://github.com/tkersey/boundary/archive/999e936c4a865cd31948b52b2af2baeacf84c9f1.tar.gz",
+            .hash = "boundary-1.8.2-flclaABjJwANIa-_Lf1KKfm-MCbC01AhOLC95VX5lZCk",
         },
     },
     .minimum_zig_version = "0.16.0",
@@ -24,10 +20,10 @@
         "actuality",
         "interpretation",
         "adequacy",
-        "examples",
         "fixtures",
         "test",
         "tools",
+        "system_closure_v1",
     },
     .fingerprint = 0x268b9c9d84371874,
 }

@@ -38,7 +38,11 @@ test "public strategy bodies preserve admitted system image bytes" {
         const Direct = struct {
             pub const Source = System.Source;
             pub const Program = boundary.program(
-                "direct-strategy-proof",
+                std.fmt.comptimePrint("{s}:{s}:{s}", .{
+                    Source.name,
+                    Source.version,
+                    Source.strategy.system_semantic_identity,
+                }),
                 Source.strategy.ProgramBody(Source),
             );
         };

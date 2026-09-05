@@ -14,20 +14,9 @@ test "agent.system returns one ordinary unspecialized Boundary Program" {
 
 test "exact image capacity preserves canonical bytes" {
     const fixture = @import("compile_fail/react_system_fixture.zig");
-    const Valid = fixture.System(fixture.representation(), fixture.Stateless);
+    const Valid = fixture.ImageCapacitySystem(256 * 1024);
     const expected = Valid.Program.image().bytes;
-    const Exact = fixture.System(.{
-        .response_bytes = 1024,
-        .maximum_provider_response_bytes = 8192,
-        .image_bytes = expected.len,
-        .schema_types = .{
-            fixture.Goal,
-            fixture.Result,
-            fixture.Action,
-            fixture.Observation,
-            fixture.Failure,
-        },
-    }, fixture.Stateless);
+    const Exact = fixture.ImageCapacitySystem(expected.len);
     const actual = try encodeSystem(Exact);
     defer std.testing.allocator.free(actual);
     try std.testing.expectEqualSlices(u8, &expected, actual);

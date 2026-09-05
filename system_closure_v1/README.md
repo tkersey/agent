@@ -21,8 +21,9 @@ prints one JSON proof receipt and leaves the repaired Git working tree in
 `WORK_DIR/workspace` for independent inspection.
 
 Repository tests require `sandbox-exec` on macOS or a root-owned Bubblewrap
-installation on Linux. They run without network or filesystem write authority,
-and cannot read outside the fixture and their declared runtime dependencies
+installation on Linux. They run without network access, with filesystem writes
+limited to one private test-report file,
+and cannot read host files outside the fixture, that report, and their declared runtime dependencies
 (including root and preload-directory entries needed by the module loader).
 The unchanged Bun fixture assertions load the replacement in a separate
 JavaScript module context without host APIs or imports. Getters and Proxy
@@ -30,8 +31,9 @@ properties are evaluated inside that context; only their acyclic data values
 cross back into assertions, never executable callbacks or matchers. This tests
 the fixture's data-returning function without
 giving replacement code control of the test runner or its passing observation.
-Bun's completed test report travels over a dedicated pipe. Sandbox and loader
-startup failures produce execution errors, never baseline-test evidence.
+Bun writes its completed test report to that file, which the environment reads
+with a size bound and removes after each test run. Sandbox and loader startup
+failures produce execution errors, never baseline-test evidence.
 
 For an uninterrupted source-independent Process State census, add an output
 path. This uses the same image, adapter, fixture, and World runtime while

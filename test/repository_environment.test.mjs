@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import childProcess from "node:child_process";
+import { existsSync, writeFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { cp, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -128,20 +129,25 @@ test("launch failure and absent or incomplete reports are not test observations"
   const workspace = await fixtureWorkspace(context);
   const spawn = childProcess.spawnSync;
   try {
-    for (const [status, report] of [
+    for (const [status, report, error = /did not report completed tests/] of [
       [71, ""], [1, ""], [0, ""],
       [1, '<?xml version="1.0" encoding="UTF-8"?>\n<testsuites name="bun test" tests="4">'],
       [0, '<?xml version="1.0" encoding="UTF-8"?>\n<testsuites name="bun test" tests="0"></testsuites>'],
+      [1, "x".repeat(1024 * 1024 + 1), /exceeds its file bound/],
     ]) {
-      childProcess.spawnSync = () => ({
-        status, signal: null, stdout: "", stderr: "sandbox_apply: Operation not permitted",
-        output: [null, "", "", report],
-      });
+      let reportPath;
+      childProcess.spawnSync = (_, args) => {
+        reportPath = args.find((arg) => arg.startsWith("--reporter-outfile="))
+          .slice("--reporter-outfile=".length);
+        writeFileSync(reportPath, report);
+        return { status, signal: null, stdout: "", stderr: "sandbox_apply: Operation not permitted" };
+      };
       syncBuiltinESMExports();
       const repository = await createRepositoryEnvironment(workspace);
       await assert.rejects(repository.resolveEffect({
         effectSemanticIdentity: "repo.test.v1", payload: Buffer.alloc(0),
-      }), /did not report completed tests/);
+      }), error);
+      assert.equal(existsSync(reportPath), false);
       assert.equal(repository.snapshot().baselineFailed, false);
       assert.equal(repository.snapshot().realTestProcesses, 0);
       assert.equal(repository.snapshot().postMutationPassed, false);
@@ -211,7 +217,10 @@ test("test process authority is read-only and excludes the outer workspace", asy
     import {spawnSync} from 'node:child_process';
     test('OS confinement applies independently of the replacement realm', async () => {
       expect(() => readFileSync(${JSON.stringify(marker)})).toThrow();
-      expect(() => readdirSync(${JSON.stringify(outside)})).toThrow();
+      let parentEntries;
+      try { parentEntries = readdirSync(${JSON.stringify(outside)}); } catch {}
+      // Bubblewrap constructs an empty parent, not the real host directory.
+      if (parentEntries !== undefined) expect(parentEntries).toEqual(['workspace']);
       expect(() => writeFileSync(${JSON.stringify(marker)}, 'changed')).toThrow();
       expect(() => writeFileSync('src/range.mjs', 'changed')).toThrow();
       expect(spawnSync('/bin/sh', ['-c', 'echo escaped > "$1"', 'sh', ${JSON.stringify(marker)}]).status).not.toBe(0);

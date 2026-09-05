@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { constants, existsSync } from "node:fs";
-import { access, lstat, open, readFile, readlink, realpath, rename, rm } from "node:fs/promises";
+import { access, lstat, mkdtemp, open, readFile, readlink, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -63,25 +64,8 @@ export async function createRepositoryEnvironment(
       }
       case "repo.test.v1": {
         assert.equal(request.payload.length, 0);
-        const command = await repositoryTestCommand(workspaceReal);
-        const result = spawnSync(command[0], command.slice(1), {
-          cwd: workspaceReal,
-          encoding: "utf8",
-          env: { AGENT_REPOSITORY_TEST_PRELOAD: "1" },
-          stdio: ["ignore", "pipe", "pipe", "pipe"],
-        });
-        if (result.error !== undefined) throw result.error;
-        assert.equal(result.signal, null, "repository test process was killed");
-        assert(Number.isInteger(result.status), "repository test process has no exit status");
-        // Only Bun's completed report establishes test execution. A sandbox or
-        // loader failure has an exit status too, but is not baseline evidence.
-        const report = result.output[3] ?? "";
-        assert(report.startsWith('<?xml version="1.0" encoding="UTF-8"?>\n') &&
-          /<testsuites name="bun test" tests="[1-9][0-9]*"/.test(report) &&
-          report.trimEnd().endsWith("</testsuites>"),
-        "repository test runner did not report completed tests");
+        const passed = await runRepositoryTests(workspaceReal);
         testProcessCount += 1;
-        const passed = result.status === 0;
         if (!mutationApplied) {
           baselineFailed ||= !passed;
         } else {
@@ -165,15 +149,46 @@ export async function createRepositoryEnvironment(
   });
 }
 
-async function repositoryTestCommand(workspace) {
+async function runRepositoryTests(workspace) {
+  const reportRoot = await mkdtemp(join(tmpdir(), "agent-repository-tests-"));
+  try {
+    const reportPath = join(await realpath(reportRoot), "report.xml");
+    await writeFile(reportPath, "", { flag: "wx", mode: 0o600 });
+    const command = await repositoryTestCommand(workspace, reportPath);
+    const result = spawnSync(command[0], command.slice(1), {
+      cwd: workspace,
+      encoding: "utf8",
+      env: { AGENT_REPOSITORY_TEST_PRELOAD: "1" },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    if (result.error !== undefined) throw result.error;
+    assert.equal(result.signal, null, "repository test process was killed");
+    assert(Number.isInteger(result.status), "repository test process has no exit status");
+    const stat = await lstat(reportPath);
+    assert(stat.isFile() && !stat.isSymbolicLink() && stat.size <= 1024 * 1024,
+      "repository test report exceeds its file bound");
+    // Bun's reporter takes a filesystem path, not a pipe-descriptor alias.
+    // Only its completed report establishes test execution, including failure.
+    const report = await readFile(reportPath, "utf8");
+    assert(report.startsWith('<?xml version="1.0" encoding="UTF-8"?>\n') &&
+      /<testsuites name="bun test" tests="[1-9][0-9]*"/.test(report) &&
+      report.trimEnd().endsWith("</testsuites>"),
+    "repository test runner did not report completed tests");
+    return result.status === 0;
+  } finally {
+    await rm(reportRoot, { recursive: true, force: true });
+  }
+}
+
+async function repositoryTestCommand(workspace, reportPath) {
   const bun = await executablePath("bun");
   const preload = await realpath(fileURLToPath(import.meta.url));
   const command = [bun, "--no-install", "--no-env-file", "--no-addons", "--no-macros",
     "--config=/dev/null", "test", "--preload", preload,
-    "--reporter=junit", "--reporter-outfile=/dev/fd/3", "./test/range.test.mjs"];
+    "--reporter=junit", `--reporter-outfile=${reportPath}`, "./test/range.test.mjs"];
   if (process.platform === "darwin" && existsSync("/usr/bin/sandbox-exec")) {
     const readable = ["/System/Library", "/usr/lib", "/usr/share", "/dev",
-      "/private/etc", "/private/var/db/timezone", workspace, bun, preload]
+      "/private/etc", "/private/var/db/timezone", workspace, bun, preload, reportPath]
       .filter(existsSync);
     const paths = [...new Set(await Promise.all(readable.map((path) => realpath(path))))];
     const ancestors = new Set(["/"]);
@@ -190,7 +205,7 @@ async function repositoryTestCommand(workspace) {
       (deny network*)
       (deny file-read* (require-all ${allowed.map((rule) => `(require-not ${rule})`).join(" ")}))
       (deny file-read-data (require-all ${data.map((rule) => `(require-not ${rule})`).join(" ")}))
-      (deny file-write* (require-not (literal "/dev/fd/3")))
+      (deny file-write* (require-not (literal ${JSON.stringify(reportPath)})))
       (deny process-fork)
       (deny process-exec (require-not (literal ${JSON.stringify(bun)})))`;
     return ["/usr/bin/sandbox-exec", "-p", profile, ...command];
@@ -210,7 +225,7 @@ async function repositoryTestCommand(workspace) {
     const files = ["/etc/ld.so.cache", "/etc/localtime", bun, preload].filter(existsSync);
     const mounts = [...directories, workspace];
     const parents = new Set();
-    for (const path of [...mounts, ...files.map(dirname)]) {
+    for (const path of [...mounts, ...files.map(dirname), dirname(reportPath)]) {
       for (let parent = path; parent !== "/"; parent = dirname(parent)) parents.add(parent);
     }
     return [bwrap, "--die-with-parent", "--new-session", "--unshare-all", "--clearenv",
@@ -219,7 +234,8 @@ async function repositoryTestCommand(workspace) {
       ...links.flatMap(([target, path]) => ["--symlink", target, path]),
       ...files.filter((path) => !mounts.some((root) => path.startsWith(`${root}/`)))
         .flatMap((path) => ["--ro-bind", path, path]),
-      "--dev", "/dev", "--proc", "/proc", "--chdir", workspace,
+      "--bind", reportPath, reportPath,
+      "--dev", "/dev", "--proc", "/proc", "--remount-ro", "/", "--chdir", workspace,
       "--setenv", "AGENT_REPOSITORY_TEST_PRELOAD", "1", ...command];
   }
   throw new Error("repository tests require an OS sandbox");

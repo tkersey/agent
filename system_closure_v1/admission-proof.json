@@ -1,0 +1,56 @@
+{
+  "format": "agent-system-closure-admission-negatives/v1",
+  "result": "passed",
+  "kernelSha256": "4da38268f12e8a2749a266480748da5460b5030dadfc10804f79ba3a3bb8013e",
+  "imageSha256": "51cc746c20cda6aa3f643a4d916a70f7066c0270c5fcda6fc0e582080852210d",
+  "negativeResults": [
+    {
+      "name": "pre-baseline-replacement",
+      "terminal": "AuthoredFailure",
+      "failureSha256": "fb5e512425fc9449316ec95969ebe71e2d576dbab833d61e2a5b9330fd70ee02"
+    },
+    {
+      "name": "disallowed-read-role",
+      "terminal": "AuthoredFailure",
+      "failureSha256": "01b4f6bd5d6a06a7b74a8565ceb4f845afe0ae96a0ac05cf5e86066bf7b538ec"
+    },
+    {
+      "name": "premature-completion",
+      "terminal": "AuthoredFailure",
+      "failureSha256": "fb5e512425fc9449316ec95969ebe71e2d576dbab833d61e2a5b9330fd70ee02"
+    }
+  ],
+  "nativeNegativeResults": [
+    {
+      "name": "stale-digest-replacement",
+      "failure": "policy_denied"
+    },
+    {
+      "name": "wrong-final-path",
+      "failure": "policy_denied"
+    },
+    {
+      "name": "wrong-final-digest",
+      "failure": "policy_denied"
+    }
+  ],
+  "nativeProcessImageSemantics": true,
+  "dangerousRepositoryEffects": 0,
+  "successfulPrematureCompletions": 0,
+  "transferPoints": [
+    "normalized-model-resume",
+    "pending-model-request",
+    "pending-repository-request"
+  ],
+  "freshHostOutcomeEquality": true,
+  "repeatedPendingRequestEquality": true,
+  "nativeWasmParity": {
+    "pendingModelStateSha256": "8a38c6600af39bef065287bcd45bbab5bf51f36945217f69b6a8f38e046fb9e6",
+    "pendingModelRequestSha256": "6ac819927597a07dcb5c5ff8f61564252ffe30f0ce3ac6af191fa69563727b07",
+    "parserStateSha256": "d9c802f43f3a546e027cfb0795bbcaebe4679140548c9bdb599861ba9e3577ba",
+    "pendingRepositoryStateSha256": "d75e199e612b91564fa8eed7d2420f17c032c6cc171a0c6b2be2bdf071e7eb3b",
+    "pendingRepositoryRequestSha256": "c8e82295131fe03cd626b5bf728039530317e6985798af9ede4facd6f7370261",
+    "policyFailureSha256": "01b4f6bd5d6a06a7b74a8565ceb4f845afe0ae96a0ac05cf5e86066bf7b538ec",
+    "completionSha256": "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032"
+  }
+}

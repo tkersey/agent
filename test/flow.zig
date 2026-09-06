@@ -164,7 +164,102 @@ const BranchMachine = boundary.program("flow-typed-branch", BranchBody).compile(
     .maximum_machine_fuel = 32,
 });
 
+const HelperText = boundary.Text(8);
+const HelperArgs = struct {
+    text: HelperText,
+    index: u32,
+};
+const HelperFailure = enum { bad_index };
+
+const RenderText = boundary.Text(64);
+const RenderPart = boundary.Text(16);
+const RenderArgs = struct {
+    prefix: RenderPart,
+    suffix: RenderPart,
+    unsigned: u16,
+    signed: i16,
+};
+const RenderFailure = enum { capacity };
+
+fn RenderLowered() type {
+    const Builder = agent.Flow(.{
+        .schema_types = .{ RenderText, RenderPart, RenderArgs, RenderFailure },
+    });
+    comptime var flow = Builder.init("flow-text-render");
+    const args = flow.begin(RenderArgs);
+    var text = flow.textEmpty(RenderText);
+    const failure = flow.constant(RenderFailure, 0);
+    text = flow.textAppendOrFail(text, flow.productExtract(0, args), failure);
+    text = flow.textAppendOrFail(text, flow.productExtract(1, args), failure);
+    text = flow.textAppendUnsignedOrFail(text, flow.productExtract(2, args), failure);
+    text = flow.textAppendSignedOrFail(text, flow.productExtract(3, args), failure);
+    flow.returnValue(text);
+    return flow.finish(RenderText);
+}
+
+const RenderBody = struct {
+    const Lowering = RenderLowered();
+    pub const InitialArgs = RenderArgs;
+    pub const Result = RenderText;
+    pub const Failure = RenderFailure;
+    pub const constants = .{RenderFailure.capacity};
+    pub const effect_sites = boundary.effect.row(.{});
+    pub const schema_types = Lowering.schema_types;
+    pub const control_ir = Lowering.control_ir;
+};
+
+const RenderMachine = boundary.program("flow-text-render", RenderBody).compile(.{
+    .maximum_frames = 2,
+    .maximum_state_bytes = 2048,
+    .maximum_machine_fuel = 64,
+});
+
+fn HelperLowered() type {
+    const Builder = agent.Flow(.{
+        .schema_types = .{ HelperArgs, HelperText, HelperFailure },
+    });
+    comptime var flow = Builder.init("flow-private-helper");
+    const args = flow.begin(HelperArgs);
+    const helper = flow.helper(.{ HelperText, u32 }, u8);
+    const called = flow.call(
+        helper,
+        .{
+            flow.productExtract(0, args),
+            flow.productExtract(1, args),
+        },
+        .{},
+    );
+    flow.returnValue(called.value);
+
+    const parameters = flow.enter(helper.entry);
+    flow.returnToCaller(flow.textByteAt(
+        parameters[0],
+        parameters[1],
+        flow.constant(HelperFailure, 0),
+    ));
+    return flow.finish(u8);
+}
+
+const HelperBody = struct {
+    const Lowering = HelperLowered();
+    pub const InitialArgs = HelperArgs;
+    pub const Result = u8;
+    pub const Failure = HelperFailure;
+    pub const constants = .{HelperFailure.bad_index};
+    pub const effect_sites = boundary.effect.row(.{});
+    pub const schema_types = Lowering.schema_types;
+    pub const control_ir = Lowering.control_ir;
+};
+
+const HelperProgram = boundary.program("flow-private-helper", HelperBody);
+const HelperMachine = HelperProgram.compile(.{
+    .maximum_frames = 4,
+    .maximum_state_bytes = 2048,
+    .maximum_machine_fuel = 64,
+});
+
 test "Flow assigns values, continuations, and resume placeholders" {
+    try std.testing.expectEqual(@as(usize, 0), Body.control_ir.functions.len);
     try std.testing.expectEqual(@as(usize, 3), Body.control_ir.blocks.len);
     try std.testing.expectEqual(@as(usize, 5), Body.control_ir.value_types.len);
     try std.testing.expectEqual(boundary.ir.BlockRole.after_handler, Body.control_ir.blocks[1].role);
@@ -207,6 +302,75 @@ test "Flow assigns values, continuations, and resume placeholders" {
     };
     defer done.deinit();
     try std.testing.expectEqual(@as(u32, 9), done.value().*);
+}
+
+test "Flow lowers private typed helpers and authored Text byte projection" {
+    try std.testing.expectEqual(@as(usize, 2), HelperBody.control_ir.functions.len);
+    try std.testing.expectEqual(@as(u16, 0), HelperBody.control_ir.blocks[0].function_id);
+    try std.testing.expectEqual(@as(u16, 1), HelperBody.control_ir.blocks[1].function_id);
+    try std.testing.expectEqual(
+        boundary.image.evaluator_semantics_v3,
+        HelperProgram.image().evaluator_semantics_version,
+    );
+
+    inline for (.{
+        .{ @as(u32, 0), @as(u8, 0xc3) },
+        .{ @as(u32, 1), @as(u8, 0xa9) },
+        .{ @as(u32, 2), @as(u8, '"') },
+    }) |fixture| {
+        const state = try HelperMachine.initialState(
+            std.testing.allocator,
+            .{
+                .text = HelperText.fromSlice("é\"") catch unreachable,
+                .index = fixture[0],
+            },
+        );
+        defer HelperMachine.deinitState(state);
+        var fuel: u64 = 64;
+        const done = switch (try HelperMachine.step(state, &fuel)) {
+            .done => |value| value,
+            else => return error.UnexpectedMachineStep,
+        };
+        defer done.deinit();
+        try std.testing.expectEqual(fixture[1], done.value().*);
+    }
+
+    const state = try HelperMachine.initialState(
+        std.testing.allocator,
+        .{
+            .text = HelperText.fromSlice("é\"") catch unreachable,
+            .index = 3,
+        },
+    );
+    defer HelperMachine.deinitState(state);
+    var fuel: u64 = 64;
+    switch (try HelperMachine.step(state, &fuel)) {
+        .failed => |failure| switch (failure) {
+            .authored => |value| try std.testing.expectEqual(
+                HelperFailure.bad_index,
+                value,
+            ),
+            else => return error.UnexpectedMachineFailure,
+        },
+        else => return error.UnexpectedMachineStep,
+    }
+}
+
+test "Flow renders dynamic Text and exact signed integers" {
+    const state = try RenderMachine.initialState(std.testing.allocator, .{
+        .prefix = RenderPart.fromSlice("count=") catch unreachable,
+        .suffix = RenderPart.fromSlice("") catch unreachable,
+        .unsigned = 42,
+        .signed = -7,
+    });
+    defer RenderMachine.deinitState(state);
+    var fuel: u64 = 64;
+    const done = switch (try RenderMachine.step(state, &fuel)) {
+        .done => |value| value,
+        else => return error.UnexpectedMachineStep,
+    };
+    defer done.deinit();
+    try std.testing.expectEqualStrings("count=42-7", try done.value().slice());
 }
 
 test "Flow preserves an authored failure value through Boundary Machine ABI v2" {
@@ -289,5 +453,61 @@ test "Flow branches with typed successor parameters" {
         };
         defer done.deinit();
         try std.testing.expectEqual(fixture[1], done.value().*);
+    }
+}
+
+test "pure hook admission preserves local branches, helpers, and authored failures" {
+    comptime {
+        const Builder = agent.Flow(.{ .schema_types = .{AuthoredFailure} });
+        var flow = Builder.init("pure-hook-extension");
+        const initial = flow.begin(bool);
+        const before = flow;
+        const helper = flow.helper(.{bool}, bool);
+        const call_path = flow.block(.segment, .{});
+        const failure_path = flow.block(.segment, .{});
+        const exit = flow.block(.segment, .{bool});
+        flow.branch(initial, call_path, .{}, failure_path, .{});
+        _ = flow.enter(failure_path);
+        flow.failValue(flow.constant(AuthoredFailure, 0));
+        const parameters = flow.enter(helper.entry);
+        flow.returnToCaller(parameters[0]);
+        _ = flow.enter(call_path);
+        const called = flow.call(helper, .{initial}, .{});
+        const continuation_id = flow.current_block;
+        flow.jump(exit, .{called.value});
+        _ = flow.enter(exit);
+        try flow.validateEffectFreeExtension(&before);
+
+        // Both arms and every call endpoint obey the same ownership rule.
+        for (.{ "then_target", "else_target" }) |field| {
+            var changed = flow;
+            @field(changed.blocks[before.current_block], field) = before.current_block;
+            try std.testing.expectError(error.ControlEscape, changed.validateEffectFreeExtension(&before));
+        }
+        for (.{ "callee_target", "continuation_target" }) |field| {
+            var changed = flow;
+            @field(changed.blocks[call_path.id], field) = before.current_block;
+            try std.testing.expectError(error.ControlEscape, changed.validateEffectFreeExtension(&before));
+        }
+        var changed = flow;
+        changed.blocks[continuation_id].jump_target = before.current_block;
+        try std.testing.expectError(error.ControlEscape, changed.validateEffectFreeExtension(&before));
+        changed = flow;
+        changed.functions[helper.id].entry = before.current_block;
+        try std.testing.expectError(error.ControlEscape, changed.validateEffectFreeExtension(&before));
+        changed = flow;
+        changed.blocks[call_path.id].callee_function = 0;
+        try std.testing.expectError(error.ControlEscape, changed.validateEffectFreeExtension(&before));
+        changed = flow;
+        changed.blocks[call_path.id].terminator_kind = .return_to_caller;
+        try std.testing.expectError(error.ControlEscape, changed.validateEffectFreeExtension(&before));
+        changed = flow;
+        changed.blocks[helper.entry.id].terminator_kind = .suspend_effect;
+        try std.testing.expectError(error.ResidualEffect, changed.validateEffectFreeExtension(&before));
+        changed = flow;
+        changed.blocks[helper.entry.id].terminator_kind = .return_value;
+        try std.testing.expectError(error.SystemReturn, changed.validateEffectFreeExtension(&before));
+        flow.returnValue(exit.parameters[0]);
+        _ = flow.finish(bool);
     }
 }

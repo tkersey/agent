@@ -1,0 +1,72 @@
+{
+  "format": "agent-system-economy-obstruction/v1",
+  "status": "blocked",
+  "obstruction": "strict typed Action JSON decoding remains the measured dominant term",
+  "providerWireBaseline": {
+    "imageSha256": "cec599592476e13faa4b5f12d723a9d395fdfb0435727b0149da354b398fae63",
+    "imageByteLength": 253427,
+    "gzip9ByteLength": 84556,
+    "reductions": 20133,
+    "modelRequests": 8,
+    "repositoryRequests": 7
+  },
+  "semanticClosure": {
+    "imageSha256": "d4742231c210fe421712fc216067d9d3d0745be330cb196f8271cf2fd15777d4",
+    "imageByteLength": 197854,
+    "gzip9ByteLength": 56295,
+    "reductions": 4424,
+    "actionArgumentDecodeReductions": 4024,
+    "allOtherReductions": 400,
+    "modelRequests": 8,
+    "repositoryRequests": 7,
+    "maximumProgressedBetweenResidualBoundaries": 2394,
+    "peakStateBytes": 38397,
+    "p95StateBytes": 4909,
+    "largestRequestBytes": 5986,
+    "terminalSha256": "36c4354afea674adb139253064d7d14563ab3296804ff7cbefbba508a93f1032",
+    "finalTree": "0d9ac8802aac6597cb0a443245efb6f92a0249fe"
+  },
+  "strictDecoderAblation": {
+    "imageSha256": "6c7372e72f637ce0a6a258e4aa9a007172cb96f81c518f7f0bb32840c0edd676",
+    "imageByteLength": 95433,
+    "gzip9ByteLength": 25023,
+    "decoderMarginalImageBytes": 102421,
+    "decoderMarginalConstructorBytes": 60614,
+    "decoderMarginalSegmentBytes": 30426,
+    "decoderMarginalValueBytes": 6380,
+    "executable": false,
+    "reason": "Measurement-only name matching substitutes canonical default payloads and does not validate model arguments."
+  },
+  "gates": {
+    "rawImageMaximumBytes": 98304,
+    "rawImage": "fail",
+    "rawImageWithoutStrictDecoder": "pass",
+    "reductionMaximum": 512,
+    "reductions": "fail",
+    "reductionsWithoutStrictDecoder": "pass",
+    "betweenEffectMaximum": 64,
+    "betweenEffectWork": "fail",
+    "peakStateMaximumBytes": 131072,
+    "peakState": "pass",
+    "largeDuplicateLiveEnvironment": "pass"
+  },
+  "releasedStackAblation": {
+    "boundaryVersion": "1.7.0",
+    "worldVersion": "4.0.0",
+    "result": "compile-failed",
+    "firstGenericObstruction": "Boundary InstructionOperation has no bytes_byte_at member",
+    "fullDecoderCompilerRequirements": {
+      "values": 2735,
+      "constructors": 578
+    },
+    "disposition": "Retain generic Text/Bytes projections only; do not retain decoder-driven capacity increases."
+  },
+  "minimizedBoundary": {
+    "commit": "a312d95c3cc7947437252f3431b9f05fd30165ee",
+    "kernelSha256": "97a29a3eae3d5ed55ddd2f0dcf45a798d4813911e1d1c5bd33720c25d7f20f6b",
+    "kernelByteLength": 648639,
+    "growthFromBoundary170Bytes": 1166,
+    "growthFromBoundary170Percent": 0.18
+  },
+  "stopRule": "Do not invent a typed model-resume runtime layer in this milestone. Resolve or explicitly authorize a successor to the strict Action JSON decoder before continuing the full A-I matrix, marginal slopes, merge, or release."
+}

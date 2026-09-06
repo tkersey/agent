@@ -3,6 +3,7 @@ const boundary = @import("boundary");
 /// Closed semantic kind for one Action variant.
 pub const Kind = enum {
     effect,
+    local,
     final,
     fail,
 };
@@ -55,6 +56,26 @@ pub fn effect(
         pub const action_name = @tagName(action_variant);
         pub const observation_name = @tagName(observation_variant);
         pub const Site = EffectSite;
+        pub const name = metadataName(metadata);
+        pub const description = metadataDescription(metadata);
+        pub const class = resolved_class;
+    };
+}
+
+/// Bind one Action variant to deterministic in-image computation that yields
+/// one typed local Observation payload without issuing a residual effect.
+pub fn local(
+    comptime action_variant: anytype,
+    comptime observation_variant: anytype,
+    comptime Implementation: type,
+    comptime metadata: anytype,
+) type {
+    const resolved_class = metadataClass(metadata);
+    return struct {
+        pub const kind = Kind.local;
+        pub const action_name = @tagName(action_variant);
+        pub const observation_name = @tagName(observation_variant);
+        pub const Local = Implementation;
         pub const name = metadataName(metadata);
         pub const description = metadataDescription(metadata);
         pub const class = resolved_class;

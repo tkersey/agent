@@ -507,6 +507,9 @@ fn emitAction(
             invalid_variant_constant,
         ),
         .fail => flow.failValue(flow.sumExtract(action_index, action_value)),
+        .local => @compileError(
+            "agent v2 compiler does not admit Agent 3 local actions",
+        ),
         .effect => emitEffectAction(
             Definition,
             Epistemics,

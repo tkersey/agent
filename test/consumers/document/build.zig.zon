@@ -1,0 +1,8 @@
+.{
+    .name = .agent_document_consumer,
+    .version = "0.0.0",
+    .fingerprint = 0xd480130d215330e7,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{ .agent = .{ .path = "../../.." } },
+    .paths = .{ "build.zig", "build.zig.zon", "main.zig", "critic.zig", "clarification.zig" },
+}

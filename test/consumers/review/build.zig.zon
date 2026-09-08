@@ -1,0 +1,8 @@
+.{
+    .name = .agent_review_consumer,
+    .version = "4.0.0-dev.0",
+    .minimum_zig_version = "0.16.0",
+    .fingerprint = 0x0d924ec48f15f9eb,
+    .dependencies = .{ .agent = .{ .path = "../../.." } },
+    .paths = .{ "build.zig", "build.zig.zon", "main.zig" },
+}

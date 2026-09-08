@@ -2,3 +2,7 @@
 /.zig-cache/
 /zig-pkg/
 /.zig-global-cache/
+**/zig-pkg/
+**/.zig-cache/
+**/zig-out/
+**/.zig-global-cache/

@@ -1,131 +1,95 @@
-# agent
+# Agent 4 — resumable interaction programs
 
-`agent` is a Zig staged compiler for complete typed agent systems.
+Agent is a Zig authoring library for ordinary Boundary 2 computations. Applications
+choose their own branches, loops, handlers, questions, conversations, and child
+computations. The complete program compiles to BPI2. Unfinished control travels in
+PST2 and executes under unchanged World 5.
 
-```text
-complete immutable Agent source
-    -> Agent frontend and generic Boundary composition
-    -> one ordinary Boundary Program
-    -> one BPI1 image
+This branch is **candidate integration**, using the exact development inputs in
+[the dependency lock](conformance/agent4/dependencies.lock.json). It does not claim
+that Boundary 2 or World 5 has been released. Agent 3 artifacts remain on their
+frozen BPI1/PST1 runtime; active-state migration is not supported.
 
-fixed Boundary Process kernel WASM
-    + BPI1
-    + portable Process State and explicit EffectResults
-    -> Process outcome
-```
+## Authoring
 
-Agent owns model configuration, prompt construction, embedded skills, the
-closed typed action algebra, raw provider-response interpretation, epistemic
-state transitions, admission, and runtime control flow. Boundary owns portable
-values, generic effects and handlers, BPI1, Process State, and the fixed
-evaluator. World admits that evaluator and relays Process bytes. Environment
-adapters perform only the explicit model transport and typed external effects.
-
-The canonical Agent 3 authoring entry point is `agent.system(comptime spec)`:
+Use Zig 0.16.0. A consuming package imports the `agent` and `boundary` modules.
+The optional `agent_contracts` module contains pure schema/value support and has
+no compiler or runtime dependency.
 
 ```zig
+const agent = @import("agent");
+const boundary = @import("boundary");
+
+const Application = struct {
+    pub fn emit(c: agent.Context) !boundary.computation.Module {
+        const b = c.builder;
+        const integer = try c.schema(u32);
+        const unit = try c.schema(void);
+        const read = try c.external("example.read.v1", integer, integer, .read);
+        const entry = try b.declare(&.{integer}, integer, &.{read}, &.{});
+        try b.define(entry, try b.term(.{ .perform = .{
+            .effect = read, .payload = try b.reference(b.parameter(entry, 0)),
+        } }));
+        return b.module(entry, unit);
+    }
+};
+
 const System = agent.system(.{
-    .name = "answer-agent",
-    .version = "3.0.0",
-    .Goal = Goal,
-    .Action = Action,
-    .Observation = Observation,
-    .Result = Result,
-    .Failure = Failure,
-    .models = .{agent.model(.{
-        .name = "primary",
-        .protocol = agent.protocol.openaiResponsesV2.Profile,
-        .model = "configured-model-id",
-        .parameters = .{},
-    })},
-    .prompts = prompts,
-    .skills = skills,
-    .actions = actions,
-    .strategy = agent.strategy.react(.{}),
-    .epistemics = epistemics,
-    .failures = failures,
-    .representation = representation,
+    .InitialArgs = u32, .Result = u32, .Failure = void,
+    .application = Application,
 });
-
-const image = System.Program.image().bytes;
+// var compiled = try agent.compile(allocator, System);
+// defer compiled.deinit();
 ```
 
-`System.Program` is an ordinary Boundary program. Agent does not emit an
-Agent-specific WASM module, require a Machine profile, or ask World to link an
-application graph. Static meaning is reachable image computation; dynamic
-meaning is in InitialArgs, Process State, or explicit effect results.
+Native emitters run only while authoring; arbitrary Zig closures and stack frames
+are not translated or checkpointed. Helpers construct the same public Boundary
+source terms available to the application. Agent has no instruction format or
+evaluator. See the independent [document](test/consumers/document) and
+[review](test/consumers/review) consuming packages.
 
-## Deterministic checks and emission
+The public library includes typed `decision`, `interaction`, `dialogue`,
+`conversation`, `react`, `scopes`, `sets`, `responders`, `observation`, `tools`, and
+`approval` constructions. Supplied system catalogs are checked and available in
+`Context.catalogs`. Model profiles, prompts, and skills become ordinary image
+constants. Private futures and approval resources never cross an external value
+boundary. See [architecture](docs/architecture.md) and
+[the model contract](docs/model-invocation-v3.md).
 
-Agent targets Zig 0.16.0 and the Process-capable Boundary line. World is a
-runtime/test consumer, not a compiler dependency.
+## Checks and execution
+
+The normal authoring check fetches only the exact locked Boundary package:
 
 ```sh
-zig build check --summary all
-zig build check-agent-system-closure-v1 --summary all
-zig build emit-agent-system-closure-v1 \
-  -Dworld-process-root=/path/to/extracted-world-runtime \
-  -Dworld-process-archive=/path/to/world-v4.1.2-process-host-runtime.tar.gz \
-  --summary all
+zig build check-agent4 -Doptimize=ReleaseSafe
+zig build emit-agent4 -Doptimize=ReleaseSafe
 ```
 
-During candidate development, an exact verified Boundary source tree can be
-supplied with Zig's package fork option. The World integration proof is
-explicit and consumes the extracted runtime plus the exact released archive:
+To acquire the immutable candidate runtime in this checkout, explicitly run:
 
 ```sh
-zig build --fork=/path/to/boundary \
-  -Dworld-process-root=/path/to/world-runtime \
-  -Dworld-process-archive=/path/to/world-v4.1.2-process-host-runtime.tar.gz \
-  check-agent-repository-system-world --summary all
+node tools/agent4/setup.mjs
+zig build check-agent4-integration -Doptimize=ReleaseSafe \
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+zig build check-agent4-economy -Doptimize=ReleaseSafe \
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
 ```
 
-Check that captured World and admission proofs execute again on a warm build:
+Use `--cache-dir` and `--global-cache-dir` inside the isolated Agent checkout when
+working alongside other deliveries. `-Dboundary-v2-source=/absolute/immutable/copy`
+is an optional development input, verified against the same lock. Native agreement
+tests use the separately authenticated unchanged World source acquired by setup.
+No runtime kernel is built per application.
 
-```sh
-node test/world_proof_freshness.mjs /path/to/world-runtime \
-  /path/to/world-v4.1.2-process-host-runtime.tar.gz
-```
+The optional runner starts, resumes, inspects, and cancels saved World outcomes.
+Canonical reply bytes are supported without a UI or provider session. It is a
+single-writer reference, with one outstanding external request per computation.
+See [runtime commands](docs/agent4-runtime.md) and
+[migration from Agent 3](docs/migration_from_3.md).
 
-The emit command installs these release-candidate assets under `zig-out/`:
-
-```text
-agent-v3.0.0-system-closure-v1.tar.gz
-agent-v3.0.0-system-closure-v1.tar.gz.sha256
-agent-v3.0.0-system-closure-v1-receipt.json
-```
-
-After extracting the archive, run the source-independent fixture with released
-World and an existing empty work directory:
-
-```sh
-node run.mjs --world-root /path/to/world-runtime \
-  --world-archive /path/to/world-runtime.tar.gz --mode fixture \
-  --work-dir /path/to/empty-work-directory
-```
-
-Fixture mode uses provider-shaped raw JSON over real loopback HTTP transport,
-real repository reads, one digest-bound replacement, and the fixture's fixed
-test command. It is deterministic model-environment evidence, not a live-model
-quality claim. The portable process is forkable data and does not itself imply
-exactly-once side effects or a hostile-host authenticity guarantee.
-
-The same archive has an explicitly invoked live mode using the image-fixed
-`gpt-5.4-mini-2026-03-17` snapshot documented by
-[OpenAI](https://developers.openai.com/api/docs/models/gpt-5.4-mini):
-
-```sh
-OPENAI_API_KEY=... node run.mjs \
-  --world-root /path/to/world-runtime \
-  --world-archive /path/to/world-runtime.tar.gz \
-  --mode live \
-  --endpoint https://api.openai.com/v1/responses \
-  --work-dir /path/to/empty-work-directory
-```
-
-Live mode accepts no model, prompt, skill, tool-catalog, or strategy override.
-
-Agent 2.7 tags and published transcript artifacts remain frozen historical
-evidence. They are not an alternate Agent 3 compiler or runtime path.
-
-Licensed under the MIT License.
+Required tests use synthetic provider replies and real tools in isolated fixture
+directories. No test needs personal credentials or paid inference. Snapshot
+portability supplies neither encryption nor global anti-replay; environmental
+handlers remain responsible for authentication, actual I/O, and atomic tool
+preconditions. Approval, negative replies, local abort, root closure, cancellation,
+uncertain delivery, and operational capacity failure remain distinct.

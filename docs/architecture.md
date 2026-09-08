@@ -1,81 +1,71 @@
-# Architecture
+# Agent 4 architecture
 
-Agent 3 owns one staged transformation:
+The application emitter constructs one Boundary source module. Agent checks its
+catalogs and protected construction, then calls Boundary's compiler once. Boundary
+owns type/effect/capture/use checking, continuation conversion, canonicalization,
+and BPI2/PST2/ERQ2/ERS2/PKI2/PKO2. Unchanged World owns execution.
 
-```text
-complete typed system source
-    -> source admission and derived tool/protocol catalogs
-    -> ordinary Boundary Control IR and generic effect composition
-    -> ordinary Boundary Program
-    -> BPI1
-```
-
-There is one executable identity: BPI1 plus Boundary's program-transition
-identity. A closure inventory or release receipt is provenance, not a runtime
-manifest or second executable format.
-
-## Permanent owners
-
-| Owner | Owns |
+| Owner | Responsibility |
 |---|---|
-| Boundary | Portable values, generic typed effects and handlers, BPI1, Process State, request/result identity, and the fixed evaluator |
-| Agent | Complete system authoring, semantic model requests, faithful normalized-result interpretation, prompts, skills, typed action selection, epistemics, admission, and lowering |
-| World | Fixed-kernel admission, fresh-instance one-reduction execution, Process codecs, and byte relay |
-| Environment | Credentials, endpoint and workspace authority, network transport, and actual typed external results |
+| Application | Control topology, declared policies, data retention and context projection |
+| Agent | Typed domain constructions, semantic contracts, protected source admission |
+| Boundary | Source calculus, portable values, checking, compilation and pure codecs |
+| World | Program-relative state admission, interpretation, protocol framing and binding |
+| Environment | Faithful typed results, credentials, authentication, atomic external operations |
 
-Boundary contains no Agent, model, prompt, skill, provider, or repository
-concept. Agent contains no evaluator, second state format, agent bytecode, or
-application-specific WASM backend. World contains no prompt renderer, model
-selector, skill loader, action decoder, admission policy, or agent loop.
+`agent.system` binds InitialArgs, Result, Failure, optional descriptor catalogs and
+an application emitter. `agent.compile` owns its temporary Builder/catalog/registry
+storage; returned Boundary Compiled output owns independent storage. There is no
+runtime callback registry, Agent control IR, compiler-selected application body,
+or executable policy sidecar. ReAct is an ordinary library composition.
 
-## Runtime law
+`Ask<Q,A>` is an internal typed demand. Its staged responder may ask a human, invoke
+a model, compute a rule, or call another authored body. The same continuation
+resumes at its call site. Answers do not become authority by their origin label.
+The model responder captures the exact request-time offer set and selection policy,
+constructs declarations from the closed catalog, and checks every returned claim.
+The adapter preserves normalized items; the image owns candidate admission.
 
-For one validated image `P`, complete portable state `S`, and optional canonical
-effect result `R`, World hosts the fixed Boundary kernel that computes:
+Internal dialogue packages own their futures. The surrounding program may retain,
+resume, route, or dispose a child while serving another request. Only the complete
+PST2 is portable execution state. A nested turn returns to its caller; only root
+termination completes a conversation. Lexical Reader/state/region constructions
+retain scopes across suspension and restore enclosing interpretations on exit.
 
-```text
-advance(P, S, R) -> Process outcome
-```
+Deliberation uses internal multi-shot resumption. Only immutable evidence crosses
+into branch evaluation; captured mutable branch state follows Boundary's region
+semantics. Agent additionally checks effect roles through bodies, handlers,
+computation origins, forwarded capabilities, cleanup and successor handlers.
+Approval, writes, commits, live-evidence acquisition and unclassified effects cannot
+enter speculation. Higher-order admission conservatively checks every source
+lambda sharing a computation schema. When unrelated code shares that schema,
+`agent.callable.define(builder, function, signature)` gives the static function
+identity its own ordinary Boundary computation schema; `agent.callable.value`
+produces its lambda. Repeated definitions of the same function and signature
+share that declaration. The helper asserts no safety: actual bodies, residual
+rows and captures still pass the same final admission. Original structurally
+interned source may remain conservatively rejected; the helper is a public source
+composition with unchanged runtime semantics, not a new execution rule.
 
-The same image, InitialArgs, and ordered effect-result bytes produce the same
-Process outcomes and requests. Host heap objects, callbacks, provider sessions,
-skill paths, and runtime registries are not part of a resumable instance.
+Live and simulation domain clients share a typed interface with distinct
+observations. Only the corresponding live read owner can mint the private evidence
+required by a live-precondition approval. Data can inform speculative assessment;
+its authority remains outside the captured continuation.
 
-The default ReAct lowering preserves the ENF flow:
+`approve_and_commit` retains the exact proposal and authority occurrence, checks
+structural equality, authenticating-adapter principal scope, current policy and
+required live evidence, then consumes its internal grant before the sole commit
+request. Amendment needs another occurrence and decision. Uncertain delivery is
+returned for explicit reconciliation, never automatic replay. External operations
+atomically enforce their final preconditions.
 
-```text
-Observation -> observe(Memory, Observation) -> Memory
-Memory -> project(Memory) -> DecisionView
-DecisionView + image constants -> complete semantic model invocation
-faithfully normalized model result -> typed Action -> offered-set/current-policy admission
-    -> local computation, typed external effect, authored failure, or completion
-```
+Protected admission scans actual source, including alternative entry/handler edges,
+instead of trusting a list of helper names. Native application authors choose policy
+and are trusted not to mutate Builder internals or forge admission metadata. Raw
+Boundary authoring without the same Agent gate carries no protected-system claim.
 
-Model-visible function declarations, JSON schemas, typed decoding, dispatch,
-and Observation correspondence derive from the same closed Action descriptors.
-Local and completion actions do not become environmental effects. External
-actions retain distinct Boundary effect contracts.
-
-The semantic model handler is a trusted effect handler for faithful protocol
-normalization, just as a repository handler is trusted to return the bytes it
-actually read. It may not choose an Action or substitute decoded fields. The
-image independently checks the returned call name, declaration ordinal, Action
-tag, offered set, and policy before dispatch. Retained raw argument bytes are
-audit provenance; arbitrary or malicious effect-result forgery is outside the
-handler contract and can forge any declared effect result.
-
-## Lifetime and portability
-
-The canonical Agent 3 path has no mandatory Budget, final action, generation
-counter, or universal turn/effect ceiling. Applications may author finite
-policies. Representation capacities and physical interpreter capacity are
-separate, accurately named bounds.
-
-Process State is transferable and forkable. Re-advancing a pending state
-reproduces its request; it does not provide distributed locking or exactly-once
-effects. Environments independently enforce filesystem, credential, and
-workspace authority while image-owned admission enforces portable application
-policy.
-
-Agent 2 Machine/World 3/capability topology survives only in immutable release
-history. It is not an active Agent 3 build dependency or compatibility runtime.
+The bridge delegates to World and returns original canonical outcomes. Inspection
+is a non-authoritative view. Missing input stays parked; cleanup can itself park.
+Killing an execution worker produces no authoritative successor or cleanup proof.
+Content identity, conversation identity and delivery occurrence are distinct; whole
+snapshot copies can replay prior control and require environmental safeguards.

@@ -2,3 +2,13 @@
 /.zig-cache/
 /zig-pkg/
 /.zig-global-cache/
+**/zig-pkg/
+**/.zig-cache/
+**/zig-out/
+**/.zig-global-cache/
+
+# Local Ledger custody/cache files; source events remain versioned.
+.ledger/.bindings/
+.ledger/.definitions/
+.ledger/.transactions/
+.ledger/**/*.cas.lock.advisory

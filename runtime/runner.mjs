@@ -160,14 +160,33 @@ async function writeCheckpoint(output, bytes, protectedPaths) {
   }
 }
 
-function jsonValue(value) {
-  if (typeof value === "bigint") return { integer: value.toString(10) };
-  if (value instanceof Uint8Array) return { encoding: "base64", bytes: Buffer.from(value).toString("base64") };
-  if (Array.isArray(value)) return value.map(jsonValue);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, jsonValue(entry)]));
+function jsonText(value) {
+  // Portable values can be deeper than the native JS stack. Serialize directly
+  // with an explicit work stack; JSON.stringify is used only for scalar tokens.
+  const output = [], pending = [{ value }];
+  while (pending.length) {
+    const item = pending.pop();
+    if ("text" in item) { output.push(item.text); continue; }
+    const current = item.value;
+    if (typeof current === "bigint") {
+      output.push(`{"integer":${JSON.stringify(current.toString(10))}}`);
+    } else if (current instanceof Uint8Array) {
+      output.push(`{"encoding":"base64","bytes":${JSON.stringify(Buffer.from(current).toString("base64"))}}`);
+    } else if (current && typeof current === "object") {
+      const array = Array.isArray(current);
+      const entries = array ? Array.from(current, (entry, index) => [index, entry]) :
+        Object.entries(current).filter(([, entry]) => entry !== undefined);
+      output.push(array ? "[" : "{");
+      pending.push({ text: array ? "]" : "}" });
+      for (let i = entries.length - 1; i >= 0; i--) {
+        const [key, entry] = entries[i];
+        pending.push({ value: entry });
+        if (!array) pending.push({ text: `${JSON.stringify(key)}:` });
+        if (i) pending.push({ text: "," });
+      }
+    } else output.push(JSON.stringify(current) ?? "null");
   }
-  return value;
+  return output.join("");
 }
 
 /** Run one World operation. Environmental effects are returned, never serviced. */
@@ -195,10 +214,11 @@ export async function executeCli(argv, { stdout = process.stdout } = {}) {
     }
   }
 
-  if (options.command !== "inspect") await writeCheckpoint(paths.out, outcome.bytes, protectedPaths);
   const view = await world.inspectPending(outcome);
   const result = options.command === "inspect" ? view : { ...view, checkpoint: paths.out };
-  stdout.write(`${JSON.stringify(jsonValue(result))}\n`);
+  const rendered = `${jsonText(result)}\n`;
+  if (options.command !== "inspect") await writeCheckpoint(paths.out, outcome.bytes, protectedPaths);
+  stdout.write(rendered);
   return outcome;
 }
 

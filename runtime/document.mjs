@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { constants as bufferConstants } from "node:buffer";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, realpath, rename, rmdir, unlink } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
@@ -20,7 +21,11 @@ const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
  * established; callers must reconcile, never automatically repeat the write.
  */
 export async function createDocumentEnvironment(options) {
-  const { root } = record(options, ["root"], "document options");
+  const { root, maximumContentBytes } = record(options,
+    ["root", "maximumContentBytes"], "document options");
+  if (!Number.isSafeInteger(maximumContentBytes) || maximumContentBytes < 0 ||
+      maximumContentBytes >= bufferConstants.MAX_LENGTH)
+    throw new TypeError("maximumContentBytes must be a nonnegative representable byte limit");
   text(root, "root");
   if (!isAbsolute(root)) throw new TypeError("document root must be absolute");
   const suppliedRoot = resolve(root);
@@ -62,11 +67,21 @@ export async function createDocumentEnvironment(options) {
       const before = await handle.stat();
       if (!before.isFile() || before.nlink !== 1 || !sameFile(before, location.stat))
         throw environmental("unsafe_path");
-      const bytes = await handle.readFile();
+      if (before.size > maximumContentBytes) throw environmental("content_too_large");
+      // One extra byte detects growth without an unbounded readFile allocation.
+      const buffer = Buffer.alloc(before.size + 1);
+      let length = 0;
+      while (length < buffer.length) {
+        const { bytesRead } = await handle.read(buffer, length, buffer.length - length, null);
+        if (!bytesRead) break;
+        length += bytesRead;
+      }
+      if (length > maximumContentBytes) throw environmental("content_too_large");
       const after = await handle.stat();
-      if (before.size !== after.size || before.mtimeMs !== after.mtimeMs ||
+      if (length !== before.size || before.size !== after.size || before.mtimeMs !== after.mtimeMs ||
           before.ctimeMs !== after.ctimeMs)
         throw environmental("concurrent_change");
+      const bytes = buffer.subarray(0, length);
       let content;
       try { content = utf8.decode(bytes); }
       catch { throw environmental("invalid_utf8"); }
@@ -132,6 +147,9 @@ export async function createDocumentEnvironment(options) {
         digest(Buffer.from(content, "utf8")) !== baseDigest)
       throw new TypeError("base digest must match the exact UTF-8 base content");
     const replacementBytes = Buffer.from(replacement, "utf8");
+    if (replacementBytes.length > maximumContentBytes ||
+        Buffer.byteLength(content, "utf8") > maximumContentBytes)
+      throw new TypeError("document input exceeds maximumContentBytes");
     const observation = Object.freeze({ content: replacement, digest: digest(replacementBytes) });
 
     return withLock(async () => {
@@ -147,6 +165,8 @@ export async function createDocumentEnvironment(options) {
           current.stat.mode & 0o777);
         try {
           await handle.writeFile(replacementBytes);
+          // Creation applies umask; replacement preserves the existing access mode.
+          await handle.chmod(current.stat.mode & 0o777);
           await handle.sync();
         } finally {
           await handle.close();

@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { DEFAULT_LOCK, readDependencyLock, readRegular, verifyRuntime } from "../tools/agent4/dependencies.mjs";
-import { decodeSchema, decodeValue } from "./values.mjs";
+import { decodeSchema, decodeValue, ValueCodecError } from "./values.mjs";
 
 const exchangePrefix = "agent.interaction.exchange.v1.";
 const classifications = new Map([
@@ -79,7 +79,15 @@ export async function loadWorldRuntime(options) {
     if (request.semanticIdentity.startsWith(exchangePrefix) &&
         request.semanticIdentity.length > exchangePrefix.length) {
       const schema = decodeSchema(request.payloadSchema);
-      const value = decodeValue(schema, request.payload);
+      let value;
+      try { value = decodeValue(schema, request.payload); }
+      catch (error) {
+        // Presentation is optional. Host allocation limits do not invalidate a
+        // canonical request or prevent binary-only clients from answering it.
+        if (error instanceof ValueCodecError && error.code === "ValueCapacity")
+          return Object.freeze(view);
+        throw error;
+      }
       if (Array.isArray(value) && value.length === 4) {
         const [channel, purpose, presentation, outgoing] = value;
         view.interaction = Object.freeze({ channel, purpose, presentation, outgoing });

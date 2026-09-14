@@ -13,10 +13,21 @@ pub const Proposal = struct {
     live_evidence: bool,
 };
 pub const Commit = agent.tools.CommitResult(Proposal, Proposal, u8, u8);
-const Mode = enum { valid, scoped, evidence, forged_evidence, reused_evidence, raw_commit, private_call, speculative };
+const Mode = enum {
+    valid,
+    scoped,
+    scoped_evidence,
+    evidence,
+    forged_evidence,
+    reused_evidence,
+    raw_commit,
+    private_call,
+    speculative,
+};
 
 pub fn build(c: agent.Context, mode: Mode) !source.Module {
-    if (mode == .scoped) return scopedApproval(c);
+    if (mode == .scoped or mode == .scoped_evidence)
+        return scopedApproval(c, mode == .scoped_evidence);
     const b = c.builder;
     const proposal = try c.schema(Proposal);
     const boolean = try b.scalar(bool);
@@ -71,7 +82,7 @@ pub fn build(c: agent.Context, mode: Mode) !source.Module {
             .function = d.function,
             .arguments = &.{input},
         } }),
-        .valid, .speculative, .scoped => try agent.approval.approveAndCommit(c, d, entry, input),
+        .valid, .speculative, .scoped, .scoped_evidence => try agent.approval.approveAndCommit(c, d, entry, input),
         .evidence, .forged_evidence, .reused_evidence => blk: {
             const w = witness.?;
             try std.testing.expectError(error.LiveEvidenceRequired, agent.approval.approveAndCommit(c, d, entry, input));
@@ -188,7 +199,8 @@ fn liveWitness(c: agent.Context, proposal: Id) !LiveWitness {
     const perform = try b.term(.{ .perform = .{ .effect = effect, .payload = try b.constant(void, {}) } });
     try b.define(read, try b.bind(data, perform, try b.pure(try b.primitive(proof, .resource_pack, &.{try b.reference(data)}, 0))));
     try b.define(consume, try b.pure(try b.primitive(integer, .resource_unpack, &.{try b.reference(b.parameter(consume, 0))}, 0)));
-    try b.define(project, try b.pure(try b.primitive(integer, .field, &.{try b.reference(b.parameter(project, 0))}, 1)));
+    const selected = try b.reference(b.parameter(project, 0));
+    try b.define(project, try b.pure(if (proposal == integer) selected else try b.primitive(integer, .field, &.{selected}, 1)));
     return .{ .proof = proof, .consume = consume, .project = project, .read = read, .effect = effect };
 }
 
@@ -216,7 +228,7 @@ test "a simulated value cannot forge a live proof and a live proof cannot be use
     }
 }
 
-fn scopedApproval(c: agent.Context) !source.Module {
+fn scopedApproval(c: agent.Context, evidence: bool) !source.Module {
     const b = c.builder;
     const boolean = try b.scalar(bool);
     const integer = try b.scalar(u64);
@@ -231,6 +243,7 @@ fn scopedApproval(c: agent.Context) !source.Module {
     try b.define(policy, try b.pure(try b.primitive(boolean, .cell_get, &.{try b.reference(cell)}, 0)));
     const operation_result = try b.schema(.{ .sum = &.{ integer, integer, unit, unit } });
     const commit = try c.external("agent.tool.scoped.commit.v1", integer, operation_result, .commit);
+    const witness = if (evidence) try liveWitness(c, integer) else null;
     const d = try agent.approval.define(c, .{
         .name = "probe.scoped",
         .proposal = integer,
@@ -242,19 +255,27 @@ fn scopedApproval(c: agent.Context) !source.Module {
         .revalidate = policy,
         .failure = try b.constant(void, {}),
         .channel = "owner",
+        .evidence = if (witness) |w|
+            .{ .proof = w.proof, .consume = w.consume, .project = w.project }
+        else
+            null,
     });
     try std.testing.expectEqualSlices(Id, &.{region}, d.regions);
-    const root = try b.declare(&.{boolean}, d.result, d.effects, &.{});
-    const inside = try b.declare(&.{region_type}, d.result, d.effects, &.{region});
+    const effects = if (witness) |w| (try (source.Row{ .effects = d.effects }).unionWith(
+        b.allocator(),
+        .{ .effects = &.{w.effect} },
+    )).effects else d.effects;
+    const root = try b.declare(&.{boolean}, d.result, effects, &.{});
+    const inside = try b.declare(&.{region_type}, d.result, effects, &.{region});
     const created = try b.primitive(cell_type, .cell_new, &.{
         try b.reference(b.parameter(inside, 0)), try b.reference(b.parameter(root, 0)),
     }, 0);
-    const operation = try agent.approval.approveAndCommit(c, d, inside, try b.constant(u64, 42));
+    const operation = if (witness) |w| try scopedEvidence(c, d, inside, w) else try agent.approval.approveAndCommit(c, d, inside, try b.constant(u64, 42));
     try b.define(inside, try b.bind(cell, try b.pure(created), operation));
     const inside_type = try b.schema(.{ .internal = .{ .computation = .{
         .parameters = &.{region_type},
         .result = d.result,
-        .effects = d.effects,
+        .effects = effects,
         .capture_bound = &.{boolean},
         .regions = &.{region},
     } } });
@@ -262,14 +283,31 @@ fn scopedApproval(c: agent.Context) !source.Module {
     return b.module(root, unit);
 }
 
+fn scopedEvidence(c: agent.Context, d: agent.approval.Definition, owner: Id, w: LiveWitness) !Id {
+    const b = c.builder;
+    const proof = try b.variable(w.proof);
+    const read = try b.term(.{ .call = .{ .function = w.read, .arguments = &.{} } });
+    try c.registry.allowPrivateCall(owner, read, w.read);
+    const approve = try agent.approval.approveWithEvidence(
+        c,
+        d,
+        owner,
+        try b.constant(u64, 42),
+        try b.reference(proof),
+    );
+    return b.bind(proof, read, approve);
+}
+
 test "current policy may borrow a scoped cell across the approval interaction" {
-    var b = source.Builder.init(std.testing.allocator);
-    defer b.deinit();
-    var registry = agent.admission.Registry.init(std.testing.allocator);
-    defer registry.deinit();
-    const module = try build(.{ .builder = &b, .registry = &registry }, .scoped);
-    try agent.admission.verify(std.testing.allocator, module, &registry);
-    var compiled = try boundary.program.compile(std.testing.allocator, module);
-    defer compiled.deinit();
-    try std.testing.expectEqual(@as(Id, 1), compiled.program.scopes.region_count);
+    for ([_]Mode{ .scoped, .scoped_evidence }) |mode| {
+        var b = source.Builder.init(std.testing.allocator);
+        defer b.deinit();
+        var registry = agent.admission.Registry.init(std.testing.allocator);
+        defer registry.deinit();
+        const module = try build(.{ .builder = &b, .registry = &registry }, mode);
+        try agent.admission.verify(std.testing.allocator, module, &registry);
+        var compiled = try boundary.program.compile(std.testing.allocator, module);
+        defer compiled.deinit();
+        try std.testing.expectEqual(@as(Id, 1), compiled.program.scopes.region_count);
+    }
 }

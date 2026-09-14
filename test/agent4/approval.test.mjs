@@ -185,24 +185,35 @@ test("required live proof binds the base across approval and every amendment", a
 });
 
 test("scoped current-policy cells survive fresh-instance approval resumption", async () => {
-  const scopedImage = await readFile(resolve(process.env.AGENT4_APPROVAL_SCOPED_IMAGE ??
-    ".agent4/out/approval/approval-scoped.bpi2"));
-  const respond = async (outcome, response) => {
-    const req = world.decodeRequest(outcome.request);
-    const canonical = encodeValue(decodeSchema(req.resumeSchema), response);
-    return kernel.run({image: scopedImage, state: outcome.state,
-      result: world.encodeResult(outcome.request, canonical)});
-  };
-  for (const allowed of [false, true]) {
-    const issued = await kernel.run({image: scopedImage, initialArgs: Uint8Array.of(Number(allowed))});
-    assert.equal(request(issued, "agent.approval.issue.v1.probe.scoped").decoded, 42n);
-    const pending = await respond(issued, 100n);
-    const challenge = request(pending, "agent.interaction.exchange.v1.probe.scoped").decoded[3];
-    const outcome = await respond(pending, value(0, [challenge, 0n, value(0, null)]));
-    if (allowed) assert.equal(request(outcome, "agent.tool.scoped.commit.v1").decoded, 42n);
-    else {
-      assert.equal(outcome.kind, "Completed");
-      assert.deepEqual(outcome.value, Uint8Array.of(3));
+  for (const evidence of [false, true]) {
+    const selected = evidence ? process.env.AGENT4_APPROVAL_SCOPED_EVIDENCE_IMAGE :
+      process.env.AGENT4_APPROVAL_SCOPED_IMAGE;
+    const scopedImage = await readFile(resolve(selected ??
+      `.agent4/out/approval/approval-scoped${evidence ? "-evidence" : ""}.bpi2`));
+    const respond = async (outcome, response) => {
+      const req = world.decodeRequest(outcome.request);
+      const canonical = encodeValue(decodeSchema(req.resumeSchema), response);
+      return kernel.run({image: scopedImage, state: outcome.state,
+        result: world.encodeResult(outcome.request, canonical)});
+    };
+    for (const allowed of [false, true]) {
+      let issued = await kernel.run({image: scopedImage, initialArgs: Uint8Array.of(Number(allowed))});
+      if (evidence) {
+        request(issued, "agent.tool.document.read.version.v1");
+        const mismatched = await respond(issued, 43n);
+        assert.equal(mismatched.kind, "Completed");
+        assert.deepEqual(mismatched.value, Uint8Array.of(3));
+        issued = await respond(issued, 42n);
+      }
+      assert.equal(request(issued, "agent.approval.issue.v1.probe.scoped").decoded, 42n);
+      const pending = await respond(issued, 100n);
+      const challenge = request(pending, "agent.interaction.exchange.v1.probe.scoped").decoded[3];
+      const outcome = await respond(pending, value(0, [challenge, 0n, value(0, null)]));
+      if (allowed) assert.equal(request(outcome, "agent.tool.scoped.commit.v1").decoded, 42n);
+      else {
+        assert.equal(outcome.kind, "Completed");
+        assert.deepEqual(outcome.value, Uint8Array.of(3));
+      }
     }
   }
 });

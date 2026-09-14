@@ -49,6 +49,8 @@ pub fn build(b: *std.Build) void {
     const runtime = b.option([]const u8, "world-runtime", "Authenticated immutable World runtime directory");
     const measure_economy = b.option(bool, "measure-economy", "Collect timings on an operator-confirmed idle host") orelse false;
     const world_source = b.option([]const u8, "world-source", "Immutable World source for native agreement") orelse b.pathFromRoot(".agent4/inputs/world");
+    const world_archive = b.option([]const u8, "world-archive", "Authenticated immutable World source archive") orelse
+        b.pathJoin(&.{ std.fs.path.dirname(world_source) orelse ".", "world-699a314.tar.gz" });
     const data = if (source) |root| b.createModule(.{
         .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ root, "src/v2/data/root.zig" }) },
         .target = target,
@@ -113,7 +115,7 @@ pub fn build(b: *std.Build) void {
     const emit = b.step("agent4-images", "Compile the consumer images");
     const distribution = b.step("emit-agent4", "Emit compiled examples and the source-independent use archive");
     const dialogue_exe = g.emitter("agent4-dialogue", dialogue);
-    for ([_][]const u8{ "twice", "dispose_owned", "exchange" }) |mode|
+    for ([_][]const u8{ "twice", "dispose_owned", "exchange", "deep_exchange", "wide_exchange" }) |mode|
         g.emit(emit, dialogue_exe, &.{mode}, b.fmt("dialogue/{s}.bpi2", .{mode}));
     const multi = g.module("test/agent4/multi_probe.zig");
     multi.addImport("deliberation", g.helper("deliberation"));
@@ -125,6 +127,7 @@ pub fn build(b: *std.Build) void {
     g.emit(emit, approval_exe, &.{}, "approval/approval.bpi2");
     g.emit(emit, approval_exe, &.{"evidence"}, "approval/approval-evidence.bpi2");
     g.emit(emit, approval_exe, &.{"scoped"}, "approval/approval-scoped.bpi2");
+    g.emit(emit, approval_exe, &.{"scoped_evidence"}, "approval/approval-scoped-evidence.bpi2");
     const review = g.module("test/consumers/review/main.zig");
     g.testModule(check, review);
     const review_exe = g.emitter("agent4-review", review);
@@ -155,6 +158,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{.{ .name = "boundary_data_v2", .module = data }},
         });
         const runtime_guard = b.addSystemCommand(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--world-runtime", runtime_path, "--world-source", world_source });
+        runtime_guard.addArgs(&.{ "--world-archive", world_archive });
         addBoundary(b, runtime_guard, source, target, optimize);
         runtime_guard.has_side_effects = true;
         _ = runtime_guard.captureStdOut(.{});
@@ -175,6 +179,7 @@ pub fn build(b: *std.Build) void {
             native_graph.testModule(runtime_work, native);
         }
         const run = b.addSystemCommand(&.{ "node", "tools/agent4/check.mjs", "integration", "--world-runtime", runtime_path, "--fixtures", b.getInstallPath(.prefix, "agent4"), "--world-source", world_source });
+        run.addArgs(&.{ "--world-archive", world_archive });
         run.addArg("--native");
         run.addFileArg(native_exe.getEmittedBin());
         addBoundary(b, run, source, target, optimize);
@@ -183,6 +188,7 @@ pub fn build(b: *std.Build) void {
         run.step.dependOn(&runtime_guard.step);
         runtime_work.dependOn(&run.step);
         const runtime_post = b.addSystemCommand(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--world-runtime", runtime_path, "--world-source", world_source });
+        runtime_post.addArgs(&.{ "--world-archive", world_archive });
         addBoundary(b, runtime_post, source, target, optimize);
         runtime_post.has_side_effects = true;
         _ = runtime_post.captureStdOut(.{});
@@ -194,6 +200,8 @@ pub fn build(b: *std.Build) void {
         const measure = b.addSystemCommand(&.{ "node", "tools/agent4/economy.mjs", "--world-runtime", runtime_path, "--fixtures", b.getInstallPath(.prefix, "agent4/economy"), "--output", b.getInstallPath(.prefix, "agent4/economy-results"), "--probe" });
         const installed_probe = b.addInstallArtifact(economy_exe, .{});
         measure.addArg(b.getInstallPath(.bin, "economy-probe"));
+        measure.addArgs(&.{ "--world-source", world_source, "--world-archive", world_archive });
+        addBoundary(b, measure, source, target, optimize);
         measure.step.dependOn(&installed_probe.step);
         if (measure_economy) measure.addArgs(&.{ "--measure", "--uncontended" });
         measure.has_side_effects = true;

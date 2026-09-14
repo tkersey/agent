@@ -7,10 +7,19 @@ const bsrc = boundary.computation;
 const Builder = bsrc.Builder;
 const Id = bsrc.Id;
 
-pub const Mode = enum { twice, dispose_owned, exchange, double_use, borrowed_escape };
+pub const Mode = enum {
+    twice,
+    dispose_owned,
+    exchange,
+    deep_exchange,
+    wide_exchange,
+    double_use,
+    borrowed_escape,
+};
 
 pub fn build(b: *Builder, mode: Mode) !bsrc.Module {
     if (mode == .exchange) return typedExchange(b);
+    if (mode == .deep_exchange or mode == .wide_exchange) return portableExchange(b, mode);
     if (mode == .borrowed_escape) return borrowedEscape(b);
     if (mode == .dispose_owned) return disposal(b);
     const unit = try b.scalar(void);
@@ -39,6 +48,37 @@ pub fn build(b: *Builder, mode: Mode) !bsrc.Module {
     const second_step = try awaitingStep(b, d, try b.constant(u64, 7), ended, false);
     const first_step = try delayedStep(b, d, delayed, second_step, mode == .double_use);
     try b.define(entry, try consumeAnswer(b, d, started, first_step));
+    return b.module(entry, unit);
+}
+
+fn portableExchange(b: *Builder, mode: Mode) !bsrc.Module {
+    const unit = try b.scalar(void);
+    const integer = try b.scalar(u8);
+    const list = if (mode == .deep_exchange) blk: {
+        const list = try b.reserveSchema();
+        const pair = try b.schema(.{ .product = &.{ integer, list } });
+        try b.defineSchema(list, .{ .sum = &.{ unit, pair } });
+        break :blk list;
+    } else try b.schema(.{ .seq = unit });
+    const text = try b.schema(.text);
+    const contract = try interaction.define(b, .{
+        .name = if (mode == .deep_exchange) "probe.deep" else "probe.wide",
+        .channel = text,
+        .purpose = text,
+        .presentation = unit,
+        .outgoing = list,
+        .input = unit,
+    });
+    const entry = try b.declare(&.{list}, unit, &.{contract.effect}, &.{});
+    const response = try b.variable(contract.reply);
+    const request = try interaction.exchange(b, contract, .{
+        .channel = try b.literal(.{ .schema = text, .bytes = "\x05human" }),
+        .purpose = try b.literal(.{ .schema = text, .bytes = "\x07message" }),
+        .presentation = try b.constant(void, {}),
+        .outgoing = try b.reference(b.parameter(entry, 0)),
+    });
+    // The second occurrence exercises deep rendering after resume as well.
+    try b.define(entry, try b.bind(response, request, try b.bind(try b.variable(contract.reply), request, try b.pure(try b.constant(void, {})))));
     return b.module(entry, unit);
 }
 

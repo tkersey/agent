@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { executeCli, parseArguments } from "../../runtime/runner.mjs";
 import { loadWorldRuntime } from "../../runtime/world.mjs";
+import { encodeValue } from "../../runtime/values.mjs";
 
 const start = ["start", "--world-runtime", "world", "--image", "image", "--initial-args", "args", "--out", "next"];
 const sink = { write() { throw new Error("failed commands must not print a successful outcome"); } };
@@ -100,7 +101,7 @@ const runtimePath = process.env.AGENT4_WORLD_RUNTIME ?? fileURLToPath(new URL(".
 const dialogueDir = process.env.AGENT4_DIALOGUE_DIR ?? fileURLToPath(new URL("../../.agent4/out/dialogue", import.meta.url));
 const lockPath = fileURLToPath(new URL("../../conformance/agent4/dependencies.lock.json", import.meta.url));
 
-async function realFixture(t, name = "twice") {
+async function realFixture(t, name = "twice", initialArgs = new Uint8Array()) {
   const root = await mkdtemp(join(tmpdir(), "agent4-runner-world-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const image = join(dialogueDir, `${name}.bpi2`);
@@ -112,7 +113,7 @@ async function realFixture(t, name = "twice") {
   const reply = join(root, "reply.value");
   const saved = join(root, "saved.pko2");
   const next = join(root, "next.pko2");
-  await writeFile(args, new Uint8Array());
+  await writeFile(args, initialArgs);
   const answer = Buffer.alloc(8);
   answer.writeBigUInt64LE(3n);
   await writeFile(reply, answer);
@@ -160,6 +161,55 @@ test("runner cancels saved State and rejects completed-state resumption", async 
   await assert.rejects(executeCli(f.argv("resume", ["--image", f.image, "--outcome", f.next, "--reply", f.reply, "--out", rejectedOutput]), { stdout: sink }), /resume requires a Requested outcome/);
   await assert.rejects(executeCli(f.argv("cancel", ["--image", f.image, "--outcome", f.next, "--reason", "already cancelled", "--out", rejectedOutput]), { stdout: sink }), /cancel requires an outcome with saved State/);
   assert.equal(await readFile(rejectedOutput, "utf8"), "retain prior checkpoint");
+});
+
+test("runner renders deep portable interactions on start, inspect, and resume", async (t) => {
+  const depth = 5000;
+  const schema = { root: 0, types: [{ sum: [1, 2] }, "unit", { product: [3, 0] }, "u8"] };
+  let list = { tag: 0, value: null };
+  for (let i = 0; i < depth; i++) list = { tag: 1, value: [i % 256, list] };
+  const f = await realFixture(t, "deep_exchange", encodeValue(schema, list));
+  assert.equal(f.parked.kind, "Requested");
+  await executeCli(f.argv("inspect", ["--outcome", f.saved]), { stdout: f.stdout });
+  await writeFile(f.reply, Uint8Array.of(0));
+  const next = await executeCli(f.argv("resume", ["--image", f.image, "--outcome", f.saved,
+    "--reply", f.reply, "--out", f.next]), { stdout: f.stdout });
+  assert.equal(next.kind, "Requested");
+  assert.deepEqual(await readFile(f.saved), Buffer.from(f.parked.bytes));
+  assert.deepEqual(await readFile(f.next), Buffer.from(next.bytes));
+  assert.equal(f.printed.length, 3);
+  for (const view of f.printed) {
+    let outgoing = view.interaction.outgoing;
+    for (let i = depth - 1; i >= 0; i--) {
+      assert.equal(outgoing.tag, 1);
+      assert.equal(outgoing.value[0], i % 256);
+      outgoing = outgoing.value[1];
+    }
+    assert.deepEqual(outgoing, { tag: 0, value: null });
+  }
+});
+
+test("optional display capacity preserves canonical start, inspect, and resume", async (t) => {
+  // A million unit values occupy three canonical bytes. They are valid World
+  // data even though the surrounding product exceeds host materialization limits.
+  const count = 1_000_000, bytes = [];
+  for (let remaining = count; remaining; remaining = Math.floor(remaining / 128))
+    bytes.push((remaining % 128) | (remaining >= 128 ? 128 : 0));
+  const f = await realFixture(t, "wide_exchange", Uint8Array.from(bytes));
+  const before = await readFile(f.saved);
+  await executeCli(f.argv("inspect", ["--outcome", f.saved]), { stdout: f.stdout });
+  await writeFile(f.reply, Uint8Array.of(0));
+  const next = await executeCli(f.argv("resume", ["--image", f.image, "--outcome", f.saved,
+    "--reply", f.reply, "--out", f.next]), { stdout: f.stdout });
+  assert.equal(next.kind, "Requested");
+  for (const view of f.printed) {
+    assert.equal(view.classification, "typed_request");
+    assert.equal(view.interaction, undefined);
+    assert.equal(view.request.semanticIdentity, "agent.interaction.exchange.v1.probe.wide");
+    assert.equal(view.request.payload.encoding, "base64");
+  }
+  assert.deepEqual(await readFile(f.saved), before);
+  assert.deepEqual(await readFile(f.next), Buffer.from(next.bytes));
 });
 
 test("runner preserves authoritative input and prior output on schema or image rejection", async (t) => {

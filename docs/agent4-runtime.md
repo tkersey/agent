@@ -198,8 +198,13 @@ The complete concrete v3 field and tag order is also documented in
 
 ## Real document I/O, custody and delivery uncertainty
 
-`runtime/document.mjs` exports `createDocumentEnvironment({ root })` for an
-existing isolated absolute directory. Its `read({ path })` returns actual
+`runtime/document.mjs` exports `createDocumentEnvironment({ root, maximumContentBytes })`
+for an existing isolated absolute directory. Set the explicit byte limit to the
+declared result contract (128 for the packaged document example). Reads exceeding
+it return `failure: content_too_large`; out-of-contract replacement inputs reject
+before I/O. Reads allocate at most the observed file size plus one byte, bounded
+by that limit plus one, and detect growth or truncation during the read.
+Its `read({ path })` returns actual
 content and a SHA-256 digest. Its `replace({ path, base, replacement })` compares
 that actual content/digest under the same cooperative root lock, then performs
 an atomic replacement. Results distinguish success, conflict, failure and

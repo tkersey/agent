@@ -8,7 +8,8 @@ const root = resolve(import.meta.dirname, '../..');
 const [mode, ...args] = process.argv.slice(2);
 assert(['authoring', 'integration'].includes(mode), 'expected authoring or integration');
 const flags = new Map([['--boundary-source','boundarySource'], ['--boundary-package','boundaryPackage'],
-  ['--world-runtime','worldRuntime'], ['--world-source','worldSource'], ['--fixtures','fixtures'], ['--native','native']]);
+  ['--world-runtime','worldRuntime'], ['--world-source','worldSource'], ['--world-archive','worldArchive'],
+  ['--fixtures','fixtures'], ['--native','native']]);
 const options = {}, seen = new Set();
 for(let i=0;i<args.length;i++) {
   const key=flags.get(args[i]);
@@ -27,6 +28,7 @@ const env={...process.env, AGENT4_WORLD_RUNTIME:options.worldRuntime,
   AGENT4_APPROVAL_IMAGE:join(fixtures,'approval/approval.bpi2'),
   AGENT4_APPROVAL_EVIDENCE_IMAGE:join(fixtures,'approval/approval-evidence.bpi2'),
   AGENT4_APPROVAL_SCOPED_IMAGE:join(fixtures,'approval/approval-scoped.bpi2'),
+  AGENT4_APPROVAL_SCOPED_EVIDENCE_IMAGE:join(fixtures,'approval/approval-scoped-evidence.bpi2'),
   AGENT4_NATIVE:native,
   AGENT4_ARCHIVE:resolve(fixtures,'../agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),
   AGENT4_MULTI_INSPECTOR:resolve(fixtures,'../bin/agent4-multi')};

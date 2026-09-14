@@ -188,7 +188,7 @@ export function verifyRuntime(runtimePath, { lockPath = DEFAULT_LOCK } = {}) {
 export function snapshotDependencies({ boundarySource,
   boundaryArchive,
   boundaryPackage, boundaryPackageProfile = "zig-managed", worldSource = join(ROOT, ".agent4/inputs/world"),
-  worldArchive = join(ROOT, ".agent4/inputs/world-699a314.tar.gz"),
+  worldArchive = join(dirname(worldSource), "world-699a314.tar.gz"),
   worldRuntime = join(ROOT, ".agent4/out/world-runtime"),
   authoringOnly = false, lockPath = DEFAULT_LOCK } = {}) {
   const lock = readDependencyLock(lockPath);

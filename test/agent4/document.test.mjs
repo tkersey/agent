@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { link, lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, link, lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -10,7 +10,7 @@ async function fixture(t, content = "Original document.\n") {
   const root = await mkdtemp(join(tmpdir(), "agent4-document-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   await writeFile(join(root, "document.txt"), content);
-  return { root, environment: await createDocumentEnvironment({ root }) };
+  return { root, environment: await createDocumentEnvironment({ root, maximumContentBytes: 128 }) };
 }
 
 function observation(content) {
@@ -41,9 +41,61 @@ test("conditional replacement accepts distinct real non-golden results", async (
   assert.deepEqual(await readdir(root), ["document.txt"]);
 });
 
+test("document byte capacity is explicit and returns typed oversized-read failure", async (t) => {
+  const { root, environment } = await fixture(t, "é".repeat(64));
+  await assert.rejects(createDocumentEnvironment({ root }), TypeError);
+  for (const maximumContentBytes of [-1, 1.5, Infinity, "128"])
+    await assert.rejects(createDocumentEnvironment({ root, maximumContentBytes }), TypeError);
+  const filename = join(root, "document.txt");
+  const base = (await environment.read({ path: "document.txt" })).observation;
+  assert.equal(Buffer.byteLength(base.content), 128);
+  await assert.rejects(environment.replace({ path: "document.txt", base, replacement: "x".repeat(129) }),
+    /maximumContentBytes/);
+  assert.equal(await readFile(filename, "utf8"), base.content);
+  await writeFile(filename, base.content + "x");
+  assert.deepEqual(await environment.read({ path: "document.txt" }),
+    { kind: "failure", code: "content_too_large" });
+  const larger = await createDocumentEnvironment({ root, maximumContentBytes: 256 });
+  assert.equal((await larger.read({ path: "document.txt" })).kind, "success");
+  assert.deepEqual(await readdir(root), ["document.txt"]);
+});
+
+test("replacement preserves existing permissions under a restrictive umask", async (t) => {
+  const { root, environment } = await fixture(t);
+  const filename = join(root, "document.txt");
+  await chmod(filename, 0o660);
+  const base = (await environment.read({ path: "document.txt" })).observation;
+  const originalMask = process.umask(0o077);
+  try {
+    const result = await environment.replace({ path: "document.txt", base, replacement: "Still shared.\n" });
+    assert.equal(result.kind, "success");
+    assert.equal((await lstat(filename)).mode & 0o777, 0o660);
+    assert.equal(await readFile(filename, "utf8"), "Still shared.\n");
+  } finally { process.umask(originalMask); }
+});
+
+test("growth after stat remains a bounded read and cannot become a successful observation", async (t) => {
+  const { root, environment } = await fixture(t, "x".repeat(128));
+  const filename = join(root, "document.txt");
+  const handle = await open(filename, "r");
+  const prototype = Object.getPrototypeOf(handle), originalRead = prototype.read;
+  await handle.close();
+  let reads = 0;
+  t.mock.method(prototype, "readFile", async () => { throw new Error("unbounded read forbidden"); });
+  t.mock.method(prototype, "read", async function (buffer, offset, length, position) {
+    assert.equal(buffer.length, 129);
+    if (!reads++) await writeFile(filename, "x".repeat(1024));
+    return originalRead.call(this, buffer, offset, length, position);
+  });
+  assert.deepEqual(await environment.read({ path: "document.txt" }),
+    { kind: "failure", code: "content_too_large" });
+  assert.equal(reads, 1);
+  assert.deepEqual(await readdir(root), ["document.txt"]);
+});
+
 test("separate environment instances serialize competing writes and return an actual conflict", async (t) => {
   const { root, environment } = await fixture(t);
-  const second = await createDocumentEnvironment({ root });
+  const second = await createDocumentEnvironment({ root, maximumContentBytes: 128 });
   const base = (await environment.read({ path: "document.txt" })).observation;
   const results = await Promise.all([
     environment.replace({ path: "document.txt", base, replacement: "Writer one.\n" }),
@@ -84,8 +136,8 @@ test("forged base digests and ambiguous invocation fields reject before acquirin
   let accessed = false;
   await assert.rejects(environment.read({ get path() { accessed = true; return "document.txt"; } }), TypeError);
   assert.equal(accessed, false);
-  await assert.rejects(createDocumentEnvironment({ root, recursive: true }), TypeError);
-  await assert.rejects(createDocumentEnvironment({ root: "relative" }), TypeError);
+  await assert.rejects(createDocumentEnvironment({ root, maximumContentBytes: 128, recursive: true }), TypeError);
+  await assert.rejects(createDocumentEnvironment({ root: "relative", maximumContentBytes: 128 }), TypeError);
   assert.deepEqual(await readdir(root), ["document.txt"]);
   assert.equal(await readFile(join(root, "document.txt"), "utf8"), base.content);
 });
@@ -120,7 +172,7 @@ test("root, intermediate, final symlinks and hardlinked files are unsupported", 
     assert.deepEqual(await environment.replace({ path, base: observation("Outside.\n"), replacement: "Forbidden.\n" }),
       { kind: "failure", code: "unsafe_path" });
   }
-  await assert.rejects(createDocumentEnvironment({ root: join(root, "escape") }), TypeError);
+  await assert.rejects(createDocumentEnvironment({ root: join(root, "escape"), maximumContentBytes: 128 }), TypeError);
   assert.equal(await readFile(join(outside, "private.txt"), "utf8"), "Outside.\n");
 });
 
@@ -130,7 +182,7 @@ test("replacing the admitted root directory invalidates the environment", async 
   const root = join(parent, "root");
   await mkdir(root);
   await writeFile(join(root, "document.txt"), "Original.\n");
-  const environment = await createDocumentEnvironment({ root });
+  const environment = await createDocumentEnvironment({ root, maximumContentBytes: 128 });
   await rename(root, join(parent, "old"));
   await mkdir(root);
   await writeFile(join(root, "document.txt"), "Replacement root.\n");
@@ -159,12 +211,12 @@ test("a held or stale root lock returns busy and is never stolen", async (t) => 
   assert.equal(await readFile(join(root, "document.txt"), "utf8"), "Original document.\n");
 });
 
-test("file synchronization failure reports failure and preserves the base", async (t) => {
+for (const method of ["chmod", "sync"]) test(`file ${method} failure preserves the base`, async (t) => {
   const { root, environment } = await fixture(t);
   const handle = await open(join(root, "document.txt"), "r");
   const prototype = Object.getPrototypeOf(handle);
   await handle.close();
-  t.mock.method(prototype, "sync", async function () { throw Object.assign(new Error("fixture disk error"), { code: "EIO" }); });
+  t.mock.method(prototype, method, async function () { throw Object.assign(new Error("fixture disk error"), { code: "EIO" }); });
   assert.deepEqual(await environment.replace({ path: "document.txt", base: observation("Original document.\n"), replacement: "x" }),
     { kind: "failure", code: "io_failure" });
   assert.equal(await readFile(join(root, "document.txt"), "utf8"), "Original document.\n");

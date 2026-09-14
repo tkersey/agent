@@ -212,7 +212,7 @@ async function fixture(run) {
   const directory = await mkdtemp(join(root, ".agent4/out/document-runtime-"));
   try {
     await writeFile(join(directory, "document.txt"), original);
-    const environment = await createDocumentEnvironment({ root: directory });
+    const environment = await createDocumentEnvironment({ root: directory, maximumContentBytes: 128 });
     return await run(environment, directory);
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -230,7 +230,7 @@ async function revisionScenario(name, replacement, mode = "success") {
       assert.equal(input.replacement, replacement);
       commits++;
       if (mode === "conflict") {
-        const competitor = await createDocumentEnvironment({ root: directory });
+        const competitor = await createDocumentEnvironment({ root: directory, maximumContentBytes: 128 });
         const changed = await competitor.replace({ path: "document.txt",
           base: input.base, replacement: "Concurrent revision.\n" });
         assert.equal(changed.kind, "success");
@@ -350,9 +350,23 @@ async function rejectedAmendmentScenario(name, change, { freshDecision = false, 
 }
 
 const records = [];
+records.push(await fixture(async (environment, directory) => {
+  const content = "x".repeat(129);
+  await writeFile(join(directory, "document.txt"), content);
+  const queues = new Map([
+    [effects.clarify, [value(3)]],
+    [effects.read, [readReply(environment)]],
+    [effects.cleanup, [null]],
+    [effects.message, [replyMessage(variant(4, "content_too_large"), variant(1))]],
+  ]);
+  const record = await execute("oversized-real-document-follows-authored-failure", queues, variant(0));
+  assert.deepEqual(record.trace, [effects.clarify, effects.read, effects.cleanup, effects.message]);
+  assert.equal(await readFile(join(directory, "document.txt"), "utf8"), content);
+  return { ...record, commitRequests: 0, actualDocument: observation(content) };
+}));
 records.push(await revisionScenario("amendment-two-turn-conversation", amended));
 records.push(await revisionScenario("alternate-real-non-golden-replacement", alternative));
-assert.notDeepEqual(records[0].actualDocument, records[1].actualDocument);
+assert.notDeepEqual(records[1].actualDocument, records[2].actualDocument);
 records.push(await revisionScenario("atomic-base-conflict", amended, "conflict"));
 records.push(await revisionScenario("stale-semantic-approval-rebound-to-new-request", amended, "stale"));
 records.push(await revisionScenario("unknown-delivery-does-not-retry", amended, "uncertain"));

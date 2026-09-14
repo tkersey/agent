@@ -98,7 +98,7 @@ pub fn define(c: authoring.Context, cfg: Config) !Definition {
         &.{ cfg.proposal, e.proof },
         result,
         effects,
-        &.{},
+        regions,
     ) else function;
     if (entry != function) try c.registry.privateFunction(entry);
     try c.registry.privateFunction(function);

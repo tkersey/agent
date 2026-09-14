@@ -79,6 +79,27 @@ test("Git tree hashing agrees with independent Git object construction", context
   assert.equal(gitTree(source), expected);
 });
 
+test("alternate World source selects its sibling archive and authenticates explicit overrides", context => {
+  const f = fixture(context);
+  const source = join(f.root, "alternate/inputs/world");
+  mkdirSync(source, { recursive: true });
+  writeFileSync(join(source, "source.zig"), "// immutable World fixture\n");
+  f.lock.world.source = inventory(source);
+  f.lock.world.gitTree = gitTree(source);
+  const archive = join(f.root, "alternate/inputs/world-699a314.tar.gz");
+  const bytes = Buffer.from("fixture archive bytes");
+  writeFileSync(archive, bytes);
+  f.lock.world.archive = { ...f.lock.world.archive, bytes: bytes.length, sha256: sha256(bytes) };
+  f.save();
+  const options = { ...f.options, authoringOnly: false, worldSource: source, worldRuntime: f.runtime };
+  const before = snapshotDependencies(options);
+  const selected = join(f.root, "explicit.tar.gz");
+  renameSync(archive, selected);
+  assert.deepEqual(snapshotDependencies({ ...options, worldArchive: selected }), before);
+  writeFileSync(selected, "untrusted replacement archive");
+  assert.throws(() => snapshotDependencies({ ...options, worldArchive: selected }), /archive identity/);
+});
+
 test("package materialization profiles are explicit exact inventories, never mode normalization", context => {
   const f = fixture(context), extracted = join(f.root, "archive-extracted");
   cpSync(f.boundary, extracted, { recursive: true });

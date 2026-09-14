@@ -23,6 +23,8 @@ const errorRecord = error => ({ name: error.name, message: error.message,
 function parseOptions(args) {
   const flags = new Map([
     ['--world-runtime', 'runtime'], ['--output', 'output'], ['--fixtures', 'fixtures'], ['--probe', 'probe'],
+    ['--world-source', 'worldSource'], ['--world-archive', 'worldArchive'],
+    ['--boundary-source', 'boundarySource'], ['--boundary-package', 'boundaryPackage'],
   ]);
   const options = { fixtures: DEFAULT_FIXTURES, probe: join(DEFAULT_FIXTURES, 'bin/economy-probe') };
   const seen = new Set();
@@ -66,7 +68,8 @@ async function noSymlinkPath(path) {
 async function prepareOutput(options) {
   await noSymlinkPath(options.output);
   const runtime = await realpath(options.runtime);
-  for (const protectedRoot of [join(ROOT, '.agent4/inputs'), runtime]) {
+  for (const protectedRoot of [join(ROOT, '.agent4/inputs'), runtime,
+    options.worldSource, options.worldArchive, options.boundarySource, options.boundaryPackage].filter(Boolean)) {
     if (within(protectedRoot, options.output)) throw new Error('OutputMayNotModifyDependency');
   }
   await mkdir(options.output, { recursive: true });
@@ -127,7 +130,8 @@ async function measureBuilds(options) {
   const source = join(directory, 'economy.zig');
   await writeFile(source, original, { flag: 'wx' });
   const args = ['build', '--build-file', join(ROOT, 'test/agent4/economy_build.zig'),
-    '-Doptimize=ReleaseSafe', `-Dboundary-source=${join(ROOT, '.agent4/inputs/boundary')}`,
+    '-Doptimize=ReleaseSafe',
+    `-Dboundary-source=${options.boundarySource ?? options.boundaryPackage ?? join(ROOT, '.agent4/inputs/boundary')}`,
     `-Deconomy-source=${source}`, '--cache-dir', join(directory, 'cache'),
     '--global-cache-dir', join(directory, 'global-cache'), '--prefix', join(directory, 'prefix')];
   const records = [];
@@ -363,13 +367,8 @@ async function conversations(world, kernel, options) {
 }
 
 async function alternatives(world, kernel, options) {
-  const path = join(ROOT, '.agent4/out/multi/multi.bpi2');
-  let image;
-  try { image = await requiredFile(path); }
-  catch (error) {
-    if (error.code === 'ENOENT') return { status: 'UNESTABLISHED', reason: 'Optional independent multi-shot fixture is not available', requiredToCompleteEconomy: true };
-    throw error;
-  }
+  const path = resolve(options.fixtures, '../multi/multi.bpi2');
+  const image = await requiredFile(path);
   const argsSchema = { root: 0, types: [{ seq: 1 }, 'u64'] };
   const resultSchema = { root: 0, types: [{ seq: 1 }, { product: [2, 2, 2] }, 'u64'] };
   const observations = [];
@@ -433,7 +432,7 @@ export async function runEconomy(args) {
     inputs: {}, checks: {}, failures: [] };
   let before;
   try {
-    before = snapshotDependencies({ worldRuntime: options.runtime });
+    before = snapshotDependencies({ ...options, worldRuntime: options.runtime });
     report.dependenciesBefore = before;
     const host = await loadWorldRuntime({ runtimePath: options.runtime });
     report.inputs.world = host.identity;
@@ -477,7 +476,7 @@ export async function runEconomy(args) {
   finally {
     if (before) {
       try {
-        const after = snapshotDependencies({ worldRuntime: options.runtime });
+        const after = snapshotDependencies({ ...options, worldRuntime: options.runtime });
         report.dependenciesAfter = after;
         assertDependenciesUnchanged(before, after);
         report.dependenciesUnchanged = true;

@@ -81,6 +81,13 @@ is an optional development input, verified against the same lock. Native agreeme
 tests use the separately authenticated unchanged World source acquired by setup.
 No runtime kernel is built per application.
 
+For `setup.mjs --work-dir /absolute/agent-inputs`, pass
+`-Dworld-source=/absolute/agent-inputs/inputs/world` and
+`-Dworld-runtime=/absolute/agent-inputs/out/world-runtime` to both aggregates.
+The archive defaults to `world-699a314.tar.gz` beside the selected source;
+`-Dworld-archive=/absolute/immutable/archive.tar.gz` selects a different location.
+All selected inputs are checked against the same lock before and after execution.
+
 The optional runner starts, resumes, inspects, and cancels saved World outcomes.
 Canonical reply bytes are supported without a UI or provider session. It is a
 single-writer reference, with one outstanding external request per computation.

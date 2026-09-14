@@ -81,9 +81,9 @@ is an optional development input, verified against the same lock. Native agreeme
 tests use the separately authenticated unchanged World source acquired by setup.
 No runtime kernel is built per application.
 
-For `setup.mjs --work-dir /absolute/agent-inputs`, pass
-`-Dworld-source=/absolute/agent-inputs/inputs/world` and
-`-Dworld-runtime=/absolute/agent-inputs/out/world-runtime` to both aggregates.
+For `node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-inputs"`, pass
+`-Dworld-source="$PWD/.agent4-inputs/inputs/world"` and
+`-Dworld-runtime="$PWD/.agent4-inputs/out/world-runtime"` to both aggregates.
 The archive defaults to `world-699a314.tar.gz` beside the selected source;
 `-Dworld-archive=/absolute/immutable/archive.tar.gz` selects a different location.
 All selected inputs are checked against the same lock before and after execution.

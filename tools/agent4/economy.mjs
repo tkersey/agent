@@ -7,6 +7,7 @@ import { mkdir, lstat, realpath, writeFile, rename } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
+import { isMain } from '../../runtime/cli.mjs';
 import { loadWorldRuntime } from '../../runtime/world.mjs';
 import { decodeSchema, decodeValue, encodeValue } from '../../runtime/values.mjs';
 import { assertDependenciesUnchanged, readRegular, sha256, snapshotDependencies } from './dependencies.mjs';
@@ -489,7 +490,7 @@ export async function runEconomy(args) {
   return report;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta)) {
   try {
     const report = await runEconomy(process.argv.slice(2));
     console.log(stringify({ status: report.status, timingStatus: report.timingStatus,

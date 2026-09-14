@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { isMain } from "../../runtime/cli.mjs";
 import { gzipSync } from "node:zlib";
 import { DEFAULT_LOCK, readDependencyLock, readRegular, sha256, verifyRuntime } from "./dependencies.mjs";
 
 const ROOT = resolve(import.meta.dirname, "../..");
-const runtimeFiles = ["runtime/world.mjs", "runtime/world.d.mts", "runtime/values.mjs", "runtime/runner.mjs",
+const runtimeFiles = ["runtime/world.mjs", "runtime/world.d.mts", "runtime/values.mjs", "runtime/runner.mjs", "runtime/cli.mjs",
   "runtime/model.mjs", "runtime/document.mjs", "tools/agent4/dependencies.mjs",
   "docs/agent4-runtime.md", "docs/migration_from_3.md", "docs/model-invocation-v3.md", "LICENSE"];
 // Optional test oracles supply prescribed external values and independently
@@ -30,7 +30,7 @@ function safeRelative(path) {
 }
 function inside(path, directory) {
   const suffix = relative(directory, path);
-  return suffix === "" || (!isAbsolute(suffix) && suffix !== ".." && !suffix.startsWith("../"));
+  return suffix === "" || (!isAbsolute(suffix) && suffix !== ".." && !suffix.startsWith(`..${sep}`));
 }
 function physical(path) {
   const absolute = resolve(path);
@@ -220,7 +220,7 @@ export function packageArtifacts(argv) {
   return receipt;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta)) {
   try { const receipt = packageArtifacts(process.argv.slice(2)); console.log(JSON.stringify(receipt.archive)); }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }

@@ -130,6 +130,19 @@ test("provider request preserves 64-bit schema bound lexemes", () => {
   assert(!request.includes('"maximum":18446744073709552000'));
 });
 
+test("provider tool choice preserves zero, optional, and required call policies", () => {
+  for (const [minimumCalls, maximumCalls, expected] of [
+    [0, 0, "none"], [0, 1, "auto"], [1, 1, "required"], [0, 2, "auto"], [1, 2, "required"],
+  ]) {
+    const invocation = decodeModelInvocation(invocationBytes(undefined, 0, null,
+      { minimumCalls, maximumCalls }));
+    assert.equal(invocation.tools.length, 1);
+    const request = JSON.parse(encodeOpenAIResponsesRequest(invocation));
+    assert.equal(request.tool_choice, expected);
+    assert.equal(request.tools[0].name, "choose");
+  }
+});
+
 test("provider request preserves canonical temperature lexemes", () => {
   const temperature = "0.12345678901234567890123456789";
   const request = encodeOpenAIResponsesRequest(
@@ -541,8 +554,9 @@ function invocationBytes(
   schemaText = '{"type":"object","properties":{"value":{"type":"integer"}},"required":["value"],"additionalProperties":false}',
   actionTag = 0,
   temperature = null,
+  selection,
 ) {
-  return encodeInvocationFixture({ temperature, tools: [{
+  return encodeInvocationFixture({ temperature, selection, tools: [{
     actionOrdinal: 0, actionTag, name: "choose", description: "Choose one value.", schemaText,
     codec: [{ name: "value", kind: 1, bitWidth: 32, maximumBytes: 0, enumNames: [], enumTags: [] }],
   }] });
@@ -561,7 +575,8 @@ function noToolInvocationBytes() {
   return encodeInvocationFixture({ tools: [] });
 }
 
-function encodeInvocationFixture({tools, temperature = null}) {
+function encodeInvocationFixture({tools, temperature = null,
+  selection = { minimumCalls: tools.length > 0 ? 1 : 0, maximumCalls: 1 }}) {
   return Buffer.concat([
     text("agent.model.protocol.openai-responses-v2"), text("fixture-model"),
     temperature === null ? Buffer.from([0, 0, 0])
@@ -576,7 +591,7 @@ function encodeInvocationFixture({tools, temperature = null}) {
         variable(field.enumTags.length), ...field.enumTags.map(u32),
       ]),
     ]),
-    u32(tools.length > 0 ? 1 : 0), u32(1), Buffer.from([0]), Buffer.from([0, 0, 0]), u32(0),
+    u32(selection.minimumCalls), u32(selection.maximumCalls), Buffer.from([0]), Buffer.from([0, 0, 0]), u32(0),
     u32(32), u32(256), u32(64), u32(32 * 1024), u32(256), u32(64),
     u32(32 * 1024), u32(32 * 1024),
   ]);

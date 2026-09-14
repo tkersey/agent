@@ -71,6 +71,19 @@ test("setup permits only owned isolated directories and rejects symlink routes",
   assert.throws(() => setupPaths({ agentRoot }), /not an Agent/);
 });
 
+test("README alternate setup and downstream paths agree with admitted setup paths", context => {
+  const agentRoot = temporary(context);
+  const readme = readFileSync(new URL("../../README.md", import.meta.url), "utf8");
+  const work = readme.match(/node tools\/agent4\/setup\.mjs --work-dir "([^"]+)"/);
+  assert(work, "README must provide the alternate setup invocation");
+  const paths = setupPaths({ agentRoot, workDir: work[1].replaceAll("$PWD", agentRoot) });
+  for (const [flag, expected] of [["world-source", paths.worldSource], ["world-runtime", paths.worldRuntime]]) {
+    const matches = [...readme.matchAll(new RegExp(`-D${flag}="([^"]+)"`, "g"))];
+    assert(matches.some(match => match[1].replaceAll("$PWD", agentRoot) === expected),
+      `${flag} must select the documented setup output`);
+  }
+});
+
 function existingFixture(context) {
   const agentRoot = temporary(context), paths = setupPaths({ agentRoot });
   const lock = JSON.parse(readFileSync(DEFAULT_LOCK));

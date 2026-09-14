@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
+import { isMain } from "../../runtime/cli.mjs";
 import { DEFAULT_LOCK, readDependencyLock, readRegular, sha256, inventory, gitTree,
   verifyBoundary, verifyRuntime, snapshotDependencies } from "./dependencies.mjs";
 
@@ -244,7 +245,7 @@ function parse(args) {
   return options;
 }
 
-if (import.meta.main) {
+if (isMain(import.meta)) {
   try {
     const result = await setup({ ...parse(process.argv.slice(2)), report: message => console.error(message) });
     console.log(JSON.stringify(result, null, 2));

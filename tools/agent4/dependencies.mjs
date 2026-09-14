@@ -3,6 +3,7 @@ import { constants, lstatSync, openSync, closeSync, fstatSync, readSync,
   readdirSync, realpathSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMain } from "../../runtime/cli.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 export const DEFAULT_LOCK = join(ROOT, "conformance/agent4/dependencies.lock.json");
@@ -244,7 +245,7 @@ function main(args) {
   console.log(JSON.stringify(snapshotDependencies(options), null, 2));
 }
 
-if (import.meta.main) {
+if (isMain(import.meta)) {
   try { main(process.argv.slice(2)); }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }

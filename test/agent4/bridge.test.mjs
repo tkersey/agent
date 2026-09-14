@@ -121,7 +121,7 @@ test("cancelling suspended cleanup returns its current request and preserves cle
 test("source-independent bridge installation executes the same compiled image", async (t) => {
   const isolated = await mkdtemp(join(tmpdir(), "agent4-bridge-installation-"));
   t.after(() => rm(isolated, { recursive: true, force: true }));
-  const files = ["runtime/world.mjs", "runtime/values.mjs", "tools/agent4/dependencies.mjs",
+  const files = ["runtime/world.mjs", "runtime/values.mjs", "runtime/cli.mjs", "tools/agent4/dependencies.mjs",
     "conformance/agent4/dependencies.lock.json"];
   for (const file of files) {
     await mkdir(dirname(join(isolated, file)), { recursive: true });

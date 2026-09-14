@@ -46,6 +46,8 @@ test("source-only authoring works without an archive or World installation", con
   mkdirSync(scripts, { recursive: true }); mkdirSync(contracts, { recursive: true });
   const cli = join(scripts, "dependencies.mjs");
   cpSync(new URL("../../tools/agent4/dependencies.mjs", import.meta.url), cli);
+  mkdirSync(join(f.root, "runtime"), { recursive: true });
+  cpSync(new URL("../../runtime/cli.mjs", import.meta.url), join(f.root, "runtime/cli.mjs"));
   cpSync(f.lockPath, join(contracts, "dependencies.lock.json"));
   const alias = join(f.root, "verify-alias.mjs"); symlinkSync(cli, alias);
   for (const entry of [cli, alias]) {

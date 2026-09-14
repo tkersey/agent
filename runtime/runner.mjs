@@ -3,7 +3,8 @@
 import { randomUUID } from "node:crypto";
 import { lstat, open, readFile, readlink, realpath, rename, stat, unlink } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
+import { isMain } from "./cli.mjs";
 
 const defaultLockPath = fileURLToPath(new URL("../conformance/agent4/dependencies.lock.json", import.meta.url));
 
@@ -222,7 +223,7 @@ export async function executeCli(argv, { stdout = process.stdout } = {}) {
   return outcome;
 }
 
-if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+if (isMain(import.meta)) {
   executeCli(process.argv.slice(2)).catch((error) => {
     process.stderr.write(`agent runner: ${error.message}\n`);
     process.exitCode = 1;

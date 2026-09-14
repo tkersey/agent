@@ -278,7 +278,8 @@ export function encodeOpenAIResponsesRequest(invocation) {
     return `${prefix},"parameters":${schemaText},"strict":${JSON.stringify(tool.strict)}}`;
   });
   fields.push(`"tools":[${tools.join(",")}]`);
-  field("tool_choice", invocation.selection.minimumCalls > 0 ? "required" : "auto");
+  field("tool_choice", invocation.selection.maximumCalls === 0 ? "none" :
+    invocation.selection.minimumCalls > 0 ? "required" : "auto");
   field("parallel_tool_calls", invocation.selection.parallelCalls);
   field("store", invocation.responsePolicy.store);
   field("stream", invocation.responsePolicy.stream);

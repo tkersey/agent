@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile, link } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { executeCli, parseArguments } from "../../runtime/runner.mjs";
 import { loadWorldRuntime } from "../../runtime/world.mjs";
 import { encodeValue } from "../../runtime/values.mjs";
@@ -147,6 +148,51 @@ test("runner starts, inspects, and resumes canonical outcomes through unchanged 
   assert.deepEqual(await readFile(f.saved), before);
   assert.equal((await stat(f.next)).mode & 0o777, 0o600);
   assert.equal((await readdir(f.root)).some((name) => name.endsWith(".tmp")), false);
+});
+
+test("direct and symlinked CLI entry points execute instead of silently succeeding", async (t) => {
+  const f = await realFixture(t);
+  const runner = fileURLToPath(new URL("../../runtime/runner.mjs", import.meta.url));
+  const alias = join(f.root, "agent-runner.mjs");
+  await symlink(runner, alias);
+  for (const [i, entry] of [runner, alias].entries()) {
+    const output = join(f.root, `cli-${i}.pko2`);
+    const printed = execFileSync(process.execPath, [entry, ...f.argv("start", [
+      "--image", f.image, "--initial-args", join(f.root, "initial.args"), "--out", output,
+    ])], { encoding: "utf8" });
+    assert.equal(JSON.parse(printed).kind, "Requested");
+    assert.deepEqual(await readFile(output), Buffer.from(f.parked.bytes));
+  }
+  for (const [i, relative] of ["../../runtime/runner.mjs", "../../tools/agent4/package.mjs",
+    "../../tools/agent4/economy.mjs", "../../tools/agent4/setup.mjs",
+    "../../tools/agent4/dependencies.mjs"].entries()) {
+    const target = fileURLToPath(new URL(relative, import.meta.url));
+    const link = join(f.root, `cli-alias-${i}.mjs`);
+    await symlink(target, link);
+    for (const entry of [target, link]) {
+      assert.throws(() => execFileSync(process.execPath, [entry, "--unknown"], { stdio: "pipe" }),
+        error => error.status === 1 && error.stderr.length > 0);
+    }
+  }
+});
+
+test("CLI fallback identifies real main paths when Node does not expose meta.main", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agent4-main-fallback-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const helper = new URL("../../runtime/cli.mjs", import.meta.url).href;
+  const entry = join(root, "entry.mjs"), alias = join(root, "alias.mjs");
+  await writeFile(entry, `import { isMain } from ${JSON.stringify(helper)};
+    console.log(JSON.stringify([
+      isMain(import.meta), isMain({url: import.meta.url}),
+      isMain({url: ${JSON.stringify(helper)}}),
+      isMain({url: ${JSON.stringify(pathToFileURL(join(root, "absent.mjs")).href)}}),
+      isMain({url: import.meta.url, main: false})
+    ]));`);
+  await symlink(entry, alias);
+  for (const path of [entry, alias]) {
+    assert.deepEqual(JSON.parse(execFileSync(process.execPath, [path], { encoding: "utf8" })),
+      [true, true, false, false, false]);
+  }
 });
 
 test("runner cancels saved State and rejects completed-state resumption", async (t) => {

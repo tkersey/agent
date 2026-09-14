@@ -143,6 +143,23 @@ test("provider tool choice preserves zero, optional, and required call policies"
   }
 });
 
+test("unsupported asynchronous response policies reject before provider I/O", async (t) => {
+  const fetch = t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("unsupported policies must not perform I/O");
+  });
+  for (const [stream, background] of [[true, false], [false, true], [true, true]]) {
+    const bytes = invocationBytes(undefined, 0, null, undefined,
+      { store: false, stream, background });
+    assert.throws(() => encodeOpenAIResponsesRequest(decodeModelInvocation(bytes)), /nonstreaming/);
+    const result = await performModelInvocation(bytes, { endpoint: "http://127.0.0.1:1" });
+    assert.deepEqual(result, Buffer.from([4, 1, 0, 0, 0]));
+  }
+  assert.equal(fetch.mock.callCount(), 0);
+  const allowed = decodeModelInvocation(invocationBytes(undefined, 0, null, undefined,
+    { store: true, stream: false, background: false }));
+  assert.equal(JSON.parse(encodeOpenAIResponsesRequest(allowed)).store, true);
+});
+
 test("provider request preserves canonical temperature lexemes", () => {
   const temperature = "0.12345678901234567890123456789";
   const request = encodeOpenAIResponsesRequest(
@@ -555,8 +572,9 @@ function invocationBytes(
   actionTag = 0,
   temperature = null,
   selection,
+  responsePolicy,
 ) {
-  return encodeInvocationFixture({ temperature, selection, tools: [{
+  return encodeInvocationFixture({ temperature, selection, responsePolicy, tools: [{
     actionOrdinal: 0, actionTag, name: "choose", description: "Choose one value.", schemaText,
     codec: [{ name: "value", kind: 1, bitWidth: 32, maximumBytes: 0, enumNames: [], enumTags: [] }],
   }] });
@@ -576,7 +594,8 @@ function noToolInvocationBytes() {
 }
 
 function encodeInvocationFixture({tools, temperature = null,
-  selection = { minimumCalls: tools.length > 0 ? 1 : 0, maximumCalls: 1 }}) {
+  selection = { minimumCalls: tools.length > 0 ? 1 : 0, maximumCalls: 1 },
+  responsePolicy = { store: false, stream: false, background: false }}) {
   return Buffer.concat([
     text("agent.model.protocol.openai-responses-v2"), text("fixture-model"),
     temperature === null ? Buffer.from([0, 0, 0])
@@ -591,7 +610,8 @@ function encodeInvocationFixture({tools, temperature = null,
         variable(field.enumTags.length), ...field.enumTags.map(u32),
       ]),
     ]),
-    u32(selection.minimumCalls), u32(selection.maximumCalls), Buffer.from([0]), Buffer.from([0, 0, 0]), u32(0),
+    u32(selection.minimumCalls), u32(selection.maximumCalls), Buffer.from([0]),
+    Buffer.from([Number(responsePolicy.store), Number(responsePolicy.stream), Number(responsePolicy.background)]), u32(0),
     u32(32), u32(256), u32(64), u32(32 * 1024), u32(256), u32(64),
     u32(32 * 1024), u32(32 * 1024),
   ]);

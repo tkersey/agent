@@ -19,7 +19,8 @@ pub fn ModelObservation(comptime P: type, comptime batch: bool) type {
 /// Declare a shared `(P.Request, [P.declaration_count]bool) -> Interpretation`
 /// computation. The request is a semantic configuration template: its `tools`
 /// field is intentionally replaced with the closed catalog filtered by offered.
-/// All other fields are preserved. Selection and the very same offered value
+/// Other fields are preserved; incompatible normalization bounds take `failure`
+/// before external I/O. Selection and the very same offered value
 /// are captured before suspension and used to admit the normalized result.
 /// `failure` is a literal of the enclosing module's failure schema.
 pub fn defineModel(
@@ -71,7 +72,12 @@ pub fn defineModelObserved(
         &.{effect},
         &.{},
     );
-    const g = Generator(P, batch){ .context = c, .function = function, .fault = fault };
+    const g = Generator(P, batch){
+        .context = c,
+        .function = function,
+        .fault = fault,
+        .failure = failure,
+    };
     try b.define(function, try g.body(effect));
     return instance.finish(b, function);
 }
@@ -111,6 +117,7 @@ fn Generator(comptime P: type, comptime batch: bool) type {
         context: authoring.Context,
         function: Id,
         fault: Id,
+        failure: Id,
 
         const G = @This();
 
@@ -188,7 +195,59 @@ fn Generator(comptime P: type, comptime batch: bool) type {
                 &.{template},
                 comptime std.meta.fieldIndex(P.Request, "selection").?,
             );
-            return b.bind(selection, try b.pure(selected), try b.bind(normalized, perform, observed));
+            const next = try b.bind(selection, try b.pure(selected), try b.bind(normalized, perform, observed));
+            return g.checkTemplate(template, selected, next);
+        }
+
+        fn checkTemplate(g: G, template: Id, selection: Id, next: Id) !Id {
+            const c = g.context;
+            const b = c.builder;
+            const Limits = @FieldType(P.Request, "normalization_limits");
+            const limits = try b.primitive(try c.schema(Limits), .field, &.{template}, comptime std.meta.fieldIndex(P.Request, "normalization_limits").?);
+            const maximum = P.normalizationLimits();
+            const rejected = try b.term(.{ .fail = g.failure });
+            var checked = next;
+            // These limits bound fields actually carried by P.Result. Parser
+            // work and raw provider-envelope limits do not alter its schema.
+            inline for (.{
+                "maximum_output_items",    "maximum_call_id_bytes",     "maximum_name_bytes",
+                "maximum_arguments_bytes", "maximum_result_text_bytes",
+            }) |name| {
+                const actual = try b.primitive(try c.schema(u32), .field, &.{limits}, comptime std.meta.fieldIndex(Limits, name).?);
+                const excess = try b.primitive(try c.schema(bool), .less, &.{ try b.constant(u32, @field(maximum, name)), actual }, 0);
+                checked = try b.term(.{ .conditional = .{
+                    .condition = excess,
+                    .when_true = rejected,
+                    .when_false = checked,
+                } });
+            }
+            const count = try b.primitive(try c.schema(u32), .field, &.{limits}, comptime std.meta.fieldIndex(Limits, "maximum_output_items").?);
+            checked = try g.checkSelection(selection, count, rejected, checked);
+            const bytes = try b.primitive(try c.schema(u32), .field, &.{template}, comptime std.meta.fieldIndex(P.Request, "maximum_provider_response_bytes").?);
+            const empty_budget = try b.primitive(try c.schema(bool), .equal, &.{ bytes, try b.constant(u32, 0) }, 0);
+            return b.term(.{ .conditional = .{
+                .condition = empty_budget,
+                .when_true = rejected,
+                .when_false = checked,
+            } });
+        }
+
+        fn checkSelection(g: G, selection: Id, items: Id, rejected: Id, next: Id) !Id {
+            const c = g.context;
+            const b = c.builder;
+            const Selection = @FieldType(P.Request, "selection");
+            const minimum = try b.primitive(try c.schema(u32), .field, &.{selection}, comptime std.meta.fieldIndex(Selection, "minimum_calls").?);
+            const maximum = try b.primitive(try c.schema(u32), .field, &.{selection}, comptime std.meta.fieldIndex(Selection, "maximum_calls").?);
+            var checked = next;
+            for ([_][2]Id{ .{ maximum, minimum }, .{ items, maximum } }) |pair| {
+                const invalid = try b.primitive(try c.schema(bool), .less, &pair, 0);
+                checked = try b.term(.{ .conditional = .{
+                    .condition = invalid,
+                    .when_true = rejected,
+                    .when_false = checked,
+                } });
+            }
+            return checked;
         }
 
         fn request(g: G, template: Id, tools: Id) !Id {

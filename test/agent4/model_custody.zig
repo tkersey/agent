@@ -67,14 +67,19 @@ fn template(tools: []const P.ToolDeclaration, selection: model.Selection) P.Requ
 }
 
 fn compileModel(comptime Q: type, comptime multiple: bool) !source.Compiled {
+    return compileResponder(Q, multiple, false);
+}
+
+fn compileResponder(comptime Q: type, comptime multiple: bool, comptime observed: bool) !source.Compiled {
     var b = source.Builder.init(allocator);
     defer b.deinit();
     var registry = agent.admission.Registry.init(b.allocator());
     defer registry.deinit();
     const context: agent.Context = .{ .builder = &b, .registry = &registry };
     const failure = try b.constant(void, {});
-    const entry = try agent.responders.defineModel(Q, context, failure, multiple);
-    const shared = try agent.responders.defineModel(Q, context, failure, multiple);
+    const define = if (observed) agent.responders.defineModelObserved else agent.responders.defineModel;
+    const entry = try define(Q, context, failure, multiple);
+    const shared = try define(Q, context, failure, multiple);
     try std.testing.expectEqual(entry, shared);
     const module = b.module(entry, try b.scalar(void));
     try agent.admission.verify(allocator, module, &registry);
@@ -311,6 +316,70 @@ test "model responder derives held offers and preserves the complete semantic re
             observed.value.accepted.choose.value
         else
             observed.value.accepted.other.value);
+    }
+}
+
+test "dynamic normalization bounds preserve reply-schema compatibility before model I/O" {
+    inline for (.{ false, true }) |multiple| {
+        inline for (.{ false, true }) |observed| {
+            var compiled = try compileResponder(P, multiple, observed);
+            defer compiled.deinit();
+            inline for (.{
+                "maximum_output_items",    "maximum_call_id_bytes",     "maximum_name_bytes",
+                "maximum_arguments_bytes", "maximum_result_text_bytes",
+            }) |field| {
+                var value: Input = .{
+                    .request = template(&.{}, single),
+                    .offered = .{ true, false },
+                };
+                @field(value.request.normalization_limits, field) += 1;
+                var rejected = try start(compiled.program, value);
+                defer rejected.deinit();
+                try std.testing.expect(rejected.record == .failed);
+                try std.testing.expectEqualSlices(u8, &.{}, rejected.record.failed.value);
+                @field(value.request.normalization_limits, field) -= 1;
+                var exact = try start(compiled.program, value);
+                defer exact.deinit();
+                try expectRequest(exact, value);
+                @field(value.request.normalization_limits, field) = 0;
+                value.request.selection = .{
+                    .minimum_calls = 0,
+                    .maximum_calls = 0,
+                    .parallel_calls = false,
+                };
+                var tighter = try start(compiled.program, value);
+                defer tighter.deinit();
+                try expectRequest(tighter, value);
+                var finished = try resumeResult(P.Result, compiled.program, tighter, .{ .unsupported_response = .normalization_limit });
+                defer finished.deinit();
+                try std.testing.expect(finished.record == .completed);
+            }
+            // These policy limits do not change any field of P.Result. They
+            // remain caller-owned rather than acquiring an unnecessary cap.
+            var independent: Input = .{
+                .request = template(&.{}, single),
+                .offered = .{ true, false },
+            };
+            independent.request.normalization_limits.maximum_argument_name_bytes += 1;
+            independent.request.normalization_limits.maximum_argument_fields += 1;
+            independent.request.maximum_provider_response_bytes = P.representation.provider_response_bytes + 1;
+            var admitted = try start(compiled.program, independent);
+            defer admitted.deinit();
+            try expectRequest(admitted, independent);
+            for (0..3) |case| {
+                var invalid = independent;
+                switch (case) {
+                    0 => invalid.request.selection.minimum_calls = 2,
+                    1 => invalid.request.selection.maximum_calls =
+                        invalid.request.normalization_limits.maximum_output_items + 1,
+                    2 => invalid.request.maximum_provider_response_bytes = 0,
+                    else => unreachable,
+                }
+                var rejected = try start(compiled.program, invalid);
+                defer rejected.deinit();
+                try std.testing.expect(rejected.record == .failed);
+            }
+        }
     }
 }
 

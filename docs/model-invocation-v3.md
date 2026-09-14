@@ -127,6 +127,8 @@ inference is retried. There is no default deadline. Supplying `signal` chooses a
 embedding-owned operational deadline; expiry yields typed `interrupted`, and is
 neither authored cancellation nor root completion.
 The standard profile requests normalized nonstreaming output.
+The built-in adapter returns `unsupported_parameter` before provider I/O when
+`stream` or `background` is true. It does not silently rewrite either policy.
 
 Model results do not authenticate human identities, prove real observations,
 authorize writes or provide exactly-once delivery. Approval, simulation provenance

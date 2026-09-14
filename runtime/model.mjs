@@ -242,6 +242,8 @@ function validateToolMetadata(tools) {
 }
 
 export function encodeOpenAIResponsesRequest(invocation) {
+  assert(!invocation.responsePolicy.stream && !invocation.responsePolicy.background,
+    "the normalized model adapter requires nonstreaming foreground responses");
   const fields = [];
   const field = (name, value) => fields.push(
     `${JSON.stringify(name)}:${JSON.stringify(value)}`,

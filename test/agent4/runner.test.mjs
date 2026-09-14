@@ -165,7 +165,7 @@ test("direct and symlinked CLI entry points execute instead of silently succeedi
   }
   for (const [i, relative] of ["../../runtime/runner.mjs", "../../tools/agent4/package.mjs",
     "../../tools/agent4/economy.mjs", "../../tools/agent4/setup.mjs",
-    "../../tools/agent4/dependencies.mjs"].entries()) {
+    "../../tools/agent4/dependencies.mjs", "./installations.mjs"].entries()) {
     const target = fileURLToPath(new URL(relative, import.meta.url));
     const link = join(f.root, `cli-alias-${i}.mjs`);
     await symlink(target, link);

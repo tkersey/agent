@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMain } from "../../runtime/cli.mjs";
 import { execFileSync } from "node:child_process";
 import { inventory, readDependencyLock, readRegular, sha256,
   withVerifiedDependencies } from "../../tools/agent4/dependencies.mjs";
@@ -155,7 +156,7 @@ export async function authoringInstallation({ sourceRoot = ROOT, output } = {}) 
   return result;
 }
 
-if (import.meta.main) {
+if (isMain(import.meta)) {
   try {
     const args = process.argv.slice(2);
     let output;

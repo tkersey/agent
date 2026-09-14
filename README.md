@@ -60,6 +60,11 @@ boundary. See [architecture](docs/architecture.md) and
 
 The normal authoring check fetches only the exact locked Boundary package:
 
+Run the JavaScript tools with Node 26.8.1 or newer, matching the unchanged World
+runtime's engine requirement; current checks use Node 26.8.2. The locked source
+installation profile is POSIX (qualified on Darwin arm64). Windows setup is not
+qualified, and permission modes are never normalized to bypass exact inventories.
+
 ```sh
 zig build check-agent4 -Doptimize=ReleaseSafe
 zig build emit-agent4 -Doptimize=ReleaseSafe

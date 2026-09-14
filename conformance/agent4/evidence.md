@@ -7,7 +7,7 @@ The initial publication paused before CAS review. Review closeout was explicitly
 ## Inputs and identity
 
 - Agent baseline: 151c683de871e3df819a1a666fcdf41bff3e391f.
-- Source-input SHA256: 02e688e186f7e89af0beb09176f14fc747f373ab3a4af92dc2f5caf44264416c. This binds the sorted path/content inventory of build configuration, current source/runtime, new tests/tools, and dependency/contracts inputs. The derived report itself is excluded.
+- Source-input SHA256: c4879472a3cdb39d838dda3b2692de3d96f7e6f4fa0eea3321ecbbff6780d7de. This binds the sorted path/content inventory of build configuration, current source/runtime, new tests/tools, and dependency/contracts inputs. The derived report itself is excluded.
 - Boundary: 7a4d10ec656cf70bbab99281dd71e3ec493daa0c, 2.0.0-dev.0; source archive 6a0ce149a47f400f8514db6cabf2e3b15209168430d7a01ab260a089da3a2a78; package boundary-2.0.0-dev.0-flclaPEkFQD7SP5XqTrQtqMjyG2qAU5fGr9QW3xaQKUs.
 - World: 699a3147088274d2bf742c6ecb4cb70a5faea631, 5.0.0-dev.0.
 - Kernel: 9d1cc7b8f2895a25034a5074413da646ae038dfc00b3d80563e71698c630f9a4, 388453 bytes; ABI2; 0 imports; 10 exports; 20 initial /4096 maximum memory pages.
@@ -65,13 +65,13 @@ The protected authoring negatives include real Boundary-compiling counterexample
 
 | Image | Bytes | SHA256 |
 |---|---:|---|
-| review/clarify_first.bpi2 | 3187 | 397c19c27f2369a4c07a238fc2c524d846f36a72b615a58e5e46374a0f70bbb6 |
+| review/clarify_first.bpi2 | 3565 | b467b7d50266b997d4de2757b9f481c6acadfd1db48894123e49986a83410912 |
 | review/human.bpi2 | 469 | f256a7167fcf8ac864de61fbc13abaa1502eb23f92b42d3172023cc4903249be |
-| review/mid_review.bpi2 | 3193 | 9f6934ab78d1d2df5d0ad5ff244cf6b3b52090e597051e8c1f37783640b72451 |
-| review/model.bpi2 | 2360 | 96143881d93c159d4f16567198a6f17de5109ecc19d5693715f79e69f3bf67bb |
+| review/mid_review.bpi2 | 3571 | 609ffdd1ee7825db48952cd4d8c730615f94904b420e2add53a96941598af550 |
+| review/model.bpi2 | 2738 | 7fe9d0c8e0551a918effd0762fef3b906ba92e19dd00673068a56cc1d769d761 |
 | review/react.bpi2 | 414 | 416d855de849ff18f169d937435c392dff6735dd7ca8e5b2a1f84e50e6fd53c8 |
 | review/rule.bpi2 | 321 | c939fd6133f2e75e57e7518ed066474c7570329650e7b08e999826fc08c9be20 |
-| document/document.bpi2 | 8330 | 9b3b0ce3df84cdf6e69fac17b898939238f275d73379a39024270b2c0a4fbf00 |
+| document/document.bpi2 | 8717 | afb1ccfe6caa244ee1c9bfc19371d7eb4230425a7ca60d8bdbb707c7ea60a96b |
 
 ## Economy observations
 
@@ -104,8 +104,14 @@ The GitHub findings on custom abort reasons and nonexistent packaged example pat
 
 The first CAS wave and subsequent GitHub review exposed seven further cases. Evidence-backed approval now carries its declared region row; the combined live-proof/scoped-policy case executes with allowed, denied and mismatched-evidence inputs. File replacement preserves permissions under a restrictive umask, and file reads have an explicit contract-aligned byte bound, including growth during reading. An oversized real document follows the image's typed failure and cleanup path. Runner rendering uses an explicit work stack for 5,000-node recursive interactions; optional display-capacity exhaustion preserves the generic canonical request, tested with a million unit values. Selected source/archive/package paths now reach integration and economy verification; required multi-shot fixtures derive from the selected output directory.
 
-The successor aggregate passes 121/121 build steps, 120 Zig tests, 105 Node tests, seven expected source rejections and 13 actual document scenarios. A separate source copy with no default input directory passes 86/86 integration/economy steps using explicit immutable inputs; a wrong archive is rejected. Raw evidence is in .agent4/closeout/seven-fixes-proof.log, .agent4/closeout/alternate/corrected-proof.log and .agent4/closeout/alternate/wrong-archive.log. All seven application image identities above remain unchanged. Dependency pre/post verification passes; the kernel is unchanged. Current functional economy evidence does not replace the historical timing observations above. CAS convergence remains a separate exact-head requirement.
+The successor aggregate passes 121/121 build steps, 120 Zig tests, 105 Node tests, seven expected source rejections and 13 actual document scenarios. A separate source copy with no default input directory passes 86/86 integration/economy steps using explicit immutable inputs; a wrong archive is rejected. Raw evidence is in .agent4/closeout/seven-fixes-proof.log, .agent4/closeout/alternate/corrected-proof.log and .agent4/closeout/alternate/wrong-archive.log. Those corrections did not change the application images. Dependency pre/post verification passes; the kernel is unchanged. Current functional economy evidence does not replace the historical timing observations above. CAS convergence remains a separate exact-head requirement.
 
 The second complete CAS wave and corresponding GitHub review identified five distinct cases: CLI aliases, main-entry detection when Node lacks `import.meta.main`, a rejected alternate-setup example, zero-call provider policy, and platform-specific path containment. One pure CLI helper now uses native main identity when available and otherwise compares real file paths; all five entry points share it. Actual direct/alias runner execution, all CLI error paths, the feature-absence fallback, and import safety are tested. The README setup path is checked against setup admission and downstream paths. Canonical model requests cover no-call, optional-call and required-call policies. Packaging uses the platform separator for parent paths; Windows execution itself was not run.
 
-The resulting aggregate passes 121/121 steps, 120 Zig tests and 109 Node tests, including the source-free bridge/archive cases with the pure CLI helper present. Source, package, runtime and kernel verification remains unchanged. Raw proof is .agent4/closeout/wave2/fixes-complete-aggregate.log. The seven application images and the previous finite economy fixture identities are unaffected; CAS review credit from earlier heads is invalidated.
+The resulting aggregate passes 121/121 steps, 120 Zig tests and 109 Node tests, including the source-free bridge/archive cases with the pure CLI helper present. Source, package, runtime and kernel verification remains unchanged. Raw proof is .agent4/closeout/wave2/fixes-complete-aggregate.log. Those CLI/provider-only corrections did not change BPI2 images or the finite economy fixtures; CAS review credit from earlier heads is invalidated.
+
+The third complete CAS wave identified an omitted installation-check entry point and dynamic model-template/result-schema incompatibility. The installation driver now uses the shared main-entry helper and participates in CLI alias rejection checks. The protected model responder checks five output-carrying normalization bounds against the same profile that defines its reply schema, plus the existing call-range and positive provider-budget preconditions. Incompatible templates take the caller's module failure before external I/O. Exact and tighter bounds remain unchanged; independent parser and provider-envelope limits are not capped by reply capacities. All single/batch and observed/projection paths execute the boundary cases under native World. The built-in adapter also rejects streaming/background policies as typed unsupported parameters before fetching.
+
+The final aggregate passes 121/121 steps, 121 Zig tests and 110 Node tests, with unchanged dependency pre/post inventories. Raw proof is .agent4/closeout/wave3/fixes-final-aggregate.log. The eight shared template checks add 378 image bytes to each model-backed review composition and 387 bytes to the document image (including its resulting canonical encoding changes); other application images and the finite economy fixtures remain unchanged. The current image identities are in the table above and .agent4/closeout/wave3/image-attribution.json. Historical timings are not fresh measurements of these changed model-backed images.
+
+Windows permission-mode normalization and complete Node20 setup were not adopted as requirements of this tuple: the locked World package declares Node>=26.8.1, and its observed source inventories include exact POSIX modes. The README now states the qualified profile. A new platform profile would need its own observed consumer evidence; modes are not weakened to force a match. Portable main detection is tested independently and does not claim complete execution on every older Node version.

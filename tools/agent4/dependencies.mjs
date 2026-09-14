@@ -214,11 +214,11 @@ export function assertDependenciesUnchanged(before, after) {
 /** Postflight runs even if the aggregate fails; neither failure is hidden by the other. */
 export async function withVerifiedDependencies(options, work) {
   const before = snapshotDependencies(options);
-  let result, failure;
-  try { result = await work(before); } catch (error) { failure = error; }
+  let result, failure, rejected = false;
+  try { result = await work(before); } catch (error) { rejected = true; failure = error; }
   try { assertDependenciesUnchanged(before, snapshotDependencies(options)); }
-  catch (error) { if (failure) throw new AggregateError([failure, error]); throw error; }
-  if (failure) throw failure;
+  catch (error) { if (rejected) throw new AggregateError([failure, error]); throw error; }
+  if (rejected) throw failure;
   return result;
 }
 

@@ -33,7 +33,8 @@ function authoringFiles(sourceRoot) {
     }
     assert(!/@embedFile\(/.test(text), "embedded authoring input needs explicit installation accounting");
   }
-  for (const name of ["build.zig.zon", "LICENSE", "README.md"])
+  for (const name of ["build.zig.zon", "LICENSE", "README.md",
+    "tools/agent4/dependencies.mjs", "runtime/cli.mjs", "conformance/agent4/dependencies.lock.json"])
     files.set(name, readRegular(join(sourceRoot, name)));
   return files;
 }
@@ -117,7 +118,10 @@ export async function authoringInstallation({ sourceRoot = ROOT, output } = {}) 
     writeFileSync(destination, bytes, { flag: "wx" });
   }
   const before = inventory(installed);
-  for (const path of ["runtime", ".agent4", "zig-pkg", "src/system_compiler.zig"])
+  // The pure CLI identity helper serves lock authentication. No World runtime,
+  // environmental handler, kernel, or old Agent compiler is installed.
+  for (const path of ["runtime/world.mjs", "runtime/model.mjs", "runtime/document.mjs",
+    "runtime/runner.mjs", ".agent4", "zig-pkg", "src/system_compiler.zig"])
     assert(!existsSync(join(installed, path)), `forbidden installation input: ${path}`);
   mkdirSync(consumer);
   writeFileSync(join(consumer, "build.zig"), BUILD);

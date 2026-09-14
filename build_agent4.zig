@@ -79,7 +79,22 @@ pub fn build(b: *std.Build) void {
     const source_guard = b.addSystemCommand(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--authoring-only" });
     addBoundary(b, source_guard, source, target, optimize);
     source_guard.has_side_effects = true;
+    source_guard.setCwd(b.path("."));
     _ = source_guard.captureStdOut(.{});
+    // Module consumers do not select this package's artifact steps. Carry the
+    // authentication prerequisite in their module graph, without runtime code.
+    const admission_files = b.addWriteFiles();
+    admission_files.step.dependOn(&source_guard.step);
+    const admission = b.createModule(.{
+        .root_source_file = admission_files.add("agent4_dependency_admission.zig", ""),
+    });
+    agent.addImport("_agent4_dependency_admission", admission);
+    contracts.addImport("_agent4_dependency_admission", admission);
+    if (source != null) {
+        // These override modules are constructed by Agent, not upstream modules.
+        boundary.addImport("_agent4_dependency_admission", admission);
+        data.addImport("_agent4_dependency_admission", admission);
+    }
     const g: Graph = .{ .b = b, .optimize = optimize, .agent = agent, .boundary = boundary, .data = data, .contracts = contracts, .gate = &source_guard.step };
     const check = b.step("agent4-authoring-tests", "Authoring test implementation");
     const aggregate = b.step("check-agent4", "Check authoring and pure contracts without World");
@@ -146,7 +161,7 @@ pub fn build(b: *std.Build) void {
     package.has_side_effects = true;
     package.step.dependOn(&inventory.step);
     distribution.dependOn(&package.step);
-    check.dependOn(distribution);
+    check.dependOn(emit);
 
     const integration = b.step("check-agent4-integration", "Execute consumer proofs under unchanged World");
     const economy = b.step("check-agent4-economy", "Measure direct/facade and retained-state economy");

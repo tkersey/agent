@@ -255,6 +255,8 @@ omitted, the receipt explicitly records `world.runtimeVerification` as
 not observations of an installed runtime. Integration packaging supplies this
 option and authenticates the runtime before and after assembly. Supplying or
 omitting it changes that receipt status, never the archive's execution bytes.
+Assembly runs from an Agent Git checkout to record source provenance. Ordinary
+authoring checks and compiled-image execution do not require Git metadata.
 
 The command checks inventory hashes and emits the versioned tar.gz, receipt
 and `SHA256SUMS`. Archive entry order, modes, owners and timestamps are fixed;

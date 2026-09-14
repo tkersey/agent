@@ -67,6 +67,13 @@ qualified, and permission modes are never normalized to bypass exact inventories
 
 ```sh
 zig build check-agent4 -Doptimize=ReleaseSafe
+```
+
+The authoring check compiles the examples and works from an extracted source
+package without Git metadata. Creating a use archive is a separate operation
+from an Agent Git checkout, where packaging records its source provenance:
+
+```sh
 zig build emit-agent4 -Doptimize=ReleaseSafe
 ```
 
@@ -82,8 +89,9 @@ zig build check-agent4-economy -Doptimize=ReleaseSafe \
 
 Use `--cache-dir` and `--global-cache-dir` inside the isolated Agent checkout when
 working alongside other deliveries. `-Dboundary-v2-source=/absolute/immutable/copy`
-is an optional development input, verified against the same lock. Native agreement
-tests use the separately authenticated unchanged World source acquired by setup.
+is an optional development input, verified against the same lock. Its authentication
+check also runs when an external build consumes Agent's exported modules.
+Native agreement tests use the separately authenticated unchanged World source acquired by setup.
 No runtime kernel is built per application.
 
 For `node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-inputs"`, pass

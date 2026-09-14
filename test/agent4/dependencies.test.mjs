@@ -182,6 +182,22 @@ test("postflight runs after aggregate failure and retains both errors", async co
     /aggregate failed/.test(error.errors[0].message) && /package inventory/.test(error.errors[1].message));
 });
 
+test("postflight preserves falsy rejection payloads and distinguishes fulfilled values", async context => {
+  const f = fixture(context);
+  for (const reason of [undefined, null, false, 0, 0n, "", NaN]) {
+    await assert.rejects(withVerifiedDependencies(f.options, async () => { throw reason; }),
+      actual => Object.is(actual, reason));
+    assert(Object.is(await withVerifiedDependencies(f.options, async () => reason), reason));
+    const path = join(f.boundary, "source.zig"), original = readFileSync(path);
+    try {
+      await assert.rejects(withVerifiedDependencies(f.options, async () => {
+        writeFileSync(path, "changed"); throw reason;
+      }), error => error instanceof AggregateError && error.errors.length === 2 &&
+        Object.is(error.errors[0], reason) && /package inventory/.test(error.errors[1].message));
+    } finally { writeFileSync(path, original); }
+  }
+});
+
 test("bounded no-follow reads reject oversized inputs and symbolic links", context => {
   const f = fixture(context), path = join(f.root, "large");
   writeFileSync(path, ""); truncateSync(path, 4097);

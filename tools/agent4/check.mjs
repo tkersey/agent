@@ -32,6 +32,9 @@ const env={...process.env, AGENT4_WORLD_RUNTIME:options.worldRuntime,
   AGENT4_NATIVE:native,
   AGENT4_ARCHIVE:resolve(fixtures,'../agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),
   AGENT4_MULTI_INSPECTOR:resolve(fixtures,'../bin/agent4-multi')};
+// Each requested test command owns a fresh runner, even when this build was
+// launched by another node:test process.
+delete env.NODE_TEST_CONTEXT;
 const results=[];
 async function run(command,argv,extra={}) {
   let output='';
@@ -49,7 +52,8 @@ await withVerifiedDependencies(options, async dependencies=>{
   } else {
     await run('node',['--test','test/agent4/dependencies.test.mjs','test/agent4/setup.test.mjs',
       'test/agent4/bridge.test.mjs','test/agent4/runner.test.mjs','test/agent4/approval.test.mjs',
-      'test/agent4/document.test.mjs','test/agent4/review_runtime.mjs', 'test/agent4/package_commands.test.mjs']);
+      'test/agent4/document.test.mjs','test/agent4/review_runtime.mjs', 'test/agent4/package_commands.test.mjs',
+      'test/agent4/consumer_build.test.mjs']);
     await run('node',['test/agent4/dialogue_runtime.test.mjs',options.worldRuntime,join(fixtures,'dialogue')]);
     await run('node',['test/agent4/multi_runtime.mjs']);
     await run('node',['test/agent4/document_runtime.mjs',options.worldRuntime,join(fixtures,'document/document.bpi2')]);

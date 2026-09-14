@@ -650,3 +650,35 @@ function u16(value) {
   result.writeUInt16LE(value);
   return result;
 }
+
+test("caller abort reasons retain interruption classification during fetch and body reads", async () => {
+  const payload = invocationBytes();
+  for (const reason of [new Error("stopped"), "stopped", { request: "stopped" }, undefined]) {
+    const controller = new AbortController();
+    controller.abort(reason);
+    const result = await performModelInvocation(payload, {
+      endpoint: "http://127.0.0.1:1/v1/responses", signal: controller.signal,
+    });
+    assert.deepEqual(result, Buffer.from([2, 2, 0, 0, 0]));
+  }
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const phase of ["fetch", "body"]) {
+      const controller = new AbortController();
+      const reason = { stopped: phase };
+      globalThis.fetch = async () => {
+        if (phase === "fetch") { controller.abort(reason); throw reason; }
+        return { status: 200, headers: { get() { return null; } },
+          body: new ReadableStream({ pull() { controller.abort(reason); throw reason; } }) };
+      };
+      const result = await performModelInvocation(payload, {
+        endpoint: "http://127.0.0.1:1/v1/responses", signal: controller.signal,
+      });
+      assert.deepEqual(result, Buffer.from([2, 2, 0, 0, 0]), phase);
+    }
+    globalThis.fetch = async () => { throw new TypeError("network failure"); };
+    assert.deepEqual(await performModelInvocation(payload, {
+      endpoint: "http://127.0.0.1:1/v1/responses", signal: new AbortController().signal,
+    }), Buffer.from([2, 0, 0, 0, 0]));
+  } finally { globalThis.fetch = originalFetch; }
+});

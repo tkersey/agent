@@ -179,7 +179,7 @@ pub fn build(b: *std.Build) void {
         run.addFileArg(native_exe.getEmittedBin());
         addBoundary(b, run, source, target, optimize);
         run.has_side_effects = true;
-        run.step.dependOn(emit);
+        run.step.dependOn(distribution);
         run.step.dependOn(&runtime_guard.step);
         runtime_work.dependOn(&run.step);
         const runtime_post = b.addSystemCommand(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--world-runtime", runtime_path, "--world-source", world_source });

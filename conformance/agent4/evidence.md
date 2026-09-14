@@ -2,12 +2,12 @@
 
 This report describes finite consumer proofs against unchanged development inputs.
 It is not a stable dependency release, live inference report, or CAS review.
-CAS review is intentionally not dispatched at the owner's request.
+The initial publication paused before CAS review. Review closeout was explicitly resumed on September 14; current review state is reported on PR #27.
 
 ## Inputs and identity
 
 - Agent baseline: 151c683de871e3df819a1a666fcdf41bff3e391f.
-- Source-input SHA256: 85f96c53749fc9144e92215bffce8ac405f249ca7480875f10f3aa206b52bf75. This binds the sorted path/content inventory of build configuration, current source/runtime, new tests/tools, and dependency/contracts inputs. The derived report itself is excluded.
+- Source-input SHA256: 1fbe2b812bff7a8938f9d399a1dee57e5ce3ca6e9d9302c772313a5fabcccc08. This binds the sorted path/content inventory of build configuration, current source/runtime, new tests/tools, and dependency/contracts inputs. The derived report itself is excluded.
 - Boundary: 7a4d10ec656cf70bbab99281dd71e3ec493daa0c, 2.0.0-dev.0; source archive 6a0ce149a47f400f8514db6cabf2e3b15209168430d7a01ab260a089da3a2a78; package boundary-2.0.0-dev.0-flclaPEkFQD7SP5XqTrQtqMjyG2qAU5fGr9QW3xaQKUs.
 - World: 699a3147088274d2bf742c6ecb4cb70a5faea631, 5.0.0-dev.0.
 - Kernel: 9d1cc7b8f2895a25034a5074413da646ae038dfc00b3d80563e71698c630f9a4, 388453 bytes; ABI2; 0 imports; 10 exports; 20 initial /4096 maximum memory pages.
@@ -97,3 +97,7 @@ The use archive contains canonical examples/InitialArgs, contract documentation,
 Tests establish application semantics for the declared finite cases, same-image implementation agreement, and independent source authoring. They do not establish malicious-handler truth, global exactly-once effects, snapshot anti-replay, distributed locking, universal model reliability, or live model execution.
 
 One diagnostic zig build --help invocation omitted isolated-cache flags; shared-cache non-mutation for that invocation is unestablished. Dependency inventories remained unchanged, and actual dependency builds and acceptance proof runs used isolated caches. This is a tooling-isolation exception, not a dependency compatibility or kernel modification.
+
+## September 14 review corrections
+
+The GitHub findings on custom abort reasons and nonexistent packaged example paths were independently confirmed and corrected. The model adapter now uses the invocation signal as well as standard exception names for interruption classification. The archive includes the canonical reply fixture; an integration test executes the exact four commands extracted from its documentation. The integration build depends on fresh distribution emission. The complete authoring/integration/economy aggregate passes (120 Zig tests; 98 Node tests; seven expected source rejections, application and three-engine transfer cases). These reruns used Node26.8.2; the unchanged dependency lock retains the original kernel-build toolchain observation. Original measurements above remain historical observations, not fresh performance claims.

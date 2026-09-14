@@ -59,8 +59,8 @@ export async function performModelInvocation(payload, options) {
   );
   const headers = { "content-type": "application/json" };
   if (options.apiKey !== undefined) headers.authorization = `Bearer ${options.apiKey}`;
+  const signal = options.signal;
   try {
-    const signal = options.signal;
     const response = await fetch(endpoint, {
       method: "POST",
       headers,
@@ -89,7 +89,7 @@ export async function performModelInvocation(payload, options) {
       invocation.tools,
     );
   } catch (error) {
-    if (error?.name === "AbortError" || error?.name === "TimeoutError") {
+    if (signal?.aborted || error?.name === "AbortError" || error?.name === "TimeoutError") {
       return encodeTransportFailure("interrupted");
     }
     if (error?.cause?.code === "EACCES" || error?.cause?.code === "EPERM") {

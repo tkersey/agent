@@ -28,7 +28,7 @@ a canonical reply admitted by that example's current request.
 ```sh
 node runtime/runner.mjs start \
   --world-runtime /absolute/path/to/world-runtime \
-  --image examples/twice.bpi2 --initial-args examples/empty.args.bin \
+  --image examples/dialogue/twice.bpi2 --initial-args examples/dialogue/twice.args.bin \
   --out started.pko2
 
 node runtime/runner.mjs inspect \
@@ -36,12 +36,12 @@ node runtime/runner.mjs inspect \
 
 node runtime/runner.mjs resume \
   --world-runtime /absolute/path/to/world-runtime \
-  --image examples/twice.bpi2 --outcome started.pko2 \
-  --reply examples/reply-3.bin --out resumed.pko2
+  --image examples/dialogue/twice.bpi2 --outcome started.pko2 \
+  --reply examples/dialogue/reply-3.bin --out resumed.pko2
 
 node runtime/runner.mjs cancel \
   --world-runtime /absolute/path/to/world-runtime \
-  --image examples/twice.bpi2 --outcome started.pko2 \
+  --image examples/dialogue/twice.bpi2 --outcome started.pko2 \
   --reason "operator requested cancellation" --out cancelled.pko2
 ```
 

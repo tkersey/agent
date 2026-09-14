@@ -27,6 +27,7 @@ for(const name of ['twice','dispose_owned','exchange']){
   examples.push({name:`dialogue-${name.replaceAll('_','-')}`,image,initialArgs});
 }
 await add('contracts.md','contract',await readFile(join(root,'conformance/agent4/contracts.md')));
+await add('dialogue/reply-3.bin','synthetic-fixture',Buffer.from([3,0,0,0,0,0,0,0]));
 await add('model-invocation-v3.md','contract',await readFile(join(root,'docs/model-invocation-v3.md')));
 await add('prescribed-provider.json','synthetic-fixture',Buffer.from(JSON.stringify({
   status:'completed',error:null,output:[{type:'function_call',status:'completed',

@@ -57,6 +57,7 @@ await withVerifiedDependencies(options, async dependencies=>{
     await run('node',['test/agent4/dialogue_runtime.test.mjs',options.worldRuntime,join(fixtures,'dialogue')]);
     await run('node',['test/agent4/multi_runtime.mjs']);
     await run('node',['test/agent4/document_runtime.mjs',options.worldRuntime,join(fixtures,'document/document.bpi2')]);
+    await run('node',['test/agent4/consequence_runtime.mjs',options.worldRuntime,join(fixtures,'document/consequence.bpi2')]);
     await run('node',['test/agent4/independent.mjs',options.worldRuntime,fixtures]);
   }
   const output=join(root,'.agent4/out/checks');

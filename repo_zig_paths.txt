@@ -34,6 +34,7 @@ src/approval.zig
 src/authoring.zig
 src/callable.zig
 src/catalogs.zig
+src/clarification.zig
 src/contracts.zig
 src/conversation.zig
 src/decision.zig
@@ -67,6 +68,7 @@ test/agent4/approval_probe.zig
 test/agent4/callable.zig
 test/agent4/callable_runtime.zig
 test/agent4/catalogs.zig
+test/agent4/clarification.zig
 test/agent4/decision_scopes.zig
 test/agent4/descriptor_contracts.zig
 test/agent4/dialogue_build.zig
@@ -87,6 +89,7 @@ test/agent4/native.zig
 test/agent4/observation.zig
 test/agent4/prompt_unknown_field.zig
 test/agent4/skill_unknown_field.zig
+test/agent4/terminology.zig
 test/agent4/values.zig
 test/boundary_equivalence.zig
 test/budgets.zig
@@ -171,8 +174,16 @@ test/compile_fail/zero_turn_budget.zig
 test/compiler.zig
 test/consumers/document/build.zig
 test/consumers/document/clarification.zig
+test/consumers/document/consequence.zig
+test/consumers/document/consequence_baseline.zig
+test/consumers/document/consequence_live.zig
+test/consumers/document/consequence_proposals.zig
+test/consumers/document/consequence_question.zig
+test/consumers/document/consequence_types.zig
 test/consumers/document/critic.zig
 test/consumers/document/main.zig
+test/consumers/document/source.zig
+test/consumers/document/terminology.zig
 test/consumers/review/build.zig
 test/consumers/review/main.zig
 test/custom_strategy.zig

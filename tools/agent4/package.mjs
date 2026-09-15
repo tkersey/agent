@@ -10,7 +10,8 @@ import { DEFAULT_LOCK, readDependencyLock, readRegular, sha256, verifyRuntime } 
 const ROOT = resolve(import.meta.dirname, "../..");
 const runtimeFiles = ["runtime/world.mjs", "runtime/world.d.mts", "runtime/values.mjs", "runtime/runner.mjs", "runtime/cli.mjs",
   "runtime/model.mjs", "runtime/document.mjs", "tools/agent4/dependencies.mjs",
-  "docs/agent4-runtime.md", "docs/migration_from_3.md", "docs/model-invocation-v3.md", "LICENSE"];
+  "docs/agent4-runtime.md", "docs/migration_from_3.md", "docs/model-invocation-v3.md",
+  "docs/consequence-clarification.md", "LICENSE"];
 // Optional test oracles supply prescribed external values and independently
 // assert application behavior. Production execution never imports these files.
 const fixtureTests = ["test/agent4/document_runtime.mjs", "test/agent4/review_runtime.mjs"];

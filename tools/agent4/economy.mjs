@@ -25,7 +25,7 @@ function parseOptions(args) {
   const flags = new Map([
     ['--world-runtime', 'runtime'], ['--output', 'output'], ['--fixtures', 'fixtures'], ['--probe', 'probe'],
     ['--world-source', 'worldSource'], ['--world-archive', 'worldArchive'],
-    ['--boundary-source', 'boundarySource'], ['--boundary-package', 'boundaryPackage'],
+    ['--boundary-source', 'boundarySource'], ['--boundary-package', 'boundaryPackage'], ['--native', 'native'],
   ]);
   const options = { fixtures: DEFAULT_FIXTURES, probe: join(DEFAULT_FIXTURES, 'bin/economy-probe') };
   const seen = new Set();
@@ -37,7 +37,7 @@ function parseOptions(args) {
     const name = flags.get(flag);
     if (!name) throw new Error(`UnknownOption: ${flag}`);
     const value = args[++i];
-    if (!value || value.startsWith('--') || !isAbsolute(value) || value.includes('\0'))
+    if (!value || value.startsWith('--') || (name !== 'native' && !isAbsolute(value)) || value.includes('\0'))
       throw new Error(`AbsolutePathRequired: ${flag}`);
     options[name] = resolve(value);
   }
@@ -87,11 +87,11 @@ async function save(output, name, data) {
   await rename(temporary, target);
   return target;
 }
-async function invoke(command, args, { cwd = ROOT, output, label, measure = false } = {}) {
+async function invoke(command, args, { cwd = ROOT, output, label, measure = false, env = process.env } = {}) {
   const started = measure ? performance.now() : null;
   let stdout = '', stderr = '';
   const exitCode = await new Promise((accept, reject) => {
-    const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
     child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     child.stdout.on('data', data => { stdout += data; });
     child.stderr.on('data', data => { stderr += data; });
@@ -424,6 +424,31 @@ async function alternatives(world, kernel, options) {
     terminalReleaseRelation: 'Completed returns only first-order result bytes and no portable State; private engine heap liveness is not measured' };
 }
 
+async function clarification(options, sourceMetrics) {
+  const image = join(options.fixtures, 'document-consequence.bpi2');
+  const baseline = join(options.fixtures, 'clarify-first.bpi2');
+  for (const [path, metric] of [[image, sourceMetrics.clarification.consequenceFirst],
+    [baseline, sourceMetrics.clarification.clarifyFirst]]) {
+    const bytes = await requiredFile(path);
+    assert.equal(sha256(bytes), metric.imageSha256);
+    assert.equal(bytes.length, metric.imageBytes);
+  }
+  const run = await invoke(process.execPath, [join(ROOT, 'test/agent4/consequence_runtime.mjs'),
+    options.runtime, image, '--economy-only'], { output: options.output, label: 'clarification',
+    env: { ...process.env, ...(options.native ? { AGENT4_NATIVE: options.native } : {}) } });
+  const result = JSON.parse(run.stdout.trim());
+  const evidence = JSON.parse(await requiredFile(result.output));
+  assert.equal(evidence.imageSha256, sourceMetrics.clarification.consequenceFirst.imageSha256);
+  assert.equal(evidence.ablation.baselineImageSha256, sourceMetrics.clarification.clarifyFirst.imageSha256);
+  const scaling = JSON.parse(await requiredFile(join(dirname(options.fixtures), 'clarification/scaling.json')));
+  assert.deepEqual(scaling.rows.map(row => row.hypotheses), [1, 2, 3, 8]);
+  assert(scaling.rows.every(row => row.functions === scaling.rows[0].functions));
+  assert(scaling.rows.every(row => row.sourceFunctions === scaling.rows[0].sourceFunctions));
+  return { status: 'PASS', sourceToImage: sourceMetrics.clarification, scaling,
+    ablation: evidence.ablation, cases: evidence.results,
+    nativeMatched: evidence.nativeMatched, nativeExecutableSha256: evidence.nativeExecutableSha256 };
+}
+
 export async function runEconomy(args) {
   const options = parseOptions(args);
   await prepareOutput(options);
@@ -459,6 +484,7 @@ export async function runEconomy(args) {
       ['sharing', () => sharing(kernel, options.fixtures, sourceMetrics)],
       ['conversation', () => conversations(world, kernel, options)],
       ['alternatives', () => alternatives(world, kernel, options)],
+      ['clarification', () => clarification(options, sourceMetrics)],
     ]) {
       process.stderr.write(`Agent economy: ${name}\n`);
       try { report.checks[name] = await body(); }

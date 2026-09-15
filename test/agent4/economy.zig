@@ -304,16 +304,20 @@ fn measure(init: std.process.Init, directory: []const u8, name: []const u8, work
 }
 
 fn facade(init: std.process.Init, directory: []const u8) !Metrics {
+    return compiledSystem(init, directory, "facade", MinimalSystem);
+}
+
+fn compiledSystem(init: std.process.Init, directory: []const u8, name: []const u8, comptime System: type) !Metrics {
     var authoring: AuthoringObserver = .{ .io = init.io };
     var compiler: Observer = .{ .io = init.io };
     const started = std.Io.Clock.awake.now(init.io);
-    var compiled = try agent.compileObserved(init.gpa, MinimalSystem, .{
+    var compiled = try agent.compileObserved(init.gpa, System, .{
         .observer = .{ .context = &authoring, .enter = AuthoringObserver.enter },
         .boundary_options = .{ .observer = .{ .context = &compiler, .enter = Observer.enter } },
     });
     const duration = elapsed(init.io, started);
     defer compiled.deinit();
-    var metrics = try saveCompiled(init, directory, "facade", compiled);
+    var metrics = try saveCompiled(init, directory, name, compiled);
     metrics.descriptorConstructionNs = authoring.phases.descriptors;
     metrics.sourceConstructionNs = authoring.phases.application_source;
     metrics.descriptorAndSourceNs = authoring.phases.descriptors + authoring.phases.application_source;
@@ -443,6 +447,9 @@ fn emit(init: std.process.Init, directory: []const u8) !void {
             return error.SharingMismatch;
     }
     const continuing = try measure(init, directory, "conversation", .conversation);
+    const document = @import("document");
+    const consequence_first = try compiledSystem(init, directory, "document-consequence", document.System);
+    const clarify_first = try compiledSystem(init, directory, "clarify-first", document.ClarifyFirstSystem);
     try save(init, directory, "direct.args", &.{ 7, 0, 0, 0 });
     try save(init, directory, "facade.args", &.{ 7, 0, 0, 0 });
     try save(init, directory, "conversation.args", &.{});
@@ -457,6 +464,7 @@ fn emit(init: std.process.Init, directory: []const u8) !void {
         .facadeOverhead = overhead(control, minimal),
         .sharing = installations,
         .conversation = continuing,
+        .clarification = .{ .consequenceFirst = consequence_first, .clarifyFirst = clarify_first },
     }, .{ .whitespace = .indent_2 });
     defer init.gpa.free(report);
     try save(init, directory, "source-metrics.json", report);

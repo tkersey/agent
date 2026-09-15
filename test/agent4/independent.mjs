@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { wasmtime, native } from "./independent/execute.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { verifyRuntime } from "../../tools/agent4/dependencies.mjs";
 
@@ -17,7 +17,6 @@ if (!process.env.AGENT4_NATIVE && diagnostic !== "--wasmtime-only")
   throw new Error("AGENT4_NATIVE is required for full agreement; --wasmtime-only is diagnostic only");
 const runtime = verifyRuntime(path.resolve(runtimeArg));
 const fixtures = path.resolve(fixturesArg);
-const project = path.join(root, "test/agent4/independent");
 const output = path.join(root, ".agent4/out/independent");
 fs.mkdirSync(output, { recursive: true });
 const world = await import(pathToFileURL(runtime.entrypoint).href);
@@ -26,12 +25,6 @@ const kernel = await world.admitProcessKernel(kernelBytes, {
   expectedSha256: runtime.kernelSha256,
 });
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const environment = {
-  ...process.env,
-  UV_CACHE_DIR: path.join(root, ".agent4/cache/independent/uv"),
-  UV_PROJECT_ENVIRONMENT: path.join(root, ".agent4/cache/independent/environment"),
-  UV_PYTHON_INSTALL_DIR: path.join(root, ".agent4/cache/independent/python"),
-};
 const records = [];
 const nativePath = process.env.AGENT4_NATIVE ? path.resolve(process.env.AGENT4_NATIVE) : null;
 const nativeIdentity = nativePath ? hash(fs.readFileSync(nativePath)) : null;
@@ -39,25 +32,13 @@ const nativeIdentity = nativePath ? hash(fs.readFileSync(nativePath)) : null;
 function execute(name, inputBytes, expectedHash = runtime.kernelSha256) {
   const inputPath = path.join(output, `${name}.pki2`);
   fs.writeFileSync(inputPath, inputBytes);
-  // This timeout and output bound are test-worker controls. Exceeding either
-  // fails the test and yields no completion or cleanup claim.
-  const processResult = spawnSync("uv", ["run", "--locked", "--project", project,
-    "python", path.join(project, "embedding.py"), runtime.kernelPath,
-    expectedHash, inputPath], {
-    cwd: root, env: environment, timeout: 60_000, maxBuffer: 64 * 1024 * 1024,
-  });
-  if (processResult.error) throw processResult.error;
-  return processResult;
+  return wasmtime(runtime, inputPath, expectedHash);
 }
 
 function executeNative(name, inputBytes) {
   const inputPath = path.join(output, `${name}.pki2`);
   fs.writeFileSync(inputPath, inputBytes);
-  const result = spawnSync(nativePath, [inputPath], {
-    cwd: root, timeout: 60_000, maxBuffer: 64 * 1024 * 1024,
-  });
-  if (result.error) throw result.error;
-  return result;
+  return native(nativePath, inputPath);
 }
 
 async function agree(name, input, mode = "run") {

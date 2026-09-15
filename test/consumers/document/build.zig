@@ -16,4 +16,13 @@ pub fn build(b: *std.Build) void {
         run.addArg(format);
         b.getInstallStep().dependOn(&b.addInstallFileWithDir(run.captureStdOut(.{}), .prefix, b.fmt("document.{s}", .{format})).step);
     }
+    for ([_][]const u8{ "consequence", "consequence-args" }, [_][]const u8{ "consequence.bpi2", "consequence.args" }) |mode, filename| {
+        const run = b.addRunArtifact(emitter);
+        run.addArg(mode);
+        b.getInstallStep().dependOn(&b.addInstallFileWithDir(
+            run.captureStdOut(.{}),
+            .prefix,
+            filename,
+        ).step);
+    }
 }

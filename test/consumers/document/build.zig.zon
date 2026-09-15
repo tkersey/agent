@@ -4,5 +4,5 @@
     .fingerprint = 0xd480130d215330e7,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{ .agent = .{ .path = "../../.." } },
-    .paths = .{ "build.zig", "build.zig.zon", "main.zig", "critic.zig", "clarification.zig" },
+    .paths = .{ "build.zig", "build.zig.zon", "main.zig", "critic.zig", "clarification.zig", "source.zig", "terminology.zig", "consequence_types.zig", "consequence_proposals.zig", "consequence_question.zig", "consequence.zig", "consequence_live.zig", "consequence_baseline.zig" },
 }

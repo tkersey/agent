@@ -4,10 +4,10 @@ Agent authoring emits ordinary Boundary BPI2. The unchanged World interpreter
 executes it; unfinished control is contained in PST2. The JavaScript bridge
 imports no Zig authoring module and introduces no additional execution format.
 
-The checked-in dependency lock currently identifies **candidate integration**:
-Boundary `5084a0d487b886197863866e20ebe6d04de2a0a1` and World
-`fd794b36fe7f429fcd62def4d87556cb5ace56f9`. These commits declare Boundary 2.0.1
-and World 5.0.1; their release tags were not published when this lock was updated.
+The checked-in dependency lock currently identifies **released integration**:
+Boundary `42a09b92c2870ab3eab923fe68ca2645eb710000` and World
+`d075169a4805d999ceba4c37b3e1c925b78c3bf9`. These commits match the published
+Boundary 2.0.2 and World 5.0.2 release tags.
 The exact runtime contents, kernel digest,
 public API and physical profile are in
 `conformance/agent4/dependencies.lock.json`. The loader checks this Agent-owned

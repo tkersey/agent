@@ -6,13 +6,13 @@ BPI1 images and PST1 snapshots continue to require their frozen runtime. There i
 no conversion of active PST1 state, and changing an application's BPI2 does not
 migrate an existing PST2 conversation.
 
-This line uses the **candidate-integration** tuple in
+This line uses the **released-integration** tuple in
 [`conformance/agent4/dependencies.lock.json`](../conformance/agent4/dependencies.lock.json):
-Boundary `2.0.1` at `5084a0d487b886197863866e20ebe6d04de2a0a1` and World
-`5.0.1` at `fd794b36fe7f429fcd62def4d87556cb5ace56f9`. The lock records the
+Boundary `2.0.2` at `42a09b92c2870ab3eab923fe68ca2645eb710000` and World
+`5.0.2` at `d075169a4805d999ceba4c37b3e1c925b78c3bf9`. The lock records the
 source/package inventories, runtime/kernel digests, toolchain, and unchanged
-physical profile. These commits declare Boundary 2.0.1 and World 5.0.1; their
-release tags were not published when this lock was updated. This guide makes no
+physical profile. These commits match the published Boundary 2.0.2 and World 5.0.2
+release tags. This guide makes no
 acceptance-completion or live-model claim; use the separately generated evidence
 for executed checks.
 

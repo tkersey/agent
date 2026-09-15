@@ -121,8 +121,8 @@ are finite execution checks, not claims about live-model quality.
 
 ## Get started
 
-Use **Zig 0.16.0** and **Node 26.8.1 or newer**. Agent 4 pins Boundary 2.0.1 and
-World 5.0.1 source commits in its [dependency lock](conformance/agent4/dependencies.lock.json); use
+Use **Zig 0.16.0** and **Node 26.8.1 or newer**. Agent 4 pins Boundary 2.0.2 and
+World 5.0.2 source commits in its [dependency lock](conformance/agent4/dependencies.lock.json); use
 that exact Boundary/World combination rather than substituting other versions.
 The locked source-installation profile is POSIX, qualified on Darwin arm64;
 Windows setup is not qualified.

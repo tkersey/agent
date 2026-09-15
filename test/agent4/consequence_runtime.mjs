@@ -45,7 +45,8 @@ const initialSchema = { root: 0, types: [
   { product: [1, 2, 2, 3, 3, 4] }, { bounded_text: 32 }, { bounded_text: 512 }, "boolean", "u64",
 ] };
 const memorySchema = { root: 0, types: [
-  { sum: [1, 2] }, "unit", { product: [3, 4] }, "boolean", { array: { element: 3, length: 2 } },
+  { product: [1, 2] }, "u64", { sum: [3, 4] }, "unit", { product: [5, 6] },
+  "boolean", { array: { element: 5, length: 2 } },
 ] };
 const original = "Active policy:\nA customer may request a refund.\n\n" +
   "Archive:\nA customer filed a request in 2021.\n";
@@ -111,7 +112,7 @@ async function scenario(name, options = {}) {
   const statistics = { multiTemplates: 0, branchActivations: 0, transitions: 0 };
   let modelCalls = 0, modelRequestBytes = 0, modelResponseBytes = 0, providerBytes = 0;
   let questionCount = 0, approvalCount = 0, replacements = 0, turnCleanup = 0, sessionCleanup = 0;
-  let issue = 0n, oldChoiceResult, cancelled = false;
+  let issue = 0n, oldChoiceResult, oldChoiceRequest, cancelled = false;
   let currentContent = before;
   let outcome = await fresh({ image, initialArgs: encodeValue(initialSchema, task) });
   try {
@@ -162,7 +163,8 @@ async function scenario(name, options = {}) {
             content: [{ type: "refusal", refusal: "declined" }] }],
         } : {
           status: "completed", error: null, output: [{ type: "function_call", status: "completed",
-            call_id: `proposal-${modelCalls}`, name: options.unknownAction && scope === 2 ? "unknown" : "proposal",
+            call_id: options.sameTask ? "fixture-proposal" : `proposal-${modelCalls}`,
+            name: options.unknownAction && scope === 2 ? "unknown" : "proposal",
             arguments: JSON.stringify(args) }],
         }));
         if (options.interrupted && scope === 2) {
@@ -194,6 +196,7 @@ async function scenario(name, options = {}) {
         assert.equal(modelCalls, 0, "clarify-first asks before performing an assessment");
         assert.deepEqual(payload[3][0], task);
         assert.equal(payload[3][1][0], currentContent);
+        assert.equal(payload[3][2], BigInt(messages.length + 1));
         answer = v(0, v(0, options.choice ?? 1));
       } else if (identity === effects.question) {
         questionCount += 1;
@@ -201,6 +204,7 @@ async function scenario(name, options = {}) {
         assert.equal(payload[1], "consequence-clarification");
         assert.deepEqual(question[0][0], task);
         assert.equal(question[0][1][0], currentContent);
+        assert.equal(question[0][2], BigInt(messages.length + 1));
         assert(question[2].includes(options.mandatory ? "policy requires" : "archived text"));
         const offered = question[3];
         assert.deepEqual(offered.map(option => option[0]), [1n, 2n]);
@@ -213,7 +217,14 @@ async function scenario(name, options = {}) {
         }
         if (options.staleAt === "question") await writeFile(filename, "External edit while awaiting scope.\n");
         if (oldChoiceResult) {
-          await assert.rejects(fresh({ image, state: outcome.state, result: oldChoiceResult }), /InvalidResult/);
+          await assert.rejects(async () => {
+            const replay = await fresh({ image, state: outcome.state, result: oldChoiceResult });
+            console.error(JSON.stringify({ unexpectedReplyAdmission: name, questionCount,
+              sameRequestBytes: Buffer.from(request.bytes).equals(oldChoiceRequest),
+              outcome: replay.kind, nextEffect: replay.kind === "Requested"
+                ? world.decodeRequest(replay.request).semanticIdentity : null }));
+            return replay;
+          }, /InvalidResult/);
         }
         assert.throws(() => world.encodeResult(request.bytes, Uint8Array.of(255)),
           /Truncated|InvalidValue|InvalidTag/);
@@ -221,6 +232,7 @@ async function scenario(name, options = {}) {
           : v(0, options.reply === "other" ? v(1) : options.reply === "unsure" ? v(2)
             : v(0, options.reply === "unoffered" ? 99 : options.choice ?? 1));
         oldChoiceResult = encodeReply(request, answer);
+        oldChoiceRequest = Buffer.from(request.bytes);
       } else if (identity === effects.issue) {
         answer = ++issue;
       } else if (identity === effects.approval) {
@@ -266,7 +278,7 @@ async function scenario(name, options = {}) {
           historyGraphs.push(graph);
         }
         if (messages.length < turns) {
-          task[5] = BigInt(messages.length + 1);
+          if (!options.sameTask) task[5] = BigInt(messages.length + 1);
           currentContent = original;
           await writeFile(filename, currentContent);
           answer = v(0, task);
@@ -314,6 +326,7 @@ async function scenario(name, options = {}) {
     for (const graph of historyGraphs.slice(2))
       assert.deepEqual(graph, historyGraphs[1], "repeated turns retain bounded reachable state");
     const memory = outcome.kind === "Completed" ? decodeValue(memorySchema, outcome.value) : null;
+    if (memory) assert.equal(memory[0], BigInt(turns + 1));
     return { name, modelCalls, clarificationExchanges: questionCount, approvalExchanges: approvalCount,
       replacements, modelRequestBytes, modelResponseBytes, providerBytes,
       completedAssessments: options.raw ? 0 : modelCalls, peakStateBytes: Math.max(...stateBytes),
@@ -354,7 +367,9 @@ results.push(await scenario("uncertain-delivery", { uncertain: true, expectedRep
 for (const cancelAt of [effects.model, effects.question, effects.approval])
   results.push(await scenario(`cancel-${cancelAt}`, { cancelAt, transfer: cancelAt === effects.question }));
 results.push(await scenario("common-then-divergent", { content: convergent, repeat: true }));
-results.push(await scenario("equal-looking-questions", { repeat: true, expectedQuestions: 2 }));
+results.push(await scenario("equal-looking-questions", {
+  repeat: 3, sameTask: true, expectedQuestions: 3,
+}));
 results.push(await scenario("unicode", { content: "préface\nActive policy:\ncafé café\nArchive:\ncafé\n",
   old: "café", term: "thé", choice: 2, expectedQuestions: 1, expectedReply: 0 }));
 results.push(await scenario("invalid-grammar", { content: "Active policy:\nx\n", old: "x", term: "y",

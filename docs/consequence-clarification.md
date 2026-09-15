@@ -116,9 +116,18 @@ Wasmtime guest during a model request, and transfer the later question, approval
 and cleanup too. Native, Node/WASM and Wasmtime use identical canonical outcomes
 for equal bound replies. The originating compiler and guest are unnecessary.
 
-Conversation memory retains one four-byte receipt: whether there was an explicit
-choice and which of the two interpretations it supports. Common actions retain
-both possibilities. Eight repeated turns leave the same reachable graph between
+State-content binding cannot distinguish two occurrences that recreate the exact
+same State. The program therefore owns a persisted turn counter, advances it once
+at turn entry, and includes the current turn in the retained question context.
+Every normal, failed, declined and aborted turn carries it forward. Caller attempt
+labels and provider call IDs may repeat; a third identical question still rejects
+the prior ERS2. The example's u64 counter fails on exhaustion instead of wrapping;
+it is ordinary application data, not runtime fuel or a host nonce service.
+
+Conversation memory retains a counter and one receipt (12 bytes after a decision):
+whether there was an explicit choice and which of the two interpretations it
+supports. Common actions retain both possibilities. Eight repeated turns leave
+the same reachable graph size between
 turns: 10 nodes, two blobs, the conversation's cleanup obligation, and no template,
 branch, resource or owned child package. This is a bounded witness, not a claim of
 constant space for arbitrary numbers or sizes of candidates.
@@ -159,9 +168,9 @@ and final approval/conditional replacement path. Counts are separate:
 | Divergent / consequence-first | 1 | 2 | 1 |
 | Divergent / clarify-first | 1 | 1 | 1 |
 
-The complete consequence-first image is 14,187 bytes. Native statistics measure
+The complete consequence-first image is 14,355 bytes. Native statistics measure
 one captured template and two activations per ordinary turn. The largest pending
-PST2 in the simple convergent/divergent fixtures is 1,954 / 2,569 bytes.
+PST2 in the simple convergent/divergent fixtures is 1,985 / 2,600 bytes.
 The economy report binds the actual images, complete public compilation metrics,
 semantic request/result bytes, provider-envelope bytes, pending State sizes and
 history. It makes **no latency, token-cost or live-model quality improvement claim**.

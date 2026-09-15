@@ -35,7 +35,7 @@ pub const Action = struct {
     policy_id: u64,
 };
 pub const Consequences = struct { changes_archive: bool };
-pub const Context = struct { task: Request, base: Observation };
+pub const Context = struct { task: Request, base: Observation, turn: u64 };
 pub const Known = struct { consequences: Consequences, action: Action };
 pub const Assessed = union(enum) { known: Known, unavailable, rejected, inconclusive };
 pub const Evaluation = struct { id: u64, assessed: Assessed };
@@ -51,7 +51,7 @@ pub const Resolution = union(enum) {
     closed,
 };
 pub const Receipt = struct { by_choice: bool, supported: [2]bool };
-pub const Memory = ?Receipt;
+pub const Memory = struct { next_turn: u64, receipt: ?Receipt };
 pub const Reply = union(enum) {
     changed: Receipt,
     no_change: Receipt,

@@ -116,8 +116,8 @@ are finite execution checks, not claims about live-model quality.
 
 ## Get started
 
-Use **Zig 0.16.0** and **Node 26.8.1 or newer**. Agent 4 currently pins development
-inputs in its [dependency lock](conformance/agent4/dependencies.lock.json); use
+Use **Zig 0.16.0** and **Node 26.8.1 or newer**. Agent 4 pins Boundary 2.0.1 and
+World 5.0.1 source commits in its [dependency lock](conformance/agent4/dependencies.lock.json); use
 that exact Boundary/World combination rather than substituting other versions.
 The locked source-installation profile is POSIX, qualified on Darwin arm64;
 Windows setup is not qualified.
@@ -229,7 +229,7 @@ Native agreement tests use the separately authenticated unchanged World source a
 For `node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-inputs"`, pass
 `-Dworld-source="$PWD/.agent4-inputs/inputs/world"` and
 `-Dworld-runtime="$PWD/.agent4-inputs/out/world-runtime"` to both aggregates.
-The archive defaults to `world-699a314.tar.gz` beside the selected source;
+The archive defaults to `world-<first seven commit characters>.tar.gz` beside the selected source;
 `-Dworld-archive=/absolute/immutable/archive.tar.gz` selects a different location.
 All selected inputs are checked against the same lock before and after execution.
 Permission modes are never normalized to bypass exact inventories.

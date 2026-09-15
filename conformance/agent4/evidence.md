@@ -1,5 +1,18 @@
 # Agent 4 candidate integration evidence
 
+The report below records the original development tuple. The current dependency
+lock selects Boundary 2.0.1 (`5084a0d487b886197863866e20ebe6d04de2a0a1`)
+and World 5.0.1 (`fd794b36fe7f429fcd62def4d87556cb5ace56f9`). Its inventories
+and runtime digest supersede the historical identities below.
+
+The updated tuple passed these checks on September 14, 2026, using Zig 0.16.0
+and Node 26.8.2 on Darwin arm64:
+
+- `node tools/agent4/setup.mjs` and offline `--verify-only --offline` readback.
+- `zig build check-agent4 -Doptimize=ReleaseSafe`.
+- `zig build check-agent4-integration -Doptimize=ReleaseSafe -Dworld-runtime="$PWD/.agent4/out/world-runtime"`,
+  including 78 JavaScript tests, native execution and independent Wasmtime agreement.
+
 This report describes finite consumer proofs against unchanged development inputs.
 It is not a stable dependency release, live inference report, or CAS review.
 The initial publication paused before CAS review. Review closeout was explicitly resumed on September 14; current review state is reported on PR #27.

@@ -5,9 +5,10 @@ executes it; unfinished control is contained in PST2. The JavaScript bridge
 imports no Zig authoring module and introduces no additional execution format.
 
 The checked-in dependency lock currently identifies **candidate integration**:
-Boundary `7a4d10ec656cf70bbab99281dd71e3ec493daa0c` and World
-`699a3147088274d2bf742c6ecb4cb70a5faea631`. These identities are development
-inputs, not stable release claims. The exact runtime contents, kernel digest,
+Boundary `5084a0d487b886197863866e20ebe6d04de2a0a1` and World
+`fd794b36fe7f429fcd62def4d87556cb5ace56f9`. These commits declare Boundary 2.0.1
+and World 5.0.1; their release tags were not published when this lock was updated.
+The exact runtime contents, kernel digest,
 public API and physical profile are in
 `conformance/agent4/dependencies.lock.json`. The loader checks this Agent-owned
 lock before importing the supplied World module. A runtime's own checksum is

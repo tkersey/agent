@@ -68,7 +68,8 @@ fn Application(comptime clarify_first: bool) type {
                 .presentation = try b.constant(void, {}),
                 .residual = .{ .effects = rows },
             });
-            try b.define(session, try agent.conversation.run(b, loop, try c.literal(t.Memory, null), try b.reference(b.parameter(session, 1))));
+            const initial = try c.literal(t.Memory, .{ .next_turn = 1, .receipt = null });
+            try b.define(session, try agent.conversation.run(b, loop, initial, try b.reference(b.parameter(session, 1))));
             return finishSession(c, session, closed, external_rows, rows, conversation_cleanup);
         }
     };
@@ -99,7 +100,16 @@ fn turnFunction(comptime clarify_first: bool, c: agent.Context, session: Id, row
     const previous = try b.reference(b.parameter(turn, 0));
     const task = try b.reference(b.parameter(turn, 1));
     const cap = try b.reference(b.parameter(session, 0));
-    try b.define(body, try readAndExplore(clarify_first, c, body, observed, proposal, resolve, execute, closed, cap, previous, task));
+    const occurrence = try code.field(b, try b.scalar(u64), previous, 0);
+    const next = try b.variable(memory);
+    const next_memory = try code.product(b, memory, &.{
+        try code.add(b, occurrence, try b.constant(u64, 1)),
+        try code.field(b, try c.schema(?t.Receipt), previous, 1),
+    });
+    // An ordinary owned counter prevents repeated task data from recreating an
+    // earlier pending request. Overflow fails rather than reusing an occurrence.
+    const work = try readAndExplore(clarify_first, c, body, observed, proposal, resolve, execute, closed, cap, try b.reference(next), task, occurrence);
+    try b.define(body, try b.bind(next, try b.pure(next_memory), work));
     const exit = try boundary.library.cleanup.exitInfo(b, try b.scalar(void));
     const finalizer = try b.declare(&.{exit}, try b.scalar(void), &.{cleanup}, &.{});
     try b.define(finalizer, try code.perform(b, cleanup, try code.field(b, try b.scalar(u64), task, 5)));
@@ -112,7 +122,7 @@ fn turnFunction(comptime clarify_first: bool, c: agent.Context, session: Id, row
     return turn;
 }
 
-fn readAndExplore(comptime clarify_first: bool, c: agent.Context, owner: Id, observed: agent.observation.Definition, proposal: proposals.Definition, resolve: Id, execute: Id, closed: boundary.library.raise.Family, cap: Id, memory: Id, task: Id) !Id {
+fn readAndExplore(comptime clarify_first: bool, c: agent.Context, owner: Id, observed: agent.observation.Definition, proposal: proposals.Definition, resolve: Id, execute: Id, closed: boundary.library.raise.Family, cap: Id, memory: Id, task: Id, occurrence: Id) !Id {
     const b = c.builder;
     const evidence = try b.variable(observed.evidence);
     const read = try b.variable(observed.data);
@@ -120,7 +130,9 @@ fn readAndExplore(comptime clarify_first: bool, c: agent.Context, owner: Id, obs
     const discarded = try b.variable(observed.data);
     const base = try b.variable(try c.schema(t.Observation));
     const failed = try b.variable(try c.schema(t.Reason));
-    const frozen = try code.product(b, try c.schema(t.Context), &.{ task, try b.reference(base) });
+    const frozen = try code.product(b, try c.schema(t.Context), &.{
+        task, try b.reference(base), occurrence,
+    });
     const classified = try b.variable(proposal.decision.types.classification);
     const resolution = try b.variable(proposal.decision.types.resolution);
     const continued = try resolutions(c, execute, closed, cap, memory, frozen, try b.reference(resolution));

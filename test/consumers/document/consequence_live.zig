@@ -81,7 +81,7 @@ fn revalidate(c: agent.Context, observed: agent.observation.Definition, approval
     const conflict = try b.bind(discarded, discard, try outcome(c, memory, 3, try b.reference(actual)));
     const failure = try b.bind(discarded, discard, try outcome(c, memory, 4, try b.reference(failed)));
     const approve = try finishApproval(c, approval, owner, selected, proof, receipt, memory);
-    const unchanged = try b.bind(discarded, discard, try successful(c, receipt, 1));
+    const unchanged = try b.bind(discarded, discard, try successful(c, memory, receipt, 1));
     const permitted = try b.term(.{ .conditional = .{
         .condition = no_change,
         .when_true = unchanged,
@@ -121,7 +121,7 @@ fn finishApproval(c: agent.Context, approval: agent.approval.Definition, owner: 
     const result = try b.term(.{ .match_sum = .{
         .value = try b.reference(operation),
         .cases = &.{
-            .{ .variable = success, .body = try successful(c, receipt, 0) },
+            .{ .variable = success, .body = try successful(c, memory, receipt, 0) },
             .{ .variable = conflict, .body = try outcome(c, memory, 3, try b.reference(conflict)) },
             .{ .variable = failed, .body = try outcome(c, memory, 4, try b.reference(failed)) },
             .{ .variable = uncertain, .body = try outcome(c, memory, 5, try b.reference(uncertain)) },
@@ -150,8 +150,12 @@ pub fn outcome(c: agent.Context, memory: Id, tag: u64, value: Id) !Id {
     return b.pure(try emit.product(b, try pairSchema(c), &.{ memory, reply }));
 }
 
-fn successful(c: agent.Context, receipt: Id, tag: u64) !Id {
-    const memory = try c.builder.primitive(try c.schema(t.Memory), .variant, &.{receipt}, 1);
+fn successful(c: agent.Context, previous: Id, receipt: Id, tag: u64) !Id {
+    const b = c.builder;
+    const remembered = try b.primitive(try c.schema(?t.Receipt), .variant, &.{receipt}, 1);
+    const memory = try emit.product(b, try c.schema(t.Memory), &.{
+        try emit.field(b, try b.scalar(u64), previous, 0), remembered,
+    });
     return outcome(c, memory, tag, receipt);
 }
 

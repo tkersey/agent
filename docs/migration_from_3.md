@@ -8,12 +8,13 @@ migrate an existing PST2 conversation.
 
 This line uses the **candidate-integration** tuple in
 [`conformance/agent4/dependencies.lock.json`](../conformance/agent4/dependencies.lock.json):
-Boundary `2.0.0-dev.0` at `7a4d10ec656cf70bbab99281dd71e3ec493daa0c` and World
-`5.0.0-dev.0` at `699a3147088274d2bf742c6ecb4cb70a5faea631`. The lock records the
+Boundary `2.0.1` at `5084a0d487b886197863866e20ebe6d04de2a0a1` and World
+`5.0.1` at `fd794b36fe7f429fcd62def4d87556cb5ace56f9`. The lock records the
 source/package inventories, runtime/kernel digests, toolchain, and unchanged
-physical profile. These identities are development inputs, not claims of stable
-upstream publication. This guide makes no acceptance-completion or live-model
-claim; use the separately generated evidence for executed checks.
+physical profile. These commits declare Boundary 2.0.1 and World 5.0.1; their
+release tags were not published when this lock was updated. This guide makes no
+acceptance-completion or live-model claim; use the separately generated evidence
+for executed checks.
 
 ## Replace the system's runtime template with an emitter
 

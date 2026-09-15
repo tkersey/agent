@@ -189,19 +189,21 @@ export function verifyRuntime(runtimePath, { lockPath = DEFAULT_LOCK } = {}) {
 export function snapshotDependencies({ boundarySource,
   boundaryArchive,
   boundaryPackage, boundaryPackageProfile = "zig-managed", worldSource = join(ROOT, ".agent4/inputs/world"),
-  worldArchive = join(dirname(worldSource), "world-699a314.tar.gz"),
+  worldArchive,
   worldRuntime = join(ROOT, ".agent4/out/world-runtime"),
   authoringOnly = false, lockPath = DEFAULT_LOCK } = {}) {
   const lock = readDependencyLock(lockPath);
   const sourceRoot = boundarySource ?? (boundaryPackage ? undefined : join(ROOT, ".agent4/inputs/boundary"));
   const archivePath = boundaryArchive ?? (boundarySource || boundaryPackage ? undefined :
-    join(ROOT, ".agent4/inputs/boundary-7a4d10e.tar.gz"));
+    join(ROOT, `.agent4/inputs/boundary-${lock.boundary.commit.slice(0, 7)}.tar.gz`));
   const result = { lockSha256: sha256(readRegular(lockPath)),
     boundary: verifyBoundary({ sourceRoot, packageRoot: boundaryPackage,
       packageProfile: boundaryPackageProfile, archivePath, lockPath }) };
   if (!authoringOnly) result.world = {
     source: verifySource(worldSource, lock.world, "World"),
-    archive: verifyArchive(worldArchive, lock.world.archive, "World"),
+    archive: verifyArchive(worldArchive ??
+      join(dirname(worldSource), `world-${lock.world.commit.slice(0, 7)}.tar.gz`),
+    lock.world.archive, "World"),
     runtime: verifyRuntime(worldRuntime, { lockPath }),
   };
   return result;

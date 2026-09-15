@@ -88,7 +88,7 @@ test("alternate World source selects its sibling archive and authenticates expli
   writeFileSync(join(source, "source.zig"), "// immutable World fixture\n");
   f.lock.world.source = inventory(source);
   f.lock.world.gitTree = gitTree(source);
-  const archive = join(f.root, "alternate/inputs/world-699a314.tar.gz");
+  const archive = join(f.root, `alternate/inputs/world-${f.lock.world.commit.slice(0, 7)}.tar.gz`);
   const bytes = Buffer.from("fixture archive bytes");
   writeFileSync(archive, bytes);
   f.lock.world.archive = { ...f.lock.world.archive, bytes: bytes.length, sha256: sha256(bytes) };

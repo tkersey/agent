@@ -102,6 +102,11 @@ keeps its conversation open across turns. Its tests exercise successful changes,
 amendments, conflicting edits, declined approval, uncertain delivery, and
 cleanup—not just a happy-path transcript.
 
+Its opt-in [consequence-sensitive mode](docs/consequence-clarification.md) explores
+both scopes of a terminology edit before asking. Equal permitted edits skip the
+scope question; different edits expose their actual consequences. Fresh evidence
+and exact-proposal approval still precede replacement.
+
 **[Review agent](test/consumers/review).** Runs the same decision body with human,
 model, and rule responders; composes clarification before or during review; and
 includes an ordinary ReAct composition. The application, not the compiler or a

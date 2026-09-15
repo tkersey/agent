@@ -56,11 +56,15 @@ fn inspectState(init: std.process.Init, path: []const u8) !void {
     var graph = try boundary.snapshot_v2.decodeGraph(init.gpa, bytes);
     defer graph.deinit();
     var multi: usize = 0;
+    var branches: usize = 0;
+    var resources: usize = 0;
     var cells: usize = 0;
     var packages: usize = 0;
     var obligations: usize = 0;
     for (graph.state.nodes) |node| switch (node) {
         .multi_template => multi += 1,
+        .branch => branches += 1,
+        .resource => resources += 1,
         .cell => cells += 1,
         .package => packages += 1,
         .obligation => obligations += 1,
@@ -69,9 +73,9 @@ fn inspectState(init: std.process.Init, path: []const u8) !void {
     var buffer: [512]u8 = undefined;
     var output = std.Io.File.stdout().writer(init.io, &buffer);
     try output.interface.print(
-        "{{\"multiTemplates\":{d},\"cells\":{d}," ++
+        "{{\"multiTemplates\":{d},\"branches\":{d},\"resources\":{d},\"cells\":{d}," ++
             "\"packages\":{d},\"obligations\":{d},\"nodes\":{d},\"blobs\":{d}}}\n",
-        .{ multi, cells, packages, obligations, graph.state.nodes.len, graph.state.blobs.len },
+        .{ multi, branches, resources, cells, packages, obligations, graph.state.nodes.len, graph.state.blobs.len },
     );
     try output.interface.flush();
 }

@@ -56,23 +56,36 @@ pub fn main(init: std.process.Init) !void {
     _ = args.next();
     const format = args.next() orelse "bpi2";
     if (args.next() != null) return error.UnknownArgument;
-    if (std.mem.eql(u8, format, "args")) {
-        const bytes = try agent.contracts.encodeOwned(u64, init.gpa, 7);
-        defer init.gpa.free(bytes);
-        var buffer: [4096]u8 = undefined;
-        var output = std.Io.File.stdout().writer(init.io, &buffer);
-        try output.interface.writeAll(bytes);
-        try output.interface.flush();
-        return;
-    }
+    if (std.mem.eql(u8, format, "args")) return writeArguments(init, u64, 7);
+    const consequence = @import("consequence.zig");
+    if (std.mem.eql(u8, format, "consequence")) return writeImage(init, consequence.System);
+    // A test construction for the paired cost comparison; omitted from use archives.
+    if (std.mem.eql(u8, format, "consequence-clarify-first"))
+        return writeImage(init, consequence.ClarifyFirstSystem);
+    if (std.mem.eql(u8, format, "consequence-args"))
+        return writeArguments(init, consequence.types.Request, consequence.types.default_request);
     if (!std.mem.eql(u8, format, "bpi2")) return error.UnknownArgument;
-    var compiled = try agent.compile(init.gpa, System);
+    return writeImage(init, System);
+}
+
+fn writeArguments(init: std.process.Init, comptime T: type, value: T) !void {
+    const bytes = try agent.contracts.encodeOwned(T, init.gpa, value);
+    defer init.gpa.free(bytes);
+    return writeBytes(init, bytes);
+}
+
+fn writeImage(init: std.process.Init, comptime Program: type) !void {
+    var compiled = try agent.compile(init.gpa, Program);
     defer compiled.deinit();
     const bytes = try init.gpa.alloc(u8, try boundary.image_v2.encodedLength(compiled.program));
     defer init.gpa.free(bytes);
+    return writeBytes(init, try compiled.encode(init.gpa, bytes));
+}
+
+fn writeBytes(init: std.process.Init, bytes: []const u8) !void {
     var buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writer(init.io, &buffer);
-    try output.interface.writeAll(try compiled.encode(init.gpa, bytes));
+    try output.interface.writeAll(bytes);
     try output.interface.flush();
 }
 
@@ -340,50 +353,22 @@ fn simulatedAssessment(c: agent.Context, d: agent.observation.Definition, assess
     return b.bind(interpreted, offered, try b.term(.{ .match_sum = .{ .value = try b.reference(interpreted), .cases = &.{ .{ .variable = external, .body = try fail(b) }, .{ .variable = simulated, .body = selected } } } }));
 }
 
-fn field(b: *source.Builder, schema: Id, value: Id, n: u64) !Id {
-    return b.primitive(schema, .field, &.{value}, n);
-}
-fn product(b: *source.Builder, schema: Id, values: []const Id) !Id {
-    return b.primitive(schema, .product, values, 0);
-}
-fn perform(b: *source.Builder, effect: Id, value: Id) !Id {
-    return b.term(.{ .perform = .{ .effect = effect, .payload = value } });
-}
-fn call(b: *source.Builder, function: Id, args: []const Id) !Id {
-    return b.term(.{ .call = .{ .function = function, .arguments = args } });
-}
-fn fail(b: *source.Builder) !Id {
-    return b.term(.{ .fail = try b.constant(void, {}) });
-}
-fn text(c: agent.Context, value: []const u8) !Id {
-    return c.literal(agent.contracts.Utf8, .{ .bytes = value });
-}
-fn equal(b: *source.Builder, a: Id, z: Id) !Id {
-    return b.primitive(try b.scalar(bool), .equal, &.{ a, z }, 0);
-}
-fn add(b: *source.Builder, a: Id, z: Id) !Id {
-    return b.value(.{ .schema = try b.scalar(u64), .expression = .{ .primitive = .{ .opcode = .integer_add, .operands = &.{ a, z }, .failures = &.{.{ .kind = .arithmetic_overflow, .value = try b.failureLiteral(try b.constant(void, {})) }} } } });
-}
-fn index(b: *source.Builder, schema: Id, value: Id, n: u64) !Id {
-    const optional = try b.schema(.{ .sum = &.{ try b.scalar(void), schema } });
-    const found = try b.primitive(optional, .sequence_get, &.{ value, try b.constant(u64, n) }, 0);
-    return b.value(.{ .schema = schema, .expression = .{ .primitive = .{ .opcode = .variant_payload, .operands = &.{found}, .immediate = 1, .failures = &.{.{ .kind = .invalid_variant, .value = try b.failureLiteral(try b.constant(void, {})) }} } } });
-}
+const emit = @import("source.zig");
+const field = emit.field;
+const product = emit.product;
+const perform = emit.perform;
+const call = emit.call;
+const fail = emit.fail;
+const text = emit.text;
+const equal = emit.equal;
+const add = emit.add;
+const index = emit.index;
+const computation = emit.computation;
+const scopedComputation = emit.scopedComputation;
+const row = emit.row;
+
 fn decimal(c: agent.Context, value: Id) !Id {
     const b = c.builder;
     const unbounded = try b.primitive(try b.schema(.text), .text_integer, &.{value}, 0);
     return b.value(.{ .schema = try c.schema(P.MessageText), .expression = .{ .primitive = .{ .opcode = .blob_concat, .operands = &.{ try c.literal(P.MessageText, .{ .bytes = "" }), unbounded }, .failures = &.{.{ .kind = .capacity_exceeded, .value = try b.failureLiteral(try b.constant(void, {})) }} } } });
-}
-fn computation(b: *source.Builder, params: []const Id, result: Id, effects: []const Id, captures: []const Id) !Id {
-    return b.schema(.{ .internal = .{ .computation = .{ .parameters = params, .result = result, .effects = effects, .capture_bound = captures } } });
-}
-fn scopedComputation(b: *source.Builder, params: []const Id, result: Id, effects: []const Id, captures: []const Id, regions: []const Id) !Id {
-    return b.schema(.{ .internal = .{ .computation = .{ .parameters = params, .result = result, .effects = effects, .capture_bound = captures, .regions = regions } } });
-}
-fn row(b: *source.Builder, a: []const Id, z: []const Id) ![]const Id {
-    const result = try b.allocator().alloc(Id, a.len + z.len);
-    @memcpy(result[0..a.len], a);
-    @memcpy(result[a.len..], z);
-    std.mem.sort(Id, result, {}, std.sort.asc(Id));
-    return result;
 }

@@ -32,4 +32,14 @@ test("documented commands execute from the actual source-independent archive", a
   assert.equal(resumed.kind, "Completed");
   assert.equal(Buffer.from(resumed.value).readBigUInt64LE(), 40n);
   assert.equal(world.decodeOutcome(await readFile(join(cwd, "cancelled.pko2"))).kind, "Cancelled");
+  const inventory = JSON.parse(await readFile(join(cwd, "examples/inventory.json"), "utf8"));
+  const consequence = inventory.examples.find(example => example.name === "document-consequence");
+  assert(consequence, "the opt-in application belongs to the source-independent package");
+  const script = resolve(import.meta.dirname, "consequence_runtime.mjs");
+  const result = execFileSync(process.execPath, [script, runtimePath,
+    join(cwd, "examples", consequence.image), "--application-only"], {
+    cwd, encoding: "utf8", timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
+  });
+  assert.equal(JSON.parse(result).cases, 36,
+    "the actual packaged image completes the prescribed file, transfer, and cancellation cases");
 });

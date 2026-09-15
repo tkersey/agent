@@ -21,6 +21,9 @@ for(const name of ['mid_review','clarify_first','human','model','rule','react'])
 await add('document/document.bpi2','image');
 await add('document/document.args','initial-args');
 examples.push({name:'document',image:'document/document.bpi2',initialArgs:'document/document.args'});
+await add('document/consequence.bpi2','image');
+await add('document/consequence.args','initial-args');
+examples.push({name:'document-consequence',image:'document/consequence.bpi2',initialArgs:'document/consequence.args'});
 for(const name of ['twice','dispose_owned','exchange']){
   const image=`dialogue/${name}.bpi2`,initialArgs=`dialogue/${name}.args.bin`;
   await add(image,'image');await add(initialArgs,'initial-args',new Uint8Array());

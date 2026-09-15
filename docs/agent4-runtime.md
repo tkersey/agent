@@ -201,7 +201,8 @@ The complete concrete v3 field and tag order is also documented in
 
 `runtime/document.mjs` exports `createDocumentEnvironment({ root, maximumContentBytes })`
 for an existing isolated absolute directory. Set the explicit byte limit to the
-declared result contract (128 for the packaged document example). Reads exceeding
+declared result contract (128 for the original document example, 512 for the
+[consequence-sensitive mode](consequence-clarification.md)). Reads exceeding
 it return `failure: content_too_large`; out-of-contract replacement inputs reject
 before I/O. Reads allocate at most the observed file size plus one byte, bounded
 by that limit plus one, and detect growth or truncation during the read.

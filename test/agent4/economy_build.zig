@@ -41,6 +41,16 @@ pub fn build(b: *std.Build) void {
             .{ .name = "agent", .module = agent },
         },
     });
+    const document = b.createModule(.{
+        .root_source_file = b.path("../consumers/document/consequence.zig"),
+        .target = b.graph.host,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "boundary", .module = boundary },
+            .{ .name = "agent", .module = agent },
+        },
+    });
+    probe.addImport("document", document);
     const executable = b.addExecutable(.{ .name = "economy-probe", .root_module = probe });
     b.installArtifact(executable);
     const tests = b.addTest(.{ .root_module = probe });

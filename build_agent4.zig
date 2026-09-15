@@ -110,6 +110,8 @@ pub fn build(b: *std.Build) void {
     g.testModule(check, g.module("src/conversation.zig"));
     g.testModule(check, g.module("src/react.zig"));
     g.testModule(check, g.module("src/value_equality.zig"));
+    g.testModule(check, g.module("src/clarification.zig"));
+    g.testModule(check, g.module("test/consumers/document/consequence.zig"));
     const negatives = b.addSystemCommand(&.{ "node", "tools/agent4/negative.mjs" });
     if (source) |path| negatives.addArgs(&.{ path, "source" }) else {
         negatives.addDirectoryArg(b.dependency("boundary", .{ .target = target, .optimize = optimize }).path("."));
@@ -153,6 +155,11 @@ pub fn build(b: *std.Build) void {
     const document_exe = g.emitter("agent4-document", g.module("test/consumers/document/main.zig"));
     g.emit(emit, document_exe, &.{}, "document/document.bpi2");
     g.emit(emit, document_exe, &.{"args"}, "document/document.args");
+    g.emit(emit, document_exe, &.{"consequence"}, "document/consequence.bpi2");
+    g.emit(emit, document_exe, &.{"consequence-args"}, "document/consequence.args");
+    g.emit(emit, document_exe, &.{"consequence-clarify-first"}, "document/clarify-first.bpi2");
+    const clarification_economy = g.emitter("clarification-scaling", g.module("test/agent4/clarification.zig"));
+    g.emit(emit, clarification_economy, &.{}, "clarification/scaling.json");
     const inventory = b.addSystemCommand(&.{ "node", "tools/agent4/emit_inventory.mjs", b.getInstallPath(.prefix, "agent4") });
     inventory.has_side_effects = true;
     inventory.step.dependOn(emit);
@@ -187,10 +194,12 @@ pub fn build(b: *std.Build) void {
             .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data_v2", .module = data } },
         });
         const native_exe = native_graph.emitter("agent4-native", native_module);
-        for ([_][]const u8{ "decision_scopes", "model_admission", "model_custody", "observation", "approval_equality", "callable_runtime" }) |name| {
+        for ([_][]const u8{ "decision_scopes", "model_admission", "model_custody", "observation", "approval_equality", "callable_runtime", "clarification", "terminology" }) |name| {
             const native = g.module(b.fmt("test/agent4/{s}.zig", .{name}));
             native.addImport("world", world);
             native.addImport("equality", g.helper("value_equality"));
+            if (std.mem.eql(u8, name, "terminology"))
+                native.addImport("document", g.module("test/consumers/document/consequence.zig"));
             native_graph.testModule(runtime_work, native);
         }
         const run = b.addSystemCommand(&.{ "node", "tools/agent4/check.mjs", "integration", "--world-runtime", runtime_path, "--fixtures", b.getInstallPath(.prefix, "agent4"), "--world-source", world_source });
@@ -209,13 +218,17 @@ pub fn build(b: *std.Build) void {
         _ = runtime_post.captureStdOut(.{});
         runtime_post.step.dependOn(runtime_work);
         integration.dependOn(&runtime_post.step);
-        const economy_exe = g.emitter("economy-probe", g.module("test/agent4/economy.zig"));
+        const economy_module = g.module("test/agent4/economy.zig");
+        economy_module.addImport("document", g.module("test/consumers/document/consequence.zig"));
+        const economy_exe = g.emitter("economy-probe", economy_module);
         const economy_emit = b.addRunArtifact(economy_exe);
         economy_emit.addArgs(&.{ "emit", b.getInstallPath(.prefix, "agent4/economy") });
         const measure = b.addSystemCommand(&.{ "node", "tools/agent4/economy.mjs", "--world-runtime", runtime_path, "--fixtures", b.getInstallPath(.prefix, "agent4/economy"), "--output", b.getInstallPath(.prefix, "agent4/economy-results"), "--probe" });
         const installed_probe = b.addInstallArtifact(economy_exe, .{});
         measure.addArg(b.getInstallPath(.bin, "economy-probe"));
         measure.addArgs(&.{ "--world-source", world_source, "--world-archive", world_archive });
+        measure.addArg("--native");
+        measure.addFileArg(native_exe.getEmittedBin());
         addBoundary(b, measure, source, target, optimize);
         measure.step.dependOn(&installed_probe.step);
         if (measure_economy) measure.addArgs(&.{ "--measure", "--uncontended" });

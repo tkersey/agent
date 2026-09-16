@@ -162,7 +162,7 @@ async function measureEmission(options) {
   const metrics = JSON.parse(metricsBytes);
   const images = [];
   for (const file of ['direct.bpi2', 'facade.bpi2', 'sharing-1.bpi2', 'sharing-8.bpi2', 'sharing-64.bpi2', 'conversation.bpi2',
-    'inquiry-repair.bpi2', 'inquiry-repeated.bpi2']) {
+    'inquiry-repair.bpi2', 'inquiry-repeated.bpi2', 'inquiry-react.bpi2']) {
     const actual = await requiredFile(join(directory, file));
     assert.deepEqual(actual, await requiredFile(join(options.fixtures, file)),
       'timed source emission must reproduce the exact functional fixture');
@@ -453,7 +453,7 @@ async function clarification(options, sourceMetrics) {
 
 async function inquiryImages(options, sourceMetrics) {
   const rows = [];
-  for (const name of ['repair', 'repeated']) {
+  for (const name of ['repair', 'repeated', 'react']) {
     const metric = sourceMetrics.inquiry[name];
     const bytes = await requiredFile(join(options.fixtures, `inquiry-${name}.bpi2`));
     const application = await requiredFile(join(dirname(options.fixtures), 'inquiry', `${name}.bpi2`));
@@ -464,6 +464,22 @@ async function inquiryImages(options, sourceMetrics) {
   }
   return { status: 'PASS', sourceToImage: rows,
     qualification: 'Complete application compilation metrics; behavioral and retained-state witnesses run in the inquiry application lane. Timing remains diagnostic unless explicitly measured.' };
+}
+
+async function inquiryComparison(options, sourceMetrics) {
+  assert(options.native, 'inquiry comparison requires the native embedding');
+  const run = await invoke(process.execPath, [join(ROOT, 'test/agent4/inquiry_cases_runtime.mjs'),
+    options.runtime, join(dirname(options.fixtures), 'inquiry'), options.native, options.probe,
+    '--comparison-only'], { output: options.output, label: 'inquiry-comparison' });
+  const evidence = JSON.parse(run.stdout.trim());
+  for (const pair of evidence.pairs) for (const row of pair.results) {
+    const metric = sourceMetrics.inquiry[row.strategy === 'inquiry' ? 'repair' : 'react'];
+    assert.equal(row.imageSha256, metric.imageSha256);
+    assert.equal(row.imageBytes, metric.imageBytes);
+  }
+  return { status: 'PASS', pairs: evidence.pairs,
+    bindingNegatives: evidence.scenarios.filter(row => row.name.startsWith('react-rejects-')),
+    qualification: 'Prescribed provider responses; identical task/experiment/acceptance/delivery contracts. Native, Node and fresh Wasmtime agree. No live-model or timing claim.' };
 }
 
 export async function runEconomy(args) {
@@ -503,6 +519,7 @@ export async function runEconomy(args) {
       ['alternatives', () => alternatives(world, kernel, options)],
       ['clarification', () => clarification(options, sourceMetrics)],
       ['inquiryImages', () => inquiryImages(options, sourceMetrics)],
+      ['inquiryComparison', () => inquiryComparison(options, sourceMetrics)],
     ]) {
       process.stderr.write(`Agent economy: ${name}\n`);
       try { report.checks[name] = await body(); }

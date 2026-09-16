@@ -22,7 +22,7 @@ pub fn define(e: E) !Id {
     return cached.finish(b, f);
 }
 
-fn directModel(e: E) !Id {
+pub fn directModel(e: E) !Id {
     const b = e.b();
     const effect = try P.declare(b);
     const f = try b.declare(&.{ try e.schema(t.Task), try e.schema(u64), try e.schema(u64), try e.schema(t.Working), try e.schema(bool) }, try e.schema(P.BatchInterpretation), &.{effect}, &.{});

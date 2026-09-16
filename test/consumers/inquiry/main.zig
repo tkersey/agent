@@ -8,6 +8,7 @@ const s = @import("source.zig");
 const Id = s.Id;
 const E = s.E;
 pub const System = agent.system(.{ .InitialArgs = t.Task, .Result = t.Result, .Failure = void, .application = Application });
+pub const ReactSystem = @import("react.zig").System;
 pub const RepeatedSystem = @import("repeated.zig").System;
 
 pub const Application = struct {
@@ -52,7 +53,7 @@ pub fn defineTask(c: agent.Context) !Id {
     return entry;
 }
 
-fn intentEntry(e: E, task_function: Id) !Id {
+pub fn intentEntry(e: E, task_function: Id) !Id {
     const b = e.b();
     const question = try @import("intent.zig").define(e);
     const entry = try b.declare(&.{ try e.schema(t.Task), try e.schema(u64) }, try e.schema(t.Result), try e.row(b.functions.items[task_function].effects, &.{question.effect}), &.{});
@@ -104,7 +105,14 @@ fn start(e: E, d: agent.inquiry.broker.Definition, entry: Id, run: Id, seed: Id)
         .{ .variable = failure, .body = try unresolved(e, "Initial model proposals unavailable or invalid.") },
     } } });
     const initial = try e.product(t.Working, &.{ try e.value(t.Reason, .{ .bytes = "Propose independent, qualified explanations. Do not assume the report is correct." }), try e.value(u64, 0), try e.value(agent.contracts.Text(4096), .{ .bytes = "No experimental evidence yet." }), try e.field(u64, task, 4), try e.value(t.Source, .{ .bytes = "" }) });
-    var next = try b.bind(response, try e.call(try @import("models.zig").define(e), &.{ task, try e.value(u64, 0), try e.value(u64, 0), initial, try e.value(bool, true) }), branch);
+    const next = try b.bind(response, try e.call(try @import("models.zig").define(e), &.{ task, try e.value(u64, 0), try e.value(u64, 0), initial, try e.value(bool, true) }), branch);
+    return admitTask(e, task, next, invalid);
+}
+
+pub fn admitTask(e: E, task: Id, continuation: Id, invalid: Id) !Id {
+    const b = e.b();
+    var next = continuation;
+    const requested = try b.primitive(try e.schema(u64), .integer_convert, &.{try e.field(u8, task, 2)}, 0);
     for ([_][2]Id{
         .{ try e.value(u64, 0), requested },                 .{ requested, try e.value(u64, 9) },
         .{ try e.value(u64, 0), try e.field(u64, task, 3) }, .{ try e.field(u64, task, 3), try e.value(u64, 65) },
@@ -122,7 +130,7 @@ fn start(e: E, d: agent.inquiry.broker.Definition, entry: Id, run: Id, seed: Id)
         try e.field(t.Hash, subject, 6),
         try e.field(u64, subject, 7),
     });
-    return b.bind(supported, try agent.value_equality.compare(b, try e.schema(t.Subject), subject, expected, try e.value(void, {})), try e.cond(try e.ref(supported), next, try unresolved(e, "Unsupported task scope or requirements; no experiments were authorized.")));
+    return b.bind(supported, try agent.value_equality.compare(b, try e.schema(t.Subject), subject, expected, try e.value(void, {})), try e.cond(try e.ref(supported), next, invalid));
 }
 
 fn seedFunction(e: E, d: agent.inquiry.broker.Definition, actor: Id, effects: []const Id) !Id {
@@ -154,6 +162,11 @@ test "repair inquiry is admitted as ordinary protected Agent source" {
         std.debug.print("{any}\n", .{diagnostic});
         return err;
     };
+    defer compiled.deinit();
+}
+
+test "ReAct comparator is admitted through the same protected application surface" {
+    var compiled = try agent.compile(std.testing.allocator, ReactSystem);
     defer compiled.deinit();
 }
 
@@ -192,6 +205,7 @@ pub fn main(init: std.process.Init) !void {
     if (std.mem.eql(u8, mode, "task-schema")) return writeSchema(init, t.Task);
     if (std.mem.eql(u8, mode, "outcome-schema")) return writeSchema(init, t.Result);
     if (std.mem.eql(u8, mode, "repeat")) return writeImage(init, @import("repeated.zig").System);
+    if (std.mem.eql(u8, mode, "react")) return writeImage(init, ReactSystem);
     if (!std.mem.eql(u8, mode, "image")) return error.InvalidArgument;
     return writeImage(init, System);
 }

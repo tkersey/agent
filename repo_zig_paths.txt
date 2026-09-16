@@ -198,6 +198,7 @@ test/consumers/inquiry/main.zig
 test/consumers/inquiry/models.zig
 test/consumers/inquiry/plans.zig
 test/consumers/inquiry/policy.zig
+test/consumers/inquiry/react.zig
 test/consumers/inquiry/repeated.zig
 test/consumers/inquiry/source.zig
 test/consumers/inquiry/types.zig

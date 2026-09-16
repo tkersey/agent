@@ -149,6 +149,7 @@ pub fn build(b: *std.Build) void {
     const inquiry_app_images = b.step("inquiry-application-images", "Emit the inquiry consumer and schemas");
     g.emit(inquiry_app_images, inquiry_app_exe, &.{}, "inquiry/repair.bpi2");
     g.emit(inquiry_app_images, inquiry_app_exe, &.{"repeat"}, "inquiry/repeated.bpi2");
+    g.emit(inquiry_app_images, inquiry_app_exe, &.{"react"}, "inquiry/react.bpi2");
     for ([_][]const u8{ "task-schema", "outcome-schema" }) |mode| {
         g.emit(inquiry_app_images, inquiry_app_exe, &.{mode}, b.fmt("inquiry/{s}.bin", .{mode}));
     }
@@ -242,6 +243,14 @@ pub fn build(b: *std.Build) void {
         inquiry_cases.step.dependOn(&runtime_guard.step);
         inquiry_app_check.dependOn(&inquiry_cases.step);
         runtime_work.dependOn(&inquiry_cases.step);
+        const comparison = b.addSystemCommand(&.{ "node", "test/agent4/inquiry_cases_runtime.mjs", runtime_path, b.getInstallPath(.prefix, "agent4/inquiry") });
+        comparison.addFileArg(native_exe.getEmittedBin());
+        comparison.addFileArg(multi_exe.getEmittedBin());
+        comparison.addArg("--comparison-only");
+        comparison.has_side_effects = true;
+        comparison.step.dependOn(inquiry_app_images);
+        comparison.step.dependOn(&runtime_guard.step);
+        b.step("check-inquiry-comparison", "Compare inquiry and ReAct on the same repair tasks").dependOn(&comparison.step);
         const inquiry_repeated = b.addSystemCommand(&.{ "node", "test/agent4/inquiry_repeated_runtime.mjs", runtime_path, b.getInstallPath(.prefix, "agent4/inquiry") });
         inquiry_repeated.addFileArg(native_exe.getEmittedBin());
         inquiry_repeated.addFileArg(multi_exe.getEmittedBin());

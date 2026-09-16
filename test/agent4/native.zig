@@ -24,6 +24,12 @@ pub fn main(init: std.process.Init) !void {
     );
     defer init.gpa.free(input_bytes);
     const input = try protocol.decode(protocol.Input, init.gpa, input_bytes);
+    // Opt-in diagnostics use World's public workspace allocator. The backing
+    // capacity is a test-host allowance, not a program or saved-State limit.
+    const storage = if (statistics_requested) try init.gpa.alloc(u8, 256 << 20) else null;
+    defer if (storage) |bytes| init.gpa.free(bytes);
+    var workspace = world.process_v2.Workspace.init(storage orelse &.{});
+    const measured_allocator = if (statistics_requested) workspace.allocator() else init.gpa;
     var statistics: world.process_v2.Statistics = .{};
     const observed: world.process_v2.Invocation = .{
         .program = .{ .image = input.image },
@@ -35,8 +41,8 @@ pub fn main(init: std.process.Init) !void {
         .statistics = &statistics,
     };
     var outcome = if (!statistics_requested) try world.process_v2.invoke(init.gpa, input) else switch (input.mode) {
-        .run => try world.process_v2.run(init.gpa, observed),
-        .advance => try world.process_v2.advance(init.gpa, observed),
+        .run => try world.process_v2.run(measured_allocator, observed),
+        .advance => try world.process_v2.advance(measured_allocator, observed),
     };
     defer outcome.deinit();
     const bytes = try init.gpa.alloc(u8, try protocol.encodedLength(protocol.Outcome, outcome.record));
@@ -49,10 +55,15 @@ pub fn main(init: std.process.Init) !void {
     if (statistics_requested) {
         var stats_buffer: [256]u8 = undefined;
         var stats = std.Io.File.stderr().writer(init.io, &stats_buffer);
-        try stats.interface.print(
-            "{{\"multiTemplates\":{d},\"branchActivations\":{d},\"transitions\":{d}}}\n",
-            .{ statistics.multi_templates, statistics.branch_activations, statistics.transitions },
-        );
+        try std.json.Stringify.value(.{
+            .multiTemplates = statistics.multi_templates,
+            .branchActivations = statistics.branch_activations,
+            .transitions = statistics.transitions,
+            .peakWorkingBytes = workspace.peak_payload,
+            .addedNodes = statistics.storage.added_nodes,
+            .copiedBlobBytes = statistics.storage.copied_blob_bytes,
+        }, .{}, &stats.interface);
+        try stats.interface.writeByte('\n');
         try stats.interface.flush();
     }
 }

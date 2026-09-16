@@ -12,35 +12,72 @@ pub const System = agent.system(.{ .InitialArgs = t.Task, .Result = t.Result, .F
 pub const Application = struct {
     pub fn emit(c: agent.Context) !source.Module {
         const e = E{ .c = c };
-        const b = c.builder;
-        const model = try t.P.declare(b);
-        try c.registry.classify(model, .model);
-        const cleanup = try c.external("inquiry.repair.cleanup.v1", try e.schema(u64), try e.schema(void), .read);
-        const spec: agent.inquiry.broker.Spec = .{
-            .identity = "inquiry.repair",
-            .subject = try e.schema(t.Subject),
-            .demand = try e.schema(t.Demand),
-            .key = try e.schema(t.Key),
-            .observation = try e.schema(t.Observation),
-            .finding = try e.schema(t.Finding),
-            .policy = try e.schema(bool),
-            .failure = try e.value(void, {}),
-            .scope = .{ .captures = &.{ try e.schema(t.Task), try e.schema(t.Working), try e.schema(t.Probe), try e.schema(t.Repair), try e.schema(t.Prediction), try e.schema(t.Hypothesis), try e.schema(t.Source), try e.schema(t.Reason), try e.schema(u64), try e.schema(bool) }, .residual = .{ .effects = &.{ model, cleanup } } },
-        };
-        const d = try agent.inquiry.broker.define(b, spec);
-        const run = try agent.inquiry.broker.implementProtected(c, spec, d, try @import("policy.zig").define(e, d));
-        const actor = try @import("investigator.zig").define(e, d, model, cleanup);
-        const seed = try seedFunction(e, d, actor, &.{ model, cleanup });
-        const rows = &.{ model, cleanup, d.experiment };
-        const diagnose = try b.declare(&.{try e.schema(t.Task)}, try e.schema(t.InquiryOutcome), rows, &.{});
-        try b.define(diagnose, try start(e, d, diagnose, run, seed));
-        const live = try @import("live.zig").define(e);
-        const entry = try b.declare(&.{try e.schema(t.Task)}, try e.schema(t.Result), try e.row(rows, live.effects), &.{});
-        const outcome = try b.variable(try e.schema(t.InquiryOutcome));
-        try b.define(entry, try b.bind(outcome, try e.call(diagnose, &.{try e.p(entry, 0)}), try e.call(live.function, &.{ try e.p(entry, 0), try e.ref(outcome) })));
-        return b.module(entry, try e.schema(void));
+        const task = try defineTask(c);
+        const entry = try c.builder.declare(&.{try e.schema(t.Task)}, try e.schema(t.Result), c.builder.functions.items[task].effects, &.{});
+        try c.builder.define(entry, try e.call(task, &.{ try e.p(entry, 0), try e.value(u64, 1) }));
+        return c.builder.module(entry, try e.schema(void));
     }
 };
+
+pub fn defineTask(c: agent.Context) !Id {
+    const e = E{ .c = c };
+    const b = c.builder;
+    const model = try t.P.declare(b);
+    try c.registry.classify(model, .model);
+    const cleanup = try c.external("inquiry.repair.cleanup.v1", try e.schema(u64), try e.schema(void), .read);
+    const spec: agent.inquiry.broker.Spec = .{
+        .identity = "inquiry.repair",
+        .subject = try e.schema(t.Subject),
+        .demand = try e.schema(t.Demand),
+        .key = try e.schema(t.Key),
+        .observation = try e.schema(t.Observation),
+        .finding = try e.schema(t.Finding),
+        .policy = try e.schema(bool),
+        .failure = try e.value(void, {}),
+        .scope = .{ .captures = &.{ try e.schema(t.Task), try e.schema(t.Working), try e.schema(t.Probe), try e.schema(t.Repair), try e.schema(t.Prediction), try e.schema(t.Hypothesis), try e.schema(t.Source), try e.schema(t.Reason), try e.schema(u64), try e.schema(bool) }, .residual = .{ .effects = &.{ model, cleanup } } },
+    };
+    const d = try agent.inquiry.broker.define(b, spec);
+    const run = try agent.inquiry.broker.implementProtected(c, spec, d, try @import("policy.zig").define(e, d));
+    const actor = try @import("investigator.zig").define(e, d, model, cleanup);
+    const seed = try seedFunction(e, d, actor, &.{ model, cleanup });
+    const rows = &.{ model, cleanup, d.experiment };
+    const diagnose = try b.declare(&.{try e.schema(t.Task)}, try e.schema(t.InquiryOutcome), rows, &.{});
+    try b.define(diagnose, try start(e, d, diagnose, run, seed));
+    const live = try @import("live.zig").define(e);
+    const task_function = try b.declare(&.{try e.schema(t.Task)}, try e.schema(t.Result), try e.row(rows, live.effects), &.{});
+    const outcome = try b.variable(try e.schema(t.InquiryOutcome));
+    try b.define(task_function, try b.bind(outcome, try e.call(diagnose, &.{try e.p(task_function, 0)}), try e.call(live.function, &.{ try e.p(task_function, 0), try e.ref(outcome) })));
+    const entry = try intentEntry(e, task_function);
+    return entry;
+}
+
+fn intentEntry(e: E, task_function: Id) !Id {
+    const b = e.b();
+    const question = try @import("intent.zig").define(e);
+    const entry = try b.declare(&.{ try e.schema(t.Task), try e.schema(u64) }, try e.schema(t.Result), try e.row(b.functions.items[task_function].effects, &.{question.effect}), &.{});
+    const supplied = try e.p(entry, 0);
+    const subject = try e.field(t.Subject, supplied, 0);
+    var subject_fields: [std.meta.fields(t.Subject).len]Id = undefined;
+    inline for (std.meta.fields(t.Subject), 0..) |field, i| subject_fields[i] = if (i == 7)
+        try e.p(entry, 1)
+    else
+        try e.field(field.type, subject, i);
+    var task_fields: [std.meta.fields(t.Task).len]Id = undefined;
+    inline for (std.meta.fields(t.Task), 0..) |field, i| task_fields[i] = switch (i) {
+        0 => try e.product(t.Subject, &subject_fields),
+        7 => try e.p(entry, 1),
+        else => try e.field(field.type, supplied, i),
+    };
+    const answer = try b.variable(try e.schema(t.IntentResolution));
+    const task = try b.variable(try e.schema(t.Task));
+    const Case = std.meta.Child(@FieldType(@FieldType(source.ast.Term, "match_sum"), "cases"));
+    var cases: [7]Case = undefined;
+    cases[0] = .{ .variable = task, .body = try e.call(task_function, &.{try e.ref(task)}) };
+    for (1..7) |i| cases[i] = .{ .variable = try b.variable(try e.schema(void)), .body = try b.pure(try e.variant(t.Result, try e.value(void, {}), 9 + i)) };
+    const handled = try b.term(.{ .match_sum = .{ .value = try e.ref(answer), .cases = &cases } });
+    try b.define(entry, try b.bind(answer, try e.call(question.function, &.{try e.product(t.Task, &task_fields)}), handled));
+    return entry;
+}
 
 fn unresolved(e: E, reason: []const u8) !Id {
     const finding = try e.product(t.Found, &.{ try e.value(u64, 0), try e.variant(t.Finding, try e.value(t.Reason, .{ .bytes = reason }), 1) });
@@ -82,6 +119,7 @@ fn start(e: E, d: agent.inquiry.broker.Definition, entry: Id, run: Id, seed: Id)
         try e.value(t.Hash, .{ .bytes = "agent.session-occurrence.acceptance.v1" }),
         try e.field(bool, subject, 5),
         try e.field(t.Hash, subject, 6),
+        try e.field(u64, subject, 7),
     });
     return b.bind(supported, try agent.value_equality.compare(b, try e.schema(t.Subject), subject, expected, try e.value(void, {})), try e.cond(try e.ref(supported), next, try unresolved(e, "Unsupported task scope or requirements; no experiments were authorized.")));
 }
@@ -118,6 +156,33 @@ test "repair inquiry is admitted as ordinary protected Agent source" {
     defer compiled.deinit();
 }
 
+test "model-only speculation rejects the application's hidden experiment path" {
+    const Bad = struct {
+        pub fn emit(c: agent.Context) !source.Module {
+            const b = c.builder;
+            const module = try Application.emit(c);
+            var experiment: ?Id = null;
+            for (b.effects.items, 0..) |effect, i|
+                if (std.mem.eql(u8, effect.identity, "inquiry.repair.experiment.v1")) {
+                    experiment = i;
+                };
+            const id = experiment orelse return error.MissingExperiment;
+            const effect = b.effects.items[id];
+            const writer = try b.declare(&.{effect.payload}, effect.result, &.{id}, &.{});
+            const performed = try b.term(.{ .perform = .{ .effect = id, .payload = try b.reference(b.parameter(writer, 0)) } });
+            try c.registry.protectSite(writer, performed, id);
+            try b.define(writer, performed);
+            // A falsely empty wrapper row must not hide the actual callee.
+            const wrapper = try b.declare(&.{effect.payload}, effect.result, &.{}, &.{});
+            try b.define(wrapper, try b.term(.{ .call = .{ .function = writer, .arguments = &.{try b.reference(b.parameter(wrapper, 0))} } }));
+            try c.registry.speculate(wrapper, &.{try t.P.declare(b)});
+            return b.module(module.entry, module.failure);
+        }
+    };
+    const BadSystem = agent.system(.{ .InitialArgs = t.Task, .Result = t.Result, .Failure = void, .application = Bad });
+    try std.testing.expectError(error.SpeculativeEffect, agent.compile(std.testing.allocator, BadSystem));
+}
+
 pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();
@@ -125,9 +190,14 @@ pub fn main(init: std.process.Init) !void {
     if (args.next() != null) return error.InvalidArgument;
     if (std.mem.eql(u8, mode, "task-schema")) return writeSchema(init, t.Task);
     if (std.mem.eql(u8, mode, "outcome-schema")) return writeSchema(init, t.Result);
+    if (std.mem.eql(u8, mode, "repeat")) return writeImage(init, @import("repeated.zig").System);
     if (!std.mem.eql(u8, mode, "image")) return error.InvalidArgument;
+    return writeImage(init, System);
+}
+
+fn writeImage(init: std.process.Init, comptime App: type) !void {
     var diagnostic: boundary.program.Diagnostic = .{};
-    var compiled = agent.compileObserved(init.gpa, System, .{ .boundary_options = .{ .diagnostic = &diagnostic } }) catch |err| {
+    var compiled = agent.compileObserved(init.gpa, App, .{ .boundary_options = .{ .diagnostic = &diagnostic } }) catch |err| {
         std.debug.print("{any}\n", .{diagnostic});
         return err;
     };

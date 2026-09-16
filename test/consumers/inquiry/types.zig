@@ -21,6 +21,8 @@ pub const Subject = struct {
     contract: Hash,
     reusable: bool,
     target: Hash,
+    /// Namespace assigned by the enclosing authored task caller, not model data.
+    scope_epoch: u64,
 };
 pub const Experiment = struct { kind: u8, source: Source, trace: Trace };
 pub const Key = struct { subject: Subject, experiment: Experiment };
@@ -127,6 +129,9 @@ pub const Task = struct {
     coalesce: bool,
     principal: u64,
     attempt: u64,
+    explore: bool,
+    /// 0: checked delivery, 1: artifact only, 2: ask about that observable intent.
+    intent: u8,
 };
 pub const Working = struct { explanation: Reason, observation: u64, summary: Text(4096), remaining: u64, candidate: Source };
 pub const VersionResult = union(enum) { done: Finding, revised: Working };
@@ -146,4 +151,15 @@ pub const Result = union(enum) {
     uncertain: Hash,
     no_change: Receipt,
     stopped,
+    artifact: Receipt,
+    other,
+    not_sure,
+    unoffered,
+    aborted,
+    closed,
+    wrong_context,
 };
+pub const IntentQuestion = struct { task: Task, occurrence: u64, prompt: Reason, options: [2]u8 };
+pub const IntentChoice = union(enum) { select: u8, other, not_sure };
+pub const IntentReply = struct { question: IntentQuestion, choice: IntentChoice };
+pub const IntentResolution = union(enum) { resolved: Task, other, not_sure, unoffered, aborted, closed, wrong_context };

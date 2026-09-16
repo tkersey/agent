@@ -1,0 +1,8 @@
+.{
+    .name = .agent_inquiry_consumer,
+    .version = "0.0.0",
+    .fingerprint = 0x78839c94bd36f3ef,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{ .agent = .{ .path = "../../.." } },
+    .paths = .{ "build.zig", "build.zig.zon", "main.zig", "types.zig", "source.zig", "models.zig", "plans.zig", "policy.zig", "evidence.zig", "investigator.zig", "live.zig", "intent.zig", "exploration.zig", "repeated.zig", "contract.txt" },
+}

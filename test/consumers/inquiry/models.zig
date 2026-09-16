@@ -8,6 +8,21 @@ const E = s.E;
 const P = t.P;
 
 pub fn define(e: E) !Id {
+    const cached = try e.b().specialization(Id, "inquiry.model-dispatch/v1", .{});
+    if (cached.cached) |value| return value;
+    const direct = try directModel(e);
+    const alternatives = try @import("exploration.zig").define(e, direct);
+    const b = e.b();
+    const params = &.{ try e.schema(t.Task), try e.schema(u64), try e.schema(u64), try e.schema(t.Working), try e.schema(bool) };
+    const f = try b.declare(params, try e.schema(P.BatchInterpretation), &.{try P.declare(b)}, &.{});
+    const normal = try e.call(direct, &.{ try e.p(f, 0), try e.p(f, 1), try e.p(f, 2), try e.p(f, 3), try e.p(f, 4) });
+    const choose = try e.cond(try e.field(bool, try e.p(f, 0), 8), try e.call(alternatives, &.{ try e.p(f, 0), try e.p(f, 1), try e.p(f, 2), try e.p(f, 3) }), normal);
+    const after_evidence = try e.cond(try e.eq(try e.field(u64, try e.p(f, 3), 1), try e.value(u64, 0)), normal, choose);
+    try b.define(f, try e.cond(try e.p(f, 4), normal, after_evidence));
+    return cached.finish(b, f);
+}
+
+fn directModel(e: E) !Id {
     const b = e.b();
     const effect = try P.declare(b);
     const f = try b.declare(&.{ try e.schema(t.Task), try e.schema(u64), try e.schema(u64), try e.schema(t.Working), try e.schema(bool) }, try e.schema(P.BatchInterpretation), &.{effect}, &.{});

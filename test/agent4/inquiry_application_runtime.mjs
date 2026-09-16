@@ -103,8 +103,8 @@ async function invoke(input, transfer) {
   return outcome;
 }
 try {
-  const task = [["session.mjs", reset, executor.runner, requirements, acceptanceContract, true, targetIdentity],
-    "fixture-model", 3, 24n, 12n, true, 7n, 1n];
+  const task = [["session.mjs", reset, executor.runner, requirements, acceptanceContract, true, targetIdentity, 0n],
+    "fixture-model", 3, 24n, 12n, true, 7n, 1n, false, 0];
   let outcome = await invoke({ image, initialArgs: encodeValue(taskSchema, task) }, true);
   while (outcome.kind === "Requested") {
     assert(models + experiments + cleanup.length < 30);

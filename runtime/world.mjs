@@ -23,7 +23,10 @@ export async function loadWorldRuntime(options) {
   if (!options || typeof options !== "object" || Array.isArray(options))
     throw new TypeError("runtime options are required");
   for (const name of Object.keys(options))
-    if (!["runtimePath", "lockPath"].includes(name)) throw new Error(`UnknownRuntimeOption: ${name}`);
+    if (!["runtimePath", "lockPath", "limits"].includes(name)) throw new Error(`UnknownRuntimeOption: ${name}`);
+  const selectedLimits = options.limits === undefined ? null : { ...options.limits };
+  if (selectedLimits && JSON.stringify(Object.keys(selectedLimits).sort()) !== JSON.stringify(["input", "output", "working"]))
+    throw new Error("limits must specify input, working and output bytes");
   const { runtimePath, lockPath = DEFAULT_LOCK } = options;
   if (typeof runtimePath !== "string" || runtimePath.length === 0)
     throw new TypeError("runtimePath must name an immutable World installation");
@@ -35,9 +38,12 @@ export async function loadWorldRuntime(options) {
   if (JSON.stringify(Object.keys(world).sort()) !== JSON.stringify(lock.world.runtime.exports))
     throw new Error("WorldPublicApiMismatch");
   const kernelBytes = readRegular(observed.kernelPath);
-  if (JSON.stringify(world.inspectKernelWasm(kernelBytes)) !== JSON.stringify(lock.world.runtime.physicalProfile.inspection))
+  const inspection = world.inspectKernelWasm(kernelBytes);
+  if (JSON.stringify(inspection) !== JSON.stringify(lock.world.runtime.physicalProfile.inspection))
     throw new Error("WorldPhysicalProfileMismatch");
   const kernel = await world.Kernel.create({ bytes: kernelBytes, expectedSha256: observed.kernelSha256 });
+  const ceiling = Math.min(0xffffffff, inspection.memory.maximumPages * 65536);
+  kernel.setLimits(selectedLimits ?? { input: ceiling, working: ceiling, output: ceiling });
   // Detect accidental concurrent replacement during admission as well as before it.
   verifyRuntime(runtimePath, { lockPath });
 

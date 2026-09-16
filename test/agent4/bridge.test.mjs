@@ -24,6 +24,15 @@ test("bridge rejects unknown options before loading a runtime", async () => {
   await assert.rejects(loadWorldRuntime({}), /runtimePath/);
 });
 
+test("an explicit smaller working budget rejects without consuming the input", async () => {
+  const program = await image();
+  const original = Uint8Array.from(program);
+  const limited = await loadWorldRuntime({ runtimePath, lockPath, limits: { input: 65536, working: 0, output: 65536 } });
+  assert.throws(() => limited.start(program, empty), error => error.code === "WORLD_CAPACITY" && error.details.arena === "working");
+  assert.deepEqual(Uint8Array.from(program), original);
+  assert.equal((await (await bridge()).start(program, empty)).kind, "requested");
+});
+
 test("bridge preserves original World records through fresh-instance owned-dialogue transfer", async () => {
   const host = await bridge(), program = await image();
   const parked = await host.start(program, empty);

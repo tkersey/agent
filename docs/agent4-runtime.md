@@ -2,10 +2,10 @@
 
 Agent authoring emits BPI3 using Boundary `3.0.0-dev.0` at
 `03da23f6066e8eb60ee646f34dc9e828220dfc28`. The candidate integration lock selects
-World `6.0.0-dev.0` at `4ccc9757b4499406aec134a0570b27bd4e448cda` and its ABI 3
-runtime. The normal bridge/runner and owned inquiry traces are validated; full
-application integration, inquiry CLI migration and the compiled-tool witness
-remain in progress. See [current status](compositional-execution.md).
+World `6.0.0-dev.0` at `58eac5241d30c88a9f07ddd33a772ac43b399e7c` and its ABI 3
+runtime. The normal bridge/runner, native semantics, inquiry CLI, full application
+integration and extracted use-archive checks pass. The independently compiled
+tool witness, performance acceptance and legacy retirement remain in progress. See [current status](compositional-execution.md).
 The exact runtime contents, kernel digest,
 public API and physical profile are in
 `conformance/agent4/dependencies.lock.json`. The loader checks this Agent-owned
@@ -85,6 +85,11 @@ const next = await host.resume(
 // Alternative to resumption, when cancellation is intended:
 // const next = await host.cancel(imageBytes, pending.state, "stop");
 ```
+
+The bridge selects arena allowances up to the authenticated kernel's shared
+memory ceiling; this build enforces a 256 MiB global maximum. A caller may pass
+`limits: { input, working, output }` to `loadWorldRuntime` to select smaller byte
+allowances. Capacity failure preserves the prior authoritative input.
 
 The bridge returns World's complete outcome, including original PKO3 `bytes`
 and detached nested State/request/value records. It copies submitted bytes and

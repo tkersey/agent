@@ -1,7 +1,7 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const agent = @import("agent");
-const world = @import("world").process_v2;
+const world = @import("world");
 const witness = @import("callable.zig");
 
 test "static-code callable preserves actual World observations and branch work" {
@@ -27,17 +27,37 @@ test "static-code callable preserves actual World observations and branch work" 
         defer selected.deinit();
         var raw_stats: world.Statistics = .{};
         var selected_stats: world.Statistics = .{};
-        var before = try world.run(allocator, .{
-            .program = .{ .records = raw.program },
-            .instance = .{ .initial_args = &.{} },
-            .statistics = &raw_stats,
-        });
+        const invocation_image_0 = try allocator.alloc(u8, try boundary.data_v2.program_image.encodedLength(raw.program));
+        defer allocator.free(invocation_image_0);
+        _ = try boundary.data_v2.program_image.encode(allocator, raw.program, invocation_image_0);
+        var before = observed: {
+            const instance: boundary.data_v2.invocation.Instance = .{ .initial_args = &.{} };
+            var session = switch (instance) {
+                .initial_args => |args| try world.Session.initImage(allocator, invocation_image_0, args),
+                .state => |state| try world.Session.restoreImage(allocator, invocation_image_0, state),
+            };
+            defer session.deinit();
+            session.statistics = &raw_stats;
+            session.store.statistics = &raw_stats.storage;
+            _ = try world.invocation.advance(&session, .none, null);
+            break :observed try world.invocation.finish(allocator, &session, true);
+        };
         defer before.deinit();
-        var after = try world.run(allocator, .{
-            .program = .{ .records = selected.program },
-            .instance = .{ .initial_args = &.{} },
-            .statistics = &selected_stats,
-        });
+        const invocation_image_1 = try allocator.alloc(u8, try boundary.data_v2.program_image.encodedLength(selected.program));
+        defer allocator.free(invocation_image_1);
+        _ = try boundary.data_v2.program_image.encode(allocator, selected.program, invocation_image_1);
+        var after = observed: {
+            const instance: boundary.data_v2.invocation.Instance = .{ .initial_args = &.{} };
+            var session = switch (instance) {
+                .initial_args => |args| try world.Session.initImage(allocator, invocation_image_1, args),
+                .state => |state| try world.Session.restoreImage(allocator, invocation_image_1, state),
+            };
+            defer session.deinit();
+            session.statistics = &selected_stats;
+            session.store.statistics = &selected_stats.storage;
+            _ = try world.invocation.advance(&session, .none, null);
+            break :observed try world.invocation.finish(allocator, &session, true);
+        };
         defer after.deinit();
         try std.testing.expect(before.record == .completed);
         try std.testing.expect(after.record == .completed);

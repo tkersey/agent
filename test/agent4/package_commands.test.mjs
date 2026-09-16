@@ -27,11 +27,11 @@ test("documented commands execute from the actual source-independent archive", a
   // The dialogue has no environmental side effects; resume and cancellation
   // exercise the two documented alternative branches using the same saved bytes.
   const world = await loadWorldRuntime({ runtimePath });
-  assert.equal(world.decodeOutcome(await readFile(join(cwd, "started.pko2"))).kind, "Requested");
-  const resumed = world.decodeOutcome(await readFile(join(cwd, "resumed.pko2")));
-  assert.equal(resumed.kind, "Completed");
+  assert.equal(world.decodeOutcome(await readFile(join(cwd, "started.pko3"))).kind, "requested");
+  const resumed = world.decodeOutcome(await readFile(join(cwd, "resumed.pko3")));
+  assert.equal(resumed.kind, "completed");
   assert.equal(Buffer.from(resumed.value).readBigUInt64LE(), 40n);
-  assert.equal(world.decodeOutcome(await readFile(join(cwd, "cancelled.pko2"))).kind, "Cancelled");
+  assert.equal(world.decodeOutcome(await readFile(join(cwd, "cancelled.pko3"))).kind, "cancelled");
   const inventory = JSON.parse(await readFile(join(cwd, "examples/inventory.json"), "utf8"));
   const consequence = inventory.examples.find(example => example.name === "document-consequence");
   assert(consequence, "the opt-in application belongs to the source-independent package");

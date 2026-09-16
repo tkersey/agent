@@ -77,16 +77,20 @@ test('opt-in dispatcher preserves checkpoints, human authority and explicit allo
   execFileSync('git', ['apply', join(root, 'artifact/repair.diff')], { cwd: diffTarget });
   assert.equal(await readFile(join(diffTarget, 'session.mjs'), 'utf8'), monotonic);
   assert.deepEqual(await readFile(origin), original);
-  const staleResult = join(root, 'artifact/0000.ers2');
-  const wrongBoundary = join(root, 'artifact/0001.pko2');
+  const staleResult = join(root, 'artifact/0000.ers3');
+  const wrongBoundary = join(root, 'artifact/0001.pko3');
+  assert.equal((await readFile(staleResult)).subarray(0, 8).toString(), 'ABL_ERS3');
+  assert.equal((await readFile(wrongBoundary)).subarray(0, 8).toString(), 'ABL_PKO3');
   const stale = await run('stale', ['--from', wrongBoundary, '--result', staleResult, '--authorize-inference']);
   assert.equal(stale.status, 'failed'); assert.equal(stale.modelRequests, 0);
+  assert.equal(stale.errorCode, 'WORLD_KERNEL_REJECTED');
+  assert.equal(stale.diagnostic, 'InvalidResult');
 
   config.task.intent = 'ask'; await save();
   const intent = await run('intent'); assert.equal(intent.status, 'awaiting-human');
-  const choiceFile = join(root, 'intent.ers2'), intentState = join(root, 'intent', intent.checkpoint);
+  const choiceFile = join(root, 'intent.ers3'), intentState = join(root, 'intent', intent.checkpoint);
   for (const [choice, tag] of [['abort', 13], ['close', 14]]) {
-    const reply = join(root, `intent-${choice}.ers2`);
+    const reply = join(root, `intent-${choice}.ers3`);
     await inquiryCli(['answer', '--config', path, '--from', intentState, '--choice', choice, '--out', reply]);
     const stopped = await run(`intent-${choice}`, ['--from', intentState, '--result', reply]);
     assert.equal(stopped.status, 'completed'); assert.equal(stopped.resultTag, tag);
@@ -97,22 +101,22 @@ test('opt-in dispatcher preserves checkpoints, human authority and explicit allo
   assert.equal(approval.status, 'awaiting-human', describe(approval)); assert.equal(approval.approvals, 1);
   assert.equal(await readFile(join(root, 'approval/replacement.mjs'), 'utf8'), monotonic);
   assert.equal(await readFile(join(target, 'session.mjs'), 'utf8'), reset);
-  const approvalState = join(root, 'approval', approval.checkpoint), grant = join(root, 'approval.ers2');
+  const approvalState = join(root, 'approval', approval.checkpoint), grant = join(root, 'approval.ers3');
   const retainedApproval = await readFile(approvalState);
   for (const choice of ['abort', 'close']) {
-    const reply = join(root, `approval-${choice}.ers2`);
+    const reply = join(root, `approval-${choice}.ers3`);
     await assert.rejects(inquiryCli(['answer', '--config', path, '--from', approvalState,
       '--choice', choice, '--out', reply]), /approval accepts approve or decline/);
     await assert.rejects(access(reply));
   }
-  const declinedReply = join(root, 'declined.ers2');
+  const declinedReply = join(root, 'declined.ers3');
   await inquiryCli(['answer', '--config', path, '--from', approvalState, '--choice', 'decline', '--out', declinedReply]);
   const declined = await run('declined', ['--from', approvalState, '--result', declinedReply]);
   assert.equal(declined.resultTag, 3); assert.equal(declined.writes, 0);
   const cancelled = await executeCli(['cancel', '--world-runtime', runtime, '--image', join(images, 'repair.bpi3'),
-    '--outcome', approvalState, '--reason', 'operator stopped at approval', '--out', join(root, 'cancelled-approval.pko2')],
+    '--outcome', approvalState, '--reason', 'operator stopped at approval', '--out', join(root, 'cancelled-approval.pko3')],
     { stdout: { write() {} } });
-  assert.equal(cancelled.kind, 'Cancelled'); assert.equal(cancelled.reason, 'operator stopped at approval');
+  assert.equal(cancelled.kind, 'cancelled'); assert.deepEqual(cancelled.reason, { kind: 'text', value: 'operator stopped at approval' });
   assert.deepEqual(await readFile(approvalState), retainedApproval);
   assert.equal(await readFile(join(target, 'session.mjs'), 'utf8'), reset);
   await inquiryCli(['answer', '--config', path, '--from', approvalState, '--choice', 'approve', '--out', grant]);

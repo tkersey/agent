@@ -51,9 +51,7 @@ const memorySchema = { root: 0, types: [
 const original = "Active policy:\nA customer may request a refund.\n\n" +
   "Archive:\nA customer filed a request in 2021.\n";
 const convergent = "Active policy:\nA customer may request a refund.\n\nArchive:\nNo prior requests.\n";
-const fresh = async input => (await world.admitProcessKernel(kernelBytes, {
-  expectedSha256: runtime.identity.kernelSha256,
-})).run(input);
+const fresh = async input => { const kernel = await world.Kernel.create({ bytes: kernelBytes, expectedSha256: runtime.identity.kernelSha256 }); kernel.setLimits({ input: 256 << 20, working: 256 << 20, output: 256 << 20 }); const bytes = kernel.invoke(world.encodeInput(input)); return { ...world.decodeOutcome(bytes), bytes }; };
 
 // Independent fixture oracle: host strings determine expected bytes only.
 // The executing application receives these as untrusted model proposals.
@@ -70,15 +68,15 @@ function oracle(content, old, replacement, scope) {
   return changed;
 }
 
-function encodeReply(request, reply) {
+async function encodeReply(request, reply) {
   const bytes = reply instanceof Uint8Array ? reply : encodeValue(decodeSchema(request.resumeSchema), reply);
   world.validateValue(request.resumeSchema, bytes);
-  return world.encodeResult(request.bytes, bytes);
+  return (await world.encodeResult(request.bytes, bytes));
 }
 
 async function transferred(input, expected, name, independent, statistics) {
-  const pki = world.encodeInput({ ...input, mode: "run" });
-  const path = join(scratch, "transfer.pki2");
+  const pki = world.encodeInput(input);
+  const path = join(scratch, "transfer.pki3");
   await writeFile(path, pki);
   if (process.env.AGENT4_NATIVE) {
     const result = native(resolve(process.env.AGENT4_NATIVE), path, true);
@@ -116,23 +114,23 @@ async function scenario(name, options = {}) {
   let currentContent = before;
   let outcome = await fresh({ image, initialArgs: encodeValue(initialSchema, task) });
   try {
-    while (outcome.kind === "Requested") {
+    while (outcome.kind === "requested") {
       const restored = await fresh({ image, state: Uint8Array.from(outcome.state) });
       assert.deepEqual(restored.bytes, outcome.bytes, `${name}: lossless fresh restore`);
-      const decoded = world.decodeRequest(outcome.request);
+      const decoded = (await world.decodeRequest(outcome.request));
       const request = { ...decoded, bytes: Uint8Array.from(outcome.request) };
       const identity = request.semanticIdentity;
       const payload = decodeValue(decodeSchema(request.payloadSchema), request.payload);
       trace.push(identity); stateBytes.push(outcome.state.length);
       if (options.cancelAt === identity && !cancelled) {
         cancelled = true;
-        const oldCleanupResult = identity === effects.turnCleanup ? encodeReply(request, null) : null;
-        const input = { image, state: outcome.state, cancel: "fixture-cancel" };
+        const oldCleanupResult = identity === effects.turnCleanup ? (await encodeReply(request, null)) : null;
+        const input = { image, state: outcome.state, control: "cancel_text", value: "fixture-cancel" };
         outcome = await transferred(input, await fresh(input), `${name}: cancel`, !!options.transfer,
           statistics);
         if (oldCleanupResult) {
-          assert.equal(outcome.kind, "Requested");
-          await assert.rejects(fresh({ image, state: outcome.state, result: oldCleanupResult }), /InvalidResult/);
+          assert.equal(outcome.kind, "requested");
+          await assert.rejects(fresh({ image, state: outcome.state, control: "reply", value: oldCleanupResult }), error => error.details?.diagnostic === "InvalidResult");
         }
         continue;
       }
@@ -180,7 +178,7 @@ async function scenario(name, options = {}) {
         if (options.staleAt === "revalidation" && modelCalls === 2)
           await writeFile(filename, "External edit while awaiting revalidation.\n");
         if (options.transfer) {
-          const snapshot = join(scratch, "model.pst2");
+          const snapshot = join(scratch, "model.pst3");
           await writeFile(snapshot, outcome.state);
           const inspector = resolve(process.env.AGENT4_MULTI_INSPECTOR ?? join(root, "zig-out/bin/agent4-multi"));
           const graph = JSON.parse(execFileSync(inspector, ["inspect-state", snapshot], { encoding: "utf8" }));
@@ -218,20 +216,20 @@ async function scenario(name, options = {}) {
         if (options.staleAt === "question") await writeFile(filename, "External edit while awaiting scope.\n");
         if (oldChoiceResult) {
           await assert.rejects(async () => {
-            const replay = await fresh({ image, state: outcome.state, result: oldChoiceResult });
+            const replay = await fresh({ image, state: outcome.state, control: "reply", value: oldChoiceResult });
             console.error(JSON.stringify({ unexpectedReplyAdmission: name, questionCount,
               sameRequestBytes: Buffer.from(request.bytes).equals(oldChoiceRequest),
-              outcome: replay.kind, nextEffect: replay.kind === "Requested"
-                ? world.decodeRequest(replay.request).semanticIdentity : null }));
+              outcome: replay.kind, nextEffect: replay.kind === "requested"
+                ? (await world.decodeRequest(replay.request)).semanticIdentity : null }));
             return replay;
-          }, /InvalidResult/);
+          }, error => error.details?.diagnostic === "InvalidResult");
         }
-        assert.throws(() => world.encodeResult(request.bytes, Uint8Array.of(255)),
+        await assert.rejects(world.encodeResult(request.bytes, Uint8Array.of(255)),
           /Truncated|InvalidValue|InvalidTag/);
         answer = options.reply === "abort" ? v(1) : options.reply === "close" ? v(2)
           : v(0, options.reply === "other" ? v(1) : options.reply === "unsure" ? v(2)
             : v(0, options.reply === "unoffered" ? 99 : options.choice ?? 1));
-        oldChoiceResult = encodeReply(request, answer);
+        oldChoiceResult = (await encodeReply(request, answer));
         oldChoiceRequest = Buffer.from(request.bytes);
       } else if (identity === effects.issue) {
         answer = ++issue;
@@ -268,7 +266,7 @@ async function scenario(name, options = {}) {
       } else if (identity === effects.message) {
         messages.push(payload[3]);
         if (turns > 2) {
-          const snapshot = join(scratch, "history.pst2");
+          const snapshot = join(scratch, "history.pst3");
           await writeFile(snapshot, outcome.state);
           const inspector = resolve(process.env.AGENT4_MULTI_INSPECTOR ?? join(root, "zig-out/bin/agent4-multi"));
           const graph = JSON.parse(execFileSync(inspector, ["inspect-state", snapshot], { encoding: "utf8" }));
@@ -284,17 +282,17 @@ async function scenario(name, options = {}) {
           answer = v(0, task);
         } else answer = v(1);
       } else assert.fail(`${name}: unexpected request ${identity}`);
-      const result = encodeReply(request, answer);
-      const input = { image, state: Uint8Array.from(outcome.state), result };
+      const result = (await encodeReply(request, answer));
+      const input = { image, state: Uint8Array.from(outcome.state), control: "reply", value: result };
       const next = await fresh(input);
       const independent = !!options.transfer && [effects.model, effects.question, effects.approval,
         effects.turnCleanup, effects.sessionCleanup].includes(identity);
       outcome = await transferred(input, next, `${name}: ${identity}`, independent, statistics);
       if (independent) transfers.push(identity);
     }
-    assert.equal(outcome.kind, cancelled ? "Cancelled" : "Completed", name);
+    assert.equal(outcome.kind, cancelled ? "cancelled" : "completed", name);
     if (cancelled) {
-      assert.equal(outcome.reason, "fixture-cancel");
+      assert.deepEqual(outcome.reason, { kind: "text", value: "fixture-cancel" });
       assert.deepEqual(outcome.cleanupFailures, []);
     }
     assert.equal(turnCleanup, turns, `${name}: turn cleanup exactly once`);
@@ -325,7 +323,7 @@ async function scenario(name, options = {}) {
     }
     for (const graph of historyGraphs.slice(2))
       assert.deepEqual(graph, historyGraphs[1], "repeated turns retain bounded reachable state");
-    const memory = outcome.kind === "Completed" ? decodeValue(memorySchema, outcome.value) : null;
+    const memory = outcome.kind === "completed" ? decodeValue(memorySchema, outcome.value) : null;
     if (memory) assert.equal(memory[0], BigInt(turns + 1));
     return { name, modelCalls, clarificationExchanges: questionCount, approvalExchanges: approvalCount,
       replacements, modelRequestBytes, modelResponseBytes, providerBytes,

@@ -151,6 +151,9 @@ def invoke(kernel: bytes, request: bytes) -> bytes:
         raise AdmissionError("expected World ABI version 3")
     if call("initialize", 1) != 0:
         raise AdmissionError("World initialization failed")
+    ceiling = min(0xFFFFFFFF, memory.type(store).limits.max * 65536)
+    if call("set_limits", 1, ceiling, ceiling, ceiling) != 0:
+        raise AdmissionError("World capacity configuration failed")
     prepared = call("prepare_input", 1, len(request))
     if prepared == 2:
         rejected("preparation")

@@ -64,18 +64,18 @@
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "4ccc9757b4499406aec134a0570b27bd4e448cda",
-    "gitTree": "8346c66f2022fd304c238e88f3a13685f2031de3",
+    "commit": "58eac5241d30c88a9f07ddd33a772ac43b399e7c",
+    "gitTree": "841dd6745fdfe4ba43a0abdabe916b7d9fc66891",
     "version": "6.0.0-dev.0",
     "source": {
-      "inventorySha256": "00bcbc1dbd270ecce5b8c4abd7d9c4bbabbe0603dde538dfb175ad40d1eaf703",
+      "inventorySha256": "b224caa0c8483389ec3a077de00c09d0fa80d940b62afb7fb0970b06699234e8",
       "entries": 504,
-      "bytes": 38758027
+      "bytes": 38760544
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/4ccc9757b4499406aec134a0570b27bd4e448cda.tar.gz",
-      "sha256": "3b3eff690cb3532fa39b5447122b1cd32cfc02f15a6dc49cc356da5f07206993",
-      "bytes": 815087
+      "url": "https://github.com/tkersey/world/archive/58eac5241d30c88a9f07ddd33a772ac43b399e7c.tar.gz",
+      "sha256": "07a5c71e1bda8a7838105633213cf12b2fa5794a8b0bb7b76d47e289c6d62a36",
+      "bytes": 815495
     },
     "authentication": "Downloaded archive tree recomputed and matched to GitHub commit API; complete source and runtime inventories bound",
     "runtime": {
@@ -201,17 +201,17 @@
           "path": "world-kernel.wasm",
           "kind": "file",
           "mode": 493,
-          "bytes": 431097,
-          "sha256": "528b95f4271c466f918dfb930ccfa3833a9fa6d48a5f6ad70f3d8bfa19f272df"
+          "bytes": 430525,
+          "sha256": "6d74b58b97a291622cabcbbb5729b60d788997b8d96485b7008d973dfd91b2cb"
         }
       ],
-      "inventorySha256": "6f06d48cb9218e4db95c31d2ac15e8bf69c74ce99a3873c02910649002babc01",
+      "inventorySha256": "7be399462eebb6fbc92576a88e4b563991874f354c9d553fc5d352f848cf30f1",
       "entries": 19,
-      "bytes": 485434,
+      "bytes": 484862,
       "kernel": {
         "path": "world-kernel.wasm",
-        "sha256": "528b95f4271c466f918dfb930ccfa3833a9fa6d48a5f6ad70f3d8bfa19f272df",
-        "bytes": 431097
+        "sha256": "6d74b58b97a291622cabcbbb5729b60d788997b8d96485b7008d973dfd91b2cb",
+        "bytes": 430525
       },
       "abi": 3,
       "exports": [

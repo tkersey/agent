@@ -43,7 +43,7 @@ test("all source-override module exports retain authentication in cached externa
   const source = join(directory, "synthetic-source");
   mkdirSync(join(source, "src/v2/data"), { recursive: true });
   writeFileSync(join(source, "src/v2/root.zig"),
-    'pub const data_v2 = @import("boundary_data_v2");\npub const computation = struct {};\n');
+    'pub const data_v2 = @import("boundary_data_v2");\npub const computation = struct { pub fn constructObserved() void {} };\n');
   writeFileSync(join(source, "src/v2/data/root.zig"), 'pub const program = struct {};\n');
   const lockPath = join(agent, "conformance/agent4/dependencies.lock.json");
   const lock = JSON.parse(readFileSync(lockPath));

@@ -32,10 +32,12 @@ const v = (tag, value = null) => ({ tag, value });
 const summaries = [];
 
 async function invoke(input, independent) {
-  const fresh = await world.admitProcessKernel(kernel, { expectedSha256: runtime.kernelSha256 });
-  const observed = await fresh.run(input);
-  const filename = join(scratch, "input.pki2");
-  await writeFile(filename, world.encodeInput({ ...input, mode: "run" }));
+  const fresh = await world.Kernel.create({ bytes: kernel, expectedSha256: runtime.kernelSha256 });
+    fresh.setLimits({ input: 256 << 20, working: 256 << 20, output: 256 << 20 });
+  const bytes = fresh.invoke(world.encodeInput(input));
+  const observed = { ...world.decodeOutcome(bytes), bytes };
+  const filename = join(scratch, "input.pki3");
+  await writeFile(filename, world.encodeInput(input));
   const n = native(resolve(nativePath), filename);
   assert.equal(n.status, 0, n.stderr.toString());
   assert.deepEqual(n.stdout, Buffer.from(observed.bytes), "native/Node equality");
@@ -53,10 +55,10 @@ async function scenario(name, options, expected) {
       options.coalesce ?? true, options.policy ?? 0n]) }, options.independent);
   let acquisitions = 0, models = 0, maximumState = 0;
   const modelPayloads = [], observationIds = [], inputs = [], graphs = [];
-  while (outcome.kind === "Requested") {
+  while (outcome.kind === "requested") {
     assert(acquisitions + models < 40, `${name}: unexpected nontermination`);
     maximumState = Math.max(maximumState, outcome.state.length);
-    const request = world.decodeRequest(outcome.request);
+    const request = (await world.decodeRequest(outcome.request));
     const payload = decodeValue(decodeSchema(request.payloadSchema), request.payload);
     let reply;
     if (request.semanticIdentity === "agent.probe.broker.experiment.v1") {
@@ -79,18 +81,18 @@ async function scenario(name, options, expected) {
       reply = 1n;
     }
     if (options.inspect && graphs.length < 2) {
-      const snapshot = join(scratch, "state.pst2");
+      const snapshot = join(scratch, "state.pst3");
       await writeFile(snapshot, outcome.state);
       const graph = JSON.parse(execFileSync(resolve(inspectorPath), ["inspect-state", snapshot]));
       graphs.push(graph);
       assert.equal(graph.packages, graphs.length === 1 ? ds.length : ds.length - 1);
     }
-    const encoded = world.encodeResult(outcome.request,
-      encodeValue(decodeSchema(request.resumeSchema), reply));
-    outcome = await invoke({ image: Uint8Array.from(image), state: outcome.state, result: encoded },
+    const encoded = (await world.encodeResult(outcome.request,
+      encodeValue(decodeSchema(request.resumeSchema), reply)));
+    outcome = await invoke({ image: Uint8Array.from(image), state: outcome.state, control: "reply", value: encoded },
       options.independent);
   }
-  assert.equal(outcome.kind, "Completed", name);
+  assert.equal(outcome.kind, "completed", name);
   const [status, findings, records, spent, reused, recipients] = decodeValue(resultSchema, outcome.value);
   assert.equal(status, expected.status ?? 0, `${name}: status`);
   assert.deepEqual(findings, expected.findings, `${name}: findings`);

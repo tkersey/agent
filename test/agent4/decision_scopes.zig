@@ -1,7 +1,7 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const agent = @import("agent");
-const world = @import("world").process_v2;
+const world = @import("world");
 const source = boundary.computation;
 const data = boundary.data_v2;
 const Id = source.Id;
@@ -68,15 +68,17 @@ fn decisionModule(b: *source.Builder, responder: Responder) !source.Module {
 }
 
 fn replyBytes(a: std.mem.Allocator, request_bytes: []const u8, value: []const u8) ![]u8 {
-    const request = try data.protocol.decode(data.protocol.Request, a, request_bytes);
-    const result = data.protocol.Result{
+    var request_owner_0 = try data.invocation.decode(data.invocation.Request, a, request_bytes);
+    defer request_owner_0.deinit();
+    const request = request_owner_0.value;
+    const result = data.invocation.Result{
         .request_identity = request.request_identity,
-        .resume_schema_digest = data.wire.digest(request.resume_schema),
+
         .value = value,
     };
-    const bytes = try a.alloc(u8, try data.protocol.encodedLength(data.protocol.Result, result));
+    const bytes = try a.alloc(u8, try data.invocation.encodedLength(data.invocation.Result, result));
     errdefer a.free(bytes);
-    _ = try data.protocol.encode(data.protocol.Result, a, result, bytes);
+    _ = try data.invocation.encode(data.invocation.Result, a, result, bytes);
     return bytes;
 }
 
@@ -84,8 +86,11 @@ fn execute(module: source.Module, prescribed: []const u8, expected: []const u8) 
     const a = std.testing.allocator;
     var compiled = try boundary.source.construct(a, module);
     defer compiled.deinit();
-    var outcome = try world.run(a, .{
-        .program = .{ .records = compiled.program },
+    const invocation_image_0 = try a.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+    defer a.free(invocation_image_0);
+    _ = try boundary.data_v2.program_image.encode(a, compiled.program, invocation_image_0);
+    var outcome = try world.invocation.invoke(a, .{
+        .image = invocation_image_0,
         .instance = .{ .initial_args = &.{} },
     });
     defer outcome.deinit();
@@ -95,10 +100,13 @@ fn execute(module: source.Module, prescribed: []const u8, expected: []const u8) 
         try std.testing.expect(requests <= 3); // finite test expectation, never a library budget
         const reply = try replyBytes(a, outcome.record.requested.request, prescribed);
         defer a.free(reply);
-        var next = try world.run(a, .{
-            .program = .{ .records = compiled.program },
-            .instance = .{ .snapshot = outcome.record.requested.state },
-            .control = .{ .continue_value = reply },
+        const invocation_image_1 = try a.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+        defer a.free(invocation_image_1);
+        _ = try boundary.data_v2.program_image.encode(a, compiled.program, invocation_image_1);
+        var next = try world.invocation.invoke(a, .{
+            .image = invocation_image_1,
+            .instance = .{ .state = outcome.record.requested.state.? },
+            .control = .{ .reply = reply },
         });
         outcome.deinit();
         outcome = next;

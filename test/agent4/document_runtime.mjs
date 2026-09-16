@@ -41,9 +41,7 @@ const effects = Object.freeze({
   message: "agent.interaction.exchange.v1.document.message",
 });
 const initial = encodeValue(scalar, 7);
-const fresh = async input => (await world.admitProcessKernel(kernelBytes, {
-  expectedSha256: runtime.identity.kernelSha256,
-})).run(input);
+const fresh = async input => { const kernel = await world.Kernel.create({ bytes: kernelBytes, expectedSha256: runtime.identity.kernelSha256 }); kernel.setLimits({ input: 256 << 20, working: 256 << 20, output: 256 << 20 }); const bytes = kernel.invoke(world.encodeInput(input)); return { ...world.decodeOutcome(bytes), bytes }; };
 
 function interaction(payload, purpose) {
   assert(Array.isArray(payload) && payload.length === 4);
@@ -132,7 +130,7 @@ function approvalReplies(replacement, stale = false) {
   let firstChallenge;
   let oldResult;
   return [
-    ({ payload, request }) => {
+    async ({ payload, request }) => {
       firstChallenge = structuredClone(interaction(payload, "approval"));
       assert.equal(firstChallenge[0], 100n);
       assert.equal(firstChallenge[1][2], "Revision: concise.\n");
@@ -140,8 +138,8 @@ function approvalReplies(replacement, stale = false) {
       const changed = structuredClone(firstChallenge[1]);
       changed[2] = replacement;
       const reply = value([firstChallenge, 7, variant(2, changed)]);
-      oldResult = world.encodeResult(request.bytes,
-        encodeValue(decodeSchema(request.resumeSchema), reply));
+      oldResult = (await world.encodeResult(request.bytes,
+        encodeValue(decodeSchema(request.resumeSchema), reply)));
       return reply;
     },
     async ({ payload, state }) => {
@@ -150,8 +148,8 @@ function approvalReplies(replacement, stale = false) {
       assert.equal(current[1][2], replacement);
       assert.notDeepEqual(current, firstChallenge, "amendment requires a fresh challenge");
       const saved = Uint8Array.from(state);
-      await assert.rejects(fresh({ image, state, result: oldResult }), /InvalidResult/);
-      assert.deepEqual(state, saved, "a stale bound ERS2 leaves the current State unchanged");
+      await assert.rejects(fresh({ image, state, control: "reply", value: oldResult }), error => error.details?.diagnostic === "InvalidResult");
+      assert.deepEqual(state, saved, "a stale bound ERS3 leaves the current State unchanged");
       return value([stale ? firstChallenge : current, 7, variant(0)]);
     },
   ];
@@ -164,7 +162,7 @@ async function execute(name, queues, expectedResult) {
   let outcome = await runtime.start(Uint8Array.from(image), Uint8Array.from(initial));
   const initialRaw = await fresh({ image, initialArgs: initial });
   assert.deepEqual(outcome.bytes, initialRaw.bytes, "raw World starts the same compiled image");
-  while (outcome.kind === "Requested") {
+  while (outcome.kind === "requested") {
     const savedBytes = Uint8Array.from(outcome.bytes);
     const savedState = Uint8Array.from(outcome.state);
     const savedRequest = Uint8Array.from(outcome.request);
@@ -172,7 +170,7 @@ async function execute(name, queues, expectedResult) {
     const restored = await fresh({ image: Uint8Array.from(image), state: detached.state });
     assert.deepEqual(restored.bytes, savedBytes,
       "a fresh instance reconstructs a pending request without reissuing its I/O");
-    const decoded = world.decodeRequest(detached.request);
+    const decoded = (await world.decodeRequest(detached.request));
     const request = Object.freeze({ ...decoded, bytes: detached.request });
     const payload = decodeValue(decodeSchema(request.payloadSchema), request.payload);
     const replies = pending.get(request.semanticIdentity);
@@ -186,21 +184,21 @@ async function execute(name, queues, expectedResult) {
     const reply = answer instanceof Uint8Array ? answer
       : encodeValue(decodeSchema(request.resumeSchema), answer);
     world.validateValue(request.resumeSchema, reply);
-    const result = world.encodeResult(detached.request, reply);
+    const result = (await world.encodeResult(detached.request, reply));
     const bridge = await loadWorldRuntime({ runtimePath });
     const bridged = await bridge.resume(Uint8Array.from(image), detached.state,
       detached.request, reply);
     const raw = await fresh({ image: Uint8Array.from(image),
-      state: Uint8Array.from(detached.state), result: Uint8Array.from(result) });
+      state: Uint8Array.from(detached.state), control: "reply", value: Uint8Array.from(result) });
     assert.deepEqual(bridged.bytes, raw.bytes,
-      "raw World and the optional bridge agree for the same image, State, and ERS2");
+      "raw World and the optional bridge agree for the same image, State, and ERS3");
     assert.deepEqual(outcome.bytes, savedBytes);
     assert.deepEqual(outcome.state, savedState);
     assert.deepEqual(outcome.request, savedRequest);
     assert.deepEqual(detached.state, savedState, "resumption never mutates its input State");
     outcome = raw;
   }
-  assert.equal(outcome.kind, "Completed", `${name} did not reach its authored root result`);
+  assert.equal(outcome.kind, "completed", `${name} did not reach its authored root result`);
   assert.deepEqual(decodeValue(memory, outcome.value), expectedResult);
   for (const [identity, remaining] of pending)
     assert.equal(remaining.length, 0, `${name}: prescribed ${identity} inputs were not consumed`);

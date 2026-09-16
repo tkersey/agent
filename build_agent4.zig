@@ -50,7 +50,7 @@ pub fn build(b: *std.Build) void {
     const measure_economy = b.option(bool, "measure-economy", "Collect timings on an operator-confirmed idle host") orelse false;
     const world_source = b.option([]const u8, "world-source", "Immutable World source for native agreement") orelse b.pathFromRoot(".agent4/inputs/world");
     const world_archive = b.option([]const u8, "world-archive", "Authenticated immutable World source archive") orelse
-        b.pathJoin(&.{ std.fs.path.dirname(world_source) orelse ".", "world-4ccc975.tar.gz" });
+        b.pathJoin(&.{ std.fs.path.dirname(world_source) orelse ".", "world-58eac52.tar.gz" });
     const data = if (source) |root| b.createModule(.{
         .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ root, "src/v2/data/root.zig" }) },
         .target = target,
@@ -214,6 +214,8 @@ pub fn build(b: *std.Build) void {
         runtime_guard.has_side_effects = true;
         _ = runtime_guard.captureStdOut(.{});
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
+        const native_checks = b.step("check-native", "Check native Agent semantics against the selected World");
+        runtime_work.dependOn(native_checks);
         // The portable kernel/custody checks do not require this external OS
         // profile. Explicit repair-application checks still require execution.
         const inquiry_host = b.graph.host.result.os.tag == .macos;
@@ -297,7 +299,7 @@ pub fn build(b: *std.Build) void {
             native.addImport("equality", g.helper("value_equality"));
             if (std.mem.eql(u8, name, "terminology"))
                 native.addImport("document", g.module("test/consumers/document/consequence.zig"));
-            native_graph.testModule(runtime_work, native);
+            native_graph.testModule(native_checks, native);
         }
         const run = b.addSystemCommand(&.{ "node", "tools/agent4/check.mjs", "integration", "--world-runtime", runtime_path, "--fixtures", b.getInstallPath(.prefix, "agent4"), "--world-source", world_source });
         run.addArgs(&.{ "--world-archive", world_archive });

@@ -28,8 +28,11 @@ const boundaries = [], epochs = [], oldQuestions = [];
 let turn = 1, models = 0, experiments = 0, cleanups = 0;
 
 async function invoke(input) {
-  const output = await (await world.admitProcessKernel(kernel, { expectedSha256: runtime.kernelSha256 })).run(input);
-  const file = join(scratch, "input.pki2"); await writeFile(file, world.encodeInput({ ...input, mode: "run" }));
+  const machine = await world.Kernel.create({ bytes: kernel, expectedSha256: runtime.kernelSha256 });
+    machine.setLimits({ input: 256 << 20, working: 256 << 20, output: 256 << 20 });
+    const bytes = machine.invoke(world.encodeInput(input));
+    const output = { ...world.decodeOutcome(bytes), bytes };
+  const file = join(scratch, "input.pki3"); await writeFile(file, world.encodeInput(input));
   const n = native(resolve(nativePath), file, true); assert.equal(n.status, 0, n.stderr.toString());
   assert.deepEqual(n.stdout, Buffer.from(output.bytes));
   const measured = JSON.parse(n.stderr);
@@ -41,9 +44,9 @@ async function invoke(input) {
 
 try {
   let outcome = await invoke({ image, initialArgs: encodeValue(schema, task) });
-  while (outcome.kind === "Requested") {
+  while (outcome.kind === "requested") {
     assert(turn <= 4);
-    const request = world.decodeRequest(outcome.request);
+    const request = (await world.decodeRequest(outcome.request));
     const payload = decodeValue(decodeSchema(request.payloadSchema), request.payload);
     let reply;
     if (request.semanticIdentity === "agent.interaction.exchange.v1.inquiry.repair.intent") {
@@ -52,18 +55,17 @@ try {
       assert.equal(q[0][0][7], BigInt(turn));
       if (oldQuestions.length) {
         const old = oldQuestions[0];
-        await assert.rejects((await world.admitProcessKernel(kernel,
-          { expectedSha256: runtime.kernelSha256 })).run({ image, state: outcome.state, result: old.encoded }), /InvalidResult/);
+        await assert.rejects(invoke({ image, state: outcome.state, control: "reply", value: old.encoded }), error => error.details?.diagnostic === "InvalidResult");
         const mismatched = await invoke({ image, state: outcome.state,
-          result: world.encodeResult(outcome.request,
-            encodeValue(decodeSchema(request.resumeSchema), v(0, [old.question, v(0, 1)]))) });
-        assert.equal(mismatched.kind, "Requested");
-        const next = world.decodeRequest(mismatched.request);
+          control: "reply", value: (await world.encodeResult(outcome.request,
+            encodeValue(decodeSchema(request.resumeSchema), v(0, [old.question, v(0, 1)])))) });
+        assert.equal(mismatched.kind, "requested");
+        const next = (await world.decodeRequest(mismatched.request));
         assert.equal(next.semanticIdentity, "agent.interaction.exchange.v1.inquiry.repair.next-task");
         assert.equal(decodeValue(decodeSchema(next.payloadSchema), next.payload)[3].tag, 15);
       }
       reply = encodeValue(decodeSchema(request.resumeSchema), v(0, [q, v(0, 1)]));
-      oldQuestions.push({ question: structuredClone(q), encoded: world.encodeResult(outcome.request, reply) });
+      oldQuestions.push({ question: structuredClone(q), encoded: (await world.encodeResult(outcome.request, reply)) });
     } else if (request.semanticIdentity === "agent.model.invoke.v3") {
       models++;
       const inv = decodeModelInvocation(request.payload);
@@ -90,7 +92,7 @@ try {
     } else {
       assert.equal(request.semanticIdentity, "agent.interaction.exchange.v1.inquiry.repair.next-task");
       assert.equal(payload[3].tag, 1);
-      const file = join(scratch, "boundary.pst2"); await writeFile(file, outcome.state);
+      const file = join(scratch, "boundary.pst3"); await writeFile(file, outcome.state);
       const graph = JSON.parse(execFileSync(resolve(inspectorPath), ["inspect-state", file]));
       for (const key of ["packages", "multiTemplates", "branches", "resources", "cells", "obligations"])
         assert.equal(graph[key], 0, `turn ${turn}: ${key}`);
@@ -98,9 +100,9 @@ try {
       reply = encodeValue(decodeSchema(request.resumeSchema), turn === 4 ? v(1) : v(0, task));
       turn++;
     }
-    outcome = await invoke({ image, state: outcome.state, result: world.encodeResult(outcome.request, reply) });
+    outcome = await invoke({ image, state: outcome.state, control: "reply", value: (await world.encodeResult(outcome.request, reply)) });
   }
-  assert.equal(outcome.kind, "Completed"); assert.equal(Buffer.from(outcome.value).readBigUInt64LE(), 4n);
+  assert.equal(outcome.kind, "completed"); assert.equal(Buffer.from(outcome.value).readBigUInt64LE(), 4n);
   assert.equal(models, 28); assert.equal(experiments, 4); assert.equal(cleanups, 8);
   assert.deepEqual(epochs, [1, 2, 3, 4]);
   assert.equal(statistics.multiTemplates, 8); assert.equal(statistics.branchActivations, 16);

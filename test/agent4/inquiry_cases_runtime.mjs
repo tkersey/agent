@@ -105,6 +105,12 @@ async function scenario(name, options, expected) {
         assert(match);
         const [, id, version, observation] = match.map(Number);
         assert.equal(invocation.messages[2].content, source);
+        assert.equal(invocation.tools.some(tool => tool.name === "hypothesis"), id === 0);
+        assert.equal(invocation.messages[0].content.includes("hypothesis calls"), id === 0,
+          "phase instruction must agree with the emitted tools");
+        assert.equal(invocation.selection.maximumCalls, id === 0 ? options.count ?? 1 : 25);
+        if (id === 0) assert(invocation.messages[0].content.includes(`Return 1..${options.count ?? 1} hypothesis calls`));
+        else assert(invocation.messages[0].content.includes("Return a prediction"));
         const context = { id, version, observation, summary: invocation.messages[5].content, invocation, models };
         if (observation && ["prediction", "repair"].includes(pendingPlans.get(id))) {
           const occurrence = `${id}:${observation}`;

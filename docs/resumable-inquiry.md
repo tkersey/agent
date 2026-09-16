@@ -217,6 +217,11 @@ and interpretation admit batches of flat typed operations into a bounded trace.
 The image checks operation references, prediction selectors, requirement IDs,
 subject scope and the accepted contract before requesting an experiment.
 The model supplies complete candidate source, with no compiled repair catalog.
+The phase flag selects both the instruction and offered tools. Initial inquiry
+asks for 1 through the configured number of hypotheses and applies that same
+call-count limit. Investigation and ReAct requests ask only for the available
+prediction/trace, repair, revision or stop operations; they do not request an
+unoffered hypothesis call.
 
 The scripted execution retains A, B and C, executes A/B's common trace once,
 and compares their different predictions in authored code. A requests a
@@ -238,7 +243,7 @@ zig build check-inquiry-application -Doptimize=ReleaseSafe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime"
 ```
 
-The current positive witness uses a 44,222-byte BPI2 image, reaches a maximum
+The current positive witness uses a 44,338-byte BPI2 image, reaches a maximum
 48,866-byte pending State, makes 10 model requests and 4 logical experiment
 requests (34 isolated executions), retires/cleans all three investigations,
 then approves and delivers the exact replacement. Every transition is compared
@@ -266,10 +271,10 @@ and cleans all of them after an honest unresolved result:
 
 | Investigations | Model requests | Experiments | Maximum pending State bytes |
 | ---: | ---: | ---: | ---: |
-| 1 | 3 | 1 | 28,068 |
-| 2 | 5 | 1 | 28,707 |
-| 4 | 9 | 1 | 29,828 |
-| 8 | 17 | 1 | 31,756 |
+| 1 | 3 | 1 | 28,012 |
+| 2 | 5 | 1 | 28,651 |
+| 4 | 9 | 1 | 29,772 |
+| 8 | 17 | 1 | 31,700 |
 
 These are bounded fixture observations, not a constant-space or latency claim.
 
@@ -296,7 +301,7 @@ provider IDs cannot reset it. Old outer replies and re-encoded stale inner
 answers reject. Across 28 model requests, four experiments, eight cleanups,
 eight templates and 16 activations, every completed-task boundary retains exactly
 170 State bytes, two nodes and one blob, with no packages, templates, branches,
-resources, cells or obligations. The complete repeated image is 44,568 bytes.
+resources, cells or obligations. The complete repeated image is 44,684 bytes.
 
 The application also builds as an independent compiler-only consumer:
 
@@ -332,9 +337,9 @@ same application bytes:
 
 | Image | Bytes | Schemas | Functions | Blocks | Constants | Constant bytes |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Repair | 44,222 | 183 | 109 | 1,126 | 158 | 9,237 |
-| Repeated use | 44,568 | 186 | 112 | 1,138 | 159 | 9,247 |
-| ReAct | 49,133 | 145 | 67 | 800 | 146 | 8,866 |
+| Repair | 44,338 | 183 | 109 | 1,126 | 160 | 9,238 |
+| Repeated use | 44,684 | 186 | 112 | 1,138 | 161 | 9,248 |
+| ReAct | 49,249 | 145 | 67 | 800 | 148 | 8,867 |
 
 The inquiry images contain two handler definitions; ReAct contains none.
 Complete compiler phase observations live
@@ -375,14 +380,14 @@ Wasmtime instances, continuing from the independent embedding's returned bytes.
 
 | Case | Strategy | Model calls | Logical / physical experiments | Maximum State bytes | Peak allocated payload bytes |
 | --- | --- | ---: | ---: | ---: | ---: |
-| reset | Inquiry | 11 | 4 / 34 | 48,999 | 1,880,945 |
-| reset | ReAct | 6 | 4 / 34 | 67,681 | 2,152,296 |
-| rebinding | Inquiry | 11 | 4 / 34 | 48,109 | 1,877,435 |
-| rebinding | ReAct | 6 | 4 / 34 | 67,110 | 2,149,877 |
-| already-correct | Inquiry | 7 | 2 / 17 | 37,017 | 1,835,559 |
-| already-correct | ReAct | 2 | 2 / 17 | 43,981 | 2,051,836 |
-| inadequate | Inquiry | 7 | 1 / 1 | 29,141 | 1,834,697 |
-| inadequate | ReAct | 2 | 1 / 1 | 26,053 | 1,979,537 |
+| reset | Inquiry | 11 | 4 / 34 | 48,999 | 1,883,677 |
+| reset | ReAct | 6 | 4 / 34 | 67,681 | 2,160,524 |
+| rebinding | Inquiry | 11 | 4 / 34 | 48,109 | 1,880,167 |
+| rebinding | ReAct | 6 | 4 / 34 | 67,110 | 2,158,105 |
+| already-correct | Inquiry | 7 | 2 / 17 | 37,017 | 1,838,075 |
+| already-correct | ReAct | 2 | 2 / 17 | 43,981 | 2,060,064 |
+| inadequate | Inquiry | 7 | 1 / 1 | 29,085 | 1,837,129 |
+| inadequate | ReAct | 2 | 1 / 1 | 26,053 | 1,990,881 |
 
 Both repaired cases have one cache hit, one hypothesis revision, a failed
 16-check candidate followed by a passing 16-check candidate, and one exact

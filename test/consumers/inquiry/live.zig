@@ -98,7 +98,9 @@ fn revalidate(e: E, observed: agent.observation.Definition, approval: agent.appr
     const proposed = try e.product(t.Proposal, &.{ try e.field(agent.contracts.Text(32), subject, 0), base, candidate, try e.field(u64, task, 6), try e.field(u64, task, 7), try e.field(t.Hash, subject, 6) });
     const no_change = try b.bind(discarded, consume, try result(e, 7, try e.product(t.Receipt, &.{ base, proposed })));
     const approve = try b.bind(selected, try b.pure(proposed), try approveExact(e, approval, f, selected, proof));
-    const choose = try b.bind(unchanged, try agent.value_equality.compare(b, try e.schema(t.Source), try e.field(t.Source, candidate, 0), try e.field(t.Source, base, 0), try e.value(void, {})), try e.cond(try e.ref(unchanged), no_change, approve));
+    const artifact = try b.bind(discarded, consume, try result(e, 9, try e.product(t.Receipt, &.{ base, proposed })));
+    const delivery = try e.cond(try e.eq(try e.field(u8, task, 9), try e.value(u8, 1)), artifact, approve);
+    const choose = try b.bind(unchanged, try agent.value_equality.compare(b, try e.schema(t.Source), try e.field(t.Source, candidate, 0), try e.field(t.Source, base, 0), try e.value(void, {})), try e.cond(try e.ref(unchanged), no_change, delivery));
     const matching = try b.bind(same, try agent.value_equality.compare(b, try e.schema(t.Source), try e.field(t.Source, subject, 1), try e.field(t.Source, base, 0), try e.value(void, {})), try e.cond(try e.ref(same), choose, conflict));
     const scoped = try b.bind(context_matches, try agent.value_equality.compare(b, try e.schema(t.Proposal), proposed, try e.ref(actual), try e.value(void, {})), try e.cond(try e.ref(context_matches), matching, invalid_context));
     const branch = try b.term(.{ .match_sum = .{ .value = try e.ref(data), .cases = &.{

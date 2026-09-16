@@ -227,8 +227,8 @@ zig build check-inquiry-application -Doptimize=ReleaseSafe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime"
 ```
 
-The current positive witness uses a 40,384-byte BPI2 image, reaches a maximum
-48,786-byte pending State, makes 10 model requests and 4 logical experiment
+The current positive witness uses a 43,919-byte BPI2 image, reaches a maximum
+48,853-byte pending State, makes 10 model requests and 4 logical experiment
 requests (34 isolated executions), retires/cleans all three investigations,
 then approves and delivers the exact replacement. Every transition is compared
 byte for byte across Node/WASM, native World and Wasmtime, continuing from the
@@ -241,13 +241,53 @@ approval produces a conditional-delivery conflict; an old outer result also
 rejects. No real user repository is modified. These prescribed provider replies
 establish the mechanism, not previously unknown model synthesis or usefulness.
 
+The same focused command runs 29 additional scenarios: a different root cause
+and repair, an already-satisfied subject, inadequate initial hypotheses, invalid
+model proposals and provider responses, observation/acceptance rejection,
+resource stop, cancellation, delivery intent and model-only exploration.
+The application sharing ablation uses the same image and model inputs: two
+matching investigations acquire one experiment with coalescing enabled and two
+with it disabled, retaining identical authority and binding checks.
+
+Optional exploration uses `agent.deliberation` after evidence arrives. Two
+model-only alternatives inherit a private cell containing 10, independently
+write 11 and 12, and retain those values across model suspension. The fixture
+records two templates and four activations while another investigation remains
+parked. Actual experiment effects inside this delimiter fail protected authoring
+with `SpeculativeEffect`, including when hidden behind an inaccurate wrapper row.
+The policy accepts the first normalized proposal, falling back to the second;
+this is not a claim of optimal proposal selection.
+
+Delivery intent can be known or explicitly requested: return a checked artifact,
+or conditionally write after separate exact approval. Clarification answers echo
+the complete task and authored occurrence. Other, NotSure, unoffered choices,
+abort, close and wrong-context answers remain distinct outcomes. Artifact-only
+delivery returns the checked proposal without approval or a write.
+
+The repeated-use image runs four tasks through one `agent.conversation` state.
+Its authored caller assigns epochs 1–4, overriding incoming attempt/epoch values;
+the epoch qualifies experiment subjects and clarification occurrences. Repeated
+provider IDs cannot reset it. Old outer replies and re-encoded stale inner
+answers reject. Across 28 model requests, four experiments, eight cleanups,
+eight templates and 16 activations, every completed-task boundary retains exactly
+170 State bytes, two nodes and one blob, with no packages, templates, branches,
+resources, cells or obligations. The complete repeated image is 44,265 bytes.
+
+The application also builds as an independent compiler-only consumer:
+
+```sh
+zig build --build-file test/consumers/inquiry/build.zig \
+  -Doptimize=ReleaseSafe --prefix "$PWD/.agent4/out/inquiry-external"
+```
+
+Its repair and repeated images match the root build byte for byte. This establishes
+public source consumption; source-independent use-archive execution remains open.
+
 ## Remaining milestone work
 
 The accepted objective remains the full Agent-only milestone. Remaining work
-includes broader sibling/model-negative and already-satisfied executions,
-genuine requirement clarification, speculative model-only integration,
-cancellation/repeated-use coverage, the live entry path, independent package
-consumption, repair/ReAct comparison, application sharing ablation and economy,
+includes the live entry path, source-independent use-archive consumption,
+repair/ReAct comparison, complete compilation/economy measurements,
 and final Ship/review-closeout. Draft PR #31 tracks the implementation. Full
 integration, economy and packaging acceptance have not been established by these
 focused witnesses.

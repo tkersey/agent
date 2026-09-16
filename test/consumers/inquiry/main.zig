@@ -8,6 +8,7 @@ const s = @import("source.zig");
 const Id = s.Id;
 const E = s.E;
 pub const System = agent.system(.{ .InitialArgs = t.Task, .Result = t.Result, .Failure = void, .application = Application });
+pub const RepeatedSystem = @import("repeated.zig").System;
 
 pub const Application = struct {
     pub fn emit(c: agent.Context) !source.Module {

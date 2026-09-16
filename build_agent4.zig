@@ -298,6 +298,7 @@ pub fn build(b: *std.Build) void {
         integration.dependOn(&runtime_post.step);
         const economy_module = g.module("test/agent4/economy.zig");
         economy_module.addImport("document", g.module("test/consumers/document/consequence.zig"));
+        economy_module.addImport("inquiry", inquiry_app);
         const economy_exe = g.emitter("economy-probe", economy_module);
         const economy_emit = b.addRunArtifact(economy_exe);
         economy_emit.addArgs(&.{ "emit", b.getInstallPath(.prefix, "agent4/economy") });

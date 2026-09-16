@@ -42,4 +42,20 @@ test("documented commands execute from the actual source-independent archive", a
   });
   assert.equal(JSON.parse(result).cases, 36,
     "the actual packaged image completes the prescribed file, transfer, and cancellation cases");
+  const inquiry = inventory.examples.find(example => example.name === "inquiry-repair");
+  assert(inquiry, "inquiry belongs to the source-independent archive");
+  const inquiryRun = execFileSync(process.execPath,
+    [join(cwd, "test/agent4/inquiry_application_runtime.mjs"), runtimePath, join(cwd, "examples/inquiry")],
+    { cwd, encoding: "utf8", timeout: 120_000, maxBuffer: 4 * 1024 * 1024 });
+  const measured = JSON.parse(inquiryRun);
+  assert.equal(measured.models, 10);
+  assert.equal(measured.experiments, 4);
+  assert.equal(measured.writes, 1);
+  assert.deepEqual(measured.cleanup, [2, 3, 1]);
+  assert.equal(measured.executor.physicalExecutions, 34);
+  // The oracle and all of its runtime imports come from the extracted archive;
+  // no authoring sources, compiler, or per-application kernel are installed.
+  const files = inventory.files.map(file => file.path);
+  assert(files.includes("inquiry/task-schema.bin"));
+  assert(files.includes("inquiry/outcome-schema.bin"));
 });

@@ -450,6 +450,9 @@ fn emit(init: std.process.Init, directory: []const u8) !void {
     const document = @import("document");
     const consequence_first = try compiledSystem(init, directory, "document-consequence", document.System);
     const clarify_first = try compiledSystem(init, directory, "clarify-first", document.ClarifyFirstSystem);
+    const inquiry = @import("inquiry");
+    const repair = try compiledSystem(init, directory, "inquiry-repair", inquiry.System);
+    const repeated = try compiledSystem(init, directory, "inquiry-repeated", inquiry.RepeatedSystem);
     try save(init, directory, "direct.args", &.{ 7, 0, 0, 0 });
     try save(init, directory, "facade.args", &.{ 7, 0, 0, 0 });
     try save(init, directory, "conversation.args", &.{});
@@ -465,6 +468,7 @@ fn emit(init: std.process.Init, directory: []const u8) !void {
         .sharing = installations,
         .conversation = continuing,
         .clarification = .{ .consequenceFirst = consequence_first, .clarifyFirst = clarify_first },
+        .inquiry = .{ .repair = repair, .repeated = repeated },
     }, .{ .whitespace = .indent_2 });
     defer init.gpa.free(report);
     try save(init, directory, "source-metrics.json", report);

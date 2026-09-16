@@ -1,8 +1,8 @@
 # Resumable inquiry
 
-Implementation in progress. The current code implements future custody and the
-authored experiment broker required by the accepted Resumable Inquiry v1
-specification. The complete diagnose-and-repair application is still pending.
+Implementation in progress. Future custody, the authored experiment broker, the
+isolated session executor and independent acceptance checks are implemented.
+The complete World diagnose-and-repair composition is still pending.
 
 ## Custody construction
 
@@ -131,11 +131,75 @@ acquisitions while retaining the same binding and conflict checks. This is a
 mechanism ablation, not yet the required repair/ReAct comparison. Full compiler
 economy and working allocation measurements remain pending.
 
+## Isolated repair experiments
+
+`runtime/inquiry.mjs` exposes `probe` and `validate` for the single editable
+`session.mjs` subject. Source bytes, runner identity and relative scope are
+explicit inputs. Traces admit 1–24 operations: issue, encode a reply to an earlier
+request, submit that original encoded reply, abort, close and inspect. Questions
+use at most four byte-valued choices, 64 bytes of text and a 32-byte label. Source
+is limited to 8,192 UTF-8 bytes; unsupported inputs reject before execution.
+No hypothesis ID or diagnosis table participates in the executor.
+
+The inspectable reduced reproduction and visible task contract are under
+`test/consumers/inquiry/`. They were authored for this milestone, not discovered
+as an unknown production incident. Test-only sibling data includes occurrence
+reset and adapter rebinding defects, an already-correct module, and two distinct
+repairs (a monotonic counter and retained ticket history). The production tool
+does not import these repairs or compare source against them.
+
+The local profile was qualified on macOS 27.0, build 26A428, with locked Node
+26.8.2. It uses deny-by-default Seatbelt policy, exact Node dependency paths and
+their symlink spellings, Apple's installed loader bootstrap profile, immutable
+input files and a fresh scratch directory. It denies network access, process
+creation, unrelated/checkout reads, outside writes, input mutation through
+aliases and scratch permission changes. Only regular scratch-file creation,
+data writes and removal are allowed. Environment inheritance is cleared.
+
+The profile has a two-second process deadline, a 65,536-byte combined output
+limit, 64 MiB V8 old space and 8 MiB semi-space settings. These are not a claim
+of a universal process RSS bound. Cancellation and output overflow kill the
+process group and await its exit before cleanup. Every environment creation
+qualifies the restrictions with trusted probes; unsupported or changed runtime
+inputs return unavailable, with no unsandboxed fallback. Relative scratch roots
+and spaces are tested. `sandbox-exec` is deprecated and Apple's dyld profile is
+a private interface: this is a qualified local profile, not a portable OS API.
+
+The JavaScript realm is an additional separation layer for the session API,
+not the security boundary. Imports are unavailable, and only bounded serialized
+observations reach the parent evaluator. Node explicitly disclaims security
+guarantees for [VM contexts](https://github.com/nodejs/node/blob/main/doc/api/vm.md)
+and its [permission model](https://nodejs.org/api/permissions.html).
+The runner identity binds Node/dependencies, the driver, adapter, evaluator,
+loader profile, resource configuration and acceptance contract. Probe reuse
+still needs an application-authorized deterministic subject contract; freezing
+arbitrary JavaScript does not make it deterministic.
+
+Acceptance runs 16 prescribed checks across matched modes. Expected transitions
+use symbolic request references, so a candidate's colliding IDs cannot redefine
+which reply ought to be accepted. Rejection preserves authoritative state;
+occurrences must be distinct, without requiring a preferred numbering scheme.
+Both repairs pass. Both root causes, accept-all, reject-all, state-reset,
+display-only, forged-verdict, early-exit and JSON-tampering replacements fail.
+The evaluator and expectations remain outside the candidate process; missing
+observations, nonzero exit, timeout, cancellation and malformed output cannot
+become successful acceptance.
+
+```sh
+node test/agent4/inquiry_executor.test.mjs
+```
+
+The executed test recorded 17 logical requests, 151 candidate-process launches
+and two separate qualification launches. The integration and focused inquiry
+build steps include this test when a World runtime is selected. These are
+executor/acceptance results; they do not yet establish model-directed repair,
+World approval or delivery.
+
 ## Remaining milestone work
 
 The accepted objective remains the full Agent-only milestone: hypothesis revision
-and application outcome paths; the repeated-interaction repair consumer with model-supplied
-traces and source; qualified isolated execution and independent acceptance;
+and application outcome paths; the World repair consumer with model-supplied
+traces and source connected to the qualified executor and acceptance boundary;
 exact live approval/delivery; sibling repair cases; speculative
 model-only integration; cancellation/clarification/approval transfer; package
 consumption; the repair/ReAct comparison, application sharing ablation and economy;

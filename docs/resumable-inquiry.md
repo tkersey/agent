@@ -1,8 +1,9 @@
 # Resumable inquiry
 
-Implementation in progress. Future custody, the authored experiment broker, the
-isolated session executor and independent acceptance checks are implemented.
-The complete World diagnose-and-repair composition is still pending.
+Implementation in progress. The deterministic World diagnose-and-repair path
+now connects retained investigations, real isolated experiments, hypothesis
+revision, independent candidate checks and exact approved delivery. The broader
+milestone coverage and review-closeout remain open.
 
 ## Custody construction
 
@@ -36,11 +37,13 @@ function IDs, with no borrowed configuration slices or host continuations.
 
 `agent.inquiry.broker.define` specializes subject, demand, exact experiment key,
 observation, finding and policy schemas. `implement` accepts pure authored
-admission, selection and early-finish functions. It emits a controller accepting
+admission, selection, observation-admission and early-finish functions. It emits a controller accepting
 seeded custody, the frozen subject, an explicit pass allowance, the sharing
 switch and ordinary policy. Its acquisition effect has a distinct identity and
-explicit request/result schemas. The caller classifies that real outer effect
-through the existing protected authoring path when composing speculation.
+explicit request/result schemas. `implementProtected` registers the actual
+acquisition site as external write work through Agent's protected authoring path.
+Admission may explicitly retire an offered future; the broker disposes it before
+selecting further work, preserving unrelated futures throughout cleanup.
 
 Application admission derives the key, permitted reuse, requirement priority
 and tool cost. A key must cover the complete input, environment, mode, schema,
@@ -105,7 +108,7 @@ These are deterministic mechanism witnesses, not live model synthesis or a
 usefulness comparison. The locked shared World kernel is unchanged (413,317
 bytes); the table reports application images separately.
 
-The 8,904-byte numerical broker image runs 24 scenarios through Node/WASM and native
+The 9,712-byte numerical broker image runs 24 scenarios through Node/WASM and native
 World, with Wasmtime transfer for shared acquisition, the sharing ablation,
 cached follow-up and conflicting results. The same emitted image accepts at
 most eight runtime demands. The executor computes a numerical measurement from
@@ -192,19 +195,62 @@ node test/agent4/inquiry_executor.test.mjs
 The executed test recorded 17 logical requests, 151 candidate-process launches
 and two separate qualification launches. The integration and focused inquiry
 build steps include this test when a World runtime is selected. These are
-executor/acceptance results; they do not yet establish model-directed repair,
-World approval or delivery.
+executor/acceptance results; the separate end-to-end World witness is described below.
+
+## World repair composition
+
+The consumer under `test/consumers/inquiry/` uses public Agent and Boundary
+imports. One shared investigator body takes runtime hypothesis data; the program
+assigns investigation IDs and hypothesis versions. Existing model normalization
+and interpretation admit batches of flat typed operations into a bounded trace.
+The image checks operation references, prediction selectors, requirement IDs,
+subject scope and the accepted contract before requesting an experiment.
+The model supplies complete candidate source, with no compiled repair catalog.
+
+The scripted execution retains A, B and C, executes A/B's common trace once,
+and compares their different predictions in authored code. A requests a
+different-question trace. B is contradicted and offers retirement; its actual
+future is disposed through suspending cleanup while two other packages survive.
+The follow-up advances A and C. A returns a revision and the shared body starts
+its next program-assigned version. An initially proposed reject-all repair fails
+the prescribed checks; a different replacement is then tested successfully.
+
+The application rereads the logical target, verifies the frozen base, obtains
+exact approval and conditionally replaces the isolated fixture file. The read
+proof binds the complete checked proposal: target, base, candidate bytes and
+check record, runner/contract, principal and attempt. An amendment changing that
+proposal cannot obtain a challenge backed by old validation. The final portable
+receipt retains the base, replacement, executed checks and qualified explanation.
+
+```sh
+zig build check-inquiry-application -Doptimize=ReleaseSafe \
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+```
+
+The current positive witness uses a 40,384-byte BPI2 image, reaches a maximum
+48,786-byte pending State, makes 10 model requests and 4 logical experiment
+requests (34 isolated executions), retires/cleans all three investigations,
+then approves and delivers the exact replacement. Every transition is compared
+byte for byte across Node/WASM, native World and Wasmtime, continuing from the
+independent guest's returned bytes. Graph assertions cover three parked futures
+and preservation of other packages during retirement cleanup.
+
+Approval fixtures reject decline, a wrong principal, stale challenge, foreign
+target and unvalidated amendment without a write. Changing the live file during
+approval produces a conditional-delivery conflict; an old outer result also
+rejects. No real user repository is modified. These prescribed provider replies
+establish the mechanism, not previously unknown model synthesis or usefulness.
 
 ## Remaining milestone work
 
-The accepted objective remains the full Agent-only milestone: hypothesis revision
-and application outcome paths; the World repair consumer with model-supplied
-traces and source connected to the qualified executor and acceptance boundary;
-exact live approval/delivery; sibling repair cases; speculative
-model-only integration; cancellation/clarification/approval transfer; package
-consumption; the repair/ReAct comparison, application sharing ablation and economy;
-and one draft PR through Ship/review-closeout. Full integration, economy and
-packaging acceptance have not been established by these focused witnesses.
+The accepted objective remains the full Agent-only milestone. Remaining work
+includes broader sibling/model-negative and already-satisfied executions,
+genuine requirement clarification, speculative model-only integration,
+cancellation/repeated-use coverage, the live entry path, independent package
+consumption, repair/ReAct comparison, application sharing ablation and economy,
+and final Ship/review-closeout. Draft PR #31 tracks the implementation. Full
+integration, economy and packaging acceptance have not been established by these
+focused witnesses.
 
 No paid inference, credential discovery, dependency/toolchain update, real
 user-repository repair, PR promotion, merge, or release is authorized here.

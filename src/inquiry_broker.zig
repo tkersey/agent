@@ -5,9 +5,11 @@ const boundary = @import("boundary");
 const source = boundary.computation;
 const custody = @import("inquiry.zig");
 const equality = @import("value_equality.zig");
+const authoring = @import("authoring.zig");
+const admission = @import("admission.zig");
 const Id = source.Id;
 const Builder = source.Builder;
-pub const Error = equality.Error;
+pub const Error = equality.Error || admission.Error;
 
 pub const Status = enum(u8) {
     finished,
@@ -34,7 +36,7 @@ pub const Spec = struct {
 pub const Types = struct {
     /// Admitted(key, reusable, priority class, cost class).
     admitted: Id,
-    /// Denied | Admitted. Application derives all metadata from its contract.
+    /// Denied | Admitted | Retire. Application derives dispositions and metadata.
     admission: Id,
     /// (ordinary custody view, admitted metadata).
     eligible: Id,
@@ -70,6 +72,8 @@ pub const Functions = struct {
     select: Id,
     /// Pure (subject, findings) -> bool. A true result disposes remaining work.
     finish: Id,
+    /// Optional pure (subject, key, observation) -> bool, for application result-kind checks.
+    observe: ?Id = null,
 };
 
 pub fn define(b: *Builder, spec: Spec) Error!Definition {
@@ -111,7 +115,7 @@ pub fn define(b: *Builder, spec: Spec) Error!Definition {
         .observation_equal = try equality.define(b, spec.observation, spec.failure),
         .types = .{
             .admitted = admitted,
-            .admission = try b.schema(.{ .sum = &.{ unit, admitted } }),
+            .admission = try b.schema(.{ .sum = &.{ unit, admitted, unit } }),
             .eligible = eligible,
             .eligible_list = try b.schema(.{ .seq = eligible }),
             .record = record,
@@ -129,16 +133,30 @@ pub fn define(b: *Builder, spec: Spec) Error!Definition {
 /// Allowance counts delivery/acquisition passes, including denied and cached
 /// work. Every iteration spends one unit. It cannot be reset by an investigator.
 pub fn implement(b: *Builder, spec: Spec, d: Definition, functions: Functions) Error!Id {
+    return implementWithRegistry(b, spec, d, functions, null);
+}
+
+/// Protected Agent authoring classifies acquisition as real external write work.
+/// Its actual transitive body cannot enter a model-only speculative scope.
+pub fn implementProtected(c: authoring.Context, spec: Spec, d: Definition, functions: Functions) !Id {
+    try c.registry.classify(d.experiment, .write);
+    try c.registry.classify(d.custody.dialogue.effect, .internal);
+    return implementWithRegistry(c.builder, spec, d, functions, c.registry);
+}
+
+fn implementWithRegistry(b: *Builder, spec: Spec, d: Definition, functions: Functions, registry: ?*admission.Registry) Error!Id {
     const integer = try b.scalar(u64);
     const boolean = try b.scalar(bool);
     try checkPure(b, functions.admit, &.{ spec.subject, spec.demand }, d.types.admission);
     try checkPure(b, functions.select, &.{ spec.subject, spec.policy, d.types.eligible_list, d.custody.types.findings }, integer);
     try checkPure(b, functions.finish, &.{ spec.subject, d.custody.types.findings }, boolean);
+    if (functions.observe) |observe|
+        try checkPure(b, observe, &.{ spec.subject, spec.key, spec.observation }, boolean);
     const effects = try b.allocator().alloc(Id, spec.scope.residual.effects.len + 1);
     @memcpy(effects[0..spec.scope.residual.effects.len], spec.scope.residual.effects);
     effects[effects.len - 1] = d.experiment;
     std.mem.sort(Id, effects, {}, std.sort.asc(Id));
-    const e: Emit = .{ .b = b, .s = spec, .d = d, .f = functions, .integer = integer, .boolean = boolean, .unit = try b.scalar(void), .effects = effects };
+    const e: Emit = .{ .b = b, .s = spec, .d = d, .f = functions, .integer = integer, .boolean = boolean, .unit = try b.scalar(void), .effects = effects, .registry = registry };
     return e.controller();
 }
 
@@ -171,6 +189,7 @@ const Emit = struct {
     boolean: Id,
     unit: Id,
     effects: []const Id,
+    registry: ?*admission.Registry = null,
 
     fn ref(e: Emit, v: Id) Error!Id {
         return e.b.reference(v);
@@ -241,19 +260,24 @@ const Emit = struct {
         const b = e.b;
         const t = e.d.types;
         const own = e.d.custody.types;
-        const result = try b.schema(.{ .product = &.{ t.eligible_list, own.ids } });
-        const f = try b.declare(&.{ own.views, e.s.subject, t.eligible_list, own.ids }, result, &.{}, &.{});
+        const result = try b.schema(.{ .product = &.{ t.eligible_list, own.ids, own.ids } });
+        const f = try b.declare(&.{ own.views, e.s.subject, t.eligible_list, own.ids, own.ids }, result, &.{}, &.{});
         const pop = try Pop.init(e, own.views, own.view);
         const response = try b.variable(t.admission);
         const denied = try b.variable(e.unit);
+        const retirement = try b.variable(e.unit);
         const metadata = try b.variable(t.admitted);
         const head = try e.ref(pop.head);
-        const bad = try e.call(f, &.{ try e.ref(pop.rest), try e.p(f, 1), try e.p(f, 2), try e.append(own.ids, try e.p(f, 3), try e.field(e.integer, head, 1)) });
+        const bad = try e.call(f, &.{ try e.ref(pop.rest), try e.p(f, 1), try e.p(f, 2), try e.append(own.ids, try e.p(f, 3), try e.field(e.integer, head, 1)), try e.p(f, 4) });
+        const retired = try e.call(f, &.{ try e.ref(pop.rest), try e.p(f, 1), try e.p(f, 2), try e.p(f, 3), try e.append(own.ids, try e.p(f, 4), try e.field(e.integer, head, 1)) });
         const admitted = try e.product(t.eligible, &.{ head, try e.ref(metadata) });
-        const good = try e.call(f, &.{ try e.ref(pop.rest), try e.p(f, 1), try e.append(t.eligible_list, try e.p(f, 2), admitted), try e.p(f, 3) });
-        const branch = try b.term(.{ .match_sum = .{ .value = try e.ref(response), .cases = &.{ .{ .variable = denied, .body = bad }, .{ .variable = metadata, .body = good } } } });
+        const good = try e.call(f, &.{ try e.ref(pop.rest), try e.p(f, 1), try e.append(t.eligible_list, try e.p(f, 2), admitted), try e.p(f, 3), try e.p(f, 4) });
+        const branch = try b.term(.{ .match_sum = .{ .value = try e.ref(response), .cases = &.{
+            .{ .variable = denied, .body = bad },         .{ .variable = metadata, .body = good },
+            .{ .variable = retirement, .body = retired },
+        } } });
         const next = try b.bind(response, try e.call(e.f.?.admit, &.{ try e.p(f, 1), try e.field(e.s.demand, head, 2) }), branch);
-        try b.define(f, try pop.match(e, try e.p(f, 0), try b.pure(try e.product(result, &.{ try e.p(f, 2), try e.p(f, 3) })), next));
+        try b.define(f, try pop.match(e, try e.p(f, 0), try b.pure(try e.product(result, &.{ try e.p(f, 2), try e.p(f, 3), try e.p(f, 4) })), next));
         return f;
     }
 
@@ -459,11 +483,15 @@ const Emit = struct {
         const admitted = try b.variable(admitted_type);
         const offered = try b.variable(t.eligible_list);
         const denied = try b.variable(ids);
+        const retired = try b.variable(ids);
         const after_denial = try b.variable(e.d.custody.types.state);
+        const after_retirement = try b.variable(e.d.custody.types.state);
         const reject = try b.bind(after_denial, try e.call(e.d.custody.distribute, &.{ state, try e.ref(denied), try e.variant(t.reply, try b.constant(void, {}), 1) }), try e.again(o, try e.ref(after_denial), try e.p(o.loop, 5), false, false, try e.len(try e.ref(denied))));
         const good = try e.chooseAdmitted(o, state, try e.ref(offered), findings);
         const decide = try e.cond(try e.eq(try e.len(try e.ref(denied)), try e.n(0)), good, reject);
-        return b.bind(admitted, try e.call(o.admit, &.{ views, try e.p(o.loop, 1), try e.sequence(t.eligible_list, &.{}), try e.sequence(ids, &.{}) }), try e.unpack(try e.ref(admitted), &.{ offered, denied }, decide));
+        const dispose = try b.bind(after_retirement, try e.call(e.d.custody.retire, &.{ state, try e.ref(retired) }), try e.again(o, try e.ref(after_retirement), try e.p(o.loop, 5), false, false, try e.n(0)));
+        const selected = try e.cond(try e.eq(try e.len(try e.ref(retired)), try e.n(0)), decide, dispose);
+        return b.bind(admitted, try e.call(o.admit, &.{ views, try e.p(o.loop, 1), try e.sequence(t.eligible_list, &.{}), try e.sequence(ids, &.{}), try e.sequence(ids, &.{}) }), try e.unpack(try e.ref(admitted), &.{ offered, denied, retired }, selected));
     }
 
     fn chooseAdmitted(e: Emit, o: Ops, state: Id, offered: Id, findings: Id) Error!Id {
@@ -525,10 +553,12 @@ const Emit = struct {
         const check_key = try b.bind(same_key, try e.call(e.d.key_equal, &.{ key, try e.field(e.s.key, response, 1) }), try e.cond(try e.ref(same_key), bound, invalid));
         const check_subject = try b.bind(same_subject, try e.call(e.d.subject_equal, &.{ subject, try e.field(e.s.subject, response, 0) }), try e.cond(try e.ref(same_subject), check_key, invalid));
         const request = try e.product(e.d.types.request, &.{ subject, key, try e.field(e.s.demand, try e.view(selected), 2), occurrence });
-        return b.bind(envelope, try b.term(.{ .perform = .{
+        const performed = try b.term(.{ .perform = .{
             .effect = e.d.experiment,
             .payload = request,
-        } }), check_subject);
+        } });
+        if (e.registry) |registry| try registry.protectSite(o.loop, performed, e.d.experiment);
+        return b.bind(envelope, performed, check_subject);
     }
 
     fn completed(e: Emit, o: Ops, state: Id, selected: Id, ids: Id, completion: Id) Error!Id {
@@ -540,8 +570,13 @@ const Emit = struct {
         const unknown = try b.bind(next, try e.call(e.d.custody.distribute, &.{ state, ids, try e.variant(e.d.types.reply, try b.constant(void, {}), 2) }), try e.again(o, try e.ref(next), try e.p(o.loop, 5), true, false, try e.len(ids)));
         const record = try e.product(e.d.types.record, &.{ try e.p(o.loop, 6), try e.experimentKey(selected), try e.ref(value), try e.reusable(selected) });
         const stored = try e.append(e.d.types.records, try e.p(o.loop, 5), record);
+        var accepted = try e.checkConflict(o, state, selected, ids, record, stored);
+        if (e.f.?.observe) |observe| {
+            const valid = try b.variable(e.boolean);
+            accepted = try b.bind(valid, try e.call(observe, &.{ try e.p(o.loop, 1), try e.experimentKey(selected), try e.ref(value) }), try e.cond(try e.ref(valid), accepted, try e.stopAfterAcquisition(o, state, .invalid_evidence, try e.p(o.loop, 5))));
+        }
         return b.term(.{ .match_sum = .{ .value = completion, .cases = &.{
-            .{ .variable = value, .body = try e.checkConflict(o, state, selected, ids, record, stored) },
+            .{ .variable = value, .body = accepted },
             .{ .variable = inconclusive, .body = unknown },
             .{ .variable = unavailable, .body = try e.stopAfterAcquisition(o, state, .environment_unavailable, try e.p(o.loop, 5)) },
         } } });

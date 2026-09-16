@@ -143,8 +143,9 @@ export async function createInquiryExecutor(options = {}) {
   const sandbox = await createInquirySandbox(options);
   if (sandbox.kind !== "qualified") return sandbox;
   const evaluatorSha256 = sourceDigest(await readFile(new URL(import.meta.url)));
+  const wireSha256 = sourceDigest(await readFile(new URL("./inquiry_wire.mjs", import.meta.url)));
   const expectedRunner = sourceDigest(JSON.stringify({ sandbox: sandbox.runner,
-    evaluatorSha256, acceptanceContract }));
+    evaluatorSha256, wireSha256, acceptanceContract }));
   let logicalRequests = 0, physicalExecutions = 0;
   const admitInput = input => {
     const { path, source, runner } = record(input, ["path", "source", "runner"]);
@@ -161,7 +162,7 @@ export async function createInquiryExecutor(options = {}) {
     return { ...result, runner };
   }
   return Object.freeze({ kind: "qualified", runner,
-    contract: { ...sandbox.contract, evaluatorSha256, acceptanceContract }, qualification: sandbox.qualification,
+    contract: { ...sandbox.contract, evaluatorSha256, wireSha256, acceptanceContract }, qualification: sandbox.qualification,
     async probe(input, suppliedTrace, { signal } = {}) {
       const subject = admitInput(input), trace = admitTrace(suppliedTrace);
       logicalRequests++;

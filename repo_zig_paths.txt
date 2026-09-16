@@ -188,6 +188,15 @@ test/consumers/document/critic.zig
 test/consumers/document/main.zig
 test/consumers/document/source.zig
 test/consumers/document/terminology.zig
+test/consumers/inquiry/evidence.zig
+test/consumers/inquiry/investigator.zig
+test/consumers/inquiry/live.zig
+test/consumers/inquiry/main.zig
+test/consumers/inquiry/models.zig
+test/consumers/inquiry/plans.zig
+test/consumers/inquiry/policy.zig
+test/consumers/inquiry/source.zig
+test/consumers/inquiry/types.zig
 test/consumers/review/build.zig
 test/consumers/review/main.zig
 test/custom_strategy.zig

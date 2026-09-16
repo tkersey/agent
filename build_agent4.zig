@@ -135,12 +135,24 @@ pub fn build(b: *std.Build) void {
     const inquiry_broker = g.module("test/agent4/inquiry_broker_probe.zig");
     g.testModule(check, inquiry_broker);
     g.testModule(inquiry_check, inquiry_broker);
+    const inquiry_app = g.module("test/consumers/inquiry/main.zig");
+    const inquiry_app_check = b.step("check-inquiry-application", "Check the model-directed repair application");
+    g.testModule(inquiry_app_check, inquiry_app);
+    g.testModule(check, inquiry_app);
 
     const emit = b.step("agent4-images", "Compile the consumer images");
     const distribution = b.step("emit-agent4", "Emit compiled examples and the source-independent use archive");
     const dialogue_exe = g.emitter("agent4-dialogue", dialogue);
     const inquiry_exe = g.emitter("agent4-inquiry-probe", inquiry);
     const inquiry_broker_exe = g.emitter("agent4-inquiry-broker", inquiry_broker);
+    const inquiry_app_exe = g.emitter("agent4-inquiry-application", inquiry_app);
+    const inquiry_app_images = b.step("inquiry-application-images", "Emit the inquiry consumer and schemas");
+    g.emit(inquiry_app_images, inquiry_app_exe, &.{}, "inquiry/repair.bpi2");
+    for ([_][]const u8{ "task-schema", "outcome-schema" }) |mode| {
+        g.emit(inquiry_app_images, inquiry_app_exe, &.{mode}, b.fmt("inquiry/{s}.bin", .{mode}));
+    }
+    inquiry_app_check.dependOn(inquiry_app_images);
+    emit.dependOn(inquiry_app_images);
     g.emit(emit, inquiry_broker_exe, &.{}, "inquiry/broker.bpi2");
     g.emit(inquiry_check, inquiry_broker_exe, &.{}, "inquiry/broker.bpi2");
     for ([_][]const u8{ "owned", "composition", "followup" }) |mode| {
@@ -213,6 +225,14 @@ pub fn build(b: *std.Build) void {
             .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data_v2", .module = data } },
         });
         const native_exe = native_graph.emitter("agent4-native", native_module);
+        const inquiry_app_run = b.addSystemCommand(&.{ "node", "test/agent4/inquiry_application_runtime.mjs", runtime_path, b.getInstallPath(.prefix, "agent4/inquiry") });
+        inquiry_app_run.addFileArg(native_exe.getEmittedBin());
+        inquiry_app_run.addFileArg(multi_exe.getEmittedBin());
+        inquiry_app_run.has_side_effects = true;
+        inquiry_app_run.step.dependOn(inquiry_app_images);
+        inquiry_app_run.step.dependOn(&runtime_guard.step);
+        inquiry_app_check.dependOn(&inquiry_app_run.step);
+        runtime_work.dependOn(&inquiry_app_run.step);
         const broker_run = b.addSystemCommand(&.{
             "node",                                                  "test/agent4/inquiry_broker_runtime.mjs", runtime_path,
             b.getInstallPath(.prefix, "agent4/inquiry/broker.bpi2"),

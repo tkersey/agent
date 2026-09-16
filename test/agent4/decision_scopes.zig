@@ -82,7 +82,7 @@ fn replyBytes(a: std.mem.Allocator, request_bytes: []const u8, value: []const u8
 
 fn execute(module: source.Module, prescribed: []const u8, expected: []const u8) !usize {
     const a = std.testing.allocator;
-    var compiled = try boundary.program.compile(a, module);
+    var compiled = try boundary.source.construct(a, module);
     defer compiled.deinit();
     var outcome = try world.run(a, .{
         .program = .{ .records = compiled.program },

@@ -26,7 +26,7 @@ const Speculation = struct { body: Id, allowed: []const Id };
 
 /// Metadata is private to the trusted Agent constructions during authoring.
 /// Native Zig that forges this registry or mutates source is outside the public
-/// authoring-path claim. Records never enter BPI2 or PST2.
+/// authoring-path claim. Records never enter BPI3 or PST3.
 pub const Registry = struct {
     arena: std.heap.ArenaAllocator,
     classifications: std.ArrayList(Classification) = .empty,

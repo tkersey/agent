@@ -22,7 +22,7 @@ assert(runtimePath && fixturePath && nativePath && inspectorPath && (!extra.leng
 const runtime = verifyRuntime(runtimePath);
 const world = await import(pathToFileURL(runtime.entrypoint));
 const kernel = await readFile(runtime.kernelPath);
-const image = await readFile(join(fixturePath, "repair.bpi2"));
+const image = await readFile(join(fixturePath, "repair.bpi3"));
 const taskSchema = decodeSchema(await readFile(join(fixturePath, "task-schema.bin")));
 const resultSchema = decodeSchema(await readFile(join(fixturePath, "outcome-schema.bin")));
 const requirements = await readFile(new URL("../consumers/inquiry/contract.txt", import.meta.url), "utf8");
@@ -45,7 +45,7 @@ function trace(expected, different = false) {
 const summaries = [];
 
 async function scenario(name, options, expected) {
-  const selectedImage = options.strategy === "react" ? await readFile(join(fixturePath, "react.bpi2")) : image;
+  const selectedImage = options.strategy === "react" ? await readFile(join(fixturePath, "react.bpi3")) : image;
   const scratch = await mkdtemp(join(tmpdir(), "inquiry-case-"));
   const filename = join(scratch, "session.mjs");
   const source = options.source ?? reset;

@@ -8,7 +8,7 @@ const source = boundary.computation;
 const p = boundary.data_v2.program;
 
 /// Optional native authoring observations. These callbacks never enter a Module,
-/// BPI2, or PST2, and borrow their context only for the compilation call.
+/// BPI3, or PST3, and borrow their context only for the compilation call.
 pub const CompileStage = enum {
     descriptors,
     application_source,
@@ -82,7 +82,7 @@ pub fn system(comptime spec: anytype) type {
 }
 
 /// Returned output owns its storage and remains valid after the builder is released.
-pub fn compile(allocator: std.mem.Allocator, comptime System: type) !source.Compiled {
+pub fn compile(allocator: std.mem.Allocator, comptime System: type) !source.Construction {
     return compileObserved(allocator, System, .{});
 }
 
@@ -90,7 +90,7 @@ pub fn compileObserved(
     allocator: std.mem.Allocator,
     comptime System: type,
     options: CompileOptions,
-) !source.Compiled {
+) !source.Construction {
     options.stage(.descriptors);
     var builder = source.Builder.init(allocator);
     defer builder.deinit();
@@ -113,7 +113,7 @@ pub fn compileObserved(
         return error.TypeMismatch;
     try admission.verify(allocator, module, &registry);
     options.stage(.boundary_compile);
-    const compiled = try boundary.program.compileObserved(allocator, module, options.boundary_options);
+    const compiled = try source.constructObserved(allocator, module, options.boundary_options);
     options.stage(.complete);
     return compiled;
 }

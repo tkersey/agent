@@ -18,7 +18,7 @@ const { admitProcessKernel, decodeRequest, encodeResult } = await import(pathToF
 ));
 const kernelBytes = await readFile(identity.kernelPath);
 const expectedSha256 = identity.kernelSha256;
-const image = await readFile(resolve(fixtures, "multi/multi.bpi2"));
+const image = await readFile(resolve(fixtures, "multi/multi.bpi3"));
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 const fresh = async input => (await admitProcessKernel(kernelBytes, { expectedSha256 })).run(input);
 await mkdir(resolve(root, ".agent4/out/multi"), { recursive: true });
@@ -120,7 +120,7 @@ async function restore(image, outcome) {
 }
 
 async function testCleanup() {
-  const image = await readFile(resolve(fixtures, "multi/cleanup.bpi2"));
+  const image = await readFile(resolve(fixtures, "multi/cleanup.bpi3"));
   const parked = await fresh({ image, initialArgs: new Uint8Array() });
   assert.equal(parked.kind, "Requested");
   const question = decodeRequest(parked.request);
@@ -166,7 +166,7 @@ async function testCleanup() {
 }
 
 async function testDisposal() {
-  const image = await readFile(resolve(fixtures, "multi/dispose.bpi2"));
+  const image = await readFile(resolve(fixtures, "multi/dispose.bpi3"));
   const parked = await fresh({ image, initialArgs: new Uint8Array() });
   assert.equal(parked.kind, "Requested");
   const parent = decodeRequest(parked.request);

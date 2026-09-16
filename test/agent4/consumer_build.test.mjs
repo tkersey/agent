@@ -84,6 +84,6 @@ test("manifest-selected source package completes authoring checks outside Git", 
   assert.notEqual(spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: source }).status, 0);
   assert(!existsSync(join(source, ".git")) && !existsSync(join(source, ".agent4")));
   build(source, directory, ["check-agent4"]);
-  assert.equal(readFileSync(join(directory, "out/agent4/document/document.bpi2")).subarray(0, 8).toString(), "ABL_BPI2");
+  assert.equal(readFileSync(join(directory, "out/agent4/document/document.bpi3")).subarray(0, 8).toString(), "ABL_BPI3");
   assert(!existsSync(join(directory, "out/agent4-release")), "authoring must not perform release packaging");
 });

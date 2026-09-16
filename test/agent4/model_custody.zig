@@ -66,11 +66,11 @@ fn template(tools: []const P.ToolDeclaration, selection: model.Selection) P.Requ
     };
 }
 
-fn compileModel(comptime Q: type, comptime multiple: bool) !source.Compiled {
+fn compileModel(comptime Q: type, comptime multiple: bool) !source.Construction {
     return compileResponder(Q, multiple, false);
 }
 
-fn compileResponder(comptime Q: type, comptime multiple: bool, comptime observed: bool) !source.Compiled {
+fn compileResponder(comptime Q: type, comptime multiple: bool, comptime observed: bool) !source.Construction {
     var b = source.Builder.init(allocator);
     defer b.deinit();
     var registry = agent.admission.Registry.init(b.allocator());
@@ -83,7 +83,7 @@ fn compileResponder(comptime Q: type, comptime multiple: bool, comptime observed
     try std.testing.expectEqual(entry, shared);
     const module = b.module(entry, try b.scalar(void));
     try agent.admission.verify(allocator, module, &registry);
-    return boundary.program.compile(allocator, module);
+    return boundary.source.construct(allocator, module);
 }
 
 test "protected Agent source rejects raw model emission with forged request-time offers" {
@@ -110,7 +110,7 @@ test "protected Agent source rejects raw model emission with forged request-time
     const module = b.module(entry, try b.scalar(void));
     // Valid public Boundary source may choose another policy. It cannot acquire
     // Agent's offer-custody claim merely by invoking the pure candidate decoder.
-    var raw_compiled = try boundary.program.compile(allocator, module);
+    var raw_compiled = try boundary.source.construct(allocator, module);
     defer raw_compiled.deinit();
     try std.testing.expectError(error.ProtectedEffectBypass, agent.admission.verify(allocator, module, &registry));
 }
@@ -130,7 +130,7 @@ test "reserved model identity cannot evade custody by omitted or read classifica
             .payload = try b.reference(b.parameter(entry, 0)),
         } }));
         const module = b.module(entry, try b.scalar(void));
-        var raw = try boundary.program.compile(allocator, module);
+        var raw = try boundary.source.construct(allocator, module);
         defer raw.deinit();
         try std.testing.expectError(error.EffectRoleMismatch, agent.admission.verify(allocator, module, &registry));
     }
@@ -150,7 +150,7 @@ test "observed model result preserves normalized provenance and typed recovery d
     try std.testing.expectEqual(1, registry.sites.items.len);
     const module = b.module(entry, try b.scalar(void));
     try agent.admission.verify(allocator, module, &registry);
-    var compiled = try boundary.program.compile(allocator, module);
+    var compiled = try boundary.source.construct(allocator, module);
     defer compiled.deinit();
     const value: Input = .{ .request = template(&.{}, single), .offered = .{ true, false } };
     var parked = try start(compiled.program, value);

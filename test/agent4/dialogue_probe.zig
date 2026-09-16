@@ -368,7 +368,7 @@ test "typed dialogue and disposal compile through the public Boundary compiler" 
     for ([_]Mode{ .twice, .dispose_owned }) |mode| {
         var b = Builder.init(std.testing.allocator);
         defer b.deinit();
-        var compiled = try boundary.program.compile(std.testing.allocator, try build(&b, mode));
+        var compiled = try boundary.source.construct(std.testing.allocator, try build(&b, mode));
         defer compiled.deinit();
         try std.testing.expect(compiled.program.handlers.len > 0);
     }
@@ -377,7 +377,7 @@ test "typed dialogue and disposal compile through the public Boundary compiler" 
 test "external interaction compiles without runtime dependencies" {
     var b = Builder.init(std.testing.allocator);
     defer b.deinit();
-    var compiled = try boundary.program.compile(std.testing.allocator, try build(&b, .exchange));
+    var compiled = try boundary.source.construct(std.testing.allocator, try build(&b, .exchange));
     defer compiled.deinit();
     try std.testing.expectEqual(@as(usize, 1), compiled.program.effects.len);
 }
@@ -385,13 +385,13 @@ test "external interaction compiles without runtime dependencies" {
 test "consumed dialogue future cannot be resumed" {
     var b = Builder.init(std.testing.allocator);
     defer b.deinit();
-    try std.testing.expectError(error.InvalidOwnership, boundary.program.compile(std.testing.allocator, try build(&b, .double_use)));
+    try std.testing.expectError(error.UnavailableSlot, boundary.source.construct(std.testing.allocator, try build(&b, .double_use)));
 }
 
 test "borrowed dialogue future cannot escape creator region" {
     var b = Builder.init(std.testing.allocator);
     defer b.deinit();
-    try std.testing.expectError(error.InvalidOwnership, boundary.program.compile(std.testing.allocator, try build(&b, .borrowed_escape)));
+    try std.testing.expectError(error.InvalidOwnership, boundary.source.construct(std.testing.allocator, try build(&b, .borrowed_escape)));
 }
 
 pub fn main(init: std.process.Init) !void {
@@ -402,9 +402,9 @@ pub fn main(init: std.process.Init) !void {
     if (args.next() != null) return error.UnknownProbe;
     var b = Builder.init(init.gpa);
     defer b.deinit();
-    var compiled = try boundary.program.compile(init.gpa, try build(&b, mode));
+    var compiled = try boundary.source.construct(init.gpa, try build(&b, mode));
     defer compiled.deinit();
-    const bytes = try init.gpa.alloc(u8, try boundary.image_v2.encodedLength(compiled.program));
+    const bytes = try init.gpa.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
     defer init.gpa.free(bytes);
     _ = try compiled.encode(init.gpa, bytes);
     var buffer: [4096]u8 = undefined;

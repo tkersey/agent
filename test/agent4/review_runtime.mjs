@@ -17,7 +17,7 @@ const kernel = () => world.admitProcessKernel(kernelBytes,
   { expectedSha256: identity.kernelSha256 });
 
 async function start(mode) {
-  const image = await readFile(path.join(images, `${mode}.bpi2`));
+  const image = await readFile(path.join(images, `${mode}.bpi3`));
   const initialArgs = await readFile(path.join(images, `${mode}.args`));
   return { image, outcome: await (await kernel()).run({ image, initialArgs }) };
 }

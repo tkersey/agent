@@ -46,7 +46,7 @@ pub fn build(b: *std.Build) void {
         b.getInstallStep().dependOn(&b.addInstallFileWithDir(
             run.captureStdOut(.{}),
             .prefix,
-            b.fmt("{s}.bpi2", .{mode}),
+            b.fmt("{s}.bpi3", .{mode}),
         ).step);
     }
 }

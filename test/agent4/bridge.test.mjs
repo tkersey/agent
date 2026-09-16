@@ -15,7 +15,7 @@ const lockPath = join(root, "conformance/agent4/dependencies.lock.json");
 const empty = new Uint8Array();
 function u64(value) { const bytes = new Uint8Array(8); new DataView(bytes.buffer).setBigUint64(0, BigInt(value), true); return bytes; }
 const bridge = () => loadWorldRuntime({ runtimePath, lockPath });
-const image = (name = "twice") => readFile(join(probeRoot, `${name}.bpi2`));
+const image = (name = "twice") => readFile(join(probeRoot, `${name}.bpi3`));
 const execute = promisify(execFile);
 
 test("bridge rejects unknown options before loading a runtime", async () => {
@@ -128,14 +128,14 @@ test("source-independent bridge installation executes the same compiled image", 
     await cp(join(root, file), join(isolated, file));
   }
   await cp(runtimePath, join(isolated, "world-runtime"), { recursive: true });
-  await writeFile(join(isolated, "example.bpi2"), await image());
+  await writeFile(join(isolated, "example.bpi3"), await image());
   // A new process has only the installed runtime, pure value support and image.
   // It cannot accidentally reuse a compiler/source module cached by this test.
   const script = `
     import { readFile } from "node:fs/promises";
     import { loadWorldRuntime } from "./runtime/world.mjs";
     const host = await loadWorldRuntime({runtimePath: "./world-runtime"});
-    const program = await readFile("./example.bpi2");
+    const program = await readFile("./example.bpi3");
     const pending = await host.start(program, new Uint8Array());
     const reply = new Uint8Array(8);
     new DataView(reply.buffer).setBigUint64(0, 3n, true);

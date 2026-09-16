@@ -23,7 +23,7 @@ const Resolution = union(enum) {
 const Input = struct { evaluations: []const Evaluation, mandatory: bool = false };
 
 const Fixture = struct {
-    compiled: source.Compiled,
+    compiled: source.Construction,
 
     fn init(domain: clarification.Domain, select: bool) !Fixture {
         var b = source.Builder.init(a);
@@ -39,7 +39,7 @@ const Fixture = struct {
         // Independent native wire types must match the exported source schemas.
         try std.testing.expectEqual(try agent.contracts.schema(Classification, &b), d.types.classification);
         const entry = if (select) d.select else d.classify;
-        return .{ .compiled = try boundary.program.compile(a, b.module(entry, try b.scalar(void))) };
+        return .{ .compiled = try boundary.source.construct(a, b.module(entry, try b.scalar(void))) };
     }
 
     fn deinit(f: *Fixture) void {
@@ -186,7 +186,7 @@ const P = agent.model_invocation.Profile(NumericAction, .{.{ .name = "score", .d
     .provider_response_bytes = 4096,
 });
 const Composition = struct {
-    compiled: source.Compiled,
+    compiled: source.Construction,
     source_functions: usize,
     source_terms: usize,
 
@@ -243,7 +243,7 @@ const Composition = struct {
         const module = b.module(entry, unit);
         try agent.admission.verify(allocator, module, &registry);
         return .{
-            .compiled = try boundary.program.compile(allocator, module),
+            .compiled = try boundary.source.construct(allocator, module),
             .source_functions = b.functions.items.len,
             .source_terms = b.terms.items.len,
         };
@@ -517,7 +517,7 @@ pub fn main(init: std.process.Init) !void {
         try output.interface.print(
             "{s}{{\"hypotheses\":{d},\"imageBytes\":{d},\"functions\":{d}," ++
                 "\"blocks\":{d},\"sourceFunctions\":{d},\"sourceTerms\":{d}}}",
-            .{ if (i == 0) "" else ",", count, try boundary.image_v2.encodedLength(program), program.functions.len, program.blocks.len, fixture.source_functions, fixture.source_terms },
+            .{ if (i == 0) "" else ",", count, try boundary.data_v2.program_image.encodedLength(program), program.functions.len, program.blocks.len, fixture.source_functions, fixture.source_terms },
         );
     }
     try output.interface.writeAll("]}\n");

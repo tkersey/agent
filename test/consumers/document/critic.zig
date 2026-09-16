@@ -243,7 +243,7 @@ test "delayed child lowers with answer-only and declared abandonment replies" {
             .close_conversation = if (controls) unit else null,
         });
         const entry = try define(&b, interaction);
-        var compiled = try boundary.program.compile(testing.allocator, b.module(entry, unit));
+        var compiled = try boundary.source.construct(testing.allocator, b.module(entry, unit));
         defer compiled.deinit();
         try testing.expect(compiled.program.blocks.len > 0);
     }

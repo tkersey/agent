@@ -65,7 +65,7 @@ fn boundReply(a: std.mem.Allocator, request_bytes: []const u8, answer: []const u
 fn execute(module: source.Module, registry: *agent.admission.Registry, expected: []const u8) !usize {
     const a = std.testing.allocator;
     try agent.admission.verify(a, module, registry);
-    var compiled = try boundary.program.compile(a, module);
+    var compiled = try boundary.source.construct(a, module);
     defer compiled.deinit();
     var result = try world.run(a, .{
         .program = .{ .records = compiled.program },
@@ -172,7 +172,7 @@ test "application code cannot mint a live resource with raw source construction"
     try b.define(entry, try agent.observation.consumeEvidence(c, d, entry, forged));
     const module = b.module(entry, try b.scalar(void));
     try agent.admission.verify(std.testing.allocator, module, &registry);
-    try std.testing.expectError(error.InvalidOwnership, boundary.program.compile(std.testing.allocator, module));
+    try std.testing.expectError(error.InvalidOwnership, boundary.source.construct(std.testing.allocator, module));
 }
 
 test "authored simulation cannot intercept the raw live read to mint evidence" {

@@ -1,4 +1,4 @@
-//! Agent 4 semantic model effects. Values are constructed by authored BPI2;
+//! Agent 4 semantic model effects. Values are constructed by authored BPI3;
 //! the environment only marshals the declared provider protocol and normalizes.
 const std = @import("std");
 const contracts = @import("agent_contracts");

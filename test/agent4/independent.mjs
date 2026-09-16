@@ -65,7 +65,7 @@ function integer(value) {
   bytes.writeBigUInt64LE(BigInt(value));
   return bytes;
 }
-const image = (family, name) => fs.readFileSync(path.join(fixtures, family, `${name}.bpi2`));
+const image = (family, name) => fs.readFileSync(path.join(fixtures, family, `${name}.bpi3`));
 
 const twice = image("dialogue", "twice");
 const dialogueInitial = { image: twice, initialArgs: new Uint8Array() };

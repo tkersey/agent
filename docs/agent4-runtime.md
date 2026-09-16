@@ -1,13 +1,12 @@
 # Agent 4 runtime and portable use archive
 
-Agent authoring emits ordinary Boundary BPI2. The unchanged World interpreter
-executes it; unfinished control is contained in PST2. The JavaScript bridge
-imports no Zig authoring module and introduces no additional execution format.
-
-The checked-in dependency lock currently identifies **released integration**:
-Boundary `42a09b92c2870ab3eab923fe68ca2645eb710000` and World
-`d075169a4805d999ceba4c37b3e1c925b78c3bf9`. These commits match the published
-Boundary 2.0.2 and World 5.0.2 release tags.
+Agent authoring now emits BPI3 using Boundary
+`3919d7ec5ab09973b49643c96477c218d0a77f08`. The lock is **candidate integration**:
+its World entry still identifies predecessor
+`d075169a4805d999ceba4c37b3e1c925b78c3bf9`, pending runtime migration. This is not
+a supported released pair, and the ABI 2 loader below cannot execute the new
+images. The remaining sections document the predecessor runner contract until
+its ABI 3 replacement is complete; see [current status](compositional-execution.md).
 The exact runtime contents, kernel digest,
 public API and physical profile are in
 `conformance/agent4/dependencies.lock.json`. The loader checks this Agent-owned

@@ -161,8 +161,8 @@ async function measureEmission(options) {
   const metricsBytes = await requiredFile(join(directory, 'source-metrics.json'));
   const metrics = JSON.parse(metricsBytes);
   const images = [];
-  for (const file of ['direct.bpi2', 'facade.bpi2', 'sharing-1.bpi2', 'sharing-8.bpi2', 'sharing-64.bpi2', 'conversation.bpi2',
-    'inquiry-repair.bpi2', 'inquiry-repeated.bpi2', 'inquiry-react.bpi2']) {
+  for (const file of ['direct.bpi3', 'facade.bpi3', 'sharing-1.bpi3', 'sharing-8.bpi3', 'sharing-64.bpi3', 'conversation.bpi3',
+    'inquiry-repair.bpi3', 'inquiry-repeated.bpi3', 'inquiry-react.bpi3']) {
     const actual = await requiredFile(join(directory, file));
     assert.deepEqual(actual, await requiredFile(join(options.fixtures, file)),
       'timed source emission must reproduce the exact functional fixture');
@@ -214,9 +214,9 @@ async function measureEmission(options) {
 }
 
 async function minimalFacade(world, kernel, fixtures) {
-  const direct = await requiredFile(join(fixtures, 'direct.bpi2'));
-  const facade = await requiredFile(join(fixtures, 'facade.bpi2'));
-  assert.deepEqual(facade, direct, 'minimal facade must produce identical canonical BPI2 without deleting instructions');
+  const direct = await requiredFile(join(fixtures, 'direct.bpi3'));
+  const facade = await requiredFile(join(fixtures, 'facade.bpi3'));
+  assert.deepEqual(facade, direct, 'minimal facade must produce identical canonical BPI3 without deleting instructions');
   const observations = [];
   for (const [name, image] of [['direct', direct], ['facade', facade]]) {
     const args = await requiredFile(join(fixtures, `${name}.args`));
@@ -233,14 +233,14 @@ async function minimalFacade(world, kernel, fixtures) {
     observations.push({ name, image: identity(image), initialArgs: identity(args),
       requests: 1, stateBytes: parked.state.length, result: identity(completed.value) });
   }
-  return { status: 'PASS', relation: 'identical canonical BPI2 and independently prescribed effect/result', observations };
+  return { status: 'PASS', relation: 'identical canonical BPI3 and independently prescribed effect/result', observations };
 }
 
 async function sharing(kernel, fixtures, sourceMetrics) {
   assert.ok(Array.isArray(sourceMetrics.sharing), 'source-metrics must list sharing witnesses');
   const observations = [];
   for (const count of [1, 8, 64]) {
-    const image = await requiredFile(join(fixtures, `sharing-${count}.bpi2`));
+    const image = await requiredFile(join(fixtures, `sharing-${count}.bpi3`));
     const rows = sourceMetrics.sharing.filter(row => row.installations === count);
     assert.equal(rows.length, 1, `one source metric must bind sharing-${count}`);
     const row = rows[0];
@@ -295,7 +295,7 @@ async function observeTraceBoundary(trace, kernel, image, input, expected, label
 }
 
 async function conversations(world, kernel, options) {
-  const image = await requiredFile(join(options.fixtures, 'conversation.bpi2'));
+  const image = await requiredFile(join(options.fixtures, 'conversation.bpi3'));
   const initialArgs = await requiredFile(join(options.fixtures, 'conversation.args'));
   assert.equal(initialArgs.length, 0);
   const observations = [];
@@ -370,7 +370,7 @@ async function conversations(world, kernel, options) {
 }
 
 async function alternatives(world, kernel, options) {
-  const path = resolve(options.fixtures, '../multi/multi.bpi2');
+  const path = resolve(options.fixtures, '../multi/multi.bpi3');
   const image = await requiredFile(path);
   const argsSchema = { root: 0, types: [{ seq: 1 }, 'u64'] };
   const resultSchema = { root: 0, types: [{ seq: 1 }, { product: [2, 2, 2] }, 'u64'] };
@@ -427,8 +427,8 @@ async function alternatives(world, kernel, options) {
 }
 
 async function clarification(options, sourceMetrics) {
-  const image = join(options.fixtures, 'document-consequence.bpi2');
-  const baseline = join(options.fixtures, 'clarify-first.bpi2');
+  const image = join(options.fixtures, 'document-consequence.bpi3');
+  const baseline = join(options.fixtures, 'clarify-first.bpi3');
   for (const [path, metric] of [[image, sourceMetrics.clarification.consequenceFirst],
     [baseline, sourceMetrics.clarification.clarifyFirst]]) {
     const bytes = await requiredFile(path);
@@ -455,8 +455,8 @@ async function inquiryImages(options, sourceMetrics) {
   const rows = [];
   for (const name of ['repair', 'repeated', 'react']) {
     const metric = sourceMetrics.inquiry[name];
-    const bytes = await requiredFile(join(options.fixtures, `inquiry-${name}.bpi2`));
-    const application = await requiredFile(join(dirname(options.fixtures), 'inquiry', `${name}.bpi2`));
+    const bytes = await requiredFile(join(options.fixtures, `inquiry-${name}.bpi3`));
+    const application = await requiredFile(join(dirname(options.fixtures), 'inquiry', `${name}.bpi3`));
     assert.deepEqual(bytes, application, 'observed compilation must reproduce the application image');
     assert.equal(sha256(bytes), metric.imageSha256);
     assert.equal(bytes.length, metric.imageBytes);
@@ -506,7 +506,7 @@ export async function runEconomy(args) {
     report.inputs.sourceMetrics = identity(metricsBytes);
     report.sourceMetrics = sourceMetrics;
     for (const name of ['direct', 'facade', 'conversation']) {
-      const image = await requiredFile(join(options.fixtures, `${name}.bpi2`));
+      const image = await requiredFile(join(options.fixtures, `${name}.bpi3`));
       assert.equal(sourceMetrics[name].imageSha256, sha256(image), `${name} metrics must bind the image actually executed`);
       assert.equal(sourceMetrics[name].imageBytes, image.length);
     }

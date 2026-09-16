@@ -147,46 +147,46 @@ pub fn build(b: *std.Build) void {
     const inquiry_broker_exe = g.emitter("agent4-inquiry-broker", inquiry_broker);
     const inquiry_app_exe = g.emitter("agent4-inquiry-application", inquiry_app);
     const inquiry_app_images = b.step("inquiry-application-images", "Emit the inquiry consumer and schemas");
-    g.emit(inquiry_app_images, inquiry_app_exe, &.{}, "inquiry/repair.bpi2");
-    g.emit(inquiry_app_images, inquiry_app_exe, &.{"repeat"}, "inquiry/repeated.bpi2");
-    g.emit(inquiry_app_images, inquiry_app_exe, &.{"react"}, "inquiry/react.bpi2");
+    g.emit(inquiry_app_images, inquiry_app_exe, &.{}, "inquiry/repair.bpi3");
+    g.emit(inquiry_app_images, inquiry_app_exe, &.{"repeat"}, "inquiry/repeated.bpi3");
+    g.emit(inquiry_app_images, inquiry_app_exe, &.{"react"}, "inquiry/react.bpi3");
     for ([_][]const u8{ "task-schema", "outcome-schema" }) |mode| {
         g.emit(inquiry_app_images, inquiry_app_exe, &.{mode}, b.fmt("inquiry/{s}.bin", .{mode}));
     }
     inquiry_app_check.dependOn(inquiry_app_images);
     emit.dependOn(inquiry_app_images);
-    g.emit(emit, inquiry_broker_exe, &.{}, "inquiry/broker.bpi2");
-    g.emit(inquiry_check, inquiry_broker_exe, &.{}, "inquiry/broker.bpi2");
+    g.emit(emit, inquiry_broker_exe, &.{}, "inquiry/broker.bpi3");
+    g.emit(inquiry_check, inquiry_broker_exe, &.{}, "inquiry/broker.bpi3");
     for ([_][]const u8{ "owned", "composition", "followup" }) |mode| {
-        g.emit(emit, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi2", .{mode}));
-        g.emit(inquiry_check, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi2", .{mode}));
+        g.emit(emit, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi3", .{mode}));
+        g.emit(inquiry_check, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi3", .{mode}));
     }
     for ([_][]const u8{ "twice", "dispose_owned", "exchange", "deep_exchange", "wide_exchange" }) |mode|
-        g.emit(emit, dialogue_exe, &.{mode}, b.fmt("dialogue/{s}.bpi2", .{mode}));
+        g.emit(emit, dialogue_exe, &.{mode}, b.fmt("dialogue/{s}.bpi3", .{mode}));
     const multi = g.module("test/agent4/multi_probe.zig");
     multi.addImport("deliberation", g.helper("deliberation"));
     const multi_exe = g.emitter("agent4-multi", multi);
     for ([_][]const u8{ "multi", "cleanup", "dispose" }) |mode|
-        g.emit(emit, multi_exe, &.{mode}, b.fmt("multi/{s}.bpi2", .{mode}));
+        g.emit(emit, multi_exe, &.{mode}, b.fmt("multi/{s}.bpi3", .{mode}));
     emit.dependOn(&b.addInstallArtifact(multi_exe, .{}).step);
     const approval_exe = g.emitter("agent4-approval", g.module("test/agent4/approval_probe.zig"));
-    g.emit(emit, approval_exe, &.{}, "approval/approval.bpi2");
-    g.emit(emit, approval_exe, &.{"evidence"}, "approval/approval-evidence.bpi2");
-    g.emit(emit, approval_exe, &.{"scoped"}, "approval/approval-scoped.bpi2");
-    g.emit(emit, approval_exe, &.{"scoped_evidence"}, "approval/approval-scoped-evidence.bpi2");
+    g.emit(emit, approval_exe, &.{}, "approval/approval.bpi3");
+    g.emit(emit, approval_exe, &.{"evidence"}, "approval/approval-evidence.bpi3");
+    g.emit(emit, approval_exe, &.{"scoped"}, "approval/approval-scoped.bpi3");
+    g.emit(emit, approval_exe, &.{"scoped_evidence"}, "approval/approval-scoped-evidence.bpi3");
     const review = g.module("test/consumers/review/main.zig");
     g.testModule(check, review);
     const review_exe = g.emitter("agent4-review", review);
     for ([_][]const u8{ "mid_review", "clarify_first", "human", "model", "rule", "react" }) |mode| {
-        for ([_][]const u8{ "bpi2", "args" }) |format|
+        for ([_][]const u8{ "bpi3", "args" }) |format|
             g.emit(emit, review_exe, &.{ mode, format }, b.fmt("review/{s}.{s}", .{ mode, format }));
     }
     const document_exe = g.emitter("agent4-document", g.module("test/consumers/document/main.zig"));
-    g.emit(emit, document_exe, &.{}, "document/document.bpi2");
+    g.emit(emit, document_exe, &.{}, "document/document.bpi3");
     g.emit(emit, document_exe, &.{"args"}, "document/document.args");
-    g.emit(emit, document_exe, &.{"consequence"}, "document/consequence.bpi2");
+    g.emit(emit, document_exe, &.{"consequence"}, "document/consequence.bpi3");
     g.emit(emit, document_exe, &.{"consequence-args"}, "document/consequence.args");
-    g.emit(emit, document_exe, &.{"consequence-clarify-first"}, "document/clarify-first.bpi2");
+    g.emit(emit, document_exe, &.{"consequence-clarify-first"}, "document/clarify-first.bpi3");
     const clarification_economy = g.emitter("clarification-scaling", g.module("test/agent4/clarification.zig"));
     g.emit(emit, clarification_economy, &.{}, "clarification/scaling.json");
     const inventory = b.addSystemCommand(&.{ "node", "tools/agent4/emit_inventory.mjs", b.getInstallPath(.prefix, "agent4") });
@@ -271,23 +271,23 @@ pub fn build(b: *std.Build) void {
         if (inquiry_host) runtime_work.dependOn(&inquiry_repeated.step);
         const broker_run = b.addSystemCommand(&.{
             "node",                                                  "test/agent4/inquiry_broker_runtime.mjs", runtime_path,
-            b.getInstallPath(.prefix, "agent4/inquiry/broker.bpi2"),
+            b.getInstallPath(.prefix, "agent4/inquiry/broker.bpi3"),
         });
         broker_run.addFileArg(native_exe.getEmittedBin());
         broker_run.addFileArg(multi_exe.getEmittedBin());
         broker_run.step.dependOn(&runtime_guard.step);
-        g.emit(&broker_run.step, inquiry_broker_exe, &.{}, "inquiry/broker.bpi2");
+        g.emit(&broker_run.step, inquiry_broker_exe, &.{}, "inquiry/broker.bpi3");
         inquiry_check.dependOn(&broker_run.step);
         runtime_work.dependOn(&broker_run.step);
         for ([_][]const u8{ "owned", "composition", "followup" }) |mode| {
             const inquiry_run = b.addSystemCommand(&.{
                 "node",                                                               "test/agent4/inquiry_runtime.mjs", runtime_path,
-                b.getInstallPath(.prefix, b.fmt("agent4/inquiry/{s}.bpi2", .{mode})),
+                b.getInstallPath(.prefix, b.fmt("agent4/inquiry/{s}.bpi3", .{mode})),
             });
             inquiry_run.addFileArg(native_exe.getEmittedBin());
             inquiry_run.addFileArg(multi_exe.getEmittedBin());
             inquiry_run.step.dependOn(&runtime_guard.step);
-            g.emit(&inquiry_run.step, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi2", .{mode}));
+            g.emit(&inquiry_run.step, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi3", .{mode}));
             inquiry_check.dependOn(&inquiry_run.step);
             runtime_work.dependOn(&inquiry_run.step);
         }

@@ -78,7 +78,7 @@ function readInventory(directory) {
     if (!safeRelative(record.path) || record.path === "inventory.json" ||
         !roles.has(record.role) || !/^[a-f0-9]{64}$/.test(record.sha256) || records.has(record.path))
       fail("invalid or duplicate inventory file");
-    const extension = record.role === "image" ? /\.bpi2$/ : record.role === "schema" ? /\.bin$/ : record.role === "initial-args" ? /\.(bin|args)$/ :
+    const extension = record.role === "image" ? /\.bpi3$/ : record.role === "schema" ? /\.bin$/ : record.role === "initial-args" ? /\.(bin|args)$/ :
       record.role === "contract" ? /\.(md|txt)$/ : /\.(json|bin|txt|md)$/;
     if (!extension.test(record.path)) fail(`unexpected ${record.role} file type: ${record.path}`);
     const path = join(directory, record.path);
@@ -182,7 +182,7 @@ export function packageArtifacts(argv) {
   sources.set("conformance/agent4/dependencies.lock.json", readRegular(lockPath));
   for (const [path, bytes] of sources) files.set(path, bytes);
   files.set("README.md", Buffer.from(`# Agent ${options.version}: resumable interaction examples\n\n` +
-    `This source-independent use archive contains compiled BPI2 and typed InitialArgs.\n` +
+    `This source-independent use archive contains compiled BPI3 and typed InitialArgs.\n` +
     `Supply the unchanged World runtime authenticated by conformance/agent4/dependencies.lock.json.\n` +
     `The dependency tuple is ${lock.status}; this archive does not claim completion, stable release, or live-model validation.\n\n` +
     `See docs/agent4-runtime.md for start, resume, inspect, cancel and raw World usage.\n` +

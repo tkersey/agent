@@ -116,11 +116,11 @@ test "single answer admission compiles as ordinary Boundary functions" {
     defer builder.deinit();
     const entry = try Fixture.interpreter(&builder);
     try std.testing.expectEqual(entry, try Fixture.interpreter(&builder));
-    var compiled = try boundary.program.compile(std.testing.allocator, builder.module(entry, try builder.scalar(void)));
+    var compiled = try boundary.source.construct(std.testing.allocator, builder.module(entry, try builder.scalar(void)));
     defer compiled.deinit();
     try std.testing.expect(compiled.program.functions.len > 1);
     const all = try Fixture.interpretAll(&builder);
-    var compiled_all = try boundary.program.compile(std.testing.allocator, builder.module(all, try builder.scalar(void)));
+    var compiled_all = try boundary.source.construct(std.testing.allocator, builder.module(all, try builder.scalar(void)));
     defer compiled_all.deinit();
 }
 

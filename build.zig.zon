@@ -3,8 +3,8 @@
     .version = "4.0.0-dev.0",
     .dependencies = .{
         .boundary = .{
-            .url = "https://github.com/tkersey/boundary/archive/42a09b92c2870ab3eab923fe68ca2645eb710000.tar.gz",
-            .hash = "boundary-2.0.2-flclaCKdMgCw2_TeuCpz6p3r3BAlrrmKKoX4Bx_Pr6Sy",
+            .url = "https://github.com/tkersey/boundary/archive/3919d7ec5ab09973b49643c96477c218d0a77f08.tar.gz",
+            .hash = "boundary-2.0.2-flclaP0cOQBOWPhm6w2J7cjlrZgHUKQL4mHNzmrevL7s",
         },
     },
     .minimum_zig_version = "0.16.0",
@@ -18,6 +18,7 @@
         "src",
         "runtime",
         "docs/architecture.md",
+        "docs/compositional-execution.md",
         "docs/security_model.md",
         "docs/agent4-runtime.md",
         "docs/migration_from_3.md",

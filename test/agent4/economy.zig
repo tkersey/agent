@@ -280,7 +280,7 @@ fn measure(init: std.process.Init, directory: []const u8, name: []const u8, work
     var observer: Observer = .{ .io = init.io };
     var diagnostic: boundary.program.Diagnostic = .{};
     const compile_start = std.Io.Clock.awake.now(init.io);
-    var compiled = boundary.program.compileObserved(init.gpa, module, .{
+    var compiled = boundary.source.constructObserved(init.gpa, module, .{
         .diagnostic = &diagnostic,
         .observer = .{ .context = &observer, .enter = Observer.enter },
     }) catch |err| {
@@ -328,13 +328,13 @@ fn compiledSystem(init: std.process.Init, directory: []const u8, name: []const u
     return metrics;
 }
 
-fn saveCompiled(init: std.process.Init, directory: []const u8, name: []const u8, compiled: source.Compiled) !Metrics {
+fn saveCompiled(init: std.process.Init, directory: []const u8, name: []const u8, compiled: source.Construction) !Metrics {
     const started = std.Io.Clock.awake.now(init.io);
-    const storage = try init.gpa.alloc(u8, try data.image.encodedLength(compiled.program));
+    const storage = try init.gpa.alloc(u8, try data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(storage);
     const image = try compiled.encode(init.gpa, storage);
     const duration = elapsed(init.io, started);
-    try save(init, directory, try std.fmt.allocPrint(init.gpa, "{s}.bpi2", .{name}), image);
+    try save(init, directory, try std.fmt.allocPrint(init.gpa, "{s}.bpi3", .{name}), image);
     const hex = std.fmt.bytesToHex(data.wire.digest(image), .lower);
     const identity = try init.gpa.dupe(u8, &hex);
     const program = compiled.program;
@@ -393,7 +393,7 @@ fn save(init: std.process.Init, directory: []const u8, name: []const u8, bytes: 
 fn warmup(allocator: std.mem.Allocator) !void {
     var b = source.Builder.init(allocator);
     defer b.deinit();
-    var control = try boundary.program.compile(allocator, try direct(&b));
+    var control = try boundary.source.construct(allocator, try direct(&b));
     defer control.deinit();
     var minimal = try agent.compile(allocator, MinimalSystem);
     defer minimal.deinit();
@@ -404,7 +404,7 @@ fn delta(facade_ns: u64, direct_ns: u64) i128 {
 }
 
 fn overhead(control: Metrics, minimal: Metrics) struct {
-    relation: []const u8 = "facade minus matched direct Boundary; identical canonical BPI2",
+    relation: []const u8 = "facade minus matched direct Boundary; identical canonical BPI3",
     qualification: []const u8 = "one warmed pair in direct/facade order; observer and clock costs included, not a universal overhead bound",
     descriptorConstructionNs: i128,
     sourceConstructionNs: i128,
@@ -538,16 +538,16 @@ test "minimal public facade has the exact direct Boundary image" {
     const a = std.testing.allocator;
     var b = source.Builder.init(a);
     defer b.deinit();
-    var control = try boundary.program.compile(a, try direct(&b));
+    var control = try boundary.source.construct(a, try direct(&b));
     defer control.deinit();
     var minimal = try agent.compile(a, MinimalSystem);
     defer minimal.deinit();
-    const first = try data.image.identity(control.program);
-    const second = try data.image.identity(minimal.program);
+    const first = try data.program_image.identity(a, control.program);
+    const second = try data.program_image.identity(a, minimal.program);
     try std.testing.expectEqualSlices(u8, &first, &second);
 }
 
-test "authoring and forwarded compiler observations do not change canonical BPI2" {
+test "authoring and forwarded compiler observations do not change canonical BPI3" {
     const Trace = struct {
         authoring: [5]agent.CompileStage = undefined,
         authoring_count: usize = 0,
@@ -572,9 +572,9 @@ test "authoring and forwarded compiler observations do not change canonical BPI2
         .boundary_options = .{ .observer = .{ .context = &trace, .enter = Trace.compiler } },
     });
     defer observed.deinit();
-    const left = try a.alloc(u8, try data.image.encodedLength(plain.program));
+    const left = try a.alloc(u8, try data.program_image.encodedLength(plain.program));
     defer a.free(left);
-    const right = try a.alloc(u8, try data.image.encodedLength(observed.program));
+    const right = try a.alloc(u8, try data.program_image.encodedLength(observed.program));
     defer a.free(right);
     try std.testing.expectEqualSlices(u8, try plain.encode(a, left), try observed.encode(a, right));
     try std.testing.expectEqual(@as(usize, 5), trace.authoring_count);
@@ -588,12 +588,12 @@ test "retention and shared-scope consumers compile using public compositions" {
     const a = std.testing.allocator;
     var b = source.Builder.init(a);
     defer b.deinit();
-    var output = try boundary.program.compile(a, try conversation(&b));
+    var output = try boundary.source.construct(a, try conversation(&b));
     defer output.deinit();
     try std.testing.expectEqual(@as(usize, 1), output.program.effects.len);
     var scope_builder = source.Builder.init(a);
     defer scope_builder.deinit();
-    var shared = try boundary.program.compile(a, try sharing(&scope_builder, 8));
+    var shared = try boundary.source.construct(a, try sharing(&scope_builder, 8));
     defer shared.deinit();
     try std.testing.expectEqual(@as(usize, 1), shared.program.handlers.len);
 }

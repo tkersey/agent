@@ -20,7 +20,7 @@ const u64 = (value) => {
   bytes.writeBigUInt64LE(BigInt(value));
   return bytes;
 };
-const read = (name) => fs.readFileSync(path.join(fixturePath, `${name}.bpi2`));
+const read = (name) => fs.readFileSync(path.join(fixturePath, `${name}.bpi3`));
 const records = [];
 
 for (const [name, effect, payload, reply, result] of [

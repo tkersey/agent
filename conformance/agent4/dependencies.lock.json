@@ -1,49 +1,49 @@
 {
   "format": "agent4-dependency-lock/v1",
-  "status": "released-integration",
+  "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "42a09b92c2870ab3eab923fe68ca2645eb710000",
-    "gitTree": "e5c9d7e34fe6fe96f42157c6903a672f0bee1fd4",
+    "commit": "3919d7ec5ab09973b49643c96477c218d0a77f08",
+    "gitTree": "facb6f3ae63244fedcc02a4c55b886889daf8d0e",
     "version": "2.0.2",
     "source": {
-      "inventorySha256": "599c56caccbcb75448997936c3393db486f9aab93cb9c03910f305795581cce3",
-      "entries": 273,
-      "bytes": 7954716
+      "inventorySha256": "005b157eca5b1e0e2bb4224a28f4a554b5c0f780df78c28fd26dce877b383cdc",
+      "entries": 320,
+      "bytes": 8380663
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/42a09b92c2870ab3eab923fe68ca2645eb710000.tar.gz",
-      "sha256": "17cfe0256c4bf302bc6a5037bb75012b283dfefdbdb8ec7fc1b71717285babe1",
-      "bytes": 1258938
+      "url": "https://github.com/tkersey/boundary/archive/3919d7ec5ab09973b49643c96477c218d0a77f08.tar.gz",
+      "sha256": "297ccfda4ed261076e0b15d2d4876bf4d433856e2681a7af8e4415129a593cc1",
+      "bytes": 1353486
     },
-    "authentication": "GitHub commit API tree identity equals recomputed complete source and downloaded archive tree; content inventories also agree",
+    "authentication": "GitHub commit API tree identity equals recomputed downloaded source tree; archive and content inventories independently bound",
     "package": {
-      "zigHash": "boundary-2.0.2-flclaCKdMgCw2_TeuCpz6p3r3BAlrrmKKoX4Bx_Pr6Sy",
+      "zigHash": "boundary-2.0.2-flclaP0cOQBOWPhm6w2J7cjlrZgHUKQL4mHNzmrevL7s",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "61dca5385d222b6e78319cfc8ab3ffda9f948b3d0fc18b2feaccfef830d59fa3",
-          "entries": 258,
-          "bytes": 3317026,
-          "derivation": "Exact Zig 0.16.0 build --fetch=all materialization from the pinned archive in a fresh isolated package project; no build runner executed"
+          "inventorySha256": "61fb491cb294323980f0a8751e6992cb4a44bef2d4a7712a7c4af27da7c0e649",
+          "entries": 305,
+          "bytes": 3742973,
+          "derivation": "Exact Zig 0.16.0 package materialization by an isolated data-only dependency build; no application compiler or runtime executed"
         },
         "archive-extracted": {
-          "inventorySha256": "811b620168cb9e31ab3bcf060955160980d9b0d222407bbd2b5d18fbbc9536cc",
-          "entries": 258,
-          "bytes": 3317026,
-          "derivation": "Exact ordinary tar extraction of the independently digest-bound Zig package-cache archive under umask 022"
+          "inventorySha256": "c9eda4443f6532e74577d284689fd514a1ca091676fb4d7db82998c83fa93bce",
+          "entries": 305,
+          "bytes": 3742973,
+          "derivation": "Exact ordinary extraction of the independently digest-bound Zig package-cache archive with normalized source modes"
         }
       },
       "archive": {
-        "sha256": "a3680fd0d1eaa8ba04e1d6a5c914810c6dbe119486476b3f3ef22b10e091a0c2",
-        "bytes": 483491
+        "sha256": "5f203d74dcb060f9c2220b58761f61c5091474095ad309195b762f0f99a74828",
+        "bytes": 571230
       }
     },
     "api": {
       "authoring": "src/v2/root.zig",
       "data": "src/v2/data/root.zig",
       "source": "src/v2/source.zig",
-      "profile": "Boundary 2 portable source and BPI2/PST2/ERQ2/ERS2/PKI2/PKO2",
+      "profile": "Stable-activation source construction and BPI3/PST3/ERQ3/ERS3/PKI3/PKO3 development contracts",
       "files": [
         {
           "path": "src/v2/root.zig",
@@ -51,15 +51,15 @@
         },
         {
           "path": "src/v2/data/root.zig",
-          "sha256": "38c2de63f8ebf62ed451211493ac10ff4ed8e437e2203d72470ee2624f9ad1b5"
+          "sha256": "eeb60921c614898a26d9ded24aa91b3a2b5e6240ce3bbbf944a93cd787d4374f"
         },
         {
           "path": "src/v2/source.zig",
-          "sha256": "075d94ff8c3d39a98a66aaf85de6ab516c7079b0cffcedcc4e0d8b3924c3164a"
+          "sha256": "1b60defd3c1c5973328a4b6b8a0b71d051272f28839c2097ba98f1470d0be839"
         },
         {
-          "path": "docs/bpi2-wire.md",
-          "sha256": "d4a9130ffaf277c7baecef48541f5177e29e5c8b31337f5ef20079e84a012271"
+          "path": "docs/bpi3-wire.md",
+          "sha256": "db328f6c19d3993554bece851e6f788f78959ac858d3abb5b328705c5cecdf32"
         }
       ]
     }
@@ -260,12 +260,13 @@
     "architecture": "arm64"
   },
   "publicationObservation": {
-    "boundaryLatest": "v2.0.2",
-    "worldLatest": "v5.0.2",
-    "compatiblePublishedReleaseObserved": true
+    "boundarySource": "successor draft branch",
+    "worldSource": "predecessor runtime pending coordinated migration",
+    "compatiblePublishedReleaseObserved": false
   },
   "limitations": [
-    "Input identities and unchanged default kernel are authenticated; consumer compatibility is established only by separately executed Agent acceptance tests.",
-    "Runtime digest is an Agent-owned expected value from an unchanged source build, not an upstream publication attestation."
+    "Boundary authoring is pinned to the successor branch; World runtime migration and matching successor runtime authentication remain in progress.",
+    "The stored Boundary package version remains 2.0.2 until coordinated major-version cutover; this candidate is not a released compatible pair.",
+    "All source/archive/package authentication remains exact; consumer acceptance is established only by executed checks."
   ]
 }

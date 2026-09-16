@@ -2,6 +2,11 @@
 
 **Build agents as portable, resumable programs.**
 
+This branch is migrating to Boundary 3 / World 6. Agent authoring now emits BPI3
+through an exactly pinned successor compiler; the normal runtime loader and
+integration package still need ABI 3 migration. The predecessor runtime examples
+below do not yet run these new images. See [migration status](docs/compositional-execution.md).
+
 Agent is a Zig library for building agents that work with models, people, and
 tools. You author the control flow; [Boundary](https://github.com/tkersey/boundary)
 checks and compiles it into portable program data;

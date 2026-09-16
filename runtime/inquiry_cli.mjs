@@ -71,7 +71,7 @@ async function load(config) {
   const host = await loadWorldRuntime({ runtimePath: config.worldRuntime });
   const world = await import(pathToFileURL(host.identity.entrypoint));
   const kernel = await world.admitProcessKernel(await readFile(host.identity.kernelPath), { expectedSha256: host.identity.kernelSha256 });
-  const image = await readFile(join(config.images, config.strategy === 'inquiry' ? 'repair.bpi2' : 'react.bpi2'));
+  const image = await readFile(join(config.images, config.strategy === 'inquiry' ? 'repair.bpi3' : 'react.bpi3'));
   return { host, world, kernel, image };
 }
 

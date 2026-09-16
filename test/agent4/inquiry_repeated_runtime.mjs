@@ -15,7 +15,7 @@ import { native, wasmtime } from "./independent/execute.mjs";
 const [runtimePath, fixtures, nativePath, inspectorPath, ...extra] = process.argv.slice(2);
 assert(runtimePath && fixtures && nativePath && inspectorPath && !extra.length);
 const runtime = verifyRuntime(runtimePath), world = await import(pathToFileURL(runtime.entrypoint));
-const kernel = await readFile(runtime.kernelPath), image = await readFile(join(fixtures, "repeated.bpi2"));
+const kernel = await readFile(runtime.kernelPath), image = await readFile(join(fixtures, "repeated.bpi3"));
 const schema = decodeSchema(await readFile(join(fixtures, "task-schema.bin")));
 const requirements = await readFile(new URL("../consumers/inquiry/contract.txt", import.meta.url), "utf8");
 const executor = await createInquiryExecutor(); assert.equal(executor.kind, "qualified");

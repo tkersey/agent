@@ -11,12 +11,12 @@ pub fn build(b: *std.Build) void {
     });
     const emitter = b.addExecutable(.{ .name = "document-emitter", .root_module = module });
     b.installArtifact(emitter);
-    for ([_][]const u8{ "bpi2", "args" }) |format| {
+    for ([_][]const u8{ "bpi3", "args" }) |format| {
         const run = b.addRunArtifact(emitter);
         run.addArg(format);
         b.getInstallStep().dependOn(&b.addInstallFileWithDir(run.captureStdOut(.{}), .prefix, b.fmt("document.{s}", .{format})).step);
     }
-    for ([_][]const u8{ "consequence", "consequence-args" }, [_][]const u8{ "consequence.bpi2", "consequence.args" }) |mode, filename| {
+    for ([_][]const u8{ "consequence", "consequence-args" }, [_][]const u8{ "consequence.bpi3", "consequence.args" }) |mode, filename| {
         const run = b.addRunArtifact(emitter);
         run.addArg(mode);
         b.getInstallStep().dependOn(&b.addInstallFileWithDir(

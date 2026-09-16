@@ -21,9 +21,9 @@ test "static-code callable preserves actual World observations and branch work" 
         const changed = try witness.build(&agent_builder, &agent_registry, .static_code, count);
         try std.testing.expectError(error.SpeculativeEffect, agent.admission.verify(allocator, original, &raw_registry));
         try agent.admission.verify(allocator, changed, &agent_registry);
-        var raw = try boundary.program.compile(allocator, original);
+        var raw = try boundary.source.construct(allocator, original);
         defer raw.deinit();
-        var selected = try boundary.program.compile(allocator, changed);
+        var selected = try boundary.source.construct(allocator, changed);
         defer selected.deinit();
         var raw_stats: world.Statistics = .{};
         var selected_stats: world.Statistics = .{};
@@ -54,10 +54,10 @@ test "static-code callable preserves actual World observations and branch work" 
         prior_schemas = selected.program.schemas.len;
         std.debug.print("callable installs={d} original_bytes={d} selected_bytes={d} " ++
             "functions={d} schemas={d} transitions={d} templates={d} branches={d}\n", .{
-            count,                                                 try boundary.image_v2.encodedLength(raw.program),
-            try boundary.image_v2.encodedLength(selected.program), selected.program.functions.len,
-            selected.program.schemas.len,                          selected_stats.transitions,
-            selected_stats.multi_templates,                        selected_stats.branch_activations,
+            count,                                                              try boundary.data_v2.program_image.encodedLength(raw.program),
+            try boundary.data_v2.program_image.encodedLength(selected.program), selected.program.functions.len,
+            selected.program.schemas.len,                                       selected_stats.transitions,
+            selected_stats.multi_templates,                                     selected_stats.branch_activations,
         });
     }
 }

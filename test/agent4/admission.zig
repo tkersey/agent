@@ -56,7 +56,7 @@ const Fixture = struct {
     }
 
     fn boundaryCompile(self: *Fixture) !void {
-        var compiled = try bnd.program.compile(allocator, self.b.module(self.entry, self.unit));
+        var compiled = try bnd.source.construct(allocator, self.b.module(self.entry, self.unit));
         defer compiled.deinit();
     }
 
@@ -582,7 +582,7 @@ test "delayed shallow package resumed under hidden-effect multi successor" {
     const saved = try b.variable(package);
     try b.define(root, try b.bind(saved, try b.term(.{ .handle = .{ .handler = initial, .body = try b.lambda(body, bt) } }), try b.term(.{ .resume_with = .{ .resumption = try b.primitive(before, .unpack, &.{try b.reference(saved)}, 0), .argument = try b.constant(void, {}), .handler = successor } })));
     const module = b.module(root, unit);
-    var compiled = try bnd.program.compile(a, module);
+    var compiled = try bnd.source.construct(a, module);
     defer compiled.deinit();
     // Rejection must be Agent's role check, after independent Boundary compile.
     try std.testing.expectError(error.SpeculativeEffect, admission.verify(a, module, &registry));

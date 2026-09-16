@@ -71,19 +71,19 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&b.addInstallFileWithDir(
         scoped.captureStdOut(.{}),
         .prefix,
-        "approval-scoped.bpi2",
+        "approval-scoped.bpi3",
     ).step);
     const with_evidence = b.addRunArtifact(executable);
     with_evidence.addArg("evidence");
     b.getInstallStep().dependOn(&b.addInstallFileWithDir(
         with_evidence.captureStdOut(.{}),
         .prefix,
-        "approval-evidence.bpi2",
+        "approval-evidence.bpi3",
     ).step);
     const run = b.addRunArtifact(executable);
     b.getInstallStep().dependOn(&b.addInstallFileWithDir(
         run.captureStdOut(.{}),
         .prefix,
-        "approval.bpi2",
+        "approval.bpi3",
     ).step);
 }

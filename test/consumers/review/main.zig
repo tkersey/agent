@@ -377,7 +377,7 @@ pub fn main(init: std.process.Init) !void {
     _ = args.next();
     const mode = std.meta.stringToEnum(Mode, args.next() orelse return error.MissingMode) orelse
         return error.InvalidMode;
-    const format = args.next() orelse "bpi2";
+    const format = args.next() orelse "bpi3";
     if (args.next() != null) return error.UnknownArgument;
     var buffer: [4096]u8 = undefined;
     var out = std.Io.File.stdout().writer(init.io, &buffer);
@@ -386,11 +386,11 @@ pub fn main(init: std.process.Init) !void {
         const bytes = try agent.contracts.encodeOwned(u32, init.gpa, value);
         defer init.gpa.free(bytes);
         try out.interface.writeAll(bytes);
-    } else if (std.mem.eql(u8, format, "bpi2")) {
+    } else if (std.mem.eql(u8, format, "bpi3")) {
         inline for (comptime std.meta.tags(Mode)) |candidate| if (mode == candidate) {
             var compiled = try agent.compile(init.gpa, System(candidate));
             defer compiled.deinit();
-            const bytes = try init.gpa.alloc(u8, try boundary.image_v2.encodedLength(compiled.program));
+            const bytes = try init.gpa.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
             defer init.gpa.free(bytes);
             try out.interface.writeAll(try compiled.encode(init.gpa, bytes));
         };

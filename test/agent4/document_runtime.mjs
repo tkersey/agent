@@ -14,7 +14,7 @@ const root = resolve(import.meta.dirname, "../..");
 const [runtimeArgument, imageArgument, ...extra] = process.argv.slice(2);
 assert.equal(extra.length, 0, "usage: document_runtime.mjs [WORLD_RUNTIME [DOCUMENT_IMAGE]]");
 const runtimePath = resolve(runtimeArgument ?? join(root, ".agent4/out/world-runtime"));
-const imagePath = resolve(imageArgument ?? join(root, ".agent4/out/document/document.bpi2"));
+const imagePath = resolve(imageArgument ?? join(root, ".agent4/out/document/document.bpi3"));
 const runtime = await loadWorldRuntime({ runtimePath });
 const world = await import(pathToFileURL(runtime.identity.entrypoint).href);
 const kernelBytes = await readFile(runtime.identity.kernelPath);

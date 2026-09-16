@@ -15,16 +15,16 @@ async function add(path,role,bytes){
   files.push({path,role,sha256:hash(content)});
 }
 for(const name of ['mid_review','clarify_first','human','model','rule','react']){
-  const image=`review/${name}.bpi2`,initialArgs=`review/${name}.args`;
+  const image=`review/${name}.bpi3`,initialArgs=`review/${name}.args`;
   await add(image,'image');await add(initialArgs,'initial-args');
   examples.push({name:`review-${name.replaceAll('_','-')}`,image,initialArgs});
 }
-await add('document/document.bpi2','image');
+await add('document/document.bpi3','image');
 await add('document/document.args','initial-args');
-examples.push({name:'document',image:'document/document.bpi2',initialArgs:'document/document.args'});
-await add('document/consequence.bpi2','image');
+examples.push({name:'document',image:'document/document.bpi3',initialArgs:'document/document.args'});
+await add('document/consequence.bpi3','image');
 await add('document/consequence.args','initial-args');
-examples.push({name:'document-consequence',image:'document/consequence.bpi2',initialArgs:'document/consequence.args'});
+examples.push({name:'document-consequence',image:'document/consequence.bpi3',initialArgs:'document/consequence.args'});
 // A typed, zero-work configuration example. Actual execution supplies a qualified
 // runner, explicit allowances and operator-selected provider/target values.
 const inquiryTask=decodeSchema(await readFile(join(output,'inquiry/task-schema.bin')));
@@ -35,14 +35,14 @@ const inquiryArgs=encodeValue(inquiryTask, [
 ]);
 await add('inquiry/task.args','initial-args',inquiryArgs);
 for(const name of ['repair','repeated','react']){
-  const image=`inquiry/${name}.bpi2`;
+  const image=`inquiry/${name}.bpi3`;
   await add(image,'image');
   examples.push({name:`inquiry-${name}`,image,initialArgs:'inquiry/task.args'});
 }
 for(const name of ['task-schema','outcome-schema'])await add(`inquiry/${name}.bin`,'schema');
 await add('inquiry/contract.txt','contract',await readFile(join(root,'test/consumers/inquiry/contract.txt')));
 for(const name of ['twice','dispose_owned','exchange']){
-  const image=`dialogue/${name}.bpi2`,initialArgs=`dialogue/${name}.args.bin`;
+  const image=`dialogue/${name}.bpi3`,initialArgs=`dialogue/${name}.args.bin`;
   await add(image,'image');await add(initialArgs,'initial-args',new Uint8Array());
   examples.push({name:`dialogue-${name.replaceAll('_','-')}`,image,initialArgs});
 }

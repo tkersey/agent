@@ -14,7 +14,7 @@ const kernel = await world.admitProcessKernel(await readFile(before.kernelPath),
   expectedSha256: before.kernelSha256,
 });
 const image = await readFile(resolve(process.env.AGENT4_APPROVAL_IMAGE ??
-  ".agent4/out/approval/approval.bpi2"));
+  ".agent4/out/approval/approval.bpi3"));
 after(() => assert.deepEqual(verifyRuntime(runtimePath), before));
 
 const proposalSchema = {root: 0, types: [
@@ -155,7 +155,7 @@ test("stale ERS2 and malformed typed input preserve the parked authoritative Sta
 
 test("required live proof binds the base across approval and every amendment", async () => {
   const evidenceImage = await readFile(resolve(process.env.AGENT4_APPROVAL_EVIDENCE_IMAGE ??
-    ".agent4/out/approval/approval-evidence.bpi2"));
+    ".agent4/out/approval/approval-evidence.bpi3"));
   const respond = async (outcome, response) => {
     const req = world.decodeRequest(outcome.request);
     const canonical = encodeValue(decodeSchema(req.resumeSchema), response);
@@ -189,7 +189,7 @@ test("scoped current-policy cells survive fresh-instance approval resumption", a
     const selected = evidence ? process.env.AGENT4_APPROVAL_SCOPED_EVIDENCE_IMAGE :
       process.env.AGENT4_APPROVAL_SCOPED_IMAGE;
     const scopedImage = await readFile(resolve(selected ??
-      `.agent4/out/approval/approval-scoped${evidence ? "-evidence" : ""}.bpi2`));
+      `.agent4/out/approval/approval-scoped${evidence ? "-evidence" : ""}.bpi3`));
     const respond = async (outcome, response) => {
       const req = world.decodeRequest(outcome.request);
       const canonical = encodeValue(decodeSchema(req.resumeSchema), response);

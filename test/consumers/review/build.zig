@@ -21,7 +21,7 @@ pub fn build(b: *std.Build) void {
     const tests = b.addTest(.{ .root_module = root });
     b.getInstallStep().dependOn(&b.addRunArtifact(tests).step);
     for ([_][]const u8{ "mid_review", "clarify_first", "human", "model", "rule", "react" }) |mode| {
-        for ([_][]const u8{ "bpi2", "args" }) |format| {
+        for ([_][]const u8{ "bpi3", "args" }) |format| {
             const run = b.addRunArtifact(emitter);
             run.addArgs(&.{ mode, format });
             b.getInstallStep().dependOn(&b.addInstallFileWithDir(run.captureStdOut(.{}), .prefix, b.fmt("{s}.{s}", .{ mode, format })).step);

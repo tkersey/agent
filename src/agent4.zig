@@ -1,4 +1,4 @@
-//! Public staged Agent authoring; runtime execution belongs to unchanged World.
+//! Public staged Agent authoring; runtime execution belongs to World.
 pub const package_version = "4.0.0-dev.0";
 pub const Context = @import("authoring.zig").Context;
 pub const system = @import("authoring.zig").system;
@@ -32,6 +32,6 @@ pub const skill = @import("skill.zig").skill;
 
 comptime {
     const boundary = @import("boundary");
-    if (!@hasDecl(boundary, "computation") or !@hasDecl(boundary, "data_v2"))
-        @compileError("Agent 4 requires the locked Boundary 2 public staged source and data API");
+    if (!@hasDecl(boundary, "computation") or !@hasDecl(boundary, "data_v2") or !@hasDecl(boundary.computation, "constructObserved"))
+        @compileError("Agent requires the coordinated Boundary stable-activation compiler and data API");
 }

@@ -18,7 +18,7 @@ assert.equal(extra.length, 0);
 assert([undefined, "--economy-only", "--application-only"].includes(mode));
 const economyOnly = mode === "--economy-only";
 const runtimePath = resolve(runtimeArg ?? join(root, ".agent4/out/world-runtime"));
-const imagePath = resolve(imageArg ?? join(root, "zig-out/agent4/document/consequence.bpi2"));
+const imagePath = resolve(imageArg ?? join(root, "zig-out/agent4/document/consequence.bpi3"));
 const runtime = await loadWorldRuntime({ runtimePath });
 const world = await import(pathToFileURL(runtime.identity.entrypoint));
 const mainImage = await readFile(imagePath);
@@ -379,7 +379,7 @@ results.push(await scenario("invalid-utf8", { raw: Buffer.from([0xff, 0xfe]), in
 }
 let ablation = null;
 if (mode !== "--application-only") {
-  const baseline = await readFile(join(dirname(imagePath), "clarify-first.bpi2"));
+  const baseline = await readFile(join(dirname(imagePath), "clarify-first.bpi3"));
   results.push(await scenario("clarify-first-common", { image: baseline, content: convergent,
     expectedQuestions: 1, expectedApproval: 1, expectedModels: 1 }));
   results.push(await scenario("clarify-first-divergent", { image: baseline,

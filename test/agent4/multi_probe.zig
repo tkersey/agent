@@ -20,7 +20,7 @@ pub fn main(init: std.process.Init) !void {
     defer b.deinit();
     var diagnostic: boundary.program.Diagnostic = .{};
     const module = try selectedModule(&b, mode);
-    var compiled = boundary.program.compileObserved(
+    var compiled = boundary.source.constructObserved(
         init.gpa,
         module,
         .{ .diagnostic = &diagnostic },
@@ -29,7 +29,7 @@ pub fn main(init: std.process.Init) !void {
         return err;
     };
     defer compiled.deinit();
-    const buffer = try init.gpa.alloc(u8, try boundary.image_v2.encodedLength(compiled.program));
+    const buffer = try init.gpa.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
     defer init.gpa.free(buffer);
     const bytes = try compiled.encode(init.gpa, buffer);
     var output_buffer: [4096]u8 = undefined;

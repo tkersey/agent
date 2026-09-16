@@ -109,7 +109,7 @@ test('opt-in dispatcher preserves checkpoints, human authority and explicit allo
   await inquiryCli(['answer', '--config', path, '--from', approvalState, '--choice', 'decline', '--out', declinedReply]);
   const declined = await run('declined', ['--from', approvalState, '--result', declinedReply]);
   assert.equal(declined.resultTag, 3); assert.equal(declined.writes, 0);
-  const cancelled = await executeCli(['cancel', '--world-runtime', runtime, '--image', join(images, 'repair.bpi2'),
+  const cancelled = await executeCli(['cancel', '--world-runtime', runtime, '--image', join(images, 'repair.bpi3'),
     '--outcome', approvalState, '--reason', 'operator stopped at approval', '--out', join(root, 'cancelled-approval.pko2')],
     { stdout: { write() {} } });
   assert.equal(cancelled.kind, 'Cancelled'); assert.equal(cancelled.reason, 'operator stopped at approval');

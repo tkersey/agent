@@ -23,8 +23,8 @@ const u64 = value => {
   bytes.writeBigUInt64LE(BigInt(value));
   return bytes;
 };
-const followup = basename(imagePath) === "followup.bpi2";
-const composition = followup || basename(imagePath) === "composition.bpi2";
+const followup = basename(imagePath) === "followup.bpi3";
+const composition = followup || basename(imagePath) === "composition.bpi3";
 const cases = followup ? [
   ["experiment", 7, u64(7), 3],
   ["model", 17, u64(1), 2],

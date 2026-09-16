@@ -105,7 +105,7 @@ const lockPath = fileURLToPath(new URL("../../conformance/agent4/dependencies.lo
 async function realFixture(t, name = "twice", initialArgs = new Uint8Array()) {
   const root = await mkdtemp(join(tmpdir(), "agent4-runner-world-"));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const image = join(dialogueDir, `${name}.bpi2`);
+  const image = join(dialogueDir, `${name}.bpi3`);
   // These are integration tests: missing runtime or emitted probes is a failure,
   // not a cached receipt or a silently skipped execution.
   await readFile(image);
@@ -264,7 +264,7 @@ test("runner preserves authoritative input and prior output on schema or image r
   await writeFile(f.next, "retain prior checkpoint");
   await writeFile(f.reply, Buffer.from([3]));
   await assert.rejects(executeCli(f.argv("resume", ["--image", f.image, "--outcome", f.saved, "--reply", f.reply, "--out", f.next]), { stdout: sink }));
-  const malformedImage = join(f.root, "malformed.bpi2");
+  const malformedImage = join(f.root, "malformed.bpi3");
   const malformed = Buffer.from(await readFile(f.image));
   malformed[0] ^= 0xff;
   await writeFile(malformedImage, malformed);

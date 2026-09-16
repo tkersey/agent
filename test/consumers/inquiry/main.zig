@@ -217,7 +217,7 @@ fn writeImage(init: std.process.Init, comptime App: type) !void {
         return err;
     };
     defer compiled.deinit();
-    const bytes = try init.gpa.alloc(u8, try boundary.image_v2.encodedLength(compiled.program));
+    const bytes = try init.gpa.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
     defer init.gpa.free(bytes);
     _ = try compiled.encode(init.gpa, bytes);
     return writeBytes(init, bytes);

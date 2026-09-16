@@ -12,7 +12,7 @@ const Input = struct {
     scope: u64,
 };
 
-fn compile() !boundary.computation.Compiled {
+fn compile() !boundary.computation.Construction {
     var b = boundary.computation.Builder.init(a);
     defer b.deinit();
     var registry = agent.admission.Registry.init(b.allocator());
@@ -21,7 +21,7 @@ fn compile() !boundary.computation.Compiled {
     const f = try terminology.define(c);
     const module = b.module(f, try b.scalar(void));
     try agent.admission.verify(a, module, &registry);
-    return boundary.program.compile(a, module);
+    return boundary.source.construct(a, module);
 }
 
 fn check(program: boundary.data_v2.program.Program, content: []const u8, old: []const u8, replacement: []const u8, scope: u64, expected: ?[]const u8, archive_changed: bool) !void {
@@ -96,7 +96,7 @@ test "every operative document field participates in the decisive key" {
         .domain = .{ .finite = &.{ 1, 2 } },
         .failure = try b.constant(void, {}),
     });
-    var compiled = try boundary.program.compile(a, b.module(d.classify, try b.scalar(void)));
+    var compiled = try boundary.source.construct(a, b.module(d.classify, try b.scalar(void)));
     defer compiled.deinit();
     const base = t.Action{
         .operation = .replace,

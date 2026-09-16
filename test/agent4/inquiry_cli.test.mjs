@@ -13,7 +13,21 @@ const runtime = resolve(process.env.AGENT4_WORLD_RUNTIME ?? '.agent4/out/world-r
 const images = resolve(process.env.AGENT4_INQUIRY_IMAGES ?? 'zig-out/agent4/inquiry');
 const action = (name, args) => ({ type: 'function_call', status: 'completed', call_id: 'reused-provider-id', name, arguments: JSON.stringify(args) });
 
-test('opt-in dispatcher preserves checkpoints, human authority and explicit allowances', { timeout: 120_000 }, async t => {
+test('unsupported host selection refuses experiment execution', () => {
+  // Exercise the unsupported-platform selector in a separate process on every
+  // host. This is branch coverage, not a claim of a Linux execution qualification.
+  const module = new URL('../../runtime/inquiry.mjs', import.meta.url).href;
+  const result = execFileSync(process.execPath, ['--input-type=module', '-e',
+    `Object.defineProperty(process, 'platform', { value: 'linux' });
+     const { createInquiryExecutor } = await import(${JSON.stringify(module)});
+     console.log(JSON.stringify(await createInquiryExecutor()));`], { encoding: 'utf8' });
+  assert.deepEqual(JSON.parse(result), { kind: 'unavailable', reason: 'unsupported_host' });
+});
+
+test('opt-in dispatcher preserves checkpoints, human authority and explicit allowances', {
+  timeout: 120_000,
+  skip: process.platform !== 'darwin' ? 'inquiry execution unavailable: macOS Seatbelt profile required' : false,
+}, async t => {
   const root = await mkdtemp(join(tmpdir(), 'inquiry-live-cli-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const target = join(root, 'subject'); await mkdir(target); await writeFile(join(target, 'session.mjs'), reset);

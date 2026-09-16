@@ -467,6 +467,8 @@ async function inquiryImages(options, sourceMetrics) {
 }
 
 async function inquiryComparison(options, sourceMetrics) {
+  if (process.platform !== 'darwin') return { status: 'UNAVAILABLE', reason: 'unsupported_host',
+    qualification: 'Portable image metrics remain available; real inquiry/ReAct experiment comparison requires the qualified macOS Seatbelt profile.' };
   assert(options.native, 'inquiry comparison requires the native embedding');
   const run = await invoke(process.execPath, [join(ROOT, 'test/agent4/inquiry_cases_runtime.mjs'),
     options.runtime, join(dirname(options.fixtures), 'inquiry'), options.native, options.probe,
@@ -545,7 +547,9 @@ export async function runEconomy(args) {
       } catch (error) { report.dependenciesUnchanged = false; report.failures.push({ check: 'dependency-postflight', ...errorRecord(error) }); }
     }
   }
-  report.status = report.failures.length ? 'FAIL' : Object.values(report.checks).some(check => check.status !== 'PASS') ? 'INCOMPLETE' : 'PASS';
+  const checks = Object.values(report.checks);
+  report.status = report.failures.length ? 'FAIL' : checks.some(check => !['PASS', 'UNAVAILABLE'].includes(check.status))
+    ? 'INCOMPLETE' : checks.some(check => check.status === 'UNAVAILABLE') ? 'PASS_PORTABLE_ONLY' : 'PASS';
   report.completionScope = 'Functional economy witnesses only; this report does not certify the full Agent 4 acceptance matrix or unmeasured performance.';
   await save(options.output, 'economy-report.json', stringify(report));
   return report;
@@ -557,6 +561,6 @@ if (isMain(import.meta)) {
     console.log(stringify({ status: report.status, timingStatus: report.timingStatus,
       report: join(parseOptions(process.argv.slice(2)).output, 'economy-report.json'),
       checks: Object.fromEntries(Object.entries(report.checks).map(([name, check]) => [name, check.status])), failures: report.failures }));
-    if (report.status !== 'PASS') process.exitCode = report.status === 'INCOMPLETE' ? 2 : 1;
+    if (!['PASS', 'PASS_PORTABLE_ONLY'].includes(report.status)) process.exitCode = report.status === 'INCOMPLETE' ? 2 : 1;
   } catch (error) { console.error(`${error.name}: ${error.message}`); process.exitCode = 1; }
 }

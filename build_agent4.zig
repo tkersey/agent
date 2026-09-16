@@ -214,10 +214,13 @@ pub fn build(b: *std.Build) void {
         runtime_guard.has_side_effects = true;
         _ = runtime_guard.captureStdOut(.{});
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
+        // The portable kernel/custody checks do not require this external OS
+        // profile. Explicit repair-application checks still require execution.
+        const inquiry_host = b.graph.host.result.os.tag == .macos;
         const inquiry_executor = b.addSystemCommand(&.{ "node", "test/agent4/inquiry_executor.test.mjs" });
         inquiry_executor.step.dependOn(&runtime_guard.step);
-        inquiry_check.dependOn(&inquiry_executor.step);
-        runtime_work.dependOn(&inquiry_executor.step);
+        inquiry_app_check.dependOn(&inquiry_executor.step);
+        if (inquiry_host) runtime_work.dependOn(&inquiry_executor.step);
         var native_graph = g;
         native_graph.gate = &runtime_guard.step;
         const native_module = b.createModule(.{
@@ -241,7 +244,7 @@ pub fn build(b: *std.Build) void {
         inquiry_app_run.step.dependOn(inquiry_app_images);
         inquiry_app_run.step.dependOn(&runtime_guard.step);
         inquiry_app_check.dependOn(&inquiry_app_run.step);
-        runtime_work.dependOn(&inquiry_app_run.step);
+        if (inquiry_host) runtime_work.dependOn(&inquiry_app_run.step);
         const inquiry_cases = b.addSystemCommand(&.{ "node", "test/agent4/inquiry_cases_runtime.mjs", runtime_path, b.getInstallPath(.prefix, "agent4/inquiry") });
         inquiry_cases.addFileArg(native_exe.getEmittedBin());
         inquiry_cases.addFileArg(multi_exe.getEmittedBin());
@@ -249,7 +252,7 @@ pub fn build(b: *std.Build) void {
         inquiry_cases.step.dependOn(inquiry_app_images);
         inquiry_cases.step.dependOn(&runtime_guard.step);
         inquiry_app_check.dependOn(&inquiry_cases.step);
-        runtime_work.dependOn(&inquiry_cases.step);
+        if (inquiry_host) runtime_work.dependOn(&inquiry_cases.step);
         const comparison = b.addSystemCommand(&.{ "node", "test/agent4/inquiry_cases_runtime.mjs", runtime_path, b.getInstallPath(.prefix, "agent4/inquiry") });
         comparison.addFileArg(native_exe.getEmittedBin());
         comparison.addFileArg(multi_exe.getEmittedBin());
@@ -265,7 +268,7 @@ pub fn build(b: *std.Build) void {
         inquiry_repeated.step.dependOn(inquiry_app_images);
         inquiry_repeated.step.dependOn(&runtime_guard.step);
         inquiry_app_check.dependOn(&inquiry_repeated.step);
-        runtime_work.dependOn(&inquiry_repeated.step);
+        if (inquiry_host) runtime_work.dependOn(&inquiry_repeated.step);
         const broker_run = b.addSystemCommand(&.{
             "node",                                                  "test/agent4/inquiry_broker_runtime.mjs", runtime_path,
             b.getInstallPath(.prefix, "agent4/inquiry/broker.bpi2"),

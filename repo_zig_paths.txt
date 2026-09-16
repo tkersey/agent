@@ -40,6 +40,7 @@ src/conversation.zig
 src/decision.zig
 src/deliberation.zig
 src/dialogue.zig
+src/inquiry.zig
 src/interaction.zig
 src/model.zig
 src/model_codec.zig
@@ -76,6 +77,7 @@ test/agent4/dialogue_probe.zig
 test/agent4/economy.zig
 test/agent4/economy_build.zig
 test/agent4/facade.zig
+test/agent4/inquiry_probe.zig
 test/agent4/model_admission.zig
 test/agent4/model_custody.zig
 test/agent4/model_noncanonical_temperature.zig

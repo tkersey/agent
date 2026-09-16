@@ -15,6 +15,7 @@ pub const responders = @import("responders.zig");
 pub const decision = @import("decision.zig");
 pub const interaction = @import("interaction.zig");
 pub const dialogue = @import("dialogue.zig");
+pub const inquiry = @import("inquiry.zig");
 pub const scopes = @import("scopes.zig");
 pub const sets = @import("sets.zig");
 pub const approval = @import("approval.zig");

@@ -1,8 +1,8 @@
-//! Test-only native consumer of the unchanged public World Process API.
-//! The argument names one canonical PKI2; stdout receives one complete PKO2.
+//! Test-only native consumer of the public World invocation and Session APIs.
+//! The argument names one canonical PKI3; stdout receives one complete PKO3.
 const std = @import("std");
 const world = @import("world");
-const protocol = @import("boundary_data_v2").protocol;
+const protocol = @import("boundary_data_v2").invocation;
 
 pub fn main(init: std.process.Init) !void {
     var arguments = init.minimal.args.iterate();
@@ -23,26 +23,26 @@ pub fn main(init: std.process.Init) !void {
         .limited(256 * 1024 * 1024),
     );
     defer init.gpa.free(input_bytes);
-    const input = try protocol.decode(protocol.Input, init.gpa, input_bytes);
+    var decoded = try protocol.decode(protocol.Input, init.gpa, input_bytes);
+    defer decoded.deinit();
+    const input = decoded.value;
     // Opt-in diagnostics use World's public workspace allocator. The backing
     // capacity is a test-host allowance, not a program or saved-State limit.
     const storage = if (statistics_requested) try init.gpa.alloc(u8, 256 << 20) else null;
     defer if (storage) |bytes| init.gpa.free(bytes);
-    var workspace = world.process_v2.Workspace.init(storage orelse &.{});
+    var workspace = world.Workspace.init(storage orelse &.{});
     const measured_allocator = if (statistics_requested) workspace.allocator() else init.gpa;
-    var statistics: world.process_v2.Statistics = .{};
-    const observed: world.process_v2.Invocation = .{
-        .program = .{ .image = input.image },
-        .instance = switch (input.instance) {
-            .initial_args => |value| .{ .initial_args = value },
-            .state => |value| .{ .snapshot = value },
-        },
-        .control = input.control,
-        .statistics = &statistics,
-    };
-    var outcome = if (!statistics_requested) try world.process_v2.invoke(init.gpa, input) else switch (input.mode) {
-        .run => try world.process_v2.run(measured_allocator, observed),
-        .advance => try world.process_v2.advance(measured_allocator, observed),
+    var statistics: world.Statistics = .{};
+    var outcome = if (!statistics_requested) try world.invocation.invoke(init.gpa, input) else measured: {
+        var session = switch (input.instance) {
+            .initial_args => |args| try world.Session.initImage(measured_allocator, input.image, args),
+            .state => |state| try world.Session.restoreImage(measured_allocator, input.image, state),
+        };
+        defer session.deinit();
+        session.statistics = &statistics;
+        session.store.statistics = &statistics.storage;
+        _ = try world.invocation.advance(&session, input.control, input.quantum);
+        break :measured try world.invocation.finish(init.gpa, &session, true);
     };
     defer outcome.deinit();
     const bytes = try init.gpa.alloc(u8, try protocol.encodedLength(protocol.Outcome, outcome.record));

@@ -27,8 +27,8 @@ test("bridge rejects unknown options before loading a runtime", async () => {
 test("bridge preserves original World records through fresh-instance owned-dialogue transfer", async () => {
   const host = await bridge(), program = await image();
   const parked = await host.start(program, empty);
-  assert.equal(parked.kind, "Requested");
-  const request = host.inspectPending(parked);
+  assert.equal(parked.kind, "requested");
+  const request = await host.inspectPending(parked);
   assert.equal(request.authoritative, false);
   assert.equal(request.classification, "typed_request");
   assert.equal(request.request.semanticIdentity, "agent.probe.dialogue.delay.v1");
@@ -40,20 +40,19 @@ test("bridge preserves original World records through fresh-instance owned-dialo
   // current request and typed answer. No creator callback is supplied.
   const transferred = await bridge();
   const finished = await transferred.resume(program, parked.state, parked.request, u64(3));
-  assert.equal(finished.kind, "Completed");
+  assert.equal(finished.kind, "completed");
   assert.deepEqual(finished.value, u64(40));
   assert.deepEqual(parked.bytes, original);
-  assert.deepEqual(host.inspectPending({ ...parked, kind: "Completed" }), request);
+  assert.deepEqual(await host.inspectPending({ ...parked, kind: "completed" }), request);
 
   // Bridge deletion: the unchanged public module and canonical bytes suffice.
   const world = await import(pathToFileURL(host.identity.entrypoint).href);
-  const raw = await world.admitProcessKernel(await readFile(host.identity.kernelPath), {
-    expectedSha256: host.identity.kernelSha256,
-  });
-  const rawParked = await raw.run({ image: program, initialArgs: empty });
+  const raw = await world.Kernel.create({ bytes: await readFile(host.identity.kernelPath), expectedSha256: host.identity.kernelSha256 });
+  const invoke = input => { const bytes = raw.invoke(world.encodeInput(input)); return { ...world.decodeOutcome(bytes), bytes }; };
+  const rawParked = invoke({ image: program, initialArgs: empty });
   assert.deepEqual(rawParked.bytes, parked.bytes);
-  const rawFinished = await raw.run({ image: program, state: rawParked.state,
-    result: world.encodeResult(rawParked.request, u64(3)) });
+  const rawFinished = invoke({ image: program, state: rawParked.state, control: "reply",
+    value: await world.encodeResult(rawParked.request, u64(3)) });
   assert.deepEqual(rawFinished.bytes, finished.bytes);
 });
 
@@ -68,14 +67,14 @@ test("bridge rejects wrong State, image and typed reply without changing the par
   const wrongImage = await image("dispose_owned");
   await assert.rejects(async () => host.resume(wrongImage, parked.state, parked.request, u64(3)));
   assert.deepEqual(parked.bytes, before);
-  assert.equal((await host.resume(program, parked.state, parked.request, u64(3))).kind, "Completed");
+  assert.equal((await host.resume(program, parked.state, parked.request, u64(3))).kind, "completed");
 });
 
 test("interaction inspection decodes the declared tuple without selecting control", async () => {
   const host = await bridge(), program = await image("exchange");
   const parked = await host.start(program, empty);
   const before = Uint8Array.from(parked.bytes);
-  const view = host.inspectPending(parked);
+  const view = await host.inspectPending(parked);
   assert.equal(view.classification, "awaiting_clarification");
   assert.equal(view.authoritative, false);
   assert.deepEqual(view.interaction, {
@@ -84,7 +83,7 @@ test("interaction inspection decodes the declared tuple without selecting contro
   assert.deepEqual(parked.bytes, before);
   const accepted = await host.resume(program, parked.state, parked.request,
     Uint8Array.from([0, ...u64(41)]));
-  assert.equal(accepted.kind, "Completed");
+  assert.equal(accepted.kind, "completed");
   assert.deepEqual(accepted.value, u64(42));
 });
 
@@ -102,19 +101,19 @@ test("equal-content independent occurrences are executed and never globally dedu
 test("cancelling suspended cleanup returns its current request and preserves cleanup control", async () => {
   const host = await bridge(), program = await image("dispose_owned");
   const parked = await host.start(program, empty);
-  assert.equal(parked.kind, "Requested");
-  assert.deepEqual(host.inspectPending(parked).request.payload, u64(42));
+  assert.equal(parked.kind, "requested");
+  assert.deepEqual((await host.inspectPending(parked)).request.payload, u64(42));
   const cancelled = await host.cancel(program, parked.state, "stop during cleanup");
-  assert.equal(cancelled.kind, "Requested");
-  assert.deepEqual(host.inspectPending(cancelled).request.payload, u64(42));
+  assert.equal(cancelled.kind, "requested");
+  assert.deepEqual((await host.inspectPending(cancelled)).request.payload, u64(42));
   assert.notDeepEqual(cancelled.request, parked.request);
   await assert.rejects(async () => host.resume(program, cancelled.state, parked.request, empty), /RequestStateMismatch/);
   const fresh = await bridge();
-  // The semantic cleanup result is bound to the CURRENT ERQ2 by World. No old
-  // ERS2 or State is patched, and the cleanup operation is not invoked again.
+  // The semantic cleanup result is bound to the CURRENT ERQ3 by World. No old
+  // ERS3 or State is patched, and the cleanup operation is not invoked again.
   const terminal = await fresh.resume(program, cancelled.state, cancelled.request, empty);
-  assert.equal(terminal.kind, "Cancelled");
-  assert.equal(terminal.reason, "stop during cleanup");
+  assert.equal(terminal.kind, "cancelled");
+  assert.deepEqual(terminal.reason, { kind: "text", value: "stop during cleanup" });
   assert.deepEqual(terminal.cleanupFailures, []);
 });
 
@@ -145,14 +144,14 @@ test("source-independent bridge installation executes the same compiled image", 
   const { stdout, stderr } = await execute(process.execPath, ["--input-type=module", "--eval", script],
     { cwd: isolated, env: {} });
   assert.equal(stderr, "");
-  assert.deepEqual(JSON.parse(stdout), { kind: "Completed", value: [...u64(40)] });
+  assert.deepEqual(JSON.parse(stdout), { kind: "completed", value: [...u64(40)] });
 });
 
 test("runtime byte changes reject against the external Agent lock before import", async (t) => {
   const isolated = await mkdtemp(join(tmpdir(), "agent4-bridge-tamper-"));
   t.after(() => rm(isolated, { recursive: true, force: true }));
   await cp(runtimePath, join(isolated, "world-runtime"), { recursive: true });
-  const kernelPath = join(isolated, "world-runtime/world-process-kernel-v2.wasm");
+  const kernelPath = join(isolated, "world-runtime/world-kernel.wasm");
   const kernel = await readFile(kernelPath);
   kernel[kernel.length - 1] ^= 1;
   await writeFile(kernelPath, kernel);

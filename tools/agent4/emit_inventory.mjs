@@ -41,7 +41,7 @@ for(const name of ['repair','repeated','react']){
 }
 for(const name of ['task-schema','outcome-schema'])await add(`inquiry/${name}.bin`,'schema');
 await add('inquiry/contract.txt','contract',await readFile(join(root,'test/consumers/inquiry/contract.txt')));
-for(const name of ['twice','dispose_owned','exchange']){
+for(const name of ['twice','dispose_owned','exchange','yield_once']){
   const image=`dialogue/${name}.bpi3`,initialArgs=`dialogue/${name}.args.bin`;
   await add(image,'image');await add(initialArgs,'initial-args',new Uint8Array());
   examples.push({name:`dialogue-${name.replaceAll('_','-')}`,image,initialArgs});

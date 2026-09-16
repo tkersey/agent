@@ -1,19 +1,18 @@
 # Agent 4 runtime and portable use archive
 
-Agent authoring now emits BPI3 using Boundary
-`3919d7ec5ab09973b49643c96477c218d0a77f08`. The lock is **candidate integration**:
-its World entry still identifies predecessor
-`d075169a4805d999ceba4c37b3e1c925b78c3bf9`, pending runtime migration. This is not
-a supported released pair, and the ABI 2 loader below cannot execute the new
-images. The remaining sections document the predecessor runner contract until
-its ABI 3 replacement is complete; see [current status](compositional-execution.md).
+Agent authoring emits BPI3 using Boundary `3.0.0-dev.0` at
+`03da23f6066e8eb60ee646f34dc9e828220dfc28`. The candidate integration lock selects
+World `6.0.0-dev.0` at `4ccc9757b4499406aec134a0570b27bd4e448cda` and its ABI 3
+runtime. The normal bridge/runner and owned inquiry traces are validated; full
+application integration, inquiry CLI migration and the compiled-tool witness
+remain in progress. See [current status](compositional-execution.md).
 The exact runtime contents, kernel digest,
 public API and physical profile are in
 `conformance/agent4/dependencies.lock.json`. The loader checks this Agent-owned
 lock before importing the supplied World module. A runtime's own checksum is
 not substituted for this expected identity.
 
-## Start, resume, inspect and cancel
+## Start, resume, inspect, cancel and continue
 
 Run the commands from the extracted use archive. Supply an existing immutable
 World runtime directory; the runner neither downloads nor rebuilds it. Node's
@@ -28,34 +27,39 @@ a canonical reply admitted by that example's current request.
 ```sh
 node runtime/runner.mjs start \
   --world-runtime /absolute/path/to/world-runtime \
-  --image examples/dialogue/twice.bpi2 --initial-args examples/dialogue/twice.args.bin \
-  --out started.pko2
+  --image examples/dialogue/twice.bpi3 --initial-args examples/dialogue/twice.args.bin \
+  --out started.pko3
 
 node runtime/runner.mjs inspect \
-  --world-runtime /absolute/path/to/world-runtime --outcome started.pko2
+  --world-runtime /absolute/path/to/world-runtime --outcome started.pko3
 
 node runtime/runner.mjs resume \
   --world-runtime /absolute/path/to/world-runtime \
-  --image examples/dialogue/twice.bpi2 --outcome started.pko2 \
-  --reply examples/dialogue/reply-3.bin --out resumed.pko2
+  --image examples/dialogue/twice.bpi3 --outcome started.pko3 \
+  --reply examples/dialogue/reply-3.bin --out resumed.pko3
 
 node runtime/runner.mjs cancel \
   --world-runtime /absolute/path/to/world-runtime \
-  --image examples/dialogue/twice.bpi2 --outcome started.pko2 \
-  --reason "operator requested cancellation" --out cancelled.pko2
+  --image examples/dialogue/twice.bpi3 --outcome started.pko3 \
+  --reason "operator requested cancellation" --out cancelled.pko3
 ```
 
 Resume and cancel are alternative successors of the same input in this example;
 do not execute both against one live environmental occurrence. The probe's reply
 is the eight-byte little-endian encoding of unsigned integer 3. Other contracts
 may require a tagged reply, a product, or another portable value. `--reply`
-contains the canonical **application value**, not an ERS2 frame. World validates
-it and constructs the ERS2 bound to the current ERQ2. No transcript is needed.
+contains the canonical **application value**, not an ERS3 frame. World validates
+it and constructs the ERS3 bound to the current ERQ3. No transcript is needed.
+
+`continue --world-runtime DIR --image FILE --outcome FILE --out FILE` resumes a
+yielded checkpoint or advances a progressed checkpoint. It rejects pending external
+requests, which require a bound typed reply. Inspection and continuation decode
+the canonical PKO3 bytes rather than trust an object's displayed kind.
 
 The optional `--lock FILE` selects another explicit Agent-owned input lock.
 Unknown, duplicate, incomplete and cross-command flags reject. An output cannot
 overwrite an input or enter the runtime directory. Successful operations save
-the complete canonical PKO2 with an exclusive temporary file, file sync and
+the complete canonical PKO3 with an exclusive temporary file, file sync and
 atomic replacement; prior authoritative input remains available on rejection.
 The runner is single-writer. It supplies no distributed checkpoint lock, inbox,
 outbox or concurrent-writer arbitration.
@@ -63,7 +67,7 @@ outbox or concurrent-writer arbitration.
 Inspection performs no model/tool operation. JSON printed to stdout is a
 non-authoritative view; opaque values are base64 bytes and exact large integers
 are decimal strings inside `{ "integer": "..." }`. Continue using the saved
-PKO2, not this display JSON. A textual purpose may produce `awaiting_message`,
+PKO3, not this display JSON. A textual purpose may produce `awaiting_message`,
 `awaiting_clarification` or `awaiting_approval`; other declared values remain
 typed requests. A display label grants no authority.
 
@@ -82,10 +86,10 @@ const next = await host.resume(
 // const next = await host.cancel(imageBytes, pending.state, "stop");
 ```
 
-The bridge returns World's complete outcome, including original PKO2 `bytes`
+The bridge returns World's complete outcome, including original PKO3 `bytes`
 and detached nested State/request/value records. It copies submitted bytes and
 checks request-to-State binding before asking the kernel to admit the complete
-input. All application control remains in BPI2/PST2. Environmental callbacks,
+input. All application control remains in BPI3/PST3. Environmental callbacks,
 when an embedding chooses to register them, may implement exact typed external
 effects only; they are not checkpointed continuations.
 
@@ -99,15 +103,13 @@ import { verifyRuntime } from "./tools/agent4/dependencies.mjs";
 
 const selected = verifyRuntime("/absolute/world-runtime");
 const world = await import(pathToFileURL(selected.entrypoint).href);
-const kernel = await world.admitProcessKernel(await readFile(selected.kernelPath), {
-  expectedSha256: selected.kernelSha256,
-});
-const pending = await kernel.run({ image: imageBytes, initialArgs: initialArgsBytes });
-const next = await kernel.run({
-  image: imageBytes,
-  state: pending.state,
-  result: world.encodeResult(pending.request, canonicalReplyBytes),
-});
+const kernel = await world.Kernel.create({ bytes: await readFile(selected.kernelPath),
+  expectedSha256: selected.kernelSha256 });
+const pending = world.decodeOutcome(kernel.invoke(world.encodeInput({ image: imageBytes, initialArgs: initialArgsBytes })));
+const next = world.decodeOutcome(kernel.invoke(world.encodeInput({
+  image: imageBytes, state: pending.state, control: "reply",
+  value: await world.encodeResult(pending.request, canonicalReplyBytes),
+})));
 ```
 
 This path uses World for process framing, admission, value validation, result
@@ -130,10 +132,10 @@ an authored yield. `NeedsCapacity` supplies no authoritative successor. Killing
 a worker proves neither completion nor cleanup.
 
 Cancellation may return another `Requested` outcome while cleanup is pending.
-Save it and supply the declared cleanup result against its **current** ERQ2.
+Save it and supply the declared cleanup result against its **current** ERQ3.
 Cancellation can rebind the request. Reuse a previously obtained semantic result
 only when the unchanged environmental operation makes that legitimate; never
-patch an old ERS2 or State, restart cleanup, or label it finished early.
+patch an old ERS3 or State, restart cleanup, or label it finished early.
 
 ## Application value and model contracts
 
@@ -141,7 +143,7 @@ patch an old ERS2 or State, restart cleanup, or label it finished early.
 documented Boundary encoding. `decodeSchema(request.resumeSchema)` obtains the
 actual standalone schema. `encodeValue(schema, value)` produces canonical value
 bytes; `decodeValue` reads them; `parseJsonValue` handles exact JSON convenience
-input against a declared schema. World remains the authority for ERQ2/ERS2 and
+input against a declared schema. World remains the authority for ERQ3/ERS3 and
 full input admission. Product values are arrays, sum values are `{ tag, value }`,
 unit is `null`, byte values are `Uint8Array`, and 64-bit integers are `BigInt`.
 Structural errors and host codec capacity exhaustion are distinct errors.
@@ -150,7 +152,7 @@ Each interaction identity is
 `agent.interaction.exchange.v1.<declared-contract-name>`. Its ordered payload is
 `(channel, purpose, presentation, outgoing)`. The input sum starts with
 `Value(In)` and contains `AbortTurn(reason)` and/or `CloseConversation(reason)`
-only where the declaration admits them, in that order. The concrete ERQ2 schema
+only where the declaration admits them, in that order. The concrete ERQ3 schema
 and contract digest bind each specialization. No continuation/resource handle
 is externalized. Presentation contains field/value hints only and may be unit.
 
@@ -169,7 +171,7 @@ tags `system`, `developer`, `user`, `assistant` in order. A declaration is
 argument_codec)`. Each codec field is `(name, kind, bit_width, maximum_bytes,
 enum_names, enum_tags)`; kinds are text, signed integer, unsigned integer,
 boolean and enumeration in that order. Concrete capacities and answer schemas
-are application specializations present in ERQ2; no global model-schema sidecar
+are application specializations present in ERQ3; no global model-schema sidecar
 selects them.
 
 Selection is `(minimum_calls, maximum_calls, parallel_calls)`. Response policy
@@ -217,8 +219,8 @@ approval and admission. A read followed by a write elsewhere without the same
 conditional contract does not inherit its atomicity. A model/simulation cannot
 manufacture live evidence simply by returning a matching record shape.
 
-The authoritative checkpoint is image identity plus PST2 and current ERQ2,
-conveniently carried by detached PKO2. Persist it before discarding prior input.
+The authoritative checkpoint is image identity plus PST3 and current ERQ3,
+conveniently carried by detached PKO3. Persist it before discarding prior input.
 A transport cannot infer from a missing result whether an external write or
 model request occurred. Uncertain delivery must enter the application's explicit
 reconciliation policy; do not retry a consumed approval automatically.
@@ -288,7 +290,7 @@ run from the extracted archive:
 ```sh
 mkdir -p .agent4/out
 node test/agent4/document_runtime.mjs \
-  /absolute/path/to/world-runtime examples/document/document.bpi2
+  /absolute/path/to/world-runtime examples/document/document.bpi3
 
 AGENT4_WORLD_RUNTIME=/absolute/path/to/world-runtime \
 AGENT4_REVIEW_IMAGES="$PWD/examples/review" \

@@ -24,6 +24,7 @@ const commandFlags = {
   resume: ["worldRuntime", "image", "outcome", "reply", "out"],
   inspect: ["worldRuntime", "outcome"],
   cancel: ["worldRuntime", "image", "outcome", "reason", "out"],
+  continue: ["worldRuntime", "image", "outcome", "out"],
 };
 
 function flagName(name) {
@@ -37,7 +38,7 @@ export function parseArguments(argv) {
   }
   const [command, ...rest] = argv;
   if (!Object.hasOwn(commandFlags, command)) {
-    throw new Error("expected one runner command: start, resume, inspect, cancel");
+    throw new Error("expected one runner command: start, resume, inspect, cancel, continue");
   }
   const options = { command };
   const allowed = new Set([...commandFlags[command], "lock"]);
@@ -129,7 +130,7 @@ async function protectOutput(output, protectedPaths) {
 }
 
 async function writeCheckpoint(output, bytes, protectedPaths) {
-  if (!(bytes instanceof Uint8Array)) throw new TypeError("World outcome has no canonical PKO2 bytes");
+  if (!(bytes instanceof Uint8Array)) throw new TypeError("World outcome has no canonical PKO3 bytes");
   // Use the resolved destination and recheck it before replacement. The runner
   // is single-writer; it does not provide distributed checkpoint locking.
   if (await physicalPath(output) !== output) throw new Error("output path changed during execution");
@@ -204,14 +205,16 @@ export async function executeCli(argv, { stdout = process.stdout } = {}) {
   } else {
     outcome = world.decodeOutcome(await readFile(paths.outcome));
     if (options.command === "resume") {
-      if (outcome.kind !== "Requested" || !outcome.state || !outcome.request) {
-        throw new Error("resume requires a Requested outcome with its saved State and current request");
+      if (outcome.kind !== "requested" || !outcome.state || !outcome.request) {
+        throw new Error("resume requires a requested outcome with its saved State and current request");
       }
       const [image, reply] = await Promise.all([readFile(paths.image), readFile(paths.reply)]);
       outcome = await world.resume(image, outcome.state, outcome.request, reply);
     } else if (options.command === "cancel") {
       if (!outcome.state) throw new Error("cancel requires an outcome with saved State");
       outcome = await world.cancel(await readFile(paths.image), outcome.state, options.reason);
+    } else if (options.command === "continue") {
+      outcome = await world.continueExecution(await readFile(paths.image), outcome);
     }
   }
 

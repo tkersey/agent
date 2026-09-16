@@ -53,7 +53,7 @@ fn inspectState(init: std.process.Init, path: []const u8) !void {
         .limited(16 * 1024 * 1024),
     );
     defer init.gpa.free(bytes);
-    var graph = try boundary.snapshot_v2.decodeGraph(init.gpa, bytes);
+    var graph = try boundary.data_v2.state_image.decodeGraph(init.gpa, bytes);
     defer graph.deinit();
     var multi: usize = 0;
     var branches: usize = 0;
@@ -61,7 +61,7 @@ fn inspectState(init: std.process.Init, path: []const u8) !void {
     var cells: usize = 0;
     var packages: usize = 0;
     var obligations: usize = 0;
-    for (graph.state.nodes) |node| switch (node) {
+    for (graph.state.nodes) |node| switch (node.record) {
         .multi_template => multi += 1,
         .branch => branches += 1,
         .resource => resources += 1,

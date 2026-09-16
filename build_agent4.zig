@@ -50,7 +50,7 @@ pub fn build(b: *std.Build) void {
     const measure_economy = b.option(bool, "measure-economy", "Collect timings on an operator-confirmed idle host") orelse false;
     const world_source = b.option([]const u8, "world-source", "Immutable World source for native agreement") orelse b.pathFromRoot(".agent4/inputs/world");
     const world_archive = b.option([]const u8, "world-archive", "Authenticated immutable World source archive") orelse
-        b.pathJoin(&.{ std.fs.path.dirname(world_source) orelse ".", "world-d075169.tar.gz" });
+        b.pathJoin(&.{ std.fs.path.dirname(world_source) orelse ".", "world-4ccc975.tar.gz" });
     const data = if (source) |root| b.createModule(.{
         .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ root, "src/v2/data/root.zig" }) },
         .target = target,
@@ -161,7 +161,7 @@ pub fn build(b: *std.Build) void {
         g.emit(emit, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi3", .{mode}));
         g.emit(inquiry_check, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi3", .{mode}));
     }
-    for ([_][]const u8{ "twice", "dispose_owned", "exchange", "deep_exchange", "wide_exchange" }) |mode|
+    for ([_][]const u8{ "twice", "dispose_owned", "exchange", "deep_exchange", "wide_exchange", "yield_once" }) |mode|
         g.emit(emit, dialogue_exe, &.{mode}, b.fmt("dialogue/{s}.bpi3", .{mode}));
     const multi = g.module("test/agent4/multi_probe.zig");
     multi.addImport("deliberation", g.helper("deliberation"));

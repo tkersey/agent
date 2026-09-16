@@ -175,9 +175,9 @@ function runtimeAt(paths, lock, { verifyOnly, lockPath, zig, report }) {
   if (existsSync(kernel)) {
     equal(sha256(readRegular(kernel)), lock.world.runtime.kernel.sha256, "existing built kernel mismatch");
   } else {
-    report("Building unchanged World kernel with its default physical profile");
+    report("Building the pinned World ABI 3 kernel with its default physical profile");
     try {
-      command(zig, ["build", "build-v2-kernel", "-Doptimize=ReleaseSafe",
+      command(zig, ["build", "build-kernel", "-Doptimize=ReleaseSafe",
         `-Dboundary-v2-source=${paths.boundarySource}`, "--cache-dir", paths.buildCache,
         "--global-cache-dir", paths.buildGlobalCache, "--prefix", paths.worldBuild], { cwd: paths.worldSource });
     } finally {

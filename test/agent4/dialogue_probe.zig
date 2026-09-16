@@ -13,11 +13,19 @@ pub const Mode = enum {
     exchange,
     deep_exchange,
     wide_exchange,
+    yield_once,
     double_use,
     borrowed_escape,
 };
 
 pub fn build(b: *Builder, mode: Mode) !bsrc.Module {
+    if (mode == .yield_once) {
+        const unit = try b.scalar(void);
+        const integer = try b.scalar(u64);
+        const entry = try b.declare(&.{}, integer, &.{}, &.{});
+        try b.define(entry, try b.term(.{ .yield_then = try b.pure(try b.constant(u64, 42)) }));
+        return b.module(entry, unit);
+    }
     if (mode == .exchange) return typedExchange(b);
     if (mode == .deep_exchange or mode == .wide_exchange) return portableExchange(b, mode);
     if (mode == .borrowed_escape) return borrowedEscape(b);

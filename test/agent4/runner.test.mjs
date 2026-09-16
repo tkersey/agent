@@ -77,7 +77,7 @@ test("runner protects runtime contents through missing paths and symlink parents
   const f = await fixture(t);
   const alias = join(f.root, "runtime-alias");
   await symlink(f.runtime, alias);
-  for (const output of [f.runtime, join(f.runtime, "new.pko2"), join(alias, "missing", "new.pko2")]) {
+  for (const output of [f.runtime, join(f.runtime, "new.pko3"), join(alias, "missing", "new.pko3")]) {
     await assert.rejects(executeCli(f.argv(output), { stdout: sink }), /output path must not overwrite or enter --world-runtime/);
   }
   assert.deepEqual(await readdir(f.runtime), []);
@@ -86,13 +86,13 @@ test("runner protects runtime contents through missing paths and symlink parents
 test("runner rejects missing output parents without creating files", async (t) => {
   const f = await fixture(t);
   const before = (await readdir(f.root)).sort();
-  await assert.rejects(executeCli(f.argv(join(f.root, "missing", "next.pko2")), { stdout: sink }), { code: "ENOENT" });
+  await assert.rejects(executeCli(f.argv(join(f.root, "missing", "next.pko3")), { stdout: sink }), { code: "ENOENT" });
   assert.deepEqual((await readdir(f.root)).sort(), before);
 });
 
 test("runner rejects directories used as application inputs", async (t) => {
   const f = await fixture(t);
-  const argv = f.argv(join(f.root, "next.pko2"));
+  const argv = f.argv(join(f.root, "next.pko3"));
   argv[argv.indexOf("--image") + 1] = f.runtime;
   await assert.rejects(executeCli(argv, { stdout: sink }), /--image must name a regular file/);
   assert.deepEqual(await readdir(f.runtime), []);
@@ -112,8 +112,8 @@ async function realFixture(t, name = "twice", initialArgs = new Uint8Array()) {
   const world = await loadWorldRuntime({ runtimePath, lockPath });
   const args = join(root, "initial.args");
   const reply = join(root, "reply.value");
-  const saved = join(root, "saved.pko2");
-  const next = join(root, "next.pko2");
+  const saved = join(root, "saved.pko3");
+  const next = join(root, "next.pko3");
   await writeFile(args, initialArgs);
   const answer = Buffer.alloc(8);
   answer.writeBigUInt64LE(3n);
@@ -125,26 +125,39 @@ async function realFixture(t, name = "twice", initialArgs = new Uint8Array()) {
   return { root, image, reply, saved, next, world, stdout, printed, argv, parked };
 }
 
+test("runner continues an explicit yield but cannot continue through a pending external request", async (t) => {
+  const f = await realFixture(t, "yield_once");
+  assert.equal(f.parked.kind, "yielded");
+  const before = await readFile(f.saved);
+  const finished = await executeCli(f.argv("continue", ["--image", f.image, "--outcome", f.saved, "--out", f.next]), { stdout: f.stdout });
+  assert.equal(finished.kind, "completed");
+  assert.equal(Buffer.from(finished.value).readBigUInt64LE(), 42n);
+  assert.deepEqual(await readFile(f.saved), before);
+  const pending = await realFixture(t);
+  await assert.rejects(executeCli(pending.argv("continue", ["--image", pending.image, "--outcome", pending.saved, "--out", pending.next]), { stdout: sink }), /continue requires a progressed or yielded checkpoint/);
+  await assert.rejects(stat(pending.next), { code: "ENOENT" });
+});
+
 test("runner starts, inspects, and resumes canonical outcomes through unchanged World", async (t) => {
   const f = await realFixture(t);
-  assert.equal(f.parked.kind, "Requested");
+  assert.equal(f.parked.kind, "requested");
   assert.deepEqual(await readFile(f.saved), Buffer.from(f.parked.bytes));
-  assert.equal(f.printed[0].kind, "Requested");
+  assert.equal(f.printed[0].kind, "requested");
   assert.equal(f.printed[0].authoritative, false);
   assert.equal(f.printed[0].request.semanticIdentity, "agent.probe.dialogue.delay.v1");
   assert.equal(f.printed[0].request.payload.encoding, "base64");
   const before = await readFile(f.saved);
   const entries = (await readdir(f.root)).sort();
   const inspected = await executeCli(f.argv("inspect", ["--outcome", f.saved]), { stdout: f.stdout });
-  assert.equal(inspected.kind, "Requested");
+  assert.equal(inspected.kind, "requested");
   assert.deepEqual(await readFile(f.saved), before);
   assert.deepEqual((await readdir(f.root)).sort(), entries);
   await writeFile(f.next, "replace only after successful World execution");
   const completed = await executeCli(f.argv("resume", ["--image", f.image, "--outcome", f.saved, "--reply", f.reply, "--out", f.next]), { stdout: f.stdout });
-  assert.equal(completed.kind, "Completed");
+  assert.equal(completed.kind, "completed");
   assert.equal(Buffer.from(completed.value).readBigUInt64LE(), 40n);
   assert.deepEqual(await readFile(f.next), Buffer.from(completed.bytes));
-  assert.equal(f.world.decodeOutcome(await readFile(f.next)).kind, "Completed");
+  assert.equal(f.world.decodeOutcome(await readFile(f.next)).kind, "completed");
   assert.deepEqual(await readFile(f.saved), before);
   assert.equal((await stat(f.next)).mode & 0o777, 0o600);
   assert.equal((await readdir(f.root)).some((name) => name.endsWith(".tmp")), false);
@@ -156,11 +169,11 @@ test("direct and symlinked CLI entry points execute instead of silently succeedi
   const alias = join(f.root, "agent-runner.mjs");
   await symlink(runner, alias);
   for (const [i, entry] of [runner, alias].entries()) {
-    const output = join(f.root, `cli-${i}.pko2`);
+    const output = join(f.root, `cli-${i}.pko3`);
     const printed = execFileSync(process.execPath, [entry, ...f.argv("start", [
       "--image", f.image, "--initial-args", join(f.root, "initial.args"), "--out", output,
     ])], { encoding: "utf8" });
-    assert.equal(JSON.parse(printed).kind, "Requested");
+    assert.equal(JSON.parse(printed).kind, "requested");
     assert.deepEqual(await readFile(output), Buffer.from(f.parked.bytes));
   }
   for (const [i, relative] of ["../../runtime/runner.mjs", "../../tools/agent4/package.mjs",
@@ -199,12 +212,12 @@ test("runner cancels saved State and rejects completed-state resumption", async 
   const f = await realFixture(t);
   const before = await readFile(f.saved);
   const cancelled = await executeCli(f.argv("cancel", ["--image", f.image, "--outcome", f.saved, "--reason", "explicit runner cancellation", "--out", f.next]), { stdout: f.stdout });
-  assert.equal(cancelled.kind, "Cancelled");
-  assert.equal(cancelled.reason, "explicit runner cancellation");
+  assert.equal(cancelled.kind, "cancelled");
+  assert.deepEqual(cancelled.reason, { kind: "text", value: "explicit runner cancellation" });
   assert.deepEqual(await readFile(f.saved), before);
-  const rejectedOutput = join(f.root, "rejected.pko2");
+  const rejectedOutput = join(f.root, "rejected.pko3");
   await writeFile(rejectedOutput, "retain prior checkpoint");
-  await assert.rejects(executeCli(f.argv("resume", ["--image", f.image, "--outcome", f.next, "--reply", f.reply, "--out", rejectedOutput]), { stdout: sink }), /resume requires a Requested outcome/);
+  await assert.rejects(executeCli(f.argv("resume", ["--image", f.image, "--outcome", f.next, "--reply", f.reply, "--out", rejectedOutput]), { stdout: sink }), /resume requires a requested outcome/);
   await assert.rejects(executeCli(f.argv("cancel", ["--image", f.image, "--outcome", f.next, "--reason", "already cancelled", "--out", rejectedOutput]), { stdout: sink }), /cancel requires an outcome with saved State/);
   assert.equal(await readFile(rejectedOutput, "utf8"), "retain prior checkpoint");
 });
@@ -215,12 +228,12 @@ test("runner renders deep portable interactions on start, inspect, and resume", 
   let list = { tag: 0, value: null };
   for (let i = 0; i < depth; i++) list = { tag: 1, value: [i % 256, list] };
   const f = await realFixture(t, "deep_exchange", encodeValue(schema, list));
-  assert.equal(f.parked.kind, "Requested");
+  assert.equal(f.parked.kind, "requested");
   await executeCli(f.argv("inspect", ["--outcome", f.saved]), { stdout: f.stdout });
   await writeFile(f.reply, Uint8Array.of(0));
   const next = await executeCli(f.argv("resume", ["--image", f.image, "--outcome", f.saved,
     "--reply", f.reply, "--out", f.next]), { stdout: f.stdout });
-  assert.equal(next.kind, "Requested");
+  assert.equal(next.kind, "requested");
   assert.deepEqual(await readFile(f.saved), Buffer.from(f.parked.bytes));
   assert.deepEqual(await readFile(f.next), Buffer.from(next.bytes));
   assert.equal(f.printed.length, 3);
@@ -247,7 +260,7 @@ test("optional display capacity preserves canonical start, inspect, and resume",
   await writeFile(f.reply, Uint8Array.of(0));
   const next = await executeCli(f.argv("resume", ["--image", f.image, "--outcome", f.saved,
     "--reply", f.reply, "--out", f.next]), { stdout: f.stdout });
-  assert.equal(next.kind, "Requested");
+  assert.equal(next.kind, "requested");
   for (const view of f.printed) {
     assert.equal(view.classification, "typed_request");
     assert.equal(view.interaction, undefined);
@@ -276,18 +289,18 @@ test("runner preserves authoritative input and prior output on schema or image r
 
 test("runner preserves suspended cleanup and uses its rebound request after cancellation", async (t) => {
   const f = await realFixture(t, "dispose_owned");
-  assert.equal(f.parked.kind, "Requested");
-  const cleanup = f.world.inspectPending(f.parked);
+  assert.equal(f.parked.kind, "requested");
+  const cleanup = await f.world.inspectPending(f.parked);
   assert.equal(Buffer.from(cleanup.request.payload).readBigUInt64LE(), 42n);
   const cancelling = await executeCli(f.argv("cancel", ["--image", f.image, "--outcome", f.saved, "--reason", "stop during cleanup", "--out", f.next]), { stdout: f.stdout });
-  assert.equal(cancelling.kind, "Requested");
+  assert.equal(cancelling.kind, "requested");
   assert.notDeepEqual(cancelling.request, f.parked.request);
-  assert.equal(Buffer.from(f.world.inspectPending(cancelling).request.payload).readBigUInt64LE(), 42n);
+  assert.equal(Buffer.from((await f.world.inspectPending(cancelling)).request.payload).readBigUInt64LE(), 42n);
   await writeFile(f.reply, new Uint8Array());
-  const final = join(f.root, "cancelled.pko2");
+  const final = join(f.root, "cancelled.pko3");
   const cancelled = await executeCli(f.argv("resume", ["--image", f.image, "--outcome", f.next, "--reply", f.reply, "--out", final]), { stdout: f.stdout });
-  assert.equal(cancelled.kind, "Cancelled");
-  assert.equal(cancelled.reason, "stop during cleanup");
+  assert.equal(cancelled.kind, "cancelled");
+  assert.deepEqual(cancelled.reason, { kind: "text", value: "stop during cleanup" });
   assert.deepEqual(await readFile(f.saved), Buffer.from(f.parked.bytes));
   assert.deepEqual(await readFile(f.next), Buffer.from(cancelling.bytes));
 });

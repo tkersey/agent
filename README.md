@@ -2,10 +2,10 @@
 
 **Build agents as portable, resumable programs.**
 
-This branch is migrating to Boundary 3 / World 6. Agent authoring now emits BPI3
-through an exactly pinned successor compiler; the normal runtime loader and
-integration package still need ABI 3 migration. The predecessor runtime examples
-below do not yet run these new images. See [migration status](docs/compositional-execution.md).
+This branch is migrating to Boundary 3 / World 6. Authoring emits BPI3, and the
+normal bridge and runner use the authenticated ABI 3 runtime. Full application
+integration and the compiled-tool transfer witness remain in progress. See
+[migration status](docs/compositional-execution.md).
 
 Agent is a Zig library for building agents that work with models, people, and
 tools. You author the control flow; [Boundary](https://github.com/tkersey/boundary)
@@ -82,8 +82,8 @@ supplies effects.**
 | **World** | Interpret the program and admit its saved state using one generic native/WASM runtime | Execution without the Agent compiler, application source, or an application-specific WASM kernel |
 | **Your environment** | Resolve typed requests using models, people, credentials, and real tools | External authority stays explicit rather than becoming hidden continuation state |
 
-Boundary turns the authored computation into a **program image** (`BPI2`). World
-carries unfinished execution in **saved state** (`PST2`), including the
+Boundary turns the authored computation into a **program image** (`BPI3`). World
+carries unfinished execution in **saved state** (`PST3`), including the
 continuations needed to resume. The program image and complete saved state—not
 a transcript, a suspended JavaScript callback, or an originating process—carry
 the application control.
@@ -126,8 +126,8 @@ are finite execution checks, not claims about live-model quality.
 
 ## Get started
 
-Use **Zig 0.16.0** and **Node 26.8.1 or newer**. Agent 4 pins Boundary 2.0.2 and
-World 5.0.2 source commits in its [dependency lock](conformance/agent4/dependencies.lock.json); use
+Use **Zig 0.16.0** and **Node 26.8.1 or newer**. Agent 4 pins Boundary 3.0.0-dev.0 and
+World 6.0.0-dev.0 source commits in its [dependency lock](conformance/agent4/dependencies.lock.json); use
 that exact Boundary/World combination rather than substituting other versions.
 The locked source-installation profile is POSIX, qualified on Darwin arm64;
 Windows setup is not qualified.
@@ -146,7 +146,8 @@ works from an extracted source package without Git metadata.
 
 ### Execute the integration examples
 
-Acquire the locked World inputs explicitly, then run the integration checks:
+Acquire the locked World inputs explicitly, then run the integration checks. The
+full integration target currently exposes remaining application migrations:
 
 ```sh
 node tools/agent4/setup.mjs
@@ -160,7 +161,7 @@ reports inquiry execution as unavailable; this does not validate the repair
 executor. Explicit `check-inquiry-application` and `check-inquiry-comparison`
 execution still require that profile. See [inquiry validation](docs/resumable-inquiry.md).
 
-The optional runner can **start, resume, inspect, and cancel** saved World
+The optional runner can **start, resume, inspect, cancel, and continue after a yield** saved World
 outcomes using canonical reply bytes, without a UI or provider session. See
 [the runtime guide](docs/agent4-runtime.md) for complete commands, the JavaScript
 embedding API, and direct World execution without the convenience bridge.
@@ -259,7 +260,7 @@ Permission modes are never normalized to bypass exact inventories.
 ## Compatibility and trust boundaries
 
 The current package is **Agent 4 development** (`4.0.0-dev.0`), with the exact
-Boundary 2 / World 5 inputs recorded in the lock. That dependency selection is
+Boundary 3 / World 6 development inputs recorded in the lock. That dependency selection is
 not a claim of compatibility with independently released versions. Agent 3
 artifacts stay on their frozen BPI1/PST1 runtime; active-state migration is not
 supported. See [migration from Agent 3](docs/migration_from_3.md).

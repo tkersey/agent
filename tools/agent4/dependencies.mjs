@@ -125,7 +125,7 @@ export function readDependencyLock(lockPath = DEFAULT_LOCK) {
         !Number.isSafeInteger(selected.entries) || selected.entries < 0 ||
         !Number.isSafeInteger(selected.bytes) || selected.bytes < 0) fail("invalid package profile");
   }
-  if (runtime?.abi !== 2 || !safePath(runtime.entrypoint) || !safePath(runtime.kernel?.path) ||
+  if (runtime?.abi !== 3 || !safePath(runtime.entrypoint) || !safePath(runtime.kernel?.path) ||
       !/^[a-f0-9]{64}$/.test(runtime.kernel?.sha256 ?? "") ||
       !/^[a-f0-9]{64}$/.test(runtime.inventorySha256 ?? "") || !Array.isArray(runtime.files))
     fail("invalid runtime lock");

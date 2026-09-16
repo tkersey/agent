@@ -6,6 +6,7 @@ const source = boundary.computation;
 const dialogue = @import("dialogue.zig");
 const Id = source.Id;
 const Builder = source.Builder;
+pub const broker = @import("inquiry_broker.zig");
 
 pub const Spec = struct {
     identity: []const u8,

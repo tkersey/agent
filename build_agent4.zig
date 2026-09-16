@@ -132,11 +132,17 @@ pub fn build(b: *std.Build) void {
     g.testModule(check, inquiry);
     const inquiry_check = b.step("check-inquiry-probe", "Check retained inquiry custody");
     g.testModule(inquiry_check, inquiry);
+    const inquiry_broker = g.module("test/agent4/inquiry_broker_probe.zig");
+    g.testModule(check, inquiry_broker);
+    g.testModule(inquiry_check, inquiry_broker);
 
     const emit = b.step("agent4-images", "Compile the consumer images");
     const distribution = b.step("emit-agent4", "Emit compiled examples and the source-independent use archive");
     const dialogue_exe = g.emitter("agent4-dialogue", dialogue);
     const inquiry_exe = g.emitter("agent4-inquiry-probe", inquiry);
+    const inquiry_broker_exe = g.emitter("agent4-inquiry-broker", inquiry_broker);
+    g.emit(emit, inquiry_broker_exe, &.{}, "inquiry/broker.bpi2");
+    g.emit(inquiry_check, inquiry_broker_exe, &.{}, "inquiry/broker.bpi2");
     for ([_][]const u8{ "owned", "composition", "followup" }) |mode| {
         g.emit(emit, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi2", .{mode}));
         g.emit(inquiry_check, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi2", .{mode}));
@@ -203,6 +209,16 @@ pub fn build(b: *std.Build) void {
             .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data_v2", .module = data } },
         });
         const native_exe = native_graph.emitter("agent4-native", native_module);
+        const broker_run = b.addSystemCommand(&.{
+            "node",                                                  "test/agent4/inquiry_broker_runtime.mjs", runtime_path,
+            b.getInstallPath(.prefix, "agent4/inquiry/broker.bpi2"),
+        });
+        broker_run.addFileArg(native_exe.getEmittedBin());
+        broker_run.addFileArg(multi_exe.getEmittedBin());
+        broker_run.step.dependOn(&runtime_guard.step);
+        g.emit(&broker_run.step, inquiry_broker_exe, &.{}, "inquiry/broker.bpi2");
+        inquiry_check.dependOn(&broker_run.step);
+        runtime_work.dependOn(&broker_run.step);
         for ([_][]const u8{ "owned", "composition", "followup" }) |mode| {
             const inquiry_run = b.addSystemCommand(&.{
                 "node",                                                               "test/agent4/inquiry_runtime.mjs", runtime_path,

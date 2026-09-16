@@ -228,6 +228,13 @@ pub fn build(b: *std.Build) void {
         });
         const native_exe = native_graph.emitter("agent4-native", native_module);
         const inquiry_app_run = b.addSystemCommand(&.{ "node", "test/agent4/inquiry_application_runtime.mjs", runtime_path, b.getInstallPath(.prefix, "agent4/inquiry") });
+        const inquiry_cli = b.addSystemCommand(&.{ "node", "--test", "test/agent4/inquiry_cli.test.mjs" });
+        inquiry_cli.setEnvironmentVariable("AGENT4_WORLD_RUNTIME", runtime_path);
+        inquiry_cli.setEnvironmentVariable("AGENT4_INQUIRY_IMAGES", b.getInstallPath(.prefix, "agent4/inquiry"));
+        inquiry_cli.has_side_effects = true;
+        inquiry_cli.step.dependOn(distribution);
+        inquiry_cli.step.dependOn(&runtime_guard.step);
+        b.step("check-inquiry-cli", "Check opt-in inquiry dispatch and checkpoint recovery").dependOn(&inquiry_cli.step);
         inquiry_app_run.addFileArg(native_exe.getEmittedBin());
         inquiry_app_run.addFileArg(multi_exe.getEmittedBin());
         inquiry_app_run.has_side_effects = true;

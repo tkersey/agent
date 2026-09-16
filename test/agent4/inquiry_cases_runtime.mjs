@@ -274,9 +274,10 @@ await scenario("multi-with-retained-futures", { count: 2, explore: true, indepen
     const branch = c.summary.match(/alternative (\d+); private before=(\d+); private after=(\d+)/u);
     assert(branch); assert.equal(Number(branch[2]), 10);
     assert.equal(Number(branch[3]), 10 + Number(branch[1]));
+    if (c.observation === 1) return trace(0, true);
     return stop(c.observation, `Alternative ${branch[1]} remains qualified and inconclusive.`);
   },
-}, { tag: 1, models: 7, experiments: 1, cleanup: [1, 2], templates: 2, activations: 4 });
+}, { tag: 1, models: 11, experiments: 2, cleanup: [1, 2], templates: 4, activations: 8 });
 
 for (const coalesce of [true, false]) await scenario(`application-coalescing-${coalesce}`, {
   count: 2, coalesce, provider: c => !c.observation ? trace(c.id - 1) : stop(c.observation),

@@ -10,13 +10,13 @@ import { DEFAULT_LOCK, readDependencyLock, readRegular, sha256, verifyRuntime } 
 const ROOT = resolve(import.meta.dirname, "../..");
 const runtimeFiles = ["runtime/world.mjs", "runtime/world.d.mts", "runtime/values.mjs", "runtime/runner.mjs", "runtime/cli.mjs",
   "runtime/model.mjs", "runtime/document.mjs", "runtime/inquiry.mjs", "runtime/inquiry_sandbox.mjs",
-  "runtime/inquiry_driver.mjs", "runtime/inquiry_wire.mjs", "runtime/inquiry_delivery.mjs", "tools/agent4/dependencies.mjs",
+  "runtime/inquiry_driver.mjs", "runtime/inquiry_wire.mjs", "runtime/inquiry_delivery.mjs", "runtime/inquiry_cli.mjs", "tools/agent4/dependencies.mjs",
   "docs/agent4-runtime.md", "docs/migration_from_3.md", "docs/model-invocation-v3.md",
   "docs/consequence-clarification.md", "docs/resumable-inquiry.md", "LICENSE"];
 // Optional test oracles supply prescribed external values and independently
 // assert application behavior. Production execution never imports these files.
 const fixtureTests = ["test/agent4/document_runtime.mjs", "test/agent4/review_runtime.mjs",
-  "test/agent4/inquiry_application_runtime.mjs", "test/consumers/inquiry/contract.txt",
+  "test/agent4/inquiry_application_runtime.mjs", "test/agent4/inquiry_cli.test.mjs", "test/consumers/inquiry/contract.txt",
   "test/consumers/inquiry/fixtures/cases.mjs", "test/consumers/inquiry/fixtures/session.mjs"];
 const roles = new Set(["image", "initial-args", "schema", "contract", "synthetic-fixture"]);
 const compare = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b));

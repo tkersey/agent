@@ -25,6 +25,7 @@ if(mode==='integration') assert(options.worldRuntime, '--world-runtime is requir
 const env={...process.env, AGENT4_WORLD_RUNTIME:options.worldRuntime,
   AGENT4_FIXTURES:fixtures, AGENT4_DIALOGUE_DIR:join(fixtures,'dialogue'),
   AGENT4_REVIEW_IMAGES:join(fixtures,'review'),
+  AGENT4_INQUIRY_IMAGES:join(fixtures,'inquiry'),
   AGENT4_APPROVAL_IMAGE:join(fixtures,'approval/approval.bpi2'),
   AGENT4_APPROVAL_EVIDENCE_IMAGE:join(fixtures,'approval/approval-evidence.bpi2'),
   AGENT4_APPROVAL_SCOPED_IMAGE:join(fixtures,'approval/approval-scoped.bpi2'),
@@ -53,7 +54,7 @@ await withVerifiedDependencies(options, async dependencies=>{
     await run('node',['--test','test/agent4/dependencies.test.mjs','test/agent4/setup.test.mjs',
       'test/agent4/bridge.test.mjs','test/agent4/runner.test.mjs','test/agent4/approval.test.mjs',
       'test/agent4/document.test.mjs','test/agent4/review_runtime.mjs', 'test/agent4/package_commands.test.mjs',
-      'test/agent4/consumer_build.test.mjs']);
+      'test/agent4/consumer_build.test.mjs', 'test/agent4/inquiry_cli.test.mjs']);
     await run('node',['test/agent4/dialogue_runtime.test.mjs',options.worldRuntime,join(fixtures,'dialogue')]);
     await run('node',['test/agent4/multi_runtime.mjs']);
     await run('node',['test/agent4/document_runtime.mjs',options.worldRuntime,join(fixtures,'document/document.bpi2')]);

@@ -40,6 +40,10 @@ test('opt-in dispatcher preserves checkpoints, human authority and explicit allo
     assert.equal(body.input[2].content, reset);
     const context = body.input[4].content;
     const initial = context.includes('Investigation 0;');
+    assert.equal(body.tools.some(tool => tool.name === 'hypothesis'), initial);
+    assert.equal(body.input[0].content.includes('hypothesis calls'), initial);
+    if (initial) assert(body.input[0].content.includes('Return 1..1 hypothesis calls'));
+    else assert(body.input[0].content.includes('Return a prediction'));
     const output = initial ? [action('hypothesis', { explanation: 'An ordinary synthetic explanation; test the proposed source.' })]
       : [action('repair', { source: monotonic, observation: Number(context.match(/observation (\d+)/)[1]) })];
     res.writeHead(200, { 'content-type': 'application/json' });

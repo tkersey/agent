@@ -42,6 +42,12 @@ fn requestValue(e: E, f: Id) !Id {
     const task = try e.p(f, 0);
     const subject = try e.field(t.Subject, task, 0);
     const working = try e.p(f, 3);
+    const initial = try e.p(f, 4);
+    const hypotheses = try b.primitive(try e.schema(u32), .integer_convert, &.{try e.field(u8, task, 2)}, 0);
+    var first = try e.concat(P.MessageText, try e.value(P.MessageText, .{ .bytes = "Investigate the supplied module. Return 1.." }), try e.textNumber(P.MessageText, hypotheses));
+    first = try e.concat(P.MessageText, first, try e.value(P.MessageText, .{ .bytes = " hypothesis calls. " }));
+    const later = try e.value(P.MessageText, .{ .bytes = "Investigate the supplied module. Return a prediction followed by ordered issue/encode/submit/abort/close/inspect calls, or exactly one repair, revise, or stop call. " });
+    const phase = try b.primitive(try e.schema(P.MessageText), .select, &.{ initial, first, later }, 0);
     var scope = try e.value(P.MessageText, .{ .bytes = "Investigation " });
     scope = try e.concat(P.MessageText, scope, try e.textNumber(P.MessageText, try e.p(f, 1)));
     scope = try e.concat(P.MessageText, scope, try e.value(P.MessageText, .{ .bytes = "; version " }));
@@ -49,15 +55,13 @@ fn requestValue(e: E, f: Id) !Id {
     scope = try e.concat(P.MessageText, scope, try e.value(P.MessageText, .{ .bytes = "; current observation " }));
     scope = try e.concat(P.MessageText, scope, try e.textNumber(P.MessageText, try e.field(u64, working, 1)));
     const contents = [_]Id{
-        try e.value(P.MessageText, .{ .bytes = "Investigate the supplied module. Initially return hypothesis calls. " ++
-            "For an investigator, return a prediction followed by ordered issue/encode/submit/abort/close/inspect calls, " ++
-            "or exactly one repair, revise, or stop call. Trace indices are zero-based and refer only to earlier outputs. " ++
+        try e.concat(P.MessageText, phase, try e.value(P.MessageText, .{ .bytes = "Trace indices are zero-based and refer only to earlier outputs. " ++
             "Prediction fields are occurrence (null projects to zero), accepted (0/1), issued, accepted_count, closed (0/1), current, issue_returned_null (0/1). " ++
             "Requirements 0..7 refer to binding, stale rejection, unchanged rejection, progression, presentation independence, " ++
             "adapter association, matched modes, and close/abort. " ++
             "A matched prediction is not a proof of the explanation. Revise inadequate explanations or stop honestly. " ++
             "Repair is complete self-contained JavaScript with the original exports and no imports. " ++
-            "Cite the current observation ID (zero before any evidence). Tests and approval are separate from your claims." }),
+            "Cite the current observation ID (zero before any evidence). Tests and approval are separate from your claims." })),
         try widen(e, try e.field(agent.contracts.Text(2048), subject, 3)),
         try widen(e, try e.field(t.Source, subject, 1)),
         try widen(e, try e.field(t.Reason, working, 0)),
@@ -78,6 +82,7 @@ fn requestValue(e: E, f: Id) !Id {
     inline for (std.meta.fields(P.Request), 0..) |field, i| fields[i] = switch (i) {
         1 => try e.field(P.ModelId, task, 1),
         3 => try b.primitive(try e.schema(P.Messages), .sequence, &messages, 0),
+        5 => try e.product(field.type, &.{ try e.value(u32, 1), try b.primitive(try e.schema(u32), .select, &.{ initial, hypotheses, try e.value(u32, 25) }, 0), try e.value(bool, true) }),
         else => try e.value(field.type, @field(template, field.name)),
     };
     return e.product(P.Request, &fields);

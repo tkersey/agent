@@ -128,10 +128,19 @@ pub fn build(b: *std.Build) void {
     dialogue.addImport("dialogue", g.helper("dialogue"));
     dialogue.addImport("interaction", g.helper("interaction"));
     g.testModule(check, dialogue);
+    const inquiry = g.module("test/agent4/inquiry_probe.zig");
+    g.testModule(check, inquiry);
+    const inquiry_check = b.step("check-inquiry-probe", "Check retained inquiry custody");
+    g.testModule(inquiry_check, inquiry);
 
     const emit = b.step("agent4-images", "Compile the consumer images");
     const distribution = b.step("emit-agent4", "Emit compiled examples and the source-independent use archive");
     const dialogue_exe = g.emitter("agent4-dialogue", dialogue);
+    const inquiry_exe = g.emitter("agent4-inquiry-probe", inquiry);
+    for ([_][]const u8{ "owned", "composition", "followup" }) |mode| {
+        g.emit(emit, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi2", .{mode}));
+        g.emit(inquiry_check, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi2", .{mode}));
+    }
     for ([_][]const u8{ "twice", "dispose_owned", "exchange", "deep_exchange", "wide_exchange" }) |mode|
         g.emit(emit, dialogue_exe, &.{mode}, b.fmt("dialogue/{s}.bpi2", .{mode}));
     const multi = g.module("test/agent4/multi_probe.zig");
@@ -194,6 +203,18 @@ pub fn build(b: *std.Build) void {
             .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data_v2", .module = data } },
         });
         const native_exe = native_graph.emitter("agent4-native", native_module);
+        for ([_][]const u8{ "owned", "composition", "followup" }) |mode| {
+            const inquiry_run = b.addSystemCommand(&.{
+                "node",                                                               "test/agent4/inquiry_runtime.mjs", runtime_path,
+                b.getInstallPath(.prefix, b.fmt("agent4/inquiry/{s}.bpi2", .{mode})),
+            });
+            inquiry_run.addFileArg(native_exe.getEmittedBin());
+            inquiry_run.addFileArg(multi_exe.getEmittedBin());
+            inquiry_run.step.dependOn(&runtime_guard.step);
+            g.emit(&inquiry_run.step, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi2", .{mode}));
+            inquiry_check.dependOn(&inquiry_run.step);
+            runtime_work.dependOn(&inquiry_run.step);
+        }
         for ([_][]const u8{ "decision_scopes", "model_admission", "model_custody", "observation", "approval_equality", "callable_runtime", "clarification", "terminology" }) |name| {
             const native = g.module(b.fmt("test/agent4/{s}.zig", .{name}));
             native.addImport("world", world);

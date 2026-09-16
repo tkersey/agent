@@ -32,7 +32,8 @@ export async function executeInquiryRequest(executor, payload, options = {}) {
   assert.equal(result.runner, runner);
   assert.equal(result.sourceDigest, sourceDigest(source));
   const observation = demand.tag === 0 ? v(0, result.rows.map(row => [
-    row[0], BigInt(row[1]), row[2], BigInt(row[3]), BigInt(row[4]), row[5], BigInt(row[6]), row[7],
+    row[0], row[1] === null ? v(0) : v(1, BigInt(row[1])), row[2],
+    BigInt(row[3]), BigInt(row[4]), row[5], BigInt(row[6]), row[7],
   ])) : v(1, [result.passed, BigInt(result.checks.length),
     BigInt(result.checks.filter(check => !check.passed).length),
     [...new Set(result.checks.flatMap(check => check.failures))].sort().join(", ")]);

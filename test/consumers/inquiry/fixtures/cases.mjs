@@ -57,6 +57,8 @@ export const bad = {
   rejectAll: replaceSubmit("return false;"),
   resetAll: replaceSubmit("session.issued = 0; session.accepted = 0; session.current = null; return true;"),
   labelOnly: reset.replace('provider-repeated-id', 'changed-display'),
+  closedZeroObject: monotonic.replace('if (session.closed) return null;', 'if (session.closed) return { occurrence: 0, label: "" };'),
+  closedNonzeroObject: monotonic.replace('if (session.closed) return null;', 'if (session.closed) return { occurrence: 9, label: "" };'),
   forgedVerdict: "console.log('PASS'); export const passed = true;",
   earlyExit: "process.exit(0);",
   tamperedJSON: "JSON.stringify = () => '{\"passed\":true}';\n" + monotonic,

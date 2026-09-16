@@ -9,7 +9,7 @@ pub const Issue = struct { text: Text(64), choices: Vector(u8, 4), label: Text(3
 pub const Encode = struct { request: u64, choice: u8 };
 pub const Step = union(enum) { issue: Issue, encode: Encode, submit: u64, abort, close, inspect };
 pub const Trace = struct { mode: u8, steps: Vector(Step, 24) };
-pub const Selector = enum { occurrence, accepted, issued, accepted_count, closed, current };
+pub const Selector = enum { occurrence, accepted, issued, accepted_count, closed, current, issue_returned_null };
 pub const Prediction = struct { step: u64, field: Selector, expected: u64, requirement: u8 };
 pub const Probe = struct { trace: Trace, prediction: Prediction };
 pub const Demand = union(enum) { probe: Probe, validate: Source, retire: Reason };
@@ -28,7 +28,7 @@ pub const Experiment = struct { kind: u8, source: Source, trace: Trace };
 pub const Key = struct { subject: Subject, experiment: Experiment };
 pub const Row = struct {
     operation: u8,
-    occurrence: u64,
+    occurrence: ?u64,
     accepted: bool,
     issued: u64,
     accepted_count: u64,

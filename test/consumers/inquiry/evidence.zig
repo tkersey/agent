@@ -33,24 +33,45 @@ fn number(e: E, value: Id, boolean: bool) !Id {
     return e.b().primitive(try e.schema(u64), .select, &.{ value, try e.value(u64, 1), try e.value(u64, 0) }, 0);
 }
 
+// Preserve absence in the rendered observation; the explicitly numeric
+// occurrence selector uses zero, and issue_returned_null inspects the sum tag.
+fn occurrence(e: E, comptime Result: type) !Id {
+    const b = e.b();
+    const f = try b.declare(&.{try e.schema(?u64)}, try e.schema(Result), &.{}, &.{});
+    const absent = try b.variable(try e.schema(void));
+    const present = try b.variable(try e.schema(u64));
+    const empty = if (Result == u64) try e.value(u64, 0) else try e.value(Text, .{ .bytes = "null" });
+    const value = if (Result == u64) try e.ref(present) else try e.textNumber(Text, try e.ref(present));
+    try b.define(f, try b.term(.{ .match_sum = .{ .value = try e.p(f, 0), .cases = &.{
+        .{ .variable = absent, .body = try b.pure(empty) },
+        .{ .variable = present, .body = try b.pure(value) },
+    } } }));
+    return f;
+}
+
 fn renderRows(e: E) !Id {
     const b = e.b();
     const f = try b.declare(&.{ try e.schema(t.Rows), try e.schema(u64), try e.schema(Text) }, try e.schema(Text), &.{}, &.{});
     const no = try b.variable(try e.schema(void));
     const row = try b.variable(try e.schema(t.Row));
+    const identity_text = try b.variable(try e.schema(Text));
     const index = try e.p(f, 1);
     var text = try e.concat(Text, try e.p(f, 2), try e.textNumber(Text, index));
     inline for (.{ 1, 2, 3, 4, 5, 6 }) |i| {
         text = try e.concat(Text, text, try e.value(Text, .{ .bytes = " " }));
-        const boolean = i == 2 or i == 5;
-        const scalar = try e.field(if (boolean) bool else u64, try e.ref(row), i);
-        text = try e.concat(Text, text, try e.textNumber(Text, try number(e, scalar, boolean)));
+        if (i == 1) {
+            text = try e.concat(Text, text, try e.ref(identity_text));
+        } else {
+            const boolean = i == 2 or i == 5;
+            const scalar = try e.field(if (boolean) bool else u64, try e.ref(row), i);
+            text = try e.concat(Text, text, try e.textNumber(Text, try number(e, scalar, boolean)));
+        }
     }
     text = try e.concat(Text, text, try e.value(Text, .{ .bytes = "\n" }));
     const next = try e.call(f, &.{ try e.p(f, 0), try e.arithmetic(.integer_add, index, try e.value(u64, 1)), text });
     try b.define(f, try b.term(.{ .match_sum = .{
         .value = try e.index(t.Row, try e.p(f, 0), index),
-        .cases = &.{ .{ .variable = no, .body = try b.pure(try e.p(f, 2)) }, .{ .variable = row, .body = next } },
+        .cases = &.{ .{ .variable = no, .body = try b.pure(try e.p(f, 2)) }, .{ .variable = row, .body = try b.bind(identity_text, try e.call(try occurrence(e, Text), &.{try e.field(?u64, try e.ref(row), 1)}), next) } },
     } }));
     return f;
 }
@@ -61,6 +82,7 @@ fn prediction(e: E) !Id {
     const p = try e.p(f, 1);
     const no = try b.variable(try e.schema(void));
     const row = try b.variable(try e.schema(t.Row));
+    const identity = try b.variable(try e.schema(u64));
     const selector = try b.primitive(try e.schema(u32), .enum_tag, &.{try e.field(t.Selector, p, 1)}, 0);
     var actual = try e.field(u64, try e.ref(row), 6);
     inline for (.{ 5, 4, 3, 2, 1 }, 0..) |field, reverse| {
@@ -68,10 +90,16 @@ fn prediction(e: E) !Id {
         const boolean = field == 2 or field == 5;
         actual = try b.primitive(try e.schema(u64), .select, &.{
             try e.eq(selector, try e.value(u32, tag)),
-            try number(e, try e.field(if (boolean) bool else u64, try e.ref(row), field), boolean),
+            if (field == 1) try e.ref(identity) else try number(e, try e.field(if (boolean) bool else u64, try e.ref(row), field), boolean),
             actual,
         }, 0);
     }
+    const tag = try b.primitive(try e.schema(u64), .variant_tag, &.{try e.field(?u64, try e.ref(row), 1)}, 0);
+    actual = try b.primitive(try e.schema(u64), .select, &.{
+        try e.eq(selector, try e.value(u32, 6)),
+        try number(e, try e.eq(tag, try e.value(u64, 0)), true),
+        actual,
+    }, 0);
     const match = try e.eq(actual, try e.field(u64, p, 2));
     const compared = try b.pure(try b.primitive(try e.schema(Text), .select, &.{
         match,
@@ -80,7 +108,7 @@ fn prediction(e: E) !Id {
     }, 0));
     try b.define(f, try b.term(.{ .match_sum = .{ .value = try e.index(t.Row, try e.p(f, 0), try e.field(u64, p, 0)), .cases = &.{
         .{ .variable = no, .body = try b.pure(try e.value(Text, .{ .bytes = "Prediction inconclusive: row unavailable.\n" })) },
-        .{ .variable = row, .body = compared },
+        .{ .variable = row, .body = try b.bind(identity, try e.call(try occurrence(e, u64), &.{try e.field(?u64, try e.ref(row), 1)}), compared) },
     } } }));
     return f;
 }

@@ -60,7 +60,9 @@ export function admitTrace(input) {
 function admitRows(rows, trace) {
   if (!Array.isArray(rows) || rows.length !== trace.steps.length) return false;
   return rows.every((row, index) => Array.isArray(row) && row.length === 8 &&
-    row[0] === trace.steps[index].tag && [row[1], row[3], row[4], row[6]].every(x =>
+    row[0] === trace.steps[index].tag &&
+    (row[1] === null ? row[0] === 0 : Number.isSafeInteger(row[1]) && row[1] >= 0 && row[1] <= 4294967295) &&
+    [row[3], row[4], row[6]].every(x =>
       Number.isSafeInteger(x) && x >= 0 && x <= 4294967295) &&
     typeof row[2] === "boolean" && typeof row[5] === "boolean" && utf8(row[7], 128));
 }
@@ -111,10 +113,10 @@ export function evaluateObservations(trace, rows) {
     let accepts = false, label = "";
     if (step.tag === 0) {
       if (closed) {
-        if (row[1] !== 0) failures.add("issue_after_close");
+        if (row[1] !== null) failures.add("issue_after_close");
       } else {
         issued++;
-        if (row[1] === 0 || occurrences.has(row[1])) failures.add("occurrence_progression");
+        if (row[1] === null || row[1] === 0 || occurrences.has(row[1])) failures.add("occurrence_progression");
         occurrences.add(row[1]);
         requests[i] = { occurrence: row[1], choices: step.value[1] };
         current = i;

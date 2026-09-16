@@ -88,6 +88,10 @@ The test continues using Wasmtime's actual returned bytes. All three engines
 agree byte for byte in `run` mode. The independent expected traces and graph
 assertions live in `test/agent4/inquiry_runtime.mjs`.
 
+These custody and numerical-broker checks are portable and do not depend on the
+repository experiment executor. Executor checks belong to the repair-application
+lane.
+
 | Witness | Complete BPI2 bytes | Maximum pending PST2 bytes | Result |
 | --- | ---: | ---: | --- |
 | Direct owning queue | 1,182 | 424 | 92 |
@@ -533,3 +537,15 @@ usefulness. The selected Boundary/World and toolchain inputs remain unchanged.
 No paid inference, credential discovery, real user-repository repair, PR
 promotion, merge or release was performed. A later live study needs its own
 explicit provider/corpus/profile/resource selection and inference authority.
+
+On non-macOS hosts, the general integration target still runs portable custody,
+broker, image, and existing consumer checks. Seatbelt-dependent positive tests
+are explicitly marked unavailable/not run, while the unsupported-host refusal
+contract is tested. Economy reports `PASS_PORTABLE_ONLY` and an `UNAVAILABLE`
+inquiry comparison, never a qualified-execution pass. The dedicated application
+and comparison targets continue to require real qualified execution. A failed
+profile setup on macOS remains a test failure; it is not treated as an unsupported
+host. The recorded positive executor and repair evidence above is from macOS.
+The unavailable-host selection and portable-only economy result were also
+exercised with an isolated test-only platform override. This is selection-branch
+coverage, not qualification on a Linux machine.

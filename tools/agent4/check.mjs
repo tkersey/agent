@@ -63,5 +63,9 @@ await withVerifiedDependencies(options, async dependencies=>{
   }
   const output=join(root,'.agent4/out/checks');
   await mkdir(output,{recursive:true});
-  await writeFile(join(output,`${mode}.json`),JSON.stringify({mode,dependencies,results},null,2)+'\n');
+  const inquiryExecution = mode === 'authoring' ? {status:'not-requested'} : process.platform === 'darwin'
+    ? {status:'passed',profile:'macos-seatbelt-session-v1'}
+    : {status:'unavailable',reason:'unsupported_host',positiveExecutionCases:'not-run'};
+  if(inquiryExecution.status==='unavailable') console.log(JSON.stringify({inquiryExecution}));
+  await writeFile(join(output,`${mode}.json`),JSON.stringify({mode,dependencies,results,inquiryExecution},null,2)+'\n');
 });

@@ -149,6 +149,12 @@ zig build check-agent4-integration -Doptimize=ReleaseSafe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime"
 ```
 
+The repair executor's qualified profile is macOS Seatbelt. On other hosts,
+the general integration target keeps the portable World/Agent checks and
+reports inquiry execution as unavailable; this does not validate the repair
+executor. Explicit `check-inquiry-application` and `check-inquiry-comparison`
+execution still require that profile. See [inquiry validation](docs/resumable-inquiry.md).
+
 The optional runner can **start, resume, inspect, and cancel** saved World
 outcomes using canonical reply bytes, without a UI or provider session. See
 [the runtime guide](docs/agent4-runtime.md) for complete commands, the JavaScript
@@ -224,6 +230,10 @@ With World acquired, run the economy checks separately:
 zig build check-agent4-economy -Doptimize=ReleaseSafe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime"
 ```
+
+Without the supported inquiry execution host, economy reports
+`PASS_PORTABLE_ONLY` with `inquiryComparison: UNAVAILABLE` when its portable
+checks pass. It does not report a passing inquiry/ReAct experiment comparison.
 
 Use `--cache-dir` and `--global-cache-dir` inside the isolated Agent checkout when
 working alongside other deliveries. `-Dboundary-v2-source=/absolute/immutable/copy`

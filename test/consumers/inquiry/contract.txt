@@ -1,0 +1,30 @@
+Investigate the reported stale-reply defect in session.mjs. A previously encoded
+answer reportedly becomes acceptable again after another occurrence of an
+identical question. Verify the report against the supplied immutable source.
+
+Only session.mjs may be replaced. Preserve these exports and signatures:
+createSession(mode), issue(session, text, choices, label),
+encodeReply(request, choice), submitEncoded(session, encoded), inspect(session),
+abort(session), close(session). The module is self-contained and has no imports.
+
+A valid reply for the current request and an offered choice is accepted once.
+A reply for a different occurrence is rejected without changing session state,
+even when text, choices, display labels and provider call IDs repeat. Issuing
+another request creates a new nonzero occurrence identity in this progressing
+session. Repeated task data cannot reset that progression. The received encoded
+reply must retain its original binding; do not reconstruct it for the current
+request. Do not use presentation labels or provider call IDs as authority.
+
+inspect returns issued and accepted counts, closed, and the current occurrence
+(zero when absent). abort clears the current request without resetting counts.
+close clears the current request permanently; subsequent issue returns null and
+submitEncoded returns false. Mode 0 uses the display prefix run: and mode 1 uses
+advance:. Compare binding behavior in matched modes; the prefix difference is
+intentional. This is a local session contract, not global rollback prevention.
+
+Experiments may issue questions, encode answers to earlier request outputs,
+submit the original encoded answer, inspect, abort and close. Propose concrete
+trace inputs and predictions. Candidate acceptance uses the prescribed external
+checks on the exact replacement; neither a model claim nor a printed verdict is
+acceptance. A passing replacement still requires current applicability and exact
+approval before delivery.

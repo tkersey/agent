@@ -200,6 +200,10 @@ pub fn build(b: *std.Build) void {
         runtime_guard.has_side_effects = true;
         _ = runtime_guard.captureStdOut(.{});
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
+        const inquiry_executor = b.addSystemCommand(&.{ "node", "test/agent4/inquiry_executor.test.mjs" });
+        inquiry_executor.step.dependOn(&runtime_guard.step);
+        inquiry_check.dependOn(&inquiry_executor.step);
+        runtime_work.dependOn(&inquiry_executor.step);
         var native_graph = g;
         native_graph.gate = &runtime_guard.step;
         const native_module = b.createModule(.{

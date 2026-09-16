@@ -52,7 +52,7 @@ fn requestValue(e: E, f: Id) !Id {
         try e.value(P.MessageText, .{ .bytes = "Investigate the supplied module. Initially return hypothesis calls. " ++
             "For an investigator, return a prediction followed by ordered issue/encode/submit/abort/close/inspect calls, " ++
             "or exactly one repair, revise, or stop call. Trace indices are zero-based and refer only to earlier outputs. " ++
-            "Prediction fields are occurrence, accepted (0/1), issued, accepted_count, closed (0/1), current. " ++
+            "Prediction fields are occurrence (null projects to zero), accepted (0/1), issued, accepted_count, closed (0/1), current, issue_returned_null (0/1). " ++
             "Requirements 0..7 refer to binding, stale rejection, unchanged rejection, progression, presentation independence, " ++
             "adapter association, matched modes, and close/abort. " ++
             "A matched prediction is not a proof of the explanation. Revise inadequate explanations or stop honestly. " ++

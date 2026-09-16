@@ -268,6 +268,22 @@ await scenario("inadequate-initial-set", { count: 3, inspect: true, provider: c 
   !c.observation ? trace(0) : stop(c.observation),
 }, { tag: 1, models: 7, experiments: 1, cleanup: [1, 2, 3] });
 
+const closedProbe = expected => [call("prediction", { mode: 0, step: 1,
+  field: "issue_returned_null", expected, requirement: 7 }), call("close", { value: "now" }),
+  call("issue", { text: "closed", choice0: 1, choice1: 0, choice2: 0, choice3: 0, count: 1, label: "sentinel" })];
+await scenario("closed-null-observation", { independent: true, provider: c => {
+  if (!c.observation) return closedProbe(1);
+  assert(c.summary.includes("matched")); assert(c.summary.includes("\n1 null "));
+  return stop(c.observation);
+} }, { tag: 1, models: 3, experiments: 1 });
+await scenario("invalid-null-prediction", { provider: () => closedProbe(2) },
+  { tag: 1, models: 2, experiments: 0 });
+await scenario("reject-nonnull-after-close", { independent: true, provider: c => {
+  if (!c.observation) return [call("repair", { source: bad.closedZeroObject, observation: 0 })];
+  assert(c.summary.includes("issue_after_close"));
+  return stop(c.observation);
+} }, { tag: 1, models: 3, experiments: 1 });
+
 await scenario("multi-with-retained-futures", { count: 2, explore: true, independent: true, inspect: true,
   provider: c => {
     if (!c.observation) return trace(c.id - 1);

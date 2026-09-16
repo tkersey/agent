@@ -24,7 +24,8 @@ const invoke = new Script(`(() => {
         for (let j = 0; j < op.value[1].length; j++) choices[j] = op.value[1][j];
         const request = apply(api.issue, undefined, [session, op.value[0], choices, op.value[2]]);
         requests[i] = request;
-        occurrence = request === null ? 0 : number(request.occurrence);
+        // Absence is an API observation, not the numeric identity zero.
+        occurrence = request === null ? null : number(request.occurrence);
         if (request !== null) {
           if (typeof request.label !== 'string' || request.label.length > 128) throw null;
           label = request.label;

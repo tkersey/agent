@@ -145,6 +145,8 @@ explicit inputs. Traces admit 1–24 operations: issue, encode a reply to an ear
 request, submit that original encoded reply, abort, close and inspect. Questions
 use at most four byte-valued choices, 64 bytes of text and a 32-byte label. Source
 is limited to 8,192 UTF-8 bytes; unsupported inputs reject before execution.
+Returned counts and numeric identities are bounded to nonnegative 32-bit
+integers; unsupported observations fail instead of being truncated.
 No hypothesis ID or diagnosis table participates in the executor.
 
 The inspectable reduced reproduction and visible task contract are under
@@ -187,6 +189,12 @@ which reply ought to be accepted. Rejection preserves authoritative state;
 occurrences must be distinct, without requiring a preferred numbering scheme.
 Both repairs pass. Both root causes, accept-all, reject-all, state-reset,
 display-only, forged-verdict, early-exit and JSON-tampering replacements fail.
+The issue result retains a nullable occurrence: an actual `null` return differs
+from an object whose occurrence is zero. The parent evaluator requires nullness
+after close; both zero- and nonzero-occurrence objects fail that same requirement.
+Trace summaries preserve `null`, and the model may predict
+`issue_returned_null` directly. The numeric occurrence selector explicitly
+projects null to zero; it is not an acceptance rule for the null sentinel.
 The evaluator and expectations remain outside the candidate process; missing
 observations, nonzero exit, timeout, cancellation and malformed output cannot
 become successful acceptance.
@@ -195,7 +203,7 @@ become successful acceptance.
 node test/agent4/inquiry_executor.test.mjs
 ```
 
-The executed test recorded 17 logical requests, 151 candidate-process launches
+The executed test recorded 19 logical requests, 183 candidate-process launches
 and two separate qualification launches. The integration and focused inquiry
 build steps include this test when a World runtime is selected. These are
 executor/acceptance results; the separate end-to-end World witness is described below.
@@ -230,8 +238,8 @@ zig build check-inquiry-application -Doptimize=ReleaseSafe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime"
 ```
 
-The current positive witness uses a 43,774-byte BPI2 image, reaches a maximum
-48,853-byte pending State, makes 10 model requests and 4 logical experiment
+The current positive witness uses a 44,222-byte BPI2 image, reaches a maximum
+48,866-byte pending State, makes 10 model requests and 4 logical experiment
 requests (34 isolated executions), retires/cleans all three investigations,
 then approves and delivers the exact replacement. Every transition is compared
 byte for byte across Node/WASM, native World and Wasmtime, continuing from the
@@ -244,7 +252,7 @@ approval produces a conditional-delivery conflict; an old outer result also
 rejects. No real user repository is modified. These prescribed provider replies
 establish the mechanism, not previously unknown model synthesis or usefulness.
 
-The same focused command runs 33 additional scenarios, plus the comparison cases below: a different root cause
+The same focused command runs 36 additional scenarios, plus the comparison cases below: a different root cause
 and repair, an already-satisfied subject, inadequate initial hypotheses, invalid
 model proposals and provider responses, observation/acceptance rejection,
 resource stop, cancellation, delivery intent and model-only exploration.
@@ -258,10 +266,10 @@ and cleans all of them after an honest unresolved result:
 
 | Investigations | Model requests | Experiments | Maximum pending State bytes |
 | ---: | ---: | ---: | ---: |
-| 1 | 3 | 1 | 27,957 |
-| 2 | 5 | 1 | 28,596 |
-| 4 | 9 | 1 | 29,717 |
-| 8 | 17 | 1 | 31,645 |
+| 1 | 3 | 1 | 28,068 |
+| 2 | 5 | 1 | 28,707 |
+| 4 | 9 | 1 | 29,828 |
+| 8 | 17 | 1 | 31,756 |
 
 These are bounded fixture observations, not a constant-space or latency claim.
 
@@ -288,7 +296,7 @@ provider IDs cannot reset it. Old outer replies and re-encoded stale inner
 answers reject. Across 28 model requests, four experiments, eight cleanups,
 eight templates and 16 activations, every completed-task boundary retains exactly
 170 State bytes, two nodes and one blob, with no packages, templates, branches,
-resources, cells or obligations. The complete repeated image is 44,120 bytes.
+resources, cells or obligations. The complete repeated image is 44,568 bytes.
 
 The application also builds as an independent compiler-only consumer:
 
@@ -324,9 +332,9 @@ same application bytes:
 
 | Image | Bytes | Schemas | Functions | Blocks | Constants | Constant bytes |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Repair | 43,774 | 184 | 106 | 1,111 | 157 | 9,135 |
-| Repeated use | 44,120 | 187 | 109 | 1,123 | 158 | 9,145 |
-| ReAct | 48,815 | 146 | 65 | 791 | 145 | 8,764 |
+| Repair | 44,222 | 183 | 109 | 1,126 | 158 | 9,237 |
+| Repeated use | 44,568 | 186 | 112 | 1,138 | 159 | 9,247 |
+| ReAct | 49,133 | 145 | 67 | 800 | 146 | 8,866 |
 
 The inquiry images contain two handler definitions; ReAct contains none.
 Complete compiler phase observations live
@@ -367,14 +375,14 @@ Wasmtime instances, continuing from the independent embedding's returned bytes.
 
 | Case | Strategy | Model calls | Logical / physical experiments | Maximum State bytes | Peak allocated payload bytes |
 | --- | --- | ---: | ---: | ---: | ---: |
-| reset | Inquiry | 11 | 4 / 34 | 48,985 | 1,880,205 |
-| reset | ReAct | 6 | 4 / 34 | 67,654 | 2,151,174 |
-| rebinding | Inquiry | 11 | 4 / 34 | 48,095 | 1,876,695 |
-| rebinding | ReAct | 6 | 4 / 34 | 67,083 | 2,148,761 |
-| already-correct | Inquiry | 7 | 2 / 17 | 37,010 | 1,834,382 |
-| already-correct | ReAct | 2 | 2 / 17 | 43,968 | 2,050,768 |
-| inadequate | Inquiry | 7 | 1 / 1 | 29,030 | 1,833,370 |
-| inadequate | ReAct | 2 | 1 / 1 | 26,054 | 1,978,257 |
+| reset | Inquiry | 11 | 4 / 34 | 48,999 | 1,880,945 |
+| reset | ReAct | 6 | 4 / 34 | 67,681 | 2,152,296 |
+| rebinding | Inquiry | 11 | 4 / 34 | 48,109 | 1,877,435 |
+| rebinding | ReAct | 6 | 4 / 34 | 67,110 | 2,149,877 |
+| already-correct | Inquiry | 7 | 2 / 17 | 37,017 | 1,835,559 |
+| already-correct | ReAct | 2 | 2 / 17 | 43,981 | 2,051,836 |
+| inadequate | Inquiry | 7 | 1 / 1 | 29,141 | 1,834,697 |
+| inadequate | ReAct | 2 | 1 / 1 | 26,053 | 1,979,537 |
 
 Both repaired cases have one cache hit, one hypothesis revision, a failed
 16-check candidate followed by a passing 16-check candidate, and one exact

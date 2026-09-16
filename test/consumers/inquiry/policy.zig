@@ -42,7 +42,7 @@ pub fn admit(e: E, d: agent.inquiry.broker.Definition) !Id {
     eligible = try e.cond(relevant, try e.cond(predicted, eligible, denied), denied);
     const selector = try b.primitive(try e.schema(u32), .enum_tag, &.{try e.field(t.Selector, prediction, 1)}, 0);
     const bounded_boolean = try e.cond(try e.less(try e.field(u64, prediction, 2), try e.value(u64, 2)), eligible, denied);
-    eligible = try e.cond(try e.eq(selector, try e.value(u32, 1)), bounded_boolean, try e.cond(try e.eq(selector, try e.value(u32, 4)), bounded_boolean, eligible));
+    eligible = try e.cond(try e.eq(selector, try e.value(u32, 1)), bounded_boolean, try e.cond(try e.eq(selector, try e.value(u32, 4)), bounded_boolean, try e.cond(try e.eq(selector, try e.value(u32, 6)), bounded_boolean, eligible)));
     const probing = try b.bind(checked, try e.call(trace_valid, &.{trace}), try e.cond(try e.ref(checked), eligible, denied));
     const validation_key = try e.product(t.Key, &.{ subject, try e.product(t.Experiment, &.{ try e.value(u8, 1), try e.ref(candidate), try e.value(t.Trace, .{ .mode = 0, .steps = .{ .items = &.{} } }) }) });
     const has_source = try e.less(try e.value(u64, 0), try b.primitive(try e.schema(u64), .blob_length, &.{try e.ref(candidate)}, 0));

@@ -29,6 +29,11 @@ try {
       assert.equal(result.checks.length, 16);
       assert(result.checks.every(check => check.passed));
     }
+    if (name === "closedZeroObject" || name === "closedNonzeroObject") {
+      assert.equal(result.kind, "completed");
+      assert(result.checks.some(check => check.failures.includes("issue_after_close")),
+        "a non-null return cannot satisfy the closed-session null contract");
+    }
     results.push({ name, kind: result.kind, passed: result.passed,
       checks: result.checks.length, failures: [...new Set(result.checks.flatMap(x => x.failures))] });
   }

@@ -245,14 +245,17 @@ export async function answerInquiry(config, options) {
   const payload = decodeValue(decodeSchema(request.payloadSchema), request.payload);
   let answer;
   const abort = options.choice === 'abort', close = options.choice === 'close';
-  if (abort || close) answer = variant(abort ? 1 : 2);
-  else if (request.semanticIdentity === 'agent.interaction.exchange.v1.inquiry.repair.intent') {
-    const choice = { artifact: variant(0, 1), deliver: variant(0, 2), other: variant(1), 'not-sure': variant(2) }[options.choice];
-    assert(choice, 'expected artifact, deliver, other, not-sure, abort or close');
-    answer = variant(0, [payload[3], choice]);
+  if (request.semanticIdentity === 'agent.interaction.exchange.v1.inquiry.repair.intent') {
+    if (abort || close) answer = variant(abort ? 1 : 2);
+    else {
+      const choice = { artifact: variant(0, 1), deliver: variant(0, 2), other: variant(1), 'not-sure': variant(2) }[options.choice];
+      assert(choice, 'expected artifact, deliver, other, not-sure, abort or close');
+      answer = variant(0, [payload[3], choice]);
+    }
   } else {
     assert.equal(request.semanticIdentity, 'agent.interaction.exchange.v1.inquiry.repair.change');
-    assert(['approve', 'decline'].includes(options.choice), 'expected approve, decline, abort or close');
+    assert(['approve', 'decline'].includes(options.choice),
+      'approval accepts approve or decline; use runtime/runner.mjs cancel to cancel the World process');
     answer = variant(0, [payload[3], BigInt(config.task.principal), options.choice === 'approve' ? variant(0) : variant(1, 'declined by operator')]);
   }
   assert(request.semanticIdentity.startsWith('agent.interaction.exchange.v1.inquiry.repair.'), 'not an inquiry human interaction');

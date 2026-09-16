@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { test } from 'node:test';
 import { inquiryCli } from '../../runtime/inquiry_cli.mjs';
+import { executeCli } from '../../runtime/runner.mjs';
 import { reset, monotonic } from '../consumers/inquiry/fixtures/cases.mjs';
 
 const describe = value => JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item);
@@ -80,12 +81,36 @@ test('opt-in dispatcher preserves checkpoints, human authority and explicit allo
   config.task.intent = 'ask'; await save();
   const intent = await run('intent'); assert.equal(intent.status, 'awaiting-human');
   const choiceFile = join(root, 'intent.ers2'), intentState = join(root, 'intent', intent.checkpoint);
+  for (const [choice, tag] of [['abort', 13], ['close', 14]]) {
+    const reply = join(root, `intent-${choice}.ers2`);
+    await inquiryCli(['answer', '--config', path, '--from', intentState, '--choice', choice, '--out', reply]);
+    const stopped = await run(`intent-${choice}`, ['--from', intentState, '--result', reply]);
+    assert.equal(stopped.status, 'completed'); assert.equal(stopped.resultTag, tag);
+    assert.equal(stopped.modelRequests, 0); assert.equal(stopped.writes, 0);
+  }
   await inquiryCli(['answer', '--config', path, '--from', intentState, '--choice', 'deliver', '--out', choiceFile]);
   const approval = await run('approval', ['--from', intentState, '--result', choiceFile, '--authorize-inference']);
   assert.equal(approval.status, 'awaiting-human', describe(approval)); assert.equal(approval.approvals, 1);
   assert.equal(await readFile(join(root, 'approval/replacement.mjs'), 'utf8'), monotonic);
   assert.equal(await readFile(join(target, 'session.mjs'), 'utf8'), reset);
   const approvalState = join(root, 'approval', approval.checkpoint), grant = join(root, 'approval.ers2');
+  const retainedApproval = await readFile(approvalState);
+  for (const choice of ['abort', 'close']) {
+    const reply = join(root, `approval-${choice}.ers2`);
+    await assert.rejects(inquiryCli(['answer', '--config', path, '--from', approvalState,
+      '--choice', choice, '--out', reply]), /approval accepts approve or decline/);
+    await assert.rejects(access(reply));
+  }
+  const declinedReply = join(root, 'declined.ers2');
+  await inquiryCli(['answer', '--config', path, '--from', approvalState, '--choice', 'decline', '--out', declinedReply]);
+  const declined = await run('declined', ['--from', approvalState, '--result', declinedReply]);
+  assert.equal(declined.resultTag, 3); assert.equal(declined.writes, 0);
+  const cancelled = await executeCli(['cancel', '--world-runtime', runtime, '--image', join(images, 'repair.bpi2'),
+    '--outcome', approvalState, '--reason', 'operator stopped at approval', '--out', join(root, 'cancelled-approval.pko2')],
+    { stdout: { write() {} } });
+  assert.equal(cancelled.kind, 'Cancelled'); assert.equal(cancelled.reason, 'operator stopped at approval');
+  assert.deepEqual(await readFile(approvalState), retainedApproval);
+  assert.equal(await readFile(join(target, 'session.mjs'), 'utf8'), reset);
   await inquiryCli(['answer', '--config', path, '--from', approvalState, '--choice', 'approve', '--out', grant]);
   const pendingWrite = await run('pending-write', ['--from', approvalState, '--result', grant]);
   assert.equal(pendingWrite.status, 'write-not-authorized'); assert.equal(pendingWrite.writes, 0);

@@ -131,8 +131,7 @@ this consumer does not claim integration with a live language model.
 
 With coalescing disabled, two matching reusable demands cause two independent
 acquisitions while retaining the same binding and conflict checks. This is a
-mechanism ablation, not yet the required repair/ReAct comparison. Full compiler
-economy and working allocation measurements remain pending.
+mechanism ablation, not yet the required repair/ReAct comparison.
 
 ## Isolated repair experiments
 
@@ -241,13 +240,26 @@ approval produces a conditional-delivery conflict; an old outer result also
 rejects. No real user repository is modified. These prescribed provider replies
 establish the mechanism, not previously unknown model synthesis or usefulness.
 
-The same focused command runs 29 additional scenarios: a different root cause
+The same focused command runs 33 additional scenarios: a different root cause
 and repair, an already-satisfied subject, inadequate initial hypotheses, invalid
 model proposals and provider responses, observation/acceptance rejection,
 resource stop, cancellation, delivery intent and model-only exploration.
 The application sharing ablation uses the same image and model inputs: two
 matching investigations acquire one experiment with coalescing enabled and two
 with it disabled, retaining identical authority and binding checks.
+
+The repair image also accepts 1/2/4/8 investigations without recompilation.
+Each scaling fixture parks exactly that many packages, shares one actual probe,
+and cleans all of them after an honest unresolved result:
+
+| Investigations | Model requests | Experiments | Maximum pending State bytes |
+| ---: | ---: | ---: | ---: |
+| 1 | 3 | 1 | 27,957 |
+| 2 | 5 | 1 | 28,596 |
+| 4 | 9 | 1 | 29,717 |
+| 8 | 17 | 1 | 31,645 |
+
+These are bounded fixture observations, not a constant-space or latency claim.
 
 Optional exploration uses `agent.deliberation` after evidence arrives. Two
 model-only alternatives inherit a private cell containing 10, independently
@@ -280,17 +292,48 @@ zig build --build-file test/consumers/inquiry/build.zig \
   -Doptimize=ReleaseSafe --prefix "$PWD/.agent4/out/inquiry-external"
 ```
 
-Its repair and repeated images match the root build byte for byte. This establishes
-public source consumption; source-independent use-archive execution remains open.
+Its repair and repeated images match the root build byte for byte.
+
+## Use archive and compilation measurements
+
+`emit-agent4` includes both inquiry images, their ordinary Boundary schemas,
+the visible contract and the executor's complete runtime modules in the existing
+use archive. The packaged zero-work InitialArgs is a configuration example;
+actual runs supply a qualified runner and explicit operator allowances.
+Optional provider fixtures remain under `test/` and are never imported by the
+production executor.
+
+```sh
+zig build emit-agent4 -Doptimize=ReleaseSafe \
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+node --test test/agent4/package_commands.test.mjs
+zig build check-agent4-economy -Doptimize=ReleaseSafe \
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+```
+
+The archive test extracts the actual artifact and runs its own inquiry oracle,
+runtime modules and image against unchanged World. It completes the 10-model,
+four-experiment repair and approval-negative cases without authoring sources or
+a compiler. The economy aggregate passes and binds observed compilations to the
+same application bytes:
+
+| Image | Bytes | Schemas | Functions | Blocks | Constants | Constant bytes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Repair | 43,919 | 184 | 106 | 1,112 | 158 | 9,207 |
+| Repeated use | 44,265 | 187 | 109 | 1,124 | 159 | 9,217 |
+
+Both contain two handler definitions. Complete compiler phase observations live
+in `zig-out/agent4/economy/source-metrics.json`; the existing economy report is
+`zig-out/agent4/economy-results/economy-report.json`. This run uses functional
+mode: phase times are diagnostics, not isolated timing or speedup evidence.
 
 ## Remaining milestone work
 
 The accepted objective remains the full Agent-only milestone. Remaining work
-includes the live entry path, source-independent use-archive consumption,
-repair/ReAct comparison, complete compilation/economy measurements,
-and final Ship/review-closeout. Draft PR #31 tracks the implementation. Full
-integration, economy and packaging acceptance have not been established by these
-focused witnesses.
+includes the live entry path, repair/ReAct comparison and its economy evidence,
+full integration, and final Ship/review-closeout. Draft PR #31 tracks the
+implementation. Package execution and the current functional economy aggregate
+pass; these do not establish the remaining full milestone acceptance.
 
 No paid inference, credential discovery, dependency/toolchain update, real
 user-repository repair, PR promotion, merge, or release is authorized here.

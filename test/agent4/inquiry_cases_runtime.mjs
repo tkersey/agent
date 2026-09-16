@@ -148,6 +148,12 @@ async function scenario(name, options, expected) {
           }
         } else if (request.semanticIdentity === "inquiry.repair.experiment.v1") {
           experiments++;
+          if (options.scaling) {
+            const file = join(scratch, "parked.pst2"); await writeFile(file, outcome.state);
+            const graph = JSON.parse(execFileSync(resolve(inspectorPath), ["inspect-state", file]));
+            assert.equal(graph.packages, options.count);
+            graphs.push({ pendingExperiment: true, ...graph });
+          }
           observed.push({ experiment: experiments, kind: payload[2].tag, occurrence: Number(payload[3]) });
           reply = options.experiment ? options.experiment(payload) : await executeInquiryRequest(executor, payload);
         } else if (request.semanticIdentity === "inquiry.repair.cleanup.v1") {
@@ -238,6 +244,11 @@ await scenario("multi-with-retained-futures", { count: 2, explore: true, indepen
 for (const coalesce of [true, false]) await scenario(`application-coalescing-${coalesce}`, {
   count: 2, coalesce, provider: c => !c.observation ? trace(c.id - 1) : stop(c.observation),
 }, { tag: 1, models: 5, experiments: coalesce ? 1 : 2, cleanup: [1, 2] });
+
+for (const count of [1, 2, 4, 8]) await scenario(`application-scaling-${count}`, {
+  count, scaling: true, provider: c => !c.observation ? trace(c.id % 2) : stop(c.observation),
+}, { tag: 1, models: 1 + 2 * count, experiments: 1,
+  cleanup: Array.from({ length: count }, (_, i) => i + 1) });
 
 for (const name of ["foreign-observation", "invalid-reference", "invalid-boolean-prediction", "mixed-plan"]) {
   await scenario(name, { provider: () => name === "foreign-observation"

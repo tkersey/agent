@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
+import { decodeSchema, encodeValue } from '../../runtime/values.mjs';
 const root=resolve(import.meta.dirname,'../..');
 const [directory,...extra]=process.argv.slice(2);
 assert(directory && !extra.length,'usage: emit_inventory.mjs EMITTED_DIRECTORY');
@@ -24,6 +25,22 @@ examples.push({name:'document',image:'document/document.bpi2',initialArgs:'docum
 await add('document/consequence.bpi2','image');
 await add('document/consequence.args','initial-args');
 examples.push({name:'document-consequence',image:'document/consequence.bpi2',initialArgs:'document/consequence.args'});
+// A typed, zero-work configuration example. Actual execution supplies a qualified
+// runner, explicit allowances and operator-selected provider/target values.
+const inquiryTask=decodeSchema(await readFile(join(output,'inquiry/task-schema.bin')));
+const inquiryArgs=encodeValue(inquiryTask, [
+  ['session.mjs','', '',await readFile(join(root,'test/consumers/inquiry/contract.txt'),'utf8'),
+    'agent.session-occurrence.acceptance.v1',false,'unconfigured-target',0n],
+  'unconfigured-model',0,0n,0n,true,0n,0n,false,1,
+]);
+await add('inquiry/task.args','initial-args',inquiryArgs);
+for(const name of ['repair','repeated']){
+  const image=`inquiry/${name}.bpi2`;
+  await add(image,'image');
+  examples.push({name:`inquiry-${name}`,image,initialArgs:'inquiry/task.args'});
+}
+for(const name of ['task-schema','outcome-schema'])await add(`inquiry/${name}.bin`,'schema');
+await add('inquiry/contract.txt','contract',await readFile(join(root,'test/consumers/inquiry/contract.txt')));
 for(const name of ['twice','dispose_owned','exchange']){
   const image=`dialogue/${name}.bpi2`,initialArgs=`dialogue/${name}.args.bin`;
   await add(image,'image');await add(initialArgs,'initial-args',new Uint8Array());

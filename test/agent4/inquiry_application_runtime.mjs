@@ -14,10 +14,10 @@ import { createInquiryExecutor, acceptanceContract } from "../../runtime/inquiry
 import { createInquiryDelivery } from "../../runtime/inquiry_delivery.mjs";
 import { executeInquiryRequest } from "../../runtime/inquiry_wire.mjs";
 import { reset, monotonic, bad } from "../consumers/inquiry/fixtures/cases.mjs";
-import { native, wasmtime } from "./independent/execute.mjs";
 
 const [runtimePath, fixturePath, nativePath, inspectorPath, ...extra] = process.argv.slice(2);
 assert(runtimePath && fixturePath && !extra.length);
+const { native, wasmtime } = nativePath ? await import("./independent/execute.mjs") : {};
 const runtime = verifyRuntime(runtimePath);
 const world = await import(pathToFileURL(runtime.entrypoint));
 const kernel = await readFile(runtime.kernelPath);

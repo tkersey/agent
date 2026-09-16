@@ -161,13 +161,15 @@ async function measureEmission(options) {
   const metricsBytes = await requiredFile(join(directory, 'source-metrics.json'));
   const metrics = JSON.parse(metricsBytes);
   const images = [];
-  for (const file of ['direct.bpi2', 'facade.bpi2', 'sharing-1.bpi2', 'sharing-8.bpi2', 'sharing-64.bpi2', 'conversation.bpi2']) {
+  for (const file of ['direct.bpi2', 'facade.bpi2', 'sharing-1.bpi2', 'sharing-8.bpi2', 'sharing-64.bpi2', 'conversation.bpi2',
+    'inquiry-repair.bpi2', 'inquiry-repeated.bpi2']) {
     const actual = await requiredFile(join(directory, file));
     assert.deepEqual(actual, await requiredFile(join(options.fixtures, file)),
       'timed source emission must reproduce the exact functional fixture');
     images.push({ file, ...identity(actual) });
   }
-  const workloadMetrics = [metrics.direct, metrics.facade, ...(metrics.sharing ?? []), metrics.conversation];
+  const workloadMetrics = [metrics.direct, metrics.facade, ...(metrics.sharing ?? []), metrics.conversation,
+    ...Object.values(metrics.inquiry)];
   for (const row of workloadMetrics) {
     for (const field of ['descriptorConstructionNs', 'sourceConstructionNs', 'agentAdmissionNs',
       'authoringTotalNs', 'compilerTotalNs', 'imageEmissionNs'])
@@ -449,6 +451,21 @@ async function clarification(options, sourceMetrics) {
     nativeMatched: evidence.nativeMatched, nativeExecutableSha256: evidence.nativeExecutableSha256 };
 }
 
+async function inquiryImages(options, sourceMetrics) {
+  const rows = [];
+  for (const name of ['repair', 'repeated']) {
+    const metric = sourceMetrics.inquiry[name];
+    const bytes = await requiredFile(join(options.fixtures, `inquiry-${name}.bpi2`));
+    const application = await requiredFile(join(dirname(options.fixtures), 'inquiry', `${name}.bpi2`));
+    assert.deepEqual(bytes, application, 'observed compilation must reproduce the application image');
+    assert.equal(sha256(bytes), metric.imageSha256);
+    assert.equal(bytes.length, metric.imageBytes);
+    rows.push(metric);
+  }
+  return { status: 'PASS', sourceToImage: rows,
+    qualification: 'Complete application compilation metrics; behavioral and retained-state witnesses run in the inquiry application lane. Timing remains diagnostic unless explicitly measured.' };
+}
+
 export async function runEconomy(args) {
   const options = parseOptions(args);
   await prepareOutput(options);
@@ -485,6 +502,7 @@ export async function runEconomy(args) {
       ['conversation', () => conversations(world, kernel, options)],
       ['alternatives', () => alternatives(world, kernel, options)],
       ['clarification', () => clarification(options, sourceMetrics)],
+      ['inquiryImages', () => inquiryImages(options, sourceMetrics)],
     ]) {
       process.stderr.write(`Agent economy: ${name}\n`);
       try { report.checks[name] = await body(); }

@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) void {
     } });
     const emitter = b.addExecutable(.{ .name = "inquiry-emitter", .root_module = module });
     b.installArtifact(emitter);
-    for ([_][]const u8{ "image", "repeat", "task-schema", "outcome-schema" }, [_][]const u8{ "repair.bpi2", "repeated.bpi2", "task-schema.bin", "outcome-schema.bin" }) |mode, name| {
+    for ([_][]const u8{ "image", "repeat", "react", "task-schema", "outcome-schema" }, [_][]const u8{ "repair.bpi2", "repeated.bpi2", "react.bpi2", "task-schema.bin", "outcome-schema.bin" }) |mode, name| {
         const run = b.addRunArtifact(emitter);
         run.addArg(mode);
         b.getInstallStep().dependOn(&b.addInstallFileWithDir(run.captureStdOut(.{}), .prefix, name).step);

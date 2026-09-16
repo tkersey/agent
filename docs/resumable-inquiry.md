@@ -226,7 +226,7 @@ zig build check-inquiry-application -Doptimize=ReleaseSafe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime"
 ```
 
-The current positive witness uses a 43,919-byte BPI2 image, reaches a maximum
+The current positive witness uses a 43,774-byte BPI2 image, reaches a maximum
 48,853-byte pending State, makes 10 model requests and 4 logical experiment
 requests (34 isolated executions), retires/cleans all three investigations,
 then approves and delivers the exact replacement. Every transition is compared
@@ -240,7 +240,7 @@ approval produces a conditional-delivery conflict; an old outer result also
 rejects. No real user repository is modified. These prescribed provider replies
 establish the mechanism, not previously unknown model synthesis or usefulness.
 
-The same focused command runs 33 additional scenarios: a different root cause
+The same focused command runs 33 additional scenarios, plus the comparison cases below: a different root cause
 and repair, an already-satisfied subject, inadequate initial hypotheses, invalid
 model proposals and provider responses, observation/acceptance rejection,
 resource stop, cancellation, delivery intent and model-only exploration.
@@ -283,7 +283,7 @@ provider IDs cannot reset it. Old outer replies and re-encoded stale inner
 answers reject. Across 28 model requests, four experiments, eight cleanups,
 eight templates and 16 activations, every completed-task boundary retains exactly
 170 State bytes, two nodes and one blob, with no packages, templates, branches,
-resources, cells or obligations. The complete repeated image is 44,265 bytes.
+resources, cells or obligations. The complete repeated image is 44,120 bytes.
 
 The application also builds as an independent compiler-only consumer:
 
@@ -292,11 +292,11 @@ zig build --build-file test/consumers/inquiry/build.zig \
   -Doptimize=ReleaseSafe --prefix "$PWD/.agent4/out/inquiry-external"
 ```
 
-Its repair and repeated images match the root build byte for byte.
+Its repair, repeated-use and ReAct images match the root build byte for byte.
 
 ## Use archive and compilation measurements
 
-`emit-agent4` includes both inquiry images, their ordinary Boundary schemas,
+`emit-agent4` includes the inquiry, repeated-use and ReAct images, their ordinary Boundary schemas,
 the visible contract and the executor's complete runtime modules in the existing
 use archive. The packaged zero-work InitialArgs is a configuration example;
 actual runs supply a qualified runner and explicit operator allowances.
@@ -319,19 +319,84 @@ same application bytes:
 
 | Image | Bytes | Schemas | Functions | Blocks | Constants | Constant bytes |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Repair | 43,919 | 184 | 106 | 1,112 | 158 | 9,207 |
-| Repeated use | 44,265 | 187 | 109 | 1,124 | 159 | 9,217 |
+| Repair | 43,774 | 184 | 106 | 1,111 | 157 | 9,135 |
+| Repeated use | 44,120 | 187 | 109 | 1,123 | 158 | 9,145 |
+| ReAct | 48,815 | 146 | 65 | 791 | 145 | 8,764 |
 
-Both contain two handler definitions. Complete compiler phase observations live
+The inquiry images contain two handler definitions; ReAct contains none.
+Complete compiler phase observations live
 in `zig-out/agent4/economy/source-metrics.json`; the existing economy report is
 `zig-out/agent4/economy-results/economy-report.json`. This run uses functional
 mode: phase times are diagnostics, not isolated timing or speedup evidence.
 
+## Single-trajectory comparison
+
+`inquiry/react.bpi2` uses `agent.react` with ordinary working records, a current
+explanation/version and an exact-key observation cache. It shares the inquiry
+consumer's model protocol, plan parser, trace admission, prediction reporting,
+candidate acceptance and live approval/delivery code. It can retain reusable
+observations, revise its account, propose arbitrary admitted traces and submit
+replacement source. It starts directly with a single model trajectory; it does
+not pay the inquiry construction's initial hypothesis-population request.
+
+The same task specifies source, requirements, model, experiment passes and final
+authority. The baseline receives the inquiry's total model allowance
+(`1 + investigations * model_turns`) and the same experiment-pass allowance.
+Both paired strategies disable optional multi-shot exploration. This compares
+one executable trajectory with retained inquiry under declared fixture choices;
+it does not establish live-model repair quality or an optimal allocation policy.
+
+```sh
+zig build check-inquiry-comparison -Doptimize=ReleaseSafe \
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+```
+
+The pairs cover occurrence reset, adapter rebinding, already-correct source and
+an inadequate explanation set. Both repair scripts repeat an eligible probe,
+change the next trace after evidence, revise the account, reject a bad candidate
+and independently check its replacement. The test host supplies provider values;
+the images interpret evidence, admit cache reuse and decide whether to deliver.
+
+The executed pairs below agree across native World, Node/WASM and fresh
+Wasmtime instances, continuing from the independent embedding's returned bytes.
+
+| Case | Strategy | Model calls | Logical / physical experiments | Maximum State bytes | Peak allocated payload bytes |
+| --- | --- | ---: | ---: | ---: | ---: |
+| reset | Inquiry | 11 | 4 / 34 | 48,985 | 1,880,205 |
+| reset | ReAct | 6 | 4 / 34 | 67,654 | 2,151,174 |
+| rebinding | Inquiry | 11 | 4 / 34 | 48,095 | 1,876,695 |
+| rebinding | ReAct | 6 | 4 / 34 | 67,083 | 2,148,761 |
+| already-correct | Inquiry | 7 | 2 / 17 | 37,010 | 1,834,382 |
+| already-correct | ReAct | 2 | 2 / 17 | 43,968 | 2,050,768 |
+| inadequate | Inquiry | 7 | 1 / 1 | 29,030 | 1,833,370 |
+| inadequate | ReAct | 2 | 1 / 1 | 26,054 | 1,978,257 |
+
+Both repaired cases have one cache hit, one hypothesis revision, a failed
+16-check candidate followed by a passing 16-check candidate, and one exact
+approval/write. Already-correct source needs no approval/write; inadequate
+explanations stop unresolved. Completed outcomes retain no continuation State.
+The economy report includes semantic/provider byte counts, actual observed
+recipient IDs, demands, reuse, cleanup, check outcomes and complete image metrics.
+Separate baseline negatives reject a foreign subject, key, occurrence and
+incomplete acceptance; an inconclusive validation retains the attempted source
+for the next model request.
+
+These fixtures favor ReAct in model work. Their State/image differences also
+depend on the concrete source construction; neither result is a general ranking
+of the strategies. No latency or live-model usefulness claim follows.
+
+Native diagnostics use World's public workspace allocator to report maximum
+live allocated payload per invocation, including image/State decoding and the
+interpreter's outcome allocations. This excludes host input/output buffers and
+allocator metadata; it is neither RSS nor a whole-session heap measurement.
+The test host grants 256 MiB backing capacity for this diagnostic lane. Canonical
+results are compared with the unchanged Node/WASM and Wasmtime executions.
+
 ## Remaining milestone work
 
 The accepted objective remains the full Agent-only milestone. Remaining work
-includes the live entry path, repair/ReAct comparison and its economy evidence,
-full integration, and final Ship/review-closeout. Draft PR #31 tracks the
+includes the live entry and reproducible live-comparison path, full integration,
+and final Ship/review-closeout. Draft PR #31 tracks the
 implementation. Package execution and the current functional economy aggregate
 pass; these do not establish the remaining full milestone acceptance.
 

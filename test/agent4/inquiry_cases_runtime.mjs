@@ -1,5 +1,6 @@
 // Additional externally driven cases. The unchanged image owns every decision.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -12,11 +13,12 @@ import { decodeModelInvocation, normalizeOpenAIResponses, performModelInvocation
 import { createInquiryExecutor, acceptanceContract } from "../../runtime/inquiry.mjs";
 import { createInquiryDelivery } from "../../runtime/inquiry_delivery.mjs";
 import { executeInquiryRequest } from "../../runtime/inquiry_wire.mjs";
-import { reset, monotonic, rebinding, tickets } from "../consumers/inquiry/fixtures/cases.mjs";
+import { reset, monotonic, rebinding, tickets, bad } from "../consumers/inquiry/fixtures/cases.mjs";
 import { native, wasmtime } from "./independent/execute.mjs";
 
 const [runtimePath, fixturePath, nativePath, inspectorPath, ...extra] = process.argv.slice(2);
-assert(runtimePath && fixturePath && nativePath && inspectorPath && !extra.length);
+const comparisonOnly = extra.length === 1 && extra[0] === "--comparison-only";
+assert(runtimePath && fixturePath && nativePath && inspectorPath && (!extra.length || comparisonOnly));
 const runtime = verifyRuntime(runtimePath);
 const world = await import(pathToFileURL(runtime.entrypoint));
 const kernel = await readFile(runtime.kernelPath);
@@ -43,23 +45,28 @@ function trace(expected, different = false) {
 const summaries = [];
 
 async function scenario(name, options, expected) {
+  const selectedImage = options.strategy === "react" ? await readFile(join(fixturePath, "react.bpi2")) : image;
   const scratch = await mkdtemp(join(tmpdir(), "inquiry-case-"));
   const filename = join(scratch, "session.mjs");
   const source = options.source ?? reset;
-  const targetId = `fixture-${name}`;
+  const targetId = options.target ?? `fixture-${name}`;
   const delivery = await createInquiryDelivery({ root: scratch, target: targetId });
   await writeFile(filename, source);
   const initial = [["session.mjs", source, executor.runner, requirements, acceptanceContract, true, targetId, 0n],
     "fixture-model", options.count ?? 1, options.passes ?? 24n, options.turns ?? 12n,
     options.coalesce ?? true, 7n, 1n, options.explore ?? false, options.intent ?? 0];
   options.changeTask?.(initial);
-  const observed = [], cleanup = [], graphs = [];
+  const observed = [], cleanup = [], graphs = [], checks = [];
+  const pendingPlans = new Map(), recipients = [], seenEvidence = new Set();
+  let demands = 0, reuseHits = 0, revisions = 0;
   const statistics = { multiTemplates: 0, branchActivations: 0, transitions: 0 };
   let models = 0, experiments = 0, approvals = 0, questions = 0, writes = 0, maximumState = 0;
   let semanticRequestBytes = 0, semanticResponseBytes = 0, providerRequestBytes = 0, providerResponseBytes = 0;
-  let cancelled = false;
+  let cancelled = false, peakWorkingBytes = 0, addedNodes = 0, copiedBlobBytes = 0;
+  let completedValueBytes = 0;
   const before = executor.metrics();
   async function invoke(input) {
+    input = { ...input, image: selectedImage };
     const output = await (await world.admitProcessKernel(kernel,
       { expectedSha256: runtime.kernelSha256 })).run(input);
     const file = join(scratch, "input.pki2");
@@ -68,6 +75,8 @@ async function scenario(name, options, expected) {
     assert.equal(n.status, 0, n.stderr.toString());
     assert.deepEqual(n.stdout, Buffer.from(output.bytes), `${name}: native equality`);
     const counts = JSON.parse(n.stderr);
+    peakWorkingBytes = Math.max(peakWorkingBytes, counts.peakWorkingBytes);
+    addedNodes += counts.addedNodes; copiedBlobBytes += counts.copiedBlobBytes;
     for (const key of Object.keys(statistics)) statistics[key] += counts[key];
     if (!options.independent) return output;
     const w = wasmtime(runtime, file);
@@ -97,6 +106,12 @@ async function scenario(name, options, expected) {
         const [, id, version, observation] = match.map(Number);
         assert.equal(invocation.messages[2].content, source);
         const context = { id, version, observation, summary: invocation.messages[5].content, invocation, models };
+        if (observation && ["prediction", "repair"].includes(pendingPlans.get(id))) {
+          const occurrence = `${id}:${observation}`;
+          if (seenEvidence.has(occurrence)) reuseHits++;
+          seenEvidence.add(occurrence);
+          recipients.push({ investigation: id, observation });
+        }
         if (options.explore && observation > 0) {
           const file = join(scratch, "model.pst2"); await writeFile(file, outcome.state);
           const graph = JSON.parse(execFileSync(resolve(inspectorPath), ["inspect-state", file]));
@@ -104,6 +119,10 @@ async function scenario(name, options, expected) {
           graphs.push({ pendingModel: true, ...graph });
         }
         let proposals = id === 0 ? hypotheses(options.count ?? 1) : options.provider(context);
+        const nextPlan = proposals?.[0]?.name;
+        if (["prediction", "repair"].includes(nextPlan)) demands++;
+        if (nextPlan === "revise") revisions++;
+        pendingPlans.set(id, nextPlan);
         observed.push({ id, version, observation, proposals: proposals?.map(x => x.name) ?? [] });
         if (options.interrupted && id !== 0) {
           reply = await performModelInvocation(request.payload, {
@@ -155,7 +174,11 @@ async function scenario(name, options, expected) {
             graphs.push({ pendingExperiment: true, ...graph });
           }
           observed.push({ experiment: experiments, kind: payload[2].tag, occurrence: Number(payload[3]) });
-          reply = options.experiment ? options.experiment(payload) : await executeInquiryRequest(executor, payload);
+          reply = options.experiment ? await options.experiment(payload) : await executeInquiryRequest(executor, payload);
+          if (reply[3].tag === 0 && reply[3].value.tag === 1) checks.push({
+            passed: reply[3].value.value[0], completed: Number(reply[3].value.value[1]),
+            failed: Number(reply[3].value.value[2]),
+          });
         } else if (request.semanticIdentity === "inquiry.repair.cleanup.v1") {
           cleanup.push(Number(payload)); reply = null;
           if (options.inspect) {
@@ -186,13 +209,17 @@ async function scenario(name, options, expected) {
       assert.deepEqual(outcome.cleanupFailures, []);
     } else {
       assert.equal(outcome.kind, "Completed", name);
+      completedValueBytes = outcome.value.length;
       const result = decodeValue(resultSchema, outcome.value);
       assert.equal(result.tag, expected.tag, `${name}: result`);
       if (expected.replacement) {
         assert.equal(result.value[1][2][0], expected.replacement);
         assert.equal(result.value[0][0], expected.tag === 9 ? source : expected.replacement);
+        const candidate = result.value[1][2];
+        recipients.push({ investigation: Number(candidate[2]), observation: Number(candidate[1]), accepted: true });
       }
     }
+    assert.equal(outcome.state, undefined, "terminal outcomes retain no continuation State");
     assert.equal(models, expected.models, `${name}: model requests`);
     assert.equal(experiments, expected.experiments, `${name}: experiments`);
     assert.equal(approvals, expected.approvals ?? 0); assert.equal(writes, expected.writes ?? 0);
@@ -205,13 +232,23 @@ async function scenario(name, options, expected) {
     }
     assert.equal(await readFile(filename, "utf8"), options.changeBeforeRead ? "external change\n"
       : expected.writes ? expected.replacement : source);
-    summaries.push({ name, result: options.cancelAt ? "Cancelled" : expected.tag, models, experiments,
+    const summary = { name, imageSha256: createHash("sha256").update(selectedImage).digest("hex"), strategy: options.strategy ?? "inquiry", imageBytes: selectedImage.length,
+      completedValueBytes, retainedStateBytes: 0, peakWorkingBytes, addedNodes, copiedBlobBytes,
+      demands, reuseHits, recipients, revisions, checks,
+      investigationStarts: new Set(observed.filter(x => x.id > 0 && x.observation === 0).map(x => x.id)).size,
+      cleanupCompletions: cleanup.length,
+      explicitRetirements: options.strategy === "react" ? 0
+        : observed.filter(x => x.proposals?.[0] === "stop").length,
+      result: options.cancelAt ? "Cancelled" : expected.tag, models, experiments,
       approvals, questions, writes, maximumState, cleanup, graphs, observed, semanticRequestBytes, semanticResponseBytes,
       providerRequestBytes, providerResponseBytes,
-      physicalExecutions: executor.metrics().physicalExecutions - before.physicalExecutions, statistics });
+      physicalExecutions: executor.metrics().physicalExecutions - before.physicalExecutions, statistics };
+    summaries.push(summary);
+    return summary;
   } finally { await rm(scratch, { recursive: true, force: true }); }
 }
 
+if (!comparisonOnly) {
 await scenario("rebinding-sibling", { source: rebinding, independent: true, provider: c => {
   if (!c.observation) return trace(1);
   if (c.observation === 1) return trace(0, true);
@@ -301,4 +338,70 @@ for (const [intentReply, tag] of [["other", 10], ["unsure", 11], ["unoffered", 1
   }, { tag, models: 0, experiments: 0, questions: 1, cleanup: [] });
 }
 
-console.log(JSON.stringify({ imageBytes: image.length, scenarios: summaries }));
+}
+
+// Same task and environment per pair. Prescribed provider choices are test inputs;
+// all model parsing, cache admission, validation and delivery remain authored.
+const pairs = [];
+for (const [name, source, replacement] of [["reset", reset, monotonic], ["rebinding", rebinding, tickets],
+  ["already-correct", monotonic, monotonic], ["inadequate", reset, null]]) {
+  const rows = [];
+  for (const strategy of ["inquiry", "react"]) {
+    let cachedProbe = false;
+    const simple = name === "already-correct" || name === "inadequate";
+    const provider = c => {
+      if (!c.observation) return trace(c.id === 1 ? 1 : 0);
+      if (c.id !== 1 || name === "inadequate") return stop(c.observation);
+      if (name === "already-correct") return [call("repair", { source: replacement, observation: c.observation })];
+      if (c.observation === 1 && !cachedProbe) { cachedProbe = true; return trace(1); }
+      if (c.observation === 1) return trace(0, true);
+      if (c.observation === 2 && c.version === 1) {
+        assert(c.summary.includes(name === "rebinding" ? "contradicted" : "matched"));
+        return [call("revise", { explanation: "Changed-question evidence revises the account; test candidate bytes independently.", observation: 2 })];
+      }
+      if (c.observation === 2) return [call("repair", { source: bad.rejectAll, observation: 2 })];
+      assert(c.summary.includes("current_reply_rejected"));
+      return [call("repair", { source: replacement, observation: c.observation })];
+    };
+    const baseModels = name === "inadequate" ? 2 : name === "already-correct" ? 2 : 6;
+    rows.push(await scenario(`paired-${name}-${strategy}`, {
+      source, strategy, target: `paired-${name}`, count: 3, provider, independent: true,
+    }, { tag: name === "inadequate" ? 1 : name === "already-correct" ? 7 : 0,
+      models: baseModels + (strategy === "inquiry" ? 5 : 0),
+      experiments: name === "inadequate" ? 1 : name === "already-correct" ? 2 : 4,
+      cleanup: strategy === "inquiry" ? [1, 2, 3] : [],
+      approvals: simple ? 0 : 1, writes: simple ? 0 : 1,
+      ...(replacement ? { replacement } : {}),
+    }));
+    if (!simple) {
+      assert(cachedProbe, "each strategy must exercise its reusable observation cache");
+      assert.equal(rows.at(-1).reuseHits, 1);
+      assert.deepEqual(rows.at(-1).checks.map(x => x.passed), [false, true]);
+    }
+  }
+  pairs.push({ name, results: rows });
+}
+for (const binding of ["subject", "key", "occurrence", "acceptance"]) {
+  await scenario(`react-rejects-${binding}`, {
+    strategy: "react", provider: () => binding === "acceptance"
+      ? [call("repair", { source: monotonic, observation: 0 })] : trace(1),
+    experiment: async payload => {
+      const reply = await executeInquiryRequest(executor, payload);
+      if (binding === "subject") reply[0] = [...reply[0].slice(0, 6), "foreign-target", reply[0][7]];
+      if (binding === "key") reply[1] = [reply[1][0], [1, "foreign-candidate", [0, []]]];
+      if (binding === "occurrence") reply[2] += 1n;
+      if (binding === "acceptance") reply[3] = v(0, v(1, [true, 15n, 0n, ""]));
+      return reply;
+    },
+  }, { tag: 1, models: 1, experiments: 1, cleanup: [] });
+}
+await scenario("react-inconclusive-candidate", {
+  strategy: "react", provider: c => {
+    if (c.models === 1) return [call("repair", { source: bad.rejectAll, observation: 0 })];
+    assert.equal(c.invocation.messages[6].content, bad.rejectAll);
+    assert(c.summary.includes("inconclusive"));
+    return stop(0);
+  },
+  experiment: ([subject, key, , occurrence]) => [subject, key, occurrence, v(1)],
+}, { tag: 1, models: 2, experiments: 1, cleanup: [] });
+console.log(JSON.stringify({ imageBytes: image.length, scenarios: summaries, pairs }));

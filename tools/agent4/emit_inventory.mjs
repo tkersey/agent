@@ -34,7 +34,7 @@ const inquiryArgs=encodeValue(inquiryTask, [
   'unconfigured-model',0,0n,0n,true,0n,0n,false,1,
 ]);
 await add('inquiry/task.args','initial-args',inquiryArgs);
-for(const name of ['repair','repeated']){
+for(const name of ['repair','repeated','react']){
   const image=`inquiry/${name}.bpi2`;
   await add(image,'image');
   examples.push({name:`inquiry-${name}`,image,initialArgs:'inquiry/task.args'});

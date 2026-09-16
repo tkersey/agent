@@ -21,7 +21,7 @@ pub fn define(e: E, d: agent.inquiry.broker.Definition) !agent.inquiry.broker.Fu
     }, d, try discriminator(e)), .finish = try finish(e, d), .observe = try observationAdmission(e) };
 }
 
-fn admit(e: E, d: agent.inquiry.broker.Definition) !Id {
+pub fn admit(e: E, d: agent.inquiry.broker.Definition) !Id {
     const b = e.b();
     const trace_valid = try traceValidator(e);
     const f = try b.declare(&.{ try e.schema(t.Subject), try e.schema(t.Demand) }, d.types.admission, &.{}, &.{});
@@ -144,7 +144,7 @@ fn finish(e: E, d: agent.inquiry.broker.Definition) !Id {
     return f;
 }
 
-fn observationAdmission(e: E) !Id {
+pub fn observationAdmission(e: E) !Id {
     const b = e.b();
     const f = try b.declare(&.{ try e.schema(t.Subject), try e.schema(t.Key), try e.schema(t.Observation) }, try e.schema(bool), &.{}, &.{});
     const experiment = try e.field(t.Experiment, try e.p(f, 1), 1);

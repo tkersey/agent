@@ -58,4 +58,10 @@ test("documented commands execute from the actual source-independent archive", a
   const files = inventory.files.map(file => file.path);
   assert(files.includes("inquiry/task-schema.bin"));
   assert(files.includes("inquiry/outcome-schema.bin"));
+  const env = { ...process.env, AGENT4_WORLD_RUNTIME: runtimePath,
+    AGENT4_INQUIRY_IMAGES: join(cwd, "examples/inquiry") };
+  delete env.NODE_TEST_CONTEXT;
+  execFileSync(process.execPath, ["--test", join(cwd, "test/agent4/inquiry_cli.test.mjs")], {
+    cwd, env, encoding: "utf8", timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
+  });
 });

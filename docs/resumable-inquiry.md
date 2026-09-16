@@ -1,9 +1,9 @@
 # Resumable inquiry
 
-Implementation in progress. The deterministic World diagnose-and-repair path
-now connects retained investigations, real isolated experiments, hypothesis
-revision, independent candidate checks and exact approved delivery. The broader
-milestone coverage and review-closeout remain open.
+The deterministic World diagnose-and-repair path connects retained
+investigations, real isolated experiments, hypothesis revision, independent
+candidate checks and exact approved delivery. Mechanism tests and the opt-in
+live entry are implemented; live-model usefulness has not been measured.
 
 ## Custody construction
 
@@ -264,8 +264,9 @@ These are bounded fixture observations, not a constant-space or latency claim.
 Optional exploration uses `agent.deliberation` after evidence arrives. Two
 model-only alternatives inherit a private cell containing 10, independently
 write 11 and 12, and retain those values across model suspension. The fixture
-records two templates and four activations while another investigation remains
-parked. Actual experiment effects inside this delimiter fail protected authoring
+records four templates and eight activations while another investigation remains
+parked. The selected ordinary proposal drives a second real experiment outside
+the speculative scope before cleanup. Actual experiment effects inside the delimiter fail protected authoring
 with `SpeculativeEffect`, including when hidden behind an inaccurate wrapper row.
 The policy accepts the first normalized proposal, falling back to the second;
 this is not a claim of optimal proposal selection.
@@ -392,14 +393,143 @@ allocator metadata; it is neither RSS nor a whole-session heap measurement.
 The test host grants 256 MiB backing capacity for this diagnostic lane. Canonical
 results are compared with the unchanged Node/WASM and Wasmtime executions.
 
-## Remaining milestone work
+## Opt-in live entry and comparison
 
-The accepted objective remains the full Agent-only milestone. Remaining work
-includes the live entry and reproducible live-comparison path, full integration,
-and final Ship/review-closeout. Draft PR #31 tracks the
-implementation. Package execution and the current functional economy aggregate
-pass; these do not establish the remaining full milestone acceptance.
+The source-independent archive includes `runtime/inquiry_cli.mjs`. It dispatches
+only emitted effects through the existing model/executor/delivery adapters.
+Investigation policy stays in the selected image. Each public boundary is saved
+as ordinary PKO2; returned replies are saved as bound ERS2 before continuing.
+No report, transcript, provider session or host investigation table is needed
+to restore the image and checkpoint.
 
-No paid inference, credential discovery, dependency/toolchain update, real
-user-repository repair, PR promotion, merge, or release is authorized here.
-The live-model usefulness study has not run.
+Select a model, endpoint, corpus, execution profile and resource allowances
+explicitly. This example is a configuration template, not previously authorized
+operator choices; paths resolve relative to its JSON file:
+
+```json
+{
+  "name": "session-case-01",
+  "corpus": "operator-supplied-holdout",
+  "worldRuntime": "/absolute/path/to/world-runtime",
+  "images": "/absolute/path/to/extracted/examples/inquiry",
+  "targetRoot": "/absolute/path/to/subject-directory",
+  "strategy": "inquiry",
+  "provider": {
+    "endpoint": "https://api.openai.com/v1/responses",
+    "model": "YOUR_EXPLICIT_MODEL",
+    "keyEnv": "INQUIRY_API_KEY"
+  },
+  "profile": "macos-seatbelt-session-v1",
+  "allowance": {
+    "modelRequests": 40,
+    "experiments": 8,
+    "requestBytes": 1048576,
+    "elapsedMs": 300000,
+    "modelTimeoutMs": 30000
+  },
+  "task": {
+    "investigations": 3,
+    "passes": 24,
+    "modelTurns": 12,
+    "reusable": false,
+    "explore": false,
+    "intent": "artifact",
+    "principal": "7"
+  }
+}
+```
+
+The target contains one regular `session.mjs`; symlink/traversal reads are
+rejected through the existing document environment. The logical target identity
+binds its physical directory. `reusable: true` requires the operator's declared
+deterministic subject contract. `intent` is `artifact`, `deliver` or `ask`;
+clarification and exact-candidate approval remain different interactions.
+
+```sh
+# Prepare a checkpoint without inference authority.
+node runtime/inquiry_cli.mjs run --config case.json --out prepared
+
+# Separately authorized inference; credentials are read only at dispatch.
+node runtime/inquiry_cli.mjs run --config case.json --out attempt \
+  --from prepared/0000.pko2 --authorize-inference
+```
+
+Only a later operator invocation with explicit inference authorization may make
+network/paid calls. The named credential variable is read only then; there is no
+automatic key discovery, dotenv loading or provisioning. Credentialed endpoints
+retain the existing model adapter's endpoint restriction. The resource allowance
+bounds this invocation's calls, experiments, request bytes and elapsed time; it
+is not a dollar-cost guarantee. A resumed invocation requires a new explicit
+allowance and produces a separate report. Actual work does not reset inside a
+speculative branch. Exhaustion cancels World and services its cleanup requests.
+
+Every output directory must be new and outside the runtime, image and target
+roots. `report.json` names the latest checkpoint and distinguishes application
+outcomes, resource stops, pending human input and uncertain dispatch. A crash
+or failed checkpoint write does not prove cleanup or exactly-once execution;
+there is no automatic retry. Copy the image and PKO2 to restore elsewhere, then
+supply the appropriate external environment and authority.
+
+At a human interaction, inspect `question.json`; an approval also exports
+`base.mjs`, `replacement.mjs`, `repair.diff` and `proposal.json`. Answer the
+specific saved boundary and pass its bound ERS2 back unchanged:
+
+```sh
+node runtime/inquiry_cli.mjs answer --config case.json \
+  --from attempt/0004.pko2 --choice approve --out answer.ers2
+node runtime/inquiry_cli.mjs run --config case.json --out successor \
+  --from attempt/0004.pko2 --result answer.ers2 --allow-write
+```
+
+Use the actual checkpoint named by the report. Intent choices are `artifact`,
+`deliver`, `other` and `not-sure`; approval choices are `approve` and `decline`.
+Both support `abort` and `close`. `--allow-write` is separate target-mutation
+authority and never replaces the program's approval. Artifact-only completion
+exports the same reviewable files without a write. The diff is independently
+tested by applying it with Git and comparing the resulting source bytes.
+
+A corpus JSON file is an array of configuration paths, for example
+`["case-01.json", "case-02.json"]`. Each case must use artifact-only intent.
+The comparison freezes each source once and performs one attempt per strategy,
+with that case's same provider/profile/allowances and independent checkpoints:
+
+```sh
+node runtime/inquiry_cli.mjs compare --corpus corpus.json --out study \
+  --authorize-inference
+```
+
+`comparison.json` records every attempted pair, including unavailable inputs,
+failed runs and resource stops, with references to per-attempt reports. There
+are no automatic repeated samples or winner selection. Reports include actual
+model/tool attempts, semantic byte counts, provider request bytes, executor
+physical executions and application outcomes. Provider response bytes are marked
+unmeasured because the existing normalized transport does not expose them;
+deterministic paired tests independently measure both provider directions.
+Select held-out cases and varied causes before a later live study. No live-model
+usefulness study or paid inference was performed for this milestone.
+
+`zig build check-inquiry-cli -Doptimize=ReleaseSafe -Dworld-runtime=...` tests
+both strategies against a local synthetic HTTP provider, actual isolated
+candidate execution, saved-state recovery, stale-result rejection, intent,
+exact approval, conditional delivery, resource cancellation and source-scope
+rejection. The normal integration and use-archive tests include this path.
+
+## Validation and limits
+
+The implemented source has passed the existing authoring, integration, functional
+economy and emission/package gates:
+
+```sh
+zig build check-agent4 check-agent4-integration check-agent4-economy emit-agent4 \
+  -Doptimize=ReleaseSafe -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+```
+
+The strengthened multi-shot/follow-up fixture also passes the application case
+runner under native, Node/WASM and Wasmtime. Draft PR #31 holds publication and
+review status. These executions establish the declared mechanism and finite test
+contracts; they do not establish universal repair correctness or live-model
+usefulness. The selected Boundary/World and toolchain inputs remain unchanged.
+
+No paid inference, credential discovery, real user-repository repair, PR
+promotion, merge or release was performed. A later live study needs its own
+explicit provider/corpus/profile/resource selection and inference authority.

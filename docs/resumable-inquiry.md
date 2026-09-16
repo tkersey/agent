@@ -495,7 +495,20 @@ node runtime/inquiry_cli.mjs run --config case.json --out successor \
 
 Use the actual checkpoint named by the report. Intent choices are `artifact`,
 `deliver`, `other` and `not-sure`; approval choices are `approve` and `decline`.
-Both support `abort` and `close`. `--allow-write` is separate target-mutation
+The intent question also supports `abort` and `close`; approval only offers
+`approve` and `decline`. To stop a pending approval without submitting a decision,
+use the existing World cancellation control with its matching image:
+
+```sh
+node runtime/runner.mjs cancel --world-runtime /absolute/path/to/world-runtime \
+  --image /absolute/path/to/extracted/examples/inquiry/repair.bpi2 \
+  --outcome attempt/0004.pko2 --reason "operator stopped at approval" \
+  --out cancelled.pko2
+```
+
+Select `react.bpi2` when the checkpoint belongs to ReAct. This is global World
+cancellation, distinct from an intent-question abort/close or an approval decline.
+`--allow-write` is separate target-mutation
 authority and never replaces the program's approval. Artifact-only completion
 exports the same reviewable files without a write. The diff is independently
 tested by applying it with Git and comparing the resulting source bytes.

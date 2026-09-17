@@ -27,7 +27,6 @@ economy_tooling_root.zig
 examples/coding_agent.zig
 examples/repository_repair_actuality.zig
 examples/research_agent.zig
-interpretation/emit_repository_repair_artifact.zig
 src/admission.zig
 src/agent4.zig
 src/approval.zig

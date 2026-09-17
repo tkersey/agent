@@ -1,20 +1,23 @@
-# Migrating Agent 3 source to Agent 4
+# Migrating to the compositional Agent 4 successor
 
-Agent 4 changes the authoring API and executable family. Recompile application
-source from new `InitialArgs` into BPI2; unfinished execution is PST2. Agent 3
-BPI1 images and PST1 snapshots continue to require their frozen runtime. There is
-no conversion of active PST1 state, and changing an application's BPI2 does not
-migrate an existing PST2 conversation.
+Agent 4 authors BPI3 Programs for Boundary 3 / World 6. Unfinished execution is
+PST3; current invocation and reply envelopes are PKI3/PKO3 and ERQ3/ERS3.
+Recompile applications and start new executions. Agent 3 BPI1/PST1 artifacts,
+predecessor Agent 4 BPI2/PST2 artifacts, and earlier draft checkpoint grammars
+require their original pinned pair; there is no automatic state conversion.
 
-This line uses the **released-integration** tuple in
-[`conformance/agent4/dependencies.lock.json`](../conformance/agent4/dependencies.lock.json):
-Boundary `2.0.2` at `42a09b92c2870ab3eab923fe68ca2645eb710000` and World
-`5.0.2` at `d075169a4805d999ceba4c37b3e1c925b78c3bf9`. The lock records the
-source/package inventories, runtime/kernel digests, toolchain, and unchanged
-physical profile. These commits match the published Boundary 2.0.2 and World 5.0.2
-release tags. This guide makes no
-acceptance-completion or live-model claim; use the separately generated evidence
-for executed checks.
+The **candidate-integration** tuple in
+[the dependency lock](../conformance/agent4/dependencies.lock.json) selects the
+exact Boundary 3.0.0-dev.0 and World 6.0.0-dev.0 commits, source/package
+inventories, runtime/kernel identities and physical profile. These are successor
+branches, not published releases. [Current status](compositional-execution.md)
+records validation and remaining acceptance work.
+
+The historical Interpretation v1 BPI1 emitter, fixed Machine-v2 driver, kernel
+acquisition and world-host/world-capabilities lock are retired. Current source-
+independent packages and native/WASM/browser transfer exercise the one generic
+World kernel. Model proposals remain data; current approval and inquiry owners
+retain their authority and continuation responsibilities.
 
 ## Replace the system's runtime template with an emitter
 
@@ -55,7 +58,7 @@ const System = agent.system(.{
 ```
 
 Call `agent.compile(allocator, System)` and release the returned Boundary
-`Compiled` with `deinit()`. Its `encode` method emits the canonical BPI2 image.
+`Compiled` with `deinit()`. Its `encode` method emits the canonical BPI3 image.
 The entry must take exactly one `InitialArgs` value and return `Result`; the
 module's failure schema must match `Failure`.
 
@@ -159,13 +162,13 @@ For a child that returns unfinished control, use `agent.dialogue.define`,
 that future exactly once by resuming or disposing it. Put owned child regions
 inside the handled body and keep borrowed caller regions live. The parent can
 hold a child while doing another permitted interaction; no continuation handle
-is exported to the host. Transfer moves the whole PST2.
+is exported to the host. Transfer moves the whole PST3.
 
 `agent.deliberation` emits internal multi-shot control. Capture before acquiring
 approval or exclusive live resources, declare the residual effects and captures,
 and return candidate data from speculation. Keep branch-local memory separate
 from live knowledge. Agent admission excludes protected authority and writes
-from the speculative domain. Do not replace this with host-side PST2 cloning.
+from the speculative domain. Do not replace this with host-side PST3 cloning.
 
 `agent.interaction.define` declares
 `agent.interaction.exchange.v1.<contract-name>`. `exchange` emits the ordered
@@ -184,7 +187,7 @@ it cannot fabricate a surviving conversation. Cleanup may itself return a
 pending request. Worker termination or absent input proves neither cleanup nor
 completion.
 
-## Invoke the unchanged World runtime
+## Invoke the authenticated World runtime
 
 [`runtime/world.mjs`](../runtime/world.mjs) exports
 `loadWorldRuntime({ runtimePath, lockPath })`. It verifies the runtime against
@@ -196,15 +199,15 @@ import { loadWorldRuntime } from "./runtime/world.mjs";
 
 const world = await loadWorldRuntime({ runtimePath, lockPath });
 const first = await world.start(image, initialArgs);
-if (first.kind === "Requested") {
+if (first.kind === "requested") {
     const next = await world.resume(image, first.state, first.request, canonicalReply);
 }
 ```
 
-Resume only a `Requested` outcome. `canonicalReply` is the encoded value for
-that ERQ2's resume schema; World constructs and binds the ERS2. It is not an old
+Resume only a `requested` outcome. `canonicalReply` is the encoded value for
+that ERQ3's resume schema; World constructs and binds the ERS3. It is not an old
 ERS1, arbitrary JSON, or a serialized callback. Persist the complete canonical
-PKO2 before discarding its predecessor. Its detached PST2 and pending ERQ2 carry
+PKO3 before discarding its predecessor. Its detached PST3 and pending ERQ3 carry
 the control needed to resume; inspection is a non-authoritative view.
 
 The reference runner performs one operation and returns environmental requests
@@ -212,20 +215,20 @@ without servicing them. From the package root, with an existing output directory
 
 ```sh
 node runtime/runner.mjs start --world-runtime /absolute/world-runtime \
-  --image app.bpi2 --initial-args initial.bin --out first.pko2
+  --image app.bpi3 --initial-args initial.bin --out first.pko3
 node runtime/runner.mjs inspect --world-runtime /absolute/world-runtime \
-  --outcome first.pko2
+  --outcome first.pko3
 node runtime/runner.mjs resume --world-runtime /absolute/world-runtime \
-  --image app.bpi2 --outcome first.pko2 --reply reply.bin --out next.pko2
+  --image app.bpi3 --outcome first.pko3 --reply reply.bin --out next.pko3
 node runtime/runner.mjs cancel --world-runtime /absolute/world-runtime \
-  --image app.bpi2 --outcome next.pko2 --reason stopped --out cancelled.pko2
+  --image app.bpi3 --outcome next.pko3 --reason stopped --out cancelled.pko3
 ```
 
 All commands accept `--lock /absolute/dependencies.lock.json`; otherwise they
 use the package's Agent 4 lock. Output must not overwrite an input or dependency.
 The runner validates flags and paths and uses atomic checkpoint replacement;
 use a distinct output filename for each operation. Check the returned outcome:
-the filename `cancelled.pko2` does not mean cleanup has already finished.
+the filename `cancelled.pko3` does not mean cleanup has already finished.
 
 There is one outstanding external request per process. Queue other input outside
 the computation until an admitted input boundary; do not inject a message into
@@ -233,7 +236,7 @@ a pending model/tool response. Preserve delivery occurrence identity separately
 from content hashes, which are not globally unique event IDs. The local runner
 is single-writer, with no distributed locking or exactly-once side-effect claim.
 
-Raw public World APIs and canonical BPI2/PST2/ERQ2/ERS2 remain sufficient for
+Raw public World APIs and canonical BPI3/PST3/ERQ3/ERS3 remain sufficient for
 execution without this bridge. A distribution that includes the bridge must
 include its pure value and dependency-verification modules and lock. Execution
 needs no application source, Agent compiler, credential in a snapshot, or

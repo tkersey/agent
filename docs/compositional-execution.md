@@ -6,11 +6,11 @@ admission still runs before Boundary admission. Diagnostics and native phase
 observers remain supported; observers do not enter portable images or execution.
 
 The normal Boundary dependency is pinned to
-`adf3c7e102fead43f32f1c850fa7d27ac417fdb6`. The downloaded archive's recomputed Git
+`c00b2a70180e8488627359724d7c50ba3d6a8670`. The downloaded archive's recomputed Git
 tree matches GitHub's commit API. Source, archive, Zig-managed package and ordinary
 extracted-package inventories are independently recorded in the existing lock.
 The selected versions are Boundary 3.0.0-dev.0 and World 6.0.0-dev.0. World is
-pinned to `321199bac228e63beeabd99d6f36ebf4bac72739`; its complete runtime
+pinned to `c6776472cf110d9d7a4fb2c5e5867b4ab187e155`; its complete runtime
 inventory and default kernel are authenticated by the same lock. This is
 candidate integration, not a published release.
 
@@ -67,5 +67,9 @@ use archive.
 The tool object is 1,485 bytes; the standalone and Agent images are 1,483 and
 4,224 bytes. These are fixture sizes, not full performance acceptance. The
 separate three-component Agent composition and general imported-borrow contracts
-remain open, as do selective execution, benchmark completion, legacy retirement
-and serial review closeout.
+remain open, alongside full performance acceptance, legacy retirement and serial
+review closeout. The selected compiler/runtime pair now includes direct immediate
+calls and independently admitted total branching tail clauses. Their native,
+checkpoint/cancellation, Node, Wasmtime and browser checks pass, as does this
+Agent integration; the local work-count reductions are not full Agent latency
+or peak-memory acceptance.

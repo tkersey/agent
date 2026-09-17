@@ -243,7 +243,7 @@ Without the supported inquiry execution host, economy reports
 checks pass. It does not report a passing inquiry/ReAct experiment comparison.
 
 Use `--cache-dir` and `--global-cache-dir` inside the isolated Agent checkout when
-working alongside other deliveries. `-Dboundary-v2-source=/absolute/immutable/copy`
+working alongside other deliveries. `-Dboundary-source=/absolute/immutable/copy`
 is an optional development input, verified against the same lock. Its authentication
 check also runs when an external build consumes Agent's exported modules.
 Native agreement tests use the separately authenticated unchanged World source acquired by setup.

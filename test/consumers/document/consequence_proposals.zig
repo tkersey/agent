@@ -239,7 +239,7 @@ test "document proposal continuation is protected portable program data" {
     const composition = try define(c, model);
     const module = b.module(composition.explore, try b.scalar(void));
     try agent.admission.verify(std.testing.allocator, module, &registry);
-    var compiled = try @import("boundary").source.construct(std.testing.allocator, module);
+    var compiled = try @import("boundary").program.compile(std.testing.allocator, module);
     defer compiled.deinit();
     try std.testing.expect(compiled.program.blocks.len > 0);
 }

@@ -5,7 +5,7 @@ const contracts = @import("agent_contracts");
 const admission = @import("admission.zig");
 pub const catalogs = @import("catalogs.zig");
 const source = boundary.computation;
-const p = boundary.data_v2.program;
+const p = boundary.data.program;
 
 /// Optional native authoring observations. These callbacks never enter a Module,
 /// BPI3, or PST3, and borrow their context only for the compilation call.
@@ -82,7 +82,7 @@ pub fn system(comptime spec: anytype) type {
 }
 
 /// Returned output owns its storage and remains valid after the builder is released.
-pub fn compile(allocator: std.mem.Allocator, comptime System: type) !source.Construction {
+pub fn compile(allocator: std.mem.Allocator, comptime System: type) !source.Compiled {
     return compileObserved(allocator, System, .{});
 }
 
@@ -90,7 +90,7 @@ pub fn compileObserved(
     allocator: std.mem.Allocator,
     comptime System: type,
     options: CompileOptions,
-) !source.Construction {
+) !source.Compiled {
     options.stage(.descriptors);
     var builder = source.Builder.init(allocator);
     defer builder.deinit();
@@ -114,7 +114,7 @@ pub fn compileObserved(
     try admission.verify(allocator, module, &registry);
     options.stage(.boundary_compile);
     const compiled = if (registry.compiled_imports.items.len == 0)
-        try source.constructObserved(allocator, module, options.boundary_options)
+        try source.lowerObserved(allocator, module, options.boundary_options)
     else
         try @import("compiled_tool.zig").link(allocator, module, &registry, options.boundary_options);
     options.stage(.complete);

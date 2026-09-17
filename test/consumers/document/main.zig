@@ -77,7 +77,7 @@ fn writeArguments(init: std.process.Init, comptime T: type, value: T) !void {
 fn writeImage(init: std.process.Init, comptime Program: type) !void {
     var compiled = try agent.compile(init.gpa, Program);
     defer compiled.deinit();
-    const bytes = try init.gpa.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+    const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(bytes);
     return writeBytes(init, try compiled.encode(init.gpa, bytes));
 }

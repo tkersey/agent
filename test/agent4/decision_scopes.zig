@@ -3,7 +3,7 @@ const boundary = @import("boundary");
 const agent = @import("agent");
 const world = @import("world");
 const source = boundary.computation;
-const data = boundary.data_v2;
+const data = boundary.data;
 const Id = source.Id;
 
 const Responder = enum { rule, human, model };
@@ -84,11 +84,11 @@ fn replyBytes(a: std.mem.Allocator, request_bytes: []const u8, value: []const u8
 
 fn execute(module: source.Module, prescribed: []const u8, expected: []const u8) !usize {
     const a = std.testing.allocator;
-    var compiled = try boundary.source.construct(a, module);
+    var compiled = try boundary.program.compile(a, module);
     defer compiled.deinit();
-    const invocation_image_0 = try a.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+    const invocation_image_0 = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer a.free(invocation_image_0);
-    _ = try boundary.data_v2.program_image.encode(a, compiled.program, invocation_image_0);
+    _ = try boundary.data.program_image.encode(a, compiled.program, invocation_image_0);
     var outcome = try world.invocation.invoke(a, .{
         .image = invocation_image_0,
         .instance = .{ .initial_args = &.{} },
@@ -100,9 +100,9 @@ fn execute(module: source.Module, prescribed: []const u8, expected: []const u8) 
         try std.testing.expect(requests <= 3); // finite test expectation, never a library budget
         const reply = try replyBytes(a, outcome.record.requested.request, prescribed);
         defer a.free(reply);
-        const invocation_image_1 = try a.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+        const invocation_image_1 = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
         defer a.free(invocation_image_1);
-        _ = try boundary.data_v2.program_image.encode(a, compiled.program, invocation_image_1);
+        _ = try boundary.data.program_image.encode(a, compiled.program, invocation_image_1);
         var next = try world.invocation.invoke(a, .{
             .image = invocation_image_1,
             .instance = .{ .state = outcome.record.requested.state.? },

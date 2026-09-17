@@ -2,7 +2,7 @@
 //! The argument names one canonical PKI3; stdout receives one complete PKO3.
 const std = @import("std");
 const world = @import("world");
-const protocol = @import("boundary_data_v2").invocation;
+const protocol = @import("boundary_data").invocation;
 
 pub fn main(init: std.process.Init) !void {
     var arguments = init.minimal.args.iterate();

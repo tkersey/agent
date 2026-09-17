@@ -8,7 +8,7 @@ import { inventory, readDependencyLock, readRegular, sha256,
   withVerifiedDependencies } from "../../tools/agent4/dependencies.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const MODULES = new Set(["std", "boundary", "boundary_data_v2", "agent_contracts"]);
+const MODULES = new Set(["std", "boundary", "boundary_data", "agent_contracts"]);
 const FORBIDDEN = /(?:^|\/)(?:system_compiler|strategy_v3|flow|runtime|world|kernel)(?:[._/]|$)/;
 
 function authoringFiles(sourceRoot) {
@@ -91,10 +91,10 @@ pub fn main(init: std.process.Init) !void {
     const System = agent.system(.{ .InitialArgs = u32, .Result = u32, .Failure = void, .application = Application });
     var compiled = try agent.compile(init.gpa, System);
     defer compiled.deinit();
-    const buffer = try init.gpa.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+    const buffer = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(buffer);
     const bytes = try compiled.encode(init.gpa, buffer);
-    var decoded = try boundary.data_v2.program_image.decode(init.gpa, bytes);
+    var decoded = try boundary.data.program_image.decode(init.gpa, bytes);
     defer decoded.deinit();
     if (decoded.program.effects.len != 1 or
         !std.mem.eql(u8, decoded.program.effects[0].identity, "consumer.installed.read.v1"))

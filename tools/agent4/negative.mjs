@@ -24,11 +24,11 @@ try {
   for(const [name,message] of cases){
     const args=['test','-fno-emit-bin','-OReleaseSafe','--dep','agent',
       '-Mroot='+join(root,`test/agent4/${name}.zig`),
-      '-OReleaseSafe','--dep','boundary','--dep','boundary_data_v2','--dep','agent_contracts',
+      '-OReleaseSafe','--dep','boundary','--dep','boundary_data','--dep','agent_contracts',
       '-Magent='+join(root,'src/agent4.zig'),
-      '-OReleaseSafe','--dep','boundary_data_v2','-Mboundary='+join(boundary,'src/v2/root.zig'),
-      '-OReleaseSafe','-Mboundary_data_v2='+join(boundary,'src/v2/data/root.zig'),
-      '-OReleaseSafe','--dep','boundary_data_v2','-Magent_contracts='+join(root,'src/contracts.zig'),
+      '-OReleaseSafe','--dep','boundary_data','-Mboundary='+join(boundary,'src/v2/root.zig'),
+      '-OReleaseSafe','-Mboundary_data='+join(boundary,'src/v2/data/root.zig'),
+      '-OReleaseSafe','--dep','boundary_data','-Magent_contracts='+join(root,'src/contracts.zig'),
       '--cache-dir',join(cache,'local'),'--global-cache-dir',join(cache,'global')];
     const result=spawnSync(zig,args,{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
     if(result.error)throw result.error;

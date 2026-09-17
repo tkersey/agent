@@ -181,7 +181,7 @@ test "generic numerical inquiry broker compiles through public imports" {
     var b = Builder.init(std.testing.allocator);
     defer b.deinit();
     var diagnostic: boundary.program.Diagnostic = .{};
-    var compiled = boundary.source.constructObserved(std.testing.allocator, try build(&b), .{ .diagnostic = &diagnostic }) catch |err| {
+    var compiled = boundary.program.compileObserved(std.testing.allocator, try build(&b), .{ .diagnostic = &diagnostic }) catch |err| {
         std.debug.print("{any}\n", .{diagnostic});
         return err;
     };
@@ -220,12 +220,12 @@ pub fn main(init: std.process.Init) !void {
     var b = Builder.init(init.gpa);
     defer b.deinit();
     var diagnostic: boundary.program.Diagnostic = .{};
-    var compiled = boundary.source.constructObserved(init.gpa, try build(&b), .{ .diagnostic = &diagnostic }) catch |err| {
+    var compiled = boundary.program.compileObserved(init.gpa, try build(&b), .{ .diagnostic = &diagnostic }) catch |err| {
         std.debug.print("{any}\n", .{diagnostic});
         return err;
     };
     defer compiled.deinit();
-    const bytes = try init.gpa.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+    const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(bytes);
     _ = try compiled.encode(init.gpa, bytes);
     var buffer: [4096]u8 = undefined;

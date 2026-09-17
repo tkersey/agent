@@ -12,7 +12,7 @@ const Input = struct {
     scope: u64,
 };
 
-fn compile() !boundary.computation.Construction {
+fn compile() !boundary.computation.Compiled {
     var b = boundary.computation.Builder.init(a);
     defer b.deinit();
     var registry = agent.admission.Registry.init(b.allocator());
@@ -21,10 +21,10 @@ fn compile() !boundary.computation.Construction {
     const f = try terminology.define(c);
     const module = b.module(f, try b.scalar(void));
     try agent.admission.verify(a, module, &registry);
-    return boundary.source.construct(a, module);
+    return boundary.program.compile(a, module);
 }
 
-fn check(program: boundary.data_v2.activation.Program, content: []const u8, old: []const u8, replacement: []const u8, scope: u64, expected: ?[]const u8, archive_changed: bool) !void {
+fn check(program: boundary.data.activation.Program, content: []const u8, old: []const u8, replacement: []const u8, scope: u64, expected: ?[]const u8, archive_changed: bool) !void {
     const args = try agent.contracts.encodeOwned(Input, a, .{
         .content = .{ .bytes = content },
         .old = .{ .bytes = old },
@@ -32,9 +32,9 @@ fn check(program: boundary.data_v2.activation.Program, content: []const u8, old:
         .scope = scope,
     });
     defer a.free(args);
-    const invocation_image_0 = try a.alloc(u8, try boundary.data_v2.program_image.encodedLength(program));
+    const invocation_image_0 = try a.alloc(u8, try boundary.data.program_image.encodedLength(program));
     defer a.free(invocation_image_0);
-    _ = try boundary.data_v2.program_image.encode(a, program, invocation_image_0);
+    _ = try boundary.data.program_image.encode(a, program, invocation_image_0);
     var outcome = try world.invocation.invoke(a, .{
         .image = invocation_image_0,
         .instance = .{ .initial_args = args },
@@ -99,7 +99,7 @@ test "every operative document field participates in the decisive key" {
         .domain = .{ .finite = &.{ 1, 2 } },
         .failure = try b.constant(void, {}),
     });
-    var compiled = try boundary.source.construct(a, b.module(d.classify, try b.scalar(void)));
+    var compiled = try boundary.program.compile(a, b.module(d.classify, try b.scalar(void)));
     defer compiled.deinit();
     const base = t.Action{
         .operation = .replace,
@@ -146,9 +146,9 @@ test "every operative document field participates in the decisive key" {
         };
         const args = try agent.contracts.encodeOwned(@TypeOf(initial), a, initial);
         defer a.free(args);
-        const invocation_image_1 = try a.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+        const invocation_image_1 = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
         defer a.free(invocation_image_1);
-        _ = try boundary.data_v2.program_image.encode(a, compiled.program, invocation_image_1);
+        _ = try boundary.data.program_image.encode(a, compiled.program, invocation_image_1);
         var result = try world.invocation.invoke(a, .{
             .image = invocation_image_1,
             .instance = .{ .initial_args = args },

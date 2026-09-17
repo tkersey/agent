@@ -517,7 +517,7 @@ test "domain and portable projection declarations reject before authoring contro
     spec.candidate = integer;
     const d = try define(&b, spec);
     try std.testing.expectEqual(d.classify, (try define(&b, spec)).classify);
-    var compiled = try @import("boundary").source.construct(
+    var compiled = try @import("boundary").program.compile(
         std.testing.allocator,
         b.module(d.classify, try b.scalar(void)),
     );
@@ -558,7 +558,7 @@ test "presenter requires the exact pure signature and portable context" {
         .presentation = nothing,
     };
     const resolve = try resolver(&b, d, p);
-    var compiled = try @import("boundary").source.construct(
+    var compiled = try @import("boundary").program.compile(
         std.testing.allocator,
         b.module(resolve, unit),
     );

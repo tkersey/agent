@@ -50,7 +50,12 @@ test('opt-in dispatcher preserves checkpoints, human authority and explicit allo
     res.end(JSON.stringify({ status: 'completed', error: null, output }));
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  t.after(() => new Promise(resolve => server.close(resolve)));
+  t.after(() => new Promise(resolve => {
+    server.close(resolve);
+    // A failed assertion or timed-out fetch must not leave teardown waiting
+    // for the HTTP server's request timeout before reporting the test failure.
+    server.closeAllConnections();
+  }));
   const config = {
     name: 'local-dispatch-fixture', corpus: 'synthetic-cli-contract', worldRuntime: runtime, images,
     targetRoot: target, strategy: 'inquiry', provider: { endpoint: `http://127.0.0.1:${server.address().port}/v1/responses`, model: 'local-fixture-model' },

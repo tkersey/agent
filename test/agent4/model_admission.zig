@@ -47,12 +47,12 @@ fn input(items: []const P.OutputItem) Inputs {
     } }, .offered = .{ true, false }, .policy = batch_policy };
 }
 
-fn execute(comptime T: type, program: boundary.data_v2.activation.Program, value: Inputs) !contracts.Decoded(T) {
+fn execute(comptime T: type, program: boundary.data.activation.Program, value: Inputs) !contracts.Decoded(T) {
     const bytes = try contracts.encodeOwned(Inputs, allocator, value);
     defer allocator.free(bytes);
-    const image = try allocator.alloc(u8, try boundary.data_v2.program_image.encodedLength(program));
+    const image = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(program));
     defer allocator.free(image);
-    _ = try boundary.data_v2.program_image.encode(allocator, program, image);
+    _ = try boundary.data.program_image.encode(allocator, program, image);
     var outcome = try world.invocation.invoke(allocator, .{
         .image = image,
         .instance = .{ .initial_args = bytes },
@@ -62,7 +62,7 @@ fn execute(comptime T: type, program: boundary.data_v2.activation.Program, value
     return contracts.decodeOwned(T, allocator, outcome.record.completed);
 }
 
-fn expectRejected(program: boundary.data_v2.activation.Program, value: Inputs, expected: P.InterpretationFailure) !void {
+fn expectRejected(program: boundary.data.activation.Program, value: Inputs, expected: P.InterpretationFailure) !void {
     var observed = try execute(P.BatchInterpretation, program, value);
     defer observed.deinit();
     try std.testing.expectEqual(expected, observed.value.rejected);
@@ -72,7 +72,7 @@ test "actual World preserves every admitted call and enforces current call polic
     var b = boundary.computation.Builder.init(allocator);
     defer b.deinit();
     const entry = try P.interpretAll(&b);
-    var compiled = try boundary.source.construct(allocator, b.module(entry, try b.scalar(void)));
+    var compiled = try boundary.program.compile(allocator, b.module(entry, try b.scalar(void)));
     defer compiled.deinit();
     const items = [_]P.OutputItem{
         .{ .reasoning = .{ .summary = .{ .bytes = "context" } } },
@@ -109,7 +109,7 @@ test "actual World rejects forged declaration association variants and offer cus
     var b = boundary.computation.Builder.init(allocator);
     defer b.deinit();
     const entry = try P.interpretAll(&b);
-    var compiled = try boundary.source.construct(allocator, b.module(entry, try b.scalar(void)));
+    var compiled = try boundary.program.compile(allocator, b.module(entry, try b.scalar(void)));
     defer compiled.deinit();
     var items = [_]P.OutputItem{item(42)};
     items[0].function_call.name.bytes = "other";
@@ -142,7 +142,7 @@ test "single answer convenience rejects multiple calls instead of choosing one" 
     var b = boundary.computation.Builder.init(allocator);
     defer b.deinit();
     const entry = try P.interpreter(&b);
-    var compiled = try boundary.source.construct(allocator, b.module(entry, try b.scalar(void)));
+    var compiled = try boundary.program.compile(allocator, b.module(entry, try b.scalar(void)));
     defer compiled.deinit();
     const items = [_]P.OutputItem{ item(42), item(73) };
     var value = input(items[0..1]);

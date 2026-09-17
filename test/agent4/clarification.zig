@@ -23,7 +23,7 @@ const Resolution = union(enum) {
 const Input = struct { evaluations: []const Evaluation, mandatory: bool = false };
 
 const Fixture = struct {
-    compiled: source.Construction,
+    compiled: source.Compiled,
 
     fn init(domain: clarification.Domain, select: bool) !Fixture {
         var b = source.Builder.init(a);
@@ -39,7 +39,7 @@ const Fixture = struct {
         // Independent native wire types must match the exported source schemas.
         try std.testing.expectEqual(try agent.contracts.schema(Classification, &b), d.types.classification);
         const entry = if (select) d.select else d.classify;
-        return .{ .compiled = try boundary.source.construct(a, b.module(entry, try b.scalar(void))) };
+        return .{ .compiled = try boundary.program.compile(a, b.module(entry, try b.scalar(void))) };
     }
 
     fn deinit(f: *Fixture) void {
@@ -49,9 +49,9 @@ const Fixture = struct {
     fn run(f: Fixture, comptime In: type, comptime Out: type, input: In) !agent.contracts.Decoded(Out) {
         const args = try agent.contracts.encodeOwned(In, a, input);
         defer a.free(args);
-        const invocation_image_0 = try a.alloc(u8, try boundary.data_v2.program_image.encodedLength(f.compiled.program));
+        const invocation_image_0 = try a.alloc(u8, try boundary.data.program_image.encodedLength(f.compiled.program));
         defer a.free(invocation_image_0);
-        _ = try boundary.data_v2.program_image.encode(a, f.compiled.program, invocation_image_0);
+        _ = try boundary.data.program_image.encode(a, f.compiled.program, invocation_image_0);
         var outcome = try world.invocation.invoke(a, .{
             .image = invocation_image_0,
             .instance = .{ .initial_args = args },
@@ -189,7 +189,7 @@ const P = agent.model_invocation.Profile(NumericAction, .{.{ .name = "score", .d
     .provider_response_bytes = 4096,
 });
 const Composition = struct {
-    compiled: source.Construction,
+    compiled: source.Compiled,
     source_functions: usize,
     source_terms: usize,
 
@@ -246,7 +246,7 @@ const Composition = struct {
         const module = b.module(entry, unit);
         try agent.admission.verify(allocator, module, &registry);
         return .{
-            .compiled = try boundary.source.construct(allocator, module),
+            .compiled = try boundary.program.compile(allocator, module),
             .source_functions = b.functions.items.len,
             .source_terms = b.terms.items.len,
         };
@@ -364,8 +364,8 @@ fn call(b: *source.Builder, function: Id, arguments: []const Id) !Id {
     return b.term(.{ .call = .{ .function = function, .arguments = arguments } });
 }
 
-fn respond(outcome: *world.invocation.Outcome, program: boundary.data_v2.activation.Program, comptime T: type, value: T, statistics: ?*world.Statistics) !void {
-    const protocol = boundary.data_v2.invocation;
+fn respond(outcome: *world.invocation.Outcome, program: boundary.data.activation.Program, comptime T: type, value: T, statistics: ?*world.Statistics) !void {
+    const protocol = boundary.data.invocation;
     var request_owner_0 = try protocol.decode(protocol.Request, a, outcome.record.requested.request);
     defer request_owner_0.deinit();
     const request = request_owner_0.value;
@@ -379,11 +379,11 @@ fn respond(outcome: *world.invocation.Outcome, program: boundary.data_v2.activat
     const encoded = try a.alloc(u8, try protocol.encodedLength(protocol.Result, result));
     defer a.free(encoded);
     _ = try protocol.encode(protocol.Result, a, result, encoded);
-    const invocation_image_1 = try a.alloc(u8, try boundary.data_v2.program_image.encodedLength(program));
+    const invocation_image_1 = try a.alloc(u8, try boundary.data.program_image.encodedLength(program));
     defer a.free(invocation_image_1);
-    _ = try boundary.data_v2.program_image.encode(a, program, invocation_image_1);
+    _ = try boundary.data.program_image.encode(a, program, invocation_image_1);
     const next = observed: {
-        const instance: boundary.data_v2.invocation.Instance = .{ .state = outcome.record.requested.state.? };
+        const instance: boundary.data.invocation.Instance = .{ .state = outcome.record.requested.state.? };
         var session = switch (instance) {
             .initial_args => |initial| try world.Session.initImage(a, invocation_image_1, initial),
             .state => |state| try world.Session.restoreImage(a, invocation_image_1, state),
@@ -406,11 +406,11 @@ test "protected composition resumes captured futures, groups non-tail results, a
     defer a.free(args);
     for ([_]bool{ false, true }) |divergent| {
         var statistics: world.Statistics = .{};
-        const invocation_image_2 = try a.alloc(u8, try boundary.data_v2.program_image.encodedLength(f.compiled.program));
+        const invocation_image_2 = try a.alloc(u8, try boundary.data.program_image.encodedLength(f.compiled.program));
         defer a.free(invocation_image_2);
-        _ = try boundary.data_v2.program_image.encode(a, f.compiled.program, invocation_image_2);
+        _ = try boundary.data.program_image.encode(a, f.compiled.program, invocation_image_2);
         var outcome = observed: {
-            const instance: boundary.data_v2.invocation.Instance = .{ .initial_args = args };
+            const instance: boundary.data.invocation.Instance = .{ .initial_args = args };
             var session = switch (instance) {
                 .initial_args => |initial| try world.Session.initImage(a, invocation_image_2, initial),
                 .state => |state| try world.Session.restoreImage(a, invocation_image_2, state),
@@ -424,7 +424,7 @@ test "protected composition resumes captured futures, groups non-tail results, a
         defer outcome.deinit();
         for (1..3) |id| {
             try std.testing.expect(outcome.record == .requested);
-            var graph = try boundary.data_v2.state_image.decodeGraph(a, outcome.record.requested.state.?);
+            var graph = try boundary.data.state_image.decodeGraph(a, outcome.record.requested.state.?);
             defer graph.deinit();
             var templates: usize = 0;
             var cells: usize = 0;
@@ -435,8 +435,8 @@ test "protected composition resumes captured futures, groups non-tail results, a
             };
             try std.testing.expectEqual(@as(usize, 1), templates);
             try std.testing.expectEqual(@as(usize, 2), cells);
-            var decoded_request_0 = try boundary.data_v2.invocation.decode(
-                boundary.data_v2.invocation.Request,
+            var decoded_request_0 = try boundary.data.invocation.decode(
+                boundary.data.invocation.Request,
                 a,
                 outcome.record.requested.request,
             );
@@ -466,8 +466,8 @@ test "protected composition resumes captured futures, groups non-tail results, a
         }
         if (divergent) {
             try std.testing.expect(outcome.record == .requested);
-            var decoded_request_1 = try boundary.data_v2.invocation.decode(
-                boundary.data_v2.invocation.Request,
+            var decoded_request_1 = try boundary.data.invocation.decode(
+                boundary.data.invocation.Request,
                 a,
                 outcome.record.requested.request,
             );
@@ -545,7 +545,7 @@ pub fn main(init: std.process.Init) !void {
         try output.interface.print(
             "{s}{{\"hypotheses\":{d},\"imageBytes\":{d},\"functions\":{d}," ++
                 "\"blocks\":{d},\"sourceFunctions\":{d},\"sourceTerms\":{d}}}",
-            .{ if (i == 0) "" else ",", count, try boundary.data_v2.program_image.encodedLength(program), program.functions.len, program.blocks.len, fixture.source_functions, fixture.source_terms },
+            .{ if (i == 0) "" else ",", count, try boundary.data.program_image.encodedLength(program), program.functions.len, program.blocks.len, fixture.source_functions, fixture.source_terms },
         );
     }
     try output.interface.writeAll("]}\n");
@@ -577,11 +577,11 @@ fn growingDomain(count: usize) !void {
     const args = try agent.contracts.encodeOwned(Initial, a, .{ .context = 99, .ids = ids });
     defer a.free(args);
     var statistics: world.Statistics = .{};
-    const invocation_image_3 = try a.alloc(u8, try boundary.data_v2.program_image.encodedLength(f.compiled.program));
+    const invocation_image_3 = try a.alloc(u8, try boundary.data.program_image.encodedLength(f.compiled.program));
     defer a.free(invocation_image_3);
-    _ = try boundary.data_v2.program_image.encode(a, f.compiled.program, invocation_image_3);
+    _ = try boundary.data.program_image.encode(a, f.compiled.program, invocation_image_3);
     var outcome = observed: {
-        const instance: boundary.data_v2.invocation.Instance = .{ .initial_args = args };
+        const instance: boundary.data.invocation.Instance = .{ .initial_args = args };
         var session = switch (instance) {
             .initial_args => |initial| try world.Session.initImage(a, invocation_image_3, initial),
             .state => |state| try world.Session.restoreImage(a, invocation_image_3, state),
@@ -606,8 +606,8 @@ fn growingDomain(count: usize) !void {
         calls += 1;
         try std.testing.expect(calls <= count);
         peak = @max(peak, outcome.record.requested.state.?.len);
-        var decoded_request_2 = try boundary.data_v2.invocation.decode(
-            boundary.data_v2.invocation.Request,
+        var decoded_request_2 = try boundary.data.invocation.decode(
+            boundary.data.invocation.Request,
             a,
             outcome.record.requested.request,
         );

@@ -107,7 +107,7 @@ test "approval emits ordinary checked BPI3 with a consumed private grant" {
     defer registry.deinit();
     const module = try build(.{ .builder = &b, .registry = &registry }, .valid);
     try agent.admission.verify(std.testing.allocator, module, &registry);
-    var compiled = try boundary.source.construct(std.testing.allocator, module);
+    var compiled = try boundary.program.compile(std.testing.allocator, module);
     defer compiled.deinit();
     try std.testing.expectEqual(@as(usize, 1), module.resources.len);
     try std.testing.expect(compiled.program.functions.len > 1);
@@ -140,9 +140,9 @@ pub fn main(init: std.process.Init) !void {
     defer registry.deinit();
     const module = try build(.{ .builder = &b, .registry = &registry }, mode);
     try agent.admission.verify(init.gpa, module, &registry);
-    var compiled = try boundary.source.construct(init.gpa, module);
+    var compiled = try boundary.program.compile(init.gpa, module);
     defer compiled.deinit();
-    const bytes = try init.gpa.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+    const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(bytes);
     _ = try compiled.encode(init.gpa, bytes);
     var buffer: [4096]u8 = undefined;
@@ -211,7 +211,7 @@ test "required live proof stays private and is consumed before approval" {
     defer registry.deinit();
     const module = try build(.{ .builder = &b, .registry = &registry }, .evidence);
     try agent.admission.verify(std.testing.allocator, module, &registry);
-    var compiled = try boundary.source.construct(std.testing.allocator, module);
+    var compiled = try boundary.program.compile(std.testing.allocator, module);
     defer compiled.deinit();
     try std.testing.expectEqual(@as(usize, 2), compiled.program.scopes.resources.len);
 }
@@ -225,7 +225,7 @@ test "a simulated value cannot forge a live proof and a live proof cannot be use
         const module = try build(.{ .builder = &b, .registry = &registry }, mode);
         try agent.admission.verify(std.testing.allocator, module, &registry);
         const expected = if (mode == .reused_evidence) error.UnavailableSlot else error.InvalidOwnership;
-        try std.testing.expectError(expected, boundary.source.construct(std.testing.allocator, module));
+        try std.testing.expectError(expected, boundary.program.compile(std.testing.allocator, module));
     }
 }
 
@@ -307,7 +307,7 @@ test "current policy may borrow a scoped cell across the approval interaction" {
         defer registry.deinit();
         const module = try build(.{ .builder = &b, .registry = &registry }, mode);
         try agent.admission.verify(std.testing.allocator, module, &registry);
-        var compiled = try boundary.source.construct(std.testing.allocator, module);
+        var compiled = try boundary.program.compile(std.testing.allocator, module);
         defer compiled.deinit();
         try std.testing.expectEqual(@as(Id, 1), compiled.program.scopes.region_count);
     }

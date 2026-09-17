@@ -227,7 +227,7 @@ const Emit = struct {
     fn cond(e: Emit, v: Id, yes: Id, no: Id) Error!Id {
         return e.b.term(.{ .conditional = .{ .condition = v, .when_true = yes, .when_false = no } });
     }
-    fn arithmetic(e: Emit, op: boundary.data_v2.program.Opcode, a: Id, b: Id) Error!Id {
+    fn arithmetic(e: Emit, op: boundary.data.program.Opcode, a: Id, b: Id) Error!Id {
         return e.b.value(.{ .schema = e.integer, .expression = .{ .primitive = .{
             .opcode = op,
             .operands = &.{ a, b },

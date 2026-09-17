@@ -1,7 +1,7 @@
 //! Pure Agent value support. All bytes follow Boundary 2's public value encoding.
 //! This module imports no source compiler, evaluator, or process framing codec.
 const std = @import("std");
-const data = @import("boundary_data_v2");
+const data = @import("boundary_data");
 const p = data.program;
 const wire = data.wire;
 

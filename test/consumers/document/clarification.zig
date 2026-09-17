@@ -195,7 +195,7 @@ test "clarification lowers lexical reads around a typed human exchange" {
     try std.testing.expectEqual(helper.function, (try define(c, d, environment)).function);
     const module = b.module(helper.function, unit);
     try agent.admission.verify(std.testing.allocator, module, &registry);
-    var compiled = try boundary.source.construct(std.testing.allocator, module);
+    var compiled = try boundary.program.compile(std.testing.allocator, module);
     defer compiled.deinit();
     try std.testing.expect(compiled.program.blocks.len > 0);
     try std.testing.expectEqualSlices(Id, &.{d.effect}, b.functions.items[helper.function].effects);

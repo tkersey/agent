@@ -3,7 +3,7 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const source = boundary.computation;
-const p = boundary.data_v2.program;
+const p = boundary.data.program;
 const Id = source.Id;
 
 pub const Error = source.Error || error{UnsupportedEqualitySchema};
@@ -266,7 +266,7 @@ test "all portable schema families lower to checked pure comparisons" {
     const function = try define(&b, whole, failure);
     try std.testing.expectEqual(function, try define(&b, whole, try b.constant(void, {})));
     try std.testing.expectEqual(@as(usize, 0), b.functions.items[@intCast(function)].effects.len);
-    var compiled = try boundary.source.construct(std.testing.allocator, b.module(function, unit));
+    var compiled = try boundary.program.compile(std.testing.allocator, b.module(function, unit));
     defer compiled.deinit();
     try std.testing.expectEqual(@as(usize, 0), compiled.program.effects.len);
 }

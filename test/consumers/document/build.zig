@@ -1,8 +1,8 @@
 const std = @import("std");
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
-    const source = b.option([]const u8, "boundary-v2-source", "Immutable Boundary source copy");
-    const dependency = if (source) |path| b.dependency("agent", .{ .optimize = optimize, .@"boundary-v2-source" = path }) else b.dependency("agent", .{ .optimize = optimize });
+    const source = b.option([]const u8, "boundary-source", "Immutable Boundary source copy");
+    const dependency = if (source) |path| b.dependency("agent", .{ .optimize = optimize, .@"boundary-source" = path }) else b.dependency("agent", .{ .optimize = optimize });
     const module = b.createModule(.{
         .root_source_file = b.path("main.zig"),
         .target = b.graph.host,

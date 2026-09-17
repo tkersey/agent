@@ -1,7 +1,7 @@
 //! Checked closed read-tool objects; Agent owns their final bindings and bytes.
 const std = @import("std");
 const boundary = @import("boundary");
-const data = boundary.data_v2;
+const data = boundary.data;
 const source = boundary.computation;
 const admission = @import("admission.zig");
 const Context = @import("authoring.zig").Context;
@@ -114,7 +114,7 @@ pub fn declare(c: Context, spec: Specification) !Descriptor {
     return descriptor(spec, declared);
 }
 
-pub fn link(allocator: std.mem.Allocator, module: source.Module, registry: *const admission.Registry, options: source.CompileOptions) !source.Construction {
+pub fn link(allocator: std.mem.Allocator, module: source.Module, registry: *const admission.Registry, options: source.CompileOptions) !source.Compiled {
     errdefer |err| if (options.diagnostic) |diagnostic| {
         diagnostic.code = err;
     };

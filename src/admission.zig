@@ -3,7 +3,7 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const source = boundary.computation;
-const p = boundary.data_v2.program;
+const p = boundary.data.program;
 const Id = p.Id;
 
 pub const Role = enum { internal, model, interaction, read, simulation, approval, commit, write };

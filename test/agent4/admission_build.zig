@@ -11,7 +11,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("../../.agent4/inputs/boundary/src/v2/root.zig"),
         .target = b.graph.host,
         .optimize = optimize,
-        .imports = &.{.{ .name = "boundary_data_v2", .module = data }},
+        .imports = &.{.{ .name = "boundary_data", .module = data }},
     });
     const admission = b.createModule(.{
         .root_source_file = b.path("../../src/admission.zig"),

@@ -3,7 +3,7 @@ const std = @import("std");
 const boundary = @import("boundary");
 const agent = @import("agent");
 const source = boundary.computation;
-const data = boundary.data_v2;
+const data = boundary.data;
 const Id = source.Id;
 const edited_source_value: u32 = 7;
 const shared_prompt = "one immutable shared instruction";
@@ -285,7 +285,7 @@ fn measure(init: std.process.Init, directory: []const u8, name: []const u8, work
     var observer: Observer = .{ .io = init.io };
     var diagnostic: boundary.program.Diagnostic = .{};
     const compile_start = std.Io.Clock.awake.now(init.io);
-    var compiled = boundary.source.constructObserved(init.gpa, module, .{
+    var compiled = boundary.program.compileObserved(init.gpa, module, .{
         .diagnostic = &diagnostic,
         .observer = .{ .context = &observer, .enter = Observer.enter },
     }) catch |err| {
@@ -333,7 +333,7 @@ fn compiledSystem(init: std.process.Init, directory: []const u8, name: []const u
     return metrics;
 }
 
-fn saveCompiled(init: std.process.Init, directory: []const u8, name: []const u8, compiled: source.Construction) !Metrics {
+fn saveCompiled(init: std.process.Init, directory: []const u8, name: []const u8, compiled: source.Compiled) !Metrics {
     const started = std.Io.Clock.awake.now(init.io);
     const storage = try init.gpa.alloc(u8, try data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(storage);
@@ -398,7 +398,7 @@ fn save(init: std.process.Init, directory: []const u8, name: []const u8, bytes: 
 fn warmup(allocator: std.mem.Allocator) !void {
     var b = source.Builder.init(allocator);
     defer b.deinit();
-    var control = try boundary.source.construct(allocator, try direct(&b));
+    var control = try boundary.program.compile(allocator, try direct(&b));
     defer control.deinit();
     var minimal = try agent.compile(allocator, MinimalSystem);
     defer minimal.deinit();
@@ -550,7 +550,7 @@ test "minimal public facade has the exact direct Boundary image" {
     var b = source.Builder.init(a);
     defer b.deinit();
     try declareDomain(&b, .direct);
-    var control = try boundary.source.construct(a, try direct(&b));
+    var control = try boundary.program.compile(a, try direct(&b));
     defer control.deinit();
     var minimal = try agent.compile(a, MinimalSystem);
     defer minimal.deinit();
@@ -600,12 +600,12 @@ test "retention and shared-scope consumers compile using public compositions" {
     const a = std.testing.allocator;
     var b = source.Builder.init(a);
     defer b.deinit();
-    var output = try boundary.source.construct(a, try conversation(&b));
+    var output = try boundary.program.compile(a, try conversation(&b));
     defer output.deinit();
     try std.testing.expectEqual(@as(usize, 1), output.program.effects.len);
     var scope_builder = source.Builder.init(a);
     defer scope_builder.deinit();
-    var shared = try boundary.source.construct(a, try sharing(&scope_builder, 8));
+    var shared = try boundary.program.compile(a, try sharing(&scope_builder, 8));
     defer shared.deinit();
     try std.testing.expectEqual(@as(usize, 1), shared.program.handlers.len);
 }

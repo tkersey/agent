@@ -10,7 +10,7 @@ pub const Representation = enum { interned, static_code, unsafe_reuse, unsafe_co
 
 pub fn build(b: *B, registry: *admission.Registry, representation: Representation, count: usize) !bnd.computation.Module {
     const unit = try b.scalar(void);
-    const signature: bnd.data_v2.program.ComputationType = .{ .parameters = &.{}, .result = unit };
+    const signature: bnd.data.program.ComputationType = .{ .parameters = &.{}, .result = unit };
     const safe = try b.declare(&.{}, unit, &.{}, &.{});
     try b.define(safe, try b.pure(try b.constant(void, {})));
     const safe_code: callable.Definition = if (representation == .interned) .{
@@ -73,7 +73,7 @@ test "original interned source is conservatively rejected despite valid Boundary
     var registry = admission.Registry.init(a);
     defer registry.deinit();
     const module = try build(&b, &registry, .interned, 1);
-    var compiled = try bnd.source.construct(a, module);
+    var compiled = try bnd.program.compile(a, module);
     defer compiled.deinit();
     try std.testing.expectError(error.SpeculativeEffect, admission.verify(a, module, &registry));
 }
@@ -85,7 +85,7 @@ test "public static-code callable preserves safe higher-order composition" {
     var registry = admission.Registry.init(a);
     defer registry.deinit();
     const module = try build(&b, &registry, .static_code, 1);
-    var compiled = try bnd.source.construct(a, module);
+    var compiled = try bnd.program.compile(a, module);
     defer compiled.deinit();
     try admission.verify(a, module, &registry);
 }
@@ -100,11 +100,11 @@ test "static-code source comparison records image cost" {
     defer b2.deinit();
     var r2 = admission.Registry.init(a);
     defer r2.deinit();
-    var c1 = try bnd.source.construct(a, try build(&b1, &r1, .interned, 1));
+    var c1 = try bnd.program.compile(a, try build(&b1, &r1, .interned, 1));
     defer c1.deinit();
-    var c2 = try bnd.source.construct(a, try build(&b2, &r2, .static_code, 1));
+    var c2 = try bnd.program.compile(a, try build(&b2, &r2, .static_code, 1));
     defer c2.deinit();
-    const image = bnd.data_v2.program_image;
+    const image = bnd.data.program_image;
     const len1 = try image.encodedLength(c1.program);
     const len2 = try image.encodedLength(c2.program);
     const bytes1 = try a.alloc(u8, len1);
@@ -125,7 +125,7 @@ test "static-code identity does not assert effect safety or bless schema reuse" 
         var registry = admission.Registry.init(a);
         defer registry.deinit();
         const module = try build(&b, &registry, representation, 1);
-        var compiled = try bnd.source.construct(a, module);
+        var compiled = try bnd.program.compile(a, module);
         defer compiled.deinit();
         try std.testing.expectError(error.SpeculativeEffect, admission.verify(a, module, &registry));
     }
@@ -138,7 +138,7 @@ test "1 8 and 64 callable installations share schema and executable body" {
         const unit = try b.scalar(void);
         const function = try b.declare(&.{}, unit, &.{}, &.{});
         try b.define(function, try b.pure(try b.constant(void, {})));
-        const signature: bnd.data_v2.program.ComputationType = .{
+        const signature: bnd.data.program.ComputationType = .{
             .parameters = &.{},
             .result = unit,
         };

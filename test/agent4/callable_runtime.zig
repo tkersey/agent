@@ -21,17 +21,17 @@ test "static-code callable preserves actual World observations and branch work" 
         const changed = try witness.build(&agent_builder, &agent_registry, .static_code, count);
         try std.testing.expectError(error.SpeculativeEffect, agent.admission.verify(allocator, original, &raw_registry));
         try agent.admission.verify(allocator, changed, &agent_registry);
-        var raw = try boundary.source.construct(allocator, original);
+        var raw = try boundary.program.compile(allocator, original);
         defer raw.deinit();
-        var selected = try boundary.source.construct(allocator, changed);
+        var selected = try boundary.program.compile(allocator, changed);
         defer selected.deinit();
         var raw_stats: world.Statistics = .{};
         var selected_stats: world.Statistics = .{};
-        const invocation_image_0 = try allocator.alloc(u8, try boundary.data_v2.program_image.encodedLength(raw.program));
+        const invocation_image_0 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(raw.program));
         defer allocator.free(invocation_image_0);
-        _ = try boundary.data_v2.program_image.encode(allocator, raw.program, invocation_image_0);
+        _ = try boundary.data.program_image.encode(allocator, raw.program, invocation_image_0);
         var before = observed: {
-            const instance: boundary.data_v2.invocation.Instance = .{ .initial_args = &.{} };
+            const instance: boundary.data.invocation.Instance = .{ .initial_args = &.{} };
             var session = switch (instance) {
                 .initial_args => |args| try world.Session.initImage(allocator, invocation_image_0, args),
                 .state => |state| try world.Session.restoreImage(allocator, invocation_image_0, state),
@@ -43,11 +43,11 @@ test "static-code callable preserves actual World observations and branch work" 
             break :observed try world.invocation.finish(allocator, &session, true);
         };
         defer before.deinit();
-        const invocation_image_1 = try allocator.alloc(u8, try boundary.data_v2.program_image.encodedLength(selected.program));
+        const invocation_image_1 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(selected.program));
         defer allocator.free(invocation_image_1);
-        _ = try boundary.data_v2.program_image.encode(allocator, selected.program, invocation_image_1);
+        _ = try boundary.data.program_image.encode(allocator, selected.program, invocation_image_1);
         var after = observed: {
-            const instance: boundary.data_v2.invocation.Instance = .{ .initial_args = &.{} };
+            const instance: boundary.data.invocation.Instance = .{ .initial_args = &.{} };
             var session = switch (instance) {
                 .initial_args => |args| try world.Session.initImage(allocator, invocation_image_1, args),
                 .state => |state| try world.Session.restoreImage(allocator, invocation_image_1, state),
@@ -74,10 +74,10 @@ test "static-code callable preserves actual World observations and branch work" 
         prior_schemas = selected.program.schemas.len;
         std.debug.print("callable installs={d} original_bytes={d} selected_bytes={d} " ++
             "functions={d} schemas={d} transitions={d} templates={d} branches={d}\n", .{
-            count,                                                              try boundary.data_v2.program_image.encodedLength(raw.program),
-            try boundary.data_v2.program_image.encodedLength(selected.program), selected.program.functions.len,
-            selected.program.schemas.len,                                       selected_stats.transitions,
-            selected_stats.multi_templates,                                     selected_stats.branch_activations,
+            count,                                                           try boundary.data.program_image.encodedLength(raw.program),
+            try boundary.data.program_image.encodedLength(selected.program), selected.program.functions.len,
+            selected.program.schemas.len,                                    selected_stats.transitions,
+            selected_stats.multi_templates,                                  selected_stats.branch_activations,
         });
     }
 }

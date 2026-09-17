@@ -5,7 +5,7 @@ const world = @import("world");
 const contracts = agent.contracts;
 const model = agent.model_invocation;
 const source = boundary.computation;
-const data = boundary.data_v2;
+const data = boundary.data;
 const allocator = std.testing.allocator;
 
 const Answer = union(enum(u32)) {
@@ -66,11 +66,11 @@ fn template(tools: []const P.ToolDeclaration, selection: model.Selection) P.Requ
     };
 }
 
-fn compileModel(comptime Q: type, comptime multiple: bool) !source.Construction {
+fn compileModel(comptime Q: type, comptime multiple: bool) !source.Compiled {
     return compileResponder(Q, multiple, false);
 }
 
-fn compileResponder(comptime Q: type, comptime multiple: bool, comptime observed: bool) !source.Construction {
+fn compileResponder(comptime Q: type, comptime multiple: bool, comptime observed: bool) !source.Compiled {
     var b = source.Builder.init(allocator);
     defer b.deinit();
     var registry = agent.admission.Registry.init(b.allocator());
@@ -83,7 +83,7 @@ fn compileResponder(comptime Q: type, comptime multiple: bool, comptime observed
     try std.testing.expectEqual(entry, shared);
     const module = b.module(entry, try b.scalar(void));
     try agent.admission.verify(allocator, module, &registry);
-    return boundary.source.construct(allocator, module);
+    return boundary.program.compile(allocator, module);
 }
 
 test "protected Agent source rejects raw model emission with forged request-time offers" {
@@ -110,7 +110,7 @@ test "protected Agent source rejects raw model emission with forged request-time
     const module = b.module(entry, try b.scalar(void));
     // Valid public Boundary source may choose another policy. It cannot acquire
     // Agent's offer-custody claim merely by invoking the pure candidate decoder.
-    var raw_compiled = try boundary.source.construct(allocator, module);
+    var raw_compiled = try boundary.program.compile(allocator, module);
     defer raw_compiled.deinit();
     try std.testing.expectError(error.ProtectedEffectBypass, agent.admission.verify(allocator, module, &registry));
 }
@@ -130,7 +130,7 @@ test "reserved model identity cannot evade custody by omitted or read classifica
             .payload = try b.reference(b.parameter(entry, 0)),
         } }));
         const module = b.module(entry, try b.scalar(void));
-        var raw = try boundary.source.construct(allocator, module);
+        var raw = try boundary.program.compile(allocator, module);
         defer raw.deinit();
         try std.testing.expectError(error.EffectRoleMismatch, agent.admission.verify(allocator, module, &registry));
     }
@@ -150,7 +150,7 @@ test "observed model result preserves normalized provenance and typed recovery d
     try std.testing.expectEqual(1, registry.sites.items.len);
     const module = b.module(entry, try b.scalar(void));
     try agent.admission.verify(allocator, module, &registry);
-    var compiled = try boundary.source.construct(allocator, module);
+    var compiled = try boundary.program.compile(allocator, module);
     defer compiled.deinit();
     const value: Input = .{ .request = template(&.{}, single), .offered = .{ true, false } };
     var parked = try start(compiled.program, value);
@@ -194,9 +194,9 @@ fn expectNormalized(expected: P.Result, actual: P.Result) !void {
 fn start(program: data.activation.Program, value: Input) !world.invocation.Outcome {
     const bytes = try contracts.encodeOwned(Input, allocator, value);
     defer allocator.free(bytes);
-    const invocation_image_0 = try allocator.alloc(u8, try boundary.data_v2.program_image.encodedLength(program));
+    const invocation_image_0 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(program));
     defer allocator.free(invocation_image_0);
-    _ = try boundary.data_v2.program_image.encode(allocator, program, invocation_image_0);
+    _ = try boundary.data.program_image.encode(allocator, program, invocation_image_0);
     return world.invocation.invoke(allocator, .{
         .image = invocation_image_0,
         .instance = .{ .initial_args = bytes },
@@ -273,9 +273,9 @@ fn resumeResult(
     const bytes = try allocator.alloc(u8, length);
     defer allocator.free(bytes);
     _ = try data.invocation.encode(data.invocation.Result, allocator, bound, bytes);
-    const invocation_image_1 = try allocator.alloc(u8, try boundary.data_v2.program_image.encodedLength(program));
+    const invocation_image_1 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(program));
     defer allocator.free(invocation_image_1);
-    _ = try boundary.data_v2.program_image.encode(allocator, program, invocation_image_1);
+    _ = try boundary.data.program_image.encode(allocator, program, invocation_image_1);
     return world.invocation.invoke(allocator, .{
         .image = invocation_image_1,
         .instance = .{ .state = parked.record.requested.state.? },
@@ -311,9 +311,9 @@ test "model responder derives held offers and preserves the complete semantic re
         const value: Input = .{ .request = template(&forged, single), .offered = offered };
         const bytes = try contracts.encodeOwned(Input, allocator, value);
         defer allocator.free(bytes);
-        const invocation_image_2 = try allocator.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+        const invocation_image_2 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
         defer allocator.free(invocation_image_2);
-        _ = try boundary.data_v2.program_image.encode(allocator, compiled.program, invocation_image_2);
+        _ = try boundary.data.program_image.encode(allocator, compiled.program, invocation_image_2);
         var parked = try world.invocation.invoke(allocator, .{
             .image = invocation_image_2,
             .instance = .{ .initial_args = bytes },
@@ -518,9 +518,9 @@ test "two scoped model calls retain separate offered sets and post answer contin
     };
     const bytes = try contracts.encodeOwned(PairInput, allocator, input);
     defer allocator.free(bytes);
-    const invocation_image_3 = try allocator.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+    const invocation_image_3 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer allocator.free(invocation_image_3);
-    _ = try boundary.data_v2.program_image.encode(allocator, compiled.program, invocation_image_3);
+    _ = try boundary.data.program_image.encode(allocator, compiled.program, invocation_image_3);
     var first = try world.invocation.invoke(allocator, .{
         .image = invocation_image_3,
         .instance = .{ .initial_args = bytes },
@@ -609,9 +609,9 @@ test "model responder executes indexes 31 32 and 63 while an unoffered declarati
         .offered = offered,
     });
     defer allocator.free(bytes);
-    const invocation_image_4 = try allocator.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+    const invocation_image_4 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer allocator.free(invocation_image_4);
-    _ = try boundary.data_v2.program_image.encode(allocator, compiled.program, invocation_image_4);
+    _ = try boundary.data.program_image.encode(allocator, compiled.program, invocation_image_4);
     var parked = try world.invocation.invoke(allocator, .{
         .image = invocation_image_4,
         .instance = .{ .initial_args = bytes },

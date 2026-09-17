@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
     });
     const boundary = b.createModule(.{
         .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ boundary_path, "src/v2/root.zig" }) },
-        .imports = &.{.{ .name = "boundary_data_v2", .module = data }},
+        .imports = &.{.{ .name = "boundary_data", .module = data }},
         .target = b.graph.host,
         .optimize = optimize,
     });

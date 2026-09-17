@@ -105,7 +105,7 @@ test "model effect is ordinary and a typed question requires no executable tool"
     try std.testing.expectEqual(request, builder.effects.items[@intCast(first)].payload);
     try std.testing.expectEqual(result, builder.effects.items[@intCast(first)].result);
     try std.testing.expect(builder.effects.items[@intCast(first)].external);
-    const facts = try boundary.data_v2.admission.schemas(std.testing.allocator, builder.schemas.items);
+    const facts = try boundary.data.admission.schemas(std.testing.allocator, builder.schemas.items);
     defer std.testing.allocator.free(facts.minimum);
     defer std.testing.allocator.free(facts.exportable);
     try std.testing.expectEqualStrings("answer", Question.allDeclarations().items[0].name.bytes);
@@ -116,11 +116,11 @@ test "single answer admission compiles as ordinary Boundary functions" {
     defer builder.deinit();
     const entry = try Fixture.interpreter(&builder);
     try std.testing.expectEqual(entry, try Fixture.interpreter(&builder));
-    var compiled = try boundary.source.construct(std.testing.allocator, builder.module(entry, try builder.scalar(void)));
+    var compiled = try boundary.program.compile(std.testing.allocator, builder.module(entry, try builder.scalar(void)));
     defer compiled.deinit();
     try std.testing.expect(compiled.program.functions.len > 1);
     const all = try Fixture.interpretAll(&builder);
-    var compiled_all = try boundary.source.construct(std.testing.allocator, builder.module(all, try builder.scalar(void)));
+    var compiled_all = try boundary.program.compile(std.testing.allocator, builder.module(all, try builder.scalar(void)));
     defer compiled_all.deinit();
 }
 

@@ -39,14 +39,14 @@ test "minimal Agent facade is the same canonical image as direct Boundary author
     });
     var builder = boundary.computation.Builder.init(std.testing.allocator);
     defer builder.deinit();
-    var direct = try boundary.source.construct(std.testing.allocator, try Direct.emit(&builder));
+    var direct = try boundary.program.compile(std.testing.allocator, try Direct.emit(&builder));
     defer direct.deinit();
     var facade = try agent.compile(std.testing.allocator, System);
     defer facade.deinit();
     const allocator = std.testing.allocator;
-    const a = try allocator.alloc(u8, try boundary.data_v2.program_image.encodedLength(direct.program));
+    const a = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(direct.program));
     defer allocator.free(a);
-    const b = try allocator.alloc(u8, try boundary.data_v2.program_image.encodedLength(facade.program));
+    const b = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(facade.program));
     defer allocator.free(b);
     try std.testing.expectEqualSlices(u8, try direct.encode(allocator, a), try facade.encode(allocator, b));
 }

@@ -390,7 +390,7 @@ pub fn main(init: std.process.Init) !void {
         inline for (comptime std.meta.tags(Mode)) |candidate| if (mode == candidate) {
             var compiled = try agent.compile(init.gpa, System(candidate));
             defer compiled.deinit();
-            const bytes = try init.gpa.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+            const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
             defer init.gpa.free(bytes);
             try out.interface.writeAll(try compiled.encode(init.gpa, bytes));
         };

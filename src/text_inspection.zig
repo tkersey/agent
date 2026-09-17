@@ -2,7 +2,7 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const source = boundary.source;
-const data = boundary.data_v2;
+const data = boundary.data;
 const contracts = @import("agent_contracts");
 const Id = source.Id;
 pub const chunk_bytes = 16;

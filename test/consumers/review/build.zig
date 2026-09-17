@@ -2,9 +2,9 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
-    const boundary_path = b.option([]const u8, "boundary-v2-source", "Immutable Boundary source");
+    const boundary_path = b.option([]const u8, "boundary-source", "Immutable Boundary source");
     const dependency = if (boundary_path) |immutable_source|
-        b.dependency("agent", .{ .target = b.graph.host, .optimize = optimize, .@"boundary-v2-source" = immutable_source })
+        b.dependency("agent", .{ .target = b.graph.host, .optimize = optimize, .@"boundary-source" = immutable_source })
     else
         b.dependency("agent", .{ .target = b.graph.host, .optimize = optimize });
     const root = b.createModule(.{

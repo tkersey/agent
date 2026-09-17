@@ -3,7 +3,7 @@ const agent = @import("agent");
 const boundary = @import("boundary");
 const world = @import("world");
 const source = boundary.computation;
-const data = boundary.data_v2;
+const data = boundary.data;
 const Id = source.Id;
 
 fn fixture(c: agent.Context) !agent.observation.Definition {
@@ -67,11 +67,11 @@ fn boundReply(a: std.mem.Allocator, request_bytes: []const u8, answer: []const u
 fn execute(module: source.Module, registry: *agent.admission.Registry, expected: []const u8) !usize {
     const a = std.testing.allocator;
     try agent.admission.verify(a, module, registry);
-    var compiled = try boundary.source.construct(a, module);
+    var compiled = try boundary.program.compile(a, module);
     defer compiled.deinit();
-    const invocation_image_0 = try a.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+    const invocation_image_0 = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer a.free(invocation_image_0);
-    _ = try boundary.data_v2.program_image.encode(a, compiled.program, invocation_image_0);
+    _ = try boundary.data.program_image.encode(a, compiled.program, invocation_image_0);
     var result = try world.invocation.invoke(a, .{
         .image = invocation_image_0,
         .instance = .{ .initial_args = &.{} },
@@ -87,9 +87,9 @@ fn execute(module: source.Module, registry: *agent.admission.Registry, expected:
         try std.testing.expectEqualStrings("consumer.document.read", request.binding.semantic_identity);
         const reply = try boundReply(a, result.record.requested.request, &.{ 42, 0, 0, 0, 0, 0, 0, 0 });
         defer a.free(reply);
-        const invocation_image_1 = try a.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+        const invocation_image_1 = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
         defer a.free(invocation_image_1);
-        _ = try boundary.data_v2.program_image.encode(a, compiled.program, invocation_image_1);
+        _ = try boundary.data.program_image.encode(a, compiled.program, invocation_image_1);
         const next = try world.invocation.invoke(a, .{
             .image = invocation_image_1,
             .instance = .{ .state = result.record.requested.state.? },
@@ -182,7 +182,7 @@ test "application code cannot mint a live resource with raw source construction"
     try b.define(entry, try agent.observation.consumeEvidence(c, d, entry, forged));
     const module = b.module(entry, try b.scalar(void));
     try agent.admission.verify(std.testing.allocator, module, &registry);
-    try std.testing.expectError(error.InvalidOwnership, boundary.source.construct(std.testing.allocator, module));
+    try std.testing.expectError(error.InvalidOwnership, boundary.program.compile(std.testing.allocator, module));
 }
 
 test "authored simulation cannot intercept the raw live read to mint evidence" {

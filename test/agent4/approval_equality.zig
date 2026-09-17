@@ -4,12 +4,12 @@ const equality = @import("equality");
 const world = @import("world");
 const Id = boundary.computation.Id;
 
-fn observe(program: boundary.data_v2.activation.Program, left: []const u8, right: []const u8, expected: bool) !void {
+fn observe(program: boundary.data.activation.Program, left: []const u8, right: []const u8, expected: bool) !void {
     const args = try std.mem.concat(std.testing.allocator, u8, &.{ left, right });
     defer std.testing.allocator.free(args);
-    const storage = try std.testing.allocator.alloc(u8, try boundary.data_v2.program_image.encodedLength(program));
+    const storage = try std.testing.allocator.alloc(u8, try boundary.data.program_image.encodedLength(program));
     defer std.testing.allocator.free(storage);
-    const image = try boundary.data_v2.program_image.encode(std.testing.allocator, program, storage);
+    const image = try boundary.data.program_image.encode(std.testing.allocator, program, storage);
     var outcome = try world.invocation.invoke(std.testing.allocator, .{ .image = image, .instance = .{ .initial_args = args } });
     defer outcome.deinit();
     try std.testing.expect(outcome.record == .completed);
@@ -19,7 +19,7 @@ fn observe(program: boundary.data_v2.activation.Program, left: []const u8, right
 fn check(b: *boundary.computation.Builder, schema: Id, left: []const u8, right: []const u8) !void {
     const failure = try b.constant(void, {});
     const function = try equality.define(b, schema, failure);
-    var compiled = try boundary.source.construct(std.testing.allocator, b.module(function, try b.scalar(void)));
+    var compiled = try boundary.program.compile(std.testing.allocator, b.module(function, try b.scalar(void)));
     defer compiled.deinit();
     try observe(compiled.program, left, left, true);
     try observe(compiled.program, right, right, true);

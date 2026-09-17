@@ -41,7 +41,7 @@ pub const E = struct {
     pub fn cond(e: E, condition: Id, yes: Id, no: Id) !Id {
         return e.b().term(.{ .conditional = .{ .condition = condition, .when_true = yes, .when_false = no } });
     }
-    pub fn arithmetic(e: E, op: boundary.data_v2.program.Opcode, a: Id, z: Id) !Id {
+    pub fn arithmetic(e: E, op: boundary.data.program.Opcode, a: Id, z: Id) !Id {
         return e.b().value(.{ .schema = try e.schema(u64), .expression = .{ .primitive = .{
             .opcode = op,
             .operands = &.{ a, z },

@@ -11,13 +11,13 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("../../.agent4/inputs/boundary/src/v2/root.zig"),
         .target = b.graph.host,
         .optimize = optimize,
-        .imports = &.{.{ .name = "boundary_data_v2", .module = data }},
+        .imports = &.{.{ .name = "boundary_data", .module = data }},
     });
     const contracts = b.createModule(.{
         .root_source_file = b.path("../../src/contracts.zig"),
         .target = b.graph.host,
         .optimize = optimize,
-        .imports = &.{.{ .name = "boundary_data_v2", .module = data }},
+        .imports = &.{.{ .name = "boundary_data", .module = data }},
     });
     const agent = b.createModule(.{
         .root_source_file = b.path("../../src/agent4.zig"),
@@ -52,7 +52,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("../../.agent4/inputs/world/src/root.zig"),
             .target = b.graph.host,
             .optimize = optimize,
-            .imports = &.{.{ .name = "boundary_data_v2", .module = data }},
+            .imports = &.{.{ .name = "boundary_data", .module = data }},
         });
         const native = b.createModule(.{
             .root_source_file = b.path("approval_equality.zig"),

@@ -181,7 +181,7 @@ test "ReAct constructs shared ordinary source with authored computation argument
         try b.lambda(execute, spec.execute),
         try b.lambda(fold, spec.fold),
     ));
-    var compiled = try boundary.source.construct(std.testing.allocator, b.module(entry, integer));
+    var compiled = try boundary.program.compile(std.testing.allocator, b.module(entry, integer));
     defer compiled.deinit();
 }
 

@@ -16,7 +16,7 @@ const Graph = struct {
             .imports = &.{
                 .{ .name = "agent", .module = g.agent },
                 .{ .name = "boundary", .module = g.boundary },
-                .{ .name = "boundary_data_v2", .module = g.data },
+                .{ .name = "boundary_data", .module = g.data },
                 .{ .name = "agent_contracts", .module = g.contracts },
                 .{ .name = "contracts", .module = g.contracts },
             },
@@ -45,37 +45,37 @@ const Graph = struct {
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
-    const source = b.option([]const u8, "boundary-v2-source", "Authenticated immutable Boundary source copy");
+    const source = b.option([]const u8, "boundary-source", "Authenticated immutable Boundary source copy");
     const runtime = b.option([]const u8, "world-runtime", "Authenticated immutable World runtime directory");
     const browser_tools_path = b.option([]const u8, "browser-tools", "Directory containing the locked Playwright browser tools");
     const measure_economy = b.option(bool, "measure-economy", "Collect timings on an operator-confirmed idle host") orelse false;
     const world_source = b.option([]const u8, "world-source", "Immutable World source for native agreement") orelse b.pathFromRoot(".agent4/inputs/world");
     const world_archive = b.option([]const u8, "world-archive", "Authenticated immutable World source archive") orelse
-        b.pathJoin(&.{ std.fs.path.dirname(world_source) orelse ".", "world-ff1ffed.tar.gz" });
+        b.pathJoin(&.{ std.fs.path.dirname(world_source) orelse ".", "world-f36994b.tar.gz" });
     const data = if (source) |root| b.createModule(.{
         .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ root, "src/v2/data/root.zig" }) },
         .target = target,
         .optimize = optimize,
-    }) else b.dependency("boundary", .{ .target = target, .optimize = optimize }).module("boundary_data_v2");
+    }) else b.dependency("boundary", .{ .target = target, .optimize = optimize }).module("boundary_data");
     const boundary = if (source) |root| b.createModule(.{
         .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ root, "src/v2/root.zig" }) },
         .target = target,
         .optimize = optimize,
-        .imports = &.{.{ .name = "boundary_data_v2", .module = data }},
+        .imports = &.{.{ .name = "boundary_data", .module = data }},
     }) else b.dependency("boundary", .{ .target = target, .optimize = optimize }).module("boundary");
     b.modules.put(b.allocator, b.dupe("boundary"), boundary) catch @panic("out of memory");
-    b.modules.put(b.allocator, b.dupe("boundary_data_v2"), data) catch @panic("out of memory");
+    b.modules.put(b.allocator, b.dupe("boundary_data"), data) catch @panic("out of memory");
     const contracts = b.addModule("agent_contracts", .{
         .root_source_file = b.path("src/contracts.zig"),
         .target = target,
         .optimize = optimize,
-        .imports = &.{.{ .name = "boundary_data_v2", .module = data }},
+        .imports = &.{.{ .name = "boundary_data", .module = data }},
     });
     const agent = b.addModule("agent", .{
         .root_source_file = b.path("src/agent4.zig"),
         .target = target,
         .optimize = optimize,
-        .imports = &.{ .{ .name = "boundary", .module = boundary }, .{ .name = "boundary_data_v2", .module = data }, .{ .name = "agent_contracts", .module = contracts } },
+        .imports = &.{ .{ .name = "boundary", .module = boundary }, .{ .name = "boundary_data", .module = data }, .{ .name = "agent_contracts", .module = contracts } },
     });
     const source_guard = b.addSystemCommand(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--authoring-only" });
     addBoundary(b, source_guard, source, target, optimize);
@@ -223,7 +223,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ world_source, "src/root.zig" }) },
             .target = b.graph.host,
             .optimize = optimize,
-            .imports = &.{.{ .name = "boundary_data_v2", .module = data }},
+            .imports = &.{.{ .name = "boundary_data", .module = data }},
         });
         const runtime_guard = b.addSystemCommand(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--world-runtime", runtime_path, "--world-source", world_source });
         runtime_guard.addArgs(&.{ "--world-archive", world_archive });
@@ -273,7 +273,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("test/agent4/native.zig"),
             .target = b.graph.host,
             .optimize = optimize,
-            .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data_v2", .module = data } },
+            .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data", .module = data } },
         });
         const native_exe = native_graph.emitter("agent4-native", native_module);
         const inquiry_app_run = b.addSystemCommand(&.{ "node", "test/agent4/inquiry_application_runtime.mjs", runtime_path, b.getInstallPath(.prefix, "agent4/inquiry") });

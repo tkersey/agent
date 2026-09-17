@@ -2,7 +2,7 @@ const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
 const source = boundary.source;
-const data = boundary.data_v2;
+const data = boundary.data;
 const a = std.testing.allocator;
 
 fn object(hidden: bool) ![]u8 {

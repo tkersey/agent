@@ -274,7 +274,7 @@ test "three protected futures compile under unchanged Boundary ownership" {
     for ([_]Mode{ .owned, .composition, .followup }) |mode| {
         var b = Builder.init(std.testing.allocator);
         defer b.deinit();
-        var compiled = try boundary.source.construct(std.testing.allocator, try build(&b, mode));
+        var compiled = try boundary.program.compile(std.testing.allocator, try build(&b, mode));
         defer compiled.deinit();
         try std.testing.expect(compiled.program.handlers.len > 0);
     }
@@ -285,7 +285,7 @@ test "inquiry custody rejects double resume, double disposal and queue duplicati
         var b = Builder.init(std.testing.allocator);
         defer b.deinit();
         const expected = if (mode == .illicit_clone) error.InvalidOwnership else error.UnavailableSlot;
-        try std.testing.expectError(expected, boundary.source.construct(std.testing.allocator, try build(&b, mode)));
+        try std.testing.expectError(expected, boundary.program.compile(std.testing.allocator, try build(&b, mode)));
     }
 }
 
@@ -297,9 +297,9 @@ pub fn main(init: std.process.Init) !void {
     if (args.next() != null) return error.UnknownProbe;
     var b = Builder.init(init.gpa);
     defer b.deinit();
-    var compiled = try boundary.source.construct(init.gpa, try build(&b, mode));
+    var compiled = try boundary.program.compile(init.gpa, try build(&b, mode));
     defer compiled.deinit();
-    const bytes = try init.gpa.alloc(u8, try boundary.data_v2.program_image.encodedLength(compiled.program));
+    const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(bytes);
     _ = try compiled.encode(init.gpa, bytes);
     var buffer: [4096]u8 = undefined;

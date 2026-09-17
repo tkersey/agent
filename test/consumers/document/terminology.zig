@@ -276,8 +276,8 @@ const Helpers = struct {
     fn invalid(h: Helpers, schema: Id) !Id {
         return h.variant(schema, try h.b.constant(void, {}), 1);
     }
-    fn fallible(h: Helpers, schema: Id, opcode: boundary.data_v2.program.Opcode, operands: []const Id, immediate: Id, faults: []const boundary.data_v2.program.Fault) !Id {
-        const Failure = boundary.data_v2.program.InstructionFailure;
+    fn fallible(h: Helpers, schema: Id, opcode: boundary.data.program.Opcode, operands: []const Id, immediate: Id, faults: []const boundary.data.program.Fault) !Id {
+        const Failure = boundary.data.program.InstructionFailure;
         const failures = try h.b.allocator().alloc(Failure, faults.len);
         const failure = try h.b.failureLiteral(try h.b.constant(void, {}));
         for (failures, faults) |*edge, kind| edge.* = .{ .kind = kind, .value = failure };

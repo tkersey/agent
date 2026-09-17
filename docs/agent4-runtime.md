@@ -1,8 +1,8 @@
 # Agent 4 runtime and portable use archive
 
 Agent authoring emits BPI3 using Boundary `3.0.0-dev.0` at
-`58bf6fb133e7d5bba1210c6ad64cd59f51755620`. The candidate integration lock selects
-World `6.0.0-dev.0` at `3f61800bfee16c37a20995eb6d0179217568acd0` and its ABI 3
+`d8edcf14d23fcd3664d8a868595150518cd40e51`. The candidate integration lock selects
+World `6.0.0-dev.0` at `6d7abe20412b0da3317afacc6e52952231b4fe4b` and its ABI 3
 runtime. The public authoring surface is `boundary.program`, with `boundary.data`
 and the `boundary_data` Zig module. The normal bridge/runner, native semantics, inquiry CLI, full application
 integration and extracted use-archive checks pass. The compiled text-tool browser/file/browser witness also passes; performance

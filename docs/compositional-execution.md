@@ -6,11 +6,11 @@ admission still runs before Boundary admission. Diagnostics and native phase
 observers remain supported; observers do not enter portable images or execution.
 
 The normal Boundary dependency is pinned to
-`58bf6fb133e7d5bba1210c6ad64cd59f51755620`. The downloaded archive's recomputed Git
+`d8edcf14d23fcd3664d8a868595150518cd40e51`. The downloaded archive's recomputed Git
 tree matches GitHub's commit API. Source, archive, Zig-managed package and ordinary
 extracted-package inventories are independently recorded in the existing lock.
 The selected versions are Boundary 3.0.0-dev.0 and World 6.0.0-dev.0. World is
-pinned to `3f61800bfee16c37a20995eb6d0179217568acd0`; its complete runtime
+pinned to `6d7abe20412b0da3317afacc6e52952231b4fe4b`; its complete runtime
 inventory and default kernel are authenticated by the same lock. This is
 candidate integration, not a published release.
 
@@ -18,9 +18,10 @@ The current storage and analysis-set pair passes authoring, native integration, 
 browser transfer and functional economy checks: 162 Zig tests and the 35-test
 JavaScript authoring suite. The Node integration owner separately passes all 83
 tests and its dialogue, multi, document, consequence and independent-engine runs.
-The authenticated default kernel is 459,416 bytes with SHA-256
-`9e9b789ddb72c67d728de2eabedb74a22f3042a9399545110e517fd0a29de63a`.
-Economy timing remains unmeasured; these checks establish behavior on this pair.
+The authenticated default kernel is 459,817 bytes with SHA-256
+`d76bfe2c7949903f53e3d5b2b6b6d229887422483d383524d655f087b8609931`.
+The aggregate establishes behavior. Matched document timings are reported below;
+other performance lanes remain open.
 
 `check-agent4` passed all 159 build steps using the normal dependency pin,
 including 112 Zig tests,
@@ -145,11 +146,11 @@ universal elimination.
 
 ## Current dependency qualification
 
-The normal lock now authenticates Boundary `58bf6fb` and World `3f61800`.
+The normal lock now authenticates Boundary `d8edcf1` and World `6d7abe2`.
 This pair includes exact-sized envelope ownership, Store-owned argument and
 terminal storage, rollback-safe compaction, and canonical word analysis sets. Downloaded source trees match GitHub's commit API; Zig-managed and extracted
 Boundary package profiles are both checked. Fresh isolated setup rebuilt and
-authenticated the 459,416-byte generic kernel from those exact sources.
+authenticated the 459,817-byte generic kernel from those exact sources.
 
 Agent's policy walker no longer branches on the removed source `direct` flag:
 every source clause has its resumption checked. This retains the previous
@@ -161,7 +162,8 @@ qualification passes 169 build steps and 50 Zig tests, the 83-test Node suite,
 package execution. Dependency post-verification passes. No paid model calls or
 real application data are used.
 
-Timing remains unmeasured. Remaining graph/helper and historical consumer cleanup,
+Document timing is reported below; the other performance lanes remain open.
+Remaining graph/helper and historical consumer cleanup,
 the complete performance matrix and serial review closeout are still required.
 The linked PRs remain drafts; no merge, promotion or release is authorized.
 
@@ -174,3 +176,35 @@ tests retain the applicable safety obligations. Published artifacts and Git
 history are unchanged; historical tooling can be reconstructed from
 `1f3297b8cd7eeb7638bd1bb2a81c9ba609e2e311`. Performance observations and the
 recorded adequacy obstruction remain intact.
+
+## Measured document-clarification comparison
+
+A separate benchmark now compares the actual document fixture at Agent
+`d2ea7e1` against the frozen `1f3297b` baseline, including both normal BPI2
+and identity-verified BPC1 images. The existing four-case economy policy and
+all assertions remain; only clocks are added. Each format runs in three rotating
+processes in each of two windows. Fresh kernel calls and whole-scenario time
+are reported separately, with fixture-only files and prescribed provider/person
+inputs. No paid model calls occur. Semantic traces, approvals, effect counts,
+result/memory and final file bytes match across formats.
+
+The published-pair consequence-sensitive cases are approximately level with
+BPC1. Clarify-first regresses: common-case cumulative fresh calls take
+138.2/139.0 ms versus BPC1's 108.5/109.4 ms; divergent cases take 138.5/137.5 ms
+versus 111.1/111.8 ms. Whole-scenario timings show the same direction. This is
+CEX-d6699e0faf41cb3fe5574899, not a performance win. Native replays of selected
+commands match captured WASM output bytes exactly and show faster value-heavy
+steps alongside slower quiet/terminal steps and higher working allocation.
+Those selected steps do not establish complete-conversation performance.
+
+Use `node tools/agent4/benchmark-clarification.mjs AGENT_SOURCE WORLD_RUNTIME IMAGE NEW_OUTPUT`
+with immutable inputs. The selected Agent source authenticates the World runtime
+against its own lock. Add `--capture` to write native-replay commands and expected
+outcomes; capture timings are explicitly unqualified because they include I/O.
+The output must be outside the inputs, including through directory aliases.
+
+[Raw observations and semantic expectations](measurements/clarification-performance.json)
+retain the matched source/kernel/image identities, all windows and selected
+native replays. A later local Boundary buffer-ownership candidate reduces
+native replay memory, but its public-host Agent timings remain unmeasured.
+Inquiry, repeated inquiry, ReAct and the rest of the required matrix remain open.

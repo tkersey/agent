@@ -15,7 +15,7 @@ inventory and default kernel are authenticated by the same lock. This is
 candidate integration, not a published release.
 
 `check-agent4` passed all 159 build steps using the normal dependency pin,
-including 110 Zig tests,
+including 112 Zig tests,
 35 JavaScript model/value tests, negative authoring cases, emitted application
 images and source-independent author installation. Both the source-override and
 normal package installation paths retain exact authentication. Use
@@ -39,7 +39,7 @@ and results 92, [(1,36),(3,56)], [(1,54),(3,74)].
 The inquiry CLI and application scripts now use current invocation controls,
 async request/reply codecs and tagged cancellation reasons. The stale-result CLI
 test checks that real ERS3/PKO3 files exist and that the guest reports InvalidResult;
-an I/O failure cannot satisfy the test. `check-agent4-integration` now passes all 157 build steps, including 47 native
+an I/O failure cannot satisfy the test. `check-agent4-integration` now passes all 160 build steps, including 47 native
 tests, 83 Node tests, the repair corpus, coalescing ablation/ReAct comparison,
 repeated tasks and the actual extracted-archive command/application checks.
 
@@ -50,7 +50,7 @@ allowances with the prior growable runtime; it is not a claim of reduced memory
 use. Native peak/copy measurements and all scripted-policy assertions remain.
 
 Still required: finish benchmark-harness migration and measured acceptance;
-complete general component contracts and the three-component Agent composition;
+complete general component contracts and imported-borrow requirements;
 preserve the complete approval/inquiry regressions;
 finish consumer package extraction, performance comparisons, legacy retirement and
 serial review closeout. The coordinated draft PRs do not claim full completion or
@@ -66,10 +66,34 @@ use archive.
 
 The tool object is 1,485 bytes; the standalone and Agent images are 1,483 and
 4,224 bytes. These are fixture sizes, not full performance acceptance. The
-separate three-component Agent composition and general imported-borrow contracts
-remain open, alongside full performance acceptance, legacy retirement and serial
+general imported-borrow contracts remain open, alongside full performance acceptance, legacy retirement and serial
 review closeout. The selected compiler/runtime pair now includes direct immediate
 calls and independently admitted total branching tail clauses. Their native,
 checkpoint/cancellation, Node, Wasmtime and browser checks pass, as does this
 Agent integration; the local work-count reductions are not full Agent latency
 or peak-memory acceptance.
+
+
+The three-component reuse witness now also runs through Agent's normal compiled
+local-tool path. The same 142/366/603-byte callable, private-state and
+owned-suspension objects produce the two standalone Programs (839/875 bytes) and
+two Agent callers (920 bytes each). The private counter yields 41 and 42; the
+suspended package retains cleanup with payload 83. Standalone results are 83/166;
+Agent preserves its input 100 and returns 183/184 for the two caller variants.
+Cancellation after the explicit yield runs cleanup once.
+
+`check-component-tools` emits each library object once, transports only the object
+files and a link/client executable, and links all four clients from those same
+bytes. Native phase observations record zero source checks/lowerings for standalone
+links and exactly one for each Agent caller. Rebuilding the second Agent caller
+neither invokes a component emitter nor changes any object digest. The small
+unit-argument adapter is first-order data, independently admitted as BMO1; it
+preserves the complete residual row. The ordinary full integration target includes
+this check. Supply the authenticated `world-runtime` and `world-source` build
+options, as for the other current runtime checks.
+
+Agent now accepts explicitly bound nominal internal effects in a compiled tool's
+interface, in addition to read/simulation I/O. Internal/external status and Agent
+role must agree at the binding. All external declarations remain explicit and
+opaque imports still reject in protected speculation. This extends composition;
+it does not establish purity or general protected-component admission.

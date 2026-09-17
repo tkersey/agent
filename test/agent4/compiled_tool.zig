@@ -9,11 +9,14 @@ fn object(hidden: bool) ![]u8 {
     return objectWith(hidden, false);
 }
 fn objectWith(hidden: bool, multi: bool) ![]u8 {
+    return objectProfile(hidden, multi, false);
+}
+fn objectProfile(hidden: bool, multi: bool, internal: bool) ![]u8 {
     var b = source.Builder.init(a);
     defer b.deinit();
     const unit = try b.scalar(void);
     const integer = try b.scalar(u64);
-    const read = try b.effect(.{ .identity = "fixture/compiled-read", .payload = integer, .result = integer, .control_use = if (multi) .multi else .linear });
+    const read = try b.effect(.{ .identity = "fixture/compiled-read", .payload = integer, .result = integer, .control_use = if (multi) .multi else .linear, .external = !internal });
     if (multi) _ = try b.schema(.{ .internal = .{ .resumption = .{
         .effect = read,
         .input = integer,
@@ -24,7 +27,8 @@ fn objectWith(hidden: bool, multi: bool) ![]u8 {
     } } });
     if (hidden) _ = try b.effect(.{ .identity = "fixture/hidden", .payload = unit, .result = unit });
     const main = try b.declare(&.{integer}, integer, &.{read}, &.{});
-    try b.define(main, try b.term(.{ .perform = .{ .effect = read, .payload = try b.reference(b.parameter(main, 0)) } }));
+    const value = try b.reference(b.parameter(main, 0));
+    try b.define(main, if (internal) try b.pure(value) else try b.term(.{ .perform = .{ .effect = read, .payload = value } }));
     var compiled = try source.component.compile(a, b.module(main, unit), .{
         .imports = &.{.{ .name = "read", .reference = .{ .kind = .effect, .id = read } }},
         .exports = &.{.{ .name = "inspect", .reference = .{ .kind = .function, .id = main } }},
@@ -40,9 +44,15 @@ const Tool = struct {
     var bytes: []u8 = &.{};
     var role: agent.admission.Role = .read;
     var rename = false;
+    var internal = false;
+    var internal_role: agent.admission.Role = .internal;
     pub fn declare(c: agent.Context) !agent.tools.Descriptor {
         const integer = try c.schema(u64);
-        const read = try c.external(if (rename) "fixture/other" else "fixture/compiled-read", integer, integer, role);
+        const read = if (internal) blk: {
+            const effect = try c.builder.effect(.{ .identity = "fixture/compiled-read", .payload = integer, .result = integer, .external = false });
+            try c.registry.classify(effect, internal_role);
+            break :blk effect;
+        } else try c.external(if (rename) "fixture/other" else "fixture/compiled-read", integer, integer, role);
         return agent.tools.declareCompiled(c, .{ .instance = "read-tool", .object = bytes, .entry = "inspect", .identity = "fixture/local-inspect", .payload = integer, .result = integer, .effects = &.{.{ .symbol = "read", .effect = read }}, .model_offered = true, .name = "inspect", .description = "Inspect a number using the compiled tool" });
     }
 };
@@ -61,6 +71,24 @@ const Application = struct {
     }
 };
 const System = agent.system(.{ .InitialArgs = u64, .Result = u64, .Failure = void, .tools = .{Tool}, .application = Application });
+
+test "compiled internal requirements retain nominal and role bindings" {
+    Tool.bytes = try objectProfile(false, false, true);
+    defer a.free(Tool.bytes);
+    try std.testing.expectError(error.InvalidCompiledTool, agent.compile(a, System));
+    Tool.internal = true;
+    defer Tool.internal = false;
+    var compiled = try agent.compile(a, System);
+    defer compiled.deinit();
+    try std.testing.expect(!compiled.program.effects[0].external);
+    Tool.internal_role = .read;
+    defer Tool.internal_role = .internal;
+    try std.testing.expectError(error.InvalidCompiledTool, agent.compile(a, System));
+    Tool.internal_role = .internal;
+    Application.speculate = true;
+    defer Application.speculate = false;
+    try std.testing.expectError(error.UnprovenComputationOrigin, agent.compile(a, System));
+}
 
 test "compiled local tool links owned object bytes through normal Agent compilation" {
     Tool.bytes = try object(false);
@@ -114,6 +142,14 @@ test "text inspection compiles into a source-independent owned component" {
 test "compiled read-tool admission rejects latent multi-shot control" {
     Tool.bytes = try objectWith(false, true);
     defer a.free(Tool.bytes);
+    try std.testing.expectError(error.InvalidCompiledTool, agent.compile(a, System));
+}
+
+test "an external compiled requirement cannot bind an internal declaration" {
+    Tool.bytes = try object(false);
+    defer a.free(Tool.bytes);
+    Tool.internal = true;
+    defer Tool.internal = false;
     try std.testing.expectError(error.InvalidCompiledTool, agent.compile(a, System));
 }
 

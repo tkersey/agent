@@ -74,6 +74,8 @@ test/agent4/callable_runtime.zig
 test/agent4/catalogs.zig
 test/agent4/clarification.zig
 test/agent4/compiled_tool.zig
+test/agent4/component_link.zig
+test/agent4/component_objects.zig
 test/agent4/decision_scopes.zig
 test/agent4/descriptor_contracts.zig
 test/agent4/dialogue_build.zig

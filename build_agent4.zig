@@ -214,6 +214,7 @@ pub fn build(b: *std.Build) void {
 
     const integration = b.step("check-agent4-integration", "Execute consumer proofs under the selected World");
     const compiled_tools_check = b.step("check-compiled-tools", "Execute one compiled text tool in standalone and Agent callers");
+    const components_check = b.step("check-component-tools", "Reuse three effectful objects in Agent and two standalone Programs");
     const browser_check = b.step("check-compiled-tool-browser", "Transfer the compiled Agent tool through real browser Workers and a file server");
     const native_checks = b.step("check-native", "Check native Agent semantics against the selected World");
     const economy = b.step("check-agent4-economy", "Measure direct/facade and retained-state economy");
@@ -236,6 +237,15 @@ pub fn build(b: *std.Build) void {
         text_check.step.dependOn(&runtime_guard.step);
         text_check.has_side_effects = true;
         compiled_tools_check.dependOn(&text_check.step);
+        const component_objects = g.emitter("agent4-component-objects", g.module("test/agent4/component_objects.zig"));
+        const component_link = g.emitter("agent4-component-link", g.module("test/agent4/component_link.zig"));
+        const component_check = b.addSystemCommand(&.{ "node", "test/agent4/component_runtime.mjs" });
+        component_check.addFileArg(component_objects.getEmittedBin());
+        component_check.addFileArg(component_link.getEmittedBin());
+        component_check.addArg(runtime_path);
+        component_check.step.dependOn(&runtime_guard.step);
+        component_check.has_side_effects = true;
+        components_check.dependOn(&component_check.step);
         if (browser_tools_path) |browser_tools| {
             const browser = b.addSystemCommand(&.{ "node", "test/agent4/text_browser.mjs" });
             browser.addFileArg(text_object.getEmittedBin());
@@ -248,6 +258,7 @@ pub fn build(b: *std.Build) void {
         } else browser_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
         runtime_work.dependOn(&text_check.step);
+        runtime_work.dependOn(&component_check.step);
         runtime_work.dependOn(native_checks);
         // The portable kernel/custody checks do not require this external OS
         // profile. Explicit repair-application checks still require execution.
@@ -372,6 +383,7 @@ pub fn build(b: *std.Build) void {
     } else {
         const missing = b.addFail("provide -Dworld-runtime=/absolute/authenticated/world-runtime");
         compiled_tools_check.dependOn(&missing.step);
+        components_check.dependOn(&missing.step);
         browser_check.dependOn(&missing.step);
         native_checks.dependOn(&missing.step);
         integration.dependOn(&missing.step);

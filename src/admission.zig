@@ -388,7 +388,8 @@ const Walker = struct {
             if (self.speculative != null) return error.UnprovenComputationOrigin;
             for (f.effects) |effect_id| {
                 const role = self.registry.roleOf(effect_id) orelse return error.EffectRoleMismatch;
-                if (role != .read and role != .simulation) return error.ProtectedEffectBypass;
+                if (role != .internal and role != .read and role != .simulation)
+                    return error.ProtectedEffectBypass;
             }
         } else try self.push(.term, f.body orelse return error.InvalidSource, id);
         if (self.speculative != null) {

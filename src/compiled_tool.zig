@@ -44,8 +44,8 @@ fn descriptor(spec: Specification, function: Id) Descriptor {
 
 /// Admit actual code, not an alleged purity summary. This import profile has
 /// portable input/output, no function imports, no multi-shot control, and only
-/// explicitly bound read/simulation effects. Opaque imports cannot enter Agent
-/// speculation; full closed Boundary admission still follows at final linking.
+/// explicitly bound read/simulation I/O and nominal internal effects. Opaque
+/// imports cannot enter speculation; closed Boundary admission follows at linking.
 pub fn declare(c: Context, spec: Specification) !Descriptor {
     if (spec.instance.len == 0 or !std.unicode.utf8ValidateSlice(spec.instance) or
         std.mem.eql(u8, spec.instance, wrapper_key) or
@@ -57,11 +57,12 @@ pub fn declare(c: Context, spec: Specification) !Descriptor {
     for (object.imports) |symbol| {
         if (symbol.reference.kind != .effect) return error.InvalidCompiledTool;
         const provided = try binding(spec.effects, symbol.name);
-        if (provided >= c.builder.effects.items.len or c.registry.roleOf(provided) != spec.role)
-            return error.InvalidCompiledTool;
+        if (provided >= c.builder.effects.items.len) return error.InvalidCompiledTool;
         const expected = object.program.effects[@intCast(symbol.reference.id)];
         const actual = c.builder.effects.items[@intCast(provided)];
-        if (!expected.external or !actual.external or !std.mem.eql(u8, expected.identity, actual.identity))
+        const role: admission.Role = if (expected.external) spec.role else .internal;
+        if (expected.external != actual.external or c.registry.roleOf(provided) != role or
+            !std.mem.eql(u8, expected.identity, actual.identity))
             return error.InvalidCompiledTool;
     }
     for (object.program.effects, 0..) |effect, id| {

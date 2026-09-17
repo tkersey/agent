@@ -23,8 +23,10 @@ and bindings. Final linking remains Boundary-owned and independently admits the
 complete Program; matching interface names or hashes do not bypass admission.
 
 This profile accepts a closed function group with portable single-argument input
-and result, effect-only imports, explicitly bound read/simulation operations, and
-no multi-shot resumption schemas. Every external operation in the object must be
+and result, effect-only imports, explicitly bound read/simulation operations,
+nominal internal requirements bound to nonexternal `.internal` declarations, and
+no multi-shot resumption schemas. Internal requirements remain in the interface;
+they are not treated as purity or silently removed. Every external operation in the object must be
 bound, including declarations outside the selected entry's immediate body.
 Bindings preserve semantic operation names and must have the declared Agent role.
 The final linker checks their complete schemas and function contracts.

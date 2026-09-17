@@ -33887,6 +33887,18 @@
         ]
       }
     ],
-    "verdict": "All seven whole-conversation cases improve versus BPC1 in both windows under this repeated-factory workload. Cold first-call costs and native interpreter regressions remain separate; this does not close the entire required matrix."
+    "verdict": "All seven whole-conversation cases improve versus BPC1 in both windows under this repeated-factory workload. Cold first-call costs and native interpreter regressions remain separate; this does not close the entire required matrix.",
+    "workReplay": {
+      "qualification": "Instrumented semantic qualification outside timed windows. Counts are WebAssembly API calls, not claims about internal engine code generation.",
+      "baseline": {
+        "compileCalls": 29,
+        "instantiationCalls": 29
+      },
+      "candidate": {
+        "compileCalls": 1,
+        "instantiationCalls": 29
+      },
+      "observations": "Both execute 29 fresh guest instances across the seven verified source cases; candidate avoids repeated compile API calls through the weak admitted-module entry."
+    }
   }
 }

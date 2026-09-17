@@ -6,11 +6,11 @@ admission still runs before Boundary admission. Diagnostics and native phase
 observers remain supported; observers do not enter portable images or execution.
 
 The normal Boundary dependency is pinned to
-`d8edcf14d23fcd3664d8a868595150518cd40e51`. The downloaded archive's recomputed Git
+`50df22c1ef83c2d84550e19ccabf807dfe2dedf5`. The downloaded archive's recomputed Git
 tree matches GitHub's commit API. Source, archive, Zig-managed package and ordinary
 extracted-package inventories are independently recorded in the existing lock.
 The selected versions are Boundary 3.0.0-dev.0 and World 6.0.0-dev.0. World is
-pinned to `9a045a1760c2071fa008e44fe608f6ee48402c6e`; its complete runtime
+pinned to `60660b28fd35c37f7dc8c6f72803f45537e49d90`; its complete runtime
 inventory and default kernel are authenticated by the same lock. This is
 candidate integration, not a published release.
 
@@ -18,8 +18,8 @@ The current storage and analysis-set pair passes authoring, native integration, 
 browser transfer and functional economy checks: 162 Zig tests and the 35-test
 JavaScript authoring suite. The Node integration owner separately passes all 83
 tests and its dialogue, multi, document, consequence and independent-engine runs.
-The authenticated default kernel is 459,817 bytes with SHA-256
-`d76bfe2c7949903f53e3d5b2b6b6d229887422483d383524d655f087b8609931`.
+The authenticated default kernel is 463,084 bytes with SHA-256
+`d793bb6891f60d9b43adcd4bbd745578626a3ecd110d55e635cb048b54b444bd`.
 The aggregate establishes behavior. Matched document timings are reported below;
 other performance lanes remain open.
 
@@ -270,3 +270,11 @@ items takes 1.54–1.55 ms versus 19.36–19.38 ms and allocates 1.11 MB versus
 42.82 MB. Tiny projections still lose latency, and some small sequence cases
 retain higher working peaks. Native control regressions, remaining matrix
 cases, producer/edit/link costs, cleanup and serial review remain required.
+
+## Solver-position dependency update
+
+The current normal pins select Boundary 50df22c1ef83c2d84550e19ccabf807dfe2dedf5 and World 60660b28fd35c37f7dc8c6f72803f45537e49d90. Fresh isolated setup authenticates both published source trees, package profiles and the rebuilt runtime. The solver records position facts during fixed-point visits and reduces canonical interner work while retaining final validation and distinct facts.
+
+Normal-pin authoring passes 159 steps / 112 Zig tests and 35 JavaScript tests. The full integration aggregate passes 169 steps / 50 Zig tests, the 83-test Node suite, 49 inquiry scenarios and compiled-tool Chromium/Firefox transfer. Post-run source/package/runtime authentication passes. The kernel is 463,084 bytes with SHA-256 d793bb6891f60d9b43adcd4bbd745578626a3ecd110d55e635cb048b54b444bd.
+
+Existing Agent performance windows remain tied to their documented earlier pair; functional requalification does not transfer those measurements to this pair. World retains the new native measurements and remaining control64 regression in docs/measurements/solver-facts.json. Full performance acceptance, remaining retirement and serial review closeout are still open.

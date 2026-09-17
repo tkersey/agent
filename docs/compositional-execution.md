@@ -163,3 +163,13 @@ real application data are used.
 Timing remains unmeasured. Remaining graph/helper and historical consumer cleanup,
 the complete performance matrix and serial review closeout are still required.
 The linked PRs remain drafts; no merge, promotion or release is authorized.
+
+The old repository-repair Process transcript producer, ABI 1 kernel client,
+acquisition, receipt validation and replay tools are removed. They supported one
+frozen BPI1 image and were not selected by the current build or package. Their
+exact-format compatibility requirement is retired; current dependency/archive
+authentication, stale-reply and State binding, fresh transfer and extracted-package
+tests retain the applicable safety obligations. Published artifacts and Git
+history are unchanged; historical tooling can be reconstructed from
+`1f3297b8cd7eeb7638bd1bb2a81c9ba609e2e311`. Performance observations and the
+recorded adequacy obstruction remain intact.

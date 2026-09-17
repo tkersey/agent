@@ -215,6 +215,11 @@ pub fn build(b: *std.Build) void {
     const integration = b.step("check-agent4-integration", "Execute consumer proofs under the selected World");
     const compiled_tools_check = b.step("check-compiled-tools", "Execute one compiled text tool in standalone and Agent callers");
     const components_check = b.step("check-component-tools", "Reuse three effectful objects in Agent and two standalone Programs");
+    const component_objects = g.emitter("agent4-component-objects", g.module("test/agent4/component_objects.zig"));
+    const component_link = g.emitter("agent4-component-link", g.module("test/agent4/component_link.zig"));
+    const component_tools = b.step("build-component-tools", "Build the independent component emitter and client linker without World");
+    component_tools.dependOn(&b.addInstallArtifact(component_objects, .{}).step);
+    component_tools.dependOn(&b.addInstallArtifact(component_link, .{}).step);
     const browser_check = b.step("check-compiled-tool-browser", "Transfer the compiled Agent tool through real browser Workers and a file server");
     const native_checks = b.step("check-native", "Check native Agent semantics against the selected World");
     const economy = b.step("check-agent4-economy", "Measure direct/facade and retained-state economy");
@@ -237,8 +242,6 @@ pub fn build(b: *std.Build) void {
         text_check.step.dependOn(&runtime_guard.step);
         text_check.has_side_effects = true;
         compiled_tools_check.dependOn(&text_check.step);
-        const component_objects = g.emitter("agent4-component-objects", g.module("test/agent4/component_objects.zig"));
-        const component_link = g.emitter("agent4-component-link", g.module("test/agent4/component_link.zig"));
         const component_check = b.addSystemCommand(&.{ "node", "test/agent4/component_runtime.mjs" });
         component_check.addFileArg(component_objects.getEmittedBin());
         component_check.addFileArg(component_link.getEmittedBin());

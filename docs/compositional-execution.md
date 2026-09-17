@@ -99,7 +99,7 @@ from those bytes. The private counter yields 41/42; cleanup carries 83; standalo
 results are 83/166 and Agent results are 183/184. Cancellation after yield runs
 cleanup once. Native phase observations record no source lowering during standalone
 links and one client lowering per Agent caller; unchanged object digests and emitter
-counts establish reuse. Elapsed client-edit/build costs still need measurement.
+counts establish reuse. Producer and client-edit costs are reported below.
 
 Nominal internal effects may be explicitly bound in a compiled tool interface.
 Internal/external status and Agent role must agree. External declarations remain
@@ -149,6 +149,49 @@ native replay commands/expected outcomes and labels timings unqualified due to I
 Output must be outside all input paths, including physical aliases. No paid model
 calls or real application data are required by these checks.
 
+## Producer and developer workflow
+
+`zig build build-component-tools -Doptimize=ReleaseSafe` builds the existing
+component emitter and client/link executable without a World installation. The
+normal Boundary authentication gate remains active. Runtime qualification still
+belongs to `check-component-tools` and the integration aggregate.
+
+The [producer/workflow measurements](measurements/producer-workflow.json) separate
+native compilation from already-built producer processes. Four matched observations
+per Boundary revision use empty Zig compilation caches, with alternating order;
+the OS filesystem cache is not claimed cold. The unchanged 64-handler images
+execute to 2080; a controlled source constant edit to 65 handlers executes to 2145.
+
+| Native build stage | Boundary 2.0.2 | Boundary 3 candidate |
+| --- | ---: | ---: |
+| Cold compiler build, median | 16.80 s | 15.66 s |
+| Warm no-change build, median | 157 ms | 155 ms |
+| Controlled producer-source edit, median | 11.48 s | 10.42 s |
+
+After two warmups, prebuilt producer medians across stages range from 3.45–4.55 ms
+for BPI2/BPC1 and 2.68–3.00 ms for BPI3. These process clocks include launch, source construction,
+checking/lowering, encoding and stdout. First post-build launches are retained
+separately (about 12–26 ms); they are not replaced by warm timings.
+
+Two component workflows build both Agent tools in 20.9/21.7 s. Warm no-change
+builds take 262/267 ms; a native client source edit takes 14.7/14.9 s while reusing
+the unchanged component emitter and all library objects. Already-built standalone
+links take about 2.5–2.6 ms with zero source checks/lowerings; Agent client invocations
+take about 2.9–3.1 ms with one client check/lowering. Object admission still runs.
+
+The existing `agent-next` configuration produces byte-identical output to the
+measured `+1` native client edit, using the already-built executable. That bounded
+configuration change avoids native recompilation; arbitrary native source edits
+do not. Changing the component's initial counter from 41 to 43 requires an
+11.7/11.8 s native emitter rebuild and a separately measured first emission. Only
+the state object is regenerated; the unchanged client executable links it in
+2.5–2.9 ms and produces the independently expected result and cleanup payload.
+The one-time component-owner emitter build is also recorded, rather than hidden.
+
+These observations establish this developer-workflow slice. They do not turn
+millisecond compiler execution into a claim about seconds of native compilation,
+or qualify the remaining runtime performance matrix.
+
 ## Retirement and remaining work
 
 The frozen BPI1 Process-transcript and Interpretation v1 producers/drivers,
@@ -161,7 +204,7 @@ and its minimal reproducer remain intact.
 
 Still required are the remaining historical consumer/helper retirements, the full
 matched workload matrix (including inquiry/repeated inquiry/ReAct), allocation/
-copy/retention corroboration where absent, cold/warm/client-edit/component/link
-costs, resolution of material primary-workload regressions, and serial review
+copy/retention corroboration where absent, resolution of material primary-workload
+regressions, and serial review
 closeout. The linked drafts must pass coordinated acceptance before any separately
 authorized landing in Boundary → World → Agent order.

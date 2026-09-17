@@ -208,3 +208,23 @@ retain the matched source/kernel/image identities, all windows and selected
 native replays. A later local Boundary buffer-ownership candidate reduces
 native replay memory, but its public-host Agent timings remain unmeasured.
 Inquiry, repeated inquiry, ReAct and the rest of the required matrix remain open.
+
+## Buffer-owner remeasurement
+
+The authenticated Boundary `d8edcf1` / World `6d7abe2` pair passed Agent's full
+authoring and integration suites. Repeating the same clarification benchmark
+on implementation `7b1bb20ded8119420269b7adcd5086f08a01178b` preserves all semantic checks.
+Consequence-sensitive fresh-call totals improve slightly; clarify-first remains
+slower than BPC1: common-case medians are 132.2/133.2 ms versus 108.2/108.7 ms,
+and divergent medians are 133.2/133.3 ms versus 110.5/110.5 ms. The regression is
+reduced but unresolved. These figures measure cumulative fresh calls, not an
+individual-request percentile; whole-scenario samples remain in the raw report.
+
+The [runtime companion matrix](measurements/runtime-source-matrix.json) adds
+generator, scheduler, queens DFS/BFS, shallow/reentrant handling and suspending
+cleanup, with independent source-oracle results and identical effect traces.
+Queens BFS takes 22.5/21.5 ms versus BPC1's 26.6/26.5 ms in the two windows.
+Other cases still regress or are inconclusive, and State sizes are larger.
+This does not discharge the complete performance objective: allocation/copy
+corroboration, remaining workloads, control regressions and serial reviews stay
+required. All paired observations, including unfavorable windows, are retained.

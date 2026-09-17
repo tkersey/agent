@@ -10,7 +10,7 @@ import { performance } from 'node:perf_hooks';
 import { isMain } from '../../runtime/cli.mjs';
 import { loadWorldRuntime } from '../../runtime/world.mjs';
 import { decodeSchema, decodeValue, encodeValue } from '../../runtime/values.mjs';
-import { assertDependenciesUnchanged, readRegular, sha256, snapshotDependencies } from './dependencies.mjs';
+import { assertDependenciesUnchanged, readRegular, sha256, snapshotDependencies, readDependencyLock } from './dependencies.mjs';
 
 const ROOT = resolve(import.meta.dirname, '../..');
 const DEFAULT_FIXTURES = join(ROOT, '.agent4/out/economy');
@@ -109,7 +109,7 @@ async function invoke(command, args, { cwd = ROOT, output, label, measure = fals
   return { stdout, stderr, ...(measure ? { elapsedMilliseconds: finished - started } : {}) };
 }
 async function inspectState(probe, output, name, state) {
-  const path = await save(output, `checkpoints/${name}.pst2`, state);
+  const path = await save(output, `checkpoints/${name}.pst3`, state);
   const result = await invoke(probe, ['inspect-state', path]);
   const graph = JSON.parse(result.stdout);
   assert.equal(graph.canonicalReachable, true, 'public snapshot inspector must establish canonical reachable graph');
@@ -175,8 +175,7 @@ async function measureEmission(options) {
       'authoringTotalNs', 'compilerTotalNs', 'imageEmissionNs'])
       assert.ok(Number.isSafeInteger(row[field]) && row[field] >= 0,
         `Measured ${row.name}.${field} must contain an actual exact observation`);
-    for (const field of ['source_copy', 'source_check', 'lowering', 'target_check',
-      'direct_optimization', 'canonicalization'])
+    for (const field of ['source_copy', 'source_check', 'lowering', 'target_check'])
       assert.ok(Number.isSafeInteger(row.compilerPhasesNs?.[field]) && row.compilerPhasesNs[field] >= 0,
         `Measured ${row.name}.compilerPhasesNs.${field} must be observed`);
   }
@@ -213,6 +212,38 @@ async function measureEmission(options) {
     facadeOverhead: metrics.facadeOverhead };
 }
 
+function invokeFresh(world, kernel, input, quantum = null, trace = null) {
+  const bytes = kernel.invoke(world.encodeInput({ ...input, quantum }));
+  if (trace) trace.push({ control: input.control ?? 'none', value: input.value, expected: bytes });
+  return { ...world.decodeOutcome(bytes), bytes };
+}
+
+function replayResident(world, kernel, image, initialArgs, trace) {
+  const prepared = kernel.prepare(image);
+  let session, terminal = false;
+  try { session = kernel.start(prepared, initialArgs); }
+  finally { kernel.releasePrepared(prepared); }
+  let checkpoints = 0;
+  try {
+    for (const [index, step] of trace.entries()) {
+      const bytes = kernel.drive(session, { control: step.control, value: step.value,
+        checkpoint: true });
+      const outcome = world.decodeOutcome(bytes);
+      terminal = ['completed', 'failed', 'cancelled'].includes(outcome.kind);
+      assert.deepEqual(bytes, step.expected, `resident/fresh checkpoint boundary ${index}`);
+      if (outcome.state) checkpoints++;
+    }
+    assert(terminal, 'resident replay must include the terminal boundary');
+    return { status: 'PASS', preparations: 1, drives: trace.length, checkpoints,
+      durability: 'checkpoint at every incomplete boundary, identical to fresh invocation',
+      relation: 'prescribed replies replayed without calling environmental handlers' };
+  } finally {
+    if (terminal) kernel.close(session);
+    else kernel.checkpoint(session, { transfer: true });
+    assert.equal(kernel.usage().workingLive, 0n, 'resident replay must release its working storage');
+  }
+}
+
 async function minimalFacade(world, kernel, fixtures) {
   const direct = await requiredFile(join(fixtures, 'direct.bpi3'));
   const facade = await requiredFile(join(fixtures, 'facade.bpi3'));
@@ -221,22 +252,24 @@ async function minimalFacade(world, kernel, fixtures) {
   for (const [name, image] of [['direct', direct], ['facade', facade]]) {
     const args = await requiredFile(join(fixtures, `${name}.args`));
     assert.equal(decodeValue(scalar('u32'), args), 7);
-    const parked = await kernel.run({ image, initialArgs: args });
-    requireOutcome(parked, 'Requested', name);
-    const request = world.decodeRequest(parked.request);
+    const trace = [];
+    const parked = invokeFresh(world, kernel, { image, initialArgs: args }, null, trace);
+    requireOutcome(parked, 'requested', name);
+    const request = await world.decodeRequest(parked.request);
     assert.equal(request.semanticIdentity, 'example.facade.read.v1');
     assert.equal(decodeValue(decodeSchema(request.payloadSchema), request.payload), 7);
     const reply = encodeValue(decodeSchema(request.resumeSchema), 9);
-    const completed = await kernel.run({ image, state: parked.state, result: world.encodeResult(parked.request, reply) });
-    requireOutcome(completed, 'Completed', name);
+    const completed = invokeFresh(world, kernel, { image, state: parked.state, control: 'reply', value: await world.encodeResult(parked.request, reply) }, null, trace);
+    requireOutcome(completed, 'completed', name);
     assert.equal(decodeValue(scalar('u32'), completed.value), 9);
     observations.push({ name, image: identity(image), initialArgs: identity(args),
-      requests: 1, stateBytes: parked.state.length, result: identity(completed.value) });
+      requests: 1, stateBytes: parked.state.length, result: identity(completed.value),
+      resident: replayResident(world, kernel, image, args, trace) });
   }
   return { status: 'PASS', relation: 'identical canonical BPI3 and independently prescribed effect/result', observations };
 }
 
-async function sharing(kernel, fixtures, sourceMetrics) {
+async function sharing(world, kernel, fixtures, sourceMetrics) {
   assert.ok(Array.isArray(sourceMetrics.sharing), 'source-metrics must list sharing witnesses');
   const observations = [];
   for (const count of [1, 8, 64]) {
@@ -250,25 +283,27 @@ async function sharing(kernel, fixtures, sourceMetrics) {
     assert.equal(row.handlerDefinitions, 1);
     assert.equal(row.imageBytes, image.length);
     assert.equal(row.imageSha256, sha256(image));
-    const completed = await kernel.run({ image, initialArgs: new Uint8Array() });
-    requireOutcome(completed, 'Completed', `sharing-${count}`);
+    const trace = [];
+    const completed = invokeFresh(world, kernel, { image, initialArgs: new Uint8Array() }, null, trace);
+    requireOutcome(completed, 'completed', `sharing-${count}`);
     assert.equal(decodeValue(scalar('u32'), completed.value), 7);
     observations.push({ installations: count, image: identity(image), sourceMetrics: row,
-      externalRequests: 0, result: 7 });
+      externalRequests: 0, result: 7,
+      resident: replayResident(world, kernel, image, new Uint8Array(), trace) });
   }
   return { status: 'PASS', relation: 'one shared helper body; image/catalog costs reported separately from execution', observations };
 }
 
-async function advanceToBoundary(kernel, image, initial, expected) {
+async function invokeToBoundary(world, kernel, image, initial, expected) {
   let input = initial, advances = 0, maximumObservedStateBytes = initial.state?.length ?? 0;
   for (;;) {
-    const outcome = await kernel.advance({ image, ...input });
+    const outcome = invokeFresh(world, kernel, { image, ...input }, 1);
     advances++;
     if (outcome.state) maximumObservedStateBytes = Math.max(maximumObservedStateBytes, outcome.state.length);
-    if (outcome.kind !== 'Progressed') {
-      assert.deepEqual(outcome.bytes, expected.bytes, 'advance and run must reach the same canonical observable boundary');
-      return { publicAdvanceCalls: advances, maximumObservedStateBytes,
-        relation: 'one selected boundary; public advance calls include the final observable call and are not a private instruction count' };
+    if (outcome.kind !== 'progressed') {
+      assert.deepEqual(outcome.bytes, expected.bytes, 'quantum-limited and unbounded invocation must reach the same canonical boundary');
+      return { quantumInvocations: advances, maximumObservedStateBytes,
+        relation: 'one selected boundary; quantum invocations include the final observable call and are not a private instruction count' };
     }
     input = { state: outcome.state };
   }
@@ -276,20 +311,20 @@ async function advanceToBoundary(kernel, image, initial, expected) {
 
 function completeTraceDiagnostics(enabled) {
   return {
-    status: enabled ? 'MEASURED_EVERY_PUBLIC_ADVANCE_BOUNDARY' : 'UNMEASURED',
-    relation: 'Diagnostic same-image replay of prescribed canonical inputs, compared byte-for-byte with run at every observable boundary; no effect handler is called and no alternative is selected by the replay.',
+    status: enabled ? 'MEASURED_EVERY_QUANTUM_BOUNDARY' : 'UNMEASURED',
+    relation: 'Diagnostic same-image replay of prescribed canonical inputs, compared byte-for-byte with unbounded invocation at every observable boundary; no effect handler is called and no alternative is selected by the replay.',
     span: 'Initial computation, every prescribed reply transition, and terminal completion, including explicit conversation close.',
-    publicAdvanceCalls: enabled ? 0 : null,
+    quantumInvocations: enabled ? 0 : null,
     maximumObservedStateBytes: enabled ? 0 : null,
     spans: [],
-    limitation: 'Maximum is exact for serialized portable States at public advance boundaries in this finite trace; private engine working-memory peak remains unmeasured.',
+    limitation: 'Maximum is exact for serialized portable States at public quantum boundaries in this finite trace; private engine working-memory peak remains unmeasured.',
   };
 }
 
-async function observeTraceBoundary(trace, kernel, image, input, expected, label) {
+async function observeTraceBoundary(trace, world, kernel, image, input, expected, label) {
   if (trace.status === 'UNMEASURED') return;
-  const observed = await advanceToBoundary(kernel, image, input, expected);
-  trace.publicAdvanceCalls += observed.publicAdvanceCalls;
+  const observed = await invokeToBoundary(world, kernel, image, input, expected);
+  trace.quantumInvocations += observed.quantumInvocations;
   trace.maximumObservedStateBytes = Math.max(trace.maximumObservedStateBytes, observed.maximumObservedStateBytes);
   trace.spans.push({ label, outcome: expected.kind, outcomeSha256: sha256(expected.bytes), ...observed });
 }
@@ -301,14 +336,15 @@ async function conversations(world, kernel, options) {
   const observations = [];
   let firstBoundary, steadyBoundary;
   for (const turns of [1, 8, 64, 1024]) {
-    let outcome = await kernel.run({ image, initialArgs });
+    const trace = [];
+    let outcome = invokeFresh(world, kernel, { image, initialArgs }, null, trace);
     const portableStateTrace = completeTraceDiagnostics(options.measure);
-    await observeTraceBoundary(portableStateTrace, kernel, image, { initialArgs }, outcome, 'initial');
+    await observeTraceBoundary(portableStateTrace, world, kernel, image, { initialArgs }, outcome, 'initial');
     let steadyState, maximumObservedParkedStateBytes = 0;
     const checkpoints = [], stateByteSizes = [], requestIdentities = new Set();
     for (let turn = 1; turn <= turns; turn++) {
-      requireOutcome(outcome, 'Requested', `conversation turn ${turn}`);
-      const request = world.decodeRequest(outcome.request);
+      requireOutcome(outcome, 'requested', `conversation turn ${turn}`);
+      const request = await world.decodeRequest(outcome.request);
       assert.equal(request.semanticIdentity, 'agent.interaction.exchange.v1.economy.next');
       const value = decodeValue(decodeSchema(request.payloadSchema), request.payload);
       assert.deepEqual(value, [null, null, null, BigInt(Math.min(turn, 8))]);
@@ -317,7 +353,7 @@ async function conversations(world, kernel, options) {
       stateByteSizes.push(outcome.state.length);
       if (turn === 8) steadyState = Uint8Array.from(outcome.state);
       if (turn > 8) assert.deepEqual(outcome.state, steadyState,
-        'after fixed-content retention fills, every quiescent PST2 must have identical reachable control and retained values');
+        'after fixed-content retention fills, every quiescent PST3 must have identical reachable control and retained values');
       if ([1, 8, 9, 64, 1024].includes(turn)) {
         const checkpoint = await inspectState(options.probe, options.output, `conversation-${turns}-turn-${turn}`, outcome.state);
         assert.equal(checkpoint.graph.pending, 1);
@@ -327,45 +363,45 @@ async function conversations(world, kernel, options) {
       if (turns === 8 && turn === 8) steadyBoundary = outcome;
       const closing = turn === turns;
       const reply = encodeValue(decodeSchema(request.resumeSchema), closing ? { tag: 1, value: null } : { tag: 0, value: 7n });
-      const input = { state: outcome.state, result: world.encodeResult(outcome.request, reply) };
-      outcome = await kernel.run({ image, ...input });
-      await observeTraceBoundary(portableStateTrace, kernel, image, input, outcome, closing ? 'explicit-close' : `turn-${turn + 1}`);
+      const input = { state: outcome.state, control: 'reply', value: await world.encodeResult(outcome.request, reply) };
+      outcome = invokeFresh(world, kernel, { image, ...input }, null, trace);
+      await observeTraceBoundary(portableStateTrace, world, kernel, image, input, outcome, closing ? 'explicit-close' : `turn-${turn + 1}`);
     }
-    requireOutcome(outcome, 'Completed', `conversation close after ${turns} turns`);
+    requireOutcome(outcome, 'completed', `conversation close after ${turns} turns`);
     assert.equal(decodeValue(scalar('u64'), outcome.value), BigInt(Math.min(turns, 8)));
     assert.equal(outcome.state, undefined, 'root completion must not expose retained continuation State');
     if (options.measure) {
       assert.equal(portableStateTrace.spans.length, turns + 1, 'complete diagnostics must cover initial, every reply, and close');
-      assert.equal(portableStateTrace.spans.at(-1).outcome, 'Completed');
+      assert.equal(portableStateTrace.spans.at(-1).outcome, 'completed');
     }
     observations.push({ turns, externalRequests: turns, acceptedValueReplies: turns - 1, explicitCloses: 1,
       maximumObservedParkedStateBytes, quiescentStateBytes: stateByteSizes.at(-1), stateByteSizes,
       uniqueRequestContents: requestIdentities.size,
       steadyAfterTurn: turns >= 8 ? 8 : null, identicalQuiescentStatesChecked: Math.max(0, turns - 8),
-      checkpoints, portableStateTrace, completedValue: Math.min(turns, 8), result: identity(outcome.value) });
+      checkpoints, portableStateTrace, resident: replayResident(world, kernel, image, initialArgs, trace), completedValue: Math.min(turns, 8), result: identity(outcome.value) });
   }
   let diagnosticStepping;
   if (options.measure) diagnosticStepping = {
-    status: 'MEASURED_EVERY_PUBLIC_ADVANCE_BOUNDARY',
-    publicAdvanceCalls: observations.reduce((total, row) => total + row.portableStateTrace.publicAdvanceCalls, 0),
+    status: 'MEASURED_EVERY_QUANTUM_BOUNDARY',
+    quantumInvocations: observations.reduce((total, row) => total + row.portableStateTrace.quantumInvocations, 0),
     maximumObservedStateBytes: Math.max(...observations.map(row => row.portableStateTrace.maximumObservedStateBytes)),
     completeTraceCount: observations.length,
     detail: 'Per-trace inputs, observable comparisons, and spans are recorded in each observation.portableStateTrace.',
   };
   else {
-    const initialDiagnostic = await advanceToBoundary(kernel, image, { initialArgs }, firstBoundary);
-    const request = world.decodeRequest(steadyBoundary.request);
-    const result = world.encodeResult(steadyBoundary.request, encodeValue(decodeSchema(request.resumeSchema), { tag: 0, value: 7n }));
-    const stableDiagnostic = await advanceToBoundary(kernel, image, { state: steadyBoundary.state, result }, steadyBoundary);
+    const initialDiagnostic = await invokeToBoundary(world, kernel, image, { initialArgs }, firstBoundary);
+    const request = await world.decodeRequest(steadyBoundary.request);
+    const result = await world.encodeResult(steadyBoundary.request, encodeValue(decodeSchema(request.resumeSchema), { tag: 0, value: 7n }));
+    const stableDiagnostic = await invokeToBoundary(world, kernel, image, { state: steadyBoundary.state, control: 'reply', value: result }, steadyBoundary);
     diagnosticStepping = { status: 'SELECTED_BOUNDARIES_ONLY', initial: initialDiagnostic, steadyTurn: stableDiagnostic };
   }
   return { status: 'PASS', image: identity(image), initialArgs: identity(initialArgs),
     memoryPolicy: { fixedInput: 7, recentWindow: 8, semanticLifetimeLimit: null },
-    relation: 'actual independent World roots and byte-identical complete quiescent PST2 after retention fills',
+    relation: 'actual independent World roots and byte-identical complete quiescent PST3 after retention fills',
     observations, diagnosticStepping,
     wholeConversationPortableStatePeak: options.measure
-      ? { status: 'MEASURED_EVERY_PUBLIC_ADVANCE_BOUNDARY', bytes: diagnosticStepping.maximumObservedStateBytes }
-      : { status: 'UNMEASURED', reason: 'Functional-only observes parked States and two selected advance spans; the complete internal trace is not measured.' },
+      ? { status: 'MEASURED_EVERY_QUANTUM_BOUNDARY', bytes: diagnosticStepping.maximumObservedStateBytes }
+      : { status: 'UNMEASURED', reason: 'Functional-only observes parked States and two selected quantum spans; the complete internal trace is not measured.' },
     wholeConversationInternalPeak: 'UNMEASURED: private engine working-memory peak is distinct from portable State size' };
 }
 
@@ -378,13 +414,14 @@ async function alternatives(world, kernel, options) {
   for (const count of [1, 8, 64]) {
     const candidates = Array.from({ length: count }, (_, i) => BigInt(i + 11));
     const initialArgs = encodeValue(argsSchema, candidates);
-    let outcome = await kernel.run({ image, initialArgs });
+    const trace = [];
+    let outcome = invokeFresh(world, kernel, { image, initialArgs }, null, trace);
     const portableStateTrace = completeTraceDiagnostics(options.measure);
-    await observeTraceBoundary(portableStateTrace, kernel, image, { initialArgs }, outcome, 'initial');
+    await observeTraceBoundary(portableStateTrace, world, kernel, image, { initialArgs }, outcome, 'initial');
     const stateByteSizes = [], checkpoints = [];
     for (let index = 0; index < count; index++) {
-      requireOutcome(outcome, 'Requested', `alternative ${index + 1}/${count}`);
-      const request = world.decodeRequest(outcome.request);
+      requireOutcome(outcome, 'requested', `alternative ${index + 1}/${count}`);
+      const request = await world.decodeRequest(outcome.request);
       assert.equal(request.semanticIdentity, 'agent4.probe.assess');
       assert.deepEqual(decodeValue(decodeSchema(request.payloadSchema), request.payload), [candidates[index], 10n]);
       stateByteSizes.push(outcome.state.length);
@@ -395,30 +432,31 @@ async function alternatives(world, kernel, options) {
         assert.equal(checkpoint.graph.obligations, 0);
         assert.equal(checkpoint.graph.pending, 1);
         checkpoints.push(checkpoint);
-        const restored = await kernel.run({ image, state: Uint8Array.from(outcome.state) });
+        const restored = invokeFresh(world, kernel, { image, state: Uint8Array.from(outcome.state) });
         assert.deepEqual(restored.bytes, outcome.bytes, 'replacing a World instance preserves unfinished internal work');
       }
       const reply = encodeValue(decodeSchema(request.resumeSchema), candidates[index] * 3n);
-      const input = { state: outcome.state, result: world.encodeResult(outcome.request, reply) };
-      outcome = await kernel.run({ image, ...input });
-      await observeTraceBoundary(portableStateTrace, kernel, image, input, outcome, `assessment-${index + 1}`);
+      const input = { state: outcome.state, control: 'reply', value: await world.encodeResult(outcome.request, reply) };
+      outcome = invokeFresh(world, kernel, { image, ...input }, null, trace);
+      await observeTraceBoundary(portableStateTrace, world, kernel, image, input, outcome, `assessment-${index + 1}`);
     }
-    requireOutcome(outcome, 'Completed', `all ${count} alternatives`);
+    requireOutcome(outcome, 'completed', `all ${count} alternatives`);
     assert.deepEqual(decodeValue(resultSchema, outcome.value), candidates.map(candidate => [10n, candidate, candidate * 3n]));
     assert.equal(outcome.state, undefined);
     if (options.measure) {
       assert.equal(portableStateTrace.spans.length, count + 1, 'complete diagnostics must include every branch reply and terminal completion');
-      assert.equal(portableStateTrace.spans.at(-1).outcome, 'Completed');
+      assert.equal(portableStateTrace.spans.at(-1).outcome, 'completed');
     }
     observations.push({ alternatives: count, initialArgs: identity(initialArgs), externalRequests: count,
       stateByteSizes, maximumObservedParkedStateBytes: Math.max(...stateByteSizes), checkpoints,
-      portableStateTrace, result: identity(outcome.value), terminalCarriesContinuationState: false });
+      portableStateTrace, resident: replayResident(world, kernel, image, initialArgs, trace),
+      result: identity(outcome.value), terminalCarriesContinuationState: false });
   }
   return { status: 'PASS', image: identity(image), relation: 'internal multi continuation, isolated cells, prescribed environmental assessments, and fresh-instance restore',
     observations,
     diagnosticStepping: options.measure ? {
-      status: 'MEASURED_EVERY_PUBLIC_ADVANCE_BOUNDARY',
-      publicAdvanceCalls: observations.reduce((total, row) => total + row.portableStateTrace.publicAdvanceCalls, 0),
+      status: 'MEASURED_EVERY_QUANTUM_BOUNDARY',
+      quantumInvocations: observations.reduce((total, row) => total + row.portableStateTrace.quantumInvocations, 0),
       maximumObservedStateBytes: Math.max(...observations.map(row => row.portableStateTrace.maximumObservedStateBytes)),
       completeTraceCount: observations.length,
     } : { status: 'UNMEASURED', reason: 'Functional-only records parked States; full branch transition diagnostics require explicit measured mode.' },
@@ -487,7 +525,7 @@ async function inquiryComparison(options, sourceMetrics) {
 export async function runEconomy(args) {
   const options = parseOptions(args);
   await prepareOutput(options);
-  const report = { format: 'agent4-economy/v1', mode: options.measure ? 'explicit-measure' : 'functional-only',
+  const report = { format: 'agent4-economy/v2', mode: options.measure ? 'explicit-measure' : 'functional-only',
     status: 'RUNNING', timingStatus: options.measure ? 'PENDING_EXPLICIT_MEASURE' : TIMING_UNMEASURED,
     claims: { dependencyModification: false, compilePerformanceOptimization: false, lifetimeLimit: false },
     inputs: {}, checks: {}, failures: [] };
@@ -498,7 +536,10 @@ export async function runEconomy(args) {
     const host = await loadWorldRuntime({ runtimePath: options.runtime });
     report.inputs.world = host.identity;
     const world = await import(pathToFileURL(host.identity.entrypoint).href);
-    const kernel = await world.admitProcessKernel(readRegular(host.identity.kernelPath), { expectedSha256: host.identity.kernelSha256 });
+    const kernel = await world.Kernel.create({ bytes: readRegular(host.identity.kernelPath),
+      expectedSha256: host.identity.kernelSha256 });
+    const ceiling = readDependencyLock().world.runtime.physicalProfile.maximumMemoryBytes;
+    kernel.setLimits({ input: ceiling, working: ceiling, output: ceiling });
     const probeBytes = await requiredFile(options.probe);
     const metricsBytes = await requiredFile(join(options.fixtures, 'source-metrics.json'));
     const sourceMetrics = JSON.parse(metricsBytes);
@@ -516,7 +557,7 @@ export async function runEconomy(args) {
     report.inputs.sourceIdentityNote = 'Compiled image, probe, harness, and source-metrics hashes bind these executions; HEAD alone does not certify an uncommitted tree.';
     for (const [name, body] of [
       ['minimalFacade', () => minimalFacade(world, kernel, options.fixtures)],
-      ['sharing', () => sharing(kernel, options.fixtures, sourceMetrics)],
+      ['sharing', () => sharing(world, kernel, options.fixtures, sourceMetrics)],
       ['conversation', () => conversations(world, kernel, options)],
       ['alternatives', () => alternatives(world, kernel, options)],
       ['clarification', () => clarification(options, sourceMetrics)],

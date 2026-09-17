@@ -167,8 +167,6 @@ const Phases = struct {
     source_check: u64 = 0,
     lowering: u64 = 0,
     target_check: u64 = 0,
-    direct_optimization: u64 = 0,
-    canonicalization: u64 = 0,
 };
 const Observer = struct {
     io: std.Io,
@@ -248,14 +246,21 @@ fn elapsed(io: std.Io, start: std.Io.Timestamp) u64 {
 const Workload = union(enum) { direct, sharing: usize, conversation };
 
 fn declareDomain(b: *source.Builder, workload: Workload) !void {
-    _ = try agent.contracts.schema(void, b);
     switch (workload) {
-        .direct => _ = try agent.contracts.schema(u32, b),
-        .sharing => _ = try agent.contracts.schema(struct {
-            selected: u32,
-            instructions: agent.contracts.Utf8,
-        }, b),
+        .direct => {
+            // Match Agent's InitialArgs/Result/Failure declaration order.
+            _ = try agent.contracts.schema(u32, b);
+            _ = try agent.contracts.schema(void, b);
+        },
+        .sharing => {
+            _ = try agent.contracts.schema(void, b);
+            _ = try agent.contracts.schema(struct {
+                selected: u32,
+                instructions: agent.contracts.Utf8,
+            }, b);
+        },
         .conversation => {
+            _ = try agent.contracts.schema(void, b);
             _ = try agent.contracts.schema(u64, b);
             _ = try agent.contracts.schema([]const u64, b);
         },
@@ -478,14 +483,21 @@ fn emit(init: std.process.Init, directory: []const u8) !void {
 fn inspectState(init: std.process.Init, path: []const u8) !void {
     const bytes = try std.Io.Dir.cwd().readFileAlloc(init.io, path, init.gpa, .unlimited);
     defer init.gpa.free(bytes);
-    var decoded = try data.snapshot.decodeGraph(init.gpa, bytes);
+    var decoded = try data.state_image.decodeGraph(init.gpa, bytes);
     defer decoded.deinit();
-    var statistics: data.snapshot.Statistics = .{};
-    var normalized = try data.snapshot.canonicalizeMeasured(init.gpa, decoded.state, &statistics);
-    defer normalized.deinit();
+    try data.state_image.checkGraph(init.gpa, decoded.state);
+    var references: std.ArrayList(data.snapshot.Reference) = .empty;
+    defer references.deinit(init.gpa);
+    try data.snapshot.references(data.graph.Roots, decoded.state.roots, &references, init.gpa);
+    var edges = references.items.len;
+    for (decoded.state.nodes) |node| {
+        references.clearRetainingCapacity();
+        try data.snapshot.references(data.process_state.Node, node, &references, init.gpa);
+        edges += references.items.len;
+    }
     const fields = std.meta.fields(data.graph.NodeTag);
     var counts = [_]usize{0} ** fields.len;
-    for (decoded.state.nodes) |node| counts[@intFromEnum(std.meta.activeTag(node))] += 1;
+    for (decoded.state.nodes) |node| counts[@intFromEnum(std.meta.activeTag(node.record))] += 1;
     var blob_bytes: usize = 0;
     for (decoded.state.blobs) |blob| blob_bytes += blob.bytes.len;
     var output_buffer: [4096]u8 = undefined;
@@ -495,9 +507,8 @@ fn inspectState(init: std.process.Init, path: []const u8) !void {
         .nodes = decoded.state.nodes.len,
         .blobs = decoded.state.blobs.len,
         .blobBytes = blob_bytes,
-        .canonicalReachable = statistics.nodes == decoded.state.nodes.len and
-            normalized.state.blobs.len == decoded.state.blobs.len,
-        .edges = statistics.edges,
+        .canonicalReachable = true, // checkGraph independently rejected noncanonical/unreachable records.
+        .edges = edges,
         .frames = counts[0] + counts[1],
         .multiTemplates = counts[15],
         .cells = counts[13],
@@ -538,6 +549,7 @@ test "minimal public facade has the exact direct Boundary image" {
     const a = std.testing.allocator;
     var b = source.Builder.init(a);
     defer b.deinit();
+    try declareDomain(&b, .direct);
     var control = try boundary.source.construct(a, try direct(&b));
     defer control.deinit();
     var minimal = try agent.compile(a, MinimalSystem);

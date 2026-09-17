@@ -1,8 +1,8 @@
 # Agent 4 runtime and portable use archive
 
 Agent authoring emits BPI3 using Boundary `3.0.0-dev.0` at
-`c00b2a70180e8488627359724d7c50ba3d6a8670`. The candidate integration lock selects
-World `6.0.0-dev.0` at `c6776472cf110d9d7a4fb2c5e5867b4ab187e155` and its ABI 3
+`e28d5b32fbf92a7013cb18cb8c81128a9b53cd6b`. The candidate integration lock selects
+World `6.0.0-dev.0` at `8d55a4d0ddaebd355c9dc8a99087e5052e42e77e` and its ABI 3
 runtime. The normal bridge/runner, native semantics, inquiry CLI, full application
 integration and extracted use-archive checks pass. The compiled text-tool browser/file/browser witness also passes; performance
 acceptance and legacy retirement remain in progress. See [the tool contract](compiled-text-tool.md). See [current status](compositional-execution.md).

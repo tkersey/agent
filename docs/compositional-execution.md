@@ -6,11 +6,11 @@ admission still runs before Boundary admission. Diagnostics and native phase
 observers remain supported; observers do not enter portable images or execution.
 
 The normal Boundary dependency is pinned to
-`c00b2a70180e8488627359724d7c50ba3d6a8670`. The downloaded archive's recomputed Git
+`e28d5b32fbf92a7013cb18cb8c81128a9b53cd6b`. The downloaded archive's recomputed Git
 tree matches GitHub's commit API. Source, archive, Zig-managed package and ordinary
 extracted-package inventories are independently recorded in the existing lock.
 The selected versions are Boundary 3.0.0-dev.0 and World 6.0.0-dev.0. World is
-pinned to `c6776472cf110d9d7a4fb2c5e5867b4ab187e155`; its complete runtime
+pinned to `8d55a4d0ddaebd355c9dc8a99087e5052e42e77e`; its complete runtime
 inventory and default kernel are authenticated by the same lock. This is
 candidate integration, not a published release.
 
@@ -49,7 +49,7 @@ ceiling. Explicit smaller caller limits remain supported and tested. This aligns
 allowances with the prior growable runtime; it is not a claim of reduced memory
 use. Native peak/copy measurements and all scripted-policy assertions remain.
 
-Still required: finish benchmark-harness migration and measured acceptance;
+Still required: complete matched-baseline runtime measurements and measured acceptance;
 complete general component contracts and imported-borrow requirements;
 preserve the complete approval/inquiry regressions;
 finish consumer package extraction, performance comparisons, legacy retirement and
@@ -97,3 +97,23 @@ interface, in addition to read/simulation I/O. Internal/external status and Agen
 role must agree at the binding. All external declarations remain explicit and
 opaque imports still reject in protected speculation. This extends composition;
 it does not establish purity or general protected-component admission.
+
+
+The consumer economy harness now uses current PKI3 invocation, asynchronous
+request/reply codecs and PST3 graph inspection. `check-agent4-economy` runs its
+three native probe tests and all seven functional lanes: direct/facade, shared
+helpers, continuing conversation, multi-shot alternatives, clarification, inquiry
+image identity, and the prescribed inquiry/ReAct comparison. The direct control
+uses the same schema declaration order as Agent; byte equality remains required.
+Only compiler phases actually emitted by stable construction are reported.
+
+The v2 economy report records resident replay for the direct/facade, sharing,
+conversation and alternatives traces. Each replay prepares once, uses the same
+prescribed replies and checkpoint obligations as fresh invocation, compares exact
+outcome bytes, and closes the Session with zero live working allocation. This
+excludes environmental execution from replay. The 1,024-turn fixed-input witness
+retains a 161-byte quiescent State after turn 8; all 1,016 subsequent quiescent
+States match. This is a functional retention result, not performance acceptance.
+Runtime timing, the optimized predecessor/BPC1 comparison, and the complete
+specification workload matrix remain open. Default timing status stays explicitly
+unmeasured.

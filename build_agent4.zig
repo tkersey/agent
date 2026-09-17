@@ -51,7 +51,7 @@ pub fn build(b: *std.Build) void {
     const measure_economy = b.option(bool, "measure-economy", "Collect timings on an operator-confirmed idle host") orelse false;
     const world_source = b.option([]const u8, "world-source", "Immutable World source for native agreement") orelse b.pathFromRoot(".agent4/inputs/world");
     const world_archive = b.option([]const u8, "world-archive", "Authenticated immutable World source archive") orelse
-        b.pathJoin(&.{ std.fs.path.dirname(world_source) orelse ".", "world-c677647.tar.gz" });
+        b.pathJoin(&.{ std.fs.path.dirname(world_source) orelse ".", "world-8d55a4d.tar.gz" });
     const data = if (source) |root| b.createModule(.{
         .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ root, "src/v2/data/root.zig" }) },
         .target = target,
@@ -364,6 +364,7 @@ pub fn build(b: *std.Build) void {
         const economy_module = g.module("test/agent4/economy.zig");
         economy_module.addImport("document", g.module("test/consumers/document/consequence.zig"));
         economy_module.addImport("inquiry", inquiry_app);
+        g.testModule(economy, economy_module);
         const economy_exe = g.emitter("economy-probe", economy_module);
         const economy_emit = b.addRunArtifact(economy_exe);
         economy_emit.addArgs(&.{ "emit", b.getInstallPath(.prefix, "agent4/economy") });

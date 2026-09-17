@@ -240,3 +240,33 @@ Program admission and Session state remain fresh. No cache survives solely
 because of the weak entry. Cold observations remain separate from repeated-call
 results. The existing clarification regression is not discharged by targeted
 factory timings; the matched consumer remeasurement follows qualification.
+
+## Host-admission remeasurement
+
+Implementation `e2c148ce175885af28432c3c12876f6b469cccd3` with World `9a045a1` passes the
+full integration suite and preserves all four document scenarios. Two rotating
+windows show consequence-sensitive whole-scenario times of 201.1/202.3 ms versus
+BPC1 231.4/232.9 ms for divergent input, and 152.9/153.6 ms versus
+181.1/179.3 ms for common input: approximately 13–15% faster. Clarify-first
+fresh-call totals are now approximately level with BPC1 (109.6/109.9 ms versus
+109.2/110.0 ms for common input); whole-scenario time retains a small overhead.
+The earlier 21–28% fresh-call regression is no longer reproduced on this pair.
+
+This is fresh guest execution with possible reuse of immutable kernel code,
+not resident Program/Session reuse. Every factory call owns and hashes its input
+bytes before looking up the weak module. The loaded runtime is an ordinary
+strong owner of its own Kernel. Separate process-first-call observations remain
+in World’s admission report; no cold-start speedup is claimed.
+
+The runtime companion matrix now improves on all seven selected cases in both
+windows. Queens BFS takes 12.9/13.1 ms versus BPC1 26.4/26.8 ms; generator,
+scheduler, shallow/reentrant handling and cleanup also improve. Independent
+source results and effect traces remain unchanged.
+
+The [native data matrix](measurements/native-data-matrix.json) records product
+and variant projections at 0/1KiB/1MiB and sequence consumption at 16/64/256/1024.
+A 1 MiB product takes about 0.41 ms versus 37.6–37.7 ms BPC1; consuming 1024
+items takes 1.54–1.55 ms versus 19.36–19.38 ms and allocates 1.11 MB versus
+42.82 MB. Tiny projections still lose latency, and some small sequence cases
+retain higher working peaks. Native control regressions, remaining matrix
+cases, producer/edit/link costs, cleanup and serial review remain required.

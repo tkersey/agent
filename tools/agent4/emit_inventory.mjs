@@ -14,6 +14,18 @@ async function add(path,role,bytes){
   const content=bytes??await readFile(join(output,path));
   files.push({path,role,sha256:hash(content)});
 }
+const textContent=Buffer.from('alpha\nbeta gamma\ndelta epsilon zeta\nomega\n');
+const subject=['fixture/story',[...createHash('sha256').update(textContent).digest()],BigInt(textContent.length)];
+await add('text/tool.bmo1','component');
+for(const name of ['subject','task','result','report'])await add(`text/${name}-schema.bin`,'schema');
+await add('text/model-reply.bin','synthetic-fixture');
+await add('text/story.txt','synthetic-fixture',textContent);
+for(const name of ['standalone','agent']){
+  const image=`text/${name}.bpi3`,initialArgs=`text/${name}.args`;
+  const schema=decodeSchema(await readFile(join(output,`text/${name==='agent'?'task':'subject'}-schema.bin`)));
+  await add(image,'image');await add(initialArgs,'initial-args',encodeValue(schema,name==='agent'?[subject,123n]:subject));
+  examples.push({name:`text-${name}`,image,initialArgs});
+}
 for(const name of ['mid_review','clarify_first','human','model','rule','react']){
   const image=`review/${name}.bpi3`,initialArgs=`review/${name}.args`;
   await add(image,'image');await add(initialArgs,'initial-args');

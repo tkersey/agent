@@ -52,7 +52,7 @@ export async function loadWorldRuntime(options) {
     return Object.freeze({ ...world.decodeOutcome(canonical), bytes: canonical });
   };
   const invoke = (input) => decodeOutcome(kernel.invoke(world.encodeInput(input)));
-  const start = (image, initialArgs) => invoke({
+  const start = async (image, initialArgs) => invoke({
     image: bytes(image, "image"), initialArgs: bytes(initialArgs, "initialArgs"),
   });
   const resume = async (image, state, currentRequest, canonicalReply) => {
@@ -69,13 +69,13 @@ export async function loadWorldRuntime(options) {
     const result = await world.encodeResult(requestBytes, reply);
     return invoke({ image: program, state: saved, control: "reply", value: result });
   };
-  const cancel = (image, state, reason) => {
+  const cancel = async (image, state, reason) => {
     if (typeof reason !== "string" && !(reason instanceof Uint8Array))
       throw new TypeError("cancellation reason must be text or bytes");
     return invoke({ image: bytes(image, "image"), state: bytes(state, "state"),
       control: typeof reason === "string" ? "cancel_text" : "cancel_bytes", value: typeof reason === "string" ? reason : bytes(reason, "reason") });
   };
-  const continueExecution = (image, outcome) => {
+  const continueExecution = async (image, outcome) => {
     const saved = decodeOutcome(outcome instanceof Uint8Array ? outcome : outcome?.bytes);
     if (!["progressed", "yielded"].includes(saved.kind) || !saved.state) throw new Error("continue requires a progressed or yielded checkpoint");
     return invoke({ image: bytes(image, "image"), state: saved.state,

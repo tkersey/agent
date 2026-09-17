@@ -4,7 +4,8 @@
 
 This branch is migrating to Boundary 3 / World 6. Authoring emits BPI3, and the
 normal bridge and runner use the authenticated ABI 3 runtime. Full application
-integration and the compiled-tool transfer witness remain in progress. See
+integration and the compiled-tool transfer witness pass; component-contract,
+performance and retirement work remains in progress. See
 [migration status](docs/compositional-execution.md).
 
 Agent is a Zig library for building agents that work with models, people, and

@@ -6,16 +6,16 @@ admission still runs before Boundary admission. Diagnostics and native phase
 observers remain supported; observers do not enter portable images or execution.
 
 The normal Boundary dependency is pinned to
-`03da23f6066e8eb60ee646f34dc9e828220dfc28`. The downloaded archive's recomputed Git
+`adf3c7e102fead43f32f1c850fa7d27ac417fdb6`. The downloaded archive's recomputed Git
 tree matches GitHub's commit API. Source, archive, Zig-managed package and ordinary
 extracted-package inventories are independently recorded in the existing lock.
 The selected versions are Boundary 3.0.0-dev.0 and World 6.0.0-dev.0. World is
-pinned to `58eac5241d30c88a9f07ddd33a772ac43b399e7c`; its complete runtime
+pinned to `321199bac228e63beeabd99d6f36ebf4bac72739`; its complete runtime
 inventory and default kernel are authenticated by the same lock. This is
 candidate integration, not a published release.
 
-`check-agent4` passed all 139 build steps using the normal dependency pin,
-including 104 Zig tests,
+`check-agent4` passed all 159 build steps using the normal dependency pin,
+including 110 Zig tests,
 35 JavaScript model/value tests, negative authoring cases, emitted application
 images and source-independent author installation. Both the source-override and
 normal package installation paths retain exact authentication. Use
@@ -39,7 +39,7 @@ and results 92, [(1,36),(3,56)], [(1,54),(3,74)].
 The inquiry CLI and application scripts now use current invocation controls,
 async request/reply codecs and tagged cancellation reasons. The stale-result CLI
 test checks that real ERS3/PKO3 files exist and that the guest reports InvalidResult;
-an I/O failure cannot satisfy the test. `check-agent4-integration` now passes all 136 build steps, including 47 native
+an I/O failure cannot satisfy the test. `check-agent4-integration` now passes all 157 build steps, including 47 native
 tests, 83 Node tests, the repair corpus, coalescing ablation/ReAct comparison,
 repeated tasks and the actual extracted-archive command/application checks.
 
@@ -50,8 +50,22 @@ allowances with the prior growable runtime; it is not a claim of reduced memory
 use. Native peak/copy measurements and all scripted-policy assertions remain.
 
 Still required: finish benchmark-harness migration and measured acceptance;
-compile/link the reusable effectful text tool; perform the real
-browser/file/browser transfer; preserve the complete approval/inquiry regressions;
+complete general component contracts and the three-component Agent composition;
+preserve the complete approval/inquiry regressions;
 finish consumer package extraction, performance comparisons, legacy retirement and
 serial review closeout. The coordinated draft PRs do not claim full completion or
 authorize merging or releases.
+
+The [compiled text tool](compiled-text-tool.md) now executes from one BMO1 object
+in standalone and Agent callers, including an actual model-facing local-tool
+declaration. The Agent retains an unrelated owned future and checks human
+occurrence identity around the tool. Real Chromium/Firefox Workers transfer the
+actual checkpoint through a separate Node file-reading process and complete from
+its successor. The same artifacts and leaf bindings execute from the extracted
+use archive.
+
+The tool object is 1,485 bytes; the standalone and Agent images are 1,483 and
+4,224 bytes. These are fixture sizes, not full performance acceptance. The
+separate three-component Agent composition and general imported-borrow contracts
+remain open, as do selective execution, benchmark completion, legacy retirement
+and serial review closeout.

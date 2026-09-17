@@ -113,7 +113,10 @@ pub fn compileObserved(
         return error.TypeMismatch;
     try admission.verify(allocator, module, &registry);
     options.stage(.boundary_compile);
-    const compiled = try source.constructObserved(allocator, module, options.boundary_options);
+    const compiled = if (registry.compiled_imports.items.len == 0)
+        try source.constructObserved(allocator, module, options.boundary_options)
+    else
+        try @import("compiled_tool.zig").link(allocator, module, &registry, options.boundary_options);
     options.stage(.complete);
     return compiled;
 }

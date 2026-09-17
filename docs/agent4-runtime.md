@@ -1,11 +1,11 @@
 # Agent 4 runtime and portable use archive
 
 Agent authoring emits BPI3 using Boundary `3.0.0-dev.0` at
-`03da23f6066e8eb60ee646f34dc9e828220dfc28`. The candidate integration lock selects
-World `6.0.0-dev.0` at `58eac5241d30c88a9f07ddd33a772ac43b399e7c` and its ABI 3
+`adf3c7e102fead43f32f1c850fa7d27ac417fdb6`. The candidate integration lock selects
+World `6.0.0-dev.0` at `321199bac228e63beeabd99d6f36ebf4bac72739` and its ABI 3
 runtime. The normal bridge/runner, native semantics, inquiry CLI, full application
-integration and extracted use-archive checks pass. The independently compiled
-tool witness, performance acceptance and legacy retirement remain in progress. See [current status](compositional-execution.md).
+integration and extracted use-archive checks pass. The compiled text-tool browser/file/browser witness also passes; performance
+acceptance and legacy retirement remain in progress. See [the tool contract](compiled-text-tool.md). See [current status](compositional-execution.md).
 The exact runtime contents, kernel digest,
 public API and physical profile are in
 `conformance/agent4/dependencies.lock.json`. The loader checks this Agent-owned

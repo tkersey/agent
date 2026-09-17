@@ -33,6 +33,10 @@ test("documented commands execute from the actual source-independent archive", a
   assert.equal(Buffer.from(resumed.value).readBigUInt64LE(), 40n);
   assert.equal(world.decodeOutcome(await readFile(join(cwd, "cancelled.pko3"))).kind, "cancelled");
   const inventory = JSON.parse(await readFile(join(cwd, "examples/inventory.json"), "utf8"));
+  const textTool = execFileSync(process.execPath, [join(cwd, "test/agent4/text_package_runtime.mjs"), runtimePath,
+    join(cwd, "examples/text")], { cwd, encoding: "utf8", timeout: 120_000 });
+  assert.equal(JSON.parse(textTool).reports.length, 2);
+  assert(inventory.files.some(file => file.path === "text/tool.bmo1" && file.role === "component"));
   const consequence = inventory.examples.find(example => example.name === "document-consequence");
   assert(consequence, "the opt-in application belongs to the source-independent package");
   const script = resolve(import.meta.dirname, "consequence_runtime.mjs");

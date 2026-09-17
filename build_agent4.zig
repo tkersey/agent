@@ -47,10 +47,11 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const source = b.option([]const u8, "boundary-v2-source", "Authenticated immutable Boundary source copy");
     const runtime = b.option([]const u8, "world-runtime", "Authenticated immutable World runtime directory");
+    const browser_tools_path = b.option([]const u8, "browser-tools", "Directory containing the locked Playwright browser tools");
     const measure_economy = b.option(bool, "measure-economy", "Collect timings on an operator-confirmed idle host") orelse false;
     const world_source = b.option([]const u8, "world-source", "Immutable World source for native agreement") orelse b.pathFromRoot(".agent4/inputs/world");
     const world_archive = b.option([]const u8, "world-archive", "Authenticated immutable World source archive") orelse
-        b.pathJoin(&.{ std.fs.path.dirname(world_source) orelse ".", "world-58eac52.tar.gz" });
+        b.pathJoin(&.{ std.fs.path.dirname(world_source) orelse ".", "world-321199b.tar.gz" });
     const data = if (source) |root| b.createModule(.{
         .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ root, "src/v2/data/root.zig" }) },
         .target = target,
@@ -104,7 +105,7 @@ pub fn build(b: *std.Build) void {
     lint.dependOn(&format_check.step);
     lint.dependOn(&paths.step);
     check.dependOn(lint);
-    for ([_][]const u8{ "facade", "values", "approval_probe", "catalogs", "descriptor_contracts", "callable" }) |name|
+    for ([_][]const u8{ "facade", "values", "approval_probe", "catalogs", "descriptor_contracts", "callable", "compiled_tool" }) |name|
         g.testModule(check, g.module(b.fmt("test/agent4/{s}.zig", .{name})));
     g.testModule(check, g.module("src/model_invocation_tests.zig"));
     g.testModule(check, g.module("src/conversation.zig"));
@@ -141,6 +142,18 @@ pub fn build(b: *std.Build) void {
     g.testModule(check, inquiry_app);
 
     const emit = b.step("agent4-images", "Compile the consumer images");
+    const text_object = g.emitter("agent-text-object", g.module("test/agent4/text_object.zig"));
+    const text_link = g.emitter("agent-text-link", g.module("test/agent4/text_link.zig"));
+    const text_object_bytes = b.addRunArtifact(text_object).captureStdOut(.{});
+    emit.dependOn(&b.addInstallFileWithDir(text_object_bytes, .prefix, "agent4/text/tool.bmo1").step);
+    for ([_][]const u8{ "standalone", "agent" }) |mode| {
+        const linked = b.addRunArtifact(text_link);
+        linked.addArg(mode);
+        linked.addFileArg(text_object_bytes);
+        emit.dependOn(&b.addInstallFileWithDir(linked.captureStdOut(.{}), .prefix, b.fmt("agent4/text/{s}.bpi3", .{mode})).step);
+    }
+    for ([_][]const u8{ "subject-schema", "task-schema", "result-schema", "report-schema", "model-reply" }) |mode|
+        g.emit(emit, text_link, &.{mode}, b.fmt("text/{s}.bin", .{mode}));
     const distribution = b.step("emit-agent4", "Emit compiled examples and the source-independent use archive");
     const dialogue_exe = g.emitter("agent4-dialogue", dialogue);
     const inquiry_exe = g.emitter("agent4-inquiry-probe", inquiry);
@@ -199,7 +212,10 @@ pub fn build(b: *std.Build) void {
     distribution.dependOn(&package.step);
     check.dependOn(emit);
 
-    const integration = b.step("check-agent4-integration", "Execute consumer proofs under unchanged World");
+    const integration = b.step("check-agent4-integration", "Execute consumer proofs under the selected World");
+    const compiled_tools_check = b.step("check-compiled-tools", "Execute one compiled text tool in standalone and Agent callers");
+    const browser_check = b.step("check-compiled-tool-browser", "Transfer the compiled Agent tool through real browser Workers and a file server");
+    const native_checks = b.step("check-native", "Check native Agent semantics against the selected World");
     const economy = b.step("check-agent4-economy", "Measure direct/facade and retained-state economy");
     if (runtime) |runtime_path| {
         const world = b.createModule(.{
@@ -213,8 +229,25 @@ pub fn build(b: *std.Build) void {
         addBoundary(b, runtime_guard, source, target, optimize);
         runtime_guard.has_side_effects = true;
         _ = runtime_guard.captureStdOut(.{});
+        const text_check = b.addSystemCommand(&.{ "node", "test/agent4/text_tool_runtime.mjs" });
+        text_check.addFileArg(text_object.getEmittedBin());
+        text_check.addFileArg(text_link.getEmittedBin());
+        text_check.addArg(runtime_path);
+        text_check.step.dependOn(&runtime_guard.step);
+        text_check.has_side_effects = true;
+        compiled_tools_check.dependOn(&text_check.step);
+        if (browser_tools_path) |browser_tools| {
+            const browser = b.addSystemCommand(&.{ "node", "test/agent4/text_browser.mjs" });
+            browser.addFileArg(text_object.getEmittedBin());
+            browser.addFileArg(text_link.getEmittedBin());
+            browser.addArg(runtime_path);
+            browser.addArg(browser_tools);
+            browser.step.dependOn(&runtime_guard.step);
+            browser.has_side_effects = true;
+            browser_check.dependOn(&browser.step);
+        } else browser_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
-        const native_checks = b.step("check-native", "Check native Agent semantics against the selected World");
+        runtime_work.dependOn(&text_check.step);
         runtime_work.dependOn(native_checks);
         // The portable kernel/custody checks do not require this external OS
         // profile. Explicit repair-application checks still require execution.
@@ -338,6 +371,9 @@ pub fn build(b: *std.Build) void {
         economy.dependOn(&measure.step);
     } else {
         const missing = b.addFail("provide -Dworld-runtime=/absolute/authenticated/world-runtime");
+        compiled_tools_check.dependOn(&missing.step);
+        browser_check.dependOn(&missing.step);
+        native_checks.dependOn(&missing.step);
         integration.dependOn(&missing.step);
         economy.dependOn(&missing.step);
     }

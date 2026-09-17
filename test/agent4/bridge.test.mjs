@@ -28,7 +28,7 @@ test("an explicit smaller working budget rejects without consuming the input", a
   const program = await image();
   const original = Uint8Array.from(program);
   const limited = await loadWorldRuntime({ runtimePath, lockPath, limits: { input: 65536, working: 0, output: 65536 } });
-  assert.throws(() => limited.start(program, empty), error => error.code === "WORLD_CAPACITY" && error.details.arena === "working");
+  await assert.rejects(limited.start(program, empty), error => error.code === "WORLD_CAPACITY" && error.details.arena === "working");
   assert.deepEqual(Uint8Array.from(program), original);
   assert.equal((await (await bridge()).start(program, empty)).kind, "requested");
 });

@@ -6,20 +6,20 @@ admission still runs before Boundary admission. Diagnostics and native phase
 observers remain supported; observers do not enter portable images or execution.
 
 The normal Boundary dependency is pinned to
-`fb5e287037da86d27110e731a7e08b0cb4009a3d`. The downloaded archive's recomputed Git
+`58bf6fb133e7d5bba1210c6ad64cd59f51755620`. The downloaded archive's recomputed Git
 tree matches GitHub's commit API. Source, archive, Zig-managed package and ordinary
 extracted-package inventories are independently recorded in the existing lock.
 The selected versions are Boundary 3.0.0-dev.0 and World 6.0.0-dev.0. World is
-pinned to `e7724f8729d35387b6c5cbe32b66f4c80fe69022`; its complete runtime
+pinned to `3f61800bfee16c37a20995eb6d0179217568acd0`; its complete runtime
 inventory and default kernel are authenticated by the same lock. This is
 candidate integration, not a published release.
 
-The current liveness-projection pair passes authoring, native integration, compiled-tool
+The current storage and analysis-set pair passes authoring, native integration, compiled-tool
 browser transfer and functional economy checks: 162 Zig tests and the 35-test
 JavaScript authoring suite. The Node integration owner separately passes all 83
 tests and its dialogue, multi, document, consequence and independent-engine runs.
-The authenticated default kernel is 458,465 bytes with SHA-256
-`1767d27d6b5a15913f7fa72ea321278c6334756de76337054445d1badb54abd7`.
+The authenticated default kernel is 459,416 bytes with SHA-256
+`9e9b789ddb72c67d728de2eabedb74a22f3042a9399545110e517fd0a29de63a`.
 Economy timing remains unmeasured; these checks establish behavior on this pair.
 
 `check-agent4` passed all 159 build steps using the normal dependency pin,
@@ -145,11 +145,11 @@ universal elimination.
 
 ## Current dependency qualification
 
-The normal lock now authenticates Boundary `fb5e287` and World `e7724f8`.
-This pair includes current source-package retirement and allocation-free
-small-frame liveness projection. Downloaded source trees match GitHub's commit API; Zig-managed and extracted
+The normal lock now authenticates Boundary `58bf6fb` and World `3f61800`.
+This pair includes exact-sized envelope ownership, Store-owned argument and
+terminal storage, rollback-safe compaction, and canonical word analysis sets. Downloaded source trees match GitHub's commit API; Zig-managed and extracted
 Boundary package profiles are both checked. Fresh isolated setup rebuilt and
-authenticated the 458,465-byte generic kernel from those exact sources.
+authenticated the 459,416-byte generic kernel from those exact sources.
 
 Agent's policy walker no longer branches on the removed source `direct` flag:
 every source clause has its resumption checked. This retains the previous

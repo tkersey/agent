@@ -486,13 +486,13 @@ fn inspectState(init: std.process.Init, path: []const u8) !void {
     var decoded = try data.state_image.decodeGraph(init.gpa, bytes);
     defer decoded.deinit();
     try data.state_image.checkGraph(init.gpa, decoded.state);
-    var references: std.ArrayList(data.snapshot.Reference) = .empty;
+    var references: std.ArrayList(data.graph_order.Reference) = .empty;
     defer references.deinit(init.gpa);
-    try data.snapshot.references(data.graph.Roots, decoded.state.roots, &references, init.gpa);
+    try data.graph_order.references(data.graph.Roots, decoded.state.roots, &references, init.gpa);
     var edges = references.items.len;
     for (decoded.state.nodes) |node| {
         references.clearRetainingCapacity();
-        try data.snapshot.references(data.process_state.Node, node, &references, init.gpa);
+        try data.graph_order.references(data.process_state.Node, node, &references, init.gpa);
         edges += references.items.len;
     }
     const fields = std.meta.fields(data.graph.NodeTag);

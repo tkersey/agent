@@ -6,20 +6,20 @@ admission still runs before Boundary admission. Diagnostics and native phase
 observers remain supported; observers do not enter portable images or execution.
 
 The normal Boundary dependency is pinned to
-`7094aa5f228aa1478489e20bd9245f02eda764a2`. The downloaded archive's recomputed Git
+`a918da81be930754ecb6d6b62c09df6b80b69cf1`. The downloaded archive's recomputed Git
 tree matches GitHub's commit API. Source, archive, Zig-managed package and ordinary
 extracted-package inventories are independently recorded in the existing lock.
 The selected versions are Boundary 3.0.0-dev.0 and World 6.0.0-dev.0. World is
-pinned to `f36994b26b6506bfc2b80ee1db8a9dfdbdef5b77`; its complete runtime
+pinned to `e622476b556482a0822610cb3e66480d56459c3b`; its complete runtime
 inventory and default kernel are authenticated by the same lock. This is
 candidate integration, not a published release.
 
-The public-compiler checkpoint passes authoring, native integration, compiled-tool
+The current record/codec-retirement pair passes authoring, native integration, compiled-tool
 browser transfer and functional economy checks: 162 Zig tests and the 35-test
 JavaScript authoring suite. The Node integration owner separately passes all 83
 tests and its dialogue, multi, document, consequence and independent-engine runs.
-The authenticated default kernel is 459,884 bytes with SHA-256
-`f436937401e3eb8c1dbd8d8dd6b3c54ac59bc6c60f1dc0a710adfbee1a3a8f67`.
+The authenticated default kernel is 458,420 bytes with SHA-256
+`89f8eb82abe322cda762fd6207b1a9374f0f1d45a48804f5b807f8018eff94c6`.
 Economy timing remains unmeasured; these checks establish behavior on this pair.
 
 `check-agent4` passed all 159 build steps using the normal dependency pin,
@@ -142,3 +142,24 @@ then passed its complete focused test in 47.4 seconds, followed by a passing
 83-test Node integration aggregate and all six owner-script commands. The
 original transient trigger was not reproduced; these results do not claim its
 universal elimination.
+
+## Current record and codec qualification
+
+The normal lock now authenticates Boundary `a918da8` and World `e622476`.
+Downloaded source trees match GitHub's commit API; Zig-managed and extracted
+Boundary package profiles are both checked. Fresh isolated setup rebuilt and
+authenticated the 458,420-byte generic kernel from those exact sources.
+
+Agent's policy walker no longer branches on the removed source `direct` flag:
+every source clause has its resumption checked. This retains the previous
+admission behavior for supported source programs. The economy graph inspector
+uses `data.graph_order` directly. Current authoring passes 159 build steps,
+112 Zig tests and 35 JavaScript tests. Native/integration/economy/tool/browser
+qualification passes 169 build steps and 50 Zig tests, the 83-test Node suite,
+49 inquiry scenarios and the owner-script runs, including source-independent
+package execution. Dependency post-verification passes. No paid model calls or
+real application data are used.
+
+Timing remains unmeasured. Remaining graph/helper and historical consumer cleanup,
+the complete performance matrix and serial review closeout are still required.
+The linked PRs remain drafts; no merge, promotion or release is authorized.

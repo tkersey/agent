@@ -197,7 +197,7 @@ fn checkResumptionOrigins(a: std.mem.Allocator, m: source.Module, r: *const Regi
     // the source handler clauses whose code/state can travel with this token.
     for (m.handlers, 0..) |handler, handler_id| {
         for (handler.clauses) |clause| {
-            if (clause.direct or clause.resumption != id) continue;
+            if (clause.resumption != id) continue;
             var producer = Walker.init(a, m, r, signature.effects);
             try producer.push(.handler, handler_id, 0);
             try producer.push(.schema, id, 0);
@@ -210,7 +210,7 @@ fn checkResumptionOrigins(a: std.mem.Allocator, m: source.Module, r: *const Regi
         const h = term.handle;
         if (h.handler >= m.handlers.len) return error.InvalidSource;
         for (m.handlers[@intCast(h.handler)].clauses) |clause| {
-            if (!clause.direct and clause.effect == signature.effect) {
+            if (clause.effect == signature.effect) {
                 try checkMultiValue(a, m, r, h.body, h.handler, h.state);
                 break;
             }
@@ -537,7 +537,7 @@ const Walker = struct {
             if (self.registry.isPrivate(clause.function)) return error.PrivateFunctionBypass;
             try self.push(.function, clause.function, clause.function);
             try self.push(.effect, clause.effect, 0);
-            if (!clause.direct) try self.push(.schema, clause.resumption, 0);
+            try self.push(.schema, clause.resumption, 0);
         }
         if (h.forward_function) |f| {
             if (self.registry.isPrivate(f)) return error.PrivateFunctionBypass;
@@ -689,7 +689,6 @@ fn inspectShape(a: std.mem.Allocator, m: source.Module, root: Id, r: ?*const Reg
 fn multiHandler(module: source.Module, id: Id) Error!bool {
     if (id >= module.handlers.len) return error.InvalidSource;
     for (module.handlers[@intCast(id)].clauses) |clause| {
-        if (clause.direct) continue;
         if (clause.resumption >= module.schemas.len) return error.InvalidSource;
         const schema = module.schemas[@intCast(clause.resumption)];
         if (schema == .internal and schema.internal == .resumption and

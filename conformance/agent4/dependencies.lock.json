@@ -3,38 +3,38 @@
   "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "e28d5b32fbf92a7013cb18cb8c81128a9b53cd6b",
-    "gitTree": "52599b791c938c51efa15296912fbeac2a49ca9e",
+    "commit": "5576f02f42ee7ae28711ff4ea304496b6d6fd3ad",
+    "gitTree": "89c095b72aaa9a4caf172cbf3930f4543749f409",
     "version": "3.0.0-dev.0",
     "source": {
-      "inventorySha256": "13c82890798211adc80d8ea22140d093ffeaea460034152536fb220cdb589d42",
-      "entries": 323,
-      "bytes": 8425165
+      "inventorySha256": "ead143b41606fa77d664617c67aeaadeb41da97fbb383aafe9a9252f8fcbe263",
+      "entries": 324,
+      "bytes": 8459553
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/e28d5b32fbf92a7013cb18cb8c81128a9b53cd6b.tar.gz",
-      "sha256": "ebd43d0defd582fda19b1bd9c401da0081e53621204a34e87f51e3b066a60b38",
-      "bytes": 1363273
+      "url": "https://github.com/tkersey/boundary/archive/5576f02f42ee7ae28711ff4ea304496b6d6fd3ad.tar.gz",
+      "sha256": "ebb7809573d08210b88cb75e7a7687aa37565a6e055c6b9394d48c27560139d4",
+      "bytes": 1369561
     },
     "authentication": "GitHub commit API tree identity equals recomputed downloaded source tree; archive and content inventories independently bound",
     "package": {
-      "zigHash": "boundary-3.0.0-dev.0-flclaNPKOQCfZB6-XOfTH7h7jIKzrwikd1W_oILKo7lw",
+      "zigHash": "boundary-3.0.0-dev.0-flclaCdROgCdUAjj_pXDrw5kAzK4iGRYlflNo2gh5vPD",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "9509179f6081ded1ca84a010d47d6bd13e45ad9887cb3cfbd04e0cd7fac37d31",
-          "entries": 308,
-          "bytes": 3787475
+          "inventorySha256": "181dbd549ed5ca3a5b510a7f52c01d4c5cf44056ce633ac38e1157299f8aa08f",
+          "entries": 309,
+          "bytes": 3821863
         },
         "archive-extracted": {
-          "inventorySha256": "afe703a5dcb988e23cb3d8ec30a4ff2e251ee06c5deff54ae9c44cb56e7c9672",
-          "entries": 308,
-          "bytes": 3787475
+          "inventorySha256": "766ebfeb5296591145c3b52b09f9b21ef83ed8b4f3a74f3739e50e700932783a",
+          "entries": 309,
+          "bytes": 3821863
         }
       },
       "archive": {
-        "sha256": "925a324b31d31fc79ef3fb729f5a9c7d5c19b071c3ea417db05d166cbfb16c28",
-        "bytes": 581582
+        "sha256": "52b444f9f11b2daa2bea4bc62b43e99c6f101dd16cc84e71ea6af1ffe9199248",
+        "bytes": 588163
       }
     },
     "api": {
@@ -49,7 +49,7 @@
         },
         {
           "path": "src/v2/data/root.zig",
-          "sha256": "12a9c917e392979eff5a9ce1d847d9da375fada943b6d777922d664386b8a08f"
+          "sha256": "1752c345a31a55e0b367a9c65612c895126bc8616c0ca83bb648e278afe6d9d4"
         },
         {
           "path": "src/v2/source.zig",
@@ -64,18 +64,18 @@
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "2342fb988764cfb7e0d6dcf0d16986f0a9d14a77",
-    "gitTree": "badf27ae27c8e5a31008c7ca7613d44b75a285d2",
+    "commit": "ff1ffed1c47e571682ab17d76bb6046293304d73",
+    "gitTree": "0ff24c48991933be88cc1fc292d202855bbbe0c8",
     "version": "6.0.0-dev.0",
     "source": {
-      "inventorySha256": "0d4dac7786cd61cacd473849974c1b0cccd44dbf5bb340537ac4fd3f2b4b2efc",
+      "inventorySha256": "55bfbf054beddb643a86b4ff14eb42d8f8fbd7fbe27564c08a1adee94cdfff25",
       "entries": 513,
-      "bytes": 38954719
+      "bytes": 38955266
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/2342fb988764cfb7e0d6dcf0d16986f0a9d14a77.tar.gz",
-      "sha256": "6bf2d0ab4a54177c2fee4a15d9f438bf381c554dfb9040d457b7a7ae5044ea49",
-      "bytes": 846203
+      "url": "https://github.com/tkersey/world/archive/ff1ffed1c47e571682ab17d76bb6046293304d73.tar.gz",
+      "sha256": "019abd61168a3c70f1397e3d1c4f4559f1bfc189f6fd38c1538e8734c9d4f461",
+      "bytes": 846436
     },
     "authentication": "Downloaded archive tree recomputed and matched to GitHub commit API; complete source and runtime inventories bound",
     "runtime": {
@@ -201,17 +201,17 @@
           "path": "world-kernel.wasm",
           "kind": "file",
           "mode": 493,
-          "bytes": 459855,
-          "sha256": "2744a5abe5d72bb5c9e2b7e9dc06159279f359b52fe6224c3fd5734aad10430d"
+          "bytes": 459817,
+          "sha256": "f2e1ddd54b65fe822e586f77fc63f97c114128c98d2c936e9e8919ae59ca8204"
         }
       ],
-      "inventorySha256": "1b7332eb15cd7edf08b957c853ade890a56e246b84ec469176d1240ee8509cb9",
+      "inventorySha256": "e6325177175bf47ee86c8f6f20a1a3226b3d1ce57d336f5d4704cb963a8e3ede",
       "entries": 19,
-      "bytes": 514192,
+      "bytes": 514154,
       "kernel": {
         "path": "world-kernel.wasm",
-        "bytes": 459855,
-        "sha256": "2744a5abe5d72bb5c9e2b7e9dc06159279f359b52fe6224c3fd5734aad10430d"
+        "bytes": 459817,
+        "sha256": "f2e1ddd54b65fe822e586f77fc63f97c114128c98d2c936e9e8919ae59ca8204"
       },
       "abi": 3,
       "exports": [
@@ -248,7 +248,7 @@
         "target": "build-kernel",
         "optimize": "ReleaseSmall",
         "machine": "wasm32-freestanding",
-        "boundarySourceCommit": "e28d5b32fbf92a7013cb18cb8c81128a9b53cd6b",
+        "boundarySourceCommit": "5576f02f42ee7ae28711ff4ea304496b6d6fd3ad",
         "capacityOverrides": [],
         "requestedOptimize": "ReleaseSafe"
       },

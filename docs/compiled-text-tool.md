@@ -29,7 +29,13 @@ no multi-shot resumption schemas. Internal requirements remain in the interface;
 they are not treated as purity or silently removed. Every external operation in the object must be
 bound, including declarations outside the selected entry's immediate body.
 Bindings preserve semantic operation names and must have the declared Agent role.
-The final linker checks their complete schemas and function contracts.
+The final linker checks their complete schemas and function contracts. The
+value-only tool caller explicitly requires no caller borrow dependencies, cell
+writes carrying borrows, or outlives requirements. Boundary derives the actual
+guarantee from linked code; the Agent effect role does not establish it. BMO1
+now includes the borrow-contract table, so earlier development objects must be
+re-emitted. The current text object is 1,490 bytes; the standalone/Agent BPI3
+images remain 1,483/4,224 bytes.
 
 An opaque import is rejected inside protected speculation even when its declared
 row appears harmless. This does not claim general protected-component admission:

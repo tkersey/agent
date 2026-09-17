@@ -122,6 +122,7 @@ pub fn link(allocator: std.mem.Allocator, module: source.Module, registry: *cons
     defer scratch.deinit();
     const a = scratch.allocator();
     var imports: std.ArrayList(data.component.Symbol) = .empty;
+    var borrows: std.ArrayList(data.borrow_contract.Summary) = .empty;
     var exports: std.ArrayList(data.component.Symbol) = .empty;
     var instances: std.ArrayList(data.linker.Instance) = .empty;
     var bindings: std.ArrayList(data.linker.Binding) = .empty;
@@ -130,6 +131,9 @@ pub fn link(allocator: std.mem.Allocator, module: source.Module, registry: *cons
     for (registry.compiled_imports.items, 0..) |item, index| {
         const name = try std.fmt.allocPrint(a, "import-{d}", .{index});
         try imports.append(a, .{ .name = name, .reference = .{ .kind = .function, .id = item.function } });
+        // The value-only tool boundary requires this guarantee. The linker
+        // derives it from the bound implementation; an effect role is no proof.
+        try borrows.append(a, .{ .function = item.function });
         try bindings.append(a, .{ .required = .{ .instance = wrapper_key, .symbol = name }, .supplied = .{ .instance = item.instance, .symbol = item.entry } });
         var existing = false;
         for (instances.items) |instance| if (std.mem.eql(u8, instance.key, item.instance)) {
@@ -146,7 +150,11 @@ pub fn link(allocator: std.mem.Allocator, module: source.Module, registry: *cons
             try bindings.append(a, .{ .required = .{ .instance = item.instance, .symbol = effect.symbol }, .supplied = .{ .instance = wrapper_key, .symbol = symbol } });
         }
     }
-    var compiled = try source.component.compileObserved(a, module, .{ .imports = imports.items, .exports = exports.items }, options);
+    var compiled = try source.component.compileObserved(a, module, .{
+        .imports = imports.items,
+        .exports = exports.items,
+        .borrows = borrows.items,
+    }, options);
     defer compiled.deinit();
     const bytes = try a.alloc(u8, try data.component.encodedLength(compiled.object));
     _ = try compiled.encode(a, bytes);

@@ -6,19 +6,19 @@ admission still runs before Boundary admission. Diagnostics and native phase
 observers remain supported; observers do not enter portable images or execution.
 
 The normal Boundary dependency is pinned to
-`e28d5b32fbf92a7013cb18cb8c81128a9b53cd6b`. The downloaded archive's recomputed Git
+`5576f02f42ee7ae28711ff4ea304496b6d6fd3ad`. The downloaded archive's recomputed Git
 tree matches GitHub's commit API. Source, archive, Zig-managed package and ordinary
 extracted-package inventories are independently recorded in the existing lock.
 The selected versions are Boundary 3.0.0-dev.0 and World 6.0.0-dev.0. World is
-pinned to `2342fb988764cfb7e0d6dcf0d16986f0a9d14a77`; its complete runtime
+pinned to `ff1ffed1c47e571682ab17d76bb6046293304d73`; its complete runtime
 inventory and default kernel are authenticated by the same lock. This is
 candidate integration, not a published release.
 
-The shared-sequence World checkpoint passes the combined `check-agent4`,
+The component borrow-contract checkpoint passes the combined `check-agent4`,
 `check-agent4-integration`, `check-compiled-tool-browser` and `check-agent4-economy`
 run: 214 build steps, 162 Zig tests, and the 35/83-test JavaScript suites. The
-authenticated default kernel is 459,855 bytes with SHA-256
-`2744a5abe5d72bb5c9e2b7e9dc06159279f359b52fe6224c3fd5734aad10430d`.
+authenticated default kernel is 459,817 bytes with SHA-256
+`f2e1ddd54b65fe822e586f77fc63f97c114128c98d2c936e9e8919ae59ca8204`.
 Economy timing remains unmeasured; this verifies behavior on the new pinned pair.
 
 `check-agent4` passed all 159 build steps using the normal dependency pin,
@@ -57,7 +57,6 @@ allowances with the prior growable runtime; it is not a claim of reduced memory
 use. Native peak/copy measurements and all scripted-policy assertions remain.
 
 Still required: complete matched-baseline runtime measurements and measured acceptance;
-complete general component contracts and imported-borrow requirements;
 preserve the complete approval/inquiry regressions;
 finish consumer package extraction, performance comparisons, legacy retirement and
 serial review closeout. The coordinated draft PRs do not claim full completion or
@@ -71,10 +70,9 @@ actual checkpoint through a separate Node file-reading process and complete from
 its successor. The same artifacts and leaf bindings execute from the extracted
 use archive.
 
-The tool object is 1,485 bytes; the standalone and Agent images are 1,483 and
+The tool object is 1,490 bytes; the standalone and Agent images are 1,483 and
 4,224 bytes. These are fixture sizes, not full performance acceptance. The
-general imported-borrow contracts remain open, alongside full performance acceptance, legacy retirement and serial
-review closeout. The selected compiler/runtime pair now includes direct immediate
+component borrow contracts are now checked locally and against actual linked implementations. Full performance acceptance, legacy retirement and serial review closeout remain open. The selected compiler/runtime pair now includes direct immediate
 calls and independently admitted total branching tail clauses. Their native,
 checkpoint/cancellation, Node, Wasmtime and browser checks pass, as does this
 Agent integration; the local work-count reductions are not full Agent latency
@@ -82,7 +80,7 @@ or peak-memory acceptance.
 
 
 The three-component reuse witness now also runs through Agent's normal compiled
-local-tool path. The same 142/366/603-byte callable, private-state and
+local-tool path. The same 147/375/612-byte callable, private-state and
 owned-suspension objects produce the two standalone Programs (839/875 bytes) and
 two Agent callers (920 bytes each). The private counter yields 41 and 42; the
 suspended package retains cleanup with payload 83. Standalone results are 83/166;

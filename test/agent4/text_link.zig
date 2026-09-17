@@ -207,6 +207,7 @@ pub fn main(init: std.process.Init) !void {
     try b.define(entry, try b.term(.{ .call = .{ .function = inspect, .arguments = &.{try b.reference(b.parameter(entry, 0))} } }));
     var caller = try source.component.compile(init.gpa, b.module(entry, unit), .{
         .imports = &.{.{ .name = "inspect", .reference = .{ .kind = .function, .id = inspect } }},
+        .borrows = &.{.{ .function = inspect }},
         .exports = &.{ .{ .name = "main", .reference = .{ .kind = .function, .id = entry } }, .{ .name = "read", .reference = .{ .kind = .effect, .id = read } }, .{ .name = "close", .reference = .{ .kind = .effect, .id = close } } },
     });
     defer caller.deinit();

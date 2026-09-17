@@ -102,6 +102,7 @@ fn toolObject(a: std.mem.Allocator, program: ir.Program) ![]u8 {
         .program = adapted,
         .imports = &.{ .{ .name = "read", .reference = .{ .kind = .effect, .id = try effect(program, "component/counter") } }, .{ .name = "release", .reference = .{ .kind = .effect, .id = try effect(program, "component/release") } } },
         .exports = &.{.{ .name = "inspect", .reference = .{ .kind = .function, .id = id } }},
+        .borrows = &.{.{ .function = id }},
     };
     const bytes = try a.alloc(u8, try data.component.encodedLength(object));
     errdefer a.free(bytes);

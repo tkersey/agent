@@ -3,8 +3,8 @@
 The application emitter constructs one Boundary source module. Agent checks its
 catalogs and protected construction, then calls Boundary's compiler once. Boundary
 owns type/effect/capture/use checking, direct stable-activation lowering, and
-BPI3/PST3/ERQ3/ERS3/PKI3/PKO3. World owns execution. The current branch has cut
-over authoring; normal runtime integration is still being migrated.
+BPI3/PST3/ERQ3/ERS3/PKI3/PKO3. World owns execution. The normal dependency lock selects the coordinated
+successor pair; full performance acceptance and serial review closeout remain open.
 
 | Owner | Responsibility |
 |---|---|

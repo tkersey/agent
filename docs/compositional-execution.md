@@ -8,18 +8,27 @@ incomplete. The linked PRs are drafts; no merge, promotion or release is authori
 
 The normal manifests and [dependency lock](../conformance/agent4/dependencies.lock.json)
 select Boundary `711325d3453f9fbb4d43f3ca9438c038fb7c14d7` and World
-`ddecb42da6bf763f40544576b1d71d42517cc608`. Downloaded source trees match GitHub
+`389d44c95507c37bc93de380d720de03d8908547`. Downloaded source trees match GitHub
 commit trees. Source/archive inventories, both Boundary package profiles, and
 World's runtime inventory are independently authenticated. Isolated setup rebuilds
 the generic kernel from these exact inputs. This is candidate integration, not a
 published release.
 
-The kernel is 460,483 bytes with SHA-256
-`d0a95764aabc8612b04816b68f9cbe9b443f31ef1501426b1c637b12bb50a9d8`.
+The kernel is 460,851 bytes with SHA-256
+`b0cee0db452b46d9cf8f3f3067c52693383d566b9670a38da778793e29de66ee`.
 The current graph has no predecessor control/continuation argument vectors:
 values belong to stable activation views. World cloning requires their owner.
 The raw graph State and migration-only Store import/export helpers are retired.
 Earlier draft PST3 records require their original pinned pair.
+
+World now gathers outgoing operands before changing an active control into its
+continuation in place. The continuation retains the same frame handle and node ID;
+multi-shot activation still clones its template. Unique slot prefixes stay in
+place, and constructor capacity is prepared before temporary values. All 86
+commands captured from this Agent implementation
+(`ec6827e0ab4bbfde60cf5ee24a9ffca9c1c570a0`) reproduce identical complete output
+bytes under the candidate native runtime. World records the new native timings
+and unresolved BPC1 gap in `docs/measurements/continuation-transfer.json`.
 
 Agent compiles through `boundary.program.compile`/`compileObserved`, with pure
 records from `boundary.data` and `boundary_data`. Protected Agent admission runs

@@ -5,7 +5,7 @@ It is not a sandbox for hostile native emitters that forge Builder data or its
 admission registry. Boundary checks the resulting program and World admits each
 supplied State relative to that image.
 
-Every external reply must match its current ERQ2 and concrete resume schema. Invalid
+Every external reply must match its current ERQ3 and concrete resume schema. Invalid
 framing, schemas, variants, identities, or bindings reject without advancing the
 parked State. Structurally valid unwanted replies follow authored rejection/retry
 control. Presentation labels and strings such as `origin=human` cannot authenticate
@@ -28,7 +28,7 @@ the actual base and atomically replacing the document. It is not a general shell
 or a distributed transaction service. Independent nonconforming writers/handlers
 remain outside its contract. Unknown write delivery remains uncertain.
 
-An image and PST2 may contain sensitive application data. Portability is not encryption.
+An image and PST3 may contain sensitive application data. Portability is not encryption.
 Secrets belong to environmental handlers and never to examples or release artifacts.
 The runner is single-writer. Copies of old snapshots can replay effects; neither
 request hashes nor approval tokens imply globally unique occurrences, exactly-once

@@ -149,6 +149,45 @@ native replay commands/expected outcomes and labels timings unqualified due to I
 Output must be outside all input paths, including physical aliases. No paid model
 calls or real application data are required by these checks.
 
+## Inquiry, repeated inquiry and ReAct measurements
+
+[The matched inquiry report](measurements/inquiry-performance.json) binds Agent
+`aa82ffa722df690e2fd729fac91426685a41a99c`, Boundary `711325d` and World `389d44c`
+to the optimized predecessor. All 54 process observations retain the original
+provider policies, real fixture-confined executor, native/Wasmtime comparisons,
+graph checks, and acceptance assertions. Three rotating observations per format
+and lane run in each of two windows. Equivalent direct stale-reply calls in the
+predecessor are explicitly timed too; no negative calls are omitted.
+
+These numbers are cumulative fresh guest time per scenario: kernel admission,
+image/State invocation and outcome decoding. Auxiliary native/Wasmtime validation
+and actual tool execution remain outside that interval. Diagnostic process/scenario
+times include those checks and are not presented as user latency.
+
+| Scenario | BPC1 window medians | BPI3 window medians |
+| --- | ---: | ---: |
+| Full inquiry repair, main path | 688.9 / 709.2 ms | 458.0 / 439.1 ms |
+| Paired reset inquiry | 743.1 / 737.1 ms | 463.1 / 494.3 ms |
+| Paired reset ReAct | 214.8 / 205.1 ms | 235.8 / 252.8 ms |
+| Four repeated tasks with stale challenges | 2038.4 / 2035.2 ms | 1157.6 / 1118.4 ms |
+
+Inquiry and repeated-task guest time improves; ReAct regresses. Native Session
+working peaks also regress: paired reset inquiry uses 3,209,470 versus 1,853,961
+bytes, and paired reset ReAct uses 5,373,182 versus 2,061,220 bytes. These counters
+exclude input-file decoding and host/output buffers, and are not RSS or total
+WASM memory. Lower blob-copy work does not discharge the peak failures. Repeated
+tasks retain a fixed 174-byte quiescent State versus the predecessor's 170 bytes,
+with no leftover packages, branches, cells, resources or obligations.
+
+`CEX-264a6e3750f35de01d632248` records the ReAct latency/peak witness;
+`CEX-f555845b0276bc998ca5f859` records inquiry's peak witness. They remain open.
+A read-only typed catalogue traversal finds 18 unused functions, 22 unused schemas,
+two unused effects and one unused handler in the 66,542-byte ReAct image. Its
+reachable function/schema/handler counts match the predecessor's totals. The
+current compiler only densifies region names at that stage. This nominates catalogue
+pruning for investigation; it is not a demonstrated fix, and inquiry retains all
+109 functions, so its peak failure needs additional explanation.
+
 ## Producer and developer workflow
 
 `zig build build-component-tools -Doptimize=ReleaseSafe` builds the existing
@@ -203,8 +242,8 @@ Historical tooling remains reconstructible from Git. The adequacy obstruction
 and its minimal reproducer remain intact.
 
 Still required are the remaining historical consumer/helper retirements, the full
-matched workload matrix (including inquiry/repeated inquiry/ReAct), allocation/
+matched workload matrix outside the measured inquiry/producer slices, allocation/
 copy/retention corroboration where absent, resolution of material primary-workload
-regressions, and serial review
+regressions including ReAct latency and inquiry/ReAct working peaks, and serial review
 closeout. The linked drafts must pass coordinated acceptance before any separately
 authorized landing in Boundary → World → Agent order.

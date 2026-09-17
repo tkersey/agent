@@ -10,7 +10,7 @@ The normal Boundary dependency is pinned to
 tree matches GitHub's commit API. Source, archive, Zig-managed package and ordinary
 extracted-package inventories are independently recorded in the existing lock.
 The selected versions are Boundary 3.0.0-dev.0 and World 6.0.0-dev.0. World is
-pinned to `6d7abe20412b0da3317afacc6e52952231b4fe4b`; its complete runtime
+pinned to `9a045a1760c2071fa008e44fe608f6ee48402c6e`; its complete runtime
 inventory and default kernel are authenticated by the same lock. This is
 candidate integration, not a published release.
 
@@ -146,7 +146,7 @@ universal elimination.
 
 ## Current dependency qualification
 
-The normal lock now authenticates Boundary `d8edcf1` and World `6d7abe2`.
+The normal lock now authenticates Boundary `d8edcf1` and World `9a045a1`.
 This pair includes exact-sized envelope ownership, Store-owned argument and
 terminal storage, rollback-safe compaction, and canonical word analysis sets. Downloaded source trees match GitHub's commit API; Zig-managed and extracted
 Boundary package profiles are both checked. Fresh isolated setup rebuilt and
@@ -228,3 +228,15 @@ Other cases still regress or are inconclusive, and State sizes are larger.
 This does not discharge the complete performance objective: allocation/copy
 corroboration, remaining workloads, control regressions and serial reviews stay
 required. All paired observations, including unfavorable windows, are retained.
+
+## Host admission update
+
+The normal World pin is now `9a045a1`; its kernel remains the same
+`d76bfe2c7949903f53e3d5b2b6b6d229887422483d383524d655f087b8609931` artifact.
+Only host admission changed: one owned snapshot binds digest, compilation and
+ABI inspection, and the last admitted immutable module may be reused through
+a weak reference. Every call rechecks bytes and digest; instances, identities,
+Program admission and Session state remain fresh. No cache survives solely
+because of the weak entry. Cold observations remain separate from repeated-call
+results. The existing clarification regression is not discharged by targeted
+factory timings; the matched consumer remeasurement follows qualification.

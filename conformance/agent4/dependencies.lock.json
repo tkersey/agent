@@ -76,18 +76,18 @@
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "6d7abe20412b0da3317afacc6e52952231b4fe4b",
-    "gitTree": "92f97788cbf8b06ba85442f2cf19a61b9d548140",
+    "commit": "9a045a1760c2071fa008e44fe608f6ee48402c6e",
+    "gitTree": "def51a02dfc184727652cef97efd0b07168ac6ca",
     "version": "6.0.0-dev.0",
     "source": {
-      "inventorySha256": "39266f8f99c1882fa37f98c8ca4c34bd9eed76ec6b1e2636970c461114747be4",
-      "entries": 246,
-      "bytes": 6448722
+      "inventorySha256": "46650feebd39cb5344abe3097f3cdeba155f483e9a3ffe02bfa8ab1ac3acc1d4",
+      "entries": 247,
+      "bytes": 6623561
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/6d7abe20412b0da3317afacc6e52952231b4fe4b.tar.gz",
-      "sha256": "7f7b4376b9da2f68a4f4ba831fa3059fa49de07d9410adb042f2b29f1f9788ca",
-      "bytes": 830177
+      "url": "https://github.com/tkersey/world/archive/9a045a1760c2071fa008e44fe608f6ee48402c6e.tar.gz",
+      "sha256": "c6a5be73222c8a66914fb74aaec7cbcc3f6d1fc381ee4f777e2288764311d64a",
+      "bytes": 850279
     },
     "authentication": "Downloaded archive tree recomputed and matched to GitHub commit API; complete source and runtime inventories bound",
     "runtime": {
@@ -173,8 +173,8 @@
           "path": "src/embedding/kernel.mjs",
           "kind": "file",
           "mode": 420,
-          "bytes": 6177,
-          "sha256": "649c24f990a62fdf2a9debea900bcb40aeba966102dfbf591e8c3dd66dbb258d"
+          "bytes": 5962,
+          "sha256": "a26b8f4e526283cda1346216ec6911858c7b96a08e44d6112fce809b1ae90838"
         },
         {
           "path": "src/embedding/values.mjs",
@@ -187,8 +187,8 @@
           "path": "src/embedding/wasm.mjs",
           "kind": "file",
           "mode": 420,
-          "bytes": 12928,
-          "sha256": "ada7b18a96016d63cd826e48b0078db2ddd459844a2b5c542d20fd6f8feb96b6"
+          "bytes": 14480,
+          "sha256": "ac164590e77034bbafef8112bbaf34303fa8c744d306547d5afa9e53d2ca0a18"
         },
         {
           "path": "src/embedding/wire.mjs",
@@ -217,9 +217,9 @@
           "sha256": "d76bfe2c7949903f53e3d5b2b6b6d229887422483d383524d655f087b8609931"
         }
       ],
-      "inventorySha256": "e70264f512c15b94639b527d850d7bffb536b1d226893ae3df14782ea9f71832",
+      "inventorySha256": "616456c1b933f7107871da86d6b68eda34264796ff34f85f2c1ff0045ae7c4ff",
       "entries": 19,
-      "bytes": 514580,
+      "bytes": 515917,
       "kernel": {
         "path": "world-kernel.wasm",
         "bytes": 459817,

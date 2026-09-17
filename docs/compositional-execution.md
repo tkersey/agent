@@ -10,9 +10,16 @@ The normal Boundary dependency is pinned to
 tree matches GitHub's commit API. Source, archive, Zig-managed package and ordinary
 extracted-package inventories are independently recorded in the existing lock.
 The selected versions are Boundary 3.0.0-dev.0 and World 6.0.0-dev.0. World is
-pinned to `8d55a4d0ddaebd355c9dc8a99087e5052e42e77e`; its complete runtime
+pinned to `2342fb988764cfb7e0d6dcf0d16986f0a9d14a77`; its complete runtime
 inventory and default kernel are authenticated by the same lock. This is
 candidate integration, not a published release.
+
+The shared-sequence World checkpoint passes the combined `check-agent4`,
+`check-agent4-integration`, `check-compiled-tool-browser` and `check-agent4-economy`
+run: 214 build steps, 162 Zig tests, and the 35/83-test JavaScript suites. The
+authenticated default kernel is 459,855 bytes with SHA-256
+`2744a5abe5d72bb5c9e2b7e9dc06159279f359b52fe6224c3fd5734aad10430d`.
+Economy timing remains unmeasured; this verifies behavior on the new pinned pair.
 
 `check-agent4` passed all 159 build steps using the normal dependency pin,
 including 112 Zig tests,

@@ -2,7 +2,7 @@
 
 Agent authoring emits BPI3 using Boundary `3.0.0-dev.0` at
 `e28d5b32fbf92a7013cb18cb8c81128a9b53cd6b`. The candidate integration lock selects
-World `6.0.0-dev.0` at `8d55a4d0ddaebd355c9dc8a99087e5052e42e77e` and its ABI 3
+World `6.0.0-dev.0` at `2342fb988764cfb7e0d6dcf0d16986f0a9d14a77` and its ABI 3
 runtime. The normal bridge/runner, native semantics, inquiry CLI, full application
 integration and extracted use-archive checks pass. The compiled text-tool browser/file/browser witness also passes; performance
 acceptance and legacy retirement remain in progress. See [the tool contract](compiled-text-tool.md). See [current status](compositional-execution.md).

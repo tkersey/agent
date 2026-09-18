@@ -10,8 +10,9 @@ Current architecture, runtime and migration instructions are in
 [architecture.md](architecture.md), [agent4-runtime.md](agent4-runtime.md),
 [migration_from_3.md](migration_from_3.md), and [compiled-text-tool.md](compiled-text-tool.md).
 
-The pinned authoring, native and integration checks pass 229 build steps and 176
-Zig tests, plus JavaScript consumer checks including an extracted external consumer. Dependency/setup tests pass 25/25
+Current runtime integration passes 182 build steps and 64 Zig tests, plus
+JavaScript consumers including an extracted external consumer. The unchanged
+authoring source retains its prior qualification. Dependency/setup tests pass 25/25
 and offline setup authenticates the complete source/runtime tuple. Current integration,
 functional economy, independent native/Node/Wasmtime execution, extracted-package
 consumers, component reuse and real Chromium/Firefox compiled-tool transfers pass.
@@ -19,8 +20,18 @@ The economy run is functional-only and does not establish timing acceptance.
 
 ## Current results and unresolved failures
 
-The current kernel is 460,161 bytes with SHA-256
-`dbb929681cb7675affaccefbfee9fd8fc5ee579e0d76276eedab882fd35642a8`.
+World now reclaims unreachable storage before returning a yield or request. A
+one-element survivor from a 1 MiB input retains 8,182 working bytes rather than
+1,056,327, with the same 86-byte checkpoint. Live aliases, repeated export,
+restoration and allocation-failure rollback have regression coverage. Checkpoint
+export remains read-only. The actual WASM resident API retains 6,064 working-live
+bytes across the same input sizes; reserved linear memory remains separately
+chargeable. This correctness fix adds about 1–5% to several tested
+suspension-heavy native controls; its performance cost remains open.
+
+
+The current kernel is 460,179 bytes with SHA-256
+`30f58a84f006bb9d4102d11aea340a81617becd8adb608bc5504b6e30d370240`.
 Inquiry, repeated-task and ReAct images remain 38,162 / 38,561 / 64,111 bytes.
 
 Boundary now uses compact analysis-set storage on 64-bit native hosts while
@@ -33,7 +44,7 @@ peaks to 2,050,143 / 3,226,040. These are requested working bytes, not RSS.
 The two final native replay windows show no material latency regression; inquiry
 changes remain below 1%, with modest ReAct gains. The all-target tagged layout
 slowed sampled guest inquiry/ReAct by about 3% / 7%, so wasm32 retains its
-previous storage and byte-identical kernel. No guest latency or memory gain is
+previous storage. The later suspension-reclamation change adds 18 kernel bytes. No guest latency or memory gain is
 claimed from the native specialization.
 
 Native Session peaks remain above optimized BPC1's 1,853,961 / 2,061,220 bytes.

@@ -76,18 +76,18 @@
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "275176e5e5e5dc360e2c6eb4deade739a164ee8a",
-    "gitTree": "7bd578d4e830fe7c8952ceb5464fc49b65683984",
+    "commit": "a068392262c0d46b04d2a782729c09c6630a1c74",
+    "gitTree": "8075e14214fdb3975b44a81a35b08f529d3d167a",
     "version": "6.0.0-dev.0",
     "source": {
-      "inventorySha256": "0e6d0c7626e2614492509d7d54556b6a76c3c830c5adc6cacfb08667be641dfa",
+      "inventorySha256": "534e01e907125f38e3744e4e41c42c517e88343c868bbcaaaa01507e35c20004",
       "entries": 133,
-      "bytes": 1303534
+      "bytes": 1310635
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/275176e5e5e5dc360e2c6eb4deade739a164ee8a.tar.gz",
-      "bytes": 296092,
-      "sha256": "7b665a7d3671553bbcf5d09d242ab39158a4d2461a24bdad2fd82b2b0ed846ab"
+      "url": "https://github.com/tkersey/world/archive/a068392262c0d46b04d2a782729c09c6630a1c74.tar.gz",
+      "bytes": 297641,
+      "sha256": "2120dace4b5683eaecffb216ca46187e072374ce4bd21ea9577814b7e05096ce"
     },
     "authentication": "Downloaded archive tree recomputed and matched to GitHub commit API; complete source and runtime inventories bound",
     "runtime": {
@@ -213,17 +213,17 @@
           "path": "world-kernel.wasm",
           "kind": "file",
           "mode": 493,
-          "bytes": 460161,
-          "sha256": "dbb929681cb7675affaccefbfee9fd8fc5ee579e0d76276eedab882fd35642a8"
+          "bytes": 460179,
+          "sha256": "30f58a84f006bb9d4102d11aea340a81617becd8adb608bc5504b6e30d370240"
         }
       ],
-      "inventorySha256": "0d0a88f7fd2b6f994e231ade637a7d5b03971f365a7521e1bcfcb2b7c774ca2e",
+      "inventorySha256": "247c3029c3ca8d84a761f8f5507f17909c691ed0a3fcdd57571ad102c78a344c",
       "entries": 19,
-      "bytes": 516261,
+      "bytes": 516279,
       "kernel": {
         "path": "world-kernel.wasm",
-        "bytes": 460161,
-        "sha256": "dbb929681cb7675affaccefbfee9fd8fc5ee579e0d76276eedab882fd35642a8"
+        "bytes": 460179,
+        "sha256": "30f58a84f006bb9d4102d11aea340a81617becd8adb608bc5504b6e30d370240"
       },
       "abi": 3,
       "exports": [

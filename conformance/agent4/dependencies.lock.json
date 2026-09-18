@@ -76,18 +76,18 @@
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "5c1e6f1b9371baef022f6e73ad41b61e9a20a7a7",
-    "gitTree": "3beb000821703bf129bd3e582a59b84b5e4343de",
+    "commit": "275176e5e5e5dc360e2c6eb4deade739a164ee8a",
+    "gitTree": "7bd578d4e830fe7c8952ceb5464fc49b65683984",
     "version": "6.0.0-dev.0",
     "source": {
-      "inventorySha256": "28e1036bded6e5e79d3ecb5bc1da3f8431fcdc7ad0f5fc5c1d40bc1589fb7365",
+      "inventorySha256": "0e6d0c7626e2614492509d7d54556b6a76c3c830c5adc6cacfb08667be641dfa",
       "entries": 133,
-      "bytes": 1297429
+      "bytes": 1303534
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/5c1e6f1b9371baef022f6e73ad41b61e9a20a7a7.tar.gz",
-      "bytes": 294325,
-      "sha256": "71384cd54ba361885d78fb660e250df3e2009b21b7a733b030b6905fcfc0126d"
+      "url": "https://github.com/tkersey/world/archive/275176e5e5e5dc360e2c6eb4deade739a164ee8a.tar.gz",
+      "bytes": 296092,
+      "sha256": "7b665a7d3671553bbcf5d09d242ab39158a4d2461a24bdad2fd82b2b0ed846ab"
     },
     "authentication": "Downloaded archive tree recomputed and matched to GitHub commit API; complete source and runtime inventories bound",
     "runtime": {

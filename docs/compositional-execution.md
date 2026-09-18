@@ -10,8 +10,8 @@ Current architecture, runtime and migration instructions are in
 [architecture.md](architecture.md), [agent4-runtime.md](agent4-runtime.md),
 [migration_from_3.md](migration_from_3.md), and [compiled-text-tool.md](compiled-text-tool.md).
 
-The pinned authoring and native checks pass 193 steps, 176 Zig tests and 35 JavaScript
-tests, including an extracted external consumer. Dependency/setup tests pass 25/25
+The pinned authoring, native and integration checks pass 229 build steps and 176
+Zig tests, plus JavaScript consumer checks including an extracted external consumer. Dependency/setup tests pass 25/25
 and offline setup authenticates the complete source/runtime tuple. Current integration,
 functional economy, independent native/Node/Wasmtime execution, extracted-package
 consumers, component reuse and real Chromium/Firefox compiled-tool transfers pass.
@@ -23,20 +23,23 @@ The current kernel is 460,161 bytes with SHA-256
 `dbb929681cb7675affaccefbfee9fd8fc5ee579e0d76276eedab882fd35642a8`.
 Inquiry, repeated-task and ReAct images remain 38,162 / 38,561 / 64,111 bytes.
 
-World batches frame writes and pruning against admitted liveness bounds. Slot
-pages remain the sole initialization authority; retained views and failed
-transitions preserve their existing contracts. Two isolated native windows
-confirm about 8% / 10% / 11% gains on 64/128/256 handlers against the preceding
-successor. Small cases remain indeterminate. These are World controls, not an
-Agent latency claim; optimized BPC1 control64 remains faster and uses less memory.
+Boundary now uses compact analysis-set storage on 64-bit native hosts while
+preserving full-width members and immutable overlay roots. Across 13 fixed
+scenarios and 128 paired native invocations, outcomes and transition/control/copy
+counters match. Inquiry/ReAct native Session peaks fall from 2,049,764 /
+3,534,020 to 1,952,780 / 3,084,054 bytes. Full invocation framing raises those
+peaks to 2,050,143 / 3,226,040. These are requested working bytes, not RSS.
 
-Current integration confirms inquiry/ReAct native Session peaks of 2,049,764 /
-3,534,020 bytes, versus optimized BPC1's 1,853,961 / 2,061,220. Requested working
-bytes exclude input-file and host/output buffers and are not RSS. The final
-matched Agent timing comparison is still required. Inquiry and
-repeated-task's earlier guest improvement and ReAct's remaining guest latency
-gap need final requalification. No live-model usefulness claim follows from
-synthetic fixture execution.
+The two final native replay windows show no material latency regression; inquiry
+changes remain below 1%, with modest ReAct gains. The all-target tagged layout
+slowed sampled guest inquiry/ReAct by about 3% / 7%, so wasm32 retains its
+previous storage and byte-identical kernel. No guest latency or memory gain is
+claimed from the native specialization.
+
+Native Session peaks remain above optimized BPC1's 1,853,961 / 2,061,220 bytes.
+Inquiry and repeated-task's earlier guest improvement and ReAct's remaining guest
+latency gap need final requalification. No live-model usefulness claim follows
+from synthetic fixture execution.
 
 Remaining work includes those primary-workload regressions, the rest of the accepted
 workload matrix, serial reviews and the final

@@ -7,8 +7,8 @@ incomplete. The linked PRs are drafts; no merge, promotion or release is authori
 ## Current construction and dependency custody
 
 The normal manifests and [dependency lock](../conformance/agent4/dependencies.lock.json)
-select Boundary `711325d3453f9fbb4d43f3ca9438c038fb7c14d7` and World
-`389d44c95507c37bc93de380d720de03d8908547`. Downloaded source trees match GitHub
+select Boundary `571b297dce1d74a94e9c3f5cfbd9f3c0ed50ec51` and World
+`a186508850765001cc22623bff6598242816d550`. Downloaded source trees match GitHub
 commit trees. Source/archive inventories, both Boundary package profiles, and
 World's runtime inventory are independently authenticated. Isolated setup rebuilds
 the generic kernel from these exact inputs. This is candidate integration, not a
@@ -230,6 +230,45 @@ The one-time component-owner emitter build is also recorded, rather than hidden.
 These observations establish this developer-workflow slice. They do not turn
 millisecond compiler execution into a claim about seconds of native compilation,
 or qualify the remaining runtime performance matrix.
+
+## Closed catalogue pruning
+
+Boundary `571b297` prunes closed Programs through its typed relocation inventory,
+after full admission and before final admission. BMO1 components retain their
+interfaces. The unchanged Agent producer emits inquiry/repeated/ReAct images of
+38,162 / 38,561 / 64,111 bytes, versus 38,239 / 38,647 / 66,542 before pruning.
+ReAct loses 18 unused functions, 134 blocks, 22 schemas, two effects and one handler.
+
+The [matched comparison](measurements/catalogue-pruning.json) contains 54 process
+runs: three rotating observations per variant/lane in each of two windows. The
+World runtime and Agent policies are identical between successor variants. Task
+and outcome schema bytes match; every original assertion and semantic/work-count
+comparison passes. Times below are cumulative fresh guest intervals in milliseconds,
+not whole-application latency.
+
+| Scenario | Optimized BPC1 | Unpruned successor | Pruned successor |
+| --- | ---: | ---: | ---: |
+| Main inquiry | 687 / 703 | 442 / 439 | 442 / 416 |
+| Paired reset inquiry | 727 / 761 | 425 / 449 | 445 / 451 |
+| Paired reset ReAct | 196 / 214 | 268 / 252 | 231 / 232 |
+| Four repeated tasks, including stale challenges | 2019 / 2081 | 1149 / 1119 | 1099 / 1130 |
+
+Pruning improves the measured ReAct medians but does not close its BPC1 gap.
+Inquiry/repeated-task changes are mixed; no uniform latency gain is claimed.
+Paired inquiry native Session peak falls from 3,209,470 to 3,107,532 bytes, versus
+BPC1's 1,853,961. Paired ReAct falls from 5,373,182 to 5,201,096 bytes, versus
+2,061,220. Copy counts are unchanged. Both working-peak regressions remain open.
+These counters exclude input-file decoding and host/output buffers, and are not RSS.
+
+Normal authenticated production emission reproduces all three measured images
+byte-for-byte. The new pair passes the 159-step authoring aggregate (112 Zig and
+35 JavaScript tests) and the combined integration/economy/component/browser
+aggregate (171 steps, 53 Zig and 83 Node tests), including extracted-package
+execution and the inquiry scenarios. Post-run source/package/runtime authentication
+passes. The callable cost witness now proves the extra nominal source declaration
+and byte-identical closed images after immediate-call lowering; the independent
+unsafe-callback admission tests retain their rejection assertions. These checks
+do not resolve the measured performance failures or grant serial review credit.
 
 ## Retirement and remaining work
 

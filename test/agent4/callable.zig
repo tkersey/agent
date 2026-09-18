@@ -90,7 +90,7 @@ test "public static-code callable preserves safe higher-order composition" {
     try admission.verify(a, module, &registry);
 }
 
-test "static-code source comparison records image cost" {
+test "static-code source separation has no closed image cost for an immediate call" {
     const a = std.testing.allocator;
     var b1 = B.init(a);
     defer b1.deinit();
@@ -104,6 +104,10 @@ test "static-code source comparison records image cost" {
     defer c1.deinit();
     var c2 = try bnd.program.compile(a, try build(&b2, &r2, .static_code, 1));
     defer c2.deinit();
+    // The unrelated callback has its own nominal source schema, so Agent can
+    // distinguish its origin. Its immediate call needs no runtime closure;
+    // closed catalogue pruning removes that otherwise unreferenced schema.
+    try std.testing.expectEqual(b1.schemas.items.len + 1, b2.schemas.items.len);
     const image = bnd.data.program_image;
     const len1 = try image.encodedLength(c1.program);
     const len2 = try image.encodedLength(c2.program);
@@ -114,7 +118,7 @@ test "static-code source comparison records image cost" {
     _ = try c1.encode(a, bytes1);
     _ = try c2.encode(a, bytes2);
     std.debug.print("shape-interned image={d}; nominal separation image={d}; byte_equal={}\n", .{ len1, len2, std.mem.eql(u8, bytes1, bytes2) });
-    try std.testing.expectEqual(len1 + 8, len2);
+    try std.testing.expectEqualSlices(u8, bytes1, bytes2);
 }
 
 test "static-code identity does not assert effect safety or bless schema reuse" {

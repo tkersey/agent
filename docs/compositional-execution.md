@@ -7,8 +7,8 @@ incomplete. The linked PRs are drafts; no merge, promotion or release is authori
 ## Current construction and dependency custody
 
 The normal manifests and [dependency lock](../conformance/agent4/dependencies.lock.json)
-select Boundary `571b297dce1d74a94e9c3f5cfbd9f3c0ed50ec51` and World
-`a186508850765001cc22623bff6598242816d550`. Downloaded source trees match GitHub
+select Boundary `8a9423c251694fef8d6957bfd58877929b174264` and World
+`6c31a76a49e9f3e36fb5cde0a83a3a8269e566df`. Downloaded source trees match GitHub
 commit trees. Source/archive inventories, both Boundary package profiles, and
 World's runtime inventory are independently authenticated. Isolated setup rebuilds
 the generic kernel from these exact inputs. This is candidate integration, not a
@@ -269,6 +269,34 @@ passes. The callable cost witness now proves the extra nominal source declaratio
 and byte-identical closed images after immediate-call lowering; the independent
 unsafe-callback admission tests retain their rejection assertions. These checks
 do not resolve the measured performance failures or grant serial review credit.
+
+## Native analysis index storage
+
+Boundary's checked 32-bit private analysis indexes reduce native tree records,
+interner keys and position facts while preserving 64-bit set members. The
+[exact source-bound native measurements](https://github.com/tkersey/boundary/blob/8a9423c251694fef8d6957bfd58877929b174264/docs/measurements/analysis-root-width.json)
+include unchanged invocation bytes, two rotating control/value windows, high-ID
+and allocation-failure tests, and the rejected wider-leaf variants.
+
+Paired inquiry native Session peak falls from 3,107,532 to 2,847,222 bytes and
+ReAct from 5,201,096 to 4,239,618. Original semantic/work counts and copied-blob
+counts are unchanged across all thirteen comparison scenarios. Both peaks remain
+above optimized BPC1; requested working bytes exclude input-file and host/output
+buffers and are not RSS. Preparation-only numbers are reported separately.
+
+The new normal dependency pair passes 159 authoring steps (112 Zig and 35 JavaScript
+tests) and 171 combined integration/economy/component/browser steps (53 Zig and
+83 Node tests), including all 49 inquiry scenarios and extracted consumers. Normal
+emission reproduces the measured inquiry/repeated/ReAct images byte-for-byte.
+
+The [authenticated guest comparison](measurements/analysis-index-guest.json)
+retains an intermediate failure: an unconditional extra index-space guard raised
+inquiry and several ReAct medians. The final guard is compiled only when the
+index is narrower than the pointer width; otherwise existing checked additions
+already enforce the bound. All final runtime bytes now match the preceding
+authenticated runtime, including the kernel. No final guest code change or speedup
+is claimed. The adverse trial remains recorded as Boundary NEG-000011. Final
+source/package/runtime authentication and image byte-equality checks pass.
 
 ## Retirement and remaining work
 

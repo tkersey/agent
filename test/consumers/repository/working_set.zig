@@ -1,0 +1,149 @@
+//! Application-owned repository working-set policy. Every transition below is
+//! authored Boundary data; host adapters do not fold memory or approve completion.
+const std = @import("std");
+const agent = @import("agent");
+const boundary = @import("boundary");
+pub const types = @import("types.zig");
+const t = types;
+const Id = boundary.computation.Id;
+
+pub const initial: t.Memory = .{
+    .listing = null,
+    .package_document = null,
+    .source_document = null,
+    .test_document = null,
+    .latest_search = null,
+    .latest_test = null,
+    .replacement = null,
+    .failing_test_observed = false,
+    .mutation_applied = false,
+    .passing_test_observed = false,
+};
+
+pub const Functions = struct { observe: Id, project: Id, final_allowed: Id };
+
+pub fn define(c: agent.Context) !Functions {
+    const e: Emit = .{ .c = c };
+    const b = c.builder;
+    const observe = try b.declare(&.{ try c.schema(t.Memory), try c.schema(t.Observation) }, try c.schema(t.Memory), &.{}, &.{});
+    const memory = try e.param(observe, 0);
+    const Case = std.meta.Child(@FieldType(@FieldType(boundary.computation.ast.Term, "match_sum"), "cases"));
+    var cases: [5]Case = undefined;
+    inline for (std.meta.fields(t.Observation), 0..) |field, index| {
+        const payload = try b.variable(try c.schema(field.type));
+        const value = try b.reference(payload);
+        const body = switch (index) {
+            0 => try b.pure(try e.memory(memory, .{ .listing = try e.some(?t.CompactListing, value) })),
+            1 => try observeRead(e, memory, value),
+            2 => try b.pure(try e.memory(memory, .{ .latest_search = try e.some(?t.CompactSearch, value) })),
+            3 => try b.pure(try observeTest(e, memory, value)),
+            4 => try b.pure(try observeReplacement(e, memory, value)),
+            else => unreachable,
+        };
+        cases[index] = .{ .variable = payload, .body = body };
+    }
+    try b.define(observe, try b.term(.{ .match_sum = .{ .value = try e.param(observe, 1), .cases = &cases } }));
+
+    const project = try b.declare(&.{try c.schema(t.Memory)}, try c.schema(t.DecisionView), &.{}, &.{});
+    const m = try e.param(project, 0);
+    var fields: [8]Id = undefined;
+    inline for (std.meta.fields(t.Memory)[0..7], 0..) |field, i| fields[i] = try e.field(field.type, m, i);
+    fields[7] = try e.product(t.DecisionEvidence, &.{ try e.field(bool, m, 7), try e.field(bool, m, 8), try e.field(bool, m, 9) });
+    try b.define(project, try b.pure(try e.product(t.DecisionView, &fields)));
+
+    const allowed = try b.declare(&.{ try c.schema(t.Memory), try c.schema(t.FinalResult) }, try c.schema(bool), &.{}, &.{});
+    const fm = try e.param(allowed, 0);
+    const result = try e.param(allowed, 1);
+    const evidence = try e.both(try e.field(bool, fm, 7), try e.field(bool, fm, 8));
+    const passing = try e.both(try e.field(bool, fm, 9), try e.field(bool, result, 2));
+    try b.define(allowed, try b.pure(try e.both(evidence, passing)));
+    return .{ .observe = observe, .project = project, .final_allowed = allowed };
+}
+
+fn observeRead(e: Emit, memory: Id, read: Id) !Id {
+    const code = try e.field(u8, read, 1);
+    var body = try e.c.builder.term(.{ .fail = try e.c.literal(t.Failure, .invalid_variant) });
+    inline for (.{ t.DocumentRole.@"test", t.DocumentRole.source, t.DocumentRole.package }) |role| {
+        const index = @intFromEnum(role);
+        const normalized = try e.product(t.ReadResult, &.{
+            try e.c.literal(t.DocumentRole, role), code,                             try e.field(t.Path, read, 2),
+            try e.field(t.DigestHex, read, 3),     try e.field(t.FileText, read, 4),
+        });
+        const present = try e.some(?t.ReadResult, normalized);
+        const updated = switch (role) {
+            .package => try e.memory(memory, .{ .package_document = present }),
+            .source => try e.memory(memory, .{ .source_document = present }),
+            .@"test" => try e.memory(memory, .{ .test_document = present }),
+        };
+        body = try e.c.builder.term(.{ .conditional = .{
+            .condition = try e.binary(.equal, code, try e.c.literal(u8, index)),
+            .when_true = try e.c.builder.pure(updated),
+            .when_false = body,
+        } });
+    }
+    return body;
+}
+
+fn observeTest(e: Emit, memory: Id, result: Id) !Id {
+    const passed = try e.field(bool, result, 1);
+    const mutation = try e.field(bool, memory, 8);
+    const failing = try e.both(try e.not(passed), try e.not(mutation));
+    const compact = try e.product(t.CompactTestResult, &.{
+        try e.field(i32, result, 0), passed, try e.field(bool, result, 4), try e.field(bool, result, 5),
+    });
+    return e.memory(memory, .{
+        .latest_test = try e.some(?t.CompactTestResult, compact),
+        .failing_test_observed = try e.either(try e.field(bool, memory, 7), failing),
+        .passing_test_observed = try e.select(bool, mutation, passed, try e.field(bool, memory, 9)),
+    });
+}
+
+fn observeReplacement(e: Emit, memory: Id, outcome: Id) !Id {
+    const tag = try e.c.builder.primitive(try e.c.schema(u64), .variant_tag, &.{outcome}, 0);
+    const applied = try e.binary(.equal, tag, try e.c.literal(u64, 0));
+    const conflict = try e.binary(.equal, tag, try e.c.literal(u64, 2));
+    const clears = try e.either(applied, conflict);
+    return e.memory(memory, .{
+        .source_document = try e.select(?t.ReadResult, clears, try e.c.literal(?t.ReadResult, null), try e.field(?t.ReadResult, memory, 2)),
+        .latest_search = try e.select(?t.CompactSearch, clears, try e.c.literal(?t.CompactSearch, null), try e.field(?t.CompactSearch, memory, 4)),
+        .replacement = try e.some(t.ReplacementSummary, outcome),
+        .mutation_applied = try e.either(try e.field(bool, memory, 8), applied),
+        .passing_test_observed = try e.select(bool, clears, try e.c.literal(bool, false), try e.field(bool, memory, 9)),
+    });
+}
+
+const Emit = struct {
+    c: agent.Context,
+    fn param(e: Emit, f: Id, i: usize) !Id {
+        return e.c.builder.reference(e.c.builder.parameter(f, i));
+    }
+    fn field(e: Emit, comptime T: type, value: Id, i: u64) !Id {
+        return e.c.builder.primitive(try e.c.schema(T), .field, &.{value}, i);
+    }
+    fn product(e: Emit, comptime T: type, fields: []const Id) !Id {
+        return e.c.builder.primitive(try e.c.schema(T), .product, fields, 0);
+    }
+    fn some(e: Emit, comptime T: type, value: Id) !Id {
+        return e.c.builder.primitive(try e.c.schema(T), .variant, &.{value}, 1);
+    }
+    fn binary(e: Emit, op: boundary.data.program.Opcode, a: Id, b: Id) !Id {
+        return e.c.builder.primitive(try e.c.schema(bool), op, &.{ a, b }, 0);
+    }
+    fn both(e: Emit, a: Id, b: Id) !Id {
+        return e.select(bool, a, b, try e.c.literal(bool, false));
+    }
+    fn either(e: Emit, a: Id, b: Id) !Id {
+        return e.select(bool, a, try e.c.literal(bool, true), b);
+    }
+    fn not(e: Emit, value: Id) !Id {
+        return e.c.builder.primitive(try e.c.schema(bool), .boolean_not, &.{value}, 0);
+    }
+    fn select(e: Emit, comptime T: type, condition: Id, yes: Id, no: Id) !Id {
+        return e.c.builder.primitive(try e.c.schema(T), .select, &.{ condition, yes, no }, 0);
+    }
+    fn memory(e: Emit, original: Id, changes: anytype) !Id {
+        var fields: [std.meta.fields(t.Memory).len]Id = undefined;
+        inline for (std.meta.fields(t.Memory), 0..) |field_, i| fields[i] = if (@hasField(@TypeOf(changes), field_.name)) @field(changes, field_.name) else try e.field(field_.type, original, i);
+        return e.product(t.Memory, &fields);
+    }
+};

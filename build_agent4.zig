@@ -341,13 +341,21 @@ pub fn build(b: *std.Build) void {
             inquiry_check.dependOn(&inquiry_run.step);
             runtime_work.dependOn(&inquiry_run.step);
         }
-        for ([_][]const u8{ "decision_scopes", "model_admission", "model_custody", "observation", "approval_equality", "callable_runtime", "clarification", "terminology" }) |name| {
+        for ([_][]const u8{ "decision_scopes", "model_admission", "model_custody", "observation", "approval_equality", "callable_runtime", "clarification", "terminology", "repository_working_set" }) |name| {
             const native = g.module(b.fmt("test/agent4/{s}.zig", .{name}));
             native.addImport("world", world);
             native.addImport("equality", g.helper("value_equality"));
             if (std.mem.eql(u8, name, "terminology"))
                 native.addImport("document", g.module("test/consumers/document/consequence.zig"));
-            native_graph.testModule(native_checks, native);
+            if (std.mem.eql(u8, name, "repository_working_set")) {
+                native.addImport("repository", g.module("test/consumers/repository/working_set.zig"));
+                const tests = b.addTest(.{ .root_module = native });
+                tests.step.dependOn(native_graph.gate);
+                const run_policy = b.addRunArtifact(tests);
+                native_checks.dependOn(&run_policy.step);
+                b.step("check-repository-working-set", "Check staged repository memory and evidence rules")
+                    .dependOn(&run_policy.step);
+            } else native_graph.testModule(native_checks, native);
         }
         const run = b.addSystemCommand(&.{ "node", "tools/agent4/check.mjs", "integration", "--world-runtime", runtime_path, "--fixtures", b.getInstallPath(.prefix, "agent4"), "--world-source", world_source });
         if (world_archive) |archive| run.addArgs(&.{ "--world-archive", archive });

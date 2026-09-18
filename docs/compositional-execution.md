@@ -19,40 +19,24 @@ The economy run is functional-only and does not establish timing acceptance.
 
 ## Current results and unresolved failures
 
-The current kernel is 459,961 bytes with SHA-256
-`a32c2a807f5b8c10cec4f44d235c2dae938e72b78c7d654843cf968fb4a6cf7c`.
+The current kernel is 460,161 bytes with SHA-256
+`dbb929681cb7675affaccefbfee9fd8fc5ee579e0d76276eedab882fd35642a8`.
 Inquiry, repeated-task and ReAct images remain 38,162 / 38,561 / 64,111 bytes.
 
-Boundary frees temporary flow-analysis storage and uses bounded FIFO worklists.
-World now also releases contract canonicalization scratch instead of retaining it
-with encoded contracts. Across 13 unchanged scenarios and 128 paired invocations,
-inquiry native Session peak falls from 2,367,460 to 2,049,764 bytes; ReAct falls
-from 3,656,504 to 3,534,020. BPC1 remains
-lower at 1,853,961 and 2,061,220 respectively, so both gaps remain open. These
-requested working-byte counters exclude input-file and host/output buffers and
-are not RSS. Native/Node outcomes, work counts, authority and cleanup checks agree.
+World batches frame writes and pruning against admitted liveness bounds. Slot
+pages remain the sole initialization authority; retained views and failed
+transitions preserve their existing contracts. Two isolated native windows
+confirm about 8% / 10% / 11% gains on 64/128/256 handlers against the preceding
+successor. Small cases remain indeterminate. These are World controls, not an
+Agent latency claim; optimized BPC1 control64 remains faster and uses less memory.
 
-Five rotating native timing windows and an independent control window overlap
-with repeated-baseline variability; no latency improvement is claimed for this
-change. The earlier guest windows also overlap; no guest-speed gain is claimed.
-Inquiry/repeated-task's preceding BPC1 improvement and ReAct's remaining guest
-latency gap need final requalification. Compact predecessor storage on 64-bit
-hosts reduces control128/256 peaks to
-353,313 / 715,953 bytes, removing the preceding successor's peak increase. The
-32-bit builder is unchanged: applying compact construction there regressed guest
-timing. Canonical set nodes now occupy 24 rather than 32 bytes on both targets;
-their exact cardinality follows from the payload and bounds without a cached count.
-Type validation also reuses its existing exportability table for borrow checking;
-this removes one repeated derivation without changing measured working peaks.
-The current kernel passes Wasmtime and real Chromium/Firefox qualification,
-including the compiled tool's actual browser/server/browser continuation transfer.
-
-World's first-fit workspace search now skips a known allocated prefix without
-changing allocation offsets, capacity outcomes or working peaks. Paired native
-windows support roughly 3–5% improvements on control8/64/256; control128 and
-tiny-program differences are indeterminate. Across 128 prescribed Agent invocation
-replays, per-scenario differences remain below 1%, so no Agent latency gain is
-claimed from this change.
+Current integration confirms inquiry/ReAct native Session peaks of 2,049,764 /
+3,534,020 bytes, versus optimized BPC1's 1,853,961 / 2,061,220. Requested working
+bytes exclude input-file and host/output buffers and are not RSS. The final
+matched Agent timing comparison is still required. Inquiry and
+repeated-task's earlier guest improvement and ReAct's remaining guest latency
+gap need final requalification. No live-model usefulness claim follows from
+synthetic fixture execution.
 
 Remaining work includes those primary-workload regressions, the rest of the accepted
 workload matrix, serial reviews and the final

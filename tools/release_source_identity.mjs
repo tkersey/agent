@@ -72,7 +72,6 @@ function isReleaseSource(path) {
     "repo_zig_paths.txt",
   ].includes(path)) return true;
   return [
-    "actuality/",
     "fixtures/repository-repair-v1/",
     "src/",
     "system_closure_v1/",

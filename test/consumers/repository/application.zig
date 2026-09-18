@@ -6,6 +6,8 @@ const E = @import("source.zig").Emit;
 pub const t = @import("types.zig");
 pub const replacement = @import("replacement.zig");
 const memory = @import("working_set.zig");
+const completion = @import("completion.zig");
+const DecisionContext = struct { memory: t.Memory, changed_files: completion.Changes };
 const prompt = @import("prompt.zig");
 const Id = boundary.computation.Id;
 const Case = std.meta.Child(@FieldType(@FieldType(boundary.computation.ast.Term, "match_sum"), "cases"));
@@ -61,6 +63,7 @@ pub const Application = struct {
         const b = c.builder;
         const e: E = .{ .c = c };
         const policy = try memory.define(c);
+        const completed = try completion.define(e);
         const replace = try replacement.define(c);
         const model = try agent.responders.defineModel(P, c, try c.literal(t.Failure, .invalid_variant), false);
         const list = try c.external("repository.repair.list.v1", try c.schema(void), try c.schema(t.ListResult), .read);
@@ -68,10 +71,11 @@ pub const Application = struct {
         const search = try c.external("repository.repair.search.v1", try c.schema(t.SearchRequest), try c.schema(t.SearchResult), .read);
         const tests = try c.external("repository.repair.test.v1", try c.schema(t.TestRequest), try c.schema(t.TestResult), .read);
         const effects = (try (boundary.computation.Row{ .effects = replace.effects }).unionWith(b.allocator(), .{ .effects = &.{ list, read, search, tests, try P.declare(b) } })).effects;
-        const loop = try b.declare(&.{ try c.schema(Task), try c.schema(t.Memory), try c.schema(u16) }, try c.schema(t.FinalResult), effects, &.{});
+        const loop = try b.declare(&.{ try c.schema(Task), try c.schema(t.Memory), try c.schema(u16), try c.schema(completion.Changes) }, try c.schema(t.FinalResult), effects, &.{});
         const task = try e.param(loop, 0);
         const state = try e.param(loop, 1);
         const remaining = try e.param(loop, 2);
+        const changes = try e.param(loop, 3);
         const next = try b.value(.{ .schema = try c.schema(u16), .expression = .{ .primitive = .{
             .opcode = .integer_sub,
             .operands = &.{ remaining, try c.literal(u16, 1) },
@@ -83,7 +87,7 @@ pub const Application = struct {
             const v = try b.variable(try c.schema(field.type));
             const value = try b.reference(v);
             const body = if (index == 5)
-                try finish(e, policy.final_allowed, state, value)
+                try finish(e, policy.final_allowed, completed.allowed, state, changes, value)
             else if (index == 6)
                 try b.term(.{ .fail = value })
             else blk: {
@@ -91,11 +95,13 @@ pub const Application = struct {
                 const observed = try b.variable(try c.schema(O));
                 const updated = try b.variable(try c.schema(t.Memory));
                 const operation = if (index == 4)
-                    try e.call(replace.function, &.{ state, value, try e.field(u64, task, 2) })
+                    try admittedReplace(e, completed.capacity, changes, value, replace.function, state, try e.field(u64, task, 2))
                 else
                     try b.term(.{ .perform = .{ .effect = ([_]Id{ list, read, search, tests })[index], .payload = if (index == 0) try c.literal(void, {}) else value } });
                 const observation = try b.primitive(try c.schema(t.Observation), .variant, &.{try b.reference(observed)}, index);
-                break :blk try b.bind(observed, operation, try b.bind(updated, try e.call(policy.observe, &.{ state, observation }), try e.call(loop, &.{ task, try b.reference(updated), next })));
+                const changed = try b.variable(try c.schema(completion.Changes));
+                const record = if (index == 4) try e.call(completed.update, &.{ changes, try b.reference(observed) }) else try b.pure(changes);
+                break :blk try b.bind(observed, operation, try b.bind(changed, record, try b.bind(updated, try e.call(policy.observe, &.{ state, observation }), try e.call(loop, &.{ task, try b.reference(updated), next, try b.reference(changed) }))));
             };
             cases[index] = .{ .variable = v, .body = body };
         }
@@ -108,7 +114,7 @@ pub const Application = struct {
         } } });
         const rendered = try b.variable(try c.schema(prompt.Text));
         const invoke = try e.call(model, &.{ try request(e, task, try b.reference(rendered)), try c.literal([7]bool, .{ true, true, true, true, true, true, true }) });
-        const decision = try b.bind(rendered, try e.call(try prompt.render(t.Memory, e), &.{state}), try b.bind(interpreted, invoke, admitted));
+        const decision = try b.bind(rendered, try e.call(try prompt.render(DecisionContext, e), &.{try e.product(DecisionContext, &.{ state, changes })}), try b.bind(interpreted, invoke, admitted));
         try b.define(loop, try b.term(.{ .conditional = .{
             .condition = try e.binary(.less, try c.literal(u16, 0), remaining),
             .when_true = decision,
@@ -116,7 +122,7 @@ pub const Application = struct {
         } }));
         const entry = try b.declare(&.{try c.schema(Task)}, try c.schema(t.FinalResult), effects, &.{});
         const input = try e.param(entry, 0);
-        try b.define(entry, try e.call(loop, &.{ input, try c.literal(t.Memory, memory.initial), try e.field(u16, input, 3) }));
+        try b.define(entry, try e.call(loop, &.{ input, try c.literal(t.Memory, memory.initial), try e.field(u16, input, 3), try c.literal(completion.Changes, .{ .items = &.{} }) }));
         return b.module(entry, try c.schema(t.Failure));
     }
 };
@@ -142,7 +148,7 @@ fn request(e: E, task: Id, context: Id) !Id {
     return e.product(P.Request, &fields);
 }
 
-fn finish(e: E, allowed: Id, state: Id, proposed: Id) !Id {
+fn finish(e: E, allowed: Id, bound: Id, state: Id, changes: Id, proposed: Id) !Id {
     const b = e.c.builder;
     const Paths = @FieldType(t.FinalResult, "changed_files");
     var paths: [4]Id = undefined;
@@ -152,10 +158,21 @@ fn finish(e: E, allowed: Id, state: Id, proposed: Id) !Id {
     for (0..4) |n| selected = try e.select(Paths, try e.binary(.equal, count, try e.c.literal(u8, @intCast(n))), try b.primitive(try e.c.schema(Paths), .sequence, paths[0..n], 0), selected);
     const result = try e.product(t.FinalResult, &.{ try e.field(t.SummaryText, proposed, 0), selected, try e.field(bool, proposed, 6), try e.field(t.DigestHex, proposed, 7) });
     const permitted = try b.variable(try e.c.schema(bool));
-    const valid = try e.both(try b.reference(permitted), try e.binary(.less, count, try e.c.literal(u8, 5)));
-    return b.bind(permitted, try e.call(allowed, &.{ state, result }), try b.term(.{ .conditional = .{
+    const exact = try b.variable(try e.c.schema(bool));
+    const valid = try e.both(try b.reference(exact), try e.both(try b.reference(permitted), try e.binary(.less, count, try e.c.literal(u8, 5))));
+    return b.bind(exact, try e.call(bound, &.{ state, changes, result }), try b.bind(permitted, try e.call(allowed, &.{ state, result }), try b.term(.{ .conditional = .{
         .condition = valid,
         .when_true = try b.pure(result),
         .when_false = try b.term(.{ .fail = try e.c.literal(t.Failure, .authored_abort) }),
+    } })));
+}
+
+fn admittedReplace(e: E, capacity: Id, changes: Id, request_: Id, replace: Id, state: Id, principal: Id) !Id {
+    const b = e.c.builder;
+    const room = try b.variable(try e.c.schema(bool));
+    return b.bind(room, try e.call(capacity, &.{ changes, try e.field(t.Path, request_, 0) }), try b.term(.{ .conditional = .{
+        .condition = try b.reference(room),
+        .when_true = try e.call(replace, &.{ state, request_, principal }),
+        .when_false = try b.term(.{ .fail = try e.c.literal(t.Failure, .capacity_exceeded) }),
     } }));
 }

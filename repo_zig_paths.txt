@@ -1,15 +1,3 @@
-actuality/application.zig
-actuality/emit_decision_contract.zig
-actuality/emit_decision_contract_binary.zig
-actuality/emit_decision_contract_digest.zig
-actuality/emit_economy_scaling_v1.zig
-actuality/emit_first_decision_request.zig
-actuality/emit_initial_args.zig
-actuality/emit_repository_system_ablation_v1.zig
-actuality/emit_repository_system_v1.zig
-actuality/repository_repair_definition.zig
-actuality/repository_repair_epistemics.zig
-actuality/repository_repair_system_v1.zig
 adequacy/router-policy-v1/build.zig
 adequacy/router-policy-v1/reproducer/build.zig
 adequacy/router-policy-v1/reproducer/main.zig
@@ -25,7 +13,6 @@ build.zig
 build_agent4.zig
 economy_tooling_root.zig
 examples/coding_agent.zig
-examples/repository_repair_actuality.zig
 examples/research_agent.zig
 src/admission.zig
 src/agent4.zig
@@ -62,7 +49,6 @@ src/tools.zig
 src/value_equality.zig
 test/action_admission.zig
 test/action_algebra.zig
-test/actuality_definition.zig
 test/agent4/admission.zig
 test/agent4/admission_build.zig
 test/agent4/approval_build.zig
@@ -212,6 +198,7 @@ test/consumers/inquiry/repeated.zig
 test/consumers/inquiry/source.zig
 test/consumers/inquiry/types.zig
 test/consumers/repository/application.zig
+test/consumers/repository/completion.zig
 test/consumers/repository/main.zig
 test/consumers/repository/prompt.zig
 test/consumers/repository/replacement.zig
@@ -221,9 +208,7 @@ test/consumers/repository/working_set.zig
 test/consumers/review/build.zig
 test/consumers/review/main.zig
 test/custom_strategy.zig
-test/decision_contract.zig
 test/definition.zig
-test/epistemics_working_set.zig
 test/external_consumer/build.zig
 test/external_consumer/main.zig
 test/final_policy.zig
@@ -233,7 +218,6 @@ test/local_action.zig
 test/machine_native_wasm.zig
 test/malformed.zig
 test/open_lifetime.zig
-test/repository_admission.zig
 test/run_machine_native.zig
 test/selective_runner.zig
 test/shared_boundary.zig

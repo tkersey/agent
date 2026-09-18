@@ -5,12 +5,16 @@ import { createDocumentEnvironment } from "./document.mjs";
 import { createRepositoryDelivery } from "./repository_delivery.mjs";
 import { runRepositoryTests } from "./repository_tests.mjs";
 
-export async function createRepositoryEnvironment({ root, paths }) {
+export async function createRepositoryEnvironment({ root, paths, writablePaths }) {
   if (!Array.isArray(paths) || paths.length > 4096 || paths.some(path => !text(path, 256) || !path))
     throw new TypeError("expected at most 4096 explicitly admitted file paths");
   const admitted = [...paths].sort();
   const scope = new Set(admitted);
   if (scope.size !== admitted.length) throw new TypeError("duplicate repository path");
+  if (!Array.isArray(writablePaths) || writablePaths.length > 4 ||
+      writablePaths.some(path => !scope.has(path)) || new Set(writablePaths).size !== writablePaths.length)
+    throw new TypeError("expected at most four distinct writable paths within the read capability");
+  const writable = new Set(writablePaths);
   const files = await createDocumentEnvironment({ root, maximumContentBytes: 32 * 1024 });
   const delivery = await createRepositoryDelivery({ root });
   const directory = await realpath(root);
@@ -24,7 +28,8 @@ export async function createRepositoryEnvironment({ root, paths }) {
     return result.observation;
   }
   function proposalInScope(proposal) {
-    pathInScope(proposal?.[0]?.[0]);
+    const path = pathInScope(proposal?.[0]?.[0]);
+    if (!writable.has(path)) throw new TypeError("file outside repository write capability");
     return proposal;
   }
   return Object.freeze({

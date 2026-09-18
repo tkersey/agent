@@ -126,10 +126,32 @@ async function repair(mode) {
     await mkdir(join(root, 'src'));
     const path = join(root, request[0]);
     await writeFile(path, mode === 'max-documents' ? 'é'.repeat(16384) : initial);
+    const many = ['multiple', 'fifth-file', 'repeat-write', 'duplicate-final', 'omitted-final'].includes(mode);
+    let steps = actions;
+    if (many) {
+      const names = Array.from({length: mode === 'fifth-file' ? 5 : 4}, (_, i) => 'src/file' + i + '.mjs');
+      steps = [['run_tests', {suite: 'default'}]];
+      for (const name of names) {
+        await writeFile(join(root, name), initial);
+        steps.push(['read_file', {role: 'source', path: name}], ['replace_file', {
+          path: name, expected_sha256: hash(initial), replacement: corrected, rationale: 'observed repair',
+        }]);
+      }
+      if (mode === 'repeat-write') steps.push(['read_file', {role: 'source', path: names[0]}], ['replace_file', {
+        path: names[0], expected_sha256: hash(corrected), replacement: corrected + 'again', rationale: 'follow-up repair',
+      }]);
+      const claimed = [...names.slice(0,4)].reverse();
+      if (mode === 'duplicate-final') claimed[1] = claimed[0];
+      steps.push(['run_tests', {suite: 'default'}], ['finish', {...finish,
+        path0: claimed[0], path1: claimed[1], path2: claimed[2], path3: claimed[3],
+        path_count: mode === 'omitted-final' ? 3 : 4,
+        final_source_sha256: hash(mode === 'repeat-write' ? corrected + 'again' : corrected),
+      }]);
+    }
     const files = await createDocumentEnvironment({ root, maximumContentBytes: 32768 });
     const delivery = await createRepositoryDelivery({ root });
     let input = { image: application, initialArgs: encodeValue(taskSchema,
-      [['Repair the failing range function.', 'fixture repository'], 'fixture-model', 7n, mode === 'repeat' ? 32 : mode === 'budget' ? 2 : 8]) };
+      [['Repair the failing range function.', 'fixture repository'], 'fixture-model', 7n, many ? 20 : mode === 'repeat' ? 32 : mode === 'budget' ? 2 : 8]) };
     let decisions = 0, tests = 0, writes = 0;
     const retained = [];
     for (let step = 0; step < 80; step++) {
@@ -149,10 +171,10 @@ async function repair(mode) {
           assert.equal(invocation.selection.minimumCalls, 1);
           const context = invocation.messages[2].content;
           assert.match(invocation.messages[1].content, /Repair the failing range function/);
-          if (decisions === 0) assert.match(context, /source_document: not observed/);
-          if (!['repeat', 'max-documents'].includes(mode) && decisions === 2) assert(context.includes(hash(initial)) && context.includes(initial));
-          if (!['repeat', 'max-documents'].includes(mode) && decisions === 3) assert.match(context, /failing_test_observed: true/);
-          if (!['repeat', 'max-documents'].includes(mode) && decisions === 4 && mode !== 'denied') {
+          if (!many && decisions === 0) assert.match(context, /source_document: not observed/);
+          if (!many && !['repeat', 'max-documents'].includes(mode) && decisions === 2) assert(context.includes(hash(initial)) && context.includes(initial));
+          if (!many && !['repeat', 'max-documents'].includes(mode) && decisions === 3) assert.match(context, /failing_test_observed: true/);
+          if (!many && !['repeat', 'max-documents'].includes(mode) && decisions === 4 && mode !== 'denied') {
             assert.match(context, /source_document: not observed/);
             assert.match(context, /mutation_applied: true/);
             assert.match(context, /passing_test_observed: false/);
@@ -163,8 +185,8 @@ async function repair(mode) {
             assert(Buffer.byteLength(context) <= 131_072);
           }
           const full = decisions < 3 ? ['read_file', {role: ['package','source','test'][decisions], path: request[0]}] : ['abort', {value: 'authored_abort'}];
-          const [name, originalArgs] = mode === 'max-documents' ? full : mode === 'repeat' ? ['list_repository', {}] : mode === 'early-finish' ? ['finish', finish] : actions[decisions];
-          const args = mode === 'invalid-role' && name === 'read_file' ? {...originalArgs, role: 1} : mode === 'too-many-paths' && name === 'finish' ? { ...originalArgs, path_count: 5 } : originalArgs;
+          const [name, originalArgs] = mode === 'max-documents' ? full : mode === 'repeat' ? ['list_repository', {}] : mode === 'early-finish' ? ['finish', finish] : steps[decisions];
+          const args = mode === 'wrong-final-path' && name === 'finish' ? {...originalArgs, path0: 'test/range.test.mjs'} : mode === 'wrong-final-digest' && name === 'finish' ? {...originalArgs, final_source_sha256: '0'.repeat(64)} : mode === 'invalid-role' && name === 'read_file' ? {...originalArgs, role: 1} : mode === 'too-many-paths' && name === 'finish' ? { ...originalArgs, path_count: 5 } : originalArgs;
           decisions++;
           const output = mode === 'refusal'
             ? [{ type: 'message', role: 'assistant', content: [{ type: 'refusal', refusal: 'cannot proceed' }] }]
@@ -204,11 +226,11 @@ async function repair(mode) {
 const { retained: repairedRetention, ...repaired } = await repair('approved');
 assert.deepEqual(repaired, { kind: 'completed', value: [finish.summary, [request[0]], true, hash(corrected)],
   content: corrected, decisions: 6, tests: 2, writes: 1 });
-for (const mode of ['early-finish', 'denied', 'failed-retest', 'budget', 'refusal', 'too-many-paths', 'invalid-role', 'max-documents']) {
+for (const mode of ['early-finish', 'denied', 'failed-retest', 'budget', 'refusal', 'too-many-paths', 'invalid-role', 'max-documents', 'wrong-final-path', 'wrong-final-digest']) {
   const actual = await repair(mode);
   assert.equal(actual.kind, 'failed', mode);
   assert.equal(actual.value, mode === 'budget' ? 0 : ['refusal', 'invalid-role'].includes(mode) ? 3 : 5, mode);
-  assert.equal(actual.writes, ['failed-retest', 'too-many-paths'].includes(mode) ? 1 : 0, mode);
+  assert.equal(actual.writes, ['failed-retest', 'too-many-paths', 'wrong-final-path', 'wrong-final-digest'].includes(mode) ? 1 : 0, mode);
 }
 const repeated = await repair('repeat');
 assert.equal(repeated.kind, 'failed');
@@ -216,4 +238,12 @@ assert.equal(repeated.value, 0);
 assert.equal(repeated.decisions, 32);
 assert(Math.max(...repeated.retained) < 512 * 1024);
 assert(Math.max(...repeated.retained) <= repeated.retained[0] + 4096);
-console.log('repository application: 10 model/action cases passed; real reads/writes, synthetic test results; repeated peak=' + Math.max(...repeated.retained));
+for (const mode of ['multiple', 'fifth-file', 'repeat-write', 'duplicate-final', 'omitted-final']) {
+  const actual = await repair(mode);
+  const valid = ['multiple', 'repeat-write'].includes(mode);
+  assert.equal(actual.kind, valid ? 'completed' : 'failed', mode);
+  assert.equal(actual.writes, mode === 'repeat-write' ? 5 : 4, mode);
+  if (valid) assert.deepEqual(actual.value[1], [3,2,1,0].map(i => 'src/file'+i+'.mjs'));
+  else assert.equal(actual.value, mode === 'fifth-file' ? 4 : 5, mode);
+}
+console.log('repository application: 17 model/action cases passed; real reads/writes, synthetic test results; repeated peak=' + Math.max(...repeated.retained));

@@ -37,7 +37,7 @@ async function run(mode) {
       "external-write": `import {writeFileSync} from 'node:fs'; writeFileSync(${JSON.stringify(marker)}, 'escaped');\n${corrected}`,
     };
     const replacement = replacements[mode] ?? corrected;
-    const environment = await createRepositoryEnvironment({ root, paths });
+    const environment = await createRepositoryEnvironment({ root, paths, writablePaths: ["src/range.mjs"] });
     const actions = [
       ["list_repository", {}],
       ["read_file", { role: "package", path: "package.json" }],

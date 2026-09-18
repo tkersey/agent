@@ -278,7 +278,7 @@ pub fn build(b: *std.Build) void {
         repository_run.addArg(runtime_path);
         repository_run.step.dependOn(&runtime_guard.step);
         repository_run.has_side_effects = true;
-        const repository_files = b.addSystemCommand(&.{ "node", "--test", "test/agent4/repository_delivery.test.mjs", "test/agent4/repository.test.mjs" });
+        const repository_files = b.addSystemCommand(&.{ "node", "--test", "test/agent4/repository_delivery.test.mjs", "test/agent4/repository.test.mjs", "test/agent4/repository_executor.test.mjs" });
         repository_delivery.dependOn(&repository_run.step);
         repository_delivery.dependOn(&repository_files.step);
         runtime_work.dependOn(repository_delivery);

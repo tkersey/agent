@@ -33,8 +33,14 @@ It renders its current working set into the model request, admits one declared
 action, folds observations and enforces the completion predicate. Provider
 replies remain candidate data. The flat model codec preserves all four changed
 path slots. Thirty-two repeated decisions terminate at the authored budget with
-a 5,333-byte peak checkpoint after warmup; three full 32-KiB documents fit the
+a 5,371-byte peak checkpoint after warmup; three full 32-KiB documents fit the
 declared prompt capacity without truncation.
+
+Completion binds the final changed-file set to at most four distinct successful
+writes, and the final source digest to the latest applied replacement. Order is
+irrelevant; omitted, invented or duplicate claims fail. Repeat writes reuse a
+slot. A fifth distinct target fails before reading evidence, asking approval or
+writing. The program retains these facts and exposes them in its decision view.
 
 The [filesystem adapter](../runtime/repository_delivery.mjs) reuses the document
 owner's isolated-root and cooperative-writer contract. It rechecks the actual
@@ -48,13 +54,14 @@ zig build check-repository-delivery -Doptimize=ReleaseSafe \
 ```
 
 This check covers seven filesystem cases, seven replacement cases across 18
-fresh-kernel restores, and ten model/action cases, including premature finish,
+fresh-kernel restores, and seventeen model/action cases, including premature finish,
 denied approval, failed retesting, malformed provider arguments and budget
 exhaustion. That policy check uses synthetic provider replies and test results.
 
 The [repository bindings](../runtime/repository.mjs) now perform actual listing,
 role-bound reads, literal search and isolated fixture tests. The caller supplies
-the root and explicit file capabilities. Listing returns at most 32 entries;
+the root, readable `paths` and a separate `writablePaths` subset (at most four).
+Reading test files grants no permission to replace them. Listing returns at most 32 entries;
 search returns at most eight 256-byte excerpts with explicit truncation. Missing
 files and unavailable executors do not become failing-baseline observations.
 
@@ -74,9 +81,11 @@ have a 4-KiB limit and truncation flag.
 
 The use archive includes the image, schemas, leaf adapters and actual fixture.
 Its default task has zero decision allowance; a caller supplies task parameters
-and explicit environmental bindings to run it. The predecessor `actuality/` and
-`system_closure_v1/` wrappers still await retirement, preserving their independent
-expectations until current replacements cover them.
+and explicit environmental bindings to run it. The obsolete per-application WASM
+emitters, old working-set compiler and World-host/capabilities wrappers are
+removed. Executor confinement, malformed-report and native-equality regressions
+now run directly against the current runtime. The separate `system_closure_v1/`
+distribution wrappers still await retirement.
 
 See [runtime setup](agent4-runtime.md), [migration guidance](migration_from_3.md)
 and [current status](compositional-execution.md). No live-model usefulness or repair

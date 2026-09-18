@@ -16,7 +16,7 @@ async function fixture(t) {
   t.after(() => rm(area, { recursive: true, force: true }));
   const root = join(area, "repository");
   await cp(resolve("fixtures/repository-repair-v1"), root, { recursive: true });
-  return { root, environment: await createRepositoryEnvironment({ root, paths }) };
+  return { root, environment: await createRepositoryEnvironment({ root, paths, writablePaths: ["src/range.mjs"] }) };
 }
 
 test("listing and role-bound reads reflect actual admitted files", async t => {
@@ -58,7 +58,7 @@ test("listing has bounded output and snapshots the supplied file capability", as
   await mkdir(join(root, "many"));
   const selected = Array.from({ length: 33 }, (_, i) => `many/${String(i).padStart(2, "0")}.txt`);
   for (const path of selected) await writeFile(join(root, path), "x");
-  const environment = await createRepositoryEnvironment({ root, paths: selected });
+  const environment = await createRepositoryEnvironment({ root, paths: selected, writablePaths: [] });
   selected.length = 0;
   const [entries, truncated] = await environment.list(null);
   assert.equal(entries.length, 32); assert.equal(truncated, true);
@@ -76,6 +76,11 @@ test("unavailable or out-of-scope files do not become successful observations", 
   await assert.rejects(environment.search(["x", "src/"]), /unsafe_path/);
   await assert.rejects(environment.test([0]), /unsafe_path/);
   assert.throws(() => environment.replace([["foreign.mjs", "0".repeat(64), "x", ""], 7n]), /capability/);
+  const tests = await readFile(join(root, "test/range.test.mjs"));
+  const proposal = [["test/range.test.mjs", hash(tests), "weakened tests", ""], 7n];
+  assert.throws(() => environment.current(proposal), /write capability/);
+  assert.throws(() => environment.replace(proposal), /write capability/);
+  assert.deepEqual(await readFile(join(root, "test/range.test.mjs")), tests);
 });
 
 test("qualified fixture tests preserve actual failing and passing suite outcomes", async t => {

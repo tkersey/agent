@@ -18,13 +18,13 @@ the broader integration, economy and browser matrix still needs final requalific
 
 ## Current results and unresolved failures
 
-The current kernel is 461,374 bytes with SHA-256
-`353d8ca5ba0a94b09c4e6b83345adca5ae834236c7948ec7370ae6069b933e6e`.
+The current kernel is 459,875 bytes with SHA-256
+`39320df71108e646a68183f4fd4394401c30933d238f01dee4abbaa52ae7adaa`.
 Inquiry, repeated-task and ReAct images remain 38,162 / 38,561 / 64,111 bytes.
 
 Boundary now frees temporary flow-analysis storage and uses bounded FIFO worklists.
 Across 13 unchanged scenarios, paired inquiry native Session peak falls from
-2,847,222 to 2,408,588 bytes; ReAct falls from 4,239,618 to 3,795,384. BPC1 remains
+2,847,222 to 2,367,460 bytes; ReAct falls from 4,239,618 to 3,656,504. BPC1 remains
 lower at 1,853,961 and 2,061,220 respectively, so both gaps remain open. These
 requested working-byte counters exclude input-file and host/output buffers and
 are not RSS. Native/Node outcomes, work counts, authority and cleanup checks agree.
@@ -33,9 +33,10 @@ Five paired guest windows overlap substantially; no guest-speed gain is claimed.
 Inquiry/repeated-task's preceding BPC1 improvement and ReAct's remaining guest
 latency gap need final requalification. Compact predecessor storage on 64-bit
 hosts reduces control128/256 peaks to
-368,337 / 761,625 bytes, removing the preceding successor's peak increase. The
+353,313 / 715,953 bytes, removing the preceding successor's peak increase. The
 32-bit builder is unchanged: applying compact construction there regressed guest
-timing. The complete guest runtime inventory stays byte-identical.
+timing. Canonical set nodes now occupy 24 rather than 32 bytes on both targets;
+their exact cardinality follows from the payload and bounds without a cached count.
 Wasmtime and real-browser requalification remain outstanding for this kernel.
 
 Remaining work includes those primary-workload regressions, the rest of the accepted

@@ -9,7 +9,7 @@ import { DEFAULT_LOCK, readDependencyLock, readRegular, sha256, verifyRuntime } 
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const runtimeFiles = ["runtime/world.mjs", "runtime/world.d.mts", "runtime/values.mjs", "runtime/runner.mjs", "runtime/cli.mjs",
-  "runtime/model.mjs", "runtime/document.mjs", "runtime/inquiry.mjs", "runtime/inquiry_sandbox.mjs",
+  "runtime/model.mjs", "runtime/document.mjs", "runtime/repository_delivery.mjs", "runtime/inquiry.mjs", "runtime/inquiry_sandbox.mjs",
   "runtime/inquiry_driver.mjs", "runtime/inquiry_wire.mjs", "runtime/inquiry_delivery.mjs", "runtime/inquiry_cli.mjs", "runtime/text_inspection.mjs", "runtime/text_file.mjs", "tools/agent4/dependencies.mjs",
   "docs/agent4-runtime.md", "docs/migration_from_3.md", "docs/model-invocation-v3.md",
   "docs/consequence-clarification.md", "docs/resumable-inquiry.md", "docs/compiled-text-tool.md", "LICENSE"];

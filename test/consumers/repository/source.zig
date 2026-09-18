@@ -7,6 +7,16 @@ pub const Id = boundary.computation.Id;
 
 pub const Emit = struct {
     c: agent.Context,
+    pub fn call(e: Emit, f: Id, args: []const Id) !Id {
+        return e.c.builder.term(.{ .call = .{ .function = f, .arguments = args } });
+    }
+    pub fn concat(e: Emit, comptime T: type, a: Id, b: Id) !Id {
+        return e.c.builder.value(.{ .schema = try e.c.schema(T), .expression = .{ .primitive = .{
+            .opcode = .blob_concat,
+            .operands = &.{ a, b },
+            .failures = &.{.{ .kind = .capacity_exceeded, .value = try e.c.builder.failureLiteral(try e.c.literal(t.Failure, .capacity_exceeded)) }},
+        } } });
+    }
     pub fn param(e: Emit, f: Id, i: usize) !Id {
         return e.c.builder.reference(e.c.builder.parameter(f, i));
     }

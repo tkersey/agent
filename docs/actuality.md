@@ -27,13 +27,34 @@ zig build check-repository-replacement -Doptimize=ReleaseSafe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime"
 ```
 
-The predecessor fixtures under `actuality/` and their independent expectations
-remain until the full application migration is complete. The model/action loop,
-repository listing/read/search/test adapters, conditional filesystem delivery and
-full end-to-end repair still require migration and qualification. The staged
-completion predicate alone grants no write authority. The replacement adapter
-must check the actual file digest again atomically with delivery; approval does
-not prevent changes made outside the application.
+The [model/action loop](../test/consumers/repository/application.zig) now authors
+the bounded sequence of inspection, testing, replacement and final decisions.
+It renders its current working set into the model request, admits one declared
+action, folds observations and enforces the completion predicate. Provider
+replies remain candidate data. The flat model codec preserves all four changed
+path slots. Thirty-two repeated decisions terminate at the authored budget with
+a 5,333-byte peak checkpoint after warmup; three full 32-KiB documents fit the
+declared prompt capacity without truncation.
+
+The [filesystem adapter](../runtime/repository_delivery.mjs) reuses the document
+owner's isolated-root and cooperative-writer contract. It rechecks the actual
+digest during conditional delivery and preserves conflict and uncertain results.
+It carries no approval or working-set state. Approval does not prevent changes
+made outside that cooperative filesystem boundary.
+
+```sh
+zig build check-repository-delivery -Doptimize=ReleaseSafe \
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+```
+
+This check covers seven filesystem cases, seven replacement cases across 18
+fresh-kernel restores, and ten model/action cases, including premature finish,
+denied approval, failed retesting, malformed provider arguments and budget
+exhaustion. Reads and writes use actual temporary files; provider replies and
+test results are synthetic. Repository listing/search and qualified test-process
+adapters, complete packaged execution and end-to-end repair qualification remain
+unfinished. The predecessor fixtures under `actuality/` and their independent
+expectations remain until that migration is complete.
 
 See [runtime setup](agent4-runtime.md), [migration guidance](migration_from_3.md)
 and [current status](compositional-execution.md). No live-model or real-repository

@@ -51,9 +51,10 @@ real user-data operations were used to obtain the fixture results.
 The obsolete Boundary 1 / World 3 acquisition and conformance runners and their
 fixed release locks are removed. Current dependency/setup tests retain archive
 authentication, extraction and source-custody checks. The old repository-repair
-working-set fold and evidence guards now have staged successor implementations
-and five native regressions, including 32 portable observations. The full
-repository-repair application and adapters still need migration; see [actuality.md](actuality.md).
+working-set fold, evidence guards and bounded model/action loop now use staged
+successor implementations. Native policy tests and fresh-kernel execution cover
+actual file reads and conditional writes. Listing/search and qualified test
+adapters still need migration; see [actuality.md](actuality.md).
 
 The existing economy tools and substantive regression fixtures remain available.
 Generated measurements, duplicated qualification receipts and historical experiment

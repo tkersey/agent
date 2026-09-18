@@ -223,6 +223,7 @@ pub fn build(b: *std.Build) void {
     component_tools.dependOn(&b.addInstallArtifact(component_link, .{}).step);
     const browser_check = b.step("check-compiled-tool-browser", "Transfer the compiled Agent tool through real browser Workers and a file server");
     const native_checks = b.step("check-native", "Check native Agent semantics against the selected World");
+    const repository_delivery = b.step("check-repository-delivery", "Check repository replacement through real file I/O and fresh kernels");
     const economy = b.step("check-agent4-economy", "Measure direct/facade and retained-state economy");
     if (runtime) |runtime_path| {
         const world = b.createModule(.{
@@ -261,6 +262,18 @@ pub fn build(b: *std.Build) void {
             browser_check.dependOn(&browser.step);
         } else browser_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
+        const repository_emitter_module = g.module("test/agent4/repository_replacement_emit.zig");
+        repository_emitter_module.addImport("repository_app", g.module("test/consumers/repository/application.zig"));
+        const repository_emitter = g.emitter("repository-replacement", repository_emitter_module);
+        const repository_run = b.addSystemCommand(&.{ "node", "test/agent4/repository_delivery_runtime.mjs" });
+        repository_run.addFileArg(repository_emitter.getEmittedBin());
+        repository_run.addArg(runtime_path);
+        repository_run.step.dependOn(&runtime_guard.step);
+        repository_run.has_side_effects = true;
+        const repository_files = b.addSystemCommand(&.{ "node", "--test", "test/agent4/repository_delivery.test.mjs" });
+        repository_delivery.dependOn(&repository_run.step);
+        repository_delivery.dependOn(&repository_files.step);
+        runtime_work.dependOn(repository_delivery);
         runtime_work.dependOn(&text_check.step);
         runtime_work.dependOn(&component_check.step);
         runtime_work.dependOn(native_checks);
@@ -401,6 +414,7 @@ pub fn build(b: *std.Build) void {
         components_check.dependOn(&missing.step);
         browser_check.dependOn(&missing.step);
         native_checks.dependOn(&missing.step);
+        repository_delivery.dependOn(&missing.step);
         integration.dependOn(&missing.step);
         economy.dependOn(&missing.step);
     }

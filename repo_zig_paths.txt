@@ -212,6 +212,7 @@ test/consumers/inquiry/repeated.zig
 test/consumers/inquiry/source.zig
 test/consumers/inquiry/types.zig
 test/consumers/repository/application.zig
+test/consumers/repository/main.zig
 test/consumers/repository/prompt.zig
 test/consumers/repository/replacement.zig
 test/consumers/repository/source.zig

@@ -33,6 +33,12 @@ test("documented commands execute from the actual source-independent archive", a
   assert.equal(Buffer.from(resumed.value).readBigUInt64LE(), 40n);
   assert.equal(world.decodeOutcome(await readFile(join(cwd, "cancelled.pko3"))).kind, "cancelled");
   const inventory = JSON.parse(await readFile(join(cwd, "examples/inventory.json"), "utf8"));
+  const repository = inventory.examples.find(example => example.name === "repository-repair");
+  assert(repository, "repository repair belongs to the source-independent archive");
+  const repositoryRun = execFileSync(process.execPath,
+    [join(cwd, "test/agent4/repository_runtime.mjs"), runtimePath, join(cwd, "examples/repository")],
+    { cwd, encoding: "utf8", timeout: 120_000, maxBuffer: 4 * 1024 * 1024 });
+  assert.match(repositoryRun, /5 cases passed; 10 real isolated test processes/);
   const textTool = execFileSync(process.execPath, [join(cwd, "test/agent4/text_package_runtime.mjs"), runtimePath,
     join(cwd, "examples/text")], { cwd, encoding: "utf8", timeout: 120_000 });
   assert.equal(JSON.parse(textTool).reports.length, 2);

@@ -52,9 +52,9 @@ The obsolete Boundary 1 / World 3 acquisition and conformance runners and their
 fixed release locks are removed. Current dependency/setup tests retain archive
 authentication, extraction and source-custody checks. The old repository-repair
 working-set fold, evidence guards and bounded model/action loop now use staged
-successor implementations. Native policy tests and fresh-kernel execution cover
-actual file reads and conditional writes. Listing/search and qualified test
-adapters still need migration; see [actuality.md](actuality.md).
+successor implementations. Fresh-kernel execution covers actual listing, reads,
+search, conditional writes and isolated fixture tests, including failed repairs
+and denied approval. Legacy wrapper retirement remains; see [actuality.md](actuality.md).
 
 The existing economy tools and substantive regression fixtures remain available.
 Generated measurements, duplicated qualification receipts and historical experiment

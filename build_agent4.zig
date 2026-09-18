@@ -156,6 +156,14 @@ pub fn build(b: *std.Build) void {
     for ([_][]const u8{ "subject-schema", "task-schema", "result-schema", "report-schema", "model-reply" }) |mode|
         g.emit(emit, text_link, &.{mode}, b.fmt("text/{s}.bin", .{mode}));
     const distribution = b.step("emit-agent4", "Emit compiled examples and the source-independent use archive");
+    const repository_application = b.step("check-repository-application", "Repair actual repository fixtures through the compiled application");
+    const repository_images = b.step("repository-application-images", "Emit repository repair and its portable schemas");
+    const repository_app = g.emitter("repository-application", g.module("test/consumers/repository/main.zig"));
+    g.emit(repository_images, repository_app, &.{}, "repository/repair.bpi3");
+    for ([_][]const u8{ "task-schema", "result-schema", "failure-schema" }) |mode|
+        g.emit(repository_images, repository_app, &.{mode}, b.fmt("repository/{s}.bin", .{mode}));
+    emit.dependOn(repository_images);
+    repository_application.dependOn(repository_images);
     const dialogue_exe = g.emitter("agent4-dialogue", dialogue);
     const inquiry_exe = g.emitter("agent4-inquiry-probe", inquiry);
     const inquiry_broker_exe = g.emitter("agent4-inquiry-broker", inquiry_broker);
@@ -270,10 +278,16 @@ pub fn build(b: *std.Build) void {
         repository_run.addArg(runtime_path);
         repository_run.step.dependOn(&runtime_guard.step);
         repository_run.has_side_effects = true;
-        const repository_files = b.addSystemCommand(&.{ "node", "--test", "test/agent4/repository_delivery.test.mjs" });
+        const repository_files = b.addSystemCommand(&.{ "node", "--test", "test/agent4/repository_delivery.test.mjs", "test/agent4/repository.test.mjs" });
         repository_delivery.dependOn(&repository_run.step);
         repository_delivery.dependOn(&repository_files.step);
         runtime_work.dependOn(repository_delivery);
+        const repository_real = b.addSystemCommand(&.{ "node", "test/agent4/repository_runtime.mjs", runtime_path, b.getInstallPath(.prefix, "agent4/repository") });
+        repository_real.step.dependOn(repository_images);
+        repository_real.step.dependOn(&runtime_guard.step);
+        repository_real.has_side_effects = true;
+        repository_application.dependOn(&repository_real.step);
+        runtime_work.dependOn(repository_application);
         runtime_work.dependOn(&text_check.step);
         runtime_work.dependOn(&component_check.step);
         runtime_work.dependOn(native_checks);
@@ -415,6 +429,7 @@ pub fn build(b: *std.Build) void {
         browser_check.dependOn(&missing.step);
         native_checks.dependOn(&missing.step);
         repository_delivery.dependOn(&missing.step);
+        repository_application.dependOn(&missing.step);
         integration.dependOn(&missing.step);
         economy.dependOn(&missing.step);
     }

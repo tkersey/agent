@@ -40,6 +40,12 @@ examples.push({name:'document-consequence',image:'document/consequence.bpi3',ini
 // A typed, zero-work configuration example. Actual execution supplies a qualified
 // runner, explicit allowances and operator-selected provider/target values.
 const inquiryTask=decodeSchema(await readFile(join(output,'inquiry/task-schema.bin')));
+const repositoryTask=decodeSchema(await readFile(join(output,'repository/task-schema.bin')));
+await add('repository/task.args','initial-args',encodeValue(repositoryTask,
+  [['Repair the admitted repository.','unconfigured-repository'],'unconfigured-model',0n,0]));
+await add('repository/repair.bpi3','image');
+for(const name of ['task-schema','result-schema','failure-schema'])await add(`repository/${name}.bin`,'schema');
+examples.push({name:'repository-repair',image:'repository/repair.bpi3',initialArgs:'repository/task.args'});
 const inquiryArgs=encodeValue(inquiryTask, [
   ['session.mjs','', '',await readFile(join(root,'test/consumers/inquiry/contract.txt'),'utf8'),
     'agent.session-occurrence.acceptance.v1',false,'unconfigured-target',0n],

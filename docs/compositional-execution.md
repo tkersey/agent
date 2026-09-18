@@ -19,8 +19,8 @@ The economy run is functional-only and does not establish timing acceptance.
 
 ## Current results and unresolved failures
 
-The current kernel is 459,873 bytes with SHA-256
-`c5f33c3b1328c9bf2f9d1f8c3597da29bd6f1d8fddfddbecda1b575f902ec330`.
+The current kernel is 459,961 bytes with SHA-256
+`a32c2a807f5b8c10cec4f44d235c2dae938e72b78c7d654843cf968fb4a6cf7c`.
 Inquiry, repeated-task and ReAct images remain 38,162 / 38,561 / 64,111 bytes.
 
 Boundary frees temporary flow-analysis storage and uses bounded FIFO worklists.
@@ -46,6 +46,13 @@ Type validation also reuses its existing exportability table for borrow checking
 this removes one repeated derivation without changing measured working peaks.
 The current kernel passes Wasmtime and real Chromium/Firefox qualification,
 including the compiled tool's actual browser/server/browser continuation transfer.
+
+World's first-fit workspace search now skips a known allocated prefix without
+changing allocation offsets, capacity outcomes or working peaks. Paired native
+windows support roughly 3–5% improvements on control8/64/256; control128 and
+tiny-program differences are indeterminate. Across 128 prescribed Agent invocation
+replays, per-scenario differences remain below 1%, so no Agent latency gain is
+claimed from this change.
 
 Remaining work includes those primary-workload regressions, the rest of the accepted
 workload matrix, serial reviews and the final

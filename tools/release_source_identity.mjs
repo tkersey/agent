@@ -60,8 +60,6 @@ function git(root, args, maxBuffer) {
 
 function isReleaseSource(path) {
   if ([
-    "system_closure_v1/admission-proof.json",
-    "system_closure_v1/fixture-proof.json",
     "system_closure_v1/release_identity.json",
   ].includes(path)) return false;
   if ([

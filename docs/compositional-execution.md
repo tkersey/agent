@@ -10,8 +10,8 @@ Current architecture, runtime and migration instructions are in
 [architecture.md](architecture.md), [agent4-runtime.md](agent4-runtime.md),
 [migration_from_3.md](migration_from_3.md), and [compiled-text-tool.md](compiled-text-tool.md).
 
-The normal pinned authoring check passes 159 steps, 112 Zig tests and 35 JavaScript
-tests, including an extracted external consumer. Dependency/setup tests pass 24/24
+The pinned authoring and native checks pass 193 steps, 176 Zig tests and 35 JavaScript
+tests, including an extracted external consumer. Dependency/setup tests pass 25/25
 and offline setup authenticates the complete source/runtime tuple. Current integration,
 functional economy, independent native/Node/Wasmtime execution, extracted-package
 consumers, component reuse and real Chromium/Firefox compiled-tool transfers pass.
@@ -44,7 +44,7 @@ The current kernel passes Wasmtime and real Chromium/Firefox qualification,
 including the compiled tool's actual browser/server/browser continuation transfer.
 
 Remaining work includes those primary-workload regressions, the rest of the accepted
-workload matrix, historical consumer retirement, serial reviews and the final
+workload matrix, serial reviews and the final
 requirement audit. Live-model usefulness remains unmeasured. No paid inference or
 real user-data operations were used to obtain the fixture results.
 
@@ -56,6 +56,10 @@ successor implementations. Fresh-kernel execution covers actual listing, reads,
 search, conditional writes and isolated fixture tests, including failed repairs
 and denied approval. The superseded repository producers and distribution
 wrappers are removed; see [actuality.md](actuality.md).
+The unsupported Agent 1–3 DSL fixtures, toy consumers and per-application WASM
+runners are retired. Current authoring admission, portable value, model, scoped
+control and consumer tests retain their supported obligations. Authored budget
+ordering and drop-oldest history have a current fresh-restoration regression.
 
 The existing economy tools and substantive regression fixtures remain available.
 Generated measurements, duplicated qualification receipts and historical experiment

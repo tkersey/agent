@@ -368,7 +368,7 @@ pub fn build(b: *std.Build) void {
             inquiry_check.dependOn(&inquiry_run.step);
             runtime_work.dependOn(&inquiry_run.step);
         }
-        for ([_][]const u8{ "decision_scopes", "model_admission", "model_custody", "observation", "approval_equality", "callable_runtime", "clarification", "terminology", "repository_working_set", "repository_replacement" }) |name| {
+        for ([_][]const u8{ "bounded_history", "decision_scopes", "model_admission", "model_custody", "observation", "approval_equality", "callable_runtime", "clarification", "terminology", "repository_working_set", "repository_replacement" }) |name| {
             const native = g.module(b.fmt("test/agent4/{s}.zig", .{name}));
             native.addImport("world", world);
             native.addImport("equality", g.helper("value_equality"));

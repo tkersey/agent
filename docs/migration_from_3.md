@@ -92,6 +92,12 @@ final Agent admission to claim those protections.
 | Strategy/runtime emitter | Supply `Application.emit(c)`; build the actual authored order and return a Boundary module. |
 | Failure/final-action routing | Use declared result sums and authored recovery. Root return, turn reply, local abort, and process cancellation have separate meanings. |
 
+Budgets and history retention are authored policy. Check capacity and effect
+allowances before exposing the operation, and choose whether a full history
+fails or drops its oldest observation. The source-package test
+`test/agent4/bounded_history.zig` demonstrates failure precedence and a two-element
+window across 32 fresh restores.
+
 `agent.model_invocation` uses **`agent.model.invoke.v3`**, retaining the semantic
 provider protocol `agent.model.protocol.openai-responses-v2`. Do not feed the
 old BPI1 value encoding to this effect. A profile supplies `Request`, `Result`,

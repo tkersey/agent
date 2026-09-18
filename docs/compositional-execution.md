@@ -12,9 +12,10 @@ Current architecture, runtime and migration instructions are in
 
 The normal pinned authoring check passes 159 steps, 112 Zig tests and 35 JavaScript
 tests, including an extracted external consumer. Dependency/setup tests pass 24/24
-and offline setup authenticates the complete source/runtime tuple. The current
-flow-storage change is checked on the 13 paired inquiry/ReAct diagnostic scenarios;
-the broader integration, economy and browser matrix still needs final requalification.
+and offline setup authenticates the complete source/runtime tuple. Current integration,
+functional economy, independent native/Node/Wasmtime execution, extracted-package
+consumers, component reuse and real Chromium/Firefox compiled-tool transfers pass.
+The economy run is functional-only and does not establish timing acceptance.
 
 ## Current results and unresolved failures
 
@@ -39,7 +40,8 @@ timing. Canonical set nodes now occupy 24 rather than 32 bytes on both targets;
 their exact cardinality follows from the payload and bounds without a cached count.
 Type validation also reuses its existing exportability table for borrow checking;
 this removes one repeated derivation without changing measured working peaks.
-Wasmtime and real-browser requalification remain outstanding for this kernel.
+The current kernel passes Wasmtime and real Chromium/Firefox qualification,
+including the compiled tool's actual browser/server/browser continuation transfer.
 
 Remaining work includes those primary-workload regressions, the rest of the accepted
 workload matrix, historical consumer retirement, serial reviews and the final

@@ -79,13 +79,21 @@ fallback; this qualification used macOS and Bun 1.4.2, not Linux. Execution is
 bounded by ten seconds and 1 MiB of captured output; returned stdout/stderr each
 have a 4-KiB limit and truncation flag.
 
+Test requests carry the authored source version when available. The adapter
+checks that version and the fixed suite identity, executes a private snapshot
+of those exact bytes, and checks the live inputs again afterward. Changed inputs
+leave the pending request unresolved; they cannot manufacture failing-baseline
+or passing-completion evidence.
+
 The use archive includes the image, schemas, leaf adapters and actual fixture.
 Its default task has zero decision allowance; a caller supplies task parameters
 and explicit environmental bindings to run it. The obsolete per-application WASM
 emitters, old working-set compiler and World-host/capabilities wrappers are
 removed. Executor confinement, malformed-report and native-equality regressions
-now run directly against the current runtime. The separate `system_closure_v1/`
-distribution wrappers still await retirement.
+now run directly against the current runtime. The old distribution, checkpoint
+metadata, state-census and report-merging wrappers are also removed. Current
+image/State/reply admission, dependency authentication and package checks own
+their successor obligations.
 
 See [runtime setup](agent4-runtime.md), [migration guidance](migration_from_3.md)
 and [current status](compositional-execution.md). No live-model usefulness or repair

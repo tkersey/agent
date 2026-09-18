@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { constants, lstatSync, openSync, closeSync, fstatSync, readSync,
-  readdirSync, realpathSync } from "node:fs";
+  opendirSync, realpathSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMain } from "../../runtime/cli.mjs";
@@ -48,13 +48,13 @@ export function readRegular(path, limit = MAX_FILE_BYTES) {
 export function inventory(root) {
   if (!lstatSync(root).isDirectory()) fail(`not a directory: ${root}`);
   const rows = [];
+  const budget = { entries: 0 };
   function visit(relative, depth) {
     if (depth > MAX_DEPTH) fail("inventory depth exceeded");
     const directory = join(root, relative);
     const before = lstatSync(directory, { bigint: true });
-    const names = readdirSync(directory).sort();
+    const names = directoryNames(directory, budget).sort();
     for (const name of names) {
-      if (rows.length >= MAX_ENTRIES) fail("inventory entry limit exceeded");
       const path = relative ? `${relative}/${name}` : name;
       if (!safePath(path)) fail("unsafe inventory path");
       const absolute = join(root, path);
@@ -79,11 +79,12 @@ export function inventory(root) {
 
 /** Recompute Git's actual tree object identity from an exported source tree. */
 export function gitTree(root) {
+  const budget = { entries: 0 };
   const hash = (type, bytes) => createHash("sha1")
     .update(`${type} ${bytes.length}\0`).update(bytes).digest();
   function tree(directory, depth) {
     if (depth > MAX_DEPTH) fail("source depth exceeded");
-    const entries = readdirSync(directory).map(name => {
+    const entries = directoryNames(directory, budget).map(name => {
       const path = join(directory, name), stat = lstatSync(path);
       if (!stat.isDirectory() && !stat.isFile()) fail(`unsupported source entry: ${name}`);
       return { name, path, stat, key: Buffer.from(name + (stat.isDirectory() ? "/" : "")) };
@@ -98,6 +99,19 @@ export function gitTree(root) {
   }
   inventory(root);
   return tree(root, 0).toString("hex");
+}
+
+// Enforce the budget while reading names, before allocating/sorting a complete
+// attacker-sized directory listing. Each traversal owns its own total budget.
+function directoryNames(path, budget) {
+  const directory = opendirSync(path), names = [];
+  try {
+    for (let entry; (entry = directory.readSync()) !== null;) {
+      if (++budget.entries > MAX_ENTRIES) fail("inventory entry limit exceeded");
+      names.push(entry.name);
+    }
+  } finally { directory.closeSync(); }
+  return names;
 }
 
 export function readDependencyLock(lockPath = DEFAULT_LOCK) {

@@ -62,6 +62,8 @@ pub const CompactSearch = SearchResult;
 
 pub const TestSuite = enum { default };
 pub const TestRequest = struct { suite: TestSuite };
+pub const SourceVersion = struct { path: Path, sha256: DigestHex };
+pub const TestInvocation = struct { request: TestRequest, expected_source: ?SourceVersion };
 pub const TestResult = struct {
     exit_code: i32,
     passed: bool,

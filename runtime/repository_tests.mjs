@@ -3,10 +3,23 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { constants, existsSync } from "node:fs";
-import { access, lstat, mkdtemp, readFile, readlink, realpath, rm, writeFile } from "node:fs/promises";
+import { access, lstat, mkdir, mkdtemp, readFile, readlink, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+// Execute exactly the admitted bytes. A concurrent change to the caller's root
+// cannot substitute a different source while Bun opens its input files.
+export async function runRepositorySnapshot(source, tests) {
+  const root = await mkdtemp(join(tmpdir(), "agent-repository-snapshot-"));
+  try {
+    await mkdir(join(root, "src"));
+    await mkdir(join(root, "test"));
+    await writeFile(join(root, "src/range.mjs"), source, {flag: "wx", mode: 0o400});
+    await writeFile(join(root, "test/range.test.mjs"), tests, {flag: "wx", mode: 0o400});
+    return await runRepositoryTests(root);
+  } finally { await rm(root, {recursive: true, force: true}); }
+}
 
 export async function runRepositoryTests(workspace) {
   workspace = await realpath(workspace);

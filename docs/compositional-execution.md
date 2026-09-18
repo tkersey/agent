@@ -54,7 +54,8 @@ authentication, extraction and source-custody checks. The old repository-repair
 working-set fold, evidence guards and bounded model/action loop now use staged
 successor implementations. Fresh-kernel execution covers actual listing, reads,
 search, conditional writes and isolated fixture tests, including failed repairs
-and denied approval. Legacy wrapper retirement remains; see [actuality.md](actuality.md).
+and denied approval. The superseded repository producers and distribution
+wrappers are removed; see [actuality.md](actuality.md).
 
 The existing economy tools and substantive regression fixtures remain available.
 Generated measurements, duplicated qualification receipts and historical experiment

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import childProcess from "node:child_process";
 import { createHash } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -74,7 +74,7 @@ test("unavailable or out-of-scope files do not become successful observations", 
   await assert.rejects(environment.read([1, "src/range.mjs"]), /not_found/);
   await symlink("../../outside", join(root, "src/range.mjs"));
   await assert.rejects(environment.search(["x", "src/"]), /unsafe_path/);
-  await assert.rejects(environment.test([0]), /unsafe_path/);
+  await assert.rejects(environment.test([[0], {tag: 0, value: null}]), /unsafe_path/);
   assert.throws(() => environment.replace([["foreign.mjs", "0".repeat(64), "x", ""], 7n]), /capability/);
   const tests = await readFile(join(root, "test/range.test.mjs"));
   const proposal = [["test/range.test.mjs", hash(tests), "weakened tests", ""], 7n];
@@ -85,12 +85,12 @@ test("unavailable or out-of-scope files do not become successful observations", 
 
 test("qualified fixture tests preserve actual failing and passing suite outcomes", async t => {
   const { root, environment } = await fixture(t);
-  const before = await environment.test([0]);
+  const before = await environment.test([[0], {tag: 0, value: null}]);
   assert.equal(before[0], 1); assert.equal(before[1], false);
   assert(before[2].length + before[3].length > 0);
   await writeFile(join(root, "src/range.mjs"),
     "export function normalizeRange(a,b){return {start:Math.min(a,b),end:Math.max(a,b)}}\n");
-  const after = await environment.test([0]);
+  const after = await environment.test([[0], {tag: 0, value: null}]);
   assert.equal(after[0], 0); assert.equal(after[1], true);
   for (const result of [before, after]) {
     assert(Buffer.byteLength(result[2]) <= 4096 && Buffer.byteLength(result[3]) <= 4096);
@@ -111,7 +111,7 @@ test("test output truncation preserves Unicode and reports the truncation flags"
       return { status: 1, signal: null, stdout: "文".repeat(2000), stderr: "é".repeat(3000) };
     };
     syncBuiltinESMExports();
-    assert.deepEqual(await environment.test([0]), [1, false, "文".repeat(1365), "é".repeat(2048), true, true]);
+    assert.deepEqual(await environment.test([[0], {tag: 0, value: null}]), [1, false, "文".repeat(1365), "é".repeat(2048), true, true]);
   } finally {
     childProcess.spawnSync = original;
     syncBuiltinESMExports();
@@ -123,9 +123,41 @@ test("missing executor remains unavailable rather than a failing baseline", asyn
   const saved = process.env.PATH;
   try {
     process.env.PATH = "";
-    await assert.rejects(environment.test([0]), /executable unavailable/);
+    await assert.rejects(environment.test([[0], {tag: 0, value: null}]), /executable unavailable/);
   } finally {
     if (saved === undefined) delete process.env.PATH;
     else process.env.PATH = saved;
+  }
+});
+
+test("a changed source or suite cannot satisfy a pending version-bound test request", async t => {
+  const { root, environment } = await fixture(t);
+  const source = await readFile(join(root, "src/range.mjs"));
+  const input = [[0], {tag: 1, value: ["src/range.mjs", hash(source)]}];
+  await writeFile(join(root, "src/range.mjs"), "changed source");
+  await assert.rejects(environment.test(input), /test source changed/);
+  await writeFile(join(root, "src/range.mjs"), source);
+  await writeFile(join(root, "test/range.test.mjs"), "process.exit(0)");
+  await assert.rejects(environment.test(input), /test suite changed/);
+});
+
+test("source changes during test execution invalidate even a completed passing report", async t => {
+  const { root, environment } = await fixture(t);
+  const expectedSource = await readFile(join(root, "src/range.mjs"));
+  const original = childProcess.spawnSync;
+  try {
+    childProcess.spawnSync = (_, args, options) => {
+      const report = args.find(arg => arg.startsWith("--reporter-outfile=")).split("=")[1];
+      writeFileSync(report, '<?xml version="1.0" encoding="UTF-8"?>\n<testsuites name="bun test" tests="4"></testsuites>');
+      writeFileSync(join(root, "src/range.mjs"), "changed after test began");
+      assert.deepEqual(readFileSync(join(options.cwd, "src/range.mjs")), expectedSource,
+        "the actual test process receives the admitted snapshot, not a changed live file");
+      return {status: 0, signal: null, stdout: "", stderr: ""};
+    };
+    syncBuiltinESMExports();
+    await assert.rejects(environment.test([[0], {tag: 0, value: null}]), /test source changed/);
+  } finally {
+    childProcess.spawnSync = original;
+    syncBuiltinESMExports();
   }
 });

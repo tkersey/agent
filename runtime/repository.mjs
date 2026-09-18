@@ -1,9 +1,11 @@
 // Leaf bindings for a caller-owned repository and explicit file capabilities.
 // The Program owns decision order, working memory, approval and completion.
-import { realpath } from "node:fs/promises";
 import { createDocumentEnvironment } from "./document.mjs";
 import { createRepositoryDelivery } from "./repository_delivery.mjs";
-import { runRepositoryTests } from "./repository_tests.mjs";
+import { runRepositorySnapshot } from "./repository_tests.mjs";
+
+// Identity of the qualified default range suite, independent of writable input.
+const suiteDigest = "556d27be95a9db73d36bc21f621870327dc64097b42f2c6ad6fc2407ac78e7fd";
 
 export async function createRepositoryEnvironment({ root, paths, writablePaths }) {
   if (!Array.isArray(paths) || paths.length > 4096 || paths.some(path => !text(path, 256) || !path))
@@ -17,7 +19,6 @@ export async function createRepositoryEnvironment({ root, paths, writablePaths }
   const writable = new Set(writablePaths);
   const files = await createDocumentEnvironment({ root, maximumContentBytes: 32 * 1024 });
   const delivery = await createRepositoryDelivery({ root });
-  const directory = await realpath(root);
   function pathInScope(path) {
     if (!text(path, 256) || !scope.has(path)) throw new TypeError("file outside repository capability");
     return path;
@@ -70,14 +71,34 @@ export async function createRepositoryEnvironment({ root, paths, writablePaths }
       return [hits, truncated];
     },
     async test(input) {
-      if (!Array.isArray(input) || input.length !== 1 || input[0] !== 0)
+      if (!Array.isArray(input) || input.length !== 2 ||
+          !Array.isArray(input[0]) || input[0].length !== 1 || input[0][0] !== 0)
         throw new TypeError("unsupported repository test suite");
+      const expected = input[1];
+      if (!expected || ![0, 1].includes(expected.tag) ||
+          (expected.tag === 0 ? expected.value !== null :
+            !Array.isArray(expected.value) || expected.value.length !== 2 ||
+            expected.value[0] !== "src/range.mjs" || !/^[a-f0-9]{64}$/.test(expected.value[1])))
+        throw new TypeError("unsupported repository test source binding");
+      const expectedDigest = expected.tag === 1 ? expected.value[1] : null;
       // This preserved executor is qualified for the range-repair fixture only.
       // Missing capabilities, failed sandbox launch and incomplete reports throw;
       // none are observations that could satisfy the authored failing-baseline gate.
-      await observe("src/range.mjs");
-      await observe("test/range.test.mjs");
-      return runRepositoryTests(directory);
+      const source = await observe("src/range.mjs");
+      const suite = await observe("test/range.test.mjs");
+      if (suite.digest !== suiteDigest) throw new Error("repository test suite changed");
+      const boundDigest = expectedDigest ?? source.digest;
+      if (source.digest !== boundDigest) throw new Error("repository test source changed");
+      async function unchanged() {
+        if ((await observe("src/range.mjs")).digest !== boundDigest)
+          throw new Error("repository test source changed");
+        if ((await observe("test/range.test.mjs")).digest !== suiteDigest)
+          throw new Error("repository test suite changed");
+      }
+      await unchanged();
+      const result = await runRepositorySnapshot(source.content, suite.content);
+      await unchanged();
+      return result;
     },
     current: proposal => delivery.read(proposalInScope(proposal)),
     replace: proposal => delivery.replace(proposalInScope(proposal)),

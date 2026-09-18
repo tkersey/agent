@@ -69,7 +69,8 @@ pub const Application = struct {
         const list = try c.external("repository.repair.list.v1", try c.schema(void), try c.schema(t.ListResult), .read);
         const read = try c.external("repository.repair.read.v1", try c.schema(t.ReadRequest), try c.schema(t.ReadResult), .read);
         const search = try c.external("repository.repair.search.v1", try c.schema(t.SearchRequest), try c.schema(t.SearchResult), .read);
-        const tests = try c.external("repository.repair.test.v1", try c.schema(t.TestRequest), try c.schema(t.TestResult), .read);
+        const tests = try c.external("repository.repair.test.v1", try c.schema(t.TestInvocation), try c.schema(t.TestResult), .read);
+        const test_request = try @import("testing.zig").define(c);
         const effects = (try (boundary.computation.Row{ .effects = replace.effects }).unionWith(b.allocator(), .{ .effects = &.{ list, read, search, tests, try P.declare(b) } })).effects;
         const loop = try b.declare(&.{ try c.schema(Task), try c.schema(t.Memory), try c.schema(u16), try c.schema(completion.Changes) }, try c.schema(t.FinalResult), effects, &.{});
         const task = try e.param(loop, 0);
@@ -96,8 +97,10 @@ pub const Application = struct {
                 const updated = try b.variable(try c.schema(t.Memory));
                 const operation = if (index == 4)
                     try admittedReplace(e, completed.capacity, changes, value, replace.function, state, try e.field(u64, task, 2))
-                else
-                    try b.term(.{ .perform = .{ .effect = ([_]Id{ list, read, search, tests })[index], .payload = if (index == 0) try c.literal(void, {}) else value } });
+                else if (index == 3) blk_test: {
+                    const invocation = try b.variable(try c.schema(t.TestInvocation));
+                    break :blk_test try b.bind(invocation, try e.call(test_request, &.{ state, value }), try b.term(.{ .perform = .{ .effect = tests, .payload = try b.reference(invocation) } }));
+                } else try b.term(.{ .perform = .{ .effect = ([_]Id{ list, read, search, tests })[index], .payload = if (index == 0) try c.literal(void, {}) else value } });
                 const observation = try b.primitive(try c.schema(t.Observation), .variant, &.{try b.reference(observed)}, index);
                 const changed = try b.variable(try c.schema(completion.Changes));
                 const record = if (index == 4) try e.call(completed.update, &.{ changes, try b.reference(observed) }) else try b.pure(changes);

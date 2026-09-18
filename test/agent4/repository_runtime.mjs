@@ -79,8 +79,25 @@ async function run(mode) {
       }[pending.semanticIdentity];
       if (leaf) {
         if (leaf === "replace") writes++;
-        if (leaf === "test") { tests++; realTests++; }
-        reply = await environment[leaf](payload);
+        if (leaf === "test") {
+          tests++; realTests++;
+          assert.deepEqual(payload, [[0], {tag: 1, value: ["src/range.mjs",
+            tests === 1 || mode === "denied" ? hash(initial) : hash(replacement)]}]);
+          if (mode === "source-drift") await writeFile(join(root, "src/range.mjs"), "changed while suspended");
+          if (mode === "suite-drift") await writeFile(join(root, "test/range.test.mjs"), "process.exit(0)");
+        }
+        try { reply = await environment[leaf](payload); }
+        catch (error) {
+          if (!["source-drift", "suite-drift"].includes(mode) || leaf !== "test") throw error;
+          assert.match(error.message, mode === "source-drift" ? /test source changed/ : /test suite changed/);
+          // No external observation was produced: the actual parked request is
+          // still pending, not converted into baseline-failure evidence.
+          const parked = world.decodeOutcome(kernel.invoke(world.encodeInput({image, state: outcome.state})));
+          assert.equal(parked.kind, "requested");
+          assert.deepEqual(parked.request, outcome.request);
+          assert.deepEqual(parked.state, outcome.state);
+          return {kind: "unavailable", decisions, writes, tests, approvals};
+        }
         if (leaf === "test") assert.equal(reply[1], tests > 1 && !["broken", "early-exit", "external-write", "denied"].includes(mode));
       } else if (pending.semanticIdentity === "agent.model.invoke.v3") {
         const invocation = decodeModelInvocation(pending.payload);
@@ -117,3 +134,11 @@ for (const mode of ["approved", "broken", "early-exit", "external-write", "denie
   assert.equal(actual.approvals, 1, mode);
 }
 console.log(`repository repair: 5 cases passed; ${realTests} real isolated test processes; ${transfers} fresh-kernel transfers`);
+for (const mode of ["source-drift", "suite-drift"]) {
+  const actual = await run(mode);
+  assert.equal(actual.kind, "unavailable");
+  assert.equal(actual.decisions, 6);
+  assert.equal(actual.writes, 0);
+  assert.equal(actual.approvals, 0);
+}
+console.log("repository repair: changed source/suite preserve the pending request without test evidence");

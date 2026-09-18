@@ -76,18 +76,18 @@
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "5f248c3f6dadc0086a4c6558727a08eee9ff8bbf",
-    "gitTree": "b424f9965d2f940b1b2bc0ad302c66ab23aeab06",
+    "commit": "907bdc14c191ae2e28189d9e9cef56bfd8b40156",
+    "gitTree": "6ac857693ab60ec91cc07432a4cf83665c27e56d",
     "version": "6.0.0-dev.0",
     "source": {
-      "inventorySha256": "eccd5884eb5f6d1d07ba63cfa154a19e9ad4b4763ad076369f9af23446e2fd71",
+      "inventorySha256": "93c8f884f9ba0be130ef492165c7584024cadeca1266256b47fd4ffab0339a04",
       "entries": 133,
-      "bytes": 1272941
+      "bytes": 1276092
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/5f248c3f6dadc0086a4c6558727a08eee9ff8bbf.tar.gz",
-      "bytes": 288149,
-      "sha256": "4e3cf52d558e77424cc411c2faed3b5835c3f7198aff5d1f6cb282b0507e6852"
+      "url": "https://github.com/tkersey/world/archive/907bdc14c191ae2e28189d9e9cef56bfd8b40156.tar.gz",
+      "bytes": 288976,
+      "sha256": "3c7b94c95b037eafe36cd6145ba17606e5a688da00983da270abf5f54f329926"
     },
     "authentication": "Downloaded archive tree recomputed and matched to GitHub commit API; complete source and runtime inventories bound",
     "runtime": {
@@ -213,17 +213,17 @@
           "path": "world-kernel.wasm",
           "kind": "file",
           "mode": 493,
-          "bytes": 459815,
-          "sha256": "c2dc18506ae8d13b2199a9eb5e3153af392ec25640a60384b5007c4e20ed6005"
+          "bytes": 459873,
+          "sha256": "c5f33c3b1328c9bf2f9d1f8c3597da29bd6f1d8fddfddbecda1b575f902ec330"
         }
       ],
-      "inventorySha256": "2b107009fb4b0f02e86889919816276c5d950efb8abd2d142fb0f10bccc5626a",
+      "inventorySha256": "c3b55bbac05e392b4c2057adee9212b1e8645679ed73d3a690602b00a6795391",
       "entries": 19,
-      "bytes": 515915,
+      "bytes": 515973,
       "kernel": {
         "path": "world-kernel.wasm",
-        "bytes": 459815,
-        "sha256": "c2dc18506ae8d13b2199a9eb5e3153af392ec25640a60384b5007c4e20ed6005"
+        "bytes": 459873,
+        "sha256": "c5f33c3b1328c9bf2f9d1f8c3597da29bd6f1d8fddfddbecda1b575f902ec330"
       },
       "abi": 3,
       "exports": [
@@ -260,7 +260,7 @@
         "target": "build-kernel",
         "optimize": "ReleaseSmall",
         "machine": "wasm32-freestanding",
-        "boundarySourceCommit": "614cd9ebde7912763fc3ac80c8315fc20d14e208",
+        "boundarySourceCommit": "d76cf3eccc6470f50ebb3ebc42031544acf47fbd",
         "capacityOverrides": [],
         "requestedOptimize": "ReleaseSafe"
       },

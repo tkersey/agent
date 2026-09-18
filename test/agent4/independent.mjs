@@ -168,7 +168,7 @@ verifyRuntime(path.resolve(runtimeArg));
 const evidence = {
   format: "agent4-independent-embedding/v1", kernelSha256: runtime.kernelSha256,
   engines: { standard: `Node ${process.version}`, independent: "Wasmtime 48.0.0 / Python 3.14.7",
-    native: nativePath ? { executableSha256: nativeIdentity, runtime: "World public process_v2.invoke" }
+    native: nativePath ? { executableSha256: nativeIdentity, runtime: "World public invocation" }
       : "not executed: AGENT4_NATIVE required for native agreement" },
   nativeAgreementEstablished: nativePath !== null,
   images: { dialogue: hash(twice), disposal: hash(disposal), multi: hash(multi) },

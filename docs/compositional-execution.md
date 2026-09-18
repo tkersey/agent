@@ -19,18 +19,22 @@ The economy run is functional-only and does not establish timing acceptance.
 
 ## Current results and unresolved failures
 
-The current kernel is 459,815 bytes with SHA-256
-`c2dc18506ae8d13b2199a9eb5e3153af392ec25640a60384b5007c4e20ed6005`.
+The current kernel is 459,873 bytes with SHA-256
+`c5f33c3b1328c9bf2f9d1f8c3597da29bd6f1d8fddfddbecda1b575f902ec330`.
 Inquiry, repeated-task and ReAct images remain 38,162 / 38,561 / 64,111 bytes.
 
-Boundary now frees temporary flow-analysis storage and uses bounded FIFO worklists.
-Across 13 unchanged scenarios, paired inquiry native Session peak falls from
-2,847,222 to 2,367,460 bytes; ReAct falls from 4,239,618 to 3,656,504. BPC1 remains
+Boundary frees temporary flow-analysis storage and uses bounded FIFO worklists.
+World now also releases contract canonicalization scratch instead of retaining it
+with encoded contracts. Across 13 unchanged scenarios and 128 paired invocations,
+inquiry native Session peak falls from 2,367,460 to 2,049,764 bytes; ReAct falls
+from 3,656,504 to 3,534,020. BPC1 remains
 lower at 1,853,961 and 2,061,220 respectively, so both gaps remain open. These
 requested working-byte counters exclude input-file and host/output buffers and
 are not RSS. Native/Node outcomes, work counts, authority and cleanup checks agree.
 
-Five paired guest windows overlap substantially; no guest-speed gain is claimed.
+Five rotating native timing windows and an independent control window overlap
+with repeated-baseline variability; no latency improvement is claimed for this
+change. The earlier guest windows also overlap; no guest-speed gain is claimed.
 Inquiry/repeated-task's preceding BPC1 improvement and ReAct's remaining guest
 latency gap need final requalification. Compact predecessor storage on 64-bit
 hosts reduces control128/256 peaks to

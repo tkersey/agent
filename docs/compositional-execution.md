@@ -10,25 +10,30 @@ Current architecture, runtime and migration instructions are in
 [architecture.md](architecture.md), [agent4-runtime.md](agent4-runtime.md),
 [migration_from_3.md](migration_from_3.md), and [compiled-text-tool.md](compiled-text-tool.md).
 
-The last implementation qualification passed 159 authoring steps (112 Zig and
-35 JavaScript tests) and 171 combined integration/economy/component/browser steps
-(53 Zig tests, 83 Node tests and 49 inquiry scenarios), including extracted consumers
-and real browser transfers. Cleanup does not change these expectations or repeat
-that full matrix. Package/source authentication is refreshed for the cleaned trees.
+The normal pinned authoring check passes 159 steps, 112 Zig tests and 35 JavaScript
+tests, including an extracted external consumer. Dependency/setup tests pass 24/24
+and offline setup authenticates the complete source/runtime tuple. The current
+flow-storage change is checked on the 13 paired inquiry/ReAct diagnostic scenarios;
+the broader integration, economy and browser matrix still needs final requalification.
 
 ## Current results and unresolved failures
 
-The final kernel remains 460,851 bytes with SHA-256
-`b0cee0db452b46d9cf8f3f3067c52693383d566b9670a38da778793e29de66ee`.
+The current kernel is 461,374 bytes with SHA-256
+`353d8ca5ba0a94b09c4e6b83345adca5ae834236c7948ec7370ae6069b933e6e`.
 Inquiry, repeated-task and ReAct images remain 38,162 / 38,561 / 64,111 bytes.
 
-Measured paired inquiry native Session peak is 2,847,222 bytes, versus BPC1's
-1,853,961; ReAct is 4,239,618 versus 2,061,220. These requested working-byte counters
-exclude input-file and host/output buffers and are not RSS. Both failures remain
-open. Inquiry and repeated-task guest runs improved over BPC1, while ReAct guest
-latency still regresses. An intermediate index guard worsened guest timings; the
-retained implementation restores the entire preceding guest runtime byte inventory.
-No final guest speedup is claimed from the native memory improvement.
+Boundary now frees temporary flow-analysis storage and uses bounded FIFO worklists.
+Across 13 unchanged scenarios, paired inquiry native Session peak falls from
+2,847,222 to 2,408,588 bytes; ReAct falls from 4,239,618 to 3,841,782. BPC1 remains
+lower at 1,853,961 and 2,061,220 respectively, so both gaps remain open. These
+requested working-byte counters exclude input-file and host/output buffers and
+are not RSS. Native/Node outcomes, work counts, authority and cleanup checks agree.
+
+Five paired guest windows overlap substantially; no guest-speed gain is claimed.
+Inquiry/repeated-task's preceding BPC1 improvement and ReAct's remaining guest
+latency gap need final requalification. Control128/256 working peaks rise versus
+the preceding successor while staying below BPC1; see the linked World status.
+Wasmtime and real-browser requalification remain outstanding for this kernel.
 
 Remaining work includes those primary-workload regressions, the rest of the accepted
 workload matrix, historical consumer retirement, serial reviews and the final

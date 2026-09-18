@@ -50,6 +50,7 @@ test("authenticated extraction admits regular source bytes and rejects unsafe pa
     { name: "source/../escape", value: "escape" },
     { name: "other/file", value: "outside root" },
     { name: "source/link", type: "2" },
+    { name: "source/hardlink", type: "1" },
     { name: "source/fifo", type: "6" },
   ].entries()) {
     const hostile = archive([entry]), target = join(root, `rejected-${index}`);
@@ -58,6 +59,31 @@ test("authenticated extraction admits regular source bytes and rejects unsafe pa
     assert.equal(existsSync(target), false);
   }
   assert.equal(existsSync(join(root, "escape")), false);
+});
+
+test("duplicate archive members reject before publishing a dependency", context => {
+  const root = temporary(context), bytes = archive([
+    { name: "source/a.zig", value: "original" },
+    { name: "source/a.zig", value: "replacement" },
+  ]);
+  const destination = join(root, "duplicate");
+  assert.throws(() => extractArchive(bytes, { bytes: bytes.length, sha256: sha256(bytes) },
+    "source", destination, join(root, "tmp")), /unsafe archive path/);
+  assert.equal(existsSync(destination), false);
+});
+
+test("ambient tar options cannot omit authenticated source members", context => {
+  const root = temporary(context), bytes = archive([{ name: "source/a.zig", value: "source bytes\n" }]);
+  const destination = join(root, "extracted"), previous = process.env.TAR_OPTIONS;
+  try {
+    process.env.TAR_OPTIONS = "--exclude=*";
+    extractArchive(bytes, { bytes: bytes.length, sha256: sha256(bytes) },
+      "source", destination, join(root, "tmp"));
+    assert.equal(readFileSync(join(destination, "a.zig"), "utf8"), "source bytes\n");
+  } finally {
+    if (previous === undefined) delete process.env.TAR_OPTIONS;
+    else process.env.TAR_OPTIONS = previous;
+  }
 });
 
 test("setup permits only owned isolated directories and rejects symlink routes", context => {

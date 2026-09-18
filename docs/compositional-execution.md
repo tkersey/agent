@@ -3,8 +3,8 @@
 Agent 4.0.0-dev.0 consumes Boundary 3 and World 6 through the authenticated
 [dependency lock](../conformance/agent4/dependencies.lock.json). Authoring, approval,
 model/tool contracts, inquiry and reusable compiled tools remain product code.
-The successor is incomplete; implementation is paused for the authorized archive
-cleanup and all linked PRs remain drafts.
+The successor is incomplete; implementation has resumed after the authorized
+archive cleanup and all linked PRs remain drafts.
 
 Current architecture, runtime and migration instructions are in
 [architecture.md](architecture.md), [agent4-runtime.md](agent4-runtime.md),
@@ -34,6 +34,12 @@ Remaining work includes those primary-workload regressions, the rest of the acce
 workload matrix, historical consumer retirement, serial reviews and the final
 requirement audit. Live-model usefulness remains unmeasured. No paid inference or
 real user-data operations were used to obtain the fixture results.
+
+The obsolete Boundary 1 / World 3 acquisition and conformance runners and their
+fixed release locks are removed. Current dependency/setup tests retain archive
+authentication, extraction and source-custody checks. The old repository-repair
+application fixtures still need migration; removing their retired runners does
+not establish successor coverage for that application.
 
 The existing economy tools and substantive regression fixtures remain available.
 Generated measurements, duplicated qualification receipts and historical experiment

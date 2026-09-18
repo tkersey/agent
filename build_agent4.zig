@@ -50,8 +50,9 @@ pub fn build(b: *std.Build) void {
     const browser_tools_path = b.option([]const u8, "browser-tools", "Directory containing the locked Playwright browser tools");
     const measure_economy = b.option(bool, "measure-economy", "Collect timings on an operator-confirmed idle host") orelse false;
     const world_source = b.option([]const u8, "world-source", "Immutable World source for native agreement") orelse b.pathFromRoot(".agent4/inputs/world");
-    const world_archive = b.option([]const u8, "world-archive", "Authenticated immutable World source archive") orelse
-        b.pathJoin(&.{ std.fs.path.dirname(world_source) orelse ".", "world-8c37c94.tar.gz" });
+    // The dependency verifier derives the sibling archive from the selected
+    // lock. Only forward an explicit override; never duplicate its commit here.
+    const world_archive = b.option([]const u8, "world-archive", "Authenticated immutable World source archive");
     const data = if (source) |root| b.createModule(.{
         .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ root, "src/v2/data/root.zig" }) },
         .target = target,
@@ -231,7 +232,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{.{ .name = "boundary_data", .module = data }},
         });
         const runtime_guard = b.addSystemCommand(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--world-runtime", runtime_path, "--world-source", world_source });
-        runtime_guard.addArgs(&.{ "--world-archive", world_archive });
+        if (world_archive) |archive| runtime_guard.addArgs(&.{ "--world-archive", archive });
         addBoundary(b, runtime_guard, source, target, optimize);
         runtime_guard.has_side_effects = true;
         _ = runtime_guard.captureStdOut(.{});
@@ -349,7 +350,7 @@ pub fn build(b: *std.Build) void {
             native_graph.testModule(native_checks, native);
         }
         const run = b.addSystemCommand(&.{ "node", "tools/agent4/check.mjs", "integration", "--world-runtime", runtime_path, "--fixtures", b.getInstallPath(.prefix, "agent4"), "--world-source", world_source });
-        run.addArgs(&.{ "--world-archive", world_archive });
+        if (world_archive) |archive| run.addArgs(&.{ "--world-archive", archive });
         run.addArg("--native");
         run.addFileArg(native_exe.getEmittedBin());
         addBoundary(b, run, source, target, optimize);
@@ -358,7 +359,7 @@ pub fn build(b: *std.Build) void {
         run.step.dependOn(&runtime_guard.step);
         runtime_work.dependOn(&run.step);
         const runtime_post = b.addSystemCommand(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--world-runtime", runtime_path, "--world-source", world_source });
-        runtime_post.addArgs(&.{ "--world-archive", world_archive });
+        if (world_archive) |archive| runtime_post.addArgs(&.{ "--world-archive", archive });
         addBoundary(b, runtime_post, source, target, optimize);
         runtime_post.has_side_effects = true;
         _ = runtime_post.captureStdOut(.{});
@@ -374,7 +375,8 @@ pub fn build(b: *std.Build) void {
         const measure = b.addSystemCommand(&.{ "node", "tools/agent4/economy.mjs", "--world-runtime", runtime_path, "--fixtures", b.getInstallPath(.prefix, "agent4/economy"), "--output", b.getInstallPath(.prefix, "agent4/economy-results"), "--probe" });
         const installed_probe = b.addInstallArtifact(economy_exe, .{});
         measure.addArg(b.getInstallPath(.bin, "economy-probe"));
-        measure.addArgs(&.{ "--world-source", world_source, "--world-archive", world_archive });
+        measure.addArgs(&.{ "--world-source", world_source });
+        if (world_archive) |archive| measure.addArgs(&.{ "--world-archive", archive });
         measure.addArg("--native");
         measure.addFileArg(native_exe.getEmittedBin());
         addBoundary(b, measure, source, target, optimize);

@@ -96,6 +96,7 @@ test/agent4/multi_probe.zig
 test/agent4/native.zig
 test/agent4/observation.zig
 test/agent4/prompt_unknown_field.zig
+test/agent4/repository_replacement.zig
 test/agent4/repository_working_set.zig
 test/agent4/skill_unknown_field.zig
 test/agent4/terminology.zig
@@ -209,6 +210,8 @@ test/consumers/inquiry/react.zig
 test/consumers/inquiry/repeated.zig
 test/consumers/inquiry/source.zig
 test/consumers/inquiry/types.zig
+test/consumers/repository/replacement.zig
+test/consumers/repository/source.zig
 test/consumers/repository/types.zig
 test/consumers/repository/working_set.zig
 test/consumers/review/build.zig

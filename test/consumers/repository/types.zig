@@ -144,6 +144,7 @@ pub const Failure = enum {
     invalid_variant,
     capacity_exceeded,
     authored_abort,
+    uncertain_delivery,
 };
 
 pub const Action = union(enum) {

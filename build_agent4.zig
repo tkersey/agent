@@ -341,19 +341,20 @@ pub fn build(b: *std.Build) void {
             inquiry_check.dependOn(&inquiry_run.step);
             runtime_work.dependOn(&inquiry_run.step);
         }
-        for ([_][]const u8{ "decision_scopes", "model_admission", "model_custody", "observation", "approval_equality", "callable_runtime", "clarification", "terminology", "repository_working_set" }) |name| {
+        for ([_][]const u8{ "decision_scopes", "model_admission", "model_custody", "observation", "approval_equality", "callable_runtime", "clarification", "terminology", "repository_working_set", "repository_replacement" }) |name| {
             const native = g.module(b.fmt("test/agent4/{s}.zig", .{name}));
             native.addImport("world", world);
             native.addImport("equality", g.helper("value_equality"));
             if (std.mem.eql(u8, name, "terminology"))
                 native.addImport("document", g.module("test/consumers/document/consequence.zig"));
-            if (std.mem.eql(u8, name, "repository_working_set")) {
-                native.addImport("repository", g.module("test/consumers/repository/working_set.zig"));
+            if (std.mem.startsWith(u8, name, "repository_")) {
+                const working_set = std.mem.eql(u8, name, "repository_working_set");
+                native.addImport(if (working_set) "repository" else "repository_replace", g.module(if (working_set) "test/consumers/repository/working_set.zig" else "test/consumers/repository/replacement.zig"));
                 const tests = b.addTest(.{ .root_module = native });
                 tests.step.dependOn(native_graph.gate);
                 const run_policy = b.addRunArtifact(tests);
                 native_checks.dependOn(&run_policy.step);
-                b.step("check-repository-working-set", "Check staged repository memory and evidence rules")
+                b.step(if (working_set) "check-repository-working-set" else "check-repository-replacement", if (working_set) "Check staged repository memory and evidence rules" else "Check live repository replacement approval")
                     .dependOn(&run_policy.step);
             } else native_graph.testModule(native_checks, native);
         }

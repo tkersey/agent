@@ -15,11 +15,25 @@ zig build check-repository-working-set -Doptimize=ReleaseSafe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime"
 ```
 
+The [replacement gate](../test/consumers/repository/replacement.zig) requires a
+failing baseline and the latest source path/digest before requesting fresh read
+evidence. Its one-shot proof binds exact-proposal approval to the authenticated
+principal. Stale replies, substituted evidence and amendments cannot commit;
+changed files return conflicts and uncertain delivery fails explicitly. Nine
+native regressions exercise these outcomes across fresh checkpoint restores:
+
+```sh
+zig build check-repository-replacement -Doptimize=ReleaseSafe \
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+```
+
 The predecessor fixtures under `actuality/` and their independent expectations
 remain until the full application migration is complete. The model/action loop,
-repository listing/read/search/test adapters, approval-bound replacement and full
-end-to-end repair still require migration and qualification. The staged predicate
-is an application evidence rule; it does not alone grant write authority.
+repository listing/read/search/test adapters, conditional filesystem delivery and
+full end-to-end repair still require migration and qualification. The staged
+completion predicate alone grants no write authority. The replacement adapter
+must check the actual file digest again atomically with delivery; approval does
+not prevent changes made outside the application.
 
 See [runtime setup](agent4-runtime.md), [migration guidance](migration_from_3.md)
 and [current status](compositional-execution.md). No live-model or real-repository

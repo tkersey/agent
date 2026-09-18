@@ -18,8 +18,8 @@ the broader integration, economy and browser matrix still needs final requalific
 
 ## Current results and unresolved failures
 
-The current kernel is 459,875 bytes with SHA-256
-`39320df71108e646a68183f4fd4394401c30933d238f01dee4abbaa52ae7adaa`.
+The current kernel is 459,815 bytes with SHA-256
+`c2dc18506ae8d13b2199a9eb5e3153af392ec25640a60384b5007c4e20ed6005`.
 Inquiry, repeated-task and ReAct images remain 38,162 / 38,561 / 64,111 bytes.
 
 Boundary now frees temporary flow-analysis storage and uses bounded FIFO worklists.
@@ -37,6 +37,8 @@ hosts reduces control128/256 peaks to
 32-bit builder is unchanged: applying compact construction there regressed guest
 timing. Canonical set nodes now occupy 24 rather than 32 bytes on both targets;
 their exact cardinality follows from the payload and bounds without a cached count.
+Type validation also reuses its existing exportability table for borrow checking;
+this removes one repeated derivation without changing measured working peaks.
 Wasmtime and real-browser requalification remain outstanding for this kernel.
 
 Remaining work includes those primary-workload regressions, the rest of the accepted

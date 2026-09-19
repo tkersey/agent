@@ -79,8 +79,8 @@ separate from the earlier Node 26.8.2 runtime qualification.
 Native build rows are single observations, not statistical speed claims or
 OS-cold filesystem measurements. Process rows are medians of nine rotating
 observations after three warmups and include process startup and file I/O.
-The client source edit adds one to its authored result: native execution of the
-fixture produces 184/185 instead of 183/184. Standalone results remain 83/166,
+The client source edit adds one to its authored result: fresh WASM execution of
+the fixture produces 184/185 instead of 183/184. Standalone results remain 83/166,
 and yield, cleanup and cancellation expectations pass before and after the edit.
 
 The native build log shows the component emitter cached while only the client/link

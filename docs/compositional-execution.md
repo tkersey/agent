@@ -20,6 +20,14 @@ The economy run is functional-only and does not establish timing acceptance.
 
 ## Current results and unresolved failures
 
+World removes its separate free-view index arrays by linking retired view records.
+Generation checks still reject stale handles, and retirement/reuse allocate
+nothing. Small controls lose two allocations and 272 peak working bytes; scalar
+peak falls 4,662 → 4,390 bytes. Timing changes are small and mixed, including
+a slight retained-loop slowdown; this is a storage reduction, not a general
+speedup. The current kernel is 122 bytes smaller. Current host qualification uses
+Node 26.9.0, recorded explicitly in the dependency lock.
+
 World now reuses direct same-function tail frames without initialized ownership
 custody. Simultaneous arguments, stale-local clearing and copy-on-write views
 preserve retained continuations. The 256-iteration retained-loop control improves
@@ -36,8 +44,8 @@ bytes across the same input sizes; reserved linear memory remains separately
 chargeable. This correctness fix adds about 1–5% to several tested
 suspension-heavy native controls; its performance cost remains open.
 
-The current kernel is 460,854 bytes with SHA-256
-`5788520b6a11c9f59b602ec6cbebdb976116d176a7e417afc2258c08ee25968c`.
+The current kernel is 460,732 bytes with SHA-256
+`61ac21c775cdf08fe9425bf21de9966ed1cd169c156911401ff1e19913d4a44f`.
 Inquiry, repeated-task and ReAct images remain 38,162 / 38,561 / 64,111 bytes.
 
 Boundary now uses compact analysis-set storage on 64-bit native hosts while

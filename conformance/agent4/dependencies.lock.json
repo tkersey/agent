@@ -76,18 +76,18 @@
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "8fb2ff862be79621ebfee79f6b748458aca75deb",
-    "gitTree": "97ccee7973ab606b1fa7500252ce3dccdd95258a",
+    "commit": "86343607cecc65a7a3c177d32c0f49eba8abe9c5",
+    "gitTree": "f5685d1c0a87ae9c7b3723213f9dffe282d9da68",
     "version": "6.0.0-dev.0",
     "source": {
-      "inventorySha256": "3337afb33e2ec8e208184d16a7fff3af65ce29e50cb8db6060831499a5d6e8e2",
+      "inventorySha256": "4491819ee7274ab14a4edde7e32a9f07083bb26ede1b69b5791b0413d4e396f2",
       "entries": 135,
-      "bytes": 1326872
+      "bytes": 1329203
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/8fb2ff862be79621ebfee79f6b748458aca75deb.tar.gz",
-      "bytes": 301081,
-      "sha256": "699782571f2da7b84e5bb0e8a9a5f3cb48ca23c9df313c6c465ebcffbb7da65e"
+      "url": "https://github.com/tkersey/world/archive/86343607cecc65a7a3c177d32c0f49eba8abe9c5.tar.gz",
+      "bytes": 301804,
+      "sha256": "abfc4787590f4a03f851a0b3689e1d3b3ec865ae780400ff814a6d6bb2e8e355"
     },
     "authentication": "Downloaded archive tree recomputed and matched to GitHub commit API; complete source and runtime inventories bound",
     "runtime": {
@@ -213,17 +213,17 @@
           "path": "world-kernel.wasm",
           "kind": "file",
           "mode": 493,
-          "bytes": 460854,
-          "sha256": "5788520b6a11c9f59b602ec6cbebdb976116d176a7e417afc2258c08ee25968c"
+          "bytes": 460732,
+          "sha256": "61ac21c775cdf08fe9425bf21de9966ed1cd169c156911401ff1e19913d4a44f"
         }
       ],
-      "inventorySha256": "92e355064f955f0d0631d6676c761fc8f341719f39e77c7a7cf762ea8950e1bb",
+      "inventorySha256": "874783365d6aab1beaf678dd12ddb86dc9c16e4f4bc59363e82e557c5e42e339",
       "entries": 19,
-      "bytes": 516954,
+      "bytes": 516832,
       "kernel": {
         "path": "world-kernel.wasm",
-        "bytes": 460854,
-        "sha256": "5788520b6a11c9f59b602ec6cbebdb976116d176a7e417afc2258c08ee25968c"
+        "bytes": 460732,
+        "sha256": "61ac21c775cdf08fe9425bf21de9966ed1cd169c156911401ff1e19913d4a44f"
       },
       "abi": 3,
       "exports": [
@@ -273,8 +273,8 @@
       "executableSha256": "71cc3995a7586753ebf82c66dfb8bef43df446517550678781834586a960f8c9"
     },
     "node": {
-      "version": "v26.8.2",
-      "executableSha256": "902b6a6984d5d825829ea9064ab73b734548df37bc0683990dca31c8dc2a9253"
+      "version": "v26.9.0",
+      "executableSha256": "91ed66b8cd139609427a3e9d93518dd3b0d5407c737fc9a265bfd991ec623d8a"
     },
     "platform": "darwin",
     "architecture": "arm64"

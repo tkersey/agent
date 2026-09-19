@@ -36,7 +36,6 @@ bytes across the same input sizes; reserved linear memory remains separately
 chargeable. This correctness fix adds about 1–5% to several tested
 suspension-heavy native controls; its performance cost remains open.
 
-
 The current kernel is 460,854 bytes with SHA-256
 `5788520b6a11c9f59b602ec6cbebdb976116d176a7e417afc2258c08ee25968c`.
 Inquiry, repeated-task and ReAct images remain 38,162 / 38,561 / 64,111 bytes.
@@ -58,6 +57,46 @@ Native Session peaks remain above optimized BPC1's 1,853,961 / 2,061,220 bytes.
 Inquiry and repeated-task's earlier guest improvement and ReAct's remaining guest
 latency gap need final requalification. No live-model usefulness claim follows
 from synthetic fixture execution.
+
+## Component build costs
+
+The existing `build-component-tools` and `component_runtime.mjs` witness was
+measured in an isolated copy of Agent 08b6185, using Boundary 3b8a69f and the
+normal authenticated source override. Zig 0.16.0 ReleaseSafe, Node 26.9.0,
+Apple M2 Pro and macOS 27.2 were used. These new Node process measurements are
+separate from the earlier Node 26.8.2 runtime qualification.
+
+| Operation | Observed elapsed time |
+|---|---:|
+| Build both tools with empty local/global Zig caches | 22.49 s |
+| Warm unchanged native build, including source authentication | 0.343 s |
+| Native client-only source edit and rebuild | 14.95 s |
+| Rebuild one state component with the existing emitter | 2.24 ms |
+| Link immutable components without source checking/lowering | 2.57 ms |
+| Compile/check one Agent client and link reused components | 2.82 ms |
+| Compile the next client variant with existing tools | 2.81 ms |
+
+Native build rows are single observations, not statistical speed claims or
+OS-cold filesystem measurements. Process rows are medians of nine rotating
+observations after three warmups and include process startup and file I/O.
+The client source edit adds one to its authored result: native execution of the
+fixture produces 184/185 instead of 183/184. Standalone results remain 83/166,
+and yield, cleanup and cancellation expectations pass before and after the edit.
+
+The native build log shows the component emitter cached while only the client/link
+executable recompiles. Its executable bytes and all four BMO1 objects remain
+unchanged (147 / 375 / 612 / 195 bytes). Link-only modes observe zero source checks
+and lowerings; each Agent-client mode observes exactly one of each. No unchanged
+component is re-emitted during the client edit. Thus component reuse removes
+repeated component compilation, but native client recompilation still costs
+seconds. The millisecond linker does not account for or excuse that cost.
+
+Reproduce with `zig build build-component-tools -Doptimize=ReleaseSafe`, isolated
+local/global caches, then the emitted `agent4-component-objects` and
+`agent4-component-link` modes exercised in `test/agent4/component_runtime.mjs`.
+The controlled edit changes `Application.increment` by one in
+`test/agent4/component_link.zig` without editing the emitter or components.
+A matched predecessor native cold-build comparison remains unestablished.
 
 Remaining work includes those primary-workload regressions, the rest of the accepted
 workload matrix, serial reviews and the final

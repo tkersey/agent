@@ -1,6 +1,6 @@
-"""Run one canonical World Process v2 input through an independent WASM engine.
+"""Run one canonical World ABI 3 input through an independent WASM engine.
 
-Usage: embedding.py KERNEL_PATH EXPECTED_SHA256 INPUT_PKI2_PATH
+Usage: embedding.py KERNEL_PATH EXPECTED_SHA256 INPUT_PKI3_PATH
 
 The caller authenticates the exact kernel and admits its full static ABI through
 World before invoking this consumer. This consumer rechecks the digest and public
@@ -17,17 +17,20 @@ from pathlib import Path
 import wasmtime
 
 
-PREFIX = "world_process_v2_"
+PREFIX = "world_"
 SIGNATURES = {
-    "abi_version": ((), ("i32",)),
-    "prepare_input": (("i64",), ("i32",)),
-    "input_ptr": ((), ("i32",)),
-    "input_capacity": ((), ("i64",)),
-    "execute": (("i64",), ("i32",)),
-    "output_ptr": ((), ("i32",)),
-    "output_len": ((), ("i64",)),
-    "error_ptr": ((), ("i32",)),
-    "error_len": ((), ("i64",)),
+    "abi_version": ((), ("i32",)), "initialize": (("i64",), ("i32",)),
+    "set_limits": (("i64",) * 4, ("i32",)), "prepare_input": (("i64",) * 2, ("i32",)),
+    "input_ptr": ((), ("i32",)), "input_capacity": ((), ("i64",)),
+    "output_ptr": ((), ("i32",)), "output_len": ((), ("i64",)),
+    "error_ptr": ((), ("i32",)), "error_len": ((), ("i64",)),
+    "prepared_handle": ((), ("i64",)), "session_handle": ((), ("i64",)),
+    "working_live": ((), ("i64",)), "working_peak": ((), ("i64",)),
+    "invoke": (("i64",) * 2, ("i32",)), "prepare": (("i64",) * 2, ("i32",)),
+    "release_prepared": (("i64",) * 2, ("i32",)), "start": (("i64",) * 3, ("i32",)),
+    "restore": (("i64",) * 3, ("i32",)),
+    "drive": (("i64", "i64", "i32", "i32", "i64", "i32", "i64"), ("i32",)),
+    "checkpoint": (("i64", "i64", "i32"), ("i32",)), "close": (("i64",) * 2, ("i32",)),
 }
 
 
@@ -65,8 +68,44 @@ def bounded_range(memory: wasmtime.Memory, store: wasmtime.Store,
     return pointer, pointer + length
 
 
+def reject_start(code: bytes) -> None:
+    if code[:8] != b"\0asm\x01\0\0\0":
+        raise AdmissionError("invalid WASM header")
+    cursor = 8
+    while cursor < len(code):
+        section = code[cursor]
+        cursor += 1
+        if section == 8:
+            raise AdmissionError("WASM start function is forbidden")
+        size = 0
+        for shift in range(0, 35, 7):
+            if cursor == len(code):
+                raise AdmissionError("truncated WASM section")
+            byte = code[cursor]
+            cursor += 1
+            if shift == 28 and byte > 15:
+                raise AdmissionError("invalid WASM section length")
+            size |= (byte & 127) << shift
+            if not byte & 128:
+                break
+        else:
+            raise AdmissionError("invalid WASM section length")
+        if size > len(code) - cursor:
+            raise AdmissionError("truncated WASM section")
+        cursor += size
+
+
 def invoke(kernel: bytes, request: bytes) -> bytes:
-    engine = wasmtime.Engine()
+    reject_start(kernel)
+    config = wasmtime.Config()
+    config.wasm_threads = False
+    config.wasm_memory64 = False
+    config.wasm_gc = False
+    config.wasm_exceptions = False
+    config.wasm_tail_call = False
+    config.wasm_relaxed_simd = False
+    config.wasm_simd = False
+    engine = wasmtime.Engine(config)
     module = wasmtime.Module(engine, kernel)
     inspect_types(module)
     store = wasmtime.Store(engine)
@@ -108,9 +147,14 @@ def invoke(kernel: bytes, request: bytes) -> bytes:
             raise AdmissionError("World ABI diagnostic is not UTF-8") from error
         raise AdmissionError(f"World rejected {stage}: {message}")
 
-    if call("abi_version") != 2:
-        raise AdmissionError("expected World Process ABI version 2")
-    prepared = call("prepare_input", len(request))
+    if call("abi_version") != 3:
+        raise AdmissionError("expected World ABI version 3")
+    if call("initialize", 1) != 0:
+        raise AdmissionError("World initialization failed")
+    ceiling = min(0xFFFFFFFF, memory.type(store).limits.max * 65536)
+    if call("set_limits", 1, ceiling, ceiling, ceiling) != 0:
+        raise AdmissionError("World capacity configuration failed")
+    prepared = call("prepare_input", 1, len(request))
     if prepared == 2:
         rejected("preparation")
     if prepared not in (0, 1):
@@ -123,10 +167,10 @@ def invoke(kernel: bytes, request: bytes) -> bytes:
             raise AdmissionError("World ABI prepared insufficient input capacity")
         if request and memory.write(store, request, pointer) != len(request):
             raise AdmissionError("World ABI input write was incomplete")
-        executed = call("execute", len(request))
+        executed = call("invoke", 1, len(request))
         if executed == 2:
             rejected("execution")
-        if executed != 0:
+        if executed not in (0, 1):
             raise AdmissionError("World ABI returned an invalid execution status")
     outcome = detached("output")
     if not outcome:
@@ -136,7 +180,7 @@ def invoke(kernel: bytes, request: bytes) -> bytes:
 
 def main(arguments: list[str]) -> int:
     if len(arguments) != 3:
-        raise AdmissionError("usage: embedding.py KERNEL_PATH EXPECTED_SHA256 INPUT_PKI2_PATH")
+        raise AdmissionError("usage: embedding.py KERNEL_PATH EXPECTED_SHA256 INPUT_PKI3_PATH")
     kernel_path, expected_digest, input_path = arguments
     if re.fullmatch(r"[0-9a-f]{64}", expected_digest) is None:
         raise AdmissionError("expected SHA-256 must be 64 lowercase hexadecimal characters")

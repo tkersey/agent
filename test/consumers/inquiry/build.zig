@@ -1,9 +1,9 @@
 const std = @import("std");
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
-    const source = b.option([]const u8, "boundary-v2-source", "Authenticated immutable Boundary source");
+    const source = b.option([]const u8, "boundary-source", "Authenticated immutable Boundary source");
     const dependency = if (source) |path|
-        b.dependency("agent", .{ .optimize = optimize, .@"boundary-v2-source" = path })
+        b.dependency("agent", .{ .optimize = optimize, .@"boundary-source" = path })
     else
         b.dependency("agent", .{ .optimize = optimize });
     const module = b.createModule(.{ .root_source_file = b.path("main.zig"), .target = b.graph.host, .optimize = optimize, .imports = &.{
@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) void {
     } });
     const emitter = b.addExecutable(.{ .name = "inquiry-emitter", .root_module = module });
     b.installArtifact(emitter);
-    for ([_][]const u8{ "image", "repeat", "react", "task-schema", "outcome-schema" }, [_][]const u8{ "repair.bpi2", "repeated.bpi2", "react.bpi2", "task-schema.bin", "outcome-schema.bin" }) |mode, name| {
+    for ([_][]const u8{ "image", "repeat", "react", "task-schema", "outcome-schema" }, [_][]const u8{ "repair.bpi3", "repeated.bpi3", "react.bpi3", "task-schema.bin", "outcome-schema.bin" }) |mode, name| {
         const run = b.addRunArtifact(emitter);
         run.addArg(mode);
         b.getInstallStep().dependOn(&b.addInstallFileWithDir(run.captureStdOut(.{}), .prefix, name).step);

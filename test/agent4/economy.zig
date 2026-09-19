@@ -3,7 +3,7 @@ const std = @import("std");
 const boundary = @import("boundary");
 const agent = @import("agent");
 const source = boundary.computation;
-const data = boundary.data_v2;
+const data = boundary.data;
 const Id = source.Id;
 const edited_source_value: u32 = 7;
 const shared_prompt = "one immutable shared instruction";
@@ -167,8 +167,6 @@ const Phases = struct {
     source_check: u64 = 0,
     lowering: u64 = 0,
     target_check: u64 = 0,
-    direct_optimization: u64 = 0,
-    canonicalization: u64 = 0,
 };
 const Observer = struct {
     io: std.Io,
@@ -248,14 +246,21 @@ fn elapsed(io: std.Io, start: std.Io.Timestamp) u64 {
 const Workload = union(enum) { direct, sharing: usize, conversation };
 
 fn declareDomain(b: *source.Builder, workload: Workload) !void {
-    _ = try agent.contracts.schema(void, b);
     switch (workload) {
-        .direct => _ = try agent.contracts.schema(u32, b),
-        .sharing => _ = try agent.contracts.schema(struct {
-            selected: u32,
-            instructions: agent.contracts.Utf8,
-        }, b),
+        .direct => {
+            // Match Agent's InitialArgs/Result/Failure declaration order.
+            _ = try agent.contracts.schema(u32, b);
+            _ = try agent.contracts.schema(void, b);
+        },
+        .sharing => {
+            _ = try agent.contracts.schema(void, b);
+            _ = try agent.contracts.schema(struct {
+                selected: u32,
+                instructions: agent.contracts.Utf8,
+            }, b);
+        },
         .conversation => {
+            _ = try agent.contracts.schema(void, b);
             _ = try agent.contracts.schema(u64, b);
             _ = try agent.contracts.schema([]const u64, b);
         },
@@ -330,11 +335,11 @@ fn compiledSystem(init: std.process.Init, directory: []const u8, name: []const u
 
 fn saveCompiled(init: std.process.Init, directory: []const u8, name: []const u8, compiled: source.Compiled) !Metrics {
     const started = std.Io.Clock.awake.now(init.io);
-    const storage = try init.gpa.alloc(u8, try data.image.encodedLength(compiled.program));
+    const storage = try init.gpa.alloc(u8, try data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(storage);
     const image = try compiled.encode(init.gpa, storage);
     const duration = elapsed(init.io, started);
-    try save(init, directory, try std.fmt.allocPrint(init.gpa, "{s}.bpi2", .{name}), image);
+    try save(init, directory, try std.fmt.allocPrint(init.gpa, "{s}.bpi3", .{name}), image);
     const hex = std.fmt.bytesToHex(data.wire.digest(image), .lower);
     const identity = try init.gpa.dupe(u8, &hex);
     const program = compiled.program;
@@ -404,7 +409,7 @@ fn delta(facade_ns: u64, direct_ns: u64) i128 {
 }
 
 fn overhead(control: Metrics, minimal: Metrics) struct {
-    relation: []const u8 = "facade minus matched direct Boundary; identical canonical BPI2",
+    relation: []const u8 = "facade minus matched direct Boundary; identical canonical BPI3",
     qualification: []const u8 = "one warmed pair in direct/facade order; observer and clock costs included, not a universal overhead bound",
     descriptorConstructionNs: i128,
     sourceConstructionNs: i128,
@@ -478,14 +483,21 @@ fn emit(init: std.process.Init, directory: []const u8) !void {
 fn inspectState(init: std.process.Init, path: []const u8) !void {
     const bytes = try std.Io.Dir.cwd().readFileAlloc(init.io, path, init.gpa, .unlimited);
     defer init.gpa.free(bytes);
-    var decoded = try data.snapshot.decodeGraph(init.gpa, bytes);
+    var decoded = try data.state_image.decodeGraph(init.gpa, bytes);
     defer decoded.deinit();
-    var statistics: data.snapshot.Statistics = .{};
-    var normalized = try data.snapshot.canonicalizeMeasured(init.gpa, decoded.state, &statistics);
-    defer normalized.deinit();
+    try data.state_image.checkGraph(init.gpa, decoded.state);
+    var references: std.ArrayList(data.graph_order.Reference) = .empty;
+    defer references.deinit(init.gpa);
+    try data.graph_order.references(data.graph.Roots, decoded.state.roots, &references, init.gpa);
+    var edges = references.items.len;
+    for (decoded.state.nodes) |node| {
+        references.clearRetainingCapacity();
+        try data.graph_order.references(data.process_state.Node, node, &references, init.gpa);
+        edges += references.items.len;
+    }
     const fields = std.meta.fields(data.graph.NodeTag);
     var counts = [_]usize{0} ** fields.len;
-    for (decoded.state.nodes) |node| counts[@intFromEnum(std.meta.activeTag(node))] += 1;
+    for (decoded.state.nodes) |node| counts[@intFromEnum(std.meta.activeTag(node.record))] += 1;
     var blob_bytes: usize = 0;
     for (decoded.state.blobs) |blob| blob_bytes += blob.bytes.len;
     var output_buffer: [4096]u8 = undefined;
@@ -495,9 +507,8 @@ fn inspectState(init: std.process.Init, path: []const u8) !void {
         .nodes = decoded.state.nodes.len,
         .blobs = decoded.state.blobs.len,
         .blobBytes = blob_bytes,
-        .canonicalReachable = statistics.nodes == decoded.state.nodes.len and
-            normalized.state.blobs.len == decoded.state.blobs.len,
-        .edges = statistics.edges,
+        .canonicalReachable = true, // checkGraph independently rejected noncanonical/unreachable records.
+        .edges = edges,
         .frames = counts[0] + counts[1],
         .multiTemplates = counts[15],
         .cells = counts[13],
@@ -538,16 +549,17 @@ test "minimal public facade has the exact direct Boundary image" {
     const a = std.testing.allocator;
     var b = source.Builder.init(a);
     defer b.deinit();
+    try declareDomain(&b, .direct);
     var control = try boundary.program.compile(a, try direct(&b));
     defer control.deinit();
     var minimal = try agent.compile(a, MinimalSystem);
     defer minimal.deinit();
-    const first = try data.image.identity(control.program);
-    const second = try data.image.identity(minimal.program);
+    const first = try data.program_image.identity(a, control.program);
+    const second = try data.program_image.identity(a, minimal.program);
     try std.testing.expectEqualSlices(u8, &first, &second);
 }
 
-test "authoring and forwarded compiler observations do not change canonical BPI2" {
+test "authoring and forwarded compiler observations do not change canonical BPI3" {
     const Trace = struct {
         authoring: [5]agent.CompileStage = undefined,
         authoring_count: usize = 0,
@@ -572,9 +584,9 @@ test "authoring and forwarded compiler observations do not change canonical BPI2
         .boundary_options = .{ .observer = .{ .context = &trace, .enter = Trace.compiler } },
     });
     defer observed.deinit();
-    const left = try a.alloc(u8, try data.image.encodedLength(plain.program));
+    const left = try a.alloc(u8, try data.program_image.encodedLength(plain.program));
     defer a.free(left);
-    const right = try a.alloc(u8, try data.image.encodedLength(observed.program));
+    const right = try a.alloc(u8, try data.program_image.encodedLength(observed.program));
     defer a.free(right);
     try std.testing.expectEqualSlices(u8, try plain.encode(a, left), try observed.encode(a, right));
     try std.testing.expectEqual(@as(usize, 5), trace.authoring_count);

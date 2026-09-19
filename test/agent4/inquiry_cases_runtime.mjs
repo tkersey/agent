@@ -22,7 +22,7 @@ assert(runtimePath && fixturePath && nativePath && inspectorPath && (!extra.leng
 const runtime = verifyRuntime(runtimePath);
 const world = await import(pathToFileURL(runtime.entrypoint));
 const kernel = await readFile(runtime.kernelPath);
-const image = await readFile(join(fixturePath, "repair.bpi2"));
+const image = await readFile(join(fixturePath, "repair.bpi3"));
 const taskSchema = decodeSchema(await readFile(join(fixturePath, "task-schema.bin")));
 const resultSchema = decodeSchema(await readFile(join(fixturePath, "outcome-schema.bin")));
 const requirements = await readFile(new URL("../consumers/inquiry/contract.txt", import.meta.url), "utf8");
@@ -45,7 +45,7 @@ function trace(expected, different = false) {
 const summaries = [];
 
 async function scenario(name, options, expected) {
-  const selectedImage = options.strategy === "react" ? await readFile(join(fixturePath, "react.bpi2")) : image;
+  const selectedImage = options.strategy === "react" ? await readFile(join(fixturePath, "react.bpi3")) : image;
   const scratch = await mkdtemp(join(tmpdir(), "inquiry-case-"));
   const filename = join(scratch, "session.mjs");
   const source = options.source ?? reset;
@@ -67,10 +67,12 @@ async function scenario(name, options, expected) {
   const before = executor.metrics();
   async function invoke(input) {
     input = { ...input, image: selectedImage };
-    const output = await (await world.admitProcessKernel(kernel,
-      { expectedSha256: runtime.kernelSha256 })).run(input);
-    const file = join(scratch, "input.pki2");
-    await writeFile(file, world.encodeInput({ ...input, mode: "run" }));
+    const machine = await world.Kernel.create({ bytes: kernel, expectedSha256: runtime.kernelSha256 });
+    machine.setLimits({ input: 256 << 20, working: 256 << 20, output: 256 << 20 });
+    const bytes = machine.invoke(world.encodeInput(input));
+    const output = { ...world.decodeOutcome(bytes), bytes };
+    const file = join(scratch, "input.pki3");
+    await writeFile(file, world.encodeInput(input));
     const n = native(resolve(nativePath), file, true);
     assert.equal(n.status, 0, n.stderr.toString());
     assert.deepEqual(n.stdout, Buffer.from(output.bytes), `${name}: native equality`);
@@ -86,14 +88,14 @@ async function scenario(name, options, expected) {
   }
   try {
     let outcome = await invoke({ image, initialArgs: encodeValue(taskSchema, initial) });
-    while (outcome.kind === "Requested") {
+    while (outcome.kind === "requested") {
       assert(models + experiments + cleanup.length < 80, `${name}: resource stop missing`);
       maximumState = Math.max(maximumState, outcome.state.length);
-      const request = world.decodeRequest(outcome.request);
+      const request = (await world.decodeRequest(outcome.request));
       const payload = decodeValue(decodeSchema(request.payloadSchema), request.payload);
       if (!cancelled && options.cancelAt === request.semanticIdentity) {
         cancelled = true;
-        outcome = await invoke({ image, state: outcome.state, cancel: "operator cancellation" });
+        outcome = await invoke({ image, state: outcome.state, control: "cancel_text", value: "operator cancellation" });
         continue;
       }
       let reply;
@@ -119,7 +121,7 @@ async function scenario(name, options, expected) {
           recipients.push({ investigation: id, observation });
         }
         if (options.explore && observation > 0) {
-          const file = join(scratch, "model.pst2"); await writeFile(file, outcome.state);
+          const file = join(scratch, "model.pst3"); await writeFile(file, outcome.state);
           const graph = JSON.parse(execFileSync(resolve(inspectorPath), ["inspect-state", file]));
           assert.equal(graph.multiTemplates, 1); assert.equal(graph.packages, 1);
           graphs.push({ pendingModel: true, ...graph });
@@ -174,7 +176,7 @@ async function scenario(name, options, expected) {
         } else if (request.semanticIdentity === "inquiry.repair.experiment.v1") {
           experiments++;
           if (options.scaling) {
-            const file = join(scratch, "parked.pst2"); await writeFile(file, outcome.state);
+            const file = join(scratch, "parked.pst3"); await writeFile(file, outcome.state);
             const graph = JSON.parse(execFileSync(resolve(inspectorPath), ["inspect-state", file]));
             assert.equal(graph.packages, options.count);
             graphs.push({ pendingExperiment: true, ...graph });
@@ -188,7 +190,7 @@ async function scenario(name, options, expected) {
         } else if (request.semanticIdentity === "inquiry.repair.cleanup.v1") {
           cleanup.push(Number(payload)); reply = null;
           if (options.inspect) {
-            const file = join(scratch, "state.pst2"); await writeFile(file, outcome.state);
+            const file = join(scratch, "state.pst3"); await writeFile(file, outcome.state);
             graphs.push(JSON.parse(execFileSync(resolve(inspectorPath), ["inspect-state", file])));
           }
         } else if (request.semanticIdentity === "inquiry.repair.read.v1") {
@@ -208,13 +210,13 @@ async function scenario(name, options, expected) {
         }
         reply = encodeValue(decodeSchema(request.resumeSchema), reply);
       }
-      outcome = await invoke({ image, state: outcome.state, result: world.encodeResult(outcome.request, reply) });
+      outcome = await invoke({ image, state: outcome.state, control: "reply", value: (await world.encodeResult(outcome.request, reply)) });
     }
     if (options.cancelAt) {
-      assert.equal(outcome.kind, "Cancelled"); assert.equal(outcome.reason, "operator cancellation");
+      assert.equal(outcome.kind, "cancelled"); assert.deepEqual(outcome.reason, { kind: "text", value: "operator cancellation" });
       assert.deepEqual(outcome.cleanupFailures, []);
     } else {
-      assert.equal(outcome.kind, "Completed", name);
+      assert.equal(outcome.kind, "completed", name);
       completedValueBytes = outcome.value.length;
       const result = decodeValue(resultSchema, outcome.value);
       assert.equal(result.tag, expected.tag, `${name}: result`);
@@ -245,7 +247,7 @@ async function scenario(name, options, expected) {
       cleanupCompletions: cleanup.length,
       explicitRetirements: options.strategy === "react" ? 0
         : observed.filter(x => x.proposals?.[0] === "stop").length,
-      result: options.cancelAt ? "Cancelled" : expected.tag, models, experiments,
+      result: options.cancelAt ? "cancelled" : expected.tag, models, experiments,
       approvals, questions, writes, maximumState, cleanup, graphs, observed, semanticRequestBytes, semanticResponseBytes,
       providerRequestBytes, providerResponseBytes,
       physicalExecutions: executor.metrics().physicalExecutions - before.physicalExecutions, statistics };

@@ -70,9 +70,12 @@ async function readSubject(root) {
 async function load(config) {
   const host = await loadWorldRuntime({ runtimePath: config.worldRuntime });
   const world = await import(pathToFileURL(host.identity.entrypoint));
-  const kernel = await world.admitProcessKernel(await readFile(host.identity.kernelPath), { expectedSha256: host.identity.kernelSha256 });
-  const image = await readFile(join(config.images, config.strategy === 'inquiry' ? 'repair.bpi2' : 'react.bpi2'));
-  return { host, world, kernel, image };
+  const kernel = await world.Kernel.create({ bytes: await readFile(host.identity.kernelPath), expectedSha256: host.identity.kernelSha256 });
+  const ceiling = Math.min(0xffffffff, host.identity.physicalProfile.maximumMemoryBytes);
+  kernel.setLimits({ input: ceiling, working: ceiling, output: ceiling });
+  const invoke = input => { const bytes = kernel.invoke(world.encodeInput(input)); return { ...world.decodeOutcome(bytes), bytes }; };
+  const image = await readFile(join(config.images, config.strategy === 'inquiry' ? 'repair.bpi3' : 'react.bpi3'));
+  return { host, world, invoke, image };
 }
 
 export function replacementDiff(base, replacement) {
@@ -109,7 +112,7 @@ export async function runInquiry(config, options) {
   const started = Date.now();
   let executor;
   try {
-    const { host, world, kernel, image } = await load(config);
+    const { host, world, invoke, image } = await load(config);
     report.imageSha256 = hash(image); report.imageBytes = image.length; report.kernelSha256 = host.identity.kernelSha256;
     executor = await createInquiryExecutor();
     report.executor = { kind: executor.kind, runner: executor.runner, reason: executor.reason };
@@ -122,9 +125,9 @@ export async function runInquiry(config, options) {
       const saved = world.decodeOutcome(bytes);
       assert(saved.state, 'resume requires a live World State');
       // Admit image/State and its pending request before dispatching any effect.
-      const admitted = await kernel.run({ image, state: saved.state });
+      const admitted = invoke({ image, state: saved.state });
       assert.deepEqual(Buffer.from(admitted.bytes), bytes, 'checkpoint/image mismatch');
-      outcome = options.result ? await kernel.run({ image, state: saved.state, result: await readFile(options.result) }) : admitted;
+      outcome = options.result ? invoke({ image, state: saved.state, control: "reply", value: await readFile(options.result) }) : admitted;
     } else {
       assert(!options.result, 'a result requires its saved outcome');
       const source = options.frozenSource ?? await readSubject(config.targetRoot);
@@ -135,18 +138,18 @@ export async function runInquiry(config, options) {
       const task = [['session.mjs', source, executor.runner, requirements, acceptanceContract, config.task.reusable, target, 0n],
         config.provider.model, config.task.investigations, BigInt(config.task.passes), BigInt(config.task.modelTurns), true,
         BigInt(config.task.principal), 0n, config.task.explore, { deliver: 0, artifact: 1, ask: 2 }[config.task.intent]];
-      outcome = await kernel.run({ image, initialArgs: encodeValue(schema, task) });
+      outcome = invoke({ image, initialArgs: encodeValue(schema, task) });
     }
     let index = 0, cancelling = false;
     for (;;) {
       const stem = String(index++).padStart(4, '0');
-      const checkpoint = `${stem}.pko2`;
+      const checkpoint = `${stem}.pko3`;
       await writeFile(join(output, checkpoint), outcome.bytes, { flag: 'wx', mode: 0o600 });
       report.checkpoints.push(checkpoint); report.checkpoint = checkpoint;
       report.maximumStateBytes = Math.max(report.maximumStateBytes, outcome.state?.length ?? 0);
-      if (outcome.kind !== 'Requested') {
+      if (outcome.kind !== 'requested') {
         report.status = outcome.kind.toLowerCase();
-        if (outcome.kind === 'Completed') {
+        if (outcome.kind === 'completed') {
           const schema = decodeSchema(await readFile(join(config.images, 'outcome-schema.bin')));
           const value = decodeValue(schema, outcome.value);
           report.outcome = value; report.resultTag = value.tag; report.applicationOutcome = outcomes[value.tag];
@@ -154,7 +157,7 @@ export async function runInquiry(config, options) {
         }
         return report;
       }
-      const request = world.decodeRequest(outcome.request);
+      const request = await world.decodeRequest(outcome.request);
       const identity = request.semanticIdentity;
       const payload = decodeValue(decodeSchema(request.payloadSchema), request.payload);
       report.pending = identity;
@@ -167,7 +170,7 @@ export async function runInquiry(config, options) {
         (experiment && report.experiments >= config.allowance.experiments));
       if (exhausted) {
         cancelling = true; report.resourceStop = true;
-        outcome = await kernel.run({ image, state: outcome.state, cancel: 'operator resource allowance exhausted' });
+        outcome = invoke({ image, state: outcome.state, control: 'cancel_text', value: 'operator resource allowance exhausted' });
         continue;
       }
       if (model && !options.authorizeInference) { report.status = 'inference-not-authorized'; return report; }
@@ -221,13 +224,15 @@ export async function runInquiry(config, options) {
         } else throw new Error(`unsupported external effect: ${identity}`);
         reply = encodeValue(decodeSchema(request.resumeSchema), reply);
       }
-      const result = world.encodeResult(outcome.request, reply);
-      await writeFile(join(output, `${stem}.ers2`), result, { flag: 'wx', mode: 0o600 });
+      const result = await world.encodeResult(outcome.request, reply);
+      await writeFile(join(output, `${stem}.ers3`), result, { flag: 'wx', mode: 0o600 });
       dispatched.status = 'returned';
-      outcome = await kernel.run({ image, state: outcome.state, result });
+      outcome = invoke({ image, state: outcome.state, control: "reply", value: result });
     }
   } catch (error) {
     report.status = 'failed'; report.error = error.message;
+    if (typeof error.code === 'string') report.errorCode = error.code;
+    if (typeof error.details?.diagnostic === 'string') report.diagnostic = error.details.diagnostic;
     report.uncertainDispatch = report.dispatches.some(row => row.status === 'dispatching');
     return report;
   } finally {
@@ -240,8 +245,8 @@ export async function runInquiry(config, options) {
 export async function answerInquiry(config, options) {
   const { world } = await load(config);
   const outcome = world.decodeOutcome(await readFile(options.from));
-  assert.equal(outcome.kind, 'Requested');
-  const request = world.decodeRequest(outcome.request);
+  assert.equal(outcome.kind, 'requested');
+  const request = await world.decodeRequest(outcome.request);
   const payload = decodeValue(decodeSchema(request.payloadSchema), request.payload);
   let answer;
   const abort = options.choice === 'abort', close = options.choice === 'close';
@@ -259,7 +264,7 @@ export async function answerInquiry(config, options) {
     answer = variant(0, [payload[3], BigInt(config.task.principal), options.choice === 'approve' ? variant(0) : variant(1, 'declined by operator')]);
   }
   assert(request.semanticIdentity.startsWith('agent.interaction.exchange.v1.inquiry.repair.'), 'not an inquiry human interaction');
-  await writeFile(options.out, world.encodeResult(outcome.request, encodeValue(decodeSchema(request.resumeSchema), answer)), { flag: 'wx', mode: 0o600 });
+  await writeFile(options.out, await world.encodeResult(outcome.request, encodeValue(decodeSchema(request.resumeSchema), answer)), { flag: 'wx', mode: 0o600 });
   return { status: 'answer-written', output: resolve(options.out) };
 }
 

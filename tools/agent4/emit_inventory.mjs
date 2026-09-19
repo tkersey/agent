@@ -14,20 +14,38 @@ async function add(path,role,bytes){
   const content=bytes??await readFile(join(output,path));
   files.push({path,role,sha256:hash(content)});
 }
+const textContent=Buffer.from('alpha\nbeta gamma\ndelta epsilon zeta\nomega\n');
+const subject=['fixture/story',[...createHash('sha256').update(textContent).digest()],BigInt(textContent.length)];
+await add('text/tool.bmo1','component');
+for(const name of ['subject','task','result','report'])await add(`text/${name}-schema.bin`,'schema');
+await add('text/model-reply.bin','synthetic-fixture');
+await add('text/story.txt','synthetic-fixture',textContent);
+for(const name of ['standalone','agent']){
+  const image=`text/${name}.bpi3`,initialArgs=`text/${name}.args`;
+  const schema=decodeSchema(await readFile(join(output,`text/${name==='agent'?'task':'subject'}-schema.bin`)));
+  await add(image,'image');await add(initialArgs,'initial-args',encodeValue(schema,name==='agent'?[subject,123n]:subject));
+  examples.push({name:`text-${name}`,image,initialArgs});
+}
 for(const name of ['mid_review','clarify_first','human','model','rule','react']){
-  const image=`review/${name}.bpi2`,initialArgs=`review/${name}.args`;
+  const image=`review/${name}.bpi3`,initialArgs=`review/${name}.args`;
   await add(image,'image');await add(initialArgs,'initial-args');
   examples.push({name:`review-${name.replaceAll('_','-')}`,image,initialArgs});
 }
-await add('document/document.bpi2','image');
+await add('document/document.bpi3','image');
 await add('document/document.args','initial-args');
-examples.push({name:'document',image:'document/document.bpi2',initialArgs:'document/document.args'});
-await add('document/consequence.bpi2','image');
+examples.push({name:'document',image:'document/document.bpi3',initialArgs:'document/document.args'});
+await add('document/consequence.bpi3','image');
 await add('document/consequence.args','initial-args');
-examples.push({name:'document-consequence',image:'document/consequence.bpi2',initialArgs:'document/consequence.args'});
+examples.push({name:'document-consequence',image:'document/consequence.bpi3',initialArgs:'document/consequence.args'});
 // A typed, zero-work configuration example. Actual execution supplies a qualified
 // runner, explicit allowances and operator-selected provider/target values.
 const inquiryTask=decodeSchema(await readFile(join(output,'inquiry/task-schema.bin')));
+const repositoryTask=decodeSchema(await readFile(join(output,'repository/task-schema.bin')));
+await add('repository/task.args','initial-args',encodeValue(repositoryTask,
+  [['Repair the admitted repository.','unconfigured-repository'],'unconfigured-model',0n,0]));
+await add('repository/repair.bpi3','image');
+for(const name of ['task-schema','result-schema','failure-schema'])await add(`repository/${name}.bin`,'schema');
+examples.push({name:'repository-repair',image:'repository/repair.bpi3',initialArgs:'repository/task.args'});
 const inquiryArgs=encodeValue(inquiryTask, [
   ['session.mjs','', '',await readFile(join(root,'test/consumers/inquiry/contract.txt'),'utf8'),
     'agent.session-occurrence.acceptance.v1',false,'unconfigured-target',0n],
@@ -35,14 +53,14 @@ const inquiryArgs=encodeValue(inquiryTask, [
 ]);
 await add('inquiry/task.args','initial-args',inquiryArgs);
 for(const name of ['repair','repeated','react']){
-  const image=`inquiry/${name}.bpi2`;
+  const image=`inquiry/${name}.bpi3`;
   await add(image,'image');
   examples.push({name:`inquiry-${name}`,image,initialArgs:'inquiry/task.args'});
 }
 for(const name of ['task-schema','outcome-schema'])await add(`inquiry/${name}.bin`,'schema');
 await add('inquiry/contract.txt','contract',await readFile(join(root,'test/consumers/inquiry/contract.txt')));
-for(const name of ['twice','dispose_owned','exchange']){
-  const image=`dialogue/${name}.bpi2`,initialArgs=`dialogue/${name}.args.bin`;
+for(const name of ['twice','dispose_owned','exchange','yield_once']){
+  const image=`dialogue/${name}.bpi3`,initialArgs=`dialogue/${name}.args.bin`;
   await add(image,'image');await add(initialArgs,'initial-args',new Uint8Array());
   examples.push({name:`dialogue-${name.replaceAll('_','-')}`,image,initialArgs});
 }

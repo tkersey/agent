@@ -43,7 +43,9 @@ test("all source-override module exports retain authentication in cached externa
   const source = join(directory, "synthetic-source");
   mkdirSync(join(source, "src/v2/data"), { recursive: true });
   writeFileSync(join(source, "src/v2/root.zig"),
-    'pub const data_v2 = @import("boundary_data_v2");\npub const computation = struct {};\n');
+    'pub const data = @import("boundary_data");\n' +
+    'pub const program = struct { pub fn compileObserved() void {} };\n' +
+    'pub const computation = struct { pub const Compiled = struct { flow: void }; };\n');
   writeFileSync(join(source, "src/v2/data/root.zig"), 'pub const program = struct {};\n');
   const lockPath = join(agent, "conformance/agent4/dependencies.lock.json");
   const lock = JSON.parse(readFileSync(lockPath));
@@ -60,14 +62,14 @@ test("all source-override module exports retain authentication in cached externa
       const optimize = b.standardOptimizeOption(.{});
       const source = b.option([]const u8, "source", "source").?;
       const surface = b.option([]const u8, "surface", "surface").?;
-      const agent = b.dependency("agent", .{ .optimize = optimize, .@"boundary-v2-source" = source });
+      const agent = b.dependency("agent", .{ .optimize = optimize, .@"boundary-source" = source });
       const module = b.createModule(.{ .root_source_file = b.path("main.zig"),
         .target = b.graph.host, .optimize = optimize,
         .imports = &.{.{ .name = "selected", .module = agent.module(surface) }} });
       b.installArtifact(b.addExecutable(.{ .name = "consumer", .root_module = module }));
     }`);
   writeFileSync(join(consumer, "main.zig"), 'pub fn main() void { _ = @import("selected"); }\n');
-  for (const surface of ["agent", "agent_contracts", "boundary", "boundary_data_v2"]) {
+  for (const surface of ["agent", "agent_contracts", "boundary", "boundary_data"]) {
     const options = [`-Dsource=${source}`, `-Dsurface=${surface}`];
     build(consumer, directory, options);
     const marker = join(source, "unadmitted-file"); writeFileSync(marker, "not in the admitted inventory");
@@ -84,6 +86,6 @@ test("manifest-selected source package completes authoring checks outside Git", 
   assert.notEqual(spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: source }).status, 0);
   assert(!existsSync(join(source, ".git")) && !existsSync(join(source, ".agent4")));
   build(source, directory, ["check-agent4"]);
-  assert.equal(readFileSync(join(directory, "out/agent4/document/document.bpi2")).subarray(0, 8).toString(), "ABL_BPI2");
+  assert.equal(readFileSync(join(directory, "out/agent4/document/document.bpi3")).subarray(0, 8).toString(), "ABL_BPI3");
   assert(!existsSync(join(directory, "out/agent4-release")), "authoring must not perform release packaging");
 });

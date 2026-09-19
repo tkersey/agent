@@ -26,10 +26,10 @@ const env={...process.env, AGENT4_WORLD_RUNTIME:options.worldRuntime,
   AGENT4_FIXTURES:fixtures, AGENT4_DIALOGUE_DIR:join(fixtures,'dialogue'),
   AGENT4_REVIEW_IMAGES:join(fixtures,'review'),
   AGENT4_INQUIRY_IMAGES:join(fixtures,'inquiry'),
-  AGENT4_APPROVAL_IMAGE:join(fixtures,'approval/approval.bpi2'),
-  AGENT4_APPROVAL_EVIDENCE_IMAGE:join(fixtures,'approval/approval-evidence.bpi2'),
-  AGENT4_APPROVAL_SCOPED_IMAGE:join(fixtures,'approval/approval-scoped.bpi2'),
-  AGENT4_APPROVAL_SCOPED_EVIDENCE_IMAGE:join(fixtures,'approval/approval-scoped-evidence.bpi2'),
+  AGENT4_APPROVAL_IMAGE:join(fixtures,'approval/approval.bpi3'),
+  AGENT4_APPROVAL_EVIDENCE_IMAGE:join(fixtures,'approval/approval-evidence.bpi3'),
+  AGENT4_APPROVAL_SCOPED_IMAGE:join(fixtures,'approval/approval-scoped.bpi3'),
+  AGENT4_APPROVAL_SCOPED_EVIDENCE_IMAGE:join(fixtures,'approval/approval-scoped-evidence.bpi3'),
   AGENT4_NATIVE:native,
   AGENT4_ARCHIVE:resolve(fixtures,'../agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),
   AGENT4_MULTI_INSPECTOR:resolve(fixtures,'../bin/agent4-multi')};
@@ -57,8 +57,8 @@ await withVerifiedDependencies(options, async dependencies=>{
       'test/agent4/consumer_build.test.mjs', 'test/agent4/inquiry_cli.test.mjs']);
     await run('node',['test/agent4/dialogue_runtime.test.mjs',options.worldRuntime,join(fixtures,'dialogue')]);
     await run('node',['test/agent4/multi_runtime.mjs']);
-    await run('node',['test/agent4/document_runtime.mjs',options.worldRuntime,join(fixtures,'document/document.bpi2')]);
-    await run('node',['test/agent4/consequence_runtime.mjs',options.worldRuntime,join(fixtures,'document/consequence.bpi2')]);
+    await run('node',['test/agent4/document_runtime.mjs',options.worldRuntime,join(fixtures,'document/document.bpi3')]);
+    await run('node',['test/agent4/consequence_runtime.mjs',options.worldRuntime,join(fixtures,'document/consequence.bpi3')]);
     await run('node',['test/agent4/independent.mjs',options.worldRuntime,fixtures]);
   }
   const output=join(root,'.agent4/out/checks');

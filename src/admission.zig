@@ -3,7 +3,7 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const source = boundary.computation;
-const p = boundary.data_v2.program;
+const p = boundary.data.program;
 const Id = p.Id;
 
 pub const Role = enum { internal, model, interaction, read, simulation, approval, commit, write };
@@ -23,10 +23,18 @@ pub const Error = std.mem.Allocator.Error || error{
 const Classification = struct { effect: Id, role: Role };
 const Site = struct { owner: Id, node: Id, target: Id };
 const Speculation = struct { body: Id, allowed: []const Id };
+pub const CompiledEffect = struct { symbol: []const u8, effect: Id };
+pub const CompiledImport = struct {
+    function: Id,
+    instance: []const u8,
+    object: []const u8,
+    entry: []const u8,
+    effects: []const CompiledEffect,
+};
 
 /// Metadata is private to the trusted Agent constructions during authoring.
 /// Native Zig that forges this registry or mutates source is outside the public
-/// authoring-path claim. Records never enter BPI2 or PST2.
+/// authoring-path claim. Records never enter BPI3 or PST3.
 pub const Registry = struct {
     arena: std.heap.ArenaAllocator,
     classifications: std.ArrayList(Classification) = .empty,
@@ -36,6 +44,7 @@ pub const Registry = struct {
     private_lambdas: std.ArrayList(Site) = .empty,
     speculations: std.ArrayList(Speculation) = .empty,
     protected_resources: std.ArrayList(Id) = .empty,
+    compiled_imports: std.ArrayList(CompiledImport) = .empty,
 
     pub fn init(allocator: std.mem.Allocator) Registry {
         return .{ .arena = std.heap.ArenaAllocator.init(allocator) };
@@ -87,13 +96,18 @@ pub const Registry = struct {
         try self.protected_resources.append(self.arena.allocator(), schema);
     }
 
-    fn roleOf(self: *const Registry, effect: Id) ?Role {
+    pub fn roleOf(self: *const Registry, effect: Id) ?Role {
         for (self.classifications.items) |item| if (item.effect == effect) return item.role;
         return null;
     }
 
     fn isPrivate(self: *const Registry, function: Id) bool {
         return contains(self.private_functions.items, function);
+    }
+
+    fn isCompiled(self: *const Registry, function: Id) bool {
+        for (self.compiled_imports.items) |item| if (item.function == function) return true;
+        return false;
     }
 
     fn allowedFor(self: *const Registry, body: Id) []const Id {
@@ -183,7 +197,7 @@ fn checkResumptionOrigins(a: std.mem.Allocator, m: source.Module, r: *const Regi
     // the source handler clauses whose code/state can travel with this token.
     for (m.handlers, 0..) |handler, handler_id| {
         for (handler.clauses) |clause| {
-            if (clause.direct or clause.resumption != id) continue;
+            if (clause.resumption != id) continue;
             var producer = Walker.init(a, m, r, signature.effects);
             try producer.push(.handler, handler_id, 0);
             try producer.push(.schema, id, 0);
@@ -196,7 +210,7 @@ fn checkResumptionOrigins(a: std.mem.Allocator, m: source.Module, r: *const Regi
         const h = term.handle;
         if (h.handler >= m.handlers.len) return error.InvalidSource;
         for (m.handlers[@intCast(h.handler)].clauses) |clause| {
-            if (!clause.direct and clause.effect == signature.effect) {
+            if (clause.effect == signature.effect) {
                 try checkMultiValue(a, m, r, h.body, h.handler, h.state);
                 break;
             }
@@ -238,6 +252,10 @@ fn checkMultiBody(
 }
 
 fn checkCatalogs(module: source.Module, registry: *const Registry) Error!void {
+    for (registry.compiled_imports.items, 0..) |item, index| {
+        if (item.function >= module.functions.len or module.functions[@intCast(item.function)].body != null or registry.isPrivate(item.function)) return error.InvalidSource;
+        for (registry.compiled_imports.items[0..index]) |prior| if (prior.function == item.function) return error.InvalidSource;
+    }
     if (module.entry >= module.functions.len or module.failure >= module.schemas.len)
         return error.InvalidSource;
     if (registry.isPrivate(module.entry)) return error.PrivateFunctionBypass;
@@ -364,7 +382,16 @@ const Walker = struct {
     fn function(self: *Walker, id: Id) Error!void {
         if (id >= self.module.functions.len) return error.InvalidSource;
         const f = self.module.functions[@intCast(id)];
-        try self.push(.term, f.body orelse return error.InvalidSource, id);
+        if (self.registry.isCompiled(id)) {
+            // An inspected closed read tool is not a proof about speculative
+            // control hidden inside an absent source body.
+            if (self.speculative != null) return error.UnprovenComputationOrigin;
+            for (f.effects) |effect_id| {
+                const role = self.registry.roleOf(effect_id) orelse return error.EffectRoleMismatch;
+                if (role != .internal and role != .read and role != .simulation)
+                    return error.ProtectedEffectBypass;
+            }
+        } else try self.push(.term, f.body orelse return error.InvalidSource, id);
         if (self.speculative != null) {
             for (f.parameters) |variable| try self.variableSchema(variable);
             try self.push(.schema, f.result, 0);
@@ -510,7 +537,7 @@ const Walker = struct {
             if (self.registry.isPrivate(clause.function)) return error.PrivateFunctionBypass;
             try self.push(.function, clause.function, clause.function);
             try self.push(.effect, clause.effect, 0);
-            if (!clause.direct) try self.push(.schema, clause.resumption, 0);
+            try self.push(.schema, clause.resumption, 0);
         }
         if (h.forward_function) |f| {
             if (self.registry.isPrivate(f)) return error.PrivateFunctionBypass;
@@ -662,7 +689,6 @@ fn inspectShape(a: std.mem.Allocator, m: source.Module, root: Id, r: ?*const Reg
 fn multiHandler(module: source.Module, id: Id) Error!bool {
     if (id >= module.handlers.len) return error.InvalidSource;
     for (module.handlers[@intCast(id)].clauses) |clause| {
-        if (clause.direct) continue;
         if (clause.resumption >= module.schemas.len) return error.InvalidSource;
         const schema = module.schemas[@intCast(clause.resumption)];
         if (schema == .internal and schema.internal == .resumption and

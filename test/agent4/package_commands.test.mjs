@@ -27,12 +27,22 @@ test("documented commands execute from the actual source-independent archive", a
   // The dialogue has no environmental side effects; resume and cancellation
   // exercise the two documented alternative branches using the same saved bytes.
   const world = await loadWorldRuntime({ runtimePath });
-  assert.equal(world.decodeOutcome(await readFile(join(cwd, "started.pko2"))).kind, "Requested");
-  const resumed = world.decodeOutcome(await readFile(join(cwd, "resumed.pko2")));
-  assert.equal(resumed.kind, "Completed");
+  assert.equal(world.decodeOutcome(await readFile(join(cwd, "started.pko3"))).kind, "requested");
+  const resumed = world.decodeOutcome(await readFile(join(cwd, "resumed.pko3")));
+  assert.equal(resumed.kind, "completed");
   assert.equal(Buffer.from(resumed.value).readBigUInt64LE(), 40n);
-  assert.equal(world.decodeOutcome(await readFile(join(cwd, "cancelled.pko2"))).kind, "Cancelled");
+  assert.equal(world.decodeOutcome(await readFile(join(cwd, "cancelled.pko3"))).kind, "cancelled");
   const inventory = JSON.parse(await readFile(join(cwd, "examples/inventory.json"), "utf8"));
+  const repository = inventory.examples.find(example => example.name === "repository-repair");
+  assert(repository, "repository repair belongs to the source-independent archive");
+  const repositoryRun = execFileSync(process.execPath,
+    [join(cwd, "test/agent4/repository_runtime.mjs"), runtimePath, join(cwd, "examples/repository")],
+    { cwd, encoding: "utf8", timeout: 120_000, maxBuffer: 4 * 1024 * 1024 });
+  assert.match(repositoryRun, /5 cases passed; 10 real isolated test processes/);
+  const textTool = execFileSync(process.execPath, [join(cwd, "test/agent4/text_package_runtime.mjs"), runtimePath,
+    join(cwd, "examples/text")], { cwd, encoding: "utf8", timeout: 120_000 });
+  assert.equal(JSON.parse(textTool).reports.length, 2);
+  assert(inventory.files.some(file => file.path === "text/tool.bmo1" && file.role === "component"));
   const consequence = inventory.examples.find(example => example.name === "document-consequence");
   assert(consequence, "the opt-in application belongs to the source-independent package");
   const script = resolve(import.meta.dirname, "consequence_runtime.mjs");
@@ -65,7 +75,9 @@ test("documented commands execute from the actual source-independent archive", a
   const env = { ...process.env, AGENT4_WORLD_RUNTIME: runtimePath,
     AGENT4_INQUIRY_IMAGES: join(cwd, "examples/inquiry") };
   delete env.NODE_TEST_CONTEXT;
-  execFileSync(process.execPath, ["--test", join(cwd, "test/agent4/inquiry_cli.test.mjs")], {
-    cwd, env, encoding: "utf8", timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
+  // This one-file child needs no additional runner process. Keep the outer
+  // deadline enforceable even if the test runner is handling a timeout itself.
+  execFileSync(process.execPath, ["--test", "--test-isolation=none", join(cwd, "test/agent4/inquiry_cli.test.mjs")], {
+    cwd, env, encoding: "utf8", timeout: 120_000, killSignal: "SIGKILL", maxBuffer: 4 * 1024 * 1024,
   });
 });

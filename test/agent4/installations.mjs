@@ -8,7 +8,7 @@ import { inventory, readDependencyLock, readRegular, sha256,
   withVerifiedDependencies } from "../../tools/agent4/dependencies.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const MODULES = new Set(["std", "boundary", "boundary_data_v2", "agent_contracts"]);
+const MODULES = new Set(["std", "boundary", "boundary_data", "agent_contracts"]);
 const FORBIDDEN = /(?:^|\/)(?:system_compiler|strategy_v3|flow|runtime|world|kernel)(?:[._/]|$)/;
 
 function authoringFiles(sourceRoot) {
@@ -55,7 +55,7 @@ pub fn build(b: *std.Build) void {
     });
     const emitter = b.addExecutable(.{ .name = "installed-author", .root_module = root });
     const run = b.addRunArtifact(emitter);
-    b.getInstallStep().dependOn(&b.addInstallFileWithDir(run.captureStdOut(.{}), .prefix, "application.bpi2").step);
+    b.getInstallStep().dependOn(&b.addInstallFileWithDir(run.captureStdOut(.{}), .prefix, "application.bpi3").step);
 }
 `;
 
@@ -91,10 +91,10 @@ pub fn main(init: std.process.Init) !void {
     const System = agent.system(.{ .InitialArgs = u32, .Result = u32, .Failure = void, .application = Application });
     var compiled = try agent.compile(init.gpa, System);
     defer compiled.deinit();
-    const buffer = try init.gpa.alloc(u8, try boundary.image_v2.encodedLength(compiled.program));
+    const buffer = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(buffer);
     const bytes = try compiled.encode(init.gpa, buffer);
-    var decoded = try boundary.image_v2.decode(init.gpa, bytes);
+    var decoded = try boundary.data.program_image.decode(init.gpa, bytes);
     defer decoded.deinit();
     if (decoded.program.effects.len != 1 or
         !std.mem.eql(u8, decoded.program.effects[0].identity, "consumer.installed.read.v1"))
@@ -145,9 +145,9 @@ export async function authoringInstallation({ sourceRoot = ROOT, output } = {}) 
     for (const [path, bytes] of source)
       assert(readRegular(join(sourceRoot, path)).equals(bytes), `source changed during A02: ${path}`);
   }
-  const image = readRegular(join(work, "out/application.bpi2"));
-  assert.equal(image.subarray(0, 8).toString(), "ABL_BPI2", "external author did not emit a Boundary 2 image");
-  assert.equal(image.readUInt16LE(8), 2, "unexpected Boundary record version");
+  const image = readRegular(join(work, "out/application.bpi3"));
+  assert.equal(image.subarray(0, 8).toString(), "ABL_BPI3", "external author did not emit a Boundary 3 image");
+  assert.equal(image.readUInt16LE(8), 3, "unexpected Boundary record version");
   assert.equal(image.readBigUInt64LE(12), BigInt(image.length - 20), "incomplete image record");
   const result = { acceptance: "A02", result: "passed", relation: "external public-module authoring without World",
     installedSource: { inventorySha256: before.inventorySha256, files: before.files },
@@ -155,7 +155,7 @@ export async function authoringInstallation({ sourceRoot = ROOT, output } = {}) 
     image: { bytes: image.length, sha256: sha256(image) },
     moduleIdentity: "agent.contracts.Utf8 equals separately imported agent_contracts.Utf8",
     workDirectory: work, command: ["zig", ...args],
-    limitations: ["This case emits BPI2; runtime execution is covered by separate integration cases."] };
+    limitations: ["This case emits BPI3; runtime execution is covered by separate integration cases."] };
   if (output) { mkdirSync(dirname(resolve(output)), { recursive: true }); writeFileSync(output, JSON.stringify(result, null, 2) + "\n"); }
   return result;
 }

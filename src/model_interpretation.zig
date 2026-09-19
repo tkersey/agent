@@ -3,7 +3,7 @@ const std = @import("std");
 const boundary = @import("boundary");
 const contracts = @import("agent_contracts");
 const ast = boundary.computation.ast;
-const Id = boundary.data_v2.program.Id;
+const Id = boundary.data.program.Id;
 const Case = std.meta.Child(@FieldType(@FieldType(ast.Term, "match_sum"), "cases"));
 
 pub const Failure = enum {

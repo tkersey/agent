@@ -11,7 +11,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("../../.agent4/inputs/boundary/src/v2/root.zig"),
         .target = b.graph.host,
         .optimize = optimize,
-        .imports = &.{.{ .name = "boundary_data_v2", .module = data }},
+        .imports = &.{.{ .name = "boundary_data", .module = data }},
     });
     const dialogue = b.createModule(.{
         .root_source_file = b.path("../../src/dialogue.zig"),
@@ -46,7 +46,7 @@ pub fn build(b: *std.Build) void {
         b.getInstallStep().dependOn(&b.addInstallFileWithDir(
             run.captureStdOut(.{}),
             .prefix,
-            b.fmt("{s}.bpi2", .{mode}),
+            b.fmt("{s}.bpi3", .{mode}),
         ).step);
     }
 }

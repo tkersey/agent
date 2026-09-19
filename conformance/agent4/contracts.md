@@ -1,8 +1,8 @@
 # Compiled example contracts
 
-The authoritative schemas and bindings are in each BPI2 and pending ERQ2. These
+The authoritative schemas and bindings are in each BPI3 and pending ERQ3. These
 names explain the demonstration values; they supply no continuation or policy.
-Canonical values use Boundary2 little-endian scalars and minimal ULEB sequence/sum
+Canonical values use Boundary little-endian scalars and minimal ULEB sequence/sum
 counts. Text is byte-counted UTF-8. Product fields are in listed order.
 
 ## Interactive document revision
@@ -29,7 +29,7 @@ required_principal:u64, reason:Text64)`.
 Its result is success(observation), conflict(observation), failure(Text64), or
 uncertain(Text64). The allocated fixture path is document.txt; live policy admits
 principal7 and external provenance1. Actual read evidence is held privately in
-PST2 and cannot be supplied through this product. Conditional replacement verifies
+PST3 and cannot be supplied through this product. Conditional replacement verifies
 actual content and digest under the local environment's serialization discipline.
 
 `agent.approval.issue.v1.document.change` requests a fresh authority occurrence

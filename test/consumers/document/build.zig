@@ -1,8 +1,8 @@
 const std = @import("std");
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
-    const source = b.option([]const u8, "boundary-v2-source", "Immutable Boundary source copy");
-    const dependency = if (source) |path| b.dependency("agent", .{ .optimize = optimize, .@"boundary-v2-source" = path }) else b.dependency("agent", .{ .optimize = optimize });
+    const source = b.option([]const u8, "boundary-source", "Immutable Boundary source copy");
+    const dependency = if (source) |path| b.dependency("agent", .{ .optimize = optimize, .@"boundary-source" = path }) else b.dependency("agent", .{ .optimize = optimize });
     const module = b.createModule(.{
         .root_source_file = b.path("main.zig"),
         .target = b.graph.host,
@@ -11,12 +11,12 @@ pub fn build(b: *std.Build) void {
     });
     const emitter = b.addExecutable(.{ .name = "document-emitter", .root_module = module });
     b.installArtifact(emitter);
-    for ([_][]const u8{ "bpi2", "args" }) |format| {
+    for ([_][]const u8{ "bpi3", "args" }) |format| {
         const run = b.addRunArtifact(emitter);
         run.addArg(format);
         b.getInstallStep().dependOn(&b.addInstallFileWithDir(run.captureStdOut(.{}), .prefix, b.fmt("document.{s}", .{format})).step);
     }
-    for ([_][]const u8{ "consequence", "consequence-args" }, [_][]const u8{ "consequence.bpi2", "consequence.args" }) |mode, filename| {
+    for ([_][]const u8{ "consequence", "consequence-args" }, [_][]const u8{ "consequence.bpi3", "consequence.args" }) |mode, filename| {
         const run = b.addRunArtifact(emitter);
         run.addArg(mode);
         b.getInstallStep().dependOn(&b.addInstallFileWithDir(

@@ -23,8 +23,8 @@ const u64 = value => {
   bytes.writeBigUInt64LE(BigInt(value));
   return bytes;
 };
-const followup = basename(imagePath) === "followup.bpi2";
-const composition = followup || basename(imagePath) === "composition.bpi2";
+const followup = basename(imagePath) === "followup.bpi3";
+const composition = followup || basename(imagePath) === "composition.bpi3";
 const cases = followup ? [
   ["experiment", 7, u64(7), 3],
   ["model", 17, u64(1), 2],
@@ -50,18 +50,17 @@ const cases = followup ? [
 const records = [];
 
 async function invoke(input) {
-  const fresh = await world.admitProcessKernel(kernel, {
-    expectedSha256: runtime.kernelSha256,
-  });
-  const observed = await fresh.run(input);
-  const filename = join(scratch, "input.pki2");
-  await writeFile(filename, world.encodeInput({ ...input, mode: "run" }));
+  const fresh = await world.Kernel.create({ bytes: kernel, expectedSha256: runtime.kernelSha256 });
+  const encoded = world.encodeInput(input);
+  const observed = fresh.invoke(encoded);
+  const filename = join(scratch, "input.pki3");
+  await writeFile(filename, encoded);
   const n = native(resolve(nativePath), filename);
   assert.equal(n.status, 0, n.stderr.toString());
-  assert.deepEqual(n.stdout, Buffer.from(observed.bytes), "native/Node outcome equality");
+  assert.deepEqual(n.stdout, Buffer.from(observed), "native/Node outcome equality");
   const independent = wasmtime(runtime, filename);
   assert.equal(independent.status, 0, independent.stderr.toString());
-  assert.deepEqual(independent.stdout, Buffer.from(observed.bytes), "Wasmtime/Node equality");
+  assert.deepEqual(independent.stdout, Buffer.from(observed), "Wasmtime/Node equality");
   // Subsequent execution uses the independent embedding's actual successor.
   return world.decodeOutcome(Uint8Array.from(independent.stdout));
 }
@@ -69,20 +68,20 @@ async function invoke(input) {
 try {
   let outcome = await invoke({ image, initialArgs: new Uint8Array() });
   for (const [kind, payload, reply, packages] of cases) {
-    assert.equal(outcome.kind, "Requested");
-    const request = world.decodeRequest(outcome.request);
+    assert.equal(outcome.kind, "requested");
+    const request = await world.decodeRequest(outcome.request);
     assert.equal(request.semanticIdentity, `agent.probe.inquiry.${kind}.v1`);
     assert.deepEqual(Buffer.from(request.payload), u64(payload));
-    const snapshot = join(scratch, "state.pst2");
+    const snapshot = join(scratch, "state.pst3");
     await writeFile(snapshot, outcome.state);
     const graph = JSON.parse(execFileSync(resolve(inspectorPath), ["inspect-state", snapshot]));
     assert.equal(graph.packages, packages, `${kind}(${payload}): retained owners`);
     assert.equal(graph.multiTemplates, 0);
     records.push({ kind, payload, stateBytes: outcome.state.length, graph });
     outcome = await invoke({ image: Uint8Array.from(image), state: outcome.state,
-      result: world.encodeResult(outcome.request, reply) });
+      control: "reply", value: await world.encodeResult(outcome.request, reply) });
   }
-  assert.equal(outcome.kind, "Completed");
+  assert.equal(outcome.kind, "completed");
   const findings = followup ? [[1, 54], [3, 74]] : [[1, 36], [3, 56]];
   const expected = composition ? Buffer.concat([Buffer.from([2]),
     ...findings.flat().map(u64)]) : u64(92);

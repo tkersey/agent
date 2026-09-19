@@ -5,6 +5,9 @@ const source = @import("boundary").computation;
 const authoring = @import("authoring.zig");
 const admission = @import("admission.zig");
 pub const Id = source.Id;
+pub const Compiled = @import("compiled_tool.zig").Specification;
+pub const declareCompiled = @import("compiled_tool.zig").declare;
+pub const textInspection = @import("text_inspection.zig");
 
 pub const Implementation = union(enum) { external: Id, local: Id };
 pub const Descriptor = struct {

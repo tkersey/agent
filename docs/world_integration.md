@@ -1,22 +1,18 @@
 # World integration
 
-World consumes `CompiledAgent.Machine` structurally as Boundary Machine ABI v2.
-The application declares every residual decision and action site as either a
-compile-time provider binding or an external effect. World needs no prompt,
-Action, Observation, budget, history, or strategy knowledge.
+Agent 4 emits Boundary 3 BPI3 Programs for World 6's generic kernel. The normal
+[dependency lock](../conformance/agent4/dependencies.lock.json) authenticates the
+Boundary source/package and World source/runtime. Agent authoring has no World
+runtime dependency; execution needs neither the authoring source nor an
+application-specific WASM build.
 
-Agent has no World source dependency. Clean consumers materialize exact Agent
-and World archives independently, and both pin the same source-compatible
-Boundary v1.6.1 owner fix with no public API delta. Agent exports its Boundary
-module for downstream source construction. World admits the resulting Machine
-structurally as ABI v2, and
-the conformance and interpretation proofs bind the emitted program/profile,
-World manifest root, specialized trace, and fixed release kernel without
-weakening Machine admission.
+Use the [runtime setup and invocation instructions](agent4-runtime.md) and
+[migration guide](migration_from_3.md). Current native, Node and browser tests
+exercise the same Program and complete PST3 checkpoints, including suspended
+cleanup. The [compiled tool witness](compiled-text-tool.md) covers independent
+component linkage and actual host transfer.
 
-Exact World v3.1.4 compiler source pins and records Boundary v1.6.1. The clean-room
-conformance gate compiles all four Research/Coding by ReAct/Reflective
-specializations into import-free application WASM, then drives Research ReAct
-and Coding Reflective through public world-host v1.0.1. Application ABI v1,
-Frame v1, Effect protocol v1, and the one-pending-effect restriction remain
-unchanged.
+The old Boundary 1 / World 3 acquisition runners, frozen release locks and
+Machine-v2 conformance path are retired. Published artifacts and Git history
+remain unchanged. The [successor status](compositional-execution.md) records
+remaining acceptance failures; retirement does not establish full completion.

@@ -21,7 +21,7 @@ const { native, wasmtime } = nativePath ? await import("./independent/execute.mj
 const runtime = verifyRuntime(runtimePath);
 const world = await import(pathToFileURL(runtime.entrypoint));
 const kernel = await readFile(runtime.kernelPath);
-const image = await readFile(join(fixturePath, "repair.bpi2"));
+const image = await readFile(join(fixturePath, "repair.bpi3"));
 const taskSchema = decodeSchema(await readFile(join(fixturePath, "task-schema.bin")));
 const outcomeSchema = decodeSchema(await readFile(join(fixturePath, "outcome-schema.bin")));
 const requirements = await readFile(new URL("../consumers/inquiry/contract.txt", import.meta.url), "utf8");
@@ -86,10 +86,13 @@ const records = [], cleanup = [];
 let models = 0, experiments = 0, maximumState = 0, providerBytes = 0, approvals = 0, writes = 0;
 let approvalPending, approvalChallenge, oldResult;
 async function invoke(input, transfer) {
-  const outcome = await (await world.admitProcessKernel(kernel, { expectedSha256: runtime.kernelSha256 })).run(input);
+  const machine = await world.Kernel.create({ bytes: kernel, expectedSha256: runtime.kernelSha256 });
+    machine.setLimits({ input: 256 << 20, working: 256 << 20, output: 256 << 20 });
+    const bytes = machine.invoke(world.encodeInput(input));
+    const outcome = { ...world.decodeOutcome(bytes), bytes };
   if (nativePath) {
-    const file = join(scratch, "input.pki2");
-    await writeFile(file, world.encodeInput({ ...input, mode: "run" }));
+    const file = join(scratch, "input.pki3");
+    await writeFile(file, world.encodeInput(input));
     const n = native(resolve(nativePath), file);
     assert.equal(n.status, 0, n.stderr.toString());
     assert.deepEqual(n.stdout, Buffer.from(outcome.bytes), "native/Node equality");
@@ -106,10 +109,10 @@ try {
   const task = [["session.mjs", reset, executor.runner, requirements, acceptanceContract, true, targetIdentity, 0n],
     "fixture-model", 3, 24n, 12n, true, 7n, 1n, false, 0];
   let outcome = await invoke({ image, initialArgs: encodeValue(taskSchema, task) }, true);
-  while (outcome.kind === "Requested") {
+  while (outcome.kind === "requested") {
     assert(models + experiments + cleanup.length < 30);
     maximumState = Math.max(maximumState, outcome.state.length);
-    const request = world.decodeRequest(outcome.request);
+    const request = (await world.decodeRequest(outcome.request));
     let reply;
     if (request.semanticIdentity === "agent.model.invoke.v3") {
       models++;
@@ -162,7 +165,7 @@ try {
         assert.equal(request.semanticIdentity, "inquiry.repair.cleanup.v1");
         cleanup.push(Number(payload));
         if (inspectorPath) {
-          const file = join(scratch, "cleanup.pst2"); await writeFile(file, outcome.state);
+          const file = join(scratch, "cleanup.pst3"); await writeFile(file, outcome.state);
           const graph = JSON.parse(execFileSync(resolve(inspectorPath), ["inspect-state", file]));
           assert.equal(graph.packages, payload === 2n ? 2 : payload === 3n ? 1 : 0);
         }
@@ -171,15 +174,15 @@ try {
       reply = encodeValue(decodeSchema(request.resumeSchema), reply);
     }
     if (inspectorPath && experiments === 1 && records.at(-1)?.experiment === 1) {
-      const file = join(scratch, "shared.pst2"); await writeFile(file, outcome.state);
+      const file = join(scratch, "shared.pst3"); await writeFile(file, outcome.state);
       const graph = JSON.parse(execFileSync(resolve(inspectorPath), ["inspect-state", file]));
       assert.equal(graph.packages, 3);
     }
-    const encoded = world.encodeResult(outcome.request, reply);
+    const encoded = (await world.encodeResult(outcome.request, reply));
     oldResult ??= Uint8Array.from(encoded);
-    outcome = await invoke({ image, state: outcome.state, result: encoded }, true);
+    outcome = await invoke({ image, state: outcome.state, control: "reply", value: encoded }, true);
   }
-  assert.equal(outcome.kind, "Completed", JSON.stringify(outcome));
+  assert.equal(outcome.kind, "completed", JSON.stringify(outcome));
   const result = decodeValue(outcomeSchema, outcome.value);
   assert.equal(result.tag, 0);
   assert.equal(result.value[0][0], monotonic);
@@ -203,30 +206,30 @@ try {
     ["unvalidated-amendment", v(0, [approvalChallenge, 7n, v(2, amended)]), 1],
   ]) {
     await writeFile(filename, reset);
-    const schema = world.decodeRequest(approvalPending.request).resumeSchema;
+    const schema = (await world.decodeRequest(approvalPending.request)).resumeSchema;
     const checked = await invoke({ image, state: approvalPending.state,
-      result: world.encodeResult(approvalPending.request, encodeValue(decodeSchema(schema), answer)) }, true);
-    assert.equal(checked.kind, "Completed", `${name}: no new challenge or commit for invalid authority/evidence`);
+      control: "reply", value: (await world.encodeResult(approvalPending.request, encodeValue(decodeSchema(schema), answer))) }, true);
+    assert.equal(checked.kind, "completed", `${name}: no new challenge or commit for invalid authority/evidence`);
     assert.equal(decodeValue(outcomeSchema, checked.value).tag, tag, name);
     assert.equal(await readFile(filename, "utf8"), reset, name);
     rejectedApprovals.push(name);
   }
-  await assert.rejects(invoke({ image, state: approvalPending.state, result: oldResult }, false), /InvalidResult/);
-  const context = world.decodeRequest(approvalPending.request);
-  const allowed = world.encodeResult(approvalPending.request,
-    encodeValue(decodeSchema(context.resumeSchema), v(0, [approvalChallenge, 7n, v(0)])));
+  await assert.rejects(invoke({ image, state: approvalPending.state, control: "reply", value: oldResult }, false), error => error.details?.diagnostic === "InvalidResult");
+  const context = (await world.decodeRequest(approvalPending.request));
+  const allowed = (await world.encodeResult(approvalPending.request,
+    encodeValue(decodeSchema(context.resumeSchema), v(0, [approvalChallenge, 7n, v(0)]))));
   const changed = "External edit while approval was pending.\n";
   await writeFile(filename, changed);
-  const pendingCommit = await invoke({ image, state: approvalPending.state, result: allowed }, true);
-  assert.equal(pendingCommit.kind, "Requested");
-  const commit = world.decodeRequest(pendingCommit.request);
+  const pendingCommit = await invoke({ image, state: approvalPending.state, control: "reply", value: allowed }, true);
+  assert.equal(pendingCommit.kind, "requested");
+  const commit = (await world.decodeRequest(pendingCommit.request));
   assert.equal(commit.semanticIdentity, "inquiry.repair.replace.v1");
   const proposal = decodeValue(decodeSchema(commit.payloadSchema), commit.payload);
   const conflict = await target.replace(proposal);
   assert.equal(conflict.kind, "conflict");
   const conflicted = await invoke({ image, state: pendingCommit.state,
-    result: world.encodeResult(pendingCommit.request, encodeValue(decodeSchema(commit.resumeSchema),
-      v(1, [conflict.observation.content, conflict.observation.digest]))) }, true);
+    control: "reply", value: (await world.encodeResult(pendingCommit.request, encodeValue(decodeSchema(commit.resumeSchema),
+      v(1, [conflict.observation.content, conflict.observation.digest])))) }, true);
   assert.equal(decodeValue(outcomeSchema, conflicted.value).tag, 2);
   assert.equal(await readFile(filename, "utf8"), changed);
   await assert.rejects(target.replace([...proposal.slice(0, 5), "other-scope"]), /foreign delivery scope/);

@@ -29,7 +29,7 @@ pub fn main(init: std.process.Init) !void {
         return err;
     };
     defer compiled.deinit();
-    const buffer = try init.gpa.alloc(u8, try boundary.image_v2.encodedLength(compiled.program));
+    const buffer = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(buffer);
     const bytes = try compiled.encode(init.gpa, buffer);
     var output_buffer: [4096]u8 = undefined;
@@ -53,7 +53,7 @@ fn inspectState(init: std.process.Init, path: []const u8) !void {
         .limited(16 * 1024 * 1024),
     );
     defer init.gpa.free(bytes);
-    var graph = try boundary.snapshot_v2.decodeGraph(init.gpa, bytes);
+    var graph = try boundary.data.state_image.decodeGraph(init.gpa, bytes);
     defer graph.deinit();
     var multi: usize = 0;
     var branches: usize = 0;
@@ -61,7 +61,7 @@ fn inspectState(init: std.process.Init, path: []const u8) !void {
     var cells: usize = 0;
     var packages: usize = 0;
     var obligations: usize = 0;
-    for (graph.state.nodes) |node| switch (node) {
+    for (graph.state.nodes) |node| switch (node.record) {
         .multi_template => multi += 1,
         .branch => branches += 1,
         .resource => resources += 1,

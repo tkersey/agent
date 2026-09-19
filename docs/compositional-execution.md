@@ -10,9 +10,8 @@ Current architecture, runtime and migration instructions are in
 [architecture.md](architecture.md), [agent4-runtime.md](agent4-runtime.md),
 [migration_from_3.md](migration_from_3.md), and [compiled-text-tool.md](compiled-text-tool.md).
 
-Current runtime integration passes 182 build steps and 64 Zig tests, plus
-JavaScript consumers including an extracted external consumer. The unchanged
-authoring source retains its prior qualification. Dependency/setup tests pass 25/25
+Current authoring and runtime qualification passes 229 build steps and 176 Zig
+tests, plus JavaScript consumers including an extracted external consumer. Dependency/setup tests pass 25/25
 and offline setup authenticates the complete source/runtime tuple. Current integration,
 functional economy, independent native/Node/Wasmtime execution, extracted-package
 consumers, component reuse and real Chromium/Firefox compiled-tool transfers pass.
@@ -20,51 +19,29 @@ The economy run is functional-only and does not establish timing acceptance.
 
 ## Current results and unresolved failures
 
-World removes its separate free-view index arrays by linking retired view records.
-Generation checks still reject stale handles, and retirement/reuse allocate
-nothing. Small controls lose two allocations and 272 peak working bytes; scalar
-peak falls 4,662 → 4,390 bytes. Timing changes are small and mixed, including
-a slight retained-loop slowdown; this is a storage reduction, not a general
-speedup. The current kernel is 122 bytes smaller. Current host qualification uses
-Node 26.9.0, recorded explicitly in the dependency lock.
+Boundary now owns large outer block catalogs with exact allocations while nested
+records keep their existing arena. Budget validation, canonical bytes and identity
+are unchanged; partial decode failures and caller mutation have explicit coverage.
+The normal dependency tuple selects the authenticated successor sources and kernel.
 
-World now reuses direct same-function tail frames without initialized ownership
-custody. Simultaneous arguments, stale-local clearing and copy-on-write views
-preserve retained continuations. The 256-iteration retained-loop control improves
-about 14–16% natively and 6–8% through fresh WASM in paired windows. Native peak
-falls 28,681 → 22,701 bytes and allocations 1,615 → 589. This is not an Agent
-latency claim; the kernel grows 675 bytes.
+Across 13 fixed scenarios and 128 paired native invocations, canonical outcomes
+and transition/control/copy counters match. Inquiry/ReAct Session peaks fall from
+1,952,780 / 3,084,054 to 1,866,916 / 2,739,154 bytes. Two native replay and two
+initial guest-invocation windows show small mixed timing changes; no latency gain
+is claimed. The kernel is 461,647 bytes with SHA-256
+`01895dd4c2ea74def03c7dc794248058e62087ecec49f6c54314f0f876f05256` (+915 bytes).
+Inquiry/repeated/ReAct images remain 38,162 / 38,561 / 64,111 bytes.
 
-World now reclaims unreachable storage before returning a yield or request. A
-one-element survivor from a 1 MiB input retains 8,182 working bytes rather than
-1,056,327, with the same 86-byte checkpoint. Live aliases, repeated export,
-restoration and allocation-failure rollback have regression coverage. Checkpoint
-export remains read-only. The actual WASM resident API retains 6,064 working-live
-bytes across the same input sizes; reserved linear memory remains separately
-chargeable. This correctness fix adds about 1–5% to several tested
-suspension-heavy native controls; its performance cost remains open.
+Native Session peaks remain above BPC1's 1,853,961 / 2,061,220 bytes. The previous
+small-control regressions, final matched Agent comparison and ReAct guest-latency
+gap remain open. No paid inference or live-model usefulness claim is made.
 
-The current kernel is 460,732 bytes with SHA-256
-`61ac21c775cdf08fe9425bf21de9966ed1cd169c156911401ff1e19913d4a44f`.
-Inquiry, repeated-task and ReAct images remain 38,162 / 38,561 / 64,111 bytes.
-
-Boundary now uses compact analysis-set storage on 64-bit native hosts while
-preserving full-width members and immutable overlay roots. Across 13 fixed
-scenarios and 128 paired native invocations, outcomes and transition/control/copy
-counters match. Inquiry/ReAct native Session peaks fall from 2,049,764 /
-3,534,020 to 1,952,780 / 3,084,054 bytes. Full invocation framing raises those
-peaks to 2,050,143 / 3,226,040. These are requested working bytes, not RSS.
-
-The two final native replay windows show no material latency regression; inquiry
-changes remain below 1%, with modest ReAct gains. The all-target tagged layout
-slowed sampled guest inquiry/ReAct by about 3% / 7%, so wasm32 retains its
-previous storage. The later suspension-reclamation change adds 18 kernel bytes. No guest latency or memory gain is
-claimed from the native specialization.
-
-Native Session peaks remain above optimized BPC1's 1,853,961 / 2,061,220 bytes.
-Inquiry and repeated-task's earlier guest improvement and ReAct's remaining guest
-latency gap need final requalification. No live-model usefulness claim follows
-from synthetic fixture execution.
+World's suspension reclamation and tail-frame reuse remain in place. The
+one-element survivor retains 8,182 native / 6,064 WASM working-live bytes at its
+recorded revision, with an 86-byte checkpoint; final memory accounting must use the
+final candidate. Retired slot-view records replace the separate free-index arrays.
+Historical control and value measurements remain attributed in World's current
+results document; they are not silently promoted to final acceptance.
 
 ## Component build costs
 

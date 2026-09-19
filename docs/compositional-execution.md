@@ -52,6 +52,45 @@ final candidate. Retired slot-view records replace the separate free-index array
 Historical control and value measurements remain attributed in World's current
 results document; they are not silently promoted to final acceptance.
 
+## Current clarification comparison
+
+The unchanged four-case document-clarification policy was compared using Agent
+1f3297b / Boundary 42a09b9 / World d075169 (normal BPI2 and compact BPC1) against
+Agent ddf4c6a / Boundary 810ba69 / World e995dc9. The predecessor runtime was
+reconstructed from its pinned files and release kernel, then verified against its
+original complete runtime inventory and kernel digest. Both sides ran on Node
+26.9.0, Zig 0.16.0, M2 Pro/macOS 27.2, with 256 MiB per-arena test allowances.
+
+Two windows rotate three process observations per format. A fresh-time sample
+sums the 21 or 23 fresh-kernel invocations in one scenario, including their kernel
+setup. Whole-scenario time includes fixture handling and file I/O. Neither is an
+individual-request tail statistic. Confirmation medians are below.
+
+| Case | BPI2 fresh ms | BPC1 fresh ms | BPI3 fresh ms | BPC1 → BPI3 scenario ms |
+|---|---:|---:|---:|---:|
+| divergent-active | 207.10 | 210.21 | 140.12 | 232.62 → 164.65 |
+| common | 165.62 | 165.60 | 102.44 | 179.74 → 118.94 |
+| clarify-first-common | 108.56 | 108.87 | 73.96 | 121.35 → 87.76 |
+| clarify-first-divergent | 109.49 | 112.73 | 73.74 | 124.12 → 88.48 |
+
+Both windows support 32–38% lower total fresh-invocation time than BPC1 for these
+cases. Model calls, request/response byte counts, clarification and approval
+exchanges, replacements, completed assessments, memory, resulting file hashes
+and complete effect/cleanup traces match. This is a real authored Agent consumer
+with prescribed model/person inputs; no paid inference or live-model quality
+claim is involved. The main image is 14,355 / 13,256 / 11,939 bytes in
+BPI2 / BPC1 / BPI3. Peak checkpoint sizes increase from 2,600 / 1,985 / 1,891 /
+2,044 to 2,639 / 2,056 / 1,928 / 2,081 bytes in table order. This run does not
+measure native working peaks or replace the remaining inquiry/ReAct comparison.
+
+Reproduce with the existing `tools/agent4/benchmark-clarification.mjs`, explicit
+Agent source/runtime/image paths and a fresh output directory for every process.
+The earlier functional audit confirmed that capability-directed forwarding is
+covered by scoped-reader source agreement; the unused `forward` record form is
+rejected by both predecessor and successor admission. No current PR review threads
+were present at this audit. Serial review entry remains pending full realization
+and the required remaining performance proof.
+
 ## Component build costs
 
 The existing `build-component-tools` and `component_runtime.mjs` witness was

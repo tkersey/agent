@@ -96,7 +96,10 @@ local/global caches, then the emitted `agent4-component-objects` and
 `agent4-component-link` modes exercised in `test/agent4/component_runtime.mjs`.
 The controlled edit changes `Application.increment` by one in
 `test/agent4/component_link.zig` without editing the emitter or components.
-A matched predecessor native cold-build comparison remains unestablished.
+The matched source-only emitter comparison is now available in
+[World’s current results](https://github.com/tkersey/world/blob/8fb2ff862be79621ebfee79f6b748458aca75deb/docs/compositional-execution.md#matched-native-build-costs): about 15.5 s
+versus 16.5 s with fresh Zig caches, while the full compiler/evaluator probe stays
+near 23 s on both versions. This does not establish all-application build gains.
 
 Remaining work includes those primary-workload regressions, the rest of the accepted
 workload matrix, serial reviews and the final

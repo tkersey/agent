@@ -19,7 +19,8 @@ The economy run is functional-only and does not establish timing acceptance.
 
 ## Current matched inquiry/ReAct results
 
-The measured successor is Agent 95001fb / Boundary 6c59436 / World 9922062. Its
+The complete BPC1 comparison measured Agent 95001fb / Boundary 6c59436 / World
+9922062. Its
 normal authenticated tuple is compared with the fixed Agent 1f3297b / Boundary
 42a09b9 / World d075169 anchors, separately using normal BPI2 and compact BPC1.
 The predecessor runtime matches its complete pinned inventory and kernel hash.
@@ -88,10 +89,11 @@ repeated 44,684 / 40,486 / 37,137, and ReAct 49,249 / 43,394 / 48,226 bytes.
 ReAct remains larger than BPC1; the specification's separate installation-image
 condition is satisfied, not replaced by a universal image-size claim.
 
-The kernel is 462,261 bytes, SHA-256
-adec1764555d7ac3638a6f414c009d3062766bc0635422e291ad4aeaa409e6c5.
+The normal tuple now selects Boundary 6c59436 / World 58f2533. Its kernel is
+462,400 bytes, SHA-256
+3beae29e2b4f74de5248c636319c3f31fbdd28fab632314b9b1dd7c83c066c49.
 Boundary's dependency package is 1,390,465 bytes (281,831 compressed); World runtime
-contents are 518,961 bytes. No paid inference or live-model quality claim is made.
+contents are 519,100 bytes. No paid inference or live-model quality claim is made.
 The adequacy obstruction and its minimal reproducer remain intact.
 
 Reproduce captures with `tools/agent4/capture-inquiry.mjs` and explicit frozen
@@ -100,6 +102,27 @@ native timing; use file-backed stdin (`replay-bench OUTCOME_SHA256 < INPUT`).
 The temporary build graphs only install existing inquiry/native/inspection tools;
 all other tracked Agent bytes match their declared revisions. Raw captures,
 profiles and temporary predecessor installations are not maintained.
+
+## Control-node reuse confirmation
+
+World 58f2533 reuses consumed continuation nodes and exclusively active controls.
+Captured callers and cloned multi-shot frames retain their custody; no authored
+work or cleanup is omitted. [World's results](https://github.com/tkersey/world/blob/58f2533a276749f85c9f439d1e1d8fa2a822b1a1/docs/compositional-execution.md#control-node-reuse-confirmation)
+record lower installation peaks and the remaining BPC1 gap.
+
+The normal tuple passes 229 build steps, 176 Zig tests, all six integration groups,
+extracted consumers and compiled-tool browser transfer. Fresh captures retain all
+original assertions. Two replay windows compare World 9922062 and 58f2533 on the
+same 180 successful inputs: every native and guest output is byte-identical, with
+unchanged complete-invocation peaks. The clocks and sample units match those above.
+Reset inquiry allocation falls 83,315,245 → 82,915,942 bytes; reset ReAct
+61,326,169 → 61,117,684; repeated inquiry 177,311,733 → 176,463,054.
+
+Native timings are nearly unchanged to slightly lower. Small guest rejection-case
+totals move in opposite directions between windows, from about 1% faster to 3–8%
+slower; those observations remain indeterminate. No additional Agent latency gain
+is claimed for node reuse. The full BPC1 table above remains explicitly bound to
+its measured tuple; final cumulative acceptance is still open.
 
 ## Current clarification comparison
 

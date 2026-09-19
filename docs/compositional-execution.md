@@ -10,51 +10,46 @@ Current architecture, runtime and migration instructions are in
 [architecture.md](architecture.md), [agent4-runtime.md](agent4-runtime.md),
 [migration_from_3.md](migration_from_3.md), and [compiled-text-tool.md](compiled-text-tool.md).
 
-Current runtime integration passes 182 build steps and 64 Zig tests, plus
-JavaScript consumers including an extracted external consumer. Unchanged
-authoring code retains its preceding qualification. Dependency/setup tests pass 25/25
-and offline setup authenticates the complete source/runtime tuple. Current integration,
+The combined authoring/runtime check passes 229 build steps and 176 Zig tests,
+plus JavaScript consumers including an extracted external source package.
+Dependency/setup checks and offline authentication pass for the complete tuple.
+Current integration,
 functional economy, independent native/Node/Wasmtime execution, extracted-package
 consumers, component reuse and real Chromium/Firefox compiled-tool transfers pass.
 The economy run is functional-only and does not establish timing acceptance.
 
 ## Current results and unresolved failures
 
-World now borrows frame-map entries during ordinary value instructions, avoiding
-a frame copy and second lookup. Control and resumption-conversion paths retain
-copies; rollback coverage includes cloned resumptions. Two native windows show
-about 4% improvement on retained-loop256 and 1–3% on control64, with unchanged
-working peaks. The retained-loop guest improves about 15–16%; guest control64 is
-inconclusive. These are local control results, not an Agent latency claim. The
-kernel grows 386 bytes.
+The normal dependency tuple now selects Boundary 2cf8d55 and World 6f29529.
+Boundary removes empty administrative jumps within a function and custody scope;
+assignments, cycles, real handlers and effects remain. Inquiry/repeated/ReAct
+images shrink to 36,861 / 37,242 / 63,151 bytes. All 13 inquiry/ReAct scenarios
+and the four-turn repeated inquiry pass their original assertions. Repeated
+inquiry still performs 28 model calls, four experiments and eight cleanups;
+each completed turn retains two nodes, one blob and a 174-byte checkpoint.
+Internal transition counts decrease, as permitted by the source contract.
 
-Boundary now owns large outer block catalogs with exact allocations while nested
-records keep their existing arena. Budget validation, canonical bytes and identity
-are unchanged; partial decode failures and caller mutation have explicit coverage.
-The normal dependency tuple selects the authenticated successor sources and kernel.
+The generic kernel is byte-identical at 462,033 bytes, SHA-256
+070d13c899f1e084fc6b5e25223b0b938818204617e07c1ad13af9a396ebf4ad.
+Boundary's dependency package is 1,368,607 bytes (179 files), or 276,781 bytes
+compressed. World runtime contents remain 518,133 bytes. Experimental evidence
+is excluded from packages. The adequacy obstruction and minimal reproducer remain.
 
-Across 13 fixed scenarios and 128 paired native invocations, canonical outcomes
-and transition/control/copy counters match. Inquiry/ReAct Session peaks fall from
-1,952,780 / 3,084,054 to 1,866,916 / 2,739,154 bytes. Two native replay and two
-initial guest-invocation windows show small mixed timing changes; no latency gain
-is claimed. The kernel is 462,033 bytes with SHA-256
-`070d13c899f1e084fc6b5e25223b0b938818204617e07c1ad13af9a396ebf4ad`.
-Inquiry/repeated/ReAct images remain 38,162 / 38,561 / 64,111 bytes.
+Four alternating native control windows show roughly 6–7% faster 64/128/256
+installations, with smaller images and working peaks. These are compiler-change
+probes, not a refreshed Agent latency comparison. Queens BFS improves about 4%
+but adds about 14 KB peak working memory; retained-loop timing is unchanged.
 
-Native Session peaks remain above BPC1's 1,853,961 / 2,061,220 bytes. The previous
-small-control regressions and ReAct guest-latency gap remain open. No paid inference or live-model usefulness claim is made.
+The preceding matched predecessor comparison below still exposes unresolved
+small-control, ReAct latency/image-size and complete-invocation memory gaps.
+Its timings are attributed to the preceding source tuple and must be refreshed
+for final acceptance. No failure is waived, no serial review epoch has started,
+and no paid inference or live-model usefulness claim is made.
 
-World's suspension reclamation and tail-frame reuse remain in place. The
-one-element survivor retains 8,182 native / 6,064 WASM working-live bytes at its
-recorded revision, with an 86-byte checkpoint; final memory accounting must use the
-final candidate. Retired slot-view records replace the separate free-index arrays.
-Historical control and value measurements remain attributed in World's current
-results document; they are not silently promoted to final acceptance.
-
-## Current inquiry/ReAct comparison
+## Preceding matched inquiry/ReAct comparison
 
 Agent 1f3297b / Boundary 42a09b9 / World d075169 (BPI2 and BPC1) were compared
-with Agent 4de8fff / Boundary 810ba69 / World e995dc9 (BPI3). The current emitter
+with Agent 4de8fff / Boundary 810ba69 / World e995dc9 (BPI3). That emitter
 used Boundary 3dc3413, whose production source is identical to its 810ba69 pin.
 The predecessor runtime matches its original full file inventory and kernel
 hash. Both native emitters use Zig 0.16.0 ReleaseSafe; the driver is Node 26.9.0

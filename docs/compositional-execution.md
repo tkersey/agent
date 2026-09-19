@@ -20,7 +20,7 @@ The economy run is functional-only and does not establish timing acceptance.
 
 ## Current results and unresolved failures
 
-The normal tuple selects Boundary 6c59436 and World dc7e81d. Boundary forwards
+The normal tuple selects Boundary 6c59436 and World 9922062. Boundary forwards
 fields from products constructed in the same block, only for copyable, droppable
 products. All operands and the product still evaluate in order. Mutable reads,
 unselected faults and malformed projections retain explicit regression coverage.
@@ -47,30 +47,25 @@ invocation and outcome decoding; file loading and JavaScript import are outside
 the timer. Every input/output digest is checked. M2 Pro, macOS 27.2, Zig 0.16.0
 ReleaseSafe; no paid inference or live-model usefulness claim is made.
 
-The generic kernel is 462,270 bytes, SHA-256
-03fe2d95e8a3ebb91115639f406ffcf72bbe3ec98be9a922a2af3ceae90a6307.
+The generic kernel is 462,261 bytes, SHA-256
+adec1764555d7ac3638a6f414c009d3062766bc0635422e291ad4aeaa409e6c5.
 Boundary's dependency package is 1,390,465 bytes (181 files), or 281,831 compressed.
-World runtime contents are 518,970 bytes. Experimental evidence is excluded
+World runtime contents are 518,961 bytes. Experimental evidence is excluded
 from packages; the adequacy obstruction and minimal reproducer remain.
 
-The BPC1 comparison below predates these compiler changes. Its material ReAct,
-small-control and memory regressions are not waived; the final matched matrix
-must confirm their disposition. Before slot ordering, four alternating native control comparisons
-against Boundary 42a09b9 / World d075169 showed that scalar and installation1/8/64
-were slower. Installation64 took 299–310 µs versus BPC1 258–263 µs, with
-190,649 versus 121,956 peak working bytes. Installation128/256 retain their
-time/memory improvements; all 64/128/256 images remain smaller than BPC1.
-The final matrix must confirm how much of those gaps remains. The ReAct image remains larger than BPC1's
-43,394 bytes, while the specification's targeted installation-size condition is
-satisfied. Final performance acceptance and serial reviews remain open.
+The BPC1 comparison below predates the compiler improvements above and does not
+establish final acceptance. The latest [World native comparison](https://github.com/tkersey/world/blob/9922062038109b918723f255709fefa8ea81c631/docs/compositional-execution.md)
+confirms large control/value gains while preserving the small-case and peak-memory
+failures. Installation64 timing ranges overlap BPC1, but its peak remains
+179,228 versus 121,956 bytes. ReAct's 48,226-byte image is still larger than BPC1's
+43,394 bytes. Final matched Agent/build confirmation and serial reviews remain open.
 
-The selected slot-ordering pass applies only to linear accumulation functions.
-Inquiry/repeated/ReAct, retained-loop, shallow and queens inputs are byte-identical
-to the preceding qualified compiler. Two windows through one fixed native runtime
-show installation64/128/256 peaks of 179,719 / 274,031 / 400,643 bytes, with lower
-time and total allocated bytes but higher allocation-call counts. The 64-case
-confirmation is 273–279 µs versus 295–301 µs before; guest gains are clearest at
-256. Installation1/8 inputs are unchanged. The remaining BPC1 gaps are still open.
+The selected World now reclaims consumed sequence cursors early on 64-bit native
+storage, retaining live aliases and restoring collection policy on failed resident
+drives. Sequence64 native peak falls from 50,899 to 17,003 bytes. Some projection
+timings cost 1–5% more; final acceptance remains open. WASM preserves its existing
+schedule after early collection slowed long sequences. No new Agent timing gain
+is inferred from the standalone value benchmark.
 
 The latest runtime omits an immediately consumed closed callable on qualified
 64-bit native storage. Aliases, captured/linear callables and other uses retain

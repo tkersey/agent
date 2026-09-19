@@ -76,18 +76,18 @@
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "dc7e81d4988e29ecacf143e13837f4c30e716136",
-    "gitTree": "8f5c29821671e1befccd0b1c1213048ecb203b29",
+    "commit": "9922062038109b918723f255709fefa8ea81c631",
+    "gitTree": "df227f860ca4446f5794193ba086b2cd14db6f00",
     "version": "6.0.0-dev.0",
     "source": {
-      "inventorySha256": "d3760e68efd7342015f6844839b3d3acf46e5b5fe04e8bbae2f1c973234fc2b0",
-      "entries": 135,
-      "bytes": 1332035
+      "inventorySha256": "9388c4df92698e3a7909fe270332898faee421873d070fdbb2700ccb0deb87c1",
+      "entries": 136,
+      "bytes": 1336505
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/dc7e81d4988e29ecacf143e13837f4c30e716136.tar.gz",
-      "bytes": 299611,
-      "sha256": "8e6df16284af0b7a8899516f61964baf9091501dd75abb1632b518fb6b937597"
+      "url": "https://github.com/tkersey/world/archive/9922062038109b918723f255709fefa8ea81c631.tar.gz",
+      "bytes": 300654,
+      "sha256": "9b2dcc36e3e610b62afcbabf6a56cec27352ae0f9fce4c690e3d35a86f64d6cb"
     },
     "authentication": "Downloaded archive tree recomputed and matched to GitHub commit API; complete source and runtime inventories bound",
     "runtime": {
@@ -213,17 +213,17 @@
           "path": "world-kernel.wasm",
           "kind": "file",
           "mode": 493,
-          "bytes": 462270,
-          "sha256": "03fe2d95e8a3ebb91115639f406ffcf72bbe3ec98be9a922a2af3ceae90a6307"
+          "bytes": 462261,
+          "sha256": "adec1764555d7ac3638a6f414c009d3062766bc0635422e291ad4aeaa409e6c5"
         }
       ],
-      "inventorySha256": "3dc5ae978cf074abd49046c71a96e276d45cf6a87e9699107b8c07b88768d5ed",
+      "inventorySha256": "f39d9401cc6594323975d0de460c4eea0e2eb2d0e341bcc91301739d5943c8c0",
       "entries": 19,
-      "bytes": 518970,
+      "bytes": 518961,
       "kernel": {
         "path": "world-kernel.wasm",
-        "bytes": 462270,
-        "sha256": "03fe2d95e8a3ebb91115639f406ffcf72bbe3ec98be9a922a2af3ceae90a6307"
+        "bytes": 462261,
+        "sha256": "adec1764555d7ac3638a6f414c009d3062766bc0635422e291ad4aeaa409e6c5"
       },
       "abi": 3,
       "exports": [

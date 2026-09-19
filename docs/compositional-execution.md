@@ -20,7 +20,7 @@ The economy run is functional-only and does not establish timing acceptance.
 
 ## Current results and unresolved failures
 
-The normal tuple selects Boundary e6388d9 and World a609a1f. Boundary forwards
+The normal tuple selects Boundary b3d3e76 and World fbc11c9. Boundary forwards
 fields from products constructed in the same block, only for copyable, droppable
 products. All operands and the product still evaluate in order. Mutable reads,
 unselected faults and malformed projections retain explicit regression coverage.
@@ -49,20 +49,28 @@ ReleaseSafe; no paid inference or live-model usefulness claim is made.
 
 The generic kernel remains byte-identical at 462,033 bytes, SHA-256
 070d13c899f1e084fc6b5e25223b0b938818204617e07c1ad13af9a396ebf4ad.
-Boundary's dependency package is 1,377,530 bytes (180 files), or 278,653 compressed.
+Boundary's dependency package is 1,388,536 bytes (181 files), or 281,026 compressed.
 World runtime contents remain 518,133 bytes. Experimental evidence is excluded
 from packages; the adequacy obstruction and minimal reproducer remain.
 
 The BPC1 comparison below predates these compiler changes. Its material ReAct,
 small-control and memory regressions are not waived; the final matched matrix
-must confirm their disposition. Four fresh alternating native control comparisons
-against Boundary 42a09b9 / World d075169 confirm that scalar and installation1/8/64
-remain slower. Installation64 takes 299–310 µs versus BPC1 258–263 µs, with
+must confirm their disposition. Before slot ordering, four alternating native control comparisons
+against Boundary 42a09b9 / World d075169 showed that scalar and installation1/8/64
+were slower. Installation64 took 299–310 µs versus BPC1 258–263 µs, with
 190,649 versus 121,956 peak working bytes. Installation128/256 retain their
 time/memory improvements; all 64/128/256 images remain smaller than BPC1.
-These current regressions remain required work. The ReAct image remains larger than BPC1's
+The final matrix must confirm how much of those gaps remains. The ReAct image remains larger than BPC1's
 43,394 bytes, while the specification's targeted installation-size condition is
 satisfied. Final performance acceptance and serial reviews remain open.
+
+The selected slot-ordering pass applies only to linear accumulation functions.
+Inquiry/repeated/ReAct, retained-loop, shallow and queens inputs are byte-identical
+to the preceding qualified compiler. Two windows through one fixed native runtime
+show installation64/128/256 peaks of 179,719 / 274,031 / 400,643 bytes, with lower
+time and total allocated bytes but higher allocation-call counts. The 64-case
+confirmation is 273–279 µs versus 295–301 µs before; guest gains are clearest at
+256. Installation1/8 inputs are unchanged. The remaining BPC1 gaps are still open.
 
 ## Preceding matched inquiry/ReAct comparison
 

@@ -3,38 +3,38 @@
   "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "e6388d936af88d0642912dfeaa81fdd40bb0800a",
-    "gitTree": "bf3e5072b751eace6a9c5a985c64cc9cf7a698fd",
+    "commit": "b3d3e760c9fc2ff0afb42a61de674fd174da996c",
+    "gitTree": "15b80ce6855ea06bee0f05c1d99c0c0b04a95d38",
     "version": "3.0.0-dev.0",
     "source": {
-      "inventorySha256": "3db4ebd1509d10f363a8a0d09508d23fbdf212f89fac19d7d3991235d597296f",
-      "entries": 219,
-      "bytes": 6112753
+      "inventorySha256": "d0b2f0e64145277948c28b2400a4dbbc4d867ec0ad3f9858f7f47ecdb49b592b",
+      "entries": 220,
+      "bytes": 6123759
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/e6388d936af88d0642912dfeaa81fdd40bb0800a.tar.gz",
-      "bytes": 1085351,
-      "sha256": "f1b0e11117072a4641abb7a88479f942da54f2fe9b45c705c7a3b8fb8bf5d80f"
+      "url": "https://github.com/tkersey/boundary/archive/b3d3e760c9fc2ff0afb42a61de674fd174da996c.tar.gz",
+      "bytes": 1087794,
+      "sha256": "664c354e3fd1beab4dffe189e88a04fbc5c56c63b4c68876694f365e5a84e564"
     },
     "authentication": "GitHub commit API tree identity equals recomputed downloaded source tree; archive and content inventories independently bound",
     "package": {
-      "zigHash": "boundary-3.0.0-dev.0-flclaPoEFQBJjRNGLUm0VndLvUA7XEzTmgy_JFJ4QsFP",
+      "zigHash": "boundary-3.0.0-dev.0-flclaPgvFQBIXtA-MYjRA1hVIai6k8sokg_VxV0Da6ns",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "9a00527c4cd8811b9e6845287e1478406a45ceab0ac3852299272980dd6f00ba",
-          "entries": 180,
-          "bytes": 1377530
+          "inventorySha256": "5a8cadeed534c192d583c49830e84c08c2127a7af042bf81ebb1a3ce760c96d3",
+          "entries": 181,
+          "bytes": 1388536
         },
         "archive-extracted": {
-          "inventorySha256": "9a00527c4cd8811b9e6845287e1478406a45ceab0ac3852299272980dd6f00ba",
-          "entries": 180,
-          "bytes": 1377530
+          "inventorySha256": "5a8cadeed534c192d583c49830e84c08c2127a7af042bf81ebb1a3ce760c96d3",
+          "entries": 181,
+          "bytes": 1388536
         }
       },
       "archive": {
-        "bytes": 278653,
-        "sha256": "8c18433aa0e44917022a8d829a9d67b97ff5d996e59be58fb5c72a73ff3de245"
+        "bytes": 281026,
+        "sha256": "af1d022aff73390b44ed504b659c68bdd8e35e0c5076280516aac3a3bb2cb426"
       }
     },
     "api": {
@@ -76,18 +76,18 @@
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "a609a1fa07b6ed79624d450ac112cdc17b7b7b3d",
-    "gitTree": "bf7865249aeb07654548e18de40c8ca423d37a34",
+    "commit": "fbc11c98dedbebd9939ee65ddb9e8120c3f5d1ab",
+    "gitTree": "ce9eedc1508ddb162d90d428fc946c5e57b365d0",
     "version": "6.0.0-dev.0",
     "source": {
-      "inventorySha256": "4965a42ae0c38abede00e7b6779258bd502dfc0e48246e671c5f7609a5e6f70c",
+      "inventorySha256": "e7065a1767c8d7cb3bfbd090f49c1b5a5dd0ba0e78970a6f396ffc9062fa457d",
       "entries": 135,
-      "bytes": 1332752
+      "bytes": 1336209
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/a609a1fa07b6ed79624d450ac112cdc17b7b7b3d.tar.gz",
-      "bytes": 302844,
-      "sha256": "2f7620f315f468e88fb2e9cb0b81dbf8b7de663969abd7f9b090846a8de9cea5"
+      "url": "https://github.com/tkersey/world/archive/fbc11c98dedbebd9939ee65ddb9e8120c3f5d1ab.tar.gz",
+      "bytes": 303728,
+      "sha256": "bef85667f611c4dbc38079619e70eeb4b5c0af55a837e1bf17e902aa57707689"
     },
     "authentication": "Downloaded archive tree recomputed and matched to GitHub commit API; complete source and runtime inventories bound",
     "runtime": {
@@ -260,7 +260,7 @@
         "target": "build-kernel",
         "optimize": "ReleaseSmall",
         "machine": "wasm32-freestanding",
-        "boundarySourceCommit": "e6388d936af88d0642912dfeaa81fdd40bb0800a",
+        "boundarySourceCommit": "b3d3e760c9fc2ff0afb42a61de674fd174da996c",
         "capacityOverrides": [],
         "requestedOptimize": "ReleaseSafe"
       },

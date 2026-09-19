@@ -42,8 +42,7 @@ is claimed. The kernel is 462,033 bytes with SHA-256
 Inquiry/repeated/ReAct images remain 38,162 / 38,561 / 64,111 bytes.
 
 Native Session peaks remain above BPC1's 1,853,961 / 2,061,220 bytes. The previous
-small-control regressions, final matched Agent comparison and ReAct guest-latency
-gap remain open. No paid inference or live-model usefulness claim is made.
+small-control regressions and ReAct guest-latency gap remain open. No paid inference or live-model usefulness claim is made.
 
 World's suspension reclamation and tail-frame reuse remain in place. The
 one-element survivor retains 8,182 native / 6,064 WASM working-live bytes at its
@@ -51,6 +50,62 @@ recorded revision, with an 86-byte checkpoint; final memory accounting must use 
 final candidate. Retired slot-view records replace the separate free-index arrays.
 Historical control and value measurements remain attributed in World's current
 results document; they are not silently promoted to final acceptance.
+
+## Current inquiry/ReAct comparison
+
+Agent 1f3297b / Boundary 42a09b9 / World d075169 (BPI2 and BPC1) were compared
+with Agent 4de8fff / Boundary 810ba69 / World e995dc9 (BPI3). The current emitter
+used Boundary 3dc3413, whose production source is identical to its 810ba69 pin.
+The predecessor runtime matches its original full file inventory and kernel
+hash. Both native emitters use Zig 0.16.0 ReleaseSafe; the driver is Node 26.9.0
+on M2 Pro/macOS 27.2. Native replay uses a 256 MiB working buffer; both kernels
+retain their pinned 256 MiB maximum memory profile.
+
+The original assertions passed for 13 inquiry/ReAct scenarios and a four-turn
+repeated inquiry on all three formats. Successful invocations match native/Node;
+paired tasks and repeated inquiry additionally match Wasmtime.
+Task/result schemas are byte-identical. Model work, experiments, approval/write
+counts, observed results, recipients, cache reuse, explicit retirements and cleanup
+match. Repeated inquiry keeps 28 model calls, four experiments, eight cleanups,
+eight templates and 16 activations. Its completed-turn boundary stays at two nodes
+and one blob: 170 bytes in BPI2/BPC1 versus 174 in BPI3. Old-question rejection
+checks remain enabled. Changed internal transition counts are not normalized into
+a claim of identical machine execution.
+
+Two windows rotate all 180 successful canonical inputs per format (128 comparison
+inputs plus 52 repeated-task inputs). Each entry below sums per-input medians of
+nine fresh invocations after three warmups. Native timing includes the complete
+byte invocation; input-file loading is outside the clock. Guest timing uses each
+public fresh API, including kernel setup and encoding. Reconstructed guest inputs
+must re-encode byte-for-byte to their captured input, and every replay output must
+match its verified capture. This is runtime replay, not whole-scenario elapsed time
+or a request-tail statistic. Confirmation values follow.
+
+| Scenario | Native BPI2 / BPC1 / BPI3 ms | Guest BPI2 / BPC1 / BPI3 ms |
+|---|---:|---:|
+| paired-reset-inquiry | 536.14 / 534.57 / 193.22 | 670.19 / 669.26 / 375.86 |
+| paired-reset-react | 84.59 / 84.78 / 87.49 | 177.14 / 178.13 / 204.88 |
+| repeated | 1658.43 / 1652.34 / 552.92 | 1888.28 / 1884.83 / 1004.87 |
+
+Across the four paired tasks, inquiry improves about 2.7–2.8× natively and 1.7–1.8×
+in the guest; repeated inquiry improves about 3× / 1.9×. ReAct remains about 3–9%
+slower natively and 14–27% slower in the guest. The five binding/inconclusive cases
+remain about 13–27% / 30–39% slower. These unfavorable observations are not waived.
+
+Complete byte-invocation peaks are higher in BPI3: reset-inquiry is
+1,853,961 → 1,964,279 bytes, reset-ReAct 2,061,220 → 2,881,140, and repeated inquiry
+1,819,273 → 1,973,835. These include invocation framing and must not be confused
+with the preceding Session-only diagnostic counters. Main image sizes in
+BPI2 / BPC1 / BPI3 are inquiry 44,338 / 40,167 / 38,162; repeated 44,684 / 40,486 /
+38,561; ReAct 49,249 / 43,394 / 64,111 bytes. ReAct size, time and memory remain
+concrete optimization targets; no live-model quality or paid-inference claim is made.
+
+The small `tools/agent4/capture-inquiry.mjs` helper preserves the fixture assertions
+and accepts explicit source/runtime/native/inspector inputs. Use World's existing
+`build_replay_bench.zig` for native timing and file-backed stdin
+(`replay-bench OUTCOME_SHA256 < INPUT`). An interrupted piped-input window stalled
+in stdin reading before runtime execution; it was discarded and both final native
+windows used files. Raw captures and temporary predecessor installations are removed.
 
 ## Current clarification comparison
 

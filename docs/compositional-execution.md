@@ -10,14 +10,23 @@ Current architecture, runtime and migration instructions are in
 [architecture.md](architecture.md), [agent4-runtime.md](agent4-runtime.md),
 [migration_from_3.md](migration_from_3.md), and [compiled-text-tool.md](compiled-text-tool.md).
 
-Current authoring and runtime qualification passes 229 build steps and 176 Zig
-tests, plus JavaScript consumers including an extracted external consumer. Dependency/setup tests pass 25/25
+Current runtime integration passes 182 build steps and 64 Zig tests, plus
+JavaScript consumers including an extracted external consumer. Unchanged
+authoring code retains its preceding qualification. Dependency/setup tests pass 25/25
 and offline setup authenticates the complete source/runtime tuple. Current integration,
 functional economy, independent native/Node/Wasmtime execution, extracted-package
 consumers, component reuse and real Chromium/Firefox compiled-tool transfers pass.
 The economy run is functional-only and does not establish timing acceptance.
 
 ## Current results and unresolved failures
+
+World now borrows frame-map entries during ordinary value instructions, avoiding
+a frame copy and second lookup. Control and resumption-conversion paths retain
+copies; rollback coverage includes cloned resumptions. Two native windows show
+about 4% improvement on retained-loop256 and 1–3% on control64, with unchanged
+working peaks. The retained-loop guest improves about 15–16%; guest control64 is
+inconclusive. These are local control results, not an Agent latency claim. The
+kernel grows 386 bytes.
 
 Boundary now owns large outer block catalogs with exact allocations while nested
 records keep their existing arena. Budget validation, canonical bytes and identity
@@ -28,8 +37,8 @@ Across 13 fixed scenarios and 128 paired native invocations, canonical outcomes
 and transition/control/copy counters match. Inquiry/ReAct Session peaks fall from
 1,952,780 / 3,084,054 to 1,866,916 / 2,739,154 bytes. Two native replay and two
 initial guest-invocation windows show small mixed timing changes; no latency gain
-is claimed. The kernel is 461,647 bytes with SHA-256
-`01895dd4c2ea74def03c7dc794248058e62087ecec49f6c54314f0f876f05256` (+915 bytes).
+is claimed. The kernel is 462,033 bytes with SHA-256
+`070d13c899f1e084fc6b5e25223b0b938818204617e07c1ad13af9a396ebf4ad`.
 Inquiry/repeated/ReAct images remain 38,162 / 38,561 / 64,111 bytes.
 
 Native Session peaks remain above BPC1's 1,853,961 / 2,061,220 bytes. The previous

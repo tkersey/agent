@@ -3,8 +3,7 @@
 Agent 4.0.0-dev.0 consumes Boundary 3 and World 6 through the authenticated
 [dependency lock](../conformance/agent4/dependencies.lock.json). Authoring, approval,
 model/tool contracts, inquiry and reusable compiled tools remain product code.
-The successor is incomplete; implementation has resumed after the authorized
-archive cleanup and all linked PRs remain drafts.
+The successor remains incomplete; all linked PRs remain drafts.
 
 Current architecture, runtime and migration instructions are in
 [architecture.md](architecture.md), [agent4-runtime.md](agent4-runtime.md),
@@ -18,118 +17,89 @@ functional economy, independent native/Node/Wasmtime execution, extracted-packag
 consumers, component reuse and real Chromium/Firefox compiled-tool transfers pass.
 The economy run is functional-only and does not establish timing acceptance.
 
-## Current results and unresolved failures
+## Current matched inquiry/ReAct results
 
-The normal tuple selects Boundary 6c59436 and World 9922062. Boundary forwards
-fields from products constructed in the same block, only for copyable, droppable
-products. All operands and the product still evaluate in order. Mutable reads,
-unselected faults and malformed projections retain explicit regression coverage.
-Inquiry/repeated/ReAct images are 36,756 / 37,137 / 48,226 bytes. ReAct removes
-2,192 instructions and temporary slots, without changing application policy.
+The measured successor is Agent 95001fb / Boundary 6c59436 / World 9922062. Its
+normal authenticated tuple is compared with the fixed Agent 1f3297b / Boundary
+42a09b9 / World d075169 anchors, separately using normal BPI2 and compact BPC1.
+The predecessor runtime matches its complete pinned inventory and kernel hash.
+BPC1 images round-trip to byte-identical BPI2 images; all 180 predecessor outcomes
+are also byte-identical across those two encodings. The inquiry, repeated-inquiry
+and ReAct application sources are unchanged between Agent revisions.
 
-Two alternating native replay windows compare this compiler with Boundary 2cf8d55,
-using World 6f29529 / Agent e64697b and the same 128 captured invocations from
-13 scenarios. All protected result, model, experiment, approval, write, observation,
-reuse and cleanup fields match. Each process takes three warmups and nine samples;
-the figures below sum per-input medians, not whole-scenario elapsed time.
+All original assertions pass for 13 scenarios and four repeated inquiry turns.
+Every non-physical scenario-summary field agrees across formats, including model,
+experiment, approval/write, observation, recipient, reuse and cleanup behavior.
+Task/result schemas are byte-identical. Repeated inquiry retains 28 model calls,
+four experiments, eight cleanups, eight templates and 16 activations. Completed
+turns retain two nodes and one blob, with no live resources, cells or obligations;
+the checkpoint is 170 bytes in BPI2/BPC1 and 174 in BPI3. Machine transition counts
+change and are reported as representation-specific work, not normalized away.
 
-| ReAct scenario | Native before → after ms | Guest before → after ms | Complete invocation peak before → after bytes |
+Zig 0.16.0 ReleaseSafe, Node 26.9.0 and M2 Pro/macOS 27.2 were used. Both kernels
+retain their pinned 256 MiB maximum memory profile; native replay uses a fixed
+256 MiB working buffer. Two windows rotate formats with no overlapping builds or
+benchmarks. Each window replays 180 successful canonical inputs per format:
+128 from the 13 scenarios and 52 from repeated inquiry. Every input has three
+warmups and nine samples, and every output must match its verified capture.
+
+Native clocks include full byte admission, execution and outcome production.
+Guest clocks include the public fresh API's kernel admission/setup, encoding,
+execution and decoding; captured input reconstruction must re-encode identically.
+File loading is outside the clocks. Guest formats run in separate Node processes.
+The table uses the second confirmation window and sums per-input medians. These
+are runtime replay totals, not whole-scenario time or request-tail statistics.
+
+| Scenario | Native BPI2 / BPC1 / BPI3 ms | Guest BPI2 / BPC1 / BPI3 ms | Native peak BPC1 → BPI3 bytes |
 | --- | ---: | ---: | ---: |
-| Reset repair | 84.72 → 60.28 | 199.65 → 146.40 | 2,863,966 → 1,993,377 |
-| Rebinding repair | 84.37 → 59.79 | 204.93 → 148.41 | 2,862,412 → 1,991,823 |
-| Already correct | 32.80 → 23.35 | 77.96 → 57.57 | 2,804,634 → 1,934,045 |
-| Inadequate | 22.01 → 15.77 | 51.32 → 38.27 | 2,758,428 → 1,887,839 |
+| reset inquiry | 541.13 / 537.38 / 174.79 | 657.59 / 656.37 / 331.96 | 1,853,961 → 1,724,731 |
+| reset react | 84.86 / 85.35 / 59.80 | 232.26 / 170.55 / 134.58 | 2,061,220 → 1,993,377 |
+| rebinding inquiry | 539.52 / 540.68 / 175.01 | 658.75 / 654.56 / 329.66 | 1,850,451 → 1,722,378 |
+| rebinding react | 84.91 / 85.41 / 59.66 | 171.16 / 170.86 / 133.96 | 2,058,801 → 1,991,823 |
+| already correct inquiry | 327.58 / 326.81 / 109.17 | 395.69 / 393.02 / 202.43 | 1,808,359 → 1,694,693 |
+| already correct react | 31.60 / 31.84 / 23.31 | 62.14 / 61.89 / 52.19 | 1,960,760 → 1,934,045 |
+| inadequate inquiry | 285.99 / 284.45 / 93.30 | 340.82 / 339.32 / 172.90 | 1,807,413 → 1,680,009 |
+| inadequate react | 21.43 / 21.58 / 15.82 | 39.78 / 39.90 / 34.79 | 1,891,577 → 1,887,839 |
+| react rejects subject | 14.28 / 14.31 / 11.34 | 26.84 / 26.78 / 24.91 | 1,885,905 → 1,888,028 |
+| react rejects key | 14.30 / 14.59 / 11.49 | 27.01 / 27.12 / 25.03 | 1,885,803 → 1,887,861 |
+| react rejects occurrence | 14.92 / 14.93 / 11.65 | 27.95 / 28.00 / 25.36 | 1,885,983 → 1,888,095 |
+| react rejects acceptance | 13.19 / 13.32 / 11.26 | 26.02 / 25.86 / 25.04 | 1,923,980 → 1,911,673 |
+| react inconclusive candidate | 18.94 / 19.13 / 15.12 | 36.46 / 36.86 / 33.52 | 1,916,537 → 1,906,982 |
+| repeated | 1641.65 / 1636.37 / 484.59 | 1853.93 / 1845.24 / 877.29 | 1,819,273 → 1,682,135 |
 
-ReAct improves about 29% natively and 26% in Node 26.9.0. Rejection/inconclusive
-cases also improve; inquiry timing is essentially unchanged. Native replay includes
-byte admission, execution and output. Guest replay includes fresh Kernel creation,
-invocation and outcome decoding; file loading and JavaScript import are outside
-the timer. Every input/output digest is checked. M2 Pro, macOS 27.2, Zig 0.16.0
-ReleaseSafe; no paid inference or live-model usefulness claim is made.
+The BPI2 reset-ReAct guest total varies from 170.72 to 232.26 ms between windows;
+BPC1 is 171.47 / 170.55 ms and BPI3 134.48 / 134.58 ms. The improvement claims
+below use the compact BPC1 comparator, not that slower BPI2 observation.
 
-The generic kernel is 462,261 bytes, SHA-256
+Both windows show paired inquiry about 3× faster natively and 2× in the guest;
+ReAct is 26–30% faster natively and 13–22% in the guest. Repeated inquiry improves
+about 3.4× / 2.1×. These measurements supersede the earlier ReAct and rejection-case
+latency regressions. They do not establish universal non-regression.
+
+Three rejection cases retain 2,058–2,123 bytes more peak memory than BPC1. The other
+scenario peaks are lower. Reset inquiry allocates 102,202,499 → 83,315,245 bytes;
+reset ReAct 62,555,152 → 61,326,169; repeated inquiry 212,133,017 → 177,311,733.
+These are complete invocation allocations, distinct from Session-only counters.
+Reset inquiry blob copies fall from 6,308,439 to 733,515 bytes; reset ReAct from
+5,709,609 to 591,854. Maximum scenario checkpoints grow by 18–79 bytes: reset
+inquiry is 48,999 → 49,025 bytes and reset ReAct 67,681 → 67,699 bytes.
+Normal BPI2 / BPC1 / BPI3 image sizes are inquiry 44,338 / 40,167 / 36,756,
+repeated 44,684 / 40,486 / 37,137, and ReAct 49,249 / 43,394 / 48,226 bytes.
+ReAct remains larger than BPC1; the specification's separate installation-image
+condition is satisfied, not replaced by a universal image-size claim.
+
+The kernel is 462,261 bytes, SHA-256
 adec1764555d7ac3638a6f414c009d3062766bc0635422e291ad4aeaa409e6c5.
-Boundary's dependency package is 1,390,465 bytes (181 files), or 281,831 compressed.
-World runtime contents are 518,961 bytes. Experimental evidence is excluded
-from packages; the adequacy obstruction and minimal reproducer remain.
+Boundary's dependency package is 1,390,465 bytes (281,831 compressed); World runtime
+contents are 518,961 bytes. No paid inference or live-model quality claim is made.
+The adequacy obstruction and its minimal reproducer remain intact.
 
-The BPC1 comparison below predates the compiler improvements above and does not
-establish final acceptance. The latest [World native comparison](https://github.com/tkersey/world/blob/9922062038109b918723f255709fefa8ea81c631/docs/compositional-execution.md)
-confirms large control/value gains while preserving the small-case and peak-memory
-failures. Installation64 timing ranges overlap BPC1, but its peak remains
-179,228 versus 121,956 bytes. ReAct's 48,226-byte image is still larger than BPC1's
-43,394 bytes. Final matched Agent/build confirmation and serial reviews remain open.
-
-The selected World now reclaims consumed sequence cursors early on 64-bit native
-storage, retaining live aliases and restoring collection policy on failed resident
-drives. Sequence64 native peak falls from 50,899 to 17,003 bytes. Some projection
-timings cost 1–5% more; final acceptance remains open. WASM preserves its existing
-schedule after early collection slowed long sequences. No new Agent timing gain
-is inferred from the standalone value benchmark.
-
-The latest runtime omits an immediately consumed closed callable on qualified
-64-bit native storage. Aliases, captured/linear callables and other uses retain
-ordinary construction. Fused execution charges both original work units; strict
-steps and bounded checkpoints agree. WASM uses ordinary execution after a guest
-regression excluded fusion there. All 128 Agent invocation inputs and outputs
-remain byte-identical, with unchanged peaks and only small mixed native/guest
-timing changes. No new Agent latency gain is claimed.
-
-## Preceding matched inquiry/ReAct comparison
-
-Agent 1f3297b / Boundary 42a09b9 / World d075169 (BPI2 and BPC1) were compared
-with Agent 4de8fff / Boundary 810ba69 / World e995dc9 (BPI3). That emitter
-used Boundary 3dc3413, whose production source is identical to its 810ba69 pin.
-The predecessor runtime matches its original full file inventory and kernel
-hash. Both native emitters use Zig 0.16.0 ReleaseSafe; the driver is Node 26.9.0
-on M2 Pro/macOS 27.2. Native replay uses a 256 MiB working buffer; both kernels
-retain their pinned 256 MiB maximum memory profile.
-
-The original assertions passed for 13 inquiry/ReAct scenarios and a four-turn
-repeated inquiry on all three formats. Successful invocations match native/Node;
-paired tasks and repeated inquiry additionally match Wasmtime.
-Task/result schemas are byte-identical. Model work, experiments, approval/write
-counts, observed results, recipients, cache reuse, explicit retirements and cleanup
-match. Repeated inquiry keeps 28 model calls, four experiments, eight cleanups,
-eight templates and 16 activations. Its completed-turn boundary stays at two nodes
-and one blob: 170 bytes in BPI2/BPC1 versus 174 in BPI3. Old-question rejection
-checks remain enabled. Changed internal transition counts are not normalized into
-a claim of identical machine execution.
-
-Two windows rotate all 180 successful canonical inputs per format (128 comparison
-inputs plus 52 repeated-task inputs). Each entry below sums per-input medians of
-nine fresh invocations after three warmups. Native timing includes the complete
-byte invocation; input-file loading is outside the clock. Guest timing uses each
-public fresh API, including kernel setup and encoding. Reconstructed guest inputs
-must re-encode byte-for-byte to their captured input, and every replay output must
-match its verified capture. This is runtime replay, not whole-scenario elapsed time
-or a request-tail statistic. Confirmation values follow.
-
-| Scenario | Native BPI2 / BPC1 / BPI3 ms | Guest BPI2 / BPC1 / BPI3 ms |
-|---|---:|---:|
-| paired-reset-inquiry | 536.14 / 534.57 / 193.22 | 670.19 / 669.26 / 375.86 |
-| paired-reset-react | 84.59 / 84.78 / 87.49 | 177.14 / 178.13 / 204.88 |
-| repeated | 1658.43 / 1652.34 / 552.92 | 1888.28 / 1884.83 / 1004.87 |
-
-Across the four paired tasks, inquiry improves about 2.7–2.8× natively and 1.7–1.8×
-in the guest; repeated inquiry improves about 3× / 1.9×. ReAct remains about 3–9%
-slower natively and 14–27% slower in the guest. The five binding/inconclusive cases
-remain about 13–27% / 30–39% slower. These unfavorable observations are not waived.
-
-Complete byte-invocation peaks are higher in BPI3: reset-inquiry is
-1,853,961 → 1,964,279 bytes, reset-ReAct 2,061,220 → 2,881,140, and repeated inquiry
-1,819,273 → 1,973,835. These include invocation framing and must not be confused
-with the preceding Session-only diagnostic counters. Main image sizes in
-BPI2 / BPC1 / BPI3 are inquiry 44,338 / 40,167 / 38,162; repeated 44,684 / 40,486 /
-38,561; ReAct 49,249 / 43,394 / 64,111 bytes. ReAct size, time and memory remain
-concrete optimization targets; no live-model quality or paid-inference claim is made.
-
-The small `tools/agent4/capture-inquiry.mjs` helper preserves the fixture assertions
-and accepts explicit source/runtime/native/inspector inputs. Use World's existing
-`build_replay_bench.zig` for native timing and file-backed stdin
-(`replay-bench OUTCOME_SHA256 < INPUT`). An interrupted piped-input window stalled
-in stdin reading before runtime execution; it was discarded and both final native
-windows used files. Raw captures and temporary predecessor installations are removed.
+Reproduce captures with `tools/agent4/capture-inquiry.mjs` and explicit frozen
+source/runtime/native/inspector paths. World's `build_replay_bench.zig` supplies
+native timing; use file-backed stdin (`replay-bench OUTCOME_SHA256 < INPUT`).
+The temporary build graphs only install existing inquiry/native/inspection tools;
+all other tracked Agent bytes match their declared revisions. Raw captures,
+profiles and temporary predecessor installations are not maintained.
 
 ## Current clarification comparison
 
@@ -204,13 +174,13 @@ local/global caches, then the emitted `agent4-component-objects` and
 The controlled edit changes `Application.increment` by one in
 `test/agent4/component_link.zig` without editing the emitter or components.
 The matched source-only emitter comparison is now available in
-[World’s current results](https://github.com/tkersey/world/blob/8fb2ff862be79621ebfee79f6b748458aca75deb/docs/compositional-execution.md#matched-native-build-costs): about 15.5 s
+[World’s current results](https://github.com/tkersey/world/blob/9922062038109b918723f255709fefa8ea81c631/docs/compositional-execution.md#remaining-acceptance-work): about 15.5 s
 versus 16.5 s with fresh Zig caches, while the full compiler/evaluator probe stays
 near 23 s on both versions. This does not establish all-application build gains.
 
-Remaining work includes those primary-workload regressions, the rest of the accepted
-workload matrix, serial reviews and the final
-requirement audit. Live-model usefulness remains unmeasured. No paid inference or
+Remaining work includes the reported peak-memory costs, the separate World
+small-case/control gaps, final clarification/build confirmation, serial reviews
+and the final requirement audit. Live-model usefulness remains unmeasured. No paid inference or
 real user-data operations were used to obtain the fixture results.
 
 The obsolete Boundary 1 / World 3 acquisition and conformance runners and their

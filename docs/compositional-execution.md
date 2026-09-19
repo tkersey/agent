@@ -85,11 +85,6 @@ measure native working peaks or replace the remaining inquiry/ReAct comparison.
 
 Reproduce with the existing `tools/agent4/benchmark-clarification.mjs`, explicit
 Agent source/runtime/image paths and a fresh output directory for every process.
-The earlier functional audit confirmed that capability-directed forwarding is
-covered by scoped-reader source agreement; the unused `forward` record form is
-rejected by both predecessor and successor admission. No current PR review threads
-were present at this audit. Serial review entry remains pending full realization
-and the required remaining performance proof.
 
 ## Component build costs
 

@@ -20,6 +20,13 @@ The economy run is functional-only and does not establish timing acceptance.
 
 ## Current results and unresolved failures
 
+World now reuses direct same-function tail frames without initialized ownership
+custody. Simultaneous arguments, stale-local clearing and copy-on-write views
+preserve retained continuations. The 256-iteration retained-loop control improves
+about 14–16% natively and 6–8% through fresh WASM in paired windows. Native peak
+falls 28,681 → 22,701 bytes and allocations 1,615 → 589. This is not an Agent
+latency claim; the kernel grows 675 bytes.
+
 World now reclaims unreachable storage before returning a yield or request. A
 one-element survivor from a 1 MiB input retains 8,182 working bytes rather than
 1,056,327, with the same 86-byte checkpoint. Live aliases, repeated export,
@@ -30,8 +37,8 @@ chargeable. This correctness fix adds about 1–5% to several tested
 suspension-heavy native controls; its performance cost remains open.
 
 
-The current kernel is 460,179 bytes with SHA-256
-`30f58a84f006bb9d4102d11aea340a81617becd8adb608bc5504b6e30d370240`.
+The current kernel is 460,854 bytes with SHA-256
+`5788520b6a11c9f59b602ec6cbebdb976116d176a7e417afc2258c08ee25968c`.
 Inquiry, repeated-task and ReAct images remain 38,162 / 38,561 / 64,111 bytes.
 
 Boundary now uses compact analysis-set storage on 64-bit native hosts while

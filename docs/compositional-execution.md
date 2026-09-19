@@ -20,31 +20,49 @@ The economy run is functional-only and does not establish timing acceptance.
 
 ## Current results and unresolved failures
 
-The normal dependency tuple now selects Boundary 2cf8d55 and World 6f29529.
-Boundary removes empty administrative jumps within a function and custody scope;
-assignments, cycles, real handlers and effects remain. Inquiry/repeated/ReAct
-images shrink to 36,861 / 37,242 / 63,151 bytes. All 13 inquiry/ReAct scenarios
-and the four-turn repeated inquiry pass their original assertions. Repeated
-inquiry still performs 28 model calls, four experiments and eight cleanups;
-each completed turn retains two nodes, one blob and a 174-byte checkpoint.
-Internal transition counts decrease, as permitted by the source contract.
+The normal tuple selects Boundary e6388d9 and World a609a1f. Boundary forwards
+fields from products constructed in the same block, only for copyable, droppable
+products. All operands and the product still evaluate in order. Mutable reads,
+unselected faults and malformed projections retain explicit regression coverage.
+Inquiry/repeated/ReAct images are 36,756 / 37,137 / 48,226 bytes. ReAct removes
+2,192 instructions and temporary slots, without changing application policy.
 
-The generic kernel is byte-identical at 462,033 bytes, SHA-256
+Two alternating native replay windows compare this compiler with Boundary 2cf8d55,
+using World 6f29529 / Agent e64697b and the same 128 captured invocations from
+13 scenarios. All protected result, model, experiment, approval, write, observation,
+reuse and cleanup fields match. Each process takes three warmups and nine samples;
+the figures below sum per-input medians, not whole-scenario elapsed time.
+
+| ReAct scenario | Native before → after ms | Guest before → after ms | Complete invocation peak before → after bytes |
+| --- | ---: | ---: | ---: |
+| Reset repair | 84.72 → 60.28 | 199.65 → 146.40 | 2,863,966 → 1,993,377 |
+| Rebinding repair | 84.37 → 59.79 | 204.93 → 148.41 | 2,862,412 → 1,991,823 |
+| Already correct | 32.80 → 23.35 | 77.96 → 57.57 | 2,804,634 → 1,934,045 |
+| Inadequate | 22.01 → 15.77 | 51.32 → 38.27 | 2,758,428 → 1,887,839 |
+
+ReAct improves about 29% natively and 26% in Node 26.9.0. Rejection/inconclusive
+cases also improve; inquiry timing is essentially unchanged. Native replay includes
+byte admission, execution and output. Guest replay includes fresh Kernel creation,
+invocation and outcome decoding; file loading and JavaScript import are outside
+the timer. Every input/output digest is checked. M2 Pro, macOS 27.2, Zig 0.16.0
+ReleaseSafe; no paid inference or live-model usefulness claim is made.
+
+The generic kernel remains byte-identical at 462,033 bytes, SHA-256
 070d13c899f1e084fc6b5e25223b0b938818204617e07c1ad13af9a396ebf4ad.
-Boundary's dependency package is 1,368,607 bytes (179 files), or 276,781 bytes
-compressed. World runtime contents remain 518,133 bytes. Experimental evidence
-is excluded from packages. The adequacy obstruction and minimal reproducer remain.
+Boundary's dependency package is 1,377,530 bytes (180 files), or 278,653 compressed.
+World runtime contents remain 518,133 bytes. Experimental evidence is excluded
+from packages; the adequacy obstruction and minimal reproducer remain.
 
-Four alternating native control windows show roughly 6–7% faster 64/128/256
-installations, with smaller images and working peaks. These are compiler-change
-probes, not a refreshed Agent latency comparison. Queens BFS improves about 4%
-but adds about 14 KB peak working memory; retained-loop timing is unchanged.
-
-The preceding matched predecessor comparison below still exposes unresolved
-small-control, ReAct latency/image-size and complete-invocation memory gaps.
-Its timings are attributed to the preceding source tuple and must be refreshed
-for final acceptance. No failure is waived, no serial review epoch has started,
-and no paid inference or live-model usefulness claim is made.
+The BPC1 comparison below predates these compiler changes. Its material ReAct,
+small-control and memory regressions are not waived; the final matched matrix
+must confirm their disposition. Four fresh alternating native control comparisons
+against Boundary 42a09b9 / World d075169 confirm that scalar and installation1/8/64
+remain slower. Installation64 takes 299–310 µs versus BPC1 258–263 µs, with
+190,649 versus 121,956 peak working bytes. Installation128/256 retain their
+time/memory improvements; all 64/128/256 images remain smaller than BPC1.
+These current regressions remain required work. The ReAct image remains larger than BPC1's
+43,394 bytes, while the specification's targeted installation-size condition is
+satisfied. Final performance acceptance and serial reviews remain open.
 
 ## Preceding matched inquiry/ReAct comparison
 

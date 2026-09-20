@@ -87,7 +87,7 @@ imported-borrow contracts, performance acceptance, or legacy retirement.
 
 ## Inspect a suspended execution
 
-Build the existing native inspector with `zig build build-inspector
+From an Agent source checkout, build the existing native inspector with `zig build build-inspector
 -Doptimize=ReleaseSafe`, then run:
 
 ```sh

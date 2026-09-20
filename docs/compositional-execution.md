@@ -3,7 +3,7 @@
 Agent 4.0.0-dev.0 consumes Boundary 3 and World 6 through the authenticated
 [dependency lock](../conformance/agent4/dependencies.lock.json). Authoring, approval,
 model/tool contracts, inquiry and reusable compiled tools remain product code.
-The successor remains incomplete; all linked PRs remain drafts.
+All linked PRs remain drafts; their live review/readiness status is authoritative.
 
 Current architecture, runtime and migration instructions are in
 [architecture.md](architecture.md), [agent4-runtime.md](agent4-runtime.md),
@@ -230,7 +230,7 @@ The September 19 amendment accepts the ten named native latency tradeoffs in
 The latency amendment alone did not accept memory, WASM or material Agent
 regressions. The standalone guest, inquiry/ReAct/repeated and clarification confirmations on
 Boundary 1b00c8c / World a20a285 are complete. The requirement audit's narrow
-inspector extension is implemented and tested; serial-review closeout remains. Existing
+inspector extension is implemented and tested; serial-review status is recorded in the linked PRs. Existing
 functionality is not reopened by older status prose or optional optimization ideas.
 
 The three rejection peaks increase by 2,058–2,123 bytes (about 0.11%); their full-invocation peaks are reproduced on the current tuple. Their precise

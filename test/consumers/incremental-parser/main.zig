@@ -7,7 +7,7 @@ const hyper = boundary.library.hyper;
 const parser = agent.parser_synthesis;
 const P = parser.proposals.Profile;
 const Id = source.Id;
-pub const Input = struct { subject: parser.Subject, model: P.Request, trace: parser.Trace, occurrence: u64, rounds: u64 };
+pub const Input = struct { subject: parser.Subject, model: P.Request, trace: parser.Trace, occurrence: u64, rounds: u64, target: agent.contracts.Text(256), principal: u64, apply: bool };
 const State = struct { input: Input, successor: bool, version: u64, remaining: u64, prior: ?Report, reference: ?parser.ReferenceReply };
 const Constraint = struct { state: State, observation: parser.ReferenceReply };
 const Constructed = struct { candidate: parser.Candidate, reference: parser.ReferenceReply };
@@ -17,6 +17,7 @@ pub const Contribution = union(enum(u32)) {
     candidate: Constructed = 1,
     assessed: Report = 2,
     unresolved: agent.contracts.Text(512) = 3,
+    delivered: agent.parser_delivery.Result = 4,
 };
 const Types = struct {
     input: Id,
@@ -97,8 +98,8 @@ fn referenceStep(b: *source.Builder, t: Types, state: Id) !Id {
     } } });
 }
 fn afterContribution(b: *source.Builder, t: Types, q: hyper.Query, value: Id, consumer: bool) !Id {
-    var cases: [4]struct { variable: Id, body: Id } = undefined;
-    const schemas = [_]Id{ try agent.contracts.schema(Constraint, b), try agent.contracts.schema(Constructed, b), try agent.contracts.schema(Report, b), try agent.contracts.schema(agent.contracts.Text(512), b) };
+    var cases: [5]struct { variable: Id, body: Id } = undefined;
+    const schemas = [_]Id{ try agent.contracts.schema(Constraint, b), try agent.contracts.schema(Constructed, b), try agent.contracts.schema(Report, b), try agent.contracts.schema(agent.contracts.Text(512), b), try agent.contracts.schema(agent.parser_delivery.Result, b) };
     for (schemas, 0..) |schema, index| {
         const variable = try b.variable(schema);
         var body = try unresolved(b, t, "Unexpected counterpart contribution.");
@@ -110,6 +111,7 @@ fn afterContribution(b: *source.Builder, t: Types, q: hyper.Query, value: Id, co
     return b.term(.{ .match_sum = .{ .value = value, .cases = &.{
         .{ .variable = cases[0].variable, .body = cases[0].body }, .{ .variable = cases[1].variable, .body = cases[1].body },
         .{ .variable = cases[2].variable, .body = cases[2].body }, .{ .variable = cases[3].variable, .body = cases[3].body },
+        .{ .variable = cases[4].variable, .body = cases[4].body },
     } } });
 }
 const Producer = struct {
@@ -260,7 +262,8 @@ const Application = struct {
         const p = try install(c, t, "producer", producer, t.pair.forward);
         const z = try install(c, t, "consumer", consumer, t.pair.backward);
         const acceptance = try c.external(parser.execution_identity, try c.schema(parser.ExecutionRequest), try c.schema(parser.ExecutionReply), .simulation);
-        const effects = &.{ t.model, t.reference, t.execution, acceptance };
+        const delivery = try agent.parser_delivery.define(c);
+        const effects = (try (source.Row{ .effects = &.{ t.model, t.reference, t.execution, acceptance } }).unionWith(b.allocator(), .{ .effects = delivery.effects })).effects;
         const round = try b.declare(&.{t.state}, t.contribution, effects, &.{});
         try c.registry.privateFunction(round);
         const state = try b.reference(b.parameter(round, 0));
@@ -271,7 +274,7 @@ const Application = struct {
         const delayed = try b.variable(t.pair.answer_backward);
         const task = try b.variable(t.task);
         const contribution = try b.variable(t.contribution);
-        const complete = try completion(c, t, round, acceptance, state, try b.reference(contribution));
+        const complete = try completion(c, t, round, acceptance, delivery, state, try b.reference(contribution));
         const run = try b.bind(delayed, try hyper.invoke(b, try b.reference(consumed), try b.lambda(peer, t.pair.peer_forward)), try b.bind(task, try hyper.force(b, try b.reference(delayed)), try b.bind(contribution, try hyper.force(b, try b.reference(task)), complete)));
         const next = try b.bind(consumed, try b.term(.{ .call = .{ .function = z, .arguments = &.{state} } }), run);
         try b.define(round, try b.bind(produced, try b.term(.{ .call = .{ .function = p, .arguments = &.{state} } }), next));
@@ -384,6 +387,7 @@ fn checkedReference(b: *source.Builder, t: Types, input: Id, value: Id) !Id {
         .{ .variable = try b.variable(try agent.contracts.schema(Constructed, b)), .body = wrong },
         .{ .variable = try b.variable(try agent.contracts.schema(Report, b)), .body = wrong },
         .{ .variable = try b.variable(try agent.contracts.schema(agent.contracts.Text(512), b)), .body = wrong },
+        .{ .variable = try b.variable(try agent.contracts.schema(agent.parser_delivery.Result, b)), .body = wrong },
     } } });
 }
 
@@ -498,7 +502,7 @@ fn completeAssessment(b: *source.Builder, t: Types, assessment: Id, finished: Id
     return b.term(.{ .conditional = .{ .condition = empty, .when_true = invalid, .when_false = complete } });
 }
 
-fn completion(c: agent.Context, t: Types, owner: Id, acceptance: Id, state: Id, value: Id) !Id {
+fn completion(c: agent.Context, t: Types, owner: Id, acceptance: Id, delivery: agent.parser_delivery.Definition, state: Id, value: Id) !Id {
     const b = c.builder;
     const candidate = try b.variable(try c.schema(Constructed));
     const report = try b.variable(try c.schema(Report));
@@ -509,12 +513,13 @@ fn completion(c: agent.Context, t: Types, owner: Id, acceptance: Id, state: Id, 
     const partial_report = try b.term(.{ .conditional = .{ .condition = is_partial, .when_true = try b.pure(value), .when_false = rejected } });
     return b.term(.{ .match_sum = .{ .value = value, .cases = &.{
         .{ .variable = try b.variable(try c.schema(Constraint)), .body = rejected },
-        .{ .variable = candidate, .body = try acceptCandidate(c, t, owner, acceptance, state, try b.reference(candidate)) },
+        .{ .variable = candidate, .body = try acceptCandidate(c, t, owner, acceptance, delivery, state, try b.reference(candidate)) },
         .{ .variable = report, .body = partial_report },
         .{ .variable = try b.variable(try c.schema(agent.contracts.Text(512))), .body = try b.pure(value) },
+        .{ .variable = try b.variable(try c.schema(agent.parser_delivery.Result)), .body = rejected },
     } } });
 }
-fn acceptCandidate(c: agent.Context, t: Types, owner: Id, acceptance: Id, state: Id, constructed: Id) !Id {
+fn acceptCandidate(c: agent.Context, t: Types, owner: Id, acceptance: Id, delivery: agent.parser_delivery.Definition, state: Id, constructed: Id) !Id {
     const b = c.builder;
     const input = try field(b, Input, state, 0);
     const candidate = try field(b, parser.Candidate, constructed, 0);
@@ -527,7 +532,7 @@ fn acceptCandidate(c: agent.Context, t: Types, owner: Id, acceptance: Id, state:
     const finished = try b.pure(try b.primitive(t.contribution, .variant, &.{report}, 2));
     const again = try retryCompletion(c, t, owner, input, constructed, report, finished);
     const assessment = try b.variable(try c.schema(parser.Assessment));
-    const assessed = try b.term(.{ .conditional = .{ .condition = try field(b, bool, try b.reference(assessment), 0), .when_true = try completeAssessment(b, t, try b.reference(assessment), finished), .when_false = again } });
+    const assessed = try b.term(.{ .conditional = .{ .condition = try field(b, bool, try b.reference(assessment), 0), .when_true = try completeAssessment(b, t, try b.reference(assessment), try deliverAccepted(c, t, owner, delivery, input, candidate, try b.reference(assessment))), .when_false = again } });
     const outcome = try field(b, @FieldType(parser.ExecutionReply, "outcome"), try b.reference(reply), 2);
     const inspected = try b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
         .{ .variable = try b.variable(try c.schema(parser.Probe)), .body = try unresolved(b, t, "Acceptance returned a probe.") },
@@ -583,3 +588,17 @@ const ForgedConsumer = struct {
         return b.pure(try b.lambda(description, q.types.answer_forward));
     }
 };
+
+fn deliverAccepted(c: agent.Context, t: Types, owner: Id, d: agent.parser_delivery.Definition, input: Id, candidate: Id, assessment: Id) !Id {
+    const b = c.builder;
+    const subject = try field(b, parser.Subject, input, 0);
+    const request = try b.primitive(try c.schema(agent.parser_delivery.Request), .product, &.{
+        try field(b, agent.contracts.Text(256), input, 5), try field(b, parser.Digest, subject, 0),
+        try field(b, parser.Code, candidate, 0),           try c.literal(agent.contracts.Text(4096), .{ .bytes = "Replace the fixture with this exact complete parser after required acceptance." }),
+    }, 0);
+    const proposal = try b.primitive(try c.schema(agent.parser_delivery.Proposal), .product, &.{
+        request, try field(b, u64, input, 6), subject, try field(b, u64, candidate, 1), assessment,
+    }, 0);
+    const result = try b.variable(try c.schema(agent.parser_delivery.Result));
+    return b.bind(result, try agent.parser_delivery.run(c, d, owner, proposal, try field(b, bool, input, 7)), try b.pure(try b.primitive(t.contribution, .variant, &.{try b.reference(result)}, 4)));
+}

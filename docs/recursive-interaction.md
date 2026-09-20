@@ -445,3 +445,44 @@ new negatives and re-entry case. Firefox verification of this newest boundary is
 not rerun here; its earlier repair/transfer evidence is scoped to the earlier
 Program. Live-target evidence, approval and conditional fixture replacement remain
 the next authority-bearing implementation steps.
+
+## Live target, exact approval and conditional application
+
+Successful private acceptance now enters `agent.parser_delivery`. It reuses the
+existing observation evidence resource and approval owner, then the existing
+repository/document conditional replacement implementation. The exact proposal
+binds target path/base/source, required principal, frozen subject, candidate version
+and acceptance data. Neither the private delivery function nor its approval/write
+effects are exported to exploratory participant objects. Incoming participant
+delivery claims are rejected by the completion boundary.
+
+A current target read is required even for artifact-only output. The resulting
+one-shot live evidence is either consumed for a reviewable artifact or passed to
+the exact approval construction. Wrong principals and amendments are denied; an
+amendment cannot inherit validation. The file adapter permits only `parser.mjs`
+inside its explicitly supplied fixture root, delegates conditional replacement to
+the existing file owner, and never retries uncertain delivery.
+
+The isolated delivery Program passed seven real-file cases: artifact-only, approved,
+declined, wrong principal, amended source, changed target before read and changed
+target during approval. Only the approved case replaced content. A change during
+approval reached the conditional operation but produced a conflict without replacing
+that external change. All cases resumed from actual saved State at each boundary.
+
+The integrated synthesis/repair/acceptance/approval run also passed. Its 14,223-byte
+Program executes two model requests, refutes version 1, fully accepts version 2,
+reads the live target once, obtains one exact approval and applies the expected
+candidate once. Native, Node/WASM, Wasmtime and Chromium Worker outcomes agree;
+there are twenty transfers and twenty-one destroyed Workers. The qualified executor
+runs 539 candidate processes plus two qualification executions. Provider and
+principal responses are explicitly synthetic fixture responses; no paid inference
+or real-user-data mutation occurs.
+
+`zig build check` passes 269 steps / 123 tests. Reproduce the standalone gate with
+`zig build parser-delivery-images` and
+`node test/agent4/parser_delivery.mjs WORLD_ENTRY KERNEL`. The integrated driver
+accepts `apply` as its final scenario argument; `repair` returns the reviewable
+artifact after live read. Firefox has not been rerun for this newest delivery
+Program. General owned-channel/local cleanup work, intent ambiguity, generic
+assessment selection, broader proof/failure sweeps, strategy/runtime comparisons,
+opt-in live configuration and serial reviews remain unfinished.

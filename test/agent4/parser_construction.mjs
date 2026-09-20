@@ -1,6 +1,9 @@
 // Environmental leaves only. Reciprocal ordering and candidate state live in BPI3.
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {readFile,mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {createParserDelivery} from '../../runtime/parser_delivery.mjs';
 import {createHash} from 'node:crypto';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -22,7 +25,11 @@ const subject=tools.subject(hash(tools.evidence.reference));
 const trace=[[[92],false],[[110,10],false],[[],true]];
 model[3].push([2,`Concrete consumer trace: ${JSON.stringify(trace)}`]);
 const rounds=scenario==='zero'?0n:scenario==='one'?1n:scenario==='full-repair'?3n:2n;
-const input=[subject,model,trace,17n,rounds];
+const area=await mkdtemp(join(tmpdir(),'parser-synthesis-'));
+await writeFile(join(area,'parser.mjs'),tools.evidence.reference);
+const delivery=await createParserDelivery({root:area});
+const apply=['apply','decline','changed-approval'].includes(scenario);
+const input=[subject,model,trace,17n,rounds,'parser.mjs',7n,apply];
 const kernelBytes=new Uint8Array(await readFile(kernelPath)),expectedSha256=hash(kernelBytes);
 const peer=peerPath?await(await import(pathToFileURL(resolve(peerPath)))).wasmtimePeer(resolve(kernelPath),expectedSha256):null;
 let browser;
@@ -31,7 +38,7 @@ if(browserTools)browser=await(await import('./recursive_browser.mjs')).browserPe
 let identity=1n;const fresh=()=>Kernel.create({bytes:kernelBytes,expectedSha256,instanceId:identity++});
 let k=await fresh(),p=k.prepare(image),s=k.start(p,encodeValue(inputSchema,input));k.releasePrepared(p);
 let control='none',value=new Uint8Array(),transfers=0;const events=[],engines=[];
-let result,modelCalls=0,probeFailed=false,fullAccepted=false;
+let result,modelCalls=0,probeFailed=false,fullAccepted=false,targetReads=0,approvals=0,writes=0;
 for(let round=0;;round++) {
   assert.ok(round<128);
   const invocation={image,state:k.checkpoint(s),control,value,quantum:100};
@@ -80,6 +87,18 @@ for(let round=0;;round++) {
         assert.deepEqual(reply[2].value[0],[[[],0,{tag:0,value:null}],[[],0,{tag:0,value:null}],[[[[10]]],1,{tag:0,value:null}]]);
       } else {assert.equal(reply[2].tag,1);const passed=!(scenario==='full-repair'&&modelCalls===2);assert.equal(reply[2].value[0],passed);fullAccepted=passed&&scenario!=='incomplete';}
       console.log(JSON.stringify({candidateVersion:modelCalls,check:reply[2].tag,passed:reply[2].value[reply[2].tag===0?1:0]}));
+    } else if(request.semanticIdentity==='agent.parser.target-read.v1') {
+      assert.equal(fullAccepted,true);targetReads++;
+      if(scenario==='changed-base')await writeFile(join(area,'parser.mjs'),'external change');
+      reply=await delivery.read(payload);
+    } else if(request.semanticIdentity==='agent.approval.issue.v1.parser.replace') {
+      assert.equal(fullAccepted,true);assert.equal(targetReads,1);reply=41n;
+    } else if(request.semanticIdentity==='agent.interaction.exchange.v1.parser.replace') {
+      approvals++;assert.equal(payload[3][0],41n);
+      if(scenario==='changed-approval')await writeFile(join(area,'parser.mjs'),'external change');
+      reply={tag:0,value:[payload[3],7n,scenario==='decline'?{tag:1,value:'declined'}:{tag:0,value:null}]};
+    } else if(request.semanticIdentity==='agent.parser.replace.v1') {
+      writes++;assert.equal(approvals,1);reply=await delivery.replace(payload);
     } else throw Error('undeclared leaf');
     control='reply';value=await encodeResult(out.request,encodeValue(decodeSchema(request.resumeSchema),reply));
   } else {control='none';value=new Uint8Array();}
@@ -90,15 +109,23 @@ if(scenario==='forged'){assert.equal(result.tag,3);assert.match(result.value,/do
 else if(rounds===0n){assert.equal(result.tag,3);assert.equal(events.length,0);}
 else if(scenario==='incomplete'){assert.equal(result.tag,3);assert.match(result.value,/incomplete or inconsistent/);assert.equal(fullAccepted,false);}
 else {
-  assert.equal(result.tag,2);
-  assert.equal(result.value[0][0],rounds===1n?bufferUntilEOF:decodedFields);
-  assert.equal(result.value[0][1],rounds);
-  assert.equal(result.value[0][2],rounds===1n?0:1);
-  assert.equal(result.value[1][2].tag,rounds===1n?0:1);
+  if(rounds===1n) {
+    assert.equal(result.tag,2);assert.equal(result.value[0][0],bufferUntilEOF);
+    assert.equal(result.value[0][2],0);assert.equal(result.value[1][2].tag,0);
+  } else {
+    assert.equal(result.tag,4);assert.equal(targetReads,1);
+    if(scenario==='apply'){assert.equal(result.value.tag,0);assert.equal(result.value.value.tag,0);assert.equal(writes,1);}
+    else if(scenario==='decline'){assert.equal(result.value.tag,1);assert.equal(writes,0);}
+    else if(scenario==='changed-base'){assert.equal(result.value.tag,5);assert.equal(approvals,0);assert.equal(writes,0);}
+    else if(scenario==='changed-approval'){assert.equal(result.value.tag,0);assert.equal(result.value.value.tag,1);}
+    else {assert.equal(result.value.tag,4);assert.equal(writes,0);assert.equal(result.value.value[0][2],decodedFields);}
+  }
   assert.equal(fullAccepted,rounds>1n);
-  assert.equal(events.filter(x=>x==='agent.parser.reference.v1').length,1,'reference evidence should be reused');
+  assert.equal(events.filter(x=>x==='agent.parser.reference.v1').length,1);
   assert.equal(modelCalls,Number(rounds));
 }
-console.log(JSON.stringify({imageBytes:image.length,events,transfers,engines,browser:browser?.identity,workersDestroyed:browser?.workersDestroyed,rounds:Number(rounds),modelCalls,fullAccepted,
+const current=await readFile(join(area,'parser.mjs'),'utf8');
+assert.equal(current,scenario==='apply'?decodedFields:['changed-base','changed-approval'].includes(scenario)?'external change':tools.evidence.reference);
+console.log(JSON.stringify({imageBytes:image.length,events,transfers,engines,browser:browser?.identity,workersDestroyed:browser?.workersDestroyed,rounds:Number(rounds),modelCalls,fullAccepted,targetReads,approvals,writes,
   counterexampleObserved:probeFailed,metrics:tools.metrics(),paidProviderCalls:0}));
-} finally {if(browser)await browser.close();if(peer)await peer.close();}
+} finally {await rm(area,{recursive:true,force:true});if(browser)await browser.close();if(peer)await peer.close();}

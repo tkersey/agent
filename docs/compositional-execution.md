@@ -151,8 +151,25 @@ experiments, eight cleanups, eight templates and 16 activations; every completed
 turn retains two nodes and one blob, with no resources, cells or obligations.
 
 The cumulative tables above retain their stated World a20a285 subject. A targeted
-before/after timing follow-up is still in progress; they are not silently rebound
-to the repair. Fresh World review closeout follows qualification. The requested
+before/after follow-up compares Agent 97b4265 / World a20a285 with Agent ea6e4fd /
+World 02846a4, holding Boundary 1b00c8c, images, policy, capacities and toolchains
+fixed. All 180 captured inputs and outputs match byte for byte. Timing selects the
+three predeclared representative paths (90 inputs), with two isolated rotating
+windows, three warmups and nine samples per input. Native replay uses file-backed
+stdin; guest clocks include the full public fresh-kernel path. File loading and
+capture are outside clocks, and no builds or benchmarks overlap.
+
+| Path | Native ms before → after (windows 1; 2) | Guest ms before → after (windows 1; 2) |
+| --- | ---: | ---: |
+| paired-reset-inquiry | 168.94 → 168.92; 172.31 → 171.63 | 313.33 → 313.49; 312.53 → 313.11 |
+| paired-reset-react | 58.20 → 58.64; 58.90 → 58.64 | 132.39 → 132.93; 132.95 → 132.58 |
+| repeated | 464.27 → 467.02; 473.60 → 473.14 | 820.66 → 822.30; 826.01 → 822.79 |
+
+Native peaks and allocated-byte totals are identical on all three paths. Timing
+changes are small and mixed; no speedup is claimed for the correctness repair.
+These observations preserve the established application gains without replacing
+the optimized BPC1 anchors or claiming a new exhaustive BPC1 matrix. Fresh World
+review closeout follows qualification. The requested
 Boundary rerun then includes one standard review and all five auxiliary lenses;
 Agent's own review sequence remains required. Named economic tradeoffs remain
 accepted, without waiving new correctness defects or material regressions.

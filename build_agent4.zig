@@ -111,6 +111,13 @@ pub fn build(b: *std.Build) void {
     const participants = b.step("check-participants", "Check compiled internal participant admission");
     g.testModule(participants, g.module("test/agent4/participant.zig"));
     check.dependOn(participants);
+    const parser_tools = b.step("check-parser-tools", "Check typed parser tool bindings");
+    g.testModule(parser_tools, g.module("test/agent4/parser_tools.zig"));
+    check.dependOn(parser_tools);
+    const parser_schema = g.emitter("parser-schema", g.module("test/agent4/parser_tools.zig"));
+    g.emit(parser_tools, parser_schema, &.{"program"}, "parser/program.bpi3");
+    for ([_][]const u8{ "reference-request", "reference-reply", "execution-request", "execution-reply" }) |mode|
+        g.emit(parser_tools, parser_schema, &.{mode}, b.fmt("parser/{s}.bin", .{mode}));
     const parser_oracle = b.addSystemCommand(&.{ "node", "--test", "test/agent4/parser_oracle.test.mjs" });
     check.dependOn(&parser_oracle.step);
     const parser_executor = b.addSystemCommand(&.{ "node", "test/agent4/parser_executor.test.mjs" });

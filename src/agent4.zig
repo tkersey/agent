@@ -11,6 +11,7 @@ pub const admission = @import("admission.zig");
 pub const catalogs = @import("catalogs.zig");
 pub const callable = @import("callable.zig");
 pub const participant = @import("participant.zig");
+pub const parser_synthesis = @import("parser_synthesis.zig");
 pub const observation = @import("observation.zig");
 pub const responders = @import("responders.zig");
 pub const decision = @import("decision.zig");

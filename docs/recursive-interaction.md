@@ -260,3 +260,37 @@ waiver. The World kernel and its data/runtime implementation are unchanged. The
 existing native fixture binary (compiled against Boundary b604ae8 data) was reused
 because no Boundary data or World runtime code changed. Both consumer variants
 and the complete four-engine double-consumer/cancellation cases were rerun.
+
+## Parser application protocol and bound tool calls
+
+`agent.parser_synthesis` now defines ordinary typed Subject, Candidate, Trace,
+Observation, Probe and Assessment values. Candidate completeness is separate from
+validation and confers no approval or delivery authority. The subject binds the
+source base, actual reference/requirements digests, executor identity and required
+acceptance contract. Reference requests omit candidate code; execution requests
+carry the exact source/version, occurrence and probe-or-acceptance operation.
+
+`runtime/parser_tools.mjs` implements only the declared read/simulation leaves.
+It verifies frozen subject inputs before execution and checks the actual executor's
+source, trace, runner and contract bindings. Partial candidates cannot request
+final acceptance. Malformed observations and output-capacity exhaustion remain
+explicit unavailable results, not truncated evidence or false success. Test-only
+candidate implementations remain outside production imports.
+
+The staged `parser_synthesis.execute` helper checks returned occurrence, candidate
+version, operation kind and completeness after World's complete request-envelope
+binding. The emitted 463-byte integration Program was executed through fresh
+World recovery with a real qualified parser probe. Correct and unavailable replies
+return their distinct data; wrong occurrences, versions, operations, stale
+unavailable replies and partial-candidate assessment claims take the authored
+failure path. This helper is not itself a trusted validation token or approval
+construction; the full consumer and delivery path remain required.
+
+`zig build check-parser-tools` builds the normal Agent integration and emits its
+portable request/reply schemas. `node test/agent4/parser_tools.test.mjs` passed
+reference/probe round-trips, partial acceptance rejection, actual reject-all
+assessment, wrong-subject rejection, capacity handling and malformed output cases
+(three candidate executions, two qualification executions). The seven World reply
+binding cases in `test/agent4/parser_tools_world.mjs WORLD_ENTRY KERNEL` passed
+with one real candidate probe. No model-driven parser controller, target write,
+or live inference is claimed by this protocol slice.

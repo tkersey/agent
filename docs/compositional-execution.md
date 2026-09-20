@@ -157,49 +157,58 @@ Agent source/runtime/image paths and a fresh output directory for every process.
 
 ## Component build costs
 
-The existing `build-component-tools` and `component_runtime.mjs` witness was
-measured in an isolated copy of Agent 08b6185, using Boundary 3b8a69f and the
-normal authenticated source override. Zig 0.16.0 ReleaseSafe, Node 26.9.0,
-Apple M2 Pro and macOS 27.2 were used. These new Node process measurements are
-separate from the earlier Node 26.8.2 runtime qualification.
+The build lanes were refreshed on Agent a9d1028 / Boundary 6c59436, using the normal
+authenticated source override and World 2a87702 for behavior checks. Zig 0.16.0
+ReleaseSafe, Node 26.9.0, M2 Pro and macOS 27.2 were held fixed. Native builds used
+two separate empty local/global Zig caches. They are cache-cold observations, not
+claims about OS-cold filesystem caches or all applications.
 
-| Operation | Observed elapsed time |
-|---|---:|
-| Build both tools with empty local/global Zig caches | 22.49 s |
-| Warm unchanged native build, including source authentication | 0.343 s |
-| Native client-only source edit and rebuild | 14.95 s |
-| Rebuild one state component with the existing emitter | 2.24 ms |
-| Link immutable components without source checking/lowering | 2.57 ms |
-| Compile/check one Agent client and link reused components | 2.82 ms |
-| Compile the next client variant with existing tools | 2.81 ms |
+| Operation | Current observations |
+| --- | ---: |
+| Build component emitter and client/linker | 22.56–23.26 s |
+| Warm unchanged build, including source authentication | 0.332–0.345 s |
+| Controlled client-only native rebuild | 15.01–15.02 s |
+| Rebuild one state component with the built emitter | 2.21–2.22 ms |
+| Link immutable components without source checking/lowering | 2.43–2.52 ms |
+| Compile/check one Agent client and link reused components | 2.79–2.82 ms |
+| Compile the next client variant with existing tools | 2.77–2.84 ms |
 
-Native build rows are single observations, not statistical speed claims or
-OS-cold filesystem measurements. Process rows are medians of nine rotating
-observations after three warmups and include process startup and file I/O.
-The client source edit adds one to its authored result: fresh WASM execution of
-the fixture produces 184/185 instead of 183/184. Standalone results remain 83/166,
-and yield, cleanup and cancellation expectations pass before and after the edit.
+Native cold/edit rows have one observation per window; warm builds have three.
+Process rows give medians from two windows, each with nine rotating observations
+after three warmups. They include process startup and file I/O, not request-tail
+statistics. No builds or benchmarks overlapped.
 
-The native build log shows the component emitter cached while only the client/link
-executable recompiles. Its executable bytes and all four BMO1 objects remain
-unchanged (147 / 375 / 612 / 195 bytes). Link-only modes observe zero source checks
-and lowerings; each Agent-client mode observes exactly one of each. No unchanged
-component is re-emitted during the client edit. Thus component reuse removes
-repeated component compilation, but native client recompilation still costs
-seconds. The millisecond linker does not account for or excuse that cost.
+The valid client edit widens the increment to u64 before adding one. Its native
+build leaves the component emitter cached and byte-identical while recompiling
+the client/linker. The edited executable then links the existing four BMO1 files
+with no emitter available: zero component emissions, zero source checks/lowerings
+for standalone links, and exactly one check/lowering per Agent client. All object
+bytes remain unchanged (147 / 375 / 612 / 195 bytes). Fresh-kernel execution yields
+184/185 for edited Agent clients versus 183/184 originally; standalone 83/166,
+yielding, release payloads, cleanup and cancellation assertions remain unchanged.
 
-Reproduce with `zig build build-component-tools -Doptimize=ReleaseSafe`, isolated
-local/global caches, then the emitted `agent4-component-objects` and
-`agent4-component-link` modes exercised in `test/agent4/component_runtime.mjs`.
-The controlled edit changes `Application.increment` by one in
-`test/agent4/component_link.zig` without editing the emitter or components.
-The matched source-only emitter comparison is now available in
-[World’s current results](https://github.com/tkersey/world/blob/9922062038109b918723f255709fefa8ea81c631/docs/compositional-execution.md#remaining-acceptance-work): about 15.5 s
-versus 16.5 s with fresh Zig caches, while the full compiler/evaluator probe stays
-near 23 s on both versions. This does not establish all-application build gains.
+The matched source-only installation64 producer compares Boundary 42a09b9 BPC1
+with 6c59436 BPI3 through World's existing producer probe. Two windows reverse
+build order and use fresh Zig caches: build plus first emission takes 16.45–17.38 s
+for BPC1 and 16.62–16.89 s for BPI3. Those ranges overlap; no consistent cold-build
+gain is established. The images remain 2,805 / 2,241 bytes.
+
+For an already-built installation256 producer, two alternating process windows
+(three warmups, nine samples per side) give medians 29.45 / 29.38 ms for BPC1 and
+4.46 / 4.42 ms for BPI3. Complete images are 12,102 / 9,551 bytes. This emission
+improvement does not account for native compiler build time.
+
+Reproduce the component lane with `zig build build-component-tools
+-Doptimize=ReleaseSafe`, isolated caches and the modes in
+`test/agent4/component_runtime.mjs`. The controlled edit changes
+`Application.increment` to `@as(u64, 1) + @intFromBool(...)`; it does not edit
+components or the emitter. The producer lane uses World's
+`test/v2/build_execution_bench.zig -Dproducer-only=true` and `producer-bench COUNT`.
+These results establish component reuse and the stated build costs, not an
+all-application cold-build improvement.
 
 Remaining work includes the reported peak-memory costs, the separate World
-small-case/control gaps, final clarification/build confirmation, serial reviews
+small-case/control gaps, final clarification confirmation, serial reviews
 and the final requirement audit. Live-model usefulness remains unmeasured. No paid inference or
 real user-data operations were used to obtain the fixture results.
 

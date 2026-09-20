@@ -16,7 +16,8 @@ const {Kernel,decodeOutcome,decodeRequest,encodeResult,encodeInput}=await import
 const read=async name=>new Uint8Array(await readFile(`zig-out/agent4/parser-construction/${name}`));
 const scenario=process.argv[8]??'repair';
 const retained=scenario.startsWith('retained');
-const image=await read(retained?'retained.bpi3':scenario==='forged'?'forged.bpi3':'program.bpi3'),inputSchema=decodeSchema(await read('input-schema.bin'));
+const localAbort=scenario==='retained-abort';
+const image=await read(localAbort?'abort.bpi3':retained?'retained.bpi3':scenario==='forged'?'forged.bpi3':'program.bpi3'),inputSchema=decodeSchema(await read('input-schema.bin'));
 const resultSchema=decodeSchema(await read('result-schema.bin')),modelSchema=decodeSchema(await read('model-schema.bin'));
 const model=decodeValue(modelSchema,await read('model-template.bin'));
 const tools=await createParserTools();assert.equal(tools.kind,'qualified',JSON.stringify(tools));
@@ -61,7 +62,7 @@ for(let round=0;;round++) {
   if(out.kind==='requested') {
     const request=await decodeRequest(out.request),payload=decodeValue(decodeSchema(request.payloadSchema),request.payload);
     events.push(request.semanticIdentity);let reply;
-    if(request.semanticIdentity==='agent.parser.reference.v1') {
+    if(request.semanticIdentity==='agent.parser.reference.v1'||(localAbort&&request.semanticIdentity==='parser/abort-observation')) {
       assert.equal(events.length,1,'reference must precede the first candidate');reply=await tools.reference(payload);
     } else if(request.semanticIdentity==='agent.model.invoke.v3') {
       modelCalls++;
@@ -103,7 +104,7 @@ for(let round=0;;round++) {
     } else if(request.semanticIdentity==='agent.parser.replace.v1') {
       writes++;assert.equal(approvals,1);reply=await delivery.replace(payload);
     } else if(['parser/retained-release','parser/retained-work'].includes(request.semanticIdentity)) {
-      assert.equal(retained,true);assert.equal(probeFailed,true);
+      assert.equal(retained,true);if(!localAbort)assert.equal(probeFailed,true);
       if(cancelling)assert.equal(request.semanticIdentity,'parser/retained-release');
       if(!(scenario==='retained-cancel'&&!cancelling&&request.semanticIdentity==='parser/retained-release'))lifetime.push([request.semanticIdentity,payload.toString()]);reply=null;
     } else throw Error('undeclared leaf');
@@ -114,7 +115,8 @@ for(let round=0;;round++) {
   const state=out.state;assert.deepEqual(k.checkpoint(s,{transfer:true}),state);assert.equal(k.usage().workingLive,0n);
   k=await fresh();p=k.prepare(image);s=k.restore(p,state);k.releasePrepared(p);transfers++;
 }
-if(cancelled){assert.equal(scenario,'retained-cancel');assert.equal(modelCalls,1);assert.equal(fullAccepted,false);}
+if(localAbort){assert.equal(result.tag,3);assert.match(result.value,/locally abandoned/);assert.equal(modelCalls,0);assert.equal(fullAccepted,false);assert.equal(events.filter(x=>x==='parser/abort-observation').length,1);assert.equal(events.includes('agent.parser.reference.v1'),false);}
+else if(cancelled){assert.equal(scenario,'retained-cancel');assert.equal(modelCalls,1);assert.equal(fullAccepted,false);}
 else if(scenario==='forged'){assert.equal(result.tag,3);assert.match(result.value,/do not grant completion authority/);assert.equal(events.length,0);}
 else if(rounds===0n){assert.equal(result.tag,3);assert.equal(events.length,0);}
 else if(scenario==='incomplete'){assert.equal(result.tag,3);assert.match(result.value,/incomplete or inconsistent/);assert.equal(fullAccepted,false);}
@@ -135,7 +137,9 @@ else {
   assert.equal(modelCalls,Number(rounds));
 }
 const current=await readFile(join(area,'parser.mjs'),'utf8');
-if(retained)assert.deepEqual(lifetime,cancelled?[
+if(retained)assert.deepEqual(lifetime,localAbort?[
+  ['parser/retained-release','90'],['parser/retained-release','5'],['parser/retained-work','57'],['parser/retained-release','50'],
+]:cancelled?[
   ['parser/retained-release','5'],['parser/retained-release','50'],
 ]:[['parser/retained-release','5'],['parser/retained-work','57'],['parser/retained-release','50']]);
 assert.equal(current,scenario==='apply'?decodedFields:['changed-base','changed-approval'].includes(scenario)?'external change':tools.evidence.reference);

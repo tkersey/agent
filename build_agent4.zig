@@ -150,6 +150,15 @@ pub fn build(b: *std.Build) void {
     retained_link.addFileArg(parser_consumer_bytes);
     retained_link.addFileArg(parser_reference_bytes);
     parser_episode.dependOn(&b.addInstallFileWithDir(retained_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/retained.bpi3").step);
+    const abort_link = b.addRunArtifact(parser_app);
+    abort_link.addArg("link-abort");
+    abort_link.addFileArg(parser_producer_bytes);
+    abort_link.addFileArg(parser_consumer_bytes);
+    abort_link.addFileArg(parser_reference_bytes);
+    // Intended-valid local-disposal witness. Kept explicit while cross-component
+    // capture-schema binding is missing; this step currently rejects at linking.
+    const parser_abort = b.step("parser-abort-image", "Expose nested local-disposal admission gap (currently rejects)");
+    parser_abort.dependOn(&b.addInstallFileWithDir(abort_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/abort.bpi3").step);
     const forged_consumer = b.addRunArtifact(parser_app);
     forged_consumer.addArg("consumer-forged");
     const forged_link = b.addRunArtifact(parser_app);

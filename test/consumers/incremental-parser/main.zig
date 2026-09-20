@@ -247,6 +247,7 @@ fn defineProbe(c: agent.Context, t: Types) !void {
 
 const Application = struct {
     var retain_idle = false;
+    var abort_nested = false;
     var producer: []const u8 = &.{};
     var consumer: []const u8 = &.{};
     var reference_bytes: []const u8 = &.{};
@@ -266,7 +267,9 @@ const Application = struct {
         const delivery = try agent.parser_delivery.define(c);
         const core_effects = (try (source.Row{ .effects = &.{ t.model, t.reference, t.execution, acceptance } }).unionWith(b.allocator(), .{ .effects = delivery.effects })).effects;
         const idle = if (retain_idle) try Retained.init(c) else null;
-        const effects = if (idle) |owned| (try (source.Row{ .effects = core_effects }).unionWith(b.allocator(), .{ .effects = &.{ owned.release, owned.activity } })).effects else core_effects;
+        const retained_effects = if (idle) |owned| (try (source.Row{ .effects = core_effects }).unionWith(b.allocator(), .{ .effects = &.{ owned.release, owned.activity } })).effects else core_effects;
+        const observation = if (abort_nested) try c.external("parser/abort-observation", try c.schema(parser.ReferenceRequest), try c.schema(parser.ReferenceReply), .read) else null;
+        const effects = if (observation) |leaf| (try (source.Row{ .effects = retained_effects }).unionWith(b.allocator(), .{ .effects = &.{leaf} })).effects else retained_effects;
         const round = try b.declare(&.{t.state}, t.contribution, effects, &.{});
         try c.registry.privateFunction(round);
         const state = try b.reference(b.parameter(round, 0));
@@ -285,8 +288,9 @@ const Application = struct {
         const input = try b.reference(b.parameter(entry, 0));
         const initial = try b.primitive(t.state, .product, &.{ input, try b.constant(bool, false), try b.constant(u64, 1), try field(b, u64, input, 4), try literal(b, ?Report, null), try literal(b, ?parser.ReferenceReply, null) }, 0);
         const call = try b.term(.{ .call = .{ .function = round, .arguments = &.{initial} } });
-        try c.registry.allowPrivateCall(entry, call, round);
-        try b.define(entry, if (idle) |owned| try owned.around(b, t.contribution, call) else call);
+        const scoped = if (abort_nested) try abortAtReference(c, t, round, call, effects, idle.?.release, observation.?, idle.?.g.package) else call;
+        if (!abort_nested) try c.registry.allowPrivateCall(entry, call, round);
+        try b.define(entry, if (idle) |owned| try owned.around(b, t.contribution, scoped) else scoped);
         return b.module(entry, try b.scalar(void));
     }
 };
@@ -301,6 +305,48 @@ fn install(c: agent.Context, t: Types, name: []const u8, bytes: []const u8, resu
         .functions = &.{ .{ .symbol = "reference-factory", .function = t.reference_factory }, .{ .symbol = "sample", .function = t.sample }, .{ .symbol = "probe", .function = t.probe } },
     });
 }
+// Capture the actual nested reference requester and abandon that delimited
+// computation after its environmental observation. Disposal itself can suspend.
+fn abortAtReference(c: agent.Context, t: Types, owner: Id, call: Id, effects: []const Id, release: Id, observation: Id, sibling: Id) !Id {
+    const b = c.builder;
+    const unit = try b.scalar(void);
+    const payload = try c.schema(parser.ReferenceRequest);
+    const reply = try c.schema(parser.ReferenceReply);
+    const capability = try b.schema(.{ .internal = .{ .capability = t.reference } });
+    const captures = &.{ t.input, t.state, t.contribution, t.task, t.pair.forward, t.pair.backward, t.pair.peer_forward, t.pair.peer_backward, t.pair.answer_forward, t.pair.answer_backward, capability, sibling };
+    const token = try b.schema(.{ .internal = .{ .resumption = .{
+        .effect = t.reference,
+        .input = reply,
+        .answer = t.contribution,
+        .effects = effects,
+        .capture_bound = captures,
+        .handled = &.{t.reference},
+        .mode = .deep,
+        .use = .linear,
+        .obligations = true,
+    } } });
+    const returns = try b.declare(&.{t.contribution}, t.contribution, &.{}, &.{});
+    try b.define(returns, try b.pure(try b.reference(b.parameter(returns, 0))));
+    const clause = try b.declare(&.{ payload, token }, t.contribution, effects, &.{});
+    const observed = try b.term(.{ .perform = .{ .effect = observation, .payload = try b.reference(b.parameter(clause, 0)) } });
+    const dispose = try b.term(.{ .dispose = try b.reference(b.parameter(clause, 1)) });
+    const stopped = try unresolved(b, t, "Nested parser work was locally abandoned after its reference observation.");
+    try b.define(clause, try b.bind(try b.variable(reply), observed, try b.bind(try b.variable(unit), dispose, stopped)));
+    const handler = try b.handler(.{ .mode = .deep, .input = t.contribution, .answer = t.contribution, .return_function = returns, .effects = effects, .clauses = &.{.{ .effect = t.reference, .function = clause, .resumption = token }} });
+    const work = try b.declare(&.{}, t.contribution, effects, &.{});
+    try c.registry.allowPrivateCall(work, call, owner);
+    try b.define(work, call);
+    const exit = try boundary.library.cleanup.exitInfo(b, unit);
+    const cleanup = try b.declare(&.{exit}, unit, &.{release}, &.{});
+    try b.define(cleanup, try b.term(.{ .perform = .{ .effect = release, .payload = try b.constant(u64, 90) } }));
+    const work_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{}, .result = t.contribution, .effects = effects, .capture_bound = &.{t.input} } } });
+    const cleanup_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{exit}, .result = unit, .effects = &.{release} } } });
+    const body = try b.declare(&.{capability}, t.contribution, effects, &.{});
+    try b.define(body, try b.term(.{ .protect = .{ .body = try b.lambda(work, work_type), .cleanup = try b.lambda(cleanup, cleanup_type) } }));
+    const body_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{capability}, .result = t.contribution, .effects = effects, .capture_bound = &.{t.input} } } });
+    return b.term(.{ .handle = .{ .handler = handler, .body = try b.lambda(body, body_type) } });
+}
+
 // Test-only owned endpoints surround the real application. Their packages never
 // enter a participant import or an assessment capture. Control stays in World.
 const Retained = struct {
@@ -378,8 +424,9 @@ pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();
     const mode = args.next() orelse return error.ExpectedMode;
-    if (std.mem.eql(u8, mode, "link") or std.mem.eql(u8, mode, "link-retained")) {
-        Application.retain_idle = std.mem.eql(u8, mode, "link-retained");
+    if (std.mem.eql(u8, mode, "link") or std.mem.eql(u8, mode, "link-retained") or std.mem.eql(u8, mode, "link-abort")) {
+        Application.abort_nested = std.mem.eql(u8, mode, "link-abort");
+        Application.retain_idle = !std.mem.eql(u8, mode, "link");
         const p = args.next() orelse return error.ExpectedProducer;
         const c = args.next() orelse return error.ExpectedConsumer;
         const r = args.next() orelse return error.ExpectedReference;

@@ -537,3 +537,42 @@ Node/WASM, Wasmtime and Chromium agree through sixteen transfers and seventeen
 destroyed Workers; release 5, work 57 and release 50 occur only after the actual
 parser result. This fresh evidence includes the new dependency binding; the older
 approved-write scenarios above remain separately scoped evidence.
+
+## Nested local-disposal admission obstruction
+
+The next intended-valid witness is executable as a separate build target:
+`zig build parser-abort-image`. It currently **fails with InvalidOwnership**;
+it is not included as a passing acceptance case in `zig build check`.
+
+The fixture links the unchanged producer, consumer and reference objects. A
+private one-shot handler captures the actual nested reference requester, forwards
+its payload to a separately declared read observation leaf, then disposes the
+captured requester. A protected cleanup inside that scope would emit release 90;
+the still-active outer owner would subsequently dispose endpoint 5 and resume
+endpoint 50. `retained-abort` in the existing runtime driver encodes the expected
+trace and zero-model-call result, but has not executed because no admitted image
+exists. This is local continuation disposal, not World cancellation.
+
+The source wrapper compiles; final source-free linking rejects its capture bound.
+A diagnostic-only compiler copy identified the missing linked schema as a linear
+resumption for the participant's internal `parser/need` effect, retained while
+`agent.parser.reference.v1` executes. The production package and validator were
+not modified. Earlier incomplete declarations also failed before linking; adding
+the wrapper's own delayed descriptors and sibling package did not authorize the
+private participant continuation and does not discharge the required contract.
+
+Boundary's BMO1 symbols already include schemas, while Agent's participant
+specification currently accepts only function/effect bindings. The leading next
+construction is an explicit typed capture-schema binding for the interaction
+interface, with actual linked schema/effect/ownership validation. It must preserve
+nominally distinct demand instances and reject false reusable or borrowed capture
+claims. An alternative that simply adds every linked schema to every handler bound
+would erase the declared restriction and is not selected. No representation or
+runtime change has been justified by this witness yet.
+
+The deciding positive test is this local disposal returning through transferable
+cleanup to the surviving sibling. The deciding negatives remain false use bounds,
+wrong nominal bindings and exclusive captures hidden behind reusable declarations.
+Until those execute through the normal Agent path, local abandonment of the
+suspended compiled parser chain remains an implementation gap, not an accepted
+cost or a completed capability.

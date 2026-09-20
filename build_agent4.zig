@@ -169,6 +169,7 @@ pub fn build(b: *std.Build) void {
     for ([_][]const u8{ "reference-request", "reference-reply", "execution-request", "execution-reply" }) |mode|
         g.emit(parser_tools, parser_schema, &.{mode}, b.fmt("parser/{s}.bin", .{mode}));
     const parser_oracle = b.addSystemCommand(&.{ "node", "--test", "test/agent4/parser_oracle.test.mjs" });
+    parser_oracle.removeEnvironmentVariable("NODE_TEST_CONTEXT");
     check.dependOn(&parser_oracle.step);
     const parser_executor = b.addSystemCommand(&.{ "node", "test/agent4/parser_executor.test.mjs" });
     const parser_protocol = b.addSystemCommand(&.{ "node", "test/agent4/parser_protocol.test.mjs" });
@@ -394,6 +395,7 @@ pub fn build(b: *std.Build) void {
         repository_run.step.dependOn(&runtime_guard.step);
         repository_run.has_side_effects = true;
         const repository_files = b.addSystemCommand(&.{ "node", "--test", "test/agent4/repository_delivery.test.mjs", "test/agent4/repository.test.mjs", "test/agent4/repository_executor.test.mjs" });
+        repository_files.removeEnvironmentVariable("NODE_TEST_CONTEXT");
         repository_delivery.dependOn(&repository_run.step);
         repository_delivery.dependOn(&repository_files.step);
         runtime_work.dependOn(repository_delivery);
@@ -424,6 +426,7 @@ pub fn build(b: *std.Build) void {
         const native_exe = native_graph.emitter("agent4-native", native_module);
         const inquiry_app_run = b.addSystemCommand(&.{ "node", "test/agent4/inquiry_application_runtime.mjs", runtime_path, b.getInstallPath(.prefix, "agent4/inquiry") });
         const inquiry_cli = b.addSystemCommand(&.{ "node", "--test", "test/agent4/inquiry_cli.test.mjs" });
+        inquiry_cli.removeEnvironmentVariable("NODE_TEST_CONTEXT");
         inquiry_cli.setEnvironmentVariable("AGENT4_WORLD_RUNTIME", runtime_path);
         inquiry_cli.setEnvironmentVariable("AGENT4_INQUIRY_IMAGES", b.getInstallPath(.prefix, "agent4/inquiry"));
         inquiry_cli.has_side_effects = true;

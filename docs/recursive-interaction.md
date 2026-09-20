@@ -591,3 +591,42 @@ The same 15,553-byte Program also reran ordinary two-round repair successfully:
 model calls, a real counterexample, full acceptance and live target read. Native,
 Node/WASM, Wasmtime and Chromium agree over sixteen transfers and seventeen destroyed
 Workers. No approval or fixture replacement was requested in this artifact-only run.
+
+## Authenticated integrated dependency tuple
+
+The normal Agent manifest/lock now selects Boundary
+`9c9992d25ab4883efa60fc9ce01f859917caeac5` and World
+`5c3dea1c0443f026b2451581de77ec2e51085e57`. Both downloaded source trees match their
+GitHub commit-tree identities; source/archive/package inventories are bound in
+`conformance/agent4/dependencies.lock.json`. The existing setup tool rebuilt World
+using the selected Boundary source and reproduced kernel SHA256
+`df7fe1ae0ed0de7b2976c98b1534d1d55f4c341b7148837ce32f42ed8d011084`.
+The relevant Boundary data code is unchanged from World's original pinned source.
+No validator bypass or manually substituted runtime file was used.
+
+Reproduce setup with `node tools/agent4/setup.mjs --work-dir .agent4-recursive-integrated`.
+The same command with `--verify-only --offline` authenticates the completed setup
+without building or downloading. Its returned World source/runtime paths are the
+normal `-Dworld-source` and `-Dworld-runtime` inputs for the integration target.
+
+The first combined `check check-agent4-integration` run reached 326/330 steps and
+passed 187 Zig tests, but correctly failed its source-package test because a Node
+test-runner context leaked into nested Node invocations. Direct Node test commands
+in the build now remove only `NODE_TEST_CONTEXT`. The assertion that nested tests
+must actually execute was retained. The failed integration lane was rerun through
+`tools/agent4/check.mjs integration`: all 86 Node tests pass, followed by the dialogue,
+multi-shot, document, 38 clarification cases and independent embedding commands.
+All six commands returned zero; dependency snapshots before and after agree. This
+is a corrected-lane result, not a claim that the original failed aggregate passed.
+
+The parser's local-abandonment witness also ran freshly against the setup-produced
+runtime package: real reference observation, suspended participant cleanup, local
+sibling resumption, six fresh Node transfers, no model/approval/write calls. Earlier
+full parser approval/delivery and browser/Wasmtime evidence remains separately
+scoped to its recorded run rather than relabeled as freshly executed here.
+
+The existing distributable examples archive is rebuilt and authenticated against
+this tuple. Parser-specific runtime files and its application command are not yet
+in that distribution; that is a separate remaining delivery gap. Normal dependency
+integration does not complete the full parser packaging, live opt-in path, general
+composition/selection, economic comparisons or serial-review obligations.

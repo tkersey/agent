@@ -539,10 +539,6 @@ const Walker = struct {
             try self.push(.effect, clause.effect, 0);
             try self.push(.schema, clause.resumption, 0);
         }
-        if (h.forward_function) |f| {
-            if (self.registry.isPrivate(f)) return error.PrivateFunctionBypass;
-            try self.push(.function, f, f);
-        }
         if (self.speculative != null) {
             try self.effects(h.effects);
             try self.captures(h.state);

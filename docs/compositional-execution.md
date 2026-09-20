@@ -17,6 +17,15 @@ functional economy, independent native/Node/Wasmtime execution, extracted-packag
 consumers, component reuse and real Chromium/Firefox compiled-tool transfers pass.
 The economy run is functional-only and does not establish timing acceptance.
 
+Unsupported forwarding constructors and handler fields are retired from the data
+and authoring APIs. Agent's admission walker drops only the traversal of that
+unconstructible field; return-function and clause protections remain. The current
+World switch is exhaustive. The scoped-reader witness retains forwarding through
+older-capability dispatch. All 42 example images are byte-identical; source JSON
+changes only by omission of the former null fields. Wire tag 14 rejects, and the
+retired handler byte remains mandatory zero. No performance gain is claimed for
+this API cleanup; the measurements below retain their exact source bindings.
+
 ## Current matched inquiry/ReAct results
 
 The complete BPC1 comparison measured Agent 95001fb / Boundary 6c59436 / World
@@ -89,11 +98,11 @@ repeated 44,684 / 40,486 / 37,137, and ReAct 49,249 / 43,394 / 48,226 bytes.
 ReAct remains larger than BPC1; the specification's separate installation-image
 condition is satisfied, not replaced by a universal image-size claim.
 
-The normal tuple now selects Boundary 6c59436 / World 2a87702. Its kernel is
-463,045 bytes, SHA-256
-54d39b7cf8b881701bb58f590cc2cd2a6baf461d7f0cad01e647c888e379ccad.
-Boundary's dependency package is 1,390,465 bytes (281,831 compressed); World runtime
-contents are 519,745 bytes. No paid inference or live-model quality claim is made.
+The normal tuple now selects Boundary 1b00c8c / World a20a285. Its kernel is
+462,524 bytes, SHA-256
+8f7b6359ddf4d63b513d8d5c17400487fde357cb487831bb2b555a449f39ee0b.
+Boundary's dependency package is 1,392,930 bytes (282,310 compressed); World runtime
+contents are 519,224 bytes. No paid inference or live-model quality claim is made.
 The adequacy obstruction and its minimal reproducer remain intact.
 
 Reproduce captures with `tools/agent4/capture-inquiry.mjs` and explicit frozen
@@ -105,7 +114,7 @@ profiles and temporary predecessor installations are not maintained.
 
 ## Runtime follow-up qualification
 
-The normal tuple now selects World 2a87702. Its in-place remap supports growable
+The workspace remap introduced at World 2a87702 supports growable
 arrays while retaining the existing arena-slab resize policy. Retained bytes,
 allocation accounting and failure atomicity are preserved; noncontiguous segments
 are never joined. [World's current results](https://github.com/tkersey/world/blob/2a877021be71499f599c1b0cd2711982b18e5085/docs/compositional-execution.md)

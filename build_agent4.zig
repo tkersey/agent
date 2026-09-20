@@ -139,6 +139,14 @@ pub fn build(b: *std.Build) void {
     parser_episode.dependOn(&b.addInstallFileWithDir(parser_producer_bytes, .prefix, "agent4/parser-construction/producer.bmo1").step);
     parser_episode.dependOn(&b.addInstallFileWithDir(parser_consumer_bytes, .prefix, "agent4/parser-construction/consumer.bmo1").step);
     parser_episode.dependOn(&b.addInstallFileWithDir(parser_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/program.bpi3").step);
+    const forged_consumer = b.addRunArtifact(parser_app);
+    forged_consumer.addArg("consumer-forged");
+    const forged_link = b.addRunArtifact(parser_app);
+    forged_link.addArg("link");
+    forged_link.addFileArg(parser_producer_bytes);
+    forged_link.addFileArg(forged_consumer.captureStdOut(.{}));
+    forged_link.addFileArg(parser_reference_bytes);
+    parser_episode.dependOn(&b.addInstallFileWithDir(forged_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/forged.bpi3").step);
     for ([_][]const u8{ "model-template", "input-schema", "result-schema", "model-schema", "model-reply-schema" }) |mode|
         g.emit(parser_episode, parser_app, &.{mode}, b.fmt("parser-construction/{s}.bin", .{mode}));
     check.dependOn(parser_episode);

@@ -412,3 +412,36 @@ evidence, not approval or delivery authority. Live target revalidation, approval
 conditional fixture application, intent handling, isolated assessment/completion
 control, local disposal/cleanup variants and the remaining comparisons/reviews
 are still required before milestone completion.
+
+## Private completion acceptance boundary
+
+Exploratory components now receive `agent.parser.probe.v1`, whose adapter refuses
+full acceptance before launching code. Complete candidates return as ordinary
+proposals to a private application-owned completion function. That function makes
+the authoritative, version-bound acceptance call through `agent.parser.execution.v1`.
+Neither the completion function nor that effect is exported to participant objects.
+Participant-claimed complete assessment reports are rejected instead of treated as
+completion authority. No opaque trusted-component flag or second interpreter is added.
+
+This replaces the prior placement of full validation inside the consumer. It does
+not duplicate full checks: normal exploration performs partial probes only. If a
+complete candidate fails acceptance, the private owner re-enters construction with
+the actual failure report, retained reference evidence, a new version and the
+remaining allowance. Successful acceptance still produces ordinary report data;
+approval and target application remain separate unfinished work.
+
+A separately compiled malicious consumer returning a forged complete/passed report
+is stopped without environmental requests or candidate execution. The probe-only
+adapter rejects an acceptance request even when caller options attempt to relax it.
+The ordinary two-round repair passes the new boundary, including native, Node,
+Wasmtime and Chromium Worker agreement. A three-round case refutes the initial
+fragment, rejects a complete parser with wrong error offsets, then validates the
+third version. It performs one reference observation, three model requests and
+569 candidate executions (plus two qualification executions); no paid inference.
+The current Program is 11,354 bytes. `zig build check` passes 261 steps / 123 tests.
+
+The `forged` and `full-repair` scenarios in `parser_construction.mjs` reproduce the
+new negatives and re-entry case. Firefox verification of this newest boundary is
+not rerun here; its earlier repair/transfer evidence is scoped to the earlier
+Program. Live-target evidence, approval and conditional fixture replacement remain
+the next authority-bearing implementation steps.

@@ -36,3 +36,7 @@ const invalid=await tools.execute([subject,7n,[malformed,3n,0n],{tag:0,value:tra
 assert.equal(invalid[2].tag,2);assert.equal(invalid[2].value,1);
 console.log(JSON.stringify({reference:true,probe:true,partialAcceptanceRejected:true,
   rejectAllRejected:true,wrongSubjectRejected:true,capacity:true,malformedOutput:true,metrics:tools.metrics()}));
+const beforeRestricted=tools.metrics().physicalExecutions;
+const blocked=await tools.probe([subject,9n,[rejectAll,4n,1],{tag:1,value:null}],{probeOnly:false});
+assert.deepEqual(blocked,[9n,4n,{tag:2,value:1}]);
+assert.equal(tools.metrics().physicalExecutions,beforeRestricted,'probe-only binding cannot run acceptance');

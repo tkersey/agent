@@ -52,7 +52,7 @@ export async function createParserTools(options = {}) {
     if (!Array.isArray(subject) || subject.length !== 5 || !digest(subject[0])) throw new TypeError('subject shape');
     assert.deepEqual(subject.slice(1),expected,'subject selects another reference, requirement or runner');
   }
-  return Object.freeze({kind:'qualified',runner:executor.runner,
+  const tools={kind:'qualified',runner:executor.runner,
     evidence:Object.freeze({reference:reference.toString('utf8'),requirements:requirements.toString('utf8')}),
     subject(base) { if(!digest(base))throw new TypeError('base digest');return [base,...expected]; },
     async reference(request) {
@@ -62,7 +62,7 @@ export async function createParserTools(options = {}) {
       try { return [id,variant(0,rowsValue(rows))]; }
       catch(error) { if(error instanceof RangeError)return [id,variant(1,unavailable('capacity'))];throw error; }
     },
-    async execute(request,{signal}={}) {
+    async execute(request,{signal,probeOnly=false}={}) {
       if(!Array.isArray(request)||request.length!==4||!occurrence(request[1]))throw new TypeError('execution request');
       const [subject,id,candidate,check]=request;checkSubject(subject);
       if(!Array.isArray(candidate)||candidate.length!==3||typeof candidate[0]!=='string'||
@@ -70,6 +70,7 @@ export async function createParserTools(options = {}) {
         ![0,1,0n,1n].includes(candidate[2])||!check||![0,1,2].includes(check.tag)||
         Object.keys(check).sort().join(',')!=='tag,value')throw new TypeError('candidate/check shape');
       const [source,version,complete]=candidate;
+      if(probeOnly&&check.tag===1)return [id,version,variant(2,unavailable('invalid'))];
       if(check.tag===1 && (Number(complete)!==1||check.value!==null))return [id,version,variant(2,unavailable('invalid'))];
       let trace;
       try { trace=check.tag===0?traceValue(check.value):check.tag===2?traceValue(experimentTrace(check.value)):null; }
@@ -99,8 +100,10 @@ export async function createParserTools(options = {}) {
       return [id,version,variant(1,[result.passed,result.executed,result.required,
         result.retention.length===2&&result.retention.every(item=>item.passed),reason.slice(0,256)])];
     },
+    probe(request,options={}) { return tools.execute(request,{...options,probeOnly:true}); },
     metrics:executor.metrics,
-  });
+  };
+  return Object.freeze(tools);
 }
 
 /** Expand an untrusted flat model experiment into the existing typed trace.

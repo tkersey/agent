@@ -369,3 +369,46 @@ harness. This remains the first construction episode: candidate revision,
 completion and authoritative full acceptance, retained idle ownership and local
 cleanup in this application, assessment policy replacement, exact approval and
 conditional delivery are still required. It does not yet complete parser synthesis.
+
+## Revision and complete-candidate acceptance
+
+The construction Program now has an explicit round allowance. The consumer retains
+the actual prior report, enters a fresh immutable construction state, increments
+the application-owned candidate version and reduces the remaining allowance.
+The counterpart receives that current state through its recursive constraint
+contribution. Model prompts include the prior source and feedback derived from
+the real probe/acceptance result. Complete-candidate proposals are offered only
+after the initial partial-construction request.
+
+The frozen reference observation is retained as ordinary data and reused only
+while the same task input (subject and trace) is preserved. Its original occurrence
+is preserved; no new reference execution is claimed. Every candidate check still
+binds the actual source/version and a distinct execution occurrence. Partial
+candidates receive probes; complete candidates receive the full authoritative
+acceptance suite. A reported pass with zero/missing checks or failed retention
+is explicitly unresolved rather than accepted.
+
+The deterministic run refutes version 1's EOF buffering, supplies different complete
+source as version 2 through the real model interpretation, and passes all 536
+semantic traces plus both retention cases. There are two model requests, one actual
+reference request, one counterexample probe and one full acceptance request.
+The qualified executor runs 539 candidate processes plus two qualification
+processes. Test provider responses are synthetic; production participants and
+prompts do not import accepted implementations, and no paid provider call ran.
+
+The final 10,290-byte Program passes native/Node/Wasmtime/Chromium/Firefox boundary
+agreement with ten transfers and eleven destroyed Workers per browser run.
+Zero rounds produce an explicit unresolved result with no Program environmental
+requests or candidate executions. One round preserves a refuted partial report.
+A forged passed-but-incomplete acceptance result is rejected as unresolved.
+`zig build check` passes 258 steps / 123 tests. Existing qualified evaluator
+implementation and check inputs are unchanged.
+
+Run `parser_construction.mjs WORLD_ENTRY KERNEL` for the two-round repair. Its
+optional existing engine arguments exercise the same cross-engine harness.
+The final optional scenario argument accepts `zero`, `one`, or `incomplete` for
+the bounded-stop and forged-report witnesses. The returned report remains ordinary
+evidence, not approval or delivery authority. Live target revalidation, approval,
+conditional fixture application, intent handling, isolated assessment/completion
+control, local disposal/cleanup variants and the remaining comparisons/reviews
+are still required before milestone completion.

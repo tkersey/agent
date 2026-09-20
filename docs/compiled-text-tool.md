@@ -84,3 +84,21 @@ zig build check-compiled-tools check-compiled-tool-browser \
 The browser tooling is the existing locked Playwright setup. This witness does
 not complete the separate three-component composition requirement, general local
 imported-borrow contracts, performance acceptance, or legacy retirement.
+
+## Inspect a suspended execution
+
+Build the existing native inspector with `zig build build-inspector
+-Doptimize=ReleaseSafe`, then run:
+
+```sh
+zig-out/bin/agent4-multi inspect-execution application.bpi3 checkpoint.pst3
+```
+
+The command admits the complete Program/State pair before producing JSON. It
+reports the pending effect identity, canonical payload/result schema bytes in
+hexadecimal, function/block/instruction location, retained activation/package and
+template counts, and cleanup-obligation identities and lifecycle status. Locations
+refer to BPI3 code, not native addresses or an unavailable source map. Required
+cleanup is distinguished from completed or failed obligations. Captured payloads
+and resource contents are omitted. Inspection does not execute, transfer custody,
+write either input, or grant authority to a caller; a mismatched pair rejects.

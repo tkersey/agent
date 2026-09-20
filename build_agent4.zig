@@ -190,7 +190,9 @@ pub fn build(b: *std.Build) void {
     const multi_exe = g.emitter("agent4-multi", multi);
     for ([_][]const u8{ "multi", "cleanup", "dispose" }) |mode|
         g.emit(emit, multi_exe, &.{mode}, b.fmt("multi/{s}.bpi3", .{mode}));
-    emit.dependOn(&b.addInstallArtifact(multi_exe, .{}).step);
+    const installed_multi = b.addInstallArtifact(multi_exe, .{});
+    emit.dependOn(&installed_multi.step);
+    b.step("build-inspector", "Build the read-only Program/State inspector").dependOn(&installed_multi.step);
     const approval_exe = g.emitter("agent4-approval", g.module("test/agent4/approval_probe.zig"));
     g.emit(emit, approval_exe, &.{}, "approval/approval.bpi3");
     g.emit(emit, approval_exe, &.{"evidence"}, "approval/approval-evidence.bpi3");

@@ -10,6 +10,12 @@ pub fn main(init: std.process.Init) !void {
     defer arguments.deinit();
     _ = arguments.skip();
     const mode = arguments.next() orelse "multi";
+    if (std.mem.eql(u8, mode, "inspect-execution")) {
+        const image_path = arguments.next() orelse return error.ExpectedImagePath;
+        const state_path = arguments.next() orelse return error.ExpectedStatePath;
+        if (arguments.next() != null) return error.UnexpectedArgument;
+        return inspectExecution(init, image_path, state_path);
+    }
     if (std.mem.eql(u8, mode, "inspect-state")) {
         const path = arguments.next() orelse return error.ExpectedStatePath;
         if (arguments.next() != null) return error.UnexpectedArgument;
@@ -77,6 +83,99 @@ fn inspectState(init: std.process.Init, path: []const u8) !void {
             "\"packages\":{d},\"obligations\":{d},\"nodes\":{d},\"blobs\":{d}}}\n",
         .{ multi, branches, resources, cells, packages, obligations, graph.state.nodes.len, graph.state.blobs.len },
     );
+    try output.interface.flush();
+}
+
+/// Inspection admits the image/State pair but never constructs an evaluator or
+/// advances cleanup. Report code and custody metadata, not captured payloads.
+fn inspectExecution(init: std.process.Init, image_path: []const u8, state_path: []const u8) !void {
+    const data = boundary.data;
+    var scratch = std.heap.ArenaAllocator.init(init.gpa);
+    defer scratch.deinit();
+    const a = scratch.allocator();
+    const image = try std.Io.Dir.cwd().readFileAlloc(init.io, image_path, a, .limited(64 << 20));
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(init.io, state_path, a, .limited(64 << 20));
+    const admitted = try data.program_image.Admitted.decode(a, image);
+    defer admitted.deinit();
+    var decoded = try data.state_image.decodeGraph(a, bytes);
+    defer decoded.deinit();
+    try data.state_admission.validateAdmitted(a, admitted, decoded.state);
+    const program = admitted.program();
+    const Location = struct { function: u64, block: u64, instruction: usize };
+    const Pending = struct {
+        effect: u64,
+        identity: ?[]const u8,
+        identityHex: []const u8,
+        payloadSchemaHex: []const u8,
+        resultSchemaHex: []const u8,
+        location: Location,
+    };
+    const pending: ?Pending = if (decoded.state.roots.pending) |reference| blk: {
+        const operation = decoded.state.nodes[@intCast(reference.id)].record.pending;
+        const effect = program.effects[@intCast(operation.effect)];
+        const block = program.blocks[@intCast(operation.source_block)];
+        const payload_schema = try data.schema.encodeOwned(a, program.schemas, effect.payload);
+        const result_schema = try data.schema.encodeOwned(a, program.schemas, effect.result);
+        break :blk .{
+            .effect = operation.effect,
+            .identity = if (std.unicode.utf8ValidateSlice(effect.identity)) effect.identity else null,
+            .identityHex = try std.fmt.allocPrint(a, "{x}", .{effect.identity}),
+            .payloadSchemaHex = try std.fmt.allocPrint(a, "{x}", .{payload_schema}),
+            .resultSchemaHex = try std.fmt.allocPrint(a, "{x}", .{result_schema}),
+            .location = .{ .function = block.function, .block = operation.source_block, .instruction = block.instructions.len },
+        };
+    } else null;
+    const Cleanup = struct { node: usize, sourceBlock: u64, status: []const u8, required: bool, deferredCleanup: bool, runningAt: ?u64, resourceSchema: ?u64 };
+    var cleanup: std.ArrayList(Cleanup) = .empty;
+    const Ownership = struct { obligation: u64, holder: ?usize, kind: []const u8 };
+    var ownership: std.ArrayList(Ownership) = .empty;
+    for (decoded.state.roots.detached) |owned| {
+        if (decoded.state.nodes[@intCast(owned.node.id)].record == .obligation)
+            try ownership.append(a, .{ .obligation = owned.node.id, .holder = null, .kind = "detached-root" });
+    }
+    var activations: usize = 0;
+    var owned_bindings: usize = 0;
+    var packages: usize = 0;
+    var templates: usize = 0;
+    for (decoded.state.nodes, 0..) |node, id| {
+        if (node.activation) |activation| {
+            activations += 1;
+            owned_bindings += activation.owners.len;
+        }
+        switch (node.record) {
+            .region => |region| for (region.obligations) |owned| {
+                try ownership.append(a, .{ .obligation = owned.node.id, .holder = id, .kind = "region" });
+            },
+            .protection => |protection| try ownership.append(a, .{ .obligation = protection.obligation.node.id, .holder = id, .kind = "protection" }),
+            .cleanup_return => |returned| try ownership.append(a, .{ .obligation = returned.obligation.node.id, .holder = id, .kind = "cleanup_return" }),
+            .package => packages += 1,
+            .multi_template => templates += 1,
+            .obligation => |obligation| try cleanup.append(a, .{
+                .node = id,
+                .sourceBlock = obligation.source_block,
+                .status = @tagName(obligation.status),
+                .required = obligation.status == .pending or obligation.status == .running,
+                .deferredCleanup = obligation.cleanup != null,
+                .runningAt = if (obligation.status == .running) obligation.status.running.id else null,
+                .resourceSchema = if (obligation.resource) |resource| resource.schema else null,
+            }),
+            else => {},
+        }
+    }
+    // Serialize completely before exposing output, including on admission/OOM
+    // failure. The command does not write either supplied file.
+    const report = try std.json.Stringify.valueAlloc(a, .{
+        .programIdentity = std.fmt.bytesToHex(decoded.state.program_identity, .lower),
+        .status = @tagName(decoded.state.status),
+        .pending = pending,
+        .retained = .{ .activationViews = activations, .ownedBindings = owned_bindings, .packages = packages, .multiTemplates = templates },
+        .cleanupObligations = cleanup.items,
+        .cleanupOwnership = ownership.items,
+    }, .{});
+    var buffer: [4096]u8 = undefined;
+    var output = std.Io.File.stdout().writer(init.io, &buffer);
+    try output.interface.writeAll(report);
+    try output.interface.writeByte('\n');
     try output.interface.flush();
 }
 

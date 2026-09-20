@@ -130,13 +130,13 @@ The current cumulative inquiry/repeated/ReAct confirmation closes the earlier
 runtime-refinement evidence gap for these applications. All native complete-call
 peaks match the previously reported peaks exactly. Three rejection peaks remain
 2,058–2,123 bytes above BPC1, and checkpoints remain larger as reported. The latest
-normal-source authentication also passes offline. This result does not substitute
-for the standalone guest matrix, the clarification lane, or serial reviews.
+normal-source authentication also passes offline. The standalone guest matrix and clarification lane are separately confirmed in
+their owning result sections; none substitutes for serial reviews.
 
 ## Current clarification comparison
 
 The unchanged four-case document-clarification policy was refreshed on Agent
-b277743 / Boundary 6c59436 / World 2a87702 against the fixed Agent 1f3297b /
+production 9cad6d0 / Boundary 1b00c8c / World a20a285 against the fixed Agent 1f3297b /
 Boundary 42a09b9 / World d075169 anchors, separately using normal BPI2 and compact
 BPC1. The predecessor runtime matches its original complete inventory and kernel
 hash. Compact images round-trip to identical BPI2 bytes, and initial arguments are
@@ -152,12 +152,12 @@ shows medians from the second confirmation window.
 
 | Case | BPI2 fresh ms | BPC1 fresh ms | BPI3 fresh ms | BPC1 → BPI3 scenario ms | BPC1 → BPI3 checkpoint bytes |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| divergent-active | 215.01 | 211.20 | 135.13 | 237.46 → 162.79 | 2600 → 2639 |
-| common | 177.65 | 171.14 | 107.17 | 188.25 → 125.52 | 1985 → 2055 |
-| clarify-first-common | 113.91 | 111.68 | 71.71 | 123.89 → 86.28 | 1891 → 1928 |
-| clarify-first-divergent | 112.28 | 113.28 | 71.83 | 126.31 → 88.04 | 2044 → 2081 |
+| divergent-active | 215.84 | 219.10 | 135.61 | 243.93 → 164.89 | 2600 → 2639 |
+| common | 174.31 | 174.69 | 101.08 | 191.55 → 116.85 | 1985 → 2055 |
+| clarify-first-common | 113.63 | 113.73 | 72.69 | 128.61 → 87.90 | 1891 → 1928 |
+| clarify-first-divergent | 115.48 | 113.75 | 72.29 | 127.07 → 88.93 | 2044 → 2081 |
 
-Both windows support about 36–41% lower fresh-invocation time than BPC1. Across all
+Both windows preserve lower fresh-invocation time than BPC1 on all four cases. Across all
 18 process runs, every reported field other than timing and State byte counts
 agrees: model work, request/response sizes, clarification and approval exchanges,
 replacements, assessments, memory, resulting file hashes and complete effect/
@@ -227,9 +227,10 @@ all-application cold-build improvement.
 
 The September 19 amendment accepts the ten named native latency tradeoffs in
 [World's current results](https://github.com/tkersey/world/blob/feat/compositional-execution/docs/compositional-execution.md#milestone-performance-disposition).
-That acceptance does not cover memory, WASM or material Agent regressions. Remaining
-work is the remaining standalone guest and clarification confirmation on Boundary 1b00c8c / World a20a285,
-explicit economic dispositions, the requirement audit and serial reviews. Existing
+The latency amendment alone did not accept memory, WASM or material Agent
+regressions. The standalone guest, inquiry/ReAct/repeated and clarification confirmations on
+Boundary 1b00c8c / World a20a285 are complete. The requirement audit's narrow
+inspector extension is implemented and tested; serial-review closeout remains. Existing
 functionality is not reopened by older status prose or optional optimization ideas.
 
 The three rejection peaks increase by 2,058–2,123 bytes (about 0.11%); their full-invocation peaks are reproduced on the current tuple. Their precise
@@ -239,9 +240,21 @@ overhead bound.
 Checkpoints grow by 18–79 bytes, with repeated completed turns retaining two nodes
 and one blob and no live resources, cells or obligations in the measured fixture.
 ReAct's image is 43,394 → 48,226 bytes (+4,832; +11.14%); the accepted size condition
-applies specifically to installation64/128/256, not every program. Recommendation:
-accept these named checkpoint/image tradeoffs if the current-tuple confirmation
-preserves their bounded behavior; no user acceptance is implied yet.
+applies specifically to installation64/128/256, not every program.
+These named checkpoint/image costs, together with the three rejection-peak costs
+and World's listed peaks, were explicitly accepted by the user on September 19.
+Current-tuple confirmation preserves the reported behavior and sizes. This is
+acceptance under the amendment, not a pass of the original unamended gate.
+
+The existing native inspector now supports `inspect-execution IMAGE STATE` via
+`zig build build-inspector`. It admits the exact Program/State pair and reports
+pending effect/schema/code location, retained activation/package counts and cleanup
+ownership without advancing or exposing captured payloads. The original multi-shot
+and suspending-cleanup runtime probes pass with additional read-only, wrong-image,
+typed-schema and pending-versus-running ownership checks. The three probe images
+remain byte-identical. This tooling-only extension does not change the measured
+compiler, application policies or World runtime. See
+[the inspection command](compiled-text-tool.md#inspect-a-suspended-execution).
 
 Live-model usefulness remains unmeasured and is not a paid-inference closeout lane.
 No real user-data operations were used to obtain these results. The adequacy

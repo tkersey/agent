@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { verifyRuntime } from "../../tools/agent4/dependencies.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
@@ -95,6 +95,19 @@ async function runProbes() {
   assert.equal(retained.multiTemplates, 1);
   assert.equal(retained.cells, 2, "the template and active branch own distinct cells");
   assert.equal(retained.obligations, 0, "speculation captures no cleanup obligation");
+  const detail = await inspectExecution("multi", "retained-alternative");
+  assert.equal(detail.pending.identity, "agent4.probe.assess");
+  assert.equal(detail.retained.multiTemplates, 1);
+  assert.ok(detail.retained.activationViews > 0);
+  assert.equal(detail.cleanupObligations.length, 0);
+  const request = await decodeRequest(await readFile(resolve(root, ".agent4/out/multi/retained-alternative.erq2")));
+  assert.deepEqual(Buffer.from(detail.pending.payloadSchemaHex, "hex"), Buffer.from(request.payloadSchema));
+  assert.deepEqual(Buffer.from(detail.pending.resultSchemaHex, "hex"), Buffer.from(request.resumeSchema));
+  const wrong = spawnSync(inspector, ["inspect-execution", resolve(fixtures, "multi/cleanup.bpi3"),
+    resolve(root, ".agent4/out/multi/retained-alternative.pst3")]);
+  assert.equal(wrong.error, undefined);
+  assert.notEqual(wrong.status, 0, "inspection must reject a different Program");
+  assert.equal(wrong.stdout.length, 0, "rejected inspection must not publish a report");
   const firstBranch = inspect("retained-64-1");
   const finalBranch = inspect("retained-64-64");
   assert.deepEqual(finalBranch, firstBranch,
@@ -113,6 +126,18 @@ function inspect(name) {
   return JSON.parse(output);
 }
 
+async function inspectExecution(imageName, stateName) {
+  const imagePath = resolve(fixtures, `multi/${imageName}.bpi3`);
+  const statePath = resolve(root, `.agent4/out/multi/${stateName}.pst3`);
+  const before = await Promise.all([readFile(imagePath), readFile(statePath)]);
+  const report = JSON.parse(execFileSync(inspector, ["inspect-execution", imagePath, statePath], { encoding: "utf8" }));
+  assert.deepEqual(await Promise.all([readFile(imagePath), readFile(statePath)]), before,
+    "read-only inspection must preserve both input files");
+  assert.match(report.programIdentity, /^[a-f0-9]{64}$/);
+  for (const value of Object.values(report.pending.location)) assert.ok(Number.isSafeInteger(value) && value >= 0);
+  return report;
+}
+
 async function restore(image, outcome) {
   const restored = await fresh({ image, state: Uint8Array.from(outcome.state) });
   assert.deepEqual(restored.bytes, outcome.bytes);
@@ -126,11 +151,22 @@ async function testCleanup() {
   const question = (await decodeRequest(parked.request));
   assert.equal(question.semanticIdentity, "agent4.probe.cleanup-question");
   assert.equal(readInteger(question.payload), 7n);
+  await writeFile(resolve(root, ".agent4/out/multi/cleanup-pending.pst3"), parked.state);
+  const waiting = await inspectExecution("cleanup", "cleanup-pending");
+  assert.ok(waiting.cleanupObligations.some(owner => owner.required && owner.deferredCleanup &&
+    owner.status === "pending" && owner.runningAt === null));
   const normal = await fresh({ image, state: parked.state,
     control: "reply", value: (await encodeResult(parked.request, integer(42))) });
   assert.equal(normal.kind, "requested");
   assert.equal((await decodeRequest(normal.request)).semanticIdentity, "agent4.probe.release");
   await writeFile(resolve(root, ".agent4/out/multi/cleanup.pst3"), normal.state);
+  const detail = await inspectExecution("cleanup", "cleanup");
+  assert.equal(detail.pending.identity, "agent4.probe.release");
+  assert.ok(detail.cleanupObligations.some(owner => owner.required && !owner.deferredCleanup && owner.status === "running" && owner.runningAt !== null),
+    "suspended cleanup remains an identified live obligation");
+  assert.ok(detail.cleanupOwnership.some(edge => edge.kind === "cleanup_return" &&
+    detail.cleanupObligations.some(owner => owner.node === edge.obligation && owner.required && owner.runningAt === edge.holder)),
+  "the suspended cleanup return retains its obligation owner");
   await restore(image, normal);
   const done = await fresh({ image, state: normal.state,
     control: "reply", value: (await encodeResult(normal.request, new Uint8Array())) });

@@ -108,6 +108,9 @@ pub fn build(b: *std.Build) void {
     check.dependOn(lint);
     for ([_][]const u8{ "facade", "values", "approval_probe", "catalogs", "descriptor_contracts", "callable", "compiled_tool" }) |name|
         g.testModule(check, g.module(b.fmt("test/agent4/{s}.zig", .{name})));
+    const participants = b.step("check-participants", "Check compiled internal participant admission");
+    g.testModule(participants, g.module("test/agent4/participant.zig"));
+    check.dependOn(participants);
     g.testModule(check, g.module("src/model_invocation_tests.zig"));
     g.testModule(check, g.module("src/conversation.zig"));
     g.testModule(check, g.module("src/react.zig"));
@@ -143,6 +146,19 @@ pub fn build(b: *std.Build) void {
     g.testModule(check, inquiry_app);
 
     const emit = b.step("agent4-images", "Compile the consumer images");
+    const participant_images = b.step("participant-images", "Emit and link the internal model participant");
+    const participant_exe = g.emitter("agent-participant", g.module("test/agent4/participant.zig"));
+    const participant_object = b.addRunArtifact(participant_exe);
+    participant_object.addArg("object");
+    const participant_bytes = participant_object.captureStdOut(.{});
+    const participant_link = b.addRunArtifact(participant_exe);
+    participant_link.addArg("link");
+    participant_link.addFileArg(participant_bytes);
+    participant_images.dependOn(&b.addInstallFileWithDir(participant_bytes, .prefix, "agent4/participant/producer.bmo1").step);
+    participant_images.dependOn(&b.addInstallFileWithDir(participant_link.captureStdOut(.{}), .prefix, "agent4/participant/program.bpi3").step);
+    for ([_][]const u8{ "input", "reply", "expected" }) |mode|
+        g.emit(participant_images, participant_exe, &.{mode}, b.fmt("participant/{s}.bin", .{mode}));
+    emit.dependOn(participant_images);
     const text_object = g.emitter("agent-text-object", g.module("test/agent4/text_object.zig"));
     const text_link = g.emitter("agent-text-link", g.module("test/agent4/text_link.zig"));
     const text_object_bytes = b.addRunArtifact(text_object).captureStdOut(.{});

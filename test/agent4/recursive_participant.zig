@@ -52,8 +52,13 @@ fn add(b: *source.Builder, t: Types, left: Id, right: Id) !Id {
 fn step(b: *source.Builder, q: hyper.Query, consumer: bool, repeat: bool) !Id {
     const t = try types(b);
     const task = try b.declare(&.{}, t.integer, &.{ t.model, t.read }, &.{});
-    const delayed_task = try b.variable(q.types.answer_backward);
-    const selected_task = try b.variable(t.task);
+    const need = try hyper.demand.family(b, "fixture.recursive.need", t.state, t.integer);
+    const interpreted = try hyper.demand.interpret(b, q, need, t.integer, .{
+        .captures = &.{ t.state, t.integer, t.pair.peer_forward, t.pair.peer_backward },
+        .residual = .{ .effects = &.{ t.model, t.read } },
+    });
+    const inside = try b.declare(&.{need.capability}, t.integer, &.{ t.model, t.read, need.effect }, &.{});
+    const capability = try b.reference(b.parameter(inside, 0));
     const contribution = try b.variable(t.integer);
     const input = try b.primitive(t.input, .field, &.{q.state}, 0);
     const next = try b.primitive(t.state, .product, &.{ input, try b.constant(bool, true) }, 0);
@@ -66,8 +71,8 @@ fn step(b: *source.Builder, q: hyper.Query, consumer: bool, repeat: bool) !Id {
             .arguments = &.{input},
         } }), try b.pure(try add(b, t, summed, try b.constant(u64, 10))));
     }
-    if (repeat) after = try repeatContribution(b, q, t, next, try b.reference(contribution));
-    const nested = try b.bind(delayed_task, try q.ask(b, next), try b.bind(selected_task, try hyper.force(b, try b.reference(delayed_task)), try b.bind(contribution, try hyper.force(b, try b.reference(selected_task)), after)));
+    if (repeat) after = try repeatContribution(b, need, capability, t, next, try b.reference(contribution));
+    const nested = try b.bind(contribution, try hyper.demand.request(b, need, capability, next), after);
     const body = if (consumer) try b.term(.{ .conditional = .{
         .condition = try b.primitive(try b.scalar(bool), .field, &.{q.state}, 1),
         .when_true = try b.term(.{ .perform = .{
@@ -76,7 +81,8 @@ fn step(b: *source.Builder, q: hyper.Query, consumer: bool, repeat: bool) !Id {
         } }),
         .when_false = nested,
     } }) else nested;
-    try b.define(task, body);
+    try b.define(inside, body);
+    try b.define(task, try hyper.demand.handle(b, interpreted, q.peer, try b.lambda(inside, interpreted.body)));
     const description = try b.declare(&.{}, t.task, &.{}, &.{});
     try b.define(description, try b.pure(try b.lambda(task, t.task)));
     return b.pure(try b.lambda(description, q.types.answer_forward));
@@ -97,13 +103,11 @@ const Alternative = struct {
     }
 };
 
-fn repeatContribution(b: *source.Builder, q: hyper.Query, t: Types, next: Id, first: Id) !Id {
-    const delayed = try b.variable(q.types.answer_backward);
-    const task = try b.variable(t.task);
+fn repeatContribution(b: *source.Builder, need: hyper.demand.Family, capability: Id, t: Types, next: Id, first: Id) !Id {
     const second = try b.variable(t.integer);
     const combined = try add(b, t, first, try b.reference(second));
     const answer = try b.pure(try add(b, t, combined, try b.constant(u64, 13)));
-    return b.bind(delayed, try q.ask(b, next), try b.bind(task, try hyper.force(b, try b.reference(delayed)), try b.bind(second, try hyper.force(b, try b.reference(task)), answer)));
+    return b.bind(second, try hyper.demand.request(b, need, capability, next), answer);
 }
 
 fn object(allocator: std.mem.Allocator, consumer: bool) ![]u8 {

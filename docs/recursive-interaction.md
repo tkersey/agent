@@ -12,9 +12,9 @@ Boundary c7a08ed7c1e15732fc7373dd1f149cbe7da82e7b,
 World 374ed712c2a2ab5041c28befa38bb3c3a859bd26,
 Agent e1b56f06ce0d91a8d7f324198a541f0b16b55a00.
 The normal authenticated Boundary dependency now selects
-`b604ae828650a9be176b103552942adaafc983c0`, including suspended invocation and
-state-based reciprocal constructors. Its downloaded source tree was recomputed
-and matched to GitHub commit tree `45d214c586a30762b55d5c9fc4445d3f3d108f72`;
+`894359086952c314b2c18b0854e3f6f35ff970e8`, including the pure algebra and
+lexical internal-demand interpretation. Its downloaded source tree was recomputed
+and matched to GitHub commit tree `1f574225c99dcc9e5b8f3cfca2e9fb2697ffc3d1`;
 the archive bytes, API files, Zig package hash and both package inventory profiles
 are bound in the existing lock. The World dependency and kernel remain unchanged.
 Inherited economic dispositions remain scoped to the foundation. No new
@@ -93,8 +93,8 @@ caller. The host only supplies declared leaves.
 
 Separate emitter processes produce a producer object and either of two consumer
 objects. The same producer object, SHA-256
-`304956a6e15862001284ecd3d840691d672e930eb4b177004e512a84239c32c2`
-(891 bytes), is passed unchanged to both source-free links. The second consumer
+`090c104a780cce5e315f3d025a0c8d7408fb2353c0a0207fdc412cd76800924d`
+(1,086 bytes), is passed unchanged to both source-free links. The second consumer
 requests two contributions; no producer code or host routing change selects it.
 Authored step selection occurs during component emission, never by inspecting a
 runtime peer identity. This fixture does not yet demonstrate removing all authoring
@@ -119,12 +119,14 @@ provider call ID in fresh responses does not establish occurrence authority.
 
 The existing generator package is the retained sibling ownership witness; this
 is not yet a completed owned-hyperfunction exchange/disposal API. Likewise, this
-slice uses pure recursive demands over task values; the explicit `Need` effect
-handler translation remains required.
+slice now interprets explicit lexical `Need` effects over task-valued endpoints.
+The generic library handler owns counterpart invocation and resumes each actual
+waiting one-shot requester. Repeating a request creates a fresh continuation;
+there is no multi-shot activation of one capture.
 
 ## Current transfer and admission evidence
 
-`zig build check recursive-participant-images --summary all` passes 203/203 steps
+`zig build check recursive-participant-images --summary all` passes 204/204 steps
 and 122/122 tests, including the normal package-installation check. Focused
 participant/image checks pass 23 steps and nine tests. New nearby negatives reject
 an exclusive resource hidden in a reusable task, an omitted reference binding,
@@ -133,8 +135,8 @@ path. A permitted assessment case passes beside the authority negative.
 
 | Consumer | Program bytes | Node/fresh transfers | Observed checkpoint bytes |
 | --- | ---: | ---: | --- |
-| Single contribution | 3,081 | 3 | 316, 586, 124 |
-| Two contributions | 3,277 | 6 | 346, 763, 511, 327, 597, 124 |
+| Single contribution | 3,461 | 3 | 646, 1012, 124 |
+| Two contributions | 3,496 | 6 | 654, 1020, 631, 668, 1034, 124 |
 
 The double-contribution program also passed exact boundary agreement across native
 World, Node/WASM, Wasmtime 48.0.0 (Python 3.14.7), Chromium 153.0.8010.12 Workers
@@ -171,8 +173,7 @@ existing `test/v2/build_source.zig`, `-Dcurrent-fixtures=true`,
 
 ## Remaining implementation
 
-The complete hyperfunction algebra and lazy aggregates, effect-based demand
-translation, source-independent support library and three-part compositional
+Broader pure-law/generated agreement, source-independent support library and three-part compositional
 closure, local disposal with suspended cleanup, multi-shot custody and allocation
 failure sweeps remain unfinished. The incremental-parser synthesis application,
 independent acceptance, consumer-supplied assessment, exact delivery, full required
@@ -249,3 +250,13 @@ This supplies independent real-tool acceptance for the emerging application.
 Model-directed fragment construction, version-bound observations, intent handling,
 selection/completion separation, exact approval/delivery and the strategy
 comparison remain unimplemented. No live-model quality advantage is claimed.
+
+The Need migration removes manual counterpart-forcing sequences from participant
+step bodies. Shared generic handler code now performs that work. The single/double
+images increased by 380/219 bytes versus the preceding direct-query witnesses;
+checkpoint peaks increased by 426/271 bytes. These are representation costs for
+the required effect interpretation, not timing results or an accepted economic
+waiver. The World kernel and its data/runtime implementation are unchanged. The
+existing native fixture binary (compiled against Boundary b604ae8 data) was reused
+because no Boundary data or World runtime code changed. Both consumer variants
+and the complete four-engine double-consumer/cancellation cases were rerun.

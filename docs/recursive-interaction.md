@@ -327,3 +327,45 @@ Reproduce with `zig build parser-proposal-images check-parser-tools`, then
 proposal/execution interfaces; it does not claim that the complete recursive
 synthesis controller, repair episode, approval/delivery or live provider command
 has been implemented. Those remain the next application work.
+
+## First consumer-directed parser construction episode
+
+`test/consumers/incremental-parser/main.zig` is the growing application. Producer,
+consumer and reference computations emit separate BMO1 objects. The consumer
+invokes the reference participant through the same hyperfunction interface; the
+composite remains an admissible consumer. All three link through normal Agent
+participant admission and the existing checked model/tool helpers. The host
+implements declared leaves only and does not choose peers or reconstruct callers.
+
+The current episode requests a partial escape-boundary construction. Before any
+candidate exists, the producer makes a reciprocal Need request; the consumer's
+successor invokes the reference participant and waits on actual reference
+execution. After fresh recovery, the consumer checks the returned occurrence,
+and the producer builds a model request containing the actual observation count.
+The model's fragment becomes an application-versioned partial candidate. The
+original consumer then runs a real qualified probe and returns its concrete
+counterexample. Complete-candidate proposals are not offered at this first step.
+
+The deterministic model response contains an API-shaped but invalid EOF-buffering
+implementation. The actual probe observes no record at the feed containing the
+terminator and a late record at final EOF. This is a genuine delayed-emission
+counterexample, not an unrelated protocol failure or a previously complete
+candidate relabeled as a fragment. Test-only source is supplied by the synthetic
+provider; the producer and prompts do not import accepted implementations.
+
+The 8,208-byte Program passes native, Node/WASM, Wasmtime 48.0.0, Chromium
+153.0.8010.12 Worker and Firefox 155.0 Worker agreement. Each run continues from
+selected engines' actual returned bytes, makes four transfers, and destroys five
+browser Workers. The environmental trace is reference → model → candidate probe;
+the model request is observed only after reference completion. The probe executes
+one candidate process under the qualified facility (plus two qualification
+processes). No provider network call or paid inference ran.
+
+`zig build check` passes 258 steps / 123 tests. Reproduce the application with
+`zig build parser-construction-images`, then
+`node test/agent4/parser_construction.mjs WORLD_ENTRY KERNEL`. Optional arguments
+`WASMTIME_PEER NATIVE_TOOL BROWSER_TOOLS ENGINE` exercise the existing full engine
+harness. This remains the first construction episode: candidate revision,
+completion and authoritative full acceptance, retained idle ownership and local
+cleanup in this application, assessment policy replacement, exact approval and
+conditional delivery are still required. It does not yet complete parser synthesis.

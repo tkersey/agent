@@ -119,6 +119,29 @@ pub fn build(b: *std.Build) void {
     for ([_][]const u8{ "program", "input", "result-schema", "fragment", "experiment", "constraint", "unresolved", "unknown", "unoffered" }) |mode|
         g.emit(parser_proposals, proposal_emitter, &.{mode}, b.fmt("parser-proposals/{s}.bin", .{mode}));
     check.dependOn(parser_proposals);
+    const parser_episode = b.step("parser-construction-images", "Emit consumer-directed parser construction");
+    const parser_app = g.emitter("parser-construction", g.module("test/consumers/incremental-parser/main.zig"));
+    const parser_producer = b.addRunArtifact(parser_app);
+    parser_producer.addArg("producer");
+    const parser_producer_bytes = parser_producer.captureStdOut(.{});
+    const parser_consumer = b.addRunArtifact(parser_app);
+    parser_consumer.addArg("consumer");
+    const parser_consumer_bytes = parser_consumer.captureStdOut(.{});
+    const parser_reference = b.addRunArtifact(parser_app);
+    parser_reference.addArg("reference");
+    const parser_reference_bytes = parser_reference.captureStdOut(.{});
+    const parser_link = b.addRunArtifact(parser_app);
+    parser_link.addArg("link");
+    parser_link.addFileArg(parser_producer_bytes);
+    parser_link.addFileArg(parser_consumer_bytes);
+    parser_link.addFileArg(parser_reference_bytes);
+    parser_episode.dependOn(&b.addInstallFileWithDir(parser_reference_bytes, .prefix, "agent4/parser-construction/reference.bmo1").step);
+    parser_episode.dependOn(&b.addInstallFileWithDir(parser_producer_bytes, .prefix, "agent4/parser-construction/producer.bmo1").step);
+    parser_episode.dependOn(&b.addInstallFileWithDir(parser_consumer_bytes, .prefix, "agent4/parser-construction/consumer.bmo1").step);
+    parser_episode.dependOn(&b.addInstallFileWithDir(parser_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/program.bpi3").step);
+    for ([_][]const u8{ "model-template", "input-schema", "result-schema", "model-schema", "model-reply-schema" }) |mode|
+        g.emit(parser_episode, parser_app, &.{mode}, b.fmt("parser-construction/{s}.bin", .{mode}));
+    check.dependOn(parser_episode);
     const parser_schema = g.emitter("parser-schema", g.module("test/agent4/parser_tools.zig"));
     g.emit(parser_tools, parser_schema, &.{"program"}, "parser/program.bpi3");
     for ([_][]const u8{ "reference-request", "reference-reply", "execution-request", "execution-reply" }) |mode|

@@ -106,6 +106,7 @@ test/consumers/document/critic.zig
 test/consumers/document/main.zig
 test/consumers/document/source.zig
 test/consumers/document/terminology.zig
+test/consumers/incremental-parser/main.zig
 test/consumers/inquiry/build.zig
 test/consumers/inquiry/evidence.zig
 test/consumers/inquiry/exploration.zig

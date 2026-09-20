@@ -7,7 +7,7 @@ const hyper = boundary.library.hyper;
 const parser = agent.parser_synthesis;
 const P = parser.proposals.Profile;
 const Id = source.Id;
-pub const Input = struct { subject: parser.Subject, model: P.Request, trace: parser.Trace, occurrence: u64, rounds: u64, target: agent.contracts.Text(256), principal: u64, apply: bool };
+pub const Input = struct { subject: parser.Subject, model: P.Request, trace: parser.Trace, occurrence: u64, rounds: u64, target: agent.contracts.Text(256), principal: u64, apply: bool, abort_nested: bool };
 const State = struct { input: Input, successor: bool, version: u64, remaining: u64, prior: ?Report, reference: ?parser.ReferenceReply };
 const Constraint = struct { state: State, observation: parser.ReferenceReply };
 const Constructed = struct { candidate: parser.Candidate, reference: parser.ReferenceReply };
@@ -31,6 +31,7 @@ const Types = struct {
     sample: Id,
     probe: Id,
     reference_factory: Id,
+    release: Id,
 };
 fn types(b: *source.Builder) !Types {
     const cache = try b.specialization(Types, "agent.parser.episode/v1", .{});
@@ -41,13 +42,14 @@ fn types(b: *source.Builder) !Types {
     const model = try P.declare(b);
     const reference = try b.effect(.{ .identity = parser.reference_identity, .payload = try agent.contracts.schema(parser.ReferenceRequest, b), .result = try agent.contracts.schema(parser.ReferenceReply, b) });
     const execution = try b.effect(.{ .identity = "agent.parser.probe.v1", .payload = try agent.contracts.schema(parser.ExecutionRequest, b), .result = try agent.contracts.schema(parser.ExecutionReply, b) });
+    const release = try b.effect(.{ .identity = "parser/participant-release", .payload = try b.scalar(u64), .result = try b.scalar(void) });
     const task = try b.reserveSchema();
     const pair = try hyper.pairWith(b, task, task, &.{ state, contribution });
-    try b.defineSchema(task, .{ .internal = .{ .computation = .{ .parameters = &.{}, .result = contribution, .effects = &.{ model, reference, execution }, .capture_bound = &.{ state, pair.peer_forward, pair.peer_backward } } } });
+    try b.defineSchema(task, .{ .internal = .{ .computation = .{ .parameters = &.{}, .result = contribution, .effects = &.{ model, reference, execution, release }, .capture_bound = &.{ state, pair.peer_forward, pair.peer_backward } } } });
     const sample = try b.declare(&.{ state, try agent.contracts.schema(Constraint, b) }, contribution, &.{model}, &.{});
     const probe = try b.declare(&.{ state, try agent.contracts.schema(parser.Candidate, b) }, try agent.contracts.schema(parser.ExecutionReply, b), &.{execution}, &.{});
     const reference_factory = try b.declare(&.{state}, pair.backward, &.{}, &.{});
-    return cache.finish(b, .{ .reference_factory = reference_factory, .input = input, .state = state, .contribution = contribution, .task = task, .pair = pair, .model = model, .reference = reference, .execution = execution, .sample = sample, .probe = probe });
+    return cache.finish(b, .{ .release = release, .reference_factory = reference_factory, .input = input, .state = state, .contribution = contribution, .task = task, .pair = pair, .model = model, .reference = reference, .execution = execution, .sample = sample, .probe = probe });
 }
 fn field(b: *source.Builder, comptime T: type, value: Id, index: Id) !Id {
     return b.primitive(try agent.contracts.schema(T, b), .field, &.{value}, index);
@@ -59,11 +61,12 @@ fn unresolved(b: *source.Builder, t: Types, message: []const u8) !Id {
 fn step(b: *source.Builder, q: hyper.Query, consumer: bool) !Id {
     const t = try types(b);
     const need = try hyper.demand.family(b, "parser/need", t.state, t.contribution);
-    const interpreted = try hyper.demand.interpret(b, q, need, t.contribution, .{
+    const interpreted = try hyper.demand.interpretWith(b, q, need, t.contribution, .{
         .captures = &.{ t.state, t.contribution, t.pair.peer_forward, t.pair.peer_backward },
-        .residual = .{ .effects = &.{ t.model, t.reference, t.execution } },
-    });
-    const body = try b.declare(&.{need.capability}, t.contribution, &.{ t.model, t.reference, t.execution, need.effect }, &.{});
+        .residual = .{ .effects = &.{ t.model, t.reference, t.execution, t.release } },
+        .obligations = true,
+    }, ReturnOrDispose);
+    const body = try b.declare(&.{need.capability}, t.contribution, &.{ t.model, t.reference, t.execution, t.release, need.effect }, &.{});
     const next = try successor(b, q.state);
     const received = try b.variable(t.contribution);
     const requested = try hyper.demand.request(b, need, try b.reference(b.parameter(body, 0)), next);
@@ -75,13 +78,40 @@ fn step(b: *source.Builder, q: hyper.Query, consumer: bool) !Id {
         .when_false = instructions,
     } });
     const exhausted = try b.primitive(try b.scalar(bool), .equal, &.{ try field(b, u64, q.state, 3), try b.constant(u64, 0) }, 0);
+    if (!consumer) {
+        const work = try b.declare(&.{}, t.contribution, &.{ t.model, t.reference, t.execution, t.release, need.effect }, &.{});
+        try b.define(work, instructions);
+        const exit = try boundary.library.cleanup.exitInfo(b, try b.scalar(void));
+        const cleanup = try b.declare(&.{exit}, try b.scalar(void), &.{t.release}, &.{});
+        try b.define(cleanup, try b.term(.{ .perform = .{ .effect = t.release, .payload = try b.constant(u64, 90) } }));
+        const work_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{}, .result = t.contribution, .effects = &.{ t.model, t.reference, t.execution, t.release, need.effect }, .capture_bound = &.{ t.state, t.pair.peer_backward, need.capability } } } });
+        const cleanup_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{exit}, .result = try b.scalar(void), .effects = &.{t.release} } } });
+        const protected = try b.term(.{ .protect = .{ .body = try b.lambda(work, work_type), .cleanup = try b.lambda(cleanup, cleanup_type) } });
+        instructions = try b.term(.{ .conditional = .{ .condition = try field(b, bool, try field(b, Input, q.state, 0), 8), .when_true = protected, .when_false = instructions } });
+    }
     try b.define(body, try b.term(.{ .conditional = .{ .condition = exhausted, .when_true = try unresolved(b, t, "Construction allowance exhausted."), .when_false = instructions } }));
-    const task = try b.declare(&.{}, t.contribution, &.{ t.model, t.reference, t.execution }, &.{});
+    const task = try b.declare(&.{}, t.contribution, &.{ t.model, t.reference, t.execution, t.release }, &.{});
     try b.define(task, try hyper.demand.handle(b, interpreted, q.peer, try b.lambda(body, interpreted.body)));
     const descriptor = try b.declare(&.{}, t.task, &.{}, &.{});
     try b.define(descriptor, try b.pure(try b.lambda(task, t.task)));
     return b.pure(try b.lambda(descriptor, q.types.answer_forward));
 }
+const ReturnOrDispose = struct {
+    var invalid: enum { none, drop, duplicate } = .none;
+    pub fn emit(b: *source.Builder, token: Id, value: Id) source.Error!Id {
+        if (invalid == .drop) return b.pure(value);
+        const resume_requester = try b.term(.{ .resume_value = .{ .resumption = token, .argument = value } });
+        if (invalid == .duplicate) return b.bind(try b.variable(try agent.contracts.schema(Contribution, b)), resume_requester, resume_requester);
+        const disposed = try b.bind(try b.variable(try b.scalar(void)), try b.term(.{ .dispose = token }), try b.pure(value));
+        return b.term(.{ .match_sum = .{ .value = value, .cases = &.{
+            .{ .variable = try b.variable(try agent.contracts.schema(Constraint, b)), .body = resume_requester },
+            .{ .variable = try b.variable(try agent.contracts.schema(Constructed, b)), .body = resume_requester },
+            .{ .variable = try b.variable(try agent.contracts.schema(Report, b)), .body = resume_requester },
+            .{ .variable = try b.variable(try agent.contracts.schema(agent.contracts.Text(512), b)), .body = disposed },
+            .{ .variable = try b.variable(try agent.contracts.schema(agent.parser_delivery.Result, b)), .body = resume_requester },
+        } } });
+    }
+};
 fn referenceStep(b: *source.Builder, t: Types, state: Id) !Id {
     const input = try field(b, Input, state, 0);
     const request = try b.primitive(try agent.contracts.schema(parser.ReferenceRequest, b), .product, &.{
@@ -89,7 +119,8 @@ fn referenceStep(b: *source.Builder, t: Types, state: Id) !Id {
     }, 0);
     const reply = try b.variable(try agent.contracts.schema(parser.ReferenceReply, b));
     const constraint = try b.primitive(try agent.contracts.schema(Constraint, b), .product, &.{ state, try b.reference(reply) }, 0);
-    const observed = try b.bind(reply, try b.term(.{ .perform = .{ .effect = t.reference, .payload = request } }), try b.pure(try b.primitive(t.contribution, .variant, &.{constraint}, 0)));
+    const contribution = try b.term(.{ .conditional = .{ .condition = try field(b, bool, input, 8), .when_true = try unresolved(b, t, "Nested parser work was locally abandoned after its reference observation."), .when_false = try b.pure(try b.primitive(t.contribution, .variant, &.{constraint}, 0)) } });
+    const observed = try b.bind(reply, try b.term(.{ .perform = .{ .effect = t.reference, .payload = request } }), contribution);
     const cached = try b.variable(try agent.contracts.schema(parser.ReferenceReply, b));
     const reused = try b.primitive(try agent.contracts.schema(Constraint, b), .product, &.{ state, try b.reference(cached) }, 0);
     return b.term(.{ .match_sum = .{ .value = try field(b, ?parser.ReferenceReply, state, 5), .cases = &.{
@@ -131,7 +162,7 @@ fn component(allocator: std.mem.Allocator, consumer: bool, reference_only: bool,
     const t = try types(&b);
     const definition = if (forged) try hyper.ana(&b, hyper.swap(t.pair), t.state, ForgedConsumer) else if (reference_only) try hyper.ana(&b, hyper.swap(t.pair), t.state, Reference) else if (consumer) try hyper.ana(&b, hyper.swap(t.pair), t.state, Consumer) else try hyper.ana(&b, t.pair, t.state, Producer);
     var compiled = try source.component.compile(allocator, b.module(definition.function, try b.scalar(void)), .{
-        .imports = &.{ .{ .name = "reference-factory", .reference = .{ .kind = .function, .id = t.reference_factory } }, .{ .name = "model", .reference = .{ .kind = .effect, .id = t.model } }, .{ .name = "probe", .reference = .{ .kind = .function, .id = t.probe } }, .{ .name = "reference", .reference = .{ .kind = .effect, .id = t.reference } }, .{ .name = "sample", .reference = .{ .kind = .function, .id = t.sample } }, .{ .name = "simulation", .reference = .{ .kind = .effect, .id = t.execution } } },
+        .imports = &.{ .{ .name = "reference-factory", .reference = .{ .kind = .function, .id = t.reference_factory } }, .{ .name = "participant-release", .reference = .{ .kind = .effect, .id = t.release } }, .{ .name = "model", .reference = .{ .kind = .effect, .id = t.model } }, .{ .name = "probe", .reference = .{ .kind = .function, .id = t.probe } }, .{ .name = "reference", .reference = .{ .kind = .effect, .id = t.reference } }, .{ .name = "sample", .reference = .{ .kind = .function, .id = t.sample } }, .{ .name = "simulation", .reference = .{ .kind = .effect, .id = t.execution } } },
         .exports = &.{.{ .name = "create", .reference = .{ .kind = .function, .id = definition.function } }},
         .borrows = &.{ .{ .function = t.sample }, .{ .function = t.probe }, .{ .function = t.reference_factory } },
     });
@@ -247,7 +278,6 @@ fn defineProbe(c: agent.Context, t: Types) !void {
 
 const Application = struct {
     var retain_idle = false;
-    var abort_nested = false;
     var producer: []const u8 = &.{};
     var consumer: []const u8 = &.{};
     var reference_bytes: []const u8 = &.{};
@@ -257,6 +287,7 @@ const Application = struct {
         try c.registry.classify(t.model, .model);
         try c.registry.classify(t.reference, .read);
         try c.registry.classify(t.execution, .simulation);
+        try c.registry.classify(t.release, .read);
         try defineSample(c, t);
         try defineProbe(c, t);
         const r = try install(c, t, "reference", reference_bytes, t.pair.backward);
@@ -265,11 +296,10 @@ const Application = struct {
         const z = try install(c, t, "consumer", consumer, t.pair.backward);
         const acceptance = try c.external(parser.execution_identity, try c.schema(parser.ExecutionRequest), try c.schema(parser.ExecutionReply), .simulation);
         const delivery = try agent.parser_delivery.define(c);
-        const core_effects = (try (source.Row{ .effects = &.{ t.model, t.reference, t.execution, acceptance } }).unionWith(b.allocator(), .{ .effects = delivery.effects })).effects;
+        const core_effects = (try (source.Row{ .effects = &.{ t.model, t.reference, t.execution, t.release, acceptance } }).unionWith(b.allocator(), .{ .effects = delivery.effects })).effects;
         const idle = if (retain_idle) try Retained.init(c) else null;
         const retained_effects = if (idle) |owned| (try (source.Row{ .effects = core_effects }).unionWith(b.allocator(), .{ .effects = &.{ owned.release, owned.activity } })).effects else core_effects;
-        const observation = if (abort_nested) try c.external("parser/abort-observation", try c.schema(parser.ReferenceRequest), try c.schema(parser.ReferenceReply), .read) else null;
-        const effects = if (observation) |leaf| (try (source.Row{ .effects = retained_effects }).unionWith(b.allocator(), .{ .effects = &.{leaf} })).effects else retained_effects;
+        const effects = retained_effects;
         const round = try b.declare(&.{t.state}, t.contribution, effects, &.{});
         try c.registry.privateFunction(round);
         const state = try b.reference(b.parameter(round, 0));
@@ -288,9 +318,8 @@ const Application = struct {
         const input = try b.reference(b.parameter(entry, 0));
         const initial = try b.primitive(t.state, .product, &.{ input, try b.constant(bool, false), try b.constant(u64, 1), try field(b, u64, input, 4), try literal(b, ?Report, null), try literal(b, ?parser.ReferenceReply, null) }, 0);
         const call = try b.term(.{ .call = .{ .function = round, .arguments = &.{initial} } });
-        const scoped = if (abort_nested) try abortAtReference(c, t, round, call, effects, idle.?.release, observation.?, idle.?.g.package) else call;
-        if (!abort_nested) try c.registry.allowPrivateCall(entry, call, round);
-        try b.define(entry, if (idle) |owned| try owned.around(b, t.contribution, scoped) else scoped);
+        try c.registry.allowPrivateCall(entry, call, round);
+        try b.define(entry, if (idle) |owned| try owned.around(b, t.contribution, call) else call);
         return b.module(entry, try b.scalar(void));
     }
 };
@@ -301,52 +330,10 @@ fn install(c: agent.Context, t: Types, name: []const u8, bytes: []const u8, resu
         .entry = "create",
         .parameters = &.{t.state},
         .result = result,
-        .effects = &.{ .{ .symbol = "model", .effect = t.model }, .{ .symbol = "reference", .effect = t.reference }, .{ .symbol = "simulation", .effect = t.execution } },
+        .effects = &.{ .{ .symbol = "participant-release", .effect = t.release }, .{ .symbol = "model", .effect = t.model }, .{ .symbol = "reference", .effect = t.reference }, .{ .symbol = "simulation", .effect = t.execution } },
         .functions = &.{ .{ .symbol = "reference-factory", .function = t.reference_factory }, .{ .symbol = "sample", .function = t.sample }, .{ .symbol = "probe", .function = t.probe } },
     });
 }
-// Capture the actual nested reference requester and abandon that delimited
-// computation after its environmental observation. Disposal itself can suspend.
-fn abortAtReference(c: agent.Context, t: Types, owner: Id, call: Id, effects: []const Id, release: Id, observation: Id, sibling: Id) !Id {
-    const b = c.builder;
-    const unit = try b.scalar(void);
-    const payload = try c.schema(parser.ReferenceRequest);
-    const reply = try c.schema(parser.ReferenceReply);
-    const capability = try b.schema(.{ .internal = .{ .capability = t.reference } });
-    const captures = &.{ t.input, t.state, t.contribution, t.task, t.pair.forward, t.pair.backward, t.pair.peer_forward, t.pair.peer_backward, t.pair.answer_forward, t.pair.answer_backward, capability, sibling };
-    const token = try b.schema(.{ .internal = .{ .resumption = .{
-        .effect = t.reference,
-        .input = reply,
-        .answer = t.contribution,
-        .effects = effects,
-        .capture_bound = captures,
-        .handled = &.{t.reference},
-        .mode = .deep,
-        .use = .linear,
-        .obligations = true,
-    } } });
-    const returns = try b.declare(&.{t.contribution}, t.contribution, &.{}, &.{});
-    try b.define(returns, try b.pure(try b.reference(b.parameter(returns, 0))));
-    const clause = try b.declare(&.{ payload, token }, t.contribution, effects, &.{});
-    const observed = try b.term(.{ .perform = .{ .effect = observation, .payload = try b.reference(b.parameter(clause, 0)) } });
-    const dispose = try b.term(.{ .dispose = try b.reference(b.parameter(clause, 1)) });
-    const stopped = try unresolved(b, t, "Nested parser work was locally abandoned after its reference observation.");
-    try b.define(clause, try b.bind(try b.variable(reply), observed, try b.bind(try b.variable(unit), dispose, stopped)));
-    const handler = try b.handler(.{ .mode = .deep, .input = t.contribution, .answer = t.contribution, .return_function = returns, .effects = effects, .clauses = &.{.{ .effect = t.reference, .function = clause, .resumption = token }} });
-    const work = try b.declare(&.{}, t.contribution, effects, &.{});
-    try c.registry.allowPrivateCall(work, call, owner);
-    try b.define(work, call);
-    const exit = try boundary.library.cleanup.exitInfo(b, unit);
-    const cleanup = try b.declare(&.{exit}, unit, &.{release}, &.{});
-    try b.define(cleanup, try b.term(.{ .perform = .{ .effect = release, .payload = try b.constant(u64, 90) } }));
-    const work_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{}, .result = t.contribution, .effects = effects, .capture_bound = &.{t.input} } } });
-    const cleanup_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{exit}, .result = unit, .effects = &.{release} } } });
-    const body = try b.declare(&.{capability}, t.contribution, effects, &.{});
-    try b.define(body, try b.term(.{ .protect = .{ .body = try b.lambda(work, work_type), .cleanup = try b.lambda(cleanup, cleanup_type) } }));
-    const body_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{capability}, .result = t.contribution, .effects = effects, .capture_bound = &.{t.input} } } });
-    return b.term(.{ .handle = .{ .handler = handler, .body = try b.lambda(body, body_type) } });
-}
-
 // Test-only owned endpoints surround the real application. Their packages never
 // enter a participant import or an assessment capture. Control stays in World.
 const Retained = struct {
@@ -424,8 +411,14 @@ pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();
     const mode = args.next() orelse return error.ExpectedMode;
-    if (std.mem.eql(u8, mode, "link") or std.mem.eql(u8, mode, "link-retained") or std.mem.eql(u8, mode, "link-abort")) {
-        Application.abort_nested = std.mem.eql(u8, mode, "link-abort");
+    if (std.mem.eql(u8, mode, "producer-drop") or std.mem.eql(u8, mode, "producer-duplicate")) {
+        if (args.next() != null) return error.UnexpectedArgument;
+        ReturnOrDispose.invalid = if (std.mem.eql(u8, mode, "producer-drop")) .drop else .duplicate;
+        const bytes = try component(init.gpa, false, false, false);
+        defer init.gpa.free(bytes);
+        return output(init, bytes);
+    }
+    if (std.mem.eql(u8, mode, "link") or std.mem.eql(u8, mode, "link-retained")) {
         Application.retain_idle = !std.mem.eql(u8, mode, "link");
         const p = args.next() orelse return error.ExpectedProducer;
         const c = args.next() orelse return error.ExpectedConsumer;
@@ -473,7 +466,7 @@ pub fn main(init: std.process.Init) !void {
 const Reference = struct {
     pub fn emit(b: *source.Builder, q: hyper.Query) !Id {
         const t = try types(b);
-        const task = try b.declare(&.{}, t.contribution, &.{ t.model, t.reference, t.execution }, &.{});
+        const task = try b.declare(&.{}, t.contribution, &.{ t.model, t.reference, t.execution, t.release }, &.{});
         try b.define(task, try referenceStep(b, t, q.state));
         const descriptor = try b.declare(&.{}, t.task, &.{}, &.{});
         try b.define(descriptor, try b.pure(try b.lambda(task, t.task)));
@@ -500,7 +493,7 @@ fn checkedReference(b: *source.Builder, t: Types, input: Id, value: Id) !Id {
         .{ .variable = reference_reply, .body = verified },
         .{ .variable = try b.variable(try agent.contracts.schema(Constructed, b)), .body = wrong },
         .{ .variable = try b.variable(try agent.contracts.schema(Report, b)), .body = wrong },
-        .{ .variable = try b.variable(try agent.contracts.schema(agent.contracts.Text(512), b)), .body = wrong },
+        .{ .variable = try b.variable(try agent.contracts.schema(agent.contracts.Text(512), b)), .body = try b.pure(value) },
         .{ .variable = try b.variable(try agent.contracts.schema(agent.parser_delivery.Result, b)), .body = wrong },
     } } });
 }
@@ -695,7 +688,7 @@ const ForgedConsumer = struct {
                 .first_failure = .{ .bytes = "" },
             } } },
         } });
-        const task = try b.declare(&.{}, t.contribution, &.{ t.model, t.reference, t.execution }, &.{});
+        const task = try b.declare(&.{}, t.contribution, &.{ t.model, t.reference, t.execution, t.release }, &.{});
         try b.define(task, try b.pure(forged));
         const description = try b.declare(&.{}, t.task, &.{}, &.{});
         try b.define(description, try b.pure(try b.lambda(task, t.task)));

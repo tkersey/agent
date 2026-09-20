@@ -16,8 +16,9 @@ const {Kernel,decodeOutcome,decodeRequest,encodeResult,encodeInput}=await import
 const read=async name=>new Uint8Array(await readFile(`zig-out/agent4/parser-construction/${name}`));
 const scenario=process.argv[8]??'repair';
 const retained=scenario.startsWith('retained');
-const localAbort=scenario==='retained-abort';
-const image=await read(localAbort?'abort.bpi3':retained?'retained.bpi3':scenario==='forged'?'forged.bpi3':'program.bpi3'),inputSchema=decodeSchema(await read('input-schema.bin'));
+const localAbort=scenario.startsWith('retained-abort');
+const cancelRequested=scenario==='retained-cancel'||scenario==='retained-abort-cancel';
+const image=await read(retained?'retained.bpi3':scenario==='forged'?'forged.bpi3':'program.bpi3'),inputSchema=decodeSchema(await read('input-schema.bin'));
 const resultSchema=decodeSchema(await read('result-schema.bin')),modelSchema=decodeSchema(await read('model-schema.bin'));
 const model=decodeValue(modelSchema,await read('model-template.bin'));
 const tools=await createParserTools();assert.equal(tools.kind,'qualified',JSON.stringify(tools));
@@ -31,7 +32,7 @@ const area=await mkdtemp(join(tmpdir(),'parser-synthesis-'));
 await writeFile(join(area,'parser.mjs'),tools.evidence.reference);
 const delivery=await createParserDelivery({root:area});
 const apply=['apply','decline','changed-approval'].includes(scenario);
-const input=[subject,model,trace,17n,rounds,'parser.mjs',7n,apply];
+const input=[subject,model,trace,17n,rounds,'parser.mjs',7n,apply,localAbort];
 const kernelBytes=new Uint8Array(await readFile(kernelPath)),expectedSha256=hash(kernelBytes);
 const peer=peerPath?await(await import(pathToFileURL(resolve(peerPath)))).wasmtimePeer(resolve(kernelPath),expectedSha256):null;
 let browser;
@@ -103,20 +104,20 @@ for(let round=0;;round++) {
       reply={tag:0,value:[payload[3],7n,scenario==='decline'?{tag:1,value:'declined'}:{tag:0,value:null}]};
     } else if(request.semanticIdentity==='agent.parser.replace.v1') {
       writes++;assert.equal(approvals,1);reply=await delivery.replace(payload);
-    } else if(['parser/retained-release','parser/retained-work'].includes(request.semanticIdentity)) {
+    } else if(['parser/retained-release','parser/retained-work','parser/participant-release'].includes(request.semanticIdentity)) {
       assert.equal(retained,true);if(!localAbort)assert.equal(probeFailed,true);
-      if(cancelling)assert.equal(request.semanticIdentity,'parser/retained-release');
-      if(!(scenario==='retained-cancel'&&!cancelling&&request.semanticIdentity==='parser/retained-release'))lifetime.push([request.semanticIdentity,payload.toString()]);reply=null;
+      if(cancelling)assert.ok(['parser/retained-release','parser/participant-release'].includes(request.semanticIdentity));
+      if(!(cancelRequested&&!cancelling&&['parser/retained-release','parser/participant-release'].includes(request.semanticIdentity)))lifetime.push([request.semanticIdentity,payload.toString()]);reply=null;
     } else throw Error('undeclared leaf');
-    if(scenario==='retained-cancel'&&!cancelling&&request.semanticIdentity==='parser/retained-release') {
+    if(cancelRequested&&!cancelling&&['parser/retained-release','parser/participant-release'].includes(request.semanticIdentity)) {
       cancelling=true;control='cancel_text';value=new TextEncoder().encode('stop during local disposal');
     } else {control='reply';value=await encodeResult(out.request,encodeValue(decodeSchema(request.resumeSchema),reply));}
   } else {control='none';value=new Uint8Array();}
   const state=out.state;assert.deepEqual(k.checkpoint(s,{transfer:true}),state);assert.equal(k.usage().workingLive,0n);
   k=await fresh();p=k.prepare(image);s=k.restore(p,state);k.releasePrepared(p);transfers++;
 }
-if(localAbort){assert.equal(result.tag,3);assert.match(result.value,/locally abandoned/);assert.equal(modelCalls,0);assert.equal(fullAccepted,false);assert.equal(events.filter(x=>x==='parser/abort-observation').length,1);assert.equal(events.includes('agent.parser.reference.v1'),false);}
-else if(cancelled){assert.equal(scenario,'retained-cancel');assert.equal(modelCalls,1);assert.equal(fullAccepted,false);}
+if(cancelled){assert.equal(cancelRequested,true);assert.equal(modelCalls,localAbort?0:1);assert.equal(fullAccepted,false);}
+else if(localAbort){assert.equal(result.tag,3);assert.match(result.value,/locally abandoned/);assert.equal(modelCalls,0);assert.equal(fullAccepted,false);assert.equal(events.filter(x=>x==='agent.parser.reference.v1').length,1);}
 else if(scenario==='forged'){assert.equal(result.tag,3);assert.match(result.value,/do not grant completion authority/);assert.equal(events.length,0);}
 else if(rounds===0n){assert.equal(result.tag,3);assert.equal(events.length,0);}
 else if(scenario==='incomplete'){assert.equal(result.tag,3);assert.match(result.value,/incomplete or inconsistent/);assert.equal(fullAccepted,false);}
@@ -137,8 +138,12 @@ else {
   assert.equal(modelCalls,Number(rounds));
 }
 const current=await readFile(join(area,'parser.mjs'),'utf8');
-if(retained)assert.deepEqual(lifetime,localAbort?[
-  ['parser/retained-release','90'],['parser/retained-release','5'],['parser/retained-work','57'],['parser/retained-release','50'],
+if(retained)assert.deepEqual(lifetime,localAbort&&cancelled?[
+  // Global unwind disposes the younger retained owner first; it does not run
+  // the authored local close-5/advance-50 continuation.
+  ['parser/participant-release','90'],['parser/retained-release','50'],['parser/retained-release','5'],
+]:localAbort?[
+  ['parser/participant-release','90'],['parser/retained-release','5'],['parser/retained-work','57'],['parser/retained-release','50'],
 ]:cancelled?[
   ['parser/retained-release','5'],['parser/retained-release','50'],
 ]:[['parser/retained-release','5'],['parser/retained-work','57'],['parser/retained-release','50']]);

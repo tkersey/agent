@@ -483,7 +483,7 @@ or real-user-data mutation occurs.
 `node test/agent4/parser_delivery.mjs WORLD_ENTRY KERNEL`. The integrated driver
 accepts `apply` as its final scenario argument; `repair` returns the reviewable
 artifact after live read. Firefox has not been rerun for this newest delivery
-Program. General owned-channel/local cleanup work, intent ambiguity, generic
+Program. General owned-channel composition, intent ambiguity, generic
 assessment selection, broader proof/failure sweeps, strategy/runtime comparisons,
 opt-in live configuration and serial reviews remain unfinished.
 
@@ -524,10 +524,10 @@ or the same command with `firefox retained-cancel`. Empty peer/tool arguments se
 Node-only execution. The ordinary `link` application has no retained fixture owners.
 
 This establishes retained owned endpoints around the real nested application and
-local disposal returning to an active owner. It does not yet establish local abort
-of the parser's suspended call chain itself, a compositional owned hyperfunction
-channel API, or resource-bearing assessment admission. Those remain required work,
-alongside the previously listed semantic, selection, comparison and review gaps.
+local disposal returning to an active owner. The local-abandonment construction below extends it to the suspended parser chain.
+A compositional owned hyperfunction channel API and resource-bearing assessment
+admission remain required, alongside the semantic, selection, comparison and review
+gaps listed below.
 
 The same retained Program also passes the two-round `retained` scenario: real
 counterexample, revised complete candidate, full independent acceptance, live target
@@ -538,41 +538,56 @@ destroyed Workers; release 5, work 57 and release 50 occur only after the actual
 parser result. This fresh evidence includes the new dependency binding; the older
 approved-write scenarios above remain separately scoped evidence.
 
-## Nested local-disposal admission obstruction
+## Local abandonment at the lexical demand owner
 
-The next intended-valid witness is executable as a separate build target:
-`zig build parser-abort-image`. It currently **fails with InvalidOwnership**;
-it is not included as a passing acceptance case in `zig build check`.
+Agent now authenticates Boundary e96ad16baad6fc80ad9028cf64e9b9b9f20395f1.
+The Need interpretation uses hyper.demand.interpretWith: the staged completion
+receives the actual linear requester and the counterpart result. An unresolved
+contribution disposes that requester; other contributions resume it. The source
+checker rejects a callback that drops it (InvalidOwnership) or resumes it twice
+(UnavailableSlot), without publishing an object. No capture contract is widened.
 
-The fixture links the unchanged producer, consumer and reference objects. A
-private one-shot handler captures the actual nested reference requester, forwards
-its payload to a separately declared read observation leaf, then disposes the
-captured requester. A protected cleanup inside that scope would emit release 90;
-the still-active outer owner would subsequently dispose endpoint 5 and resume
-endpoint 50. `retained-abort` in the existing runtime driver encodes the expected
-trace and zero-model-call result, but has not executed because no admitted image
-exists. This is local continuation disposal, not World cancellation.
+The parser input has an explicit abort_nested fixture policy. The producer installs
+cleanup before asking its counterpart. The consumer recursively asks the reference
+participant, which executes the real frozen reference observation and returns an
+unresolved contribution under that policy. The producer's waiting continuation is
+then disposed instead of resumed into model sampling. Its cleanup emits release 90
+and can suspend. Disposal returns through the still-active outer owner, which closes
+endpoint 5, resumes unrelated endpoint 50 with input 7, observes work/completion 57,
+and releases 50. Model, approval and target-write counts are zero.
 
-The source wrapper compiles; final source-free linking rejects its capture bound.
-A diagnostic-only compiler copy identified the missing linked schema as a linear
-resumption for the participant's internal `parser/need` effect, retained while
-`agent.parser.reference.v1` executes. The production package and validator were
-not modified. Earlier incomplete declarations also failed before linking; adding
-the wrapper's own delayed descriptors and sibling package did not authorize the
-private participant continuation and does not discharge the required contract.
+The same separately compiled participant bytes and 15,553-byte retained Program run
+both ordinary repair and this policy; no host controller reconstructs the waiting
+chain. The local-abort trace is reference, participant release 90, release 5, work 57,
+release 50. Native, Node/WASM, Wasmtime and Chromium agree across six transfers and
+seven destroyed Workers; actual selected destination bytes advance the next step.
+The reference operation is real; lifecycle leaf responses are synthetic fixtures.
 
-Boundary's BMO1 symbols already include schemas, while Agent's participant
-specification currently accepts only function/effect bindings. The leading next
-construction is an explicit typed capture-schema binding for the interaction
-interface, with actual linked schema/effect/ownership validation. It must preserve
-nominally distinct demand instances and reject false reusable or borrowed capture
-claims. An alternative that simply adds every linked schema to every handler bound
-would erase the declared restriction and is not selected. No representation or
-runtime change has been justified by this witness yet.
+A separate run accepts whole-session cancellation during participant cleanup.
+It finishes release 90, unwinds younger endpoint 50 then endpoint 5, and never starts
+ordinary sibling work. Native, Node/WASM, Wasmtime and Firefox agree across six
+transfers and seven destroyed Workers. Reobserving the pending cleanup request after
+cancellation does not count as another release execution. Global unwind is distinct
+from the authored local close-and-resume order.
 
-The deciding positive test is this local disposal returning through transferable
-cleanup to the surviving sibling. The deciding negatives remain false use bounds,
-wrong nominal bindings and exclusive captures hidden behind reusable declarations.
-Until those execute through the normal Agent path, local abandonment of the
-suspended compiled parser chain remains an implementation gap, not an accepted
-cost or a completed capability.
+Build with zig build parser-construction-images. The existing runtime driver takes
+retained-abort or retained-abort-cancel as its final scenario argument. The obsolete
+parser-abort-image target and outer reference-handler prototype were removed.
+That prototype had two problems: its declared capture bound omitted a private
+participant Need continuation, and its operational assumption was wrong. World
+routes a perform without an explicit capability directly to the host, so an outer
+handler cannot intercept it. A schema-binding prototype admitted that image but did
+not cause interception; it was removed. The selected construction disposes at the
+existing lexical owner and requires no new Agent import category or World change.
+
+Aggregate validation passes 272 steps / 123 tests, including both callback rejection
+cases. This result closes this scoped local-abandonment witness; general owned
+channel composition, generic selection, missing intent, multishot and broader
+failure sweeps, structural economy, matched comparisons, live opt-in configuration
+and serial reviews remain unfinished.
+
+The same 15,553-byte Program also reran ordinary two-round repair successfully:
+539 isolated candidate executions plus two qualification executions, two synthetic
+model calls, a real counterexample, full acceptance and live target read. Native,
+Node/WASM, Wasmtime and Chromium agree over sixteen transfers and seventeen destroyed
+Workers. No approval or fixture replacement was requested in this artifact-only run.

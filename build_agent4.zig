@@ -126,6 +126,9 @@ pub fn build(b: *std.Build) void {
     check.dependOn(parser_proposals);
     const parser_episode = b.step("parser-construction-images", "Emit consumer-directed parser construction");
     const parser_app = g.emitter("parser-construction", g.module("test/consumers/incremental-parser/main.zig"));
+    const disposition_negative = b.addSystemCommand(&.{ "node", "test/agent4/parser_disposition_negative.mjs" });
+    disposition_negative.addArtifactArg(parser_app);
+    parser_episode.dependOn(&disposition_negative.step);
     const parser_producer = b.addRunArtifact(parser_app);
     parser_producer.addArg("producer");
     const parser_producer_bytes = parser_producer.captureStdOut(.{});
@@ -150,15 +153,6 @@ pub fn build(b: *std.Build) void {
     retained_link.addFileArg(parser_consumer_bytes);
     retained_link.addFileArg(parser_reference_bytes);
     parser_episode.dependOn(&b.addInstallFileWithDir(retained_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/retained.bpi3").step);
-    const abort_link = b.addRunArtifact(parser_app);
-    abort_link.addArg("link-abort");
-    abort_link.addFileArg(parser_producer_bytes);
-    abort_link.addFileArg(parser_consumer_bytes);
-    abort_link.addFileArg(parser_reference_bytes);
-    // Intended-valid local-disposal witness. Kept explicit while cross-component
-    // capture-schema binding is missing; this step currently rejects at linking.
-    const parser_abort = b.step("parser-abort-image", "Expose nested local-disposal admission gap (currently rejects)");
-    parser_abort.dependOn(&b.addInstallFileWithDir(abort_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/abort.bpi3").step);
     const forged_consumer = b.addRunArtifact(parser_app);
     forged_consumer.addArg("consumer-forged");
     const forged_link = b.addRunArtifact(parser_app);

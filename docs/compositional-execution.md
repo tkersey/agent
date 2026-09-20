@@ -123,37 +123,43 @@ acceptance is open; no new raw captures or evidence framework is maintained.
 
 ## Current clarification comparison
 
-The unchanged four-case document-clarification policy was compared using Agent
-1f3297b / Boundary 42a09b9 / World d075169 (normal BPI2 and compact BPC1) against
-Agent ddf4c6a / Boundary 810ba69 / World e995dc9. The predecessor runtime was
-reconstructed from its pinned files and release kernel, then verified against its
-original complete runtime inventory and kernel digest. Both sides ran on Node
-26.9.0, Zig 0.16.0, M2 Pro/macOS 27.2, with 256 MiB per-arena test allowances.
+The unchanged four-case document-clarification policy was refreshed on Agent
+b277743 / Boundary 6c59436 / World 2a87702 against the fixed Agent 1f3297b /
+Boundary 42a09b9 / World d075169 anchors, separately using normal BPI2 and compact
+BPC1. The predecessor runtime matches its original complete inventory and kernel
+hash. Compact images round-trip to identical BPI2 bytes, and initial arguments are
+byte-identical. The application policy source is unchanged.
 
-Two windows rotate three process observations per format. A fresh-time sample
-sums the 21 or 23 fresh-kernel invocations in one scenario, including their kernel
-setup. Whole-scenario time includes fixture handling and file I/O. Neither is an
-individual-request tail statistic. Confirmation medians are below.
+Two windows rotate three isolated Node process observations per format. Zig 0.16.0
+ReleaseSafe, Node 26.9.0 and M2 Pro/macOS 27.2 were held fixed. Kernels retain their
+pinned 256 MiB maximum-memory profiles. No builds overlapped the timings.
+Each fresh-time sample sums the 21 or 23 full fresh-kernel calls in one scenario,
+including kernel setup and encoding. Whole-scenario time also includes fixture
+handling and file I/O. Neither is an individual-request tail statistic. The table
+shows medians from the second confirmation window.
 
-| Case | BPI2 fresh ms | BPC1 fresh ms | BPI3 fresh ms | BPC1 → BPI3 scenario ms |
-|---|---:|---:|---:|---:|
-| divergent-active | 207.10 | 210.21 | 140.12 | 232.62 → 164.65 |
-| common | 165.62 | 165.60 | 102.44 | 179.74 → 118.94 |
-| clarify-first-common | 108.56 | 108.87 | 73.96 | 121.35 → 87.76 |
-| clarify-first-divergent | 109.49 | 112.73 | 73.74 | 124.12 → 88.48 |
+| Case | BPI2 fresh ms | BPC1 fresh ms | BPI3 fresh ms | BPC1 → BPI3 scenario ms | BPC1 → BPI3 checkpoint bytes |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| divergent-active | 215.01 | 211.20 | 135.13 | 237.46 → 162.79 | 2600 → 2639 |
+| common | 177.65 | 171.14 | 107.17 | 188.25 → 125.52 | 1985 → 2055 |
+| clarify-first-common | 113.91 | 111.68 | 71.71 | 123.89 → 86.28 | 1891 → 1928 |
+| clarify-first-divergent | 112.28 | 113.28 | 71.83 | 126.31 → 88.04 | 2044 → 2081 |
 
-Both windows support 32–38% lower total fresh-invocation time than BPC1 for these
-cases. Model calls, request/response byte counts, clarification and approval
-exchanges, replacements, completed assessments, memory, resulting file hashes
-and complete effect/cleanup traces match. This is a real authored Agent consumer
-with prescribed model/person inputs; no paid inference or live-model quality
-claim is involved. The main image is 14,355 / 13,256 / 11,939 bytes in
-BPI2 / BPC1 / BPI3. Peak checkpoint sizes increase from 2,600 / 1,985 / 1,891 /
-2,044 to 2,639 / 2,056 / 1,928 / 2,081 bytes in table order. This run does not
-measure native working peaks or replace the remaining inquiry/ReAct comparison.
+Both windows support about 36–41% lower fresh-invocation time than BPC1. Across all
+18 process runs, every reported field other than timing and State byte counts
+agrees: model work, request/response sizes, clarification and approval exchanges,
+replacements, assessments, memory, resulting file hashes and complete effect/
+cleanup traces. All original fixture assertions remain enabled.
 
-Reproduce with the existing `tools/agent4/benchmark-clarification.mjs`, explicit
-Agent source/runtime/image paths and a fresh output directory for every process.
+The main image is 14,355 / 13,256 / 11,435 bytes in BPI2 / BPC1 / BPI3; the
+clarify-first image is 11,777 / 10,797 / 9,373. Maximum checkpoints remain 37–70
+bytes larger in BPI3. This lane measures the public guest path, not native working
+peaks or live-model usefulness. It uses prescribed model/person inputs and no paid
+inference. Remaining World performance gaps are not waived by these gains.
+
+Reproduce with `tools/agent4/benchmark-clarification.mjs`, explicit immutable
+Agent source/runtime/image paths and a fresh output directory per process.
+Temporary predecessor installations and generated measurements are removed.
 
 ## Component build costs
 
@@ -208,7 +214,7 @@ These results establish component reuse and the stated build costs, not an
 all-application cold-build improvement.
 
 Remaining work includes the reported peak-memory costs, the separate World
-small-case/control gaps, final clarification confirmation, serial reviews
+small-case/control gaps, final cumulative confirmation, serial reviews
 and the final requirement audit. Live-model usefulness remains unmeasured. No paid inference or
 real user-data operations were used to obtain the fixture results.
 

@@ -28,9 +28,9 @@ this API cleanup; the measurements below retain their exact source bindings.
 
 ## Current matched inquiry/ReAct results
 
-The complete BPC1 comparison measured Agent 95001fb / Boundary 6c59436 / World
-9922062. Its
-normal authenticated tuple is compared with the fixed Agent 1f3297b / Boundary
+The cumulative confirmation measures Agent production 9cad6d0 / Boundary 1b00c8c /
+World a20a285, using the normal authenticated dependency tuple. Subsequent Agent
+changes affect this result document only. It is compared with fixed Agent 1f3297b / Boundary
 42a09b9 / World d075169 anchors, separately using normal BPI2 and compact BPC1.
 The predecessor runtime matches its complete pinned inventory and kernel hash.
 BPC1 images round-trip to byte-identical BPI2 images; all 180 predecessor outcomes
@@ -62,34 +62,46 @@ are runtime replay totals, not whole-scenario time or request-tail statistics.
 
 | Scenario | Native BPI2 / BPC1 / BPI3 ms | Guest BPI2 / BPC1 / BPI3 ms | Native peak BPC1 → BPI3 bytes |
 | --- | ---: | ---: | ---: |
-| reset inquiry | 541.13 / 537.38 / 174.79 | 657.59 / 656.37 / 331.96 | 1,853,961 → 1,724,731 |
-| reset react | 84.86 / 85.35 / 59.80 | 232.26 / 170.55 / 134.58 | 2,061,220 → 1,993,377 |
-| rebinding inquiry | 539.52 / 540.68 / 175.01 | 658.75 / 654.56 / 329.66 | 1,850,451 → 1,722,378 |
-| rebinding react | 84.91 / 85.41 / 59.66 | 171.16 / 170.86 / 133.96 | 2,058,801 → 1,991,823 |
-| already correct inquiry | 327.58 / 326.81 / 109.17 | 395.69 / 393.02 / 202.43 | 1,808,359 → 1,694,693 |
-| already correct react | 31.60 / 31.84 / 23.31 | 62.14 / 61.89 / 52.19 | 1,960,760 → 1,934,045 |
-| inadequate inquiry | 285.99 / 284.45 / 93.30 | 340.82 / 339.32 / 172.90 | 1,807,413 → 1,680,009 |
-| inadequate react | 21.43 / 21.58 / 15.82 | 39.78 / 39.90 / 34.79 | 1,891,577 → 1,887,839 |
-| react rejects subject | 14.28 / 14.31 / 11.34 | 26.84 / 26.78 / 24.91 | 1,885,905 → 1,888,028 |
-| react rejects key | 14.30 / 14.59 / 11.49 | 27.01 / 27.12 / 25.03 | 1,885,803 → 1,887,861 |
-| react rejects occurrence | 14.92 / 14.93 / 11.65 | 27.95 / 28.00 / 25.36 | 1,885,983 → 1,888,095 |
-| react rejects acceptance | 13.19 / 13.32 / 11.26 | 26.02 / 25.86 / 25.04 | 1,923,980 → 1,911,673 |
-| react inconclusive candidate | 18.94 / 19.13 / 15.12 | 36.46 / 36.86 / 33.52 | 1,916,537 → 1,906,982 |
-| repeated | 1641.65 / 1636.37 / 484.59 | 1853.93 / 1845.24 / 877.29 | 1,819,273 → 1,682,135 |
+| paired-reset-inquiry | 554.71 / 552.96 / 174.13 | 687.53 / 686.61 / 327.36 | 1,853,961 → 1,724,731 |
+| paired-reset-react | 87.68 / 88.09 / 59.83 | 179.38 / 178.72 / 139.45 | 2,061,220 → 1,993,377 |
+| paired-rebinding-inquiry | 554.34 / 552.86 / 174.62 | 684.53 / 685.22 / 327.14 | 1,850,451 → 1,722,378 |
+| paired-rebinding-react | 87.52 / 88.11 / 60.21 | 179.34 / 178.64 / 139.75 | 2,058,801 → 1,991,823 |
+| paired-already-correct-inquiry | 335.25 / 334.51 / 108.68 | 413.97 / 412.03 / 200.88 | 1,808,359 → 1,694,693 |
+| paired-already-correct-react | 32.52 / 32.49 / 23.63 | 65.44 / 64.73 / 54.50 | 1,960,760 → 1,934,045 |
+| paired-inadequate-inquiry | 291.29 / 289.84 / 92.95 | 357.78 / 355.41 / 171.22 | 1,807,413 → 1,680,009 |
+| paired-inadequate-react | 22.00 / 22.07 / 15.99 | 41.86 / 41.61 / 36.17 | 1,891,577 → 1,887,839 |
+| react-rejects-subject | 14.67 / 14.76 / 11.41 | 28.21 / 28.03 / 25.80 | 1,885,905 → 1,888,028 |
+| react-rejects-key | 14.76 / 14.96 / 11.50 | 28.33 / 28.40 / 26.11 | 1,885,803 → 1,887,861 |
+| react-rejects-occurrence | 15.37 / 15.38 / 11.64 | 29.32 / 29.14 / 26.19 | 1,885,983 → 1,888,095 |
+| react-rejects-acceptance | 13.64 / 13.74 / 11.24 | 27.58 / 27.27 / 25.94 | 1,923,980 → 1,911,673 |
+| react-inconclusive-candidate | 19.77 / 19.81 / 15.27 | 38.75 / 38.24 / 35.00 | 1,916,537 → 1,906,982 |
+| repeated | 1671.51 / 1662.61 / 480.30 | 1942.56 / 1936.80 / 934.42 | 1,819,273 → 1,682,135 |
 
-The BPI2 reset-ReAct guest total varies from 170.72 to 232.26 ms between windows;
-BPC1 is 171.47 / 170.55 ms and BPI3 134.48 / 134.58 ms. The improvement claims
-below use the compact BPC1 comparator, not that slower BPI2 observation.
+Both predeclared windows preserve substantial consumer gains against compact BPC1:
+paired inquiry is about 3.1–3.2× faster natively and 2.0–2.1× in the guest;
+paired ReAct is about 27–32% faster natively and 13–22% in the guest. Repeated
+inquiry improves about 3.45× natively and 2.07–2.25× in the guest. All 180 current
+inputs per window reproduce their qualified capture bytes; all 180 BPI2/BPC1
+outcomes are byte-identical. Nonphysical scenario fields, template counts and
+activation counts agree across formats. No assertion or application policy changed.
 
-Both windows show paired inquiry about 3× faster natively and 2× in the guest;
-ReAct is 26–30% faster natively and 13–22% in the guest. Repeated inquiry improves
-about 3.4× / 2.1×. These measurements supersede the earlier ReAct and rejection-case
-latency regressions. They do not establish universal non-regression.
+The small native occurrence/acceptance rejection totals were 16.94/15.21 ms in the
+first window versus BPC1 15.37/13.59, but 11.64/11.24 versus 15.38/13.74 in the
+second. Their direction is mixed across the two windows; no uniform native
+non-regression or stable improvement is claimed for those cases. The cause of the
+first-window variation is unresolved. Every guest rejection case is faster than
+BPC1 in both windows. These are full captured-input replay totals, not whole
+scenario times or per-request tail statistics.
 
 Three rejection cases retain 2,058–2,123 bytes more peak memory than BPC1. The other
-scenario peaks are lower. Reset inquiry allocates 102,202,499 → 83,315,245 bytes;
-reset ReAct 62,555,152 → 61,326,169; repeated inquiry 212,133,017 → 177,311,733.
+scenario peaks are lower. Reset inquiry allocates 102,202,499 → 80,107,943 bytes;
+reset ReAct 62,555,152 → 57,363,085; repeated inquiry 212,133,017 → 170,178,530.
 These are complete invocation allocations, distinct from Session-only counters.
+Some smaller cases allocate more cumulatively despite lower timing: inadequate
+ReAct 14,258,359 → 14,380,897 bytes; subject/key/occurrence/acceptance rejection
+9,542,025/9,634,266/9,881,764/9,546,801 →
+10,277,944/10,311,230/10,454,757/10,305,402; inconclusive
+13,316,382 → 13,841,420. Cumulative allocation is not retained storage or peak.
 Reset inquiry blob copies fall from 6,308,439 to 733,515 bytes; reset ReAct from
 5,709,609 to 591,854. Maximum scenario checkpoints grow by 18–79 bytes: reset
 inquiry is 48,999 → 49,025 bytes and reset ReAct 67,681 → 67,699 bytes.
@@ -112,23 +124,14 @@ The temporary build graphs only install existing inquiry/native/inspection tools
 all other tracked Agent bytes match their declared revisions. Raw captures,
 profiles and temporary predecessor installations are not maintained.
 
-## Runtime follow-up qualification
+## Qualification scope
 
-The workspace remap introduced at World 2a87702 supports growable
-arrays while retaining the existing arena-slab resize policy. Retained bytes,
-allocation accounting and failure atomicity are preserved; noncontiguous segments
-are never joined. [World's current results](https://github.com/tkersey/world/blob/2a877021be71499f599c1b0cd2711982b18e5085/docs/compositional-execution.md)
-show installation64 native peak falling 141,786 → 135,051 bytes and installation256
-388,069 → 365,015. Guest peaks are unchanged and timings are mixed. No Agent
-latency gain is inferred from those standalone measurements.
-
-The preceding control-node comparison, World 9922062 → 58f2533, replayed the same
-180 successful Agent inputs in two windows. All native and guest outcomes were
-byte-identical, with unchanged complete-invocation peaks. Native times were nearly
-flat to slightly lower; small guest rejection cases ranged from about 1% faster
-to 3–8% slower across windows and remain indeterminate. The complete BPC1 table
-and these follow-up timings remain bound to their named tuples. Final cumulative
-acceptance is open; no new raw captures or evidence framework is maintained.
+The current cumulative inquiry/repeated/ReAct confirmation closes the earlier
+runtime-refinement evidence gap for these applications. All native complete-call
+peaks match the previously reported peaks exactly. Three rejection peaks remain
+2,058–2,123 bytes above BPC1, and checkpoints remain larger as reported. The latest
+normal-source authentication also passes offline. This result does not substitute
+for the standalone guest matrix, the clarification lane, or serial reviews.
 
 ## Current clarification comparison
 
@@ -225,12 +228,14 @@ all-application cold-build improvement.
 The September 19 amendment accepts the ten named native latency tradeoffs in
 [World's current results](https://github.com/tkersey/world/blob/feat/compositional-execution/docs/compositional-execution.md#milestone-performance-disposition).
 That acceptance does not cover memory, WASM or material Agent regressions. Remaining
-work is the cumulative guest/Agent confirmation on Boundary 1b00c8c / World a20a285,
+work is the remaining standalone guest and clarification confirmation on Boundary 1b00c8c / World a20a285,
 explicit economic dispositions, the requirement audit and serial reviews. Existing
 functionality is not reopened by older status prose or optional optimization ideas.
 
-The three rejection peaks increase by 2,058–2,123 bytes (about 0.11%); their exact
-attribution and preservation on the current tuple await that confirmation.
+The three rejection peaks increase by 2,058–2,123 bytes (about 0.11%); their full-invocation peaks are reproduced on the current tuple. Their precise
+byte-level differential attribution remains unresolved; the explicit recommendation
+is acceptance as a named fixed-fixture cost, not a claim of a leak or a universal
+overhead bound.
 Checkpoints grow by 18–79 bytes, with repeated completed turns retaining two nodes
 and one blob and no live resources, cells or obligations in the measured fixture.
 ReAct's image is 43,394 → 48,226 bytes (+4,832; +11.14%); the accepted size condition

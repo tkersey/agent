@@ -35,6 +35,7 @@ src/model_invocation.zig
 src/model_invocation_tests.zig
 src/model_json.zig
 src/observation.zig
+src/parser_proposals.zig
 src/parser_synthesis.zig
 src/participant.zig
 src/prompt.zig
@@ -80,6 +81,7 @@ test/agent4/multi_build.zig
 test/agent4/multi_probe.zig
 test/agent4/native.zig
 test/agent4/observation.zig
+test/agent4/parser_proposals.zig
 test/agent4/parser_tools.zig
 test/agent4/participant.zig
 test/agent4/prompt_unknown_field.zig

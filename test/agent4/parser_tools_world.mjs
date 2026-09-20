@@ -48,4 +48,8 @@ async function check(name,pending,value,expected) {
 for(const [name,value,expected] of variants)await check(name,pending,value,expected);
 const partial=await park([subject,2n,input[2],{tag:1,value:null}]);
 await check('partial-is-not-validated',partial,[2n,1n,assessment],'failed');
+const proposedInput=[subject,3n,input[2],{tag:2,value:['5c6e0a',1,2,true,'Escape boundary']}];
+const proposed=await park(proposedInput);
+await check('model-proposed-experiment',proposed,await tools.execute(proposedInput),'completed');
+await check('experiment-cannot-return-assessment',proposed,[3n,1n,assessment],'failed');
 console.log(JSON.stringify({imageBytes:image.length,results,realProbe:tools.metrics()}));

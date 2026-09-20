@@ -4,6 +4,7 @@
 const contracts = @import("agent_contracts");
 const Context = @import("authoring.zig").Context;
 const Id = @import("boundary").computation.Id;
+pub const proposals = @import("parser_proposals.zig");
 pub const contract = "agent.incremental-byte-parser/v1";
 pub const reference_identity = "agent.parser.reference.v1";
 pub const execution_identity = "agent.parser.execution.v1";
@@ -49,7 +50,7 @@ pub const ExecutionRequest = struct {
     subject: Subject,
     occurrence: u64,
     candidate: Candidate,
-    check: union(enum(u32)) { probe: Trace = 0, acceptance: void = 1 },
+    check: union(enum(u32)) { probe: Trace = 0, acceptance: void = 1, proposed_probe: proposals.Experiment = 2 },
 };
 pub const ExecutionReply = struct {
     occurrence: u64,
@@ -81,6 +82,8 @@ pub fn execute(c: Context, tools: Tools, request: Id, failure: Id) !Id {
         const check = try b.primitive(try c.schema(@FieldType(ExecutionRequest, "check")), .field, &.{input}, 3);
         const outcome = try b.primitive(try c.schema(@FieldType(ExecutionReply, "outcome")), .field, &.{received}, 2);
         const check_tag = try b.primitive(integer, .variant_tag, &.{check}, 0);
+        const proposed = try equal(c, check_tag, try b.constant(u64, 2));
+        const expected_tag = try b.primitive(integer, .select, &.{ proposed, try b.constant(u64, 0), check_tag }, 0);
         const outcome_tag = try b.primitive(integer, .variant_tag, &.{outcome}, 0);
         var accepted = try b.pure(received);
         const complete = try b.primitive(try c.schema(Completeness), .field, &.{candidate}, 2);
@@ -89,7 +92,7 @@ pub fn execute(c: Context, tools: Tools, request: Id, failure: Id) !Id {
         const is_assessment = try equal(c, outcome_tag, try b.constant(u64, 1));
         accepted = try b.term(.{ .conditional = .{ .condition = is_assessment, .when_true = try ensure(c, valid_complete, accepted, failure), .when_false = accepted } });
         const unavailable = try equal(c, outcome_tag, try b.constant(u64, 2));
-        accepted = try b.term(.{ .conditional = .{ .condition = unavailable, .when_true = try b.pure(received), .when_false = try ensure(c, try equal(c, check_tag, outcome_tag), accepted, failure) } });
+        accepted = try b.term(.{ .conditional = .{ .condition = unavailable, .when_true = try b.pure(received), .when_false = try ensure(c, try equal(c, expected_tag, outcome_tag), accepted, failure) } });
         accepted = try ensure(c, try equal(c, try b.primitive(integer, .field, &.{candidate}, 1), try b.primitive(integer, .field, &.{received}, 1)), accepted, failure);
         accepted = try ensure(c, try equal(c, try b.primitive(integer, .field, &.{input}, 1), try b.primitive(integer, .field, &.{received}, 0)), accepted, failure);
         try b.define(function, try b.bind(reply, try b.term(.{ .perform = .{

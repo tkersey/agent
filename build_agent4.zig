@@ -114,6 +114,11 @@ pub fn build(b: *std.Build) void {
     const parser_tools = b.step("check-parser-tools", "Check typed parser tool bindings");
     g.testModule(parser_tools, g.module("test/agent4/parser_tools.zig"));
     check.dependOn(parser_tools);
+    const parser_proposals = b.step("parser-proposal-images", "Emit checked parser model proposals");
+    const proposal_emitter = g.emitter("parser-proposals", g.module("test/agent4/parser_proposals.zig"));
+    for ([_][]const u8{ "program", "input", "result-schema", "fragment", "experiment", "constraint", "unresolved", "unknown", "unoffered" }) |mode|
+        g.emit(parser_proposals, proposal_emitter, &.{mode}, b.fmt("parser-proposals/{s}.bin", .{mode}));
+    check.dependOn(parser_proposals);
     const parser_schema = g.emitter("parser-schema", g.module("test/agent4/parser_tools.zig"));
     g.emit(parser_tools, parser_schema, &.{"program"}, "parser/program.bpi3");
     for ([_][]const u8{ "reference-request", "reference-reply", "execution-request", "execution-reply" }) |mode|

@@ -294,3 +294,36 @@ assessment, wrong-subject rejection, capacity handling and malformed output case
 binding cases in `test/agent4/parser_tools_world.mjs WORLD_ENTRY KERNEL` passed
 with one real candidate probe. No model-driven parser controller, target write,
 or live inference is claimed by this protocol slice.
+
+## Model-facing construction proposals
+
+`parser_synthesis.proposals` now uses the existing checked model responder for
+untrusted fragment, complete-candidate, experiment, constraint and unresolved
+proposals. The model cannot assign candidate versions, validated status, approval
+or delivery authority. The prompt distinguishes partial source from an unvalidated
+complete module, empirical reference questions from genuinely missing intent, and
+observations from predictions. It contains no accepted replacement implementation.
+
+The existing model codec intentionally supports flat typed fields. Experiments
+therefore specify hex input, first-chunk size, later chunk size, finalization and
+a reason. `experimentTrace` checks these fields and expands them into the existing
+typed trace, with explicit capacity rejection. It performs no candidate execution.
+The execution request now accepts this proposed-probe form; the qualified adapter
+normalizes and executes it, and the compiled receiver requires a probe response
+rather than an assessment. Malformed proposals become explicit unavailable data.
+
+`zig build check --summary all` passes 238 steps / 123 tests. The 5,080-byte model
+interpretation Program was recovered with six synthetic response cases: fragment,
+experiment, constraint and unresolved proposals were admitted; unknown and
+unoffered actions rejected. A decoded experiment was run against a test-only
+candidate through the qualified executor. No provider network call or paid
+inference occurred. The updated 501-byte execution-binding Program passed nine
+fresh-recovery cases, including a model-proposed experiment and rejection of an
+assessment substituted for its result. Existing parser-tool tests also pass.
+
+Reproduce with `zig build parser-proposal-images check-parser-tools`, then
+`node test/agent4/parser_proposals.mjs WORLD_ENTRY KERNEL` and
+`node test/agent4/parser_tools_world.mjs WORLD_ENTRY KERNEL`. This verifies the
+proposal/execution interfaces; it does not claim that the complete recursive
+synthesis controller, repair episode, approval/delivery or live provider command
+has been implemented. Those remain the next application work.

@@ -67,11 +67,17 @@ export async function createParserTools(options = {}) {
       const [subject,id,candidate,check]=request;checkSubject(subject);
       if(!Array.isArray(candidate)||candidate.length!==3||typeof candidate[0]!=='string'||
         Buffer.byteLength(candidate[0])>8192||!occurrence(candidate[1])||
-        ![0,1,0n,1n].includes(candidate[2])||!check||![0,1].includes(check.tag)||
+        ![0,1,0n,1n].includes(candidate[2])||!check||![0,1,2].includes(check.tag)||
         Object.keys(check).sort().join(',')!=='tag,value')throw new TypeError('candidate/check shape');
       const [source,version,complete]=candidate;
       if(check.tag===1 && (Number(complete)!==1||check.value!==null))return [id,version,variant(2,unavailable('invalid'))];
-      const trace=check.tag===0?traceValue(check.value):null;
+      let trace;
+      try { trace=check.tag===0?traceValue(check.value):check.tag===2?traceValue(experimentTrace(check.value)):null; }
+      catch(error) {
+        if(error instanceof TypeError||error instanceof RangeError)
+          return [id,version,variant(2,unavailable(error instanceof RangeError?'capacity':'invalid'))];
+        throw error;
+      }
       const result=trace?await executor.probe(source,trace,{signal}):await executor.validate(source,{signal});
       assert.equal(result.sourceDigest,hash(source));assert.equal(result.runner,executor.runner);
       assert.equal(result.acceptanceContract,parserContract);
@@ -95,4 +101,26 @@ export async function createParserTools(options = {}) {
     },
     metrics:executor.metrics,
   });
+}
+
+/** Expand an untrusted flat model experiment into the existing typed trace.
+ * No code runs here, and invalid/capacity cases never become empty experiments. */
+export function experimentTrace(proposal) {
+  if(!Array.isArray(proposal)||proposal.length!==5)throw new TypeError('experiment shape');
+  const [hex,first,width,finalize,reason]=proposal;
+  if(typeof hex!=='string'||hex.length>8192||hex.length%2||!/^([0-9a-fA-F]{2})*$/.test(hex)||
+    !Number.isInteger(first)||first<0||first>0xffffffff||!Number.isInteger(width)||width<1||width>4096||
+    typeof finalize!=='boolean'||typeof reason!=='string'||Buffer.byteLength(reason)>512)
+    throw new TypeError('invalid experiment');
+  const bytes=[...Buffer.from(hex,'hex')],trace=[];
+  const cut=Math.min(first,bytes.length);
+  trace.push([bytes.slice(0,cut),false]);
+  for(let offset=cut;offset<bytes.length;offset+=width) {
+    if(trace.length===64)throw new RangeError('experiment trace capacity');
+    trace.push([bytes.slice(offset,offset+width),false]);
+  }
+  if(trace[0][0].length>4096)throw new RangeError('experiment chunk capacity');
+  trace.at(-1)[1]=finalize;
+  traceValue(trace);
+  return trace;
 }

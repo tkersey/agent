@@ -222,10 +222,26 @@ components or the emitter. The producer lane uses World's
 These results establish component reuse and the stated build costs, not an
 all-application cold-build improvement.
 
-Remaining work includes the reported peak-memory costs, the separate World
-small-case/control gaps, final cumulative confirmation, serial reviews
-and the final requirement audit. Live-model usefulness remains unmeasured. No paid inference or
-real user-data operations were used to obtain the fixture results.
+The September 19 amendment accepts the ten named native latency tradeoffs in
+[World's current results](https://github.com/tkersey/world/blob/feat/compositional-execution/docs/compositional-execution.md#milestone-performance-disposition).
+That acceptance does not cover memory, WASM or material Agent regressions. Remaining
+work is the cumulative guest/Agent confirmation on Boundary 1b00c8c / World a20a285,
+explicit economic dispositions, the requirement audit and serial reviews. Existing
+functionality is not reopened by older status prose or optional optimization ideas.
+
+The three rejection peaks increase by 2,058–2,123 bytes (about 0.11%); their exact
+attribution and preservation on the current tuple await that confirmation.
+Checkpoints grow by 18–79 bytes, with repeated completed turns retaining two nodes
+and one blob and no live resources, cells or obligations in the measured fixture.
+ReAct's image is 43,394 → 48,226 bytes (+4,832; +11.14%); the accepted size condition
+applies specifically to installation64/128/256, not every program. Recommendation:
+accept these named checkpoint/image tradeoffs if the current-tuple confirmation
+preserves their bounded behavior; no user acceptance is implied yet.
+
+Live-model usefulness remains unmeasured and is not a paid-inference closeout lane.
+No real user-data operations were used to obtain these results. The adequacy
+obstruction is a result for its explicitly locked historical release tuple; it is
+not a current successor defect without a current reproduction.
 
 The obsolete Boundary 1 / World 3 acquisition and conformance runners and their
 fixed release locks are removed. Current dependency/setup tests retain archive

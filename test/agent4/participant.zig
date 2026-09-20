@@ -5,7 +5,7 @@ const source = boundary.computation;
 const data = boundary.data;
 const a = std.testing.allocator;
 const Answer = union(enum(u32)) { contribute: struct { value: u64 } = 1 };
-const P = agent.model_invocation.Profile(Answer, .{
+pub const P = agent.model_invocation.Profile(Answer, .{
     .{ .name = "contribute", .description = "Supply the requested contribution." },
 }, .{
     .model_id_bytes = 32,
@@ -18,7 +18,7 @@ const P = agent.model_invocation.Profile(Answer, .{
     .result_text_bytes = 128,
     .provider_response_bytes = 4096,
 });
-const Input = struct { request: P.Request, offered: [1]bool };
+pub const Input = struct { request: P.Request, offered: [1]bool };
 
 fn producer(allocator: std.mem.Allocator, direct: bool) ![]u8 {
     var b = source.Builder.init(allocator);
@@ -209,14 +209,14 @@ const Model = agent.model(.{
     },
 });
 
-fn inputBytes(allocator: std.mem.Allocator) ![]u8 {
+pub fn inputBytes(allocator: std.mem.Allocator) ![]u8 {
     const request = try P.templateValue(Model, .{ .items = &.{.{
         .role = .user,
         .content = .{ .bytes = "Supply the requested number." },
     }} }, .{ .minimum_calls = 1, .maximum_calls = 1, .parallel_calls = false });
     return agent.contracts.encodeOwned(Input, allocator, .{ .request = request, .offered = .{true} });
 }
-fn replyBytes(allocator: std.mem.Allocator) ![]u8 {
+pub fn replyBytes(allocator: std.mem.Allocator) ![]u8 {
     return agent.contracts.encodeOwned(P.Result, allocator, .{ .output = .{
         .items = .{ .items = &.{.{ .function_call = .{
             .call_id = .{ .bytes = "participant-fixture" },

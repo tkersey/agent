@@ -83,32 +83,100 @@ compiled-tool tests retain the rejection of model-named read-tool aliases.
 These observations establish model admission and fresh recovery, not yet the
 required reciprocal application episode or an independent empirical experiment.
 
-## Remaining deciding witness
+## Compiled reciprocal task endpoints
 
-Next, independently compile a producer and consumer using the same recursive
-interface. The producer's request must remain waiting while the consumer requests
-an actual reference observation; the model boundary supplies a typed contribution.
-Both saved callers must perform distinct non-tail work after fresh restore, with
-a second owned participant idle and valid. Add false reusable capture and
-compiled completion-authority negatives alongside that positive case.
+`test/agent4/recursive_participant.zig` now uses the public Boundary `ana` and
+`Query.ask` operations with endpoints that are suspended tasks. Pure construction
+creates task descriptors; explicit task invocation executes environmental work.
+The resulting image contains the participant relationship and every waiting
+caller. The host only supplies declared leaves.
 
-The complete hyperfunction library, reciprocal source-free composition, parser
-synthesis and independent acceptance, local cleanup/global cancellation cases,
-full native/browser/Wasmtime transfer, multi-shot custody, failure sweeps,
-structural economy, comparisons and serial reviews remain required. The strategy
-and any future live evaluation stay opt-in; no live-model study has run.
+Separate emitter processes produce a producer object and either of two consumer
+objects. The same producer object, SHA-256
+`304956a6e15862001284ecd3d840691d672e930eb4b177004e512a84239c32c2`
+(891 bytes), is passed unchanged to both source-free links. The second consumer
+requests two contributions; no producer code or host routing change selects it.
+Authored step selection occurs during component emission, never by inspecting a
+runtime peer identity. This fixture does not yet demonstrate removing all authoring
+sources/emitters before linking; that broader isolation check remains open.
 
-Current slice validation: `zig build check participant-images --summary all`
-passes 185/185 steps and 119/119 tests, including six participant tests and the
-external public-package installation check. The final Node/WASM execution above
-was repeated against those emitted artifacts. An earlier aggregate invalidated
-its installation evidence when source changed during execution; it receives no
-credit and was replaced by this stable-input run. No existing assertion or
-negative case was removed to admit the new path.
+The single-consumer episode is:
 
-The new Boundary binding passed `zig build check` (185 steps / 119 tests),
-`check-participants participant-images` (six focused tests), and the actual
-Node/WASM model request transfer. No source override or authentication relaxation
-was used. The next application slice will use the newly bound hyperfunction
-constructors; this dependency update does not itself establish reciprocal Agent
-interaction.
+1. The consumer requests a producer contribution and waits.
+2. The producer requests a contribution from the consumer's successor and waits.
+3. The successor requests a real bounded reference-file read.
+4. After fresh recovery, the producer uses the checked model responder, then
+   performs its non-tail addition; the original consumer performs its own addition.
+5. An independently owned generator package, idle throughout the nested work,
+   resumes and makes a second real read before final completion.
+
+The reference adapter reads the actual frozen fixture bytes. Provider responses
+are synthetic untrusted proposal data admitted by the real model interpreter.
+The single consumer returns 85; the double consumer returns 157 and makes two
+fresh model/reference executions. Replaying the first bound model reply against
+the second occurrence rejects without changing the waiting checkpoint. The same
+provider call ID in fresh responses does not establish occurrence authority.
+
+The existing generator package is the retained sibling ownership witness; this
+is not yet a completed owned-hyperfunction exchange/disposal API. Likewise, this
+slice uses pure recursive demands over task values; the explicit `Need` effect
+handler translation remains required.
+
+## Current transfer and admission evidence
+
+`zig build check recursive-participant-images --summary all` passes 203/203 steps
+and 122/122 tests, including the normal package-installation check. Focused
+participant/image checks pass 23 steps and nine tests. New nearby negatives reject
+an exclusive resource hidden in a reusable task, an omitted reference binding,
+and completion write authority substituted through the actual recursive component
+path. A permitted assessment case passes beside the authority negative.
+
+| Consumer | Program bytes | Node/fresh transfers | Observed checkpoint bytes |
+| --- | ---: | ---: | --- |
+| Single contribution | 3,081 | 3 | 316, 586, 124 |
+| Two contributions | 3,277 | 6 | 346, 763, 511, 327, 597, 124 |
+
+The double-contribution program also passed exact boundary agreement across native
+World, Node/WASM, Wasmtime 48.0.0 (Python 3.14.7), Chromium 153.0.8010.12 Workers
+and Firefox 155.0 Workers. Each engine's actual returned bytes are selected for
+subsequent execution. Each browser run destroys eight fresh Workers, including
+the separate cancellation execution. These are finite observations, not a
+performance comparison or universal portability proof.
+
+A separate execution cancels the enclosing World session at the inner reference
+request, after fresh transfer. All tested engines return cancellation with reason
+`stop`, no cleanup failures, and no ordinary model/sibling work afterward. This
+does not establish scoped local disposal or suspending resource cleanup; those
+remain separate required cases. No external reference operation is dispatched in
+that cancelled fixture execution; arbitrary external cancellation is not claimed.
+
+Run the emitted images with:
+
+```
+node test/agent4/recursive_participant.mjs WORLD_ENTRY KERNEL \
+  zig-out/agent4/recursive single
+node test/agent4/recursive_participant.mjs WORLD_ENTRY KERNEL \
+  zig-out/agent4/recursive double WASMTIME_PEER NATIVE_TOOL BROWSER_TOOLS chromium
+```
+
+Repeat the last command with `firefox`. `WASMTIME_PEER` is the unchanged World's
+`test/current/peer.mjs`; `BROWSER_TOOLS` is its locked
+`test/current/browser-tools` directory. The native tool is built with World's
+existing `test/v2/build_source.zig`, `-Dcurrent-fixtures=true`,
+`-Dworld-source=WORLD_SOURCE`, `-Dboundary-source=BOUNDARY_SOURCE`, and
+`-Doptimize=ReleaseSafe`. This run used World
+`374ed712c2a2ab5041c28befa38bb3c3a859bd26` and the authenticated Boundary
+`b604ae828650a9be176b103552942adaafc983c0` source. The kernel SHA-256 remains
+`7a27d64295431c960046439353a158e378f14d4686fac47b61b1406cf1753663`.
+
+## Remaining implementation
+
+The complete hyperfunction algebra and lazy aggregates, effect-based demand
+translation, source-independent support library and three-part compositional
+closure, local disposal with suspended cleanup, multi-shot custody and allocation
+failure sweeps remain unfinished. The incremental-parser synthesis application,
+independent acceptance, consumer-supplied assessment, exact delivery, full required
+transfer variants, structural economy, matched comparisons and serial reviews
+remain required. No live-model quality or cost study has run. The numerical
+model/reference witness is the integration foundation for that application, not
+its completed substitute.

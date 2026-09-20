@@ -81,6 +81,7 @@ test/agent4/native.zig
 test/agent4/observation.zig
 test/agent4/participant.zig
 test/agent4/prompt_unknown_field.zig
+test/agent4/recursive_participant.zig
 test/agent4/repository_replacement.zig
 test/agent4/repository_replacement_emit.zig
 test/agent4/repository_working_set.zig

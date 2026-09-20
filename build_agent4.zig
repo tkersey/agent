@@ -111,6 +111,12 @@ pub fn build(b: *std.Build) void {
     const participants = b.step("check-participants", "Check compiled internal participant admission");
     g.testModule(participants, g.module("test/agent4/participant.zig"));
     check.dependOn(participants);
+    const recursive_tests = b.addTest(.{
+        .root_module = g.module("test/agent4/recursive_participant.zig"),
+        .filters = &.{"recursive participant"},
+    });
+    recursive_tests.step.dependOn(g.gate);
+    participants.dependOn(&b.addRunArtifact(recursive_tests).step);
     g.testModule(check, g.module("src/model_invocation_tests.zig"));
     g.testModule(check, g.module("src/conversation.zig"));
     g.testModule(check, g.module("src/react.zig"));
@@ -159,6 +165,33 @@ pub fn build(b: *std.Build) void {
     for ([_][]const u8{ "input", "reply", "expected" }) |mode|
         g.emit(participant_images, participant_exe, &.{mode}, b.fmt("participant/{s}.bin", .{mode}));
     emit.dependOn(participant_images);
+    const recursive_images = b.step("recursive-participant-images", "Emit reciprocal task participants");
+    const recursive_exe = g.emitter("agent-recursive-participant", g.module("test/agent4/recursive_participant.zig"));
+    const producer_run = b.addRunArtifact(recursive_exe);
+    producer_run.addArg("producer");
+    const producer_bytes = producer_run.captureStdOut(.{});
+    const consumer_run = b.addRunArtifact(recursive_exe);
+    consumer_run.addArg("consumer");
+    const consumer_bytes = consumer_run.captureStdOut(.{});
+    const recursive_link = b.addRunArtifact(recursive_exe);
+    recursive_link.addArg("link");
+    recursive_link.addFileArg(producer_bytes);
+    recursive_link.addFileArg(consumer_bytes);
+    recursive_images.dependOn(&b.addInstallFileWithDir(producer_bytes, .prefix, "agent4/recursive/producer.bmo1").step);
+    recursive_images.dependOn(&b.addInstallFileWithDir(consumer_bytes, .prefix, "agent4/recursive/consumer.bmo1").step);
+    recursive_images.dependOn(&b.addInstallFileWithDir(recursive_link.captureStdOut(.{}), .prefix, "agent4/recursive/program.bpi3").step);
+    const alternate_run = b.addRunArtifact(recursive_exe);
+    alternate_run.addArg("consumer-alt");
+    const alternate_bytes = alternate_run.captureStdOut(.{});
+    const alternate_link = b.addRunArtifact(recursive_exe);
+    alternate_link.addArg("link");
+    alternate_link.addFileArg(producer_bytes);
+    alternate_link.addFileArg(alternate_bytes);
+    recursive_images.dependOn(&b.addInstallFileWithDir(alternate_bytes, .prefix, "agent4/recursive/consumer-alt.bmo1").step);
+    recursive_images.dependOn(&b.addInstallFileWithDir(alternate_link.captureStdOut(.{}), .prefix, "agent4/recursive/program-alt.bpi3").step);
+    for ([_][]const u8{ "input", "reply" }) |mode|
+        g.emit(recursive_images, recursive_exe, &.{mode}, b.fmt("recursive/{s}.bin", .{mode}));
+    emit.dependOn(recursive_images);
     const text_object = g.emitter("agent-text-object", g.module("test/agent4/text_object.zig"));
     const text_link = g.emitter("agent-text-link", g.module("test/agent4/text_link.zig"));
     const text_object_bytes = b.addRunArtifact(text_object).captureStdOut(.{});

@@ -89,11 +89,11 @@ repeated 44,684 / 40,486 / 37,137, and ReAct 49,249 / 43,394 / 48,226 bytes.
 ReAct remains larger than BPC1; the specification's separate installation-image
 condition is satisfied, not replaced by a universal image-size claim.
 
-The normal tuple now selects Boundary 6c59436 / World 58f2533. Its kernel is
-462,400 bytes, SHA-256
-3beae29e2b4f74de5248c636319c3f31fbdd28fab632314b9b1dd7c83c066c49.
+The normal tuple now selects Boundary 6c59436 / World 2a87702. Its kernel is
+463,045 bytes, SHA-256
+54d39b7cf8b881701bb58f590cc2cd2a6baf461d7f0cad01e647c888e379ccad.
 Boundary's dependency package is 1,390,465 bytes (281,831 compressed); World runtime
-contents are 519,100 bytes. No paid inference or live-model quality claim is made.
+contents are 519,745 bytes. No paid inference or live-model quality claim is made.
 The adequacy obstruction and its minimal reproducer remain intact.
 
 Reproduce captures with `tools/agent4/capture-inquiry.mjs` and explicit frozen
@@ -103,26 +103,23 @@ The temporary build graphs only install existing inquiry/native/inspection tools
 all other tracked Agent bytes match their declared revisions. Raw captures,
 profiles and temporary predecessor installations are not maintained.
 
-## Control-node reuse confirmation
+## Runtime follow-up qualification
 
-World 58f2533 reuses consumed continuation nodes and exclusively active controls.
-Captured callers and cloned multi-shot frames retain their custody; no authored
-work or cleanup is omitted. [World's results](https://github.com/tkersey/world/blob/58f2533a276749f85c9f439d1e1d8fa2a822b1a1/docs/compositional-execution.md#control-node-reuse-confirmation)
-record lower installation peaks and the remaining BPC1 gap.
+The normal tuple now selects World 2a87702. Its in-place remap supports growable
+arrays while retaining the existing arena-slab resize policy. Retained bytes,
+allocation accounting and failure atomicity are preserved; noncontiguous segments
+are never joined. [World's current results](https://github.com/tkersey/world/blob/2a877021be71499f599c1b0cd2711982b18e5085/docs/compositional-execution.md)
+show installation64 native peak falling 141,786 → 135,051 bytes and installation256
+388,069 → 365,015. Guest peaks are unchanged and timings are mixed. No Agent
+latency gain is inferred from those standalone measurements.
 
-The normal tuple passes 229 build steps, 176 Zig tests, all six integration groups,
-extracted consumers and compiled-tool browser transfer. Fresh captures retain all
-original assertions. Two replay windows compare World 9922062 and 58f2533 on the
-same 180 successful inputs: every native and guest output is byte-identical, with
-unchanged complete-invocation peaks. The clocks and sample units match those above.
-Reset inquiry allocation falls 83,315,245 → 82,915,942 bytes; reset ReAct
-61,326,169 → 61,117,684; repeated inquiry 177,311,733 → 176,463,054.
-
-Native timings are nearly unchanged to slightly lower. Small guest rejection-case
-totals move in opposite directions between windows, from about 1% faster to 3–8%
-slower; those observations remain indeterminate. No additional Agent latency gain
-is claimed for node reuse. The full BPC1 table above remains explicitly bound to
-its measured tuple; final cumulative acceptance is still open.
+The preceding control-node comparison, World 9922062 → 58f2533, replayed the same
+180 successful Agent inputs in two windows. All native and guest outcomes were
+byte-identical, with unchanged complete-invocation peaks. Native times were nearly
+flat to slightly lower; small guest rejection cases ranged from about 1% faster
+to 3–8% slower across windows and remain indeterminate. The complete BPC1 table
+and these follow-up timings remain bound to their named tuples. Final cumulative
+acceptance is open; no new raw captures or evidence framework is maintained.
 
 ## Current clarification comparison
 

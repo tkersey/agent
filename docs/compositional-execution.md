@@ -110,11 +110,11 @@ repeated 44,684 / 40,486 / 37,137, and ReAct 49,249 / 43,394 / 48,226 bytes.
 ReAct remains larger than BPC1; the specification's separate installation-image
 condition is satisfied, not replaced by a universal image-size claim.
 
-The normal tuple now selects Boundary 1b00c8c / World a20a285. Its kernel is
-462,524 bytes, SHA-256
-8f7b6359ddf4d63b513d8d5c17400487fde357cb487831bb2b555a449f39ee0b.
+The normal tuple now selects Boundary 1b00c8c / World 02846a4. Its kernel is
+462,629 bytes, SHA-256
+7a27d64295431c960046439353a158e378f14d4686fac47b61b1406cf1753663.
 Boundary's dependency package is 1,392,930 bytes (282,310 compressed); World runtime
-contents are 519,224 bytes. No paid inference or live-model quality claim is made.
+contents are 519,413 bytes. No paid inference or live-model quality claim is made.
 The adequacy obstruction and its minimal reproducer remain intact.
 
 Reproduce captures with `tools/agent4/capture-inquiry.mjs` and explicit frozen
@@ -132,6 +132,30 @@ peaks match the previously reported peaks exactly. Three rejection peaks remain
 2,058–2,123 bytes above BPC1, and checkpoints remain larger as reported. The latest
 normal-source authentication also passes offline. The standalone guest matrix and clarification lane are separately confirmed in
 their owning result sections; none substitutes for serial reviews.
+
+## World review repair qualification
+
+The normal lock now authenticates World 02846a4, including its Git tree, downloaded
+archive and complete runtime inventory. Boundary remains pinned to 1b00c8c.
+World repairs failed-publication rollback for shallow resumptions, rejects inherited
+or non-string control names before execution, and synchronizes shared preparation
+leases across independent native Sessions. These are correctness fixes, not new
+performance objectives or changes to application policy.
+
+The repaired tuple passes Agent's normal 229-step / 176-test check, all six
+integration groups, extracted consumers and compiled-tool transfers in Chromium
+and Firefox. World's normal package dependency produces the same kernel bytes as
+its exact-source qualification. Inquiry/repeated/ReAct images remain
+36,756 / 37,137 / 48,226 bytes. Repeated inquiry retains 28 model calls, four
+experiments, eight cleanups, eight templates and 16 activations; every completed
+turn retains two nodes and one blob, with no resources, cells or obligations.
+
+The cumulative tables above retain their stated World a20a285 subject. A targeted
+before/after timing follow-up is still in progress; they are not silently rebound
+to the repair. Fresh World review closeout follows qualification. The requested
+Boundary rerun then includes one standard review and all five auxiliary lenses;
+Agent's own review sequence remains required. Named economic tradeoffs remain
+accepted, without waiving new correctness defects or material regressions.
 
 ## Current clarification comparison
 

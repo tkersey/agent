@@ -76,18 +76,18 @@
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "a20a285d2ac145a55d852ae7d50cd02abe9ce09f",
-    "gitTree": "3ff2878b3c8b0dc7308b8495b467cbb69d6b0dff",
+    "commit": "02846a4c8d535c60956874aba5fd30f579207c20",
+    "gitTree": "8150fabc9244790365588f979ac58371a7ef4f05",
     "version": "6.0.0-dev.0",
     "source": {
-      "inventorySha256": "5864483ab806febdfe195432d3bc9ac7cc3560b7ddb4c9c43bdc91886f903076",
+      "inventorySha256": "3aef3337f1e9624d68b4aecfb47a2d99c179cab873f13a2c12badc139c612a75",
       "entries": 136,
-      "bytes": 1350411
+      "bytes": 1385370
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/a20a285d2ac145a55d852ae7d50cd02abe9ce09f.tar.gz",
-      "bytes": 303246,
-      "sha256": "d0b41ff3c51079f1da0b143505592fdda5f3518565fc9d95dad916fe9782af91"
+      "url": "https://github.com/tkersey/world/archive/02846a4c8d535c60956874aba5fd30f579207c20.tar.gz",
+      "bytes": 314174,
+      "sha256": "e3cbae09288df37901dd18b704e874bc136ae892f8522e17f4ea4bea40ab9de3"
     },
     "authentication": "Downloaded archive tree recomputed and matched to GitHub commit API; complete source and runtime inventories bound",
     "runtime": {
@@ -152,8 +152,8 @@
           "path": "src/embedding/codec.mjs",
           "kind": "file",
           "mode": 420,
-          "bytes": 4948,
-          "sha256": "1913018781ec1561e69e03e98d998cb7e714ccb3e8068f093dfef823cf68fe87"
+          "bytes": 4990,
+          "sha256": "0d8a633733359a52ec393defdb680c7f1e041017fd46a6dfe4605d60f5c2859d"
         },
         {
           "path": "src/embedding/errors.mjs",
@@ -173,8 +173,8 @@
           "path": "src/embedding/kernel.mjs",
           "kind": "file",
           "mode": 420,
-          "bytes": 5962,
-          "sha256": "a26b8f4e526283cda1346216ec6911858c7b96a08e44d6112fce809b1ae90838"
+          "bytes": 6004,
+          "sha256": "7f3be362b474b49c632722d2a02ae16117ffe65c83818887589cf3c56877b13d"
         },
         {
           "path": "src/embedding/values.mjs",
@@ -213,17 +213,17 @@
           "path": "world-kernel.wasm",
           "kind": "file",
           "mode": 493,
-          "bytes": 462524,
-          "sha256": "8f7b6359ddf4d63b513d8d5c17400487fde357cb487831bb2b555a449f39ee0b"
+          "bytes": 462629,
+          "sha256": "7a27d64295431c960046439353a158e378f14d4686fac47b61b1406cf1753663"
         }
       ],
-      "inventorySha256": "eca4283e5d3e59f58061ea9a879b7f68f3f18704385d7a906b09b3d21f18fbd3",
+      "inventorySha256": "3883a4f55ed04bb00cb6532f01653c8c21806ad00f0bf590f25fa99db736cded",
       "entries": 19,
-      "bytes": 519224,
+      "bytes": 519413,
       "kernel": {
         "path": "world-kernel.wasm",
-        "bytes": 462524,
-        "sha256": "8f7b6359ddf4d63b513d8d5c17400487fde357cb487831bb2b555a449f39ee0b"
+        "bytes": 462629,
+        "sha256": "7a27d64295431c960046439353a158e378f14d4686fac47b61b1406cf1753663"
       },
       "abi": 3,
       "exports": [
@@ -285,7 +285,7 @@
     "compatiblePublishedReleaseObserved": false
   },
   "limitations": [
-    "Candidate successor sources and runtime are authenticated; full Agent integration migration and performance acceptance remain in progress.",
+    "Successor migration is functionally qualified; World review repairs and final coordinated review closeout remain under validation.",
     "Runtime digest is consumer-owned expected identity from the exact source build, not a release attestation."
   ]
 }

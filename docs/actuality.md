@@ -6,6 +6,9 @@ now use current staged authoring in
 [contracts](../test/consumers/repository/types.zig). Host adapters do not update
 this memory. The policy preserves role-code normalization, stale source/search
 invalidation, denial behavior and revocation of passing evidence after failure.
+The latest proposal outcome remains visible, while a separate applied source
+version binds completion and retesting. Denial preserves that version; a conflict
+revokes it together with the passing-test evidence.
 
 Run the five native policy regressions, including 32 actual portable observations
 with bounded checkpoint retention and authored budget termination:
@@ -33,7 +36,7 @@ It renders its current working set into the model request, admits one declared
 action, folds observations and enforces the completion predicate. Provider
 replies remain candidate data. The flat model codec preserves all four changed
 path slots. Thirty-two repeated decisions terminate at the authored budget with
-a 5,371-byte peak checkpoint after warmup; three full 32-KiB documents fit the
+a 5,401-byte peak checkpoint after warmup; three full 32-KiB documents fit the
 declared prompt capacity without truncation.
 
 Completion binds the final changed-file set to at most four distinct successful
@@ -54,9 +57,12 @@ zig build check-repository-delivery -Doptimize=ReleaseSafe \
 ```
 
 This check covers seven filesystem cases, seven replacement cases across 18
-fresh-kernel restores, and seventeen model/action cases, including premature finish,
+fresh-kernel restores, and twenty-one model/action cases, including premature finish,
 denied approval, failed retesting, malformed provider arguments and budget
-exhaustion. That policy check uses synthetic provider replies and test results.
+exhaustion. The additional cases preserve valid completion after one or repeated
+denials, keep retesting bound to the applied source, and reject stale completion
+after a conflict even if a later test passes. That policy check uses synthetic
+provider replies and test results.
 
 The [repository bindings](../runtime/repository.mjs) now perform actual listing,
 role-bound reads, literal search and isolated fixture tests. The caller supplies

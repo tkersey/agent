@@ -115,6 +115,11 @@ test "staged repository evidence follows failure mutation pass and revokes later
         owner = next;
         try testing.expect(owner.value.failing_test_observed);
         try testing.expectEqual(i >= 1, owner.value.mutation_applied);
+        try testing.expectEqual(i >= 1, owner.value.applied_source != null);
+        if (owner.value.applied_source) |source| {
+            try testing.expectEqualStrings("src/range.mjs", source.path.bytes);
+            try testing.expectEqualStrings(new_digest, source.sha256.bytes);
+        }
         try testing.expectEqual(i == 2, owner.value.passing_test_observed);
         var result = try allowed.run(.{ .memory = owner.value, .result = final_result });
         defer result.deinit();
@@ -132,15 +137,23 @@ test "staged denial preserves evidence and conflict invalidates source search an
     memory.failing_test_observed = true;
     memory.mutation_applied = true;
     memory.passing_test_observed = true;
+    memory.replacement = applied();
+    memory.applied_source = .{
+        .path = .{ .bytes = "src/range.mjs" },
+        .sha256 = .{ .bytes = new_digest },
+    };
     var denied = try h.run(.{ .memory = memory, .observation = .{ .replace_file = .{ .denied = .{ .reason = .{ .bytes = "denied" } } } } });
     defer denied.deinit();
     try testing.expect(denied.value.passing_test_observed and denied.value.mutation_applied);
     try testing.expect(denied.value.source_document != null and denied.value.latest_search != null);
+    try testing.expect(denied.value.replacement.? == .denied);
+    try testing.expectEqualStrings(new_digest, denied.value.applied_source.?.sha256.bytes);
     var conflicted = try h.run(.{ .memory = denied.value, .observation = .{ .replace_file = .{ .conflict = .{ .path = .{ .bytes = "src/range.mjs" }, .expected_sha256 = .{ .bytes = old_digest }, .actual_sha256 = .{ .bytes = new_digest } } } } });
     defer conflicted.deinit();
     try testing.expect(conflicted.value.mutation_applied and conflicted.value.failing_test_observed);
     try testing.expect(!conflicted.value.passing_test_observed);
     try testing.expect(conflicted.value.source_document == null and conflicted.value.latest_search == null);
+    try testing.expect(conflicted.value.applied_source == null);
 }
 
 test "staged final guard requires all four independent evidence flags" {

@@ -115,6 +115,8 @@ pub const Memory = struct {
     failing_test_observed: bool,
     mutation_applied: bool,
     passing_test_observed: bool,
+    // Successful mutation evidence has a different lifetime from the latest outcome.
+    applied_source: ?SourceVersion,
 };
 pub const DecisionEvidence = struct {
     failing_test_observed: bool,

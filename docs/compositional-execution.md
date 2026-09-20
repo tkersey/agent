@@ -174,6 +174,29 @@ Boundary rerun then includes one standard review and all five auxiliary lenses;
 Agent's own review sequence remains required. Named economic tradeoffs remain
 accepted, without waiving new correctness defects or material regressions.
 
+## Repository completion correction
+
+The later repository-completion review found that a denied proposal erased the
+applied digest needed to finish a previously successful repair. The regression
+reproduced `authored_abort` after one actual write and a passing retest, despite
+unchanged correct file bytes. The authored working set now retains one optional
+applied source version separately from the latest proposal outcome. Denials
+preserve it; conflicts revoke it. Completion and test requests use that version.
+The existing approval, exact changed-file set and passing-test guards remain.
+
+Focused qualification passes 25 build steps, 14 native tests, 22 filesystem/
+executor tests, 21 model/action cases and the five real repair scenarios with
+99 fresh-kernel transfers. Final lint, image emission and these checks pass 141
+steps; both extracted-archive command tests pass. The distributed repository
+image is byte-identical to the image exercised by the new regression.
+The repository image grows 18,220 → 18,838 bytes
+(+618; 3.39%); the existing 32-decision fixture's peak checkpoint grows
+5,371 → 5,401 bytes (+30; 0.56%). This is bounded additional correctness state,
+not a performance improvement. No runtime, compiler, inquiry/ReAct/clarification
+policy or measured application input changes; their qualified measurements and
+the accepted milestone tradeoffs remain scoped to the same production inputs.
+Fresh Agent reviews are required after this correction; live status is in the PR.
+
 ## Current clarification comparison
 
 The unchanged four-case document-clarification policy was refreshed on Agent

@@ -32,7 +32,7 @@ async function run(mode) {
     await writeFile(path, initial);
     const delivery = await createRepositoryDelivery({ root });
     const memory = [none, none, some([1, 1, request[0], request[1], initial]), none,
-      none, none, none, mode !== "no-baseline", false, false];
+      none, none, none, mode !== "no-baseline", false, false, none];
     let input = { image, initialArgs: encodeValue(inputSchema, [memory, request, 7n]) };
     let commits = 0, reads = 0, questions = 0;
     for (let step = 0; step < 6; step++) {
@@ -127,7 +127,19 @@ async function repair(mode) {
     const path = join(root, request[0]);
     await writeFile(path, mode === 'max-documents' ? 'é'.repeat(16384) : initial);
     const many = ['multiple', 'fifth-file', 'repeat-write', 'duplicate-final', 'omitted-final'].includes(mode);
+    const afterRepair = ['denied-after-repair', 'denied-after-repair-retest',
+      'denied-after-repair-twice', 'conflict-after-repair'].includes(mode);
     let steps = actions;
+    if (afterRepair) {
+      const followup = ['replace_file', {path: request[0], expected_sha256: hash(corrected),
+        replacement: corrected + 'unapproved', rationale: 'Another proposal.'}];
+      steps = [...actions.slice(1, 5),
+        ['read_file', {role: 'source', path: request[0]}], followup,
+        ...(mode === 'denied-after-repair-twice' ? [followup] : []),
+        ...(['denied-after-repair-retest', 'conflict-after-repair'].includes(mode)
+          ? [['run_tests', {suite: 'default'}]] : []),
+        ['finish', finish]];
+    }
     if (many) {
       const names = Array.from({length: mode === 'fifth-file' ? 5 : 4}, (_, i) => 'src/file' + i + '.mjs');
       steps = [['run_tests', {suite: 'default'}]];
@@ -171,10 +183,11 @@ async function repair(mode) {
           assert.equal(invocation.selection.minimumCalls, 1);
           const context = invocation.messages[2].content;
           assert.match(invocation.messages[1].content, /Repair the failing range function/);
+          const originalSequence = !afterRepair;
           if (!many && decisions === 0) assert.match(context, /source_document: not observed/);
-          if (!many && !['repeat', 'max-documents'].includes(mode) && decisions === 2) assert(context.includes(hash(initial)) && context.includes(initial));
-          if (!many && !['repeat', 'max-documents'].includes(mode) && decisions === 3) assert.match(context, /failing_test_observed: true/);
-          if (!many && !['repeat', 'max-documents'].includes(mode) && decisions === 4 && mode !== 'denied') {
+          if (originalSequence && !many && !['repeat', 'max-documents'].includes(mode) && decisions === 2) assert(context.includes(hash(initial)) && context.includes(initial));
+          if (originalSequence && !many && !['repeat', 'max-documents'].includes(mode) && decisions === 3) assert.match(context, /failing_test_observed: true/);
+          if (originalSequence && !many && !['repeat', 'max-documents'].includes(mode) && decisions === 4 && mode !== 'denied') {
             assert.match(context, /source_document: not observed/);
             assert.match(context, /mutation_applied: true/);
             assert.match(context, /passing_test_observed: false/);
@@ -203,14 +216,22 @@ async function repair(mode) {
         }
         case 'repository.repair.test.v1': {
           tests++;
+          if (afterRepair && tests === 3) {
+            assert.deepEqual(payload[1], mode === 'conflict-after-repair'
+              ? none : some([request[0], hash(corrected)]));
+          }
           const passed = tests > 1 && mode !== 'failed-retest';
           reply = [passed ? 0 : 1, passed, passed ? 'passed' : 'failed', '', false, false];
           break;
         }
-        case 'repository.repair.current.v1': reply = await delivery.read(payload); break;
+        case 'repository.repair.current.v1':
+          if (mode === 'conflict-after-repair' && writes === 1)
+            await writeFile(path, 'external change\n');
+          reply = await delivery.read(payload);
+          break;
         case 'agent.approval.issue.v1.repository.repair.replace': reply = 37n; break;
         case 'agent.interaction.exchange.v1.repository.repair.replace':
-          reply = { tag: 0, value: [payload[3], 7n, mode === 'denied'
+          reply = { tag: 0, value: [payload[3], 7n, mode === 'denied' || (afterRepair && writes === 1)
             ? { tag: 1, value: 'owner declined' } : { tag: 0, value: null }] };
           break;
         case 'repository.repair.replace.v1': writes++; reply = await delivery.replace(payload); break;
@@ -226,6 +247,16 @@ async function repair(mode) {
 const { retained: repairedRetention, ...repaired } = await repair('approved');
 assert.deepEqual(repaired, { kind: 'completed', value: [finish.summary, [request[0]], true, hash(corrected)],
   content: corrected, decisions: 6, tests: 2, writes: 1 });
+for (const mode of ['denied-after-repair', 'denied-after-repair-retest', 'denied-after-repair-twice']) {
+  const {retained, ...actual} = await repair(mode);
+  assert.deepEqual(actual, {kind: 'completed',
+    value: [finish.summary, [request[0]], true, hash(corrected)],
+    content: corrected, decisions: mode === 'denied-after-repair' ? 7 : 8,
+    tests: mode === 'denied-after-repair-retest' ? 3 : 2, writes: 1}, mode);
+}
+const {retained: conflictRetention, ...conflictAfterRepair} = await repair('conflict-after-repair');
+assert.deepEqual(conflictAfterRepair, {kind: 'failed', value: 5,
+  content: 'external change\n', decisions: 8, tests: 3, writes: 1});
 for (const mode of ['early-finish', 'denied', 'failed-retest', 'budget', 'refusal', 'too-many-paths', 'invalid-role', 'max-documents', 'wrong-final-path', 'wrong-final-digest']) {
   const actual = await repair(mode);
   assert.equal(actual.kind, 'failed', mode);
@@ -246,4 +277,4 @@ for (const mode of ['multiple', 'fifth-file', 'repeat-write', 'duplicate-final',
   if (valid) assert.deepEqual(actual.value[1], [3,2,1,0].map(i => 'src/file'+i+'.mjs'));
   else assert.equal(actual.value, mode === 'fifth-file' ? 4 : 5, mode);
 }
-console.log('repository application: 17 model/action cases passed; real reads/writes, synthetic test results; repeated peak=' + Math.max(...repeated.retained));
+console.log('repository application: 21 model/action cases passed; real reads/writes, synthetic test results; repeated peak=' + Math.max(...repeated.retained));

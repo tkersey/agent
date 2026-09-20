@@ -18,6 +18,7 @@ pub const initial: t.Memory = .{
     .failing_test_observed = false,
     .mutation_applied = false,
     .passing_test_observed = false,
+    .applied_source = null,
 };
 
 pub const Functions = struct { observe: Id, project: Id, final_allowed: Id };
@@ -37,7 +38,7 @@ pub fn define(c: agent.Context) !Functions {
             1 => try observeRead(e, memory, value),
             2 => try b.pure(try e.memory(memory, .{ .latest_search = try e.some(?t.CompactSearch, value) })),
             3 => try b.pure(try observeTest(e, memory, value)),
-            4 => try b.pure(try observeReplacement(e, memory, value)),
+            4 => try observeReplacement(e, memory, value),
             else => unreachable,
         };
         cases[index] = .{ .variable = payload, .body = body };
@@ -103,13 +104,30 @@ fn observeReplacement(e: Emit, memory: Id, outcome: Id) !Id {
     const applied = try e.binary(.equal, tag, try e.c.literal(u64, 0));
     const conflict = try e.binary(.equal, tag, try e.c.literal(u64, 2));
     const clears = try e.either(applied, conflict);
-    return e.memory(memory, .{
+    const updated = try e.memory(memory, .{
         .source_document = try e.select(?t.ReadResult, clears, try e.c.literal(?t.ReadResult, null), try e.field(?t.ReadResult, memory, 2)),
         .latest_search = try e.select(?t.CompactSearch, clears, try e.c.literal(?t.CompactSearch, null), try e.field(?t.CompactSearch, memory, 4)),
         .replacement = try e.some(t.ReplacementSummary, outcome),
         .mutation_applied = try e.either(try e.field(bool, memory, 8), applied),
         .passing_test_observed = try e.select(bool, clears, try e.c.literal(bool, false), try e.field(bool, memory, 9)),
     });
+    const b = e.c.builder;
+    const success = try b.variable(try e.c.schema(t.ReplaceApplied));
+    const denied = try b.variable(try e.c.schema(t.ReplaceDenied));
+    const changed = try b.variable(try e.c.schema(t.ReplaceConflict));
+    const source = try e.product(t.SourceVersion, &.{
+        try e.field(t.Path, try b.reference(success), 0),
+        try e.field(t.DigestHex, try b.reference(success), 2),
+    });
+    return b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
+        .{ .variable = success, .body = try b.pure(try e.memory(updated, .{
+            .applied_source = try e.some(?t.SourceVersion, source),
+        })) },
+        .{ .variable = denied, .body = try b.pure(updated) },
+        .{ .variable = changed, .body = try b.pure(try e.memory(updated, .{
+            .applied_source = try e.c.literal(?t.SourceVersion, null),
+        })) },
+    } } });
 }
 
 const Emit = @import("source.zig").Emit;

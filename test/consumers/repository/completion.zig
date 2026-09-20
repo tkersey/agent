@@ -75,10 +75,7 @@ fn allowedFunction(e: E, subset: Id) !Id {
     const b = e.c.builder;
     const f = try b.declare(&.{ try e.c.schema(t.Memory), try e.c.schema(Changes), try e.c.schema(t.FinalResult) }, try e.c.schema(bool), &.{}, &.{});
     const no = try b.variable(try e.c.schema(void));
-    const outcome = try b.variable(try e.c.schema(t.ReplaceOutcome));
-    const applied = try b.variable(try e.c.schema(t.ReplaceApplied));
-    const denied = try b.variable(try e.c.schema(t.ReplaceDenied));
-    const conflict = try b.variable(try e.c.schema(t.ReplaceConflict));
+    const applied = try b.variable(try e.c.schema(t.SourceVersion));
     const reject = try b.pure(try e.c.literal(bool, false));
     const paths = try e.field(Changes, try e.param(f, 2), 1);
     const matching = try b.variable(try e.c.schema(bool));
@@ -86,12 +83,15 @@ fn allowedFunction(e: E, subset: Id) !Id {
     const actual_length = try b.primitive(try e.c.schema(u64), .sequence_length, &.{try e.param(f, 1)}, 0);
     const claimed_length = try b.primitive(try e.c.schema(u64), .sequence_length, &.{paths}, 0);
     const valid = try e.both(try b.reference(matching), try e.both(try b.reference(digest), try e.binary(.equal, actual_length, claimed_length)));
-    const checked = try b.bind(matching, try e.call(subset, &.{ try e.param(f, 1), paths }), try b.bind(digest, try compare(e, t.DigestHex, try e.field(t.DigestHex, try e.param(f, 2), 3), try e.field(t.DigestHex, try b.reference(applied), 2)), try b.pure(valid)));
-    const last = try b.term(.{ .match_sum = .{ .value = try b.reference(outcome), .cases = &.{
-        .{ .variable = applied, .body = checked }, .{ .variable = denied, .body = reject }, .{ .variable = conflict, .body = reject },
-    } } });
-    try b.define(f, try b.term(.{ .match_sum = .{ .value = try e.field(t.ReplacementSummary, try e.param(f, 0), 6), .cases = &.{
-        .{ .variable = no, .body = reject }, .{ .variable = outcome, .body = last },
+    const claimed_digest = try e.field(t.DigestHex, try e.param(f, 2), 3);
+    const applied_digest = try e.field(t.DigestHex, try b.reference(applied), 1);
+    const same_digest = try compare(e, t.DigestHex, claimed_digest, applied_digest);
+    const checked_digest = try b.bind(digest, same_digest, try b.pure(valid));
+    const matching_paths = try e.call(subset, &.{ try e.param(f, 1), paths });
+    const checked = try b.bind(matching, matching_paths, checked_digest);
+    const source = try e.field(?t.SourceVersion, try e.param(f, 0), 10);
+    try b.define(f, try b.term(.{ .match_sum = .{ .value = source, .cases = &.{
+        .{ .variable = no, .body = reject }, .{ .variable = applied, .body = checked },
     } } }));
     return f;
 }

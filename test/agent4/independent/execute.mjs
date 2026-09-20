@@ -1,4 +1,4 @@
-// Shared fresh-process embeddings of the existing World PKI2/PKO2 contract.
+// Shared fresh-process embeddings of the current World PKI3/PKO3 contract.
 import { spawnSync } from "node:child_process";
 import { resolve, join } from "node:path";
 

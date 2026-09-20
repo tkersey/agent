@@ -15,13 +15,13 @@ pub fn build(b: *std.Build) void {
         .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ boundary_path, "src/v2/root.zig" }) },
         .target = b.graph.host,
         .optimize = optimize,
-        .imports = &.{.{ .name = "boundary_data_v2", .module = data }},
+        .imports = &.{.{ .name = "boundary_data", .module = data }},
     });
     const contracts = b.createModule(.{
         .root_source_file = b.path("../../src/contracts.zig"),
         .target = b.graph.host,
         .optimize = optimize,
-        .imports = &.{.{ .name = "boundary_data_v2", .module = data }},
+        .imports = &.{.{ .name = "boundary_data", .module = data }},
     });
     const agent = b.createModule(.{
         .root_source_file = b.path("../../src/agent4.zig"),

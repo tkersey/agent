@@ -212,3 +212,17 @@ test("CLI rejects unknown, duplicate and conflicting options before dependency I
     ["--authoring-only", "--world-runtime", "/missing"]])
     assert.throws(() => execFileSync(process.execPath, [cli, "verify", ...args], { stdio: "pipe" }));
 });
+
+test("dependency traversal enforces entry and depth budgets before admission", context => {
+  const root = mkdtempSync(join(tmpdir(), "agent4-inventory-limits-"));
+  context.after(() => rmSync(root, {recursive: true, force: true}));
+  const wide = join(root, "wide"), deep = join(root, "deep");
+  mkdirSync(wide); mkdirSync(deep);
+  for (let i = 0; i < 10001; i++) writeFileSync(join(wide, String(i)), "");
+  assert.throws(() => inventory(wide), /entry limit exceeded/);
+  assert.throws(() => gitTree(wide), /entry limit exceeded/);
+  let path = deep;
+  for (let i = 0; i < 33; i++) { path = join(path, "d"); mkdirSync(path); }
+  assert.throws(() => inventory(deep), /depth exceeded/);
+  assert.throws(() => gitTree(deep), /depth exceeded/);
+});

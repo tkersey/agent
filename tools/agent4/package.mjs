@@ -9,16 +9,18 @@ import { DEFAULT_LOCK, readDependencyLock, readRegular, sha256, verifyRuntime } 
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const runtimeFiles = ["runtime/world.mjs", "runtime/world.d.mts", "runtime/values.mjs", "runtime/runner.mjs", "runtime/cli.mjs",
-  "runtime/model.mjs", "runtime/document.mjs", "runtime/inquiry.mjs", "runtime/inquiry_sandbox.mjs",
-  "runtime/inquiry_driver.mjs", "runtime/inquiry_wire.mjs", "runtime/inquiry_delivery.mjs", "runtime/inquiry_cli.mjs", "tools/agent4/dependencies.mjs",
+  "runtime/model.mjs", "runtime/document.mjs", "runtime/repository_delivery.mjs", "runtime/repository.mjs", "runtime/repository_tests.mjs", "runtime/inquiry.mjs", "runtime/inquiry_sandbox.mjs",
+  "runtime/inquiry_driver.mjs", "runtime/inquiry_wire.mjs", "runtime/inquiry_delivery.mjs", "runtime/inquiry_cli.mjs", "runtime/text_inspection.mjs", "runtime/text_file.mjs", "tools/agent4/dependencies.mjs",
   "docs/agent4-runtime.md", "docs/migration_from_3.md", "docs/model-invocation-v3.md",
-  "docs/consequence-clarification.md", "docs/resumable-inquiry.md", "LICENSE"];
+  "docs/consequence-clarification.md", "docs/resumable-inquiry.md", "docs/compiled-text-tool.md", "LICENSE"];
 // Optional test oracles supply prescribed external values and independently
 // assert application behavior. Production execution never imports these files.
-const fixtureTests = ["test/agent4/document_runtime.mjs", "test/agent4/review_runtime.mjs",
+const fixtureTests = ["test/agent4/document_runtime.mjs", "test/agent4/review_runtime.mjs", "test/agent4/repository_runtime.mjs",
+  "fixtures/repository-repair-v1/README.md", "fixtures/repository-repair-v1/package.json",
+  "fixtures/repository-repair-v1/src/range.mjs", "fixtures/repository-repair-v1/test/range.test.mjs",
   "test/agent4/inquiry_application_runtime.mjs", "test/agent4/inquiry_cli.test.mjs", "test/consumers/inquiry/contract.txt",
-  "test/consumers/inquiry/fixtures/cases.mjs", "test/consumers/inquiry/fixtures/session.mjs"];
-const roles = new Set(["image", "initial-args", "schema", "contract", "synthetic-fixture"]);
+  "test/consumers/inquiry/fixtures/cases.mjs", "test/consumers/inquiry/fixtures/session.mjs", "test/agent4/text_package_runtime.mjs"];
+const roles = new Set(["image", "component", "initial-args", "schema", "contract", "synthetic-fixture"]);
 const compare = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b));
 const json = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
 
@@ -78,7 +80,7 @@ function readInventory(directory) {
     if (!safeRelative(record.path) || record.path === "inventory.json" ||
         !roles.has(record.role) || !/^[a-f0-9]{64}$/.test(record.sha256) || records.has(record.path))
       fail("invalid or duplicate inventory file");
-    const extension = record.role === "image" ? /\.bpi2$/ : record.role === "schema" ? /\.bin$/ : record.role === "initial-args" ? /\.(bin|args)$/ :
+    const extension = record.role === "image" ? /\.bpi3$/ : record.role === "component" ? /\.bmo1$/ : record.role === "schema" ? /\.bin$/ : record.role === "initial-args" ? /\.(bin|args)$/ :
       record.role === "contract" ? /\.(md|txt)$/ : /\.(json|bin|txt|md)$/;
     if (!extension.test(record.path)) fail(`unexpected ${record.role} file type: ${record.path}`);
     const path = join(directory, record.path);
@@ -182,7 +184,7 @@ export function packageArtifacts(argv) {
   sources.set("conformance/agent4/dependencies.lock.json", readRegular(lockPath));
   for (const [path, bytes] of sources) files.set(path, bytes);
   files.set("README.md", Buffer.from(`# Agent ${options.version}: resumable interaction examples\n\n` +
-    `This source-independent use archive contains compiled BPI2 and typed InitialArgs.\n` +
+    `This source-independent use archive contains compiled BPI3 and typed InitialArgs.\n` +
     `Supply the unchanged World runtime authenticated by conformance/agent4/dependencies.lock.json.\n` +
     `The dependency tuple is ${lock.status}; this archive does not claim completion, stable release, or live-model validation.\n\n` +
     `See docs/agent4-runtime.md for start, resume, inspect, cancel and raw World usage.\n` +

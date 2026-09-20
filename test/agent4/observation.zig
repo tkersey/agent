@@ -1,9 +1,9 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const world = @import("world").process_v2;
+const world = @import("world");
 const source = boundary.computation;
-const data = boundary.data_v2;
+const data = boundary.data;
 const Id = source.Id;
 
 fn fixture(c: agent.Context) !agent.observation.Definition {
@@ -50,15 +50,17 @@ fn interpreted(c: agent.Context, live: bool) !source.Module {
 }
 
 fn boundReply(a: std.mem.Allocator, request_bytes: []const u8, answer: []const u8) ![]u8 {
-    const request = try data.protocol.decode(data.protocol.Request, a, request_bytes);
-    const result = data.protocol.Result{
+    var request_owner_0 = try data.invocation.decode(data.invocation.Request, a, request_bytes);
+    defer request_owner_0.deinit();
+    const request = request_owner_0.value;
+    const result = data.invocation.Result{
         .request_identity = request.request_identity,
-        .resume_schema_digest = data.wire.digest(request.resume_schema),
+
         .value = answer,
     };
-    const bytes = try a.alloc(u8, try data.protocol.encodedLength(data.protocol.Result, result));
+    const bytes = try a.alloc(u8, try data.invocation.encodedLength(data.invocation.Result, result));
     errdefer a.free(bytes);
-    _ = try data.protocol.encode(data.protocol.Result, a, result, bytes);
+    _ = try data.invocation.encode(data.invocation.Result, a, result, bytes);
     return bytes;
 }
 
@@ -67,8 +69,11 @@ fn execute(module: source.Module, registry: *agent.admission.Registry, expected:
     try agent.admission.verify(a, module, registry);
     var compiled = try boundary.program.compile(a, module);
     defer compiled.deinit();
-    var result = try world.run(a, .{
-        .program = .{ .records = compiled.program },
+    const invocation_image_0 = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+    defer a.free(invocation_image_0);
+    _ = try boundary.data.program_image.encode(a, compiled.program, invocation_image_0);
+    var result = try world.invocation.invoke(a, .{
+        .image = invocation_image_0,
         .instance = .{ .initial_args = &.{} },
     });
     defer result.deinit();
@@ -76,14 +81,19 @@ fn execute(module: source.Module, registry: *agent.admission.Registry, expected:
     while (result.record == .requested) {
         requests += 1;
         try std.testing.expectEqual(@as(usize, 1), requests);
-        const request = try data.protocol.decode(data.protocol.Request, a, result.record.requested.request);
-        try std.testing.expectEqualStrings("consumer.document.read", request.semantic_identity);
+        var request_owner_1 = try data.invocation.decode(data.invocation.Request, a, result.record.requested.request);
+        defer request_owner_1.deinit();
+        const request = request_owner_1.value;
+        try std.testing.expectEqualStrings("consumer.document.read", request.binding.semantic_identity);
         const reply = try boundReply(a, result.record.requested.request, &.{ 42, 0, 0, 0, 0, 0, 0, 0 });
         defer a.free(reply);
-        const next = try world.run(a, .{
-            .program = .{ .records = compiled.program },
-            .instance = .{ .snapshot = result.record.requested.state },
-            .control = .{ .continue_value = reply },
+        const invocation_image_1 = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+        defer a.free(invocation_image_1);
+        _ = try boundary.data.program_image.encode(a, compiled.program, invocation_image_1);
+        const next = try world.invocation.invoke(a, .{
+            .image = invocation_image_1,
+            .instance = .{ .state = result.record.requested.state.? },
+            .control = .{ .reply = reply },
         });
         result.deinit();
         result = next;

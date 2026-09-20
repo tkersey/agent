@@ -1,87 +1,97 @@
 {
   "format": "agent4-dependency-lock/v1",
-  "status": "released-integration",
+  "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "42a09b92c2870ab3eab923fe68ca2645eb710000",
-    "gitTree": "e5c9d7e34fe6fe96f42157c6903a672f0bee1fd4",
-    "version": "2.0.2",
+    "commit": "1b00c8c159f0cb490a1223fac8d3d208cef41cb1",
+    "gitTree": "efdd8210b1bcaf1340475d8961c33d72825e1cc6",
+    "version": "3.0.0-dev.0",
     "source": {
-      "inventorySha256": "599c56caccbcb75448997936c3393db486f9aab93cb9c03910f305795581cce3",
-      "entries": 273,
-      "bytes": 7954716
+      "inventorySha256": "d12312b75c11d65fe742595a99936f1df93f93526e099e454f06c0b97b03cddb",
+      "entries": 220,
+      "bytes": 6128153
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/42a09b92c2870ab3eab923fe68ca2645eb710000.tar.gz",
-      "sha256": "17cfe0256c4bf302bc6a5037bb75012b283dfefdbdb8ec7fc1b71717285babe1",
-      "bytes": 1258938
+      "url": "https://github.com/tkersey/boundary/archive/1b00c8c159f0cb490a1223fac8d3d208cef41cb1.tar.gz",
+      "bytes": 1088980,
+      "sha256": "2976ad463e1f6e18bf204bba961cae85865f3ec7934ba9a090602830c3e13018"
     },
-    "authentication": "GitHub commit API tree identity equals recomputed complete source and downloaded archive tree; content inventories also agree",
+    "authentication": "GitHub commit API tree identity equals recomputed downloaded source tree; archive and content inventories independently bound",
     "package": {
-      "zigHash": "boundary-2.0.2-flclaCKdMgCw2_TeuCpz6p3r3BAlrrmKKoX4Bx_Pr6Sy",
+      "zigHash": "boundary-3.0.0-dev.0-flclaCJBFQCNUnFJK019OyLBDLZdg6_eTW1rzBpwImGA",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "61dca5385d222b6e78319cfc8ab3ffda9f948b3d0fc18b2feaccfef830d59fa3",
-          "entries": 258,
-          "bytes": 3317026,
-          "derivation": "Exact Zig 0.16.0 build --fetch=all materialization from the pinned archive in a fresh isolated package project; no build runner executed"
+          "inventorySha256": "9fe0d1509dc1d5ebbe0a45a98c9f0008caf2f8ccd604a75a7c6de09611ec1eef",
+          "entries": 181,
+          "bytes": 1392930
         },
         "archive-extracted": {
-          "inventorySha256": "811b620168cb9e31ab3bcf060955160980d9b0d222407bbd2b5d18fbbc9536cc",
-          "entries": 258,
-          "bytes": 3317026,
-          "derivation": "Exact ordinary tar extraction of the independently digest-bound Zig package-cache archive under umask 022"
+          "inventorySha256": "9fe0d1509dc1d5ebbe0a45a98c9f0008caf2f8ccd604a75a7c6de09611ec1eef",
+          "entries": 181,
+          "bytes": 1392930
         }
       },
       "archive": {
-        "sha256": "a3680fd0d1eaa8ba04e1d6a5c914810c6dbe119486476b3f3ef22b10e091a0c2",
-        "bytes": 483491
+        "bytes": 282310,
+        "sha256": "5d7abea53bb3118dbcc13dae1174ee98a9b61b335fe81703c5eaa3a36a983ed4"
       }
     },
     "api": {
       "authoring": "src/v2/root.zig",
       "data": "src/v2/data/root.zig",
       "source": "src/v2/source.zig",
-      "profile": "Boundary 2 portable source and BPI2/PST2/ERQ2/ERS2/PKI2/PKO2",
+      "profile": "Current stable executable records, BMO1/BPI3/PST3/invocation codecs and graph_order; predecessor codecs and executable layouts retired",
       "files": [
         {
           "path": "src/v2/root.zig",
-          "sha256": "a53155935a6ef7dce788df70738ac1c6c82c49f7383f81c8b83bd2357fa3b10b"
+          "sha256": "c264b34c8d49a9410f29a324f4ca60402dc0489393b829c16ebb510b11ac23ee"
         },
         {
           "path": "src/v2/data/root.zig",
-          "sha256": "38c2de63f8ebf62ed451211493ac10ff4ed8e437e2203d72470ee2624f9ad1b5"
+          "sha256": "93ec842fe300c58ac99f4f88bdd6229ca305cee3ebe42765d6ce39a3cc5bfb72"
         },
         {
           "path": "src/v2/source.zig",
-          "sha256": "075d94ff8c3d39a98a66aaf85de6ab516c7079b0cffcedcc4e0d8b3924c3164a"
+          "sha256": "503c9523cd846a32136b8290e53c56d5eeb01d9e70c3e4739601cf64b98bb6c0"
         },
         {
-          "path": "docs/bpi2-wire.md",
-          "sha256": "d4a9130ffaf277c7baecef48541f5177e29e5c8b31337f5ef20079e84a012271"
+          "path": "docs/bpi3-wire.md",
+          "sha256": "b026b831c1f8170e4788f2778b147d39aa7ab5d757195dd1819916d994c919b6"
+        },
+        {
+          "path": "src/v2/data/activation.zig",
+          "sha256": "a96689f8375a3664905a7a56de86c8e2c7d34628be1dd33725475b67198dbca5"
+        },
+        {
+          "path": "src/v2/data/graph_order.zig",
+          "sha256": "e1497fd8b5a0b606a0301bfa016415a8ef05bc65c32ce66571c5983a73a34d1d"
+        },
+        {
+          "path": "src/v2/data/invocation.zig",
+          "sha256": "2ab86f8a4cc902a1aff3b3b8766723f0097f25e46c87181d755d6f25c972a5c9"
         }
       ]
     }
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "d075169a4805d999ceba4c37b3e1c925b78c3bf9",
-    "gitTree": "849a610a88c10a055075c27a325a4cc3c14bca3e",
-    "version": "5.0.2",
+    "commit": "02846a4c8d535c60956874aba5fd30f579207c20",
+    "gitTree": "8150fabc9244790365588f979ac58371a7ef4f05",
+    "version": "6.0.0-dev.0",
     "source": {
-      "inventorySha256": "1a4b022452c92501679ca908a98e9d5a9c4ddef0a34277706a6cea172f1a8197",
-      "entries": 461,
-      "bytes": 38417525
+      "inventorySha256": "3aef3337f1e9624d68b4aecfb47a2d99c179cab873f13a2c12badc139c612a75",
+      "entries": 136,
+      "bytes": 1385370
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/d075169a4805d999ceba4c37b3e1c925b78c3bf9.tar.gz",
-      "sha256": "022cab801d1aab6cfa087a07ff81b7d41b90f651f3ffef55ab7a6b905d946416",
-      "bytes": 738746
+      "url": "https://github.com/tkersey/world/archive/02846a4c8d535c60956874aba5fd30f579207c20.tar.gz",
+      "bytes": 314174,
+      "sha256": "e3cbae09288df37901dd18b704e874bc136ae892f8522e17f4ea4bea40ab9de3"
     },
-    "authentication": "GitHub commit API tree identity equals recomputed complete source and downloaded archive tree; content inventories also agree",
+    "authentication": "Downloaded archive tree recomputed and matched to GitHub commit API; complete source and runtime inventories bound",
     "runtime": {
-      "entrypoint": "src/process_v2/index.mjs",
+      "entrypoint": "src/embedding/index.mjs",
       "files": [
         {
           "path": "LICENSE",
@@ -94,8 +104,8 @@
           "path": "README.md",
           "kind": "file",
           "mode": 420,
-          "bytes": 5337,
-          "sha256": "d876689d3c546ecdb3d3f9e05db5f47f6470bc437a74352288431d869bdd4807"
+          "bytes": 4452,
+          "sha256": "cd8dbbaf991300b56beecc0544daf9d6ade810cf4a7cc9240210f7578a9baba2"
         },
         {
           "path": "bin",
@@ -106,8 +116,8 @@
           "path": "bin/world.mjs",
           "kind": "file",
           "mode": 493,
-          "bytes": 296,
-          "sha256": "4cd23dcbe2037d7e198f18018eb0c3da77c0bc965601add30623dde594344679"
+          "bytes": 2187,
+          "sha256": "01a64e073a5b6327da3acb94cfd034df91a7d932a9c4e20a4243ab7bf8e2b782"
         },
         {
           "path": "docs",
@@ -115,18 +125,18 @@
           "mode": 493
         },
         {
-          "path": "docs/process_v2-abi.md",
+          "path": "docs/kernel-abi.md",
           "kind": "file",
           "mode": 420,
-          "bytes": 8076,
-          "sha256": "55dcc35ea6c3ada88817c7711bc0c2b0d001c2ae9403cec0bd0bdcd3a6dabe7c"
+          "bytes": 9305,
+          "sha256": "8a363578832859119e2540099696c876d691562ad286c98d27152f90db6dc8dd"
         },
         {
           "path": "package.json",
           "kind": "file",
           "mode": 420,
-          "bytes": 587,
-          "sha256": "aea68b63c3c2089ad7a9db1812cfc1432ee94042660aa7b23a0fcc1a4a3a7ba0"
+          "bytes": 514,
+          "sha256": "8b7b05dedfb3de758c6b88aaec4e988d8ec7d44042db3c2e8581655d23e98422"
         },
         {
           "path": "src",
@@ -134,86 +144,96 @@
           "mode": 493
         },
         {
-          "path": "src/process_v2",
+          "path": "src/embedding",
           "kind": "directory",
           "mode": 493
         },
         {
-          "path": "src/process_v2/cli.mjs",
+          "path": "src/embedding/codec.mjs",
           "kind": "file",
           "mode": 420,
-          "bytes": 4574,
-          "sha256": "0a201f6cdc3c029cd059056f1e4ff2b23bacf25edd39ac01488025f9063bce02"
+          "bytes": 4990,
+          "sha256": "0d8a633733359a52ec393defdb680c7f1e041017fd46a6dfe4605d60f5c2859d"
         },
         {
-          "path": "src/process_v2/codec.mjs",
+          "path": "src/embedding/errors.mjs",
           "kind": "file",
           "mode": 420,
-          "bytes": 14693,
-          "sha256": "40bb5a52fb9672682419cbb1cb9d64c52fadcfc2460b5ee95e29cb7627b860bb"
+          "bytes": 2292,
+          "sha256": "7cf79f9095beab8e41b5844fc3f4c67117d3723275655837a2ac42952c2d6b3f"
         },
         {
-          "path": "src/process_v2/errors.mjs",
+          "path": "src/embedding/index.mjs",
           "kind": "file",
           "mode": 420,
-          "bytes": 2220,
-          "sha256": "d2d3ef1e5613f448cb68f0e4fb9e0832e91dbd64a58299cfcb66105189391179"
+          "bytes": 311,
+          "sha256": "6abe8f15c788c18e4fe6d0878d4eefdb5ddfa86d375f77d1ff271a6d23bdaf6a"
         },
         {
-          "path": "src/process_v2/file_input.mjs",
+          "path": "src/embedding/kernel.mjs",
           "kind": "file",
           "mode": 420,
-          "bytes": 1445,
-          "sha256": "3f79adfe6d870a7ac27b7eb5993e759f9badf573eedd399159a63d2a6aaf587a"
+          "bytes": 6004,
+          "sha256": "7f3be362b474b49c632722d2a02ae16117ffe65c83818887589cf3c56877b13d"
         },
         {
-          "path": "src/process_v2/index.mjs",
+          "path": "src/embedding/values.mjs",
           "kind": "file",
           "mode": 420,
-          "bytes": 3970,
-          "sha256": "0fc485b75861b931007345d5b938a25b83daa79ec64ac582c5f3838f1818e6d0"
+          "bytes": 5374,
+          "sha256": "1c0faa397f829cbf804d3ef3202ee338648344626c95a5c931b1e1c62f0f5e69"
         },
         {
-          "path": "src/process_v2/kernel_file.mjs",
+          "path": "src/embedding/wasm.mjs",
           "kind": "file",
           "mode": 420,
-          "bytes": 1248,
-          "sha256": "a2443cd29499c343793f50ae65260c81c515875221a679f6f9b1f36098ded64d"
+          "bytes": 14480,
+          "sha256": "ac164590e77034bbafef8112bbaf34303fa8c744d306547d5afa9e53d2ca0a18"
         },
         {
-          "path": "src/process_v2/wasm.mjs",
+          "path": "src/embedding/wire.mjs",
           "kind": "file",
           "mode": 420,
-          "bytes": 12535,
-          "sha256": "9b7ca995fbe22cab5b14230f6ecadef511e32d74f0f1d0453c7f3800ad6e8227"
+          "bytes": 4352,
+          "sha256": "3afff4d7dd778dba8b1984c735b0a630d91664c5f53ca5a15a810cf6a8d560e2"
         },
         {
-          "path": "world-process-kernel-v2.wasm",
+          "path": "src/node",
+          "kind": "directory",
+          "mode": 493
+        },
+        {
+          "path": "src/node/file-input.mjs",
+          "kind": "file",
+          "mode": 420,
+          "bytes": 1456,
+          "sha256": "e0c36b83fafebc72f6d14ecff3acf2c819856b65b4432b97b5a83ab2102a624d"
+        },
+        {
+          "path": "world-kernel.wasm",
           "kind": "file",
           "mode": 493,
-          "bytes": 413317,
-          "sha256": "d046dbe1e92e61bb3d8aeb52cac898ae90916fb388c289d87c0b304ff23e7380"
+          "bytes": 462629,
+          "sha256": "7a27d64295431c960046439353a158e378f14d4686fac47b61b1406cf1753663"
         }
       ],
-      "inventorySha256": "477c543507e94d21720d5eb524c0d215f47f1a831aedcd22e9fbd9d6c8d93142",
-      "entries": 17,
-      "bytes": 469365,
+      "inventorySha256": "3883a4f55ed04bb00cb6532f01653c8c21806ad00f0bf590f25fa99db736cded",
+      "entries": 19,
+      "bytes": 519413,
       "kernel": {
-        "path": "world-process-kernel-v2.wasm",
-        "sha256": "d046dbe1e92e61bb3d8aeb52cac898ae90916fb388c289d87c0b304ff23e7380",
-        "bytes": 413317
+        "path": "world-kernel.wasm",
+        "bytes": 462629,
+        "sha256": "7a27d64295431c960046439353a158e378f14d4686fac47b61b1406cf1753663"
       },
-      "abi": 2,
+      "abi": 3,
       "exports": [
-        "admitProcessKernel",
-        "advance",
+        "Kernel",
         "decodeOutcome",
         "decodeRequest",
         "encodeInput",
         "encodeResult",
-        "loadProcessKernel",
+        "inspectKernelWasm",
         "packageVersion",
-        "run",
         "validateValue"
       ],
       "physicalProfile": {
@@ -223,13 +243,13 @@
         "stackBytes": 65536,
         "maximumMemoryBytes": 268435456,
         "inspection": {
-          "format": "world-process-kernel-inspection/v2",
+          "format": "world-kernel-inspection/v3",
           "wasm32": true,
           "importCount": 0,
-          "exportCount": 10,
+          "exportCount": 23,
           "hasStart": false,
           "memory": {
-            "initialPages": 20,
+            "initialPages": 18,
             "maximumPages": 4096,
             "shared": false,
             "memory64": false
@@ -237,14 +257,14 @@
         }
       },
       "build": {
-        "target": "build-v2-kernel",
+        "target": "build-kernel",
         "optimize": "ReleaseSmall",
         "machine": "wasm32-freestanding",
-        "boundarySourceCommit": "42a09b92c2870ab3eab923fe68ca2645eb710000",
+        "boundarySourceCommit": "1b00c8c159f0cb490a1223fac8d3d208cef41cb1",
         "capacityOverrides": [],
         "requestedOptimize": "ReleaseSafe"
       },
-      "provenance": "Agent-owned build of unchanged World 5.0.2 source using its default physical profile; not a published World runtime"
+      "provenance": "Locally built generic ABI 3 kernel from the exact successor World/Boundary source pair; not a published runtime release"
     }
   },
   "toolchain": {
@@ -253,19 +273,19 @@
       "executableSha256": "71cc3995a7586753ebf82c66dfb8bef43df446517550678781834586a960f8c9"
     },
     "node": {
-      "version": "v26.8.2",
-      "executableSha256": "902b6a6984d5d825829ea9064ab73b734548df37bc0683990dca31c8dc2a9253"
+      "version": "v26.9.0",
+      "executableSha256": "91ed66b8cd139609427a3e9d93518dd3b0d5407c737fc9a265bfd991ec623d8a"
     },
     "platform": "darwin",
     "architecture": "arm64"
   },
   "publicationObservation": {
-    "boundaryLatest": "v2.0.2",
-    "worldLatest": "v5.0.2",
-    "compatiblePublishedReleaseObserved": true
+    "boundarySource": "draft PR 152",
+    "worldSource": "draft PR 54",
+    "compatiblePublishedReleaseObserved": false
   },
   "limitations": [
-    "Input identities and unchanged default kernel are authenticated; consumer compatibility is established only by separately executed Agent acceptance tests.",
-    "Runtime digest is an Agent-owned expected value from an unchanged source build, not an upstream publication attestation."
+    "Successor migration is functionally qualified; World review repairs and final coordinated review closeout remain under validation.",
+    "Runtime digest is consumer-owned expected identity from the exact source build, not a release attestation."
   ]
 }

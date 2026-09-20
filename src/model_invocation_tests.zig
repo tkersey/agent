@@ -105,7 +105,7 @@ test "model effect is ordinary and a typed question requires no executable tool"
     try std.testing.expectEqual(request, builder.effects.items[@intCast(first)].payload);
     try std.testing.expectEqual(result, builder.effects.items[@intCast(first)].result);
     try std.testing.expect(builder.effects.items[@intCast(first)].external);
-    const facts = try boundary.data_v2.admission.schemas(std.testing.allocator, builder.schemas.items);
+    const facts = try boundary.data.admission.schemas(std.testing.allocator, builder.schemas.items);
     defer std.testing.allocator.free(facts.minimum);
     defer std.testing.allocator.free(facts.exportable);
     try std.testing.expectEqualStrings("answer", Question.allDeclarations().items[0].name.bytes);

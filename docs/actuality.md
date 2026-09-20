@@ -1,45 +1,107 @@
-# Agent Actuality v2
+# Repository-repair application migration
 
-`repository-repair-actuality` compiles AgentDefinition v2, ReAct, and the
-`repository_working_set_v1` EpistemicStrategy into one ordinary Boundary
-Machine and one World Application ABI v1 WASM.
+The working-set fold, decision-view projection and four-flag completion predicate
+now use current staged authoring in
+[working_set.zig](../test/consumers/repository/working_set.zig), with portable
+[contracts](../test/consumers/repository/types.zig). Host adapters do not update
+this memory. The policy preserves role-code normalization, stale source/search
+invalidation, denial behavior and revocation of passing evidence after failure.
+The latest proposal outcome remains visible, while a separate applied source
+version binds completion and retesting. Denial preserves that version; a conflict
+revokes it together with the passing-test evidence.
 
-The deterministic lane performs real repository reads, literal search,
-`bun test`, request-bound approval, one atomic source replacement, a hidden
-behavior check, and typed completion. The current artifact is import-free,
-3,741,106 bytes, uses a 128 MiB WASM stack, declares at most 256 MiB linear
-memory, and admits at most 512 KiB application state.
-
-```sh
-AGENT_WORLD_HOST_ROOT=/path/to/world-host \
-AGENT_WORLD_CAPABILITIES_ROOT=/path/to/world-capabilities \
-zig build check-agent-actuality-release
-```
-
-The lifecycle proof additionally requires byte-identical retry, zero-fresh-
-effect replay, independent children from one parent, and migration with
-receiver preflight and no transferred secrets or approval.
-
-The anonymous public lane downloads exact lock-pinned world-host and
-world-capabilities artifacts, authenticates them before extraction, reproduces
-the digest-bound deterministic capability distribution, and runs without
-sibling source checkouts or GitHub credentials:
+Run the five native policy regressions, including 32 actual portable observations
+with bounded checkpoint retention and authored budget termination:
 
 ```sh
-zig build check-agent-reference-stack
+zig build check-repository-working-set -Doptimize=ReleaseSafe \
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
 ```
 
-The live lane swaps only the deterministic decision handler for the admitted
-OpenAI pack. It requires `OPENAI_API_KEY`, `OPENAI_MODEL`, a TTY confirmation
-before controlled fixture contents are sent, and request-specific interactive
-approval before mutation:
+The [replacement gate](../test/consumers/repository/replacement.zig) requires a
+failing baseline and the latest source path/digest before requesting fresh read
+evidence. Its one-shot proof binds exact-proposal approval to the authenticated
+principal. Stale replies, substituted evidence and amendments cannot commit;
+changed files return conflicts and uncertain delivery fails explicitly. Nine
+native regressions exercise these outcomes across fresh checkpoint restores:
 
 ```sh
-AGENT_WORLD_HOST_ROOT=/path/to/world-host \
-AGENT_WORLD_CAPABILITIES_ROOT=/path/to/world-capabilities \
-OPENAI_API_KEY=... OPENAI_MODEL=... \
-zig build check-agent-actuality-live
+zig build check-repository-replacement -Doptimize=ReleaseSafe \
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
 ```
 
-Capabilities return EffectResults only. They cannot author Memory,
-DecisionView, Frames, Machine state, branch heads, or terminal results.
+The [model/action loop](../test/consumers/repository/application.zig) now authors
+the bounded sequence of inspection, testing, replacement and final decisions.
+It renders its current working set into the model request, admits one declared
+action, folds observations and enforces the completion predicate. Provider
+replies remain candidate data. The flat model codec preserves all four changed
+path slots. Thirty-two repeated decisions terminate at the authored budget with
+a 5,401-byte peak checkpoint after warmup; three full 32-KiB documents fit the
+declared prompt capacity without truncation.
+
+Completion binds the final changed-file set to at most four distinct successful
+writes, and the final source digest to the latest applied replacement. Order is
+irrelevant; omitted, invented or duplicate claims fail. Repeat writes reuse a
+slot. A fifth distinct target fails before reading evidence, asking approval or
+writing. The program retains these facts and exposes them in its decision view.
+
+The [filesystem adapter](../runtime/repository_delivery.mjs) reuses the document
+owner's isolated-root and cooperative-writer contract. It rechecks the actual
+digest during conditional delivery and preserves conflict and uncertain results.
+It carries no approval or working-set state. Approval does not prevent changes
+made outside that cooperative filesystem boundary.
+
+```sh
+zig build check-repository-delivery -Doptimize=ReleaseSafe \
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+```
+
+This check covers seven filesystem cases, seven replacement cases across 18
+fresh-kernel restores, and twenty-one model/action cases, including premature finish,
+denied approval, failed retesting, malformed provider arguments and budget
+exhaustion. The additional cases preserve valid completion after one or repeated
+denials, keep retesting bound to the applied source, and reject stale completion
+after a conflict even if a later test passes. That policy check uses synthetic
+provider replies and test results.
+
+The [repository bindings](../runtime/repository.mjs) now perform actual listing,
+role-bound reads, literal search and isolated fixture tests. The caller supplies
+the root, readable `paths` and a separate `writablePaths` subset (at most four).
+Reading test files grants no permission to replace them. Listing returns at most 32 entries;
+search returns at most eight 256-byte excerpts with explicit truncation. Missing
+files and unavailable executors do not become failing-baseline observations.
+
+```sh
+zig build check-repository-application -Doptimize=ReleaseSafe \
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+```
+
+The application check covers valid repair, failed repair, attempted early exit,
+attempted external write and denied approval: ten real isolated test processes
+and 99 fresh-kernel transfers. Only provider candidates are synthetic. The range
+fixture executor preserves Bun equality semantics and requires a completed test
+report. It runs with macOS Seatbelt or Linux Bubblewrap, with no unsandboxed
+fallback; this qualification used macOS and Bun 1.4.2, not Linux. Execution is
+bounded by ten seconds and 1 MiB of captured output; returned stdout/stderr each
+have a 4-KiB limit and truncation flag.
+
+Test requests carry the authored source version when available. The adapter
+checks that version and the fixed suite identity, executes a private snapshot
+of those exact bytes, and checks the live inputs again afterward. Changed inputs
+leave the pending request unresolved; they cannot manufacture failing-baseline
+or passing-completion evidence.
+
+The use archive includes the image, schemas, leaf adapters and actual fixture.
+Its default task has zero decision allowance; a caller supplies task parameters
+and explicit environmental bindings to run it. The obsolete per-application WASM
+emitters, old working-set compiler and World-host/capabilities wrappers are
+removed. Executor confinement, malformed-report and native-equality regressions
+now run directly against the current runtime. The old distribution, checkpoint
+metadata, state-census and report-merging wrappers are also removed. Current
+image/State/reply admission, dependency authentication and package checks own
+their successor obligations.
+
+See [runtime setup](agent4-runtime.md), [migration guidance](migration_from_3.md)
+and [current status](compositional-execution.md). No live-model usefulness or repair
+of user repositories is claimed. The [historical adequacy obstruction](../adequacy/router-policy-v1/agent-adequacy-obstruction.md)
+and its exact-release minimal reproducer remain unchanged.

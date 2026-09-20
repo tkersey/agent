@@ -54,7 +54,7 @@ const System = agent.system(.{ .InitialArgs = u64, .Result = Memory, .Failure = 
 pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();
-    const format = args.next() orelse "bpi2";
+    const format = args.next() orelse "bpi3";
     if (args.next() != null) return error.UnknownArgument;
     if (std.mem.eql(u8, format, "args")) return writeArguments(init, u64, 7);
     const consequence = @import("consequence.zig");
@@ -64,7 +64,7 @@ pub fn main(init: std.process.Init) !void {
         return writeImage(init, consequence.ClarifyFirstSystem);
     if (std.mem.eql(u8, format, "consequence-args"))
         return writeArguments(init, consequence.types.Request, consequence.types.default_request);
-    if (!std.mem.eql(u8, format, "bpi2")) return error.UnknownArgument;
+    if (!std.mem.eql(u8, format, "bpi3")) return error.UnknownArgument;
     return writeImage(init, System);
 }
 
@@ -77,7 +77,7 @@ fn writeArguments(init: std.process.Init, comptime T: type, value: T) !void {
 fn writeImage(init: std.process.Init, comptime Program: type) !void {
     var compiled = try agent.compile(init.gpa, Program);
     defer compiled.deinit();
-    const bytes = try init.gpa.alloc(u8, try boundary.image_v2.encodedLength(compiled.program));
+    const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(bytes);
     return writeBytes(init, try compiled.encode(init.gpa, bytes));
 }

@@ -1,5 +1,5 @@
 // Narrow experiment adapter. It executes input traces and mandatory checks;
-// investigation choice, evidence sharing and hypothesis policy live in BPI2.
+// investigation choice, evidence sharing and hypothesis policy live in BPI3.
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createInquirySandbox } from "./inquiry_sandbox.mjs";

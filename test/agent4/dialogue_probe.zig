@@ -13,11 +13,19 @@ pub const Mode = enum {
     exchange,
     deep_exchange,
     wide_exchange,
+    yield_once,
     double_use,
     borrowed_escape,
 };
 
 pub fn build(b: *Builder, mode: Mode) !bsrc.Module {
+    if (mode == .yield_once) {
+        const unit = try b.scalar(void);
+        const integer = try b.scalar(u64);
+        const entry = try b.declare(&.{}, integer, &.{}, &.{});
+        try b.define(entry, try b.term(.{ .yield_then = try b.pure(try b.constant(u64, 42)) }));
+        return b.module(entry, unit);
+    }
     if (mode == .exchange) return typedExchange(b);
     if (mode == .deep_exchange or mode == .wide_exchange) return portableExchange(b, mode);
     if (mode == .borrowed_escape) return borrowedEscape(b);
@@ -127,7 +135,7 @@ fn failure(b: *Builder) !Id {
     return b.term(.{ .fail = try b.constant(void, {}) });
 }
 
-fn arithmetic(b: *Builder, opcode: boundary.data_v2.program.Opcode, a: Id, c: Id) !Id {
+fn arithmetic(b: *Builder, opcode: boundary.data.program.Opcode, a: Id, c: Id) !Id {
     return b.value(.{ .schema = try b.scalar(u64), .expression = .{ .primitive = .{
         .opcode = opcode,
         .operands = &.{ a, c },
@@ -385,7 +393,7 @@ test "external interaction compiles without runtime dependencies" {
 test "consumed dialogue future cannot be resumed" {
     var b = Builder.init(std.testing.allocator);
     defer b.deinit();
-    try std.testing.expectError(error.InvalidOwnership, boundary.program.compile(std.testing.allocator, try build(&b, .double_use)));
+    try std.testing.expectError(error.UnavailableSlot, boundary.program.compile(std.testing.allocator, try build(&b, .double_use)));
 }
 
 test "borrowed dialogue future cannot escape creator region" {
@@ -404,7 +412,7 @@ pub fn main(init: std.process.Init) !void {
     defer b.deinit();
     var compiled = try boundary.program.compile(init.gpa, try build(&b, mode));
     defer compiled.deinit();
-    const bytes = try init.gpa.alloc(u8, try boundary.image_v2.encodedLength(compiled.program));
+    const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(bytes);
     _ = try compiled.encode(init.gpa, bytes);
     var buffer: [4096]u8 = undefined;

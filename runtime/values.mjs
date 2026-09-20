@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Agent contributors. MIT license.
 // Pure application values. No process framing, execution, or World internals.
-// Wire source: Boundary 2 docs/bpi2-wire.md (profile 1).
+// Wire source: Boundary 2 docs/bpi3-wire.md (profile 1).
 
 const U64_MAX = (1n << 64n) - 1n;
 const U32_MAX = (1n << 32n) - 1n;

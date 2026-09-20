@@ -2,7 +2,7 @@
 //! This separates higher-order origins without changing runtime instructions,
 //! adding an evaluator, or asserting that the function's effects are safe.
 const source = @import("boundary").computation;
-const p = @import("boundary").data_v2.program;
+const p = @import("boundary").data.program;
 
 pub const Definition = struct { function: p.Id, schema: p.Id };
 

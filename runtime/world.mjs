@@ -16,14 +16,17 @@ function bytes(value, name) {
 }
 
 /**
- * Authenticate the supplied, unchanged World installation against Agent's input
+ * Authenticate the supplied World installation against Agent's input
  * lock before importing its public module. No authoring source is loaded.
  */
 export async function loadWorldRuntime(options) {
   if (!options || typeof options !== "object" || Array.isArray(options))
     throw new TypeError("runtime options are required");
   for (const name of Object.keys(options))
-    if (!["runtimePath", "lockPath"].includes(name)) throw new Error(`UnknownRuntimeOption: ${name}`);
+    if (!["runtimePath", "lockPath", "limits"].includes(name)) throw new Error(`UnknownRuntimeOption: ${name}`);
+  const selectedLimits = options.limits === undefined ? null : { ...options.limits };
+  if (selectedLimits && JSON.stringify(Object.keys(selectedLimits).sort()) !== JSON.stringify(["input", "output", "working"]))
+    throw new Error("limits must specify input, working and output bytes");
   const { runtimePath, lockPath = DEFAULT_LOCK } = options;
   if (typeof runtimePath !== "string" || runtimePath.length === 0)
     throw new TypeError("runtimePath must name an immutable World installation");
@@ -34,11 +37,13 @@ export async function loadWorldRuntime(options) {
     throw new Error("WorldPackageVersionMismatch");
   if (JSON.stringify(Object.keys(world).sort()) !== JSON.stringify(lock.world.runtime.exports))
     throw new Error("WorldPublicApiMismatch");
-  const kernel = await world.admitProcessKernel(readRegular(observed.kernelPath), {
-    expectedSha256: observed.kernelSha256,
-  });
-  if (JSON.stringify(kernel.inspection) !== JSON.stringify(lock.world.runtime.physicalProfile.inspection))
+  const kernelBytes = readRegular(observed.kernelPath);
+  const inspection = world.inspectKernelWasm(kernelBytes);
+  if (JSON.stringify(inspection) !== JSON.stringify(lock.world.runtime.physicalProfile.inspection))
     throw new Error("WorldPhysicalProfileMismatch");
+  const kernel = await world.Kernel.create({ bytes: kernelBytes, expectedSha256: observed.kernelSha256 });
+  const ceiling = Math.min(0xffffffff, inspection.memory.maximumPages * 65536);
+  kernel.setLimits(selectedLimits ?? { input: ceiling, working: ceiling, output: ceiling });
   // Detect accidental concurrent replacement during admission as well as before it.
   verifyRuntime(runtimePath, { lockPath });
 
@@ -46,34 +51,43 @@ export async function loadWorldRuntime(options) {
     const canonical = bytes(input, "outcome");
     return Object.freeze({ ...world.decodeOutcome(canonical), bytes: canonical });
   };
-  const start = (image, initialArgs) => kernel.run({
+  const invoke = (input) => decodeOutcome(kernel.invoke(world.encodeInput(input)));
+  const start = async (image, initialArgs) => invoke({
     image: bytes(image, "image"), initialArgs: bytes(initialArgs, "initialArgs"),
   });
-  const resume = (image, state, currentRequest, canonicalReply) => {
+  const resume = async (image, state, currentRequest, canonicalReply) => {
+    const program = bytes(image, "image");
     const saved = bytes(state, "state");
     const requestBytes = bytes(currentRequest, "request");
-    const request = world.decodeRequest(requestBytes);
-    const digest = createHash("sha256").update(saved).digest();
+    const reply = bytes(canonicalReply, "reply");
+    const request = await world.decodeRequest(requestBytes);
+    const digest = createHash("sha256").update("boundary.pending-state/v3\0").update(saved).digest();
     if (!timingSafeEqual(digest, request.pendingStateDigest))
       throw new Error("RequestStateMismatch");
-    // ERS2 construction and typed validation belong to World. The kernel then
+    // ERS3 construction and typed validation belong to World. The kernel then
     // admits the complete image/State/request binding before any transition.
-    const result = world.encodeResult(requestBytes, bytes(canonicalReply, "reply"));
-    return kernel.run({ image: bytes(image, "image"), state: saved, result });
+    const result = await world.encodeResult(requestBytes, reply);
+    return invoke({ image: program, state: saved, control: "reply", value: result });
   };
-  const cancel = (image, state, reason) => {
+  const cancel = async (image, state, reason) => {
     if (typeof reason !== "string" && !(reason instanceof Uint8Array))
       throw new TypeError("cancellation reason must be text or bytes");
-    return kernel.run({ image: bytes(image, "image"), state: bytes(state, "state"),
-      cancel: typeof reason === "string" ? reason : bytes(reason, "reason") });
+    return invoke({ image: bytes(image, "image"), state: bytes(state, "state"),
+      control: typeof reason === "string" ? "cancel_text" : "cancel_bytes", value: typeof reason === "string" ? reason : bytes(reason, "reason") });
   };
-  const inspectPending = (outcome) => {
-    // The canonical PKO2 remains authoritative; an object's display fields are
+  const continueExecution = async (image, outcome) => {
+    const saved = decodeOutcome(outcome instanceof Uint8Array ? outcome : outcome?.bytes);
+    if (!["progressed", "yielded"].includes(saved.kind) || !saved.state) throw new Error("continue requires a progressed or yielded checkpoint");
+    return invoke({ image: bytes(image, "image"), state: saved.state,
+      control: saved.kind === "yielded" ? "resume_yield" : "none" });
+  };
+  const inspectPending = async (outcome) => {
+    // The canonical PKO3 remains authoritative; an object's display fields are
     // never trusted to select or reconstruct pending control.
     const decoded = decodeOutcome(outcome instanceof Uint8Array ? outcome : outcome?.bytes);
-    if (decoded.kind !== "Requested")
+    if (decoded.kind !== "requested")
       return Object.freeze({ kind: decoded.kind, authoritative: false });
-    const request = Object.freeze(world.decodeRequest(decoded.request));
+    const request = Object.freeze(await world.decodeRequest(decoded.request));
     const view = { kind: decoded.kind, authoritative: false, request,
       classification: "typed_request" };
     if (request.semanticIdentity.startsWith(exchangePrefix) &&
@@ -98,7 +112,7 @@ export async function loadWorldRuntime(options) {
     }
     return Object.freeze(view);
   };
-  return Object.freeze({ start, resume, cancel, inspectPending, decodeOutcome,
+  return Object.freeze({ start, resume, cancel, continueExecution, inspectPending, decodeOutcome,
     identity: Object.freeze({ ...observed, packageVersion: world.packageVersion,
       abi: lock.world.runtime.abi, physicalProfile: lock.world.runtime.physicalProfile }) });
 }

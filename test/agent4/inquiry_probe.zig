@@ -284,7 +284,8 @@ test "inquiry custody rejects double resume, double disposal and queue duplicati
     for ([_]Mode{ .duplicate_resume, .duplicate_dispose, .duplicate_queue, .illicit_clone }) |mode| {
         var b = Builder.init(std.testing.allocator);
         defer b.deinit();
-        try std.testing.expectError(error.InvalidOwnership, boundary.program.compile(std.testing.allocator, try build(&b, mode)));
+        const expected = if (mode == .illicit_clone) error.InvalidOwnership else error.UnavailableSlot;
+        try std.testing.expectError(expected, boundary.program.compile(std.testing.allocator, try build(&b, mode)));
     }
 }
 
@@ -298,7 +299,7 @@ pub fn main(init: std.process.Init) !void {
     defer b.deinit();
     var compiled = try boundary.program.compile(init.gpa, try build(&b, mode));
     defer compiled.deinit();
-    const bytes = try init.gpa.alloc(u8, try boundary.image_v2.encodedLength(compiled.program));
+    const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(bytes);
     _ = try compiled.encode(init.gpa, bytes);
     var buffer: [4096]u8 = undefined;

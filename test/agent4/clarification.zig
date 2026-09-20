@@ -2,7 +2,7 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const world = @import("world").process_v2;
+const world = @import("world");
 const source = boundary.computation;
 const clarification = agent.clarification;
 const a = std.testing.allocator;
@@ -49,8 +49,11 @@ const Fixture = struct {
     fn run(f: Fixture, comptime In: type, comptime Out: type, input: In) !agent.contracts.Decoded(Out) {
         const args = try agent.contracts.encodeOwned(In, a, input);
         defer a.free(args);
-        var outcome = try world.run(a, .{
-            .program = .{ .records = f.compiled.program },
+        const invocation_image_0 = try a.alloc(u8, try boundary.data.program_image.encodedLength(f.compiled.program));
+        defer a.free(invocation_image_0);
+        _ = try boundary.data.program_image.encode(a, f.compiled.program, invocation_image_0);
+        var outcome = try world.invocation.invoke(a, .{
+            .image = invocation_image_0,
             .instance = .{ .initial_args = args },
         });
         defer outcome.deinit();
@@ -361,25 +364,36 @@ fn call(b: *source.Builder, function: Id, arguments: []const Id) !Id {
     return b.term(.{ .call = .{ .function = function, .arguments = arguments } });
 }
 
-fn respond(outcome: *world.Outcome, program: boundary.data_v2.program.Program, comptime T: type, value: T, statistics: ?*world.Statistics) !void {
-    const protocol = boundary.data_v2.protocol;
-    const request = try protocol.decode(protocol.Request, a, outcome.record.requested.request);
+fn respond(outcome: *world.invocation.Outcome, program: boundary.data.activation.Program, comptime T: type, value: T, statistics: ?*world.Statistics) !void {
+    const protocol = boundary.data.invocation;
+    var request_owner_0 = try protocol.decode(protocol.Request, a, outcome.record.requested.request);
+    defer request_owner_0.deinit();
+    const request = request_owner_0.value;
     const bytes = try agent.contracts.encodeOwned(T, a, value);
     defer a.free(bytes);
     const result = protocol.Result{
         .request_identity = request.request_identity,
-        .resume_schema_digest = boundary.data_v2.wire.digest(request.resume_schema),
+
         .value = bytes,
     };
     const encoded = try a.alloc(u8, try protocol.encodedLength(protocol.Result, result));
     defer a.free(encoded);
     _ = try protocol.encode(protocol.Result, a, result, encoded);
-    const next = try world.run(a, .{
-        .program = .{ .records = program },
-        .instance = .{ .snapshot = outcome.record.requested.state },
-        .control = .{ .continue_value = encoded },
-        .statistics = statistics,
-    });
+    const invocation_image_1 = try a.alloc(u8, try boundary.data.program_image.encodedLength(program));
+    defer a.free(invocation_image_1);
+    _ = try boundary.data.program_image.encode(a, program, invocation_image_1);
+    const next = observed: {
+        const instance: boundary.data.invocation.Instance = .{ .state = outcome.record.requested.state.? };
+        var session = switch (instance) {
+            .initial_args => |initial| try world.Session.initImage(a, invocation_image_1, initial),
+            .state => |state| try world.Session.restoreImage(a, invocation_image_1, state),
+        };
+        defer session.deinit();
+        session.statistics = statistics;
+        if (statistics) |observed_statistics| session.store.statistics = &observed_statistics.storage;
+        _ = try world.invocation.advance(&session, .{ .reply = encoded }, null);
+        break :observed try world.invocation.finish(a, &session, true);
+    };
     outcome.deinit();
     outcome.* = next;
 }
@@ -392,31 +406,43 @@ test "protected composition resumes captured futures, groups non-tail results, a
     defer a.free(args);
     for ([_]bool{ false, true }) |divergent| {
         var statistics: world.Statistics = .{};
-        var outcome = try world.run(a, .{
-            .program = .{ .records = f.compiled.program },
-            .instance = .{ .initial_args = args },
-            .statistics = &statistics,
-        });
+        const invocation_image_2 = try a.alloc(u8, try boundary.data.program_image.encodedLength(f.compiled.program));
+        defer a.free(invocation_image_2);
+        _ = try boundary.data.program_image.encode(a, f.compiled.program, invocation_image_2);
+        var outcome = observed: {
+            const instance: boundary.data.invocation.Instance = .{ .initial_args = args };
+            var session = switch (instance) {
+                .initial_args => |initial| try world.Session.initImage(a, invocation_image_2, initial),
+                .state => |state| try world.Session.restoreImage(a, invocation_image_2, state),
+            };
+            defer session.deinit();
+            session.statistics = &statistics;
+            session.store.statistics = &statistics.storage;
+            _ = try world.invocation.advance(&session, .none, null);
+            break :observed try world.invocation.finish(a, &session, true);
+        };
         defer outcome.deinit();
         for (1..3) |id| {
             try std.testing.expect(outcome.record == .requested);
-            var graph = try boundary.snapshot_v2.decodeGraph(a, outcome.record.requested.state);
+            var graph = try boundary.data.state_image.decodeGraph(a, outcome.record.requested.state.?);
             defer graph.deinit();
             var templates: usize = 0;
             var cells: usize = 0;
-            for (graph.state.nodes) |node| switch (node) {
+            for (graph.state.nodes) |node| switch (node.record) {
                 .multi_template => templates += 1,
                 .cell => cells += 1,
                 else => {},
             };
             try std.testing.expectEqual(@as(usize, 1), templates);
             try std.testing.expectEqual(@as(usize, 2), cells);
-            const request = try boundary.data_v2.protocol.decode(
-                boundary.data_v2.protocol.Request,
+            var decoded_request_0 = try boundary.data.invocation.decode(
+                boundary.data.invocation.Request,
                 a,
                 outcome.record.requested.request,
             );
-            var received = try agent.contracts.decodeOwned(P.Request, a, request.payload);
+            defer decoded_request_0.deinit();
+            const request = decoded_request_0.value;
+            var received = try agent.contracts.decodeOwned(P.Request, a, request.binding.payload);
             defer received.deinit();
             const messages = received.value.messages.items;
             try std.testing.expectEqual(@as(usize, 3), messages.len);
@@ -440,13 +466,15 @@ test "protected composition resumes captured futures, groups non-tail results, a
         }
         if (divergent) {
             try std.testing.expect(outcome.record == .requested);
-            const request = try boundary.data_v2.protocol.decode(
-                boundary.data_v2.protocol.Request,
+            var decoded_request_1 = try boundary.data.invocation.decode(
+                boundary.data.invocation.Request,
                 a,
                 outcome.record.requested.request,
             );
+            defer decoded_request_1.deinit();
+            const request = decoded_request_1.value;
             const Outgoing = struct { context: u64, choice: Choice };
-            var question = try agent.contracts.decodeOwned(Outgoing, a, request.payload);
+            var question = try agent.contracts.decodeOwned(Outgoing, a, request.binding.payload);
             defer question.deinit();
             try std.testing.expectEqual(@as(u64, 77), question.value.context);
             try std.testing.expectEqual(@as(usize, 2), question.value.choice.groups.len);
@@ -517,7 +545,7 @@ pub fn main(init: std.process.Init) !void {
         try output.interface.print(
             "{s}{{\"hypotheses\":{d},\"imageBytes\":{d},\"functions\":{d}," ++
                 "\"blocks\":{d},\"sourceFunctions\":{d},\"sourceTerms\":{d}}}",
-            .{ if (i == 0) "" else ",", count, try boundary.image_v2.encodedLength(program), program.functions.len, program.blocks.len, fixture.source_functions, fixture.source_terms },
+            .{ if (i == 0) "" else ",", count, try boundary.data.program_image.encodedLength(program), program.functions.len, program.blocks.len, fixture.source_functions, fixture.source_terms },
         );
     }
     try output.interface.writeAll("]}\n");
@@ -549,11 +577,21 @@ fn growingDomain(count: usize) !void {
     const args = try agent.contracts.encodeOwned(Initial, a, .{ .context = 99, .ids = ids });
     defer a.free(args);
     var statistics: world.Statistics = .{};
-    var outcome = try world.run(a, .{
-        .program = .{ .records = f.compiled.program },
-        .instance = .{ .initial_args = args },
-        .statistics = &statistics,
-    });
+    const invocation_image_3 = try a.alloc(u8, try boundary.data.program_image.encodedLength(f.compiled.program));
+    defer a.free(invocation_image_3);
+    _ = try boundary.data.program_image.encode(a, f.compiled.program, invocation_image_3);
+    var outcome = observed: {
+        const instance: boundary.data.invocation.Instance = .{ .initial_args = args };
+        var session = switch (instance) {
+            .initial_args => |initial| try world.Session.initImage(a, invocation_image_3, initial),
+            .state => |state| try world.Session.restoreImage(a, invocation_image_3, state),
+        };
+        defer session.deinit();
+        session.statistics = &statistics;
+        session.store.statistics = &statistics.storage;
+        _ = try world.invocation.advance(&session, .none, null);
+        break :observed try world.invocation.finish(a, &session, true);
+    };
     defer outcome.deinit();
     var calls: usize = 0;
     var peak: usize = 0;
@@ -567,14 +605,16 @@ fn growingDomain(count: usize) !void {
     while (outcome.record == .requested) {
         calls += 1;
         try std.testing.expect(calls <= count);
-        peak = @max(peak, outcome.record.requested.state.len);
-        const request = try boundary.data_v2.protocol.decode(
-            boundary.data_v2.protocol.Request,
+        peak = @max(peak, outcome.record.requested.state.?.len);
+        var decoded_request_2 = try boundary.data.invocation.decode(
+            boundary.data.invocation.Request,
             a,
             outcome.record.requested.request,
         );
-        try std.testing.expectEqualStrings(agent.model_invocation.semantic_identity, request.semantic_identity);
-        var context = try agent.contracts.decodeOwned(P.Request, a, request.payload);
+        defer decoded_request_2.deinit();
+        const request = decoded_request_2.value;
+        try std.testing.expectEqualStrings(agent.model_invocation.semantic_identity, request.binding.semantic_identity);
+        var context = try agent.contracts.decodeOwned(P.Request, a, request.binding.payload);
         defer context.deinit();
         try std.testing.expectEqualStrings("99", context.value.messages.items[0].content.bytes);
         try std.testing.expectEqualStrings("11", context.value.messages.items[2].content.bytes);

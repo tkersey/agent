@@ -1,6 +1,6 @@
 const std = @import("std");
 const boundary = @import("boundary");
-const data = @import("boundary_data_v2");
+const data = @import("boundary_data");
 const contracts = @import("contracts");
 const a = std.testing.allocator;
 

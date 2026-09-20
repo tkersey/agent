@@ -1,11 +1,11 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const agent = @import("agent");
-const world = @import("world").process_v2;
+const world = @import("world");
 const contracts = agent.contracts;
 const model = agent.model_invocation;
 const source = boundary.computation;
-const data = boundary.data_v2;
+const data = boundary.data;
 const allocator = std.testing.allocator;
 
 const Answer = union(enum(u32)) {
@@ -191,23 +191,28 @@ fn expectNormalized(expected: P.Result, actual: P.Result) !void {
     try std.testing.expectEqualSlices(u8, expected_bytes, actual_bytes);
 }
 
-fn start(program: data.program.Program, value: Input) !world.Outcome {
+fn start(program: data.activation.Program, value: Input) !world.invocation.Outcome {
     const bytes = try contracts.encodeOwned(Input, allocator, value);
     defer allocator.free(bytes);
-    return world.run(allocator, .{
-        .program = .{ .records = program },
+    const invocation_image_0 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(program));
+    defer allocator.free(invocation_image_0);
+    _ = try boundary.data.program_image.encode(allocator, program, invocation_image_0);
+    return world.invocation.invoke(allocator, .{
+        .image = invocation_image_0,
         .instance = .{ .initial_args = bytes },
     });
 }
 
-fn expectRequest(outcome: world.Outcome, value: Input) !void {
+fn expectRequest(outcome: world.invocation.Outcome, value: Input) !void {
     try std.testing.expect(outcome.record == .requested);
-    const request = try data.protocol.decode(
-        data.protocol.Request,
+    var request_owner_0 = try data.invocation.decode(
+        data.invocation.Request,
         allocator,
         outcome.record.requested.request,
     );
-    try std.testing.expectEqualStrings(model.semantic_identity, request.semantic_identity);
+    defer request_owner_0.deinit();
+    const request = request_owner_0.value;
+    try std.testing.expectEqualStrings(model.semantic_identity, request.binding.semantic_identity);
     var expected = value.request;
     expected.tools = try P.declarationsValue(allocator, value.offered);
     defer allocator.free(expected.tools.items);
@@ -215,7 +220,7 @@ fn expectRequest(outcome: world.Outcome, value: Input) !void {
     defer allocator.free(expected_bytes);
     // Comparing the complete payload also checks parameters, message order,
     // selection, response policy, and normalization/representation limits.
-    try std.testing.expectEqualSlices(u8, expected_bytes, request.payload);
+    try std.testing.expectEqualSlices(u8, expected_bytes, request.binding.payload);
 }
 
 fn call(comptime name: std.meta.Tag(Answer), value: u64) P.OutputItem {
@@ -245,38 +250,43 @@ fn result(items: []const P.OutputItem) P.Result {
 
 fn resumeResult(
     comptime Result: type,
-    program: data.program.Program,
-    parked: world.Outcome,
+    program: data.activation.Program,
+    parked: world.invocation.Outcome,
     reply: Result,
-) !world.Outcome {
+) !world.invocation.Outcome {
     try std.testing.expect(parked.record == .requested);
-    const request = try data.protocol.decode(
-        data.protocol.Request,
+    var request_owner_1 = try data.invocation.decode(
+        data.invocation.Request,
         allocator,
         parked.record.requested.request,
     );
+    defer request_owner_1.deinit();
+    const request = request_owner_1.value;
     const value = try contracts.encodeOwned(Result, allocator, reply);
     defer allocator.free(value);
-    const bound: data.protocol.Result = .{
+    const bound: data.invocation.Result = .{
         .request_identity = request.request_identity,
-        .resume_schema_digest = data.wire.digest(request.resume_schema),
+
         .value = value,
     };
-    const length = try data.protocol.encodedLength(data.protocol.Result, bound);
+    const length = try data.invocation.encodedLength(data.invocation.Result, bound);
     const bytes = try allocator.alloc(u8, length);
     defer allocator.free(bytes);
-    _ = try data.protocol.encode(data.protocol.Result, allocator, bound, bytes);
-    return world.run(allocator, .{
-        .program = .{ .records = program },
-        .instance = .{ .snapshot = parked.record.requested.state },
-        .control = .{ .continue_value = bytes },
+    _ = try data.invocation.encode(data.invocation.Result, allocator, bound, bytes);
+    const invocation_image_1 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(program));
+    defer allocator.free(invocation_image_1);
+    _ = try boundary.data.program_image.encode(allocator, program, invocation_image_1);
+    return world.invocation.invoke(allocator, .{
+        .image = invocation_image_1,
+        .instance = .{ .state = parked.record.requested.state.? },
+        .control = .{ .reply = bytes },
     });
 }
 
 fn finish(
     comptime T: type,
-    program: data.program.Program,
-    parked: world.Outcome,
+    program: data.activation.Program,
+    parked: world.invocation.Outcome,
     reply: P.Result,
 ) !contracts.Decoded(T) {
     var outcome = try resumeResult(P.Result, program, parked, reply);
@@ -301,8 +311,11 @@ test "model responder derives held offers and preserves the complete semantic re
         const value: Input = .{ .request = template(&forged, single), .offered = offered };
         const bytes = try contracts.encodeOwned(Input, allocator, value);
         defer allocator.free(bytes);
-        var parked = try world.run(allocator, .{
-            .program = .{ .records = compiled.program },
+        const invocation_image_2 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+        defer allocator.free(invocation_image_2);
+        _ = try boundary.data.program_image.encode(allocator, compiled.program, invocation_image_2);
+        var parked = try world.invocation.invoke(allocator, .{
+            .image = invocation_image_2,
             .instance = .{ .initial_args = bytes },
         });
         defer parked.deinit();
@@ -505,8 +518,11 @@ test "two scoped model calls retain separate offered sets and post answer contin
     };
     const bytes = try contracts.encodeOwned(PairInput, allocator, input);
     defer allocator.free(bytes);
-    var first = try world.run(allocator, .{
-        .program = .{ .records = compiled.program },
+    const invocation_image_3 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+    defer allocator.free(invocation_image_3);
+    _ = try boundary.data.program_image.encode(allocator, compiled.program, invocation_image_3);
+    var first = try world.invocation.invoke(allocator, .{
+        .image = invocation_image_3,
         .instance = .{ .initial_args = bytes },
     });
     defer first.deinit();
@@ -559,7 +575,7 @@ fn manyReply(comptime Q: type, comptime index: usize) Q.Result {
     } };
 }
 
-fn expectSharedSchema(comptime Q: type, program: data.program.Program) !void {
+fn expectSharedSchema(comptime Q: type, program: data.activation.Program) !void {
     const schema_json = Q.allDeclarations().items[0].input_schema_json.bytes;
     var copies: usize = 0;
     for (program.constants) |constant| {
@@ -593,20 +609,25 @@ test "model responder executes indexes 31 32 and 63 while an unoffered declarati
         .offered = offered,
     });
     defer allocator.free(bytes);
-    var parked = try world.run(allocator, .{
-        .program = .{ .records = compiled.program },
+    const invocation_image_4 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+    defer allocator.free(invocation_image_4);
+    _ = try boundary.data.program_image.encode(allocator, compiled.program, invocation_image_4);
+    var parked = try world.invocation.invoke(allocator, .{
+        .image = invocation_image_4,
         .instance = .{ .initial_args = bytes },
     });
     defer parked.deinit();
     try std.testing.expect(parked.record == .requested);
-    const external = try data.protocol.decode(
-        data.protocol.Request,
+    var request_owner_2 = try data.invocation.decode(
+        data.invocation.Request,
         allocator,
         parked.record.requested.request,
     );
-    var payload = try contracts.decodeOwned(Q.Request, allocator, external.payload);
+    defer request_owner_2.deinit();
+    const external = request_owner_2.value;
+    var payload = try contracts.decodeOwned(Q.Request, allocator, external.binding.payload);
     defer payload.deinit();
-    try std.testing.expectEqualStrings(model.semantic_identity, external.semantic_identity);
+    try std.testing.expectEqualStrings(model.semantic_identity, external.binding.semantic_identity);
     try std.testing.expectEqual(3, payload.value.tools.items.len);
     inline for (.{ 31, 32, 63 }, 0..) |index, position| {
         const declaration = payload.value.tools.items[position];

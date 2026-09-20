@@ -2,8 +2,9 @@
 
 The application emitter constructs one Boundary source module. Agent checks its
 catalogs and protected construction, then calls Boundary's compiler once. Boundary
-owns type/effect/capture/use checking, continuation conversion, canonicalization,
-and BPI2/PST2/ERQ2/ERS2/PKI2/PKO2. Unchanged World owns execution.
+owns type/effect/capture/use checking, direct stable-activation lowering, and
+BPI3/PST3/ERQ3/ERS3/PKI3/PKO3. World owns execution. The normal dependency lock selects the coordinated
+successor pair; full performance acceptance and serial review closeout remain open.
 
 | Owner | Responsibility |
 |---|---|
@@ -15,7 +16,7 @@ and BPI2/PST2/ERQ2/ERS2/PKI2/PKO2. Unchanged World owns execution.
 
 `agent.system` binds InitialArgs, Result, Failure, optional descriptor catalogs and
 an application emitter. `agent.compile` owns its temporary Builder/catalog/registry
-storage; returned Boundary Compiled output owns independent storage. There is no
+storage; returned Boundary Construction output owns independent storage. There is no
 runtime callback registry, Agent control IR, compiler-selected application body,
 or executable policy sidecar. ReAct is an ordinary library composition.
 
@@ -28,7 +29,7 @@ The adapter preserves normalized items; the image owns candidate admission.
 
 Internal dialogue packages own their futures. The surrounding program may retain,
 resume, route, or dispose a child while serving another request. Only the complete
-PST2 is portable execution state. A nested turn returns to its caller; only root
+PST3 is portable execution state. A nested turn returns to its caller; only root
 termination completes a conversation. Lexical Reader/state/region constructions
 retain scopes across suspension and restore enclosing interpretations on exit.
 

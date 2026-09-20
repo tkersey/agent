@@ -1,7 +1,7 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const agent = @import("agent");
-const world = @import("world").process_v2;
+const world = @import("world");
 const contracts = agent.contracts;
 const model = agent.model_invocation;
 const Answer = union(enum(u32)) {
@@ -47,11 +47,14 @@ fn input(items: []const P.OutputItem) Inputs {
     } }, .offered = .{ true, false }, .policy = batch_policy };
 }
 
-fn execute(comptime T: type, program: boundary.data_v2.program.Program, value: Inputs) !contracts.Decoded(T) {
+fn execute(comptime T: type, program: boundary.data.activation.Program, value: Inputs) !contracts.Decoded(T) {
     const bytes = try contracts.encodeOwned(Inputs, allocator, value);
     defer allocator.free(bytes);
-    var outcome = try world.run(allocator, .{
-        .program = .{ .records = program },
+    const image = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(program));
+    defer allocator.free(image);
+    _ = try boundary.data.program_image.encode(allocator, program, image);
+    var outcome = try world.invocation.invoke(allocator, .{
+        .image = image,
         .instance = .{ .initial_args = bytes },
     });
     defer outcome.deinit();
@@ -59,7 +62,7 @@ fn execute(comptime T: type, program: boundary.data_v2.program.Program, value: I
     return contracts.decodeOwned(T, allocator, outcome.record.completed);
 }
 
-fn expectRejected(program: boundary.data_v2.program.Program, value: Inputs, expected: P.InterpretationFailure) !void {
+fn expectRejected(program: boundary.data.activation.Program, value: Inputs, expected: P.InterpretationFailure) !void {
     var observed = try execute(P.BatchInterpretation, program, value);
     defer observed.deinit();
     try std.testing.expectEqual(expected, observed.value.rejected);

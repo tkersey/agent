@@ -217,7 +217,7 @@ fn writeImage(init: std.process.Init, comptime App: type) !void {
         return err;
     };
     defer compiled.deinit();
-    const bytes = try init.gpa.alloc(u8, try boundary.image_v2.encodedLength(compiled.program));
+    const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(bytes);
     _ = try compiled.encode(init.gpa, bytes);
     return writeBytes(init, bytes);
@@ -227,7 +227,7 @@ fn writeSchema(init: std.process.Init, comptime T: type) !void {
     var builder = source.Builder.init(init.gpa);
     defer builder.deinit();
     const root = try agent.contracts.schema(T, &builder);
-    const bytes = try boundary.data_v2.schema.encodeOwned(init.gpa, builder.schemas.items, root);
+    const bytes = try boundary.data.schema.encodeOwned(init.gpa, builder.schemas.items, root);
     defer init.gpa.free(bytes);
     try writeBytes(init, bytes);
 }

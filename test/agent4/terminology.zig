@@ -1,7 +1,7 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const world = @import("world").process_v2;
+const world = @import("world");
 const t = @import("document").types;
 const terminology = t.terminology;
 const a = std.testing.allocator;
@@ -24,7 +24,7 @@ fn compile() !boundary.computation.Compiled {
     return boundary.program.compile(a, module);
 }
 
-fn check(program: boundary.data_v2.program.Program, content: []const u8, old: []const u8, replacement: []const u8, scope: u64, expected: ?[]const u8, archive_changed: bool) !void {
+fn check(program: boundary.data.activation.Program, content: []const u8, old: []const u8, replacement: []const u8, scope: u64, expected: ?[]const u8, archive_changed: bool) !void {
     const args = try agent.contracts.encodeOwned(Input, a, .{
         .content = .{ .bytes = content },
         .old = .{ .bytes = old },
@@ -32,8 +32,11 @@ fn check(program: boundary.data_v2.program.Program, content: []const u8, old: []
         .scope = scope,
     });
     defer a.free(args);
-    var outcome = try world.run(a, .{
-        .program = .{ .records = program },
+    const invocation_image_0 = try a.alloc(u8, try boundary.data.program_image.encodedLength(program));
+    defer a.free(invocation_image_0);
+    _ = try boundary.data.program_image.encode(a, program, invocation_image_0);
+    var outcome = try world.invocation.invoke(a, .{
+        .image = invocation_image_0,
         .instance = .{ .initial_args = args },
     });
     defer outcome.deinit();
@@ -143,8 +146,11 @@ test "every operative document field participates in the decisive key" {
         };
         const args = try agent.contracts.encodeOwned(@TypeOf(initial), a, initial);
         defer a.free(args);
-        var result = try world.run(a, .{
-            .program = .{ .records = compiled.program },
+        const invocation_image_1 = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+        defer a.free(invocation_image_1);
+        _ = try boundary.data.program_image.encode(a, compiled.program, invocation_image_1);
+        var result = try world.invocation.invoke(a, .{
+            .image = invocation_image_1,
             .instance = .{ .initial_args = args },
         });
         defer result.deinit();

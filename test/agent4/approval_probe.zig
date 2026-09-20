@@ -100,7 +100,7 @@ pub fn build(c: agent.Context, mode: Mode) !source.Module {
     return b.module(entry, try b.scalar(void));
 }
 
-test "approval emits ordinary checked BPI2 with a consumed private grant" {
+test "approval emits ordinary checked BPI3 with a consumed private grant" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
     var registry = agent.admission.Registry.init(std.testing.allocator);
@@ -142,7 +142,7 @@ pub fn main(init: std.process.Init) !void {
     try agent.admission.verify(init.gpa, module, &registry);
     var compiled = try boundary.program.compile(init.gpa, module);
     defer compiled.deinit();
-    const bytes = try init.gpa.alloc(u8, try boundary.image_v2.encodedLength(compiled.program));
+    const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(bytes);
     _ = try compiled.encode(init.gpa, bytes);
     var buffer: [4096]u8 = undefined;
@@ -224,7 +224,8 @@ test "a simulated value cannot forge a live proof and a live proof cannot be use
         defer registry.deinit();
         const module = try build(.{ .builder = &b, .registry = &registry }, mode);
         try agent.admission.verify(std.testing.allocator, module, &registry);
-        try std.testing.expectError(error.InvalidOwnership, boundary.program.compile(std.testing.allocator, module));
+        const expected = if (mode == .reused_evidence) error.UnavailableSlot else error.InvalidOwnership;
+        try std.testing.expectError(expected, boundary.program.compile(std.testing.allocator, module));
     }
 }
 

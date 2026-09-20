@@ -626,7 +626,50 @@ full parser approval/delivery and browser/Wasmtime evidence remains separately
 scoped to its recorded run rather than relabeled as freshly executed here.
 
 The existing distributable examples archive is rebuilt and authenticated against
-this tuple. Parser-specific runtime files and its application command are not yet
-in that distribution; that is a separate remaining delivery gap. Normal dependency
-integration does not complete the full parser packaging, live opt-in path, general
-composition/selection, economic comparisons or serial-review obligations.
+this tuple. The parser distribution and command are described below. Normal dependency
+integration alone does not complete general composition/selection, economic
+comparisons or serial-review obligations.
+
+## Packaged parser and opt-in provider command
+
+The use archive now includes the parser Program, producer/consumer/reference BMO1
+objects, schemas, zero-allowance InitialArgs, trusted batch reference/requirements,
+qualified execution and delivery leaves, and runtime/parser_cli.mjs. The command
+uses the same generic World interpreter and existing provider adapter. It dispatches
+only environmental leaves; reciprocal construction and acceptance remain compiled
+control. No accepted incremental implementation is imported by the production
+proposer. See [parser-synthesis.md](parser-synthesis.md) for executable commands.
+
+Model calls default to zero. Enabled runs require an explicit model, endpoint,
+fixture-only data policy and call/check allowances. External calls require paid-use
+authorization; selected credentials are read only under that authorization and the
+existing endpoint restriction. Local loopback tests used no credentials or paid
+inference. The command creates an ephemeral fixture and returns a reviewable
+validated artifact; it grants no approval or target-write authority.
+
+Model/check counts and context/request/reply bytes are accounted outside World
+rollback. A work stop exports the actual checkpoint and next invocation control.
+A completed but not-yet-admitted environmental reply is preserved as bound bytes,
+not silently lost or repeated. A fresh-instance test consumes the saved reference
+reply and reaches the model request without replaying the reference operation.
+This is an explicit partial-result handoff, not a durable session manager.
+
+The extracted archive runs without authoring sources or emitters. Its default case
+performs zero leaf operations; its abandonment case performs a real reference read
+and transferable cleanup. Provider-adapter tests cover explicit configuration,
+unresolved output, budget stopping and full repair: two model responses, two checks,
+539 isolated candidate executions plus qualification, and the exact validated source.
+The provider is a deterministic local HTTP fixture, so these results establish the
+live transport path and control semantics, not live-model reasoning quality or cost.
+
+Validation: check plus emit-agent4 passes 275 steps / 123 Zig tests; extracted archive
+commands pass three tests; parser CLI passes two tests, including the full real-tool
+acceptance path. A final context-counter check records actual semantic request and
+reply bytes. The existing source-authoring-outside-Git obligation is unchanged. An
+extra repackaging-outside-Git test was retired because the existing packager requires
+Git provenance; extracted execution, rather than provenance-free repackaging, is
+the relevant requirement here. No provenance guard was weakened.
+
+Missing-intent cases, model-proposed experiment/constraint routing, generic selection,
+owned channel composition, held-out live/comparator evaluation, broader proof and
+economic evidence, and serial reviews remain required. No paid live study was run.

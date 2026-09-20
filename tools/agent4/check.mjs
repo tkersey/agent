@@ -54,7 +54,7 @@ await withVerifiedDependencies(options, async dependencies=>{
     await run('node',['--test','test/agent4/dependencies.test.mjs','test/agent4/setup.test.mjs',
       'test/agent4/bridge.test.mjs','test/agent4/runner.test.mjs','test/agent4/approval.test.mjs',
       'test/agent4/document.test.mjs','test/agent4/review_runtime.mjs', 'test/agent4/package_commands.test.mjs',
-      'test/agent4/consumer_build.test.mjs', 'test/agent4/inquiry_cli.test.mjs']);
+      'test/agent4/consumer_build.test.mjs', 'test/agent4/inquiry_cli.test.mjs', 'test/agent4/parser_cli.test.mjs']);
     await run('node',['test/agent4/dialogue_runtime.test.mjs',options.worldRuntime,join(fixtures,'dialogue')]);
     await run('node',['test/agent4/multi_runtime.mjs']);
     await run('node',['test/agent4/document_runtime.mjs',options.worldRuntime,join(fixtures,'document/document.bpi3')]);

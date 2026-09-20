@@ -217,6 +217,7 @@ pub fn build(b: *std.Build) void {
     g.testModule(check, inquiry_app);
 
     const emit = b.step("agent4-images", "Compile the consumer images");
+    emit.dependOn(parser_episode);
     const participant_images = b.step("participant-images", "Emit and link the internal model participant");
     const participant_exe = g.emitter("agent-participant", g.module("test/agent4/participant.zig"));
     const participant_object = b.addRunArtifact(participant_exe);

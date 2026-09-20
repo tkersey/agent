@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
-import { decodeSchema, encodeValue } from '../../runtime/values.mjs';
+import { decodeSchema, decodeValue, encodeValue } from '../../runtime/values.mjs';
 const root=resolve(import.meta.dirname,'../..');
 const [directory,...extra]=process.argv.slice(2);
 assert(directory && !extra.length,'usage: emit_inventory.mjs EMITTED_DIRECTORY');
@@ -59,6 +59,21 @@ for(const name of ['repair','repeated','react']){
 }
 for(const name of ['task-schema','outcome-schema'])await add(`inquiry/${name}.bin`,'schema');
 await add('inquiry/contract.txt','contract',await readFile(join(root,'test/consumers/inquiry/contract.txt')));
+const parserRoot='parser-construction';
+for(const name of ['producer','consumer','reference'])await add(`${parserRoot}/${name}.bmo1`,'component');
+for(const name of ['input-schema','result-schema','model-schema','model-reply-schema'])await add(`${parserRoot}/${name}.bin`,'schema');
+await add(`${parserRoot}/model-template.bin`,'synthetic-fixture');
+const parserInput=decodeSchema(await readFile(join(output,`${parserRoot}/input-schema.bin`)));
+const parserModel=decodeSchema(await readFile(join(output,`${parserRoot}/model-schema.bin`)));
+const template=decodeValue(parserModel,await readFile(join(output,`${parserRoot}/model-template.bin`)));
+// Zero allowance prevents this unconfigured example from requesting any leaf.
+const parserArgs=encodeValue(parserInput,[
+  ['0'.repeat(64),'0'.repeat(64),'0'.repeat(64),'0'.repeat(64),'agent.incremental-byte-parser/v1'],
+  template,[],1n,0n,'parser.mjs',7n,false,false,
+]);
+await add(`${parserRoot}/task.args`,'initial-args',parserArgs);
+await add(`${parserRoot}/program.bpi3`,'image');
+examples.push({name:'parser-synthesis',image:`${parserRoot}/program.bpi3`,initialArgs:`${parserRoot}/task.args`});
 for(const name of ['twice','dispose_owned','exchange','yield_once']){
   const image=`dialogue/${name}.bpi3`,initialArgs=`dialogue/${name}.args.bin`;
   await add(image,'image');await add(initialArgs,'initial-args',new Uint8Array());

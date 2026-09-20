@@ -33,6 +33,21 @@ test("documented commands execute from the actual source-independent archive", a
   assert.equal(Buffer.from(resumed.value).readBigUInt64LE(), 40n);
   assert.equal(world.decodeOutcome(await readFile(join(cwd, "cancelled.pko3"))).kind, "cancelled");
   const inventory = JSON.parse(await readFile(join(cwd, "examples/inventory.json"), "utf8"));
+  const parser = inventory.examples.find(example => example.name === "parser-synthesis");
+  assert(parser, "parser synthesis belongs to the source-independent archive");
+  for (const participant of ["producer", "consumer", "reference"])
+    assert(inventory.files.some(file => file.path === `parser-construction/${participant}.bmo1` && file.role === "component"));
+  await t.test("packaged parser retains nested work without authoring sources", {
+    skip: process.platform !== "darwin" ? "parser executor unavailable: macOS Seatbelt profile required" : false,
+  }, async () => {
+    const output = execFileSync(process.execPath,
+      [join(cwd, "test/agent4/parser_package_runtime.mjs"), runtimePath],
+      { cwd, encoding: "utf8", timeout: 30_000 });
+    const observed = JSON.parse(output);
+    assert.equal(observed.zero.events.length, 0);
+    assert.deepEqual(observed.abandoned.events, ["agent.parser.reference.v1", "parser/participant-release"]);
+    assert.equal(observed.paidCalls, 0);
+  });
   const repository = inventory.examples.find(example => example.name === "repository-repair");
   assert(repository, "repository repair belongs to the source-independent archive");
   const repositoryRun = execFileSync(process.execPath,

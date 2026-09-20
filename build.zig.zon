@@ -21,6 +21,7 @@
         "docs/compositional-execution.md",
         "docs/compiled-text-tool.md",
         "docs/recursive-interaction.md",
+        "docs/parser-synthesis.md",
         "docs/security_model.md",
         "docs/agent4-runtime.md",
         "docs/migration_from_3.md",

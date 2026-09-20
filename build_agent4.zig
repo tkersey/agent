@@ -144,6 +144,12 @@ pub fn build(b: *std.Build) void {
     parser_episode.dependOn(&b.addInstallFileWithDir(parser_producer_bytes, .prefix, "agent4/parser-construction/producer.bmo1").step);
     parser_episode.dependOn(&b.addInstallFileWithDir(parser_consumer_bytes, .prefix, "agent4/parser-construction/consumer.bmo1").step);
     parser_episode.dependOn(&b.addInstallFileWithDir(parser_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/program.bpi3").step);
+    const retained_link = b.addRunArtifact(parser_app);
+    retained_link.addArg("link-retained");
+    retained_link.addFileArg(parser_producer_bytes);
+    retained_link.addFileArg(parser_consumer_bytes);
+    retained_link.addFileArg(parser_reference_bytes);
+    parser_episode.dependOn(&b.addInstallFileWithDir(retained_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/retained.bpi3").step);
     const forged_consumer = b.addRunArtifact(parser_app);
     forged_consumer.addArg("consumer-forged");
     const forged_link = b.addRunArtifact(parser_app);

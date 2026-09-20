@@ -246,6 +246,7 @@ fn defineProbe(c: agent.Context, t: Types) !void {
 }
 
 const Application = struct {
+    var retain_idle = false;
     var producer: []const u8 = &.{};
     var consumer: []const u8 = &.{};
     var reference_bytes: []const u8 = &.{};
@@ -263,7 +264,9 @@ const Application = struct {
         const z = try install(c, t, "consumer", consumer, t.pair.backward);
         const acceptance = try c.external(parser.execution_identity, try c.schema(parser.ExecutionRequest), try c.schema(parser.ExecutionReply), .simulation);
         const delivery = try agent.parser_delivery.define(c);
-        const effects = (try (source.Row{ .effects = &.{ t.model, t.reference, t.execution, acceptance } }).unionWith(b.allocator(), .{ .effects = delivery.effects })).effects;
+        const core_effects = (try (source.Row{ .effects = &.{ t.model, t.reference, t.execution, acceptance } }).unionWith(b.allocator(), .{ .effects = delivery.effects })).effects;
+        const idle = if (retain_idle) try Retained.init(c) else null;
+        const effects = if (idle) |owned| (try (source.Row{ .effects = core_effects }).unionWith(b.allocator(), .{ .effects = &.{ owned.release, owned.activity } })).effects else core_effects;
         const round = try b.declare(&.{t.state}, t.contribution, effects, &.{});
         try c.registry.privateFunction(round);
         const state = try b.reference(b.parameter(round, 0));
@@ -283,7 +286,7 @@ const Application = struct {
         const initial = try b.primitive(t.state, .product, &.{ input, try b.constant(bool, false), try b.constant(u64, 1), try field(b, u64, input, 4), try literal(b, ?Report, null), try literal(b, ?parser.ReferenceReply, null) }, 0);
         const call = try b.term(.{ .call = .{ .function = round, .arguments = &.{initial} } });
         try c.registry.allowPrivateCall(entry, call, round);
-        try b.define(entry, call);
+        try b.define(entry, if (idle) |owned| try owned.around(b, t.contribution, call) else call);
         return b.module(entry, try b.scalar(void));
     }
 };
@@ -298,6 +301,69 @@ fn install(c: agent.Context, t: Types, name: []const u8, bytes: []const u8, resu
         .functions = &.{ .{ .symbol = "reference-factory", .function = t.reference_factory }, .{ .symbol = "sample", .function = t.sample }, .{ .symbol = "probe", .function = t.probe } },
     });
 }
+// Test-only owned endpoints surround the real application. Their packages never
+// enter a participant import or an assessment capture. Control stays in World.
+const Retained = struct {
+    g: boundary.library.generator.Generator,
+    release: Id,
+    activity: Id,
+    body: Id,
+    fn init(c: agent.Context) !Retained {
+        const b = c.builder;
+        const unit = try b.scalar(void);
+        const integer = try b.scalar(u64);
+        const release = try c.external("parser/retained-release", integer, unit, .read);
+        const activity = try c.external("parser/retained-work", integer, unit, .read);
+        const g = try boundary.library.generator.defineExchange(b, "parser/retained-offer", integer, integer, integer, &.{integer}, &.{}, &.{}, .{ .effects = &.{ release, activity } });
+        const f = try b.declare(&.{ g.capability, integer }, integer, &.{ release, activity, g.effect }, &.{});
+        const initial = try b.reference(b.parameter(f, 1));
+        const work = try b.declare(&.{}, integer, &.{ activity, g.effect }, &.{});
+        const input = try b.variable(integer);
+        const offer = try b.term(.{ .perform = .{ .effect = g.effect, .capability = try b.reference(b.parameter(f, 0)), .payload = initial } });
+        const total = try arithmetic(b, .integer_add, initial, try b.reference(input));
+        const notify = try b.term(.{ .perform = .{ .effect = activity, .payload = total } });
+        try b.define(work, try b.bind(input, offer, try b.bind(try b.variable(unit), notify, try b.pure(total))));
+        const exit = try boundary.library.cleanup.exitInfo(b, unit);
+        const cleanup = try b.declare(&.{exit}, unit, &.{release}, &.{});
+        try b.define(cleanup, try b.term(.{ .perform = .{ .effect = release, .payload = initial } }));
+        const work_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{}, .result = integer, .effects = &.{ activity, g.effect }, .capture_bound = &.{ integer, g.capability } } } });
+        const cleanup_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{exit}, .result = unit, .effects = &.{release}, .capture_bound = &.{integer} } } });
+        try b.define(f, try b.term(.{ .protect = .{ .body = try b.lambda(work, work_type), .cleanup = try b.lambda(cleanup, cleanup_type) } }));
+        const signature = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{ g.capability, integer }, .result = integer, .effects = &.{ release, activity, g.effect } } } });
+        return .{ .g = g, .release = release, .activity = activity, .body = try b.lambda(f, signature) };
+    }
+    fn yielded(self: Retained, b: *source.Builder, answer: Id, owner: Id, next: Id) !Id {
+        const pair = try b.variable(self.g.yielded);
+        return b.term(.{ .match_sum = .{ .value = answer, .cases = &.{
+            .{ .variable = try b.variable(try b.scalar(u64)), .body = try b.term(.{ .fail = try b.constant(void, {}) }) },
+            .{ .variable = pair, .body = try b.term(.{ .unpack_product = .{ .value = try b.reference(pair), .variables = &.{ try b.variable(try b.scalar(u64)), owner }, .body = next } }) },
+        } } });
+    }
+    fn around(self: Retained, b: *source.Builder, result: Id, computation: Id) !Id {
+        const generator = boundary.library.generator;
+        const a = try b.variable(self.g.answer);
+        const z = try b.variable(self.g.answer);
+        const ap = try b.variable(self.g.package);
+        const zp = try b.variable(self.g.package);
+        const saved = try b.variable(result);
+        const final = try b.variable(self.g.answer);
+        const completed = try b.variable(try b.scalar(u64));
+        const unexpected = try b.variable(self.g.yielded);
+        const leftover = try b.variable(self.g.package);
+        const fail = try b.term(.{ .fail = try b.constant(void, {}) });
+        const disposal = try b.term(.{ .unpack_product = .{ .value = try b.reference(unexpected), .variables = &.{ try b.variable(try b.scalar(u64)), leftover }, .body = try b.bind(try b.variable(try b.scalar(void)), try generator.close(b, self.g, try b.reference(leftover)), fail) } });
+        const equal = try b.primitive(try b.scalar(bool), .equal, &.{ try b.reference(completed), try b.constant(u64, 57) }, 0);
+        const done = try b.term(.{ .match_sum = .{ .value = try b.reference(final), .cases = &.{
+            .{ .variable = completed, .body = try b.term(.{ .conditional = .{ .condition = equal, .when_true = try b.pure(try b.reference(saved)), .when_false = fail } }) },
+            .{ .variable = unexpected, .body = disposal },
+        } } });
+        const resume_side = try b.bind(final, try generator.exchange(b, self.g, try b.reference(zp), try b.constant(u64, 7)), done);
+        const close_local = try b.bind(try b.variable(try b.scalar(void)), try generator.close(b, self.g, try b.reference(ap)), resume_side);
+        const run = try b.bind(saved, computation, close_local);
+        const second = try b.bind(z, try generator.begin(b, self.g, self.body, try b.constant(u64, 50)), try self.yielded(b, try b.reference(z), zp, run));
+        return b.bind(a, try generator.begin(b, self.g, self.body, try b.constant(u64, 5)), try self.yielded(b, try b.reference(a), ap, second));
+    }
+};
 const System = agent.system(.{ .InitialArgs = Input, .Result = Contribution, .Failure = void, .application = Application });
 const Model = agent.model(.{ .name = "parser-producer", .model = "synthetic-only", .protocol = struct {
     pub const semantic_identity = agent.model_invocation.protocol_identity;
@@ -312,7 +378,8 @@ pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();
     const mode = args.next() orelse return error.ExpectedMode;
-    if (std.mem.eql(u8, mode, "link")) {
+    if (std.mem.eql(u8, mode, "link") or std.mem.eql(u8, mode, "link-retained")) {
+        Application.retain_idle = std.mem.eql(u8, mode, "link-retained");
         const p = args.next() orelse return error.ExpectedProducer;
         const c = args.next() orelse return error.ExpectedConsumer;
         const r = args.next() orelse return error.ExpectedReference;

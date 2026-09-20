@@ -486,3 +486,54 @@ artifact after live read. Firefox has not been rerun for this newest delivery
 Program. General owned-channel/local cleanup work, intent ambiguity, generic
 assessment selection, broader proof/failure sweeps, strategy/runtime comparisons,
 opt-in live configuration and serial reviews remain unfinished.
+
+## Retained endpoints around parser work
+
+Agent now authenticates Boundary `cd457113d2450f35880fe4a0d8e8f78637bd19e0`
+through its ordinary archive, package hash and dependency inventory. The World
+kernel and protocols are unchanged. `zig build check` passes 271 steps / 123 tests.
+
+The `link-retained` fixture links the same producer, consumer and reference objects
+and surrounds the actual parser computation with two independently owned exchange
+endpoints. Their ownership remains private to the application entry; neither
+assessment imports nor participant captures receive it. Both endpoints are parked
+before the nested reference/model/probe chain. After that chain returns, local
+`generator.close` disposes endpoint 5, then `generator.exchange` supplies 7 to
+endpoint 50. The latter emits ordinary work 57 and completes with 57; cleanup
+releases 50 before the saved parser result returns. The assertions distinguish
+input-taking exchange from previous-yield behavior and require both cleanup leaves.
+
+`retained-one` runs a real qualified candidate experiment, observes the invalid
+partial candidate, and exhausts its one-round allowance without claiming acceptance.
+The 14,947-byte Program passes eight fresh transfers with identical native,
+Node/WASM, Wasmtime and Chromium Worker outcomes. Actual selected destination bytes
+advance execution; nine Workers are destroyed. The ordered lifetime observations
+are release 5, work 57, release 50.
+
+The separate `retained-cancel` execution accepts global cancellation while local
+cleanup is pending. It replies to the still-pending cleanup occurrence, releases
+both endpoints, and performs no ordinary sibling work. Native, Node/WASM, Wasmtime
+and Firefox Worker agree across eight transfers and nine destroyed Workers. The
+pending request can be observed again after cancellation; this is not counted as a
+second release execution. Both cases use one real candidate process and two
+executor qualification processes; model and lifetime leaves remain synthetic.
+
+Reproduce with `zig build parser-construction-images`, then
+`node test/agent4/parser_construction.mjs WORLD_ENTRY KERNEL WASMTIME_PEER NATIVE_TOOL BROWSER_TOOLS chromium retained-one`
+or the same command with `firefox retained-cancel`. Empty peer/tool arguments select
+Node-only execution. The ordinary `link` application has no retained fixture owners.
+
+This establishes retained owned endpoints around the real nested application and
+local disposal returning to an active owner. It does not yet establish local abort
+of the parser's suspended call chain itself, a compositional owned hyperfunction
+channel API, or resource-bearing assessment admission. Those remain required work,
+alongside the previously listed semantic, selection, comparison and review gaps.
+
+The same retained Program also passes the two-round `retained` scenario: real
+counterexample, revised complete candidate, full independent acceptance, live target
+read and reviewable artifact. It uses 539 candidate processes plus two qualification
+processes, two synthetic model calls, no approval and no target write. Native,
+Node/WASM, Wasmtime and Chromium agree through sixteen transfers and seventeen
+destroyed Workers; release 5, work 57 and release 50 occur only after the actual
+parser result. This fresh evidence includes the new dependency binding; the older
+approved-write scenarios above remain separately scoped evidence.

@@ -15,7 +15,8 @@ const [worldEntry,kernelPath,peerPath,nativeTool,browserTools,browserEngine='chr
 const {Kernel,decodeOutcome,decodeRequest,encodeResult,encodeInput}=await import(pathToFileURL(resolve(worldEntry)));
 const read=async name=>new Uint8Array(await readFile(`zig-out/agent4/parser-construction/${name}`));
 const scenario=process.argv[8]??'repair';
-const image=await read(scenario==='forged'?'forged.bpi3':'program.bpi3'),inputSchema=decodeSchema(await read('input-schema.bin'));
+const retained=scenario.startsWith('retained');
+const image=await read(retained?'retained.bpi3':scenario==='forged'?'forged.bpi3':'program.bpi3'),inputSchema=decodeSchema(await read('input-schema.bin'));
 const resultSchema=decodeSchema(await read('result-schema.bin')),modelSchema=decodeSchema(await read('model-schema.bin'));
 const model=decodeValue(modelSchema,await read('model-template.bin'));
 const tools=await createParserTools();assert.equal(tools.kind,'qualified',JSON.stringify(tools));
@@ -24,7 +25,7 @@ const hash=value=>createHash('sha256').update(value).digest('hex');
 const subject=tools.subject(hash(tools.evidence.reference));
 const trace=[[[92],false],[[110,10],false],[[],true]];
 model[3].push([2,`Concrete consumer trace: ${JSON.stringify(trace)}`]);
-const rounds=scenario==='zero'?0n:scenario==='one'?1n:scenario==='full-repair'?3n:2n;
+const rounds=scenario==='zero'?0n:['one','retained-one','retained-cancel'].includes(scenario)?1n:scenario==='full-repair'?3n:2n;
 const area=await mkdtemp(join(tmpdir(),'parser-synthesis-'));
 await writeFile(join(area,'parser.mjs'),tools.evidence.reference);
 const delivery=await createParserDelivery({root:area});
@@ -39,6 +40,7 @@ let identity=1n;const fresh=()=>Kernel.create({bytes:kernelBytes,expectedSha256,
 let k=await fresh(),p=k.prepare(image),s=k.start(p,encodeValue(inputSchema,input));k.releasePrepared(p);
 let control='none',value=new Uint8Array(),transfers=0;const events=[],engines=[];
 let result,modelCalls=0,probeFailed=false,fullAccepted=false,targetReads=0,approvals=0,writes=0;
+const lifetime=[];let cancelling=false,cancelled=false;
 for(let round=0;;round++) {
   assert.ok(round<128);
   const invocation={image,state:k.checkpoint(s),control,value,quantum:100};
@@ -53,6 +55,7 @@ for(let round=0;;round++) {
     [returned,engine]=choices[round%choices.length];
   }
   engines.push(engine);const out=decodeOutcome(returned);
+  if(out.kind==='cancelled') {assert.equal(cancelling,true);cancelled=true;k.close(s);assert.equal(k.usage().workingLive,0n);break;}
   if(out.kind==='completed') {result=decodeValue(resultSchema,out.value);k.close(s);assert.equal(k.usage().workingLive,0n);break;}
   assert.ok(['progressed','requested'].includes(out.kind),out.kind);
   if(out.kind==='requested') {
@@ -99,13 +102,20 @@ for(let round=0;;round++) {
       reply={tag:0,value:[payload[3],7n,scenario==='decline'?{tag:1,value:'declined'}:{tag:0,value:null}]};
     } else if(request.semanticIdentity==='agent.parser.replace.v1') {
       writes++;assert.equal(approvals,1);reply=await delivery.replace(payload);
+    } else if(['parser/retained-release','parser/retained-work'].includes(request.semanticIdentity)) {
+      assert.equal(retained,true);assert.equal(probeFailed,true);
+      if(cancelling)assert.equal(request.semanticIdentity,'parser/retained-release');
+      if(!(scenario==='retained-cancel'&&!cancelling&&request.semanticIdentity==='parser/retained-release'))lifetime.push([request.semanticIdentity,payload.toString()]);reply=null;
     } else throw Error('undeclared leaf');
-    control='reply';value=await encodeResult(out.request,encodeValue(decodeSchema(request.resumeSchema),reply));
+    if(scenario==='retained-cancel'&&!cancelling&&request.semanticIdentity==='parser/retained-release') {
+      cancelling=true;control='cancel_text';value=new TextEncoder().encode('stop during local disposal');
+    } else {control='reply';value=await encodeResult(out.request,encodeValue(decodeSchema(request.resumeSchema),reply));}
   } else {control='none';value=new Uint8Array();}
   const state=out.state;assert.deepEqual(k.checkpoint(s,{transfer:true}),state);assert.equal(k.usage().workingLive,0n);
   k=await fresh();p=k.prepare(image);s=k.restore(p,state);k.releasePrepared(p);transfers++;
 }
-if(scenario==='forged'){assert.equal(result.tag,3);assert.match(result.value,/do not grant completion authority/);assert.equal(events.length,0);}
+if(cancelled){assert.equal(scenario,'retained-cancel');assert.equal(modelCalls,1);assert.equal(fullAccepted,false);}
+else if(scenario==='forged'){assert.equal(result.tag,3);assert.match(result.value,/do not grant completion authority/);assert.equal(events.length,0);}
 else if(rounds===0n){assert.equal(result.tag,3);assert.equal(events.length,0);}
 else if(scenario==='incomplete'){assert.equal(result.tag,3);assert.match(result.value,/incomplete or inconsistent/);assert.equal(fullAccepted,false);}
 else {
@@ -125,7 +135,10 @@ else {
   assert.equal(modelCalls,Number(rounds));
 }
 const current=await readFile(join(area,'parser.mjs'),'utf8');
+if(retained)assert.deepEqual(lifetime,cancelled?[
+  ['parser/retained-release','5'],['parser/retained-release','50'],
+]:[['parser/retained-release','5'],['parser/retained-work','57'],['parser/retained-release','50']]);
 assert.equal(current,scenario==='apply'?decodedFields:['changed-base','changed-approval'].includes(scenario)?'external change':tools.evidence.reference);
-console.log(JSON.stringify({imageBytes:image.length,events,transfers,engines,browser:browser?.identity,workersDestroyed:browser?.workersDestroyed,rounds:Number(rounds),modelCalls,fullAccepted,targetReads,approvals,writes,
+console.log(JSON.stringify({imageBytes:image.length,events,lifetime,cancelled,transfers,engines,browser:browser?.identity,workersDestroyed:browser?.workersDestroyed,rounds:Number(rounds),modelCalls,fullAccepted,targetReads,approvals,writes,
   counterexampleObserved:probeFailed,metrics:tools.metrics(),paidProviderCalls:0}));
 } finally {await rm(area,{recursive:true,force:true});if(browser)await browser.close();if(peer)await peer.close();}

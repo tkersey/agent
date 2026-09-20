@@ -11,8 +11,12 @@ Boundary #152, World #54, Agent #32 are merged. Immutable follow-on bases:
 Boundary c7a08ed7c1e15732fc7373dd1f149cbe7da82e7b,
 World 374ed712c2a2ab5041c28befa38bb3c3a859bd26,
 Agent e1b56f06ce0d91a8d7f324198a541f0b16b55a00.
-Normal authenticated dependency locks are unchanged in this slice; the new
-participant path uses the foundation's existing component and runtime APIs.
+The normal authenticated Boundary dependency now selects
+`b604ae828650a9be176b103552942adaafc983c0`, including suspended invocation and
+state-based reciprocal constructors. Its downloaded source tree was recomputed
+and matched to GitHub commit tree `45d214c586a30762b55d5c9fc4445d3f3d108f72`;
+the archive bytes, API files, Zig package hash and both package inventory profiles
+are bound in the existing lock. The World dependency and kernel remain unchanged.
 Inherited economic dispositions remain scoped to the foundation. No new
 performance waiver or live-model quality claim is made.
 
@@ -101,3 +105,10 @@ was repeated against those emitted artifacts. An earlier aggregate invalidated
 its installation evidence when source changed during execution; it receives no
 credit and was replaced by this stable-input run. No existing assertion or
 negative case was removed to admit the new path.
+
+The new Boundary binding passed `zig build check` (185 steps / 119 tests),
+`check-participants participant-images` (six focused tests), and the actual
+Node/WASM model request transfer. No source override or authentication relaxation
+was used. The next application slice will use the newly bound hyperfunction
+constructors; this dependency update does not itself establish reciprocal Agent
+interaction.

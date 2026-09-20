@@ -114,8 +114,17 @@ function launch(command, args, { cwd, timeoutMs, maximumOutputBytes, signal }) {
 }
 
 /** Qualifies the installed profile before any candidate source is executed. */
-export async function createInquirySandbox({ scratchRoot = tmpdir(), timeoutMs = 2000,
-  maximumOutputBytes = 65536 } = {}) {
+export function createInquirySandbox(options = {}) {
+  return createSandbox(options, driverPath, "agent.inquiry.macos-seatbelt.v1");
+}
+
+export function createParserSandbox(options = {}) {
+  return createSandbox(options, fileURLToPath(new URL("./parser_driver.mjs", import.meta.url)),
+    "agent.incremental-parser.macos-seatbelt.v1");
+}
+
+async function createSandbox({ scratchRoot = tmpdir(), timeoutMs = 2000,
+  maximumOutputBytes = 65536 } = {}, driverPath, name) {
   if (process.platform !== "darwin") return { kind: "unavailable", reason: "unsupported_host" };
   if (!Number.isInteger(timeoutMs) || timeoutMs < 50 || timeoutMs > 10000 ||
       !Number.isInteger(maximumOutputBytes) || maximumOutputBytes < 1024 || maximumOutputBytes > 1048576)
@@ -132,7 +141,7 @@ export async function createInquirySandbox({ scratchRoot = tmpdir(), timeoutMs =
     root = await realpath(resolve(scratchRoot));
     if (!(await lstat(root)).isDirectory()) throw new Error("not a directory");
   } catch { return { kind: "unavailable", reason: "profile_setup_failed" }; }
-  const contract = Object.freeze({ name: "agent.inquiry.macos-seatbelt.v1",
+  const contract = Object.freeze({ name,
     osRelease: release(), nodeVersion: process.version, executableSha256: dependencies[0].sha256,
     driverSha256: hash(driver), adapterSha256: hash(await readFile(fileURLToPath(import.meta.url))),
     dyldProfileSha256: hash(dyldProfile),
@@ -226,7 +235,8 @@ export async function createInquirySandbox({ scratchRoot = tmpdir(), timeoutMs =
         throw new TypeError("candidate source exceeds 8192 bytes");
       const nonce = randomUUID();
       const input = JSON.stringify({ nonce, trace });
-      if (Buffer.byteLength(input) > 16384) throw new TypeError("trace input too large");
+      const maximumTraceBytes = name === "agent.incremental-parser.macos-seatbelt.v1" ? 2097152 : 16384;
+      if (Buffer.byteLength(input) > maximumTraceBytes) throw new TypeError("trace input too large");
       const result = await invoke({ "driver.mjs": driver, "session.mjs": source,
         "trace.json": input }, "driver.mjs", { signal });
       const metadata = { runner, physicalExecutions: result.physicalExecutions ?? 0,

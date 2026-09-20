@@ -111,6 +111,13 @@ pub fn build(b: *std.Build) void {
     const participants = b.step("check-participants", "Check compiled internal participant admission");
     g.testModule(participants, g.module("test/agent4/participant.zig"));
     check.dependOn(participants);
+    const parser_oracle = b.addSystemCommand(&.{ "node", "--test", "test/agent4/parser_oracle.test.mjs" });
+    check.dependOn(&parser_oracle.step);
+    const parser_executor = b.addSystemCommand(&.{ "node", "test/agent4/parser_executor.test.mjs" });
+    const parser_protocol = b.addSystemCommand(&.{ "node", "test/agent4/parser_protocol.test.mjs" });
+    parser_executor.step.dependOn(&parser_protocol.step);
+    b.step("check-parser-executor", "Check incremental parser candidates in the qualified executor")
+        .dependOn(&parser_executor.step);
     const recursive_tests = b.addTest(.{
         .root_module = g.module("test/agent4/recursive_participant.zig"),
         .filters = &.{"recursive participant"},

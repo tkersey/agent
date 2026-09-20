@@ -30,6 +30,7 @@
         "test/agent4",
         "test/consumers",
         "fixtures/repository-repair-v1",
+        "fixtures/incremental-parser-v1",
         "tools/agent4",
         "tools/check_zig_paths.sh",
     },

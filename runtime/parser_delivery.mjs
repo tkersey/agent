@@ -1,8 +1,9 @@
 // Fixture-scoped file leaves; the Program owns acceptance, approval and ordering.
 import assert from 'node:assert/strict';
 import {createRepositoryDelivery} from './repository_delivery.mjs';
-import {parserContract} from './parser_oracle.mjs';
-export async function createParserDelivery({root}) {
+import {contractFor} from './parser_oracle.mjs';
+export async function createParserDelivery({root,eofPolicy='strict'}) {
+  const parserContract=contractFor(eofPolicy);
   const files=await createRepositoryDelivery({root});
   function admit(value) {
     if(!Array.isArray(value)||value.length!==5)throw new TypeError('parser proposal');

@@ -58,3 +58,6 @@ export const bufferUntilEOF = decodedFields.replace('const records=[];', 'const 
 export const wrongOffset = decodedFields.replace("fail('InvalidEscape',offset)", "fail('InvalidEscape',0)");
 export const globalState = decodedFields.replace('export function step(s, chunk, end) {', 'let saved=initial(); export function step(ignored, chunk, end) {const s=saved;');
 export const keepsHistory = decodedFields.replace('const offset=s.offset++;s.started=true;', 's.history=(s.history??[]);s.history.push(b);const offset=s.offset++;s.started=true;');
+// Alternate task meaning; still test-only, never supplied to production prompts.
+export const emitFinalRecord = decodedFields.replace("else if(s.started)fail('UnterminatedRecord',s.offset);",
+  "else if(s.started){s.fields.push(s.field);records.push(s.fields);s.fields=[];s.field=[];s.started=false;s.status='complete';}");

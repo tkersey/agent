@@ -3,6 +3,10 @@ import { createHash } from 'node:crypto';
 import { observePrefix } from '../fixtures/incremental-parser-v1/batch.mjs';
 
 export const parserContract = 'agent.incremental-byte-parser/v1';
+export function contractFor(eofPolicy = 'strict') {
+  if (!['strict','emit'].includes(eofPolicy)) throw new TypeError('unknown EOF policy');
+  return eofPolicy === 'strict' ? parserContract : 'agent.incremental-byte-parser-emit-eof/v1';
+}
 export function admitTrace(trace) {
   if (!Array.isArray(trace) || trace.length === 0 || trace.length > 4096)
     throw new TypeError('trace must contain 1 through 4096 calls');
@@ -18,7 +22,8 @@ export function admitTrace(trace) {
   });
 }
 
-export function observations(trace) {
+export function observations(trace, eofPolicy = 'strict') {
+  contractFor(eofPolicy);
   trace = admitTrace(trace);
   const prefix = [], rows = [];
   let count = 0, terminal;
@@ -28,7 +33,7 @@ export function observations(trace) {
       continue;
     }
     for (const byte of call.chunk) prefix.push(byte);
-    const observed = observePrefix(prefix, call.endOfInput);
+    const observed = observePrefix(prefix, call.endOfInput, eofPolicy);
     rows.push({ newly_completed_records: observed.records.slice(count), status: observed.status,
       ...(observed.error ? { error: observed.error } : {}) });
     count = observed.records.length;
@@ -38,8 +43,8 @@ export function observations(trace) {
   return rows;
 }
 
-export function traceIdentity(trace) {
-  return createHash('sha256').update(parserContract).update('\0')
+export function traceIdentity(trace, eofPolicy = 'strict') {
+  return createHash('sha256').update(contractFor(eofPolicy)).update('\0')
     .update(JSON.stringify(admitTrace(trace))).digest('hex');
 }
 

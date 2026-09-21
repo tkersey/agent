@@ -7,7 +7,8 @@ const hyper = boundary.library.hyper;
 const parser = agent.parser_synthesis;
 const P = parser.proposals.Profile;
 const Id = source.Id;
-pub const Input = struct { subject: parser.Subject, model: P.Request, trace: parser.Trace, occurrence: u64, rounds: u64, target: agent.contracts.Text(256), principal: u64, apply: bool, abort_nested: bool };
+pub const Alternative = struct { subject: parser.Subject, model: P.Request };
+pub const Input = struct { subject: parser.Subject, model: P.Request, trace: parser.Trace, occurrence: u64, rounds: u64, target: agent.contracts.Text(256), principal: u64, apply: bool, abort_nested: bool, alternate_eof: ?Alternative = null };
 // Round identifies the contribution occurrence. Source proposals mint that
 // version; experiments retain the prior candidate's exact version and content.
 const State = struct { input: Input, successor: bool, round: u64, remaining: u64, prior: ?Report, reference: ?parser.ReferenceReply };
@@ -376,15 +377,56 @@ const Application = struct {
         const run = try b.bind(delayed, try hyper.invoke(b, try b.reference(consumed), try b.lambda(peer, t.pair.peer_forward)), try b.bind(task, try hyper.force(b, try b.reference(delayed)), try b.bind(contribution, try hyper.force(b, try b.reference(task)), complete)));
         const next = try b.bind(consumed, try b.term(.{ .call = .{ .function = z, .arguments = &.{state} } }), run);
         try b.define(round, try b.bind(produced, try b.term(.{ .call = .{ .function = p, .arguments = &.{state} } }), next));
-        const entry = try b.declare(&.{t.input}, t.contribution, effects, &.{});
-        const input = try b.reference(b.parameter(entry, 0));
+        const intent = try agent.parser_intent.define(c);
+        const entry_effects = (try (source.Row{ .effects = effects }).unionWith(b.allocator(), .{ .effects = &.{intent.effect} })).effects;
+        const entry = try b.declare(&.{t.input}, t.contribution, entry_effects, &.{});
+        const selected = try b.variable(t.input);
+        const input = try b.reference(selected);
         const initial = try b.primitive(t.state, .product, &.{ input, try b.constant(bool, false), try b.constant(u64, 1), try field(b, u64, input, 4), try literal(b, ?Report, null), try literal(b, ?parser.ReferenceReply, null) }, 0);
         const call = try b.term(.{ .call = .{ .function = round, .arguments = &.{initial} } });
         try c.registry.allowPrivateCall(entry, call, round);
-        try b.define(entry, if (idle) |owned| try owned.around(b, t.contribution, call) else call);
+        const execute = if (idle) |owned| try owned.around(b, t.contribution, call) else call;
+        const chosen = try b.variable(try c.schema(?Input));
+        const dispatch = try b.term(.{ .match_sum = .{ .value = try b.reference(chosen), .cases = &.{
+            .{ .variable = try b.variable(try b.scalar(void)), .body = try unresolved(b, t, "EOF behavior remains unresolved.") },
+            .{ .variable = selected, .body = execute },
+        } } });
+        try b.define(entry, try b.bind(chosen, try chooseInput(c, t, intent, try b.reference(b.parameter(entry, 0))), dispatch));
         return b.module(entry, try b.scalar(void));
     }
 };
+fn chooseInput(c: agent.Context, t: Types, intent: agent.parser_intent.Definition, input: Id) !Id {
+    const b = c.builder;
+    const option = try c.schema(?Input);
+    const alternate = try b.variable(try c.schema(Alternative));
+    const resolution = try b.variable(try c.schema(agent.parser_intent.Result));
+    const id = try b.variable(try b.scalar(u64));
+    var strict_fields: [std.meta.fields(Input).len]Id = undefined;
+    var emit_fields: [std.meta.fields(Input).len]Id = undefined;
+    inline for (std.meta.fields(Input), 0..) |item, index| {
+        strict_fields[index] = if (index == 9) try literal(b, ?Alternative, null) else try field(b, item.type, input, index);
+        emit_fields[index] = if (index == 0) try field(b, parser.Subject, try b.reference(alternate), 0) else if (index == 1) try field(b, P.Request, try b.reference(alternate), 1) else strict_fields[index];
+    }
+    const strict = try b.pure(try b.primitive(option, .variant, &.{try b.primitive(t.input, .product, &strict_fields, 0)}, 1));
+    const emit = try b.pure(try b.primitive(option, .variant, &.{try b.primitive(t.input, .product, &emit_fields, 0)}, 1));
+    const unknown = try b.pure(try literal(b, ?Input, null));
+    const chosen = try b.term(.{ .conditional = .{
+        .condition = try b.primitive(try b.scalar(bool), .equal, &.{ try b.reference(id), try b.constant(u64, 1) }, 0),
+        .when_true = strict,
+        .when_false = try b.term(.{ .conditional = .{ .condition = try b.primitive(try b.scalar(bool), .equal, &.{ try b.reference(id), try b.constant(u64, 2) }, 0), .when_true = emit, .when_false = unknown } }),
+    } });
+    const result = try b.term(.{ .match_sum = .{ .value = try b.reference(resolution), .cases = &.{
+        .{ .variable = id, .body = chosen }, .{ .variable = try b.variable(try b.scalar(void)), .body = unknown },
+    } } });
+    const frozen = try b.primitive(try c.schema(agent.parser_intent.Frozen), .product, &.{ try field(b, parser.Subject, input, 0), try field(b, parser.Subject, try b.reference(alternate), 0), try field(b, u64, input, 3) }, 0);
+    const asked = try b.bind(resolution, try b.term(.{ .call = .{ .function = intent.function, .arguments = &.{frozen} } }), result);
+    const dispatch = try b.term(.{ .match_sum = .{ .value = try field(b, ?Alternative, input, 9), .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = try b.pure(try b.primitive(option, .variant, &.{input}, 1)) },
+        .{ .variable = alternate, .body = asked },
+    } } });
+    const no_work = try b.primitive(try b.scalar(bool), .equal, &.{ try field(b, u64, input, 4), try b.constant(u64, 0) }, 0);
+    return b.term(.{ .conditional = .{ .condition = no_work, .when_true = try b.pure(try b.primitive(option, .variant, &.{input}, 1)), .when_false = dispatch } });
+}
 fn install(c: agent.Context, t: Types, name: []const u8, bytes: []const u8, result: Id) !Id {
     return agent.participant.declare(c, .{
         .instance = name,

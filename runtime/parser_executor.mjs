@@ -3,28 +3,30 @@ import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { readFile } from 'node:fs/promises';
 import { createParserSandbox } from './inquiry_sandbox.mjs';
-import { parserContract, admitTrace, observations, mandatoryTraces, traceIdentity } from './parser_oracle.mjs';
+import { contractFor, admitTrace, observations, mandatoryTraces, traceIdentity } from './parser_oracle.mjs';
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 
 export async function createParserExecutor(options = {}) {
-  const sandbox = await createParserSandbox({ maximumOutputBytes: 1048576, timeoutMs: 10000, ...options });
+  const { eofPolicy = 'strict', ...sandboxOptions } = options;
+  const acceptanceContract = contractFor(eofPolicy);
+  const sandbox = await createParserSandbox({ maximumOutputBytes: 1048576, timeoutMs: 10000, ...sandboxOptions });
   if (sandbox.kind !== 'qualified') return sandbox;
   const oracleBytes = await readFile(new URL('./parser_oracle.mjs', import.meta.url));
   const referenceBytes = await readFile(new URL('../fixtures/incremental-parser-v1/batch.mjs', import.meta.url));
   const evaluatorBytes = await readFile(new URL(import.meta.url));
   const runner = digest(JSON.stringify({ sandbox: sandbox.runner, oracle: digest(oracleBytes),
-    reference: digest(referenceBytes), evaluator: digest(evaluatorBytes), parserContract }));
+    reference: digest(referenceBytes), evaluator: digest(evaluatorBytes), acceptanceContract }));
   let physicalExecutions = 0;
   async function probe(source, input, { signal } = {}) {
     if (typeof source !== 'string' || Buffer.byteLength(source) > 8192)
       throw new TypeError('candidate source capacity');
     const trace = admitTrace(input);
-    const binding = { sourceDigest: digest(source), traceDigest: traceIdentity(trace),
-      runner, acceptanceContract: parserContract };
+    const binding = { sourceDigest: digest(source), traceDigest: traceIdentity(trace,eofPolicy),
+      runner, acceptanceContract: acceptanceContract };
     const actual = await sandbox.execute(source, trace, { signal });
     physicalExecutions += actual.physicalExecutions;
     if (actual.kind !== 'completed') return { ...binding, kind: actual.kind, passed: false };
-    const expected = observations(trace), failures = [];
+    const expected = observations(trace,eofPolicy), failures = [];
     if (actual.rows.length !== expected.length) failures.push({ call: null, reason: 'row_count' });
     for (let i = 0; i < expected.length; i++) {
       const row = actual.rows[i];
@@ -64,7 +66,7 @@ export async function createParserExecutor(options = {}) {
       retention.push({ name: 'unfinished-field', ...field,
         peak: Math.max(0, ...(field.rows ?? []).map(row => row.stateBytes)) });
     }
-    return { sourceDigest: digest(source), runner, acceptanceContract: parserContract,
+    return { sourceDigest: digest(source), runner, acceptanceContract: acceptanceContract,
       seed, required, executed: checks.length,
       passed: checks.length === required && checks.every(check => check.passed) &&
         retention.length === 2 && retention.every(check => check.passed), checks, retention };

@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict';
 import {readFile,mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
+import {createInterface} from 'node:readline';
+import {contractFor} from './parser_oracle.mjs';
 import {join,resolve} from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {createHash,randomBytes} from 'node:crypto';
@@ -15,14 +17,15 @@ const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const json=value=>JSON.stringify(value,(_,item)=>typeof item==='bigint'?item.toString():item);
 export function parseParserOptions(args){
- const options={calls:0,checks:0,quanta:10000,allowPaid:false};const seen=new Set();
- const fields=new Map([['--world-runtime','runtime'],['--model','model'],['--endpoint','endpoint'],['--data-policy','dataPolicy'],['--key-env','keyEnv'],['--max-model-calls','calls'],['--max-checks','checks'],['--max-quanta','quanta']]);
+ const options={calls:0,checks:0,quanta:10000,allowPaid:false,eofPolicy:'strict'};const seen=new Set();
+ const fields=new Map([['--eof-policy','eofPolicy'],['--world-runtime','runtime'],['--model','model'],['--endpoint','endpoint'],['--data-policy','dataPolicy'],['--key-env','keyEnv'],['--max-model-calls','calls'],['--max-checks','checks'],['--max-quanta','quanta']]);
  for(let i=0;i<args.length;i++){
   const name=args[i];assert(!seen.has(name),'repeated option');seen.add(name);
   if(name==='--allow-paid'){options.allowPaid=true;continue;}
   const field=fields.get(name);assert(field&&args[i+1]&&!args[i+1].startsWith('--'),'unknown or missing option');options[field]=args[++i];
  }
  for(const name of ['calls','checks','quanta']){assert(/^\d+$/.test(String(options[name])),'invalid allowance');options[name]=Number(options[name]);assert(Number.isSafeInteger(options[name])&&options[name]>=0&&options[name]<=(name==='quanta'?10000:16),'allowance out of range');}
+ assert(['strict','emit','ask'].includes(options.eofPolicy),'unknown EOF policy');
  assert(options.runtime,'--world-runtime is required');assert(options.quanta>0,'positive work allowance required');
  if(options.calls){
   assert(options.model&&Buffer.byteLength(options.model)<=128,'explicit model required');
@@ -49,27 +52,37 @@ export async function runParser(args){
  const runtime=verifyRuntime(resolve(options.runtime));
  const world=await import(pathToFileURL(runtime.entrypoint));
  const installed=await installedInputs();
- const input=structuredClone(installed.input),spent={models:0,checks:0,quanta:0,contextBytes:0,modelRequestBytes:0,modelReplyBytes:0};
- let tools,delivery,area,apiKey;
+ const input=structuredClone(installed.input),spent={models:0,checks:0,quanta:0,contextBytes:0,modelRequestBytes:0,modelReplyBytes:0,questions:0};
+ let tools,delivery,area,apiKey;const bindings=new Map();
  try{
  if(options.calls){
-  tools=await createParserTools();
+  tools=await createParserTools({eofPolicy:options.eofPolicy==='emit'?'emit':'strict'});
   if(tools.kind!=='qualified')return{format:'agent-parser-run/v1',status:'unresolved',reason:'executor-unavailable',capability:tools,spent};
   if(options.keyEnv){apiKey=process.env[options.keyEnv];assert(apiKey,'selected credential is unavailable');}
   area=await mkdtemp(join(tmpdir(),'agent-parser-fixture-'));
   await writeFile(join(area,'parser.mjs'),tools.evidence.reference);
-  delivery=await createParserDelivery({root:area});
+  delivery=await createParserDelivery({root:area,eofPolicy:options.eofPolicy==='emit'?'emit':'strict'});
+  bindings.set(tools.subject(hash(tools.evidence.reference))[4],{tools,delivery});
   input[0]=tools.subject(hash(tools.evidence.reference));input[1][1]=options.model;
   input[1][3].push([2,`Frozen batch reference:\n${tools.evidence.reference}\nRequired behavior:\n${tools.evidence.requirements}`]);
   input[2]=[[[92],false],[[110,10],false],[[],true]];
   input[1][3].push([2,`Concrete consumer trace: ${JSON.stringify(input[2])}`]);
   input[3]=(randomBytes(8).readBigUInt64LE()&((1n<<63n)-1n))||1n;input[4]=BigInt(options.calls);
+  if(options.eofPolicy==='ask'){
+   const alternative=await createParserTools({eofPolicy:'emit'});
+   if(alternative.kind!=='qualified')return{format:'agent-parser-run/v1',status:'unresolved',reason:'executor-unavailable',capability:alternative,spent};
+   const alternateModel=structuredClone(installed.input[1]);alternateModel[1]=options.model;
+   alternateModel[3].push([2,`Frozen batch reference:\n${alternative.evidence.reference}\nRequired behavior:\n${alternative.evidence.requirements}`]);
+   alternateModel[3].push([2,`Concrete consumer trace: ${JSON.stringify(input[2])}`]);
+   input[9]={tag:1,value:[alternative.subject(input[0][0]),alternateModel]};
+   bindings.set(contractFor('emit'),{tools:alternative,delivery:await createParserDelivery({root:area,eofPolicy:'emit'})});
+  }
  }
  const bytes=new Uint8Array(await readFile(runtime.kernelPath));
  let identity=(randomBytes(8).readBigUInt64LE()&((1n<<63n)-1n))||1n;
  const fresh=()=>world.Kernel.create({bytes,expectedSha256:runtime.kernelSha256,instanceId:identity++});
  let kernel=await fresh(),prepared=kernel.prepare(installed.image),session=kernel.start(prepared,encodeValue(installed.inputSchema,input));kernel.releasePrepared(prepared);
- const report=extra=>({format:'agent-parser-run/v1',...extra,spent:{...spent},metrics:tools?.metrics(),kernelSha256:runtime.kernelSha256,imageSha256:hash(installed.image),paidAuthorization:options.allowPaid});
+ const report=extra=>({format:'agent-parser-run/v1',...extra,spent:{...spent},metrics:tools?{physicalExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().physicalExecutions,0),qualificationExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().qualificationExecutions,0)}:undefined,kernelSha256:runtime.kernelSha256,imageSha256:hash(installed.image),paidAuthorization:options.allowPaid});
  let control='none',value=new Uint8Array();
  const park=reason=>report({status:'unresolved',reason,state:Buffer.from(kernel.checkpoint(session,{transfer:true})).toString('base64'),resume:{control,value:Buffer.from(value).toString('base64')},environment:'ephemeral batch fixture; no automatic retry or resume'});
   while(spent.quanta<options.quanta){
@@ -91,11 +104,20 @@ export async function runParser(args){
      spent.modelReplyBytes+=reply.length;
     }else{
      const payload=decodeValue(decodeSchema(request.payloadSchema),request.payload);let result;
-     if(request.semanticIdentity==='agent.parser.reference.v1'){assert(tools);result=await tools.reference(payload);}
+     if(request.semanticIdentity==='agent.interaction.exchange.v1.parser.eof'){
+      spent.questions++;const reader=createInterface({input:process.stdin,output:process.stderr});
+      const answer=await new Promise(done=>{
+       reader.once('line',text=>done({kind:'line',text}));reader.once('close',()=>done({kind:'closed'}));reader.once('SIGINT',()=>done({kind:'aborted'}));
+       process.stderr.write(payload[3][1]+'\n[1 / 2 / other / unsure] ');
+      });reader.close();
+      if(answer.kind!=='line')result={tag:answer.kind==='closed'?2:1,value:null};
+      else {const text=answer.text.trim();result={tag:0,value:text==='1'||text==='2'?{tag:0,value:BigInt(text)}:{tag:text==='other'?1:2,value:null}};}
+     }else if(request.semanticIdentity==='agent.parser.reference.v1'){const binding=bindings.get(payload[0][4]);assert(binding,'unbound EOF contract');result=await binding.tools.reference(payload);}
      else if(['agent.parser.probe.v1','agent.parser.execution.v1'].includes(request.semanticIdentity)){
       if(spent.checks>=options.checks)return park('experiment-allowance');spent.checks++;
-      result=await(request.semanticIdentity==='agent.parser.probe.v1'?tools.probe(payload):tools.execute(payload));
-     }else if(request.semanticIdentity==='agent.parser.target-read.v1'){assert(delivery);result=await delivery.read(payload);}
+      const binding=bindings.get(payload[0][4]);assert(binding,'unbound EOF contract');
+      result=await(request.semanticIdentity==='agent.parser.probe.v1'?binding.tools.probe(payload):binding.tools.execute(payload));
+     }else if(request.semanticIdentity==='agent.parser.target-read.v1'){const binding=bindings.get(payload[2][4]);assert(binding,'unbound EOF contract');result=await binding.delivery.read(payload);}
      else throw Error('Unexpected environmental operation; no delivery authority granted');
      reply=encodeValue(decodeSchema(request.resumeSchema),result);
     }

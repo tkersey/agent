@@ -176,6 +176,9 @@ pub fn build(b: *std.Build) void {
     parser_executor.step.dependOn(&parser_protocol.step);
     b.step("check-parser-executor", "Check incremental parser candidates in the qualified executor")
         .dependOn(&parser_executor.step);
+    const eof_executor = b.addSystemCommand(&.{ "node", "test/agent4/parser_eof_executor.mjs" });
+    b.step("check-parser-eof-executor", "Check selected EOF policies against real candidate execution")
+        .dependOn(&eof_executor.step);
     const recursive_tests = b.addTest(.{
         .root_module = g.module("test/agent4/recursive_participant.zig"),
         .filters = &.{"recursive participant"},
@@ -339,6 +342,7 @@ pub fn build(b: *std.Build) void {
     check.dependOn(emit);
 
     const integration = b.step("check-agent4-integration", "Execute consumer proofs under the selected World");
+    const parser_intent = b.step("check-parser-intent", "Check EOF clarification through fresh World states");
     const compiled_tools_check = b.step("check-compiled-tools", "Execute one compiled text tool in standalone and Agent callers");
     const components_check = b.step("check-component-tools", "Reuse three effectful objects in Agent and two standalone Programs");
     const component_objects = g.emitter("agent4-component-objects", g.module("test/agent4/component_objects.zig"));
@@ -362,6 +366,10 @@ pub fn build(b: *std.Build) void {
         addBoundary(b, runtime_guard, source, target, optimize);
         runtime_guard.has_side_effects = true;
         _ = runtime_guard.captureStdOut(.{});
+        const intent_run = b.addSystemCommand(&.{ "node", "test/agent4/parser_intent_runtime.mjs", runtime_path });
+        intent_run.step.dependOn(parser_episode);
+        intent_run.step.dependOn(&runtime_guard.step);
+        parser_intent.dependOn(&intent_run.step);
         const text_check = b.addSystemCommand(&.{ "node", "test/agent4/text_tool_runtime.mjs" });
         text_check.addFileArg(text_object.getEmittedBin());
         text_check.addFileArg(text_link.getEmittedBin());
@@ -387,6 +395,7 @@ pub fn build(b: *std.Build) void {
             browser_check.dependOn(&browser.step);
         } else browser_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
+        runtime_work.dependOn(parser_intent);
         const repository_emitter_module = g.module("test/agent4/repository_replacement_emit.zig");
         repository_emitter_module.addImport("repository_app", g.module("test/consumers/repository/application.zig"));
         const repository_emitter = g.emitter("repository-replacement", repository_emitter_module);
@@ -550,6 +559,7 @@ pub fn build(b: *std.Build) void {
         repository_delivery.dependOn(&missing.step);
         repository_application.dependOn(&missing.step);
         integration.dependOn(&missing.step);
+        parser_intent.dependOn(&missing.step);
         economy.dependOn(&missing.step);
     }
     const pure = b.addSystemCommand(&.{ "node", "tools/agent4/check.mjs", "authoring" });

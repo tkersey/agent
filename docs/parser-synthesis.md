@@ -51,7 +51,7 @@ the reported spent allowances. This CLI is not a durable session manager.
 Unsupported qualified executors stop before model calls. Unknown model output,
 refusal, failed checks and incomplete candidates do not become successful artifacts.
 The current application offers fragment/complete-candidate/experiment/unresolved contributions;
-constraint routing, missing-intent task support, a held-out
+general constraint routing, a held-out
 live comparison and the broader selection/composition obligations remain open.
 
 The optional `test/agent4/parser_package_runtime.mjs` checks zero work and a real
@@ -63,3 +63,20 @@ candidate under an explicit trace; it cannot request full acceptance or choose a
 new subject/version. A passing probe does not clear a previously observed failure.
 The next model request includes the executed trace and retained counterexample.
 Unchanged refuted source cannot become complete merely by receiving a new label.
+
+## Intentionally unspecified EOF behavior
+
+The default `--eof-policy strict` remains the original fully specified language and
+asks no question. `--eof-policy emit` is an explicitly selected alternative: final
+EOF emits a non-escaped unfinished record, while dangling/invalid escapes retain
+their original errors and offsets. The alternative has its own contract, reference,
+requirements and runner binding.
+
+For a task that intentionally permits either outcome but has not selected one, use
+`--eof-policy ask` with a positive model allowance. The compiled application asks
+about that observable behavior before starting its participants. Enter `1` to reject
+unterminated records, `2` to emit them, or `other`/`unsure` to remain unresolved.
+Closed input also remains unresolved. This is intent selection, not approval.
+A zero-work task stops without asking and does not establish a preference for a
+future task. The existing clarification resolver retains the exact frozen subjects
+and occurrence; the host only supplies the typed answer and policy-bound leaves.

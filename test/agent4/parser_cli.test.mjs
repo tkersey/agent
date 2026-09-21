@@ -9,7 +9,7 @@ import {pathToFileURL} from 'node:url';
 import {readFile} from 'node:fs/promises';
 import {verifyRuntime} from '../../tools/agent4/dependencies.mjs';
 import {parseParserOptions} from '../../runtime/parser_cli.mjs';
-import {bufferUntilEOF,decodedFields} from '../consumers/incremental-parser/candidates.mjs';
+import {bufferUntilEOF,emitFinalRecord} from '../consumers/incremental-parser/candidates.mjs';
 const runtime=resolve(process.env.AGENT4_WORLD_RUNTIME??'.agent4-recursive-integrated/out/world-runtime');
 test('parser provider configuration is explicit and credentials are not implicit',()=>{
  assert.equal(parseParserOptions(['--world-runtime',runtime]).calls,0);
@@ -20,8 +20,9 @@ test('parser provider configuration is explicit and credentials are not implicit
  assert.throws(()=>parseParserOptions([...common,'--endpoint','http://127.0.0.1:1234','--max-checks','17']),/out of range/);
  assert.throws(()=>parseParserOptions(['--world-runtime',runtime,'--unknown','x']),/unknown/);
 });
-async function run(cwd,args,timeout=30000){
- const child=spawn(process.execPath,['runtime/parser_cli.mjs','--world-runtime',runtime,...args],{cwd,stdio:['ignore','pipe','pipe']});
+async function run(cwd,args,timeout=30000,input){
+ const child=spawn(process.execPath,['runtime/parser_cli.mjs','--world-runtime',runtime,...args],{cwd,stdio:[input===undefined?'ignore':'pipe','pipe','pipe']});
+ if(input!==undefined)child.stdin.end(input);
  let output='',error='';child.stdout.on('data',x=>output+=x);child.stderr.on('data',x=>error+=x);
  const timer=setTimeout(()=>child.kill('SIGKILL'),timeout);
  try{const code=await new Promise((done,reject)=>{child.on('error',reject);child.on('exit',done);});assert.equal(code,0,error);return JSON.parse(output);}finally{clearTimeout(timer);}
@@ -42,7 +43,8 @@ test('extracted parser command uses the real provider adapter without paid infer
    const name=repair?(repairCalls===0?'fragment':repairCalls===1?'experiment':'complete_candidate'):'unresolved';
    const args=!repair?{reason:'Fixture cannot establish a complete parser.'}:repairCalls===1?
     {input_hex:'610a',first_chunk_bytes:1,chunk_bytes:1,finalize:true,reason:'Check record termination at final input.'}:
-    {source:repairCalls===0?bufferUntilEOF:decodedFields,explanation:'Provider fixture proposes source; the real evaluator decides acceptance.'};
+    {source:repairCalls===0?bufferUntilEOF:emitFinalRecord,explanation:'Provider fixture proposes source; the real evaluator decides acceptance.'};
+   if(repair){assert.match(body,/EOF_POLICY = 'emit'/);assert.match(body,/unfinished record is emitted at EOF/);}
    if(repair&&repairCalls===2){assert.match(body,/earlier required check FAILED/);assert.match(body,/Hex bytes: 610a/);}
    if(repair)repairCalls++;
    res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({status:'completed',error:null,output:[{type:'function_call',status:'completed',call_id:'fixture-id',name,arguments:JSON.stringify(args)}]}));
@@ -70,11 +72,20 @@ test('extracted parser command uses the real provider adapter without paid infer
  const result=await run(cwd,['--endpoint',`http://127.0.0.1:${server.address().port}`,'--model','fixture-model','--data-policy','fixture-only','--max-model-calls','1','--max-checks','1']);
  assert.equal(calls,1);assert.equal(result.status,'unresolved');assert.equal(result.spent.models,1);assert.equal(result.spent.checks,0);assert.equal(result.paidAuthorization,false);assert.equal(result.result.tag,3);
  repair=true;
- const completed=await run(cwd,['--endpoint',`http://127.0.0.1:${server.address().port}`,'--model','fixture-model','--data-policy','fixture-only','--max-model-calls','3','--max-checks','3'],240000);
+ const completed=await run(cwd,['--endpoint',`http://127.0.0.1:${server.address().port}`,'--model','fixture-model','--data-policy','fixture-only','--max-model-calls','3','--max-checks','3','--eof-policy','ask'],240000,'2\n');
  assert.equal(calls,4);assert.equal(completed.status,'validated-artifact');assert.equal(completed.spent.models,3);assert.equal(completed.spent.checks,3);
- assert.equal(completed.result.tag,4);assert.equal(completed.result.value.tag,4);assert.equal(completed.result.value.value[0][2],decodedFields);
+ assert.equal(completed.result.tag,4);assert.equal(completed.result.value.tag,4);assert.equal(completed.result.value.value[0][2],emitFinalRecord);
  assert.equal(completed.metrics.physicalExecutions,540);assert.equal(completed.paidAuthorization,false);
+ assert.equal(completed.spent.questions,1);
+ assert.equal(completed.result.value.value[2][4],'agent.incremental-byte-parser-emit-eof/v1');
  assert.ok(completed.spent.contextBytes>0);
  assert.ok(completed.spent.modelRequestBytes>=completed.spent.contextBytes);
  assert.ok(completed.spent.modelReplyBytes>0);
+ repair=false;
+ const clarified=await run(cwd,['--endpoint',`http://127.0.0.1:${server.address().port}`,'--model','fixture-model','--data-policy','fixture-only','--max-model-calls','1','--max-checks','1','--eof-policy','ask'],30000,'2\n');
+ assert.equal(clarified.status,'unresolved');assert.equal(clarified.spent.questions,1);assert.equal(clarified.spent.models,1);
+ const unsure=await run(cwd,['--endpoint',`http://127.0.0.1:${server.address().port}`,'--model','fixture-model','--data-policy','fixture-only','--max-model-calls','1','--max-checks','1','--eof-policy','ask'],30000,'unsure\n');
+ assert.equal(unsure.status,'unresolved');assert.equal(unsure.spent.questions,1);assert.equal(unsure.spent.models,0);
+ const closed=await run(cwd,['--endpoint',`http://127.0.0.1:${server.address().port}`,'--model','fixture-model','--data-policy','fixture-only','--max-model-calls','1','--max-checks','1','--eof-policy','ask'],30000,'');
+ assert.equal(closed.status,'unresolved');assert.equal(closed.spent.questions,1);assert.equal(closed.spent.models,0);
 });

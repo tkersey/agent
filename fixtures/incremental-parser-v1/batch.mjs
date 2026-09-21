@@ -1,6 +1,8 @@
 // Immutable batch reference supplied as task evidence. Fields are byte arrays.
 // This function rescans the entire input; it is not an incremental replacement.
-export function observePrefix(bytes, endOfInput = true) {
+export const EOF_POLICY = 'strict';
+export function observePrefix(bytes, endOfInput = true, eofPolicy = EOF_POLICY) {
+  if (!['strict', 'emit'].includes(eofPolicy)) throw new TypeError('unknown EOF policy');
   if (!Array.isArray(bytes) || bytes.some(b => !Number.isInteger(b) || b < 0 || b > 255))
     throw new TypeError('expected an array of bytes');
   const records = [];
@@ -23,7 +25,10 @@ export function observePrefix(bytes, endOfInput = true) {
   }
   if (!endOfInput) return { records, status: 'open' };
   if (escape !== null) return failed('DanglingEscape', escape);
-  if (unfinished) return failed('UnterminatedRecord', bytes.length);
+  if (unfinished) {
+    if (eofPolicy === 'strict') return failed('UnterminatedRecord', bytes.length);
+    fields.push(field); records.push(fields);
+  }
   return { records, status: 'complete' };
 }
 export const parseBatch = bytes => observePrefix(bytes, true);

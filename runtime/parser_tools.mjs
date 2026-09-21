@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createParserExecutor } from './parser_executor.mjs';
-import { parserContract, observations, admitTrace, traceIdentity } from './parser_oracle.mjs';
+import { contractFor, observations, admitTrace, traceIdentity } from './parser_oracle.mjs';
 const hash = value => createHash('sha256').update(value).digest('hex');
 const variant = (tag,value=null) => ({tag,value});
 const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -43,10 +43,16 @@ function unavailable(kind) {
 }
 
 export async function createParserTools(options = {}) {
+  const eofPolicy = options.eofPolicy ?? 'strict';
+  const parserContract = contractFor(eofPolicy);
   const executor = await createParserExecutor(options);
   if (executor.kind !== 'qualified') return executor;
-  const reference = await readFile(new URL('../fixtures/incremental-parser-v1/batch.mjs',import.meta.url));
-  const requirements = await readFile(new URL('../fixtures/incremental-parser-v1/requirements.md',import.meta.url));
+  const source = await readFile(new URL('../fixtures/incremental-parser-v1/batch.mjs',import.meta.url),'utf8');
+  assert(source.includes("export const EOF_POLICY = 'strict';"));
+  const reference = Buffer.from(source.replace("export const EOF_POLICY = 'strict';",`export const EOF_POLICY = '${eofPolicy}';`));
+  let requirements = await readFile(new URL('../fixtures/incremental-parser-v1/requirements.md',import.meta.url),'utf8');
+  if(eofPolicy==='emit')requirements=requirements.replace('unfinished record fails as UnterminatedRecord at the end offset.','unfinished record is emitted at EOF as a final record.');
+  requirements=Buffer.from(requirements);
   const expected = [hash(reference),hash(requirements),executor.runner,parserContract];
   function checkSubject(subject) {
     if (!Array.isArray(subject) || subject.length !== 5 || !digest(subject[0])) throw new TypeError('subject shape');
@@ -58,7 +64,7 @@ export async function createParserTools(options = {}) {
     async reference(request) {
       if(!Array.isArray(request)||request.length!==3||!occurrence(request[1]))throw new TypeError('reference request');
       const [subject,id,encoded]=request;checkSubject(subject);
-      const rows=observations(traceValue(encoded));
+      const rows=observations(traceValue(encoded),eofPolicy);
       try { return [id,variant(0,rowsValue(rows))]; }
       catch(error) { if(error instanceof RangeError)return [id,variant(1,unavailable('capacity'))];throw error; }
     },
@@ -83,7 +89,7 @@ export async function createParserTools(options = {}) {
       assert.equal(result.sourceDigest,hash(source));assert.equal(result.runner,executor.runner);
       assert.equal(result.acceptanceContract,parserContract);
       if(trace) {
-        assert.equal(result.traceDigest,traceIdentity(trace));
+        assert.equal(result.traceDigest,traceIdentity(trace,eofPolicy));
         if(result.kind!=='completed')return [id,version,variant(2,unavailable(result.kind))];
         try { return [id,version,variant(0,[rowsValue(result.rows),result.passed,
           BigInt(Math.max(0,...result.rows.map(row=>row.stateBytes)))])]; }

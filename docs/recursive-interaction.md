@@ -670,7 +670,7 @@ extra repackaging-outside-Git test was retired because the existing packager req
 Git provenance; extracted execution, rather than provenance-free repackaging, is
 the relevant requirement here. No provenance guard was weakened.
 
-Missing-intent cases and constraint routing, generic selection,
+General constraint routing, generic selection,
 owned channel composition, held-out live/comparator evaluation, broader proof and
 economic evidence, and serial reviews remain required. No paid live study was run.
 
@@ -715,3 +715,43 @@ Reproduce with `parser_construction.mjs` scenarios `experiment`, `experiment-inv
 changing the tested Program bytes. Constraint/intent routing, generic selection,
 complete regression-history/revalidation, broader composition/proof/economic work
 and serial reviews remain open. No global completion claim is made.
+
+## Explicit EOF intent before construction
+
+`agent.parser_intent` reuses the consequence-sensitive classifier and resolver for
+the separate task whose final unterminated-record policy is intentionally unresolved.
+Two frozen subjects share the source base but name distinct strict/emit-EOF contracts,
+reference meanings, requirements and runners. Their keys describe different accepted
+behavior, not implementation style. The question retains both subjects and the
+occurrence. Other, unsure, unoffered, aborted or closed answers do not select a policy.
+
+The application receives an optional alternate EOF task. When absent, its already
+specified subject proceeds without a question. When present, the root resolves the
+task definition before creating participant work, so no captured candidate premise
+is rewritten. Zero allowance performs no work and asks nothing; a later unspecified
+task still asks. Known strict behavior is never presented as missing evidence.
+Invalid base/contract pairs reject before interaction. Old question replies reject
+without changing the parked input.
+
+The default strict parser meaning is unchanged. The emit-EOF alternative emits the
+last unfinished non-escaped record and preserves empty-input behavior, prefix records,
+DanglingEscape, InvalidEscape and their offsets. Distinct contract and trace identities
+prevent cross-policy observation reuse. The same tool adapters and generic World
+interpreter execute both; no alternative parser runtime or host participant controller
+was introduced. The selected policy is part of every reference/evaluation binding.
+
+Executed evidence: five oracle tests; cross-policy candidate discrimination and full
+alternate acceptance (536 required checks plus retention); eleven intent scenarios,
+including repeated tasks, no-work, invalid subjects and stale replies. The final
+21,361-byte Program agrees across native/Node/Wasmtime/Firefox while advancing actual
+destination states (124 destroyed Workers). The earlier eight-case version also
+passed Chromium. The final packaged CLI uses the local provider adapter, asks for the
+emit-EOF choice, performs three model responses and three checks, and produces the
+correct alternate artifact; unsure and closed stdin make no model call. Paid calls
+were not run. Clarification is separate from final approval/delivery.
+
+`zig build check check-parser-intent` passes 275 steps / 123 Zig tests under the
+normal authenticated runtime. `check-parser-eof-executor` owns the real alternate
+executor test. Packaged CLI tests pass. Broader constraint routing, generic selection,
+owned channel composition, complete observation history/revalidation, matched strategy
+and runtime economics, and serial reviews remain open.

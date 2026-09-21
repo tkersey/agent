@@ -1,8 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseBatch } from '../../fixtures/incremental-parser-v1/batch.mjs';
-import { observations, mandatoryTraces, admitTrace, traceIdentity } from '../../runtime/parser_oracle.mjs';
+import { observations, mandatoryTraces, admitTrace, traceIdentity, contractFor } from '../../runtime/parser_oracle.mjs';
 const bytes = text => [...Buffer.from(text)];
+
+test('selected EOF meanings differ only at a non-escaped unfinished final record',()=>{
+  const trace=[{chunk:[97,10,98,44],endOfInput:true},{chunk:[],endOfInput:true}];
+  assert.deepEqual(observations(trace,'emit'),[
+    {newly_completed_records:[[[97]],[[98],[]]],status:'complete'},
+    {newly_completed_records:[],status:'complete'},
+  ]);
+  assert.equal(observations(trace)[0].error.code,'UnterminatedRecord');
+  for(const chunk of [[],[10],[92],[92,120],[97,10,92]])
+    assert.deepEqual(observations([{chunk,endOfInput:true}],'emit'),observations([{chunk,endOfInput:true}],'strict'));
+  assert.notEqual(contractFor('strict'),contractFor('emit'));
+  assert.notEqual(traceIdentity(trace,'strict'),traceIdentity(trace,'emit'));
+  assert.throws(()=>contractFor('unknown'),TypeError);
+});
 
 test('batch meaning preserves bytes, escapes, empty fields and prefix records', () => {
   assert.deepEqual(parseBatch([]), { records: [], status: 'complete' });

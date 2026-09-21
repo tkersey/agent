@@ -33,7 +33,7 @@ const area=await mkdtemp(join(tmpdir(),'parser-synthesis-'));
 await writeFile(join(area,'parser.mjs'),tools.evidence.reference);
 const delivery=await createParserDelivery({root:area});
 const apply=['apply','decline','changed-approval'].includes(scenario);
-const input=[subject,model,trace,17n,rounds,'parser.mjs',7n,apply,localAbort];
+const input=[subject,model,trace,17n,rounds,'parser.mjs',7n,apply,localAbort,{tag:0,value:null}];
 const kernelBytes=new Uint8Array(await readFile(kernelPath)),expectedSha256=hash(kernelBytes);
 const peer=peerPath?await(await import(pathToFileURL(resolve(peerPath)))).wasmtimePeer(resolve(kernelPath),expectedSha256):null;
 let browser;

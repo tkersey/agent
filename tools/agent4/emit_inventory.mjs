@@ -69,7 +69,7 @@ const template=decodeValue(parserModel,await readFile(join(output,`${parserRoot}
 // Zero allowance prevents this unconfigured example from requesting any leaf.
 const parserArgs=encodeValue(parserInput,[
   ['0'.repeat(64),'0'.repeat(64),'0'.repeat(64),'0'.repeat(64),'agent.incremental-byte-parser/v1'],
-  template,[],1n,0n,'parser.mjs',7n,false,false,
+  template,[],1n,0n,'parser.mjs',7n,false,false,{tag:0,value:null},
 ]);
 await add(`${parserRoot}/task.args`,'initial-args',parserArgs);
 await add(`${parserRoot}/program.bpi3`,'image');

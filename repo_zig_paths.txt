@@ -36,6 +36,7 @@ src/model_invocation_tests.zig
 src/model_json.zig
 src/observation.zig
 src/parser_delivery.zig
+src/parser_intent.zig
 src/parser_proposals.zig
 src/parser_synthesis.zig
 src/participant.zig

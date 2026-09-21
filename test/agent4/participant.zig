@@ -262,3 +262,77 @@ pub fn main(init: std.process.Init) !void {
     defer init.gpa.free(bytes);
     return output(init, bytes);
 }
+
+fn incomingOwnerType(b: *source.Builder, wrapped: bool) !struct { effect: source.Id, owner: source.Id, input: source.Id } {
+    const unit = try b.scalar(void);
+    const effect = try b.effect(.{ .identity = "assessment/incoming-owner", .payload = unit, .result = unit, .external = false });
+    const owner = try b.schema(.{ .internal = .{ .resumption = .{ .effect = effect, .input = unit, .answer = unit, .handled = &.{effect}, .mode = .deep, .use = .linear, .obligations = true } } });
+    return .{ .effect = effect, .owner = owner, .input = if (wrapped) try b.schema(.{ .product = &.{owner} }) else owner };
+}
+fn incomingOwner(allocator: std.mem.Allocator, wrapped: bool) ![]u8 {
+    var b = source.Builder.init(allocator);
+    defer b.deinit();
+    const t = try incomingOwnerType(&b, wrapped);
+    const entry = try b.declare(&.{t.input}, try b.scalar(void), &.{}, &.{});
+    const value = try b.reference(b.parameter(entry, 0));
+    const owner = try b.variable(t.owner);
+    const dispose = try b.term(.{ .dispose = if (wrapped) try b.reference(owner) else value });
+    try b.define(entry, if (wrapped) try b.term(.{ .unpack_product = .{ .value = value, .variables = &.{owner}, .body = dispose } }) else dispose);
+    var compiled = try source.component.compile(allocator, b.module(entry, try b.scalar(void)), .{
+        .imports = &.{.{ .name = "demand", .reference = .{ .kind = .effect, .id = t.effect } }},
+        .exports = &.{.{ .name = "dispose", .reference = .{ .kind = .function, .id = entry } }},
+    });
+    defer compiled.deinit();
+    const bytes = try allocator.alloc(u8, try data.component.encodedLength(compiled.object));
+    errdefer allocator.free(bytes);
+    _ = try compiled.encode(allocator, bytes);
+    return bytes;
+}
+const IncomingOwner = struct {
+    var object: []const u8 = &.{};
+    var wrapped = false;
+    var assessment = true;
+    pub fn emit(c: agent.Context) !source.Module {
+        const b = c.builder;
+        const t = try incomingOwnerType(b, wrapped);
+        try c.registry.classify(t.effect, .internal);
+        const unit = try b.scalar(void);
+        const imported = try agent.participant.declare(c, .{ .instance = "incoming", .object = object, .entry = "dispose", .parameters = &.{t.input}, .result = unit, .effects = &.{.{ .symbol = "demand", .effect = t.effect }} });
+        if (assessment) try c.registry.speculate(imported, &.{});
+        const entry = try b.declare(&.{unit}, unit, &.{}, &.{});
+        try b.define(entry, try b.pure(try b.constant(void, {})));
+        return b.module(entry, unit);
+    }
+};
+test "compiled assessment rejects incoming cleanup owners directly and through aggregates" {
+    const OwnerSystem = agent.system(.{ .InitialArgs = void, .Result = void, .Failure = void, .application = IncomingOwner });
+    for ([_]bool{ false, true }) |wrapped| {
+        const bytes = try incomingOwner(a, wrapped);
+        defer a.free(bytes);
+        IncomingOwner.object = bytes;
+        IncomingOwner.wrapped = wrapped;
+        IncomingOwner.assessment = false;
+        var valid = try agent.compile(a, OwnerSystem);
+        valid.deinit();
+        IncomingOwner.assessment = true;
+        try std.testing.expectError(error.SpeculativeCapture, agent.compile(a, OwnerSystem));
+    }
+}
+
+fn inspectIncomingAllocation(allocator: std.mem.Allocator, object: data.component.Object) !void {
+    var registry = agent.admission.Registry.init(allocator);
+    defer registry.deinit();
+    const item: agent.admission.CompiledImport = .{ .function = 0, .instance = "incoming", .object = &.{}, .entry = "dispose", .effects = &.{}, .participant = true };
+    agent.participant.inspect(allocator, object, item, &registry, &.{}) catch |err| {
+        if (err == error.SpeculativeCapture) return;
+        return err;
+    };
+    return error.ExpectedRejection;
+}
+test "assessment interface graph inspection releases partial allocations" {
+    const bytes = try incomingOwner(a, true);
+    defer a.free(bytes);
+    var decoded = try data.component.decode(a, bytes);
+    defer decoded.deinit();
+    try std.testing.checkAllAllocationFailures(a, inspectIncomingAllocation, .{decoded.object});
+}

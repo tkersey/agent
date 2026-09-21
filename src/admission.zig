@@ -418,7 +418,8 @@ const Walker = struct {
     fn participant(self: *Walker, item: CompiledImport) Error!void {
         var decoded = @import("boundary").data.component.decode(self.allocator, item.object) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.InvalidSource;
         defer decoded.deinit();
-        @import("participant.zig").inspect(decoded.object, item, self.registry, self.speculative) catch |err| return switch (err) {
+        @import("participant.zig").inspect(self.allocator, decoded.object, item, self.registry, self.speculative) catch |err| return switch (err) {
+            error.OutOfMemory => error.OutOfMemory,
             error.SpeculativeEffect => error.SpeculativeEffect,
             error.SpeculativeCapture => error.SpeculativeCapture,
             error.ProtectedEffectBypass => error.ProtectedEffectBypass,

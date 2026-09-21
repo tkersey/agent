@@ -363,8 +363,9 @@ const Application = struct {
         const idle = if (retain_idle) try Retained.init(c) else null;
         const retained_effects = if (idle) |owned| (try (source.Row{ .effects = core_effects }).unionWith(b.allocator(), .{ .effects = &.{ owned.release, owned.activity } })).effects else core_effects;
         const effects = retained_effects;
-        const round = try b.declare(&.{t.state}, t.contribution, effects, &.{});
-        try c.registry.privateFunction(round);
+        const assessment_effects = &.{ t.model, t.reference, t.execution, t.release, acceptance };
+        const round = try b.declare(&.{t.state}, t.contribution, assessment_effects, &.{});
+        try c.registry.speculate(round, assessment_effects);
         const state = try b.reference(b.parameter(round, 0));
         const produced = try b.variable(t.pair.forward);
         const consumed = try b.variable(t.pair.backward);
@@ -373,7 +374,7 @@ const Application = struct {
         const delayed = try b.variable(t.pair.answer_backward);
         const task = try b.variable(t.task);
         const contribution = try b.variable(t.contribution);
-        const complete = try completion(c, t, round, acceptance, delivery, state, try b.reference(contribution));
+        const complete = try completion(c, t, round, acceptance, state, try b.reference(contribution));
         const run = try b.bind(delayed, try hyper.invoke(b, try b.reference(consumed), try b.lambda(peer, t.pair.peer_forward)), try b.bind(task, try hyper.force(b, try b.reference(delayed)), try b.bind(contribution, try hyper.force(b, try b.reference(task)), complete)));
         const next = try b.bind(consumed, try b.term(.{ .call = .{ .function = z, .arguments = &.{state} } }), run);
         try b.define(round, try b.bind(produced, try b.term(.{ .call = .{ .function = p, .arguments = &.{state} } }), next));
@@ -384,8 +385,9 @@ const Application = struct {
         const input = try b.reference(selected);
         const initial = try b.primitive(t.state, .product, &.{ input, try b.constant(bool, false), try b.constant(u64, 1), try field(b, u64, input, 4), try literal(b, ?Report, null), try literal(b, ?parser.ReferenceReply, null) }, 0);
         const call = try b.term(.{ .call = .{ .function = round, .arguments = &.{initial} } });
-        try c.registry.allowPrivateCall(entry, call, round);
-        const execute = if (idle) |owned| try owned.around(b, t.contribution, call) else call;
+        const assessed = try b.variable(t.contribution);
+        const finished = try b.bind(assessed, call, try finishAssessment(c, t, entry, delivery, input, try b.reference(assessed)));
+        const execute = if (idle) |owned| try owned.around(b, t.contribution, finished) else finished;
         const chosen = try b.variable(try c.schema(?Input));
         const dispatch = try b.term(.{ .match_sum = .{ .value = try b.reference(chosen), .cases = &.{
             .{ .variable = try b.variable(try b.scalar(void)), .body = try unresolved(b, t, "EOF behavior remains unresolved.") },
@@ -807,7 +809,7 @@ fn completeAssessment(b: *source.Builder, t: Types, assessment: Id, finished: Id
     return b.term(.{ .conditional = .{ .condition = empty, .when_true = invalid, .when_false = complete } });
 }
 
-fn completion(c: agent.Context, t: Types, owner: Id, acceptance: Id, delivery: agent.parser_delivery.Definition, state: Id, value: Id) !Id {
+fn completion(c: agent.Context, t: Types, owner: Id, acceptance: Id, state: Id, value: Id) !Id {
     const b = c.builder;
     const candidate = try b.variable(try c.schema(Constructed));
     const report = try b.variable(try c.schema(Report));
@@ -818,13 +820,13 @@ fn completion(c: agent.Context, t: Types, owner: Id, acceptance: Id, delivery: a
     const partial_report = try b.term(.{ .conditional = .{ .condition = is_partial, .when_true = try b.pure(value), .when_false = rejected } });
     return b.term(.{ .match_sum = .{ .value = value, .cases = &.{
         .{ .variable = try b.variable(try c.schema(Constraint)), .body = rejected },
-        .{ .variable = candidate, .body = try acceptCandidate(c, t, owner, acceptance, delivery, state, try b.reference(candidate)) },
+        .{ .variable = candidate, .body = try acceptCandidate(c, t, owner, acceptance, state, try b.reference(candidate)) },
         .{ .variable = report, .body = partial_report },
         .{ .variable = try b.variable(try c.schema(agent.contracts.Text(512))), .body = try b.pure(value) },
         .{ .variable = try b.variable(try c.schema(agent.parser_delivery.Result)), .body = rejected },
     } } });
 }
-fn acceptCandidate(c: agent.Context, t: Types, owner: Id, acceptance: Id, delivery: agent.parser_delivery.Definition, state: Id, constructed: Id) !Id {
+fn acceptCandidate(c: agent.Context, t: Types, owner: Id, acceptance: Id, state: Id, constructed: Id) !Id {
     const b = c.builder;
     const input = try field(b, Input, state, 0);
     const candidate = try field(b, parser.Candidate, constructed, 0);
@@ -839,7 +841,7 @@ fn acceptCandidate(c: agent.Context, t: Types, owner: Id, acceptance: Id, delive
     const finished = try b.pure(try b.primitive(t.contribution, .variant, &.{report}, 2));
     const again = try retryCompletion(c, t, owner, input, constructed, report, finished);
     const assessment = try b.variable(try c.schema(parser.Assessment));
-    const assessed = try b.term(.{ .conditional = .{ .condition = try field(b, bool, try b.reference(assessment), 0), .when_true = try completeAssessment(b, t, try b.reference(assessment), try deliverAccepted(c, t, owner, delivery, input, candidate, try b.reference(assessment))), .when_false = again } });
+    const assessed = try b.term(.{ .conditional = .{ .condition = try field(b, bool, try b.reference(assessment), 0), .when_true = try completeAssessment(b, t, try b.reference(assessment), finished), .when_false = again } });
     const outcome = try field(b, @FieldType(parser.ExecutionReply, "outcome"), try b.reference(reply), 2);
     const inspected = try b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
         .{ .variable = try b.variable(try c.schema(parser.Probe)), .body = try unresolved(b, t, "Acceptance returned a probe.") },
@@ -870,7 +872,6 @@ fn retryCompletion(c: agent.Context, t: Types, owner: Id, input: Id, constructed
         try b.primitive(try c.schema(?Report), .variant, &.{report}, 1),  try b.primitive(try c.schema(?parser.ReferenceReply), .variant, &.{try field(b, parser.ReferenceReply, constructed, 1)}, 1),
     }, 0);
     const retry = try b.term(.{ .call = .{ .function = owner, .arguments = &.{state} } });
-    try c.registry.allowPrivateCall(owner, retry, owner);
     return b.term(.{ .conditional = .{ .condition = more, .when_true = retry, .when_false = finished } });
 }
 
@@ -896,6 +897,31 @@ const ForgedConsumer = struct {
     }
 };
 
+// Only the actual assessor's returned value enters this completion boundary.
+// Imported participant reports are rejected by completion before this function.
+fn finishAssessment(c: agent.Context, t: Types, owner: Id, delivery: agent.parser_delivery.Definition, input: Id, value: Id) !Id {
+    const b = c.builder;
+    const report = try b.variable(try c.schema(Report));
+    const candidate = try field(b, parser.Candidate, try b.reference(report), 0);
+    const observation = try field(b, parser.ExecutionReply, try b.reference(report), 1);
+    const assessment = try b.variable(try c.schema(parser.Assessment));
+    const keep = try b.pure(value);
+    const complete = try b.primitive(try b.scalar(bool), .equal, &.{ try b.primitive(try b.scalar(u32), .enum_tag, &.{try field(b, parser.Completeness, candidate, 2)}, 0), try b.constant(u32, 1) }, 0);
+    const deliver = try completeAssessment(b, t, try b.reference(assessment), try deliverAccepted(c, t, owner, delivery, input, candidate, try b.reference(assessment)));
+    const valid = try b.term(.{ .conditional = .{ .condition = try field(b, bool, try b.reference(assessment), 0), .when_true = try b.term(.{ .conditional = .{ .condition = complete, .when_true = deliver, .when_false = keep } }), .when_false = keep } });
+    const inspect = try b.term(.{ .match_sum = .{ .value = try field(b, @FieldType(parser.ExecutionReply, "outcome"), observation, 2), .cases = &.{
+        .{ .variable = try b.variable(try c.schema(parser.Probe)), .body = keep },
+        .{ .variable = assessment, .body = valid },
+        .{ .variable = try b.variable(try c.schema(parser.Unavailable)), .body = keep },
+    } } });
+    return b.term(.{ .match_sum = .{ .value = value, .cases = &.{
+        .{ .variable = try b.variable(try c.schema(Constraint)), .body = keep },
+        .{ .variable = try b.variable(try c.schema(Constructed)), .body = keep },
+        .{ .variable = report, .body = inspect },
+        .{ .variable = try b.variable(try c.schema(agent.contracts.Text(512))), .body = keep },
+        .{ .variable = try b.variable(try c.schema(agent.parser_delivery.Result)), .body = keep },
+    } } });
+}
 fn deliverAccepted(c: agent.Context, t: Types, owner: Id, d: agent.parser_delivery.Definition, input: Id, candidate: Id, assessment: Id) !Id {
     const b = c.builder;
     const subject = try field(b, parser.Subject, input, 0);

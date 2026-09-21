@@ -825,3 +825,45 @@ not add a separately compiled Agent pipeline or establish general owned
 hyperfunction composition. Boundary's earlier three-part, sibling, cancellation,
 and cross-engine pipeline results remain separate evidence. Parser selection
 integration and final serial reviews remain unfinished.
+
+### Separate parser assessment from completion
+
+The parser round now returns its actual assessment to the caller. It has no
+approval, target-read, or delivery effect in its row, and Agent checks the whole
+round under its assessment policy, including linked producer/consumer/reference
+objects and bound helpers. Only the caller interprets the returned accepted report
+and enters live delivery. The existing participant-report rejection remains in
+front of that boundary; a forged complete assessment does not become trusted by
+passing through the new return path. This is the prerequisite authority split for
+parser selection, not integration of the generic selector or multiple alternatives.
+
+This exposed a conservative compiled-participant restriction: merely declaring a
+local obligation-bearing resumption previously rejected an assessment. Internal
+one-shot resumptions may now retain locally created cleanup. A finite worklist
+checks imported and exported function/effect interfaces, recursively including
+callable parameters, results, and capture bounds, and rejects incoming or escaping
+obligation-bearing resumptions. Abstract resources and suspension packages remain
+unsupported in compiled assessment objects; multi-shot restrictions remain.
+Boundary still checks actual ownership/captures and source-free bindings. Agent
+still checks every object's effects and all bound helper bodies, including cleanup;
+no protected tool profile was weakened.
+
+The added normal-compilation negatives reject both direct and aggregate-wrapped
+incoming cleanup owners, while their ordinary non-assessment neighbors admit.
+Allocation-failure tests cover the new graph traversal and its partial storage.
+Focused admission passes 14 tests; the authoring aggregate passes 292 steps and
+130 tests. The actual parser repair run completes with two synthetic model replies,
+539 isolated candidate executions, one target read, and no approval/write in
+artifact mode. Forged assessment performs no external work. Local abandonment
+releases the nested producer (90), then its affected retained owner (5), resumes
+unrelated work (57), and finally releases that owner (50). No paid model study ran.
+
+The approval/apply variant passed native, Node/WASM, independent Wasmtime and
+Chromium Worker execution, continuing each destination's actual returned State:
+20 transfers, 21 destroyed Workers, one target read, one approval and one
+fixture-confined write. The 21,573-byte Program is 212 bytes larger than the prior
+21,361-byte parser image. This is an image-size observation, not a latency or
+strategy-quality result. The generic World kernel and dependency tuple did not
+change in this slice.
+The regenerated use archive passed all three extracted-package command tests
+(including qualified parser and Inquiry execution), with no skipped tests.

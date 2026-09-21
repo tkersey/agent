@@ -112,7 +112,7 @@ fn bindings(c: Context, spec: Specification, object: data.component.Object) !voi
         .functions = spec.functions,
         .participant = true,
     };
-    try inspect(object, temporary, c.registry, null);
+    try inspect(c.builder.allocator(), object, temporary, c.registry, null);
 }
 
 fn roleOf(object: data.component.Object, item: admission.CompiledImport, registry: *const admission.Registry, effect: Id) !admission.Role {
@@ -129,7 +129,8 @@ fn roleOf(object: data.component.Object, item: admission.CompiledImport, registr
 /// Inspect every object definition, including code hidden behind local handlers.
 /// Direct protected emissions/handlers are forbidden; only checked source helper
 /// imports can implement them. Assessment also checks every bound helper body.
-pub fn inspect(object: data.component.Object, item: admission.CompiledImport, registry: *const admission.Registry, allowed: ?[]const Id) !void {
+pub fn inspect(allocator: std.mem.Allocator, object: data.component.Object, item: admission.CompiledImport, registry: *const admission.Registry, allowed: ?[]const Id) !void {
+    if (allowed != null) try assessmentInterfaces(allocator, object);
     for (object.program.effects, 0..) |_, id| {
         const role = try roleOf(object, item, registry, id);
         if (allowed) |effects| {
@@ -163,9 +164,66 @@ pub fn inspect(object: data.component.Object, item: admission.CompiledImport, re
                 return error.SpeculativeCapture,
             .resumption => |r| {
                 if (r.use == .multi) return error.InvalidParticipant;
-                if (allowed != null and r.obligations) return error.SpeculativeCapture;
+                // Local one-shot cleanup obligations are permitted. Boundary checks
+                // their capture/consumption; interfaces below exclude incoming owners.
             },
             .computation => |c| if (c.use == .multi) return error.InvalidParticipant,
+            else => {},
+        }
+    }
+}
+
+// The object may create local cleanup scopes, but assessment cannot import or
+// export a live obligation through a callable, captured aggregate, or effect.
+// Visit the finite schema graph, including recursive callable capture bounds.
+fn assessmentInterfaces(allocator: std.mem.Allocator, object: data.component.Object) !void {
+    const program = object.program;
+    var queue: std.ArrayList(Id) = .empty;
+    defer queue.deinit(allocator);
+    var seen: std.AutoHashMapUnmanaged(Id, void) = .empty;
+    defer seen.deinit(allocator);
+    for ([_][]const data.component.Symbol{ object.imports, object.exports }) |symbols| for (symbols) |symbol| {
+        switch (symbol.reference.kind) {
+            .function => {
+                const f = program.functions[@intCast(symbol.reference.id)];
+                for (f.inputs) |slot| try queue.append(allocator, f.layout.slots[@intCast(slot)]);
+                try queue.append(allocator, f.result);
+            },
+            .effect => {
+                const e = program.effects[@intCast(symbol.reference.id)];
+                try queue.appendSlice(allocator, &.{ e.payload, e.result });
+                try queue.appendSlice(allocator, e.bodies);
+            },
+            else => return error.InvalidParticipant,
+        }
+    };
+    var index: usize = 0;
+    while (index < queue.items.len) : (index += 1) {
+        const id = queue.items[index];
+        if (id >= program.schemas.len) return error.InvalidParticipant;
+        const visited = try seen.getOrPut(allocator, id);
+        if (visited.found_existing) continue;
+        switch (program.schemas[@intCast(id)]) {
+            .product, .sum => |fields| try queue.appendSlice(allocator, fields),
+            .seq => |element| try queue.append(allocator, element),
+            .vector => |v| try queue.append(allocator, v.element),
+            .array => |v| try queue.append(allocator, v.element),
+            .internal => |internal| switch (internal) {
+                .resumption => |r| {
+                    if (r.obligations) return error.SpeculativeCapture;
+                    try queue.appendSlice(allocator, &.{ r.input, r.answer });
+                    try queue.appendSlice(allocator, r.capture_bound);
+                },
+                .computation => |c| {
+                    try queue.appendSlice(allocator, c.parameters);
+                    try queue.appendSlice(allocator, c.capture_bound);
+                    try queue.append(allocator, c.result);
+                },
+                .cell => |c| try queue.append(allocator, c.element),
+                .borrowed => |v| try queue.append(allocator, v.value),
+                .abstract_resource, .suspension_package => return error.SpeculativeCapture,
+                else => {},
+            },
             else => {},
         }
     }

@@ -111,6 +111,26 @@ pub fn build(b: *std.Build) void {
     const participants = b.step("check-participants", "Check compiled internal participant admission");
     g.testModule(participants, g.module("test/agent4/participant.zig"));
     check.dependOn(participants);
+    const selection_images = b.step("selection-images", "Emit checked recursive numerical selection");
+    const selection_check = b.step("check-selection", "Check generic selection construction and admission");
+    g.testModule(selection_check, g.module("test/agent4/selection.zig"));
+    check.dependOn(selection_check);
+    const selection_emitter = g.emitter("recursive-selection", g.module("test/agent4/recursive_selection.zig"));
+    const selection_producer = b.addRunArtifact(selection_emitter);
+    selection_producer.addArg("producer");
+    const selection_object = selection_producer.captureStdOut(.{});
+    selection_images.dependOn(&b.addInstallFileWithDir(selection_object, .prefix, "agent4/selection/producer.bmo1").step);
+    for ([_][]const u8{ "link", "pure", "invalid" }) |mode| {
+        const linked = b.addRunArtifact(selection_emitter);
+        linked.addArg(mode);
+        linked.addFileArg(selection_object);
+        selection_images.dependOn(&b.addInstallFileWithDir(linked.captureStdOut(.{}), .prefix, b.fmt("agent4/selection/{s}.bpi3", .{mode})).step);
+    }
+    check.dependOn(selection_images);
+    const selection_negative = b.addSystemCommand(&.{ "node", "test/agent4/selection_negative.mjs" });
+    selection_negative.addArtifactArg(selection_emitter);
+    selection_negative.addFileArg(selection_object);
+    selection_images.dependOn(&selection_negative.step);
     const parser_tools = b.step("check-parser-tools", "Check typed parser tool bindings");
     g.testModule(parser_tools, g.module("test/agent4/parser_tools.zig"));
     check.dependOn(parser_tools);
@@ -343,6 +363,7 @@ pub fn build(b: *std.Build) void {
 
     const integration = b.step("check-agent4-integration", "Execute consumer proofs under the selected World");
     const parser_intent = b.step("check-parser-intent", "Check EOF clarification through fresh World states");
+    const selection_runtime = b.step("check-selection-runtime", "Check recursive assessment and completion isolation");
     const compiled_tools_check = b.step("check-compiled-tools", "Execute one compiled text tool in standalone and Agent callers");
     const components_check = b.step("check-component-tools", "Reuse three effectful objects in Agent and two standalone Programs");
     const component_objects = g.emitter("agent4-component-objects", g.module("test/agent4/component_objects.zig"));
@@ -370,6 +391,10 @@ pub fn build(b: *std.Build) void {
         intent_run.step.dependOn(parser_episode);
         intent_run.step.dependOn(&runtime_guard.step);
         parser_intent.dependOn(&intent_run.step);
+        const selection_run = b.addSystemCommand(&.{ "node", "test/agent4/recursive_selection.mjs", runtime_path });
+        selection_run.step.dependOn(selection_images);
+        selection_run.step.dependOn(&runtime_guard.step);
+        selection_runtime.dependOn(&selection_run.step);
         const text_check = b.addSystemCommand(&.{ "node", "test/agent4/text_tool_runtime.mjs" });
         text_check.addFileArg(text_object.getEmittedBin());
         text_check.addFileArg(text_link.getEmittedBin());
@@ -396,6 +421,7 @@ pub fn build(b: *std.Build) void {
         } else browser_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
         runtime_work.dependOn(parser_intent);
+        runtime_work.dependOn(selection_runtime);
         const repository_emitter_module = g.module("test/agent4/repository_replacement_emit.zig");
         repository_emitter_module.addImport("repository_app", g.module("test/consumers/repository/application.zig"));
         const repository_emitter = g.emitter("repository-replacement", repository_emitter_module);
@@ -560,6 +586,7 @@ pub fn build(b: *std.Build) void {
         repository_application.dependOn(&missing.step);
         integration.dependOn(&missing.step);
         parser_intent.dependOn(&missing.step);
+        selection_runtime.dependOn(&missing.step);
         economy.dependOn(&missing.step);
     }
     const pure = b.addSystemCommand(&.{ "node", "tools/agent4/check.mjs", "authoring" });

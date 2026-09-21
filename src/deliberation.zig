@@ -1,4 +1,4 @@
-//! Internal multi-shot evaluation over ordinary Boundary source computations.
+//! Scoped candidate evaluation: multi-shot exploration and sequential assessment.
 //! Alternatives and assessments are program values; no host snapshot is cloned.
 const source = @import("boundary").computation;
 pub const Id = source.Id;
@@ -192,4 +192,86 @@ pub fn choose(
         .capability = capability,
         .payload = alternatives,
     } });
+}
+
+/// Sequential assessment of immutable candidate data. Selection returns ordinary
+/// evidence, never an approval or the caller's completion continuation.
+pub const SelectionSpec = struct {
+    candidate: Id,
+    assessment: Id,
+    maximum: u32,
+    assess: Id,
+    choose: Id,
+    allowed: []const Id = &.{},
+    failure: Id,
+};
+pub const SelectionTypes = struct { candidates: Id, assessed: Id, assessments: Id, choice: Id, result: Id };
+pub const Selection = struct { function: Id, types: SelectionTypes };
+pub fn selectionTypes(b: *source.Builder, candidate: Id, assessment: Id, maximum: u32) source.Error!SelectionTypes {
+    if (candidate >= b.schemas.items.len or assessment >= b.schemas.items.len) return error.InvalidReference;
+    if (maximum == 0) return error.Capacity;
+    const row = try b.schema(.{ .product = &.{ candidate, assessment } });
+    const rows = try b.schema(.{ .vector = .{ .element = row, .maximum = maximum } });
+    return .{ .candidates = try b.schema(.{ .vector = .{ .element = candidate, .maximum = maximum } }), .assessed = row, .assessments = rows, .choice = try b.schema(.{ .sum = &.{ try b.scalar(u64), try b.scalar(void) } }), .result = try b.schema(.{ .sum = &.{ row, rows } }) };
+}
+
+/// assess: Candidate -> Assessment with the admitted assessment effects.
+/// choose: [(Candidate, Assessment)] -> Index | Unresolved, pure.
+/// Every candidate is assessed in order, including unavailable/failed data. The
+/// consumer owns interpretation of that data; no scalar scoring is imposed here.
+pub fn selectSequential(c: anytype, spec: SelectionSpec) !Selection {
+    const b = c.builder;
+    const cache = try b.specialization(Selection, "agent.deliberation.select-sequential/v1", .{spec});
+    if (cache.cached) |d| return d;
+    const d = try selectionTypes(b, spec.candidate, spec.assessment, spec.maximum);
+    try selectionFunction(b, spec.assess, spec.candidate, spec.assessment, spec.allowed);
+    try selectionFunction(b, spec.choose, d.assessments, d.choice, &.{});
+    try c.registry.speculate(spec.assess, spec.allowed);
+    const integer = try b.scalar(u64);
+    const unit = try b.scalar(void);
+    const loop = try b.declare(&.{ d.candidates, integer, d.assessments }, d.result, spec.allowed, &.{});
+    const candidates = try b.reference(b.parameter(loop, 0));
+    const index = try b.reference(b.parameter(loop, 1));
+    const collected = try b.reference(b.parameter(loop, 2));
+    const candidate = try b.variable(spec.candidate);
+    const assessment = try b.variable(spec.assessment);
+    const row = try b.primitive(d.assessed, .product, &.{ try b.reference(candidate), try b.reference(assessment) }, 0);
+    const appended = try b.value(.{ .schema = d.assessments, .expression = .{ .primitive = .{
+        .opcode = .sequence_append,
+        .operands = &.{ collected, row },
+        .failures = &.{.{ .kind = .capacity_exceeded, .value = try b.failureLiteral(spec.failure) }},
+    } } });
+    const next = try b.value(.{ .schema = integer, .expression = .{ .primitive = .{
+        .opcode = .integer_add,
+        .operands = &.{ index, try b.constant(u64, 1) },
+        .failures = &.{.{ .kind = .arithmetic_overflow, .value = try b.failureLiteral(spec.failure) }},
+    } } });
+    const proceed = try b.bind(assessment, try b.term(.{ .call = .{ .function = spec.assess, .arguments = &.{try b.reference(candidate)} } }), try b.term(.{ .call = .{ .function = loop, .arguments = &.{ candidates, next, appended } } }));
+    const choice = try b.variable(d.choice);
+    const chosen = try b.variable(integer);
+    const selected = try b.variable(d.assessed);
+    const unresolved = try b.pure(try b.primitive(d.result, .variant, &.{collected}, 1));
+    const lookup = try b.primitive(try b.schema(.{ .sum = &.{ unit, d.assessed } }), .sequence_get, &.{ collected, try b.reference(chosen) }, 0);
+    const checked = try b.term(.{ .match_sum = .{ .value = lookup, .cases = &.{
+        .{ .variable = try b.variable(unit), .body = unresolved },
+        .{ .variable = selected, .body = try b.pure(try b.primitive(d.result, .variant, &.{try b.reference(selected)}, 0)) },
+    } } });
+    const resolve = try b.bind(choice, try b.term(.{ .call = .{ .function = spec.choose, .arguments = &.{collected} } }), try b.term(.{ .match_sum = .{ .value = try b.reference(choice), .cases = &.{
+        .{ .variable = chosen, .body = checked }, .{ .variable = try b.variable(unit), .body = unresolved },
+    } } }));
+    const optional = try b.schema(.{ .sum = &.{ unit, spec.candidate } });
+    try b.define(loop, try b.term(.{ .match_sum = .{ .value = try b.primitive(optional, .sequence_get, &.{ candidates, index }, 0), .cases = &.{
+        .{ .variable = try b.variable(unit), .body = resolve }, .{ .variable = candidate, .body = proceed },
+    } } }));
+    const function = try b.declare(&.{d.candidates}, d.result, spec.allowed, &.{});
+    try b.define(function, try b.term(.{ .call = .{ .function = loop, .arguments = &.{ try b.reference(b.parameter(function, 0)), try b.constant(u64, 0), try b.primitive(d.assessments, .sequence, &.{}, 0) } } }));
+    return cache.finish(b, .{ .function = function, .types = d });
+}
+fn selectionFunction(b: *source.Builder, function: Id, input: Id, output: Id, allowed: []const Id) source.Error!void {
+    if (function >= b.functions.items.len) return error.InvalidReference;
+    const f = b.functions.items[@intCast(function)];
+    if (f.parameters.len != 1 or f.result != output) return error.TypeMismatch;
+    if (f.parameters[0] >= b.variables.items.len) return error.InvalidReference;
+    if (b.variables.items[@intCast(f.parameters[0])] != input) return error.TypeMismatch;
+    for (f.effects) |effect| if (@import("std").mem.indexOfScalar(Id, allowed, effect) == null) return error.InvalidEffect;
 }

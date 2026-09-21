@@ -755,3 +755,47 @@ normal authenticated runtime. `check-parser-eof-executor` owns the real alternat
 executor test. Packaged CLI tests pass. Broader constraint routing, generic selection,
 owned channel composition, complete observation history/revalidation, matched strategy
 and runtime economics, and serial reviews remain open.
+
+## Sequential consumer-supplied selection
+
+The existing deliberation owner now provides `selectionTypes` and
+`selectSequential`. An application supplies candidate/assessment schemas, an explicit
+maximum, an assessor function, a pure choice function and an assessment-effect
+allow-list. The generated loop assesses each candidate in order and retains paired
+candidate/assessment rows. Choice returns an index or unresolved; invalid indices
+return unresolved with all rows. The constructor exposes no executable function
+until construction completes. No scalar scoring law, approval or completion authority
+is implied by a selected row.
+
+The actual assessor is registered with Agent's protected admission. Its source,
+callable origins, imported participant code and bound helpers remain subject to the
+existing transitive checks. Including write authority in the declared allow-list
+does not make it legal in assessment. The ordinary caller retains its real completion
+continuation; the selection interface does not receive it. Candidate extraction also
+retains Boundary's ordinary copy/use and borrow checking.
+
+`test/agent4/recursive_selection.zig` supplies the non-agent numerical witness.
+An independently compiled unchanged producer cooperates with the assessor through
+public task-valued hyperfunctions: assessor asks producer, producer asks back, an
+external square observation completes, then both callers perform distinct non-tail
+work. Changing the consumer's assessment policy changes the selected candidate from
+5 to 2 on identical producer bytes and inputs. The default metric is x*x+x+5; the
+alternate consumer compares its complement. A guarded branch leaves an overflowing
+unused complement unevaluated. A pure-assessment variant requests no observation;
+completion remains a separate fixture write.
+
+Eight runtime cases pass, including empty input, insufficient data, an out-of-range
+choice and an explicitly unestablished assessment. All assessment-time observations
+verify that the completion file does not exist. Selected cases create it once;
+unresolved cases never create it. A callable alias attempting to invoke the real
+write helper from assessment rejects with SpeculativeEffect before an image is
+published. The normal numerical Program is 1,564 bytes. Native, Node, Wasmtime and
+Chromium agree using actual destination states; 74 Workers are destroyed across the
+cases. This is a finite mechanism witness, not an optimality or live-quality claim.
+
+`check-selection` includes construction/allocation-failure and invalid-schema/capacity
+checks. `check-selection-runtime` runs the numerical flow against an authenticated
+World. The aggregate with this runtime lane passes 289 steps / 125 tests. Existing
+parser behavior is unchanged; integrating this generic selection API into its
+consumer-supplied assessment strategy remains open, as do the other stated
+composition, regression-history, economic and serial-review requirements.

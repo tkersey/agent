@@ -799,3 +799,29 @@ World. The aggregate with this runtime lane passes 289 steps / 125 tests. Existi
 parser behavior is unchanged; integrating this generic selection API into its
 consumer-supplied assessment strategy remains open, as do the other stated
 composition, regression-history, economic and serial-review requirements.
+
+### Agent adoption of composed exchange owners
+
+Agent now authenticates Boundary `5a8aa24bb179bc8defaa896ea776605261ed6539`
+(Git tree `41c292f1e16b96bd6d32dfe8273cb656286b0106`) through its ordinary
+archive, package, source inventory, and API checks. World remains
+`5c3dea1c0443f026b2451581de77ec2e51085e57`; rebuilding it against that Boundary
+source produced the same `df7fe1ae0ed0de7b2976c98b1534d1d55f4c341b7148837ce32f42ed8d011084`
+kernel. Offline setup verification passed. No runtime or wire extension was needed.
+
+`test/agent4/composed_owners.zig` uses the normal `agent.compile` entry point to
+start two owned exchanges, consume them into a pipeline, and dispose the
+successor. Admission permits read cleanup, including inside an assessment;
+it rejects consuming that successor twice and rejects write authority reachable
+through retained cleanup during assessment even when the effect is explicitly
+listed. The otherwise identical non-assessment write case admits, so rejection
+is not an unsupported-shape shortcut.
+
+`zig build check-composed-owners-runtime -Dworld-runtime=RUNTIME -Dworld-source=SOURCE`
+executes the 994-byte image on the authenticated generic kernel. Thirteen fresh
+Node/WASM restores include both cleanup suspensions; owners release once in order
+`2, 1`, and terminal working live memory is zero. This focused adoption test does
+not add a separately compiled Agent pipeline or establish general owned
+hyperfunction composition. Boundary's earlier three-part, sibling, cancellation,
+and cross-engine pipeline results remain separate evidence. Parser selection
+integration and final serial reviews remain unfinished.

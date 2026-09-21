@@ -8,10 +8,13 @@ const parser = agent.parser_synthesis;
 const P = parser.proposals.Profile;
 const Id = source.Id;
 pub const Input = struct { subject: parser.Subject, model: P.Request, trace: parser.Trace, occurrence: u64, rounds: u64, target: agent.contracts.Text(256), principal: u64, apply: bool, abort_nested: bool };
-const State = struct { input: Input, successor: bool, version: u64, remaining: u64, prior: ?Report, reference: ?parser.ReferenceReply };
+// Round identifies the contribution occurrence. Source proposals mint that
+// version; experiments retain the prior candidate's exact version and content.
+const State = struct { input: Input, successor: bool, round: u64, remaining: u64, prior: ?Report, reference: ?parser.ReferenceReply };
 const Constraint = struct { state: State, observation: parser.ReferenceReply };
 const Constructed = struct { candidate: parser.Candidate, reference: parser.ReferenceReply };
-pub const Report = struct { candidate: parser.Candidate, observation: parser.ExecutionReply };
+const Counterexample = struct { observation: parser.ExecutionReply, experiment: ?parser.proposals.Experiment };
+pub const Report = struct { candidate: parser.Candidate, observation: parser.ExecutionReply, experiment: ?parser.proposals.Experiment = null, counterexample: ?Counterexample = null };
 pub const Contribution = union(enum(u32)) {
     reference: Constraint = 0,
     candidate: Constructed = 1,
@@ -46,7 +49,7 @@ fn types(b: *source.Builder) !Types {
     const task = try b.reserveSchema();
     const pair = try hyper.pairWith(b, task, task, &.{ state, contribution });
     try b.defineSchema(task, .{ .internal = .{ .computation = .{ .parameters = &.{}, .result = contribution, .effects = &.{ model, reference, execution, release }, .capture_bound = &.{ state, pair.peer_forward, pair.peer_backward } } } });
-    const sample = try b.declare(&.{ state, try agent.contracts.schema(Constraint, b) }, contribution, &.{model}, &.{});
+    const sample = try b.declare(&.{ state, try agent.contracts.schema(Constraint, b) }, contribution, &.{ model, execution }, &.{});
     const probe = try b.declare(&.{ state, try agent.contracts.schema(parser.Candidate, b) }, try agent.contracts.schema(parser.ExecutionReply, b), &.{execution}, &.{});
     const reference_factory = try b.declare(&.{state}, pair.backward, &.{}, &.{});
     return cache.finish(b, .{ .release = release, .reference_factory = reference_factory, .input = input, .state = state, .contribution = contribution, .task = task, .pair = pair, .model = model, .reference = reference, .execution = execution, .sample = sample, .probe = probe });
@@ -137,6 +140,7 @@ fn afterContribution(b: *source.Builder, t: Types, q: hyper.Query, value: Id, co
         if (index == 3) body = try b.pure(try b.primitive(t.contribution, .variant, &.{try b.reference(variable)}, 3));
         if (!consumer and index == 0) body = try b.term(.{ .call = .{ .function = t.sample, .arguments = &.{ q.state, try b.reference(variable) } } });
         if (consumer and index == 1) body = try assessAndContinue(b, t, q, try b.reference(variable));
+        if (consumer and index == 2) body = try experimentAndContinue(b, t, q, try b.reference(variable));
         cases[index] = .{ .variable = variable, .body = body };
     }
     return b.term(.{ .match_sum = .{ .value = value, .cases = &.{
@@ -220,13 +224,13 @@ fn defineSample(c: agent.Context, t: Types) !void {
     const answer = try b.variable(try c.schema(parser.proposals.Proposal));
     const rejected = try b.variable(try c.schema(P.InterpretationFailure));
     const interpreted = try b.term(.{ .match_sum = .{ .value = try b.reference(result), .cases = &.{
-        .{ .variable = answer, .body = try candidateProposal(c, t, try b.reference(answer), try field(b, u64, current, 2), reference_reply) },
+        .{ .variable = answer, .body = try candidateProposal(c, t, try b.reference(answer), current, reference_reply) },
         .{ .variable = rejected, .body = try unresolved(b, t, "The model response was rejected.") },
     } } });
     const summarized = try appendSummary(c, try field(b, P.Request, input, 1), try b.reference(rows));
     const request_slot = try b.variable(try c.schema(P.Request));
     const request = try b.reference(request_slot);
-    const sampled_call = try b.bind(result, try agent.responders.invokeModel(P, c, try b.constant(void, {}), false, request, try offered(c, try field(b, u64, current, 2))), interpreted);
+    const sampled_call = try b.bind(result, try agent.responders.invokeModel(P, c, try b.constant(void, {}), false, request, try offered(c, current)), interpreted);
     const sampled = try b.bind(request_slot, try revisionPrompt(c, summarized, current), sampled_call);
     const dispatch = try b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
         .{ .variable = rows, .body = sampled },
@@ -237,8 +241,9 @@ fn defineSample(c: agent.Context, t: Types) !void {
     }, 0);
     try b.define(t.sample, try b.term(.{ .conditional = .{ .condition = matching, .when_true = dispatch, .when_false = try unresolved(b, t, "Reference occurrence is stale.") } }));
 }
-fn candidateProposal(c: agent.Context, t: Types, answer: Id, version: Id, reference_reply: Id) !Id {
+fn candidateProposal(c: agent.Context, t: Types, answer: Id, state: Id, reference_reply: Id) !Id {
     const b = c.builder;
+    const version = try field(b, u64, state, 2);
     var cases: [5]struct { variable: Id, body: Id } = undefined;
     inline for (std.meta.fields(parser.proposals.Proposal), 0..) |item, index| {
         const variable = try b.variable(try c.schema(item.type));
@@ -250,7 +255,9 @@ fn candidateProposal(c: agent.Context, t: Types, answer: Id, version: Id, refere
             }, 0);
             const constructed = try b.primitive(try c.schema(Constructed), .product, &.{ candidate, reference_reply }, 0);
             body = try b.pure(try b.primitive(t.contribution, .variant, &.{constructed}, 1));
+            if (index == 1) body = try rejectUnchangedFailure(c, t, state, code, body);
         }
+        if (index == 2) body = try proposedExperiment(c, t, state, try b.reference(variable));
         if (index == 4) body = try b.pure(try b.primitive(t.contribution, .variant, &.{try field(b, parser.proposals.Explanation, try b.reference(variable), 0)}, 3));
         cases[index] = .{ .variable = variable, .body = body };
     }
@@ -258,6 +265,61 @@ fn candidateProposal(c: agent.Context, t: Types, answer: Id, version: Id, refere
         .{ .variable = cases[0].variable, .body = cases[0].body }, .{ .variable = cases[1].variable, .body = cases[1].body },
         .{ .variable = cases[2].variable, .body = cases[2].body }, .{ .variable = cases[3].variable, .body = cases[3].body },
         .{ .variable = cases[4].variable, .body = cases[4].body },
+    } } });
+}
+fn rejectUnchangedFailure(c: agent.Context, t: Types, state: Id, code: Id, accepted: Id) !Id {
+    const b = c.builder;
+    const prior = try b.variable(try c.schema(Report));
+    const old = try field(b, parser.Code, try field(b, parser.Candidate, try b.reference(prior), 0), 0);
+    const same = try b.primitive(try b.scalar(bool), .equal, &.{ try b.primitive(try b.scalar(i8), .blob_compare, &.{ code, old }, 0), try b.constant(i8, 0) }, 0);
+    const rejected = try b.term(.{ .conditional = .{ .condition = same, .when_true = try unresolved(b, t, "A known counterexample still applies to this unchanged source."), .when_false = accepted } });
+    const counterexample = try b.term(.{ .match_sum = .{ .value = try field(b, ?Counterexample, try b.reference(prior), 3), .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = accepted },
+        .{ .variable = try b.variable(try c.schema(Counterexample)), .body = rejected },
+    } } });
+    return b.term(.{ .match_sum = .{ .value = try field(b, ?Report, state, 4), .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = accepted },
+        .{ .variable = prior, .body = counterexample },
+    } } });
+}
+fn makeReport(b: *source.Builder, candidate: Id, observation: Id, experiment: Id, previous: Id) !Id {
+    const result = try agent.contracts.schema(Report, b);
+    const f = try b.declare(&.{ try agent.contracts.schema(parser.Candidate, b), try agent.contracts.schema(parser.ExecutionReply, b), try agent.contracts.schema(?parser.proposals.Experiment, b), try agent.contracts.schema(?Counterexample, b) }, result, &.{}, &.{});
+    const c = try b.reference(b.parameter(f, 0));
+    const o = try b.reference(b.parameter(f, 1));
+    const e = try b.reference(b.parameter(f, 2));
+    const prior = try b.reference(b.parameter(f, 3));
+    const evidence = try b.primitive(try agent.contracts.schema(Counterexample, b), .product, &.{ o, e }, 0);
+    const saved = try b.primitive(try agent.contracts.schema(?Counterexample, b), .variant, &.{evidence}, 1);
+    const unchanged = try b.pure(try b.primitive(result, .product, &.{ c, o, e, prior }, 0));
+    const failed = try b.pure(try b.primitive(result, .product, &.{ c, o, e, saved }, 0));
+    const probe = try b.variable(try agent.contracts.schema(parser.Probe, b));
+    const assessment = try b.variable(try agent.contracts.schema(parser.Assessment, b));
+    const outcome = try field(b, @FieldType(parser.ExecutionReply, "outcome"), o, 2);
+    try b.define(f, try b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
+        .{ .variable = probe, .body = try b.term(.{ .conditional = .{ .condition = try field(b, bool, try b.reference(probe), 1), .when_true = unchanged, .when_false = failed } }) },
+        .{ .variable = assessment, .body = try b.term(.{ .conditional = .{ .condition = try field(b, bool, try b.reference(assessment), 0), .when_true = unchanged, .when_false = failed } }) },
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Unavailable, b)), .body = unchanged },
+    } } }));
+    return b.term(.{ .call = .{ .function = f, .arguments = &.{ candidate, observation, experiment, previous } } });
+}
+
+fn proposedExperiment(c: agent.Context, t: Types, state: Id, experiment: Id) !Id {
+    const b = c.builder;
+    const prior = try b.variable(try c.schema(Report));
+    const candidate = try field(b, parser.Candidate, try b.reference(prior), 0);
+    const input = try field(b, Input, state, 0);
+    const occurrence = try arithmetic(b, .integer_add, try field(b, u64, input, 3), try field(b, u64, state, 2));
+    const check = try b.primitive(try c.schema(@FieldType(parser.ExecutionRequest, "check")), .variant, &.{experiment}, 2);
+    const request = try b.primitive(try c.schema(parser.ExecutionRequest), .product, &.{ try field(b, parser.Subject, input, 0), occurrence, candidate, check }, 0);
+    const observation = try b.variable(try c.schema(parser.ExecutionReply));
+    const report_slot = try b.variable(try c.schema(Report));
+    const report = try b.reference(report_slot);
+    const recorded = try makeReport(b, candidate, try b.reference(observation), try b.primitive(try c.schema(?parser.proposals.Experiment), .variant, &.{experiment}, 1), try field(b, ?Counterexample, try b.reference(prior), 3));
+    const execute = try b.bind(observation, try parser.execute(c, .{ .reference = t.reference, .execution = t.execution }, request, try b.constant(void, {})), try b.bind(report_slot, recorded, try b.pure(try b.primitive(t.contribution, .variant, &.{report}, 2))));
+    return b.term(.{ .match_sum = .{ .value = try field(b, ?Report, state, 4), .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = try unresolved(b, t, "An experiment requires an existing candidate.") },
+        .{ .variable = prior, .body = execute },
     } } });
 }
 fn defineProbe(c: agent.Context, t: Types) !void {
@@ -511,11 +573,14 @@ fn arithmetic(b: *source.Builder, opcode: boundary.data.program.Opcode, left: Id
         .failures = &.{.{ .kind = .arithmetic_overflow, .value = try b.failureLiteral(try b.constant(void, {})) }},
     } } });
 }
-fn offered(c: agent.Context, version: Id) !Id {
+fn offered(c: agent.Context, state: Id) !Id {
+    const version = try field(c.builder, u64, state, 2);
     const first = try c.builder.primitive(try c.builder.scalar(bool), .equal, &.{ version, try c.builder.constant(u64, 1) }, 0);
     const permit_complete = try c.builder.primitive(try c.builder.scalar(bool), .equal, &.{ first, try c.builder.constant(bool, false) }, 0);
+    const prior_tag = try c.builder.primitive(try c.builder.scalar(u64), .variant_tag, &.{try field(c.builder, ?Report, state, 4)}, 0);
+    const permit_experiment = try c.builder.primitive(try c.builder.scalar(bool), .equal, &.{ prior_tag, try c.builder.constant(u64, 1) }, 0);
     return c.builder.primitive(try c.schema([5]bool), .sequence, &.{
-        try c.builder.constant(bool, true),  permit_complete,                    try c.builder.constant(bool, false),
+        try c.builder.constant(bool, true),  permit_complete,                    permit_experiment,
         try c.builder.constant(bool, false), try c.builder.constant(bool, true),
     }, 0);
 }
@@ -532,17 +597,108 @@ fn revisionPrompt(c: agent.Context, request: Id, state: Id) !Id {
     } } });
     const observation = try field(b, parser.ExecutionReply, try b.reference(prior), 1);
     const outcome = try field(b, @FieldType(parser.ExecutionReply, "outcome"), observation, 2);
-    const revised = try b.bind(prefix, try feedbackText(c, outcome), try b.pure(try appendMessage(c, request, content)));
+    const informed = try b.variable(try c.schema(P.Request));
+    const retained = try b.variable(try c.schema(P.Request));
+    const revised = try b.bind(retained, try counterexamplePrompt(c, request, try field(b, ?Counterexample, try b.reference(prior), 3)), try b.bind(informed, try experimentPrompt(c, try b.reference(retained), try field(b, ?parser.proposals.Experiment, try b.reference(prior), 2), "The last real probe used your experiment on the unchanged candidate. Hex bytes: "), try b.bind(prefix, try feedbackText(c, outcome), try b.pure(try appendMessage(c, try b.reference(informed), content)))));
     return b.term(.{ .match_sum = .{ .value = try field(b, ?Report, state, 4), .cases = &.{
         .{ .variable = try b.variable(try b.scalar(void)), .body = try b.pure(request) },
         .{ .variable = prior, .body = revised },
     } } });
 }
+fn counterexamplePrompt(c: agent.Context, request: Id, optional: Id) !Id {
+    const b = c.builder;
+    const evidence = try b.variable(try c.schema(Counterexample));
+    const experiment = try field(b, ?parser.proposals.Experiment, try b.reference(evidence), 1);
+    const has_experiment = try b.primitive(try b.scalar(bool), .equal, &.{ try b.primitive(try b.scalar(u64), .variant_tag, &.{experiment}, 0), try b.constant(u64, 1) }, 0);
+    const described = try b.term(.{ .conditional = .{
+        .condition = has_experiment,
+        .when_true = try experimentPrompt(c, request, experiment, "An earlier FAILED experiment remains a counterexample for this unchanged candidate. Hex bytes: "),
+        .when_false = try b.pure(try appendMessage(c, request, try c.literal(P.MessageText, .{ .bytes = "An earlier required check FAILED for this unchanged candidate. A passing additional probe does not discharge that counterexample." }))),
+    } });
+    return b.term(.{ .match_sum = .{ .value = optional, .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = try b.pure(request) },
+        .{ .variable = evidence, .body = described },
+    } } });
+}
+
+fn experimentPrompt(c: agent.Context, request: Id, optional: Id, prefix: []const u8) !Id {
+    const b = c.builder;
+    const experiment = try b.variable(try c.schema(parser.proposals.Experiment));
+    const value = try b.reference(experiment);
+    const finalized = try b.variable(try c.schema(P.MessageText));
+    const final_text = try b.term(.{ .conditional = .{
+        .condition = try field(b, bool, value, 3),
+        .when_true = try b.pure(try c.literal(P.MessageText, .{ .bytes = "true" })),
+        .when_false = try b.pure(try c.literal(P.MessageText, .{ .bytes = "false" })),
+    } });
+    var text = try c.literal(P.MessageText, .{ .bytes = prefix });
+    const parts = [_]Id{
+        try field(b, agent.contracts.Text(8192), value, 0),
+        try c.literal(P.MessageText, .{ .bytes = "; first chunk bytes: " }),
+        try b.primitive(try b.schema(.text), .text_integer, &.{try field(b, u32, value, 1)}, 0),
+        try c.literal(P.MessageText, .{ .bytes = "; later chunk bytes: " }),
+        try b.primitive(try b.schema(.text), .text_integer, &.{try field(b, u32, value, 2)}, 0),
+        try c.literal(P.MessageText, .{ .bytes = "; finalize: " }),
+        try b.reference(finalized),
+    };
+    for (parts) |part| text = try b.value(.{ .schema = try c.schema(P.MessageText), .expression = .{ .primitive = .{
+        .opcode = .blob_concat,
+        .operands = &.{ text, part },
+        .failures = &.{.{ .kind = .capacity_exceeded, .value = try b.failureLiteral(try b.constant(void, {})) }},
+    } } });
+    const described = try b.bind(finalized, final_text, try b.pure(try appendMessage(c, request, text)));
+    return b.term(.{ .match_sum = .{ .value = optional, .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = try b.pure(request) },
+        .{ .variable = experiment, .body = described },
+    } } });
+}
+
+fn experimentAndContinue(b: *source.Builder, t: Types, q: hyper.Query, report: Id) !Id {
+    const invalid = try unresolved(b, t, "Experiment report does not match the current candidate or occurrence.");
+    const prior = try b.variable(try agent.contracts.schema(Report, b));
+    const reference_reply = try b.variable(try agent.contracts.schema(parser.ReferenceReply, b));
+    const candidate = try field(b, parser.Candidate, report, 0);
+    const observation = try field(b, parser.ExecutionReply, report, 1);
+    const finish = try b.pure(try b.primitive(t.contribution, .variant, &.{report}, 2));
+    const again = try reenter(b, t, q, report, try b.reference(reference_reply), finish);
+    const outcome = try field(b, @FieldType(parser.ExecutionReply, "outcome"), observation, 2);
+    var verified = try b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Probe, b)), .body = again },
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Assessment, b)), .body = invalid },
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Unavailable, b)), .body = finish },
+    } } });
+    const expected_occurrence = try arithmetic(b, .integer_add, try field(b, u64, try field(b, Input, q.state, 0), 3), try field(b, u64, q.state, 2));
+    const pairs = [_][2]Id{
+        .{ try field(b, u64, candidate, 1), try field(b, u64, observation, 1) },
+        .{ expected_occurrence, try field(b, u64, observation, 0) },
+    };
+    for (pairs) |pair| verified = try b.term(.{ .conditional = .{
+        .condition = try b.primitive(try b.scalar(bool), .equal, &pair, 0),
+        .when_true = verified,
+        .when_false = invalid,
+    } });
+    const same_candidate = try b.variable(try b.scalar(bool));
+    verified = try b.bind(same_candidate, (agent.value_equality.compare(b, try agent.contracts.schema(parser.Candidate, b), candidate, try field(b, parser.Candidate, try b.reference(prior), 0), try b.constant(void, {})) catch |err| return switch (err) {
+        error.UnsupportedEqualitySchema => error.TypeMismatch,
+        else => @as(source.Error, @errorCast(err)),
+    }), try b.term(.{ .conditional = .{ .condition = try b.reference(same_candidate), .when_true = verified, .when_false = invalid } }));
+    const with_reference = try b.term(.{ .match_sum = .{ .value = try field(b, ?parser.ReferenceReply, q.state, 5), .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = invalid },
+        .{ .variable = reference_reply, .body = verified },
+    } } });
+    return b.term(.{ .match_sum = .{ .value = try field(b, ?Report, q.state, 4), .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = invalid },
+        .{ .variable = prior, .body = with_reference },
+    } } });
+}
+
 fn assessAndContinue(b: *source.Builder, t: Types, q: hyper.Query, constructed: Id) !Id {
     const candidate = try field(b, parser.Candidate, constructed, 0);
     const reference_reply = try field(b, parser.ReferenceReply, constructed, 1);
     const observation = try b.variable(try agent.contracts.schema(parser.ExecutionReply, b));
-    const report = try b.primitive(try agent.contracts.schema(Report, b), .product, &.{ candidate, try b.reference(observation) }, 0);
+    const report_slot = try b.variable(try agent.contracts.schema(Report, b));
+    const report = try b.reference(report_slot);
+    const recorded = try makeReport(b, candidate, try b.reference(observation), try literal(b, ?parser.proposals.Experiment, null), try literal(b, ?Counterexample, null));
     const finish = try b.pure(try b.primitive(t.contribution, .variant, &.{report}, 2));
     const again = try reenter(b, t, q, report, reference_reply, finish);
     const assessment = try b.variable(try agent.contracts.schema(parser.Assessment, b));
@@ -553,7 +709,7 @@ fn assessAndContinue(b: *source.Builder, t: Types, q: hyper.Query, constructed: 
         .{ .variable = assessment, .body = passes },
         .{ .variable = try b.variable(try agent.contracts.schema(parser.Unavailable, b)), .body = finish },
     } } });
-    const probed = try b.bind(observation, try b.term(.{ .call = .{ .function = t.probe, .arguments = &.{ q.state, candidate } } }), next);
+    const probed = try b.bind(observation, try b.term(.{ .call = .{ .function = t.probe, .arguments = &.{ q.state, candidate } } }), try b.bind(report_slot, recorded, next));
     const completeness = try field(b, parser.Completeness, candidate, 2);
     const complete = try b.primitive(try b.scalar(bool), .equal, &.{
         try b.primitive(try b.scalar(u32), .enum_tag, &.{completeness}, 0), try b.constant(u32, 1),
@@ -635,7 +791,9 @@ fn acceptCandidate(c: agent.Context, t: Types, owner: Id, acceptance: Id, delive
     const status = try field(b, parser.Completeness, candidate, 2);
     const complete = try b.primitive(try b.scalar(bool), .equal, &.{ try b.primitive(try b.scalar(u32), .enum_tag, &.{status}, 0), try b.constant(u32, 1) }, 0);
     const reply = try b.variable(try c.schema(parser.ExecutionReply));
-    const report = try b.primitive(try c.schema(Report), .product, &.{ candidate, try b.reference(reply) }, 0);
+    const report_slot = try b.variable(try c.schema(Report));
+    const report = try b.reference(report_slot);
+    const recorded = try makeReport(b, candidate, try b.reference(reply), try literal(b, ?parser.proposals.Experiment, null), try literal(b, ?Counterexample, null));
     const finished = try b.pure(try b.primitive(t.contribution, .variant, &.{report}, 2));
     const again = try retryCompletion(c, t, owner, input, constructed, report, finished);
     const assessment = try b.variable(try c.schema(parser.Assessment));
@@ -650,7 +808,7 @@ fn acceptCandidate(c: agent.Context, t: Types, owner: Id, acceptance: Id, delive
         try field(b, parser.Subject, input, 0),                                                                                 try arithmetic(b, .integer_add, try field(b, u64, input, 3), version), candidate,
         try b.primitive(try c.schema(@FieldType(parser.ExecutionRequest, "check")), .variant, &.{try b.constant(void, {})}, 1),
     }, 0);
-    var execute = try b.bind(reply, try parser.execute(c, .{ .reference = t.reference, .execution = acceptance }, request, try b.constant(void, {})), inspected);
+    var execute = try b.bind(reply, try parser.execute(c, .{ .reference = t.reference, .execution = acceptance }, request, try b.constant(void, {})), try b.bind(report_slot, recorded, inspected));
     const invalid = try unresolved(b, t, "Candidate completion or allowance is invalid.");
     const excessive = try b.primitive(try b.scalar(bool), .less, &.{ count, version }, 0);
     execute = try b.term(.{ .conditional = .{ .condition = excessive, .when_true = invalid, .when_false = execute } });

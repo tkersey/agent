@@ -38,9 +38,12 @@ test('extracted parser command uses the real provider adapter without paid infer
    assert.equal(req.headers.authorization,undefined);let body='';for await(const chunk of req)body+=chunk;
    const input=JSON.parse(body);assert.equal(input.model,'fixture-model');assert.match(body,/Frozen batch reference/);
    const later=repair&&repairCalls>0;
-   assert.deepEqual(input.tools.map(x=>x.name),later?['fragment','complete_candidate','unresolved']:['fragment','unresolved']);calls++;
-   const name=repair?(later?'complete_candidate':'fragment'):'unresolved';
-   const args=repair?{source:later?decodedFields:bufferUntilEOF,explanation:'Provider fixture proposes source; the real evaluator decides acceptance.'}:{reason:'Fixture cannot establish a complete parser.'};
+   assert.deepEqual(input.tools.map(x=>x.name),later?['fragment','complete_candidate','experiment','unresolved']:['fragment','unresolved']);calls++;
+   const name=repair?(repairCalls===0?'fragment':repairCalls===1?'experiment':'complete_candidate'):'unresolved';
+   const args=!repair?{reason:'Fixture cannot establish a complete parser.'}:repairCalls===1?
+    {input_hex:'610a',first_chunk_bytes:1,chunk_bytes:1,finalize:true,reason:'Check record termination at final input.'}:
+    {source:repairCalls===0?bufferUntilEOF:decodedFields,explanation:'Provider fixture proposes source; the real evaluator decides acceptance.'};
+   if(repair&&repairCalls===2){assert.match(body,/earlier required check FAILED/);assert.match(body,/Hex bytes: 610a/);}
    if(repair)repairCalls++;
    res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({status:'completed',error:null,output:[{type:'function_call',status:'completed',call_id:'fixture-id',name,arguments:JSON.stringify(args)}]}));
   }catch(error){res.writeHead(500);res.end(error.message);}
@@ -67,10 +70,10 @@ test('extracted parser command uses the real provider adapter without paid infer
  const result=await run(cwd,['--endpoint',`http://127.0.0.1:${server.address().port}`,'--model','fixture-model','--data-policy','fixture-only','--max-model-calls','1','--max-checks','1']);
  assert.equal(calls,1);assert.equal(result.status,'unresolved');assert.equal(result.spent.models,1);assert.equal(result.spent.checks,0);assert.equal(result.paidAuthorization,false);assert.equal(result.result.tag,3);
  repair=true;
- const completed=await run(cwd,['--endpoint',`http://127.0.0.1:${server.address().port}`,'--model','fixture-model','--data-policy','fixture-only','--max-model-calls','2','--max-checks','2'],240000);
- assert.equal(calls,3);assert.equal(completed.status,'validated-artifact');assert.equal(completed.spent.models,2);assert.equal(completed.spent.checks,2);
+ const completed=await run(cwd,['--endpoint',`http://127.0.0.1:${server.address().port}`,'--model','fixture-model','--data-policy','fixture-only','--max-model-calls','3','--max-checks','3'],240000);
+ assert.equal(calls,4);assert.equal(completed.status,'validated-artifact');assert.equal(completed.spent.models,3);assert.equal(completed.spent.checks,3);
  assert.equal(completed.result.tag,4);assert.equal(completed.result.value.tag,4);assert.equal(completed.result.value.value[0][2],decodedFields);
- assert.equal(completed.metrics.physicalExecutions,539);assert.equal(completed.paidAuthorization,false);
+ assert.equal(completed.metrics.physicalExecutions,540);assert.equal(completed.paidAuthorization,false);
  assert.ok(completed.spent.contextBytes>0);
  assert.ok(completed.spent.modelRequestBytes>=completed.spent.contextBytes);
  assert.ok(completed.spent.modelReplyBytes>0);

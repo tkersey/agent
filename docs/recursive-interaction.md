@@ -670,6 +670,48 @@ extra repackaging-outside-Git test was retired because the existing packager req
 Git provenance; extracted execution, rather than provenance-free repackaging, is
 the relevant requirement here. No provenance guard was weakened.
 
-Missing-intent cases, model-proposed experiment/constraint routing, generic selection,
+Missing-intent cases and constraint routing, generic selection,
 owned channel composition, held-out live/comparator evaluation, broader proof and
 economic evidence, and serial reviews remain required. No paid live study was run.
+
+## Model-proposed candidate experiments
+
+After a candidate exists, the model may propose an experiment through the existing
+flat hex/chunk/finalization schema. The checked compiled sample helper binds it to
+the exact retained candidate and frozen subject, gives it a fresh contribution
+occurrence, and calls the probe-only execution interpretation. The consumer checks
+candidate content/completeness/version and reply occurrence before re-entering.
+The host merely executes the declared leaf. An experiment is not a new candidate:
+round 2 still checks candidate version 1; changed source in round 3 receives version 3.
+
+Reports retain the proposed inputs and an applicable failed observation. Passing or
+unavailable additional probes do not erase that counterexample. Subsequent model
+context names the actual experiment and retained failure. Re-offering identical
+refuted source as complete is rejected even with a fresh version label. Changed
+source does not inherit old verdicts and still undergoes private authoritative
+acceptance. This is bounded current-candidate evidence, not a complete history or
+universal dependency-invalidation system.
+
+The discriminator intentionally uses a passing additional experiment: the original
+escape-boundary probe refutes a buffer-until-EOF implementation, while the proposed
+hex `610a`, one-byte chunks, finalization on the last chunk passes. The report still
+contains the original failed observation, and the unchanged-source completion is
+rejected. A changed implementation then passes the full required evaluator.
+
+Executed cases include an experiment before any candidate (unoffered/rejected),
+malformed hex (unavailable without candidate execution), wrong candidate-version
+reply (authored rejection), a probe reply forged as full assessment (rejected),
+unchanged refuted source (unresolved), and the pre-existing forged completion case.
+The full three-model-response path passes native/Node/Wasmtime/Chromium agreement:
+18,640-byte Program, nineteen transfers and twenty destroyed Workers, 540 candidate
+processes plus two qualification processes, no approval or target write. The same
+three-response flow passes through the packaged command and actual provider adapter
+using a credential-free local HTTP fixture. No paid inference or live quality study.
+
+Validation: check plus emit-agent4 passes 275 steps / 123 tests; parser CLI tests pass.
+Reproduce with `parser_construction.mjs` scenarios `experiment`, `experiment-invalid`,
+`experiment-stale`, `experiment-assessment`, `experiment-before`,
+`experiment-unchanged`, and `experiment-repair`. Round naming was clarified without
+changing the tested Program bytes. Constraint/intent routing, generic selection,
+complete regression-history/revalidation, broader composition/proof/economic work
+and serial reviews remain open. No global completion claim is made.

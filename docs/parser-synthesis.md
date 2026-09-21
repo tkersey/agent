@@ -50,10 +50,16 @@ the reported spent allowances. This CLI is not a durable session manager.
 
 Unsupported qualified executors stop before model calls. Unknown model output,
 refusal, failed checks and incomplete candidates do not become successful artifacts.
-The current application offers fragment/complete-candidate/unresolved contributions;
-model-proposed experiment/constraint routing, missing-intent task support, a held-out
+The current application offers fragment/complete-candidate/experiment/unresolved contributions;
+constraint routing, missing-intent task support, a held-out
 live comparison and the broader selection/composition obligations remain open.
 
 The optional `test/agent4/parser_package_runtime.mjs` checks zero work and a real
 reference/cleanup transfer using only archive files. Deterministic loopback-provider
 tests establish the transport/control path, not model reasoning quality or live cost.
+
+After the first candidate, `experiment` is also offered. It checks the retained
+candidate under an explicit trace; it cannot request full acceptance or choose a
+new subject/version. A passing probe does not clear a previously observed failure.
+The next model request includes the executed trace and retained counterexample.
+Unchanged refuted source cannot become complete merely by receiving a new label.

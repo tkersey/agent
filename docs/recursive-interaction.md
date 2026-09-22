@@ -1095,3 +1095,52 @@ The report binds dependency-lock digest
 Qualified macOS executor coverage passed. Existing cross-engine fixture evidence
 remains separately scoped; this integrated run is not serial-review closeout or
 proof that every outstanding goal discriminator is implemented.
+
+### Parser-specific consumer replacement
+
+`consumer-alt.bmo1` asks an additional immediate-emission question before the
+normal escape-boundary probe. Its probe uses literal `a` followed by a non-final
+LF, and a disjoint occurrence interval; it does not mutate the caller's reference
+trace or cached reference binding. A failed additional experiment remains attached
+to the exact candidate even when the following boundary probe passes. Unavailable
+additional evidence ends unresolved, with no target read or write.
+
+Both consumer objects link through normal Agent admission against producer bytes
+`fcf0b53d44983c0aabe5e69eec502295d2b2e66b6eb3cdcd57281be8cf456502`, unchanged
+from the preceding delivery. The same initial partial implementation passes the
+usual probe but fails the alternate consumer's extra question. The producer gets
+different feedback and revises before full acceptance; no producer-side consumer
+identity branch or host routing phase is added. Default/alternate full runs each
+used two model contributions and one approval/write. Checks were two versus three,
+with 539 versus 540 candidate processes and 22 versus 25 fresh Node/WASM transfers.
+
+`tools/agent4/link_parser.zig` is a link-only executable entering `agent.compile`;
+participant-emission entry points are unreachable from its main. The source-free
+witness copies objects, that linker, a normal native World invocation tool and the
+use archive into an isolated directory. OS policy denies reads and execution in
+the original Agent source/emitter root; an actual read-denial probe confirms it.
+Both linking and every guest invocation run under this policy. Qualified tools
+remain outside the source-denial process and receive only declared requests. The
+first attempt to nest the candidate sandbox under source denial was unavailable
+(`sandbox_apply: Operation not permitted`); no unsandboxed candidate fallback was
+used. The adopted split reuses the existing external-tool/native-invocation seam.
+
+`zig build check-parser-source-free -Dworld-runtime=RUNTIME -Dworld-source=SOURCE`
+passed 197 steps. Both source-denied executions performed the actual reciprocal
+partial-construction episode: default one probe/five fresh native transfers;
+alternate two probes/seven transfers. They return partial reports, not accepted
+artifacts. The complete acceptance/delivery runs are separate evidence. The
+source-denied path does not measure native working-live memory; no zero-memory
+claim is inferred from process exit.
+
+The alternate consumer's full path also passed native/Node/Wasmtime/Chromium
+execution through 25 actual destination-State transfers and 26 fresh Workers.
+It completed two model contributions, three checks, 540 candidate processes and
+one approved fixture write. An injected unavailable first probe returned unresolved
+with one model/probe and no target read, approval or write. The earlier counterexample
+and its `610a`/non-final trace metadata are explicitly checked in the source-denied
+partial result after the later probe passes. Authoring passed 306 steps/130 tests.
+The updated use archive passed all three extracted-command tests with no skips,
+including the alternate Program's zero-work default. This replaces the earlier
+unproved parser-consumer-swap audit item with executed evidence. It does not start
+or complete the serial-review inventory, nor replace the final requirement audit.

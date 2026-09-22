@@ -138,3 +138,4 @@ test/consumers/repository/types.zig
 test/consumers/repository/working_set.zig
 test/consumers/review/build.zig
 test/consumers/review/main.zig
+tools/agent4/link_parser.zig

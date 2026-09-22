@@ -60,7 +60,7 @@ for(const name of ['repair','repeated','react']){
 for(const name of ['task-schema','outcome-schema'])await add(`inquiry/${name}.bin`,'schema');
 await add('inquiry/contract.txt','contract',await readFile(join(root,'test/consumers/inquiry/contract.txt')));
 const parserRoot='parser-construction';
-for(const name of ['producer','consumer','reference'])await add(`${parserRoot}/${name}.bmo1`,'component');
+for(const name of ['producer','consumer','consumer-alt','reference'])await add(`${parserRoot}/${name}.bmo1`,'component');
 for(const name of ['input-schema','result-schema','model-schema','model-reply-schema'])await add(`${parserRoot}/${name}.bin`,'schema');
 await add(`${parserRoot}/model-template.bin`,'synthetic-fixture');
 const parserInput=decodeSchema(await readFile(join(output,`${parserRoot}/input-schema.bin`)));
@@ -74,7 +74,7 @@ const parserArgs=encodeValue(parserInput,[
 await add(`${parserRoot}/task.args`,'initial-args',parserArgs);
 await add(`${parserRoot}/program.bpi3`,'image');
 examples.push({name:'parser-synthesis',image:`${parserRoot}/program.bpi3`,initialArgs:`${parserRoot}/task.args`});
-for(const strategy of ['react','complete']){
+for(const strategy of ['react','complete','alternate']){
  const image=`${parserRoot}/${strategy}.bpi3`;await add(image,'image');
  examples.push({name:`parser-${strategy}`,image,initialArgs:`${parserRoot}/task.args`});
 }

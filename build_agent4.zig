@@ -152,6 +152,10 @@ pub fn build(b: *std.Build) void {
     const parser_episode = b.step("parser-construction-images", "Emit consumer-directed parser construction");
     const parser_app = g.emitter("parser-construction", g.module("test/consumers/incremental-parser/main.zig"));
     g.emit(parser_episode, parser_app, &.{"react"}, "parser-construction/react.bpi3");
+    const parser_link_module = g.module("tools/agent4/link_parser.zig");
+    parser_link_module.addImport("parser_application", g.module("test/consumers/incremental-parser/main.zig"));
+    const parser_link_only = g.emitter("link-parser", parser_link_module);
+    parser_episode.dependOn(&b.addInstallArtifact(parser_link_only, .{}).step);
     const disposition_negative = b.addSystemCommand(&.{ "node", "test/agent4/parser_disposition_negative.mjs" });
     disposition_negative.addArtifactArg(parser_app);
     parser_episode.dependOn(&disposition_negative.step);
@@ -193,6 +197,16 @@ pub fn build(b: *std.Build) void {
     retained_link.addFileArg(parser_consumer_bytes);
     retained_link.addFileArg(parser_reference_bytes);
     parser_episode.dependOn(&b.addInstallFileWithDir(retained_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/retained.bpi3").step);
+    const parser_alternate_consumer = b.addRunArtifact(parser_app);
+    parser_alternate_consumer.addArg("consumer-alt");
+    const parser_alternate_consumer_bytes = parser_alternate_consumer.captureStdOut(.{});
+    const parser_alternate_link = b.addRunArtifact(parser_app);
+    parser_alternate_link.addArg("link");
+    parser_alternate_link.addFileArg(parser_producer_bytes);
+    parser_alternate_link.addFileArg(parser_alternate_consumer_bytes);
+    parser_alternate_link.addFileArg(parser_reference_bytes);
+    parser_episode.dependOn(&b.addInstallFileWithDir(parser_alternate_consumer_bytes, .prefix, "agent4/parser-construction/consumer-alt.bmo1").step);
+    parser_episode.dependOn(&b.addInstallFileWithDir(parser_alternate_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/alternate.bpi3").step);
     const forged_consumer = b.addRunArtifact(parser_app);
     forged_consumer.addArg("consumer-forged");
     const forged_link = b.addRunArtifact(parser_app);
@@ -387,6 +401,8 @@ pub fn build(b: *std.Build) void {
     const integration = b.step("check-agent4-integration", "Execute consumer proofs under the selected World");
     const parser_intent = b.step("check-parser-intent", "Check EOF clarification through fresh World states");
     const composed_runtime = b.step("check-composed-owners-runtime", "Restore composed owners through cleanup");
+    const parser_source_free = b.step("check-parser-source-free", "Link and execute parser objects with source access denied");
+    const parser_consumers = b.step("check-parser-consumers", "Swap checked parser consumers around one unchanged producer");
     const parser_comparison = b.step("check-parser-comparison", "Compare parser ReAct, recursive and complete-candidate strategies");
     const parser_selection = b.step("check-parser-selection", "Execute two recursively assessed parser constructions");
     const selection_runtime = b.step("check-selection-runtime", "Check recursive assessment and completion isolation");
@@ -435,6 +451,12 @@ pub fn build(b: *std.Build) void {
                 parser_comparison.dependOn(&comparison.step);
             }
         }
+        for ([_][]const u8{ "recursive", "alternate" }) |strategy| {
+            const consumer_case = b.addSystemCommand(&.{ "node", "test/agent4/parser_comparison.mjs", runtime_path, strategy, "consumer" });
+            consumer_case.step.dependOn(parser_episode);
+            consumer_case.step.dependOn(&runtime_guard.step);
+            parser_consumers.dependOn(&consumer_case.step);
+        }
         const selection_run = b.addSystemCommand(&.{ "node", "test/agent4/recursive_selection.mjs", runtime_path });
         selection_run.step.dependOn(selection_images);
         selection_run.step.dependOn(&runtime_guard.step);
@@ -468,6 +490,7 @@ pub fn build(b: *std.Build) void {
         runtime_work.dependOn(selection_runtime);
         runtime_work.dependOn(parser_selection);
         runtime_work.dependOn(parser_comparison);
+        runtime_work.dependOn(parser_consumers);
         runtime_work.dependOn(composed_runtime);
         const repository_emitter_module = g.module("test/agent4/repository_replacement_emit.zig");
         repository_emitter_module.addImport("repository_app", g.module("test/consumers/repository/application.zig"));
@@ -507,6 +530,14 @@ pub fn build(b: *std.Build) void {
             .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data", .module = data } },
         });
         const native_exe = native_graph.emitter("agent4-native", native_module);
+        if (inquiry_host) {
+            const source_free = b.addSystemCommand(&.{ "node", "test/agent4/parser_source_free.mjs", runtime_path });
+            source_free.addFileArg(native_exe.getEmittedBin());
+            source_free.step.dependOn(distribution);
+            source_free.step.dependOn(&runtime_guard.step);
+            parser_source_free.dependOn(&source_free.step);
+            runtime_work.dependOn(parser_source_free);
+        } else parser_source_free.dependOn(&b.addFail("source-denial witness requires macOS sandbox-exec").step);
         const inquiry_app_run = b.addSystemCommand(&.{ "node", "test/agent4/inquiry_application_runtime.mjs", runtime_path, b.getInstallPath(.prefix, "agent4/inquiry") });
         const inquiry_cli = b.addSystemCommand(&.{ "node", "--test", "test/agent4/inquiry_cli.test.mjs" });
         inquiry_cli.removeEnvironmentVariable("NODE_TEST_CONTEXT");
@@ -636,6 +667,8 @@ pub fn build(b: *std.Build) void {
         selection_runtime.dependOn(&missing.step);
         parser_selection.dependOn(&missing.step);
         parser_comparison.dependOn(&missing.step);
+        parser_consumers.dependOn(&missing.step);
+        parser_source_free.dependOn(&missing.step);
         composed_runtime.dependOn(&missing.step);
         economy.dependOn(&missing.step);
     }

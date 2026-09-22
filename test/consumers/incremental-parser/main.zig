@@ -340,6 +340,7 @@ fn defineProbe(c: agent.Context, t: Types) !void {
 }
 
 const Application = struct {
+    var alternate_consumer = false;
     var react_mode = false;
     var complete_only = false;
     var retain_idle = false;
@@ -564,8 +565,9 @@ pub fn main(init: std.process.Init) !void {
         return output(init, bytes);
     }
     if (args.next() != null) return error.UnexpectedArgument;
-    if (std.mem.eql(u8, mode, "producer") or std.mem.eql(u8, mode, "consumer") or std.mem.eql(u8, mode, "reference") or std.mem.eql(u8, mode, "consumer-forged")) {
-        const bytes = try component(init.gpa, std.mem.eql(u8, mode, "consumer"), std.mem.eql(u8, mode, "reference"), std.mem.eql(u8, mode, "consumer-forged"));
+    if (std.mem.eql(u8, mode, "producer") or std.mem.eql(u8, mode, "consumer") or std.mem.eql(u8, mode, "reference") or std.mem.eql(u8, mode, "consumer-forged") or std.mem.eql(u8, mode, "consumer-alt")) {
+        Application.alternate_consumer = std.mem.eql(u8, mode, "consumer-alt");
+        const bytes = try component(init.gpa, std.mem.eql(u8, mode, "consumer") or Application.alternate_consumer, std.mem.eql(u8, mode, "reference"), std.mem.eql(u8, mode, "consumer-forged"));
         defer init.gpa.free(bytes);
         return output(init, bytes);
     }
@@ -759,7 +761,9 @@ fn assessAndContinue(b: *source.Builder, t: Types, q: hyper.Query, constructed: 
     const observation = try b.variable(try agent.contracts.schema(parser.ExecutionReply, b));
     const report_slot = try b.variable(try agent.contracts.schema(Report, b));
     const report = try b.reference(report_slot);
-    const recorded = try makeReport(b, candidate, try b.reference(observation), try literal(b, ?parser.proposals.Experiment, null), try literal(b, ?Counterexample, null));
+    const earlier = if (Application.alternate_consumer) try b.variable(try agent.contracts.schema(Report, b)) else null;
+    const prior_counterexample = if (earlier) |saved| try field(b, ?Counterexample, try b.reference(saved), 3) else try literal(b, ?Counterexample, null);
+    const recorded = try makeReport(b, candidate, try b.reference(observation), try literal(b, ?parser.proposals.Experiment, null), prior_counterexample);
     const finish = try b.pure(try b.primitive(t.contribution, .variant, &.{report}, 2));
     const again = try reenter(b, t, q, report, reference_reply, finish);
     const assessment = try b.variable(try agent.contracts.schema(parser.Assessment, b));
@@ -770,7 +774,8 @@ fn assessAndContinue(b: *source.Builder, t: Types, q: hyper.Query, constructed: 
         .{ .variable = assessment, .body = passes },
         .{ .variable = try b.variable(try agent.contracts.schema(parser.Unavailable, b)), .body = finish },
     } } });
-    const probed = try b.bind(observation, try b.term(.{ .call = .{ .function = t.probe, .arguments = &.{ q.state, candidate } } }), try b.bind(report_slot, recorded, next));
+    var probed = try b.bind(observation, try b.term(.{ .call = .{ .function = t.probe, .arguments = &.{ q.state, candidate } } }), try b.bind(report_slot, recorded, next));
+    if (earlier) |saved| probed = try additionalConsumerProbe(b, t, q.state, candidate, saved, probed);
     const completeness = try field(b, parser.Completeness, candidate, 2);
     const complete = try b.primitive(try b.scalar(bool), .equal, &.{
         try b.primitive(try b.scalar(u32), .enum_tag, &.{completeness}, 0), try b.constant(u32, 1),
@@ -1124,4 +1129,47 @@ fn emitReact(c: agent.Context) !source.Module {
 }
 fn callable(b: *source.Builder, parameters: []const Id, result: Id, effects: []const Id) !Id {
     return b.schema(.{ .internal = .{ .computation = .{ .parameters = parameters, .result = result, .effects = effects } } });
+}
+
+// A second independently compiled consumer policy. Only its object changes;
+// the producer and checked probe helper retain the same contracts and bytes.
+fn additionalConsumerProbe(b: *source.Builder, t: Types, state: Id, candidate: Id, saved: Id, next: Id) !Id {
+    const input = try field(b, Input, state, 0);
+    const trace = try literal(b, parser.Trace, .{ .items = &.{
+        .{ .chunk = .{ .items = &.{97} }, .end_of_input = false },
+        .{ .chunk = .{ .items = &.{10} }, .end_of_input = false },
+    } });
+    var inputs: [std.meta.fields(Input).len]Id = undefined;
+    inline for (std.meta.fields(Input), 0..) |f, i| inputs[i] = try field(b, f.type, input, i);
+    inputs[2] = trace;
+    // Reserve a disjoint occurrence interval for these additional probes.
+    inputs[3] = try arithmetic(b, .integer_add, inputs[3], try arithmetic(b, .integer_add, inputs[4], try b.constant(u64, 1)));
+    var fields: [std.meta.fields(State).len]Id = undefined;
+    inline for (std.meta.fields(State), 0..) |f, i| fields[i] = if (i == 0) try b.primitive(t.input, .product, &inputs, 0) else try field(b, f.type, state, i);
+    const probe_state = try b.primitive(t.state, .product, &fields, 0);
+    const observed = try b.variable(try agent.contracts.schema(parser.ExecutionReply, b));
+    const experiment = try literal(b, ?parser.proposals.Experiment, .{ .input_hex = .{ .bytes = "610a" }, .first_chunk_bytes = 1, .chunk_bytes = 1, .finalize = false, .reason = .{ .bytes = "Does a literal record terminator emit immediately before final EOF?" } });
+    const recorded = try makeReport(b, candidate, try b.reference(observed), experiment, try literal(b, ?Counterexample, null));
+    const outcome = try field(b, @FieldType(parser.ExecutionReply, "outcome"), try b.reference(observed), 2);
+    const stopped = try unresolved(b, t, "The additional consumer probe is unavailable or invalid.");
+    const inspect = try b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Probe, b)), .body = try b.bind(saved, recorded, next) },
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Assessment, b)), .body = stopped },
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Unavailable, b)), .body = stopped },
+    } } });
+    return b.bind(observed, try b.term(.{ .call = .{ .function = t.probe, .arguments = &.{ probe_state, candidate } } }), inspect);
+}
+
+/// Link-only entry for an independently compiled native tool. Participant
+/// emission is not reachable from that tool's main function.
+pub fn linkParticipants(allocator: std.mem.Allocator, producer_bytes: []const u8, consumer_bytes: []const u8, reference_bytes: []const u8) !source.Compiled {
+    Application.producer = producer_bytes;
+    Application.consumer = consumer_bytes;
+    Application.reference_bytes = reference_bytes;
+    Application.react_mode = false;
+    Application.complete_only = false;
+    Application.alternate_consumer = false;
+    Application.retain_idle = false;
+    Application.selection = .none;
+    return agent.compile(allocator, System);
 }

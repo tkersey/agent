@@ -44,6 +44,8 @@ for(const policy of ['first','last']){
  const stopped=await execute(initial,()=>{throw Error('unconfigured selection must not execute a leaf');},program);
  assert.equal(stopped.result.tag,3);assert.deepEqual(stopped.events,[]);
 }
+const alternate=await execute(initial,()=>{throw Error('unconfigured alternate consumer must not execute a leaf');},new Uint8Array(await readFile(new URL('alternate.bpi3',folder))));
+assert.equal(alternate.result.tag,3);assert.deepEqual(alternate.events,[]);
 const tools=await createParserTools();assert.equal(tools.kind,'qualified',JSON.stringify(tools));
 const input=structuredClone(initial);input[0]=tools.subject(createHash('sha256').update(tools.evidence.reference).digest('hex'));
 input[2]=[[[92],false],[[110,10],false],[[],true]];input[3]=17n;input[4]=2n;input[8]=true;

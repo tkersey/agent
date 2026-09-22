@@ -1144,3 +1144,28 @@ The updated use archive passed all three extracted-command tests with no skips,
 including the alternate Program's zero-work default. This replaces the earlier
 unproved parser-consumer-swap audit item with executed evidence. It does not start
 or complete the serial-review inventory, nor replace the final requirement audit.
+
+### Unsupported circular-demand discriminator
+
+A checked `consumer-circular` object deliberately asks its producer back without
+supplying reference evidence. It links through the normal participant path.
+`check-parser-circular` executes eight quanta of 97 instructions, transferring the
+actual State between fresh embeddings each time. Every outcome is Progress;
+there are zero model/tool requests and no invented answer or constraint. The
+embedding's explicit work allowance then yields an unresolved report with a
+6,676-byte saved State. A separate cancellation drive completes cancellation and
+releases working ownership. This finite observation is not a divergence/deadlock
+proof or a semantic fuel limit in Boundary. The cyclic test Program is 20,853 bytes.
+The focused build/check passed 48 steps. Production inventory images/components
+were read back against their existing hashes; all 29 remained unchanged.
+
+The current normal dependency tuple is Boundary
+`a3676bef943e2fcea2a2452988b08a2a357e131c` and World
+`0bcdf990daa4b0e2a359034334bb1d2b55469998`, authenticated through GitHub tree
+identities and downloaded source/package/archive inventories. Setup and offline
+verification passed; kernel bytes remain unchanged. Agent authoring plus the
+circular-demand check passed 312 steps/130 tests; package emission passed 196
+steps. The circular fixture is test-only. Existing production images/components
+retain their previous hashes, so the preceding integration and cross-engine
+observations are reused for those unchanged inputs rather than relabeled as new
+executions. The whole specification still needs its final review disposition.

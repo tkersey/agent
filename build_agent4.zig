@@ -207,6 +207,14 @@ pub fn build(b: *std.Build) void {
     parser_alternate_link.addFileArg(parser_reference_bytes);
     parser_episode.dependOn(&b.addInstallFileWithDir(parser_alternate_consumer_bytes, .prefix, "agent4/parser-construction/consumer-alt.bmo1").step);
     parser_episode.dependOn(&b.addInstallFileWithDir(parser_alternate_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/alternate.bpi3").step);
+    const circular_consumer = b.addRunArtifact(parser_app);
+    circular_consumer.addArg("consumer-circular");
+    const circular_link = b.addRunArtifact(parser_app);
+    circular_link.addArg("link");
+    circular_link.addFileArg(parser_producer_bytes);
+    circular_link.addFileArg(circular_consumer.captureStdOut(.{}));
+    circular_link.addFileArg(parser_reference_bytes);
+    parser_episode.dependOn(&b.addInstallFileWithDir(circular_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/circular.bpi3").step);
     const forged_consumer = b.addRunArtifact(parser_app);
     forged_consumer.addArg("consumer-forged");
     const forged_link = b.addRunArtifact(parser_app);
@@ -399,6 +407,7 @@ pub fn build(b: *std.Build) void {
     check.dependOn(emit);
 
     const integration = b.step("check-agent4-integration", "Execute consumer proofs under the selected World");
+    const parser_circular = b.step("check-parser-circular", "Bound unsupported circular participant demands without invented evidence");
     const parser_intent = b.step("check-parser-intent", "Check EOF clarification through fresh World states");
     const composed_runtime = b.step("check-composed-owners-runtime", "Restore composed owners through cleanup");
     const parser_source_free = b.step("check-parser-source-free", "Link and execute parser objects with source access denied");
@@ -457,6 +466,10 @@ pub fn build(b: *std.Build) void {
             consumer_case.step.dependOn(&runtime_guard.step);
             parser_consumers.dependOn(&consumer_case.step);
         }
+        const circular_run = b.addSystemCommand(&.{ "node", "test/agent4/parser_circular.mjs", runtime_path });
+        circular_run.step.dependOn(parser_episode);
+        circular_run.step.dependOn(&runtime_guard.step);
+        parser_circular.dependOn(&circular_run.step);
         const selection_run = b.addSystemCommand(&.{ "node", "test/agent4/recursive_selection.mjs", runtime_path });
         selection_run.step.dependOn(selection_images);
         selection_run.step.dependOn(&runtime_guard.step);
@@ -487,6 +500,7 @@ pub fn build(b: *std.Build) void {
         } else browser_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
         runtime_work.dependOn(parser_intent);
+        runtime_work.dependOn(parser_circular);
         runtime_work.dependOn(selection_runtime);
         runtime_work.dependOn(parser_selection);
         runtime_work.dependOn(parser_comparison);
@@ -664,6 +678,7 @@ pub fn build(b: *std.Build) void {
         repository_application.dependOn(&missing.step);
         integration.dependOn(&missing.step);
         parser_intent.dependOn(&missing.step);
+        parser_circular.dependOn(&missing.step);
         selection_runtime.dependOn(&missing.step);
         parser_selection.dependOn(&missing.step);
         parser_comparison.dependOn(&missing.step);

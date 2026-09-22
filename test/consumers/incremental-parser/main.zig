@@ -78,7 +78,7 @@ fn step(b: *source.Builder, q: hyper.Query, consumer: bool) !Id {
     var instructions = try b.bind(received, requested, continued);
     if (consumer) instructions = try b.term(.{ .conditional = .{
         .condition = try field(b, bool, q.state, 1),
-        .when_true = try referenceParticipant(b, t, q),
+        .when_true = if (Application.circular_consumer) instructions else try referenceParticipant(b, t, q),
         .when_false = instructions,
     } });
     const exhausted = try b.primitive(try b.scalar(bool), .equal, &.{ try field(b, u64, q.state, 3), try b.constant(u64, 0) }, 0);
@@ -341,6 +341,7 @@ fn defineProbe(c: agent.Context, t: Types) !void {
 
 const Application = struct {
     var alternate_consumer = false;
+    var circular_consumer = false;
     var react_mode = false;
     var complete_only = false;
     var retain_idle = false;
@@ -565,9 +566,10 @@ pub fn main(init: std.process.Init) !void {
         return output(init, bytes);
     }
     if (args.next() != null) return error.UnexpectedArgument;
-    if (std.mem.eql(u8, mode, "producer") or std.mem.eql(u8, mode, "consumer") or std.mem.eql(u8, mode, "reference") or std.mem.eql(u8, mode, "consumer-forged") or std.mem.eql(u8, mode, "consumer-alt")) {
+    if (std.mem.eql(u8, mode, "producer") or std.mem.eql(u8, mode, "consumer") or std.mem.eql(u8, mode, "reference") or std.mem.eql(u8, mode, "consumer-forged") or std.mem.eql(u8, mode, "consumer-alt") or std.mem.eql(u8, mode, "consumer-circular")) {
+        Application.circular_consumer = std.mem.eql(u8, mode, "consumer-circular");
         Application.alternate_consumer = std.mem.eql(u8, mode, "consumer-alt");
-        const bytes = try component(init.gpa, std.mem.eql(u8, mode, "consumer") or Application.alternate_consumer, std.mem.eql(u8, mode, "reference"), std.mem.eql(u8, mode, "consumer-forged"));
+        const bytes = try component(init.gpa, std.mem.eql(u8, mode, "consumer") or Application.alternate_consumer or Application.circular_consumer, std.mem.eql(u8, mode, "reference"), std.mem.eql(u8, mode, "consumer-forged"));
         defer init.gpa.free(bytes);
         return output(init, bytes);
     }
@@ -1169,6 +1171,7 @@ pub fn linkParticipants(allocator: std.mem.Allocator, producer_bytes: []const u8
     Application.react_mode = false;
     Application.complete_only = false;
     Application.alternate_consumer = false;
+    Application.circular_consumer = false;
     Application.retain_idle = false;
     Application.selection = .none;
     return agent.compile(allocator, System);

@@ -867,3 +867,52 @@ strategy-quality result. The generic World kernel and dependency tuple did not
 change in this slice.
 The regenerated use archive passed all three extracted-package command tests
 (including qualified parser and Inquiry execution), with no skipped tests.
+
+### Parser selection through the generic assessor
+
+The parser emitter supports `link-select-first` and `link-select-last` beside
+its default single-construction mode. Both link the same producer, consumer and
+reference BMO1 bytes, and feed two immutable construction states to
+`deliberation.selectSequential`. The actual recursive parser round is the
+assessor: each fresh construction requests its reference and fragment, runs the
+consumer probe, requests completion/repair, and performs authoritative acceptance.
+Only the caller receives the chosen assessment and enters delivery. Running
+interactions and completion authority are not cloned.
+
+The policies are deliberately explicit tie-breaks between two fully accepted
+alternatives, not quality scores: choose the first or last. Both alternatives
+must establish complete acceptance; any unresolved assessment prevents delivery.
+Each construction has a disjoint checked observation-occurrence interval, while
+model executions remain fresh even for equal prompts and provider IDs. The
+existing default Program and its CLI still use one construction; CLI selection
+configuration and a fair strategy comparison remain unfinished.
+
+`zig build check-parser-selection -Dworld-runtime=RUNTIME -Dworld-source=SOURCE`
+uses real qualified candidate execution and fresh Node/WASM State recovery. Its
+scripted proposals are test-only implementations, never imported into the
+production proposer or its prompt. One fragment needs repair after a failed
+probe; the other passes its probe but still needs a complete candidate and full
+acceptance. The test requires different resulting feedback, zero target reads or
+writes during both assessments, one final approval/write for the selected code,
+and no delivery when an assessment reply is unavailable. The unavailable reply
+case is explicitly a protocol injection after real execution, not a claim that
+the evaluator actually became unavailable.
+
+The two selection Programs are included as `parser-selection-first` and
+`parser-selection-last` in the source-independent archive, with zero-work default
+arguments. A configured run gives each alternative the supplied per-construction
+round allowance; total model/tool spending remains the embedding's responsibility
+outside rollback. No live inference is enabled by emitting or packaging them.
+The default CLI does not silently double its allowance or select this mode.
+Both selection images are 22,777 bytes; the default image remains 21,573 bytes.
+
+Executed results: both policies passed with four synthetic model contributions,
+four real checks, 1,078 isolated candidate executions plus two qualification
+executions, 34 fresh Node/WASM transfers, one target read, one approval, and one
+fixture write. First/last selected the respective independently written accepted
+source. The injected unavailable result completed unresolved after 23 transfers,
+with zero target reads, approvals, or writes. The source-independent archive
+passed all three documented-command tests, including zero-work invocation of
+both selection variants. This slice did not rerun the four-engine matrix for the
+new selection Programs or measure their timing/retention; preceding parser
+transfer results do not establish those new combinations.

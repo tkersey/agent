@@ -17,9 +17,9 @@ const resultSchema=decodeSchema(await readFile(new URL('result-schema.bin',folde
 const initial=decodeValue(inputSchema,await readFile(new URL('task.args',folder)));
 const bytes=new Uint8Array(await readFile(runtime.kernelPath));
 let identity=1n;
-async function execute(input,leaf){
+async function execute(input,leaf,program=image){
  const fresh=()=>Kernel.create({bytes,expectedSha256:runtime.kernelSha256,instanceId:identity++});
- let kernel=await fresh(),p=kernel.prepare(image),session=kernel.start(p,encodeValue(inputSchema,input));kernel.releasePrepared(p);
+ let kernel=await fresh(),p=kernel.prepare(program),session=kernel.start(p,encodeValue(inputSchema,input));kernel.releasePrepared(p);
  let control='none',value=new Uint8Array(),transfers=0;const events=[];
  for(let round=0;round<128;round++){
   const out=decodeOutcome(kernel.drive(session,{control,value,quantum:97,checkpoint:true}));
@@ -33,12 +33,17 @@ async function execute(input,leaf){
    control='reply';value=await encodeResult(out.request,encodeValue(decodeSchema(request.resumeSchema),reply));
   }else{assert.equal(out.kind,'progressed');control='none';value=new Uint8Array();}
   assert.deepEqual(kernel.checkpoint(session,{transfer:true}),out.state);assert.equal(kernel.usage().workingLive,0n);
-  kernel=await fresh();p=kernel.prepare(image);session=kernel.restore(p,out.state);kernel.releasePrepared(p);transfers++;
+  kernel=await fresh();p=kernel.prepare(program);session=kernel.restore(p,out.state);kernel.releasePrepared(p);transfers++;
  }
  throw Error('fixture work allowance exhausted');
 }
 const zero=await execute(initial,()=>{throw Error('unconfigured example must not execute a leaf');});
 assert.equal(zero.result.tag,3);assert.match(zero.result.value,/allowance exhausted/i);assert.deepEqual(zero.events,[]);
+for(const policy of ['first','last']){
+ const program=new Uint8Array(await readFile(new URL(`select-${policy}.bpi3`,folder)));
+ const stopped=await execute(initial,()=>{throw Error('unconfigured selection must not execute a leaf');},program);
+ assert.equal(stopped.result.tag,3);assert.deepEqual(stopped.events,[]);
+}
 const tools=await createParserTools();assert.equal(tools.kind,'qualified',JSON.stringify(tools));
 const input=structuredClone(initial);input[0]=tools.subject(createHash('sha256').update(tools.evidence.reference).digest('hex'));
 input[2]=[[[92],false],[[110,10],false],[[],true]];input[3]=17n;input[4]=2n;input[8]=true;

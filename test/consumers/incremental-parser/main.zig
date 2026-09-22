@@ -341,6 +341,7 @@ fn defineProbe(c: agent.Context, t: Types) !void {
 
 const Application = struct {
     var retain_idle = false;
+    var selection: enum { none, first, last } = .none;
     var producer: []const u8 = &.{};
     var consumer: []const u8 = &.{};
     var reference_bytes: []const u8 = &.{};
@@ -384,7 +385,7 @@ const Application = struct {
         const selected = try b.variable(t.input);
         const input = try b.reference(selected);
         const initial = try b.primitive(t.state, .product, &.{ input, try b.constant(bool, false), try b.constant(u64, 1), try field(b, u64, input, 4), try literal(b, ?Report, null), try literal(b, ?parser.ReferenceReply, null) }, 0);
-        const call = try b.term(.{ .call = .{ .function = round, .arguments = &.{initial} } });
+        const call = if (selection == .none) try b.term(.{ .call = .{ .function = round, .arguments = &.{initial} } }) else try selectConstructions(c, t, round, assessment_effects, input, initial, selection == .last);
         const assessed = try b.variable(t.contribution);
         const finished = try b.bind(assessed, call, try finishAssessment(c, t, entry, delivery, input, try b.reference(assessed)));
         const execute = if (idle) |owned| try owned.around(b, t.contribution, finished) else finished;
@@ -524,8 +525,9 @@ pub fn main(init: std.process.Init) !void {
         defer init.gpa.free(bytes);
         return output(init, bytes);
     }
-    if (std.mem.eql(u8, mode, "link") or std.mem.eql(u8, mode, "link-retained")) {
-        Application.retain_idle = !std.mem.eql(u8, mode, "link");
+    if (std.mem.eql(u8, mode, "link") or std.mem.eql(u8, mode, "link-retained") or std.mem.eql(u8, mode, "link-select-first") or std.mem.eql(u8, mode, "link-select-last")) {
+        Application.retain_idle = std.mem.eql(u8, mode, "link-retained");
+        Application.selection = if (std.mem.eql(u8, mode, "link-select-first")) .first else if (std.mem.eql(u8, mode, "link-select-last")) .last else .none;
         const p = args.next() orelse return error.ExpectedProducer;
         const c = args.next() orelse return error.ExpectedConsumer;
         const r = args.next() orelse return error.ExpectedReference;
@@ -934,4 +936,71 @@ fn deliverAccepted(c: agent.Context, t: Types, owner: Id, d: agent.parser_delive
     }, 0);
     const result = try b.variable(try c.schema(agent.parser_delivery.Result));
     return b.bind(result, try agent.parser_delivery.run(c, d, owner, proposal, try field(b, bool, input, 7)), try b.pure(try b.primitive(t.contribution, .variant, &.{try b.reference(result)}, 4)));
+}
+
+// Candidate values here are immutable construction inputs. Assessment executes
+// their fresh compiled interactions; no live endpoint or completion is cloned.
+fn selectConstructions(c: agent.Context, t: Types, assessor: Id, allowed: []const Id, input: Id, initial: Id, prefer_last: bool) !Id {
+    const b = c.builder;
+    const d = try agent.deliberation.selectionTypes(b, t.state, t.contribution, 2);
+    const choose = try b.declare(&.{d.assessments}, d.choice, &.{}, &.{});
+    const rows = try b.reference(b.parameter(choose, 0));
+    const option = try b.schema(.{ .sum = &.{ try b.scalar(void), d.assessed } });
+    const absent = try b.pure(try b.primitive(d.choice, .variant, &.{try b.constant(void, {})}, 1));
+    var choice = try b.pure(try b.primitive(d.choice, .variant, &.{try b.constant(u64, if (prefer_last) 1 else 0)}, 0));
+    // Both promised alternatives must establish acceptance; unavailable or failed
+    // work is not silently removed from the comparison's denominator.
+    for (0..2) |index| {
+        const row = try b.variable(d.assessed);
+        const contribution = try b.primitive(t.contribution, .field, &.{try b.reference(row)}, 1);
+        choice = try b.term(.{ .match_sum = .{ .value = try b.primitive(option, .sequence_get, &.{ rows, try b.constant(u64, index) }, 0), .cases = &.{
+            .{ .variable = try b.variable(try b.scalar(void)), .body = absent },
+            .{ .variable = row, .body = try acceptedContribution(b, t, contribution, choice, absent) },
+        } } });
+    }
+    try b.define(choose, choice);
+    const select = try agent.deliberation.selectSequential(c, .{ .candidate = t.state, .assessment = t.contribution, .maximum = 2, .assess = assessor, .choose = choose, .allowed = allowed, .failure = try b.constant(void, {}) });
+    var fields: [std.meta.fields(Input).len]Id = undefined;
+    inline for (std.meta.fields(Input), 0..) |f, i| fields[i] = try field(b, f.type, input, i);
+    // Each construction has a disjoint observation occurrence interval. Its
+    // model samples are fresh; identical prompts do not share execution.
+    fields[3] = try arithmetic(b, .integer_add, fields[3], try arithmetic(b, .integer_add, fields[4], try b.constant(u64, 1)));
+    const other_input = try b.primitive(t.input, .product, &fields, 0);
+    const other = try b.primitive(t.state, .product, &.{ other_input, try b.constant(bool, false), try b.constant(u64, 1), fields[4], try literal(b, ?Report, null), try literal(b, ?parser.ReferenceReply, null) }, 0);
+    const result = try b.variable(d.result);
+    const selected = try b.variable(d.assessed);
+    return b.bind(result, try b.term(.{ .call = .{ .function = select.function, .arguments = &.{try b.primitive(d.candidates, .sequence, &.{ initial, other }, 0)} } }), try b.term(.{ .match_sum = .{ .value = try b.reference(result), .cases = &.{
+        .{ .variable = selected, .body = try b.pure(try b.primitive(t.contribution, .field, &.{try b.reference(selected)}, 1)) },
+        .{ .variable = try b.variable(d.assessments), .body = try unresolved(b, t, "Both construction alternatives must establish complete acceptance before selection.") },
+    } } }));
+}
+fn acceptedContribution(b: *source.Builder, t: Types, value: Id, yes: Id, no: Id) !Id {
+    const report = try b.variable(try agent.contracts.schema(Report, b));
+    const assessment = try b.variable(try agent.contracts.schema(parser.Assessment, b));
+    const candidate = try field(b, parser.Candidate, try b.reference(report), 0);
+    const observed = try field(b, parser.ExecutionReply, try b.reference(report), 1);
+    const status = try b.primitive(try b.scalar(u32), .enum_tag, &.{try field(b, parser.Completeness, candidate, 2)}, 0);
+    var valid = yes;
+    const a = try b.reference(assessment);
+    const conditions = [_]Id{
+        try b.primitive(try b.scalar(bool), .equal, &.{ status, try b.constant(u32, 1) }, 0),
+        try field(b, bool, a, 0),
+        try field(b, bool, a, 3),
+        try b.primitive(try b.scalar(bool), .less, &.{ try b.constant(u32, 0), try field(b, u32, a, 2) }, 0),
+        try b.primitive(try b.scalar(bool), .equal, &.{ try field(b, u32, a, 1), try field(b, u32, a, 2) }, 0),
+    };
+    for (conditions) |condition| valid = try b.term(.{ .conditional = .{ .condition = condition, .when_true = valid, .when_false = no } });
+    const inspected = try b.term(.{ .match_sum = .{ .value = try field(b, @FieldType(parser.ExecutionReply, "outcome"), observed, 2), .cases = &.{
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Probe, b)), .body = no },
+        .{ .variable = assessment, .body = valid },
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Unavailable, b)), .body = no },
+    } } });
+    _ = t;
+    return b.term(.{ .match_sum = .{ .value = value, .cases = &.{
+        .{ .variable = try b.variable(try agent.contracts.schema(Constraint, b)), .body = no },
+        .{ .variable = try b.variable(try agent.contracts.schema(Constructed, b)), .body = no },
+        .{ .variable = report, .body = inspected },
+        .{ .variable = try b.variable(try agent.contracts.schema(agent.contracts.Text(512), b)), .body = no },
+        .{ .variable = try b.variable(try agent.contracts.schema(agent.parser_delivery.Result, b)), .body = no },
+    } } });
 }

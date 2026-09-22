@@ -172,6 +172,14 @@ pub fn build(b: *std.Build) void {
     parser_episode.dependOn(&b.addInstallFileWithDir(parser_producer_bytes, .prefix, "agent4/parser-construction/producer.bmo1").step);
     parser_episode.dependOn(&b.addInstallFileWithDir(parser_consumer_bytes, .prefix, "agent4/parser-construction/consumer.bmo1").step);
     parser_episode.dependOn(&b.addInstallFileWithDir(parser_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/program.bpi3").step);
+    for ([_][]const u8{ "first", "last" }) |policy| {
+        const selected_link = b.addRunArtifact(parser_app);
+        selected_link.addArg(b.fmt("link-select-{s}", .{policy}));
+        selected_link.addFileArg(parser_producer_bytes);
+        selected_link.addFileArg(parser_consumer_bytes);
+        selected_link.addFileArg(parser_reference_bytes);
+        parser_episode.dependOn(&b.addInstallFileWithDir(selected_link.captureStdOut(.{}), .prefix, b.fmt("agent4/parser-construction/select-{s}.bpi3", .{policy})).step);
+    }
     const retained_link = b.addRunArtifact(parser_app);
     retained_link.addArg("link-retained");
     retained_link.addFileArg(parser_producer_bytes);
@@ -369,6 +377,7 @@ pub fn build(b: *std.Build) void {
     const integration = b.step("check-agent4-integration", "Execute consumer proofs under the selected World");
     const parser_intent = b.step("check-parser-intent", "Check EOF clarification through fresh World states");
     const composed_runtime = b.step("check-composed-owners-runtime", "Restore composed owners through cleanup");
+    const parser_selection = b.step("check-parser-selection", "Execute two recursively assessed parser constructions");
     const selection_runtime = b.step("check-selection-runtime", "Check recursive assessment and completion isolation");
     const compiled_tools_check = b.step("check-compiled-tools", "Execute one compiled text tool in standalone and Agent callers");
     const components_check = b.step("check-component-tools", "Reuse three effectful objects in Agent and two standalone Programs");
@@ -401,6 +410,12 @@ pub fn build(b: *std.Build) void {
         composed_run.step.dependOn(composed_images);
         composed_run.step.dependOn(&runtime_guard.step);
         composed_runtime.dependOn(&composed_run.step);
+        for ([_][]const u8{ "first", "last", "unavailable" }) |policy| {
+            const selection_case = b.addSystemCommand(&.{ "node", "test/agent4/parser_selection.mjs", runtime_path, policy });
+            selection_case.step.dependOn(parser_episode);
+            selection_case.step.dependOn(&runtime_guard.step);
+            parser_selection.dependOn(&selection_case.step);
+        }
         const selection_run = b.addSystemCommand(&.{ "node", "test/agent4/recursive_selection.mjs", runtime_path });
         selection_run.step.dependOn(selection_images);
         selection_run.step.dependOn(&runtime_guard.step);
@@ -432,6 +447,7 @@ pub fn build(b: *std.Build) void {
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
         runtime_work.dependOn(parser_intent);
         runtime_work.dependOn(selection_runtime);
+        runtime_work.dependOn(parser_selection);
         runtime_work.dependOn(composed_runtime);
         const repository_emitter_module = g.module("test/agent4/repository_replacement_emit.zig");
         repository_emitter_module.addImport("repository_app", g.module("test/consumers/repository/application.zig"));
@@ -598,6 +614,7 @@ pub fn build(b: *std.Build) void {
         integration.dependOn(&missing.step);
         parser_intent.dependOn(&missing.step);
         selection_runtime.dependOn(&missing.step);
+        parser_selection.dependOn(&missing.step);
         composed_runtime.dependOn(&missing.step);
         economy.dependOn(&missing.step);
     }

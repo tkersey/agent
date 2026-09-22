@@ -1054,7 +1054,7 @@ source file and uses the existing qualified executor. It returns source/runner/
 check-set bindings and finite acceptance, counterexample or unavailability. It
 has no model/approval/delivery adapter. Reserved-input evaluation remains separate
 from synthesis feedback; prior exposure is an environmental evaluation condition.
-An independent held-out task corpus and live model comparison remain outstanding.
+The reserved input partition satisfies the specification's task/input-split preparation. A separate task corpus is not added as a new acceptance gate; live model quality remains unmeasured and paid evaluation still needs external authorization.
 
 Validation passed: six oracle tests, both independent valid implementations on
 all 559 reserved-partition checks plus retention (561 candidate processes each),
@@ -1065,3 +1065,33 @@ per-call-override tests passed before any candidate execution. The extracted
 archive command returned exit 1 and a correctly bound counterexample for reject-all.
 Authoring checks passed 300 steps/130 tests; package emission passed 187 steps.
 No live inference or task-quality claim is added by these fixture observations.
+
+### Updated integrated dependency tuple
+
+Agent now authenticates Boundary `b40befad3fa214431961e60c375c012995817aac`
+against Git tree `5711235ab99210dcc9721a65a88536c3ee580d45`, with World still
+`5c3dea1c0443f026b2451581de77ec2e51085e57`. Downloaded source, Zig package,
+archive bytes, API files and normal build binding are refreshed together.
+The standard setup and offline verification passed; rebuilt World kernel bytes
+remain `df7fe1ae0ed0de7b2976c98b1534d1d55f4c341b7148837ce32f42ed8d011084`.
+
+The full normal `check-agent4-integration` run uses this authenticated tuple with
+two build jobs. Its result is tracked separately from the setup and focused
+witnesses; neither setup success nor prior sliced checks establish full integration.
+
+The remaining-acceptance audit distinguishes required work from optional research.
+The valid parser-specific alternate-consumer witness remains unproved by the
+current normal/forged consumer objects; numerical/general consumer swaps and
+first/last selection policies are different evidence. Final serial reviews also
+remain unstarted. The prepared reserved input split is complete as an input split;
+a paid live-model study is not required for implementation acceptance.
+
+The integrated run completed successfully: 280/280 build steps and 64/64 Zig
+tests; its packaged Node group passed 90 tests with zero failures/skips. All six
+top-level commands in the normal integration report exited zero, including the
+source-independent archive/source-consumer path and sequential runtime checks.
+The report binds dependency-lock digest
+`ef4bedef2e7c66c7f8baa1fdcdb84953d13a549acaaab4f7108e564d19fb90c5`.
+Qualified macOS executor coverage passed. Existing cross-engine fixture evidence
+remains separately scoped; this integrated run is not serial-review closeout or
+proof that every outstanding goal discriminator is implemented.

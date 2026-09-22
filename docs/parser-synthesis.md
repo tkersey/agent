@@ -114,3 +114,33 @@ partial source fragment. These modes are available in the source-independent
 archive and do not enable paid inference. The deterministic comparison in
 `docs/recursive-interaction.md` does not establish live model quality or universal
 strategy superiority.
+
+## Reserved input evaluation of a frozen artifact
+
+After construction ends, save the exact candidate source as a regular UTF-8 file
+and evaluate it without a model or delivery adapter:
+
+```sh
+node runtime/parser_evaluation.mjs --candidate frozen-parser.mjs --split heldout
+```
+
+`heldout` is the default. The command runs 68 shared mandatory edge-case traces
+and 491 reserved traces absent from the development set, plus both retention
+checks. `--split development` uses the original 536 traces. The report binds the
+source digest, immutable evaluation-set digest, seed, runner, language contract,
+executed/required counts and retention results. Exit codes are 0 for finite
+acceptance, 1 for a counterexample, and 2 for unavailable/invalid execution.
+`--eof-policy emit` selects the explicitly admitted alternate language meaning;
+strict EOF remains the default. Qualified isolation is required in either mode.
+
+Do not feed the reserved verdict back into construction and then describe a
+subsequent trial as held out. The command itself has no such feedback path, but
+it cannot certify what a human or external orchestrator previously exposed.
+This is a reserved **input** partition for the parser task, not an independent
+held-out task corpus or evidence of live model quality. No accepted patch or
+reserved input is placed in construction prompts by this command.
+
+Evaluation sets are fixed when an executor is created. Per-call seed/evaluation
+overrides reject. The set digest participates in the runner identity, so changing
+sets invalidates old subject/evidence bindings. This is not saved-State migration
+or permission to relabel an old assessment as current.

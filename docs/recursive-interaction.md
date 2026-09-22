@@ -1032,3 +1032,36 @@ the credential-free provider adapter. The prior selection-specific CLI test was
 not repeated; the comparison did not change its Program. Normal dependency
 bindings remain Boundary `5a8aa24bb179bc8defaa896ea776605261ed6539` and World
 `5c3dea1c0443f026b2451581de77ec2e51085e57`.
+
+### Immutable evaluation identity and reserved input partition
+
+A concrete pre-change witness created one executor and called `validate` with
+seeds 1 and 2. It reported 501 versus 521 required checks under the same runner
+identity (two actual reject-all candidate executions). That conflated the required
+check sets even though the tool subject used the runner as its binding.
+
+The executor now constructs one immutable evaluation plan and incorporates its
+metadata/digest into the runner. Per-call seed/evaluation overrides reject before
+candidate execution; a tool subject from the other split also rejects before
+execution. Development retains exactly the original 536 traces. The reserved
+partition uses seed 1831565813, shares 68 mandatory edge cases, and adds 491
+exact traces disjoint from development (559 total). Trace arrays, calls, chunks
+and metadata are frozen. This is a finite graph/data construction, not a new
+scheduler, wire format or runtime policy registry.
+
+The source-independent `parser_evaluation.mjs` command reads a bounded frozen
+source file and uses the existing qualified executor. It returns source/runner/
+check-set bindings and finite acceptance, counterexample or unavailability. It
+has no model/approval/delivery adapter. Reserved-input evaluation remains separate
+from synthesis feedback; prior exposure is an environmental evaluation condition.
+An independent held-out task corpus and live model comparison remain outstanding.
+
+Validation passed: six oracle tests, both independent valid implementations on
+all 559 reserved-partition checks plus retention (561 candidate processes each),
+and reject-all rejection. The original development suite retained its two valid
+acceptances and five distinct rejection results (1,650 candidate processes plus
+two qualification processes total). Cross-split subject rejection and immutable/
+per-call-override tests passed before any candidate execution. The extracted
+archive command returned exit 1 and a correctly bound counterexample for reject-all.
+Authoring checks passed 300 steps/130 tests; package emission passed 187 steps.
+No live inference or task-quality claim is added by these fixture observations.

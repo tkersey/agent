@@ -58,7 +58,7 @@ export async function createParserTools(options = {}) {
     if (!Array.isArray(subject) || subject.length !== 5 || !digest(subject[0])) throw new TypeError('subject shape');
     assert.deepEqual(subject.slice(1),expected,'subject selects another reference, requirement or runner');
   }
-  const tools={kind:'qualified',runner:executor.runner,
+  const tools={kind:'qualified',runner:executor.runner,evaluation:executor.evaluation,
     evidence:Object.freeze({reference:reference.toString('utf8'),requirements:requirements.toString('utf8')}),
     subject(base) { if(!digest(base))throw new TypeError('base digest');return [base,...expected]; },
     async reference(request) {

@@ -68,3 +68,20 @@ test('trace admission rejects malformed data before any execution', () => {
   assert.notEqual(traceIdentity([{ chunk: [], endOfInput: true }]),
     traceIdentity([{ chunk: [], endOfInput: false }]));
 });
+
+test('reserved evaluation inputs are disjoint and immutable while mandatory cases remain',async()=>{
+  const {evaluationPlan}=await import('../../runtime/parser_oracle.mjs');
+  const development=evaluationPlan(),heldout=evaluationPlan('heldout');
+  assert.deepEqual(development.traces,mandatoryTraces());
+  assert.notEqual(development.metadata.traceDigest,heldout.metadata.traceDigest);
+  assert.equal(development.metadata.required,536);
+  const anchors=development.traces.filter(row=>Number(row.name.split('-')[1])<15);
+  assert.deepEqual(heldout.traces.slice(0,anchors.length),anchors);
+  const seen=new Set(development.traces.map(row=>JSON.stringify(row.trace)));
+  const reserved=heldout.traces.slice(anchors.length);assert(reserved.length>0);
+  for(const row of reserved){const key=JSON.stringify(row.trace);assert(!seen.has(key));seen.add(key);}
+  assert.equal(reserved.length,heldout.metadata.reservedInputs);
+  assert.throws(()=>heldout.traces[0].trace[0].chunk.push(7),TypeError);
+  assert.throws(()=>{heldout.metadata.seed=0;},TypeError);
+  assert.throws(()=>evaluationPlan('unknown'),TypeError);
+});

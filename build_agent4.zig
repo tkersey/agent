@@ -216,6 +216,9 @@ pub fn build(b: *std.Build) void {
     parser_executor.step.dependOn(&parser_protocol.step);
     b.step("check-parser-executor", "Check incremental parser candidates in the qualified executor")
         .dependOn(&parser_executor.step);
+    const heldout_executor = b.addSystemCommand(&.{ "node", "test/agent4/parser_evaluation.test.mjs" });
+    b.step("check-parser-evaluation", "Check immutable held-out input evaluation and subject bindings")
+        .dependOn(&heldout_executor.step);
     const eof_executor = b.addSystemCommand(&.{ "node", "test/agent4/parser_eof_executor.mjs" });
     b.step("check-parser-eof-executor", "Check selected EOF policies against real candidate execution")
         .dependOn(&eof_executor.step);

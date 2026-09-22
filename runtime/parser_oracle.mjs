@@ -77,3 +77,30 @@ export function mandatoryTraces(seed = 0x13579bdf) {
   return samples.flatMap((bytes, sample) => partitions(bytes).map((trace, partition) =>
     ({ name: `sample-${sample}-partition-${partition}`, trace })));
 }
+
+/** Fixed input partitions. Shared mandatory edge cases are not called held out. */
+export function evaluationPlan(split = 'development') {
+  if (!['development','heldout'].includes(split)) throw new TypeError('unknown evaluation split');
+  const seed = split === 'development' ? 0x13579bdf : 0x6d2b79f5;
+  const development = mandatoryTraces(0x13579bdf);
+  const anchors = development.filter(row => Number(row.name.split('-')[1]) < 15);
+  let reserved = [];
+  if (split === 'heldout') {
+    const seen = new Set(development.map(row => JSON.stringify(row.trace)));
+    reserved = mandatoryTraces(seed).filter(row => {
+      const key = JSON.stringify(row.trace);
+      if (seen.has(key)) return false;
+      seen.add(key);return true;
+    });
+    if (reserved.length === 0) throw new Error('empty reserved input partition');
+  }
+  const traces = split === 'development' ? development : [...anchors,...reserved];
+  for (const row of traces) {
+    for (const call of row.trace) { Object.freeze(call.chunk);Object.freeze(call); }
+    Object.freeze(row.trace);Object.freeze(row);
+  }
+  Object.freeze(traces);
+  const metadata = Object.freeze({split,seed,required:traces.length,sharedMandatory:anchors.length,
+    reservedInputs:reserved.length,traceDigest:createHash('sha256').update(JSON.stringify(traces)).digest('hex')});
+  return Object.freeze({metadata,traces});
+}

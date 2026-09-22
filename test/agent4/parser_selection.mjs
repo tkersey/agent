@@ -5,12 +5,14 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
 import {verifyRuntime} from '../../tools/agent4/dependencies.mjs';
 import {decodeSchema,decodeValue,encodeValue} from '../../runtime/values.mjs';
 import {createParserTools} from '../../runtime/parser_tools.mjs';
 import {createParserDelivery} from '../../runtime/parser_delivery.mjs';
 import {decodedFields,rawRecords,bufferUntilEOF} from '../consumers/incremental-parser/candidates.mjs';
-const [runtimePath,policy='first']=process.argv.slice(2);assert(['first','last','unavailable'].includes(policy));
+const [runtimePath,policy='first',nativeTool,peerPath,browserTools]=process.argv.slice(2);
+assert.equal(Boolean(nativeTool),Boolean(peerPath));assert(!browserTools||peerPath);assert(['first','last','unavailable'].includes(policy));
 const runtime=verifyRuntime(resolve(runtimePath)),world=await import(pathToFileURL(runtime.entrypoint));
 const read=name=>readFile('zig-out/agent4/parser-construction/'+name);
 const image=await read('select-'+(policy==='unavailable'?'first':policy)+'.bpi3');
@@ -19,7 +21,10 @@ const model=decodeValue(decodeSchema(await read('model-schema.bin')),await read(
 const tools=await createParserTools();assert.equal(tools.kind,'qualified',JSON.stringify(tools));
 const hash=v=>createHash('sha256').update(v).digest('hex');
 const area=await mkdtemp(join(tmpdir(),'parser-selection-'));
+let peer,browser;const engines=[];
 try{
+ if(peerPath)peer=await(await import(pathToFileURL(resolve(peerPath)))).wasmtimePeer(runtime.kernelPath,runtime.kernelSha256);
+ if(browserTools)browser=await(await import('./recursive_browser.mjs')).browserPeer({worldEntry:runtime.entrypoint,kernelPath:runtime.kernelPath,tools:browserTools,engine:'chromium',sha256:runtime.kernelSha256});
  await writeFile(join(area,'parser.mjs'),tools.evidence.reference);
  const delivery=await createParserDelivery({root:area});
  model[3].push([2,`Frozen batch reference:\n${tools.evidence.reference}\nRequired behavior:\n${tools.evidence.requirements}`]);
@@ -30,7 +35,18 @@ try{
  let control='none',value=new Uint8Array(),models=0,checks=0,approvals=0,writes=0,reads=0,transfers=0,result;
  const references=[],acceptances=[],events=[];
  for(let n=0;;n++){
-  assert(n<256);const out=world.decodeOutcome(k.drive(s,{control,value,quantum:97,checkpoint:true}));
+  assert(n<256);const invocation={image,state:k.checkpoint(s),control,value,quantum:97};
+  const node=k.drive(s,{control,value,quantum:97,checkpoint:true});let returned=node,engine='Node';
+  if(peer){
+   const command=world.encodeInput(invocation);
+   const native=new Uint8Array(execFileSync(nativeTool,['invoke'],{input:command,maxBuffer:16<<20}));
+   const independent=(await peer.call('invoke',{bytes:command})).bytes;
+   assert.deepEqual(node,native);assert.deepEqual(independent,native);
+   const choices=[[node,'Node'],[native,'native'],[independent,'Wasmtime']];
+   if(browser){const actual=await browser.invoke(invocation);assert.deepEqual(actual,native);choices.unshift([actual,'Chromium Worker']);}
+   [returned,engine]=choices[n%choices.length];
+  }
+  engines.push(engine);const out=world.decodeOutcome(returned);
   if(out.kind==='completed'){result=decodeValue(resultSchema,out.value);k.close(s);assert.equal(k.usage().workingLive,0n);break;}
   if(out.kind==='requested'){
    const request=await world.decodeRequest(out.request),payload=decodeValue(decodeSchema(request.payloadSchema),request.payload);events.push(request.semanticIdentity);let reply;
@@ -66,5 +82,5 @@ try{
  assert.deepEqual(references,[17n,20n]);assert.equal(models,4);assert.equal(checks,4);
  if(policy==='unavailable'){assert.equal(result.tag,3);assert.equal(writes,0);assert.equal(reads,0);assert.equal(await readFile(join(area,'parser.mjs'),'utf8'),tools.evidence.reference);}
  else{assert.equal(result.tag,4);assert.equal(approvals,1);assert.equal(writes,1);assert.equal(reads,1);assert.equal(await readFile(join(area,'parser.mjs'),'utf8'),policy==='first'?decodedFields:rawRecords);}
- console.log(JSON.stringify({policy,imageBytes:image.length,models,checks,approvals,writes,reads,transfers,references:references.map(String),acceptances:acceptances.map(String),metrics:tools.metrics(),events}));
-}finally{await rm(area,{recursive:true,force:true});}
+ console.log(JSON.stringify({policy,imageBytes:image.length,models,checks,approvals,writes,reads,transfers,references:references.map(String),acceptances:acceptances.map(String),metrics:tools.metrics(),events,engines,browser:browser?.identity,workersDestroyed:browser?.workersDestroyed}));
+}finally{if(browser)await browser.close();if(peer)await peer.close();await rm(area,{recursive:true,force:true});}

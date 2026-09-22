@@ -916,3 +916,32 @@ passed all three documented-command tests, including zero-work invocation of
 both selection variants. This slice did not rerun the four-engine matrix for the
 new selection Programs or measure their timing/retention; preceding parser
 transfer results do not establish those new combinations.
+
+### Selection portability and CLI entry
+
+`test/agent4/parser_selection.mjs` accepts optional native-fixture, Wasmtime-peer
+and browser-tools paths after its runtime and policy arguments. At every boundary
+it compares the actual generic-kernel outcomes and rotates which destination's
+returned bytes continue the computation. Browser calls use newly created Workers;
+no participant control is reconstructed by the host.
+
+The packaged CLI now exposes `--selection single|first|last`, with `single` as its
+unchanged default. It chooses the corresponding hash-checked inventory image.
+Existing model/check counters remain shared across both assessments and outside
+World rollback. Selection does not grant approval or fixture write authority to
+the CLI. The loopback tests exercise exhausted allowance and a complete two-candidate
+run using the real provider adapter and qualified candidate tools, without credentials
+or paid inference.
+
+The `last` selection policy passed the four-engine path: 34 actual State
+transfers across Chromium 153.0.8010.12 Workers, Node/WASM, native World and
+independent Wasmtime, with 35 Workers destroyed. It retained both recursive
+assessments through real tools, then performed one target read, one approval and
+one fixture write. The 22,777-byte Program and generic kernel were unchanged.
+The first-policy and unavailable-result cases retain their prior Node/WASM
+evidence; this representative matrix does not imply a Cartesian host/case sweep.
+The extracted CLI suite passed all three tests with no skips: existing provider/
+EOF behavior, shared one-call exhaustion without a second provider request, and
+a complete `--selection last` run with four total model calls, four checks and
+1,078 isolated candidate executions. It returned the second accepted source as
+an artifact without approval/write authority. No paid provider calls ran.

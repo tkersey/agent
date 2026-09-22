@@ -80,3 +80,20 @@ Closed input also remains unresolved. This is intent selection, not approval.
 A zero-work task stops without asking and does not establish a preference for a
 future task. The existing clarification resolver retains the exact frozen subjects
 and occurrence; the host only supplies the typed answer and policy-bound leaves.
+
+## Optional comparison of two constructions
+
+`--selection first` and `--selection last` load the packaged two-construction
+Programs. Each alternative performs recursive fragment construction, consumer
+feedback, and authoritative acceptance. Both must establish acceptance before the
+chosen tie-break selects an artifact; an unavailable alternative leaves selection
+unresolved. These policies are ordering choices between accepted artifacts, not
+quality scores. `--selection single` is the default.
+
+The supplied `--max-model-calls` and `--max-checks` are total run allowances shared
+across alternatives. Selecting two does not double them or restore spent work on
+re-entry. Insufficient allowance returns the actual pending State and unresolved
+status. The report includes the selected policy and total usage. As with the
+single-construction CLI, selection returns a reviewable artifact and does not
+acquire fixture replacement approval or write authority. Live paid inference
+still requires the same explicit authorization and remains unrun here.

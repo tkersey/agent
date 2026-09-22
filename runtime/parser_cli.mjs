@@ -17,8 +17,8 @@ const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const json=value=>JSON.stringify(value,(_,item)=>typeof item==='bigint'?item.toString():item);
 export function parseParserOptions(args){
- const options={calls:0,checks:0,quanta:10000,allowPaid:false,eofPolicy:'strict'};const seen=new Set();
- const fields=new Map([['--eof-policy','eofPolicy'],['--world-runtime','runtime'],['--model','model'],['--endpoint','endpoint'],['--data-policy','dataPolicy'],['--key-env','keyEnv'],['--max-model-calls','calls'],['--max-checks','checks'],['--max-quanta','quanta']]);
+ const options={calls:0,checks:0,quanta:10000,allowPaid:false,eofPolicy:'strict',selection:'single'};const seen=new Set();
+ const fields=new Map([['--selection','selection'],['--eof-policy','eofPolicy'],['--world-runtime','runtime'],['--model','model'],['--endpoint','endpoint'],['--data-policy','dataPolicy'],['--key-env','keyEnv'],['--max-model-calls','calls'],['--max-checks','checks'],['--max-quanta','quanta']]);
  for(let i=0;i<args.length;i++){
   const name=args[i];assert(!seen.has(name),'repeated option');seen.add(name);
   if(name==='--allow-paid'){options.allowPaid=true;continue;}
@@ -26,6 +26,7 @@ export function parseParserOptions(args){
  }
  for(const name of ['calls','checks','quanta']){assert(/^\d+$/.test(String(options[name])),'invalid allowance');options[name]=Number(options[name]);assert(Number.isSafeInteger(options[name])&&options[name]>=0&&options[name]<=(name==='quanta'?10000:16),'allowance out of range');}
  assert(['strict','emit','ask'].includes(options.eofPolicy),'unknown EOF policy');
+ assert(['single','first','last'].includes(options.selection),'unknown selection policy');
  assert(options.runtime,'--world-runtime is required');assert(options.quanta>0,'positive work allowance required');
  if(options.calls){
   assert(options.model&&Buffer.byteLength(options.model)<=128,'explicit model required');
@@ -39,19 +40,19 @@ export function parseParserOptions(args){
  }else assert(!options.allowPaid&&!options.keyEnv,'credentials require an explicit positive call allowance');
  return Object.freeze(options);
 }
-async function installedInputs(){
+async function installedInputs(selection){
  const directory=join(root,'examples');
  const inventory=JSON.parse(await readFile(join(directory,'inventory.json'),'utf8'));
  const read=async path=>{const row=inventory.files.find(x=>x.path===path);assert(row,'missing parser inventory entry');const bytes=await readFile(join(directory,path));assert.equal(hash(bytes),row.sha256,'parser artifact changed');return bytes;};
  const folder='parser-construction/';
  const inputSchema=decodeSchema(await read(folder+'input-schema.bin'));
- return{image:await read(folder+'program.bpi3'),inputSchema,resultSchema:decodeSchema(await read(folder+'result-schema.bin')),input:decodeValue(inputSchema,await read(folder+'task.args'))};
+ return{image:await read(folder+(selection==='single'?'program.bpi3':`select-${selection}.bpi3`)),inputSchema,resultSchema:decodeSchema(await read(folder+'result-schema.bin')),input:decodeValue(inputSchema,await read(folder+'task.args'))};
 }
 export async function runParser(args){
  const options=parseParserOptions(args);
  const runtime=verifyRuntime(resolve(options.runtime));
  const world=await import(pathToFileURL(runtime.entrypoint));
- const installed=await installedInputs();
+ const installed=await installedInputs(options.selection);
  const input=structuredClone(installed.input),spent={models:0,checks:0,quanta:0,contextBytes:0,modelRequestBytes:0,modelReplyBytes:0,questions:0};
  let tools,delivery,area,apiKey;const bindings=new Map();
  try{
@@ -82,7 +83,7 @@ export async function runParser(args){
  let identity=(randomBytes(8).readBigUInt64LE()&((1n<<63n)-1n))||1n;
  const fresh=()=>world.Kernel.create({bytes,expectedSha256:runtime.kernelSha256,instanceId:identity++});
  let kernel=await fresh(),prepared=kernel.prepare(installed.image),session=kernel.start(prepared,encodeValue(installed.inputSchema,input));kernel.releasePrepared(prepared);
- const report=extra=>({format:'agent-parser-run/v1',...extra,spent:{...spent},metrics:tools?{physicalExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().physicalExecutions,0),qualificationExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().qualificationExecutions,0)}:undefined,kernelSha256:runtime.kernelSha256,imageSha256:hash(installed.image),paidAuthorization:options.allowPaid});
+ const report=extra=>({format:'agent-parser-run/v1',selection:options.selection,...extra,spent:{...spent},metrics:tools?{physicalExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().physicalExecutions,0),qualificationExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().qualificationExecutions,0)}:undefined,kernelSha256:runtime.kernelSha256,imageSha256:hash(installed.image),paidAuthorization:options.allowPaid});
  let control='none',value=new Uint8Array();
  const park=reason=>report({status:'unresolved',reason,state:Buffer.from(kernel.checkpoint(session,{transfer:true})).toString('base64'),resume:{control,value:Buffer.from(value).toString('base64')},environment:'ephemeral batch fixture; no automatic retry or resume'});
   while(spent.quanta<options.quanta){

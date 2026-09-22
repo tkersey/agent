@@ -9,10 +9,13 @@ import {pathToFileURL} from 'node:url';
 import {readFile} from 'node:fs/promises';
 import {verifyRuntime} from '../../tools/agent4/dependencies.mjs';
 import {parseParserOptions} from '../../runtime/parser_cli.mjs';
-import {bufferUntilEOF,emitFinalRecord} from '../consumers/incremental-parser/candidates.mjs';
+import {bufferUntilEOF,emitFinalRecord,decodedFields,rawRecords} from '../consumers/incremental-parser/candidates.mjs';
 const runtime=resolve(process.env.AGENT4_WORLD_RUNTIME??'.agent4-recursive-integrated/out/world-runtime');
 test('parser provider configuration is explicit and credentials are not implicit',()=>{
  assert.equal(parseParserOptions(['--world-runtime',runtime]).calls,0);
+ assert.equal(parseParserOptions(['--world-runtime',runtime]).selection,'single');
+ assert.equal(parseParserOptions(['--world-runtime',runtime,'--selection','last']).calls,0);
+ assert.throws(()=>parseParserOptions(['--world-runtime',runtime,'--selection','best']),/selection policy/);
  const common=['--world-runtime',runtime,'--model','fixture','--max-model-calls','1','--data-policy','fixture-only'];
  assert.throws(()=>parseParserOptions([...common,'--endpoint','https://api.openai.com/v1/responses']),/allow-paid/);
  assert.throws(()=>parseParserOptions([...common,'--endpoint','http://127.0.0.1:1234','--key-env','TEST_KEY','--allow-paid']),/OpenAI Responses endpoint/);
@@ -88,4 +91,31 @@ test('extracted parser command uses the real provider adapter without paid infer
  assert.equal(unsure.status,'unresolved');assert.equal(unsure.spent.questions,1);assert.equal(unsure.spent.models,0);
  const closed=await run(cwd,['--endpoint',`http://127.0.0.1:${server.address().port}`,'--model','fixture-model','--data-policy','fixture-only','--max-model-calls','1','--max-checks','1','--eof-policy','ask'],30000,'');
  assert.equal(closed.status,'unresolved');assert.equal(closed.spent.questions,1);assert.equal(closed.spent.models,0);
+});
+
+test('packaged selection uses one shared call allowance across both constructions',{timeout:360000},async t=>{
+ const area=await mkdtemp(join(tmpdir(),'parser-cli-selection-'));t.after(()=>rm(area,{recursive:true,force:true}));
+ execFileSync('tar',['-xzf',resolve('zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),'-C',area]);
+ const cwd=join(area,(await readdir(area))[0]);
+ for(const policy of ['first','last']){const zero=await run(cwd,['--selection',policy]);assert.equal(zero.selection,policy);assert.equal(zero.status,'unresolved');assert.equal(zero.spent.models,0);}
+ if(process.platform!=='darwin')return;
+ let calls=0,limited=true;
+ const server=createServer(async(req,res)=>{
+  try{
+   assert.equal(req.headers.authorization,undefined);let body='';for await(const chunk of req)body+=chunk;
+   const input=JSON.parse(body);assert.equal(input.model,'fixture-model');calls++;
+   const fragment=calls%2===1;
+   const name=limited?'unresolved':fragment?'fragment':'complete_candidate';
+   const args=limited?{reason:'No complete contribution.'}:{source:calls===1?bufferUntilEOF:calls===2?decodedFields:rawRecords,explanation:'The independent evaluator decides acceptance.'};
+   res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({status:'completed',error:null,output:[{type:'function_call',status:'completed',call_id:'same-provider-id',name,arguments:JSON.stringify(args)}]}));
+  }catch(error){res.writeHead(500);res.end(error.message);}
+ });
+ await new Promise(done=>server.listen(0,'127.0.0.1',done));t.after(()=>new Promise(done=>server.close(done)));
+ const args=['--endpoint',`http://127.0.0.1:${server.address().port}`,'--model','fixture-model','--data-policy','fixture-only','--selection','last'];
+ const stopped=await run(cwd,[...args,'--max-model-calls','1','--max-checks','1']);
+ assert.equal(calls,1);assert.equal(stopped.spent.models,1);assert.equal(stopped.status,'unresolved');assert.equal(stopped.reason,'model-call-allowance');
+ calls=0;limited=false;
+ const selected=await run(cwd,[...args,'--max-model-calls','4','--max-checks','4'],330000);
+ assert.equal(calls,4);assert.equal(selected.selection,'last');assert.equal(selected.status,'validated-artifact');assert.equal(selected.spent.models,4);assert.equal(selected.spent.checks,4);
+ assert.equal(selected.result.value.value[0][2],rawRecords);assert.equal(selected.paidAuthorization,false);assert.equal(selected.metrics.physicalExecutions,1078);
 });

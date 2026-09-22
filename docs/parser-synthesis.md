@@ -97,3 +97,20 @@ status. The report includes the selected policy and total usage. As with the
 single-construction CLI, selection returns a reviewable artifact and does not
 acquire fixture replacement approval or write authority. Live paid inference
 still requires the same explicit authorization and remains unrun here.
+
+## Complete-candidate strategies
+
+`--strategy react` uses the existing ReAct loop with retained candidate/evidence
+state. `--strategy complete` uses the recursive participants but requires complete
+candidate proposals, providing the focused ablation. Both can propose experiments
+and revise from counterexamples through the same adapters, required evaluator,
+clarification and delivery boundary. `--strategy recursive` remains this opt-in
+application's default. The `react` and `complete` strategies require `--selection single`;
+incompatible combinations reject rather than silently ignoring a policy.
+
+Call/check allowances remain total run limits for every strategy. Initial prompts
+and offered operations agree: complete-candidate modes do not request or offer a
+partial source fragment. These modes are available in the source-independent
+archive and do not enable paid inference. The deterministic comparison in
+`docs/recursive-interaction.md` does not establish live model quality or universal
+strategy superiority.

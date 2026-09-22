@@ -17,8 +17,8 @@ const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const json=value=>JSON.stringify(value,(_,item)=>typeof item==='bigint'?item.toString():item);
 export function parseParserOptions(args){
- const options={calls:0,checks:0,quanta:10000,allowPaid:false,eofPolicy:'strict',selection:'single'};const seen=new Set();
- const fields=new Map([['--selection','selection'],['--eof-policy','eofPolicy'],['--world-runtime','runtime'],['--model','model'],['--endpoint','endpoint'],['--data-policy','dataPolicy'],['--key-env','keyEnv'],['--max-model-calls','calls'],['--max-checks','checks'],['--max-quanta','quanta']]);
+ const options={calls:0,checks:0,quanta:10000,allowPaid:false,eofPolicy:'strict',selection:'single',strategy:'recursive'};const seen=new Set();
+ const fields=new Map([['--strategy','strategy'],['--selection','selection'],['--eof-policy','eofPolicy'],['--world-runtime','runtime'],['--model','model'],['--endpoint','endpoint'],['--data-policy','dataPolicy'],['--key-env','keyEnv'],['--max-model-calls','calls'],['--max-checks','checks'],['--max-quanta','quanta']]);
  for(let i=0;i<args.length;i++){
   const name=args[i];assert(!seen.has(name),'repeated option');seen.add(name);
   if(name==='--allow-paid'){options.allowPaid=true;continue;}
@@ -27,6 +27,8 @@ export function parseParserOptions(args){
  for(const name of ['calls','checks','quanta']){assert(/^\d+$/.test(String(options[name])),'invalid allowance');options[name]=Number(options[name]);assert(Number.isSafeInteger(options[name])&&options[name]>=0&&options[name]<=(name==='quanta'?10000:16),'allowance out of range');}
  assert(['strict','emit','ask'].includes(options.eofPolicy),'unknown EOF policy');
  assert(['single','first','last'].includes(options.selection),'unknown selection policy');
+ assert(['recursive','react','complete'].includes(options.strategy),'unknown strategy');
+ assert(options.strategy==='recursive'||options.selection==='single','selection requires recursive strategy');
  assert(options.runtime,'--world-runtime is required');assert(options.quanta>0,'positive work allowance required');
  if(options.calls){
   assert(options.model&&Buffer.byteLength(options.model)<=128,'explicit model required');
@@ -40,19 +42,19 @@ export function parseParserOptions(args){
  }else assert(!options.allowPaid&&!options.keyEnv,'credentials require an explicit positive call allowance');
  return Object.freeze(options);
 }
-async function installedInputs(selection){
+async function installedInputs({selection,strategy}){
  const directory=join(root,'examples');
  const inventory=JSON.parse(await readFile(join(directory,'inventory.json'),'utf8'));
  const read=async path=>{const row=inventory.files.find(x=>x.path===path);assert(row,'missing parser inventory entry');const bytes=await readFile(join(directory,path));assert.equal(hash(bytes),row.sha256,'parser artifact changed');return bytes;};
  const folder='parser-construction/';
  const inputSchema=decodeSchema(await read(folder+'input-schema.bin'));
- return{image:await read(folder+(selection==='single'?'program.bpi3':`select-${selection}.bpi3`)),inputSchema,resultSchema:decodeSchema(await read(folder+'result-schema.bin')),input:decodeValue(inputSchema,await read(folder+'task.args'))};
+ return{image:await read(folder+(strategy!=='recursive'?`${strategy}.bpi3`:selection==='single'?'program.bpi3':`select-${selection}.bpi3`)),inputSchema,resultSchema:decodeSchema(await read(folder+'result-schema.bin')),input:decodeValue(inputSchema,await read(folder+'task.args'))};
 }
 export async function runParser(args){
  const options=parseParserOptions(args);
  const runtime=verifyRuntime(resolve(options.runtime));
  const world=await import(pathToFileURL(runtime.entrypoint));
- const installed=await installedInputs(options.selection);
+ const installed=await installedInputs(options);
  const input=structuredClone(installed.input),spent={models:0,checks:0,quanta:0,contextBytes:0,modelRequestBytes:0,modelReplyBytes:0,questions:0};
  let tools,delivery,area,apiKey;const bindings=new Map();
  try{
@@ -65,6 +67,7 @@ export async function runParser(args){
   delivery=await createParserDelivery({root:area,eofPolicy:options.eofPolicy==='emit'?'emit':'strict'});
   bindings.set(tools.subject(hash(tools.evidence.reference))[4],{tools,delivery});
   input[0]=tools.subject(hash(tools.evidence.reference));input[1][1]=options.model;
+  if(options.strategy!=='recursive')input[1][3][1][1]='Propose a complete incremental parser using the required language. Later feedback may request experiments or revised complete source. Use only offered operations.';
   input[1][3].push([2,`Frozen batch reference:\n${tools.evidence.reference}\nRequired behavior:\n${tools.evidence.requirements}`]);
   input[2]=[[[92],false],[[110,10],false],[[],true]];
   input[1][3].push([2,`Concrete consumer trace: ${JSON.stringify(input[2])}`]);
@@ -73,6 +76,7 @@ export async function runParser(args){
    const alternative=await createParserTools({eofPolicy:'emit'});
    if(alternative.kind!=='qualified')return{format:'agent-parser-run/v1',status:'unresolved',reason:'executor-unavailable',capability:alternative,spent};
    const alternateModel=structuredClone(installed.input[1]);alternateModel[1]=options.model;
+   if(options.strategy!=='recursive')alternateModel[3][1][1]=input[1][3][1][1];
    alternateModel[3].push([2,`Frozen batch reference:\n${alternative.evidence.reference}\nRequired behavior:\n${alternative.evidence.requirements}`]);
    alternateModel[3].push([2,`Concrete consumer trace: ${JSON.stringify(input[2])}`]);
    input[9]={tag:1,value:[alternative.subject(input[0][0]),alternateModel]};
@@ -83,7 +87,7 @@ export async function runParser(args){
  let identity=(randomBytes(8).readBigUInt64LE()&((1n<<63n)-1n))||1n;
  const fresh=()=>world.Kernel.create({bytes,expectedSha256:runtime.kernelSha256,instanceId:identity++});
  let kernel=await fresh(),prepared=kernel.prepare(installed.image),session=kernel.start(prepared,encodeValue(installed.inputSchema,input));kernel.releasePrepared(prepared);
- const report=extra=>({format:'agent-parser-run/v1',selection:options.selection,...extra,spent:{...spent},metrics:tools?{physicalExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().physicalExecutions,0),qualificationExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().qualificationExecutions,0)}:undefined,kernelSha256:runtime.kernelSha256,imageSha256:hash(installed.image),paidAuthorization:options.allowPaid});
+ const report=extra=>({format:'agent-parser-run/v1',selection:options.selection,strategy:options.strategy,...extra,spent:{...spent},metrics:tools?{physicalExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().physicalExecutions,0),qualificationExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().qualificationExecutions,0)}:undefined,kernelSha256:runtime.kernelSha256,imageSha256:hash(installed.image),paidAuthorization:options.allowPaid});
  let control='none',value=new Uint8Array();
  const park=reason=>report({status:'unresolved',reason,state:Buffer.from(kernel.checkpoint(session,{transfer:true})).toString('base64'),resume:{control,value:Buffer.from(value).toString('base64')},environment:'ephemeral batch fixture; no automatic retry or resume'});
   while(spent.quanta<options.quanta){

@@ -74,6 +74,10 @@ const parserArgs=encodeValue(parserInput,[
 await add(`${parserRoot}/task.args`,'initial-args',parserArgs);
 await add(`${parserRoot}/program.bpi3`,'image');
 examples.push({name:'parser-synthesis',image:`${parserRoot}/program.bpi3`,initialArgs:`${parserRoot}/task.args`});
+for(const strategy of ['react','complete']){
+ const image=`${parserRoot}/${strategy}.bpi3`;await add(image,'image');
+ examples.push({name:`parser-${strategy}`,image,initialArgs:`${parserRoot}/task.args`});
+}
 for(const policy of ['first','last']){
   const image=`${parserRoot}/select-${policy}.bpi3`;await add(image,'image');
   examples.push({name:`parser-selection-${policy}`,image,initialArgs:`${parserRoot}/task.args`});

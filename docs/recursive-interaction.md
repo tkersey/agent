@@ -945,3 +945,90 @@ EOF behavior, shared one-call exhaustion without a second provider request, and
 a complete `--selection last` run with four total model calls, four checks and
 1,078 isolated candidate executions. It returned the second accepted source as
 an artifact without approval/write authority. No paid provider calls ran.
+
+### Parser strategy comparison inputs
+
+This comparison uses the frozen incremental-parser fixture, its real qualified
+executor and independent authoritative evaluator, the same typed model adapter,
+and the same shared approval/delivery constructions. All executions use the
+locked generic World kernel and fresh recovery at each quantum/effect boundary.
+No paid inference is authorized or run.
+
+Compare the existing `agent.react` loop with consumer-directed recursive
+construction and a complete-candidate-only ablation of recursive construction.
+ReAct retains its current candidate, counterexample/experiment and applicable
+reference observation; it may propose experiments, revise after rejection and
+resume actual saved State. It is not a transcript-restart baseline. The ablation
+keeps the same producer/consumer objects and changes the offered construction
+protocol to require complete candidates. No runtime speedup is inferred from a
+change in model/tool work.
+
+Before running: use equal three-call and corresponding experiment allowances,
+the same reference, required input language and acceptance contract. The scripted
+cases are (1) a valid initial source and (2) an invalid source, an additional
+experiment, and a valid revision. The offered partial/complete contribution kind
+is the declared strategy difference; candidate source, experiment input and
+provider adapter are held fixed. Scripted behavior proves control/effect work,
+not live model reasoning quality or a general win. Keep all attempted cases and
+false completion claims in the denominator.
+
+Record actual accepted artifacts, model calls/context bytes, checks/physical
+executions, reference requests/reuse, approval/write counts, Program bytes, peak
+checkpoint bytes and transfer count. A successful run must return the exact
+validated source. Failures, unavailable checks and allowance exhaustion must
+remain non-success. These are finite deterministic observations; no latency
+claim, universal memory bound or calibrated model-cost inference is made.
+
+The full required comparison also needs broader failure, base-change and intent
+cases, held-out/live readiness, and resource attribution. Do not promote the
+recursive strategy based only on the initial cases below.
+
+Initial matched observations (Zig 0.16.0, Node 26.9.0, locked World kernel;
+quantum 97, full checkpoint/fresh restore after every nonterminal outcome):
+
+| Case | Strategy | Model calls | Context bytes | Candidate processes | Max checkpoint bytes | Transfers |
+|---|---|---:|---:|---:|---:|---:|
+| Valid initial source | ReAct | 1 | 4594 | 538 | 25954 | 16 |
+| Valid initial source | Recursive fragment | 2 | 10460 | 539 | 37310 | 22 |
+| Valid initial source | Complete-only ablation | 1 | 4594 | 538 | 25989 | 17 |
+| Repair + experiment | ReAct | 3 | 16763 | 543 | 32394 | 27 |
+| Repair + experiment | Recursive fragment | 3 | 16868 | 540 | 40582 | 29 |
+| Repair + experiment | Complete-only ablation | 3 | 16763 | 543 | 41913 | 30 |
+
+Every row delivered the exact accepted fixture source after one target read and
+one approval; each fetched its reference once and retained it across fresh
+resumptions. Each run also paid two executor qualification processes, excluded
+from the candidate-process column. Context is supplied message UTF-8 bytes, not
+provider tokens. Checkpoint maxima are observations at the declared boundaries,
+not universal memory bounds or physical process RSS. No timing claim is made.
+
+The recursive fragment path loses on the easy case: one extra model call,
+5,866 extra context bytes (+127.7%) and 11,356 extra checkpoint bytes (+43.8%)
+versus ReAct. On repair it saves three candidate processes, but adds 105 context
+bytes (+0.6%) and 8,188 checkpoint bytes (+25.3%). Its image is 21,573 bytes versus
+ReAct's 19,096 (+2,477, 13.0%); the complete-only image is 21,544 bytes. These are
+new strategy/representation costs, not inherited foundation costs or a regression
+claim about unchanged foundation applications. Keep recursive construction opt-in;
+these cases do not justify a general quality or cost superiority claim.
+
+The additional unresolved-model and stale-reference cases preserve failure
+outcomes: neither can produce an accepted artifact or target write. These are
+explicit scripted/protocol cases, not a live model success-rate estimate. The
+broader live/held-out study and remaining task variants are still unmeasured.
+
+Across this fixed four-case set, each strategy produced two accepted artifacts
+and two expected unresolved outcomes, with zero false completion claims. ReAct
+and the ablation used five total model calls per two accepted artifacts (2.5);
+recursive fragment construction used six (3.0). Candidate processes were 1,081,
+1,081 and 1,079 respectively, plus eight qualification processes per strategy.
+These intentionally weighted fixture totals are not population success rates or
+live cost-per-task estimates. All twelve runs used actual fresh State recovery;
+no native/browser/Wasmtime claim is made here for the new ReAct Program.
+
+Authoring checks passed 300 build steps and 130 tests. Package emission passed
+187 steps. Two focused extracted CLI tests passed, including zero-work baseline
+modes and a one-model-call ReAct candidate accepted by the real evaluator through
+the credential-free provider adapter. The prior selection-specific CLI test was
+not repeated; the comparison did not change its Program. Normal dependency
+bindings remain Boundary `5a8aa24bb179bc8defaa896ea776605261ed6539` and World
+`5c3dea1c0443f026b2451581de77ec2e51085e57`.

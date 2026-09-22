@@ -151,6 +151,7 @@ pub fn build(b: *std.Build) void {
     check.dependOn(parser_proposals);
     const parser_episode = b.step("parser-construction-images", "Emit consumer-directed parser construction");
     const parser_app = g.emitter("parser-construction", g.module("test/consumers/incremental-parser/main.zig"));
+    g.emit(parser_episode, parser_app, &.{"react"}, "parser-construction/react.bpi3");
     const disposition_negative = b.addSystemCommand(&.{ "node", "test/agent4/parser_disposition_negative.mjs" });
     disposition_negative.addArtifactArg(parser_app);
     parser_episode.dependOn(&disposition_negative.step);
@@ -180,6 +181,12 @@ pub fn build(b: *std.Build) void {
         selected_link.addFileArg(parser_reference_bytes);
         parser_episode.dependOn(&b.addInstallFileWithDir(selected_link.captureStdOut(.{}), .prefix, b.fmt("agent4/parser-construction/select-{s}.bpi3", .{policy})).step);
     }
+    const complete_link = b.addRunArtifact(parser_app);
+    complete_link.addArg("link-complete");
+    complete_link.addFileArg(parser_producer_bytes);
+    complete_link.addFileArg(parser_consumer_bytes);
+    complete_link.addFileArg(parser_reference_bytes);
+    parser_episode.dependOn(&b.addInstallFileWithDir(complete_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/complete.bpi3").step);
     const retained_link = b.addRunArtifact(parser_app);
     retained_link.addArg("link-retained");
     retained_link.addFileArg(parser_producer_bytes);
@@ -377,6 +384,7 @@ pub fn build(b: *std.Build) void {
     const integration = b.step("check-agent4-integration", "Execute consumer proofs under the selected World");
     const parser_intent = b.step("check-parser-intent", "Check EOF clarification through fresh World states");
     const composed_runtime = b.step("check-composed-owners-runtime", "Restore composed owners through cleanup");
+    const parser_comparison = b.step("check-parser-comparison", "Compare parser ReAct, recursive and complete-candidate strategies");
     const parser_selection = b.step("check-parser-selection", "Execute two recursively assessed parser constructions");
     const selection_runtime = b.step("check-selection-runtime", "Check recursive assessment and completion isolation");
     const compiled_tools_check = b.step("check-compiled-tools", "Execute one compiled text tool in standalone and Agent callers");
@@ -416,6 +424,14 @@ pub fn build(b: *std.Build) void {
             selection_case.step.dependOn(&runtime_guard.step);
             parser_selection.dependOn(&selection_case.step);
         }
+        for ([_][]const u8{ "react", "recursive", "complete" }) |strategy| {
+            for ([_][]const u8{ "easy", "repair", "unresolved", "stale" }) |scenario| {
+                const comparison = b.addSystemCommand(&.{ "node", "test/agent4/parser_comparison.mjs", runtime_path, strategy, scenario });
+                comparison.step.dependOn(parser_episode);
+                comparison.step.dependOn(&runtime_guard.step);
+                parser_comparison.dependOn(&comparison.step);
+            }
+        }
         const selection_run = b.addSystemCommand(&.{ "node", "test/agent4/recursive_selection.mjs", runtime_path });
         selection_run.step.dependOn(selection_images);
         selection_run.step.dependOn(&runtime_guard.step);
@@ -448,6 +464,7 @@ pub fn build(b: *std.Build) void {
         runtime_work.dependOn(parser_intent);
         runtime_work.dependOn(selection_runtime);
         runtime_work.dependOn(parser_selection);
+        runtime_work.dependOn(parser_comparison);
         runtime_work.dependOn(composed_runtime);
         const repository_emitter_module = g.module("test/agent4/repository_replacement_emit.zig");
         repository_emitter_module.addImport("repository_app", g.module("test/consumers/repository/application.zig"));
@@ -615,6 +632,7 @@ pub fn build(b: *std.Build) void {
         parser_intent.dependOn(&missing.step);
         selection_runtime.dependOn(&missing.step);
         parser_selection.dependOn(&missing.step);
+        parser_comparison.dependOn(&missing.step);
         composed_runtime.dependOn(&missing.step);
         economy.dependOn(&missing.step);
     }

@@ -14,6 +14,8 @@ const runtime=resolve(process.env.AGENT4_WORLD_RUNTIME??'.agent4-recursive-integ
 test('parser provider configuration is explicit and credentials are not implicit',()=>{
  assert.equal(parseParserOptions(['--world-runtime',runtime]).calls,0);
  assert.equal(parseParserOptions(['--world-runtime',runtime]).selection,'single');
+ assert.equal(parseParserOptions(['--world-runtime',runtime]).strategy,'recursive');
+ assert.throws(()=>parseParserOptions(['--world-runtime',runtime,'--strategy','react','--selection','last']),/selection requires/);
  assert.equal(parseParserOptions(['--world-runtime',runtime,'--selection','last']).calls,0);
  assert.throws(()=>parseParserOptions(['--world-runtime',runtime,'--selection','best']),/selection policy/);
  const common=['--world-runtime',runtime,'--model','fixture','--max-model-calls','1','--data-policy','fixture-only'];
@@ -30,21 +32,22 @@ async function run(cwd,args,timeout=30000,input){
  const timer=setTimeout(()=>child.kill('SIGKILL'),timeout);
  try{const code=await new Promise((done,reject)=>{child.on('error',reject);child.on('exit',done);});assert.equal(code,0,error);return JSON.parse(output);}finally{clearTimeout(timer);}
 }
-test('extracted parser command uses the real provider adapter without paid inference',{timeout:300000},async t=>{
+test('extracted parser command uses the real provider adapter without paid inference',{timeout:360000},async t=>{
  const area=await mkdtemp(join(tmpdir(),'parser-cli-package-'));t.after(()=>rm(area,{recursive:true,force:true}));
  execFileSync('tar',['-xzf',resolve('zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),'-C',area]);
  const cwd=join(area,(await readdir(area))[0]);
  const zero=await run(cwd,[]);assert.equal(zero.status,'unresolved');assert.equal(zero.spent.models,0);assert.equal(zero.spent.checks,0);
+ for(const strategy of ['react','complete']){const baseline=await run(cwd,['--strategy',strategy]);assert.equal(baseline.strategy,strategy);assert.equal(baseline.status,'unresolved');assert.equal(baseline.spent.models,0);}
  if(process.platform!=='darwin')return;
- let calls=0,repair=false,repairCalls=0;
+ let calls=0,repair=false,repairCalls=0,baseline=false;
  const server=createServer(async(req,res)=>{
   try{
    assert.equal(req.headers.authorization,undefined);let body='';for await(const chunk of req)body+=chunk;
    const input=JSON.parse(body);assert.equal(input.model,'fixture-model');assert.match(body,/Frozen batch reference/);
-   const later=repair&&repairCalls>0;
-   assert.deepEqual(input.tools.map(x=>x.name),later?['fragment','complete_candidate','experiment','unresolved']:['fragment','unresolved']);calls++;
-   const name=repair?(repairCalls===0?'fragment':repairCalls===1?'experiment':'complete_candidate'):'unresolved';
-   const args=!repair?{reason:'Fixture cannot establish a complete parser.'}:repairCalls===1?
+   const later=baseline||repair&&repairCalls>0;
+   assert.deepEqual(input.tools.map(x=>x.name),baseline?['complete_candidate','unresolved']:later?['fragment','complete_candidate','experiment','unresolved']:['fragment','unresolved']);calls++;
+   const name=baseline?'complete_candidate':repair?(repairCalls===0?'fragment':repairCalls===1?'experiment':'complete_candidate'):'unresolved';
+   const args=baseline?{source:decodedFields,explanation:'A complete candidate for independent acceptance.'}:!repair?{reason:'Fixture cannot establish a complete parser.'}:repairCalls===1?
     {input_hex:'610a',first_chunk_bytes:1,chunk_bytes:1,finalize:true,reason:'Check record termination at final input.'}:
     {source:repairCalls===0?bufferUntilEOF:emitFinalRecord,explanation:'Provider fixture proposes source; the real evaluator decides acceptance.'};
    if(repair){assert.match(body,/EOF_POLICY = 'emit'/);assert.match(body,/unfinished record is emitted at EOF/);}
@@ -91,6 +94,9 @@ test('extracted parser command uses the real provider adapter without paid infer
  assert.equal(unsure.status,'unresolved');assert.equal(unsure.spent.questions,1);assert.equal(unsure.spent.models,0);
  const closed=await run(cwd,['--endpoint',`http://127.0.0.1:${server.address().port}`,'--model','fixture-model','--data-policy','fixture-only','--max-model-calls','1','--max-checks','1','--eof-policy','ask'],30000,'');
  assert.equal(closed.status,'unresolved');assert.equal(closed.spent.questions,1);assert.equal(closed.spent.models,0);
+ baseline=true;const before=calls;
+ const direct=await run(cwd,['--endpoint',`http://127.0.0.1:${server.address().port}`,'--model','fixture-model','--data-policy','fixture-only','--max-model-calls','1','--max-checks','1','--strategy','react'],240000);
+ assert.equal(calls,before+1);assert.equal(direct.strategy,'react');assert.equal(direct.status,'validated-artifact');assert.equal(direct.spent.models,1);assert.equal(direct.spent.checks,1);assert.equal(direct.result.value.value[0][2],decodedFields);
 });
 
 test('packaged selection uses one shared call allowance across both constructions',{timeout:360000},async t=>{

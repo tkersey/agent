@@ -340,12 +340,15 @@ fn defineProbe(c: agent.Context, t: Types) !void {
 }
 
 const Application = struct {
+    var react_mode = false;
+    var complete_only = false;
     var retain_idle = false;
     var selection: enum { none, first, last } = .none;
     var producer: []const u8 = &.{};
     var consumer: []const u8 = &.{};
     var reference_bytes: []const u8 = &.{};
     pub fn emit(c: agent.Context) !source.Module {
+        if (react_mode) return emitReact(c);
         const b = c.builder;
         const t = try types(b);
         try c.registry.classify(t.model, .model);
@@ -518,6 +521,17 @@ pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();
     const mode = args.next() orelse return error.ExpectedMode;
+    if (std.mem.eql(u8, mode, "react")) {
+        if (args.next() != null) return error.UnexpectedArgument;
+        Application.react_mode = true;
+        Application.complete_only = true;
+        var compiled = try agent.compile(init.gpa, System);
+        defer compiled.deinit();
+        const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+        defer init.gpa.free(bytes);
+        _ = try compiled.encode(init.gpa, bytes);
+        return output(init, bytes);
+    }
     if (std.mem.eql(u8, mode, "producer-drop") or std.mem.eql(u8, mode, "producer-duplicate")) {
         if (args.next() != null) return error.UnexpectedArgument;
         ReturnOrDispose.invalid = if (std.mem.eql(u8, mode, "producer-drop")) .drop else .duplicate;
@@ -525,7 +539,8 @@ pub fn main(init: std.process.Init) !void {
         defer init.gpa.free(bytes);
         return output(init, bytes);
     }
-    if (std.mem.eql(u8, mode, "link") or std.mem.eql(u8, mode, "link-retained") or std.mem.eql(u8, mode, "link-select-first") or std.mem.eql(u8, mode, "link-select-last")) {
+    if (std.mem.eql(u8, mode, "link") or std.mem.eql(u8, mode, "link-retained") or std.mem.eql(u8, mode, "link-select-first") or std.mem.eql(u8, mode, "link-select-last") or std.mem.eql(u8, mode, "link-complete")) {
+        Application.complete_only = std.mem.eql(u8, mode, "link-complete");
         Application.retain_idle = std.mem.eql(u8, mode, "link-retained");
         Application.selection = if (std.mem.eql(u8, mode, "link-select-first")) .first else if (std.mem.eql(u8, mode, "link-select-last")) .last else .none;
         const p = args.next() orelse return error.ExpectedProducer;
@@ -622,12 +637,12 @@ fn arithmetic(b: *source.Builder, opcode: boundary.data.program.Opcode, left: Id
 fn offered(c: agent.Context, state: Id) !Id {
     const version = try field(c.builder, u64, state, 2);
     const first = try c.builder.primitive(try c.builder.scalar(bool), .equal, &.{ version, try c.builder.constant(u64, 1) }, 0);
-    const permit_complete = try c.builder.primitive(try c.builder.scalar(bool), .equal, &.{ first, try c.builder.constant(bool, false) }, 0);
+    const permit_complete = if (Application.complete_only) try c.builder.constant(bool, true) else try c.builder.primitive(try c.builder.scalar(bool), .equal, &.{ first, try c.builder.constant(bool, false) }, 0);
     const prior_tag = try c.builder.primitive(try c.builder.scalar(u64), .variant_tag, &.{try field(c.builder, ?Report, state, 4)}, 0);
     const permit_experiment = try c.builder.primitive(try c.builder.scalar(bool), .equal, &.{ prior_tag, try c.builder.constant(u64, 1) }, 0);
     return c.builder.primitive(try c.schema([5]bool), .sequence, &.{
-        try c.builder.constant(bool, true),  permit_complete,                    permit_experiment,
-        try c.builder.constant(bool, false), try c.builder.constant(bool, true),
+        try c.builder.constant(bool, !Application.complete_only), permit_complete,                    permit_experiment,
+        try c.builder.constant(bool, false),                      try c.builder.constant(bool, true),
     }, 0);
 }
 fn revisionPrompt(c: agent.Context, request: Id, state: Id) !Id {
@@ -828,7 +843,7 @@ fn completion(c: agent.Context, t: Types, owner: Id, acceptance: Id, state: Id, 
         .{ .variable = try b.variable(try c.schema(agent.parser_delivery.Result)), .body = rejected },
     } } });
 }
-fn acceptCandidate(c: agent.Context, t: Types, owner: Id, acceptance: Id, state: Id, constructed: Id) !Id {
+fn acceptCandidate(c: agent.Context, t: Types, owner: ?Id, acceptance: Id, state: Id, constructed: Id) !Id {
     const b = c.builder;
     const input = try field(b, Input, state, 0);
     const candidate = try field(b, parser.Candidate, constructed, 0);
@@ -841,7 +856,7 @@ fn acceptCandidate(c: agent.Context, t: Types, owner: Id, acceptance: Id, state:
     const report = try b.reference(report_slot);
     const recorded = try makeReport(b, candidate, try b.reference(reply), try literal(b, ?parser.proposals.Experiment, null), try literal(b, ?Counterexample, null));
     const finished = try b.pure(try b.primitive(t.contribution, .variant, &.{report}, 2));
-    const again = try retryCompletion(c, t, owner, input, constructed, report, finished);
+    const again = if (owner) |retry| try retryCompletion(c, t, retry, input, constructed, report, finished) else finished;
     const assessment = try b.variable(try c.schema(parser.Assessment));
     const assessed = try b.term(.{ .conditional = .{ .condition = try field(b, bool, try b.reference(assessment), 0), .when_true = try completeAssessment(b, t, try b.reference(assessment), finished), .when_false = again } });
     const outcome = try field(b, @FieldType(parser.ExecutionReply, "outcome"), try b.reference(reply), 2);
@@ -1003,4 +1018,110 @@ fn acceptedContribution(b: *source.Builder, t: Types, value: Id, yes: Id, no: Id
         .{ .variable = try b.variable(try agent.contracts.schema(agent.contracts.Text(512), b)), .body = no },
         .{ .variable = try b.variable(try agent.contracts.schema(agent.parser_delivery.Result, b)), .body = no },
     } } });
+}
+
+// Complete-candidate comparator on the existing ReAct construction. Ordinary
+// state retains observations; there is no transcript-driven host restart loop.
+fn emitReact(c: agent.Context) !source.Module {
+    const b = c.builder;
+    const t = try types(b);
+    const unit = try b.scalar(void);
+    try c.registry.classify(t.model, .model);
+    try c.registry.classify(t.reference, .read);
+    try c.registry.classify(t.execution, .simulation);
+    try c.registry.classify(t.release, .read);
+    try defineSample(c, t);
+    try defineProbe(c, t);
+    // Shared schema setup reserves the reciprocal factory; ReAct has no caller.
+    // A valid unreachable body keeps source admission complete; lowering removes it.
+    try b.define(t.reference_factory, try b.term(.{ .fail = try b.constant(void, {}) }));
+    const acceptance = try c.external(parser.execution_identity, try c.schema(parser.ExecutionRequest), try c.schema(parser.ExecutionReply), .simulation);
+    const effects = &.{ t.model, t.reference, t.execution, t.release, acceptance };
+    const working = try b.schema(.{ .sum = &.{ t.state, t.contribution } });
+    const action = try b.schema(.{ .product = &.{ t.state, t.contribution } });
+    const step_type = try agent.react.step(b, action, t.contribution);
+    const decide = try b.declare(&.{working}, step_type.schema, effects, &.{});
+    const execute = try b.declare(&.{action}, action, effects, &.{});
+    const fold = try b.declare(&.{ working, action }, working, &.{}, &.{});
+    const active = try b.variable(t.state);
+    const done = try b.variable(t.contribution);
+    const state = try b.reference(active);
+    const input = try field(b, Input, state, 0);
+    const ref_type = try c.schema(parser.ReferenceReply);
+    const reference = try b.variable(ref_type);
+    const cached = try b.variable(ref_type);
+    const request = try b.primitive(try c.schema(parser.ReferenceRequest), .product, &.{ try field(b, parser.Subject, input, 0), try field(b, u64, input, 3), try field(b, parser.Trace, input, 2) }, 0);
+    const observed = try b.term(.{ .match_sum = .{ .value = try field(b, ?parser.ReferenceReply, state, 5), .cases = &.{
+        .{ .variable = try b.variable(unit), .body = try b.term(.{ .perform = .{ .effect = t.reference, .payload = request } }) },
+        .{ .variable = cached, .body = try b.pure(try b.reference(cached)) },
+    } } });
+    const saved = try b.primitive(t.state, .product, &.{ input, try b.constant(bool, false), try field(b, u64, state, 2), try field(b, u64, state, 3), try field(b, ?Report, state, 4), try b.primitive(try c.schema(?parser.ReferenceReply), .variant, &.{try b.reference(reference)}, 1) }, 0);
+    const proposal = try b.variable(t.contribution);
+    const constraint = try b.primitive(try c.schema(Constraint), .product, &.{ saved, try b.reference(reference) }, 0);
+    const act = try b.pure(try agent.react.continueWith(b, step_type, try b.primitive(action, .product, &.{ saved, try b.reference(proposal) }, 0)));
+    const sampling = try b.bind(reference, observed, try b.bind(proposal, try b.term(.{ .call = .{ .function = t.sample, .arguments = &.{ saved, constraint } } }), act));
+    const exhausted = try b.primitive(try b.scalar(bool), .equal, &.{ try field(b, u64, state, 3), try b.constant(u64, 0) }, 0);
+    const stopped = try b.variable(t.contribution);
+    const stop = try b.bind(stopped, try unresolved(b, t, "Construction allowance exhausted."), try b.pure(try agent.react.finishWith(b, step_type, try b.reference(stopped))));
+    try b.define(decide, try b.term(.{ .match_sum = .{ .value = try b.reference(b.parameter(decide, 0)), .cases = &.{
+        .{ .variable = active, .body = try b.term(.{ .conditional = .{ .condition = exhausted, .when_true = stop, .when_false = sampling } }) },
+        .{ .variable = done, .body = try b.pure(try agent.react.finishWith(b, step_type, try b.reference(done))) },
+    } } }));
+    const pending = try b.reference(b.parameter(execute, 0));
+    const before = try b.primitive(t.state, .field, &.{pending}, 0);
+    const value = try b.primitive(t.contribution, .field, &.{pending}, 1);
+    const candidate = try b.variable(try c.schema(Constructed));
+    const checked = try b.variable(t.contribution);
+    const unchanged = try b.pure(value);
+    const inspection = try b.term(.{ .match_sum = .{ .value = value, .cases = &.{
+        .{ .variable = try b.variable(try c.schema(Constraint)), .body = try unresolved(b, t, "Unexpected reference contribution.") },
+        .{ .variable = candidate, .body = try acceptCandidate(c, t, null, acceptance, before, try b.reference(candidate)) },
+        .{ .variable = try b.variable(try c.schema(Report)), .body = unchanged },
+        .{ .variable = try b.variable(try c.schema(agent.contracts.Text(512))), .body = unchanged },
+        .{ .variable = try b.variable(try c.schema(agent.parser_delivery.Result)), .body = try unresolved(b, t, "Proposal has no completion authority.") },
+    } } });
+    try b.define(execute, try b.bind(checked, inspection, try b.pure(try b.primitive(action, .product, &.{ before, try b.reference(checked) }, 0))));
+    const observation = try b.reference(b.parameter(fold, 1));
+    const prior = try b.primitive(t.state, .field, &.{observation}, 0);
+    const outcome = try b.primitive(t.contribution, .field, &.{observation}, 1);
+    const completed = try b.pure(try b.primitive(working, .variant, &.{outcome}, 1));
+    const report = try b.variable(try c.schema(Report));
+    const report_value = try b.reference(report);
+    const following = try b.primitive(t.state, .product, &.{ try field(b, Input, prior, 0), try b.constant(bool, false), try arithmetic(b, .integer_add, try field(b, u64, prior, 2), try b.constant(u64, 1)), try arithmetic(b, .integer_sub, try field(b, u64, prior, 3), try b.constant(u64, 1)), try b.primitive(try c.schema(?Report), .variant, &.{report_value}, 1), try field(b, ?parser.ReferenceReply, prior, 5) }, 0);
+    const again = try b.pure(try b.primitive(working, .variant, &.{following}, 0));
+    const remaining = try b.primitive(try b.scalar(bool), .less, &.{ try b.constant(u64, 1), try field(b, u64, prior, 3) }, 0);
+    const retry = try b.term(.{ .conditional = .{ .condition = remaining, .when_true = again, .when_false = completed } });
+    const unresolved_report = try b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
+        .{ .variable = try b.variable(try c.schema(Constraint)), .body = completed },
+        .{ .variable = try b.variable(try c.schema(Constructed)), .body = completed },
+        .{ .variable = report, .body = retry },
+        .{ .variable = try b.variable(try c.schema(agent.contracts.Text(512))), .body = completed },
+        .{ .variable = try b.variable(try c.schema(agent.parser_delivery.Result)), .body = completed },
+    } } });
+    try b.define(fold, try acceptedContribution(b, t, outcome, completed, unresolved_report));
+    const decide_type = try callable(b, &.{working}, step_type.schema, effects);
+    const execute_type = try callable(b, &.{action}, action, effects);
+    const fold_type = try callable(b, &.{ working, action }, working, &.{});
+    const loop = try agent.react.define(b, .{ .state = working, .step = step_type, .observation = action, .decide = decide_type, .execute = execute_type, .fold = fold_type, .residual = .{ .effects = effects } });
+    const d = try agent.parser_delivery.define(c);
+    try c.registry.speculate(loop.function, effects);
+    const intent = try agent.parser_intent.define(c);
+    const delivery_effects = (try (source.Row{ .effects = effects }).unionWith(b.allocator(), .{ .effects = d.effects })).effects;
+    const all_effects = (try (source.Row{ .effects = delivery_effects }).unionWith(b.allocator(), .{ .effects = &.{intent.effect} })).effects;
+    const entry = try b.declare(&.{t.input}, t.contribution, all_effects, &.{});
+    const selected_input = try b.variable(t.input);
+    const initial_input = try b.reference(selected_input);
+    const initial = try b.primitive(t.state, .product, &.{ initial_input, try b.constant(bool, false), try b.constant(u64, 1), try field(b, u64, initial_input, 4), try literal(b, ?Report, null), try literal(b, ?parser.ReferenceReply, null) }, 0);
+    const result = try b.variable(t.contribution);
+    const perform = try b.bind(result, try agent.react.run(b, loop, try b.primitive(working, .variant, &.{initial}, 0), try b.lambda(decide, decide_type), try b.lambda(execute, execute_type), try b.lambda(fold, fold_type)), try finishAssessment(c, t, entry, d, initial_input, try b.reference(result)));
+    const selected = try b.variable(try c.schema(?Input));
+    const dispatch = try b.term(.{ .match_sum = .{ .value = try b.reference(selected), .cases = &.{
+        .{ .variable = try b.variable(unit), .body = try unresolved(b, t, "EOF behavior remains unresolved.") },
+        .{ .variable = selected_input, .body = perform },
+    } } });
+    try b.define(entry, try b.bind(selected, try chooseInput(c, t, intent, try b.reference(b.parameter(entry, 0))), dispatch));
+    return b.module(entry, unit);
+}
+fn callable(b: *source.Builder, parameters: []const Id, result: Id, effects: []const Id) !Id {
+    return b.schema(.{ .internal = .{ .computation = .{ .parameters = parameters, .result = result, .effects = effects } } });
 }

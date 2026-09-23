@@ -6,6 +6,23 @@ import { createParserSandbox } from './inquiry_sandbox.mjs';
 import { contractFor, admitTrace, observations, evaluationPlan, traceIdentity } from './parser_oracle.mjs';
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 
+// A completed counterexample is decisive even if another check is inconclusive.
+export function evaluationDisposition(result) {
+  const checks = [...result.checks, ...result.retention];
+  const rejected = checks.find(check => check.kind === 'completed' && check.passed === false);
+  if (rejected) return { status: 'rejected', first: rejected };
+  const unavailable = checks.find(check => check.kind !== 'completed');
+  const complete = result.required > 0 && result.checks.length === result.required &&
+    result.retention.length === 2 && checks.every(check => check.kind === 'completed' && check.passed === true);
+  return { status: complete ? 'accepted' : 'unavailable', first: unavailable ?? null };
+}
+
+export function completedHistoryGrowth(rows) {
+  const baseline = rows[0]?.stateBytes ?? 0;
+  const peak = Math.max(0, ...rows.map(row => row.stateBytes));
+  return { baseline, peak, growth: Math.max(0, peak - baseline), maximumGrowth: 2048 };
+}
+
 export async function createParserExecutor(options = {}) {
   const { eofPolicy = 'strict', evaluation = 'development', ...sandboxOptions } = options;
   const plan = evaluationPlan(evaluation);
@@ -61,19 +78,18 @@ export async function createParserExecutor(options = {}) {
       }));
       completed.push({ chunk: [], endOfInput: true });
       const history = await probe(source, completed, { signal });
-      const peak = Math.max(0, ...(history.rows ?? []).map(row => row.stateBytes));
-      retention.push({ name: 'completed-history', ...history, peak, maximum: 2048,
-        passed: history.passed && peak <= 2048 });
+      const growth = completedHistoryGrowth(history.rows ?? []);
+      retention.push({ name: 'completed-history', ...history, ...growth,
+        passed: history.passed && growth.growth <= growth.maximumGrowth });
       const unfinished = Array.from({ length: 128 }, () => ({ chunk: Array(64).fill(97), endOfInput: false }));
       unfinished.push({ chunk: [10], endOfInput: true });
       const field = await probe(source, unfinished, { signal });
       retention.push({ name: 'unfinished-field', ...field,
         peak: Math.max(0, ...(field.rows ?? []).map(row => row.stateBytes)) });
     }
-    return { sourceDigest: digest(source), runner, acceptanceContract: acceptanceContract,
-      seed: plan.metadata.seed, evaluation: plan.metadata, required, executed: checks.length,
-      passed: checks.length === required && checks.every(check => check.passed) &&
-        retention.length === 2 && retention.every(check => check.passed), checks, retention };
+    const result = { sourceDigest: digest(source), runner, acceptanceContract: acceptanceContract,
+      seed: plan.metadata.seed, evaluation: plan.metadata, required, executed: checks.length, checks, retention };
+    return { ...result, passed: evaluationDisposition(result).status === 'accepted' };
   }
   return Object.freeze({ kind: 'qualified', runner, evaluation: plan.metadata, contract: sandbox.contract,
     qualification: sandbox.qualification, probe, validate,

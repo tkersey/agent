@@ -59,10 +59,10 @@ try{
     const source=models===1?bufferUntilEOF:models===2?decodedFields:rawRecords;
     const explanation=fragment?'Construct the boundary transition.':'Revise to emit each complete record immediately.';
     reply={tag:0,value:[[{tag:0,value:['reused-provider-id',name,new TextEncoder().encode(JSON.stringify({source,explanation})),ordinal,{tag:0,value:{tag:ordinal,value:[source,explanation]}}]}],Array(32).fill(0)]};
-   }else if(['agent.parser.probe.v1','agent.parser.execution.v1'].includes(request.semanticIdentity)){
+   }else if(['agent.parser.probe.v2','agent.parser.execution.v2'].includes(request.semanticIdentity)){
     assert.equal(writes,0);assert.equal(reads,0);checks++;
-    reply=await(request.semanticIdentity==='agent.parser.probe.v1'?tools.probe(payload):tools.execute(payload));
-    if(request.semanticIdentity==='agent.parser.execution.v1'){
+    reply=await(request.semanticIdentity==='agent.parser.probe.v2'?tools.probe(payload):tools.execute(payload));
+    if(request.semanticIdentity==='agent.parser.execution.v2'){
      assert.equal(reply[2].tag,1);assert.equal(reply[2].value[0],true);acceptances.push(payload[1]);
      // An unavailable bound reply is a protocol test, not fabricated acceptance.
      if(policy==='unavailable'&&models===4)reply=[payload[1],payload[2][1],{tag:2,value:0}];

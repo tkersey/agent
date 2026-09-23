@@ -61,7 +61,7 @@ export async function runParser(args){
   operation==='agent.interaction.exchange.v1.parser.eof'?'clarification':
   options.strategy==='react'?'react':operation==='agent.model.invoke.v3'?'producer':
    operation==='agent.parser.reference.v1'?'reference':
-    ['agent.parser.probe.v1','agent.parser.execution.v1'].includes(operation)?'consumer':null;
+    ['agent.parser.probe.v2','agent.parser.execution.v2'].includes(operation)?'consumer':null;
  let tools,delivery,area,apiKey;const bindings=new Map();
  try{
  if(options.calls){
@@ -121,7 +121,7 @@ export async function runParser(args){
     }else{
      const payload=decodeValue(decodeSchema(request.payloadSchema),request.payload);let result;
      if(request.semanticIdentity==='agent.parser.reference.v1')pendingView.demand={trace:payload[2]};
-     else if(['agent.parser.probe.v1','agent.parser.execution.v1'].includes(request.semanticIdentity))
+     else if(['agent.parser.probe.v2','agent.parser.execution.v2'].includes(request.semanticIdentity))
       pendingView.demand={occurrence:payload[1],candidateVersion:payload[2][1],sourceDigest:hash(payload[2][0]),operation:payload[3]};
      if(request.semanticIdentity==='agent.interaction.exchange.v1.parser.eof'){
       spent.questions++;const reader=createInterface({input:process.stdin,output:process.stderr});
@@ -132,13 +132,13 @@ export async function runParser(args){
       if(answer.kind!=='line')result={tag:answer.kind==='closed'?2:1,value:null};
       else {const text=answer.text.trim();result={tag:0,value:text==='1'||text==='2'?{tag:0,value:BigInt(text)}:{tag:text==='other'?1:2,value:null}};}
      }else if(request.semanticIdentity==='agent.parser.reference.v1'){const binding=bindings.get(payload[0][4]);assert(binding,'unbound EOF contract');result=await binding.tools.reference(payload);}
-     else if(['agent.parser.probe.v1','agent.parser.execution.v1'].includes(request.semanticIdentity)){
+     else if(['agent.parser.probe.v2','agent.parser.execution.v2'].includes(request.semanticIdentity)){
       if(spent.checks>=options.checks)return park('experiment-allowance');spent.checks++;
       const binding=bindings.get(payload[0][4]);assert(binding,'unbound EOF contract');
-      result=await(request.semanticIdentity==='agent.parser.probe.v1'?binding.tools.probe(payload):binding.tools.execute(payload));
+      result=await(request.semanticIdentity==='agent.parser.probe.v2'?binding.tools.probe(payload):binding.tools.execute(payload));
       const outcome=result[2];
       observations.push({participant:participantFor(request.semanticIdentity),operation:request.semanticIdentity,occurrence:payload[1],candidateVersion:payload[2][1],sourceDigest:hash(payload[2][0]),
-       ...(outcome.tag===0?{kind:'probe',passed:outcome.value[1],peakStateBytes:outcome.value[2]}:
+       ...(outcome.tag===0?{kind:'probe',passed:outcome.value[1],peakStateBytes:outcome.value[2],firstFailure:outcome.value[3],observationsAvailable:outcome.value[0].tag===1}:
         outcome.tag===1?{kind:'assessment',passed:outcome.value[0],executed:outcome.value[1],required:outcome.value[2],retentionPassed:outcome.value[3],firstFailure:outcome.value[4]}:
          {kind:'unavailable',reason:['unavailable','invalid','timeout','cancelled','failed','capacity'][outcome.value]})});
      }else if(request.semanticIdentity==='agent.parser.target-read.v1'){const binding=bindings.get(payload[2][4]);assert(binding,'unbound EOF contract');result=await binding.delivery.read(payload);}

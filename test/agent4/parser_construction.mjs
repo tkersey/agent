@@ -10,12 +10,13 @@ import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {decodeSchema,decodeValue,encodeValue} from '../../runtime/values.mjs';
 import {createParserTools} from '../../runtime/parser_tools.mjs';
-import {bufferUntilEOF,decodedFields,wrongOffset} from '../consumers/incremental-parser/candidates.mjs';
+import {bufferUntilEOF,decodedFields,wrongOffset,malformedRows} from '../consumers/incremental-parser/candidates.mjs';
 const [worldEntry,kernelPath,peerPath,nativeTool,browserTools,browserEngine='chromium']=process.argv.slice(2);
 const {Kernel,decodeOutcome,decodeRequest,encodeResult,encodeInput}=await import(pathToFileURL(resolve(worldEntry)));
 const read=async name=>new Uint8Array(await readFile(`zig-out/agent4/parser-construction/${name}`));
 const scenario=process.argv[8]??'repair';
 const experiment=scenario.startsWith('experiment');
+const initialSource=scenario==='malformed-repair'?malformedRows:bufferUntilEOF;
 const retained=scenario.startsWith('retained');
 const localAbort=scenario.startsWith('retained-abort');
 const cancelRequested=scenario==='retained-cancel'||scenario==='retained-abort-cancel';
@@ -75,12 +76,13 @@ for(let round=0;;round++) {
       } else {
         assert.equal(probeFailed,true,'repair requires the actual counterexample first');
         assert.match(payload[3].at(-1)[1],experiment&&modelCalls===3?/consumer probe passed/:modelCalls===2?/real consumer probe failed/:/Required acceptance rejected/);
-        assert.ok(payload[3].at(-1)[1].includes(modelCalls===2||experiment?bufferUntilEOF:wrongOffset));
+        assert.ok(payload[3].at(-1)[1].includes(modelCalls===2||experiment?initialSource:wrongOffset));
         if(experiment&&modelCalls===3){assert.ok(payload[3].some(message=>message[1].includes('Hex bytes: 610a; first chunk bytes: 1; later chunk bytes: 1; finalize: true')));assert.ok(payload[3].some(message=>message[1].includes('earlier required check FAILED')));}
         assert.ok(!payload[3].some(message=>message[1].includes(decodedFields)));
+        if(scenario==='malformed-repair')assert.match(payload[3].at(-1)[1],/candidate observations: observation shape/);
         assert.deepEqual(payload[4].map(tool=>tool[2]),['fragment','complete_candidate','experiment','unresolved']);
       }
-      const source=modelCalls===1||scenario==='experiment-unchanged'?bufferUntilEOF:scenario==='full-repair'&&modelCalls===2?wrongOffset:decodedFields;
+      const source=modelCalls===1||scenario==='experiment-unchanged'?initialSource:scenario==='full-repair'&&modelCalls===2?wrongOffset:decodedFields;
       const name=modelCalls===1?'fragment':'complete_candidate',ordinal=modelCalls===1?0:1;
       const explanation=modelCalls===1?'Escape handling is present; record emission still needs assessment.':'Revise immediate emission; request full independent acceptance.';
       reply={tag:0,value:[[{tag:0,value:['same-provider-id',name,
@@ -91,18 +93,19 @@ for(let round=0;;round++) {
         reply={tag:0,value:[[{tag:0,value:['same-provider-id','experiment',new TextEncoder().encode(JSON.stringify(proposal)),2,
           {tag:0,value:{tag:2,value:Object.values(proposal)}}]}],Array(32).fill(0)]};
       }
-    } else if(['agent.parser.execution.v1','agent.parser.probe.v1'].includes(request.semanticIdentity)) {
+    } else if(['agent.parser.execution.v2','agent.parser.probe.v2'].includes(request.semanticIdentity)) {
       const proposed=experiment&&modelCalls===2;
-      assert.equal(payload[2][0],modelCalls===1||proposed?bufferUntilEOF:scenario==='full-repair'&&modelCalls===2?wrongOffset:decodedFields);
+      assert.equal(payload[2][0],modelCalls===1||proposed?initialSource:scenario==='full-repair'&&modelCalls===2?wrongOffset:decodedFields);
       assert.equal(payload[2][1],BigInt(proposed?1:modelCalls));assert.equal(payload[2][2],modelCalls===1||proposed?0:1);
       if(proposed)assert.equal(payload[3].tag,2);
-      assert.equal(payload[1],17n+BigInt(modelCalls));reply=scenario==='incomplete'&&modelCalls===2?[payload[1],payload[2][1],{tag:1,value:[true,0,536,false,'']}]:await (request.semanticIdentity==='agent.parser.probe.v1'?tools.probe(payload):tools.execute(payload));
+      assert.equal(payload[1],17n+BigInt(modelCalls));reply=scenario==='incomplete'&&modelCalls===2?[payload[1],payload[2][1],{tag:1,value:[true,0,536,false,'']}]:await (request.semanticIdentity==='agent.parser.probe.v2'?tools.probe(payload):tools.execute(payload));
       if(modelCalls===1) {
         assert.equal(reply[2].tag,0);assert.equal(reply[2].value[1],false);probeFailed=true;
-        assert.deepEqual(reply[2].value[0],[[[],0,{tag:0,value:null}],[[],0,{tag:0,value:null}],[[[[10]]],1,{tag:0,value:null}]]);
+        if(scenario==='malformed-repair'){assert.equal(reply[2].value[0].tag,0);assert.match(reply[2].value[3],/candidate observations/);}
+        else assert.deepEqual(reply[2].value[0].value,[[[],0,{tag:0,value:null}],[[],0,{tag:0,value:null}],[[[[10]]],1,{tag:0,value:null}]]);
       } else if(proposed){
         assert.equal(reply[2].tag,scenario==='experiment-invalid'?2:0);
-        if(reply[2].tag===0){assert.equal(reply[2].value[1],true);assert.deepEqual(reply[2].value[0],[[[],0,{tag:0,value:null}],[[[[97]]],1,{tag:0,value:null}]]);}
+        if(reply[2].tag===0){assert.equal(reply[2].value[1],true);assert.deepEqual(reply[2].value[0].value,[[[],0,{tag:0,value:null}],[[[[97]]],1,{tag:0,value:null}]]);}
         if(scenario==='experiment-stale')reply[1]=2n;
         if(scenario==='experiment-assessment')reply=[payload[1],payload[2][1],{tag:1,value:[true,536,536,true,'']}];
       } else {assert.equal(reply[2].tag,1);const passed=!(scenario==='full-repair'&&modelCalls===2);assert.equal(reply[2].value[0],passed);fullAccepted=passed&&scenario!=='incomplete';}

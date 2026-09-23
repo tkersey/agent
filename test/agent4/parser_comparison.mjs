@@ -68,13 +68,13 @@ try{
     const source=scenario.startsWith('consumer')&&models===1?decodedFields.replace('records.push(s.fields);','if(s.fields.some(field=>field.includes(10)))records.push(s.fields);'):scenario==='repair'&&models===1?bufferUntilEOF:decodedFields;
     const args=scenario==='unresolved'?{reason:'No supported construction.'}:experiment?{input_hex:'610a',first_chunk_bytes:1,chunk_bytes:1,finalize:true,reason:'Check immediate emission.'}:{source,explanation:'Required acceptance decides correctness.'};
     reply={tag:0,value:[[{tag:0,value:['same-provider-id',name,new TextEncoder().encode(JSON.stringify(args)),ordinal,{tag:0,value:{tag:ordinal,value:Object.values(args)}}]}],Array(32).fill(0)]};
-   }else if(['agent.parser.probe.v1','agent.parser.execution.v1'].includes(request.semanticIdentity)){
+   }else if(['agent.parser.probe.v2','agent.parser.execution.v2'].includes(request.semanticIdentity)){
     checks++;if(payload[3].tag===2)experiments++;
-    if(scenario.startsWith('consumer')&&request.semanticIdentity==='agent.parser.probe.v1'){probes.push(payload[1].toString());const extra=strategy==='alternate'&&probes.length===1;assert.equal(payload[1],extra?17n+input[4]+2n:18n);assert.deepEqual(payload[3].value,extra?[[[97],false],[[10],false]]:input[2]);}
+    if(scenario.startsWith('consumer')&&request.semanticIdentity==='agent.parser.probe.v2'){probes.push(payload[1].toString());const extra=strategy==='alternate'&&probes.length===1;assert.equal(payload[1],extra?17n+input[4]+2n:18n);assert.deepEqual(payload[3].value,extra?[[[97],false],[[10],false]]:input[2]);}
 
-    reply=await(request.semanticIdentity==='agent.parser.probe.v1'?tools.probe(payload):tools.execute(payload));
+    reply=await(request.semanticIdentity==='agent.parser.probe.v2'?tools.probe(payload):tools.execute(payload));
     if(scenario==='consumer-unavailable'&&checks===1)reply=[payload[1],payload[2][1],{tag:2,value:0}];
-    if(request.semanticIdentity==='agent.parser.execution.v1')accepted=reply[2].tag===1&&reply[2].value[0];
+    if(request.semanticIdentity==='agent.parser.execution.v2')accepted=reply[2].tag===1&&reply[2].value[0];
    }else{
     assert(accepted,'no target authority before full acceptance');
     if(request.semanticIdentity==='agent.parser.target-read.v1'){reads++;reply=await delivery.read(payload);}

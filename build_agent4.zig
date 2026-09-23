@@ -230,7 +230,7 @@ pub fn build(b: *std.Build) void {
     g.emit(parser_tools, parser_schema, &.{"program"}, "parser/program.bpi3");
     for ([_][]const u8{ "reference-request", "reference-reply", "execution-request", "execution-reply" }) |mode|
         g.emit(parser_tools, parser_schema, &.{mode}, b.fmt("parser/{s}.bin", .{mode}));
-    const parser_oracle = b.addSystemCommand(&.{ "node", "--test", "test/agent4/parser_oracle.test.mjs" });
+    const parser_oracle = b.addSystemCommand(&.{ "node", "--test", "test/agent4/parser_oracle.test.mjs", "test/agent4/parser_disposition.test.mjs" });
     parser_oracle.removeEnvironmentVariable("NODE_TEST_CONTEXT");
     check.dependOn(&parser_oracle.step);
     const parser_executor = b.addSystemCommand(&.{ "node", "test/agent4/parser_executor.test.mjs" });
@@ -407,6 +407,7 @@ pub fn build(b: *std.Build) void {
     check.dependOn(emit);
 
     const integration = b.step("check-agent4-integration", "Execute consumer proofs under the selected World");
+    const parser_repair = b.step("check-parser-repair", "Repair malformed candidate observations through participants");
     const parser_repeated = b.step("check-parser-repeated", "Check repeated parser custody and stale task replies");
     const parser_circular = b.step("check-parser-circular", "Bound unsupported circular participant demands without invented evidence");
     const parser_intent = b.step("check-parser-intent", "Check EOF clarification through fresh World states");
@@ -467,6 +468,10 @@ pub fn build(b: *std.Build) void {
             consumer_case.step.dependOn(&runtime_guard.step);
             parser_consumers.dependOn(&consumer_case.step);
         }
+        const repair_run = b.addSystemCommand(&.{ "node", "test/agent4/parser_construction.mjs", b.pathJoin(&.{ runtime_path, "src/embedding/index.mjs" }), b.pathJoin(&.{ runtime_path, "world-kernel.wasm" }), "", "", "", "chromium", "malformed-repair" });
+        repair_run.step.dependOn(parser_episode);
+        repair_run.step.dependOn(&runtime_guard.step);
+        parser_repair.dependOn(&repair_run.step);
         const repeated_run = b.addSystemCommand(&.{ "node", "test/agent4/parser_repeated.mjs", runtime_path });
         repeated_run.step.dependOn(parser_episode);
         repeated_run.step.dependOn(&runtime_guard.step);
@@ -507,6 +512,7 @@ pub fn build(b: *std.Build) void {
         runtime_work.dependOn(parser_intent);
         runtime_work.dependOn(parser_circular);
         runtime_work.dependOn(parser_repeated);
+        runtime_work.dependOn(parser_repair);
         runtime_work.dependOn(selection_runtime);
         runtime_work.dependOn(parser_selection);
         runtime_work.dependOn(parser_comparison);

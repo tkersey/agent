@@ -45,7 +45,7 @@ fn types(b: *source.Builder) !Types {
     const contribution = try agent.contracts.schema(Contribution, b);
     const model = try P.declare(b);
     const reference = try b.effect(.{ .identity = parser.reference_identity, .payload = try agent.contracts.schema(parser.ReferenceRequest, b), .result = try agent.contracts.schema(parser.ReferenceReply, b) });
-    const execution = try b.effect(.{ .identity = "agent.parser.probe.v1", .payload = try agent.contracts.schema(parser.ExecutionRequest, b), .result = try agent.contracts.schema(parser.ExecutionReply, b) });
+    const execution = try b.effect(.{ .identity = "agent.parser.probe.v2", .payload = try agent.contracts.schema(parser.ExecutionRequest, b), .result = try agent.contracts.schema(parser.ExecutionReply, b) });
     const release = try b.effect(.{ .identity = "parser/participant-release", .payload = try b.scalar(u64), .result = try b.scalar(void) });
     const task = try b.reserveSchema();
     const pair = try hyper.pairWith(b, task, task, &.{ state, contribution });
@@ -811,10 +811,23 @@ fn feedbackText(c: agent.Context, outcome: Id) !Id {
             return context.builder.pure(try context.literal(P.MessageText, .{ .bytes = value }));
         }
     }.emit;
+    const failure_prefix = try b.value(.{ .schema = try c.schema(P.MessageText), .expression = .{ .primitive = .{
+        .opcode = .blob_concat,
+        .operands = &.{
+            try c.literal(P.MessageText, .{ .bytes = "The real consumer probe failed on the supplied concrete trace. Detail: " }),
+            try field(b, agent.contracts.Text(256), try b.reference(probe), 3),
+        },
+        .failures = &.{.{ .kind = .capacity_exceeded, .value = try b.failureLiteral(try b.constant(void, {})) }},
+    } } });
+    const failure_detail = try b.value(.{ .schema = try c.schema(P.MessageText), .expression = .{ .primitive = .{
+        .opcode = .blob_concat,
+        .operands = &.{ failure_prefix, try c.literal(P.MessageText, .{ .bytes = ". Revise the source using the batch reference and required immediate-emission behavior. A complete candidate will undergo full acceptance. Previous source:\n" }) },
+        .failures = &.{.{ .kind = .capacity_exceeded, .value = try b.failureLiteral(try b.constant(void, {})) }},
+    } } });
     const probe_feedback = try b.term(.{ .conditional = .{
         .condition = try field(b, bool, try b.reference(probe), 1),
         .when_true = try text(c, "The consumer probe passed, but this partial source is not a complete validated artifact. Supply a complete candidate for required acceptance. Previous source:\n"),
-        .when_false = try text(c, "The real consumer probe failed on the supplied concrete trace. Revise the source using the batch reference and required immediate-emission behavior. A complete candidate will undergo full acceptance. Previous source:\n"),
+        .when_false = try b.pure(failure_detail),
     } });
     return b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
         .{ .variable = probe, .body = probe_feedback },

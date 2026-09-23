@@ -27,3 +27,10 @@ may legitimately grow. The evaluator measures returned serialized state rather
 than trusting a self-reported count. The task does not prescribe an implementation
 style or a particular patch. Candidate code cannot edit the evaluator or its
 required checks.
+
+The finite retention exercise feeds 500 complete bounded records. It permits up
+to 2,048 bytes of additional serialized state beyond the state after the first
+completed record, so a fixed lookup table is not mistaken for retained history.
+A separate exercise retains an 8,192-byte unfinished field. These finite checks
+are not a universal complexity proof. The executor separately limits serialized
+state to 131,072 bytes and may report an inconclusive resource-limit outcome.

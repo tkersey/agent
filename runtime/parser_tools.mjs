@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { createParserExecutor } from './parser_executor.mjs';
+import { createParserExecutor, evaluationDisposition } from './parser_executor.mjs';
 import { contractFor, observations, admitTrace, traceIdentity } from './parser_oracle.mjs';
 const hash = value => createHash('sha256').update(value).digest('hex');
 const variant = (tag,value=null) => ({tag,value});
@@ -91,19 +91,23 @@ export async function createParserTools(options = {}) {
       if(trace) {
         assert.equal(result.traceDigest,traceIdentity(trace,eofPolicy));
         if(result.kind!=='completed')return [id,version,variant(2,unavailable(result.kind))];
-        try { return [id,version,variant(0,[rowsValue(result.rows),result.passed,
-          BigInt(Math.max(0,...result.rows.map(row=>row.stateBytes)))])]; }
+        const maximum = BigInt(Math.max(0,...result.rows.map(row=>row.stateBytes)));
+        const failure = result.failures[0]?.reason ?? '';
+        try { return [id,version,variant(0,[variant(1,rowsValue(result.rows)),result.passed,
+          maximum,failure])]; }
         catch(error) {
-          if(error instanceof TypeError||error instanceof RangeError)
-            return [id,version,variant(2,unavailable(error instanceof RangeError?'capacity':'invalid'))];
-          throw error;
+          if (!(error instanceof TypeError || error instanceof RangeError)) throw error;
+          if (!result.passed) return [id,version,variant(0,[variant(0),false,maximum,
+            ('candidate observations: '+error.message).slice(0,256)])];
+          return [id,version,variant(2,unavailable(error instanceof RangeError?'capacity':'invalid'))];
         }
       }
-      const unavailableCheck=[...result.checks,...result.retention].find(item=>item.kind!=='completed');
-      if(unavailableCheck)return [id,version,variant(2,unavailable(unavailableCheck.kind))];
-      const first=result.checks.find(item=>!item.passed)??result.retention.find(item=>!item.passed);
-      const reason=first?`${first.name}: ${first.failures?.[0]?.reason??'retained state'}`:'';
-      return [id,version,variant(1,[result.passed,result.executed,result.required,
+      const disposition=evaluationDisposition(result);
+      if(disposition.status==='unavailable')
+        return [id,version,variant(2,unavailable(disposition.first?.kind??'unavailable'))];
+      const first=disposition.first;
+      const reason=first?`${first.name}: ${first.failures?.[0]?.reason??'retained state growth'}`:'';
+      return [id,version,variant(1,[disposition.status==='accepted',result.executed,result.required,
         result.retention.length===2&&result.retention.every(item=>item.passed),reason.slice(0,256)])];
     },
     probe(request,options={}) { return tools.execute(request,{...options,probeOnly:true}); },

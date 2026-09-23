@@ -22,7 +22,7 @@ const fresh=()=>Kernel.create({bytes,expectedSha256,instanceId:identity++});
 async function park(input) {
   const k=await fresh(),p=k.prepare(image),s=k.start(p,encodeValue(requestSchema,input));k.releasePrepared(p);
   const out=decodeOutcome(k.drive(s,{checkpoint:true}));assert.equal(out.kind,'requested');
-  const request=await decodeRequest(out.request);assert.equal(request.semanticIdentity,'agent.parser.execution.v1');
+  const request=await decodeRequest(out.request);assert.equal(request.semanticIdentity,'agent.parser.execution.v2');
   assert.deepEqual(decodeValue(requestSchema,request.payload),input);
   const state=k.checkpoint(s,{transfer:true});assert.equal(k.usage().workingLive,0n);
   return {state,request:out.request};
@@ -31,6 +31,8 @@ const pending=await park(input);
 const actual=await tools.execute(input);
 const assessment={tag:1,value:[true,536,536,true,'']};
 const variants=[['valid',actual,'completed'],
+  ['missing-observations-cannot-pass',[1n,1n,{tag:0,value:[{tag:0,value:null},true,0n,'']}],'failed'],
+  ['unrepresentable-counterexample',[1n,1n,{tag:0,value:[{tag:0,value:null},false,2n,'invalid status']}],'completed'],
   ['wrong-occurrence',[2n,1n,actual[2]],'failed'],
   ['wrong-version',[1n,2n,actual[2]],'failed'],
   ['wrong-operation',[1n,1n,assessment],'failed'],

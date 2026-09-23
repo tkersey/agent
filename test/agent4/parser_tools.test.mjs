@@ -20,6 +20,8 @@ assert.equal(partial[2].tag,2);assert.equal(tools.metrics().physicalExecutions,b
 const probe=await tools.execute(wire('execution-request',[subject,3n,candidate,{tag:0,value:trace}]));
 assert.equal(probe[2].tag,0);assert.equal(probe[2].value[1],true);
 assert.deepEqual(wire('execution-reply',probe),probe);
+assert.throws(()=>wire('execution-reply',[3n,1n,{tag:0,value:[reference[1].value,true,0n]}]),
+  'the old v1 Probe layout must not be reinterpreted as v2');
 const rejected=await tools.execute([subject,4n,[rejectAll,2n,1n],{tag:1,value:null}]);
 assert.equal(rejected[2].tag,1);assert.equal(rejected[2].value[0],false);
 assert.deepEqual(wire('execution-reply',rejected),rejected);
@@ -33,7 +35,10 @@ assert.deepEqual(capacity,[6n,{tag:1,value:5}]);
 assert.deepEqual(wire('reference-reply',capacity),capacity);
 const malformed=`export const initial=()=>({});export const step=s=>({next_state:s,newly_completed_records:'bad',status:'complete'});`;
 const invalid=await tools.execute([subject,7n,[malformed,3n,0n],{tag:0,value:trace}]);
-assert.equal(invalid[2].tag,2);assert.equal(invalid[2].value,1);
+assert.equal(invalid[2].tag,0);assert.equal(invalid[2].value[1],false);
+assert.deepEqual(invalid[2].value[0],{tag:0,value:null});
+assert.match(invalid[2].value[3],/candidate observations: observation shape/);
+assert.deepEqual(wire('execution-reply',invalid),invalid);
 console.log(JSON.stringify({reference:true,probe:true,partialAcceptanceRejected:true,
   rejectAllRejected:true,wrongSubjectRejected:true,capacity:true,malformedOutput:true,metrics:tools.metrics()}));
 const beforeRestricted=tools.metrics().physicalExecutions;

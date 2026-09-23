@@ -1,7 +1,7 @@
 // Frozen-artifact evaluation only. This command has no model or delivery adapter.
 import {isUtf8} from 'node:buffer';
 import {readRegular} from '../tools/agent4/dependencies.mjs';
-import {createParserExecutor} from './parser_executor.mjs';
+import {createParserExecutor,evaluationDisposition} from './parser_executor.mjs';
 import {isMain} from './cli.mjs';
 export function evaluationOptions(args) {
   const result={split:'heldout',eofPolicy:'strict'},seen=new Set();
@@ -21,13 +21,11 @@ export async function evaluateCandidateFile(options) {
   const executor=await createParserExecutor({evaluation:options.split,eofPolicy:options.eofPolicy});
   if(executor.kind!=='qualified')return {format:'agent-parser-evaluation/v1',status:'unavailable',capability:executor};
   const result=await executor.validate(bytes.toString('utf8'));
-  const checks=[...result.checks,...result.retention];
-  const unavailable=checks.find(check=>check.kind!=='completed');
-  const first=checks.find(check=>!check.passed);
-  return {format:'agent-parser-evaluation/v1',status:result.passed?'accepted':unavailable?'unavailable':'rejected',
+  const disposition=evaluationDisposition(result),first=disposition.first;
+  return {format:'agent-parser-evaluation/v1',status:disposition.status,
     sourceDigest:result.sourceDigest,runner:result.runner,contract:result.acceptanceContract,
     evaluation:result.evaluation,executed:result.executed,required:result.required,
-    retention:result.retention.map(({name,passed,peak,maximum})=>({name,passed,peak,maximum})),
+    retention:result.retention.map(({name,passed,baseline,peak,growth,maximumGrowth})=>({name,passed,baseline,peak,growth,maximumGrowth})),
     firstFailure:first?{name:first.name,kind:first.kind,failures:first.failures}:null,metrics:executor.metrics()};
 }
 if(isMain(import.meta)) {

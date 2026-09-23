@@ -7,7 +7,7 @@ const Id = @import("boundary").computation.Id;
 pub const proposals = @import("parser_proposals.zig");
 pub const contract = "agent.incremental-byte-parser/v1";
 pub const reference_identity = "agent.parser.reference.v1";
-pub const execution_identity = "agent.parser.execution.v1";
+pub const execution_identity = "agent.parser.execution.v2";
 pub const Digest = contracts.Text(64);
 pub const Code = contracts.Text(8192);
 pub const Subject = struct {
@@ -40,7 +40,13 @@ pub const Assessment = struct {
     retention_passed: bool,
     first_failure: contracts.Text(256),
 };
-pub const Probe = struct { observations: Observations, passed: bool, maximum_state_bytes: u64 };
+pub const Probe = struct {
+    // None means completed candidate output could not be represented as observations.
+    observations: ?Observations,
+    passed: bool,
+    maximum_state_bytes: u64,
+    first_failure: contracts.Text(256),
+};
 pub const ReferenceRequest = struct { subject: Subject, occurrence: u64, trace: Trace };
 pub const ReferenceReply = struct {
     occurrence: u64,
@@ -85,7 +91,7 @@ pub fn execute(c: Context, tools: Tools, request: Id, failure: Id) !Id {
         const proposed = try equal(c, check_tag, try b.constant(u64, 2));
         const expected_tag = try b.primitive(integer, .select, &.{ proposed, try b.constant(u64, 0), check_tag }, 0);
         const outcome_tag = try b.primitive(integer, .variant_tag, &.{outcome}, 0);
-        var accepted = try b.pure(received);
+        var accepted = try probeEvidence(c, outcome, try b.pure(received), failure);
         const complete = try b.primitive(try c.schema(Completeness), .field, &.{candidate}, 2);
         const complete_tag = try b.primitive(try b.scalar(u32), .enum_tag, &.{complete}, 0);
         const valid_complete = try equal(c, complete_tag, try b.constant(u32, @intFromEnum(Completeness.complete)));
@@ -102,6 +108,23 @@ pub fn execute(c: Context, tools: Tools, request: Id, failure: Id) !Id {
         break :blk try cache.finish(b, function);
     };
     return b.term(.{ .call = .{ .function = function, .arguments = &.{request} } });
+}
+fn probeEvidence(c: Context, outcome: Id, next: Id, failure: Id) !Id {
+    const b = c.builder;
+    const probe = try b.variable(try c.schema(Probe));
+    const observed = try b.primitive(try c.schema(?Observations), .field, &.{try b.reference(probe)}, 0);
+    const tag = try b.primitive(try b.scalar(u64), .variant_tag, &.{observed}, 0);
+    const present = try equal(c, tag, try b.constant(u64, 1));
+    const checked = try b.term(.{ .conditional = .{
+        .condition = try b.primitive(try b.scalar(bool), .field, &.{try b.reference(probe)}, 1),
+        .when_true = try ensure(c, present, next, failure),
+        .when_false = next,
+    } });
+    return b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
+        .{ .variable = probe, .body = checked },
+        .{ .variable = try b.variable(try c.schema(Assessment)), .body = next },
+        .{ .variable = try b.variable(try c.schema(Unavailable)), .body = next },
+    } } });
 }
 fn equal(c: Context, left: Id, right: Id) !Id {
     return c.builder.primitive(try c.builder.scalar(bool), .equal, &.{ left, right }, 0);

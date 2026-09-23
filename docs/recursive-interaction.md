@@ -1248,3 +1248,49 @@ reports available at the time, and the diagnostic improvement is not claimed to
 have fixed that unknown cause. A redundant aggregate replay was stopped and is
 not counted as a pass. Current exact-head authoring/package checks and the
 request-bound read-only view test are recorded separately in the draft summary.
+
+## Evaluator evidence preservation and probe protocol v2
+
+The Agent review identified three defects: completed malformed observations became
+unavailable, later unavailable retention work could mask a completed rejection,
+and an absolute 2 KiB retention threshold rejected valid fixed state. The repair
+keeps these judgments separate from the evaluator's finite operational budgets.
+
+`parser_executor.evaluationDisposition` derives acceptance only from all required
+completed checks and both completed retention observations. Any completed failed
+check establishes rejection even if another check is unavailable. Both the typed
+tool adapter and standalone evaluation command use this classification; neither
+recomputes a competing precedence rule from a later error.
+
+`agent.parser.probe.v2` and `agent.parser.execution.v2` explicitly version the
+changed Probe reply. Observations are optional: absent observations identify a
+completed counterexample whose candidate rows cannot be represented by the typed
+observation schema. `passed` stays false and `first_failure` explains it. Valid
+empty observations are not fabricated as a replacement. The compiled reply guard
+rejects a success claim with absent observations. Ordinary unavailable and capacity
+results remain distinct. Old v1 Probe layouts are not reinterpreted; affected BMO1
+objects and BPI3 Programs are rebuilt, and saved State still requires its exact
+Program. The generic BPI3/BMO1/PST3 formats and World kernel are unchanged.
+
+The completed-history exercise now measures growth above the state following its
+first completed record, with an explicit 2,048-byte growth allowance over 500
+bounded records. The supplied requirements state this finite rule. A separate
+8,192-byte unfinished-field exercise and the existing 131,072-byte executor state
+limit remain. This is a finite acceptance contract, not an asymptotic proof.
+
+The real executor accepts both independent parsers plus eagerly and lazily created
+3 KiB lookup-table variants. Each table variant grows by seven bytes (3,165-byte
+baseline; 3,172-byte peak). The history-retaining negative still fails with
+13,480 bytes of growth. All five prior invalid implementations remain rejected;
+2,726 candidate executions covered the nine-candidate set. Pure classification
+regressions cover rejection/unavailable ordering and incomplete acceptance.
+
+The normal compiled malformed-row episode delivers a failed probe with absent
+observations, retains its explanation in the producer's next request, obtains a
+revision, and passes independent acceptance. It uses two synthetic model replies,
+539 real isolated candidate executions, fresh Node transfers and zero target
+writes. Normal typed reply tests also reject wrong occurrence/version/operation,
+missing-observation success and stale unavailable results. Broader regenerated
+host/strategy evidence and successor serial reviews are separate pending checks;
+these focused results do not claim their completion or explain the older
+intermittent CLI outcomes.

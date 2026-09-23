@@ -61,3 +61,7 @@ export const keepsHistory = decodedFields.replace('const offset=s.offset++;s.sta
 // Alternate task meaning; still test-only, never supplied to production prompts.
 export const emitFinalRecord = decodedFields.replace("else if(s.started)fail('UnterminatedRecord',s.offset);",
   "else if(s.started){s.fields.push(s.field);records.push(s.fields);s.fields=[];s.field=[];s.started=false;s.status='complete';}");
+// Fixed overhead is not accumulated completed-input history.
+export const fixedTable = decodedFields.replace('offset:0,', "lookup:'x'.repeat(3072),offset:0,");
+export const lazyTable = decodedFields.replace('const records=[];', "const records=[];if(!s.lookup)s.lookup='x'.repeat(3072);");
+export const malformedRows = `export const initial=()=>({});export const step=s=>({next_state:s,newly_completed_records:'bad',status:'complete'});`;

@@ -27,7 +27,14 @@ async function invoke(operation, encoded) {
   return JSON.parse(result);
 }
 
+function stateBytes(state) {
+  const bytes = Buffer.byteLength(JSON.stringify(state));
+  if (bytes > 131072) throw new Error('candidate state capacity');
+  return bytes;
+}
+
 let state = await invoke('initial', '{}');
+stateBytes(state);
 const rows = [];
 for (const call of trace) {
   const prior = state;
@@ -38,10 +45,9 @@ for (const call of trace) {
       Object.keys(result).some(key => !['next_state', 'status', 'newly_completed_records', 'error'].includes(key)))
     throw new Error('candidate step protocol');
   state = result.next_state;
-  const encoded = JSON.stringify(state);
-  if (Buffer.byteLength(encoded) > 131072) throw new Error('candidate state capacity');
+  const measuredStateBytes = stateBytes(state);
   rows.push({ newly_completed_records: result.newly_completed_records, status: result.status,
     ...(result.error === undefined ? {} : { error: result.error }),
-    stateBytes: Buffer.byteLength(encoded), stateUnchanged: isDeepStrictEqual(prior, state) });
+    stateBytes: measuredStateBytes, stateUnchanged: isDeepStrictEqual(prior, state) });
 }
 process.stdout.write(JSON.stringify({ nonce, kind: 'observations', rows }));

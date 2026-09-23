@@ -1403,3 +1403,27 @@ compiled control, evaluator inputs, kernel and tool authority are unchanged; the
 executed evidence is reused at that scope. The new request-consistency tests cover
 the changed instruction. Live-model quality remains unmeasured. Existing saved
 State retains its captured input and is not silently rewritten to a new template.
+
+## Initial-state capacity boundary
+
+The final initial review of the EOF-corrected head found that `initial()` could
+return more than the stated 131,072-byte state limit and discard it in the first
+step. A qualified reproduction returned a 131,073-character string initially,
+then an empty state; the old probe completed and passed. The driver now applies
+one state-size function immediately after `initial()` and after every step.
+The separate 262,144-byte total result bound is unchanged.
+
+Qualified boundary checks reject oversized initial and step states, accept exact
+131,072-byte JSON states at both boundaries, and preserve a 3 KiB fixed table.
+The test uses five actual candidate executions; these probe observations do not
+claim that its minimal capacity fixtures implement the whole parser language.
+No input, state, output, timeout or working-memory budget was increased. The
+sandbox runner identity includes the changed driver bytes, preventing stale
+acceptance evidence from silently naming the new evaluator.
+
+The constructor-boundary correction passed the normal aggregate, package and full
+real-candidate suite: 316/316 steps, 130/130 Zig tests, with both independent valid
+parsers and both fixed-table variants accepted and all five invalid candidates
+still rejected. The new exact-limit/oversized-state probes are separate from those
+full-language candidates. No clean review credit from the invalidated predecessor
+is reused; the corrected subject still requires its successor serial review.

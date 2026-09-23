@@ -234,8 +234,10 @@ pub fn build(b: *std.Build) void {
     parser_oracle.removeEnvironmentVariable("NODE_TEST_CONTEXT");
     check.dependOn(&parser_oracle.step);
     const parser_executor = b.addSystemCommand(&.{ "node", "test/agent4/parser_executor.test.mjs" });
+    const parser_state_capacity = b.addSystemCommand(&.{ "node", "test/agent4/parser_state_capacity.test.mjs" });
     const parser_protocol = b.addSystemCommand(&.{ "node", "test/agent4/parser_protocol.test.mjs" });
     parser_executor.step.dependOn(&parser_protocol.step);
+    parser_executor.step.dependOn(&parser_state_capacity.step);
     b.step("check-parser-executor", "Check incremental parser candidates in the qualified executor")
         .dependOn(&parser_executor.step);
     const heldout_executor = b.addSystemCommand(&.{ "node", "test/agent4/parser_evaluation.test.mjs" });

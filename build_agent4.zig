@@ -407,6 +407,7 @@ pub fn build(b: *std.Build) void {
     check.dependOn(emit);
 
     const integration = b.step("check-agent4-integration", "Execute consumer proofs under the selected World");
+    const parser_repeated = b.step("check-parser-repeated", "Check repeated parser custody and stale task replies");
     const parser_circular = b.step("check-parser-circular", "Bound unsupported circular participant demands without invented evidence");
     const parser_intent = b.step("check-parser-intent", "Check EOF clarification through fresh World states");
     const composed_runtime = b.step("check-composed-owners-runtime", "Restore composed owners through cleanup");
@@ -466,6 +467,10 @@ pub fn build(b: *std.Build) void {
             consumer_case.step.dependOn(&runtime_guard.step);
             parser_consumers.dependOn(&consumer_case.step);
         }
+        const repeated_run = b.addSystemCommand(&.{ "node", "test/agent4/parser_repeated.mjs", runtime_path });
+        repeated_run.step.dependOn(parser_episode);
+        repeated_run.step.dependOn(&runtime_guard.step);
+        parser_repeated.dependOn(&repeated_run.step);
         const circular_run = b.addSystemCommand(&.{ "node", "test/agent4/parser_circular.mjs", runtime_path });
         circular_run.step.dependOn(parser_episode);
         circular_run.step.dependOn(&runtime_guard.step);
@@ -501,6 +506,7 @@ pub fn build(b: *std.Build) void {
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
         runtime_work.dependOn(parser_intent);
         runtime_work.dependOn(parser_circular);
+        runtime_work.dependOn(parser_repeated);
         runtime_work.dependOn(selection_runtime);
         runtime_work.dependOn(parser_selection);
         runtime_work.dependOn(parser_comparison);

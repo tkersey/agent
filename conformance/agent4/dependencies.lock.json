@@ -3,38 +3,38 @@
   "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "a3676bef943e2fcea2a2452988b08a2a357e131c",
-    "gitTree": "56db4b4230000fb81730cadfee7540d7717736c4",
+    "commit": "3fc90c83dfedc9bcc7dce3385776d60f0bfae6bb",
+    "gitTree": "dfdcf4e2f68bda0b9e9a05ce626894a8d3d52f75",
     "version": "3.0.0-dev.0",
     "source": {
-      "inventorySha256": "5eb5454405bb173b8e5fc9b5bc51078fe11db7b05d196c3f9f5a2f635e844893",
-      "entries": 253,
-      "bytes": 6363750
+      "inventorySha256": "a99121b41fb2b64e5e5ab6bb383f5c2b2d20b48058e6e351586a1112a095b317",
+      "entries": 255,
+      "bytes": 6381210
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/a3676bef943e2fcea2a2452988b08a2a357e131c.tar.gz",
-      "bytes": 1147422,
-      "sha256": "5fff152d43eb0788cf8aab187f8c02937090955ac65c512d25048d4aac580efb"
+      "url": "https://github.com/tkersey/boundary/archive/3fc90c83dfedc9bcc7dce3385776d60f0bfae6bb.tar.gz",
+      "bytes": 1151155,
+      "sha256": "2b66bc572aeac4fc746c8848ad42ad4ac8777400f5f47e05c08bc5e2c1c7698f"
     },
     "authentication": "GitHub commit API tree identity equals recomputed downloaded source tree; archive and content inventories independently bound",
     "package": {
-      "zigHash": "boundary-3.0.0-dev.0-flclaG_ZGACEpNysUP_wajQZbLMdlUozDowVZFinxoFz",
+      "zigHash": "boundary-3.0.0-dev.0-flclaKMdGQD5JHSgE2p5PmoZNrWzn1Our-5LTSkQH3J-",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "4f80e2200847fafbef8865671eccdbc1ac45686c1e999fcc6648333a55f437a2",
-          "entries": 214,
-          "bytes": 1628527
+          "inventorySha256": "34aaa98d05cea4ee8de3a356ed0641b76a0b58ac6658734962daf502b103901a",
+          "entries": 216,
+          "bytes": 1645987
         },
         "archive-extracted": {
-          "inventorySha256": "4f80e2200847fafbef8865671eccdbc1ac45686c1e999fcc6648333a55f437a2",
-          "entries": 214,
-          "bytes": 1628527
+          "inventorySha256": "34aaa98d05cea4ee8de3a356ed0641b76a0b58ac6658734962daf502b103901a",
+          "entries": 216,
+          "bytes": 1645987
         }
       },
       "archive": {
-        "bytes": 340229,
-        "sha256": "7e192433776853b9f842e67462ac18f820628c5d98014f3a7f26569bfdb04146"
+        "bytes": 343885,
+        "sha256": "9a39405e40dbc3989a8ae51ff89ab64e7444de03537da9b7e240a1f405131774"
       }
     },
     "api": {
@@ -260,7 +260,7 @@
         "target": "build-kernel",
         "optimize": "ReleaseSmall",
         "machine": "wasm32-freestanding",
-        "boundarySourceCommit": "a3676bef943e2fcea2a2452988b08a2a357e131c",
+        "boundarySourceCommit": "3fc90c83dfedc9bcc7dce3385776d60f0bfae6bb",
         "capacityOverrides": [],
         "requestedOptimize": "ReleaseSafe"
       },
@@ -280,12 +280,12 @@
     "architecture": "arm64"
   },
   "publicationObservation": {
-    "boundarySource": "draft PR 152",
-    "worldSource": "draft PR 54",
+    "boundarySource": "draft PR 153",
+    "worldSource": "draft PR 55",
     "compatiblePublishedReleaseObserved": false
   },
   "limitations": [
-    "Successor migration is functionally qualified; World review repairs and final coordinated review closeout remain under validation.",
+    "Hyperfunction successor integration remains draft; coordinated requirement audit and Boundary/Agent serial reviews remain open.",
     "Runtime digest is consumer-owned expected identity from the exact source build, not a release attestation."
   ]
 }

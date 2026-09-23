@@ -56,6 +56,12 @@ export async function runParser(args){
  const world=await import(pathToFileURL(runtime.entrypoint));
  const installed=await installedInputs(options);
  const input=structuredClone(installed.input),spent={models:0,checks:0,quanta:0,contextBytes:0,modelRequestBytes:0,modelReplyBytes:0,questions:0};
+ const observations=[];
+ const participantFor=operation=>operation==='agent.parser.target-read.v1'?'completion':
+  operation==='agent.interaction.exchange.v1.parser.eof'?'clarification':
+  options.strategy==='react'?'react':operation==='agent.model.invoke.v3'?'producer':
+   operation==='agent.parser.reference.v1'?'reference':
+    ['agent.parser.probe.v1','agent.parser.execution.v1'].includes(operation)?'consumer':null;
  let tools,delivery,area,apiKey;const bindings=new Map();
  try{
  if(options.calls){
@@ -87,9 +93,9 @@ export async function runParser(args){
  let identity=(randomBytes(8).readBigUInt64LE()&((1n<<63n)-1n))||1n;
  const fresh=()=>world.Kernel.create({bytes,expectedSha256:runtime.kernelSha256,instanceId:identity++});
  let kernel=await fresh(),prepared=kernel.prepare(installed.image),session=kernel.start(prepared,encodeValue(installed.inputSchema,input));kernel.releasePrepared(prepared);
- const report=extra=>({format:'agent-parser-run/v1',selection:options.selection,strategy:options.strategy,...extra,spent:{...spent},metrics:tools?{physicalExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().physicalExecutions,0),qualificationExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().qualificationExecutions,0)}:undefined,kernelSha256:runtime.kernelSha256,imageSha256:hash(installed.image),paidAuthorization:options.allowPaid});
- let control='none',value=new Uint8Array();
- const park=reason=>report({status:'unresolved',reason,state:Buffer.from(kernel.checkpoint(session,{transfer:true})).toString('base64'),resume:{control,value:Buffer.from(value).toString('base64')},environment:'ephemeral batch fixture; no automatic retry or resume'});
+ const report=extra=>({format:'agent-parser-run/v1',selection:options.selection,strategy:options.strategy,...extra,spent:{...spent},observations,metrics:tools?{physicalExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().physicalExecutions,0),qualificationExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().qualificationExecutions,0)}:undefined,kernelSha256:runtime.kernelSha256,imageSha256:hash(installed.image),paidAuthorization:options.allowPaid});
+ let control='none',value=new Uint8Array(),pendingView=null;
+ const park=reason=>report({status:'unresolved',reason,pending:pendingView,state:Buffer.from(kernel.checkpoint(session,{transfer:true})).toString('base64'),resume:{control,value:Buffer.from(value).toString('base64')},environment:'ephemeral batch fixture; no automatic retry or resume'});
   while(spent.quanta<options.quanta){
    const out=world.decodeOutcome(kernel.drive(session,{control,value,quantum:100,checkpoint:true}));spent.quanta++;
    control='none';value=new Uint8Array(); // The previous ingress has been consumed.
@@ -101,14 +107,22 @@ export async function runParser(args){
    assert(['progressed','requested'].includes(out.kind));
    if(out.kind==='requested'){
     const request=await world.decodeRequest(out.request);let reply;
+    pendingView={authoritative:false,participant:participantFor(request.semanticIdentity),
+     operation:request.semanticIdentity,requestDigest:hash(out.request)};
     if(request.semanticIdentity==='agent.model.invoke.v3'){
+     pendingView.demand='model contribution';
      if(spent.models>=options.calls)return park('model-call-allowance');
-     const invocation=decodeModelInvocation(request.payload);assert.equal(invocation.model,options.model);spent.models++;
+     const invocation=decodeModelInvocation(request.payload);
+     pendingView.demand=invocation.messages.at(-1)?.content??'';
+     assert.equal(invocation.model,options.model);spent.models++;
      spent.contextBytes+=invocation.messages.reduce((n,message)=>n+Buffer.byteLength(message.content),0);spent.modelRequestBytes+=request.payload.length;
      reply=await performModelInvocation(request.payload,{endpoint:options.endpoint,...(apiKey===undefined?{}:{apiKey}),signal:AbortSignal.timeout(60000)});
      spent.modelReplyBytes+=reply.length;
     }else{
      const payload=decodeValue(decodeSchema(request.payloadSchema),request.payload);let result;
+     if(request.semanticIdentity==='agent.parser.reference.v1')pendingView.demand={trace:payload[2]};
+     else if(['agent.parser.probe.v1','agent.parser.execution.v1'].includes(request.semanticIdentity))
+      pendingView.demand={occurrence:payload[1],candidateVersion:payload[2][1],sourceDigest:hash(payload[2][0]),operation:payload[3]};
      if(request.semanticIdentity==='agent.interaction.exchange.v1.parser.eof'){
       spent.questions++;const reader=createInterface({input:process.stdin,output:process.stderr});
       const answer=await new Promise(done=>{
@@ -122,12 +136,17 @@ export async function runParser(args){
       if(spent.checks>=options.checks)return park('experiment-allowance');spent.checks++;
       const binding=bindings.get(payload[0][4]);assert(binding,'unbound EOF contract');
       result=await(request.semanticIdentity==='agent.parser.probe.v1'?binding.tools.probe(payload):binding.tools.execute(payload));
+      const outcome=result[2];
+      observations.push({participant:participantFor(request.semanticIdentity),operation:request.semanticIdentity,occurrence:payload[1],candidateVersion:payload[2][1],sourceDigest:hash(payload[2][0]),
+       ...(outcome.tag===0?{kind:'probe',passed:outcome.value[1],peakStateBytes:outcome.value[2]}:
+        outcome.tag===1?{kind:'assessment',passed:outcome.value[0],executed:outcome.value[1],required:outcome.value[2],retentionPassed:outcome.value[3],firstFailure:outcome.value[4]}:
+         {kind:'unavailable',reason:['unavailable','invalid','timeout','cancelled','failed','capacity'][outcome.value]})});
      }else if(request.semanticIdentity==='agent.parser.target-read.v1'){const binding=bindings.get(payload[2][4]);assert(binding,'unbound EOF contract');result=await binding.delivery.read(payload);}
      else throw Error('Unexpected environmental operation; no delivery authority granted');
      reply=encodeValue(decodeSchema(request.resumeSchema),result);
     }
     control='reply';value=await world.encodeResult(out.request,reply);
-   }else{control='none';value=new Uint8Array();}
+   }else{control='none';value=new Uint8Array();pendingView=null;}
    assert.deepEqual(kernel.checkpoint(session,{transfer:true}),out.state);
    kernel=await fresh();prepared=kernel.prepare(installed.image);session=kernel.restore(prepared,out.state);kernel.releasePrepared(prepared);
   }

@@ -48,6 +48,18 @@ binding is removed on exit. There is no automatic retry/resume of an external ca
 resuming exported work requires restoring its environmental bindings and respecting
 the reported spent allowances. This CLI is not a durable session manager.
 
+The JSON report retains a bounded `observations` list for executed checks: exact
+candidate digest/version and occurrence, probe or assessment outcome, and any
+unavailable reason. These are read-only diagnostics; selection and acceptance
+remain in the compiled Program. Failed probes remain visible after a successful
+revision, and an unresolved selection no longer hides its individual check results.
+At a parked residual request, `pending` names the packaged strategy's participant,
+the operation and current demand, and a digest of the actual request. It is marked
+`authoritative: false`. Editing this view cannot select a peer or resume a Session;
+recovery uses the separate canonical State and bound reply. A quantum stop between
+requests has no pending view. This is a request-bound view, not an internal
+instruction debugger.
+
 Unsupported qualified executors stop before model calls. Unknown model output,
 refusal, failed checks and incomplete candidates do not become successful artifacts.
 The current application offers fragment/complete-candidate/experiment/unresolved contributions;

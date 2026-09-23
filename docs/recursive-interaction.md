@@ -1,7 +1,8 @@
 # Recursive participant integration
 
 Implementation of Defunctionalized Hyperfunctions and Recursive Interaction
-v1.1 (September 19, 2026), still incomplete. Boundary companion:
+v1.1 (September 19, 2026). Current review and acceptance status is maintained in
+the linked draft PRs. Boundary companion:
 https://github.com/tkersey/boundary/pull/153. Agent draft:
 https://github.com/tkersey/agent/pull/33.
 
@@ -11,12 +12,11 @@ Boundary #152, World #54, Agent #32 are merged. Immutable follow-on bases:
 Boundary c7a08ed7c1e15732fc7373dd1f149cbe7da82e7b,
 World 374ed712c2a2ab5041c28befa38bb3c3a859bd26,
 Agent e1b56f06ce0d91a8d7f324198a541f0b16b55a00.
-The normal authenticated Boundary dependency now selects
-`894359086952c314b2c18b0854e3f6f35ff970e8`, including the pure algebra and
-lexical internal-demand interpretation. Its downloaded source tree was recomputed
-and matched to GitHub commit tree `1f574225c99dcc9e5b8f3cfca2e9fb2697ffc3d1`;
-the archive bytes, API files, Zig package hash and both package inventory profiles
-are bound in the existing lock. The World dependency and kernel remain unchanged.
+The current authenticated tuple is Boundary
+`3fc90c83dfedc9bcc7dce3385776d60f0bfae6bb` and World
+`0bcdf990daa4b0e2a359034334bb1d2b55469998`. Their archive/tree/package/runtime
+identities are bound in the normal dependency lock. The setup tool recomputes
+source inventories and builds the generic World kernel before admitting it.
 Inherited economic dispositions remain scoped to the foundation. No new
 performance waiver or live-model quality claim is made.
 
@@ -47,14 +47,52 @@ bodies. A helper capable of writing at an ordinarily authorized source site is
 rejected in assessment. Unallowed model access is rejected too. The original
 compiled-tool profile and its independent rejection tests remain intact.
 
-The initial supported participant profile has one entry per installed instance,
-function/effect imports, and one-shot control. Multi-shot object control and
-resource-bearing assessment objects remain conservatively rejected pending the
-required custody proof. These are incomplete portions of v1.1, not claims of
-complete recursive participant support. Other component symbol kinds are not yet
-exposed through this path. Ordinary source capabilities remain available.
+The supported participant profile has one entry per installed instance and
+function/effect imports. Local one-shot control can own cleanup; compiled
+assessment interfaces reject incoming or escaping cleanup owners, including
+recursively wrapped captures. Multi-shot object control, abstract resources and
+suspension packages inside compiled assessment objects remain unsupported.
+Clone-safe source factories and the existing owned exchange facilities retain
+their independent support; these restrictions do not disable the demonstrated
+parser/model/experiment/assessment path or weaken the compiled-tool profile.
 
-## Executed first production slice
+## Current implementation and evidence
+
+The maintained production path is Boundary authoring/data → World execution →
+Agent admission and application. Exact source trees, archives, Zig package and
+runtime bytes are bound in `conformance/agent4/dependencies.lock.json`; local
+setup never substitutes an unchecked participant or a different kernel.
+Current review/acceptance status belongs to the linked draft PRs. The milestone
+is not complete merely because one witness or a local check passes.
+
+| Required behavior | Owning implementation and deciding evidence |
+| --- | --- |
+| Pure non-strict general construction | Boundary `library.hyper`; constant/divergent-peer, aggregate, fault, adaptive ana, and 96 generated-construction comparisons against the independent closure oracle |
+| Effectful reciprocal demands | Boundary `hyper.demand`; parser `step` and `referenceParticipant` retain the real waiting callers and route only residual leaves to the host |
+| Checked compiled participants | `src/participant.zig`, normal `agent.compile`, `test/agent4/participant.zig`: model-helper binding, imported authority, incoming-owner and allocation-failure negatives |
+| Source-free reuse and consumer swap | `tools/agent4/link_parser.zig`, `parser_source_free.mjs`, `parser_comparison.mjs`: source-denied linking/execution and identical producer bytes with two consumers |
+| Owned composition and lifetime | Boundary `generator.compose`, Agent `composed_owners.mjs`, parser cleanup paths: nested composition, local disposal with a surviving sibling, distinct whole-session cancellation |
+| Recursive assessment without delivery authority | `deliberation.selectSequential`, `recursive_selection.mjs`, `parser_selection.mjs`, `parser_disposition_negative.mjs`: actual nested experiments and rejection of imported completion authority |
+| Independent parser acceptance | `runtime/parser_oracle.mjs`, qualified executor, parser executor/evaluation tests: two independently written valid candidates, separate invalid candidates, chunk/error/prefix/closed-protocol and retained-state checks |
+| Model proposals and actual repair | `parser_construction.mjs` and parser comparison: a partial transition precedes the complete candidate, a real counterexample reaches the producer, and the revised exact source is evaluated |
+| Exact delivery and context binding | `parser_delivery.mjs`, parser tool/protocol tests: reacquired target, exact approval, conditional fixture replacement, stale/forged reports, denial and uncertain delivery |
+| Fresh portable execution | Shared recursive peer/Worker harness and parser construction/delivery/selection scenarios: native, Node/WASM, Wasmtime and Chromium consume actual destination State bytes |
+| Progress and honest stopping | `parser_circular.mjs`, zero/one-round and unavailable/malformed cases: explicit unresolved results, no invented evidence, cancellation and reclaimed ownership |
+| Comparison and live readiness | `parser_comparison.mjs`, `runtime/parser_cli.mjs`, reserved-input evaluation: capable ReAct baseline, complete-candidate ablation, opt-in authorized provider path; paid/live quality remains unmeasured |
+
+Pure and task-valued hyperfunctions share the ordinary compiler and World
+interpreter. The owned sequential exchange operator is a narrower derived
+pipeline; it does not replace general hyperfunction invocation or inherit all
+pure laws. ReAct and Inquiry remain independent supported strategies.
+
+Earlier sections below retain the named slice's executed observations and exact
+inputs. Their historical remaining-work notes are not the current acceptance
+inventory. The final audit uses the owning code/tests and the current tuple,
+with reused observations explicitly distinguished from fresh executions.
+
+## Development evidence by slice
+
+### Executed first production slice
 
 `test/agent4/participant.zig` independently emits a producer object with a typed
 model-helper import. A separate process reads only its BMO1 bytes and links it to
@@ -171,16 +209,12 @@ existing `test/v2/build_source.zig`, `-Dcurrent-fixtures=true`,
 `b604ae828650a9be176b103552942adaafc983c0` source. The kernel SHA-256 remains
 `7a27d64295431c960046439353a158e378f14d4686fac47b61b1406cf1753663`.
 
-## Remaining implementation
+## Scope of the first slice
 
-Broader pure-law/generated agreement, source-independent support library and three-part compositional
-closure, local disposal with suspended cleanup, multi-shot custody and allocation
-failure sweeps remain unfinished. The incremental-parser synthesis application,
-independent acceptance, consumer-supplied assessment, exact delivery, full required
-transfer variants, structural economy, matched comparisons and serial reviews
-remain required. No live-model quality or cost study has run. The numerical
-model/reference witness is the integration foundation for that application, not
-its completed substitute.
+The first numerical model/reference witness established the integration boundary.
+The later parser, ownership, composition, selection and comparison witnesses below
+carry their own evidence; the first slice alone did not establish those results.
+Live-model quality and cost remain unmeasured.
 
 ## Independent incremental-parser acceptance
 
@@ -1169,3 +1203,48 @@ steps. The circular fixture is test-only. Existing production images/components
 retain their previous hashes, so the preceding integration and cross-engine
 observations are reused for those unchanged inputs rather than relabeled as new
 executions. The whole specification still needs its final review disposition.
+
+## Latest dependency and validation update
+
+The normal tuple now selects Boundary `3fc90c83dfedc9bcc7dce3385776d60f0bfae6bb`
+(Git tree `dfdcf4e2f68bda0b9e9a05ce626894a8d3d52f75`) and World
+`0bcdf990daa4b0e2a359034334bb1d2b55469998`. Setup, offline verification and
+196-step package emission passed. All 29 production Programs/components are
+byte-identical to the preceding d8132a6 tuple; the generic kernel is unchanged.
+
+The first combined integration run at d8132a6 passed 194 Zig tests but failed
+one packaged CLI assertion: 89/90 Node tests passed, and the parser repair
+command returned unresolved instead of a validated artifact. The assertion did
+not retain the unresolved report. A focused reproduction with report diagnostics
+passed, but does not explain or erase that failure. Provider diagnostics were
+added without weakening acceptance; the failing integration group requires
+recovery before acceptance. No paid inference ran.
+
+### Repeated completed executions and diagnostic recovery
+
+`check-parser-repeated` reuses one resident kernel and one prepared retained-parser
+Program for four completed executions, each returning an explicit unresolved
+result after a real reference observation and one synthetic model contribution.
+Only the task occurrence changes. The same provider ID is reused deliberately.
+Each later task rejects the preceding reference and model reply without changing
+its checkpoint. Cleanup and unrelated retained work still run in the prescribed
+order. Maximum checkpoint size is 8,804 bytes on every run; live working memory
+returns to the prepared baseline of 578,356 bytes after each Session closes.
+Releasing the prepared Program returns working memory to zero. These four runs
+are a bounded ownership/retention observation, not a universal leak proof or four
+accepted parser artifacts. The focused target and package emission passed 199 steps.
+
+The packaged integration recovery exposed a second unresolved selection result.
+It had completed four model calls, four checks and 1,078 candidate executions, but
+its final result did not retain which individual assessment was unsuccessful.
+Both focused CLI cases passed alone. The CLI now retains bounded per-check
+observations with candidate/occurrence binding and descriptive unavailable reasons;
+this changes reporting, not selection, allowance, approval or executor policy.
+All 90 packaged Node tests and all six commands in the normal integration group
+then passed against lock digest
+`727dfc07c6317ac3f934850c7c0b643905cf88caf9c8f3b754f1b5aa38556245`.
+The original failures remain failed; their cause was not established from the
+reports available at the time, and the diagnostic improvement is not claimed to
+have fixed that unknown cause. A redundant aggregate replay was stopped and is
+not counted as a pass. Current exact-head authoring/package checks and the
+request-bound read-only view test are recorded separately in the draft summary.

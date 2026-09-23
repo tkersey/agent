@@ -32,14 +32,40 @@ async function run(cwd,args,timeout=30000,input){
  const timer=setTimeout(()=>child.kill('SIGKILL'),timeout);
  try{const code=await new Promise((done,reject)=>{child.on('error',reject);child.on('exit',done);});assert.equal(code,0,error);return JSON.parse(output);}finally{clearTimeout(timer);}
 }
+test('parked participant view is diagnostic and cannot redirect resumption',async t=>{
+ if(process.platform!=='darwin')return;
+ const area=await mkdtemp(join(tmpdir(),'parser-cli-view-'));t.after(()=>rm(area,{recursive:true,force:true}));
+ execFileSync('tar',['-xzf',resolve('zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),'-C',area]);
+ const cwd=join(area,(await readdir(area))[0]);let stopped;
+ for(let budget=1;budget<=8;budget++){
+  const result=await run(cwd,['--endpoint','http://127.0.0.1:1','--model','fixture-model','--data-policy','fixture-only','--max-model-calls','1','--max-checks','1','--max-quanta',String(budget)]);
+  assert.equal(result.spent.models,0);if(result.resume?.control==='reply'){stopped=result;break;}
+ }
+ assert(stopped);assert.equal(stopped.pending.authoritative,false);
+ assert.equal(stopped.pending.participant,'reference');assert.equal(stopped.pending.operation,'agent.parser.reference.v1');
+ assert.deepEqual(stopped.pending.demand.trace,[[[92],false],[[110,10],false],[[],true]]);
+ assert.match(stopped.pending.requestDigest,/^[a-f0-9]{64}$/);
+ const selected=verifyRuntime(runtime),world=await import(pathToFileURL(selected.entrypoint));
+ const kernel=await world.Kernel.create({bytes:await readFile(selected.kernelPath),expectedSha256:selected.kernelSha256,instanceId:999n});
+ const program=kernel.prepare(await readFile(join(cwd,'examples/parser-construction/program.bpi3')));
+ const session=kernel.restore(program,Buffer.from(stopped.state,'base64'));kernel.releasePrepared(program);
+ stopped.pending.participant='forged completion';stopped.pending.operation='target-write';
+ assert.throws(()=>kernel.drive(stopped.pending),{code:'WORLD_HANDLE_INVALID'});
+ let next=world.decodeOutcome(kernel.drive(session,{control:stopped.resume.control,value:Buffer.from(stopped.resume.value,'base64'),quantum:100,checkpoint:true}));
+ for(let i=0;next.kind==='progressed'&&i<8;i++)next=world.decodeOutcome(kernel.drive(session,{quantum:100,checkpoint:true}));
+ assert.equal(next.kind,'requested');assert.equal((await world.decodeRequest(next.request)).semanticIdentity,'agent.model.invoke.v3');
+ kernel.checkpoint(session,{transfer:true});assert.equal(kernel.usage().workingLive,0n);
+});
+
 test('extracted parser command uses the real provider adapter without paid inference',{timeout:360000},async t=>{
  const area=await mkdtemp(join(tmpdir(),'parser-cli-package-'));t.after(()=>rm(area,{recursive:true,force:true}));
  execFileSync('tar',['-xzf',resolve('zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),'-C',area]);
  const cwd=join(area,(await readdir(area))[0]);
- const zero=await run(cwd,[]);assert.equal(zero.status,'unresolved');assert.equal(zero.spent.models,0);assert.equal(zero.spent.checks,0);
+ const zero=await run(cwd,[]);assert.equal(zero.status,'unresolved');assert.equal(zero.spent.models,0);assert.equal(zero.spent.checks,0);assert.deepEqual(zero.observations,[]);
  for(const strategy of ['react','complete']){const baseline=await run(cwd,['--strategy',strategy]);assert.equal(baseline.strategy,strategy);assert.equal(baseline.status,'unresolved');assert.equal(baseline.spent.models,0);}
  if(process.platform!=='darwin')return;
  let calls=0,repair=false,repairCalls=0,baseline=false;
+ const providerErrors=[];
  const server=createServer(async(req,res)=>{
   try{
    assert.equal(req.headers.authorization,undefined);let body='';for await(const chunk of req)body+=chunk;
@@ -54,7 +80,7 @@ test('extracted parser command uses the real provider adapter without paid infer
    if(repair&&repairCalls===2){assert.match(body,/earlier required check FAILED/);assert.match(body,/Hex bytes: 610a/);}
    if(repair)repairCalls++;
    res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({status:'completed',error:null,output:[{type:'function_call',status:'completed',call_id:'fixture-id',name,arguments:JSON.stringify(args)}]}));
-  }catch(error){res.writeHead(500);res.end(error.message);}
+  }catch(error){providerErrors.push(error.message);res.writeHead(500);res.end(error.message);}
  });
  await new Promise(done=>server.listen(0,'127.0.0.1',done));t.after(()=>new Promise(done=>server.close(done)));
  let stopped;
@@ -79,8 +105,9 @@ test('extracted parser command uses the real provider adapter without paid infer
  assert.equal(calls,1);assert.equal(result.status,'unresolved');assert.equal(result.spent.models,1);assert.equal(result.spent.checks,0);assert.equal(result.paidAuthorization,false);assert.equal(result.result.tag,3);
  repair=true;
  const completed=await run(cwd,['--endpoint',`http://127.0.0.1:${server.address().port}`,'--model','fixture-model','--data-policy','fixture-only','--max-model-calls','3','--max-checks','3','--eof-policy','ask'],240000,'2\n');
- assert.equal(calls,4);assert.equal(completed.status,'validated-artifact');assert.equal(completed.spent.models,3);assert.equal(completed.spent.checks,3);
+ assert.equal(calls,4);assert.equal(completed.status,'validated-artifact',JSON.stringify({completed,providerErrors}));assert.equal(completed.spent.models,3);assert.equal(completed.spent.checks,3);
  assert.equal(completed.result.tag,4);assert.equal(completed.result.value.tag,4);assert.equal(completed.result.value.value[0][2],emitFinalRecord);
+ assert.deepEqual(completed.observations.map(({kind,passed})=>[kind,passed]),[['probe',false],['probe',true],['assessment',true]]);
  assert.equal(completed.metrics.physicalExecutions,540);assert.equal(completed.paidAuthorization,false);
  assert.equal(completed.spent.questions,1);
  assert.equal(completed.result.value.value[2][4],'agent.incremental-byte-parser-emit-eof/v1');
@@ -96,7 +123,7 @@ test('extracted parser command uses the real provider adapter without paid infer
  assert.equal(closed.status,'unresolved');assert.equal(closed.spent.questions,1);assert.equal(closed.spent.models,0);
  baseline=true;const before=calls;
  const direct=await run(cwd,['--endpoint',`http://127.0.0.1:${server.address().port}`,'--model','fixture-model','--data-policy','fixture-only','--max-model-calls','1','--max-checks','1','--strategy','react'],240000);
- assert.equal(calls,before+1);assert.equal(direct.strategy,'react');assert.equal(direct.status,'validated-artifact');assert.equal(direct.spent.models,1);assert.equal(direct.spent.checks,1);assert.equal(direct.result.value.value[0][2],decodedFields);
+ assert.equal(calls,before+1);assert.equal(direct.strategy,'react');assert.equal(direct.status,'validated-artifact',JSON.stringify({direct,providerErrors}));assert.equal(direct.spent.models,1);assert.equal(direct.spent.checks,1);assert.equal(direct.result.value.value[0][2],decodedFields);
 });
 
 test('packaged selection uses one shared call allowance across both constructions',{timeout:360000},async t=>{
@@ -122,6 +149,7 @@ test('packaged selection uses one shared call allowance across both construction
  assert.equal(calls,1);assert.equal(stopped.spent.models,1);assert.equal(stopped.status,'unresolved');assert.equal(stopped.reason,'model-call-allowance');
  calls=0;limited=false;
  const selected=await run(cwd,[...args,'--max-model-calls','4','--max-checks','4'],330000);
- assert.equal(calls,4);assert.equal(selected.selection,'last');assert.equal(selected.status,'validated-artifact');assert.equal(selected.spent.models,4);assert.equal(selected.spent.checks,4);
+ assert.equal(calls,4);assert.equal(selected.selection,'last');assert.equal(selected.status,'validated-artifact',JSON.stringify(selected));assert.equal(selected.spent.models,4);assert.equal(selected.spent.checks,4);
+ assert.deepEqual(selected.observations.map(({kind,passed})=>[kind,passed]),[['probe',false],['assessment',true],['probe',true],['assessment',true]]);
  assert.equal(selected.result.value.value[0][2],rawRecords);assert.equal(selected.paidAuthorization,false);assert.equal(selected.metrics.physicalExecutions,1078);
 });

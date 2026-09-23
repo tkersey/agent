@@ -1321,3 +1321,51 @@ with the last-candidate policy passed 34 transfers/35 Workers, four model calls,
 four checks, 1,078 candidate executions, one approval and one conditional fixture
 write. These runs consume the chosen destination's actual State bytes. They do
 not establish the still-pending full integration/strategy matrix or review closeout.
+
+## Current v2 integration and comparison results
+
+At production head `33a2f2ad8807a59d91325d66d13bbde2426ddb59`, the complete normal
+`check-agent4-integration -j2` target passed 300/300 steps and 64/64 Zig tests.
+Its packaged Node group passed 91/91 tests with no skips, and all six integration
+commands exited zero. The report binds lock digest
+`727dfc07c6317ac3f934850c7c0b643905cf88caf9c8f3b754f1b5aa38556245`.
+Authoring/repeated-task/package proof separately passed 315 steps/130 tests.
+No previous failed or stopped aggregate is relabeled as passing.
+
+The twelve matched strategy cases again produced six accepted artifacts and six
+expected unresolved/stale stops, with zero false completion claims. Successful
+cases each performed one live target read, one approval and one conditional
+fixture write. Required reference acquisition was one per task. The repair cases
+include one model-proposed experiment. Context volume is UTF-8 bytes, not provider
+tokens; working/checkpoint observations are not process RSS or latency statistics.
+
+| Case | Strategy | Image bytes | Model calls | Context bytes | Checks | Candidate executions | Transfers | Peak checkpoint bytes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Easy | ReAct | 19,322 | 1 | 5,072 | 1 | 538 | 16 | 28,344 |
+| Easy | Recursive | 21,895 | 2 | 11,416 | 2 | 539 | 22 | 40,184 |
+| Easy | Complete-candidate ablation | 21,866 | 1 | 5,072 | 1 | 538 | 17 | 28,379 |
+| Repair | ReAct | 19,322 | 3 | 18,197 | 3 | 543 | 27 | 38,370 |
+| Repair | Recursive | 21,895 | 3 | 18,323 | 3 | 540 | 29 | 40,966 |
+| Repair | Complete-candidate ablation | 21,866 | 3 | 18,197 | 3 | 543 | 30 | 41,703 |
+
+These are strategy differences, not interpreter optimizations. The easy recursive
+case remains more expensive; the strategy stays opt-in. No live-model quality or
+cost advantage is established. The full v2 source-free, alternate-consumer,
+malformed-repair, selection, local-disposal and cancellation observations above
+replace the affected older parser-image evidence. Unchanged general hyperfunction,
+World-kernel and foundation-consumer evidence is reused only for unchanged inputs.
+
+Held-out evaluation on the same evaluator code accepted both independent valid
+parsers through 559 checks plus retention and rejected reject-all after its first
+check. The evaluator identity is
+`8b2b591229ec4a1cd474ec7210c8b07bd488309fe0d87f0137063dd32c3bf4ea`.
+Those observations completed before an earlier broader aggregate was interrupted;
+they are reused, not claimed as a fresh execution of that interrupted target.
+The later caller I/O policy does not enter the isolated evaluator. Reserved-input
+status is not evidence that a paid or unseen live-model study occurred.
+
+The prior intermittent CLI outcomes remain unexplained by their original reports.
+The current v2 full run is passing, and future reports retain individual check
+outcomes. Neither this successful run nor clean reviews can prove universal
+availability, correctness of every candidate, or absence of every resource leak.
+Review completion and final draft state are tracked in the linked PRs.

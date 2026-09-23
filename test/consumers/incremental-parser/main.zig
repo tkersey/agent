@@ -1,0 +1,1191 @@
+//! Consumer-directed parser construction using compiled task-valued hyperfunctions.
+const std = @import("std");
+const agent = @import("agent");
+const boundary = @import("boundary");
+const source = boundary.computation;
+const hyper = boundary.library.hyper;
+const parser = agent.parser_synthesis;
+const P = parser.proposals.Profile;
+const Id = source.Id;
+pub const Alternative = struct { subject: parser.Subject, model: P.Request };
+pub const Input = struct { subject: parser.Subject, model: P.Request, trace: parser.Trace, occurrence: u64, rounds: u64, target: agent.contracts.Text(256), principal: u64, apply: bool, abort_nested: bool, alternate_eof: ?Alternative = null };
+// Round identifies the contribution occurrence. Source proposals mint that
+// version; experiments retain the prior candidate's exact version and content.
+const State = struct { input: Input, successor: bool, round: u64, remaining: u64, prior: ?Report, reference: ?parser.ReferenceReply };
+const Constraint = struct { state: State, observation: parser.ReferenceReply };
+const Constructed = struct { candidate: parser.Candidate, reference: parser.ReferenceReply };
+const Counterexample = struct { observation: parser.ExecutionReply, experiment: ?parser.proposals.Experiment };
+pub const Report = struct { candidate: parser.Candidate, observation: parser.ExecutionReply, experiment: ?parser.proposals.Experiment = null, counterexample: ?Counterexample = null };
+pub const Contribution = union(enum(u32)) {
+    reference: Constraint = 0,
+    candidate: Constructed = 1,
+    assessed: Report = 2,
+    unresolved: agent.contracts.Text(512) = 3,
+    delivered: agent.parser_delivery.Result = 4,
+};
+const Types = struct {
+    input: Id,
+    state: Id,
+    contribution: Id,
+    task: Id,
+    pair: hyper.Pair,
+    model: Id,
+    reference: Id,
+    execution: Id,
+    sample: Id,
+    probe: Id,
+    reference_factory: Id,
+    release: Id,
+};
+fn types(b: *source.Builder) !Types {
+    const cache = try b.specialization(Types, "agent.parser.episode/v1", .{});
+    if (cache.cached) |value| return value;
+    const input = try agent.contracts.schema(Input, b);
+    const state = try agent.contracts.schema(State, b);
+    const contribution = try agent.contracts.schema(Contribution, b);
+    const model = try P.declare(b);
+    const reference = try b.effect(.{ .identity = parser.reference_identity, .payload = try agent.contracts.schema(parser.ReferenceRequest, b), .result = try agent.contracts.schema(parser.ReferenceReply, b) });
+    const execution = try b.effect(.{ .identity = "agent.parser.probe.v2", .payload = try agent.contracts.schema(parser.ExecutionRequest, b), .result = try agent.contracts.schema(parser.ExecutionReply, b) });
+    const release = try b.effect(.{ .identity = "parser/participant-release", .payload = try b.scalar(u64), .result = try b.scalar(void) });
+    const task = try b.reserveSchema();
+    const pair = try hyper.pairWith(b, task, task, &.{ state, contribution });
+    try b.defineSchema(task, .{ .internal = .{ .computation = .{ .parameters = &.{}, .result = contribution, .effects = &.{ model, reference, execution, release }, .capture_bound = &.{ state, pair.peer_forward, pair.peer_backward } } } });
+    const sample = try b.declare(&.{ state, try agent.contracts.schema(Constraint, b) }, contribution, &.{ model, execution }, &.{});
+    const probe = try b.declare(&.{ state, try agent.contracts.schema(parser.Candidate, b) }, try agent.contracts.schema(parser.ExecutionReply, b), &.{execution}, &.{});
+    const reference_factory = try b.declare(&.{state}, pair.backward, &.{}, &.{});
+    return cache.finish(b, .{ .release = release, .reference_factory = reference_factory, .input = input, .state = state, .contribution = contribution, .task = task, .pair = pair, .model = model, .reference = reference, .execution = execution, .sample = sample, .probe = probe });
+}
+fn field(b: *source.Builder, comptime T: type, value: Id, index: Id) !Id {
+    return b.primitive(try agent.contracts.schema(T, b), .field, &.{value}, index);
+}
+fn unresolved(b: *source.Builder, t: Types, message: []const u8) !Id {
+    const text = try literal(b, agent.contracts.Text(512), .{ .bytes = message });
+    return b.pure(try b.primitive(t.contribution, .variant, &.{text}, 3));
+}
+fn step(b: *source.Builder, q: hyper.Query, consumer: bool) !Id {
+    const t = try types(b);
+    const need = try hyper.demand.family(b, "parser/need", t.state, t.contribution);
+    const interpreted = try hyper.demand.interpretWith(b, q, need, t.contribution, .{
+        .captures = &.{ t.state, t.contribution, t.pair.peer_forward, t.pair.peer_backward },
+        .residual = .{ .effects = &.{ t.model, t.reference, t.execution, t.release } },
+        .obligations = true,
+    }, ReturnOrDispose);
+    const body = try b.declare(&.{need.capability}, t.contribution, &.{ t.model, t.reference, t.execution, t.release, need.effect }, &.{});
+    const next = try successor(b, q.state);
+    const received = try b.variable(t.contribution);
+    const requested = try hyper.demand.request(b, need, try b.reference(b.parameter(body, 0)), next);
+    const continued = try afterContribution(b, t, q, try b.reference(received), consumer);
+    var instructions = try b.bind(received, requested, continued);
+    if (consumer) instructions = try b.term(.{ .conditional = .{
+        .condition = try field(b, bool, q.state, 1),
+        .when_true = if (Application.circular_consumer) instructions else try referenceParticipant(b, t, q),
+        .when_false = instructions,
+    } });
+    const exhausted = try b.primitive(try b.scalar(bool), .equal, &.{ try field(b, u64, q.state, 3), try b.constant(u64, 0) }, 0);
+    if (!consumer) {
+        const work = try b.declare(&.{}, t.contribution, &.{ t.model, t.reference, t.execution, t.release, need.effect }, &.{});
+        try b.define(work, instructions);
+        const exit = try boundary.library.cleanup.exitInfo(b, try b.scalar(void));
+        const cleanup = try b.declare(&.{exit}, try b.scalar(void), &.{t.release}, &.{});
+        try b.define(cleanup, try b.term(.{ .perform = .{ .effect = t.release, .payload = try b.constant(u64, 90) } }));
+        const work_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{}, .result = t.contribution, .effects = &.{ t.model, t.reference, t.execution, t.release, need.effect }, .capture_bound = &.{ t.state, t.pair.peer_backward, need.capability } } } });
+        const cleanup_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{exit}, .result = try b.scalar(void), .effects = &.{t.release} } } });
+        const protected = try b.term(.{ .protect = .{ .body = try b.lambda(work, work_type), .cleanup = try b.lambda(cleanup, cleanup_type) } });
+        instructions = try b.term(.{ .conditional = .{ .condition = try field(b, bool, try field(b, Input, q.state, 0), 8), .when_true = protected, .when_false = instructions } });
+    }
+    try b.define(body, try b.term(.{ .conditional = .{ .condition = exhausted, .when_true = try unresolved(b, t, "Construction allowance exhausted."), .when_false = instructions } }));
+    const task = try b.declare(&.{}, t.contribution, &.{ t.model, t.reference, t.execution, t.release }, &.{});
+    try b.define(task, try hyper.demand.handle(b, interpreted, q.peer, try b.lambda(body, interpreted.body)));
+    const descriptor = try b.declare(&.{}, t.task, &.{}, &.{});
+    try b.define(descriptor, try b.pure(try b.lambda(task, t.task)));
+    return b.pure(try b.lambda(descriptor, q.types.answer_forward));
+}
+const ReturnOrDispose = struct {
+    var invalid: enum { none, drop, duplicate } = .none;
+    pub fn emit(b: *source.Builder, token: Id, value: Id) source.Error!Id {
+        if (invalid == .drop) return b.pure(value);
+        const resume_requester = try b.term(.{ .resume_value = .{ .resumption = token, .argument = value } });
+        if (invalid == .duplicate) return b.bind(try b.variable(try agent.contracts.schema(Contribution, b)), resume_requester, resume_requester);
+        const disposed = try b.bind(try b.variable(try b.scalar(void)), try b.term(.{ .dispose = token }), try b.pure(value));
+        return b.term(.{ .match_sum = .{ .value = value, .cases = &.{
+            .{ .variable = try b.variable(try agent.contracts.schema(Constraint, b)), .body = resume_requester },
+            .{ .variable = try b.variable(try agent.contracts.schema(Constructed, b)), .body = resume_requester },
+            .{ .variable = try b.variable(try agent.contracts.schema(Report, b)), .body = resume_requester },
+            .{ .variable = try b.variable(try agent.contracts.schema(agent.contracts.Text(512), b)), .body = disposed },
+            .{ .variable = try b.variable(try agent.contracts.schema(agent.parser_delivery.Result, b)), .body = resume_requester },
+        } } });
+    }
+};
+fn referenceStep(b: *source.Builder, t: Types, state: Id) !Id {
+    const input = try field(b, Input, state, 0);
+    const request = try b.primitive(try agent.contracts.schema(parser.ReferenceRequest, b), .product, &.{
+        try field(b, parser.Subject, input, 0), try field(b, u64, input, 3), try field(b, parser.Trace, input, 2),
+    }, 0);
+    const reply = try b.variable(try agent.contracts.schema(parser.ReferenceReply, b));
+    const constraint = try b.primitive(try agent.contracts.schema(Constraint, b), .product, &.{ state, try b.reference(reply) }, 0);
+    const contribution = try b.term(.{ .conditional = .{ .condition = try field(b, bool, input, 8), .when_true = try unresolved(b, t, "Nested parser work was locally abandoned after its reference observation."), .when_false = try b.pure(try b.primitive(t.contribution, .variant, &.{constraint}, 0)) } });
+    const observed = try b.bind(reply, try b.term(.{ .perform = .{ .effect = t.reference, .payload = request } }), contribution);
+    const cached = try b.variable(try agent.contracts.schema(parser.ReferenceReply, b));
+    const reused = try b.primitive(try agent.contracts.schema(Constraint, b), .product, &.{ state, try b.reference(cached) }, 0);
+    return b.term(.{ .match_sum = .{ .value = try field(b, ?parser.ReferenceReply, state, 5), .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = observed },
+        .{ .variable = cached, .body = try b.pure(try b.primitive(t.contribution, .variant, &.{reused}, 0)) },
+    } } });
+}
+fn afterContribution(b: *source.Builder, t: Types, q: hyper.Query, value: Id, consumer: bool) !Id {
+    var cases: [5]struct { variable: Id, body: Id } = undefined;
+    const schemas = [_]Id{ try agent.contracts.schema(Constraint, b), try agent.contracts.schema(Constructed, b), try agent.contracts.schema(Report, b), try agent.contracts.schema(agent.contracts.Text(512), b), try agent.contracts.schema(agent.parser_delivery.Result, b) };
+    for (schemas, 0..) |schema, index| {
+        const variable = try b.variable(schema);
+        var body = try unresolved(b, t, "Unexpected counterpart contribution.");
+        if (index == 3) body = try b.pure(try b.primitive(t.contribution, .variant, &.{try b.reference(variable)}, 3));
+        if (!consumer and index == 0) body = try b.term(.{ .call = .{ .function = t.sample, .arguments = &.{ q.state, try b.reference(variable) } } });
+        if (consumer and index == 1) body = try assessAndContinue(b, t, q, try b.reference(variable));
+        if (consumer and index == 2) body = try experimentAndContinue(b, t, q, try b.reference(variable));
+        cases[index] = .{ .variable = variable, .body = body };
+    }
+    return b.term(.{ .match_sum = .{ .value = value, .cases = &.{
+        .{ .variable = cases[0].variable, .body = cases[0].body }, .{ .variable = cases[1].variable, .body = cases[1].body },
+        .{ .variable = cases[2].variable, .body = cases[2].body }, .{ .variable = cases[3].variable, .body = cases[3].body },
+        .{ .variable = cases[4].variable, .body = cases[4].body },
+    } } });
+}
+const Producer = struct {
+    pub fn emit(b: *source.Builder, q: hyper.Query) !Id {
+        return step(b, q, false);
+    }
+};
+const Consumer = struct {
+    pub fn emit(b: *source.Builder, q: hyper.Query) !Id {
+        return step(b, q, true);
+    }
+};
+
+fn component(allocator: std.mem.Allocator, consumer: bool, reference_only: bool, forged: bool) ![]u8 {
+    var b = source.Builder.init(allocator);
+    defer b.deinit();
+    const t = try types(&b);
+    const definition = if (forged) try hyper.ana(&b, hyper.swap(t.pair), t.state, ForgedConsumer) else if (reference_only) try hyper.ana(&b, hyper.swap(t.pair), t.state, Reference) else if (consumer) try hyper.ana(&b, hyper.swap(t.pair), t.state, Consumer) else try hyper.ana(&b, t.pair, t.state, Producer);
+    var compiled = try source.component.compile(allocator, b.module(definition.function, try b.scalar(void)), .{
+        .imports = &.{ .{ .name = "reference-factory", .reference = .{ .kind = .function, .id = t.reference_factory } }, .{ .name = "participant-release", .reference = .{ .kind = .effect, .id = t.release } }, .{ .name = "model", .reference = .{ .kind = .effect, .id = t.model } }, .{ .name = "probe", .reference = .{ .kind = .function, .id = t.probe } }, .{ .name = "reference", .reference = .{ .kind = .effect, .id = t.reference } }, .{ .name = "sample", .reference = .{ .kind = .function, .id = t.sample } }, .{ .name = "simulation", .reference = .{ .kind = .effect, .id = t.execution } } },
+        .exports = &.{.{ .name = "create", .reference = .{ .kind = .function, .id = definition.function } }},
+        .borrows = &.{ .{ .function = t.sample }, .{ .function = t.probe }, .{ .function = t.reference_factory } },
+    });
+    defer compiled.deinit();
+    const bytes = try allocator.alloc(u8, try boundary.data.component.encodedLength(compiled.object));
+    errdefer allocator.free(bytes);
+    _ = try compiled.encode(allocator, bytes);
+    return bytes;
+}
+
+fn literal(b: *source.Builder, comptime T: type, value: T) !Id {
+    return b.literal(.{ .schema = try agent.contracts.schema(T, b), .bytes = try agent.contracts.encodeOwned(T, b.allocator(), value) });
+}
+fn appendSummary(c: agent.Context, request: Id, rows: Id) !Id {
+    const b = c.builder;
+    const count = try b.primitive(try b.scalar(u64), .sequence_length, &.{rows}, 0);
+    const number = try b.primitive(try b.schema(.text), .text_integer, &.{count}, 0);
+    const prefix = try c.literal(P.MessageText, .{ .bytes = "The actual frozen reference returned this many feed observations: " });
+    const content = try b.value(.{ .schema = try c.schema(P.MessageText), .expression = .{ .primitive = .{
+        .opcode = .blob_concat,
+        .operands = &.{ prefix, number },
+        .failures = &.{.{ .kind = .capacity_exceeded, .value = try b.failureLiteral(try b.constant(void, {})) }},
+    } } });
+    return appendMessage(c, request, content);
+}
+fn appendMessage(c: agent.Context, request: Id, content: Id) !Id {
+    const b = c.builder;
+    const message = try b.primitive(try c.schema(P.Message), .product, &.{ try c.literal(agent.model_invocation.MessageRole, .user), content }, 0);
+    var fields: [std.meta.fields(P.Request).len]Id = undefined;
+    inline for (std.meta.fields(P.Request), 0..) |item, index| {
+        const value = try field(b, item.type, request, index);
+        fields[index] = if (comptime std.mem.eql(u8, item.name, "messages")) try b.value(.{
+            .schema = try c.schema(P.Messages),
+            .expression = .{ .primitive = .{
+                .opcode = .sequence_append,
+                .operands = &.{ value, message },
+                .failures = &.{.{ .kind = .capacity_exceeded, .value = try b.failureLiteral(try b.constant(void, {})) }},
+            } },
+        }) else value;
+    }
+    return b.primitive(try c.schema(P.Request), .product, &fields, 0);
+}
+fn defineSample(c: agent.Context, t: Types) !void {
+    const b = c.builder;
+    const state = try b.reference(b.parameter(t.sample, 0));
+    const constraint = try b.reference(b.parameter(t.sample, 1));
+    const reference_reply = try field(b, parser.ReferenceReply, constraint, 1);
+    const current = try field(b, State, constraint, 0);
+    const input = try field(b, Input, current, 0);
+    _ = state;
+    const outcome = try field(b, @FieldType(parser.ReferenceReply, "outcome"), reference_reply, 1);
+    const rows = try b.variable(try c.schema(parser.Observations));
+    const unavailable = try b.variable(try c.schema(parser.Unavailable));
+    const result = try b.variable(try c.schema(P.Interpretation));
+    const answer = try b.variable(try c.schema(parser.proposals.Proposal));
+    const rejected = try b.variable(try c.schema(P.InterpretationFailure));
+    const interpreted = try b.term(.{ .match_sum = .{ .value = try b.reference(result), .cases = &.{
+        .{ .variable = answer, .body = try candidateProposal(c, t, try b.reference(answer), current, reference_reply) },
+        .{ .variable = rejected, .body = try unresolved(b, t, "The model response was rejected.") },
+    } } });
+    const summarized = try appendSummary(c, try field(b, P.Request, input, 1), try b.reference(rows));
+    const request_slot = try b.variable(try c.schema(P.Request));
+    const request = try b.reference(request_slot);
+    const sampled_call = try b.bind(result, try agent.responders.invokeModel(P, c, try b.constant(void, {}), false, request, try offered(c, current)), interpreted);
+    const sampled = try b.bind(request_slot, try revisionPrompt(c, summarized, current), sampled_call);
+    const dispatch = try b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
+        .{ .variable = rows, .body = sampled },
+        .{ .variable = unavailable, .body = try unresolved(b, t, "Reference evidence is unavailable.") },
+    } } });
+    const matching = try b.primitive(try b.scalar(bool), .equal, &.{
+        try field(b, u64, reference_reply, 0), try field(b, u64, input, 3),
+    }, 0);
+    try b.define(t.sample, try b.term(.{ .conditional = .{ .condition = matching, .when_true = dispatch, .when_false = try unresolved(b, t, "Reference occurrence is stale.") } }));
+}
+fn candidateProposal(c: agent.Context, t: Types, answer: Id, state: Id, reference_reply: Id) !Id {
+    const b = c.builder;
+    const version = try field(b, u64, state, 2);
+    var cases: [5]struct { variable: Id, body: Id } = undefined;
+    inline for (std.meta.fields(parser.proposals.Proposal), 0..) |item, index| {
+        const variable = try b.variable(try c.schema(item.type));
+        var body = try unresolved(b, t, "The proposal does not answer the current fragment demand.");
+        if (index == 0 or index == 1) {
+            const code = try field(b, parser.Code, try b.reference(variable), 0);
+            const candidate = try b.primitive(try c.schema(parser.Candidate), .product, &.{
+                code, version, try c.literal(parser.Completeness, if (index == 0) .partial else .complete),
+            }, 0);
+            const constructed = try b.primitive(try c.schema(Constructed), .product, &.{ candidate, reference_reply }, 0);
+            body = try b.pure(try b.primitive(t.contribution, .variant, &.{constructed}, 1));
+            if (index == 1) body = try rejectUnchangedFailure(c, t, state, code, body);
+        }
+        if (index == 2) body = try proposedExperiment(c, t, state, try b.reference(variable));
+        if (index == 4) body = try b.pure(try b.primitive(t.contribution, .variant, &.{try field(b, parser.proposals.Explanation, try b.reference(variable), 0)}, 3));
+        cases[index] = .{ .variable = variable, .body = body };
+    }
+    return b.term(.{ .match_sum = .{ .value = answer, .cases = &.{
+        .{ .variable = cases[0].variable, .body = cases[0].body }, .{ .variable = cases[1].variable, .body = cases[1].body },
+        .{ .variable = cases[2].variable, .body = cases[2].body }, .{ .variable = cases[3].variable, .body = cases[3].body },
+        .{ .variable = cases[4].variable, .body = cases[4].body },
+    } } });
+}
+fn rejectUnchangedFailure(c: agent.Context, t: Types, state: Id, code: Id, accepted: Id) !Id {
+    const b = c.builder;
+    const prior = try b.variable(try c.schema(Report));
+    const old = try field(b, parser.Code, try field(b, parser.Candidate, try b.reference(prior), 0), 0);
+    const same = try b.primitive(try b.scalar(bool), .equal, &.{ try b.primitive(try b.scalar(i8), .blob_compare, &.{ code, old }, 0), try b.constant(i8, 0) }, 0);
+    const rejected = try b.term(.{ .conditional = .{ .condition = same, .when_true = try unresolved(b, t, "A known counterexample still applies to this unchanged source."), .when_false = accepted } });
+    const counterexample = try b.term(.{ .match_sum = .{ .value = try field(b, ?Counterexample, try b.reference(prior), 3), .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = accepted },
+        .{ .variable = try b.variable(try c.schema(Counterexample)), .body = rejected },
+    } } });
+    return b.term(.{ .match_sum = .{ .value = try field(b, ?Report, state, 4), .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = accepted },
+        .{ .variable = prior, .body = counterexample },
+    } } });
+}
+fn makeReport(b: *source.Builder, candidate: Id, observation: Id, experiment: Id, previous: Id) !Id {
+    const result = try agent.contracts.schema(Report, b);
+    const f = try b.declare(&.{ try agent.contracts.schema(parser.Candidate, b), try agent.contracts.schema(parser.ExecutionReply, b), try agent.contracts.schema(?parser.proposals.Experiment, b), try agent.contracts.schema(?Counterexample, b) }, result, &.{}, &.{});
+    const c = try b.reference(b.parameter(f, 0));
+    const o = try b.reference(b.parameter(f, 1));
+    const e = try b.reference(b.parameter(f, 2));
+    const prior = try b.reference(b.parameter(f, 3));
+    const evidence = try b.primitive(try agent.contracts.schema(Counterexample, b), .product, &.{ o, e }, 0);
+    const saved = try b.primitive(try agent.contracts.schema(?Counterexample, b), .variant, &.{evidence}, 1);
+    const unchanged = try b.pure(try b.primitive(result, .product, &.{ c, o, e, prior }, 0));
+    const failed = try b.pure(try b.primitive(result, .product, &.{ c, o, e, saved }, 0));
+    const probe = try b.variable(try agent.contracts.schema(parser.Probe, b));
+    const assessment = try b.variable(try agent.contracts.schema(parser.Assessment, b));
+    const outcome = try field(b, @FieldType(parser.ExecutionReply, "outcome"), o, 2);
+    try b.define(f, try b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
+        .{ .variable = probe, .body = try b.term(.{ .conditional = .{ .condition = try field(b, bool, try b.reference(probe), 1), .when_true = unchanged, .when_false = failed } }) },
+        .{ .variable = assessment, .body = try b.term(.{ .conditional = .{ .condition = try field(b, bool, try b.reference(assessment), 0), .when_true = unchanged, .when_false = failed } }) },
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Unavailable, b)), .body = unchanged },
+    } } }));
+    return b.term(.{ .call = .{ .function = f, .arguments = &.{ candidate, observation, experiment, previous } } });
+}
+
+fn proposedExperiment(c: agent.Context, t: Types, state: Id, experiment: Id) !Id {
+    const b = c.builder;
+    const prior = try b.variable(try c.schema(Report));
+    const candidate = try field(b, parser.Candidate, try b.reference(prior), 0);
+    const input = try field(b, Input, state, 0);
+    const occurrence = try arithmetic(b, .integer_add, try field(b, u64, input, 3), try field(b, u64, state, 2));
+    const check = try b.primitive(try c.schema(@FieldType(parser.ExecutionRequest, "check")), .variant, &.{experiment}, 2);
+    const request = try b.primitive(try c.schema(parser.ExecutionRequest), .product, &.{ try field(b, parser.Subject, input, 0), occurrence, candidate, check }, 0);
+    const observation = try b.variable(try c.schema(parser.ExecutionReply));
+    const report_slot = try b.variable(try c.schema(Report));
+    const report = try b.reference(report_slot);
+    const recorded = try makeReport(b, candidate, try b.reference(observation), try b.primitive(try c.schema(?parser.proposals.Experiment), .variant, &.{experiment}, 1), try field(b, ?Counterexample, try b.reference(prior), 3));
+    const execute = try b.bind(observation, try parser.execute(c, .{ .reference = t.reference, .execution = t.execution }, request, try b.constant(void, {})), try b.bind(report_slot, recorded, try b.pure(try b.primitive(t.contribution, .variant, &.{report}, 2))));
+    return b.term(.{ .match_sum = .{ .value = try field(b, ?Report, state, 4), .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = try unresolved(b, t, "An experiment requires an existing candidate.") },
+        .{ .variable = prior, .body = execute },
+    } } });
+}
+fn defineProbe(c: agent.Context, t: Types) !void {
+    const b = c.builder;
+    const input = try field(b, Input, try b.reference(b.parameter(t.probe, 0)), 0);
+    const occurrence = try b.value(.{ .schema = try b.scalar(u64), .expression = .{ .primitive = .{
+        .opcode = .integer_add,
+        .operands = &.{ try field(b, u64, input, 3), try field(b, u64, try b.reference(b.parameter(t.probe, 0)), 2) },
+        .failures = &.{.{ .kind = .arithmetic_overflow, .value = try b.failureLiteral(try b.constant(void, {})) }},
+    } } });
+    const check_type = try c.schema(@FieldType(parser.ExecutionRequest, "check"));
+    const check = try b.primitive(check_type, .variant, &.{try field(b, parser.Trace, input, 2)}, 0);
+    const request = try b.primitive(try c.schema(parser.ExecutionRequest), .product, &.{
+        try field(b, parser.Subject, input, 0), occurrence, try b.reference(b.parameter(t.probe, 1)), check,
+    }, 0);
+    try b.define(t.probe, try parser.execute(c, .{ .reference = t.reference, .execution = t.execution }, request, try b.constant(void, {})));
+}
+
+const Application = struct {
+    var alternate_consumer = false;
+    var circular_consumer = false;
+    var react_mode = false;
+    var complete_only = false;
+    var retain_idle = false;
+    var selection: enum { none, first, last } = .none;
+    var producer: []const u8 = &.{};
+    var consumer: []const u8 = &.{};
+    var reference_bytes: []const u8 = &.{};
+    pub fn emit(c: agent.Context) !source.Module {
+        if (react_mode) return emitReact(c);
+        const b = c.builder;
+        const t = try types(b);
+        try c.registry.classify(t.model, .model);
+        try c.registry.classify(t.reference, .read);
+        try c.registry.classify(t.execution, .simulation);
+        try c.registry.classify(t.release, .read);
+        try defineSample(c, t);
+        try defineProbe(c, t);
+        const r = try install(c, t, "reference", reference_bytes, t.pair.backward);
+        try b.define(t.reference_factory, try b.term(.{ .call = .{ .function = r, .arguments = &.{try b.reference(b.parameter(t.reference_factory, 0))} } }));
+        const p = try install(c, t, "producer", producer, t.pair.forward);
+        const z = try install(c, t, "consumer", consumer, t.pair.backward);
+        const acceptance = try c.external(parser.execution_identity, try c.schema(parser.ExecutionRequest), try c.schema(parser.ExecutionReply), .simulation);
+        const delivery = try agent.parser_delivery.define(c);
+        const core_effects = (try (source.Row{ .effects = &.{ t.model, t.reference, t.execution, t.release, acceptance } }).unionWith(b.allocator(), .{ .effects = delivery.effects })).effects;
+        const idle = if (retain_idle) try Retained.init(c) else null;
+        const retained_effects = if (idle) |owned| (try (source.Row{ .effects = core_effects }).unionWith(b.allocator(), .{ .effects = &.{ owned.release, owned.activity } })).effects else core_effects;
+        const effects = retained_effects;
+        const assessment_effects = &.{ t.model, t.reference, t.execution, t.release, acceptance };
+        const round = try b.declare(&.{t.state}, t.contribution, assessment_effects, &.{});
+        try c.registry.speculate(round, assessment_effects);
+        const state = try b.reference(b.parameter(round, 0));
+        const produced = try b.variable(t.pair.forward);
+        const consumed = try b.variable(t.pair.backward);
+        const peer = try b.declare(&.{}, t.pair.forward, &.{}, &.{});
+        try b.define(peer, try b.pure(try b.reference(produced)));
+        const delayed = try b.variable(t.pair.answer_backward);
+        const task = try b.variable(t.task);
+        const contribution = try b.variable(t.contribution);
+        const complete = try completion(c, t, round, acceptance, state, try b.reference(contribution));
+        const run = try b.bind(delayed, try hyper.invoke(b, try b.reference(consumed), try b.lambda(peer, t.pair.peer_forward)), try b.bind(task, try hyper.force(b, try b.reference(delayed)), try b.bind(contribution, try hyper.force(b, try b.reference(task)), complete)));
+        const next = try b.bind(consumed, try b.term(.{ .call = .{ .function = z, .arguments = &.{state} } }), run);
+        try b.define(round, try b.bind(produced, try b.term(.{ .call = .{ .function = p, .arguments = &.{state} } }), next));
+        const intent = try agent.parser_intent.define(c);
+        const entry_effects = (try (source.Row{ .effects = effects }).unionWith(b.allocator(), .{ .effects = &.{intent.effect} })).effects;
+        const entry = try b.declare(&.{t.input}, t.contribution, entry_effects, &.{});
+        const selected = try b.variable(t.input);
+        const input = try b.reference(selected);
+        const initial = try b.primitive(t.state, .product, &.{ input, try b.constant(bool, false), try b.constant(u64, 1), try field(b, u64, input, 4), try literal(b, ?Report, null), try literal(b, ?parser.ReferenceReply, null) }, 0);
+        const call = if (selection == .none) try b.term(.{ .call = .{ .function = round, .arguments = &.{initial} } }) else try selectConstructions(c, t, round, assessment_effects, input, initial, selection == .last);
+        const assessed = try b.variable(t.contribution);
+        const finished = try b.bind(assessed, call, try finishAssessment(c, t, entry, delivery, input, try b.reference(assessed)));
+        const execute = if (idle) |owned| try owned.around(b, t.contribution, finished) else finished;
+        const chosen = try b.variable(try c.schema(?Input));
+        const dispatch = try b.term(.{ .match_sum = .{ .value = try b.reference(chosen), .cases = &.{
+            .{ .variable = try b.variable(try b.scalar(void)), .body = try unresolved(b, t, "EOF behavior remains unresolved.") },
+            .{ .variable = selected, .body = execute },
+        } } });
+        try b.define(entry, try b.bind(chosen, try chooseInput(c, t, intent, try b.reference(b.parameter(entry, 0))), dispatch));
+        return b.module(entry, try b.scalar(void));
+    }
+};
+fn chooseInput(c: agent.Context, t: Types, intent: agent.parser_intent.Definition, input: Id) !Id {
+    const b = c.builder;
+    const option = try c.schema(?Input);
+    const alternate = try b.variable(try c.schema(Alternative));
+    const resolution = try b.variable(try c.schema(agent.parser_intent.Result));
+    const id = try b.variable(try b.scalar(u64));
+    var strict_fields: [std.meta.fields(Input).len]Id = undefined;
+    var emit_fields: [std.meta.fields(Input).len]Id = undefined;
+    inline for (std.meta.fields(Input), 0..) |item, index| {
+        strict_fields[index] = if (index == 9) try literal(b, ?Alternative, null) else try field(b, item.type, input, index);
+        emit_fields[index] = if (index == 0) try field(b, parser.Subject, try b.reference(alternate), 0) else if (index == 1) try field(b, P.Request, try b.reference(alternate), 1) else strict_fields[index];
+    }
+    const strict = try b.pure(try b.primitive(option, .variant, &.{try b.primitive(t.input, .product, &strict_fields, 0)}, 1));
+    const emit = try b.pure(try b.primitive(option, .variant, &.{try b.primitive(t.input, .product, &emit_fields, 0)}, 1));
+    const unknown = try b.pure(try literal(b, ?Input, null));
+    const chosen = try b.term(.{ .conditional = .{
+        .condition = try b.primitive(try b.scalar(bool), .equal, &.{ try b.reference(id), try b.constant(u64, 1) }, 0),
+        .when_true = strict,
+        .when_false = try b.term(.{ .conditional = .{ .condition = try b.primitive(try b.scalar(bool), .equal, &.{ try b.reference(id), try b.constant(u64, 2) }, 0), .when_true = emit, .when_false = unknown } }),
+    } });
+    const result = try b.term(.{ .match_sum = .{ .value = try b.reference(resolution), .cases = &.{
+        .{ .variable = id, .body = chosen }, .{ .variable = try b.variable(try b.scalar(void)), .body = unknown },
+    } } });
+    const frozen = try b.primitive(try c.schema(agent.parser_intent.Frozen), .product, &.{ try field(b, parser.Subject, input, 0), try field(b, parser.Subject, try b.reference(alternate), 0), try field(b, u64, input, 3) }, 0);
+    const asked = try b.bind(resolution, try b.term(.{ .call = .{ .function = intent.function, .arguments = &.{frozen} } }), result);
+    const dispatch = try b.term(.{ .match_sum = .{ .value = try field(b, ?Alternative, input, 9), .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = try b.pure(try b.primitive(option, .variant, &.{input}, 1)) },
+        .{ .variable = alternate, .body = asked },
+    } } });
+    const no_work = try b.primitive(try b.scalar(bool), .equal, &.{ try field(b, u64, input, 4), try b.constant(u64, 0) }, 0);
+    return b.term(.{ .conditional = .{ .condition = no_work, .when_true = try b.pure(try b.primitive(option, .variant, &.{input}, 1)), .when_false = dispatch } });
+}
+fn install(c: agent.Context, t: Types, name: []const u8, bytes: []const u8, result: Id) !Id {
+    return agent.participant.declare(c, .{
+        .instance = name,
+        .object = bytes,
+        .entry = "create",
+        .parameters = &.{t.state},
+        .result = result,
+        .effects = &.{ .{ .symbol = "participant-release", .effect = t.release }, .{ .symbol = "model", .effect = t.model }, .{ .symbol = "reference", .effect = t.reference }, .{ .symbol = "simulation", .effect = t.execution } },
+        .functions = &.{ .{ .symbol = "reference-factory", .function = t.reference_factory }, .{ .symbol = "sample", .function = t.sample }, .{ .symbol = "probe", .function = t.probe } },
+    });
+}
+// Test-only owned endpoints surround the real application. Their packages never
+// enter a participant import or an assessment capture. Control stays in World.
+const Retained = struct {
+    g: boundary.library.generator.Generator,
+    release: Id,
+    activity: Id,
+    body: Id,
+    fn init(c: agent.Context) !Retained {
+        const b = c.builder;
+        const unit = try b.scalar(void);
+        const integer = try b.scalar(u64);
+        const release = try c.external("parser/retained-release", integer, unit, .read);
+        const activity = try c.external("parser/retained-work", integer, unit, .read);
+        const g = try boundary.library.generator.defineExchange(b, "parser/retained-offer", integer, integer, integer, &.{integer}, &.{}, &.{}, .{ .effects = &.{ release, activity } });
+        const f = try b.declare(&.{ g.capability, integer }, integer, &.{ release, activity, g.effect }, &.{});
+        const initial = try b.reference(b.parameter(f, 1));
+        const work = try b.declare(&.{}, integer, &.{ activity, g.effect }, &.{});
+        const input = try b.variable(integer);
+        const offer = try b.term(.{ .perform = .{ .effect = g.effect, .capability = try b.reference(b.parameter(f, 0)), .payload = initial } });
+        const total = try arithmetic(b, .integer_add, initial, try b.reference(input));
+        const notify = try b.term(.{ .perform = .{ .effect = activity, .payload = total } });
+        try b.define(work, try b.bind(input, offer, try b.bind(try b.variable(unit), notify, try b.pure(total))));
+        const exit = try boundary.library.cleanup.exitInfo(b, unit);
+        const cleanup = try b.declare(&.{exit}, unit, &.{release}, &.{});
+        try b.define(cleanup, try b.term(.{ .perform = .{ .effect = release, .payload = initial } }));
+        const work_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{}, .result = integer, .effects = &.{ activity, g.effect }, .capture_bound = &.{ integer, g.capability } } } });
+        const cleanup_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{exit}, .result = unit, .effects = &.{release}, .capture_bound = &.{integer} } } });
+        try b.define(f, try b.term(.{ .protect = .{ .body = try b.lambda(work, work_type), .cleanup = try b.lambda(cleanup, cleanup_type) } }));
+        const signature = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{ g.capability, integer }, .result = integer, .effects = &.{ release, activity, g.effect } } } });
+        return .{ .g = g, .release = release, .activity = activity, .body = try b.lambda(f, signature) };
+    }
+    fn yielded(self: Retained, b: *source.Builder, answer: Id, owner: Id, next: Id) !Id {
+        const pair = try b.variable(self.g.yielded);
+        return b.term(.{ .match_sum = .{ .value = answer, .cases = &.{
+            .{ .variable = try b.variable(try b.scalar(u64)), .body = try b.term(.{ .fail = try b.constant(void, {}) }) },
+            .{ .variable = pair, .body = try b.term(.{ .unpack_product = .{ .value = try b.reference(pair), .variables = &.{ try b.variable(try b.scalar(u64)), owner }, .body = next } }) },
+        } } });
+    }
+    fn around(self: Retained, b: *source.Builder, result: Id, computation: Id) !Id {
+        const generator = boundary.library.generator;
+        const a = try b.variable(self.g.answer);
+        const z = try b.variable(self.g.answer);
+        const ap = try b.variable(self.g.package);
+        const zp = try b.variable(self.g.package);
+        const saved = try b.variable(result);
+        const final = try b.variable(self.g.answer);
+        const completed = try b.variable(try b.scalar(u64));
+        const unexpected = try b.variable(self.g.yielded);
+        const leftover = try b.variable(self.g.package);
+        const fail = try b.term(.{ .fail = try b.constant(void, {}) });
+        const disposal = try b.term(.{ .unpack_product = .{ .value = try b.reference(unexpected), .variables = &.{ try b.variable(try b.scalar(u64)), leftover }, .body = try b.bind(try b.variable(try b.scalar(void)), try generator.close(b, self.g, try b.reference(leftover)), fail) } });
+        const equal = try b.primitive(try b.scalar(bool), .equal, &.{ try b.reference(completed), try b.constant(u64, 57) }, 0);
+        const done = try b.term(.{ .match_sum = .{ .value = try b.reference(final), .cases = &.{
+            .{ .variable = completed, .body = try b.term(.{ .conditional = .{ .condition = equal, .when_true = try b.pure(try b.reference(saved)), .when_false = fail } }) },
+            .{ .variable = unexpected, .body = disposal },
+        } } });
+        const resume_side = try b.bind(final, try generator.exchange(b, self.g, try b.reference(zp), try b.constant(u64, 7)), done);
+        const close_local = try b.bind(try b.variable(try b.scalar(void)), try generator.close(b, self.g, try b.reference(ap)), resume_side);
+        const run = try b.bind(saved, computation, close_local);
+        const second = try b.bind(z, try generator.begin(b, self.g, self.body, try b.constant(u64, 50)), try self.yielded(b, try b.reference(z), zp, run));
+        return b.bind(a, try generator.begin(b, self.g, self.body, try b.constant(u64, 5)), try self.yielded(b, try b.reference(a), ap, second));
+    }
+};
+const System = agent.system(.{ .InitialArgs = Input, .Result = Contribution, .Failure = void, .application = Application });
+const Model = agent.model(.{ .name = "parser-producer", .model = "synthetic-only", .protocol = struct {
+    pub const semantic_identity = agent.model_invocation.protocol_identity;
+} });
+fn output(init: std.process.Init, bytes: []const u8) !void {
+    var buffer: [4096]u8 = undefined;
+    var writer = std.Io.File.stdout().writer(init.io, &buffer);
+    try writer.interface.writeAll(bytes);
+    try writer.interface.flush();
+}
+pub fn main(init: std.process.Init) !void {
+    var args = init.minimal.args.iterate();
+    _ = args.next();
+    const mode = args.next() orelse return error.ExpectedMode;
+    if (std.mem.eql(u8, mode, "react")) {
+        if (args.next() != null) return error.UnexpectedArgument;
+        Application.react_mode = true;
+        Application.complete_only = true;
+        var compiled = try agent.compile(init.gpa, System);
+        defer compiled.deinit();
+        const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+        defer init.gpa.free(bytes);
+        _ = try compiled.encode(init.gpa, bytes);
+        return output(init, bytes);
+    }
+    if (std.mem.eql(u8, mode, "producer-drop") or std.mem.eql(u8, mode, "producer-duplicate")) {
+        if (args.next() != null) return error.UnexpectedArgument;
+        ReturnOrDispose.invalid = if (std.mem.eql(u8, mode, "producer-drop")) .drop else .duplicate;
+        const bytes = try component(init.gpa, false, false, false);
+        defer init.gpa.free(bytes);
+        return output(init, bytes);
+    }
+    if (std.mem.eql(u8, mode, "link") or std.mem.eql(u8, mode, "link-retained") or std.mem.eql(u8, mode, "link-select-first") or std.mem.eql(u8, mode, "link-select-last") or std.mem.eql(u8, mode, "link-complete")) {
+        Application.complete_only = std.mem.eql(u8, mode, "link-complete");
+        Application.retain_idle = std.mem.eql(u8, mode, "link-retained");
+        Application.selection = if (std.mem.eql(u8, mode, "link-select-first")) .first else if (std.mem.eql(u8, mode, "link-select-last")) .last else .none;
+        const p = args.next() orelse return error.ExpectedProducer;
+        const c = args.next() orelse return error.ExpectedConsumer;
+        const r = args.next() orelse return error.ExpectedReference;
+        if (args.next() != null) return error.UnexpectedArgument;
+        const pb = try std.Io.Dir.cwd().readFileAlloc(init.io, p, init.gpa, .limited(64 << 20));
+        defer init.gpa.free(pb);
+        const cb = try std.Io.Dir.cwd().readFileAlloc(init.io, c, init.gpa, .limited(64 << 20));
+        defer init.gpa.free(cb);
+        const rb = try std.Io.Dir.cwd().readFileAlloc(init.io, r, init.gpa, .limited(64 << 20));
+        defer init.gpa.free(rb);
+        Application.reference_bytes = rb;
+        Application.producer = pb;
+        Application.consumer = cb;
+        var compiled = try agent.compile(init.gpa, System);
+        defer compiled.deinit();
+        const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+        defer init.gpa.free(bytes);
+        _ = try compiled.encode(init.gpa, bytes);
+        return output(init, bytes);
+    }
+    if (args.next() != null) return error.UnexpectedArgument;
+    if (std.mem.eql(u8, mode, "producer") or std.mem.eql(u8, mode, "consumer") or std.mem.eql(u8, mode, "reference") or std.mem.eql(u8, mode, "consumer-forged") or std.mem.eql(u8, mode, "consumer-alt") or std.mem.eql(u8, mode, "consumer-circular")) {
+        Application.circular_consumer = std.mem.eql(u8, mode, "consumer-circular");
+        Application.alternate_consumer = std.mem.eql(u8, mode, "consumer-alt");
+        const bytes = try component(init.gpa, std.mem.eql(u8, mode, "consumer") or Application.alternate_consumer or Application.circular_consumer, std.mem.eql(u8, mode, "reference"), std.mem.eql(u8, mode, "consumer-forged"));
+        defer init.gpa.free(bytes);
+        return output(init, bytes);
+    }
+    if (std.mem.eql(u8, mode, "model-template")) {
+        const request = try P.templateValue(Model, .{ .items = &.{
+            .{ .role = .system, .content = .{ .bytes = parser.proposals.instructions } },
+            .{ .role = .user, .content = .{ .bytes = "The consumer initially requests an escape-boundary transition before a complete parser. Later feedback may request revised or complete source. Explain inability honestly." } },
+        } }, .{ .minimum_calls = 1, .maximum_calls = 1, .parallel_calls = false });
+        const bytes = try agent.contracts.encodeOwned(P.Request, init.gpa, request);
+        defer init.gpa.free(bytes);
+        return output(init, bytes);
+    }
+    var b = source.Builder.init(init.gpa);
+    defer b.deinit();
+    const schema = if (std.mem.eql(u8, mode, "input-schema")) try agent.contracts.schema(Input, &b) else if (std.mem.eql(u8, mode, "result-schema")) try agent.contracts.schema(Contribution, &b) else if (std.mem.eql(u8, mode, "model-schema")) try agent.contracts.schema(P.Request, &b) else if (std.mem.eql(u8, mode, "model-reply-schema")) try agent.contracts.schema(P.Result, &b) else return error.InvalidMode;
+    const bytes = try boundary.data.schema.encodeOwned(init.gpa, b.schemas.items, schema);
+    defer init.gpa.free(bytes);
+    return output(init, bytes);
+}
+
+const Reference = struct {
+    pub fn emit(b: *source.Builder, q: hyper.Query) !Id {
+        const t = try types(b);
+        const task = try b.declare(&.{}, t.contribution, &.{ t.model, t.reference, t.execution, t.release }, &.{});
+        try b.define(task, try referenceStep(b, t, q.state));
+        const descriptor = try b.declare(&.{}, t.task, &.{}, &.{});
+        try b.define(descriptor, try b.pure(try b.lambda(task, t.task)));
+        return b.pure(try b.lambda(descriptor, q.types.answer_forward));
+    }
+};
+fn referenceParticipant(b: *source.Builder, t: Types, q: hyper.Query) !Id {
+    const participant = try b.variable(t.pair.backward);
+    const delayed = try b.variable(t.pair.answer_backward);
+    const task = try b.variable(t.task);
+    const contribution = try b.variable(t.contribution);
+    const observed = try checkedReference(b, t, try field(b, Input, q.state, 0), try b.reference(contribution));
+    const run = try b.bind(delayed, try hyper.invoke(b, try b.reference(participant), q.peer), try b.bind(task, try hyper.force(b, try b.reference(delayed)), try b.bind(contribution, try hyper.force(b, try b.reference(task)), observed)));
+    return b.bind(participant, try b.term(.{ .call = .{ .function = t.reference_factory, .arguments = &.{q.state} } }), run);
+}
+fn checkedReference(b: *source.Builder, t: Types, input: Id, value: Id) !Id {
+    const reference_reply = try b.variable(try agent.contracts.schema(Constraint, b));
+    const wrong = try unresolved(b, t, "The reference participant returned an incompatible contribution.");
+    const matches = try b.primitive(try b.scalar(bool), .equal, &.{
+        try field(b, u64, try field(b, parser.ReferenceReply, try b.reference(reference_reply), 1), 0), try field(b, u64, input, 3),
+    }, 0);
+    const verified = try b.term(.{ .conditional = .{ .condition = matches, .when_true = try b.pure(value), .when_false = try unresolved(b, t, "The reference participant returned a stale occurrence.") } });
+    return b.term(.{ .match_sum = .{ .value = value, .cases = &.{
+        .{ .variable = reference_reply, .body = verified },
+        .{ .variable = try b.variable(try agent.contracts.schema(Constructed, b)), .body = wrong },
+        .{ .variable = try b.variable(try agent.contracts.schema(Report, b)), .body = wrong },
+        .{ .variable = try b.variable(try agent.contracts.schema(agent.contracts.Text(512), b)), .body = try b.pure(value) },
+        .{ .variable = try b.variable(try agent.contracts.schema(agent.parser_delivery.Result, b)), .body = wrong },
+    } } });
+}
+
+fn successor(b: *source.Builder, state: Id) !Id {
+    var values: [std.meta.fields(State).len]Id = undefined;
+    inline for (std.meta.fields(State), 0..) |item, index|
+        values[index] = if (index == 1) try b.constant(bool, true) else try field(b, item.type, state, index);
+    return b.primitive(try agent.contracts.schema(State, b), .product, &values, 0);
+}
+fn arithmetic(b: *source.Builder, opcode: boundary.data.program.Opcode, left: Id, right: Id) !Id {
+    return b.value(.{ .schema = try b.scalar(u64), .expression = .{ .primitive = .{
+        .opcode = opcode,
+        .operands = &.{ left, right },
+        .failures = &.{.{ .kind = .arithmetic_overflow, .value = try b.failureLiteral(try b.constant(void, {})) }},
+    } } });
+}
+fn offered(c: agent.Context, state: Id) !Id {
+    const version = try field(c.builder, u64, state, 2);
+    const first = try c.builder.primitive(try c.builder.scalar(bool), .equal, &.{ version, try c.builder.constant(u64, 1) }, 0);
+    const permit_complete = if (Application.complete_only) try c.builder.constant(bool, true) else try c.builder.primitive(try c.builder.scalar(bool), .equal, &.{ first, try c.builder.constant(bool, false) }, 0);
+    const prior_tag = try c.builder.primitive(try c.builder.scalar(u64), .variant_tag, &.{try field(c.builder, ?Report, state, 4)}, 0);
+    const permit_experiment = try c.builder.primitive(try c.builder.scalar(bool), .equal, &.{ prior_tag, try c.builder.constant(u64, 1) }, 0);
+    return c.builder.primitive(try c.schema([5]bool), .sequence, &.{
+        try c.builder.constant(bool, !Application.complete_only), permit_complete,                    permit_experiment,
+        try c.builder.constant(bool, false),                      try c.builder.constant(bool, true),
+    }, 0);
+}
+fn revisionPrompt(c: agent.Context, request: Id, state: Id) !Id {
+    const b = c.builder;
+    const prior = try b.variable(try c.schema(Report));
+    const candidate = try field(b, parser.Candidate, try b.reference(prior), 0);
+    const code = try field(b, parser.Code, candidate, 0);
+    const prefix = try b.variable(try c.schema(P.MessageText));
+    const content = try b.value(.{ .schema = try c.schema(P.MessageText), .expression = .{ .primitive = .{
+        .opcode = .blob_concat,
+        .operands = &.{ try b.reference(prefix), code },
+        .failures = &.{.{ .kind = .capacity_exceeded, .value = try b.failureLiteral(try b.constant(void, {})) }},
+    } } });
+    const observation = try field(b, parser.ExecutionReply, try b.reference(prior), 1);
+    const outcome = try field(b, @FieldType(parser.ExecutionReply, "outcome"), observation, 2);
+    const informed = try b.variable(try c.schema(P.Request));
+    const retained = try b.variable(try c.schema(P.Request));
+    const revised = try b.bind(retained, try counterexamplePrompt(c, request, try field(b, ?Counterexample, try b.reference(prior), 3)), try b.bind(informed, try experimentPrompt(c, try b.reference(retained), try field(b, ?parser.proposals.Experiment, try b.reference(prior), 2), "The last real probe used your experiment on the unchanged candidate. Hex bytes: "), try b.bind(prefix, try feedbackText(c, outcome), try b.pure(try appendMessage(c, try b.reference(informed), content)))));
+    return b.term(.{ .match_sum = .{ .value = try field(b, ?Report, state, 4), .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = try b.pure(request) },
+        .{ .variable = prior, .body = revised },
+    } } });
+}
+fn counterexamplePrompt(c: agent.Context, request: Id, optional: Id) !Id {
+    const b = c.builder;
+    const evidence = try b.variable(try c.schema(Counterexample));
+    const experiment = try field(b, ?parser.proposals.Experiment, try b.reference(evidence), 1);
+    const has_experiment = try b.primitive(try b.scalar(bool), .equal, &.{ try b.primitive(try b.scalar(u64), .variant_tag, &.{experiment}, 0), try b.constant(u64, 1) }, 0);
+    const described = try b.term(.{ .conditional = .{
+        .condition = has_experiment,
+        .when_true = try experimentPrompt(c, request, experiment, "An earlier FAILED experiment remains a counterexample for this unchanged candidate. Hex bytes: "),
+        .when_false = try b.pure(try appendMessage(c, request, try c.literal(P.MessageText, .{ .bytes = "An earlier required check FAILED for this unchanged candidate. A passing additional probe does not discharge that counterexample." }))),
+    } });
+    return b.term(.{ .match_sum = .{ .value = optional, .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = try b.pure(request) },
+        .{ .variable = evidence, .body = described },
+    } } });
+}
+
+fn experimentPrompt(c: agent.Context, request: Id, optional: Id, prefix: []const u8) !Id {
+    const b = c.builder;
+    const experiment = try b.variable(try c.schema(parser.proposals.Experiment));
+    const value = try b.reference(experiment);
+    const finalized = try b.variable(try c.schema(P.MessageText));
+    const final_text = try b.term(.{ .conditional = .{
+        .condition = try field(b, bool, value, 3),
+        .when_true = try b.pure(try c.literal(P.MessageText, .{ .bytes = "true" })),
+        .when_false = try b.pure(try c.literal(P.MessageText, .{ .bytes = "false" })),
+    } });
+    var text = try c.literal(P.MessageText, .{ .bytes = prefix });
+    const parts = [_]Id{
+        try field(b, agent.contracts.Text(8192), value, 0),
+        try c.literal(P.MessageText, .{ .bytes = "; first chunk bytes: " }),
+        try b.primitive(try b.schema(.text), .text_integer, &.{try field(b, u32, value, 1)}, 0),
+        try c.literal(P.MessageText, .{ .bytes = "; later chunk bytes: " }),
+        try b.primitive(try b.schema(.text), .text_integer, &.{try field(b, u32, value, 2)}, 0),
+        try c.literal(P.MessageText, .{ .bytes = "; finalize: " }),
+        try b.reference(finalized),
+    };
+    for (parts) |part| text = try b.value(.{ .schema = try c.schema(P.MessageText), .expression = .{ .primitive = .{
+        .opcode = .blob_concat,
+        .operands = &.{ text, part },
+        .failures = &.{.{ .kind = .capacity_exceeded, .value = try b.failureLiteral(try b.constant(void, {})) }},
+    } } });
+    const described = try b.bind(finalized, final_text, try b.pure(try appendMessage(c, request, text)));
+    return b.term(.{ .match_sum = .{ .value = optional, .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = try b.pure(request) },
+        .{ .variable = experiment, .body = described },
+    } } });
+}
+
+fn experimentAndContinue(b: *source.Builder, t: Types, q: hyper.Query, report: Id) !Id {
+    const invalid = try unresolved(b, t, "Experiment report does not match the current candidate or occurrence.");
+    const prior = try b.variable(try agent.contracts.schema(Report, b));
+    const reference_reply = try b.variable(try agent.contracts.schema(parser.ReferenceReply, b));
+    const candidate = try field(b, parser.Candidate, report, 0);
+    const observation = try field(b, parser.ExecutionReply, report, 1);
+    const finish = try b.pure(try b.primitive(t.contribution, .variant, &.{report}, 2));
+    const again = try reenter(b, t, q, report, try b.reference(reference_reply), finish);
+    const outcome = try field(b, @FieldType(parser.ExecutionReply, "outcome"), observation, 2);
+    var verified = try b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Probe, b)), .body = again },
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Assessment, b)), .body = invalid },
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Unavailable, b)), .body = finish },
+    } } });
+    const expected_occurrence = try arithmetic(b, .integer_add, try field(b, u64, try field(b, Input, q.state, 0), 3), try field(b, u64, q.state, 2));
+    const pairs = [_][2]Id{
+        .{ try field(b, u64, candidate, 1), try field(b, u64, observation, 1) },
+        .{ expected_occurrence, try field(b, u64, observation, 0) },
+    };
+    for (pairs) |pair| verified = try b.term(.{ .conditional = .{
+        .condition = try b.primitive(try b.scalar(bool), .equal, &pair, 0),
+        .when_true = verified,
+        .when_false = invalid,
+    } });
+    const same_candidate = try b.variable(try b.scalar(bool));
+    verified = try b.bind(same_candidate, (agent.value_equality.compare(b, try agent.contracts.schema(parser.Candidate, b), candidate, try field(b, parser.Candidate, try b.reference(prior), 0), try b.constant(void, {})) catch |err| return switch (err) {
+        error.UnsupportedEqualitySchema => error.TypeMismatch,
+        else => @as(source.Error, @errorCast(err)),
+    }), try b.term(.{ .conditional = .{ .condition = try b.reference(same_candidate), .when_true = verified, .when_false = invalid } }));
+    const with_reference = try b.term(.{ .match_sum = .{ .value = try field(b, ?parser.ReferenceReply, q.state, 5), .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = invalid },
+        .{ .variable = reference_reply, .body = verified },
+    } } });
+    return b.term(.{ .match_sum = .{ .value = try field(b, ?Report, q.state, 4), .cases = &.{
+        .{ .variable = try b.variable(try b.scalar(void)), .body = invalid },
+        .{ .variable = prior, .body = with_reference },
+    } } });
+}
+
+fn assessAndContinue(b: *source.Builder, t: Types, q: hyper.Query, constructed: Id) !Id {
+    const candidate = try field(b, parser.Candidate, constructed, 0);
+    const reference_reply = try field(b, parser.ReferenceReply, constructed, 1);
+    const observation = try b.variable(try agent.contracts.schema(parser.ExecutionReply, b));
+    const report_slot = try b.variable(try agent.contracts.schema(Report, b));
+    const report = try b.reference(report_slot);
+    const earlier = if (Application.alternate_consumer) try b.variable(try agent.contracts.schema(Report, b)) else null;
+    const prior_counterexample = if (earlier) |saved| try field(b, ?Counterexample, try b.reference(saved), 3) else try literal(b, ?Counterexample, null);
+    const recorded = try makeReport(b, candidate, try b.reference(observation), try literal(b, ?parser.proposals.Experiment, null), prior_counterexample);
+    const finish = try b.pure(try b.primitive(t.contribution, .variant, &.{report}, 2));
+    const again = try reenter(b, t, q, report, reference_reply, finish);
+    const assessment = try b.variable(try agent.contracts.schema(parser.Assessment, b));
+    const passes = try b.term(.{ .conditional = .{ .condition = try field(b, bool, try b.reference(assessment), 0), .when_true = try completeAssessment(b, t, try b.reference(assessment), finish), .when_false = again } });
+    const outcome = try field(b, @FieldType(parser.ExecutionReply, "outcome"), try b.reference(observation), 2);
+    const next = try b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Probe, b)), .body = again },
+        .{ .variable = assessment, .body = passes },
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Unavailable, b)), .body = finish },
+    } } });
+    var probed = try b.bind(observation, try b.term(.{ .call = .{ .function = t.probe, .arguments = &.{ q.state, candidate } } }), try b.bind(report_slot, recorded, next));
+    if (earlier) |saved| probed = try additionalConsumerProbe(b, t, q.state, candidate, saved, probed);
+    const completeness = try field(b, parser.Completeness, candidate, 2);
+    const complete = try b.primitive(try b.scalar(bool), .equal, &.{
+        try b.primitive(try b.scalar(u32), .enum_tag, &.{completeness}, 0), try b.constant(u32, 1),
+    }, 0);
+    const checked = try b.term(.{ .conditional = .{ .condition = complete, .when_true = try b.pure(try b.primitive(t.contribution, .variant, &.{constructed}, 1)), .when_false = probed } });
+    const current = try b.primitive(try b.scalar(bool), .equal, &.{ try field(b, u64, candidate, 1), try field(b, u64, q.state, 2) }, 0);
+    return b.term(.{ .conditional = .{ .condition = current, .when_true = checked, .when_false = try unresolved(b, t, "Candidate version is stale.") } });
+}
+fn reenter(b: *source.Builder, t: Types, q: hyper.Query, report: Id, reference_reply: Id, exhausted: Id) !Id {
+    const remaining = try field(b, u64, q.state, 3);
+    const last = try b.primitive(try b.scalar(bool), .equal, &.{ remaining, try b.constant(u64, 1) }, 0);
+    const state = try b.primitive(t.state, .product, &.{
+        try field(b, Input, q.state, 0),                                                        try b.constant(bool, false),
+        try arithmetic(b, .integer_add, try field(b, u64, q.state, 2), try b.constant(u64, 1)), try arithmetic(b, .integer_sub, remaining, try b.constant(u64, 1)),
+        try b.primitive(try agent.contracts.schema(?Report, b), .variant, &.{report}, 1),       try b.primitive(try agent.contracts.schema(?parser.ReferenceReply, b), .variant, &.{reference_reply}, 1),
+    }, 0);
+    const participant = try b.variable(q.types.forward);
+    const delayed = try b.variable(q.types.answer_forward);
+    const task = try b.variable(t.task);
+    const invoked = try hyper.invoke(b, try b.reference(participant), q.peer);
+    const continued = try b.bind(participant, try b.term(.{ .call = .{ .function = q.maker, .arguments = &.{state} } }), try b.bind(delayed, invoked, try b.bind(task, try hyper.force(b, try b.reference(delayed)), try hyper.force(b, try b.reference(task)))));
+    return b.term(.{ .conditional = .{ .condition = last, .when_true = exhausted, .when_false = continued } });
+}
+
+fn feedbackText(c: agent.Context, outcome: Id) !Id {
+    const b = c.builder;
+    const probe = try b.variable(try c.schema(parser.Probe));
+    const assessment = try b.variable(try c.schema(parser.Assessment));
+    const text = struct {
+        fn emit(context: agent.Context, value: []const u8) !Id {
+            return context.builder.pure(try context.literal(P.MessageText, .{ .bytes = value }));
+        }
+    }.emit;
+    const failure_prefix = try b.value(.{ .schema = try c.schema(P.MessageText), .expression = .{ .primitive = .{
+        .opcode = .blob_concat,
+        .operands = &.{
+            try c.literal(P.MessageText, .{ .bytes = "The real consumer probe failed on the supplied concrete trace. Detail: " }),
+            try field(b, agent.contracts.Text(256), try b.reference(probe), 3),
+        },
+        .failures = &.{.{ .kind = .capacity_exceeded, .value = try b.failureLiteral(try b.constant(void, {})) }},
+    } } });
+    const failure_detail = try b.value(.{ .schema = try c.schema(P.MessageText), .expression = .{ .primitive = .{
+        .opcode = .blob_concat,
+        .operands = &.{ failure_prefix, try c.literal(P.MessageText, .{ .bytes = ". Revise the source using the batch reference and required immediate-emission behavior. A complete candidate will undergo full acceptance. Previous source:\n" }) },
+        .failures = &.{.{ .kind = .capacity_exceeded, .value = try b.failureLiteral(try b.constant(void, {})) }},
+    } } });
+    const probe_feedback = try b.term(.{ .conditional = .{
+        .condition = try field(b, bool, try b.reference(probe), 1),
+        .when_true = try text(c, "The consumer probe passed, but this partial source is not a complete validated artifact. Supply a complete candidate for required acceptance. Previous source:\n"),
+        .when_false = try b.pure(failure_detail),
+    } });
+    return b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
+        .{ .variable = probe, .body = probe_feedback },
+        .{ .variable = assessment, .body = try text(c, "Required acceptance rejected this complete candidate. Repair it; no validation is established. Previous source:\n") },
+        .{ .variable = try b.variable(try c.schema(parser.Unavailable)), .body = try text(c, "The prior check was unavailable. No acceptance is established. Previous source:\n") },
+    } } });
+}
+
+fn completeAssessment(b: *source.Builder, t: Types, assessment: Id, finished: Id) !Id {
+    const invalid = try unresolved(b, t, "Acceptance report is incomplete or inconsistent.");
+    const required = try field(b, u32, assessment, 2);
+    const empty = try b.primitive(try b.scalar(bool), .equal, &.{ required, try b.constant(u32, 0) }, 0);
+    const retained = try b.term(.{ .conditional = .{ .condition = try field(b, bool, assessment, 3), .when_true = finished, .when_false = invalid } });
+    const all = try b.primitive(try b.scalar(bool), .equal, &.{ required, try field(b, u32, assessment, 1) }, 0);
+    const complete = try b.term(.{ .conditional = .{ .condition = all, .when_true = retained, .when_false = invalid } });
+    return b.term(.{ .conditional = .{ .condition = empty, .when_true = invalid, .when_false = complete } });
+}
+
+fn completion(c: agent.Context, t: Types, owner: Id, acceptance: Id, state: Id, value: Id) !Id {
+    const b = c.builder;
+    const candidate = try b.variable(try c.schema(Constructed));
+    const report = try b.variable(try c.schema(Report));
+    const partial = try field(b, parser.Candidate, try b.reference(report), 0);
+    const status = try field(b, parser.Completeness, partial, 2);
+    const is_partial = try b.primitive(try b.scalar(bool), .equal, &.{ try b.primitive(try b.scalar(u32), .enum_tag, &.{status}, 0), try b.constant(u32, 0) }, 0);
+    const rejected = try unresolved(b, t, "Participant reports do not grant completion authority.");
+    const partial_report = try b.term(.{ .conditional = .{ .condition = is_partial, .when_true = try b.pure(value), .when_false = rejected } });
+    return b.term(.{ .match_sum = .{ .value = value, .cases = &.{
+        .{ .variable = try b.variable(try c.schema(Constraint)), .body = rejected },
+        .{ .variable = candidate, .body = try acceptCandidate(c, t, owner, acceptance, state, try b.reference(candidate)) },
+        .{ .variable = report, .body = partial_report },
+        .{ .variable = try b.variable(try c.schema(agent.contracts.Text(512))), .body = try b.pure(value) },
+        .{ .variable = try b.variable(try c.schema(agent.parser_delivery.Result)), .body = rejected },
+    } } });
+}
+fn acceptCandidate(c: agent.Context, t: Types, owner: ?Id, acceptance: Id, state: Id, constructed: Id) !Id {
+    const b = c.builder;
+    const input = try field(b, Input, state, 0);
+    const candidate = try field(b, parser.Candidate, constructed, 0);
+    const version = try field(b, u64, candidate, 1);
+    const count = try field(b, u64, input, 4);
+    const status = try field(b, parser.Completeness, candidate, 2);
+    const complete = try b.primitive(try b.scalar(bool), .equal, &.{ try b.primitive(try b.scalar(u32), .enum_tag, &.{status}, 0), try b.constant(u32, 1) }, 0);
+    const reply = try b.variable(try c.schema(parser.ExecutionReply));
+    const report_slot = try b.variable(try c.schema(Report));
+    const report = try b.reference(report_slot);
+    const recorded = try makeReport(b, candidate, try b.reference(reply), try literal(b, ?parser.proposals.Experiment, null), try literal(b, ?Counterexample, null));
+    const finished = try b.pure(try b.primitive(t.contribution, .variant, &.{report}, 2));
+    const again = if (owner) |retry| try retryCompletion(c, t, retry, input, constructed, report, finished) else finished;
+    const assessment = try b.variable(try c.schema(parser.Assessment));
+    const assessed = try b.term(.{ .conditional = .{ .condition = try field(b, bool, try b.reference(assessment), 0), .when_true = try completeAssessment(b, t, try b.reference(assessment), finished), .when_false = again } });
+    const outcome = try field(b, @FieldType(parser.ExecutionReply, "outcome"), try b.reference(reply), 2);
+    const inspected = try b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
+        .{ .variable = try b.variable(try c.schema(parser.Probe)), .body = try unresolved(b, t, "Acceptance returned a probe.") },
+        .{ .variable = assessment, .body = assessed },
+        .{ .variable = try b.variable(try c.schema(parser.Unavailable)), .body = finished },
+    } } });
+    const request = try b.primitive(try c.schema(parser.ExecutionRequest), .product, &.{
+        try field(b, parser.Subject, input, 0),                                                                                 try arithmetic(b, .integer_add, try field(b, u64, input, 3), version), candidate,
+        try b.primitive(try c.schema(@FieldType(parser.ExecutionRequest, "check")), .variant, &.{try b.constant(void, {})}, 1),
+    }, 0);
+    var execute = try b.bind(reply, try parser.execute(c, .{ .reference = t.reference, .execution = acceptance }, request, try b.constant(void, {})), try b.bind(report_slot, recorded, inspected));
+    const invalid = try unresolved(b, t, "Candidate completion or allowance is invalid.");
+    const excessive = try b.primitive(try b.scalar(bool), .less, &.{ count, version }, 0);
+    execute = try b.term(.{ .conditional = .{ .condition = excessive, .when_true = invalid, .when_false = execute } });
+    const zero = try b.primitive(try b.scalar(bool), .equal, &.{ version, try b.constant(u64, 0) }, 0);
+    execute = try b.term(.{ .conditional = .{ .condition = zero, .when_true = invalid, .when_false = execute } });
+    return b.term(.{ .conditional = .{ .condition = complete, .when_true = execute, .when_false = invalid } });
+}
+fn retryCompletion(c: agent.Context, t: Types, owner: Id, input: Id, constructed: Id, report: Id, finished: Id) !Id {
+    const b = c.builder;
+    const candidate = try field(b, parser.Candidate, constructed, 0);
+    const version = try field(b, u64, candidate, 1);
+    const count = try field(b, u64, input, 4);
+    const more = try b.primitive(try b.scalar(bool), .less, &.{ version, count }, 0);
+    const state = try b.primitive(t.state, .product, &.{
+        input,                                                            try b.constant(bool, false),
+        try arithmetic(b, .integer_add, version, try b.constant(u64, 1)), try arithmetic(b, .integer_sub, count, version),
+        try b.primitive(try c.schema(?Report), .variant, &.{report}, 1),  try b.primitive(try c.schema(?parser.ReferenceReply), .variant, &.{try field(b, parser.ReferenceReply, constructed, 1)}, 1),
+    }, 0);
+    const retry = try b.term(.{ .call = .{ .function = owner, .arguments = &.{state} } });
+    return b.term(.{ .conditional = .{ .condition = more, .when_true = retry, .when_false = finished } });
+}
+
+// Adversarial test object: ordinary fields cannot impersonate completion authority.
+const ForgedConsumer = struct {
+    pub fn emit(b: *source.Builder, q: hyper.Query) !Id {
+        const t = try types(b);
+        const forged = try literal(b, Contribution, .{ .assessed = .{
+            .candidate = .{ .source = .{ .bytes = "unvalidated source" }, .version = 1, .completeness = .complete },
+            .observation = .{ .occurrence = 18, .candidate_version = 1, .outcome = .{ .assessment = .{
+                .passed = true,
+                .executed = 536,
+                .required = 536,
+                .retention_passed = true,
+                .first_failure = .{ .bytes = "" },
+            } } },
+        } });
+        const task = try b.declare(&.{}, t.contribution, &.{ t.model, t.reference, t.execution, t.release }, &.{});
+        try b.define(task, try b.pure(forged));
+        const description = try b.declare(&.{}, t.task, &.{}, &.{});
+        try b.define(description, try b.pure(try b.lambda(task, t.task)));
+        return b.pure(try b.lambda(description, q.types.answer_forward));
+    }
+};
+
+// Only the actual assessor's returned value enters this completion boundary.
+// Imported participant reports are rejected by completion before this function.
+fn finishAssessment(c: agent.Context, t: Types, owner: Id, delivery: agent.parser_delivery.Definition, input: Id, value: Id) !Id {
+    const b = c.builder;
+    const report = try b.variable(try c.schema(Report));
+    const candidate = try field(b, parser.Candidate, try b.reference(report), 0);
+    const observation = try field(b, parser.ExecutionReply, try b.reference(report), 1);
+    const assessment = try b.variable(try c.schema(parser.Assessment));
+    const keep = try b.pure(value);
+    const complete = try b.primitive(try b.scalar(bool), .equal, &.{ try b.primitive(try b.scalar(u32), .enum_tag, &.{try field(b, parser.Completeness, candidate, 2)}, 0), try b.constant(u32, 1) }, 0);
+    const deliver = try completeAssessment(b, t, try b.reference(assessment), try deliverAccepted(c, t, owner, delivery, input, candidate, try b.reference(assessment)));
+    const valid = try b.term(.{ .conditional = .{ .condition = try field(b, bool, try b.reference(assessment), 0), .when_true = try b.term(.{ .conditional = .{ .condition = complete, .when_true = deliver, .when_false = keep } }), .when_false = keep } });
+    const inspect = try b.term(.{ .match_sum = .{ .value = try field(b, @FieldType(parser.ExecutionReply, "outcome"), observation, 2), .cases = &.{
+        .{ .variable = try b.variable(try c.schema(parser.Probe)), .body = keep },
+        .{ .variable = assessment, .body = valid },
+        .{ .variable = try b.variable(try c.schema(parser.Unavailable)), .body = keep },
+    } } });
+    return b.term(.{ .match_sum = .{ .value = value, .cases = &.{
+        .{ .variable = try b.variable(try c.schema(Constraint)), .body = keep },
+        .{ .variable = try b.variable(try c.schema(Constructed)), .body = keep },
+        .{ .variable = report, .body = inspect },
+        .{ .variable = try b.variable(try c.schema(agent.contracts.Text(512))), .body = keep },
+        .{ .variable = try b.variable(try c.schema(agent.parser_delivery.Result)), .body = keep },
+    } } });
+}
+fn deliverAccepted(c: agent.Context, t: Types, owner: Id, d: agent.parser_delivery.Definition, input: Id, candidate: Id, assessment: Id) !Id {
+    const b = c.builder;
+    const subject = try field(b, parser.Subject, input, 0);
+    const request = try b.primitive(try c.schema(agent.parser_delivery.Request), .product, &.{
+        try field(b, agent.contracts.Text(256), input, 5), try field(b, parser.Digest, subject, 0),
+        try field(b, parser.Code, candidate, 0),           try c.literal(agent.contracts.Text(4096), .{ .bytes = "Replace the fixture with this exact complete parser after required acceptance." }),
+    }, 0);
+    const proposal = try b.primitive(try c.schema(agent.parser_delivery.Proposal), .product, &.{
+        request, try field(b, u64, input, 6), subject, try field(b, u64, candidate, 1), assessment,
+    }, 0);
+    const result = try b.variable(try c.schema(agent.parser_delivery.Result));
+    return b.bind(result, try agent.parser_delivery.run(c, d, owner, proposal, try field(b, bool, input, 7)), try b.pure(try b.primitive(t.contribution, .variant, &.{try b.reference(result)}, 4)));
+}
+
+// Candidate values here are immutable construction inputs. Assessment executes
+// their fresh compiled interactions; no live endpoint or completion is cloned.
+fn selectConstructions(c: agent.Context, t: Types, assessor: Id, allowed: []const Id, input: Id, initial: Id, prefer_last: bool) !Id {
+    const b = c.builder;
+    const d = try agent.deliberation.selectionTypes(b, t.state, t.contribution, 2);
+    const choose = try b.declare(&.{d.assessments}, d.choice, &.{}, &.{});
+    const rows = try b.reference(b.parameter(choose, 0));
+    const option = try b.schema(.{ .sum = &.{ try b.scalar(void), d.assessed } });
+    const absent = try b.pure(try b.primitive(d.choice, .variant, &.{try b.constant(void, {})}, 1));
+    var choice = try b.pure(try b.primitive(d.choice, .variant, &.{try b.constant(u64, if (prefer_last) 1 else 0)}, 0));
+    // Both promised alternatives must establish acceptance; unavailable or failed
+    // work is not silently removed from the comparison's denominator.
+    for (0..2) |index| {
+        const row = try b.variable(d.assessed);
+        const contribution = try b.primitive(t.contribution, .field, &.{try b.reference(row)}, 1);
+        choice = try b.term(.{ .match_sum = .{ .value = try b.primitive(option, .sequence_get, &.{ rows, try b.constant(u64, index) }, 0), .cases = &.{
+            .{ .variable = try b.variable(try b.scalar(void)), .body = absent },
+            .{ .variable = row, .body = try acceptedContribution(b, t, contribution, choice, absent) },
+        } } });
+    }
+    try b.define(choose, choice);
+    const select = try agent.deliberation.selectSequential(c, .{ .candidate = t.state, .assessment = t.contribution, .maximum = 2, .assess = assessor, .choose = choose, .allowed = allowed, .failure = try b.constant(void, {}) });
+    var fields: [std.meta.fields(Input).len]Id = undefined;
+    inline for (std.meta.fields(Input), 0..) |f, i| fields[i] = try field(b, f.type, input, i);
+    // Each construction has a disjoint observation occurrence interval. Its
+    // model samples are fresh; identical prompts do not share execution.
+    fields[3] = try arithmetic(b, .integer_add, fields[3], try arithmetic(b, .integer_add, fields[4], try b.constant(u64, 1)));
+    const other_input = try b.primitive(t.input, .product, &fields, 0);
+    const other = try b.primitive(t.state, .product, &.{ other_input, try b.constant(bool, false), try b.constant(u64, 1), fields[4], try literal(b, ?Report, null), try literal(b, ?parser.ReferenceReply, null) }, 0);
+    const result = try b.variable(d.result);
+    const selected = try b.variable(d.assessed);
+    return b.bind(result, try b.term(.{ .call = .{ .function = select.function, .arguments = &.{try b.primitive(d.candidates, .sequence, &.{ initial, other }, 0)} } }), try b.term(.{ .match_sum = .{ .value = try b.reference(result), .cases = &.{
+        .{ .variable = selected, .body = try b.pure(try b.primitive(t.contribution, .field, &.{try b.reference(selected)}, 1)) },
+        .{ .variable = try b.variable(d.assessments), .body = try unresolved(b, t, "Both construction alternatives must establish complete acceptance before selection.") },
+    } } }));
+}
+fn acceptedContribution(b: *source.Builder, t: Types, value: Id, yes: Id, no: Id) !Id {
+    const report = try b.variable(try agent.contracts.schema(Report, b));
+    const assessment = try b.variable(try agent.contracts.schema(parser.Assessment, b));
+    const candidate = try field(b, parser.Candidate, try b.reference(report), 0);
+    const observed = try field(b, parser.ExecutionReply, try b.reference(report), 1);
+    const status = try b.primitive(try b.scalar(u32), .enum_tag, &.{try field(b, parser.Completeness, candidate, 2)}, 0);
+    var valid = yes;
+    const a = try b.reference(assessment);
+    const conditions = [_]Id{
+        try b.primitive(try b.scalar(bool), .equal, &.{ status, try b.constant(u32, 1) }, 0),
+        try field(b, bool, a, 0),
+        try field(b, bool, a, 3),
+        try b.primitive(try b.scalar(bool), .less, &.{ try b.constant(u32, 0), try field(b, u32, a, 2) }, 0),
+        try b.primitive(try b.scalar(bool), .equal, &.{ try field(b, u32, a, 1), try field(b, u32, a, 2) }, 0),
+    };
+    for (conditions) |condition| valid = try b.term(.{ .conditional = .{ .condition = condition, .when_true = valid, .when_false = no } });
+    const inspected = try b.term(.{ .match_sum = .{ .value = try field(b, @FieldType(parser.ExecutionReply, "outcome"), observed, 2), .cases = &.{
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Probe, b)), .body = no },
+        .{ .variable = assessment, .body = valid },
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Unavailable, b)), .body = no },
+    } } });
+    _ = t;
+    return b.term(.{ .match_sum = .{ .value = value, .cases = &.{
+        .{ .variable = try b.variable(try agent.contracts.schema(Constraint, b)), .body = no },
+        .{ .variable = try b.variable(try agent.contracts.schema(Constructed, b)), .body = no },
+        .{ .variable = report, .body = inspected },
+        .{ .variable = try b.variable(try agent.contracts.schema(agent.contracts.Text(512), b)), .body = no },
+        .{ .variable = try b.variable(try agent.contracts.schema(agent.parser_delivery.Result, b)), .body = no },
+    } } });
+}
+
+// Complete-candidate comparator on the existing ReAct construction. Ordinary
+// state retains observations; there is no transcript-driven host restart loop.
+fn emitReact(c: agent.Context) !source.Module {
+    const b = c.builder;
+    const t = try types(b);
+    const unit = try b.scalar(void);
+    try c.registry.classify(t.model, .model);
+    try c.registry.classify(t.reference, .read);
+    try c.registry.classify(t.execution, .simulation);
+    try c.registry.classify(t.release, .read);
+    try defineSample(c, t);
+    try defineProbe(c, t);
+    // Shared schema setup reserves the reciprocal factory; ReAct has no caller.
+    // A valid unreachable body keeps source admission complete; lowering removes it.
+    try b.define(t.reference_factory, try b.term(.{ .fail = try b.constant(void, {}) }));
+    const acceptance = try c.external(parser.execution_identity, try c.schema(parser.ExecutionRequest), try c.schema(parser.ExecutionReply), .simulation);
+    const effects = &.{ t.model, t.reference, t.execution, t.release, acceptance };
+    const working = try b.schema(.{ .sum = &.{ t.state, t.contribution } });
+    const action = try b.schema(.{ .product = &.{ t.state, t.contribution } });
+    const step_type = try agent.react.step(b, action, t.contribution);
+    const decide = try b.declare(&.{working}, step_type.schema, effects, &.{});
+    const execute = try b.declare(&.{action}, action, effects, &.{});
+    const fold = try b.declare(&.{ working, action }, working, &.{}, &.{});
+    const active = try b.variable(t.state);
+    const done = try b.variable(t.contribution);
+    const state = try b.reference(active);
+    const input = try field(b, Input, state, 0);
+    const ref_type = try c.schema(parser.ReferenceReply);
+    const reference = try b.variable(ref_type);
+    const cached = try b.variable(ref_type);
+    const request = try b.primitive(try c.schema(parser.ReferenceRequest), .product, &.{ try field(b, parser.Subject, input, 0), try field(b, u64, input, 3), try field(b, parser.Trace, input, 2) }, 0);
+    const observed = try b.term(.{ .match_sum = .{ .value = try field(b, ?parser.ReferenceReply, state, 5), .cases = &.{
+        .{ .variable = try b.variable(unit), .body = try b.term(.{ .perform = .{ .effect = t.reference, .payload = request } }) },
+        .{ .variable = cached, .body = try b.pure(try b.reference(cached)) },
+    } } });
+    const saved = try b.primitive(t.state, .product, &.{ input, try b.constant(bool, false), try field(b, u64, state, 2), try field(b, u64, state, 3), try field(b, ?Report, state, 4), try b.primitive(try c.schema(?parser.ReferenceReply), .variant, &.{try b.reference(reference)}, 1) }, 0);
+    const proposal = try b.variable(t.contribution);
+    const constraint = try b.primitive(try c.schema(Constraint), .product, &.{ saved, try b.reference(reference) }, 0);
+    const act = try b.pure(try agent.react.continueWith(b, step_type, try b.primitive(action, .product, &.{ saved, try b.reference(proposal) }, 0)));
+    const sampling = try b.bind(reference, observed, try b.bind(proposal, try b.term(.{ .call = .{ .function = t.sample, .arguments = &.{ saved, constraint } } }), act));
+    const exhausted = try b.primitive(try b.scalar(bool), .equal, &.{ try field(b, u64, state, 3), try b.constant(u64, 0) }, 0);
+    const stopped = try b.variable(t.contribution);
+    const stop = try b.bind(stopped, try unresolved(b, t, "Construction allowance exhausted."), try b.pure(try agent.react.finishWith(b, step_type, try b.reference(stopped))));
+    try b.define(decide, try b.term(.{ .match_sum = .{ .value = try b.reference(b.parameter(decide, 0)), .cases = &.{
+        .{ .variable = active, .body = try b.term(.{ .conditional = .{ .condition = exhausted, .when_true = stop, .when_false = sampling } }) },
+        .{ .variable = done, .body = try b.pure(try agent.react.finishWith(b, step_type, try b.reference(done))) },
+    } } }));
+    const pending = try b.reference(b.parameter(execute, 0));
+    const before = try b.primitive(t.state, .field, &.{pending}, 0);
+    const value = try b.primitive(t.contribution, .field, &.{pending}, 1);
+    const candidate = try b.variable(try c.schema(Constructed));
+    const checked = try b.variable(t.contribution);
+    const unchanged = try b.pure(value);
+    const inspection = try b.term(.{ .match_sum = .{ .value = value, .cases = &.{
+        .{ .variable = try b.variable(try c.schema(Constraint)), .body = try unresolved(b, t, "Unexpected reference contribution.") },
+        .{ .variable = candidate, .body = try acceptCandidate(c, t, null, acceptance, before, try b.reference(candidate)) },
+        .{ .variable = try b.variable(try c.schema(Report)), .body = unchanged },
+        .{ .variable = try b.variable(try c.schema(agent.contracts.Text(512))), .body = unchanged },
+        .{ .variable = try b.variable(try c.schema(agent.parser_delivery.Result)), .body = try unresolved(b, t, "Proposal has no completion authority.") },
+    } } });
+    try b.define(execute, try b.bind(checked, inspection, try b.pure(try b.primitive(action, .product, &.{ before, try b.reference(checked) }, 0))));
+    const observation = try b.reference(b.parameter(fold, 1));
+    const prior = try b.primitive(t.state, .field, &.{observation}, 0);
+    const outcome = try b.primitive(t.contribution, .field, &.{observation}, 1);
+    const completed = try b.pure(try b.primitive(working, .variant, &.{outcome}, 1));
+    const report = try b.variable(try c.schema(Report));
+    const report_value = try b.reference(report);
+    const following = try b.primitive(t.state, .product, &.{ try field(b, Input, prior, 0), try b.constant(bool, false), try arithmetic(b, .integer_add, try field(b, u64, prior, 2), try b.constant(u64, 1)), try arithmetic(b, .integer_sub, try field(b, u64, prior, 3), try b.constant(u64, 1)), try b.primitive(try c.schema(?Report), .variant, &.{report_value}, 1), try field(b, ?parser.ReferenceReply, prior, 5) }, 0);
+    const again = try b.pure(try b.primitive(working, .variant, &.{following}, 0));
+    const remaining = try b.primitive(try b.scalar(bool), .less, &.{ try b.constant(u64, 1), try field(b, u64, prior, 3) }, 0);
+    const retry = try b.term(.{ .conditional = .{ .condition = remaining, .when_true = again, .when_false = completed } });
+    const unresolved_report = try b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
+        .{ .variable = try b.variable(try c.schema(Constraint)), .body = completed },
+        .{ .variable = try b.variable(try c.schema(Constructed)), .body = completed },
+        .{ .variable = report, .body = retry },
+        .{ .variable = try b.variable(try c.schema(agent.contracts.Text(512))), .body = completed },
+        .{ .variable = try b.variable(try c.schema(agent.parser_delivery.Result)), .body = completed },
+    } } });
+    try b.define(fold, try acceptedContribution(b, t, outcome, completed, unresolved_report));
+    const decide_type = try callable(b, &.{working}, step_type.schema, effects);
+    const execute_type = try callable(b, &.{action}, action, effects);
+    const fold_type = try callable(b, &.{ working, action }, working, &.{});
+    const loop = try agent.react.define(b, .{ .state = working, .step = step_type, .observation = action, .decide = decide_type, .execute = execute_type, .fold = fold_type, .residual = .{ .effects = effects } });
+    const d = try agent.parser_delivery.define(c);
+    try c.registry.speculate(loop.function, effects);
+    const intent = try agent.parser_intent.define(c);
+    const delivery_effects = (try (source.Row{ .effects = effects }).unionWith(b.allocator(), .{ .effects = d.effects })).effects;
+    const all_effects = (try (source.Row{ .effects = delivery_effects }).unionWith(b.allocator(), .{ .effects = &.{intent.effect} })).effects;
+    const entry = try b.declare(&.{t.input}, t.contribution, all_effects, &.{});
+    const selected_input = try b.variable(t.input);
+    const initial_input = try b.reference(selected_input);
+    const initial = try b.primitive(t.state, .product, &.{ initial_input, try b.constant(bool, false), try b.constant(u64, 1), try field(b, u64, initial_input, 4), try literal(b, ?Report, null), try literal(b, ?parser.ReferenceReply, null) }, 0);
+    const result = try b.variable(t.contribution);
+    const perform = try b.bind(result, try agent.react.run(b, loop, try b.primitive(working, .variant, &.{initial}, 0), try b.lambda(decide, decide_type), try b.lambda(execute, execute_type), try b.lambda(fold, fold_type)), try finishAssessment(c, t, entry, d, initial_input, try b.reference(result)));
+    const selected = try b.variable(try c.schema(?Input));
+    const dispatch = try b.term(.{ .match_sum = .{ .value = try b.reference(selected), .cases = &.{
+        .{ .variable = try b.variable(unit), .body = try unresolved(b, t, "EOF behavior remains unresolved.") },
+        .{ .variable = selected_input, .body = perform },
+    } } });
+    try b.define(entry, try b.bind(selected, try chooseInput(c, t, intent, try b.reference(b.parameter(entry, 0))), dispatch));
+    return b.module(entry, unit);
+}
+fn callable(b: *source.Builder, parameters: []const Id, result: Id, effects: []const Id) !Id {
+    return b.schema(.{ .internal = .{ .computation = .{ .parameters = parameters, .result = result, .effects = effects } } });
+}
+
+// A second independently compiled consumer policy. Only its object changes;
+// the producer and checked probe helper retain the same contracts and bytes.
+fn additionalConsumerProbe(b: *source.Builder, t: Types, state: Id, candidate: Id, saved: Id, next: Id) !Id {
+    const input = try field(b, Input, state, 0);
+    const trace = try literal(b, parser.Trace, .{ .items = &.{
+        .{ .chunk = .{ .items = &.{97} }, .end_of_input = false },
+        .{ .chunk = .{ .items = &.{10} }, .end_of_input = false },
+    } });
+    var inputs: [std.meta.fields(Input).len]Id = undefined;
+    inline for (std.meta.fields(Input), 0..) |f, i| inputs[i] = try field(b, f.type, input, i);
+    inputs[2] = trace;
+    // Reserve a disjoint occurrence interval for these additional probes.
+    inputs[3] = try arithmetic(b, .integer_add, inputs[3], try arithmetic(b, .integer_add, inputs[4], try b.constant(u64, 1)));
+    var fields: [std.meta.fields(State).len]Id = undefined;
+    inline for (std.meta.fields(State), 0..) |f, i| fields[i] = if (i == 0) try b.primitive(t.input, .product, &inputs, 0) else try field(b, f.type, state, i);
+    const probe_state = try b.primitive(t.state, .product, &fields, 0);
+    const observed = try b.variable(try agent.contracts.schema(parser.ExecutionReply, b));
+    const experiment = try literal(b, ?parser.proposals.Experiment, .{ .input_hex = .{ .bytes = "610a" }, .first_chunk_bytes = 1, .chunk_bytes = 1, .finalize = false, .reason = .{ .bytes = "Does a literal record terminator emit immediately before final EOF?" } });
+    const recorded = try makeReport(b, candidate, try b.reference(observed), experiment, try literal(b, ?Counterexample, null));
+    const outcome = try field(b, @FieldType(parser.ExecutionReply, "outcome"), try b.reference(observed), 2);
+    const stopped = try unresolved(b, t, "The additional consumer probe is unavailable or invalid.");
+    const inspect = try b.term(.{ .match_sum = .{ .value = outcome, .cases = &.{
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Probe, b)), .body = try b.bind(saved, recorded, next) },
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Assessment, b)), .body = stopped },
+        .{ .variable = try b.variable(try agent.contracts.schema(parser.Unavailable, b)), .body = stopped },
+    } } });
+    return b.bind(observed, try b.term(.{ .call = .{ .function = t.probe, .arguments = &.{ probe_state, candidate } } }), inspect);
+}
+
+/// Link-only entry for an independently compiled native tool. Participant
+/// emission is not reachable from that tool's main function.
+pub fn linkParticipants(allocator: std.mem.Allocator, producer_bytes: []const u8, consumer_bytes: []const u8, reference_bytes: []const u8) !source.Compiled {
+    Application.producer = producer_bytes;
+    Application.consumer = consumer_bytes;
+    Application.reference_bytes = reference_bytes;
+    Application.react_mode = false;
+    Application.complete_only = false;
+    Application.alternate_consumer = false;
+    Application.circular_consumer = false;
+    Application.retain_idle = false;
+    Application.selection = .none;
+    return agent.compile(allocator, System);
+}

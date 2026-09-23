@@ -35,6 +35,11 @@ src/model_invocation.zig
 src/model_invocation_tests.zig
 src/model_json.zig
 src/observation.zig
+src/parser_delivery.zig
+src/parser_intent.zig
+src/parser_proposals.zig
+src/parser_synthesis.zig
+src/participant.zig
 src/prompt.zig
 src/protocol/openai_responses_v2.zig
 src/react.zig
@@ -58,6 +63,7 @@ test/agent4/clarification.zig
 test/agent4/compiled_tool.zig
 test/agent4/component_link.zig
 test/agent4/component_objects.zig
+test/agent4/composed_owners.zig
 test/agent4/decision_scopes.zig
 test/agent4/descriptor_contracts.zig
 test/agent4/dialogue_build.zig
@@ -78,10 +84,17 @@ test/agent4/multi_build.zig
 test/agent4/multi_probe.zig
 test/agent4/native.zig
 test/agent4/observation.zig
+test/agent4/parser_delivery.zig
+test/agent4/parser_proposals.zig
+test/agent4/parser_tools.zig
+test/agent4/participant.zig
 test/agent4/prompt_unknown_field.zig
+test/agent4/recursive_participant.zig
+test/agent4/recursive_selection.zig
 test/agent4/repository_replacement.zig
 test/agent4/repository_replacement_emit.zig
 test/agent4/repository_working_set.zig
+test/agent4/selection.zig
 test/agent4/skill_unknown_field.zig
 test/agent4/terminology.zig
 test/agent4/text_link.zig
@@ -99,6 +112,7 @@ test/consumers/document/critic.zig
 test/consumers/document/main.zig
 test/consumers/document/source.zig
 test/consumers/document/terminology.zig
+test/consumers/incremental-parser/main.zig
 test/consumers/inquiry/build.zig
 test/consumers/inquiry/evidence.zig
 test/consumers/inquiry/exploration.zig
@@ -124,3 +138,4 @@ test/consumers/repository/types.zig
 test/consumers/repository/working_set.zig
 test/consumers/review/build.zig
 test/consumers/review/main.zig
+tools/agent4/link_parser.zig

@@ -12,11 +12,14 @@ fn objectWith(hidden: bool, multi: bool) ![]u8 {
     return objectProfile(hidden, multi, false);
 }
 fn objectProfile(hidden: bool, multi: bool, internal: bool) ![]u8 {
+    return objectNamed(hidden, multi, internal, "fixture/compiled-read");
+}
+fn objectNamed(hidden: bool, multi: bool, internal: bool, identity: []const u8) ![]u8 {
     var b = source.Builder.init(a);
     defer b.deinit();
     const unit = try b.scalar(void);
     const integer = try b.scalar(u64);
-    const read = try b.effect(.{ .identity = "fixture/compiled-read", .payload = integer, .result = integer, .control_use = if (multi) .multi else .linear, .external = !internal });
+    const read = try b.effect(.{ .identity = identity, .payload = integer, .result = integer, .control_use = if (multi) .multi else .linear, .external = !internal });
     if (multi) _ = try b.schema(.{ .internal = .{ .resumption = .{
         .effect = read,
         .input = integer,
@@ -41,6 +44,7 @@ fn objectProfile(hidden: bool, multi: bool, internal: bool) ![]u8 {
 }
 
 const Tool = struct {
+    var identity: []const u8 = "fixture/compiled-read";
     var bytes: []u8 = &.{};
     var role: agent.admission.Role = .read;
     var rename = false;
@@ -52,7 +56,7 @@ const Tool = struct {
             const effect = try c.builder.effect(.{ .identity = "fixture/compiled-read", .payload = integer, .result = integer, .external = false });
             try c.registry.classify(effect, internal_role);
             break :blk effect;
-        } else try c.external(if (rename) "fixture/other" else "fixture/compiled-read", integer, integer, role);
+        } else try c.external(if (rename) "fixture/other" else identity, integer, integer, role);
         return agent.tools.declareCompiled(c, .{ .instance = "read-tool", .object = bytes, .entry = "inspect", .identity = "fixture/local-inspect", .payload = integer, .result = integer, .effects = &.{.{ .symbol = "read", .effect = read }}, .model_offered = true, .name = "inspect", .description = "Inspect a number using the compiled tool" });
     }
 };
@@ -71,6 +75,22 @@ const Application = struct {
     }
 };
 const System = agent.system(.{ .InitialArgs = u64, .Result = u64, .Failure = void, .tools = .{Tool}, .application = Application });
+
+test "internal model participants cannot enter through a read-tool alias" {
+    // Boundary accepts this typed effectful component, but that does not grant
+    // Agent model authority. A matching label and schema must not bypass it.
+    Tool.identity = "agent.model.invoke.v3";
+    defer Tool.identity = "fixture/compiled-read";
+    Tool.bytes = try objectNamed(false, false, false, Tool.identity);
+    defer a.free(Tool.bytes);
+    var decoded = try data.component.decode(a, Tool.bytes);
+    defer decoded.deinit();
+    try std.testing.expectEqualStrings(Tool.identity, decoded.object.program.effects[0].identity);
+    try std.testing.expectError(error.InvalidCompiledTool, agent.compile(a, System));
+    Tool.role = .model;
+    defer Tool.role = .read;
+    try std.testing.expectError(error.InvalidCompiledTool, agent.compile(a, System));
+}
 
 test "compiled internal requirements retain nominal and role bindings" {
     Tool.bytes = try objectProfile(false, false, true);

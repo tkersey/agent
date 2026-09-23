@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {createParserTools} from '../../runtime/parser_tools.mjs';
+import {decodeSchema,encodeValue,decodeValue} from '../../runtime/values.mjs';
+import {decodedFields,rejectAll} from '../consumers/incremental-parser/candidates.mjs';
+const tools=await createParserTools();assert.equal(tools.kind,'qualified',JSON.stringify(tools));
+const schemas={};
+for(const name of ['reference-request','reference-reply','execution-request','execution-reply'])
+  schemas[name]=decodeSchema(await readFile(`zig-out/agent4/parser/${name}.bin`));
+const wire=(name,value)=>decodeValue(schemas[name],encodeValue(schemas[name],value));
+const subject=tools.subject('a'.repeat(64));
+const trace=[[[92n],false],[[110n,10n],true]];
+const reference=await tools.reference(wire('reference-request',[subject,1n,trace]));
+assert.deepEqual(wire('reference-reply',reference),reference);
+assert.deepEqual(reference,[1n,{tag:0,value:[[[],0,{tag:0,value:null}],[[[[10]]],1,{tag:0,value:null}]]}]);
+const candidate=[decodedFields,1n,0n];
+const before=tools.metrics().physicalExecutions;
+const partial=await tools.execute([subject,2n,candidate,{tag:1,value:null}]);
+assert.equal(partial[2].tag,2);assert.equal(tools.metrics().physicalExecutions,before);
+const probe=await tools.execute(wire('execution-request',[subject,3n,candidate,{tag:0,value:trace}]));
+assert.equal(probe[2].tag,0);assert.equal(probe[2].value[1],true);
+assert.deepEqual(wire('execution-reply',probe),probe);
+assert.throws(()=>wire('execution-reply',[3n,1n,{tag:0,value:[reference[1].value,true,0n]}]),
+  'the old v1 Probe layout must not be reinterpreted as v2');
+const rejected=await tools.execute([subject,4n,[rejectAll,2n,1n],{tag:1,value:null}]);
+assert.equal(rejected[2].tag,1);assert.equal(rejected[2].value[0],false);
+assert.deepEqual(wire('execution-reply',rejected),rejected);
+const wrong=[...subject];wrong[1]='0'.repeat(64);
+const unchanged=tools.metrics().physicalExecutions;
+await assert.rejects(tools.execute([wrong,5n,candidate,{tag:0,value:trace}]));
+await assert.rejects(tools.execute([subject,0n,candidate,{tag:0,value:trace}]));
+assert.equal(tools.metrics().physicalExecutions,unchanged);
+const capacity=await tools.reference([subject,6n,[[Array(257).fill(10n),true]]]);
+assert.deepEqual(capacity,[6n,{tag:1,value:5}]);
+assert.deepEqual(wire('reference-reply',capacity),capacity);
+const malformed=`export const initial=()=>({});export const step=s=>({next_state:s,newly_completed_records:'bad',status:'complete'});`;
+const invalid=await tools.execute([subject,7n,[malformed,3n,0n],{tag:0,value:trace}]);
+assert.equal(invalid[2].tag,0);assert.equal(invalid[2].value[1],false);
+assert.deepEqual(invalid[2].value[0],{tag:0,value:null});
+assert.match(invalid[2].value[3],/candidate observations: observation shape/);
+assert.deepEqual(wire('execution-reply',invalid),invalid);
+console.log(JSON.stringify({reference:true,probe:true,partialAcceptanceRejected:true,
+  rejectAllRejected:true,wrongSubjectRejected:true,capacity:true,malformedOutput:true,metrics:tools.metrics()}));
+const beforeRestricted=tools.metrics().physicalExecutions;
+const blocked=await tools.probe([subject,9n,[rejectAll,4n,1],{tag:1,value:null}],{probeOnly:false});
+assert.deepEqual(blocked,[9n,4n,{tag:2,value:1}]);
+assert.equal(tools.metrics().physicalExecutions,beforeRestricted,'probe-only binding cannot run acceptance');

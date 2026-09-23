@@ -30,6 +30,9 @@ pub const CompiledImport = struct {
     object: []const u8,
     entry: []const u8,
     effects: []const CompiledEffect,
+    functions: []const @import("participant.zig").FunctionBinding = &.{},
+    participant: bool = false,
+    borrows: @import("boundary").data.borrow_contract.Summary = .{ .function = 0 },
 };
 
 /// Metadata is private to the trusted Agent constructions during authoring.
@@ -383,6 +386,19 @@ const Walker = struct {
         if (id >= self.module.functions.len) return error.InvalidSource;
         const f = self.module.functions[@intCast(id)];
         if (self.registry.isCompiled(id)) {
+            for (self.registry.compiled_imports.items) |item| {
+                if (item.function != id or !item.participant) continue;
+                try self.participant(item);
+                if (self.speculative != null) {
+                    for (f.parameters) |variable| {
+                        try self.variableSchema(variable);
+                        try self.push(.capture, self.module.variables[@intCast(variable)], 0);
+                    }
+                    try self.push(.capture, f.result, 0);
+                    try self.effects(f.effects);
+                }
+                return;
+            }
             // An inspected closed read tool is not a proof about speculative
             // control hidden inside an absent source body.
             if (self.speculative != null) return error.UnprovenComputationOrigin;
@@ -396,6 +412,23 @@ const Walker = struct {
             for (f.parameters) |variable| try self.variableSchema(variable);
             try self.push(.schema, f.result, 0);
             try self.effects(f.effects);
+        }
+    }
+
+    fn participant(self: *Walker, item: CompiledImport) Error!void {
+        var decoded = @import("boundary").data.component.decode(self.allocator, item.object) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.InvalidSource;
+        defer decoded.deinit();
+        @import("participant.zig").inspect(self.allocator, decoded.object, item, self.registry, self.speculative) catch |err| return switch (err) {
+            error.OutOfMemory => error.OutOfMemory,
+            error.SpeculativeEffect => error.SpeculativeEffect,
+            error.SpeculativeCapture => error.SpeculativeCapture,
+            error.ProtectedEffectBypass => error.ProtectedEffectBypass,
+            error.ProtectedHandler => error.ProtectedHandler,
+            else => error.InvalidSource,
+        };
+        for (item.functions) |binding| {
+            if (self.registry.isPrivate(binding.function)) return error.PrivateFunctionBypass;
+            try self.push(.function, binding.function, binding.function);
         }
     }
 

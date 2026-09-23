@@ -1,0 +1,97 @@
+// The candidate supplies observations; this parent owns required checks and verdicts.
+import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
+import { readFile } from 'node:fs/promises';
+import { createParserSandbox } from './inquiry_sandbox.mjs';
+import { contractFor, admitTrace, observations, evaluationPlan, traceIdentity } from './parser_oracle.mjs';
+const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+
+// A completed counterexample is decisive even if another check is inconclusive.
+export function evaluationDisposition(result) {
+  const checks = [...result.checks, ...result.retention];
+  const rejected = checks.find(check => check.kind === 'completed' && check.passed === false);
+  if (rejected) return { status: 'rejected', first: rejected };
+  const unavailable = checks.find(check => check.kind !== 'completed');
+  const complete = result.required > 0 && result.checks.length === result.required &&
+    result.retention.length === 2 && checks.every(check => check.kind === 'completed' && check.passed === true);
+  return { status: complete ? 'accepted' : 'unavailable', first: unavailable ?? null };
+}
+
+export function completedHistoryGrowth(rows) {
+  const baseline = rows[0]?.stateBytes ?? 0;
+  const peak = Math.max(0, ...rows.map(row => row.stateBytes));
+  return { baseline, peak, growth: Math.max(0, peak - baseline), maximumGrowth: 2048 };
+}
+
+export async function createParserExecutor(options = {}) {
+  const { eofPolicy = 'strict', evaluation = 'development', ...sandboxOptions } = options;
+  const plan = evaluationPlan(evaluation);
+  const acceptanceContract = contractFor(eofPolicy);
+  const sandbox = await createParserSandbox({ maximumOutputBytes: 1048576, timeoutMs: 10000, ...sandboxOptions });
+  if (sandbox.kind !== 'qualified') return sandbox;
+  const oracleBytes = await readFile(new URL('./parser_oracle.mjs', import.meta.url));
+  const referenceBytes = await readFile(new URL('../fixtures/incremental-parser-v1/batch.mjs', import.meta.url));
+  const evaluatorBytes = await readFile(new URL(import.meta.url));
+  const runner = digest(JSON.stringify({ sandbox: sandbox.runner, oracle: digest(oracleBytes),
+    reference: digest(referenceBytes), evaluator: digest(evaluatorBytes), acceptanceContract, evaluation: plan.metadata }));
+  let physicalExecutions = 0;
+  async function probe(source, input, { signal } = {}) {
+    if (typeof source !== 'string' || Buffer.byteLength(source) > 8192)
+      throw new TypeError('candidate source capacity');
+    const trace = admitTrace(input);
+    const binding = { sourceDigest: digest(source), traceDigest: traceIdentity(trace,eofPolicy),
+      runner, acceptanceContract: acceptanceContract };
+    const actual = await sandbox.execute(source, trace, { signal });
+    physicalExecutions += actual.physicalExecutions;
+    if (actual.kind !== 'completed') return { ...binding, kind: actual.kind, passed: false };
+    const expected = observations(trace,eofPolicy), failures = [];
+    if (actual.rows.length !== expected.length) failures.push({ call: null, reason: 'row_count' });
+    for (let i = 0; i < expected.length; i++) {
+      const row = actual.rows[i];
+      if (!row || typeof row !== 'object') { failures.push({ call: i, reason: 'missing_row' }); continue; }
+      const { stateBytes, stateUnchanged, ...observed } = row;
+      if (!isDeepStrictEqual(observed, expected[i])) failures.push({ call: i, reason: 'observation' });
+      if (!Number.isSafeInteger(stateBytes) || stateBytes < 0 || typeof stateUnchanged !== 'boolean')
+        failures.push({ call: i, reason: 'state_measurement' });
+      if (i > 0 && expected[i - 1].status !== 'open' && !stateUnchanged)
+        failures.push({ call: i, reason: 'closed_state_mutation' });
+    }
+    return { ...binding, kind: 'completed', passed: failures.length === 0,
+      failures, rows: actual.rows };
+  }
+  async function validate(source, options = {}) {
+    if (!options || typeof options !== 'object' || Array.isArray(options) || Object.keys(options).some(key => key !== 'signal'))
+      throw new TypeError('evaluation is fixed at executor construction');
+    const { signal } = options;
+    const checks = [];
+    for (const { name, trace } of plan.traces) {
+      const result = await probe(source, trace, { signal });
+      checks.push({ name, ...result });
+      if (!result.passed) break; // Incomplete checks never become acceptance.
+    }
+    const required = plan.traces.length;
+    const retention = [];
+    if (checks.length === required && checks.every(check => check.passed)) {
+      const completed = Array.from({ length: 500 }, (_, index) => ({
+        chunk: [...Array.from({ length: 8 }, (_, field) => 65 + ((index * 17 + field * 11) % 26)), 10],
+        endOfInput: false,
+      }));
+      completed.push({ chunk: [], endOfInput: true });
+      const history = await probe(source, completed, { signal });
+      const growth = completedHistoryGrowth(history.rows ?? []);
+      retention.push({ name: 'completed-history', ...history, ...growth,
+        passed: history.passed && growth.growth <= growth.maximumGrowth });
+      const unfinished = Array.from({ length: 128 }, () => ({ chunk: Array(64).fill(97), endOfInput: false }));
+      unfinished.push({ chunk: [10], endOfInput: true });
+      const field = await probe(source, unfinished, { signal });
+      retention.push({ name: 'unfinished-field', ...field,
+        peak: Math.max(0, ...(field.rows ?? []).map(row => row.stateBytes)) });
+    }
+    const result = { sourceDigest: digest(source), runner, acceptanceContract: acceptanceContract,
+      seed: plan.metadata.seed, evaluation: plan.metadata, required, executed: checks.length, checks, retention };
+    return { ...result, passed: evaluationDisposition(result).status === 'accepted' };
+  }
+  return Object.freeze({ kind: 'qualified', runner, evaluation: plan.metadata, contract: sandbox.contract,
+    qualification: sandbox.qualification, probe, validate,
+    metrics: () => ({ physicalExecutions, qualificationExecutions: sandbox.qualificationExecutions }) });
+}

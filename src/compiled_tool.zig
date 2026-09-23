@@ -133,7 +133,7 @@ pub fn link(allocator: std.mem.Allocator, module: source.Module, registry: *cons
         try imports.append(a, .{ .name = name, .reference = .{ .kind = .function, .id = item.function } });
         // The value-only tool boundary requires this guarantee. The linker
         // derives it from the bound implementation; an effect role is no proof.
-        try borrows.append(a, .{ .function = item.function });
+        try borrows.append(a, if (item.participant) item.borrows else .{ .function = item.function });
         try bindings.append(a, .{ .required = .{ .instance = wrapper_key, .symbol = name }, .supplied = .{ .instance = item.instance, .symbol = item.entry } });
         var existing = false;
         for (instances.items) |instance| if (std.mem.eql(u8, instance.key, item.instance)) {
@@ -141,6 +141,14 @@ pub fn link(allocator: std.mem.Allocator, module: source.Module, registry: *cons
         };
         if (existing) continue;
         try instances.append(a, .{ .key = item.instance, .object = item.object });
+        for (item.functions, 0..) |function, function_index| {
+            const symbol = try std.fmt.allocPrint(a, "helper-{d}-{d}", .{ index, function_index });
+            try exports.append(a, .{ .name = symbol, .reference = .{ .kind = .function, .id = function.function } });
+            try bindings.append(a, .{
+                .required = .{ .instance = item.instance, .symbol = function.symbol },
+                .supplied = .{ .instance = wrapper_key, .symbol = symbol },
+            });
+        }
         for (item.effects) |effect| {
             const symbol = try std.fmt.allocPrint(a, "effect-{d}", .{effect.effect});
             if (std.mem.indexOfScalar(Id, effects.items, effect.effect) == null) {

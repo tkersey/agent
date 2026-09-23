@@ -108,6 +108,150 @@ pub fn build(b: *std.Build) void {
     check.dependOn(lint);
     for ([_][]const u8{ "facade", "values", "approval_probe", "catalogs", "descriptor_contracts", "callable", "compiled_tool" }) |name|
         g.testModule(check, g.module(b.fmt("test/agent4/{s}.zig", .{name})));
+    const participants = b.step("check-participants", "Check compiled internal participant admission");
+    g.testModule(participants, g.module("test/agent4/participant.zig"));
+    g.testModule(participants, g.module("test/agent4/composed_owners.zig"));
+    check.dependOn(participants);
+    const composed_images = b.step("composed-owner-images", "Emit admitted composed-owner cleanup");
+    const composed_emitter = g.emitter("composed-owners", g.module("test/agent4/composed_owners.zig"));
+    g.emit(composed_images, composed_emitter, &.{}, "composed-owners.bpi3");
+    check.dependOn(composed_images);
+    const selection_images = b.step("selection-images", "Emit checked recursive numerical selection");
+    const selection_check = b.step("check-selection", "Check generic selection construction and admission");
+    g.testModule(selection_check, g.module("test/agent4/selection.zig"));
+    check.dependOn(selection_check);
+    const selection_emitter = g.emitter("recursive-selection", g.module("test/agent4/recursive_selection.zig"));
+    const selection_producer = b.addRunArtifact(selection_emitter);
+    selection_producer.addArg("producer");
+    const selection_object = selection_producer.captureStdOut(.{});
+    selection_images.dependOn(&b.addInstallFileWithDir(selection_object, .prefix, "agent4/selection/producer.bmo1").step);
+    for ([_][]const u8{ "link", "pure", "invalid" }) |mode| {
+        const linked = b.addRunArtifact(selection_emitter);
+        linked.addArg(mode);
+        linked.addFileArg(selection_object);
+        selection_images.dependOn(&b.addInstallFileWithDir(linked.captureStdOut(.{}), .prefix, b.fmt("agent4/selection/{s}.bpi3", .{mode})).step);
+    }
+    check.dependOn(selection_images);
+    const selection_negative = b.addSystemCommand(&.{ "node", "test/agent4/selection_negative.mjs" });
+    selection_negative.addArtifactArg(selection_emitter);
+    selection_negative.addFileArg(selection_object);
+    selection_images.dependOn(&selection_negative.step);
+    const parser_tools = b.step("check-parser-tools", "Check typed parser tool bindings");
+    g.testModule(parser_tools, g.module("test/agent4/parser_tools.zig"));
+    check.dependOn(parser_tools);
+    const parser_delivery = b.step("parser-delivery-images", "Emit protected parser delivery");
+    const delivery_emitter = g.emitter("parser-delivery", g.module("test/agent4/parser_delivery.zig"));
+    for ([_][]const u8{ "program", "input-schema", "result-schema" }) |mode|
+        g.emit(parser_delivery, delivery_emitter, &.{mode}, b.fmt("parser-delivery/{s}.bin", .{mode}));
+    check.dependOn(parser_delivery);
+    const parser_proposals = b.step("parser-proposal-images", "Emit checked parser model proposals");
+    const proposal_emitter = g.emitter("parser-proposals", g.module("test/agent4/parser_proposals.zig"));
+    for ([_][]const u8{ "program", "input", "result-schema", "fragment", "experiment", "constraint", "unresolved", "unknown", "unoffered" }) |mode|
+        g.emit(parser_proposals, proposal_emitter, &.{mode}, b.fmt("parser-proposals/{s}.bin", .{mode}));
+    check.dependOn(parser_proposals);
+    const parser_episode = b.step("parser-construction-images", "Emit consumer-directed parser construction");
+    const parser_app = g.emitter("parser-construction", g.module("test/consumers/incremental-parser/main.zig"));
+    g.emit(parser_episode, parser_app, &.{"react"}, "parser-construction/react.bpi3");
+    const parser_link_module = g.module("tools/agent4/link_parser.zig");
+    parser_link_module.addImport("parser_application", g.module("test/consumers/incremental-parser/main.zig"));
+    const parser_link_only = g.emitter("link-parser", parser_link_module);
+    parser_episode.dependOn(&b.addInstallArtifact(parser_link_only, .{}).step);
+    const disposition_negative = b.addSystemCommand(&.{ "node", "test/agent4/parser_disposition_negative.mjs" });
+    disposition_negative.addArtifactArg(parser_app);
+    parser_episode.dependOn(&disposition_negative.step);
+    const parser_producer = b.addRunArtifact(parser_app);
+    parser_producer.addArg("producer");
+    const parser_producer_bytes = parser_producer.captureStdOut(.{});
+    const parser_consumer = b.addRunArtifact(parser_app);
+    parser_consumer.addArg("consumer");
+    const parser_consumer_bytes = parser_consumer.captureStdOut(.{});
+    const parser_reference = b.addRunArtifact(parser_app);
+    parser_reference.addArg("reference");
+    const parser_reference_bytes = parser_reference.captureStdOut(.{});
+    const parser_link = b.addRunArtifact(parser_app);
+    parser_link.addArg("link");
+    parser_link.addFileArg(parser_producer_bytes);
+    parser_link.addFileArg(parser_consumer_bytes);
+    parser_link.addFileArg(parser_reference_bytes);
+    parser_episode.dependOn(&b.addInstallFileWithDir(parser_reference_bytes, .prefix, "agent4/parser-construction/reference.bmo1").step);
+    parser_episode.dependOn(&b.addInstallFileWithDir(parser_producer_bytes, .prefix, "agent4/parser-construction/producer.bmo1").step);
+    parser_episode.dependOn(&b.addInstallFileWithDir(parser_consumer_bytes, .prefix, "agent4/parser-construction/consumer.bmo1").step);
+    parser_episode.dependOn(&b.addInstallFileWithDir(parser_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/program.bpi3").step);
+    for ([_][]const u8{ "first", "last" }) |policy| {
+        const selected_link = b.addRunArtifact(parser_app);
+        selected_link.addArg(b.fmt("link-select-{s}", .{policy}));
+        selected_link.addFileArg(parser_producer_bytes);
+        selected_link.addFileArg(parser_consumer_bytes);
+        selected_link.addFileArg(parser_reference_bytes);
+        parser_episode.dependOn(&b.addInstallFileWithDir(selected_link.captureStdOut(.{}), .prefix, b.fmt("agent4/parser-construction/select-{s}.bpi3", .{policy})).step);
+    }
+    const complete_link = b.addRunArtifact(parser_app);
+    complete_link.addArg("link-complete");
+    complete_link.addFileArg(parser_producer_bytes);
+    complete_link.addFileArg(parser_consumer_bytes);
+    complete_link.addFileArg(parser_reference_bytes);
+    parser_episode.dependOn(&b.addInstallFileWithDir(complete_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/complete.bpi3").step);
+    const retained_link = b.addRunArtifact(parser_app);
+    retained_link.addArg("link-retained");
+    retained_link.addFileArg(parser_producer_bytes);
+    retained_link.addFileArg(parser_consumer_bytes);
+    retained_link.addFileArg(parser_reference_bytes);
+    parser_episode.dependOn(&b.addInstallFileWithDir(retained_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/retained.bpi3").step);
+    const parser_alternate_consumer = b.addRunArtifact(parser_app);
+    parser_alternate_consumer.addArg("consumer-alt");
+    const parser_alternate_consumer_bytes = parser_alternate_consumer.captureStdOut(.{});
+    const parser_alternate_link = b.addRunArtifact(parser_app);
+    parser_alternate_link.addArg("link");
+    parser_alternate_link.addFileArg(parser_producer_bytes);
+    parser_alternate_link.addFileArg(parser_alternate_consumer_bytes);
+    parser_alternate_link.addFileArg(parser_reference_bytes);
+    parser_episode.dependOn(&b.addInstallFileWithDir(parser_alternate_consumer_bytes, .prefix, "agent4/parser-construction/consumer-alt.bmo1").step);
+    parser_episode.dependOn(&b.addInstallFileWithDir(parser_alternate_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/alternate.bpi3").step);
+    const circular_consumer = b.addRunArtifact(parser_app);
+    circular_consumer.addArg("consumer-circular");
+    const circular_link = b.addRunArtifact(parser_app);
+    circular_link.addArg("link");
+    circular_link.addFileArg(parser_producer_bytes);
+    circular_link.addFileArg(circular_consumer.captureStdOut(.{}));
+    circular_link.addFileArg(parser_reference_bytes);
+    parser_episode.dependOn(&b.addInstallFileWithDir(circular_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/circular.bpi3").step);
+    const forged_consumer = b.addRunArtifact(parser_app);
+    forged_consumer.addArg("consumer-forged");
+    const forged_link = b.addRunArtifact(parser_app);
+    forged_link.addArg("link");
+    forged_link.addFileArg(parser_producer_bytes);
+    forged_link.addFileArg(forged_consumer.captureStdOut(.{}));
+    forged_link.addFileArg(parser_reference_bytes);
+    parser_episode.dependOn(&b.addInstallFileWithDir(forged_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/forged.bpi3").step);
+    for ([_][]const u8{ "model-template", "input-schema", "result-schema", "model-schema", "model-reply-schema" }) |mode|
+        g.emit(parser_episode, parser_app, &.{mode}, b.fmt("parser-construction/{s}.bin", .{mode}));
+    check.dependOn(parser_episode);
+    const parser_schema = g.emitter("parser-schema", g.module("test/agent4/parser_tools.zig"));
+    g.emit(parser_tools, parser_schema, &.{"program"}, "parser/program.bpi3");
+    for ([_][]const u8{ "reference-request", "reference-reply", "execution-request", "execution-reply" }) |mode|
+        g.emit(parser_tools, parser_schema, &.{mode}, b.fmt("parser/{s}.bin", .{mode}));
+    const parser_oracle = b.addSystemCommand(&.{ "node", "--test", "test/agent4/parser_oracle.test.mjs", "test/agent4/parser_disposition.test.mjs" });
+    parser_oracle.removeEnvironmentVariable("NODE_TEST_CONTEXT");
+    check.dependOn(&parser_oracle.step);
+    const parser_executor = b.addSystemCommand(&.{ "node", "test/agent4/parser_executor.test.mjs" });
+    const parser_state_capacity = b.addSystemCommand(&.{ "node", "test/agent4/parser_state_capacity.test.mjs" });
+    const parser_protocol = b.addSystemCommand(&.{ "node", "test/agent4/parser_protocol.test.mjs" });
+    parser_executor.step.dependOn(&parser_protocol.step);
+    parser_executor.step.dependOn(&parser_state_capacity.step);
+    b.step("check-parser-executor", "Check incremental parser candidates in the qualified executor")
+        .dependOn(&parser_executor.step);
+    const heldout_executor = b.addSystemCommand(&.{ "node", "test/agent4/parser_evaluation.test.mjs" });
+    b.step("check-parser-evaluation", "Check immutable held-out input evaluation and subject bindings")
+        .dependOn(&heldout_executor.step);
+    const eof_executor = b.addSystemCommand(&.{ "node", "test/agent4/parser_eof_executor.mjs" });
+    b.step("check-parser-eof-executor", "Check selected EOF policies against real candidate execution")
+        .dependOn(&eof_executor.step);
+    const recursive_tests = b.addTest(.{
+        .root_module = g.module("test/agent4/recursive_participant.zig"),
+        .filters = &.{"recursive participant"},
+    });
+    recursive_tests.step.dependOn(g.gate);
+    participants.dependOn(&b.addRunArtifact(recursive_tests).step);
     g.testModule(check, g.module("src/model_invocation_tests.zig"));
     g.testModule(check, g.module("src/conversation.zig"));
     g.testModule(check, g.module("src/react.zig"));
@@ -143,6 +287,47 @@ pub fn build(b: *std.Build) void {
     g.testModule(check, inquiry_app);
 
     const emit = b.step("agent4-images", "Compile the consumer images");
+    emit.dependOn(parser_episode);
+    const participant_images = b.step("participant-images", "Emit and link the internal model participant");
+    const participant_exe = g.emitter("agent-participant", g.module("test/agent4/participant.zig"));
+    const participant_object = b.addRunArtifact(participant_exe);
+    participant_object.addArg("object");
+    const participant_bytes = participant_object.captureStdOut(.{});
+    const participant_link = b.addRunArtifact(participant_exe);
+    participant_link.addArg("link");
+    participant_link.addFileArg(participant_bytes);
+    participant_images.dependOn(&b.addInstallFileWithDir(participant_bytes, .prefix, "agent4/participant/producer.bmo1").step);
+    participant_images.dependOn(&b.addInstallFileWithDir(participant_link.captureStdOut(.{}), .prefix, "agent4/participant/program.bpi3").step);
+    for ([_][]const u8{ "input", "reply", "expected" }) |mode|
+        g.emit(participant_images, participant_exe, &.{mode}, b.fmt("participant/{s}.bin", .{mode}));
+    emit.dependOn(participant_images);
+    const recursive_images = b.step("recursive-participant-images", "Emit reciprocal task participants");
+    const recursive_exe = g.emitter("agent-recursive-participant", g.module("test/agent4/recursive_participant.zig"));
+    const producer_run = b.addRunArtifact(recursive_exe);
+    producer_run.addArg("producer");
+    const producer_bytes = producer_run.captureStdOut(.{});
+    const consumer_run = b.addRunArtifact(recursive_exe);
+    consumer_run.addArg("consumer");
+    const consumer_bytes = consumer_run.captureStdOut(.{});
+    const recursive_link = b.addRunArtifact(recursive_exe);
+    recursive_link.addArg("link");
+    recursive_link.addFileArg(producer_bytes);
+    recursive_link.addFileArg(consumer_bytes);
+    recursive_images.dependOn(&b.addInstallFileWithDir(producer_bytes, .prefix, "agent4/recursive/producer.bmo1").step);
+    recursive_images.dependOn(&b.addInstallFileWithDir(consumer_bytes, .prefix, "agent4/recursive/consumer.bmo1").step);
+    recursive_images.dependOn(&b.addInstallFileWithDir(recursive_link.captureStdOut(.{}), .prefix, "agent4/recursive/program.bpi3").step);
+    const alternate_run = b.addRunArtifact(recursive_exe);
+    alternate_run.addArg("consumer-alt");
+    const alternate_bytes = alternate_run.captureStdOut(.{});
+    const alternate_link = b.addRunArtifact(recursive_exe);
+    alternate_link.addArg("link");
+    alternate_link.addFileArg(producer_bytes);
+    alternate_link.addFileArg(alternate_bytes);
+    recursive_images.dependOn(&b.addInstallFileWithDir(alternate_bytes, .prefix, "agent4/recursive/consumer-alt.bmo1").step);
+    recursive_images.dependOn(&b.addInstallFileWithDir(alternate_link.captureStdOut(.{}), .prefix, "agent4/recursive/program-alt.bpi3").step);
+    for ([_][]const u8{ "input", "reply" }) |mode|
+        g.emit(recursive_images, recursive_exe, &.{mode}, b.fmt("recursive/{s}.bin", .{mode}));
+    emit.dependOn(recursive_images);
     const text_object = g.emitter("agent-text-object", g.module("test/agent4/text_object.zig"));
     const text_link = g.emitter("agent-text-link", g.module("test/agent4/text_link.zig"));
     const text_object_bytes = b.addRunArtifact(text_object).captureStdOut(.{});
@@ -224,6 +409,16 @@ pub fn build(b: *std.Build) void {
     check.dependOn(emit);
 
     const integration = b.step("check-agent4-integration", "Execute consumer proofs under the selected World");
+    const parser_repair = b.step("check-parser-repair", "Repair malformed candidate observations through participants");
+    const parser_repeated = b.step("check-parser-repeated", "Check repeated parser custody and stale task replies");
+    const parser_circular = b.step("check-parser-circular", "Bound unsupported circular participant demands without invented evidence");
+    const parser_intent = b.step("check-parser-intent", "Check EOF clarification through fresh World states");
+    const composed_runtime = b.step("check-composed-owners-runtime", "Restore composed owners through cleanup");
+    const parser_source_free = b.step("check-parser-source-free", "Link and execute parser objects with source access denied");
+    const parser_consumers = b.step("check-parser-consumers", "Swap checked parser consumers around one unchanged producer");
+    const parser_comparison = b.step("check-parser-comparison", "Compare parser ReAct, recursive and complete-candidate strategies");
+    const parser_selection = b.step("check-parser-selection", "Execute two recursively assessed parser constructions");
+    const selection_runtime = b.step("check-selection-runtime", "Check recursive assessment and completion isolation");
     const compiled_tools_check = b.step("check-compiled-tools", "Execute one compiled text tool in standalone and Agent callers");
     const components_check = b.step("check-component-tools", "Reuse three effectful objects in Agent and two standalone Programs");
     const component_objects = g.emitter("agent4-component-objects", g.module("test/agent4/component_objects.zig"));
@@ -247,6 +442,50 @@ pub fn build(b: *std.Build) void {
         addBoundary(b, runtime_guard, source, target, optimize);
         runtime_guard.has_side_effects = true;
         _ = runtime_guard.captureStdOut(.{});
+        const intent_run = b.addSystemCommand(&.{ "node", "test/agent4/parser_intent_runtime.mjs", runtime_path });
+        intent_run.step.dependOn(parser_episode);
+        intent_run.step.dependOn(&runtime_guard.step);
+        parser_intent.dependOn(&intent_run.step);
+        const composed_run = b.addSystemCommand(&.{ "node", "test/agent4/composed_owners.mjs", runtime_path });
+        composed_run.step.dependOn(composed_images);
+        composed_run.step.dependOn(&runtime_guard.step);
+        composed_runtime.dependOn(&composed_run.step);
+        for ([_][]const u8{ "first", "last", "unavailable" }) |policy| {
+            const selection_case = b.addSystemCommand(&.{ "node", "test/agent4/parser_selection.mjs", runtime_path, policy });
+            selection_case.step.dependOn(parser_episode);
+            selection_case.step.dependOn(&runtime_guard.step);
+            parser_selection.dependOn(&selection_case.step);
+        }
+        for ([_][]const u8{ "react", "recursive", "complete" }) |strategy| {
+            for ([_][]const u8{ "easy", "repair", "unresolved", "stale" }) |scenario| {
+                const comparison = b.addSystemCommand(&.{ "node", "test/agent4/parser_comparison.mjs", runtime_path, strategy, scenario });
+                comparison.step.dependOn(parser_episode);
+                comparison.step.dependOn(&runtime_guard.step);
+                parser_comparison.dependOn(&comparison.step);
+            }
+        }
+        for ([_][]const u8{ "recursive", "alternate" }) |strategy| {
+            const consumer_case = b.addSystemCommand(&.{ "node", "test/agent4/parser_comparison.mjs", runtime_path, strategy, "consumer" });
+            consumer_case.step.dependOn(parser_episode);
+            consumer_case.step.dependOn(&runtime_guard.step);
+            parser_consumers.dependOn(&consumer_case.step);
+        }
+        const repair_run = b.addSystemCommand(&.{ "node", "test/agent4/parser_construction.mjs", b.pathJoin(&.{ runtime_path, "src/embedding/index.mjs" }), b.pathJoin(&.{ runtime_path, "world-kernel.wasm" }), "", "", "", "chromium", "malformed-repair" });
+        repair_run.step.dependOn(parser_episode);
+        repair_run.step.dependOn(&runtime_guard.step);
+        parser_repair.dependOn(&repair_run.step);
+        const repeated_run = b.addSystemCommand(&.{ "node", "test/agent4/parser_repeated.mjs", runtime_path });
+        repeated_run.step.dependOn(parser_episode);
+        repeated_run.step.dependOn(&runtime_guard.step);
+        parser_repeated.dependOn(&repeated_run.step);
+        const circular_run = b.addSystemCommand(&.{ "node", "test/agent4/parser_circular.mjs", runtime_path });
+        circular_run.step.dependOn(parser_episode);
+        circular_run.step.dependOn(&runtime_guard.step);
+        parser_circular.dependOn(&circular_run.step);
+        const selection_run = b.addSystemCommand(&.{ "node", "test/agent4/recursive_selection.mjs", runtime_path });
+        selection_run.step.dependOn(selection_images);
+        selection_run.step.dependOn(&runtime_guard.step);
+        selection_runtime.dependOn(&selection_run.step);
         const text_check = b.addSystemCommand(&.{ "node", "test/agent4/text_tool_runtime.mjs" });
         text_check.addFileArg(text_object.getEmittedBin());
         text_check.addFileArg(text_link.getEmittedBin());
@@ -272,6 +511,15 @@ pub fn build(b: *std.Build) void {
             browser_check.dependOn(&browser.step);
         } else browser_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
+        runtime_work.dependOn(parser_intent);
+        runtime_work.dependOn(parser_circular);
+        runtime_work.dependOn(parser_repeated);
+        runtime_work.dependOn(parser_repair);
+        runtime_work.dependOn(selection_runtime);
+        runtime_work.dependOn(parser_selection);
+        runtime_work.dependOn(parser_comparison);
+        runtime_work.dependOn(parser_consumers);
+        runtime_work.dependOn(composed_runtime);
         const repository_emitter_module = g.module("test/agent4/repository_replacement_emit.zig");
         repository_emitter_module.addImport("repository_app", g.module("test/consumers/repository/application.zig"));
         const repository_emitter = g.emitter("repository-replacement", repository_emitter_module);
@@ -281,6 +529,7 @@ pub fn build(b: *std.Build) void {
         repository_run.step.dependOn(&runtime_guard.step);
         repository_run.has_side_effects = true;
         const repository_files = b.addSystemCommand(&.{ "node", "--test", "test/agent4/repository_delivery.test.mjs", "test/agent4/repository.test.mjs", "test/agent4/repository_executor.test.mjs" });
+        repository_files.removeEnvironmentVariable("NODE_TEST_CONTEXT");
         repository_delivery.dependOn(&repository_run.step);
         repository_delivery.dependOn(&repository_files.step);
         runtime_work.dependOn(repository_delivery);
@@ -309,8 +558,17 @@ pub fn build(b: *std.Build) void {
             .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data", .module = data } },
         });
         const native_exe = native_graph.emitter("agent4-native", native_module);
+        if (inquiry_host) {
+            const source_free = b.addSystemCommand(&.{ "node", "test/agent4/parser_source_free.mjs", runtime_path });
+            source_free.addFileArg(native_exe.getEmittedBin());
+            source_free.step.dependOn(distribution);
+            source_free.step.dependOn(&runtime_guard.step);
+            parser_source_free.dependOn(&source_free.step);
+            runtime_work.dependOn(parser_source_free);
+        } else parser_source_free.dependOn(&b.addFail("source-denial witness requires macOS sandbox-exec").step);
         const inquiry_app_run = b.addSystemCommand(&.{ "node", "test/agent4/inquiry_application_runtime.mjs", runtime_path, b.getInstallPath(.prefix, "agent4/inquiry") });
         const inquiry_cli = b.addSystemCommand(&.{ "node", "--test", "test/agent4/inquiry_cli.test.mjs" });
+        inquiry_cli.removeEnvironmentVariable("NODE_TEST_CONTEXT");
         inquiry_cli.setEnvironmentVariable("AGENT4_WORLD_RUNTIME", runtime_path);
         inquiry_cli.setEnvironmentVariable("AGENT4_INQUIRY_IMAGES", b.getInstallPath(.prefix, "agent4/inquiry"));
         inquiry_cli.has_side_effects = true;
@@ -433,6 +691,14 @@ pub fn build(b: *std.Build) void {
         repository_delivery.dependOn(&missing.step);
         repository_application.dependOn(&missing.step);
         integration.dependOn(&missing.step);
+        parser_intent.dependOn(&missing.step);
+        parser_circular.dependOn(&missing.step);
+        selection_runtime.dependOn(&missing.step);
+        parser_selection.dependOn(&missing.step);
+        parser_comparison.dependOn(&missing.step);
+        parser_consumers.dependOn(&missing.step);
+        parser_source_free.dependOn(&missing.step);
+        composed_runtime.dependOn(&missing.step);
         economy.dependOn(&missing.step);
     }
     const pure = b.addSystemCommand(&.{ "node", "tools/agent4/check.mjs", "authoring" });

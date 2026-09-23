@@ -3,8 +3,8 @@
     .version = "4.0.0-dev.0",
     .dependencies = .{
         .boundary = .{
-            .url = "https://github.com/tkersey/boundary/archive/1b00c8c159f0cb490a1223fac8d3d208cef41cb1.tar.gz",
-            .hash = "boundary-3.0.0-dev.0-flclaCJBFQCNUnFJK019OyLBDLZdg6_eTW1rzBpwImGA",
+            .url = "https://github.com/tkersey/boundary/archive/3fc90c83dfedc9bcc7dce3385776d60f0bfae6bb.tar.gz",
+            .hash = "boundary-3.0.0-dev.0-flclaKMdGQD5JHSgE2p5PmoZNrWzn1Our-5LTSkQH3J-",
         },
     },
     .minimum_zig_version = "0.16.0",
@@ -20,6 +20,8 @@
         "docs/architecture.md",
         "docs/compositional-execution.md",
         "docs/compiled-text-tool.md",
+        "docs/recursive-interaction.md",
+        "docs/parser-synthesis.md",
         "docs/security_model.md",
         "docs/agent4-runtime.md",
         "docs/migration_from_3.md",
@@ -29,6 +31,7 @@
         "test/agent4",
         "test/consumers",
         "fixtures/repository-repair-v1",
+        "fixtures/incremental-parser-v1",
         "tools/agent4",
         "tools/check_zig_paths.sh",
     },

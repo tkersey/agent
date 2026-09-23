@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import { createParserExecutor } from '../../runtime/parser_executor.mjs';
+const executor = await createParserExecutor({ timeoutMs: 1000 });
+assert.equal(executor.kind, 'qualified', JSON.stringify(executor));
+const trace = [{ chunk: [], endOfInput: true }];
+const forged = `export const initial=()=>({});export const step=s=>({next_state:s,newly_completed_records:[],status:'complete',stateBytes:0,passed:true});`;
+assert.equal((await executor.probe(forged, trace)).passed, false);
+const imported = `import fs from 'node:fs'; export const initial=()=>({}); export const step=()=>fs.readFileSync('/etc/passwd');`;
+assert.equal((await executor.probe(imported, trace)).kind, 'execution_failed');
+const looping = `export const initial=()=>({});export function step(){while(true){}}`;
+const timeout = await executor.probe(looping, trace);
+assert.equal(timeout.kind, 'timeout');
+assert.equal(timeout.passed, false);
+const controller = new AbortController();controller.abort();
+const before = executor.metrics().physicalExecutions;
+assert.equal((await executor.probe(looping, trace, {signal:controller.signal})).kind, 'cancelled');
+assert.equal(executor.metrics().physicalExecutions, before);
+await assert.rejects(executor.probe(looping, [{chunk:[256],endOfInput:true}]), TypeError);
+assert.equal(executor.metrics().physicalExecutions, before);
+console.log(JSON.stringify({qualified:true,forgedVerdictRejected:true,importsRejected:true,
+  timeout:timeout.kind,preCancelledExecutions:0,metrics:executor.metrics()}));

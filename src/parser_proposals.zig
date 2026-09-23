@@ -50,8 +50,8 @@ pub const instructions =
     \\is a proposed initial()/step(state, chunk, endOfInput) module, never proof of acceptance.
     \\Experiments specify hex bytes, first-chunk size, later chunk size, and finalization. Tool observations are evidence;
     \\predictions and explanations are not. Do not invent successful tests or modify required checks.
-    \\Request reference evidence for empirical uncertainty. Strict EOF behavior is already specified;
-    \\request human intent only when the task explicitly leaves the observable EOF behavior unresolved.
+    \\Request reference evidence for empirical uncertainty. Use the EOF behavior supplied in the task requirements;
+    \\request human intent only when those requirements explicitly leave that observable behavior unresolved.
     \\Do not select an implementation from a hidden template. Different correct designs are allowed.
     \\Do not claim validation, approval, target writes, or delivery. Those are separate application steps.
 ;

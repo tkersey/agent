@@ -1369,3 +1369,37 @@ The current v2 full run is passing, and future reports retain individual check
 outcomes. Neither this successful run nor clean reviews can prove universal
 availability, correctness of every candidate, or absence of every resource leak.
 Review completion and final draft state are tracked in the linked PRs.
+
+## EOF instruction consistency
+
+The successor review found that the shared system instruction asserted strict
+EOF behavior even when the task selected emit-at-EOF. The shared instruction now
+uses the behavior supplied in the task requirements and asks about intent only
+when those requirements leave it unresolved. This corrects the shared owner;
+there is no per-strategy text replacement or second policy source.
+
+The actual emitted request is checked through the normal loopback provider adapter
+for twelve combinations: recursive, ReAct and complete-candidate strategies, each
+with strict, direct emit, clarified strict and clarified emit behavior. All twelve
+agree with the selected reference/requirements and contain no contradictory strict
+default. The checks use one synthetic unresolved response per case, real reference
+observations, no candidate acceptance claim, and no paid inference. Configuration
+and read-only view regressions also pass. Aggregate: 312 steps/130 tests.
+
+Only `model-template.bin` and `task.args` changed in the emitted inventory. All 29
+compiled Programs/components remain byte-identical. Reconstructing the old system
+text in the current decoded template reproduces its recorded old artifact hash;
+the new instruction adds exactly 20 UTF-8 bytes. Each scripted comparison request
+contains that shared instruction once, so the derived context totals are:
+
+| Case | ReAct | Recursive | Complete-candidate ablation |
+| --- | ---: | ---: | ---: |
+| Easy | 5,092 | 11,456 | 5,092 |
+| Repair | 18,257 | 18,383 | 18,257 |
+
+These are exact template-byte adjustments to the preceding measured request
+counts, not fresh model or timing measurements. The controlled provider responses,
+compiled control, evaluator inputs, kernel and tool authority are unchanged; their
+executed evidence is reused at that scope. The new request-consistency tests cover
+the changed instruction. Live-model quality remains unmeasured. Existing saved
+State retains its captured input and is not silently rewritten to a new template.

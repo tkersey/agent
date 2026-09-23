@@ -58,6 +58,34 @@ test('parked participant view is diagnostic and cannot redirect resumption',asyn
  kernel.checkpoint(session,{transfer:true});assert.equal(kernel.usage().workingLive,0n);
 });
 
+test('model instructions agree with strict, emit and clarified EOF requirements',{timeout:240000},async t=>{
+ if(process.platform!=='darwin')return;
+ const area=await mkdtemp(join(tmpdir(),'parser-cli-eof-prompt-'));t.after(()=>rm(area,{recursive:true,force:true}));
+ execFileSync('tar',['-xzf',resolve('zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),'-C',area]);
+ const cwd=join(area,(await readdir(area))[0]);let policy='strict',calls=0;
+ const server=createServer(async(req,res)=>{
+  try{
+   let body='';for await(const chunk of req)body+=chunk;
+   assert.equal(req.headers.authorization,undefined);
+   assert.match(body,/Use the EOF behavior supplied in the task requirements/);
+   assert.doesNotMatch(body,/Strict EOF behavior is already specified/);
+   assert(body.includes("EOF_POLICY = '"+policy+"'"));
+   if(policy==='emit')assert.match(body,/unfinished record is emitted at EOF/);
+   else assert.match(body,/unfinished record fails as UnterminatedRecord/);
+   calls++;res.writeHead(200,{'content-type':'application/json'});
+   res.end(JSON.stringify({status:'completed',error:null,output:[{type:'function_call',status:'completed',call_id:'same-fixture-id',name:'unresolved',arguments:JSON.stringify({reason:'Prompt observation complete.'})}]}));
+  }catch(error){res.writeHead(500);res.end(error.message);}
+ });
+ await new Promise(done=>server.listen(0,'127.0.0.1',done));t.after(()=>new Promise(done=>server.close(done)));
+ for(const strategy of ['recursive','react','complete'])for(const [mode,answer,selected]of [['strict',undefined,'strict'],['emit',undefined,'emit'],['ask','1\n','strict'],['ask','2\n','emit']]){
+  policy=selected;const before=calls;
+  const result=await run(cwd,['--endpoint','http://127.0.0.1:'+server.address().port,'--model','fixture-model','--data-policy','fixture-only','--max-model-calls','1','--max-checks','1','--eof-policy',mode,'--strategy',strategy],30000,answer);
+  assert.equal(calls,before+1,JSON.stringify(result));assert.equal(result.spent.models,1);
+  assert.equal(result.spent.questions,mode==='ask'?1:0);assert.equal(result.status,'unresolved');
+  assert.equal(result.spent.checks,0);assert.equal(result.paidAuthorization,false);
+ }
+});
+
 test('extracted parser command uses the real provider adapter without paid inference',{timeout:360000},async t=>{
  const area=await mkdtemp(join(tmpdir(),'parser-cli-package-'));t.after(()=>rm(area,{recursive:true,force:true}));
  execFileSync('tar',['-xzf',resolve('zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),'-C',area]);
@@ -77,7 +105,7 @@ test('extracted parser command uses the real provider adapter without paid infer
    const args=baseline?{source:decodedFields,explanation:'A complete candidate for independent acceptance.'}:!repair?{reason:'Fixture cannot establish a complete parser.'}:repairCalls===1?
     {input_hex:'610a',first_chunk_bytes:1,chunk_bytes:1,finalize:true,reason:'Check record termination at final input.'}:
     {source:repairCalls===0?bufferUntilEOF:emitFinalRecord,explanation:'Provider fixture proposes source; the real evaluator decides acceptance.'};
-   if(repair){assert.match(body,/EOF_POLICY = 'emit'/);assert.match(body,/unfinished record is emitted at EOF/);}
+   if(repair){assert.doesNotMatch(body,/Strict EOF behavior is already specified/);assert.match(body,/EOF_POLICY = 'emit'/);assert.match(body,/unfinished record is emitted at EOF/);}
    if(repair&&repairCalls===2){assert.match(body,/earlier required check FAILED/);assert.match(body,/Hex bytes: 610a/);}
    if(repair)repairCalls++;
    res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({status:'completed',error:null,output:[{type:'function_call',status:'completed',call_id:'fixture-id',name,arguments:JSON.stringify(args)}]}));

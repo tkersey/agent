@@ -1,3 +1,4 @@
+import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 // Real candidate tools; World retains all selection and reciprocal control.
 import assert from 'node:assert/strict';
 import {readFile,writeFile,mkdtemp,rm} from 'node:fs/promises';
@@ -30,7 +31,7 @@ try{
  model[3].push([2,`Frozen batch reference:\n${tools.evidence.reference}\nRequired behavior:\n${tools.evidence.requirements}`]);
  const input=[tools.subject(hash(tools.evidence.reference)),model,[[[92],false],[[110,10],false],[[],true]],17n,2n,'parser.mjs',7n,true,false,{tag:0,value:null}];
  const kernelBytes=await readFile(runtime.kernelPath);let id=1n;
- const fresh=()=>world.Kernel.create({bytes:kernelBytes,expectedSha256:runtime.kernelSha256,instanceId:id++});
+ const fresh=()=>createParserKernel(world.Kernel, {bytes:kernelBytes,expectedSha256:runtime.kernelSha256,instanceId:id++});
  let k=await fresh(),p=k.prepare(image),s=k.start(p,encodeValue(inputSchema,input));k.releasePrepared(p);
  let control='none',value=new Uint8Array(),models=0,checks=0,approvals=0,writes=0,reads=0,transfers=0,result;
  const references=[],acceptances=[],events=[];

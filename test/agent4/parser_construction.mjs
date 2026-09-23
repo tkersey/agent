@@ -1,3 +1,4 @@
+import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 // Environmental leaves only. Reciprocal ordering and candidate state live in BPI3.
 import assert from 'node:assert/strict';
 import {readFile,mkdtemp,writeFile,rm} from 'node:fs/promises';
@@ -40,7 +41,7 @@ const peer=peerPath?await(await import(pathToFileURL(resolve(peerPath)))).wasmti
 let browser;
 try {
 if(browserTools)browser=await(await import('./recursive_browser.mjs')).browserPeer({worldEntry,kernelPath,tools:browserTools,engine:browserEngine,sha256:expectedSha256});
-let identity=1n;const fresh=()=>Kernel.create({bytes:kernelBytes,expectedSha256,instanceId:identity++});
+let identity=1n;const fresh=()=>createParserKernel(Kernel, {bytes:kernelBytes,expectedSha256,instanceId:identity++});
 let k=await fresh(),p=k.prepare(image),s=k.start(p,encodeValue(inputSchema,input));k.releasePrepared(p);
 let control='none',value=new Uint8Array(),transfers=0;const events=[],engines=[];
 let result,modelCalls=0,probeFailed=false,fullAccepted=false,targetReads=0,approvals=0,writes=0;

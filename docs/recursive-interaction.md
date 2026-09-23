@@ -1294,3 +1294,30 @@ missing-observation success and stale unavailable results. Broader regenerated
 host/strategy evidence and successor serial reviews are separate pending checks;
 these focused results do not claim their completion or explain the older
 intermittent CLI outcomes.
+
+### v2 caller I/O allowance and portable recovery
+
+The regenerated selection outcome needs 67,872 output bytes. The low-level World
+64 KiB default therefore reported an exact `WORLD_CAPACITY` output requirement;
+it was not an authored parser result. `runtime/parser_kernel.mjs` now supplies the
+parser CLI and its drivers with a shared 4 MiB input/output allowance while
+preserving the 1 MiB working-memory limit. Setting limits does not preallocate
+those arenas. The generic kernel, its defaults, and the candidate executor's
+budgets are unchanged. This is a caller I/O policy, not a workaround for growing
+live interaction state.
+
+The source-free consumer check initially retained the old v1 producer hash. Its
+v2 baseline is now `672efdd6d55b36cd46711c0fb73461bbc1e7e425482f35f887d1f9bcb39811dc`;
+the same bytes must link unchanged with both v2 consumers. Source-denied linking,
+repeated-task custody and packaging passed 202 steps. The invalidated broader
+integration run was stopped, not passed; its affected lanes are rerun separately.
+
+Fresh native/Node/Wasmtime/Chromium execution of the v2 malformed-row repair passed
+14 transfers (15 destroyed Workers), with two model contributions, 539 actual
+candidate executions and no target write. Local disposal and whole-session
+cancellation each passed six transfers/seven Workers. Local disposal resumes the
+retained sibling after cleanup; cancellation performs only cleanup. Selection
+with the last-candidate policy passed 34 transfers/35 Workers, four model calls,
+four checks, 1,078 candidate executions, one approval and one conditional fixture
+write. These runs consume the chosen destination's actual State bytes. They do
+not establish the still-pending full integration/strategy matrix or review closeout.

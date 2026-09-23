@@ -156,3 +156,8 @@ Evaluation sets are fixed when an executor is created. Per-call seed/evaluation
 overrides reject. The set digest participates in the runner identity, so changing
 sets invalidates old subject/evidence bindings. This is not saved-State migration
 or permission to relabel an old assessment as current.
+
+The parser embedding admits up to 4 MiB of input and output bytes for complete
+State plus a residual request. Its working-memory limit remains 1 MiB. These
+caller limits do not preallocate arenas or change the generic World's defaults;
+exhaustion is an operational error, never an authored successful result.

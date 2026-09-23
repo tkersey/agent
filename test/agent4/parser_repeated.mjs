@@ -1,3 +1,4 @@
+import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 // Four complete unresolved executions reuse one resident kernel and prepared Program.
 // Only the task occurrence changes; prior replies and provider IDs grant no reuse.
 import assert from 'node:assert/strict';
@@ -19,7 +20,7 @@ const model=decodeValue(decodeSchema(await read('model-schema.bin')),await read(
 const tools=await createParserTools();assert.equal(tools.kind,'qualified');
 const hash=x=>createHash('sha256').update(x).digest('hex');
 const bytes=await readFile(runtime.kernelPath);
-const k=await Kernel.create({bytes,expectedSha256:hash(bytes),instanceId:444n}),p=k.prepare(image);
+const k=await createParserKernel(Kernel, {bytes,expectedSha256:hash(bytes),instanceId:444n}),p=k.prepare(image);
 const baseline=k.usage().workingLive,oldReplies=new Map(),rows=[];
 for(let task=0;task<4;task++){
  const input=[tools.subject(hash(tools.evidence.reference)),model,[[[92],false],[[110,10],false],[[],true]],17n+100n*BigInt(task),2n,'parser.mjs',7n,false,false,{tag:0,value:null}];

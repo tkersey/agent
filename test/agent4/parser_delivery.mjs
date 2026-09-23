@@ -1,3 +1,4 @@
+import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -25,7 +26,7 @@ try {
   let input={image,initialArgs:encodeValue(inputSchema,[proposal,mode!=='artifact'])};
   let reads=0,questions=0,writes=0,output;
   for(let round=0;round<10;round++) {
-   const k=await world.Kernel.create({bytes,expectedSha256:hash(bytes)});
+   const k=await createParserKernel(world.Kernel, {bytes,expectedSha256:hash(bytes)});
    const out=world.decodeOutcome(k.invoke(world.encodeInput(input)));
    if(out.kind==='completed'){output=decodeValue(resultSchema,out.value);break;}
    assert.equal(out.kind,'requested');

@@ -1,3 +1,4 @@
+import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 import assert from 'node:assert/strict';
 import {readFile,writeFile,mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -22,8 +23,9 @@ const inputSchema=decodeSchema(await read('input-schema.bin')),resultSchema=deco
 const model=decodeValue(decodeSchema(await read('model-schema.bin')),await read('model-template.bin'));
 const tools=await createParserTools();assert.equal(tools.kind,'qualified',JSON.stringify(tools));
 const hash=v=>createHash('sha256').update(v).digest('hex');
+// Protocol v2 fixture baseline. Both linked consumers must retain these producer bytes.
 if(scenario.startsWith('consumer')){
- assert.equal(hash(await read('producer.bmo1')),'fcf0b53d44983c0aabe5e69eec502295d2b2e66b6eb3cdcd57281be8cf456502');
+ assert.equal(hash(await read('producer.bmo1')),'672efdd6d55b36cd46711c0fb73461bbc1e7e425482f35f887d1f9bcb39811dc');
  assert.notDeepEqual(await read('consumer.bmo1'),await read('consumer-alt.bmo1'));
 }
 assert(!peerPath||nativeTool&&!deniedRoot);assert(!browserTools||peerPath);
@@ -38,7 +40,7 @@ try{
  model[3]=[model[3][0],[2,`Construct an incremental parser for this frozen batch reference and required behavior. Use the offered construction or experiment operations; explain inability honestly.\nFrozen batch reference:\n${tools.evidence.reference}\nRequired behavior:\n${tools.evidence.requirements}`]];
  const input=[tools.subject(hash(tools.evidence.reference)),model,[[[92],false],[[110,10],false],[[],true]],17n,scenario==='consumer-partial'?1n:3n,'parser.mjs',7n,true,false,{tag:0,value:null}];
  const kernelBytes=await readFile(runtime.kernelPath);let id=1n;
- const fresh=()=>world.Kernel.create({bytes:kernelBytes,expectedSha256:runtime.kernelSha256,instanceId:id++});
+ const fresh=()=>createParserKernel(world.Kernel, {bytes:kernelBytes,expectedSha256:runtime.kernelSha256,instanceId:id++});
  const initialArgs=encodeValue(inputSchema,input);let k,p,s,nativeState;
  if(!nativeTool||peer){k=await fresh();p=k.prepare(image);s=k.start(p,initialArgs);k.releasePrepared(p);}
  const profile=deniedRoot?`(version 1) (allow default) (deny file-read* (subpath ${JSON.stringify(deniedRoot)})) (deny process-exec (subpath ${JSON.stringify(deniedRoot)}))`:null;

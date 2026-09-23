@@ -1,3 +1,4 @@
+import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {createServer} from 'node:http';
@@ -46,7 +47,7 @@ test('parked participant view is diagnostic and cannot redirect resumption',asyn
  assert.deepEqual(stopped.pending.demand.trace,[[[92],false],[[110,10],false],[[],true]]);
  assert.match(stopped.pending.requestDigest,/^[a-f0-9]{64}$/);
  const selected=verifyRuntime(runtime),world=await import(pathToFileURL(selected.entrypoint));
- const kernel=await world.Kernel.create({bytes:await readFile(selected.kernelPath),expectedSha256:selected.kernelSha256,instanceId:999n});
+ const kernel=await createParserKernel(world.Kernel, {bytes:await readFile(selected.kernelPath),expectedSha256:selected.kernelSha256,instanceId:999n});
  const program=kernel.prepare(await readFile(join(cwd,'examples/parser-construction/program.bpi3')));
  const session=kernel.restore(program,Buffer.from(stopped.state,'base64'));kernel.releasePrepared(program);
  stopped.pending.participant='forged completion';stopped.pending.operation='target-write';
@@ -94,7 +95,7 @@ test('extracted parser command uses the real provider adapter without paid infer
  // A fresh World instance consumes the saved real reference result. The next
  // request must be the model, never a repeated reference operation.
  const selected=verifyRuntime(runtime),world=await import(pathToFileURL(selected.entrypoint));
- const kernel=await world.Kernel.create({bytes:await readFile(selected.kernelPath),expectedSha256:selected.kernelSha256,instanceId:999n});
+ const kernel=await createParserKernel(world.Kernel, {bytes:await readFile(selected.kernelPath),expectedSha256:selected.kernelSha256,instanceId:999n});
  const program=kernel.prepare(await readFile(join(cwd,'examples/parser-construction/program.bpi3')));
  const session=kernel.restore(program,Buffer.from(stopped.state,'base64'));kernel.releasePrepared(program);
  let next=world.decodeOutcome(kernel.drive(session,{control:stopped.resume.control,value:Buffer.from(stopped.resume.value,'base64'),quantum:100,checkpoint:true}));

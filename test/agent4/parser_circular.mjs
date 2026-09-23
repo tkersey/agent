@@ -1,3 +1,4 @@
+import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 // The guest has reciprocal waiting contexts; the embedding owns its work allowance.
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -12,7 +13,7 @@ const image=await read('circular.bpi3'),schema=decodeSchema(await read('input-sc
 const model=decodeValue(decodeSchema(await read('model-schema.bin')),await read('model-template.bin'));
 const input=[['0'.repeat(64),'0'.repeat(64),'0'.repeat(64),'0'.repeat(64),'agent.incremental-byte-parser/v1'],model,[],17n,2n,'parser.mjs',7n,false,false,{tag:0,value:null}];
 const bytes=await readFile(runtime.kernelPath);let identity=1n;
-const fresh=()=>Kernel.create({bytes,expectedSha256:runtime.kernelSha256,instanceId:identity++});
+const fresh=()=>createParserKernel(Kernel, {bytes,expectedSha256:runtime.kernelSha256,instanceId:identity++});
 let k=await fresh(),p=k.prepare(image),s=k.start(p,encodeValue(schema,input));k.releasePrepared(p);
 let checkpoint;
 const allowance={quanta:8,quantum:97};

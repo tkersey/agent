@@ -1,3 +1,4 @@
+import {createParserKernel} from './parser_kernel.mjs';
 // Environmental adapter loop only; construction, selection and acceptance live in BPI3.
 import assert from 'node:assert/strict';
 import {readFile,mkdtemp,writeFile,rm} from 'node:fs/promises';
@@ -91,7 +92,7 @@ export async function runParser(args){
  }
  const bytes=new Uint8Array(await readFile(runtime.kernelPath));
  let identity=(randomBytes(8).readBigUInt64LE()&((1n<<63n)-1n))||1n;
- const fresh=()=>world.Kernel.create({bytes,expectedSha256:runtime.kernelSha256,instanceId:identity++});
+ const fresh=()=>createParserKernel(world.Kernel, {bytes,expectedSha256:runtime.kernelSha256,instanceId:identity++});
  let kernel=await fresh(),prepared=kernel.prepare(installed.image),session=kernel.start(prepared,encodeValue(installed.inputSchema,input));kernel.releasePrepared(prepared);
  const report=extra=>({format:'agent-parser-run/v1',selection:options.selection,strategy:options.strategy,...extra,spent:{...spent},observations,metrics:tools?{physicalExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().physicalExecutions,0),qualificationExecutions:[...bindings.values()].reduce((n,b)=>n+b.tools.metrics().qualificationExecutions,0)}:undefined,kernelSha256:runtime.kernelSha256,imageSha256:hash(installed.image),paidAuthorization:options.allowPaid});
  let control='none',value=new Uint8Array(),pendingView=null;

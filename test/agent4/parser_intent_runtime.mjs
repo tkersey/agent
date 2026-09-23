@@ -1,3 +1,4 @@
+import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
@@ -32,7 +33,7 @@ for(const [name,choice]of [['known',null],['strict',1],['emit',2],['unsure','uns
  if(name==='bad-base')input[9].value[0][0]='f'.repeat(64);
  if(name==='bad-contract')input[9].value[0][4]=subjects[0][4];
  if(noWork)input[4]=0n;
- const fresh=()=>Kernel.create({bytes:kernelBytes,expectedSha256:runtime.kernelSha256,instanceId:identity++});
+ const fresh=()=>createParserKernel(Kernel, {bytes:kernelBytes,expectedSha256:runtime.kernelSha256,instanceId:identity++});
  let k=await fresh(),p=k.prepare(image),s=k.start(p,encodeValue(inputSchema,input));k.releasePrepared(p);
  let control='none',value=new Uint8Array(),transfers=0,questions=0,models=0;const events=[];
  for(let n=0;;n++){

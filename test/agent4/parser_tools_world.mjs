@@ -1,3 +1,4 @@
+import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 // Semantic reply binding is enforced in the compiled Program, after World framing.
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -18,7 +19,7 @@ const tools=await createParserTools();assert.equal(tools.kind,'qualified',JSON.s
 const subject=tools.subject('a'.repeat(64)), trace=[[[92],false],[[110,10],true]];
 const input=[subject,1n,[decodedFields,1n,0],{tag:0,value:trace}];
 let identity=1n;
-const fresh=()=>Kernel.create({bytes,expectedSha256,instanceId:identity++});
+const fresh=()=>createParserKernel(Kernel, {bytes,expectedSha256,instanceId:identity++});
 async function park(input) {
   const k=await fresh(),p=k.prepare(image),s=k.start(p,encodeValue(requestSchema,input));k.releasePrepared(p);
   const out=decodeOutcome(k.drive(s,{checkpoint:true}));assert.equal(out.kind,'requested');

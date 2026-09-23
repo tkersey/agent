@@ -1,3 +1,4 @@
+import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 // This optional archive test imports only files installed beside itself.
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -18,7 +19,7 @@ const initial=decodeValue(inputSchema,await readFile(new URL('task.args',folder)
 const bytes=new Uint8Array(await readFile(runtime.kernelPath));
 let identity=1n;
 async function execute(input,leaf,program=image){
- const fresh=()=>Kernel.create({bytes,expectedSha256:runtime.kernelSha256,instanceId:identity++});
+ const fresh=()=>createParserKernel(Kernel, {bytes,expectedSha256:runtime.kernelSha256,instanceId:identity++});
  let kernel=await fresh(),p=kernel.prepare(program),session=kernel.start(p,encodeValue(inputSchema,input));kernel.releasePrepared(p);
  let control='none',value=new Uint8Array(),transfers=0;const events=[];
  for(let round=0;round<128;round++){

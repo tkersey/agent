@@ -1,3 +1,4 @@
+import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 // Synthetic provider data passes through the actual compiled model interpreter.
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -14,7 +15,7 @@ const expectedSha256=createHash('sha256').update(bytes).digest('hex');
 const read=async name=>new Uint8Array(await readFile(`zig-out/agent4/parser-proposals/${name}.bin`));
 const image=await read('program'),input=await read('input'),schema=decodeSchema(await read('result-schema'));
 let identity=1n;
-const fresh=()=>Kernel.create({bytes,expectedSha256,instanceId:identity++});
+const fresh=()=>createParserKernel(Kernel, {bytes,expectedSha256,instanceId:identity++});
 const k=await fresh(),p=k.prepare(image),s=k.start(p,input);k.releasePrepared(p);
 const first=decodeOutcome(k.drive(s,{checkpoint:true}));assert.equal(first.kind,'requested');
 assert.equal((await decodeRequest(first.request)).semanticIdentity,'agent.model.invoke.v3');

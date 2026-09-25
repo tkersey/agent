@@ -185,7 +185,7 @@ test "application code cannot mint a live resource with raw source construction"
     try std.testing.expectError(error.InvalidOwnership, boundary.program.compile(std.testing.allocator, module));
 }
 
-test "authored simulation cannot intercept the raw live read to mint evidence" {
+test "raw handler cannot intercept the live read to mint evidence" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
     var registry = agent.admission.Registry.init(b.allocator());
@@ -197,12 +197,46 @@ test "authored simulation cannot intercept the raw live read to mint evidence" {
         .parameters = &.{d.question},
         .result = d.data,
     } } });
-    _ = try agent.decision.interpret(&b, .{
+    const family: agent.decision.Family = .{
         .effect = d.live_effect,
         .capability = capability,
         .question = d.question,
         .answer = d.data,
-    }, d.data, responder, .{});
+    };
+    try std.testing.expectError(error.InvalidSource, agent.decision.interpret(&b, family, d.data, responder, .{}));
+    // The typed constructor rejects external operations. Agent admission must
+    // still inspect handlers supplied through the retained raw source path.
+    const token = try b.schema(.{ .internal = .{ .resumption = .{
+        .effect = d.live_effect,
+        .input = d.data,
+        .answer = d.data,
+        .capture_bound = &.{ capability, responder },
+        .handled = &.{d.live_effect},
+        .mode = .deep,
+        .use = .linear,
+    } } });
+    const returns = try b.declare(&.{ responder, d.data }, d.data, &.{}, &.{});
+    try b.define(returns, try b.pure(try b.reference(b.parameter(returns, 1))));
+    const clause = try b.declare(&.{ responder, d.question, token }, d.data, &.{}, &.{});
+    const answer = try b.variable(d.data);
+    const answered = try b.term(.{ .apply = .{
+        .computation = try b.reference(b.parameter(clause, 0)),
+        .arguments = &.{try b.reference(b.parameter(clause, 1))},
+    } });
+    const resumed = try b.term(.{ .resume_value = .{
+        .resumption = try b.reference(b.parameter(clause, 2)),
+        .argument = try b.reference(answer),
+    } });
+    try b.define(clause, try b.bind(answer, answered, resumed));
+    _ = try b.handler(.{
+        .mode = .deep,
+        .input = d.data,
+        .answer = d.data,
+        .return_function = returns,
+        .state = &.{responder},
+        .effects = &.{},
+        .clauses = &.{.{ .effect = d.live_effect, .function = clause, .resumption = token }},
+    });
     const entry = try b.declare(&.{}, d.data, &.{}, &.{});
     try b.define(entry, try b.pure(try b.constant(u64, 0)));
     try std.testing.expectError(error.ProtectedHandler, agent.admission.verify(std.testing.allocator, b.module(entry, try b.scalar(void)), &registry));

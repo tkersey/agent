@@ -143,6 +143,38 @@ test "Ask rejects incompatible and linear responder schemas and duplicate meanin
     try std.testing.expectError(error.TypeMismatch, agent.decision.interpret(&b, family, number, number, .{}));
 }
 
+test "Ask interpretation preserves captures regions cleanup and pure return" {
+    var b = source.Builder.init(std.testing.allocator);
+    defer b.deinit();
+    const number = try b.scalar(u64);
+    const family = try agent.decision.define(&b, "question.metadata", number, number);
+    const external = try b.effect(.{ .identity = "question.responder", .payload = number, .result = number });
+    const responder = try b.schema(.{ .internal = .{ .computation = .{
+        .parameters = &.{number},
+        .result = number,
+        .effects = &.{external},
+    } } });
+    const region = b.region();
+    const interpretation = try agent.decision.interpret(&b, family, number, responder, .{
+        .captures = &.{number},
+        .residual = .{ .effects = &.{external} },
+        .owned_regions = &.{region},
+        .borrowed_regions = &.{region},
+    });
+    const token = b.schemas.items[@intCast(interpretation.resumption)].internal.resumption;
+    try std.testing.expect(token.obligations);
+    try std.testing.expectEqualSlices(Id, &.{ number, family.capability, responder }, token.capture_bound);
+    try std.testing.expectEqualSlices(Id, &.{region}, token.owned_regions);
+    try std.testing.expectEqualSlices(Id, &.{external}, token.effects);
+    const handler = b.handlers.items[@intCast(interpretation.handler)];
+    const returns = b.functions.items[@intCast(handler.return_function)];
+    const clause = b.functions.items[@intCast(handler.clauses[0].function)];
+    try std.testing.expectEqual(@as(usize, 0), returns.effects.len);
+    try std.testing.expectEqualSlices(Id, &.{external}, clause.effects);
+    try std.testing.expectEqualSlices(Id, &.{region}, returns.regions);
+    try std.testing.expectEqualSlices(Id, &.{region}, clause.regions);
+}
+
 test "portable descriptor intersection covers 31 32 63 and rejects unavailable indexes" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();

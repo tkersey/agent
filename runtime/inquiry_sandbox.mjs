@@ -3,7 +3,7 @@
 import { spawn, execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { access, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { access, lstat, mkdir, mkdtemp, open, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { tmpdir, release } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -113,6 +113,28 @@ function launch(command, args, { cwd, timeoutMs, maximumOutputBytes, signal }) {
   });
 }
 
+// The worker has exited before this bounded, no-follow checkpoint read.
+async function checkpoint(path, nonce) {
+  const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const before = await file.stat();
+    if (!before.isFile() || before.size > 131200) throw new Error("checkpoint capacity");
+    const bytes = Buffer.alloc(before.size);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const { bytesRead } = await file.read(bytes, offset, bytes.length - offset, offset);
+      if (bytesRead === 0) throw new Error("short checkpoint");
+      offset += bytesRead;
+    }
+    if ((await file.stat()).size !== before.size) throw new Error("changed checkpoint");
+    const value = JSON.parse(bytes.toString("utf8"));
+    if (value?.nonce !== nonce || !Object.hasOwn(value, "state") ||
+        Object.keys(value).length !== 2 || Buffer.byteLength(JSON.stringify(value.state)) > 131072)
+      throw new Error("checkpoint binding");
+    return value.state;
+  } finally { await file.close(); }
+}
+
 /** Qualifies the installed profile before any candidate source is executed. */
 export function createInquirySandbox(options = {}) {
   return createSandbox(options, driverPath, "agent.inquiry.macos-seatbelt.v1");
@@ -173,8 +195,12 @@ async function createSandbox({ scratchRoot = tmpdir(), timeoutMs = 2000,
         "--no-addons", "--no-warnings", "--openssl-config=/dev/null",
         "--experimental-vm-modules", "--max-old-space-size=64",
         "--max-semi-space-size=8", join(input, entry), ...(options.args ?? [])];
+      if (options.deadline !== undefined && performance.now() >= options.deadline)
+        return { kind: "timeout", physicalExecutions: 0 };
       const result = await launch("/usr/bin/sandbox-exec", args, {
-        cwd: scratch, timeoutMs, maximumOutputBytes, signal: options.signal,
+        cwd: scratch, timeoutMs: options.deadline === undefined ? timeoutMs :
+          Math.max(1, Math.min(timeoutMs, options.deadline - performance.now())),
+        maximumOutputBytes, signal: options.signal,
       });
       for (const [name, bytes] of Object.entries(files)) {
         const path = join(input, name);
@@ -186,6 +212,11 @@ async function createSandbox({ scratchRoot = tmpdir(), timeoutMs = 2000,
         } catch {
           return { kind: "input_tampered", physicalExecutions: result.physicalExecutions };
         }
+      }
+      if (options.checkpoint && result.kind === "completed" && result.code === 0) {
+        try { result.state = await checkpoint(join(scratch, "state.json"), options.checkpoint); }
+        catch { return { kind: "malformed_output", physicalExecutions: result.physicalExecutions,
+          outputBytes: result.outputBytes }; }
       }
       return result;
     } finally { await rm(directory, { recursive: true, force: true }); }
@@ -229,6 +260,44 @@ async function createSandbox({ scratchRoot = tmpdir(), timeoutMs = 2000,
     if (!qualification.outputLimit) return { kind: "unavailable", reason: "output_bound_missing" };
   } finally { await rm(canaryRoot, { recursive: true, force: true }); }
 
+  async function parserTrace(source, trace, signal) {
+    // A process owns at most 32 realms; reclamation does not depend on V8 GC timing.
+    const rows = [], deadline = performance.now() + timeoutMs;
+    let state, offset = 0, physicalExecutions = 0, outputBytes = 0;
+    let logicalBytes = Buffer.byteLength(JSON.stringify({ nonce: randomUUID(), kind: "observations", rows }));
+    do {
+      const count = offset === 0 ? 31 : 32; // The first worker also creates the initial realm.
+      const nonce = randomUUID(), chunk = trace.slice(offset, offset + count);
+      const more = offset + chunk.length < trace.length;
+      const input = JSON.stringify({ nonce, trace: chunk, ...(more ? { checkpoint: true } : {}),
+        ...(offset === 0 ? {} : { state }) });
+      const result = await invoke({ "driver.mjs": driver, "session.mjs": source,
+        "trace.json": input }, "driver.mjs", { signal, deadline, checkpoint: more ? nonce : null });
+      physicalExecutions += result.physicalExecutions ?? 0;
+      outputBytes += result.outputBytes ?? 0;
+      const metadata = { runner, physicalExecutions, outputBytes };
+      if (result.kind !== "completed") return { kind: result.kind, ...metadata };
+      if (performance.now() >= deadline) return { kind: "timeout", ...metadata };
+      if (result.code !== 0) return { kind: "execution_failed", ...metadata, exitCode: result.code };
+      let decoded;
+      try { decoded = JSON.parse(result.stdout.toString("utf8")); }
+      catch { return { kind: "malformed_output", ...metadata }; }
+      if (decoded?.nonce !== nonce || decoded?.kind !== "observations" ||
+          !Array.isArray(decoded.rows) || decoded.rows.length !== chunk.length ||
+          Object.keys(decoded).length !== 3)
+        return { kind: "malformed_output", ...metadata };
+      for (const row of decoded.rows) {
+        logicalBytes += Buffer.byteLength(JSON.stringify(row)) + Number(rows.length !== 0);
+        if (logicalBytes > maximumOutputBytes) return { kind: "output_limit", ...metadata };
+        rows.push(row);
+      }
+      state = result.state;
+      offset += chunk.length;
+    } while (offset < trace.length);
+    if (performance.now() >= deadline) return { kind: "timeout", runner, physicalExecutions, outputBytes };
+    return { kind: "completed", runner, physicalExecutions, outputBytes, rows };
+  }
+
   return Object.freeze({ kind: "qualified", runner, contract, qualification, qualificationExecutions,
     async execute(source, trace, { signal } = {}) {
       if (typeof source !== "string" || Buffer.byteLength(source) > 8192)
@@ -237,6 +306,10 @@ async function createSandbox({ scratchRoot = tmpdir(), timeoutMs = 2000,
       const input = JSON.stringify({ nonce, trace });
       const maximumTraceBytes = name === "agent.incremental-parser.macos-seatbelt.v1" ? 2097152 : 16384;
       if (Buffer.byteLength(input) > maximumTraceBytes) throw new TypeError("trace input too large");
+      if (name === "agent.incremental-parser.macos-seatbelt.v1") {
+        const captured = JSON.parse(input).trace;
+        if (Array.isArray(captured)) return parserTrace(source, captured, signal);
+      }
       const result = await invoke({ "driver.mjs": driver, "session.mjs": source,
         "trace.json": input }, "driver.mjs", { signal });
       const metadata = { runner, physicalExecutions: result.physicalExecutions ?? 0,

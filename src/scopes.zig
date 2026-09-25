@@ -1,6 +1,7 @@
 //! Lexical interpretations and explicit portable scope values. Exiting a scope
 //! restores the enclosing handler; suspension retains the installed environment.
 const boundary = @import("boundary");
+const typed = boundary.authoring;
 const source = boundary.computation;
 const Id = source.Id;
 const sets = @import("sets.zig");
@@ -30,48 +31,60 @@ pub fn define(
     if (instance.cached) |cached| return cached;
     const unit = try b.scalar(void);
     const family = try decision.define(b, identity, unit, environment);
-    const captures = try b.allocator().alloc(Id, scope.captures.len + 2);
-    @memcpy(captures[0..scope.captures.len], scope.captures);
-    captures[scope.captures.len] = family.capability;
-    captures[scope.captures.len + 1] = environment;
-    const token = try b.schema(.{ .internal = .{ .resumption = .{
-        .effect = family.effect,
-        .input = environment,
-        .answer = result,
-        .effects = scope.residual.effects,
-        .capture_bound = captures,
-        .handled = &.{family.effect},
+    const reader = authoredReader(b, family, environment, result, scope) catch |err|
+        return typed.sourceError(err);
+    return instance.finish(b, reader);
+}
+
+fn authoredReader(
+    b: *source.Builder,
+    family: decision.Family,
+    environment: Id,
+    result: Id,
+    scope: Scope,
+) typed.Error!Reader {
+    const c = try typed.Context.init(b);
+    const operation = try typed.interop.operation(c, family.effect);
+    const environment_schema = try typed.interop.schema(c, environment);
+    const result_schema = try typed.interop.schema(c, result);
+    const captures = try b.allocator().alloc(*const typed.Schema, scope.captures.len + 2);
+    for (scope.captures, 0..) |id, i| captures[i] = try typed.interop.schema(c, id);
+    captures[scope.captures.len] = try typed.interop.schema(c, family.capability);
+    captures[scope.captures.len + 1] = environment_schema;
+    const residual = try b.allocator().alloc(*const typed.Operation, scope.residual.effects.len);
+    for (scope.residual.effects, residual) |id, *item| item.* = try typed.interop.operation(c, id);
+    const owned = try b.allocator().alloc(*const typed.Region, scope.owned_regions.len);
+    for (scope.owned_regions, owned) |id, *item| item.* = try typed.interop.region(c, id);
+    const borrowed = try b.allocator().alloc(*const typed.Region, scope.borrowed_regions.len);
+    for (scope.borrowed_regions, borrowed) |id, *item| item.* = try typed.interop.region(c, id);
+    const handler = try c.handler(operation, result_schema, result_schema, .{
         .mode = .deep,
         .use = .linear,
-        .owned_regions = scope.owned_regions,
         .obligations = true,
-    } } });
-    const returns = try b.declare(&.{ environment, result }, result, &.{}, scope.borrowed_regions);
-    try b.define(returns, try b.pure(try b.reference(b.parameter(returns, 1))));
-    const clause = try b.declare(
-        &.{ environment, unit, token },
-        result,
-        scope.residual.effects,
-        scope.borrowed_regions,
+        .residual = residual,
+        .captures = captures,
+        .owned_regions = owned,
+        .borrowed_regions = borrowed,
+        .state = &.{.{ .name = "environment", .schema = environment_schema }},
+    });
+    const returns = try c.returnFunction(handler);
+    // The reader's return arm is pure even if its clause allows residual effects.
+    b.functions.items[@intCast(try typed.interop.functionId(c, returns))].effects = &.{};
+    const return_body = try c.body(returns);
+    try c.define(returns, try return_body.ret(try return_body.parameter("result")));
+    const clause = try c.clauseFunction(handler);
+    const clause_body = try c.body(clause);
+    const resumed = try clause_body.resumeValue(
+        try clause_body.parameter("resumption"),
+        try clause_body.parameter("environment"),
     );
-    try b.define(clause, try b.term(.{ .resume_value = .{
-        .resumption = try b.reference(b.parameter(clause, 2)),
-        .argument = try b.reference(b.parameter(clause, 0)),
-    } }));
-    return instance.finish(b, .{
+    try c.define(clause, try clause_body.ret(resumed));
+    return .{
         .family = family,
         .environment = environment,
-        .resumption = token,
-        .handler = try b.handler(.{
-            .mode = .deep,
-            .input = result,
-            .answer = result,
-            .return_function = returns,
-            .state = &.{environment},
-            .effects = scope.residual.effects,
-            .clauses = &.{.{ .effect = family.effect, .function = clause, .resumption = token }},
-        }),
-    });
+        .handler = try typed.interop.handlerId(c, handler),
+        .resumption = try typed.interop.schemaId(c, try typed.interop.resumptionSchema(c, handler)),
+    };
 }
 
 pub fn read(b: *source.Builder, reader: Reader, capability: Id) source.Error!Id {

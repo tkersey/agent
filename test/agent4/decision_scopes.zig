@@ -219,6 +219,34 @@ fn scopeBodySchema(b: *source.Builder, reader: agent.scopes.Reader, residual: Id
     } } });
 }
 
+test "reader interpretation retains captures regions cleanup and pure return" {
+    var b = source.Builder.init(std.testing.allocator);
+    defer b.deinit();
+    const environment = try b.scalar(u64);
+    const captured = try b.scalar(bool);
+    const external = try b.effect(.{ .identity = "reader.residual", .payload = environment, .result = environment });
+    const region = b.region();
+    const reader = try agent.scopes.define(&b, "reader.metadata", environment, environment, .{
+        .captures = &.{captured},
+        .residual = .{ .effects = &.{external} },
+        .owned_regions = &.{region},
+        .borrowed_regions = &.{region},
+    });
+    const token = b.schemas.items[@intCast(reader.resumption)].internal.resumption;
+    try std.testing.expect(token.obligations);
+    try std.testing.expectEqualSlices(Id, &.{ captured, reader.family.capability, environment }, token.capture_bound);
+    try std.testing.expectEqualSlices(Id, &.{region}, token.owned_regions);
+    try std.testing.expectEqualSlices(Id, &.{external}, token.effects);
+    const handler = b.handlers.items[@intCast(reader.handler)];
+    try std.testing.expectEqualSlices(Id, &.{environment}, handler.state);
+    const returns = b.functions.items[@intCast(handler.return_function)];
+    const clause = b.functions.items[@intCast(handler.clauses[0].function)];
+    try std.testing.expectEqual(@as(usize, 0), returns.effects.len);
+    try std.testing.expectEqualSlices(Id, &.{external}, clause.effects);
+    try std.testing.expectEqualSlices(Id, &.{region}, returns.regions);
+    try std.testing.expectEqualSlices(Id, &.{region}, clause.regions);
+}
+
 test "nested lexical environments survive residual suspension and restore outer interpretation" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();

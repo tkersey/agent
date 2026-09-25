@@ -6,13 +6,13 @@ pub fn build(b: *std.Build) void {
         b.pathFromRoot("../../.agent4/inputs/boundary");
     const data = b.createModule(.{
         .root_source_file = .{ .cwd_relative = b.pathJoin(&.{
-            boundary_path, "src/v2/data/root.zig",
+            boundary_path, "src/data/root.zig",
         }) },
         .target = b.graph.host,
         .optimize = optimize,
     });
     const boundary = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ boundary_path, "src/v2/root.zig" }) },
+        .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ boundary_path, "src/root.zig" }) },
         .imports = &.{.{ .name = "boundary_data", .module = data }},
         .target = b.graph.host,
         .optimize = optimize,

@@ -41,12 +41,12 @@ test("all source-override module exports retain authentication in cached externa
   // A synthetic stand-in tests build dependency routing, not Boundary semantics.
   // No actual Boundary source or locked installation is modified.
   const source = join(directory, "synthetic-source");
-  mkdirSync(join(source, "src/v2/data"), { recursive: true });
-  writeFileSync(join(source, "src/v2/root.zig"),
+  mkdirSync(join(source, "src/data"), { recursive: true });
+  writeFileSync(join(source, "src/root.zig"),
     'pub const data = @import("boundary_data");\n' +
     'pub const program = struct { pub fn compileObserved() void {} };\n' +
     'pub const computation = struct { pub const Compiled = struct { flow: void }; };\n');
-  writeFileSync(join(source, "src/v2/data/root.zig"), 'pub const program = struct {};\n');
+  writeFileSync(join(source, "src/data/root.zig"), 'pub const program = struct {};\n');
   const lockPath = join(agent, "conformance/agent4/dependencies.lock.json");
   const lock = JSON.parse(readFileSync(lockPath));
   lock.boundary.source = inventory(source); lock.boundary.gitTree = gitTree(source);

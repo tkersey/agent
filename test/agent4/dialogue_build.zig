@@ -3,12 +3,12 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const data = b.createModule(.{
-        .root_source_file = b.path("../../.agent4/inputs/boundary/src/v2/data/root.zig"),
+        .root_source_file = b.path("../../.agent4/inputs/boundary/src/data/root.zig"),
         .target = b.graph.host,
         .optimize = optimize,
     });
     const boundary = b.createModule(.{
-        .root_source_file = b.path("../../.agent4/inputs/boundary/src/v2/root.zig"),
+        .root_source_file = b.path("../../.agent4/inputs/boundary/src/root.zig"),
         .target = b.graph.host,
         .optimize = optimize,
         .imports = &.{.{ .name = "boundary_data", .module = data }},

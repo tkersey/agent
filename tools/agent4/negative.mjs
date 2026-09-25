@@ -26,8 +26,8 @@ try {
       '-Mroot='+join(root,`test/agent4/${name}.zig`),
       '-OReleaseSafe','--dep','boundary','--dep','boundary_data','--dep','agent_contracts',
       '-Magent='+join(root,'src/agent4.zig'),
-      '-OReleaseSafe','--dep','boundary_data','-Mboundary='+join(boundary,'src/v2/root.zig'),
-      '-OReleaseSafe','-Mboundary_data='+join(boundary,'src/v2/data/root.zig'),
+      '-OReleaseSafe','--dep','boundary_data','-Mboundary='+join(boundary,'src/root.zig'),
+      '-OReleaseSafe','-Mboundary_data='+join(boundary,'src/data/root.zig'),
       '-OReleaseSafe','--dep','boundary_data','-Magent_contracts='+join(root,'src/contracts.zig'),
       '--cache-dir',join(cache,'local'),'--global-cache-dir',join(cache,'global')];
     const result=spawnSync(zig,args,{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});

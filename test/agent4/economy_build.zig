@@ -7,12 +7,12 @@ pub fn build(b: *std.Build) void {
     const economy_path = b.option([]const u8, "economy-source", "Isolated emitter source") orelse
         b.pathFromRoot("economy.zig");
     const data = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ boundary_path, "src/v2/data/root.zig" }) },
+        .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ boundary_path, "src/data/root.zig" }) },
         .target = b.graph.host,
         .optimize = optimize,
     });
     const boundary = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ boundary_path, "src/v2/root.zig" }) },
+        .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ boundary_path, "src/root.zig" }) },
         .target = b.graph.host,
         .optimize = optimize,
         .imports = &.{.{ .name = "boundary_data", .module = data }},

@@ -3,72 +3,72 @@
   "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "3fc90c83dfedc9bcc7dce3385776d60f0bfae6bb",
-    "gitTree": "dfdcf4e2f68bda0b9e9a05ce626894a8d3d52f75",
+    "commit": "f512dbbfb14ab61ed5e1d875518c2b683ff5d215",
+    "gitTree": "5182ba46cdec4093eace083cc824d9089bef2e34",
     "version": "3.0.0-dev.0",
     "source": {
-      "inventorySha256": "a99121b41fb2b64e5e5ab6bb383f5c2b2d20b48058e6e351586a1112a095b317",
-      "entries": 255,
-      "bytes": 6381210
+      "inventorySha256": "6f8dc016b54fc12435338cb9a9009166374879c9c8bb418149281f2bf12d785d",
+      "entries": 261,
+      "bytes": 6543686
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/3fc90c83dfedc9bcc7dce3385776d60f0bfae6bb.tar.gz",
-      "bytes": 1151155,
-      "sha256": "2b66bc572aeac4fc746c8848ad42ad4ac8777400f5f47e05c08bc5e2c1c7698f"
+      "url": "https://github.com/tkersey/boundary/archive/f512dbbfb14ab61ed5e1d875518c2b683ff5d215.tar.gz",
+      "bytes": 1182259,
+      "sha256": "8da191ef7e9cfb901f37bcc1c33237e6b335f266aaf81c27799b5615a1d9d851"
     },
     "authentication": "GitHub commit API tree identity equals recomputed downloaded source tree; archive and content inventories independently bound",
     "package": {
-      "zigHash": "boundary-3.0.0-dev.0-flclaKMdGQD5JHSgE2p5PmoZNrWzn1Our-5LTSkQH3J-",
+      "zigHash": "boundary-3.0.0-dev.0-flclaCUnGwAErKpf2Ql6uEt80nLBXe3T0tcjbd4SoXgS",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "34aaa98d05cea4ee8de3a356ed0641b76a0b58ac6658734962daf502b103901a",
-          "entries": 216,
-          "bytes": 1645987
+          "inventorySha256": "3ee65bf18e046a4f28b374dccc1e38a4ed3ee06fb90e218a59fac1e6b741ce49",
+          "entries": 222,
+          "bytes": 1779493
         },
         "archive-extracted": {
-          "inventorySha256": "34aaa98d05cea4ee8de3a356ed0641b76a0b58ac6658734962daf502b103901a",
-          "entries": 216,
-          "bytes": 1645987
+          "inventorySha256": "3ee65bf18e046a4f28b374dccc1e38a4ed3ee06fb90e218a59fac1e6b741ce49",
+          "entries": 222,
+          "bytes": 1779493
         }
       },
       "archive": {
-        "bytes": 343885,
-        "sha256": "9a39405e40dbc3989a8ae51ff89ab64e7444de03537da9b7e240a1f405131774"
+        "bytes": 369027,
+        "sha256": "e272ec2a38660d0789da00b6d5bd7586635823e4eb821924d5a852d563643279"
       }
     },
     "api": {
-      "authoring": "src/v2/root.zig",
-      "data": "src/v2/data/root.zig",
-      "source": "src/v2/source.zig",
-      "profile": "Current stable executable records, BMO1/BPI3/PST3/invocation codecs and graph_order; predecessor codecs and executable layouts retired",
+      "authoring": "src/root.zig",
+      "data": "src/data/root.zig",
+      "source": "src/source.zig",
+      "profile": "Flattened current source, typed authoring, stable BMO1/BPI3/PST3 and invocation codecs",
       "files": [
         {
-          "path": "src/v2/root.zig",
-          "sha256": "02812ca8eadb357a58213c4602b647c1cac81d56866ff87aaec4ae1bf710e1db"
+          "path": "src/root.zig",
+          "sha256": "fb401a7dc034ff989a824bc81a44fb4151715ff324ea6315edbb54187b7927a9"
         },
         {
-          "path": "src/v2/data/root.zig",
+          "path": "src/data/root.zig",
           "sha256": "93ec842fe300c58ac99f4f88bdd6229ca305cee3ebe42765d6ce39a3cc5bfb72"
         },
         {
-          "path": "src/v2/source.zig",
+          "path": "src/source.zig",
           "sha256": "503c9523cd846a32136b8290e53c56d5eeb01d9e70c3e4739601cf64b98bb6c0"
         },
         {
           "path": "docs/bpi3-wire.md",
-          "sha256": "b026b831c1f8170e4788f2778b147d39aa7ab5d757195dd1819916d994c919b6"
+          "sha256": "0b1126a2b0707c83b618f9b2ff755f96b2171daa58a5a15f1b785e64aef49efa"
         },
         {
-          "path": "src/v2/data/activation.zig",
+          "path": "src/data/activation.zig",
           "sha256": "a96689f8375a3664905a7a56de86c8e2c7d34628be1dd33725475b67198dbca5"
         },
         {
-          "path": "src/v2/data/graph_order.zig",
+          "path": "src/data/graph_order.zig",
           "sha256": "e1497fd8b5a0b606a0301bfa016415a8ef05bc65c32ce66571c5983a73a34d1d"
         },
         {
-          "path": "src/v2/data/invocation.zig",
+          "path": "src/data/invocation.zig",
           "sha256": "2ab86f8a4cc902a1aff3b3b8766723f0097f25e46c87181d755d6f25c972a5c9"
         }
       ]
@@ -76,18 +76,18 @@
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "0bcdf990daa4b0e2a359034334bb1d2b55469998",
-    "gitTree": "dc309221972a6742c5c9515e8a6a59e02d861b2c",
+    "commit": "c20695e00056186a4b74564da6e4ca1c368cb33b",
+    "gitTree": "4e9a804b09fcc519af45308c2a7569211464eae1",
     "version": "6.0.0-dev.0",
     "source": {
-      "inventorySha256": "17e0b7b552d25d56c7cfec2669ceb07a5700d32676e7a7dbcfaeed4177de0cea",
-      "entries": 137,
-      "bytes": 1395713
+      "inventorySha256": "0451a4b51557266fef82453f175b3ac96ae62977d9d5182ab72f219feba11470",
+      "entries": 148,
+      "bytes": 1459847
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/0bcdf990daa4b0e2a359034334bb1d2b55469998.tar.gz",
-      "bytes": 317423,
-      "sha256": "0bc37e77c575a920df3bc81f401eeb6083d16360864bc33d5469f781575cf75c"
+      "url": "https://github.com/tkersey/world/archive/c20695e00056186a4b74564da6e4ca1c368cb33b.tar.gz",
+      "bytes": 335450,
+      "sha256": "5be7c99599d88331d41631fb1bbc468dbf6d6177f24e87f013e2da0cc271b5f8"
     },
     "authentication": "Downloaded archive tree recomputed and matched to GitHub commit API; complete source and runtime inventories bound",
     "runtime": {
@@ -104,8 +104,8 @@
           "path": "README.md",
           "kind": "file",
           "mode": 420,
-          "bytes": 4452,
-          "sha256": "cd8dbbaf991300b56beecc0544daf9d6ade810cf4a7cc9240210f7578a9baba2"
+          "bytes": 4609,
+          "sha256": "1effc383f51000a849ae8003685a99e1dbeda4224cb84457e4297526af1f1bcf"
         },
         {
           "path": "bin",
@@ -116,8 +116,8 @@
           "path": "bin/world.mjs",
           "kind": "file",
           "mode": 493,
-          "bytes": 2187,
-          "sha256": "01a64e073a5b6327da3acb94cfd034df91a7d932a9c4e20a4243ab7bf8e2b782"
+          "bytes": 2663,
+          "sha256": "99d336cd5e574a0fcc341772befe3e6d9f1f3ba5e4eca2a893a5f676bb7d46c8"
         },
         {
           "path": "docs",
@@ -132,11 +132,18 @@
           "sha256": "8a363578832859119e2540099696c876d691562ad286c98d27152f90db6dc8dd"
         },
         {
+          "path": "docs/runtime-bundles.md",
+          "kind": "file",
+          "mode": 420,
+          "bytes": 3874,
+          "sha256": "65e9b793e7dfc6d11d0557c364efd95f6fa1931999a6f2114094ae8bea1d4058"
+        },
+        {
           "path": "package.json",
           "kind": "file",
           "mode": 420,
-          "bytes": 514,
-          "sha256": "8b7b05dedfb3de758c6b88aaec4e988d8ec7d44042db3c2e8581655d23e98422"
+          "bytes": 545,
+          "sha256": "351da910a6cb9ca13516e78a2eb4a3c8a34dd051f6c351b1ce6227ba36248b27"
         },
         {
           "path": "src",
@@ -210,20 +217,62 @@
           "sha256": "e0c36b83fafebc72f6d14ecff3acf2c819856b65b4432b97b5a83ab2102a624d"
         },
         {
+          "path": "src/node/runtime-acquire.mjs",
+          "kind": "file",
+          "mode": 420,
+          "bytes": 3916,
+          "sha256": "f22e208eccb1510a2f1297514c0d5980936dac7e2ad56f8fecb2e4f0c1b3b41e"
+        },
+        {
+          "path": "src/node/runtime-bundle.mjs",
+          "kind": "file",
+          "mode": 420,
+          "bytes": 7377,
+          "sha256": "f6413a334c6f9e1bdfdf7cdf6a879020b59405d539dedf469796569f68dc1c04"
+        },
+        {
+          "path": "src/node/runtime-command.mjs",
+          "kind": "file",
+          "mode": 420,
+          "bytes": 1645,
+          "sha256": "92d6d298a367bf94d0f86effc57b48b5b03568a312353b624a47ffac6f132bfa"
+        },
+        {
+          "path": "src/node/runtime-output.mjs",
+          "kind": "file",
+          "mode": 420,
+          "bytes": 977,
+          "sha256": "efe09dce15bc54cd000f451c7d1f674ef9a81a57c48328239c411cefae3ecf64"
+        },
+        {
+          "path": "src/node/runtime-prepare.mjs",
+          "kind": "file",
+          "mode": 420,
+          "bytes": 9380,
+          "sha256": "e4a6bcaffda3b32ffd54253a5d6446dadea29ceee85e086dab4e2feeaa74f38b"
+        },
+        {
+          "path": "src/node/runtime-smoke.mjs",
+          "kind": "file",
+          "mode": 420,
+          "bytes": 4342,
+          "sha256": "ed30a7aa9d799d012898f8ea46d0ea70ebc7f86de784db655bf9816397e1c239"
+        },
+        {
           "path": "world-kernel.wasm",
           "kind": "file",
           "mode": 493,
-          "bytes": 462730,
-          "sha256": "df7fe1ae0ed0de7b2976c98b1534d1d55f4c341b7148837ce32f42ed8d011084"
+          "bytes": 462833,
+          "sha256": "7d31effb1d4e32523d0fcbd5b4d5f5a8a2289fbd4c731173a33b1c174524282f"
         }
       ],
-      "inventorySha256": "1316a69aaff9a18df90ebd5c18350325e851acd127757b577c43e661a4a5ef31",
-      "entries": 19,
-      "bytes": 519514,
+      "inventorySha256": "2d38ed84052a3bb67da18d4cec7441604473bf3d77b23aad526e28331df032d1",
+      "entries": 26,
+      "bytes": 551792,
       "kernel": {
         "path": "world-kernel.wasm",
-        "bytes": 462730,
-        "sha256": "df7fe1ae0ed0de7b2976c98b1534d1d55f4c341b7148837ce32f42ed8d011084"
+        "bytes": 462833,
+        "sha256": "7d31effb1d4e32523d0fcbd5b4d5f5a8a2289fbd4c731173a33b1c174524282f"
       },
       "abi": 3,
       "exports": [
@@ -260,11 +309,11 @@
         "target": "build-kernel",
         "optimize": "ReleaseSmall",
         "machine": "wasm32-freestanding",
-        "boundarySourceCommit": "3fc90c83dfedc9bcc7dce3385776d60f0bfae6bb",
+        "boundarySourceCommit": "f512dbbfb14ab61ed5e1d875518c2b683ff5d215",
         "capacityOverrides": [],
         "requestedOptimize": "ReleaseSafe"
       },
-      "provenance": "Locally built generic ABI 3 tail-application successor; authenticated source and runtime inventories, not a published release"
+      "provenance": "Locally built from the landed World and Boundary integration tuple; not a release attestation"
     }
   },
   "toolchain": {
@@ -273,8 +322,8 @@
       "executableSha256": "71cc3995a7586753ebf82c66dfb8bef43df446517550678781834586a960f8c9"
     },
     "node": {
-      "version": "v26.9.0",
-      "executableSha256": "91ed66b8cd139609427a3e9d93518dd3b0d5407c737fc9a265bfd991ec623d8a"
+      "version": "v26.10.0",
+      "executableSha256": "d4cd917f05a5730ffda8a203e32fb8f9b70f79213fff1fafb045e438db8a6c06"
     },
     "platform": "darwin",
     "architecture": "arm64"

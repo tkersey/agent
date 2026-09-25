@@ -54,12 +54,12 @@ pub fn build(b: *std.Build) void {
     // lock. Only forward an explicit override; never duplicate its commit here.
     const world_archive = b.option([]const u8, "world-archive", "Authenticated immutable World source archive");
     const data = if (source) |root| b.createModule(.{
-        .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ root, "src/v2/data/root.zig" }) },
+        .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ root, "src/data/root.zig" }) },
         .target = target,
         .optimize = optimize,
     }) else b.dependency("boundary", .{ .target = target, .optimize = optimize }).module("boundary_data");
     const boundary = if (source) |root| b.createModule(.{
-        .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ root, "src/v2/root.zig" }) },
+        .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ root, "src/root.zig" }) },
         .target = target,
         .optimize = optimize,
         .imports = &.{.{ .name = "boundary_data", .module = data }},

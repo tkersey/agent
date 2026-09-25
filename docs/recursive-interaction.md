@@ -13,10 +13,13 @@ Boundary c7a08ed7c1e15732fc7373dd1f149cbe7da82e7b,
 World 374ed712c2a2ab5041c28befa38bb3c3a859bd26,
 Agent e1b56f06ce0d91a8d7f324198a541f0b16b55a00.
 The current authenticated tuple is Boundary
-`3fc90c83dfedc9bcc7dce3385776d60f0bfae6bb` and World
-`0bcdf990daa4b0e2a359034334bb1d2b55469998`. Their archive/tree/package/runtime
+`f512dbbfb14ab61ed5e1d875518c2b683ff5d215` and World
+`c20695e00056186a4b74564da6e4ca1c368cb33b`. Their archive/tree/package/runtime
 identities are bound in the normal dependency lock. The setup tool recomputes
 source inventories and builds the generic World kernel before admitting it.
+When upgrading a checkout with retained setup inputs, use a fresh direct-child
+work directory as shown in the README; setup deliberately rejects source or
+runtime bytes from an earlier locked tuple.
 Inherited economic dispositions remain scoped to the foundation. No new
 performance waiver or live-model quality claim is made.
 
@@ -1193,7 +1196,7 @@ proof or a semantic fuel limit in Boundary. The cyclic test Program is 20,853 by
 The focused build/check passed 48 steps. Production inventory images/components
 were read back against their existing hashes; all 29 remained unchanged.
 
-The current normal dependency tuple is Boundary
+The normal dependency tuple at that stage was Boundary
 `a3676bef943e2fcea2a2452988b08a2a357e131c` and World
 `0bcdf990daa4b0e2a359034334bb1d2b55469998`, authenticated through GitHub tree
 identities and downloaded source/package/archive inventories. Setup and offline
@@ -1204,9 +1207,9 @@ retain their previous hashes, so the preceding integration and cross-engine
 observations are reused for those unchanged inputs rather than relabeled as new
 executions. The whole specification still needs its final review disposition.
 
-## Latest dependency and validation update
+## Historical dependency and validation update
 
-The normal tuple now selects Boundary `3fc90c83dfedc9bcc7dce3385776d60f0bfae6bb`
+At that stage the normal tuple selected Boundary `3fc90c83dfedc9bcc7dce3385776d60f0bfae6bb`
 (Git tree `dfdcf4e2f68bda0b9e9a05ce626894a8d3d52f75`) and World
 `0bcdf990daa4b0e2a359034334bb1d2b55469998`. Setup, offline verification and
 196-step package emission passed. All 29 production Programs/components are

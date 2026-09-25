@@ -161,3 +161,11 @@ The parser embedding admits up to 4 MiB of input and output bytes for complete
 State plus a residual request. Its working-memory limit remains 1 MiB. These
 caller limits do not preallocate arenas or change the generic World's defaults;
 exhaustion is an operational error, never an authored successful result.
+
+The trusted parser driver keeps each candidate call in a fresh realm. Long traces
+use bounded workers, each creating at most 32 realms, and transfer only the
+size-checked JSON state through a nonce-bound private checkpoint. A logical trace
+retains one deadline and one observation-output budget; a later worker failure
+cannot publish earlier partial observations as a completed trace. This bounds
+trusted realm metadata without raising the 64 MiB heap limit or relaxing candidate
+isolation. Physical worker executions remain visible in executor metrics.

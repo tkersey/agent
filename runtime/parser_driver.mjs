@@ -1,10 +1,11 @@
 // Fixed trusted observation driver inside the existing qualified OS sandbox.
 // Every call evaluates the candidate in a new realm; no candidate object escapes.
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { createContext, Script, SourceTextModule } from 'node:vm';
 import { isDeepStrictEqual } from 'node:util';
 const source = await readFile(new URL('./session.mjs', import.meta.url), 'utf8');
-const { nonce, trace } = JSON.parse(await readFile(new URL('./trace.json', import.meta.url), 'utf8'));
+const input = JSON.parse(await readFile(new URL('./trace.json', import.meta.url), 'utf8'));
+const { nonce, trace } = input;
 
 async function invoke(operation, encoded) {
   const context = createContext(Object.create(null), { codeGeneration: { strings: false, wasm: false } });
@@ -33,7 +34,7 @@ function stateBytes(state) {
   return bytes;
 }
 
-let state = await invoke('initial', '{}');
+let state = Object.hasOwn(input, 'state') ? input.state : await invoke('initial', '{}');
 stateBytes(state);
 const rows = [];
 for (const call of trace) {
@@ -50,4 +51,6 @@ for (const call of trace) {
     ...(result.error === undefined ? {} : { error: result.error }),
     stateBytes: measuredStateBytes, stateUnchanged: isDeepStrictEqual(prior, state) });
 }
+if (input.checkpoint)
+  await writeFile('state.json', JSON.stringify({ nonce, state }), { flag: 'wx', mode: 0o600 });
 process.stdout.write(JSON.stringify({ nonce, kind: 'observations', rows }));

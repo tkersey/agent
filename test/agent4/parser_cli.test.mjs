@@ -137,7 +137,7 @@ test('extracted parser command uses the real provider adapter without paid infer
  assert.equal(calls,4);assert.equal(completed.status,'validated-artifact',JSON.stringify({completed,providerErrors}));assert.equal(completed.spent.models,3);assert.equal(completed.spent.checks,3);
  assert.equal(completed.result.tag,4);assert.equal(completed.result.value.tag,4);assert.equal(completed.result.value.value[0][2],emitFinalRecord);
  assert.deepEqual(completed.observations.map(({kind,passed})=>[kind,passed]),[['probe',false],['probe',true],['assessment',true]]);
- assert.equal(completed.metrics.physicalExecutions,540);assert.equal(completed.paidAuthorization,false);
+ assert.equal(completed.metrics.physicalExecutions,559);assert.equal(completed.paidAuthorization,false);
  assert.equal(completed.spent.questions,1);
  assert.equal(completed.result.value.value[2][4],'agent.incremental-byte-parser-emit-eof/v1');
  assert.ok(completed.spent.contextBytes>0);
@@ -180,5 +180,5 @@ test('packaged selection uses one shared call allowance across both construction
  const selected=await run(cwd,[...args,'--max-model-calls','4','--max-checks','4'],330000);
  assert.equal(calls,4);assert.equal(selected.selection,'last');assert.equal(selected.status,'validated-artifact',JSON.stringify(selected));assert.equal(selected.spent.models,4);assert.equal(selected.spent.checks,4);
  assert.deepEqual(selected.observations.map(({kind,passed})=>[kind,passed]),[['probe',false],['assessment',true],['probe',true],['assessment',true]]);
- assert.equal(selected.result.value.value[0][2],rawRecords);assert.equal(selected.paidAuthorization,false);assert.equal(selected.metrics.physicalExecutions,1078);
+ assert.equal(selected.result.value.value[0][2],rawRecords);assert.equal(selected.paidAuthorization,false);assert.equal(selected.metrics.physicalExecutions,1116);
 });

@@ -26,12 +26,20 @@ try {
   await copyFile(linker, join(area, "link"));
   // Only compiled objects and a link/client executable cross this boundary.
   assert.deepEqual((await readdir(area)).sort(), ["call.bmo1", "double.bmo1", "link", "state.bmo1", "suspend.bmo1"]);
-  for (const mode of ["standalone", "double", "agent", "agent-next"]) {
-    const linked = spawnSync(join(area, "link"), [mode], { cwd: area });
+  for (const mode of ["standalone", "double", "agent", "agent-next", "agent-safe"]) {
+    const selected = mode === "agent-safe";
+    const linked = spawnSync(join(area, "link"), selected ? ["agent", "safe"] : [mode], { cwd: area });
     assert.equal(linked.status, 0, linked.stderr.toString());
     images[mode] = new Uint8Array(linked.stdout);
     const observed = JSON.parse(linked.stderr.toString());
-    assert.deepEqual(observed, { sourceChecks: mode.startsWith("agent") ? 1 : 0,
+    if (selected) {
+      assert.equal(observed.sourceChecks, 1);
+      assert.equal(observed.lowerings, 1);
+      assert.ok(["applied", "no_change", "size_guard"].includes(observed.coalescing));
+      assert.equal(observed.baselineBytes, images.agent.length);
+      assert.equal(observed.selectedBytes, images[mode].length);
+      assert.ok(images[mode].length <= images.agent.length);
+    } else assert.deepEqual(observed, { sourceChecks: mode.startsWith("agent") ? 1 : 0,
       lowerings: mode.startsWith("agent") ? 1 : 0 });
     links.push({ mode, ...observed });
     for (const [file, expected] of Object.entries(objects))
@@ -54,7 +62,8 @@ try {
       if (outcome.kind === "completed" || outcome.kind === "cancelled") {
         assert.equal(yields, 1); assert.equal(releases, 1);
         assert.equal(outcome.kind, cancel ? "cancelled" : "completed");
-        if (!cancel) assert.deepEqual(outcome.value, integer({ standalone: 83, double: 166, agent: 183, "agent-next": 184 }[mode]));
+        if (!cancel) assert.deepEqual(outcome.value, integer({ standalone: 83, double: 166,
+          agent: 183, "agent-next": 184, "agent-safe": 183 }[mode]));
         return;
       }
       assert.ok(outcome.state);
@@ -78,6 +87,7 @@ try {
   }
   for (const mode of Object.keys(images)) await run(mode);
   await run("agent", true);
+  await run("agent-safe", true);
   console.log(JSON.stringify({ check: "three immutable effectful components in Agent",
     objects, componentEmissions: emissions, links, imageBytes: Object.fromEntries(Object.entries(images).map(([name, bytes]) => [name, bytes.length])), transfers }));
 } finally { await rm(area, { recursive: true, force: true }); }

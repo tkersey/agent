@@ -167,6 +167,9 @@ const Phases = struct {
     source_check: u64 = 0,
     lowering: u64 = 0,
     target_check: u64 = 0,
+    direct_optimization: u64 = 0,
+    canonicalization: u64 = 0,
+    coalescing: u64 = 0,
 };
 const Observer = struct {
     io: std.Io,
@@ -214,7 +217,29 @@ const AuthoringObserver = struct {
     }
 };
 
+const CoalescingMetrics = struct {
+    outcome: data.coalescing.Outcome,
+    baseline: data.coalescing.Counts,
+    selected: data.coalescing.Counts,
+    full: data.coalescing.Counts,
+    descriptions: data.coalescing.Counts,
+    work: u64,
+    comparisons: u64,
+};
+fn coalescingMetrics(stats: data.coalescing.Statistics) CoalescingMetrics {
+    return .{
+        .outcome = stats.outcome,
+        .baseline = stats.baseline,
+        .selected = stats.selected,
+        .full = stats.full,
+        .descriptions = stats.descriptions,
+        .work = stats.work.units,
+        .comparisons = stats.work.comparisons,
+    };
+}
+
 const Metrics = struct {
+    coalescing: ?CoalescingMetrics = null,
     name: []const u8,
     installations: ?usize = null,
     imageBytes: usize,
@@ -267,7 +292,7 @@ fn declareDomain(b: *source.Builder, workload: Workload) !void {
     }
 }
 
-fn measure(init: std.process.Init, directory: []const u8, name: []const u8, workload: Workload) !Metrics {
+fn measure(init: std.process.Init, directory: []const u8, name: []const u8, workload: Workload, mode: data.coalescing.Mode) !Metrics {
     const total_started = std.Io.Clock.awake.now(init.io);
     var b = source.Builder.init(init.gpa);
     var builder_live = true;
@@ -283,9 +308,11 @@ fn measure(init: std.process.Init, directory: []const u8, name: []const u8, work
     };
     const source_ns = elapsed(init.io, source_start);
     var observer: Observer = .{ .io = init.io };
+    var stats: data.coalescing.Statistics = .{};
     var diagnostic: boundary.program.Diagnostic = .{};
     const compile_start = std.Io.Clock.awake.now(init.io);
     var compiled = boundary.program.compileObserved(init.gpa, module, .{
+        .coalescing = .{ .mode = mode, .statistics = &stats },
         .diagnostic = &diagnostic,
         .observer = .{ .context = &observer, .enter = Observer.enter },
     }) catch |err| {
@@ -298,6 +325,7 @@ fn measure(init: std.process.Init, directory: []const u8, name: []const u8, work
     builder_live = false;
     const total_ns = elapsed(init.io, total_started);
     var metrics = try saveCompiled(init, directory, name, compiled);
+    metrics.coalescing = coalescingMetrics(stats);
     metrics.installations = if (workload == .sharing) workload.sharing else null;
     metrics.descriptorConstructionNs = descriptor_ns;
     metrics.sourceConstructionNs = source_ns;
@@ -308,21 +336,23 @@ fn measure(init: std.process.Init, directory: []const u8, name: []const u8, work
     return metrics;
 }
 
-fn facade(init: std.process.Init, directory: []const u8) !Metrics {
-    return compiledSystem(init, directory, "facade", MinimalSystem);
+fn facade(init: std.process.Init, directory: []const u8, mode: data.coalescing.Mode) !Metrics {
+    return compiledSystem(init, directory, "facade", MinimalSystem, mode);
 }
 
-fn compiledSystem(init: std.process.Init, directory: []const u8, name: []const u8, comptime System: type) !Metrics {
+fn compiledSystem(init: std.process.Init, directory: []const u8, name: []const u8, comptime System: type, mode: data.coalescing.Mode) !Metrics {
     var authoring: AuthoringObserver = .{ .io = init.io };
     var compiler: Observer = .{ .io = init.io };
+    var stats: data.coalescing.Statistics = .{};
     const started = std.Io.Clock.awake.now(init.io);
     var compiled = try agent.compileObserved(init.gpa, System, .{
         .observer = .{ .context = &authoring, .enter = AuthoringObserver.enter },
-        .boundary_options = .{ .observer = .{ .context = &compiler, .enter = Observer.enter } },
+        .boundary_options = .{ .coalescing = .{ .mode = mode, .statistics = &stats }, .observer = .{ .context = &compiler, .enter = Observer.enter } },
     });
     const duration = elapsed(init.io, started);
     defer compiled.deinit();
     var metrics = try saveCompiled(init, directory, name, compiled);
+    metrics.coalescing = coalescingMetrics(stats);
     metrics.descriptorConstructionNs = authoring.phases.descriptors;
     metrics.sourceConstructionNs = authoring.phases.application_source;
     metrics.descriptorAndSourceNs = authoring.phases.descriptors + authoring.phases.application_source;
@@ -395,12 +425,12 @@ fn save(init: std.process.Init, directory: []const u8, name: []const u8, bytes: 
     try std.Io.Dir.cwd().writeFile(init.io, .{ .sub_path = path, .data = bytes });
 }
 
-fn warmup(allocator: std.mem.Allocator) !void {
+fn warmup(allocator: std.mem.Allocator, mode: data.coalescing.Mode) !void {
     var b = source.Builder.init(allocator);
     defer b.deinit();
-    var control = try boundary.program.compile(allocator, try direct(&b));
+    var control = try boundary.program.compileObserved(allocator, try direct(&b), .{ .coalescing = .{ .mode = mode } });
     defer control.deinit();
-    var minimal = try agent.compile(allocator, MinimalSystem);
+    var minimal = try agent.compileObserved(allocator, MinimalSystem, .{ .boundary_options = .{ .coalescing = .{ .mode = mode } } });
     defer minimal.deinit();
 }
 
@@ -434,31 +464,37 @@ fn overhead(control: Metrics, minimal: Metrics) struct {
     };
 }
 
-fn emit(init: std.process.Init, directory: []const u8) !void {
+fn emit(init: std.process.Init, directory: []const u8, mode: data.coalescing.Mode) !void {
     try std.Io.Dir.cwd().createDirPath(init.io, directory);
     // Warm each minimal authoring path once before paired phase observations.
     // This is measurement work, not compilation per runtime test scenario.
-    try warmup(init.gpa);
-    const control = try measure(init, directory, "direct", .direct);
-    const minimal = try facade(init, directory);
+    try warmup(init.gpa, mode);
+    const control = try measure(init, directory, "direct", .direct, mode);
+    const minimal = try facade(init, directory, mode);
     if (!std.mem.eql(u8, control.imageSha256, minimal.imageSha256))
         return error.FacadeCanonicalMismatch;
     var installations: [3]Metrics = undefined;
     for (&installations, [_]usize{ 1, 8, 64 }) |*item, count| {
         const name = try std.fmt.allocPrint(init.gpa, "sharing-{d}", .{count});
-        item.* = try measure(init, directory, name, .{ .sharing = count });
+        item.* = try measure(init, directory, name, .{ .sharing = count }, mode);
         if (item.helperFunctionCount != 1 or item.helperIncomingCalls != count or
             item.sharedPromptCopies != 1 or item.handlerDefinitions != 1)
             return error.SharingMismatch;
     }
-    const continuing = try measure(init, directory, "conversation", .conversation);
-    const document = @import("document");
-    const consequence_first = try compiledSystem(init, directory, "document-consequence", document.System);
-    const clarify_first = try compiledSystem(init, directory, "clarify-first", document.ClarifyFirstSystem);
+    const continuing = try measure(init, directory, "conversation", .conversation, mode);
+    const document = @import("document").consequence;
+    const consequence_first = try compiledSystem(init, directory, "document-consequence", document.System, mode);
+    const clarify_first = try compiledSystem(init, directory, "clarify-first", document.ClarifyFirstSystem, mode);
     const inquiry = @import("inquiry");
-    const repair = try compiledSystem(init, directory, "inquiry-repair", inquiry.System);
-    const repeated = try compiledSystem(init, directory, "inquiry-repeated", inquiry.RepeatedSystem);
-    const react = try compiledSystem(init, directory, "inquiry-react", inquiry.ReactSystem);
+    const repair = try compiledSystem(init, directory, "inquiry-repair", inquiry.System, mode);
+    const repeated = try compiledSystem(init, directory, "inquiry-repeated", inquiry.RepeatedSystem, mode);
+    const react = try compiledSystem(init, directory, "inquiry-react", inquiry.ReactSystem, mode);
+    const document_base = try compiledSystem(init, directory, "document", @import("document").System, mode);
+    const review = @import("review");
+    var reviews: [std.meta.fields(review.Mode).len]Metrics = undefined;
+    inline for (std.enums.values(review.Mode), 0..) |variant, index| {
+        reviews[index] = try compiledSystem(init, directory, "review-" ++ @tagName(variant), review.System(variant), mode);
+    }
     try save(init, directory, "direct.args", &.{ 7, 0, 0, 0 });
     try save(init, directory, "facade.args", &.{ 7, 0, 0, 0 });
     try save(init, directory, "conversation.args", &.{});
@@ -475,6 +511,8 @@ fn emit(init: std.process.Init, directory: []const u8) !void {
         .conversation = continuing,
         .clarification = .{ .consequenceFirst = consequence_first, .clarifyFirst = clarify_first },
         .inquiry = .{ .repair = repair, .repeated = repeated, .react = react },
+        .document = document_base,
+        .review = reviews,
     }, .{ .whitespace = .indent_2 });
     defer init.gpa.free(report);
     try save(init, directory, "source-metrics.json", report);
@@ -539,8 +577,12 @@ pub fn main(original: std.process.Init) !void {
     _ = arguments.skip();
     const command = arguments.next() orelse return error.ExpectedCommand;
     const path = arguments.next() orelse return error.ExpectedPath;
+    const mode = if (arguments.next()) |selected|
+        std.meta.stringToEnum(data.coalescing.Mode, selected) orelse return error.InvalidMode
+    else
+        data.coalescing.Mode.off;
     if (arguments.next() != null) return error.UnexpectedArgument;
-    if (std.mem.eql(u8, command, "emit")) return emit(init, path);
+    if (std.mem.eql(u8, command, "emit")) return emit(init, path, mode);
     if (std.mem.eql(u8, command, "inspect-state")) return inspectState(init, path);
     return error.UnknownCommand;
 }

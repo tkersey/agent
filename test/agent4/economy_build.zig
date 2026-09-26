@@ -42,7 +42,7 @@ pub fn build(b: *std.Build) void {
         },
     });
     const document = b.createModule(.{
-        .root_source_file = b.path("../consumers/document/consequence.zig"),
+        .root_source_file = b.path("../consumers/document/main.zig"),
         .target = b.graph.host,
         .optimize = optimize,
         .imports = &.{
@@ -51,6 +51,17 @@ pub fn build(b: *std.Build) void {
         },
     });
     probe.addImport("document", document);
+    inline for (.{
+        .{ "review", "../consumers/review/main.zig" },
+    }) |item| probe.addImport(item[0], b.createModule(.{
+        .root_source_file = b.path(item[1]),
+        .target = b.graph.host,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "boundary", .module = boundary },
+            .{ .name = "agent", .module = agent },
+        },
+    }));
     probe.addImport("inquiry", b.createModule(.{
         .root_source_file = b.path("../consumers/inquiry/main.zig"),
         .target = b.graph.host,

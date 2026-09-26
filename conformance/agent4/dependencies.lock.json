@@ -3,45 +3,45 @@
   "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "f512dbbfb14ab61ed5e1d875518c2b683ff5d215",
-    "gitTree": "5182ba46cdec4093eace083cc824d9089bef2e34",
+    "commit": "cc1cdb00fb4f9c573afd8ae51fdda1a4dba491b6",
+    "gitTree": "c70c9ec602c395cb18c12e6d477580d258d2d498",
     "version": "3.0.0-dev.0",
     "source": {
-      "inventorySha256": "6f8dc016b54fc12435338cb9a9009166374879c9c8bb418149281f2bf12d785d",
-      "entries": 261,
-      "bytes": 6543686
+      "inventorySha256": "99608c37e085dee08e751122cc84f2790e62e4ed3bad7be3c6b083df262def5b",
+      "entries": 284,
+      "bytes": 6707522
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/f512dbbfb14ab61ed5e1d875518c2b683ff5d215.tar.gz",
-      "bytes": 1182259,
-      "sha256": "8da191ef7e9cfb901f37bcc1c33237e6b335f266aaf81c27799b5615a1d9d851"
+      "url": "https://github.com/tkersey/boundary/archive/cc1cdb00fb4f9c573afd8ae51fdda1a4dba491b6.tar.gz",
+      "bytes": 1218688,
+      "sha256": "f18692e3e5dd45058047ea7f1148eec7b9acb86672a0e16ccee6832335a282cd"
     },
-    "authentication": "GitHub commit API tree identity equals recomputed downloaded source tree; archive and content inventories independently bound",
+    "authentication": "Downloaded GitHub archive tree recomputed and matched to the GitHub commit API; archive and complete source/package inventories independently measured",
     "package": {
-      "zigHash": "boundary-3.0.0-dev.0-flclaCUnGwAErKpf2Ql6uEt80nLBXe3T0tcjbd4SoXgS",
+      "zigHash": "boundary-3.0.0-dev.0-flclaCGnHQDGNa7G2vVRi7ZoraMmQUlocnU6fKJ4xm-V",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "3ee65bf18e046a4f28b374dccc1e38a4ed3ee06fb90e218a59fac1e6b741ce49",
-          "entries": 222,
-          "bytes": 1779493
+          "inventorySha256": "6bff1314a75b2d06904b83b0a9ef82f7e226e6172607b80c226205310412cd73",
+          "entries": 245,
+          "bytes": 1943329
         },
         "archive-extracted": {
-          "inventorySha256": "3ee65bf18e046a4f28b374dccc1e38a4ed3ee06fb90e218a59fac1e6b741ce49",
-          "entries": 222,
-          "bytes": 1779493
+          "inventorySha256": "6bff1314a75b2d06904b83b0a9ef82f7e226e6172607b80c226205310412cd73",
+          "entries": 245,
+          "bytes": 1943329
         }
       },
       "archive": {
-        "bytes": 369027,
-        "sha256": "e272ec2a38660d0789da00b6d5bd7586635823e4eb821924d5a852d563643279"
+        "bytes": 405874,
+        "sha256": "ee3786a6580448508cdd65199007553184f7d422a896a4f6bf39ef908fde629a"
       }
     },
     "api": {
       "authoring": "src/root.zig",
       "data": "src/data/root.zig",
       "source": "src/source.zig",
-      "profile": "Flattened current source, typed authoring, stable BMO1/BPI3/PST3 and invocation codecs",
+      "profile": "Current typed authoring and opt-in checked coalescing; unchanged BMO1/BPI3/PST3 and invocation grammars",
       "files": [
         {
           "path": "src/root.zig",
@@ -49,11 +49,11 @@
         },
         {
           "path": "src/data/root.zig",
-          "sha256": "93ec842fe300c58ac99f4f88bdd6229ca305cee3ebe42765d6ce39a3cc5bfb72"
+          "sha256": "984e6043c50edf45987083f94117350640a56f236e52ec991680f271b045d446"
         },
         {
           "path": "src/source.zig",
-          "sha256": "503c9523cd846a32136b8290e53c56d5eeb01d9e70c3e4739601cf64b98bb6c0"
+          "sha256": "b319665073e102551d3219ae8b692d4a1108efd8a687bed01f0985e80a26327d"
         },
         {
           "path": "docs/bpi3-wire.md",
@@ -329,12 +329,12 @@
     "architecture": "arm64"
   },
   "publicationObservation": {
-    "boundarySource": "draft PR 153",
-    "worldSource": "draft PR 55",
+    "boundarySource": "draft PR 160",
+    "worldSource": "World c20695e; unchanged authenticated B0 runtime",
     "compatiblePublishedReleaseObserved": false
   },
   "limitations": [
-    "Hyperfunction successor integration remains draft; coordinated requirement audit and Boundary/Agent serial reviews remain open.",
-    "Runtime digest is consumer-owned expected identity from the exact source build, not a release attestation."
+    "Coalescing remains opt-in; full semantic, consumer, performance and serial-review qualification is incomplete.",
+    "The World runtime remains the authenticated B0 artifact built with Boundary f512dbb; both coalescing arms use that exact artifact."
   ]
 }

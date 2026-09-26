@@ -151,10 +151,10 @@ Acquire the locked World inputs explicitly, then run the integration checks. The
 full integration target currently exposes remaining application migrations:
 
 ```sh
-node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-boundary-f512dbb-world-c20695e"
+node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-boundary-cc1cdb0-world-c20695e"
 zig build check-agent4-integration -Doptimize=ReleaseSafe \
-  -Dworld-source="$PWD/.agent4-boundary-f512dbb-world-c20695e/inputs/world" \
-  -Dworld-runtime="$PWD/.agent4-boundary-f512dbb-world-c20695e/out/world-runtime"
+  -Dworld-source="$PWD/.agent4-boundary-cc1cdb0-world-c20695e/inputs/world" \
+  -Dworld-runtime="$PWD/.agent4-boundary-cc1cdb0-world-c20695e/out/world-runtime"
 ```
 
 Use a new work directory when advancing the dependency lock. Setup verifies
@@ -240,8 +240,8 @@ With World acquired, run the economy checks separately:
 
 ```sh
 zig build check-agent4-economy -Doptimize=ReleaseSafe \
-  -Dworld-source="$PWD/.agent4-boundary-f512dbb-world-c20695e/inputs/world" \
-  -Dworld-runtime="$PWD/.agent4-boundary-f512dbb-world-c20695e/out/world-runtime"
+  -Dworld-source="$PWD/.agent4-boundary-cc1cdb0-world-c20695e/inputs/world" \
+  -Dworld-runtime="$PWD/.agent4-boundary-cc1cdb0-world-c20695e/out/world-runtime"
 ```
 
 Without the supported inquiry execution host, economy reports

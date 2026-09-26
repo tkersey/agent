@@ -1,0 +1,1430 @@
+{
+  "scope": "Existing workload B1/B2 structural census; timing and runtime qualification remain separate",
+  "boundary": "cc1cdb00fb4f9c573afd8ae51fdda1a4dba491b6",
+  "world": "c20695e00056186a4b74564da6e4ca1c368cb33b",
+  "kernelSha256": "7d31effb1d4e32523d0fcbd5b4d5f5a8a2289fbd4c731173a33b1c174524282f",
+  "lockSha256": "c7ab17a5caaf55a122a02b291fbe00cbcef855cda66eac57ccd90b0234f296bd",
+  "workloadSources": [
+    {
+      "path": "test/consumers/document/main.zig",
+      "sha256": "13b2bf96bd6ae91faa1aaa5436d3387820b03a9b764b3e168266de050576b3ca"
+    },
+    {
+      "path": "test/consumers/document/consequence.zig",
+      "sha256": "11adb9f700034e200d4faec6b52795565b82451b326257fe06c8f9b9f59f85d1"
+    },
+    {
+      "path": "test/consumers/review/main.zig",
+      "sha256": "1cc618f8a0dc272ef0585ca76435a497c2b59b1d58eb36c8a5dd0b930b9352bd"
+    },
+    {
+      "path": "test/consumers/inquiry/main.zig",
+      "sha256": "916cd3ea188a569cd0d459cf04a18f88c2c1f8c3bb9f50c410f87b5123678bbe"
+    },
+    {
+      "path": "test/agent4/economy.zig",
+      "sha256": "dafe2c4db2792a1f9d98c47ee9d297a5b984ab4476ef59058926961e78fb192b"
+    }
+  ],
+  "catalogueOrder": [
+    "schema",
+    "constant",
+    "effect",
+    "function",
+    "block",
+    "handler",
+    "capture",
+    "region",
+    "resource",
+    "constructor"
+  ],
+  "realConsumerCodeBenefitObserved": false,
+  "rows": [
+    {
+      "name": "direct",
+      "realConsumer": false,
+      "off": {
+        "bytes": 90,
+        "sha256": "0868302e26c48ef5920ed4bef1746dab60edbc618f2e540ba6e5ea1049e6ed7b",
+        "catalogues": [
+          2,
+          0,
+          1,
+          1,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "instructions": 0
+      },
+      "safe": {
+        "bytes": 90,
+        "sha256": "0868302e26c48ef5920ed4bef1746dab60edbc618f2e540ba6e5ea1049e6ed7b",
+        "catalogues": [
+          2,
+          0,
+          1,
+          1,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "instructions": 0
+      },
+      "outcome": "no_change",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          2,
+          0,
+          1,
+          1,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "instructions": 0,
+        "bytes": 90,
+        "entries": 6
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          2,
+          0,
+          1,
+          1,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "instructions": 0,
+        "bytes": 90,
+        "entries": 6
+      },
+      "discoveryWork": 407,
+      "exactComparisons": 0
+    },
+    {
+      "name": "facade",
+      "realConsumer": false,
+      "off": {
+        "bytes": 90,
+        "sha256": "0868302e26c48ef5920ed4bef1746dab60edbc618f2e540ba6e5ea1049e6ed7b",
+        "catalogues": [
+          2,
+          0,
+          1,
+          1,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "instructions": 0
+      },
+      "safe": {
+        "bytes": 90,
+        "sha256": "0868302e26c48ef5920ed4bef1746dab60edbc618f2e540ba6e5ea1049e6ed7b",
+        "catalogues": [
+          2,
+          0,
+          1,
+          1,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "instructions": 0
+      },
+      "outcome": "no_change",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          2,
+          0,
+          1,
+          1,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "instructions": 0,
+        "bytes": 90,
+        "entries": 6
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          2,
+          0,
+          1,
+          1,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "instructions": 0,
+        "bytes": 90,
+        "entries": 6
+      },
+      "discoveryWork": 407,
+      "exactComparisons": 0
+    },
+    {
+      "name": "sharing-1",
+      "realConsumer": false,
+      "off": {
+        "bytes": 292,
+        "sha256": "3a424258a480412a2952618ce9a10e0ad6ff9c0c6b07d5f129a43c4ef4fb7563",
+        "catalogues": [
+          7,
+          3,
+          1,
+          5,
+          8,
+          1,
+          1,
+          0,
+          0,
+          1
+        ],
+        "instructions": 6
+      },
+      "safe": {
+        "bytes": 292,
+        "sha256": "3a424258a480412a2952618ce9a10e0ad6ff9c0c6b07d5f129a43c4ef4fb7563",
+        "catalogues": [
+          7,
+          3,
+          1,
+          5,
+          8,
+          1,
+          1,
+          0,
+          0,
+          1
+        ],
+        "instructions": 6
+      },
+      "outcome": "no_change",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          7,
+          3,
+          1,
+          5,
+          8,
+          1,
+          1,
+          0,
+          0,
+          1
+        ],
+        "instructions": 6,
+        "bytes": 292,
+        "entries": 27
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          7,
+          3,
+          1,
+          5,
+          8,
+          1,
+          1,
+          0,
+          0,
+          1
+        ],
+        "instructions": 6,
+        "bytes": 292,
+        "entries": 27
+      },
+      "discoveryWork": 4838,
+      "exactComparisons": 57
+    },
+    {
+      "name": "sharing-8",
+      "realConsumer": false,
+      "off": {
+        "bytes": 460,
+        "sha256": "a0e5451968682a12837cba3de0242da29595457791366fb90db6919986fcf514",
+        "catalogues": [
+          7,
+          3,
+          1,
+          5,
+          15,
+          1,
+          1,
+          0,
+          0,
+          1
+        ],
+        "instructions": 27
+      },
+      "safe": {
+        "bytes": 460,
+        "sha256": "a0e5451968682a12837cba3de0242da29595457791366fb90db6919986fcf514",
+        "catalogues": [
+          7,
+          3,
+          1,
+          5,
+          15,
+          1,
+          1,
+          0,
+          0,
+          1
+        ],
+        "instructions": 27
+      },
+      "outcome": "no_change",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          7,
+          3,
+          1,
+          5,
+          15,
+          1,
+          1,
+          0,
+          0,
+          1
+        ],
+        "instructions": 27,
+        "bytes": 460,
+        "entries": 34
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          7,
+          3,
+          1,
+          5,
+          15,
+          1,
+          1,
+          0,
+          0,
+          1
+        ],
+        "instructions": 27,
+        "bytes": 460,
+        "entries": 34
+      },
+      "discoveryWork": 7849,
+      "exactComparisons": 57
+    },
+    {
+      "name": "sharing-64",
+      "realConsumer": false,
+      "off": {
+        "bytes": 2032,
+        "sha256": "ace112bea38db89d17db421c2e9e129420ae16193677e3f3133bbdce01eed271",
+        "catalogues": [
+          7,
+          3,
+          1,
+          5,
+          71,
+          1,
+          1,
+          0,
+          0,
+          1
+        ],
+        "instructions": 195
+      },
+      "safe": {
+        "bytes": 2032,
+        "sha256": "ace112bea38db89d17db421c2e9e129420ae16193677e3f3133bbdce01eed271",
+        "catalogues": [
+          7,
+          3,
+          1,
+          5,
+          71,
+          1,
+          1,
+          0,
+          0,
+          1
+        ],
+        "instructions": 195
+      },
+      "outcome": "no_change",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          7,
+          3,
+          1,
+          5,
+          71,
+          1,
+          1,
+          0,
+          0,
+          1
+        ],
+        "instructions": 195,
+        "bytes": 2032,
+        "entries": 90
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          7,
+          3,
+          1,
+          5,
+          71,
+          1,
+          1,
+          0,
+          0,
+          1
+        ],
+        "instructions": 195,
+        "bytes": 2032,
+        "entries": 90
+      },
+      "discoveryWork": 34143,
+      "exactComparisons": 57
+    },
+    {
+      "name": "conversation",
+      "realConsumer": false,
+      "off": {
+        "bytes": 377,
+        "sha256": "7876808bbfcdfbff76ca8cd94d886ab39b6eab9a84d58a1f98f927052d918800",
+        "catalogues": [
+          9,
+          3,
+          1,
+          4,
+          15,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "instructions": 17
+      },
+      "safe": {
+        "bytes": 377,
+        "sha256": "7876808bbfcdfbff76ca8cd94d886ab39b6eab9a84d58a1f98f927052d918800",
+        "catalogues": [
+          9,
+          3,
+          1,
+          4,
+          15,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "instructions": 17
+      },
+      "outcome": "no_change",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          9,
+          3,
+          1,
+          4,
+          15,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "instructions": 17,
+        "bytes": 377,
+        "entries": 32
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          9,
+          3,
+          1,
+          4,
+          15,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "instructions": 17,
+        "bytes": 377,
+        "entries": 32
+      },
+      "discoveryWork": 5593,
+      "exactComparisons": 24
+    },
+    {
+      "name": "document-consequence",
+      "realConsumer": true,
+      "off": {
+        "bytes": 11435,
+        "sha256": "9c0c22c8a75cb47ea7cd2642278289b7edf4300df20342d7cbdc252c162f5b45",
+        "catalogues": [
+          142,
+          66,
+          12,
+          60,
+          407,
+          3,
+          7,
+          0,
+          2,
+          7
+        ],
+        "instructions": 753
+      },
+      "safe": {
+        "bytes": 11422,
+        "sha256": "d333e574ecd70f8106b7464f8172464ae5b1c78cccb28805dd535fbbfab2504b",
+        "catalogues": [
+          142,
+          66,
+          12,
+          60,
+          407,
+          3,
+          4,
+          0,
+          2,
+          7
+        ],
+        "instructions": 753
+      },
+      "outcome": "applied",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          142,
+          66,
+          12,
+          60,
+          407,
+          3,
+          4,
+          0,
+          2,
+          7
+        ],
+        "instructions": 753,
+        "bytes": 11422,
+        "entries": 703
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          142,
+          66,
+          12,
+          60,
+          407,
+          3,
+          4,
+          0,
+          2,
+          7
+        ],
+        "instructions": 753,
+        "bytes": 11422,
+        "entries": 703
+      },
+      "discoveryWork": 548320,
+      "exactComparisons": 3833
+    },
+    {
+      "name": "clarify-first",
+      "realConsumer": true,
+      "off": {
+        "bytes": 9373,
+        "sha256": "5ebe81832c70028fbd1bfd4d470cf0754cb7b1b883a203b41f63aa53eb48b6bb",
+        "catalogues": [
+          124,
+          59,
+          11,
+          47,
+          333,
+          2,
+          6,
+          0,
+          2,
+          6
+        ],
+        "instructions": 646
+      },
+      "safe": {
+        "bytes": 9360,
+        "sha256": "43421d3f0322c15fa13f6584aaa9889a2005a32ab726a1d87b4179054ea7a1b3",
+        "catalogues": [
+          124,
+          59,
+          11,
+          47,
+          333,
+          2,
+          3,
+          0,
+          2,
+          6
+        ],
+        "instructions": 646
+      },
+      "outcome": "applied",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          124,
+          59,
+          11,
+          47,
+          333,
+          2,
+          3,
+          0,
+          2,
+          6
+        ],
+        "instructions": 646,
+        "bytes": 9360,
+        "entries": 587
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          124,
+          59,
+          11,
+          47,
+          333,
+          2,
+          3,
+          0,
+          2,
+          6
+        ],
+        "instructions": 646,
+        "bytes": 9360,
+        "entries": 587
+      },
+      "discoveryWork": 413278,
+      "exactComparisons": 2706
+    },
+    {
+      "name": "inquiry-repair",
+      "realConsumer": true,
+      "off": {
+        "bytes": 36756,
+        "sha256": "f4ca15185e614bc3845d5bb4ac4e9258fe541f0589e7922f3001e7303e65e906",
+        "catalogues": [
+          183,
+          160,
+          10,
+          109,
+          1148,
+          2,
+          5,
+          1,
+          2,
+          5
+        ],
+        "instructions": 2233
+      },
+      "safe": {
+        "bytes": 36756,
+        "sha256": "f4ca15185e614bc3845d5bb4ac4e9258fe541f0589e7922f3001e7303e65e906",
+        "catalogues": [
+          183,
+          160,
+          10,
+          109,
+          1148,
+          2,
+          5,
+          1,
+          2,
+          5
+        ],
+        "instructions": 2233
+      },
+      "outcome": "no_change",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          183,
+          160,
+          10,
+          109,
+          1148,
+          2,
+          5,
+          1,
+          2,
+          5
+        ],
+        "instructions": 2233,
+        "bytes": 36756,
+        "entries": 1625
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          183,
+          160,
+          10,
+          109,
+          1148,
+          2,
+          5,
+          1,
+          2,
+          5
+        ],
+        "instructions": 2233,
+        "bytes": 36756,
+        "entries": 1625
+      },
+      "discoveryWork": 790539,
+      "exactComparisons": 3866
+    },
+    {
+      "name": "inquiry-repeated",
+      "realConsumer": true,
+      "off": {
+        "bytes": 37137,
+        "sha256": "2a315541e2f7a8ac1ac1e4adc20fa6efa64b303e415baf998949fe9fe93a0416",
+        "catalogues": [
+          186,
+          161,
+          11,
+          112,
+          1158,
+          2,
+          5,
+          1,
+          2,
+          5
+        ],
+        "instructions": 2242
+      },
+      "safe": {
+        "bytes": 37137,
+        "sha256": "2a315541e2f7a8ac1ac1e4adc20fa6efa64b303e415baf998949fe9fe93a0416",
+        "catalogues": [
+          186,
+          161,
+          11,
+          112,
+          1158,
+          2,
+          5,
+          1,
+          2,
+          5
+        ],
+        "instructions": 2242
+      },
+      "outcome": "no_change",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          186,
+          161,
+          11,
+          112,
+          1158,
+          2,
+          5,
+          1,
+          2,
+          5
+        ],
+        "instructions": 2242,
+        "bytes": 37137,
+        "entries": 1643
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          186,
+          161,
+          11,
+          112,
+          1158,
+          2,
+          5,
+          1,
+          2,
+          5
+        ],
+        "instructions": 2242,
+        "bytes": 37137,
+        "entries": 1643
+      },
+      "discoveryWork": 800119,
+      "exactComparisons": 3923
+    },
+    {
+      "name": "inquiry-react",
+      "realConsumer": true,
+      "off": {
+        "bytes": 48226,
+        "sha256": "6b3c923a115342e173552c7f0dc66de44afdf20004173fd9fe52783412906897",
+        "catalogues": [
+          145,
+          148,
+          7,
+          67,
+          856,
+          0,
+          3,
+          0,
+          2,
+          3
+        ],
+        "instructions": 3701
+      },
+      "safe": {
+        "bytes": 48218,
+        "sha256": "07293e6052653f83babf063b15ad215be08ccb63b452fd3fbcbf3784472faabb",
+        "catalogues": [
+          145,
+          148,
+          7,
+          67,
+          856,
+          0,
+          1,
+          0,
+          2,
+          3
+        ],
+        "instructions": 3701
+      },
+      "outcome": "applied",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          145,
+          148,
+          7,
+          67,
+          856,
+          0,
+          1,
+          0,
+          2,
+          3
+        ],
+        "instructions": 3701,
+        "bytes": 48218,
+        "entries": 1229
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          145,
+          148,
+          7,
+          67,
+          856,
+          0,
+          1,
+          0,
+          2,
+          3
+        ],
+        "instructions": 3701,
+        "bytes": 48218,
+        "entries": 1229
+      },
+      "discoveryWork": 1760173,
+      "exactComparisons": 5692
+    },
+    {
+      "name": "document",
+      "realConsumer": true,
+      "off": {
+        "bytes": 7331,
+        "sha256": "75f23f5228e91dfe39ec9ad177c002a2a5008d9579173d5a8ee0d6493ab5e1e0",
+        "catalogues": [
+          126,
+          52,
+          14,
+          48,
+          262,
+          5,
+          10,
+          2,
+          2,
+          10
+        ],
+        "instructions": 383
+      },
+      "safe": {
+        "bytes": 7317,
+        "sha256": "0ff49094f80eb5397ec8ee0a96dd7fabb4a8e33da2eb20e746b4d8f391342def",
+        "catalogues": [
+          126,
+          52,
+          14,
+          48,
+          262,
+          5,
+          7,
+          2,
+          2,
+          10
+        ],
+        "instructions": 383
+      },
+      "outcome": "applied",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          126,
+          52,
+          14,
+          48,
+          262,
+          5,
+          7,
+          2,
+          2,
+          10
+        ],
+        "instructions": 383,
+        "bytes": 7317,
+        "entries": 528
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          126,
+          52,
+          14,
+          48,
+          262,
+          5,
+          7,
+          2,
+          2,
+          10
+        ],
+        "instructions": 383,
+        "bytes": 7317,
+        "entries": 528
+      },
+      "discoveryWork": 298210,
+      "exactComparisons": 2712
+    },
+    {
+      "name": "review-mid_review",
+      "realConsumer": true,
+      "off": {
+        "bytes": 2955,
+        "sha256": "109e65fb4b29509241b13a055c2df03989342e20c6268adb6571dc7307966efc",
+        "catalogues": [
+          77,
+          37,
+          6,
+          15,
+          87,
+          2,
+          3,
+          0,
+          0,
+          3
+        ],
+        "instructions": 152
+      },
+      "safe": {
+        "bytes": 2947,
+        "sha256": "b4d6f335811307cc2a6d5cd9d38ef0a3addaf2bcc4c7669ad87fc8d4ddfa760d",
+        "catalogues": [
+          77,
+          37,
+          6,
+          15,
+          87,
+          2,
+          1,
+          0,
+          0,
+          3
+        ],
+        "instructions": 152
+      },
+      "outcome": "applied",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          77,
+          37,
+          6,
+          15,
+          87,
+          2,
+          1,
+          0,
+          0,
+          3
+        ],
+        "instructions": 152,
+        "bytes": 2947,
+        "entries": 228
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          77,
+          37,
+          6,
+          15,
+          87,
+          2,
+          1,
+          0,
+          0,
+          3
+        ],
+        "instructions": 152,
+        "bytes": 2947,
+        "entries": 228
+      },
+      "discoveryWork": 103084,
+      "exactComparisons": 1048
+    },
+    {
+      "name": "review-clarify_first",
+      "realConsumer": true,
+      "off": {
+        "bytes": 2954,
+        "sha256": "a6746ec90e7dc2a1eed2e79d5f22ccfbabab12546fc3e55a28c674a375d02da6",
+        "catalogues": [
+          77,
+          37,
+          6,
+          15,
+          87,
+          2,
+          3,
+          0,
+          0,
+          3
+        ],
+        "instructions": 152
+      },
+      "safe": {
+        "bytes": 2946,
+        "sha256": "a04fd24d0aaa1bedff2ba37271ff55214ad8469f06b7fb3b8a2b074816e9b1a4",
+        "catalogues": [
+          77,
+          37,
+          6,
+          15,
+          87,
+          2,
+          1,
+          0,
+          0,
+          3
+        ],
+        "instructions": 152
+      },
+      "outcome": "applied",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          77,
+          37,
+          6,
+          15,
+          87,
+          2,
+          1,
+          0,
+          0,
+          3
+        ],
+        "instructions": 152,
+        "bytes": 2946,
+        "entries": 228
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          77,
+          37,
+          6,
+          15,
+          87,
+          2,
+          1,
+          0,
+          0,
+          3
+        ],
+        "instructions": 152,
+        "bytes": 2946,
+        "entries": 228
+      },
+      "discoveryWork": 103084,
+      "exactComparisons": 1048
+    },
+    {
+      "name": "review-human",
+      "realConsumer": true,
+      "off": {
+        "bytes": 418,
+        "sha256": "d750426fad1458aa73b802e5ee9dd538b920ee047825a2b440eba6136fd2a8a0",
+        "catalogues": [
+          9,
+          4,
+          2,
+          5,
+          11,
+          1,
+          2,
+          0,
+          0,
+          2
+        ],
+        "instructions": 8
+      },
+      "safe": {
+        "bytes": 414,
+        "sha256": "a3a54c5cecbf3d6f9076febdb1005fbcd4007a6a02e69ddec495a5ca10221ca5",
+        "catalogues": [
+          9,
+          4,
+          2,
+          5,
+          11,
+          1,
+          1,
+          0,
+          0,
+          2
+        ],
+        "instructions": 8
+      },
+      "outcome": "applied",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          9,
+          4,
+          2,
+          5,
+          11,
+          1,
+          1,
+          0,
+          0,
+          2
+        ],
+        "instructions": 8,
+        "bytes": 414,
+        "entries": 35
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          9,
+          4,
+          2,
+          5,
+          11,
+          1,
+          1,
+          0,
+          0,
+          2
+        ],
+        "instructions": 8,
+        "bytes": 414,
+        "entries": 35
+      },
+      "discoveryWork": 12675,
+      "exactComparisons": 142
+    },
+    {
+      "name": "review-model",
+      "realConsumer": true,
+      "off": {
+        "bytes": 2243,
+        "sha256": "614a7fb711174f36cd5349c95ad835ac7034088f2108e842abe1dfa2ab22b9c3",
+        "catalogues": [
+          66,
+          32,
+          2,
+          9,
+          68,
+          1,
+          2,
+          0,
+          0,
+          2
+        ],
+        "instructions": 128
+      },
+      "safe": {
+        "bytes": 2239,
+        "sha256": "eb25579ebbadbde11254104334516d4372722946490be5c94c9c074bc4c45d3d",
+        "catalogues": [
+          66,
+          32,
+          2,
+          9,
+          68,
+          1,
+          1,
+          0,
+          0,
+          2
+        ],
+        "instructions": 128
+      },
+      "outcome": "applied",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          66,
+          32,
+          2,
+          9,
+          68,
+          1,
+          1,
+          0,
+          0,
+          2
+        ],
+        "instructions": 128,
+        "bytes": 2239,
+        "entries": 181
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          66,
+          32,
+          2,
+          9,
+          68,
+          1,
+          1,
+          0,
+          0,
+          2
+        ],
+        "instructions": 128,
+        "bytes": 2239,
+        "entries": 181
+      },
+      "discoveryWork": 72487,
+      "exactComparisons": 720
+    },
+    {
+      "name": "review-rule",
+      "realConsumer": true,
+      "off": {
+        "bytes": 273,
+        "sha256": "ebbffe3b17485abf25d1ab8e9b9cb2f5f386ed71c827056f95442526b668e4f5",
+        "catalogues": [
+          6,
+          2,
+          1,
+          5,
+          9,
+          1,
+          2,
+          0,
+          0,
+          2
+        ],
+        "instructions": 4
+      },
+      "safe": {
+        "bytes": 269,
+        "sha256": "4dc62720dafc28b4109d350e12397212bcf9883e5135292592e7d0e840737e5e",
+        "catalogues": [
+          6,
+          2,
+          1,
+          5,
+          9,
+          1,
+          1,
+          0,
+          0,
+          2
+        ],
+        "instructions": 4
+      },
+      "outcome": "applied",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          6,
+          2,
+          1,
+          5,
+          9,
+          1,
+          1,
+          0,
+          0,
+          2
+        ],
+        "instructions": 4,
+        "bytes": 269,
+        "entries": 27
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          6,
+          2,
+          1,
+          5,
+          9,
+          1,
+          1,
+          0,
+          0,
+          2
+        ],
+        "instructions": 4,
+        "bytes": 269,
+        "entries": 27
+      },
+      "discoveryWork": 9457,
+      "exactComparisons": 114
+    },
+    {
+      "name": "review-react",
+      "realConsumer": true,
+      "off": {
+        "bytes": 310,
+        "sha256": "0b3969bf4c9c39e512b874307ad78cacdae801b2dc0351419c0c032b715d3ac0",
+        "catalogues": [
+          7,
+          3,
+          0,
+          5,
+          14,
+          0,
+          3,
+          0,
+          0,
+          3
+        ],
+        "instructions": 10
+      },
+      "safe": {
+        "bytes": 302,
+        "sha256": "b90295a16cad6cccff2514bbefea2bf349089bf15b5037f319d6b6886ee9a0e7",
+        "catalogues": [
+          7,
+          3,
+          0,
+          5,
+          14,
+          0,
+          1,
+          0,
+          0,
+          3
+        ],
+        "instructions": 10
+      },
+      "outcome": "applied",
+      "functionBodiesRemoved": 0,
+      "constructorsRemoved": 0,
+      "fullCandidate": {
+        "catalogs": [
+          7,
+          3,
+          0,
+          5,
+          14,
+          0,
+          1,
+          0,
+          0,
+          3
+        ],
+        "instructions": 10,
+        "bytes": 302,
+        "entries": 33
+      },
+      "descriptionsCandidate": {
+        "catalogs": [
+          7,
+          3,
+          0,
+          5,
+          14,
+          0,
+          1,
+          0,
+          0,
+          3
+        ],
+        "instructions": 10,
+        "bytes": 302,
+        "entries": 33
+      },
+      "discoveryWork": 12086,
+      "exactComparisons": 132
+    }
+  ]
+}

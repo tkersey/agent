@@ -5,7 +5,7 @@ const boundary = @import("boundary");
 const source = boundary.computation;
 const Builder = source.Builder;
 const Id = source.Id;
-const Mode = enum { mid_review, clarify_first, human, model, rule, react };
+pub const Mode = enum { mid_review, clarify_first, human, model, rule, react };
 const Finding = struct { kind: u32, score: u32 };
 const Memory = struct { last_evidence: u32, last_score: u32 };
 const Report = struct {
@@ -52,7 +52,7 @@ fn Application(comptime mode: Mode) type {
     };
 }
 
-fn System(comptime mode: Mode) type {
+pub fn System(comptime mode: Mode) type {
     return agent.system(.{
         .InitialArgs = u32,
         .Result = if (mode == .mid_review or mode == .clarify_first) Memory else u32,

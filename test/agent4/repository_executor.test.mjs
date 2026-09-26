@@ -52,22 +52,31 @@ test("launch failure and absent or incomplete reports are not test observations"
 test("replacement code cannot exit, forge output, mock assertions, or pass matcher objects", async (context) => {
   const workspace = await fixtureWorkspace(context);
   const replacements = [
-    "export function normalizeRange(",
-    "export function normalizeRange() { return {}; } process.exit(0);",
-    "export function normalizeRange() { return {}; } console.log('4 pass\\n0 fail\\n4 expect() calls'); process.exit(0);",
-    "import {mock} from 'bun:test'; mock.module('bun:test', () => ({})); export function normalizeRange(){return {};}",
-    "export function normalizeRange(){return {asymmetricMatch(){return true}, $$typeof: Symbol.for('jest.asymmetricMatcher')};}",
-    "export function normalizeRange(){return {get start(){return 1}, end:3};}",
-    "export function normalizeRange(a,b){return {start:a,end:b,toJSON(){return {start:Math.min(a,b),end:Math.max(a,b)}}};}",
-    "await import('node:process').catch(e => e.constructor.constructor('return process')().exit(0)); export function normalizeRange(){return {};}",
-    "const p=import('node:process'); p.catch(()=>{}); p.constructor.constructor('return process')().exit(0); export function normalizeRange(){return {};}",
-    "globalThis.constructor.constructor('return process')().exit(0); export function normalizeRange(){return {};}",
-    "Array.prototype[Symbol.iterator]=function*(){yield Math.min(this[0],this[1]);yield Math.max(this[0],this[1]);}; export function normalizeRange(start,end){return {start,end};}",
-    "export function normalizeRange(a,b){return new Proxy({}, {ownKeys(){return ['start','end']}, getOwnPropertyDescriptor(_,key){return {enumerable:true,configurable:true,value:key==='start'?Math.min(a,b):Math.max(a,b)}}});}",
+    ["export function normalizeRange(", true],
+    ["export function normalizeRange() { return {}; } process.exit(0);", true],
+    ["export function normalizeRange() { return {}; } console.log('4 pass\\n0 fail\\n4 expect() calls'); process.exit(0);", true],
+    ["import {mock} from 'bun:test'; mock.module('bun:test', () => ({})); export function normalizeRange(){return {};}"],
+    ["export function normalizeRange(){return {asymmetricMatch(){return true}, $$typeof: Symbol.for('jest.asymmetricMatcher')};}"],
+    ["export function normalizeRange(){return {get start(){return 1}, end:3};}"],
+    ["export function normalizeRange(a,b){return {start:a,end:b,toJSON(){return {start:Math.min(a,b),end:Math.max(a,b)}}};}"],
+    ["await import('node:process').catch(e => e.constructor.constructor('return process')().exit(0)); export function normalizeRange(){return {};}"],
+    ["const p=import('node:process'); p.catch(()=>{}); p.constructor.constructor('return process')().exit(0); export function normalizeRange(){return {};}", true],
+    ["globalThis.constructor.constructor('return process')().exit(0); export function normalizeRange(){return {};}", true],
+    ["Array.prototype[Symbol.iterator]=function*(){yield Math.min(this[0],this[1]);yield Math.max(this[0],this[1]);}; export function normalizeRange(start,end){return {start,end};}"],
+    ["export function normalizeRange(a,b){return new Proxy({}, {ownKeys(){return ['start','end']}, getOwnPropertyDescriptor(_,key){return {enumerable:true,configurable:true,value:key==='start'?Math.min(a,b):Math.max(a,b)}}});}"],
   ];
-  for (const replacement of replacements) {
+  for (const [replacement, evaluationMayAbort = false] of replacements) {
     await writeFile(join(workspace, "src/range.mjs"), replacement);
-    const result = await runRepositoryTests(workspace);
+    let result;
+    try { result = await runRepositoryTests(workspace); }
+    catch (error) {
+      // Bun can abort before its reporter completes on these evaluation-time
+      // failures. The executor must reject that as unavailable, never fabricate
+      // either a passing or a completed failing observation.
+      if (!evaluationMayAbort) throw error;
+      assert.equal(error.message, "repository test runner did not report completed tests");
+      continue;
+    }
     assert.equal(result[1], false, replacement);
 
   }

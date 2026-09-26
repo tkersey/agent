@@ -1,9 +1,9 @@
 {
   "scope": "Existing workload B1/B2 structural census; timing and runtime qualification remain separate",
-  "boundary": "cc1cdb00fb4f9c573afd8ae51fdda1a4dba491b6",
+  "boundary": "86f7f0d4785d3566273ba35cac978666dcea9182",
   "world": "c20695e00056186a4b74564da6e4ca1c368cb33b",
   "kernelSha256": "7d31effb1d4e32523d0fcbd5b4d5f5a8a2289fbd4c731173a33b1c174524282f",
-  "lockSha256": "c7ab17a5caaf55a122a02b291fbe00cbcef855cda66eac57ccd90b0234f296bd",
+  "lockSha256": "3e6538781321514dde84073bea42278c4978d7980d49098c2f4d756d26720f28",
   "workloadSources": [
     {
       "path": "test/consumers/document/main.zig",
@@ -23,7 +23,7 @@
     },
     {
       "path": "test/agent4/economy.zig",
-      "sha256": "dafe2c4db2792a1f9d98c47ee9d297a5b984ab4476ef59058926961e78fb192b"
+      "sha256": "50845fdc87253c70ef4582d1dc85e95550e8cde950e61b1c9e05e978a6f4a89b"
     }
   ],
   "catalogueOrder": [
@@ -39,6 +39,7 @@
     "constructor"
   ],
   "realConsumerCodeBenefitObserved": false,
+  "defaultMatchesSafe": true,
   "rows": [
     {
       "name": "direct",
@@ -114,7 +115,7 @@
         "bytes": 90,
         "entries": 6
       },
-      "discoveryWork": 407,
+      "discoveryWork": 246,
       "exactComparisons": 0
     },
     {
@@ -191,7 +192,7 @@
         "bytes": 90,
         "entries": 6
       },
-      "discoveryWork": 407,
+      "discoveryWork": 246,
       "exactComparisons": 0
     },
     {
@@ -268,8 +269,8 @@
         "bytes": 292,
         "entries": 27
       },
-      "discoveryWork": 4838,
-      "exactComparisons": 57
+      "discoveryWork": 2900,
+      "exactComparisons": 33
     },
     {
       "name": "sharing-8",
@@ -345,8 +346,8 @@
         "bytes": 460,
         "entries": 34
       },
-      "discoveryWork": 7849,
-      "exactComparisons": 57
+      "discoveryWork": 4752,
+      "exactComparisons": 33
     },
     {
       "name": "sharing-64",
@@ -422,8 +423,8 @@
         "bytes": 2032,
         "entries": 90
       },
-      "discoveryWork": 34143,
-      "exactComparisons": 57
+      "discoveryWork": 20898,
+      "exactComparisons": 33
     },
     {
       "name": "conversation",
@@ -499,8 +500,8 @@
         "bytes": 377,
         "entries": 32
       },
-      "discoveryWork": 5593,
-      "exactComparisons": 24
+      "discoveryWork": 3399,
+      "exactComparisons": 15
     },
     {
       "name": "document-consequence",
@@ -576,8 +577,8 @@
         "bytes": 11422,
         "entries": 703
       },
-      "discoveryWork": 548320,
-      "exactComparisons": 3833
+      "discoveryWork": 326704,
+      "exactComparisons": 2561
     },
     {
       "name": "clarify-first",
@@ -653,8 +654,8 @@
         "bytes": 9360,
         "entries": 587
       },
-      "discoveryWork": 413278,
-      "exactComparisons": 2706
+      "discoveryWork": 248422,
+      "exactComparisons": 1884
     },
     {
       "name": "inquiry-repair",
@@ -730,8 +731,8 @@
         "bytes": 36756,
         "entries": 1625
       },
-      "discoveryWork": 790539,
-      "exactComparisons": 3866
+      "discoveryWork": 492613,
+      "exactComparisons": 2796
     },
     {
       "name": "inquiry-repeated",
@@ -807,8 +808,8 @@
         "bytes": 37137,
         "entries": 1643
       },
-      "discoveryWork": 800119,
-      "exactComparisons": 3923
+      "discoveryWork": 497999,
+      "exactComparisons": 2827
     },
     {
       "name": "inquiry-react",
@@ -884,8 +885,8 @@
         "bytes": 48218,
         "entries": 1229
       },
-      "discoveryWork": 1760173,
-      "exactComparisons": 5692
+      "discoveryWork": 1112259,
+      "exactComparisons": 4404
     },
     {
       "name": "document",
@@ -961,8 +962,8 @@
         "bytes": 7317,
         "entries": 528
       },
-      "discoveryWork": 298210,
-      "exactComparisons": 2712
+      "discoveryWork": 180996,
+      "exactComparisons": 1800
     },
     {
       "name": "review-mid_review",
@@ -1038,8 +1039,8 @@
         "bytes": 2947,
         "entries": 228
       },
-      "discoveryWork": 103084,
-      "exactComparisons": 1048
+      "discoveryWork": 66378,
+      "exactComparisons": 810
     },
     {
       "name": "review-clarify_first",
@@ -1115,8 +1116,8 @@
         "bytes": 2946,
         "entries": 228
       },
-      "discoveryWork": 103084,
-      "exactComparisons": 1048
+      "discoveryWork": 66378,
+      "exactComparisons": 810
     },
     {
       "name": "review-human",
@@ -1192,8 +1193,8 @@
         "bytes": 414,
         "entries": 35
       },
-      "discoveryWork": 12675,
-      "exactComparisons": 142
+      "discoveryWork": 7647,
+      "exactComparisons": 88
     },
     {
       "name": "review-model",
@@ -1269,8 +1270,8 @@
         "bytes": 2239,
         "entries": 181
       },
-      "discoveryWork": 72487,
-      "exactComparisons": 720
+      "discoveryWork": 48527,
+      "exactComparisons": 620
     },
     {
       "name": "review-rule",
@@ -1346,8 +1347,8 @@
         "bytes": 269,
         "entries": 27
       },
-      "discoveryWork": 9457,
-      "exactComparisons": 114
+      "discoveryWork": 5503,
+      "exactComparisons": 64
     },
     {
       "name": "review-react",
@@ -1423,8 +1424,8 @@
         "bytes": 302,
         "entries": 33
       },
-      "discoveryWork": 12086,
-      "exactComparisons": 132
+      "discoveryWork": 7218,
+      "exactComparisons": 80
     }
   ]
 }

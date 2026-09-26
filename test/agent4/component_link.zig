@@ -142,7 +142,7 @@ pub fn main(init: std.process.Init) !void {
         selected_mode = true;
         break :selection std.meta.stringToEnum(data.coalescing.Mode, name) orelse
             return error.InvalidMode;
-    } else data.coalescing.Mode.off;
+    } else (data.coalescing.Options{}).mode;
     if (args.next() != null) return error.UnexpectedArgument;
     const doubled = std.mem.eql(u8, mode, "double");
     const agent_mode = std.mem.eql(u8, mode, "agent") or std.mem.eql(u8, mode, "agent-next");

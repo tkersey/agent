@@ -4,9 +4,10 @@ import {readFileSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {readDependencyLock, sha256, DEFAULT_LOCK} from './dependencies.mjs';
 
-const [offRoot, safeRoot, output] = process.argv.slice(2);
+const [offRoot, safeRoot, output, defaultRoot] = process.argv.slice(2);
 assert.ok(offRoot && safeRoot && output,
-  'usage: node tools/agent4/coalescing-census.mjs OFF_ROOT SAFE_ROOT OUTPUT');
+  'usage: node tools/agent4/coalescing-census.mjs OFF_ROOT SAFE_ROOT OUTPUT [DEFAULT_ROOT]');
+assert.ok(process.argv.length <= 6);
 function records(value, map = new Map()) {
   if (!value || typeof value !== 'object') return map;
   if (value.name && value.imageBytes !== undefined) {
@@ -36,6 +37,8 @@ const rows = [...off].map(([name, a]) => {
   assert.equal(a.coalescing.outcome, 'disabled');
   assert.ok(['no_change', 'applied', 'size_guard'].includes(b.coalescing.outcome));
   assert.ok(after.bytes <= before.bytes);
+  if (defaultRoot) assert.deepEqual(readFileSync(join(defaultRoot, `${name}.bpi3`)),
+    readFileSync(join(safeRoot, `${name}.bpi3`)), `default differs from safe: ${name}`);
   return {name, realConsumer: realConsumers.has(name),
     off: before, safe: after, outcome: b.coalescing.outcome,
     functionBodiesRemoved: before.catalogues[3] - after.catalogues[3],
@@ -56,6 +59,7 @@ const report = {
   realConsumerCodeBenefitObserved: rows.some(row =>
     row.realConsumer && (row.functionBodiesRemoved > 0 || row.constructorsRemoved > 0) &&
       row.safe.bytes < row.off.bytes),
+  defaultMatchesSafe: defaultRoot ? true : null,
   rows,
 };
 writeFileSync(output, JSON.stringify(report, null, 2) + '\n');

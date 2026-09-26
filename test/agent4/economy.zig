@@ -580,7 +580,7 @@ pub fn main(original: std.process.Init) !void {
     const mode = if (arguments.next()) |selected|
         std.meta.stringToEnum(data.coalescing.Mode, selected) orelse return error.InvalidMode
     else
-        data.coalescing.Mode.off;
+        (data.coalescing.Options{}).mode;
     if (arguments.next() != null) return error.UnexpectedArgument;
     if (std.mem.eql(u8, command, "emit")) return emit(init, path, mode);
     if (std.mem.eql(u8, command, "inspect-state")) return inspectState(init, path);

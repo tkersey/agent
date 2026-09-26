@@ -3,45 +3,45 @@
   "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "cc1cdb00fb4f9c573afd8ae51fdda1a4dba491b6",
-    "gitTree": "c70c9ec602c395cb18c12e6d477580d258d2d498",
+    "commit": "86f7f0d4785d3566273ba35cac978666dcea9182",
+    "gitTree": "79f7b243faa71ed2e4131860da53e851ac866cc3",
     "version": "3.0.0-dev.0",
     "source": {
-      "inventorySha256": "99608c37e085dee08e751122cc84f2790e62e4ed3bad7be3c6b083df262def5b",
-      "entries": 284,
-      "bytes": 6707522
+      "inventorySha256": "a9ec800e385f4e035312c271938d2fd62a674e097430e5f5c8776102b683e432",
+      "entries": 312,
+      "bytes": 10615719
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/cc1cdb00fb4f9c573afd8ae51fdda1a4dba491b6.tar.gz",
-      "bytes": 1218688,
-      "sha256": "f18692e3e5dd45058047ea7f1148eec7b9acb86672a0e16ccee6832335a282cd"
+      "url": "https://github.com/tkersey/boundary/archive/86f7f0d4785d3566273ba35cac978666dcea9182.tar.gz",
+      "bytes": 1419702,
+      "sha256": "d448e9d4c36ce676d26721f43941d6ce9d3b72e4f031700c0c4c0ea1c12a2b93"
     },
     "authentication": "Downloaded GitHub archive tree recomputed and matched to the GitHub commit API; archive and complete source/package inventories independently measured",
     "package": {
-      "zigHash": "boundary-3.0.0-dev.0-flclaCGnHQDGNa7G2vVRi7ZoraMmQUlocnU6fKJ4xm-V",
+      "zigHash": "boundary-3.0.0-dev.0-flclaIZJWQAOQqcdOhsEGn6hW_zCLXKZg9jz56fn-ZlR",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "6bff1314a75b2d06904b83b0a9ef82f7e226e6172607b80c226205310412cd73",
-          "entries": 245,
-          "bytes": 1943329
+          "inventorySha256": "02a437e17b65c291a02a6592bd0fcbc96df2303bcbf25f4f8f04a0170e3f98b2",
+          "entries": 273,
+          "bytes": 5851526
         },
         "archive-extracted": {
-          "inventorySha256": "6bff1314a75b2d06904b83b0a9ef82f7e226e6172607b80c226205310412cd73",
-          "entries": 245,
-          "bytes": 1943329
+          "inventorySha256": "02a437e17b65c291a02a6592bd0fcbc96df2303bcbf25f4f8f04a0170e3f98b2",
+          "entries": 273,
+          "bytes": 5851526
         }
       },
       "archive": {
-        "bytes": 405874,
-        "sha256": "ee3786a6580448508cdd65199007553184f7d422a896a4f6bf39ef908fde629a"
+        "bytes": 598059,
+        "sha256": "904bb72ff1a8b416e439c65e43f9b8dcea9058314dae9fad1245935ac00aa8ff"
       }
     },
     "api": {
       "authoring": "src/root.zig",
       "data": "src/data/root.zig",
       "source": "src/source.zig",
-      "profile": "Current typed authoring and opt-in checked coalescing; unchanged BMO1/BPI3/PST3 and invocation grammars",
+      "profile": "Current typed authoring and default safe checked coalescing; unchanged BMO1/BPI3/PST3 and invocation grammars",
       "files": [
         {
           "path": "src/root.zig",
@@ -334,7 +334,7 @@
     "compatiblePublishedReleaseObserved": false
   },
   "limitations": [
-    "Coalescing remains opt-in; full semantic, consumer, performance and serial-review qualification is incomplete.",
+    "Coalescing defaults to safe; remaining correctness, consumer integration and serial-review qualification is tracked in the acceptance inventory. Current compiler overhead and limited Agent reductions are accepted.",
     "The World runtime remains the authenticated B0 artifact built with Boundary f512dbb; both coalescing arms use that exact artifact."
   ]
 }

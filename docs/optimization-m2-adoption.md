@@ -74,3 +74,37 @@ clarify-first has 1,559 → 1,623 nodes, crossing capacity 1,580 → 2,379.
 Decoded-record storage falls in both cases. This is evidence against using image
 size alone as the cost model. Selection/representation repair remains open;
 no validation, memory threshold or mandatory P01 requirement has been waived.
+
+Isolated follow-up attributes the increases to expression reuse, rather than
+dead-computation removal alone. Running DCE before reuse did not remove either
+regression. An unshipped literal-rematerialization experiment removed the
+clarify-first retention increase but left review-model above its cutover memory;
+the remaining review-model reuse replaced four field projections with moves.
+Neither experiment was retained. The unresolved selection/lifetime cost is not
+a reason to change runtime ownership or waive the admission-memory criterion.
+
+## Prepared correction and integration scheduling
+
+Boundary `95277a26ef7d5fa04265a200f9d9fca7caed8981` is authenticated separately
+while the previous tuple is still under test. Its standalone source economy
+build passes 3/3 steps and fresh source emission completes all 18 workloads.
+Every image hash matches Boundary's recorded candidate-selection measurement:
+the two new native admission-memory increases are removed for these exact images.
+The active dependency lock still names `8321156`; no evidence is relabeled.
+
+The unchanged production WASM kernel subsequently exposed new `95277a2` costs
+in review-mid_review and review-clarify_first: peak increases of 13,636/13,642
+bytes and retained increases of 6,684/6,690 bytes. The three-fresh-kernel samples
+and exact image hashes are retained in `m2-wasm-admission-memory.json`. This
+candidate is not being rebound into the active lock. Boundary's successor now
+models native/WASM allocation growth from logical node counts; its closed-record
+probe reduces those increases to 38/44 bytes, but it still needs authenticated
+source/package binding and fresh emission here.
+
+The old concurrently scheduled Node integration batch completed with 93 passing,
+one failing and one cancelled test (95 total): inquiry CLI and packaged-command
+timeouts. The enclosing Zig aggregate still has other active checks. A focused invocation
+of the unchanged inquiry CLI test passes both tests in 78.5 seconds, preserving
+its 120-second timeout. Per-scenario reports show contention in the concurrent
+attempt. The next integrated run serializes Node test files; every original case,
+assertion and deadline remains. Its complete outcome is not yet established.

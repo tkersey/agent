@@ -51,7 +51,10 @@ await withVerifiedDependencies(options, async dependencies=>{
   if(mode==='authoring') {
     await run('node',['--test','test/agent4/values.test.mjs','test/agent4/model.test.mjs']);
   } else {
-    await run('node',['--test','test/agent4/dependencies.test.mjs','test/agent4/setup.test.mjs',
+    // These files qualify real sandbox executors and packaged CLI workloads.
+    // Concurrent files contend for the same host while enforcing their own
+    // deadlines. Keep every case/deadline; serialize only the file runners.
+    await run('node',['--test','--test-concurrency=1','test/agent4/dependencies.test.mjs','test/agent4/setup.test.mjs',
       'test/agent4/bridge.test.mjs','test/agent4/runner.test.mjs','test/agent4/approval.test.mjs',
       'test/agent4/document.test.mjs','test/agent4/review_runtime.mjs', 'test/agent4/package_commands.test.mjs',
       'test/agent4/consumer_build.test.mjs', 'test/agent4/inquiry_cli.test.mjs', 'test/agent4/parser_cli.test.mjs']);

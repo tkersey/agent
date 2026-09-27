@@ -258,29 +258,54 @@ const Emit = struct {
         return e.field(e.boolean, try e.meta(offered), 1);
     }
 
+    // Temporary boundary for existing source-defined policy/custody functions.
+    // Argument categories are checked here; normal Source/Agent admission still
+    // checks lexical captures, effects, and authority on the resulting call.
+    fn callSource(e: Emit, body: *typed.Body, function: Id, arguments: []const *const typed.Value) typed.Error!*const typed.Value {
+        if (function >= e.b.functions.items.len) return error.InvalidReference;
+        const target = e.b.functions.items[@intCast(function)];
+        if (target.parameters.len != arguments.len) return error.TypeMismatch;
+        const ids = try e.b.allocator().alloc(Id, arguments.len);
+        for (arguments, target.parameters, ids) |value, parameter, *id| {
+            id.* = try typed.interop.valueId(body, value);
+            if (e.b.values.items[@intCast(id.*)].schema != e.b.variables.items[@intCast(parameter)]) return error.TypeMismatch;
+        }
+        return typed.interop.term(body, try e.b.term(.{ .call = .{ .function = function, .arguments = ids } }), try typed.interop.schema(e.c, target.result));
+    }
+
     fn admitViews(e: Emit) Error!Id {
-        const b = e.b;
-        const t = e.d.types;
-        const own = e.d.custody.types;
-        const result = try b.schema(.{ .product = &.{ t.eligible_list, own.ids, own.ids } });
-        const f = try b.declare(&.{ own.views, e.s.subject, t.eligible_list, own.ids, own.ids }, result, &.{}, &.{});
-        const pop = try Pop.init(e, own.views, own.view);
-        const response = try b.variable(t.admission);
-        const denied = try b.variable(e.unit);
-        const retirement = try b.variable(e.unit);
-        const metadata = try b.variable(t.admitted);
-        const head = try e.ref(pop.head);
-        const bad = try e.call(f, &.{ try e.ref(pop.rest), try e.p(f, 1), try e.p(f, 2), try e.append(own.ids, try e.p(f, 3), try e.field(e.integer, head, 1)), try e.p(f, 4) });
-        const retired = try e.call(f, &.{ try e.ref(pop.rest), try e.p(f, 1), try e.p(f, 2), try e.p(f, 3), try e.append(own.ids, try e.p(f, 4), try e.field(e.integer, head, 1)) });
-        const admitted = try e.product(t.eligible, &.{ head, try e.ref(metadata) });
-        const good = try e.call(f, &.{ try e.ref(pop.rest), try e.p(f, 1), try e.append(t.eligible_list, try e.p(f, 2), admitted), try e.p(f, 3), try e.p(f, 4) });
-        const branch = try b.term(.{ .match_sum = .{ .value = try e.ref(response), .cases = &.{
-            .{ .variable = denied, .body = bad },         .{ .variable = metadata, .body = good },
-            .{ .variable = retirement, .body = retired },
-        } } });
-        const next = try b.bind(response, try e.call(e.f.?.admit, &.{ try e.p(f, 1), try e.field(e.s.demand, head, 2) }), branch);
-        try b.define(f, try pop.match(e, try e.p(f, 0), try b.pure(try e.product(result, &.{ try e.p(f, 2), try e.p(f, 3), try e.p(f, 4) })), next));
-        return f;
+        return e.admitTyped() catch |err| return typed.sourceError(err);
+    }
+    fn admitTyped(e: Emit) typed.Error!Id {
+        const c = e.c;
+        const offers = try typed.interop.schema(c, e.d.types.eligible_list);
+        const ids = try typed.interop.schema(c, e.d.custody.types.ids);
+        const result = try c.record(&.{ .{ .name = "offered", .schema = offers }, .{ .name = "denied", .schema = ids }, .{ .name = "retired", .schema = ids } });
+        const function = try c.function("admit inquiry views", &.{ .{ .name = "views", .schema = try typed.interop.schema(c, e.d.custody.types.views) }, .{ .name = "subject", .schema = try typed.interop.schema(c, e.s.subject) }, .{ .name = "offered", .schema = offers }, .{ .name = "denied", .schema = ids }, .{ .name = "retired", .schema = ids } }, result, &.{});
+        const body = try c.body(function);
+        const subject = try body.parameter("subject");
+        const offered = try body.parameter("offered");
+        const denied_ids = try body.parameter("denied");
+        const retired_ids = try body.parameter("retired");
+        const popped = try body.pop(try body.parameter("views"));
+        const empty = try body.caseOf(popped, "empty");
+        const item = try body.caseOf(popped, "item");
+        const finished = try empty.body().product(result, &.{ .{ .name = "offered", .value = offered }, .{ .name = "denied", .value = denied_ids }, .{ .name = "retired", .value = retired_ids } });
+        const work = item.body();
+        const parts = try work.destructure(item.payload());
+        const view_value = try parts.get("head");
+        const tail = try parts.get("tail");
+        const response = try e.callSource(work, e.f.?.admit, &.{ subject, try work.field(view_value, "2") });
+        const denied = try work.caseOf(response, "0");
+        const accepted = try work.caseOf(response, "1");
+        const retired = try work.caseOf(response, "2");
+        const bad = try denied.body().call(function, &.{ .{ .name = "views", .value = tail }, .{ .name = "subject", .value = subject }, .{ .name = "offered", .value = offered }, .{ .name = "denied", .value = try denied.body().append(denied_ids, try denied.body().field(view_value, "1")) }, .{ .name = "retired", .value = retired_ids } });
+        const metadata = try accepted.body().product(try typed.interop.schema(c, e.d.types.eligible), &.{ .{ .name = "0", .value = view_value }, .{ .name = "1", .value = accepted.payload() } });
+        const good = try accepted.body().call(function, &.{ .{ .name = "views", .value = tail }, .{ .name = "subject", .value = subject }, .{ .name = "offered", .value = try accepted.body().append(offered, metadata) }, .{ .name = "denied", .value = denied_ids }, .{ .name = "retired", .value = retired_ids } });
+        const stopped = try retired.body().call(function, &.{ .{ .name = "views", .value = tail }, .{ .name = "subject", .value = subject }, .{ .name = "offered", .value = offered }, .{ .name = "denied", .value = denied_ids }, .{ .name = "retired", .value = try retired.body().append(retired_ids, try retired.body().field(view_value, "1")) } });
+        const classified = try work.match(response, &.{ try denied.ret(bad), try accepted.ret(good), try retired.ret(stopped) });
+        try c.define(function, try body.ret(try body.match(popped, &.{ try empty.ret(finished), try item.ret(classified) })));
+        return typed.interop.functionId(c, function);
     }
 
     // Only reusable completed records are applicable; failures never enter this list.
@@ -492,8 +517,7 @@ const Emit = struct {
     // The public source callback was checked by checkPure before this adapter.
     // Remove this call-site projection when its policy callers become typed.
     fn callDiscriminator(e: Emit, body: *typed.Body, function: Id, left: *const typed.Value, right: *const typed.Value) typed.Error!*const typed.Value {
-        const term = try e.b.term(.{ .call = .{ .function = function, .arguments = &.{ try typed.interop.valueId(body, left), try typed.interop.valueId(body, right) } } });
-        return typed.interop.term(body, term, try e.c.scalar(bool));
+        return e.callSource(body, function, &.{ left, right });
     }
     fn betterTyped(_: Emit, body: *typed.Body, left: *const typed.Value, right: *const typed.Value, shared_left: *const typed.Value, shared_right: *const typed.Value) typed.Error!*const typed.Value {
         const lm = try body.field(left, "1");
@@ -573,13 +597,22 @@ const Emit = struct {
     }
 
     fn stopper(e: Emit) Error!Id {
-        const b = e.b;
-        const t = e.d.types;
-        const f = try b.declare(&.{ e.d.custody.types.state, try b.scalar(u8), t.records, e.integer, e.integer, e.integer }, t.outcome, e.effects, e.s.scope.borrowed_regions);
-        const findings = try b.variable(e.d.custody.types.findings);
-        const result = try e.product(t.outcome, &.{ try e.p(f, 1), try e.ref(findings), try e.p(f, 2), try e.p(f, 3), try e.p(f, 4), try e.p(f, 5) });
-        try b.define(f, try b.bind(findings, try e.call(e.d.custody.finish, &.{try e.p(f, 0)}), try b.pure(result)));
-        return f;
+        return e.stopperTyped() catch |err| return typed.sourceError(err);
+    }
+    fn stopperTyped(e: Emit) typed.Error!Id {
+        const c = e.c;
+        const integer = try c.scalar(u64);
+        const effects = try e.b.allocator().alloc(*const typed.Operation, e.effects.len);
+        for (effects, e.effects) |*out, id| out.* = try typed.interop.operation(c, id);
+        const regions = try e.b.allocator().alloc(*const typed.Region, e.s.scope.borrowed_regions.len);
+        for (regions, e.s.scope.borrowed_regions) |*out, id| out.* = try typed.interop.region(c, id);
+        const result = try typed.interop.schema(c, e.d.types.outcome);
+        const signature = try c.callable(&.{ .{ .name = "state", .schema = try typed.interop.schema(c, e.d.custody.types.state) }, .{ .name = "status", .schema = try c.scalar(u8) }, .{ .name = "records", .schema = try typed.interop.schema(c, e.d.types.records) }, .{ .name = "acquisitions", .schema = integer }, .{ .name = "reused", .schema = integer }, .{ .name = "recipients", .schema = integer } }, result, effects, .{ .use = .reusable, .captures = &.{}, .regions = regions });
+        const function = try c.functionFor("stop inquiry with findings", signature);
+        const body = try c.body(function);
+        const findings = try e.callSource(body, e.d.custody.finish, &.{try body.parameter("state")});
+        try c.define(function, try body.ret(try body.product(result, &.{ .{ .name = "0", .value = try body.parameter("status") }, .{ .name = "1", .value = findings }, .{ .name = "2", .value = try body.parameter("records") }, .{ .name = "3", .value = try body.parameter("acquisitions") }, .{ .name = "4", .value = try body.parameter("reused") }, .{ .name = "5", .value = try body.parameter("recipients") } })));
+        return typed.interop.functionId(c, function);
     }
 
     fn stopWith(e: Emit, o: Ops, state: Id, status: Status, records: Id) Error!Id {

@@ -1,9 +1,9 @@
 {
   "scope": "Existing workload B1/B2 structural census; timing and runtime qualification remain separate",
-  "boundary": "86f7f0d4785d3566273ba35cac978666dcea9182",
+  "boundary": "63137689bf788bc408ba638f47256f2a8f219b44",
   "world": "c20695e00056186a4b74564da6e4ca1c368cb33b",
   "kernelSha256": "7d31effb1d4e32523d0fcbd5b4d5f5a8a2289fbd4c731173a33b1c174524282f",
-  "lockSha256": "3e6538781321514dde84073bea42278c4978d7980d49098c2f4d756d26720f28",
+  "lockSha256": "d7acec23db26819d78350802bc0cf25a249f162f6e86d2df788643ab87405ea8",
   "workloadSources": [
     {
       "path": "test/consumers/document/main.zig",

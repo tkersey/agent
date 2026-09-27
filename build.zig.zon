@@ -3,7 +3,7 @@
     .version = "4.0.0-dev.0",
     .dependencies = .{
         .boundary = .{
-            .url = "https://github.com/tkersey/boundary/archive/86f7f0d4785d3566273ba35cac978666dcea9182.tar.gz",
+            .url = "https://github.com/tkersey/boundary/archive/63137689bf788bc408ba638f47256f2a8f219b44.tar.gz",
             .hash = "boundary-3.0.0-dev.0-flclaIZJWQAOQqcdOhsEGn6hW_zCLXKZg9jz56fn-ZlR",
         },
     },

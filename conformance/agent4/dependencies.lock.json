@@ -3,7 +3,7 @@
   "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "86f7f0d4785d3566273ba35cac978666dcea9182",
+    "commit": "63137689bf788bc408ba638f47256f2a8f219b44",
     "gitTree": "79f7b243faa71ed2e4131860da53e851ac866cc3",
     "version": "3.0.0-dev.0",
     "source": {
@@ -12,9 +12,9 @@
       "bytes": 10615719
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/86f7f0d4785d3566273ba35cac978666dcea9182.tar.gz",
-      "bytes": 1419702,
-      "sha256": "d448e9d4c36ce676d26721f43941d6ce9d3b72e4f031700c0c4c0ea1c12a2b93"
+      "url": "https://github.com/tkersey/boundary/archive/63137689bf788bc408ba638f47256f2a8f219b44.tar.gz",
+      "bytes": 1419692,
+      "sha256": "05daa204903dca57253ccc1b2ec3e6e14f41ff93a11d55cbd0d9bedd080380d2"
     },
     "authentication": "Downloaded GitHub archive tree recomputed and matched to the GitHub commit API; archive and complete source/package inventories independently measured",
     "package": {
@@ -329,12 +329,12 @@
     "architecture": "arm64"
   },
   "publicationObservation": {
-    "boundarySource": "draft PR 160",
+    "boundarySource": "merged PR 160 at 63137689bf788bc408ba638f47256f2a8f219b44",
     "worldSource": "World c20695e; unchanged authenticated B0 runtime",
     "compatiblePublishedReleaseObserved": false
   },
   "limitations": [
-    "Coalescing defaults to safe; remaining correctness, consumer integration and serial-review qualification is tracked in the acceptance inventory. Current compiler overhead and limited Agent reductions are accepted.",
+    "Coalescing defaults to safe. Boundary and Agent correctness, consumer integration and serial-review qualification passed on the reviewed source tree; the landed Boundary commit has the identical tree. Current compiler overhead and limited Agent reductions are accepted.",
     "The World runtime remains the authenticated B0 artifact built with Boundary f512dbb; both coalescing arms use that exact artifact."
   ]
 }

@@ -1,13 +1,14 @@
 # Coalescing consumer qualification
 
-Status: draft; the default is `safe`. The accepted Boundary specification v2.1
+The default is `safe`. The accepted Boundary specification v2.1
 amendment makes speedup optional and accepts current compiler overhead and limited
 Agent reductions. Correctness, integration and review remain required.
 
 ## Dependency and configuration
 
-The candidate selects Boundary `86f7f0d4785d3566273ba35cac978666dcea9182`
-([draft PR 160](https://github.com/tkersey/boundary/pull/160)). Its downloaded
+The consumer selects landed Boundary `63137689bf788bc408ba638f47256f2a8f219b44`
+([merged PR 160](https://github.com/tkersey/boundary/pull/160)). Its Git tree is
+identical to the reviewed Boundary head `86f7f0d4785d3566273ba35cac978666dcea9182`. The downloaded
 archive was checked against GitHub's commit tree
 `79f7b243faa71ed2e4131860da53e851ac866cc3`; source and Zig package inventories
 were recomputed. The predecessor Boundary pin was `f512dbb` and the Agent
@@ -16,7 +17,7 @@ starting commit was `7b3215cecabd93e7b8d4c547f6c3948a838cf3f5`.
 World remains `c20695e00056186a4b74564da6e4ca1c368cb33b`. Both arms use the
 authenticated kernel with SHA-256
 `7d31effb1d4e32523d0fcbd5b4d5f5a8a2289fbd4c731173a33b1c174524282f`.
-Fresh setup against the candidate also reproduced that exact artifact and its
+Fresh setup against the landed commit also reproduced that exact artifact and its
 runtime inventory. There is no World evaluator change or new wire version.
 
 ```zig
@@ -82,7 +83,7 @@ The maintained aggregate retains its predecessor assertions. The compiled-tool
 runtime harness adds an enabled arm, verifies the final-link outcome (not merely
 intermediate component observation), and preserves its original emission counts.
 
-The final consumer qualification command passed against Boundary `86f7f0d`:
+The final consumer qualification command passed against Boundary `6313768`:
 
 ```sh
 zig build check-agent4 check-agent4-integration build-component-tools \
@@ -98,15 +99,14 @@ witnesses. These are macOS arm64 results with Zig 0.16.0, Node 26.10.0 and Bun
 evaluation. Boundary records its separate semantic, diagnostic and browser
 qualification in its acceptance inventory.
 
-Required serial review convergence remains open. The released Codex CLI timed
-out during CAS startup preflight; no review began or earned credit. Neither
-repository is ready for promotion, merge or release until that review completes.
+The serial review record for each Agent head is tracked in [PR 38](https://github.com/tkersey/agent/pull/38).
+The released Codex 0.157.0 runtime passed CAS's review compatibility gate.
 
-## Default enablement at Boundary 86f7f0d
+## Default enablement at landed Boundary 6313768
 
 Fresh authenticated setup reproduced the locked World runtime and kernel. The
 source archive tree, source inventory, Zig package inventory and API file hashes
-were recomputed for Boundary `86f7f0d4785d3566273ba35cac978666dcea9182`.
+were recomputed for Boundary `63137689bf788bc408ba638f47256f2a8f219b44`.
 The three modes (explicit off, explicit safe, omitted option) compile the same
 18 workload configurations. All default images equal explicit safe byte for byte.
 The census still reports no removed function bodies or constructors, as accepted.

@@ -2,6 +2,7 @@
 //! A suspended future remains internal program data and has linear custody.
 const boundary = @import("boundary");
 const source = boundary.computation;
+const typed = boundary.authoring;
 const Id = source.Id;
 
 pub const Dialogue = struct {
@@ -75,7 +76,8 @@ pub fn define(
         .awaiting = awaiting,
         .package = package,
         .resumption = resumption,
-        .handler = try defineHandler(builder, effect, result, outgoing, answer, awaiting, package, resumption, scope),
+        .handler = defineHandler(builder, effect, result, answer, awaiting, scope) catch |err|
+            return typed.sourceError(err),
     };
     return instance.finish(builder, dialogue);
 }
@@ -84,28 +86,52 @@ fn defineHandler(
     b: *source.Builder,
     effect: Id,
     result: Id,
-    outgoing: Id,
     answer: Id,
     awaiting: Id,
-    package: Id,
-    resumption: Id,
     scope: Scope,
-) source.Error!Id {
-    const returns = try b.declare(&.{result}, answer, &.{}, scope.borrowed_regions);
-    const returned = try b.reference(b.parameter(returns, 0));
-    try b.define(returns, try b.pure(try b.primitive(answer, .variant, &.{returned}, 0)));
-    const clause = try b.declare(&.{ outgoing, resumption }, answer, &.{}, scope.borrowed_regions);
-    const future = try b.primitive(package, .package, &.{try b.reference(b.parameter(clause, 1))}, 0);
-    const offered = try b.primitive(awaiting, .product, &.{ try b.reference(b.parameter(clause, 0)), future }, 0);
-    try b.define(clause, try b.pure(try b.primitive(answer, .variant, &.{offered}, 1)));
-    return b.handler(.{
+) typed.Error!Id {
+    const c = try typed.Context.init(b);
+    const operation = try typed.interop.operation(c, effect);
+    const result_schema = try typed.interop.schema(c, result);
+    // The finite recursive answer group was completed before its checked adoption.
+    const answer_schema = try typed.interop.schema(c, answer);
+    const awaiting_schema = try typed.interop.schema(c, awaiting);
+    const captures = try b.allocator().alloc(*const typed.Schema, scope.captures.len + 1);
+    for (scope.captures, 0..) |id, i| captures[i] = try typed.interop.schema(c, id);
+    captures[scope.captures.len] = try c.capability(operation);
+    const residual = try b.allocator().alloc(*const typed.Operation, scope.residual.effects.len);
+    for (residual, scope.residual.effects) |*item, id| item.* = try typed.interop.operation(c, id);
+    const owned = try b.allocator().alloc(*const typed.Region, scope.owned_regions.len);
+    for (owned, scope.owned_regions) |*item, id| item.* = try typed.interop.region(c, id);
+    const borrowed = try b.allocator().alloc(*const typed.Region, scope.borrowed_regions.len);
+    for (borrowed, scope.borrowed_regions) |*item, id| item.* = try typed.interop.region(c, id);
+    const handler = try c.handler(operation, result_schema, answer_schema, .{
         .mode = .deep,
-        .input = result,
-        .answer = answer,
-        .return_function = returns,
-        .clauses = &.{.{ .effect = effect, .function = clause, .resumption = resumption }},
-        .effects = scope.residual.effects,
+        .use = .linear,
+        .obligations = true,
+        .residual = residual,
+        .return_effects = &.{},
+        .clause_effects = &.{},
+        .captures = captures,
+        .owned_regions = owned,
+        .borrowed_regions = borrowed,
     });
+    const returns_fn = try c.returnFunction(handler);
+    const returns = try c.body(returns_fn);
+    try c.define(returns_fn, try returns.ret(try returns.variant(
+        answer_schema,
+        "0",
+        try returns.parameter("result"),
+    )));
+    const clause_fn = try c.clauseFunction(handler);
+    const clause = try c.body(clause_fn);
+    const future = try clause.package(try clause.parameter("resumption"));
+    const offered = try clause.product(awaiting_schema, &.{
+        .{ .name = "0", .value = try clause.parameter("payload") },
+        .{ .name = "1", .value = future },
+    });
+    try c.define(clause_fn, try clause.ret(try clause.variant(answer_schema, "1", offered)));
+    return typed.interop.handlerId(c, handler);
 }
 
 /// The body's first parameter receives the dialogue capability. Further

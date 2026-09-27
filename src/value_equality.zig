@@ -12,9 +12,7 @@ pub fn create(c: *a.Context, schema: *const a.Schema, failure: *const a.FailureL
     const b = a.interop.builder(c);
     const id = try a.interop.schemaId(c, schema);
     _ = try a.interop.failureLiteralId(c, failure);
-    var visited = std.AutoHashMapUnmanaged(Id, void){};
-    defer visited.deinit(b.allocator());
-    try portable(b, id, &visited);
+    try checkPortableSchema(b, id);
     return declare(c, schema, failure);
 }
 
@@ -26,9 +24,7 @@ pub fn define(b: *source.Builder, schema: Id, failure: Id) Error!Id {
     };
 }
 fn adapted(b: *source.Builder, schema: Id, failure: Id) TypedError!Id {
-    var visited = std.AutoHashMapUnmanaged(Id, void){};
-    defer visited.deinit(b.allocator());
-    try portable(b, schema, &visited);
+    try checkPortableSchema(b, schema);
     const literal = try b.failureLiteral(failure);
     const cached = try b.specialization(Id, "agent.value-equality/source-adapter/v2", .{ schema, literal });
     if (cached.cached) |function| return function;
@@ -41,6 +37,15 @@ pub fn compare(b: *source.Builder, schema: Id, left: Id, right: Id, failure: Id)
     if (left >= b.values.items.len or right >= b.values.items.len) return error.InvalidReference;
     if (b.values.items[@intCast(left)].schema != schema or b.values.items[@intCast(right)].schema != schema) return error.TypeMismatch;
     return b.term(.{ .call = .{ .function = try define(b, schema, failure), .arguments = &.{ left, right } } });
+}
+
+/// Inspect a source schema for portable equality/presentation admission without
+/// emitting code. This is an IR admission boundary: IDs belong to this Builder,
+/// and every call rechecks the current graph, including recursive children.
+pub fn checkPortableSchema(b: *source.Builder, schema: Id) Error!void {
+    var visited = std.AutoHashMapUnmanaged(Id, void){};
+    defer visited.deinit(b.allocator());
+    try portable(b, schema, &visited);
 }
 
 fn portable(
@@ -249,4 +254,23 @@ test "typed comparisons preserve named records and share equal failure literals"
     try std.testing.expectError(error.ForeignHandle, create(foreign, schema, try foreign.literalFailure(void, {})));
     var compiled = try c.compile(std.testing.allocator, function, unit);
     defer compiled.deinit();
+}
+
+test "portable schema admission emits no code and rechecks recursive mutable graphs" {
+    var b = source.Builder.init(std.testing.allocator);
+    defer b.deinit();
+    const leaf = try b.reserveSchema();
+    try b.defineSchema(leaf, .u64);
+    const tree = try b.reserveSchema();
+    const node = try b.schema(.{ .product = &.{ leaf, tree } });
+    try b.defineSchema(tree, .{ .sum = &.{ leaf, node } });
+    try checkPortableSchema(&b, tree);
+    try std.testing.expectEqual(@as(usize, 0), b.functions.items.len);
+    try std.testing.expectEqual(@as(usize, 0), b.values.items.len);
+    // Source admission observes the present graph; a previous successful check
+    // is not a certificate for a subsequently changed source declaration.
+    b.schemas.items[@intCast(leaf)] = .{ .internal = .{ .cell = .{ .element = tree, .region = b.region() } } };
+    try std.testing.expectError(error.UnsupportedEqualitySchema, checkPortableSchema(&b, tree));
+    try std.testing.expectError(error.InvalidReference, checkPortableSchema(&b, b.schemas.items.len));
+    try std.testing.expectEqual(@as(usize, 0), b.functions.items.len);
 }

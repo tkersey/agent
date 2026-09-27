@@ -17,9 +17,10 @@ fn observe(program: boundary.data.activation.Program, left: []const u8, right: [
 }
 
 fn check(b: *boundary.source.Builder, schema: Id, left: []const u8, right: []const u8) !void {
-    const failure = try b.constant(void, {});
-    const function = try equality.define(b, schema, failure);
-    var compiled = try boundary.program.compile(std.testing.allocator, b.module(function, try b.scalar(void)));
+    const c = try boundary.authoring.Context.init(b);
+    const contract = try boundary.authoring.interop.schema(c, schema);
+    const function = try equality.create(c, contract, try c.literalFailure(void, {}));
+    var compiled = try c.compile(std.testing.allocator, function, try c.scalar(void));
     defer compiled.deinit();
     try observe(compiled.program, left, left, true);
     try observe(compiled.program, right, right, true);

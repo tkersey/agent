@@ -3,6 +3,7 @@
 //! This module owns coverage, exact-key grouping, and offered-choice selection.
 const std = @import("std");
 const source = @import("boundary").source;
+const typed = @import("boundary").authoring;
 const deliberation = @import("deliberation.zig");
 const equality = @import("value_equality.zig");
 const interaction = @import("interaction.zig");
@@ -71,15 +72,19 @@ pub fn define(b: *Builder, spec: Spec) Error!Definition {
         }
     }
     // Also rejects internal types nested in externally presented candidates.
-    _ = try equality.define(b, spec.candidate, spec.failure);
-    const key_equal = try equality.define(b, spec.key, spec.failure);
+    try equality.checkPortableSchema(b, spec.candidate);
+    _ = try b.failureLiteral(spec.failure);
+    try equality.checkPortableSchema(b, spec.key);
     const cached = try b.specialization(Definition, "agent.clarification/v1", .{spec});
     if (cached.cached) |present| return present;
     const t = try schemas(b, spec.candidate, spec.key);
     const e = Emit{ .b = b, .t = t, .failure = spec.failure };
     const contains = try containsId(e);
     const valid = try validateEvaluations(e, spec.domain, contains);
-    const insert = try insertGroup(e, key_equal);
+    const insert = insertGroup(e, spec.key) catch |err| return switch (err) {
+        error.UnsupportedEqualitySchema => error.UnsupportedEqualitySchema,
+        else => typed.sourceError(@errorCast(err)),
+    };
     const group = try groupEvaluations(e, insert);
     const classified = try classifier(e, spec.domain, valid, group);
     const multi = try deliberation.define(
@@ -181,8 +186,9 @@ pub fn resolver(b: *Builder, d: Definition, p: Presentation) Error!Id {
     try checkPure(b, p.present, &.{ p.context, d.types.choice }, contract.outgoing);
     // Checking complete portable schemas also catches context/resource leaks.
     const failure = d.failure;
-    _ = try equality.define(b, p.context, failure);
-    _ = try equality.define(b, contract.outgoing, failure);
+    try equality.checkPortableSchema(b, p.context);
+    _ = try b.failureLiteral(failure);
+    try equality.checkPortableSchema(b, contract.outgoing);
     const f = try b.declare(&.{ p.context, d.types.classification }, d.types.resolution, &.{p.exchange.effect}, &.{});
     const common = try b.variable(d.types.group);
     const choice = try b.variable(d.types.choice);
@@ -341,40 +347,42 @@ fn groupEvaluations(e: Emit, insert: Id) Error!Id {
     return f;
 }
 
-fn insertGroup(e: Emit, key_equal: Id) Error!Id {
-    const b = e.b;
-    const f = try b.declare(&.{ e.t.groups, e.t.group }, e.t.groups, &.{}, &.{});
-    const groups = try b.reference(b.parameter(f, 0));
-    const added = try b.reference(b.parameter(f, 1));
-    const pop = try Pop.init(b, e.t.groups, e.t.group);
-    const old = try b.reference(pop.head);
-    const same = try b.variable(try b.scalar(bool));
-    const tail = try b.variable(e.t.groups);
-    const old_known = try e.field(e.t.known, old, 1);
-    const new_known = try e.field(e.t.known, added, 1);
-    const comparison = try call(b, key_equal, &.{
-        try e.field(e.t.key, old_known, 1), try e.field(e.t.key, new_known, 1),
+fn insertGroup(e: Emit, key: Id) equality.TypedError!Id {
+    const c = try typed.Context.init(e.b);
+    const group = try typed.interop.schema(c, e.t.group);
+    const groups = try typed.interop.schema(c, e.t.groups);
+    const fault = try typed.interop.literalFailure(c, e.failure, try typed.interop.schema(c, e.b.values.items[@intCast(e.failure)].schema));
+    const equal = try equality.create(c, try typed.interop.schema(c, key), fault);
+    const f = try c.function("group exact clarification keys", &.{ .{ .name = "groups", .schema = groups }, .{ .name = "added", .schema = group } }, groups, &.{});
+    const body = try c.body(f);
+    const added = try body.parameter("added");
+    const popped = try body.pop(try body.parameter("groups"));
+    const empty = try body.caseOf(popped, "empty");
+    const item = try body.caseOf(popped, "item");
+    const work = item.body();
+    const old = try work.field(item.payload(), "head");
+    const tail = try work.field(item.payload(), "tail");
+    const same = try work.call(equal, &.{
+        .{ .name = "left", .value = try work.field(try work.field(old, "1"), "1") },
+        .{ .name = "right", .value = try work.field(try work.field(added, "1"), "1") },
     });
-    const merged = try mergedGroup(e, old, added);
-    const combined = try b.pure(try e.concat(e.t.groups, try e.sequence(e.t.groups, &.{merged}), try b.reference(pop.rest)));
-    const rest = try b.bind(tail, try call(b, f, &.{ try b.reference(pop.rest), added }), try b.pure(try e.concat(e.t.groups, try e.sequence(e.t.groups, &.{old}), try b.reference(tail))));
-    const checked = try b.bind(same, comparison, try e.conditional(try b.reference(same), combined, rest));
-    try b.define(f, try pop.match(b, groups, try b.pure(try e.sequence(e.t.groups, &.{added})), checked));
-    return f;
-}
-
-fn mergedGroup(e: Emit, old: Id, added: Id) Error!Id {
-    const b = e.b;
-    const integer = try b.scalar(u64);
-    const old_id = try e.field(integer, old, 0);
-    const new_id = try e.field(integer, added, 0);
-    const earlier = try b.primitive(try b.scalar(bool), .less, &.{ new_id, old_id }, 0);
-    const representative = try b.primitive(e.t.group, .select, &.{ earlier, added, old }, 0);
-    return e.product(e.t.group, &.{
-        try e.field(integer, representative, 0),
-        try e.field(e.t.known, representative, 1),
-        try e.concat(e.t.ids, try e.field(e.t.ids, old, 2), try e.field(e.t.ids, added, 2)),
+    const yes = try work.branch();
+    const no = try work.branch();
+    const earlier = try yes.less(try yes.field(added, "0"), try yes.field(old, "0"));
+    const representative = try yes.select(earlier, added, old);
+    const merged = try yes.product(group, &.{
+        .{ .name = "0", .value = try yes.field(representative, "0") },
+        .{ .name = "1", .value = try yes.field(representative, "1") },
+        .{ .name = "2", .value = try yes.concat(try yes.field(old, "2"), try yes.field(added, "2")) },
     });
+    const combined = try yes.concat(try yes.sequenceValue(groups, &.{merged}), tail);
+    const rest = try no.call(f, &.{ .{ .name = "groups", .value = tail }, .{ .name = "added", .value = added } });
+    const retained = try no.concat(try no.sequenceValue(groups, &.{old}), rest);
+    const selected = try work.conditional(same, try yes.ret(combined), try no.ret(retained));
+    try c.define(f, try body.ret(try body.match(popped, &.{
+        try empty.ret(try empty.body().sequenceValue(groups, &.{added})), try item.ret(selected),
+    })));
+    return typed.interop.functionId(c, f);
 }
 
 fn selector(e: Emit) Error!Id {
@@ -516,7 +524,9 @@ test "domain and portable projection declarations reject before authoring contro
     try std.testing.expectError(error.UnsupportedEqualitySchema, define(&b, spec));
     spec.candidate = integer;
     const d = try define(&b, spec);
+    const declarations = b.functions.items.len;
     try std.testing.expectEqual(d.classify, (try define(&b, spec)).classify);
+    try std.testing.expectEqual(declarations, b.functions.items.len);
     var compiled = try @import("boundary").program.compile(
         std.testing.allocator,
         b.module(d.classify, try b.scalar(void)),

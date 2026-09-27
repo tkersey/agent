@@ -203,7 +203,7 @@ fn finishSession(c: agent.Context, author: *typed.Context, session: Id, family: 
     for (capture_ids, captures) |id, *schema| schema.* = try typed.interop.schema(author, id);
     const residual = try b.allocator().alloc(*const typed.Operation, external_rows.len);
     for (external_rows, residual) |id, *operation| operation.* = try typed.interop.operation(author, id);
-    const catching = try boundary.library.raise.catching(author, family, try typed.interop.schema(author, memory), captures, residual, &.{});
+    const catching = try boundary.library.raise.catching(author, family, try typed.interop.schema(author, memory), .{ .continuation = captures }, residual, &.{});
     const outer_rows = try code.row(b, external_rows, &.{cleanup});
     const entry = try b.declare(&.{request}, memory, outer_rows, &.{});
     const body = try b.declare(&.{}, memory, external_rows, &.{});

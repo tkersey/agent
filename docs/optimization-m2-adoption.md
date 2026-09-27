@@ -67,6 +67,17 @@ browser/file/browser transfer and cleanup. The exact log hash and tuple are in
 
 Paired timing, compiler-cost reporting and final review closure remain open.
 
+Admission timing now completes all 72 native/WASM local and cumulative cells
+under the supplied alternating-window protocol. No C2/C1 cell has a reproducible
+greater-than-5% slowdown. ReAct's paired median admission ratios are 0.889 native
+and 0.888 WASM versus C1, and 0.854/0.857 versus C0. Three cumulative cells retain
+previously accepted cutover slowdowns: native review-clarify_first (1.089), native
+review-model (1.192), and WASM review-model (1.171). Their local C2/C1 cells have no
+confirmed slowdown. The exact ratios remain visible rather than being replaced
+by the historical percentages; `m2-admission-timing.json` preserves every raw
+window/sample in compact JSON rows. This does not qualify execution/checkpoint
+timing, which is running separately.
+
 The unchanged inquiry/ReAct scenarios execute all 13 cases and 128 semantic
 boundaries identically for C0, C1 and C2: canonical request schemas/payloads,
 nominal effect identities, results, approvals, writes and cleanup agree.

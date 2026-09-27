@@ -1,9 +1,9 @@
 {
   "status": "incomplete",
-  "boundaryCommit": "e82386e2a2a7446b87bfa0b7a2409f2c88a00ada",
+  "boundaryCommit": "5f5c11e7f1331ba4b10e8520f48df8278765a704",
   "worldBinding": "unchanged",
-  "sourceMetricsSha256": "ee24821d7408c59f62e42ca587cdc600c9cc28cd48770b245c8588a395f09e90",
-  "qualification": "Authenticated tuple and fresh 18-image source emission verified; six review and 38 clarification WASM scenarios passed. Final integrated/serial/browser and economic qualification incomplete.",
+  "sourceMetricsSha256": "346471bbb13afbb130e7f1ae951536ec84a9ef4ae5ecc1a8da1399e9e716de49",
+  "qualification": "Final M2 source/archive/extracted and managed package inventories verify; standalone source emission matches all 18 cost-probe image hashes. Integrated Agent/serial/browser aggregate active, no terminal pass credited.",
   "priorObservation": {
     "boundaryCommit": "517cfb1670671f8b9383aa8711b76c30a01f32ad",
     "workLimitWorkloads": [
@@ -406,6 +406,8 @@
     "reviewTests": 6,
     "clarificationScenarios": 38,
     "engine": "unchanged production WASM",
-    "nativeComparison": false
+    "nativeComparison": false,
+    "boundaryCommit": "e82386e2a2a7446b87bfa0b7a2409f2c88a00ada",
+    "reusedByExactImageIdentityFor": "5f5c11e7f1331ba4b10e8520f48df8278765a704"
   }
 }

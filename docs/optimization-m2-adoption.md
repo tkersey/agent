@@ -1,7 +1,7 @@
 # M2 semantic compilation adoption — in progress
 
 This successor preserves cutover PR #39 at `c181ef5`. Boundary authoring is rebound
-to `e82386e2a2a7446b87bfa0b7a2409f2c88a00ada` (Boundary draft #162). The downloaded
+to `5f5c11e7f1331ba4b10e8520f48df8278765a704` (Boundary draft #162). The downloaded
 GitHub archive's reconstructed Git tree matches the commit API, and the source,
 Zig-managed package and extracted-package inventories have been checked. The World
 lock, authenticated runtime and kernel are unchanged; no kernel was rebuilt or
@@ -50,13 +50,16 @@ migration is required by this audit.
 
 ## Current evidence and unresolved qualification
 
-At Boundary `e82386e`, the source archive, GitHub tree, extracted package,
+At Boundary `5f5c11e`, the source archive, GitHub tree, extracted package,
 Zig-managed package and existing World tuple verify. Managed component tools
 pass 7/7 steps; the standalone economy build passes 3/3 steps. Fresh source
 emission completes all 18 workloads and every image hash equals the cross-engine
 candidate-selection probe. Six review runtime tests and 38 clarification
-scenarios pass against the unchanged production WASM kernel (no native execution
-comparison is claimed for these two focused commands).
+scenarios passed on the preceding `e82386e` images. The new emission has identical
+image hashes, so that unchanged-kernel behavior evidence remains applicable; no
+fresh native execution comparison is claimed for those two focused commands.
+The frozen-implementation aggregate, including serial Node files and browser
+transfer checks, is active and receives no terminal pass credit yet.
 
 Final integrated/serial/browser qualification, execution/checkpoint/timing costs,
 consumer-policy completion and remaining M2 transformations are still open.

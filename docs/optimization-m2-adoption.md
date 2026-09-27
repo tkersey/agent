@@ -53,3 +53,24 @@ Native/Node/WASM/browser behavior, separate World admission/execution/memory and
 checkpoint costs, package bindings and cumulative C0 comparisons remain pending.
 The accepted cutover costs remain in the baseline; no new World regression is
 accepted implicitly. No PR is ready to merge and no merge/release is authorized.
+
+## Native admission-memory observation
+
+`conformance/agent4/m2-admission-memory.json` binds all 18 images in three arms:
+the original C0 corpus, retained cutover corpus and freshly emitted M2 corpus.
+One ReleaseSafe executable uses World `f8a1597` and Boundary `8321156` for every
+arm. Twelve admissions per image measure Workspace peak payload and retained
+Prepared storage. Timings are omitted because qualification was running.
+
+ReAct peak admission payload falls **1,524,416 → 1,364,714 bytes** versus cutover
+(159,702 fewer), and retained storage falls by 129,662 bytes. Two new costs need
+resolution: review-model peak **104,388 → 108,166** and retained storage
+**91,486 → 95,146**; clarify-first retained storage **281,526 → 294,120** despite
+a slightly lower peak. These increases are not covered by the earlier acceptance.
+
+The allocation breakdown identifies growth in the admission analysis set pool:
+review-model has 455 → 473 interned nodes, crossing capacity 455 → 692;
+clarify-first has 1,559 → 1,623 nodes, crossing capacity 1,580 → 2,379.
+Decoded-record storage falls in both cases. This is evidence against using image
+size alone as the cost model. Selection/representation repair remains open;
+no validation, memory threshold or mandatory P01 requirement has been waived.

@@ -268,7 +268,7 @@ fn discardIdle(b: *source.Builder, g: boundary.library.generator.Generator, valu
 /// independently live while the reciprocal task and model responder are parked.
 fn withIdle(b: *source.Builder, t: Types, work: Id) !Id {
     const unit = try b.scalar(void);
-    const g = try boundary.library.generator.define(b, "fixture.recursive.idle", t.integer, &.{ unit, t.integer }, &.{}, .{ .effects = &.{t.read} });
+    const g = try boundary.library.generator.defineExchange(b, "fixture.recursive.idle", unit, t.integer, unit, &.{ unit, t.integer }, &.{}, &.{}, .{ .effects = &.{t.read} });
     const body = try b.declare(&.{g.capability}, unit, &.{ t.read, g.effect }, &.{});
     const offered = try b.term(.{ .perform = .{ .effect = g.effect, .capability = try b.reference(b.parameter(body, 0)), .payload = try b.constant(u64, 7) } });
     const observed = try b.term(.{ .perform = .{ .effect = t.read, .payload = try b.constant(u64, 1) } });

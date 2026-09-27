@@ -42,7 +42,7 @@ fn Application(comptime duplicate: bool, comptime assessment: bool, comptime wri
             while (i > 0) {
                 i -= 1;
                 const result = try b.variable(g.answer);
-                work = try b.bind(result, try generator.begin(b, g, try b.lambda(body, signature), try b.constant(u64, i + 1)), try unpack(b, g, try b.reference(result), owners[i], work));
+                work = try b.bind(result, try generator.start(b, g, try b.lambda(body, signature), &.{try b.constant(u64, i + 1)}), try unpack(b, g, try b.reference(result), owners[i], work));
             }
             try b.define(entry, work);
             if (assessment) try c.registry.speculate(entry, &.{release});

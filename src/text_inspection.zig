@@ -138,7 +138,7 @@ pub fn emit(allocator: std.mem.Allocator) ![]u8 {
     const loop = try fold(e, read);
     const captures = try b.allocator().alloc(Id, b.schemas.items.len);
     for (captures, 0..) |*id, i| id.* = i;
-    const generator = try boundary.library.generator.define(&b, "agent.text.result.v1", result_schema, captures, &.{}, .{ .effects = &.{ read, close } });
+    const generator = try boundary.library.generator.defineExchange(&b, "agent.text.result.v1", e.unit, result_schema, e.unit, captures, &.{}, &.{}, .{ .effects = &.{ read, close } });
     const main = try b.declare(&.{subject_schema}, result_schema, &.{ read, close }, &.{});
     const subject = try e.p(main, 0);
     const start = try b.declare(&.{generator.capability}, e.unit, &.{ read, close, generator.effect }, &.{});

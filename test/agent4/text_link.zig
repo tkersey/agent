@@ -66,7 +66,7 @@ fn withRetainedWork(c: agent.Context, side_effect: source.Id, tool: agent.tools.
     const b = c.builder;
     const unit = try b.scalar(void);
     const integer = try b.scalar(u64);
-    const g = try boundary.library.generator.define(b, "agent.text.side-task.v1", integer, &.{ unit, integer }, &.{}, .{ .effects = &.{side_effect} });
+    const g = try boundary.library.generator.defineExchange(b, "agent.text.side-task.v1", unit, integer, unit, &.{ unit, integer }, &.{}, &.{}, .{ .effects = &.{side_effect} });
     const body = try b.declare(&.{g.capability}, unit, &.{ side_effect, g.effect }, &.{});
     const offered = try b.term(.{ .perform = .{ .effect = g.effect, .capability = try b.reference(b.parameter(body, 0)), .payload = try b.constant(u64, 7) } });
     const resumed = try b.term(.{ .perform = .{ .effect = side_effect, .payload = try b.constant(u64, 77) } });

@@ -505,8 +505,8 @@ const Retained = struct {
         const resume_side = try b.bind(final, try generator.exchange(b, self.g, try b.reference(zp), try b.constant(u64, 7)), done);
         const close_local = try b.bind(try b.variable(try b.scalar(void)), try generator.close(b, self.g, try b.reference(ap)), resume_side);
         const run = try b.bind(saved, computation, close_local);
-        const second = try b.bind(z, try generator.begin(b, self.g, self.body, try b.constant(u64, 50)), try self.yielded(b, try b.reference(z), zp, run));
-        return b.bind(a, try generator.begin(b, self.g, self.body, try b.constant(u64, 5)), try self.yielded(b, try b.reference(a), ap, second));
+        const second = try b.bind(z, try generator.start(b, self.g, self.body, &.{try b.constant(u64, 50)}), try self.yielded(b, try b.reference(z), zp, run));
+        return b.bind(a, try generator.start(b, self.g, self.body, &.{try b.constant(u64, 5)}), try self.yielded(b, try b.reference(a), ap, second));
     }
 };
 const System = agent.system(.{ .InitialArgs = Input, .Result = Contribution, .Failure = void, .application = Application });

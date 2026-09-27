@@ -333,11 +333,14 @@ pub fn disposalProbe(b: *source.Builder) !source.Module {
         .result = unit,
     });
     const gen = boundary.library.generator;
-    const g = try gen.define(
+    const g = try gen.defineExchange(
         b,
         "agent4.probe.disposal-yield",
+        unit,
         integer,
+        unit,
         &.{ unit, integer },
+        &.{},
         &.{},
         .{ .effects = &.{release} },
     );

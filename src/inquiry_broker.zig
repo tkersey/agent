@@ -3,6 +3,7 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const source = boundary.source;
+const typed = boundary.authoring;
 const custody = @import("inquiry.zig");
 const equality = @import("value_equality.zig");
 const authoring = @import("authoring.zig");
@@ -156,7 +157,7 @@ fn implementWithRegistry(b: *Builder, spec: Spec, d: Definition, functions: Func
     @memcpy(effects[0..spec.scope.residual.effects.len], spec.scope.residual.effects);
     effects[effects.len - 1] = d.experiment;
     std.mem.sort(Id, effects, {}, std.sort.asc(Id));
-    const e: Emit = .{ .b = b, .s = spec, .d = d, .f = functions, .integer = integer, .boolean = boolean, .unit = try b.scalar(void), .effects = effects, .registry = registry };
+    const e: Emit = .{ .b = b, .c = typed.Context.init(b) catch |err| return typed.sourceError(err), .s = spec, .d = d, .f = functions, .integer = integer, .boolean = boolean, .unit = try b.scalar(void), .effects = effects, .registry = registry };
     return e.controller();
 }
 
@@ -167,7 +168,7 @@ fn implementWithRegistry(b: *Builder, spec: Spec, d: Definition, functions: Func
 pub fn defaultSelection(b: *Builder, spec: Spec, d: Definition, discriminates: Id) Error!Id {
     const boolean = try b.scalar(bool);
     try checkPure(b, discriminates, &.{ spec.demand, spec.demand }, boolean);
-    const e: Emit = .{ .b = b, .s = spec, .d = d, .f = null, .integer = try b.scalar(u64), .boolean = boolean, .unit = try b.scalar(void), .effects = &.{} };
+    const e: Emit = .{ .b = b, .c = typed.Context.init(b) catch |err| return typed.sourceError(err), .s = spec, .d = d, .f = null, .integer = try b.scalar(u64), .boolean = boolean, .unit = try b.scalar(void), .effects = &.{} };
     return e.defaultPolicy(discriminates);
 }
 
@@ -182,6 +183,7 @@ fn checkPure(b: *Builder, function: Id, parameters: []const Id, result: Id) Erro
 
 const Emit = struct {
     b: *Builder,
+    c: *typed.Context,
     s: Spec,
     d: Definition,
     f: ?Functions,
@@ -283,66 +285,163 @@ const Emit = struct {
 
     // Only reusable completed records are applicable; failures never enter this list.
     fn lookupFunction(e: Emit, optional: Id) Error!Id {
-        const b = e.b;
-        const t = e.d.types;
-        const f = try b.declare(&.{ t.records, e.s.key }, optional, &.{}, &.{});
-        const pop = try Pop.init(e, t.records, t.record);
-        const same = try b.variable(e.boolean);
-        const next = try e.call(f, &.{ try e.ref(pop.rest), try e.p(f, 1) });
-        const item = try e.ref(pop.head);
-        const found = try b.pure(try e.variant(optional, item, 1));
-        const compare = try b.bind(same, try e.call(e.d.key_equal, &.{ try e.field(e.s.key, item, 1), try e.p(f, 1) }), try e.cond(try e.ref(same), found, next));
-        try b.define(f, try pop.match(e, try e.p(f, 0), try b.pure(try e.variant(optional, try b.constant(void, {}), 0)), try e.cond(try e.field(e.boolean, item, 3), compare, next)));
-        return f;
+        return e.lookupTyped(optional) catch |err| {
+            if (err == error.UnsupportedEqualitySchema) return error.UnsupportedEqualitySchema;
+            return typed.sourceError(@errorCast(err));
+        };
+    }
+    fn lookupTyped(e: Emit, optional: Id) equality.TypedError!Id {
+        const c = e.c;
+        const records = try typed.interop.schema(c, e.d.types.records);
+        const key = try typed.interop.schema(c, e.s.key);
+        const result = try typed.interop.schema(c, optional);
+        if (e.s.failure >= e.b.values.items.len) return error.InvalidReference;
+        const failure = try typed.interop.literalFailure(c, e.s.failure, try typed.interop.schema(c, e.b.values.items[@intCast(e.s.failure)].schema));
+        const equal = try equality.create(c, key, failure);
+        const function = try c.function("find reusable observation", &.{ .{ .name = "records", .schema = records }, .{ .name = "key", .schema = key } }, result, &.{});
+        const body = try c.body(function);
+        const wanted = try body.parameter("key");
+        const popped = try body.pop(try body.parameter("records"));
+        const empty = try body.caseOf(popped, "empty");
+        const item = try body.caseOf(popped, "item");
+        const work = item.body();
+        const parts = try work.destructure(item.payload());
+        const record = try parts.get("head");
+        const tail = try parts.get("tail");
+        const applicable = try work.branch();
+        const skipped = try work.branch();
+        const same = try applicable.call(equal, &.{ .{ .name = "left", .value = try applicable.field(record, "1") }, .{ .name = "right", .value = wanted } });
+        const found = try applicable.branch();
+        const different = try applicable.branch();
+        const continued = try different.call(function, &.{ .{ .name = "records", .value = tail }, .{ .name = "key", .value = wanted } });
+        const selected = try applicable.conditional(same, try found.ret(try found.variant(result, "1", record)), try different.ret(continued));
+        const next = try skipped.call(function, &.{ .{ .name = "records", .value = tail }, .{ .name = "key", .value = wanted } });
+        const checked = try work.conditional(try work.field(record, "3"), try applicable.ret(selected), try skipped.ret(next));
+        try c.define(function, try body.ret(try body.match(popped, &.{ try empty.ret(try empty.body().variant(result, "0", try empty.body().constant(void, {}))), try item.ret(checked) })));
+        return typed.interop.functionId(c, function);
     }
 
     fn cachedChoice(e: Emit, lookup: Id, optional: Id) Error!Id {
-        const b = e.b;
-        const t = e.d.types;
-        const f = try b.declare(&.{ t.eligible_list, t.records, t.eligible_list }, t.eligible_list, &.{}, &.{});
-        const pop = try Pop.init(e, t.eligible_list, t.eligible);
-        const cached = try b.variable(optional);
-        const missing = try b.variable(e.unit);
-        const found = try b.variable(t.record);
-        const next = try e.call(f, &.{ try e.ref(pop.rest), try e.p(f, 1), try e.p(f, 2) });
-        const included = try e.call(f, &.{ try e.ref(pop.rest), try e.p(f, 1), try e.append(t.eligible_list, try e.p(f, 2), try e.ref(pop.head)) });
-        const branch = try b.term(.{ .match_sum = .{
-            .value = try e.ref(cached),
-            .cases = &.{ .{ .variable = missing, .body = next }, .{ .variable = found, .body = included } },
-        } });
-        const checked = try b.bind(cached, try e.call(lookup, &.{ try e.p(f, 1), try e.experimentKey(try e.ref(pop.head)) }), branch);
-        try b.define(f, try pop.match(e, try e.p(f, 0), try b.pure(try e.p(f, 2)), try e.cond(try e.reusable(try e.ref(pop.head)), checked, next)));
-        return f;
+        return e.cachedTyped(lookup, optional) catch |err| return typed.sourceError(err);
+    }
+    fn cachedTyped(e: Emit, lookup: Id, optional: Id) typed.Error!Id {
+        const c = e.c;
+        const offered = try typed.interop.schema(c, e.d.types.eligible_list);
+        const records = try typed.interop.schema(c, e.d.types.records);
+        _ = try typed.interop.schema(c, optional);
+        const find = try typed.interop.declaredFunction(c, lookup);
+        const function = try c.function("prefer cached observations", &.{ .{ .name = "offered", .schema = offered }, .{ .name = "records", .schema = records }, .{ .name = "selected", .schema = offered } }, offered, &.{});
+        const body = try c.body(function);
+        const observed = try body.parameter("records");
+        const selected = try body.parameter("selected");
+        const popped = try body.pop(try body.parameter("offered"));
+        const empty = try body.caseOf(popped, "empty");
+        const item = try body.caseOf(popped, "item");
+        const work = item.body();
+        const parts = try work.destructure(item.payload());
+        const head = try parts.get("head");
+        const tail = try parts.get("tail");
+        const applicable = try work.branch();
+        const skipped = try work.branch();
+        const cached = try applicable.call(find, &.{ .{ .name = "records", .value = observed }, .{ .name = "key", .value = try applicable.field(try applicable.field(head, "1"), "0") } });
+        const missing = try applicable.caseOf(cached, "0");
+        const found = try applicable.caseOf(cached, "1");
+        const without = try missing.body().call(function, &.{ .{ .name = "offered", .value = tail }, .{ .name = "records", .value = observed }, .{ .name = "selected", .value = selected } });
+        const included = try found.body().call(function, &.{ .{ .name = "offered", .value = tail }, .{ .name = "records", .value = observed }, .{ .name = "selected", .value = try found.body().append(selected, head) } });
+        const checked = try applicable.match(cached, &.{ try missing.ret(without), try found.ret(included) });
+        const next = try skipped.call(function, &.{ .{ .name = "offered", .value = tail }, .{ .name = "records", .value = observed }, .{ .name = "selected", .value = selected } });
+        const result = try work.conditional(try work.field(try work.field(head, "1"), "1"), try applicable.ret(checked), try skipped.ret(next));
+        try c.define(function, try body.ret(try body.match(popped, &.{ try empty.ret(selected), try item.ret(result) })));
+        return typed.interop.functionId(c, function);
     }
 
     fn selectedFunction(e: Emit, optional: Id) Error!Id {
-        const b = e.b;
-        const t = e.d.types;
-        const f = try b.declare(&.{ t.eligible_list, e.integer }, optional, &.{}, &.{});
-        const pop = try Pop.init(e, t.eligible_list, t.eligible);
-        const next = try e.call(f, &.{ try e.ref(pop.rest), try e.p(f, 1) });
-        const item = try e.ref(pop.head);
-        try b.define(f, try pop.match(e, try e.p(f, 0), try b.pure(try e.variant(optional, try b.constant(void, {}), 0)), try e.cond(try e.eq(try e.demandGeneration(item), try e.p(f, 1)), try b.pure(try e.variant(optional, item, 1)), next)));
-        return f;
+        return e.selectedTyped(optional) catch |err| return typed.sourceError(err);
+    }
+    fn selectedTyped(e: Emit, optional: Id) typed.Error!Id {
+        const c = e.c;
+        const offered = try typed.interop.schema(c, e.d.types.eligible_list);
+        const result = try typed.interop.schema(c, optional);
+        const function = try c.function("select offered generation", &.{ .{ .name = "offered", .schema = offered }, .{ .name = "generation", .schema = try c.scalar(u64) } }, result, &.{});
+        const body = try c.body(function);
+        const generation = try body.parameter("generation");
+        const popped = try body.pop(try body.parameter("offered"));
+        const empty = try body.caseOf(popped, "empty");
+        const item = try body.caseOf(popped, "item");
+        const work = item.body();
+        const parts = try work.destructure(item.payload());
+        const candidate = try parts.get("head");
+        const found = try work.branch();
+        const next = try work.branch();
+        const continued = try next.call(function, &.{ .{ .name = "offered", .value = try parts.get("tail") }, .{ .name = "generation", .value = generation } });
+        const matched = try work.conditional(try work.equal(try work.field(try work.field(candidate, "0"), "1"), generation), try found.ret(try found.variant(result, "1", candidate)), try next.ret(continued));
+        try c.define(function, try body.ret(try body.match(popped, &.{ try empty.ret(try empty.body().variant(result, "0", try empty.body().constant(void, {}))), try item.ret(matched) })));
+        return typed.interop.functionId(c, function);
     }
 
     fn recipients(e: Emit) Error!Id {
-        const b = e.b;
-        const t = e.d.types;
-        const ids = e.d.custody.types.ids;
-        const f = try b.declare(&.{ t.eligible_list, t.eligible, e.boolean, ids }, ids, &.{}, &.{});
-        const pop = try Pop.init(e, t.eligible_list, t.eligible);
-        const same = try b.variable(e.boolean);
-        const item = try e.ref(pop.head);
-        const chosen = try e.p(f, 1);
-        const next = try e.call(f, &.{ try e.ref(pop.rest), chosen, try e.p(f, 2), try e.p(f, 3) });
-        const included = try e.call(f, &.{ try e.ref(pop.rest), chosen, try e.p(f, 2), try e.append(ids, try e.p(f, 3), try e.demandGeneration(item)) });
-        const compare = try b.bind(same, try e.call(e.d.key_equal, &.{ try e.experimentKey(item), try e.experimentKey(chosen) }), try e.cond(try e.ref(same), included, next));
-        const shared = try e.cond(try e.reusable(item), compare, next);
-        const eligible = try e.cond(try e.p(f, 2), try e.cond(try e.reusable(chosen), shared, next), next);
-        const choose = try e.cond(try e.eq(try e.demandGeneration(item), try e.demandGeneration(chosen)), included, eligible);
-        try b.define(f, try pop.match(e, try e.p(f, 0), try b.pure(try e.p(f, 3)), choose));
-        return f;
+        return e.recipientsTyped() catch |err| {
+            if (err == error.UnsupportedEqualitySchema) return error.UnsupportedEqualitySchema;
+            return typed.sourceError(@errorCast(err));
+        };
+    }
+    fn recipientsTyped(e: Emit) equality.TypedError!Id {
+        const c = e.c;
+        const offered = try typed.interop.schema(c, e.d.types.eligible_list);
+        const eligible_type = try typed.interop.schema(c, e.d.types.eligible);
+        const ids = try typed.interop.schema(c, e.d.custody.types.ids);
+        if (e.s.failure >= e.b.values.items.len) return error.InvalidReference;
+        const failure = try typed.interop.literalFailure(c, e.s.failure, try typed.interop.schema(c, e.b.values.items[@intCast(e.s.failure)].schema));
+        const equal = try equality.create(c, try typed.interop.schema(c, e.s.key), failure);
+        const function = try c.function("choose observation recipients", &.{ .{ .name = "offered", .schema = offered }, .{ .name = "chosen", .schema = eligible_type }, .{ .name = "coalesce", .schema = try c.scalar(bool) }, .{ .name = "ids", .schema = ids } }, ids, &.{});
+        const body = try c.body(function);
+        const chosen = try body.parameter("chosen");
+        const coalesce = try body.parameter("coalesce");
+        const selected = try body.parameter("ids");
+        const popped = try body.pop(try body.parameter("offered"));
+        const empty = try body.caseOf(popped, "empty");
+        const item = try body.caseOf(popped, "item");
+        const work = item.body();
+        const parts = try work.destructure(item.payload());
+        const head = try parts.get("head");
+        const generation = try work.field(try work.field(head, "0"), "1");
+        const exact = try work.branch();
+        const other = try work.branch();
+        const chosen_generation = try work.field(try work.field(chosen, "0"), "1");
+        const shared = try e.shareRecipients(other, equal, function, try parts.get("tail"), head, chosen, coalesce, selected, generation);
+        const included = try e.nextRecipients(exact, function, try parts.get("tail"), chosen, coalesce, try exact.append(selected, generation));
+        const next = try work.conditional(try work.equal(generation, chosen_generation), try exact.ret(included), try other.ret(shared));
+        try c.define(function, try body.ret(try body.match(popped, &.{ try empty.ret(selected), try item.ret(next) })));
+        return typed.interop.functionId(c, function);
+    }
+    fn nextRecipients(_: Emit, body: *typed.Body, function: *const typed.Function, tail: *const typed.Value, chosen: *const typed.Value, coalesce: *const typed.Value, ids: *const typed.Value) typed.Error!*const typed.Value {
+        return body.call(function, &.{ .{ .name = "offered", .value = tail }, .{ .name = "chosen", .value = chosen }, .{ .name = "coalesce", .value = coalesce }, .{ .name = "ids", .value = ids } });
+    }
+    fn shareRecipients(e: Emit, body: *typed.Body, equal: *const typed.Function, function: *const typed.Function, tail: *const typed.Value, item: *const typed.Value, chosen: *const typed.Value, coalesce: *const typed.Value, ids: *const typed.Value, generation: *const typed.Value) typed.Error!*const typed.Value {
+        const Guard = struct { parent: *typed.Body, condition: *const typed.Value, yes: *typed.Body, no: *typed.Body };
+        var guards: [3]Guard = undefined;
+        var work = body;
+        for (&guards, 0..) |*guard, index| {
+            const condition = switch (index) {
+                0 => coalesce,
+                1 => try work.field(try work.field(chosen, "1"), "1"),
+                else => try work.field(try work.field(item, "1"), "1"),
+            };
+            const yes = try work.branch();
+            guard.* = .{ .parent = work, .condition = condition, .yes = yes, .no = try work.branch() };
+            work = yes;
+        }
+        const matches = try work.call(equal, &.{ .{ .name = "left", .value = try work.field(try work.field(item, "1"), "0") }, .{ .name = "right", .value = try work.field(try work.field(chosen, "1"), "0") } });
+        const included = try work.branch();
+        const skipped = try work.branch();
+        var result = try work.conditional(matches, try included.ret(try e.nextRecipients(included, function, tail, chosen, coalesce, try included.append(ids, generation))), try skipped.ret(try e.nextRecipients(skipped, function, tail, chosen, coalesce, ids)));
+        var remaining = guards.len;
+        while (remaining != 0) {
+            remaining -= 1;
+            const guard = guards[remaining];
+            result = try guard.parent.conditional(guard.condition, try guard.yes.ret(result), try guard.no.ret(try e.nextRecipients(guard.no, function, tail, chosen, coalesce, ids)));
+        }
+        return result;
     }
 
     fn discriminating(e: Emit, discriminator: Id) Error!Id {

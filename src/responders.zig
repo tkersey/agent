@@ -5,6 +5,7 @@ const boundary = @import("boundary");
 const authoring = @import("authoring.zig");
 const sets = @import("sets.zig");
 const source = boundary.computation;
+const typed = boundary.authoring;
 const Id = source.Id;
 
 /// Normalized metadata is untrusted external evidence. Its adjacent admission
@@ -33,20 +34,23 @@ pub fn defineModel(
     const observed = try defineModelObserved(P, c, failure, batch);
     const instance = try b.specialization(Id, "agent.model.candidate-projection/v3", .{observed});
     if (instance.cached) |cached| return cached;
-    const result = try c.schema(if (batch) P.BatchInterpretation else P.Interpretation);
-    const function = try b.declare(
-        &.{ try c.schema(P.Request), try c.schema([P.declaration_count]bool) },
-        result,
-        b.functions.items[@intCast(observed)].effects,
-        &.{},
-    );
-    const observation = try b.variable(try c.schema(ModelObservation(P, batch)));
+    const t = try typed.Context.init(b);
+    const result = try typed.interop.schema(t, try c.schema(if (batch) P.BatchInterpretation else P.Interpretation));
+    const effects = b.functions.items[@intCast(observed)].effects;
+    const row = try b.allocator().alloc(*const typed.Operation, effects.len);
+    for (row, effects) |*item, id| item.* = try typed.interop.operation(t, id);
+    const handle = try t.function("model candidate", &.{
+        .{ .name = "request", .schema = try typed.interop.schema(t, try c.schema(P.Request)) },
+        .{ .name = "offered", .schema = try typed.interop.schema(t, try c.schema([P.declaration_count]bool)) },
+    }, result, row);
+    const body = try t.body(handle);
     const call = try b.term(.{ .call = .{ .function = observed, .arguments = &.{
-        try b.reference(b.parameter(function, 0)),
-        try b.reference(b.parameter(function, 1)),
+        try typed.interop.valueId(body, try body.parameter("request")),
+        try typed.interop.valueId(body, try body.parameter("offered")),
     } } });
-    const interpreted = try b.primitive(result, .field, &.{try b.reference(observation)}, 1);
-    try b.define(function, try b.bind(observation, call, try b.pure(interpreted)));
+    const observation = try typed.interop.term(body, call, try typed.interop.schema(t, try c.schema(ModelObservation(P, batch))));
+    try t.define(handle, try body.ret(try body.field(observation, "1")));
+    const function = try typed.interop.functionId(t, handle);
     return instance.finish(b, function);
 }
 
@@ -66,19 +70,14 @@ pub fn defineModelObserved(
         @typeName(P), effect, fault, batch,
     });
     if (instance.cached) |cached| return cached;
-    const function = try b.declare(
-        &.{ try c.schema(P.Request), try c.schema([P.declaration_count]bool) },
-        try c.schema(ModelObservation(P, batch)),
-        &.{effect},
-        &.{},
-    );
-    const g = Generator(P, batch){
-        .context = c,
-        .function = function,
-        .fault = fault,
-        .failure = failure,
-    };
-    try b.define(function, try g.body(effect));
+    const t = try typed.Context.init(b);
+    const handle = try t.function("observed model response", &.{
+        .{ .name = "request", .schema = try typed.interop.schema(t, try c.schema(P.Request)) },
+        .{ .name = "offered", .schema = try typed.interop.schema(t, try c.schema([P.declaration_count]bool)) },
+    }, try typed.interop.schema(t, try c.schema(ModelObservation(P, batch))), &.{try typed.interop.operation(t, effect)});
+    const function = try typed.interop.functionId(t, handle);
+    const g = Generator(P, batch){ .context = c, .typed_context = t, .handle = handle, .function = function, .fault = fault, .failure = failure };
+    try t.define(handle, try g.emitBody(effect));
     return instance.finish(b, function);
 }
 
@@ -115,158 +114,107 @@ pub fn invokeModelObserved(
 fn Generator(comptime P: type, comptime batch: bool) type {
     return struct {
         context: authoring.Context,
+        typed_context: *typed.Context,
+        handle: *const typed.Function,
         function: Id,
         fault: Id,
         failure: Id,
-
         const G = @This();
 
-        fn body(g: G, effect: Id) !Id {
-            const c = g.context;
-            const b = c.builder;
-            const template = try b.reference(b.parameter(g.function, 0));
-            const offered = try b.reference(b.parameter(g.function, 1));
-            const tools_schema = try c.schema(P.Tools);
-            var tools: [P.declaration_count + 1]Id = undefined;
-            for (&tools) |*value| value.* = try b.variable(tools_schema);
-            var continuation = try g.invoke(effect, template, offered, tools[tools.len - 1]);
-            var index = P.declaration_count;
-            while (index != 0) {
-                index -= 1;
-                continuation = try g.filter(
-                    offered,
-                    index,
-                    tools[index],
-                    tools[index + 1],
-                    continuation,
-                );
-            }
-            const empty = try c.literal(P.Tools, .{ .items = &.{} });
-            return b.bind(tools[0], try b.pure(empty), continuation);
+        fn schema(g: G, comptime T: type) !*const typed.Schema {
+            return typed.interop.schema(g.typed_context, try g.context.schema(T));
         }
-
-        fn filter(g: G, offered: Id, index: usize, before: Id, after: Id, next: Id) !Id {
-            const c = g.context;
-            const b = c.builder;
-            const set = try sets.define(b, P.declaration_count);
-            const present = try b.variable(try c.schema(bool));
-            const previous = try b.reference(before);
-            const tool = try P.declarationValue(b, index);
-            const append = try b.value(.{
-                .schema = try c.schema(P.Tools),
-                .expression = .{ .primitive = .{
-                    .opcode = .sequence_append,
-                    .operands = &.{ previous, tool },
-                    .failures = &.{.{ .kind = .capacity_exceeded, .value = g.fault }},
-                } },
-            });
-            const choose = try b.term(.{ .conditional = .{
-                .condition = try b.reference(present),
-                .when_true = try b.pure(append),
-                .when_false = try b.pure(previous),
+        fn value(g: G, body: *typed.Body, id: Id) !*const typed.Value {
+            return typed.interop.adoptValue(body, id, try typed.interop.schema(g.typed_context, g.context.builder.values.items[id].schema));
+        }
+        fn pure(g: G, body: *typed.Body, id: Id) !*const typed.Value {
+            const b = g.context.builder;
+            return typed.interop.term(body, try b.pure(id), try typed.interop.schema(g.typed_context, b.values.items[id].schema));
+        }
+        fn literal(g: G, body: *typed.Body, comptime T: type, item: T) !*const typed.Value {
+            return g.value(body, try g.context.literal(T, item));
+        }
+        fn field(_: G, body: *typed.Body, datum: *const typed.Value, comptime T: type, comptime name: []const u8) !*const typed.Value {
+            const index = comptime std.meta.fieldIndex(T, name).?;
+            return body.field(datum, std.fmt.comptimePrint("{d}", .{index}));
+        }
+        fn less(g: G, body: *typed.Body, left: *const typed.Value, right: *const typed.Value) !*const typed.Value {
+            return g.pure(body, try g.context.builder.primitive(try g.context.schema(bool), .less, &.{ try typed.interop.valueId(body, left), try typed.interop.valueId(body, right) }, 0));
+        }
+        fn rejectWhen(g: G, body: *typed.Body, invalid: *const typed.Value) !void {
+            const rejected = try body.branch();
+            const accepted = try body.branch();
+            _ = try body.conditional(invalid, try rejected.fail(try g.schema(void), try g.value(rejected, g.failure)), try accepted.ret(try accepted.constant(void, {})));
+        }
+        fn emitBody(g: G, effect: Id) !*const typed.Computation {
+            const root = try g.typed_context.body(g.handle);
+            const template = try root.parameter("request");
+            const offered = try root.parameter("offered");
+            var tools = try g.literal(root, P.Tools, .{ .items = &.{} });
+            for (0..P.declaration_count) |index| tools = try g.filter(root, offered, index, tools);
+            const selection = try g.field(root, template, P.Request, "selection");
+            try g.checkTemplate(root, template, selection);
+            const payload = try g.request(root, template, tools);
+            const b = g.context.builder;
+            // Agent's registry binds this exact environmental site to its owner.
+            const perform = try b.term(.{ .perform = .{
+                .effect = effect,
+                .payload = try typed.interop.valueId(root, payload),
             } });
-            const availability = try sets.member(b, set, offered, index);
-            return b.bind(present, availability, try b.bind(after, choose, next));
-        }
-
-        fn invoke(g: G, effect: Id, template: Id, offered: Id, tools: Id) !Id {
-            const c = g.context;
-            const b = c.builder;
-            const selection_schema = try c.schema(@FieldType(P.Request, "selection"));
-            const selection = try b.variable(selection_schema);
-            const normalized = try b.variable(try c.schema(P.Result));
-            const payload = try g.request(template, try b.reference(tools));
-            const perform = try b.term(.{ .perform = .{ .effect = effect, .payload = payload } });
-            try c.registry.protectSite(g.function, perform, effect);
+            try g.context.registry.protectSite(g.function, perform, effect);
+            const normalized = try typed.interop.term(root, perform, try g.schema(P.Result));
+            // The protocol interpreter is independently generated/admitted code.
             const admit = try b.term(.{ .call = .{
                 .function = if (batch) try P.interpretAll(b) else try P.interpreter(b),
-                .arguments = &.{
-                    try b.reference(normalized), offered, try b.reference(selection),
-                },
+                .arguments = &.{ try typed.interop.valueId(root, normalized), try typed.interop.valueId(root, offered), try typed.interop.valueId(root, selection) },
             } });
-            const interpreted = try b.variable(try c.schema(
-                if (batch) P.BatchInterpretation else P.Interpretation,
-            ));
-            const observation = try b.primitive(try c.schema(ModelObservation(P, batch)), .product, &.{ try b.reference(normalized), try b.reference(interpreted) }, 0);
-            const observed = try b.bind(interpreted, admit, try b.pure(observation));
-            const selected = try b.primitive(
-                selection_schema,
-                .field,
-                &.{template},
-                comptime std.meta.fieldIndex(P.Request, "selection").?,
-            );
-            const next = try b.bind(selection, try b.pure(selected), try b.bind(normalized, perform, observed));
-            return g.checkTemplate(template, selected, next);
+            const interpreted = try typed.interop.term(root, admit, try g.schema(if (batch) P.BatchInterpretation else P.Interpretation));
+            return root.ret(try root.product(try g.schema(ModelObservation(P, batch)), &.{
+                .{ .name = "0", .value = normalized }, .{ .name = "1", .value = interpreted },
+            }));
         }
-
-        fn checkTemplate(g: G, template: Id, selection: Id, next: Id) !Id {
-            const c = g.context;
-            const b = c.builder;
+        fn filter(g: G, body: *typed.Body, offered: *const typed.Value, index: usize, previous: *const typed.Value) !*const typed.Value {
+            const b = g.context.builder;
+            const set = try sets.define(b, P.declaration_count);
+            const present = try typed.interop.term(body, try sets.member(b, set, try typed.interop.valueId(body, offered), index), try g.schema(bool));
+            const included = try body.branch();
+            const excluded = try body.branch();
+            const appended = try g.pure(included, try b.value(.{
+                .schema = try g.context.schema(P.Tools),
+                .expression = .{ .primitive = .{
+                    .opcode = .sequence_append,
+                    .operands = &.{ try typed.interop.valueId(included, previous), try P.declarationValue(b, index) },
+                    .failures = &.{.{ .kind = .capacity_exceeded, .value = g.fault }},
+                } },
+            }));
+            return body.conditional(present, try included.ret(appended), try excluded.ret(previous));
+        }
+        fn checkTemplate(g: G, body: *typed.Body, template: *const typed.Value, selection: *const typed.Value) !void {
+            const bytes = try g.field(body, template, P.Request, "maximum_provider_response_bytes");
+            try g.rejectWhen(body, try body.equal(bytes, try body.constant(u32, 0)));
             const Limits = @FieldType(P.Request, "normalization_limits");
-            const limits = try b.primitive(try c.schema(Limits), .field, &.{template}, comptime std.meta.fieldIndex(P.Request, "normalization_limits").?);
-            const maximum = P.normalizationLimits();
-            const rejected = try b.term(.{ .fail = g.failure });
-            var checked = next;
-            // These limits bound fields actually carried by P.Result. Parser
-            // work and raw provider-envelope limits do not alter its schema.
-            inline for (.{
-                "maximum_output_items",    "maximum_call_id_bytes",     "maximum_name_bytes",
-                "maximum_arguments_bytes", "maximum_result_text_bytes",
-            }) |name| {
-                const actual = try b.primitive(try c.schema(u32), .field, &.{limits}, comptime std.meta.fieldIndex(Limits, name).?);
-                const excess = try b.primitive(try c.schema(bool), .less, &.{ try b.constant(u32, @field(maximum, name)), actual }, 0);
-                checked = try b.term(.{ .conditional = .{
-                    .condition = excess,
-                    .when_true = rejected,
-                    .when_false = checked,
-                } });
-            }
-            const count = try b.primitive(try c.schema(u32), .field, &.{limits}, comptime std.meta.fieldIndex(Limits, "maximum_output_items").?);
-            checked = try g.checkSelection(selection, count, rejected, checked);
-            const bytes = try b.primitive(try c.schema(u32), .field, &.{template}, comptime std.meta.fieldIndex(P.Request, "maximum_provider_response_bytes").?);
-            const empty_budget = try b.primitive(try c.schema(bool), .equal, &.{ bytes, try b.constant(u32, 0) }, 0);
-            return b.term(.{ .conditional = .{
-                .condition = empty_budget,
-                .when_true = rejected,
-                .when_false = checked,
-            } });
-        }
-
-        fn checkSelection(g: G, selection: Id, items: Id, rejected: Id, next: Id) !Id {
-            const c = g.context;
-            const b = c.builder;
+            const limits = try g.field(body, template, P.Request, "normalization_limits");
+            const count = try g.field(body, limits, Limits, "maximum_output_items");
             const Selection = @FieldType(P.Request, "selection");
-            const minimum = try b.primitive(try c.schema(u32), .field, &.{selection}, comptime std.meta.fieldIndex(Selection, "minimum_calls").?);
-            const maximum = try b.primitive(try c.schema(u32), .field, &.{selection}, comptime std.meta.fieldIndex(Selection, "maximum_calls").?);
-            var checked = next;
-            for ([_][2]Id{ .{ maximum, minimum }, .{ items, maximum } }) |pair| {
-                const invalid = try b.primitive(try c.schema(bool), .less, &pair, 0);
-                checked = try b.term(.{ .conditional = .{
-                    .condition = invalid,
-                    .when_true = rejected,
-                    .when_false = checked,
-                } });
+            const minimum = try g.field(body, selection, Selection, "minimum_calls");
+            const maximum = try g.field(body, selection, Selection, "maximum_calls");
+            try g.rejectWhen(body, try g.less(body, count, maximum));
+            try g.rejectWhen(body, try g.less(body, maximum, minimum));
+            const bounds = P.normalizationLimits();
+            // Preserve the predecessor's guard order, before any environmental I/O.
+            inline for (.{ "maximum_result_text_bytes", "maximum_arguments_bytes", "maximum_name_bytes", "maximum_call_id_bytes", "maximum_output_items" }) |name| {
+                const actual = try g.field(body, limits, Limits, name);
+                try g.rejectWhen(body, try g.less(body, try body.constant(u32, @field(bounds, name)), actual));
             }
-            return checked;
         }
-
-        fn request(g: G, template: Id, tools: Id) !Id {
-            const c = g.context;
+        fn request(g: G, body: *typed.Body, template: *const typed.Value, tools: *const typed.Value) !*const typed.Value {
             const fields = std.meta.fields(P.Request);
-            var values: [fields.len]Id = undefined;
-            inline for (fields, 0..) |field, index| {
-                if (comptime std.mem.eql(u8, field.name, "tools")) {
-                    values[index] = tools;
-                    continue;
-                }
-                values[index] = try c.builder.primitive(
-                    try c.schema(field.type),
-                    .field,
-                    &.{template},
-                    index,
-                );
-            }
-            return c.builder.primitive(try c.schema(P.Request), .product, &values, 0);
+            var values: [fields.len]typed.Argument = undefined;
+            inline for (fields, 0..) |entry, index| values[index] = .{
+                .name = std.fmt.comptimePrint("{d}", .{index}),
+                .value = if (comptime std.mem.eql(u8, entry.name, "tools")) tools else try g.field(body, template, P.Request, entry.name),
+            };
+            return body.product(try g.schema(P.Request), &values);
         }
     };
 }

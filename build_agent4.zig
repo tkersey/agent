@@ -366,7 +366,7 @@ pub fn build(b: *std.Build) void {
     emit.dependOn(inquiry_app_images);
     g.emit(emit, inquiry_broker_exe, &.{}, "inquiry/broker.bpi3");
     g.emit(inquiry_check, inquiry_broker_exe, &.{}, "inquiry/broker.bpi3");
-    for ([_][]const u8{ "owned", "composition", "followup" }) |mode| {
+    for ([_][]const u8{ "owned", "composition", "followup", "typed" }) |mode| {
         g.emit(emit, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi3", .{mode}));
         g.emit(inquiry_check, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi3", .{mode}));
     }
@@ -618,7 +618,7 @@ pub fn build(b: *std.Build) void {
         g.emit(&broker_run.step, inquiry_broker_exe, &.{}, "inquiry/broker.bpi3");
         inquiry_check.dependOn(&broker_run.step);
         runtime_work.dependOn(&broker_run.step);
-        for ([_][]const u8{ "owned", "composition", "followup" }) |mode| {
+        for ([_][]const u8{ "owned", "composition", "followup", "typed" }) |mode| {
             const inquiry_run = b.addSystemCommand(&.{
                 "node",                                                               "test/agent4/inquiry_runtime.mjs", runtime_path,
                 b.getInstallPath(.prefix, b.fmt("agent4/inquiry/{s}.bpi3", .{mode})),

@@ -8,6 +8,7 @@ const Id = source.Id;
 const Builder = source.Builder;
 
 pub const Mode = enum {
+    typed,
     owned,
     composition,
     followup,
@@ -247,6 +248,7 @@ const Witness = struct {
 };
 
 pub fn build(b: *Builder, mode: Mode) !source.Module {
+    if (mode == .typed) return typedWitness(b);
     const integer = try b.scalar(u64);
     const unit = try b.scalar(void);
     const experiment = try b.effect(.{ .identity = "agent.probe.inquiry.experiment.v1", .payload = integer, .result = integer });
@@ -268,6 +270,50 @@ pub fn build(b: *Builder, mode: Mode) !source.Module {
     const d = if (definition) |value| value.dialogue else try dialogue.defineExchange(b, "agent.probe.inquiry.need.v1", integer, integer, integer, scope.captures, scope.owned_regions, scope.borrowed_regions, scope.residual);
     const w: Witness = .{ .b = b, .d = d, .integer = integer, .unit = unit, .model = model, .cleanup = cleanup, .experiment = experiment, .queue = try b.schema(.{ .seq = d.answer }), .effects = effects, .mode = mode };
     return if (definition) |value| w.compositionEntry(value) else w.entry();
+}
+
+fn typedWitness(b: *Builder) !source.Module {
+    const a = boundary.authoring;
+    const c = try a.Context.init(b);
+    const integer = try c.scalar(u64);
+    const unit = try c.scalar(void);
+    const demand = try c.record(&.{.{ .name = "question", .schema = integer }});
+    const finding = try c.record(&.{.{ .name = "answer", .schema = integer }});
+    const d = try inquiry.create(c, .{
+        .identity = "agent.probe.inquiry.named",
+        .demand = demand,
+        .reply = integer,
+        .finding = finding,
+        .failure = try c.literalFailure(void, {}),
+        .captures = .{ .continuation = &.{ unit, integer, demand, finding } },
+        .parameters = &.{.{ .name = "seed", .schema = integer }},
+        .body_use = .reusable,
+    });
+    const producer_type = try c.handledSchema(d.dialogue.handler());
+    const producer_fn = try c.functionFor("named investigator", producer_type);
+    const producer = try c.body(producer_fn);
+    const answer = try producer.performLocal(d.dialogue.effect(), try producer.parameter("capability"), try producer.product(demand, &.{.{ .name = "question", .value = try producer.parameter("seed") }}));
+    try c.define(producer_fn, try producer.ret(try producer.product(finding, &.{.{ .name = "answer", .value = answer }})));
+    const output = try c.record(&.{ .{ .name = "findings", .schema = d.types.findings }, .{ .name = "views", .schema = d.types.views } });
+    const entry = try c.function("entry", &.{}, output, &.{});
+    const body = try c.body(entry);
+    const first = try body.handleWithArguments(d.dialogue.handler(), try body.lambda(producer_fn, producer_type), &.{.{ .name = "seed", .value = try body.constant(u64, 7) }}, &.{});
+    const parked = try body.call(d.park, &.{ .{ .name = "state", .value = try inquiry.initial(body, d) }, .{ .name = "id", .value = try body.constant(u64, 9) }, .{ .name = "answer", .value = first } });
+    const projected = try body.call(d.project, &.{.{ .name = "state", .value = parked }});
+    const parts = try body.destructure(projected);
+    const state = try parts.get("state");
+    const views = try parts.get("views");
+    const delivered = try body.call(d.distribute, &.{ .{ .name = "state", .value = state }, .{ .name = "ids", .value = try body.sequenceValue(d.types.ids, &.{try body.constant(u64, 1)}) }, .{ .name = "reply", .value = try body.constant(u64, 42) } });
+    const findings = try body.call(d.finish, &.{.{ .name = "state", .value = delivered }});
+    try c.define(entry, try body.ret(try body.product(output, &.{ .{ .name = "findings", .value = findings }, .{ .name = "views", .value = views } })));
+    return c.module(entry, unit);
+}
+
+test "typed inquiry retains named demand and finding contracts" {
+    var b = Builder.init(std.testing.allocator);
+    defer b.deinit();
+    var compiled = try boundary.program.compile(std.testing.allocator, try typedWitness(&b));
+    defer compiled.deinit();
 }
 
 test "three protected futures compile under unchanged Boundary ownership" {

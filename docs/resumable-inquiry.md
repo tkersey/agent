@@ -7,9 +7,11 @@ live entry are implemented; live-model usefulness has not been measured.
 
 ## Custody construction
 
-`agent.inquiry.define` specializes one dialogue on application demand, reply,
-and finding schemas. Its emitted functions operate under ordinary Boundary
-ownership admission:
+`agent.inquiry.create(context, options)` constructs one inquiry family from typed
+demand, reply, finding, and failure contracts. Reuse that definition for each
+installation; `agent.inquiry.initial(body, definition)` creates its initial owned
+state. State and view records retain named fields. Its emitted functions operate
+under ordinary Boundary ownership admission:
 
 - `park(state, investigation, answer)` retains an actual awaiting package or
   appends a completed finding. Every new offer receives a checked, increasing
@@ -30,8 +32,14 @@ acquisition, admission, matching and storage of experimental observations.
 Each scan is bounded by its input queue length. Membership uses a linear scan
 of the fixed recipient list. New findings and offers can increase storage;
 the application must impose its declared capacities and work allowances.
-The builder owns source allocations. Returned definitions contain schema and
-function IDs, with no borrowed configuration slices or host continuations.
+The builder owns source allocations. Returned definitions contain typed schema
+and function handles borrowed from their authoring context, with no host
+continuations. The `typed` mode in `test/agent4/inquiry_probe.zig` demonstrates
+parking, projection, reply delivery, and finalization with named records.
+
+The older `define`/`empty`/`need` source adapter currently projects the same
+construction for broker and application callers that have not migrated. Its
+remaining caller migration and removal are required cutover work.
 
 ## Experiment broker
 

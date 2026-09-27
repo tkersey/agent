@@ -444,72 +444,113 @@ const Emit = struct {
         return result;
     }
 
-    fn discriminating(e: Emit, discriminator: Id) Error!Id {
-        const b = e.b;
-        const t = e.d.types;
-        const f = try b.declare(&.{ t.eligible, t.eligible_list }, e.boolean, &.{}, &.{});
-        const pop = try Pop.init(e, t.eligible_list, t.eligible);
-        const candidate = try e.p(f, 0);
-        const other = try e.ref(pop.head);
-        const same = try b.variable(e.boolean);
-        const differs = try b.variable(e.boolean);
-        const next = try e.call(f, &.{ candidate, try e.ref(pop.rest) });
-        const check_predictions = try b.bind(differs, try e.call(discriminator, &.{ try e.field(e.s.demand, try e.view(candidate), 2), try e.field(e.s.demand, try e.view(other), 2) }), try e.cond(try e.ref(differs), try b.pure(try b.constant(bool, true)), next));
-        const check_key = try b.bind(same, try e.call(e.d.key_equal, &.{ try e.experimentKey(candidate), try e.experimentKey(other) }), try e.cond(try e.ref(same), check_predictions, next));
-        const different = try e.cond(try e.eq(try e.demandGeneration(candidate), try e.demandGeneration(other)), next, check_key);
-        const checked = try e.cond(try e.reusable(candidate), try e.cond(try e.reusable(other), different, next), next);
-        try b.define(f, try pop.match(e, try e.p(f, 1), try b.pure(try b.constant(bool, false)), checked));
-        return f;
+    fn discriminating(e: Emit, discriminator: Id) equality.TypedError!*const typed.Function {
+        const c = e.c;
+        const eligible_type = try typed.interop.schema(c, e.d.types.eligible);
+        const offers = try typed.interop.schema(c, e.d.types.eligible_list);
+        const boolean = try c.scalar(bool);
+        if (e.s.failure >= e.b.values.items.len) return error.InvalidReference;
+        const failure = try typed.interop.literalFailure(c, e.s.failure, try typed.interop.schema(c, e.b.values.items[@intCast(e.s.failure)].schema));
+        const key_equal = try equality.create(c, try typed.interop.schema(c, e.s.key), failure);
+        const function = try c.function("find distinguishing prediction", &.{ .{ .name = "candidate", .schema = eligible_type }, .{ .name = "offered", .schema = offers } }, boolean, &.{});
+        const body = try c.body(function);
+        const candidate = try body.parameter("candidate");
+        const popped = try body.pop(try body.parameter("offered"));
+        const empty = try body.caseOf(popped, "empty");
+        const item = try body.caseOf(popped, "item");
+        var work = item.body();
+        const parts = try work.destructure(item.payload());
+        const other = try parts.get("head");
+        const tail = try parts.get("tail");
+        const Guard = struct { parent: *typed.Body, condition: *const typed.Value, yes: *typed.Body, no: *typed.Body, accepts_true: bool };
+        var guards: [5]Guard = undefined;
+        for (&guards, 0..) |*guard, index| {
+            const condition = switch (index) {
+                0 => try work.field(try work.field(candidate, "1"), "1"),
+                1 => try work.field(try work.field(other, "1"), "1"),
+                2 => try work.equal(try work.field(try work.field(candidate, "0"), "1"), try work.field(try work.field(other, "0"), "1")),
+                3 => try work.call(key_equal, &.{ .{ .name = "left", .value = try work.field(try work.field(candidate, "1"), "0") }, .{ .name = "right", .value = try work.field(try work.field(other, "1"), "0") } }),
+                else => try e.callDiscriminator(work, discriminator, try work.field(try work.field(candidate, "0"), "2"), try work.field(try work.field(other, "0"), "2")),
+            };
+            const yes = try work.branch();
+            guard.* = .{ .parent = work, .condition = condition, .yes = yes, .no = try work.branch(), .accepts_true = index != 2 };
+            work = yes;
+        }
+        var result = try work.constant(bool, true);
+        var remaining = guards.len;
+        while (remaining != 0) {
+            remaining -= 1;
+            const guard = guards[remaining];
+            const next = try guard.no.call(function, &.{ .{ .name = "candidate", .value = candidate }, .{ .name = "offered", .value = tail } });
+            const yes = try guard.yes.ret(result);
+            const no = try guard.no.ret(next);
+            result = try guard.parent.conditional(guard.condition, if (guard.accepts_true) yes else no, if (guard.accepts_true) no else yes);
+        }
+        try c.define(function, try body.ret(try body.match(popped, &.{ try empty.ret(try empty.body().constant(bool, false)), try item.ret(result) })));
+        return function;
     }
-
-    fn less(e: Emit, a: Id, b: Id) Error!Id {
-        return e.b.primitive(e.boolean, .less, &.{ a, b }, 0);
+    // The public source callback was checked by checkPure before this adapter.
+    // Remove this call-site projection when its policy callers become typed.
+    fn callDiscriminator(e: Emit, body: *typed.Body, function: Id, left: *const typed.Value, right: *const typed.Value) typed.Error!*const typed.Value {
+        const term = try e.b.term(.{ .call = .{ .function = function, .arguments = &.{ try typed.interop.valueId(body, left), try typed.interop.valueId(body, right) } } });
+        return typed.interop.term(body, term, try e.c.scalar(bool));
     }
-    fn selectValue(e: Emit, condition: Id, yes: Id, no: Id) Error!Id {
-        return e.b.primitive(e.boolean, .select, &.{ condition, yes, no }, 0);
+    fn betterTyped(_: Emit, body: *typed.Body, left: *const typed.Value, right: *const typed.Value, shared_left: *const typed.Value, shared_right: *const typed.Value) typed.Error!*const typed.Value {
+        const lm = try body.field(left, "1");
+        const rm = try body.field(right, "1");
+        const lp = try body.field(lm, "2");
+        const rp = try body.field(rm, "2");
+        const lc = try body.field(lm, "3");
+        const rc = try body.field(rm, "3");
+        const oldest = try body.less(try body.field(try body.field(left, "0"), "1"), try body.field(try body.field(right, "0"), "1"));
+        const cheapest = try body.select(try body.equal(lc, rc), oldest, try body.less(lc, rc));
+        const shared = try body.select(try body.equal(shared_left, shared_right), cheapest, shared_left);
+        return body.select(try body.equal(lp, rp), shared, try body.less(lp, rp));
     }
-    fn better(e: Emit, a: Id, b: Id, shared_a: Id, shared_b: Id) Error!Id {
-        const ma = try e.meta(a);
-        const mb = try e.meta(b);
-        const priority_a = try e.field(e.integer, ma, 2);
-        const priority_b = try e.field(e.integer, mb, 2);
-        const cost_a = try e.field(e.integer, ma, 3);
-        const cost_b = try e.field(e.integer, mb, 3);
-        const oldest = try e.less(try e.demandGeneration(a), try e.demandGeneration(b));
-        const cheapest = try e.selectValue(try e.eq(cost_a, cost_b), oldest, try e.less(cost_a, cost_b));
-        const shared = try e.selectValue(try e.eq(shared_a, shared_b), cheapest, shared_a);
-        return e.selectValue(try e.eq(priority_a, priority_b), shared, try e.less(priority_a, priority_b));
-    }
-
     fn defaultPolicy(e: Emit, discriminator: Id) Error!Id {
-        const b = e.b;
-        const t = e.d.types;
-        const choice = try b.schema(.{ .sum = &.{ e.unit, t.eligible } });
+        return e.policyTyped(discriminator) catch |err| {
+            if (err == error.UnsupportedEqualitySchema) return error.UnsupportedEqualitySchema;
+            return typed.sourceError(@errorCast(err));
+        };
+    }
+    fn policyTyped(e: Emit, discriminator: Id) equality.TypedError!Id {
+        const c = e.c;
+        const offers = try typed.interop.schema(c, e.d.types.eligible_list);
+        const eligible_type = try typed.interop.schema(c, e.d.types.eligible);
+        const integer = try c.scalar(u64);
+        const choice = try c.alternatives(&.{ .{ .name = "none", .schema = try c.scalar(void) }, .{ .name = "some", .schema = eligible_type } });
         const score = try e.discriminating(discriminator);
-        const scan = try b.declare(&.{ t.eligible_list, t.eligible_list, choice, e.boolean }, e.integer, &.{}, &.{});
-        const pop = try Pop.init(e, t.eligible_list, t.eligible);
-        const no_best = try b.variable(e.unit);
-        const best = try b.variable(t.eligible);
-        const head_shared = try b.variable(e.boolean);
-        const head = try e.ref(pop.head);
-        const adopt = try e.call(scan, &.{ try e.ref(pop.rest), try e.p(scan, 1), try e.variant(choice, head, 1), try e.ref(head_shared) });
-        const retain = try e.call(scan, &.{ try e.ref(pop.rest), try e.p(scan, 1), try e.p(scan, 2), try e.p(scan, 3) });
-        const compare = try e.cond(try e.better(head, try e.ref(best), try e.ref(head_shared), try e.p(scan, 3)), adopt, retain);
-        const select_best = try b.term(.{ .match_sum = .{
-            .value = try e.p(scan, 2),
-            .cases = &.{ .{ .variable = no_best, .body = adopt }, .{ .variable = best, .body = compare } },
-        } });
-        const next = try b.bind(head_shared, try e.call(score, &.{ head, try e.p(scan, 1) }), select_best);
-        const empty = try b.variable(e.unit);
-        const final = try b.variable(t.eligible);
-        const answer = try b.term(.{ .match_sum = .{
-            .value = try e.p(scan, 2),
-            .cases = &.{ .{ .variable = empty, .body = try b.pure(try e.n(0)) }, .{ .variable = final, .body = try b.pure(try e.demandGeneration(try e.ref(final))) } },
-        } });
-        try b.define(scan, try pop.match(e, try e.p(scan, 0), answer, next));
-        const f = try b.declare(&.{ e.s.subject, e.s.policy, t.eligible_list, e.d.custody.types.findings }, e.integer, &.{}, &.{});
-        try b.define(f, try e.call(scan, &.{ try e.p(f, 2), try e.p(f, 2), try e.variant(choice, try b.constant(void, {}), 0), try b.constant(bool, false) }));
-        return f;
+        const scan = try c.function("rank admitted work", &.{ .{ .name = "remaining", .schema = offers }, .{ .name = "all", .schema = offers }, .{ .name = "best", .schema = choice }, .{ .name = "shared", .schema = try c.scalar(bool) } }, integer, &.{});
+        const body = try c.body(scan);
+        const all = try body.parameter("all");
+        const best = try body.parameter("best");
+        const shared = try body.parameter("shared");
+        const popped = try body.pop(try body.parameter("remaining"));
+        const empty = try body.caseOf(popped, "empty");
+        const item = try body.caseOf(popped, "item");
+        const absent = try empty.body().caseOf(best, "none");
+        const final = try empty.body().caseOf(best, "some");
+        const exhausted_result = try empty.body().match(best, &.{ try absent.ret(try absent.body().constant(u64, 0)), try final.ret(try final.body().field(try final.body().field(final.payload(), "0"), "1")) });
+        const work = item.body();
+        const parts = try work.destructure(item.payload());
+        const head = try parts.get("head");
+        const tail = try parts.get("tail");
+        const head_shared = try work.call(score, &.{ .{ .name = "candidate", .value = head }, .{ .name = "offered", .value = all } });
+        const missing = try work.caseOf(best, "none");
+        const present = try work.caseOf(best, "some");
+        const first = try missing.body().call(scan, &.{ .{ .name = "remaining", .value = tail }, .{ .name = "all", .value = all }, .{ .name = "best", .value = try missing.body().variant(choice, "some", head) }, .{ .name = "shared", .value = head_shared } });
+        const adopt = try present.body().branch();
+        const retain = try present.body().branch();
+        const replacement = try adopt.call(scan, &.{ .{ .name = "remaining", .value = tail }, .{ .name = "all", .value = all }, .{ .name = "best", .value = try adopt.variant(choice, "some", head) }, .{ .name = "shared", .value = head_shared } });
+        const retained = try retain.call(scan, &.{ .{ .name = "remaining", .value = tail }, .{ .name = "all", .value = all }, .{ .name = "best", .value = best }, .{ .name = "shared", .value = shared } });
+        const selected = try present.body().conditional(try e.betterTyped(present.body(), head, present.payload(), head_shared, shared), try adopt.ret(replacement), try retain.ret(retained));
+        const continued = try work.match(best, &.{ try missing.ret(first), try present.ret(selected) });
+        try c.define(scan, try body.ret(try body.match(popped, &.{ try empty.ret(exhausted_result), try item.ret(continued) })));
+        const entry = try c.function("default inquiry policy", &.{ .{ .name = "subject", .schema = try typed.interop.schema(c, e.s.subject) }, .{ .name = "policy", .schema = try typed.interop.schema(c, e.s.policy) }, .{ .name = "offered", .schema = offers }, .{ .name = "findings", .schema = try typed.interop.schema(c, e.d.custody.types.findings) } }, integer, &.{});
+        const root = try c.body(entry);
+        const offered = try root.parameter("offered");
+        try c.define(entry, try root.ret(try root.call(scan, &.{ .{ .name = "remaining", .value = offered }, .{ .name = "all", .value = offered }, .{ .name = "best", .value = try root.variant(choice, "none", try root.constant(void, {})) }, .{ .name = "shared", .value = try root.constant(bool, false) } })));
+        return typed.interop.functionId(c, entry);
     }
 
     // Loop arguments: state, subject, allowance, coalesce, policy, records,

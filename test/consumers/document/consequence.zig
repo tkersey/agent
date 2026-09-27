@@ -3,6 +3,8 @@ const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
 const source = boundary.computation;
+const typed = boundary.authoring;
+const CloseOperation = struct { effect: Id, capability: Id };
 const Id = source.Id;
 const code = @import("source.zig");
 pub const types = @import("consequence_types.zig");
@@ -44,7 +46,9 @@ fn Application(comptime clarify_first: bool) type {
             const message = try messageContract(c);
             const turn_cleanup = try c.external("document.terminology.turn.cleanup.v1", try b.scalar(u64), unit, .read);
             const conversation_cleanup = try c.external("document.terminology.conversation.cleanup.v1", unit, unit, .read);
-            const closed = try boundary.library.raise.family(b, "document.terminology.close.v1", memory);
+            const author = try typed.Context.init(b);
+            const close_family = try boundary.library.raise.family(author, "document.terminology.close.v1", try typed.interop.schema(author, memory));
+            const closed: CloseOperation = .{ .effect = try typed.interop.operationId(author, close_family.effect()), .capability = try typed.interop.schemaId(author, close_family.capability()) };
             try c.registry.classify(closed.effect, .internal);
             const external_rows = try code.row(b, &.{
                 model,          b.functions.items[resolve].effects[b.functions.items[resolve].effects.len - 1],
@@ -70,7 +74,7 @@ fn Application(comptime clarify_first: bool) type {
             });
             const initial = try c.literal(t.Memory, .{ .next_turn = 1, .receipt = null });
             try b.define(session, try agent.conversation.run(b, loop, initial, try b.reference(b.parameter(session, 1))));
-            return finishSession(c, session, closed, external_rows, rows, conversation_cleanup);
+            return finishSession(c, author, session, close_family, external_rows, rows, conversation_cleanup);
         }
     };
 }
@@ -90,7 +94,7 @@ fn messageContract(c: agent.Context) !agent.interaction.Definition {
     return d;
 }
 
-fn turnFunction(comptime clarify_first: bool, c: agent.Context, session: Id, rows: []const Id, closed: boundary.library.raise.Family, cleanup: Id, observed: agent.observation.Definition, proposal: proposals.Definition, resolve: Id, execute: Id) !Id {
+fn turnFunction(comptime clarify_first: bool, c: agent.Context, session: Id, rows: []const Id, closed: CloseOperation, cleanup: Id, observed: agent.observation.Definition, proposal: proposals.Definition, resolve: Id, execute: Id) !Id {
     const b = c.builder;
     const memory = try c.schema(t.Memory);
     const request = try c.schema(t.Request);
@@ -122,7 +126,7 @@ fn turnFunction(comptime clarify_first: bool, c: agent.Context, session: Id, row
     return turn;
 }
 
-fn readAndExplore(comptime clarify_first: bool, c: agent.Context, owner: Id, observed: agent.observation.Definition, proposal: proposals.Definition, resolve: Id, execute: Id, closed: boundary.library.raise.Family, cap: Id, memory: Id, task: Id, occurrence: Id) !Id {
+fn readAndExplore(comptime clarify_first: bool, c: agent.Context, owner: Id, observed: agent.observation.Definition, proposal: proposals.Definition, resolve: Id, execute: Id, closed: CloseOperation, cap: Id, memory: Id, task: Id, occurrence: Id) !Id {
     const b = c.builder;
     const evidence = try b.variable(observed.evidence);
     const read = try b.variable(observed.data);
@@ -159,7 +163,7 @@ fn readAndExplore(comptime clarify_first: bool, c: agent.Context, owner: Id, obs
     return b.bind(evidence, try agent.observation.readEvidence(c, observed, owner, try code.field(b, try c.schema(t.Path), task, 0)), unpack);
 }
 
-fn resolutions(c: agent.Context, execute: Id, closed: boundary.library.raise.Family, capability: Id, memory: Id, frozen: Id, resolution: Id) !Id {
+fn resolutions(c: agent.Context, execute: Id, closed: CloseOperation, capability: Id, memory: Id, frozen: Id, resolution: Id) !Id {
     const b = c.builder;
     const common = try b.variable(try c.schema(t.Group));
     const selected = try b.variable(try c.schema(t.Group));
@@ -185,26 +189,31 @@ fn resolutions(c: agent.Context, execute: Id, closed: boundary.library.raise.Fam
     } } });
 }
 
-fn finishSession(c: agent.Context, session: Id, family: boundary.library.raise.Family, external_rows: []const Id, rows: []const Id, cleanup: Id) !source.Module {
+fn finishSession(c: agent.Context, author: *typed.Context, session: Id, family: *const boundary.library.raise.Family, external_rows: []const Id, rows: []const Id, cleanup: Id) !source.Module {
     const b = c.builder;
     const memory = try c.schema(t.Memory);
     const request = try c.schema(t.Request);
     const unit = try b.scalar(void);
-    const catching = try boundary.library.raise.catching(b, family, memory, &.{
+    const capture_ids = [_]Id{
         memory,                      request,                   try c.schema(t.Reply), try c.schema(t.Context),
         try c.schema(t.Resolution),  try c.schema(t.NonAction), try c.schema(t.Group), try c.schema(t.Receipt),
         try c.schema(t.Observation), try b.scalar(u64),         try b.scalar(bool),    unit,
-    }, .{ .effects = external_rows }, &.{});
+    };
+    const captures = try b.allocator().alloc(*const typed.Schema, capture_ids.len);
+    for (capture_ids, captures) |id, *schema| schema.* = try typed.interop.schema(author, id);
+    const residual = try b.allocator().alloc(*const typed.Operation, external_rows.len);
+    for (external_rows, residual) |id, *operation| operation.* = try typed.interop.operation(author, id);
+    const catching = try boundary.library.raise.catching(author, family, try typed.interop.schema(author, memory), captures, residual, &.{});
     const outer_rows = try code.row(b, external_rows, &.{cleanup});
     const entry = try b.declare(&.{request}, memory, outer_rows, &.{});
     const body = try b.declare(&.{}, memory, external_rows, &.{});
-    const session_type = try code.computation(b, &.{ family.capability, request }, memory, rows, &.{});
+    const session_type = try code.computation(b, &.{ try typed.interop.schemaId(author, family.capability()), request }, memory, rows, &.{});
     const handled = try b.term(.{ .handle = .{
-        .handler = catching.handler,
+        .handler = try typed.interop.handlerId(author, catching.handler),
         .body = try b.lambda(session, session_type),
         .arguments = &.{try b.reference(b.parameter(entry, 0))},
     } });
-    const answer = try b.variable(catching.answer);
+    const answer = try b.variable(try typed.interop.schemaId(author, catching.answer));
     const closed = try b.variable(memory);
     const finished = try b.variable(memory);
     try b.define(body, try b.bind(answer, handled, try b.term(.{ .match_sum = .{

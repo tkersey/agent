@@ -11,6 +11,13 @@ const admission = @import("admission.zig");
 const Id = source.Id;
 const Builder = source.Builder;
 pub const Error = equality.Error || admission.Error;
+const ConstructionError = typed.Error || Error;
+fn constructionError(err: ConstructionError) Error {
+    return switch (err) {
+        error.UnsupportedEqualitySchema, error.EffectRoleMismatch, error.DuplicateEffectIdentity, error.ProtectedEffectBypass, error.ProtectedHandler, error.PrivateFunctionBypass, error.SpeculativeEffect, error.SpeculativeCapture, error.ProtectedResourceEscape, error.UnprovenComputationOrigin => @errorCast(err),
+        else => typed.sourceError(@errorCast(err)),
+    };
+}
 
 pub const Status = enum(u8) {
     finished,
@@ -192,71 +199,6 @@ const Emit = struct {
     unit: Id,
     effects: []const Id,
     registry: ?*admission.Registry = null,
-
-    fn ref(e: Emit, v: Id) Error!Id {
-        return e.b.reference(v);
-    }
-    fn p(e: Emit, f: Id, i: usize) Error!Id {
-        return e.ref(e.b.parameter(f, i));
-    }
-    fn n(e: Emit, v: u64) Error!Id {
-        return e.b.constant(u64, v);
-    }
-    fn call(e: Emit, f: Id, args: []const Id) Error!Id {
-        return e.b.term(.{ .call = .{ .function = f, .arguments = args } });
-    }
-    fn field(e: Emit, t: Id, v: Id, i: u64) Error!Id {
-        return e.b.primitive(t, .field, &.{v}, i);
-    }
-    fn product(e: Emit, t: Id, values: []const Id) Error!Id {
-        return e.b.primitive(t, .product, values, 0);
-    }
-    fn variant(e: Emit, t: Id, v: Id, tag: u64) Error!Id {
-        return e.b.primitive(t, .variant, &.{v}, tag);
-    }
-    fn sequence(e: Emit, t: Id, values: []const Id) Error!Id {
-        return e.b.primitive(t, .sequence, values, 0);
-    }
-    fn append(e: Emit, t: Id, items: Id, v: Id) Error!Id {
-        return e.b.primitive(t, .sequence_append, &.{ items, v }, 0);
-    }
-    fn eq(e: Emit, a: Id, b: Id) Error!Id {
-        return e.b.primitive(e.boolean, .equal, &.{ a, b }, 0);
-    }
-    fn len(e: Emit, v: Id) Error!Id {
-        return e.b.primitive(e.integer, .sequence_length, &.{v}, 0);
-    }
-    fn cond(e: Emit, v: Id, yes: Id, no: Id) Error!Id {
-        return e.b.term(.{ .conditional = .{ .condition = v, .when_true = yes, .when_false = no } });
-    }
-    fn arithmetic(e: Emit, op: boundary.data.program.Opcode, a: Id, b: Id) Error!Id {
-        return e.b.value(.{ .schema = e.integer, .expression = .{ .primitive = .{
-            .opcode = op,
-            .operands = &.{ a, b },
-            .failures = &.{.{
-                .kind = .arithmetic_overflow,
-                .value = try e.b.failureLiteral(e.s.failure),
-            }},
-        } } });
-    }
-    fn unpack(e: Emit, value: Id, vars: []const Id, body: Id) Error!Id {
-        return e.b.term(.{ .unpack_product = .{ .value = value, .variables = vars, .body = body } });
-    }
-    fn meta(e: Emit, offered: Id) Error!Id {
-        return e.field(e.d.types.admitted, offered, 1);
-    }
-    fn view(e: Emit, offered: Id) Error!Id {
-        return e.field(e.d.custody.types.view, offered, 0);
-    }
-    fn experimentKey(e: Emit, offered: Id) Error!Id {
-        return e.field(e.s.key, try e.meta(offered), 0);
-    }
-    fn demandGeneration(e: Emit, offered: Id) Error!Id {
-        return e.field(e.integer, try e.view(offered), 1);
-    }
-    fn reusable(e: Emit, offered: Id) Error!Id {
-        return e.field(e.boolean, try e.meta(offered), 1);
-    }
 
     // Temporary boundary for existing source-defined policy/custody functions.
     // Argument categories are checked here; normal Source/Agent admission still
@@ -577,29 +519,46 @@ const Emit = struct {
         return typed.interop.functionId(c, entry);
     }
 
-    // Loop arguments: state, subject, allowance, coalesce, policy, records,
-    // next experiment occurrence, acquisition count, cache passes, recipients.
     fn controller(e: Emit) Error!Id {
-        const b = e.b;
-        const t = e.d.types;
-        const own = e.d.custody.types;
-        const args: []const Id = &.{ own.state, e.s.subject, e.integer, e.boolean, e.s.policy, t.records, e.integer, e.integer, e.integer, e.integer };
-        const loop = try b.declare(args, t.outcome, e.effects, e.s.scope.borrowed_regions);
-        const stop = try e.stopper();
-        const optional = try b.schema(.{ .sum = &.{ e.unit, t.record } });
-        const choice = try b.schema(.{ .sum = &.{ e.unit, t.eligible } });
+        return e.controllerTyped() catch |err| return constructionError(err);
+    }
+    fn controllerTyped(e: Emit) ConstructionError!Id {
+        const c = e.c;
+        const names = [_][]const u8{ "state", "subject", "allowance", "coalesce", "policy", "records", "occurrence", "acquisitions", "reused", "recipients" };
+        const ids = [_]Id{ e.d.custody.types.state, e.s.subject, e.integer, e.boolean, e.s.policy, e.d.types.records, e.integer, e.integer, e.integer, e.integer };
+        var fields: [names.len]typed.Field = undefined;
+        for (names, ids, &fields) |name, id, *field| field.* = .{ .name = name, .schema = try typed.interop.schema(c, id) };
+        const effects = try e.b.allocator().alloc(*const typed.Operation, e.effects.len);
+        for (effects, e.effects) |*out, id| out.* = try typed.interop.operation(c, id);
+        const regions = try e.b.allocator().alloc(*const typed.Region, e.s.scope.borrowed_regions.len);
+        for (regions, e.s.scope.borrowed_regions) |*out, id| out.* = try typed.interop.region(c, id);
+        const outcome = try typed.interop.schema(c, e.d.types.outcome);
+        const loop = try c.functionFor("inquiry controller", try c.callable(&fields, outcome, effects, .{ .use = .reusable, .captures = &.{}, .regions = regions }));
+        const optional = try e.b.schema(.{ .sum = &.{ e.unit, e.d.types.record } });
+        const choice = try e.b.schema(.{ .sum = &.{ e.unit, e.d.types.eligible } });
         const lookup = try e.lookupFunction(optional);
-        const ops: Ops = .{ .loop = loop, .stop = stop, .optional = optional, .choice = choice, .admit = try e.admitViews(), .lookup = lookup, .recipients = try e.recipients(), .selected = try e.selectedFunction(choice), .cached_choice = try e.cachedChoice(lookup, optional) };
-        try b.define(loop, try e.loopBody(ops));
-        const run = try b.declare(args[0..5], t.outcome, e.effects, e.s.scope.borrowed_regions);
-        try b.define(run, try e.call(loop, &.{ try e.p(run, 0), try e.p(run, 1), try e.p(run, 2), try e.p(run, 3), try e.p(run, 4), try e.sequence(t.records, &.{}), try e.n(1), try e.n(0), try e.n(0), try e.n(0) }));
-        return run;
+        const fault = try typed.interop.literalFailure(c, e.s.failure, try typed.interop.schema(c, e.b.values.items[@intCast(e.s.failure)].schema));
+        const ops: LoopOps = .{ .loop = loop, .stop = try typed.interop.declaredFunction(c, try e.stopper()), .admit = try typed.interop.declaredFunction(c, try e.admitViews()), .lookup = try typed.interop.declaredFunction(c, lookup), .recipients = try typed.interop.declaredFunction(c, try e.recipients()), .selected = try typed.interop.declaredFunction(c, try e.selectedFunction(choice)), .cached_choice = try typed.interop.declaredFunction(c, try e.cachedChoice(lookup, optional)), .failure = fault };
+        const body = try c.body(loop);
+        var args: LoopArgs = undefined;
+        inline for (@typeInfo(LoopArgs).@"struct".fields) |field| @field(args, field.name) = try body.parameter(field.name);
+        try c.define(loop, try body.ret(try e.loopTyped(body, ops, args)));
+        const entry = try c.functionFor("start inquiry controller", try c.callable(fields[0..5], outcome, effects, .{ .use = .reusable, .captures = &.{}, .regions = regions }));
+        const root = try c.body(entry);
+        try c.define(entry, try root.ret(try root.call(loop, &.{
+            .{ .name = "state", .value = try root.parameter("state") },         .{ .name = "subject", .value = try root.parameter("subject") },
+            .{ .name = "allowance", .value = try root.parameter("allowance") }, .{ .name = "coalesce", .value = try root.parameter("coalesce") },
+            .{ .name = "policy", .value = try root.parameter("policy") },       .{ .name = "records", .value = try root.sequenceValue(try typed.interop.schema(c, e.d.types.records), &.{}) },
+            .{ .name = "occurrence", .value = try root.constant(u64, 1) },      .{ .name = "acquisitions", .value = try root.constant(u64, 0) },
+            .{ .name = "reused", .value = try root.constant(u64, 0) },          .{ .name = "recipients", .value = try root.constant(u64, 0) },
+        })));
+        return typed.interop.functionId(c, entry);
     }
 
     fn stopper(e: Emit) Error!Id {
-        return e.stopperTyped() catch |err| return typed.sourceError(err);
+        return e.stopperTyped() catch |err| return constructionError(err);
     }
-    fn stopperTyped(e: Emit) typed.Error!Id {
+    fn stopperTyped(e: Emit) ConstructionError!Id {
         const c = e.c;
         const integer = try c.scalar(u64);
         const effects = try e.b.allocator().alloc(*const typed.Operation, e.effects.len);
@@ -615,188 +574,184 @@ const Emit = struct {
         return typed.interop.functionId(c, function);
     }
 
-    fn stopWith(e: Emit, o: Ops, state: Id, status: Status, records: Id) Error!Id {
-        return e.call(o.stop, &.{ state, try e.b.constant(u8, @intFromEnum(status)), records, try e.p(o.loop, 7), try e.p(o.loop, 8), try e.p(o.loop, 9) });
+    fn stopTyped(_: Emit, body: *typed.Body, o: LoopOps, v: LoopArgs, state: *const typed.Value, status: Status, records: *const typed.Value, acquired: bool) ConstructionError!*const typed.Value {
+        const count = if (acquired) try body.checkedAdd(v.acquisitions, try body.constant(u64, 1), o.failure) else v.acquisitions;
+        return body.call(o.stop, &.{ .{ .name = "state", .value = state }, .{ .name = "status", .value = try body.constant(u8, @intFromEnum(status)) }, .{ .name = "records", .value = records }, .{ .name = "acquisitions", .value = count }, .{ .name = "reused", .value = v.reused }, .{ .name = "recipients", .value = v.recipients } });
     }
-
-    fn stopAfterAcquisition(e: Emit, o: Ops, state: Id, status: Status, records: Id) Error!Id {
-        return e.call(o.stop, &.{ state, try e.b.constant(u8, @intFromEnum(status)), records, try e.arithmetic(.integer_add, try e.p(o.loop, 7), try e.n(1)), try e.p(o.loop, 8), try e.p(o.loop, 9) });
+    fn againTyped(_: Emit, body: *typed.Body, o: LoopOps, v: LoopArgs, state: *const typed.Value, records: *const typed.Value, acquired: bool, reused: bool, recipients_count: *const typed.Value) ConstructionError!*const typed.Value {
+        return body.call(o.loop, &.{
+            .{ .name = "state", .value = state },                                                                                               .{ .name = "subject", .value = v.subject },
+            .{ .name = "allowance", .value = try body.checked(.subtract, v.allowance, try body.constant(u64, 1), .{ .overflow = o.failure }) }, .{ .name = "coalesce", .value = v.coalesce },
+            .{ .name = "policy", .value = v.policy },                                                                                           .{ .name = "records", .value = records },
+            .{ .name = "occurrence", .value = try body.checkedAdd(v.occurrence, try body.constant(u64, @intFromBool(acquired)), o.failure) },   .{ .name = "acquisitions", .value = try body.checkedAdd(v.acquisitions, try body.constant(u64, @intFromBool(acquired)), o.failure) },
+            .{ .name = "reused", .value = try body.checkedAdd(v.reused, try body.constant(u64, @intFromBool(reused)), o.failure) },             .{ .name = "recipients", .value = try body.checkedAdd(v.recipients, recipients_count, o.failure) },
+        });
     }
-
-    fn again(e: Emit, o: Ops, state: Id, records: Id, acquired: bool, reused: bool, recipients_count: Id) Error!Id {
-        const f = o.loop;
-        return e.call(f, &.{ state, try e.p(f, 1), try e.arithmetic(.integer_sub, try e.p(f, 2), try e.n(1)), try e.p(f, 3), try e.p(f, 4), records, try e.arithmetic(.integer_add, try e.p(f, 6), try e.n(@intFromBool(acquired))), try e.arithmetic(.integer_add, try e.p(f, 7), try e.n(@intFromBool(acquired))), try e.arithmetic(.integer_add, try e.p(f, 8), try e.n(@intFromBool(reused))), try e.arithmetic(.integer_add, try e.p(f, 9), recipients_count) });
+    fn rebuildState(e: Emit, body: *typed.Body, queue: *const typed.Value, findings: *const typed.Value, generation: *const typed.Value) ConstructionError!*const typed.Value {
+        return body.product(try typed.interop.schema(e.c, e.d.custody.types.state), &.{ .{ .name = "0", .value = queue }, .{ .name = "1", .value = findings }, .{ .name = "2", .value = generation } });
     }
-
-    fn loopBody(e: Emit, o: Ops) Error!Id {
-        const b = e.b;
-        const own = e.d.custody.types;
-        const queue = try b.variable(own.queue);
-        const findings = try b.variable(own.findings);
-        const generation = try b.variable(e.integer);
-        const rebuilt = try e.product(own.state, &.{ try e.ref(queue), try e.ref(findings), try e.ref(generation) });
-        const done = try b.variable(e.boolean);
-        const projected = try b.variable(own.projected);
-        const state = try b.variable(own.state);
-        const views = try b.variable(own.views);
-        const select = try e.chooseWork(o, try e.ref(state), try e.ref(views), try e.ref(findings));
-        const active = try b.bind(projected, try e.call(e.d.custody.project, &.{rebuilt}), try e.unpack(try e.ref(projected), &.{ state, views }, select));
-        const empty = try e.eq(try e.len(try e.ref(queue)), try e.n(0));
-        const finished = try e.stopWith(o, rebuilt, .finished, try e.p(o.loop, 5));
-        const bounded = try e.cond(try e.eq(try e.p(o.loop, 2), try e.n(0)), try e.stopWith(o, rebuilt, .stopped, try e.p(o.loop, 5)), active);
-        const terminal = try b.bind(done, try e.call(e.f.?.finish, &.{ try e.p(o.loop, 1), try e.ref(findings) }), try e.cond(try e.ref(done), finished, try e.cond(empty, finished, bounded)));
-        return e.unpack(try e.p(o.loop, 0), &.{ queue, findings, generation }, terminal);
+    fn loopTyped(e: Emit, body: *typed.Body, o: LoopOps, v: LoopArgs) ConstructionError!*const typed.Value {
+        const parts = try body.destructure(v.state);
+        const queue = try parts.get("0");
+        const findings = try parts.get("1");
+        const generation = try parts.get("2");
+        const finished = try e.callSource(body, e.f.?.finish, &.{ v.subject, findings });
+        const done = try body.branch();
+        const unfinished = try body.branch();
+        const empty = try unfinished.branch();
+        const pending = try unfinished.branch();
+        const stopped = try pending.branch();
+        const active = try pending.branch();
+        const projected = try e.callSource(active, e.d.custody.project, &.{try e.rebuildState(active, queue, findings, generation)});
+        const projection = try active.destructure(projected);
+        const next = try e.chooseTyped(active, o, v, try projection.get("0"), try projection.get("1"), findings);
+        const bounded = try pending.conditional(try pending.equal(v.allowance, try pending.constant(u64, 0)), try stopped.ret(try e.stopTyped(stopped, o, v, try e.rebuildState(stopped, queue, findings, generation), .stopped, v.records, false)), try active.ret(next));
+        const has_work = try unfinished.conditional(try unfinished.equal(try unfinished.sequenceLength(queue), try unfinished.constant(u64, 0)), try empty.ret(try e.stopTyped(empty, o, v, try e.rebuildState(empty, queue, findings, generation), .finished, v.records, false)), try pending.ret(bounded));
+        return body.conditional(finished, try done.ret(try e.stopTyped(done, o, v, try e.rebuildState(done, queue, findings, generation), .finished, v.records, false)), try unfinished.ret(has_work));
     }
-
-    fn chooseWork(e: Emit, o: Ops, state: Id, views: Id, findings: Id) Error!Id {
-        const b = e.b;
-        const t = e.d.types;
-        const ids = e.d.custody.types.ids;
-        const admitted_type = b.functions.items[@intCast(o.admit)].result;
-        const admitted = try b.variable(admitted_type);
-        const offered = try b.variable(t.eligible_list);
-        const denied = try b.variable(ids);
-        const retired = try b.variable(ids);
-        const after_denial = try b.variable(e.d.custody.types.state);
-        const after_retirement = try b.variable(e.d.custody.types.state);
-        const reject = try b.bind(after_denial, try e.call(e.d.custody.distribute, &.{ state, try e.ref(denied), try e.variant(t.reply, try b.constant(void, {}), 1) }), try e.again(o, try e.ref(after_denial), try e.p(o.loop, 5), false, false, try e.len(try e.ref(denied))));
-        const good = try e.chooseAdmitted(o, state, try e.ref(offered), findings);
-        const decide = try e.cond(try e.eq(try e.len(try e.ref(denied)), try e.n(0)), good, reject);
-        const dispose = try b.bind(after_retirement, try e.call(e.d.custody.retire, &.{ state, try e.ref(retired) }), try e.again(o, try e.ref(after_retirement), try e.p(o.loop, 5), false, false, try e.n(0)));
-        const selected = try e.cond(try e.eq(try e.len(try e.ref(retired)), try e.n(0)), decide, dispose);
-        return b.bind(admitted, try e.call(o.admit, &.{ views, try e.p(o.loop, 1), try e.sequence(t.eligible_list, &.{}), try e.sequence(ids, &.{}), try e.sequence(ids, &.{}) }), try e.unpack(try e.ref(admitted), &.{ offered, denied, retired }, selected));
+    fn chooseTyped(e: Emit, body: *typed.Body, o: LoopOps, v: LoopArgs, state: *const typed.Value, views: *const typed.Value, findings: *const typed.Value) ConstructionError!*const typed.Value {
+        const ids_type = try typed.interop.schema(e.c, e.d.custody.types.ids);
+        const admitted = try body.call(o.admit, &.{ .{ .name = "views", .value = views }, .{ .name = "subject", .value = v.subject }, .{ .name = "offered", .value = try body.sequenceValue(try typed.interop.schema(e.c, e.d.types.eligible_list), &.{}) }, .{ .name = "denied", .value = try body.sequenceValue(ids_type, &.{}) }, .{ .name = "retired", .value = try body.sequenceValue(ids_type, &.{}) } });
+        const parts = try body.destructure(admitted);
+        const offered = try parts.get("offered");
+        const denied_ids = try parts.get("denied");
+        const retired_ids = try parts.get("retired");
+        const no_retirement = try body.branch();
+        const retirement = try body.branch();
+        const disposed = try e.callSource(retirement, e.d.custody.retire, &.{ state, retired_ids });
+        const after_retirement = try e.againTyped(retirement, o, v, disposed, v.records, false, false, try retirement.constant(u64, 0));
+        const admitted_work = try no_retirement.branch();
+        const denial = try no_retirement.branch();
+        const denied_reply = try denial.variant(try typed.interop.schema(e.c, e.d.types.reply), "1", try denial.constant(void, {}));
+        const distributed = try e.callSource(denial, e.d.custody.distribute, &.{ state, denied_ids, denied_reply });
+        const after_denial = try e.againTyped(denial, o, v, distributed, v.records, false, false, try denial.sequenceLength(denied_ids));
+        const selected = try no_retirement.conditional(try no_retirement.equal(try no_retirement.sequenceLength(denied_ids), try no_retirement.constant(u64, 0)), try admitted_work.ret(try e.chooseAdmittedTyped(admitted_work, o, v, state, offered, findings)), try denial.ret(after_denial));
+        return body.conditional(try body.equal(try body.sequenceLength(retired_ids), try body.constant(u64, 0)), try no_retirement.ret(selected), try retirement.ret(after_retirement));
     }
-
-    fn chooseAdmitted(e: Emit, o: Ops, state: Id, offered: Id, findings: Id) Error!Id {
-        const b = e.b;
-        const list = e.d.types.eligible_list;
-        const cached = try b.variable(list);
-        const candidates = try b.variable(list);
-        const selected_id = try b.variable(e.integer);
-        const choice = try b.variable(o.choice);
-        const missing = try b.variable(e.unit);
-        const found = try b.variable(e.d.types.eligible);
-        const branch = try b.term(.{ .match_sum = .{
-            .value = try e.ref(choice),
-            .cases = &.{ .{ .variable = missing, .body = try e.stopWith(o, state, .invalid_selection, try e.p(o.loop, 5)) }, .{ .variable = found, .body = try e.dispatch(o, state, offered, try e.ref(found)) } },
-        } });
-        const checked = try b.bind(choice, try e.call(o.selected, &.{ try e.ref(candidates), try e.ref(selected_id) }), branch);
-        const selected = try b.bind(selected_id, try e.call(e.f.?.select, &.{ try e.p(o.loop, 1), try e.p(o.loop, 4), try e.ref(candidates), findings }), try e.cond(try e.eq(try e.ref(selected_id), try e.n(0)), try e.stopWith(o, state, .unresolved, try e.p(o.loop, 5)), checked));
-        const choose_candidates = try b.bind(candidates, try e.cond(try e.eq(try e.len(try e.ref(cached)), try e.n(0)), try b.pure(offered), try b.pure(try e.ref(cached))), selected);
-        return b.bind(cached, try e.cond(try e.p(o.loop, 3), try e.call(o.cached_choice, &.{ offered, try e.p(o.loop, 5), try e.sequence(list, &.{}) }), try b.pure(try e.sequence(list, &.{}))), choose_candidates);
+    fn chooseAdmittedTyped(e: Emit, body: *typed.Body, o: LoopOps, v: LoopArgs, state: *const typed.Value, offered: *const typed.Value, findings: *const typed.Value) ConstructionError!*const typed.Value {
+        const list = try typed.interop.schema(e.c, e.d.types.eligible_list);
+        const caching = try body.branch();
+        const uncached = try body.branch();
+        const found = try caching.call(o.cached_choice, &.{ .{ .name = "offered", .value = offered }, .{ .name = "records", .value = v.records }, .{ .name = "selected", .value = try caching.sequenceValue(list, &.{}) } });
+        const cached = try body.conditional(v.coalesce, try caching.ret(found), try uncached.ret(try uncached.sequenceValue(list, &.{})));
+        const no_cache = try body.branch();
+        const use_cache = try body.branch();
+        const candidates = try body.conditional(try body.equal(try body.sequenceLength(cached), try body.constant(u64, 0)), try no_cache.ret(offered), try use_cache.ret(cached));
+        const selected_id = try e.callSource(body, e.f.?.select, &.{ v.subject, v.policy, candidates, findings });
+        const unresolved = try body.branch();
+        const selected = try body.branch();
+        const choice = try selected.call(o.selected, &.{ .{ .name = "offered", .value = candidates }, .{ .name = "generation", .value = selected_id } });
+        const missing = try selected.caseOf(choice, "0");
+        const present = try selected.caseOf(choice, "1");
+        const checked = try selected.match(choice, &.{ try missing.ret(try e.stopTyped(missing.body(), o, v, state, .invalid_selection, v.records, false)), try present.ret(try e.dispatchTyped(present.body(), o, v, state, offered, present.payload())) });
+        return body.conditional(try body.equal(selected_id, try body.constant(u64, 0)), try unresolved.ret(try e.stopTyped(unresolved, o, v, state, .unresolved, v.records, false)), try selected.ret(checked));
     }
-
-    fn dispatch(e: Emit, o: Ops, state: Id, offered: Id, selected: Id) Error!Id {
-        const b = e.b;
-        const ids = try b.variable(e.d.custody.types.ids);
-        const cached = try b.variable(o.optional);
-        const absent = try b.variable(e.unit);
-        const record = try b.variable(e.d.types.record);
-        const acquire = try e.acquireObservation(o, state, selected, try e.ref(ids));
-        const shared = try e.deliverRecord(o, state, try e.ref(ids), try e.ref(record), try e.p(o.loop, 5), false, true);
-        const branch = try b.term(.{ .match_sum = .{
-            .value = try e.ref(cached),
-            .cases = &.{ .{ .variable = absent, .body = acquire }, .{ .variable = record, .body = shared } },
-        } });
-        const lookup = try b.bind(cached, try e.call(o.lookup, &.{ try e.p(o.loop, 5), try e.experimentKey(selected) }), branch);
-        const perform = try e.cond(try e.p(o.loop, 3), try e.cond(try e.reusable(selected), lookup, acquire), acquire);
-        return b.bind(ids, try e.call(o.recipients, &.{ offered, selected, try e.p(o.loop, 3), try e.sequence(e.d.custody.types.ids, &.{}) }), perform);
+    fn dispatchTyped(e: Emit, body: *typed.Body, o: LoopOps, v: LoopArgs, state: *const typed.Value, offered: *const typed.Value, selected: *const typed.Value) ConstructionError!*const typed.Value {
+        const ids = try body.call(o.recipients, &.{ .{ .name = "offered", .value = offered }, .{ .name = "chosen", .value = selected }, .{ .name = "coalesce", .value = v.coalesce }, .{ .name = "ids", .value = try body.sequenceValue(try typed.interop.schema(e.c, e.d.custody.types.ids), &.{}) } });
+        const optional = try typed.interop.schema(e.c, e.b.functions.items[@intCast(try typed.interop.functionId(e.c, o.lookup))].result);
+        const enabled = try body.branch();
+        const disabled = try body.branch();
+        const reusable_case = try enabled.branch();
+        const fresh_case = try enabled.branch();
+        const prior = try reusable_case.call(o.lookup, &.{ .{ .name = "records", .value = v.records }, .{ .name = "key", .value = try reusable_case.field(try reusable_case.field(selected, "1"), "0") } });
+        const selected_case = try enabled.conditional(try enabled.field(try enabled.field(selected, "1"), "1"), try reusable_case.ret(prior), try fresh_case.ret(try fresh_case.variant(optional, "0", try fresh_case.constant(void, {}))));
+        const cached = try body.conditional(v.coalesce, try enabled.ret(selected_case), try disabled.ret(try disabled.variant(optional, "0", try disabled.constant(void, {}))));
+        const absent = try body.caseOf(cached, "0");
+        const present = try body.caseOf(cached, "1");
+        return body.match(cached, &.{ try absent.ret(try e.acquireTyped(absent.body(), o, v, state, selected, ids)), try present.ret(try e.deliverTyped(present.body(), o, v, state, ids, present.payload(), v.records, false, true)) });
     }
-
-    fn deliverRecord(e: Emit, o: Ops, state: Id, ids: Id, record: Id, records: Id, acquired: bool, reused: bool) Error!Id {
-        const next = try e.b.variable(e.d.custody.types.state);
-        const stored = try e.b.variable(e.d.types.records);
-        const reply = try e.variant(e.d.types.reply, record, if (reused) 3 else 0);
-        const distributed = try e.b.bind(next, try e.call(e.d.custody.distribute, &.{ state, ids, reply }), try e.again(o, try e.ref(next), try e.ref(stored), acquired, reused, try e.len(ids)));
-        return e.b.bind(stored, try e.b.pure(records), distributed);
+    fn deliverTyped(e: Emit, body: *typed.Body, o: LoopOps, v: LoopArgs, state: *const typed.Value, ids: *const typed.Value, record: *const typed.Value, records: *const typed.Value, acquired: bool, reused: bool) ConstructionError!*const typed.Value {
+        const reply = try body.variant(try typed.interop.schema(e.c, e.d.types.reply), if (reused) "3" else "0", record);
+        const next = try e.callSource(body, e.d.custody.distribute, &.{ state, ids, reply });
+        return e.againTyped(body, o, v, next, records, acquired, reused, try body.sequenceLength(ids));
     }
-
-    fn acquireObservation(e: Emit, o: Ops, state: Id, selected: Id, ids: Id) Error!Id {
-        const b = e.b;
-        const envelope = try b.variable(e.d.types.envelope);
-        const response = try e.ref(envelope);
-        const key = try e.experimentKey(selected);
-        const subject = try e.p(o.loop, 1);
-        const occurrence = try e.p(o.loop, 6);
-        const same_subject = try b.variable(e.boolean);
-        const same_key = try b.variable(e.boolean);
-        const invalid = try e.stopAfterAcquisition(o, state, .invalid_evidence, try e.p(o.loop, 5));
-        const complete = try e.completed(o, state, selected, ids, try e.field(e.d.types.completion, response, 3));
-        const bound = try e.cond(try e.eq(occurrence, try e.field(e.integer, response, 2)), complete, invalid);
-        const check_key = try b.bind(same_key, try e.call(e.d.key_equal, &.{ key, try e.field(e.s.key, response, 1) }), try e.cond(try e.ref(same_key), bound, invalid));
-        const check_subject = try b.bind(same_subject, try e.call(e.d.subject_equal, &.{ subject, try e.field(e.s.subject, response, 0) }), try e.cond(try e.ref(same_subject), check_key, invalid));
-        const request = try e.product(e.d.types.request, &.{ subject, key, try e.field(e.s.demand, try e.view(selected), 2), occurrence });
-        const performed = try b.term(.{ .perform = .{
-            .effect = e.d.experiment,
-            .payload = request,
-        } });
-        if (e.registry) |registry| try registry.protectSite(o.loop, performed, e.d.experiment);
-        return b.bind(envelope, performed, check_subject);
-    }
-
-    fn completed(e: Emit, o: Ops, state: Id, selected: Id, ids: Id, completion: Id) Error!Id {
-        const b = e.b;
-        const value = try b.variable(e.s.observation);
-        const inconclusive = try b.variable(e.unit);
-        const unavailable = try b.variable(e.unit);
-        const next = try b.variable(e.d.custody.types.state);
-        const unknown = try b.bind(next, try e.call(e.d.custody.distribute, &.{ state, ids, try e.variant(e.d.types.reply, try b.constant(void, {}), 2) }), try e.again(o, try e.ref(next), try e.p(o.loop, 5), true, false, try e.len(ids)));
-        const record = try e.product(e.d.types.record, &.{ try e.p(o.loop, 6), try e.experimentKey(selected), try e.ref(value), try e.reusable(selected) });
-        const stored = try e.append(e.d.types.records, try e.p(o.loop, 5), record);
-        var accepted = try e.checkConflict(o, state, selected, ids, record, stored);
-        if (e.f.?.observe) |observe| {
-            const valid = try b.variable(e.boolean);
-            accepted = try b.bind(valid, try e.call(observe, &.{ try e.p(o.loop, 1), try e.experimentKey(selected), try e.ref(value) }), try e.cond(try e.ref(valid), accepted, try e.stopAfterAcquisition(o, state, .invalid_evidence, try e.p(o.loop, 5))));
+    fn acquireTyped(e: Emit, body: *typed.Body, o: LoopOps, v: LoopArgs, state: *const typed.Value, selected: *const typed.Value, ids: *const typed.Value) ConstructionError!*const typed.Value {
+        const key = try body.field(try body.field(selected, "1"), "0");
+        const request = try body.product(try typed.interop.schema(e.c, e.d.types.request), &.{ .{ .name = "0", .value = v.subject }, .{ .name = "1", .value = key }, .{ .name = "2", .value = try body.field(try body.field(selected, "0"), "2") }, .{ .name = "3", .value = v.occurrence } });
+        // Keep the exact perform-site witness required by Agent's registry.
+        const site = try e.b.term(.{ .perform = .{ .effect = e.d.experiment, .payload = try typed.interop.valueId(body, request) } });
+        if (e.registry) |registry| try registry.protectSite(try typed.interop.functionId(e.c, o.loop), site, e.d.experiment);
+        const response = try typed.interop.term(body, site, try typed.interop.schema(e.c, e.d.types.envelope));
+        const Guard = struct { parent: *typed.Body, condition: *const typed.Value, yes: *typed.Body, no: *typed.Body };
+        var guards: [3]Guard = undefined;
+        var work = body;
+        for (&guards, 0..) |*guard, index| {
+            const condition = switch (index) {
+                0 => try e.callSource(work, e.d.subject_equal, &.{ v.subject, try work.field(response, "0") }),
+                1 => try e.callSource(work, e.d.key_equal, &.{ try work.field(try work.field(selected, "1"), "0"), try work.field(response, "1") }),
+                else => try work.equal(v.occurrence, try work.field(response, "2")),
+            };
+            const yes = try work.branch();
+            guard.* = .{ .parent = work, .condition = condition, .yes = yes, .no = try work.branch() };
+            work = yes;
         }
-        return b.term(.{ .match_sum = .{ .value = completion, .cases = &.{
-            .{ .variable = value, .body = accepted },
-            .{ .variable = inconclusive, .body = unknown },
-            .{ .variable = unavailable, .body = try e.stopAfterAcquisition(o, state, .environment_unavailable, try e.p(o.loop, 5)) },
-        } } });
+        var result = try e.completedTyped(work, o, v, state, selected, ids, try work.field(response, "3"));
+        var remaining = guards.len;
+        while (remaining != 0) {
+            remaining -= 1;
+            const guard = guards[remaining];
+            result = try guard.parent.conditional(guard.condition, try guard.yes.ret(result), try guard.no.ret(try e.stopTyped(guard.no, o, v, state, .invalid_evidence, v.records, true)));
+        }
+        return result;
     }
-
-    fn checkConflict(e: Emit, o: Ops, state: Id, selected: Id, ids: Id, record: Id, records: Id) Error!Id {
-        const b = e.b;
-        const prior = try b.variable(o.optional);
-        const absent = try b.variable(e.unit);
-        const found = try b.variable(e.d.types.record);
-        const same = try b.variable(e.boolean);
-        const deliver = try e.deliverRecord(o, state, ids, record, records, true, false);
-        const compared = try b.bind(same, try e.call(e.d.observation_equal, &.{ try e.field(e.s.observation, try e.ref(found), 2), try e.field(e.s.observation, record, 2) }), try e.cond(try e.ref(same), deliver, try e.stopAfterAcquisition(o, state, .conflicting_observations, records)));
-        const branch = try b.term(.{ .match_sum = .{
-            .value = try e.ref(prior),
-            .cases = &.{ .{ .variable = absent, .body = deliver }, .{ .variable = found, .body = compared } },
-        } });
-        return e.cond(try e.reusable(selected), try b.bind(prior, try e.call(o.lookup, &.{ try e.p(o.loop, 5), try e.experimentKey(selected) }), branch), deliver);
+    fn completedTyped(e: Emit, body: *typed.Body, o: LoopOps, v: LoopArgs, state: *const typed.Value, selected: *const typed.Value, ids: *const typed.Value, completion: *const typed.Value) ConstructionError!*const typed.Value {
+        const completed_case = try body.caseOf(completion, "0");
+        const inconclusive = try body.caseOf(completion, "1");
+        const unavailable = try body.caseOf(completion, "2");
+        const work = completed_case.body();
+        const key = try work.field(try work.field(selected, "1"), "0");
+        const accepted = if (e.f.?.observe) |observe| blk: {
+            const valid = try e.callSource(work, observe, &.{ v.subject, key, completed_case.payload() });
+            const yes = try work.branch();
+            const no = try work.branch();
+            break :blk try work.conditional(valid, try yes.ret(try e.acceptObservation(yes, o, v, state, selected, ids, completed_case.payload())), try no.ret(try e.stopTyped(no, o, v, state, .invalid_evidence, v.records, true)));
+        } else try e.acceptObservation(work, o, v, state, selected, ids, completed_case.payload());
+        const unknown = inconclusive.body();
+        const reply = try unknown.variant(try typed.interop.schema(e.c, e.d.types.reply), "2", try unknown.constant(void, {}));
+        const next = try e.callSource(unknown, e.d.custody.distribute, &.{ state, ids, reply });
+        return body.match(completion, &.{ try completed_case.ret(accepted), try inconclusive.ret(try e.againTyped(unknown, o, v, next, v.records, true, false, try unknown.sequenceLength(ids))), try unavailable.ret(try e.stopTyped(unavailable.body(), o, v, state, .environment_unavailable, v.records, true)) });
+    }
+    fn acceptObservation(e: Emit, body: *typed.Body, o: LoopOps, v: LoopArgs, state: *const typed.Value, selected: *const typed.Value, ids: *const typed.Value, observation: *const typed.Value) ConstructionError!*const typed.Value {
+        const record = try body.product(try typed.interop.schema(e.c, e.d.types.record), &.{ .{ .name = "0", .value = v.occurrence }, .{ .name = "1", .value = try body.field(try body.field(selected, "1"), "0") }, .{ .name = "2", .value = observation }, .{ .name = "3", .value = try body.field(try body.field(selected, "1"), "1") } });
+        return e.conflictTyped(body, o, v, state, selected, ids, record);
+    }
+    fn deliverNew(e: Emit, body: *typed.Body, o: LoopOps, v: LoopArgs, state: *const typed.Value, ids: *const typed.Value, record: *const typed.Value) ConstructionError!*const typed.Value {
+        return e.deliverTyped(body, o, v, state, ids, record, try body.append(v.records, record), true, false);
+    }
+    fn conflictTyped(e: Emit, body: *typed.Body, o: LoopOps, v: LoopArgs, state: *const typed.Value, selected: *const typed.Value, ids: *const typed.Value, record: *const typed.Value) ConstructionError!*const typed.Value {
+        const reusable_case = try body.branch();
+        const fresh = try body.branch();
+        const prior = try reusable_case.call(o.lookup, &.{ .{ .name = "records", .value = v.records }, .{ .name = "key", .value = try reusable_case.field(try reusable_case.field(selected, "1"), "0") } });
+        const absent = try reusable_case.caseOf(prior, "0");
+        const present = try reusable_case.caseOf(prior, "1");
+        const same = try e.callSource(present.body(), e.d.observation_equal, &.{ try present.body().field(present.payload(), "2"), try present.body().field(record, "2") });
+        const yes = try present.body().branch();
+        const no = try present.body().branch();
+        const compared = try present.body().conditional(same, try yes.ret(try e.deliverNew(yes, o, v, state, ids, record)), try no.ret(try e.stopTyped(no, o, v, state, .conflicting_observations, try no.append(v.records, record), true)));
+        const checked = try reusable_case.match(prior, &.{ try absent.ret(try e.deliverNew(absent.body(), o, v, state, ids, record)), try present.ret(compared) });
+        return body.conditional(try body.field(try body.field(selected, "1"), "1"), try reusable_case.ret(checked), try fresh.ret(try e.deliverNew(fresh, o, v, state, ids, record)));
     }
 };
 
-const Ops = struct {
-    loop: Id,
-    stop: Id,
-    admit: Id,
-    lookup: Id,
-    optional: Id,
-    choice: Id,
-    cached_choice: Id,
-    selected: Id,
-    recipients: Id,
+const LoopOps = struct {
+    loop: *const typed.Function,
+    stop: *const typed.Function,
+    admit: *const typed.Function,
+    lookup: *const typed.Function,
+    cached_choice: *const typed.Function,
+    selected: *const typed.Function,
+    recipients: *const typed.Function,
+    failure: *const typed.FailureLiteral,
 };
-
-const Pop = struct {
-    optional: Id,
-    empty: Id,
-    present: Id,
-    head: Id,
-    rest: Id,
-    fn init(e: Emit, sequence: Id, element: Id) Error!Pop {
-        const pair = try e.b.schema(.{ .product = &.{ element, sequence } });
-        return .{ .optional = try e.b.schema(.{ .sum = &.{ e.unit, pair } }), .empty = try e.b.variable(e.unit), .present = try e.b.variable(pair), .head = try e.b.variable(element), .rest = try e.b.variable(sequence) };
-    }
-    fn match(p: Pop, e: Emit, sequence: Id, empty_body: Id, present: Id) Error!Id {
-        return e.b.term(.{ .match_sum = .{
-            .value = try e.b.primitive(p.optional, .sequence_pop, &.{sequence}, 0),
-            .cases = &.{ .{ .variable = p.empty, .body = empty_body }, .{ .variable = p.present, .body = try e.unpack(try e.ref(p.present), &.{ p.head, p.rest }, present) } },
-        } });
-    }
+const LoopArgs = struct {
+    state: *const typed.Value,
+    subject: *const typed.Value,
+    allowance: *const typed.Value,
+    coalesce: *const typed.Value,
+    policy: *const typed.Value,
+    records: *const typed.Value,
+    occurrence: *const typed.Value,
+    acquisitions: *const typed.Value,
+    reused: *const typed.Value,
+    recipients: *const typed.Value,
 };

@@ -1,0 +1,278 @@
+{
+  "scope": "Cumulative native World Prepared admission memory; actual pre-cutover images versus current images, one unchanged World implementation. This does not qualify execution/checkpoint timing.",
+  "baseline": {
+    "agent": "dd336f0c3833b233978c103caf73b3bcad1daf47",
+    "boundary": "63137689bf788bc408ba638f47256f2a8f219b44",
+    "metricsSha256": "28e2283b4f0faf6fc33ff87bff2b01842595e5c44cd08c51bde92616c7b6c883"
+  },
+  "candidate": {
+    "agent": "6e43fafe884ab261c3c54529935e1b15353a7409",
+    "boundary": "48f36c11f2400bbd69d2b6284a278c86dc9b71e5"
+  },
+  "world": {
+    "source": "0ba21202353a24b5ba88bd6a2ce810863916138b",
+    "productionSource": "f8a1597d4ff62ae691dfca12f7ce3a2b4e6c0727",
+    "kernelSha256": "7d31effb1d4e32523d0fcbd5b4d5f5a8a2289fbd4c731173a33b1c174524282f"
+  },
+  "measurement": {
+    "api": "World.Prepared.init with World.Workspace allocator; peak_payload and Prepared.storageBytes; ReleaseSafe Zig 0.16.0 native",
+    "samples": 12,
+    "backingBytes": 268435456,
+    "timing": "unqualified: concurrent build active; samples omitted"
+  },
+  "rows": [
+    {
+      "name": "direct",
+      "baseline": {
+        "peak": 5235,
+        "retained": 3852
+      },
+      "candidate": {
+        "peak": 5235,
+        "retained": 3852
+      },
+      "peakDelta": 0,
+      "threshold": 1024,
+      "disposition": "within threshold"
+    },
+    {
+      "name": "facade",
+      "baseline": {
+        "peak": 5235,
+        "retained": 3852
+      },
+      "candidate": {
+        "peak": 5235,
+        "retained": 3852
+      },
+      "peakDelta": 0,
+      "threshold": 1024,
+      "disposition": "within threshold"
+    },
+    {
+      "name": "sharing-1",
+      "baseline": {
+        "peak": 10916,
+        "retained": 10380
+      },
+      "candidate": {
+        "peak": 10916,
+        "retained": 10380
+      },
+      "peakDelta": 0,
+      "threshold": 1024,
+      "disposition": "within threshold"
+    },
+    {
+      "name": "sharing-8",
+      "baseline": {
+        "peak": 17626,
+        "retained": 14526
+      },
+      "candidate": {
+        "peak": 17626,
+        "retained": 14526
+      },
+      "peakDelta": 0,
+      "threshold": 1024,
+      "disposition": "within threshold"
+    },
+    {
+      "name": "sharing-64",
+      "baseline": {
+        "peak": 90408,
+        "retained": 74648
+      },
+      "candidate": {
+        "peak": 90408,
+        "retained": 74648
+      },
+      "peakDelta": 0,
+      "threshold": 1024,
+      "disposition": "within threshold"
+    },
+    {
+      "name": "conversation",
+      "baseline": {
+        "peak": 18324,
+        "retained": 14862
+      },
+      "candidate": {
+        "peak": 18804,
+        "retained": 14542
+      },
+      "peakDelta": 480,
+      "threshold": 1024,
+      "disposition": "within threshold"
+    },
+    {
+      "name": "document-consequence",
+      "baseline": {
+        "peak": 387086,
+        "retained": 348610
+      },
+      "candidate": {
+        "peak": 393964,
+        "retained": 354510
+      },
+      "peakDelta": 6878,
+      "threshold": 3871,
+      "disposition": "unaccepted regression"
+    },
+    {
+      "name": "clarify-first",
+      "baseline": {
+        "peak": 323732,
+        "retained": 289868
+      },
+      "candidate": {
+        "peak": 329826,
+        "retained": 281526
+      },
+      "peakDelta": 6094,
+      "threshold": 3238,
+      "disposition": "unaccepted regression"
+    },
+    {
+      "name": "inquiry-repair",
+      "baseline": {
+        "peak": 1107992,
+        "retained": 940690
+      },
+      "candidate": {
+        "peak": 1109532,
+        "retained": 896610
+      },
+      "peakDelta": 1540,
+      "threshold": 11080,
+      "disposition": "within threshold"
+    },
+    {
+      "name": "inquiry-repeated",
+      "baseline": {
+        "peak": 1118602,
+        "retained": 947572
+      },
+      "candidate": {
+        "peak": 1123442,
+        "retained": 904202
+      },
+      "peakDelta": 4840,
+      "threshold": 11187,
+      "disposition": "within threshold"
+    },
+    {
+      "name": "inquiry-react",
+      "baseline": {
+        "peak": 1509780,
+        "retained": 1341344
+      },
+      "candidate": {
+        "peak": 1524416,
+        "retained": 1354760
+      },
+      "peakDelta": 14636,
+      "threshold": 15098,
+      "disposition": "within threshold"
+    },
+    {
+      "name": "document",
+      "baseline": {
+        "peak": 279382,
+        "retained": 224110
+      },
+      "candidate": {
+        "peak": 291342,
+        "retained": 229876
+      },
+      "peakDelta": 11960,
+      "threshold": 2794,
+      "disposition": "unaccepted regression"
+    },
+    {
+      "name": "review-mid_review",
+      "baseline": {
+        "peak": 114574,
+        "retained": 101074
+      },
+      "candidate": {
+        "peak": 126316,
+        "retained": 112644
+      },
+      "peakDelta": 11742,
+      "threshold": 1146,
+      "disposition": "unaccepted regression"
+    },
+    {
+      "name": "review-clarify_first",
+      "baseline": {
+        "peak": 114562,
+        "retained": 101062
+      },
+      "candidate": {
+        "peak": 126304,
+        "retained": 112632
+      },
+      "peakDelta": 11742,
+      "threshold": 1146,
+      "disposition": "unaccepted regression"
+    },
+    {
+      "name": "review-human",
+      "baseline": {
+        "peak": 14681,
+        "retained": 13094
+      },
+      "candidate": {
+        "peak": 14681,
+        "retained": 13094
+      },
+      "peakDelta": 0,
+      "threshold": 1024,
+      "disposition": "within threshold"
+    },
+    {
+      "name": "review-model",
+      "baseline": {
+        "peak": 95358,
+        "retained": 82456
+      },
+      "candidate": {
+        "peak": 104388,
+        "retained": 91486
+      },
+      "peakDelta": 9030,
+      "threshold": 1024,
+      "disposition": "unaccepted regression"
+    },
+    {
+      "name": "review-rule",
+      "baseline": {
+        "peak": 10536,
+        "retained": 10016
+      },
+      "candidate": {
+        "peak": 10536,
+        "retained": 10016
+      },
+      "peakDelta": 0,
+      "threshold": 1024,
+      "disposition": "within threshold"
+    },
+    {
+      "name": "review-react",
+      "baseline": {
+        "peak": 16598,
+        "retained": 12168
+      },
+      "candidate": {
+        "peak": 16598,
+        "retained": 12168
+      },
+      "peakDelta": 0,
+      "threshold": 1024,
+      "disposition": "within threshold"
+    }
+  ],
+  "acceptance": "Open: six admission-memory regressions require correction or explicit owner acceptance. Pre-optimization code review was waived, not this economic gate."
+}

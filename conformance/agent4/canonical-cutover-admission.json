@@ -117,7 +117,7 @@
       },
       "peakDelta": 6878,
       "threshold": 3871,
-      "disposition": "unaccepted regression"
+      "disposition": "accepted tradeoff"
     },
     {
       "name": "clarify-first",
@@ -131,7 +131,7 @@
       },
       "peakDelta": 6094,
       "threshold": 3238,
-      "disposition": "unaccepted regression"
+      "disposition": "accepted tradeoff"
     },
     {
       "name": "inquiry-repair",
@@ -187,7 +187,7 @@
       },
       "peakDelta": 11960,
       "threshold": 2794,
-      "disposition": "unaccepted regression"
+      "disposition": "accepted tradeoff"
     },
     {
       "name": "review-mid_review",
@@ -201,7 +201,7 @@
       },
       "peakDelta": 11742,
       "threshold": 1146,
-      "disposition": "unaccepted regression"
+      "disposition": "accepted tradeoff"
     },
     {
       "name": "review-clarify_first",
@@ -215,7 +215,7 @@
       },
       "peakDelta": 11742,
       "threshold": 1146,
-      "disposition": "unaccepted regression"
+      "disposition": "accepted tradeoff"
     },
     {
       "name": "review-human",
@@ -243,7 +243,7 @@
       },
       "peakDelta": 9030,
       "threshold": 1024,
-      "disposition": "unaccepted regression"
+      "disposition": "accepted tradeoff"
     },
     {
       "name": "review-rule",
@@ -274,7 +274,7 @@
       "disposition": "within threshold"
     }
   ],
-  "acceptance": "Open: six admission-memory regressions, ReAct execution-memory growth, and four reproducible admission-timing regressions require correction or explicit owner acceptance. Execution/checkpoint timing is not qualified here.",
+  "acceptance": "Accepted by explicit user instruction: the six admission-memory increases, ReAct execution-memory growth, and measured native/WASM admission slowdowns are accepted cutover tradeoffs so M2 can proceed. Keep the actual pre-cutover baseline for later optimization comparisons. Unmeasured execution/checkpoint timing is not reported as passing.",
   "admissionTiming": {
     "method": "Independent alternating processes; three warmup batches and nine measured batches of 64 cold preparations. Three windows, plus two confirmation windows for suspected >5% slowdown.",
     "environmentCaveat": "Shared workstation with background processes; no uncontended-host claim. No execution or checkpoint timing claim.",
@@ -3677,5 +3677,15 @@
       "percent": 1.2494381824430967,
       "stateDelta": -2
     }
-  ]
+  ],
+  "ownerDecision": {
+    "source": "User reply: Accept these measured cutover costs",
+    "scope": [
+      "six native admission-memory increases",
+      "ReAct execution-memory growth of about 22.7 KiB (1.21–1.26%)",
+      "native admission slowdowns of 6.3–19.7%",
+      "WASM review-model admission slowdown of 17.2%"
+    ],
+    "preOptimizationCodeReview": "waived by user"
+  }
 }

@@ -58,11 +58,24 @@ candidate-selection probe. Six review runtime tests and 38 clarification
 scenarios passed on the preceding `e82386e` images. The new emission has identical
 image hashes, so that unchanged-kernel behavior evidence remains applicable; no
 fresh native execution comparison is claimed for those two focused commands.
-The frozen-implementation aggregate, including serial Node files and browser
-transfer checks, is active and receives no terminal pass credit yet.
+The frozen-implementation aggregate completes with exit zero: **418/418 build
+steps and 205/205 Zig tests**, including authoring, native, integration, economy
+and browser targets. The serialized Node batch passes **95/95 tests** with zero
+failures/cancellations. Chromium 153.0.8010.12 and Firefox 155.0 pass actual
+browser/file/browser transfer and cleanup. The exact log hash and tuple are in
+`conformance/agent4/m2-adoption-status.json`.
 
-Final integrated/serial/browser qualification, execution/checkpoint/timing costs,
-consumer-policy execution qualification and remaining M2 closeout gates are still open.
+Paired timing, compiler-cost reporting and final review closure remain open.
+
+The unchanged inquiry/ReAct scenarios execute all 13 cases and 128 semantic
+boundaries identically for C0, C1 and C2: canonical request schemas/payloads,
+nominal effect identities, results, approvals, writes and cleanup agree.
+`conformance/agent4/m2-runtime-comparison.json` records the local and cumulative
+native/WASM memory observations. Versus C1, ReAct's measured native fresh-session
+peak is 129,662 bytes lower; the WASM reduction ranges from 451,681 to 478,573
+bytes. Inquiry also decreases. Checkpoint maxima are unchanged versus C1 and
+unchanged or two bytes smaller versus C0. These are finite scenario results,
+not a latency claim or a bound for all applications.
 
 ### Attribution control
 

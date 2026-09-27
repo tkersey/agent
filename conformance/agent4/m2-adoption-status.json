@@ -3,7 +3,7 @@
   "boundaryCommit": "5f5c11e7f1331ba4b10e8520f48df8278765a704",
   "worldBinding": "unchanged",
   "sourceMetricsSha256": "346471bbb13afbb130e7f1ae951536ec84a9ef4ae5ecc1a8da1399e9e716de49",
-  "qualification": "Final M2 source/archive/extracted and managed package inventories verify; standalone source emission matches all 18 cost-probe image hashes. Integrated Agent/serial/browser aggregate active, no terminal pass credited.",
+  "qualification": "Final authenticated M2 tuple: complete Agent authoring/native/integration/economy/browser aggregate passed. Paired timing and review closure remain incomplete.",
   "priorObservation": {
     "boundaryCommit": "517cfb1670671f8b9383aa8711b76c30a01f32ad",
     "workLimitWorkloads": [
@@ -409,5 +409,35 @@
     "nativeComparison": false,
     "boundaryCommit": "e82386e2a2a7446b87bfa0b7a2409f2c88a00ada",
     "reusedByExactImageIdentityFor": "5f5c11e7f1331ba4b10e8520f48df8278765a704"
+  },
+  "finalAggregate": {
+    "boundaryCommit": "5f5c11e7f1331ba4b10e8520f48df8278765a704",
+    "exitCode": 0,
+    "buildSteps": {
+      "passed": 418,
+      "total": 418
+    },
+    "zigTests": {
+      "passed": 205,
+      "total": 205
+    },
+    "nodeBatch": {
+      "passed": 95,
+      "total": 95,
+      "failed": 0,
+      "cancelled": 0
+    },
+    "steps": [
+      "check-agent4",
+      "check-native",
+      "check-agent4-integration",
+      "check-agent4-economy",
+      "check-compiled-tool-browser"
+    ],
+    "logSha256": "8fc5dfac357c588c17776f16528cbbba16f2434b1494bb6653bd788db88faba5",
+    "browsers": [
+      "Chromium 153.0.8010.12",
+      "Firefox 155.0"
+    ]
   }
 }

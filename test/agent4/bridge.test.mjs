@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { loadWorldRuntime } from "../../runtime/world.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
-const runtimePath = resolve(process.env.AGENT4_WORLD_RUNTIME ?? join(root, ".agent4/out/world-runtime"));
+const runtimePath = resolve(process.env.AGENT4_WORLD_RUNTIME ?? join(root, ".agent4/out/world-runtime/runtime"));
 const probeRoot = resolve(process.env.AGENT4_DIALOGUE_DIR ?? join(root, ".agent4/out/dialogue"));
 const lockPath = join(root, "conformance/agent4/dependencies.lock.json");
 const empty = new Uint8Array();

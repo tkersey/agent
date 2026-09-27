@@ -11,7 +11,7 @@ import {readFile} from 'node:fs/promises';
 import {verifyRuntime} from '../../tools/agent4/dependencies.mjs';
 import {parseParserOptions} from '../../runtime/parser_cli.mjs';
 import {bufferUntilEOF,emitFinalRecord,decodedFields,rawRecords} from '../consumers/incremental-parser/candidates.mjs';
-const runtime=resolve(process.env.AGENT4_WORLD_RUNTIME??'.agent4-recursive-integrated/out/world-runtime');
+const runtime=resolve(process.env.AGENT4_WORLD_RUNTIME??'.agent4-recursive-integrated/out/world-runtime/runtime');
 test('parser provider configuration is explicit and credentials are not implicit',()=>{
  assert.equal(parseParserOptions(['--world-runtime',runtime]).calls,0);
  assert.equal(parseParserOptions(['--world-runtime',runtime]).selection,'single');

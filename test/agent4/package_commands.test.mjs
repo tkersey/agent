@@ -10,7 +10,7 @@ test("documented commands execute from the actual source-independent archive", a
   const area = await mkdtemp(join(tmpdir(), "agent4-documented-commands-"));
   t.after(() => rm(area, { recursive: true, force: true }));
   const archive = resolve(process.env.AGENT4_ARCHIVE ?? "zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz");
-  const runtimePath = resolve(process.env.AGENT4_WORLD_RUNTIME ?? ".agent4/out/world-runtime");
+  const runtimePath = resolve(process.env.AGENT4_WORLD_RUNTIME ?? ".agent4/out/world-runtime/runtime");
   execFileSync("tar", ["-xzf", archive, "-C", area]);
   const [folder] = await readdir(area);
   const cwd = join(area, folder);

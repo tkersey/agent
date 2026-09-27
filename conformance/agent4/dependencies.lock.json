@@ -76,18 +76,18 @@
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "c20695e00056186a4b74564da6e4ca1c368cb33b",
-    "gitTree": "4e9a804b09fcc519af45308c2a7569211464eae1",
+    "commit": "f8a1597d4ff62ae691dfca12f7ce3a2b4e6c0727",
+    "gitTree": "1e1da87672d83c810a0d8cda5474b5d0a3b89207",
     "version": "6.0.0-dev.0",
     "source": {
-      "inventorySha256": "0451a4b51557266fef82453f175b3ac96ae62977d9d5182ab72f219feba11470",
+      "inventorySha256": "892f54ef0a7579b4b1dd78a0fb3ad9babd06d30ff1f444b79d9dab82c3d13192",
       "entries": 148,
-      "bytes": 1459847
+      "bytes": 1468271
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/c20695e00056186a4b74564da6e4ca1c368cb33b.tar.gz",
-      "bytes": 335450,
-      "sha256": "5be7c99599d88331d41631fb1bbc468dbf6d6177f24e87f013e2da0cc271b5f8"
+      "url": "https://github.com/tkersey/world/archive/f8a1597d4ff62ae691dfca12f7ce3a2b4e6c0727.tar.gz",
+      "bytes": 337473,
+      "sha256": "13522bb3c558acf4674cfde459c1c74f392cedb60c396b058aa96cd33087c970"
     },
     "authentication": "Downloaded archive tree recomputed and matched to GitHub commit API; complete source and runtime inventories bound",
     "runtime": {
@@ -104,8 +104,8 @@
           "path": "README.md",
           "kind": "file",
           "mode": 420,
-          "bytes": 4609,
-          "sha256": "1effc383f51000a849ae8003685a99e1dbeda4224cb84457e4297526af1f1bcf"
+          "bytes": 4770,
+          "sha256": "a064349dc423a25f32ab0132ce91a261f90250020de552183bc804cb0449f51e"
         },
         {
           "path": "bin",
@@ -135,8 +135,8 @@
           "path": "docs/runtime-bundles.md",
           "kind": "file",
           "mode": 420,
-          "bytes": 3874,
-          "sha256": "65e9b793e7dfc6d11d0557c364efd95f6fa1931999a6f2114094ae8bea1d4058"
+          "bytes": 4688,
+          "sha256": "e4d237bada11f6a110ed0af017f9e733de2d2c6f04476423c6814efba1ad6d8b"
         },
         {
           "path": "package.json",
@@ -227,8 +227,8 @@
           "path": "src/node/runtime-bundle.mjs",
           "kind": "file",
           "mode": 420,
-          "bytes": 7377,
-          "sha256": "f6413a334c6f9e1bdfdf7cdf6a879020b59405d539dedf469796569f68dc1c04"
+          "bytes": 9606,
+          "sha256": "8236ef3c9595c3e1167854963256c8f227588f4af6c9dfb9d1a1278b57f481ac"
         },
         {
           "path": "src/node/runtime-command.mjs",
@@ -248,8 +248,8 @@
           "path": "src/node/runtime-prepare.mjs",
           "kind": "file",
           "mode": 420,
-          "bytes": 9380,
-          "sha256": "e4a6bcaffda3b32ffd54253a5d6446dadea29ceee85e086dab4e2feeaa74f38b"
+          "bytes": 9579,
+          "sha256": "7a7e409ed71201f874058c734b3ccf9e426169a93ce09768dd49f629f9147ce3"
         },
         {
           "path": "src/node/runtime-smoke.mjs",
@@ -266,9 +266,9 @@
           "sha256": "7d31effb1d4e32523d0fcbd5b4d5f5a8a2289fbd4c731173a33b1c174524282f"
         }
       ],
-      "inventorySha256": "2d38ed84052a3bb67da18d4cec7441604473bf3d77b23aad526e28331df032d1",
+      "inventorySha256": "ba84e0de889100dccb31436ad6193dd481a73a02d7f0bce6829249557bd6578b",
       "entries": 26,
-      "bytes": 551792,
+      "bytes": 555195,
       "kernel": {
         "path": "world-kernel.wasm",
         "bytes": 462833,
@@ -306,14 +306,30 @@
         }
       },
       "build": {
-        "target": "build-kernel",
+        "target": "qualified-runtime-bundle",
         "optimize": "ReleaseSmall",
         "machine": "wasm32-freestanding",
-        "boundarySourceCommit": "f512dbbfb14ab61ed5e1d875518c2b683ff5d215",
+        "boundarySourceCommit": "511fe388587b36ae37307d277e04c22b0bb6f6d9",
         "capacityOverrides": [],
         "requestedOptimize": "ReleaseSafe"
       },
-      "provenance": "Locally built from the landed World and Boundary integration tuple; not a release attestation"
+      "provenance": "Qualified World producer; GitHub Actions run 36294378202, artifact 10923323364; archive and complete runtime inventory verified"
+    },
+    "delivery": {
+      "commit": "f8a1597d4ff62ae691dfca12f7ce3a2b4e6c0727",
+      "runId": 36294378202,
+      "artifactName": "world-runtime-f8a1597d4ff62ae691dfca12f7ce3a2b4e6c0727",
+      "expiresAt": "2026-10-27T04:33:48Z",
+      "manifestSha256": "9e13320dbcd5c230258aa4a81c76a592569c0ebc697f0600c707f7e2f91674c4",
+      "archive": {
+        "bytes": 216805,
+        "sha256": "932621ba55999a2418beb2d18ef6990eb7fc407f44e643eb7464a7c8e3d8eb4f"
+      },
+      "artifact": {
+        "apiPath": "repos/tkersey/world/actions/artifacts/10923323364/zip",
+        "bytes": 218213,
+        "sha256": "070f4bbd987fa0c5b25aabf159b30d4515e26bec56ddd1d4bc26d4f748ead5ab"
+      }
     }
   },
   "toolchain": {

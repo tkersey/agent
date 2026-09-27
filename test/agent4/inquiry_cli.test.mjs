@@ -10,7 +10,7 @@ import { executeCli } from '../../runtime/runner.mjs';
 import { reset, monotonic } from '../consumers/inquiry/fixtures/cases.mjs';
 
 const describe = value => JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item);
-const runtime = resolve(process.env.AGENT4_WORLD_RUNTIME ?? '.agent4/out/world-runtime');
+const runtime = resolve(process.env.AGENT4_WORLD_RUNTIME ?? '.agent4/out/world-runtime/runtime');
 const images = resolve(process.env.AGENT4_INQUIRY_IMAGES ?? 'zig-out/agent4/inquiry');
 const action = (name, args) => ({ type: 'function_call', status: 'completed', call_id: 'reused-provider-id', name, arguments: JSON.stringify(args) });
 

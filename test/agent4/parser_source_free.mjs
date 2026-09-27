@@ -7,7 +7,7 @@ import {join,resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 assert.equal(process.platform,'darwin','this source-denial witness requires macOS sandbox-exec');
 const source=await realpath(resolve(import.meta.dirname,'../..'));
-const runtime=resolve(process.argv[2]??'.agent4-multishot/out/world-runtime');
+const runtime=resolve(process.argv[2]??'.agent4-multishot/out/world-runtime/runtime');
 assert(process.argv[3],'native World invocation tool is required');
 const native=resolve(process.argv[3]);
 const area=await mkdtemp(join(tmpdir(),'parser-source-free-'));

@@ -33,9 +33,8 @@ export function setupPaths({ agentRoot = ROOT, workDir = join(agentRoot, ".agent
   const input = join(workDir, "inputs"), out = join(workDir, "out"), cache = join(workDir, "cache");
   const paths = { agentRoot, workDir, input, out, cache, temporary: join(workDir, "setup-tmp"),
     boundarySource: join(input, "boundary"), worldSource: join(input, "world"),
-    worldRuntime: join(out, "world-runtime"), worldBuild: join(out, "world"),
-    packageCache: join(cache, "package"), buildCache: join(cache, "world-local"),
-    buildGlobalCache: join(cache, "world-global") };
+    worldBundle: join(out, "world-runtime"), worldRuntime: join(out, "world-runtime", "runtime"),
+    packageCache: join(cache, "package") };
   for (const path of Object.values(paths)) assertNoSymlinks(path, agentRoot);
   return paths;
 }
@@ -144,51 +143,55 @@ function packageAt(paths, lock, boundaryArchive, { verifyOnly, lockPath, zig }) 
   return packageRoot;
 }
 
-function assembleRuntime(paths, lock) {
-  const staged = mkdtempSync(join(paths.temporary, "runtime-"));
+function runtimeTransport(paths, delivery, {offline, verifyOnly}) {
+  const archive = join(paths.input, "world-runtime-bundle.tar.gz");
+  if (existsSync(archive)) {
+    authenticateArchive(readRegular(archive), delivery.archive);
+    return archive;
+  }
+  if (offline || verifyOnly) fail("missing authenticated World bundle transport");
+  mkdirSync(paths.temporary, {recursive: true});
+  const staged = mkdtempSync(join(paths.temporary, "delivery-"));
   try {
-    for (const row of lock.world.runtime.files) {
-      const target = join(staged, row.path);
-      if (row.kind === "directory") mkdirSync(target, { recursive: true });
-      else {
-        const source = row.path === lock.world.runtime.kernel.path ?
-          join(paths.worldBuild, row.path) : join(paths.worldSource, row.path);
-        const bytes = readRegular(source);
-        equal(sha256(bytes), row.sha256, `runtime source mismatch: ${row.path}`);
-        equal(bytes.length, row.bytes, `runtime source length mismatch: ${row.path}`);
-        mkdirSync(dirname(target), { recursive: true });
-        writeFileSync(target, bytes, { flag: "wx", mode: row.mode });
-      }
-      chmodSync(target, row.mode);
-    }
-    equal(inventory(staged).inventorySha256, lock.world.runtime.inventorySha256, "runtime assembly mismatch");
-    renameSync(staged, paths.worldRuntime);
-  } finally { rmSync(staged, { recursive: true, force: true }); }
+    const zip = command("gh", ["api", delivery.artifact.apiPath], {
+      encoding: null, maxBuffer: MAX_ARCHIVE_BYTES,
+    });
+    authenticateArchive(zip, delivery.artifact);
+    const zipPath = join(staged, "delivery.zip");
+    writeFileSync(zipPath, zip, {flag: "wx", mode: 0o600});
+    const names = command("unzip", ["-Z1", zipPath]).trim().split("\n").sort();
+    equal(JSON.stringify(names), JSON.stringify(["world-runtime-bundle.delivery.json", "world-runtime-bundle.tar.gz"]),
+      "unexpected delivery members");
+    const record = JSON.parse(command("unzip", ["-p", zipPath, names[0]]));
+    equal(record.source.commit, delivery.commit, "delivery source mismatch");
+    equal(record.manifestSha256, delivery.manifestSha256, "delivery manifest mismatch");
+    equal(record.archive.sha256, delivery.archive.sha256, "delivery archive binding mismatch");
+    const bytes = command("unzip", ["-p", zipPath, names[1]], {
+      encoding: null, maxBuffer: MAX_ARCHIVE_BYTES,
+    });
+    authenticateArchive(bytes, delivery.archive);
+    mkdirSync(paths.input, {recursive: true});
+    const candidate = join(staged, "bundle.tar.gz");
+    writeFileSync(candidate, bytes, {flag: "wx", mode: 0o600});
+    renameSync(candidate, archive);
+    return archive;
+  } finally { rmSync(staged, {recursive: true, force: true}); }
 }
 
-function runtimeAt(paths, lock, { verifyOnly, lockPath, zig, report }) {
-  if (existsSync(paths.worldRuntime)) return verifyRuntime(paths.worldRuntime, { lockPath });
-  if (verifyOnly) fail(`missing World runtime: ${paths.worldRuntime}`);
-  mkdirSync(paths.out, { recursive: true });
-  mkdirSync(paths.temporary, { recursive: true });
-  const kernel = join(paths.worldBuild, lock.world.runtime.kernel.path);
-  if (existsSync(kernel)) {
-    equal(sha256(readRegular(kernel)), lock.world.runtime.kernel.sha256, "existing built kernel mismatch");
-  } else {
-    report("Building the pinned World ABI 3 kernel with its default physical profile");
-    try {
-      command(zig, ["build", "build-kernel", "-Doptimize=ReleaseSafe",
-        `-Dboundary-source=${paths.boundarySource}`, "--cache-dir", paths.buildCache,
-        "--global-cache-dir", paths.buildGlobalCache, "--prefix", paths.worldBuild], { cwd: paths.worldSource });
-    } finally {
-      equal(inventory(paths.boundarySource).inventorySha256, lock.boundary.source.inventorySha256,
-        "Boundary source changed during build");
-      equal(inventory(paths.worldSource).inventorySha256, lock.world.source.inventorySha256,
-        "World source changed during build");
-    }
-  }
-  assembleRuntime(paths, lock);
-  return verifyRuntime(paths.worldRuntime, { lockPath });
+function runtimeAt(paths, lock, options) {
+  if (existsSync(paths.worldRuntime)) return verifyRuntime(paths.worldRuntime, {lockPath: options.lockPath});
+  if (options.verifyOnly) fail("missing qualified World runtime");
+  const delivery = lock.world.delivery;
+  if (!delivery || delivery.commit !== lock.world.commit) fail("missing qualified World delivery binding");
+  const archive = runtimeTransport(paths, delivery, options);
+  mkdirSync(paths.out, {recursive: true});
+  options.report("Acquiring the pinned qualified World bundle");
+  // World owns its bundle format and acquisition. The source copy was already
+  // authenticated and is immutable under the setup lock.
+  command(process.execPath, [join(paths.worldSource, "bin/world.mjs"), "runtime", "acquire",
+    "--archive", archive, "--archive-sha256", delivery.archive.sha256,
+    "--manifest-sha256", delivery.manifestSha256, "--output", paths.worldBundle]);
+  return verifyRuntime(paths.worldRuntime, {lockPath: options.lockPath});
 }
 
 export async function setup(options = {}) {

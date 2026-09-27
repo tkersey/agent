@@ -7,7 +7,7 @@ import { decodeSchema, decodeValue, encodeValue } from "../../runtime/values.mjs
 import { verifyRuntime } from "../../tools/agent4/dependencies.mjs";
 
 // This lane intentionally does not import Agent's convenience World bridge.
-const runtimePath = resolve(process.env.AGENT4_WORLD_RUNTIME ?? ".agent4/out/world-runtime");
+const runtimePath = resolve(process.env.AGENT4_WORLD_RUNTIME ?? ".agent4/out/world-runtime/runtime");
 const before = verifyRuntime(runtimePath);
 const world = await import(pathToFileURL(before.entrypoint));
 const kernel = await world.Kernel.create({ bytes: await readFile(before.kernelPath), expectedSha256: before.kernelSha256 });

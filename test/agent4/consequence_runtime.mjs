@@ -17,7 +17,7 @@ const [runtimeArg, imageArg, mode, ...extra] = process.argv.slice(2);
 assert.equal(extra.length, 0);
 assert([undefined, "--economy-only", "--application-only"].includes(mode));
 const economyOnly = mode === "--economy-only";
-const runtimePath = resolve(runtimeArg ?? join(root, ".agent4/out/world-runtime"));
+const runtimePath = resolve(runtimeArg ?? join(root, ".agent4/out/world-runtime/runtime"));
 const imagePath = resolve(imageArg ?? join(root, "zig-out/agent4/document/consequence.bpi3"));
 const runtime = await loadWorldRuntime({ runtimePath });
 const world = await import(pathToFileURL(runtime.identity.entrypoint));

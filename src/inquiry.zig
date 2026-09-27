@@ -3,6 +3,7 @@
 //! belong to the caller's Builder; runtime custody belongs to the emitted terms.
 const boundary = @import("boundary");
 const source = boundary.computation;
+const typed = boundary.authoring;
 const dialogue = @import("dialogue.zig");
 const Id = source.Id;
 const Builder = source.Builder;
@@ -122,9 +123,6 @@ const Emit = struct {
             .when_false = no,
         } });
     }
-    fn equal(e: Emit, a: Id, b: Id) source.Error!Id {
-        return e.b.primitive(try e.b.scalar(bool), .equal, &.{ a, b }, 0);
-    }
     fn unpack(e: Emit, value: Id, variables: []const Id, body: Id) source.Error!Id {
         return e.b.term(.{ .unpack_product = .{
             .value = value,
@@ -135,53 +133,97 @@ const Emit = struct {
     fn field(e: Emit, schema: Id, value: Id, index: u64) source.Error!Id {
         return e.b.primitive(schema, .field, &.{value}, index);
     }
-    fn increment(e: Emit, value: Id) source.Error!Id {
-        return e.b.value(.{ .schema = e.integer, .expression = .{ .primitive = .{
-            .opcode = .integer_add,
-            .operands = &.{ value, try e.b.constant(u64, 1) },
-            .failures = &.{.{ .kind = .arithmetic_overflow, .value = try e.b.failureLiteral(e.spec.failure) }},
-        } } });
-    }
 
     fn parker(e: Emit) source.Error!Id {
-        const b = e.b;
-        const f = try b.declare(&.{ e.t.state, e.integer, e.d.answer }, e.t.state, &.{}, e.spec.scope.borrowed_regions);
-        const q = try b.variable(e.t.queue);
-        const findings = try b.variable(e.t.findings);
-        const generation = try b.variable(e.integer);
-        const done = try b.variable(e.spec.finding);
-        const awaiting = try b.variable(e.d.awaiting);
-        const demand = try b.variable(e.spec.demand);
-        const package = try b.variable(e.d.package);
-        const id = try e.param(f, 1);
-        const found = try e.product(e.t.found, &.{ id, try e.ref(done) });
-        const completed = try b.pure(try e.product(e.t.state, &.{ try e.ref(q), try e.append(e.t.findings, try e.ref(findings), found), try e.ref(generation) }));
-        const view = try e.product(e.t.view, &.{ id, try e.ref(generation), try e.ref(demand) });
-        const waiting = try e.product(e.t.waiting, &.{ view, try e.ref(package) });
-        const parked = try b.pure(try e.product(e.t.state, &.{
-            try e.append(e.t.queue, try e.ref(q), waiting), try e.ref(findings),
-            try e.increment(try e.ref(generation)),
-        }));
-        const answer = try b.term(.{ .match_sum = .{
-            .value = try e.param(f, 2),
-            .cases = &.{
-                .{ .variable = done, .body = completed },
-                .{ .variable = awaiting, .body = try e.unpack(try e.ref(awaiting), &.{ demand, package }, parked) },
-            },
-        } });
-        try b.define(f, try e.unpack(try e.param(f, 0), &.{ q, findings, generation }, answer));
-        return f;
+        return e.typedParker() catch |err| return typed.sourceError(err);
+    }
+
+    fn typedParker(e: Emit) typed.Error!Id {
+        const c = try typed.Context.init(e.b);
+        const state_type = try typed.interop.schema(c, e.t.state);
+        const integer = try typed.interop.schema(c, e.integer);
+        const answer_type = try typed.interop.schema(c, e.d.answer);
+        const regions = try e.b.allocator().alloc(*const typed.Region, e.spec.scope.borrowed_regions.len);
+        for (regions, e.spec.scope.borrowed_regions) |*item, id| item.* = try typed.interop.region(c, id);
+        const signature = try c.callable(&.{
+            .{ .name = "state", .schema = state_type },
+            .{ .name = "id", .schema = integer },
+            .{ .name = "answer", .schema = answer_type },
+        }, state_type, &.{}, .{ .use = .reusable, .captures = &.{}, .regions = regions });
+        const function = try c.functionFor("park inquiry answer", signature);
+        const body = try c.body(function);
+        const state = try body.destructure(try body.parameter("state"));
+        const queue = try state.get("0");
+        const findings = try state.get("1");
+        const generation = try state.get("2");
+        const id = try body.parameter("id");
+        const answer = try body.parameter("answer");
+        const done = try body.caseOf(answer, "0");
+        const completed = done.body();
+        const found = try completed.product(try typed.interop.schema(c, e.t.found), &.{
+            .{ .name = "0", .value = id }, .{ .name = "1", .value = done.payload() },
+        });
+        const complete_state = try completed.product(state_type, &.{
+            .{ .name = "0", .value = queue },
+            .{ .name = "1", .value = try completed.append(findings, found) },
+            .{ .name = "2", .value = generation },
+        });
+        const awaiting = try body.caseOf(answer, "1");
+        const suspended = awaiting.body();
+        const pending = try suspended.destructure(awaiting.payload());
+        const view = try suspended.product(try typed.interop.schema(c, e.t.view), &.{
+            .{ .name = "0", .value = id },                   .{ .name = "1", .value = generation },
+            .{ .name = "2", .value = try pending.get("0") },
+        });
+        const waiting = try suspended.product(try typed.interop.schema(c, e.t.waiting), &.{
+            .{ .name = "0", .value = view }, .{ .name = "1", .value = try pending.get("1") },
+        });
+        const queued = try suspended.append(queue, waiting);
+        if (e.spec.failure >= e.b.values.items.len) return error.InvalidReference;
+        const failure = try typed.interop.literalFailure(c, e.spec.failure, try typed.interop.schema(c, e.b.values.items[e.spec.failure].schema));
+        const next_generation = try suspended.checkedAdd(generation, try suspended.constant(u64, 1), failure);
+        const parked = try suspended.product(state_type, &.{
+            .{ .name = "0", .value = queued },          .{ .name = "1", .value = findings },
+            .{ .name = "2", .value = next_generation },
+        });
+        const result = try body.match(answer, &.{ try done.ret(complete_state), try awaiting.ret(parked) });
+        try c.define(function, try body.ret(result));
+        return typed.interop.functionId(c, function);
     }
 
     fn membership(e: Emit) source.Error!Id {
-        const b = e.b;
-        const boolean = try b.scalar(bool);
-        const f = try b.declare(&.{ e.t.ids, e.integer }, boolean, &.{}, &.{});
-        const pop = try Pop.init(e, e.t.ids, e.integer);
-        const next = try e.call(f, &.{ try e.ref(pop.rest), try e.param(f, 1) });
-        const checked = try e.conditional(try e.equal(try e.ref(pop.head), try e.param(f, 1)), try b.pure(try b.constant(bool, true)), next);
-        try b.define(f, try pop.match(e, try e.param(f, 0), try b.pure(try b.constant(bool, false)), checked));
-        return f;
+        return e.typedMembership() catch |err| return typed.sourceError(err);
+    }
+
+    fn typedMembership(e: Emit) typed.Error!Id {
+        const c = try typed.Context.init(e.b);
+        const ids = try typed.interop.schema(c, e.t.ids);
+        const integer = try typed.interop.schema(c, e.integer);
+        const function = try c.function("inquiry membership", &.{
+            .{ .name = "ids", .schema = ids }, .{ .name = "id", .schema = integer },
+        }, try c.scalar(bool), &.{});
+        const body = try c.body(function);
+        const id = try body.parameter("id");
+        const popped = try body.pop(try body.parameter("ids"));
+        const empty_case = try body.caseOf(popped, "empty");
+        const item = try body.caseOf(popped, "item");
+        const parts = try item.body().destructure(item.payload());
+        const yes = try item.body().branch();
+        const no = try item.body().branch();
+        const next = try no.call(function, &.{
+            .{ .name = "ids", .value = try parts.get("tail") },
+            .{ .name = "id", .value = id },
+        });
+        const found = try item.body().conditional(
+            try item.body().equal(try parts.get("head"), id),
+            try yes.ret(try yes.constant(bool, true)),
+            try no.ret(next),
+        );
+        const result = try body.match(popped, &.{
+            try empty_case.ret(try empty_case.body().constant(bool, false)), try item.ret(found),
+        });
+        try c.define(function, try body.ret(result));
+        return typed.interop.functionId(c, function);
     }
 
     fn projector(e: Emit) source.Error!Id {

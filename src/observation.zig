@@ -189,6 +189,7 @@ fn authoredInterpretation(
         .mode = .deep,
         .use = .linear,
         .obligations = true,
+        .return_effects = &.{},
         .residual = residual,
         .captures = captures,
         .owned_regions = owned,
@@ -196,8 +197,6 @@ fn authoredInterpretation(
         .state = &.{.{ .name = "responder", .schema = response }},
     });
     const returns = try c.returnFunction(handler);
-    // Preserve the domain's pure return arm; only its clause carries residual I/O.
-    b.functions.items[@intCast(try typed.interop.functionId(c, returns))].effects = &.{};
     const return_body = try c.body(returns);
     try c.define(returns, try return_body.ret(try return_body.parameter("result")));
     const clause = try c.clauseFunction(handler);

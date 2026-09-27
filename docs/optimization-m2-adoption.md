@@ -1,7 +1,7 @@
 # M2 semantic compilation adoption — in progress
 
 This successor preserves cutover PR #39 at `c181ef5`. Boundary authoring is rebound
-to `517cfb1670671f8b9383aa8711b76c30a01f32ad` (Boundary draft #162). The downloaded
+to `8321156276ef5ffbbaecd618a8cb8412da73d449` (Boundary draft #162). The downloaded
 GitHub archive's reconstructed Git tree matches the commit API, and the source,
 Zig-managed package and extracted-package inventories have been checked. The World
 lock, authenticated runtime and kernel are unchanged; no kernel was rebuilt or
@@ -29,23 +29,25 @@ locks, cleanup and runtime acquisition retain their existing owners.
 
 ## Current evidence and unresolved qualification
 
-- Authenticated-source `check-agent4`: terminal success, 314/314 build steps,
-  136/136 Zig tests; subordinate Node/negative/installation checks also completed.
-- Managed-package `build-component-tools`: terminal success, 7/7 steps.
-- The existing World source/runtime tuple verifies with the new Boundary pin.
-- The updated economy probe builds and emits the 18-workload corpus. It records
-  semantic outcomes and the semantic-optimization phase separately.
-- **Ten workloads exhaust semantic work limits** and therefore return the validated
-  structural baseline: sharing-64, document-consequence, clarify-first,
-  inquiry-repair, inquiry-repeated, inquiry-react, document, review-mid_review,
-  review-clarify_first and review-model. They are not credited as optimizer wins.
+At Boundary `8321156`:
 
-Boundary follow-up is active: GVN scans unrelated functions/predecessors and the
-pipeline's broad reservations reject large real records before useful work. A
-larger-corpus probe also exposed a DCE producer still needed by an explicit edge
-assignment; candidate admission correctly rejected it. These upstream issues must
-be corrected, repinned and the complete corpus requalified before adoption closes.
-The initial authoring aggregate does not substitute for that final qualification.
+- GitHub commit/tree, source archive, extracted package and actual Zig-managed
+  package inventories verify. The existing World source/runtime tuple also verifies.
+- Managed-package component tools and economy probe: terminal success, 10/10 steps.
+- Fresh source emission completes all 18 workloads under unchanged default work
+  limits: ten applied, eight legal no-ops, zero work-limit outcomes.
+- ReAct image: 49,604-byte structural baseline → 41,021 bytes. Inquiry repair:
+  35,591 → 35,257; repeated inquiry: 35,973 → 35,637. Image size does not prove speed.
+- Combined authoring/native/integration/economy validation is pending its terminal
+  result; it is not credited as passing.
+
+Historical evidence at the initial `517cfb1` pin remains distinct: authenticated
+source authoring passed 314/314 build steps and 136/136 Zig tests; managed component
+tools passed 7/7 steps. Ten corpus workloads exhausted optimizer limits then.
+The new pin includes the edge-demand/capture-lifetime corrections and bounded GVN
+work over applicable regions, with independently indexed certificate validation.
+Fresh emission above supersedes the budget failure for this corpus; it does not
+relabel the earlier checks as new-head evidence.
 
 Native/Node/WASM/browser behavior, separate World admission/execution/memory and
 checkpoint costs, package bindings and cumulative C0 comparisons remain pending.

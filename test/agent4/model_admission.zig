@@ -69,7 +69,7 @@ fn expectRejected(program: boundary.data.activation.Program, value: Inputs, expe
 }
 
 test "actual World preserves every admitted call and enforces current call policy" {
-    var b = boundary.computation.Builder.init(allocator);
+    var b = boundary.source.Builder.init(allocator);
     defer b.deinit();
     const entry = try P.interpretAll(&b);
     var compiled = try boundary.program.compile(allocator, b.module(entry, try b.scalar(void)));
@@ -106,7 +106,7 @@ test "actual World preserves every admitted call and enforces current call polic
 }
 
 test "actual World rejects forged declaration association variants and offer custody" {
-    var b = boundary.computation.Builder.init(allocator);
+    var b = boundary.source.Builder.init(allocator);
     defer b.deinit();
     const entry = try P.interpretAll(&b);
     var compiled = try boundary.program.compile(allocator, b.module(entry, try b.scalar(void)));
@@ -139,7 +139,7 @@ test "actual World rejects forged declaration association variants and offer cus
 }
 
 test "single answer convenience rejects multiple calls instead of choosing one" {
-    var b = boundary.computation.Builder.init(allocator);
+    var b = boundary.source.Builder.init(allocator);
     defer b.deinit();
     const entry = try P.interpreter(&b);
     var compiled = try boundary.program.compile(allocator, b.module(entry, try b.scalar(void)));

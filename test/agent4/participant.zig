@@ -1,7 +1,7 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const data = boundary.data;
 const a = std.testing.allocator;
 const Answer = union(enum(u32)) { contribute: struct { value: u64 } = 1 };

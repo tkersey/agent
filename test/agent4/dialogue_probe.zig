@@ -3,7 +3,7 @@ const std = @import("std");
 const boundary = @import("boundary");
 const dialogue = boundary.library.generator;
 const interaction = @import("interaction");
-const bsrc = boundary.computation;
+const bsrc = boundary.source;
 const Builder = bsrc.Builder;
 const Id = bsrc.Id;
 

@@ -33,7 +33,7 @@ const expected = [_]u8{
 };
 
 test "descriptor derivation and value bytes agree with public Boundary admission" {
-    var builder = boundary.computation.Builder.init(a);
+    var builder = boundary.source.Builder.init(a);
     defer builder.deinit();
     const root = try contracts.schema(Envelope, &builder);
     const bytes = try contracts.encodeOwned(Envelope, a, envelope);
@@ -97,7 +97,7 @@ test "tagged unions use ordinal tags while enums retain their explicit tags" {
     var decoded = try contracts.decodeOwned(T, a, bytes);
     defer decoded.deinit();
     try std.testing.expectEqual(std.math.maxInt(u64), decoded.value.number);
-    var builder = boundary.computation.Builder.init(a);
+    var builder = boundary.source.Builder.init(a);
     defer builder.deinit();
     const root = try contracts.schema(T, &builder);
     try data.schema.validateValue(a, .{ .root = root, .types = builder.schemas.items }, bytes);
@@ -174,7 +174,7 @@ fn agree(descriptor: data.schema.Descriptor, bytes: []const u8) !void {
 }
 
 test "every byte mutation and truncation agrees with public Boundary value admission" {
-    var builder = boundary.computation.Builder.init(a);
+    var builder = boundary.source.Builder.init(a);
     defer builder.deinit();
     const root = try contracts.schema(Envelope, &builder);
     const descriptor: data.schema.Descriptor = .{ .root = root, .types = builder.schemas.items };

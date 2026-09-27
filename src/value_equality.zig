@@ -2,7 +2,7 @@
 //! The native implementation runs only while authoring a source module.
 const std = @import("std");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const p = boundary.data.program;
 const Id = source.Id;
 

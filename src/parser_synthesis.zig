@@ -3,7 +3,7 @@
 //! approval, completion-continuation access, or target-write authority.
 const contracts = @import("agent_contracts");
 const Context = @import("authoring.zig").Context;
-const Id = @import("boundary").computation.Id;
+const Id = @import("boundary").source.Id;
 pub const proposals = @import("parser_proposals.zig");
 pub const contract = "agent.incremental-byte-parser/v1";
 pub const reference_identity = "agent.parser.reference.v1";

@@ -2,7 +2,7 @@
 //! These helpers emit Boundary source, never runtime Zig callbacks.
 const boundary = @import("boundary");
 const typed = boundary.authoring;
-const source = boundary.computation;
+const source = boundary.source;
 const Id = source.Id;
 
 pub const Family = struct { effect: Id, capability: Id, question: Id, answer: Id };

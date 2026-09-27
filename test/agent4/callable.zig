@@ -3,12 +3,12 @@ const bnd = @import("boundary");
 const agent = @import("agent");
 const admission = agent.admission;
 const callable = agent.callable;
-const Id = bnd.computation.Id;
-const B = bnd.computation.Builder;
+const Id = bnd.source.Id;
+const B = bnd.source.Builder;
 
 pub const Representation = enum { interned, static_code, unsafe_reuse, unsafe_code };
 
-pub fn build(b: *B, registry: *admission.Registry, representation: Representation, count: usize) !bnd.computation.Module {
+pub fn build(b: *B, registry: *admission.Registry, representation: Representation, count: usize) !bnd.source.Module {
     const unit = try b.scalar(void);
     const signature: bnd.data.program.ComputationType = .{ .parameters = &.{}, .result = unit };
     const safe = try b.declare(&.{}, unit, &.{}, &.{});

@@ -2,7 +2,7 @@ const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
 const world = @import("world");
-const source = boundary.computation;
+const source = boundary.source;
 const data = boundary.data;
 const Id = source.Id;
 

@@ -2,7 +2,7 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const Builder = source.Builder;
 const Id = source.Id;
 pub const Mode = enum { mid_review, clarify_first, human, model, rule, react };

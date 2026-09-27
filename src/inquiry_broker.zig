@@ -2,7 +2,7 @@
 //! No runtime native callback, continuation registry or external evidence cache.
 const std = @import("std");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const custody = @import("inquiry.zig");
 const equality = @import("value_equality.zig");
 const authoring = @import("authoring.zig");

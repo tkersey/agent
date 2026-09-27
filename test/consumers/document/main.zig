@@ -2,7 +2,7 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const Id = source.Id;
 const Text = agent.contracts.Text;
 const Observation = struct { content: Text(128), digest: Text(64) };

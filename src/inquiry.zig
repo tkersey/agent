@@ -2,7 +2,7 @@
 //! Application callbacks never receive the owning queue. All source allocations
 //! belong to the caller's Builder; runtime custody belongs to the emitted terms.
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const typed = boundary.authoring;
 const dialogue = boundary.library.generator;
 const Id = source.Id;

@@ -3,7 +3,7 @@ const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
 const t = @import("types.zig");
-pub const Id = boundary.computation.Id;
+pub const Id = boundary.source.Id;
 
 pub const Emit = struct {
     c: agent.Context,

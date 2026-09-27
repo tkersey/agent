@@ -9,7 +9,7 @@ const Model = agent.model(.{ .name = "parser-fixture", .model = "synthetic-only"
     pub const semantic_identity = agent.model_invocation.protocol_identity;
 } });
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const b = c.builder;
         const responder = try proposals.define(c, try b.constant(void, {}));
         const entry = try b.declare(&.{try c.schema(Input)}, try c.schema(P.Interpretation), b.functions.items[@intCast(responder)].effects, &.{});
@@ -109,7 +109,7 @@ pub fn main(init: std.process.Init) !void {
         return output(init, bytes);
     }
     if (std.mem.eql(u8, mode, "result-schema")) {
-        var b = boundary.computation.Builder.init(init.gpa);
+        var b = boundary.source.Builder.init(init.gpa);
         defer b.deinit();
         const schema = try agent.contracts.schema(P.Interpretation, &b);
         const bytes = try boundary.data.schema.encodeOwned(init.gpa, b.schemas.items, schema);

@@ -1,7 +1,7 @@
 //! Exact parser proposals use the existing live-evidence and approval owners.
 const agent_contracts = @import("agent_contracts");
 const parser = @import("parser_synthesis.zig");
-const source = @import("boundary").computation;
+const source = @import("boundary").source;
 const Context = @import("authoring.zig").Context;
 const observation = @import("observation.zig");
 const approval = @import("approval.zig");

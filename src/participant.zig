@@ -2,7 +2,7 @@
 //! Objects remain BMO1; no source reconstruction or runtime evaluator is added.
 const std = @import("std");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const data = boundary.data;
 const admission = @import("admission.zig");
 const Context = @import("authoring.zig").Context;

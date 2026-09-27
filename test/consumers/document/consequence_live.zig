@@ -1,6 +1,6 @@
 //! Live revalidation and exact-operation approval, outside every multi delimiter.
 const agent = @import("agent");
-const source = @import("boundary").computation;
+const source = @import("boundary").source;
 const Id = source.Id;
 const emit = @import("source.zig");
 const t = @import("consequence_types.zig");

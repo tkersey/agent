@@ -2,7 +2,7 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const typed = boundary.authoring;
 const CloseOperation = struct { effect: Id, capability: Id };
 const Id = source.Id;

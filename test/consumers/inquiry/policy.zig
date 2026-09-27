@@ -6,7 +6,7 @@ const s = @import("source.zig");
 const Pop = @import("plans.zig").Pop;
 const Id = s.Id;
 const E = s.E;
-const Case = std.meta.Child(@FieldType(@FieldType(@import("boundary").computation.ast.Term, "match_sum"), "cases"));
+const Case = std.meta.Child(@FieldType(@FieldType(@import("boundary").source.ast.Term, "match_sum"), "cases"));
 
 pub fn define(e: E, d: agent.inquiry.broker.Definition) !agent.inquiry.broker.Functions {
     return .{ .admit = try admit(e, d), .select = try agent.inquiry.broker.defaultSelection(e.b(), .{

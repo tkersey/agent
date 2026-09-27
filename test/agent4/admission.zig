@@ -1,8 +1,8 @@
 const std = @import("std");
 const bnd = @import("boundary");
 const admission = @import("admission");
-const Id = bnd.computation.Id;
-const B = bnd.computation.Builder;
+const Id = bnd.source.Id;
+const B = bnd.source.Builder;
 const allocator = std.testing.allocator;
 
 const Fixture = struct {
@@ -182,7 +182,7 @@ test "private function cannot be used as root" {
 }
 
 fn localHandler(f: *Fixture, effect: Id, body: Id, multi: bool) !Id {
-    const residual = try (bnd.computation.Row{
+    const residual = try (bnd.source.Row{
         .effects = f.b.functions.items[@intCast(body)].effects,
     }).subtract(f.b.allocator(), .{ .effects = &.{effect} });
     if (multi) f.b.effects.items[@intCast(effect)].control_use = .multi;

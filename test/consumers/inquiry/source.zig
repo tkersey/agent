@@ -2,7 +2,7 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-pub const Id = boundary.computation.Id;
+pub const Id = boundary.source.Id;
 pub const E = struct {
     c: agent.Context,
     pub fn b(e: E) *@TypeOf(e.c.builder.*) {

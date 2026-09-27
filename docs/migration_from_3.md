@@ -40,7 +40,7 @@ const agent = @import("agent");
 const boundary = @import("boundary");
 
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const b = c.builder;
         const integer = try c.schema(u32);
         const entry = try b.declare(&.{integer}, integer, &.{}, &.{});

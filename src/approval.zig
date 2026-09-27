@@ -1,7 +1,7 @@
 //! Approval and consumption are one ordinary staged computation. Only this
 //! computation owns its protected effects and its non-cloneable internal grant.
 const std = @import("std");
-const source = @import("boundary").computation;
+const source = @import("boundary").source;
 const authoring = @import("authoring.zig");
 const interaction = @import("interaction.zig");
 const equality = @import("value_equality.zig");

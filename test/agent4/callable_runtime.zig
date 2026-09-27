@@ -9,9 +9,9 @@ test "static-code callable preserves actual World observations and branch work" 
     var prior_functions: ?usize = null;
     var prior_schemas: ?usize = null;
     for ([_]usize{ 1, 8, 64 }) |count| {
-        var raw_builder = boundary.computation.Builder.init(allocator);
+        var raw_builder = boundary.source.Builder.init(allocator);
         defer raw_builder.deinit();
-        var agent_builder = boundary.computation.Builder.init(allocator);
+        var agent_builder = boundary.source.Builder.init(allocator);
         defer agent_builder.deinit();
         var raw_registry = agent.admission.Registry.init(allocator);
         defer raw_registry.deinit();

@@ -2,7 +2,7 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const generator = boundary.library.generator;
 const Id = source.Id;
 fn Application(comptime duplicate: bool, comptime assessment: bool, comptime write: bool) type {

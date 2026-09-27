@@ -4,7 +4,7 @@ const std = @import("std");
 const boundary = @import("boundary");
 const authoring = @import("authoring.zig");
 const sets = @import("sets.zig");
-const source = boundary.computation;
+const source = boundary.source;
 const typed = boundary.authoring;
 const Id = source.Id;
 

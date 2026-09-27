@@ -3,7 +3,7 @@ const std = @import("std");
 const boundary = @import("boundary");
 const agent = @import("agent");
 const broker = agent.inquiry.broker;
-const source = boundary.computation;
+const source = boundary.source;
 const Id = source.Id;
 const Builder = source.Builder;
 

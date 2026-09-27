@@ -9,8 +9,8 @@ const memory = @import("working_set.zig");
 const completion = @import("completion.zig");
 const DecisionContext = struct { memory: t.Memory, changed_files: completion.Changes };
 const prompt = @import("prompt.zig");
-const Id = boundary.computation.Id;
-const Case = std.meta.Child(@FieldType(@FieldType(boundary.computation.ast.Term, "match_sum"), "cases"));
+const Id = boundary.source.Id;
+const Case = std.meta.Child(@FieldType(@FieldType(boundary.source.ast.Term, "match_sum"), "cases"));
 
 // The model's flat codec preserves the four-path result capacity. Normalization
 // below constructs the portable vector; the host never selects program control.
@@ -59,7 +59,7 @@ pub const Task = struct { goal: t.Goal, model: P.ModelId, principal: u64, maximu
 pub const System = agent.system(.{ .InitialArgs = Task, .Result = t.FinalResult, .Failure = t.Failure, .application = Application });
 
 pub const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const b = c.builder;
         const e: E = .{ .c = c };
         const policy = try memory.define(c);
@@ -71,7 +71,7 @@ pub const Application = struct {
         const search = try c.external("repository.repair.search.v1", try c.schema(t.SearchRequest), try c.schema(t.SearchResult), .read);
         const tests = try c.external("repository.repair.test.v1", try c.schema(t.TestInvocation), try c.schema(t.TestResult), .read);
         const test_request = try @import("testing.zig").define(c);
-        const effects = (try (boundary.computation.Row{ .effects = replace.effects }).unionWith(b.allocator(), .{ .effects = &.{ list, read, search, tests, try P.declare(b) } })).effects;
+        const effects = (try (boundary.source.Row{ .effects = replace.effects }).unionWith(b.allocator(), .{ .effects = &.{ list, read, search, tests, try P.declare(b) } })).effects;
         const loop = try b.declare(&.{ try c.schema(Task), try c.schema(t.Memory), try c.schema(u16), try c.schema(completion.Changes) }, try c.schema(t.FinalResult), effects, &.{});
         const task = try e.param(loop, 0);
         const state = try e.param(loop, 1);

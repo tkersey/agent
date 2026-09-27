@@ -20,7 +20,7 @@ const proposal: replacement.Proposal = .{ .request = .{
 }, .principal = 7 };
 
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const b = c.builder;
         const operation = try replacement.define(c);
         const entry = try b.declare(&.{try c.schema(Input)}, try c.schema(t.ReplaceOutcome), operation.effects, &.{});

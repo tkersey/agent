@@ -4,7 +4,7 @@ const boundary = @import("boundary");
 const contracts = @import("agent_contracts");
 const admission = @import("admission.zig");
 pub const catalogs = @import("catalogs.zig");
-const source = boundary.computation;
+const source = boundary.source;
 const p = boundary.data.program;
 
 /// Optional native authoring observations. These callbacks never enter a Module,

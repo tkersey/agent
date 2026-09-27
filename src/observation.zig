@@ -3,7 +3,7 @@
 //! resource can satisfy a protected commitment's live-evidence requirement.
 const std = @import("std");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const typed = boundary.authoring;
 const authoring = @import("authoring.zig");
 const decision = @import("decision.zig");

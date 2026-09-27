@@ -1,7 +1,7 @@
 //! Consumer-owned child control: retain a critic's future while asking a human.
 const agent = @import("agent");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const Builder = source.Builder;
 const Id = source.Id;
 const Dialogue = boundary.library.generator.Generator;

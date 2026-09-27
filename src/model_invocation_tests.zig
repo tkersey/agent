@@ -95,7 +95,7 @@ test "normalized Answer uses sum ordinal while enum payload keeps explicit tags"
 
 test "model effect is ordinary and a typed question requires no executable tool" {
     const Question = invocation.Question(i64, "answer", "Answer the integer question.", limits);
-    var builder = boundary.computation.Builder.init(std.testing.allocator);
+    var builder = boundary.source.Builder.init(std.testing.allocator);
     defer builder.deinit();
     const first = try Question.declare(&builder);
     try std.testing.expectEqual(first, try Question.declare(&builder));
@@ -112,7 +112,7 @@ test "model effect is ordinary and a typed question requires no executable tool"
 }
 
 test "single answer admission compiles as ordinary Boundary functions" {
-    var builder = boundary.computation.Builder.init(std.testing.allocator);
+    var builder = boundary.source.Builder.init(std.testing.allocator);
     defer builder.deinit();
     const entry = try Fixture.interpreter(&builder);
     try std.testing.expectEqual(entry, try Fixture.interpreter(&builder));
@@ -157,7 +157,7 @@ test "model declarations and offered sets preserve indexes 31 32 and 63" {
     try std.testing.expectEqual(32, declarations.items[1].action_ordinal);
     try std.testing.expectEqual(63, declarations.items[2].action_ordinal);
     try std.testing.expectEqualStrings("tool_63", declarations.items[2].name.bytes);
-    var builder = boundary.computation.Builder.init(std.testing.allocator);
+    var builder = boundary.source.Builder.init(std.testing.allocator);
     defer builder.deinit();
     inline for (0..64) |index| _ = try P.declarationValue(&builder, index);
     const encoded_schema = try contracts.encodeOwned(P.ToolSchema, std.testing.allocator, declarations.items[0].input_schema_json);

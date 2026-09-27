@@ -2,7 +2,7 @@
 //! The application owns the proposal boundary and the completeness of its key.
 //! This module owns coverage, exact-key grouping, and offered-choice selection.
 const std = @import("std");
-const source = @import("boundary").computation;
+const source = @import("boundary").source;
 const deliberation = @import("deliberation.zig");
 const equality = @import("value_equality.zig");
 const interaction = @import("interaction.zig");

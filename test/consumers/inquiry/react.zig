@@ -25,7 +25,7 @@ const Action = struct { state: State, plan: t.Plan };
 pub const System = agent.system(.{ .InitialArgs = t.Task, .Result = t.Result, .Failure = void, .application = Application });
 
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const e = E{ .c = c };
         const b = c.builder;
         const model = try t.P.declare(b);

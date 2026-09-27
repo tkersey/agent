@@ -2,7 +2,7 @@
 //! restores the enclosing handler; suspension retains the installed environment.
 const boundary = @import("boundary");
 const typed = boundary.authoring;
-const source = boundary.computation;
+const source = boundary.source;
 const Id = source.Id;
 const sets = @import("sets.zig");
 const decision = @import("decision.zig");

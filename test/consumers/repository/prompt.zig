@@ -4,9 +4,9 @@ const agent = @import("agent");
 const boundary = @import("boundary");
 const E = @import("source.zig").Emit;
 const t = @import("types.zig");
-const Id = boundary.computation.Id;
+const Id = boundary.source.Id;
 pub const Text = agent.contracts.Text(128 * 1024);
-const Case = std.meta.Child(@FieldType(@FieldType(boundary.computation.ast.Term, "match_sum"), "cases"));
+const Case = std.meta.Child(@FieldType(@FieldType(boundary.source.ast.Term, "match_sum"), "cases"));
 
 pub fn render(comptime T: type, e: E) anyerror!Id {
     const b = e.c.builder;

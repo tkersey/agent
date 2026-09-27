@@ -35,8 +35,8 @@ pub const skill = @import("skill.zig").skill;
 
 comptime {
     const boundary = @import("boundary");
-    if (!@hasDecl(boundary, "computation") or !@hasDecl(boundary, "data") or
+    if (!@hasDecl(boundary, "source") or !@hasDecl(boundary, "data") or
         !@hasDecl(boundary, "program") or !@hasDecl(boundary.program, "compileObserved") or
-        !@hasField(boundary.computation.Compiled, "flow"))
+        !@hasField(boundary.source.Compiled, "flow"))
         @compileError("Agent requires the coordinated Boundary stable-activation compiler and data API");
 }

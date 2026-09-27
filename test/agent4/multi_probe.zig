@@ -2,7 +2,7 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const deliberation = @import("deliberation");
-const source = boundary.computation;
+const source = boundary.source;
 const Id = source.Id;
 
 pub fn main(init: std.process.Init) !void {

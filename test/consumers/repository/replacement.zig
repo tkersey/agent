@@ -4,7 +4,7 @@ const boundary = @import("boundary");
 pub const types = @import("types.zig");
 const t = types;
 const E = @import("source.zig").Emit;
-const Id = boundary.computation.Id;
+const Id = boundary.source.Id;
 pub const Reason = agent.contracts.Text(256);
 pub const Proposal = struct { request: t.ReplaceRequest, principal: u64 };
 // The adapter returns current only after matching the real file to the query's
@@ -44,7 +44,7 @@ pub fn define(c: agent.Context) !Definition {
         .channel = "repository-owner",
         .evidence = .{ .proof = observed.proof, .consume = observed.consume, .project = project },
     });
-    const effects = (try (boundary.computation.Row{ .effects = approval.effects }).unionWith(b.allocator(), .{ .effects = &.{read} })).effects;
+    const effects = (try (boundary.source.Row{ .effects = approval.effects }).unionWith(b.allocator(), .{ .effects = &.{read} })).effects;
     const f = try b.declare(&.{ try c.schema(t.Memory), try c.schema(t.ReplaceRequest), try c.schema(u64) }, try c.schema(t.ReplaceOutcome), effects, &.{});
     const evidence = try b.variable(observed.evidence);
     const data = try b.variable(observed.data);

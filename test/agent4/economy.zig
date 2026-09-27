@@ -2,7 +2,7 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const agent = @import("agent");
-const source = boundary.computation;
+const source = boundary.source;
 const data = boundary.data;
 const Id = source.Id;
 const edited_source_value: u32 = 7;

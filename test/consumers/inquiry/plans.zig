@@ -111,7 +111,7 @@ fn collector(e: E, decode: Id) !Id {
     return f;
 }
 
-const Case = std.meta.Child(@FieldType(@FieldType(@import("boundary").computation.ast.Term, "match_sum"), "cases"));
+const Case = std.meta.Child(@FieldType(@FieldType(@import("boundary").source.ast.Term, "match_sum"), "cases"));
 pub const Pop = struct {
     optional: Id,
     empty: Id,

@@ -1,0 +1,119 @@
+{
+  "scope": "Uninstalled semantic-contract control omitting M2 transformations; original checks and P01 retained",
+  "baseline": "5f5c11e7f1331ba4b10e8520f48df8278765a704",
+  "controlSourceSha256": "fddc46e3b9469986accf568615463416ed83783fb5e8ed3ebd609b0dd1535836",
+  "productionSourceSha256": "e8b02497fd468f49fc8b21fa8df0d0e2875dad1361cfc07715b3508113842edc",
+  "rows": [
+    {
+      "name": "direct",
+      "c1Sha256": "0868302e26c48ef5920ed4bef1746dab60edbc618f2e540ba6e5ea1049e6ed7b",
+      "cutoverSha256": "0868302e26c48ef5920ed4bef1746dab60edbc618f2e540ba6e5ea1049e6ed7b",
+      "identical": true
+    },
+    {
+      "name": "facade",
+      "c1Sha256": "0868302e26c48ef5920ed4bef1746dab60edbc618f2e540ba6e5ea1049e6ed7b",
+      "cutoverSha256": "0868302e26c48ef5920ed4bef1746dab60edbc618f2e540ba6e5ea1049e6ed7b",
+      "identical": true
+    },
+    {
+      "name": "sharing-1",
+      "c1Sha256": "f0a17ed97f5e5e66829fd1a10a990394c444aa2331fc2686abb3157eb72319c7",
+      "cutoverSha256": "f0a17ed97f5e5e66829fd1a10a990394c444aa2331fc2686abb3157eb72319c7",
+      "identical": true
+    },
+    {
+      "name": "sharing-8",
+      "c1Sha256": "89a257a0c46c711c342aa92d1507bea537358e1140b753ac585ca3a805167458",
+      "cutoverSha256": "89a257a0c46c711c342aa92d1507bea537358e1140b753ac585ca3a805167458",
+      "identical": true
+    },
+    {
+      "name": "sharing-64",
+      "c1Sha256": "0b3dfa0f5598bfd365ade0fbd3b6052846eea524aeba4e28144053b6b373d328",
+      "cutoverSha256": "0b3dfa0f5598bfd365ade0fbd3b6052846eea524aeba4e28144053b6b373d328",
+      "identical": true
+    },
+    {
+      "name": "conversation",
+      "c1Sha256": "86a51a7e63cfdd94b36bd62af05d5bc1887788221d7ff48f81847e9503ff2e20",
+      "cutoverSha256": "86a51a7e63cfdd94b36bd62af05d5bc1887788221d7ff48f81847e9503ff2e20",
+      "identical": true
+    },
+    {
+      "name": "document-consequence",
+      "c1Sha256": "be844910a6fbd7278031bb861706fb29ec85ba6d7732863de856e8e6b1d6fd07",
+      "cutoverSha256": "be844910a6fbd7278031bb861706fb29ec85ba6d7732863de856e8e6b1d6fd07",
+      "identical": true
+    },
+    {
+      "name": "clarify-first",
+      "c1Sha256": "b3dd1136fdf98cb0290c9ad905deb9dd09a54d872081c1a8f001f08fa587053e",
+      "cutoverSha256": "b3dd1136fdf98cb0290c9ad905deb9dd09a54d872081c1a8f001f08fa587053e",
+      "identical": true
+    },
+    {
+      "name": "inquiry-repair",
+      "c1Sha256": "481bfc969682c1a3456679a438e75f37f58d5a45c9892cbb9cdb36b5e509cd47",
+      "cutoverSha256": "481bfc969682c1a3456679a438e75f37f58d5a45c9892cbb9cdb36b5e509cd47",
+      "identical": true
+    },
+    {
+      "name": "inquiry-repeated",
+      "c1Sha256": "8de6e55dde1322dbed54892e47795f3bd76c06c038b1e024bb9a37b8284d0c51",
+      "cutoverSha256": "8de6e55dde1322dbed54892e47795f3bd76c06c038b1e024bb9a37b8284d0c51",
+      "identical": true
+    },
+    {
+      "name": "inquiry-react",
+      "c1Sha256": "57a5d8fa300d5579412f45e7b580ce6fa40dc222d6303d2397d22ccdba3491f5",
+      "cutoverSha256": "57a5d8fa300d5579412f45e7b580ce6fa40dc222d6303d2397d22ccdba3491f5",
+      "identical": true
+    },
+    {
+      "name": "document",
+      "c1Sha256": "6b8c9d204fcc2d2780bdcda7bcd35b01d9851c71baf45665086024baa25afa3e",
+      "cutoverSha256": "6b8c9d204fcc2d2780bdcda7bcd35b01d9851c71baf45665086024baa25afa3e",
+      "identical": true
+    },
+    {
+      "name": "review-mid_review",
+      "c1Sha256": "319893be473d08a7e15046404f527ebf3cd952661cf1370792b1824b8c481972",
+      "cutoverSha256": "319893be473d08a7e15046404f527ebf3cd952661cf1370792b1824b8c481972",
+      "identical": true
+    },
+    {
+      "name": "review-clarify_first",
+      "c1Sha256": "6d304173b7b59aebab484149a868291f90f17316bdd9f5def0e0e496902f8ee7",
+      "cutoverSha256": "6d304173b7b59aebab484149a868291f90f17316bdd9f5def0e0e496902f8ee7",
+      "identical": true
+    },
+    {
+      "name": "review-human",
+      "c1Sha256": "222e18e156a1a93d19cbbe3787725cf6f298e2b2e57a914c2e3e1a34be77af72",
+      "cutoverSha256": "222e18e156a1a93d19cbbe3787725cf6f298e2b2e57a914c2e3e1a34be77af72",
+      "identical": true
+    },
+    {
+      "name": "review-model",
+      "c1Sha256": "9a57937127837aec22857efc103b96b8117f61af03b6f0966147c3f37fc71f93",
+      "cutoverSha256": "9a57937127837aec22857efc103b96b8117f61af03b6f0966147c3f37fc71f93",
+      "identical": true
+    },
+    {
+      "name": "review-rule",
+      "c1Sha256": "e159594845f0d01375a92eb46b2fc04bf3017881b9b69fbdff728384198c164e",
+      "cutoverSha256": "e159594845f0d01375a92eb46b2fc04bf3017881b9b69fbdff728384198c164e",
+      "identical": true
+    },
+    {
+      "name": "review-react",
+      "c1Sha256": "30d023517353c3e6f197b264daf0f8ac8b9640ee5e0cfc4c2d2afd3981514e4c",
+      "cutoverSha256": "30d023517353c3e6f197b264daf0f8ac8b9640ee5e0cfc4c2d2afd3981514e4c",
+      "identical": true
+    }
+  ],
+  "controlPatch": "In an uninstalled copy only, after original admission and mandatory P01 baseline construction, semantic selection returns that baseline before the M2 transformation portfolio. Hard image admission remains checked.",
+  "limitations": "Output identity supports reuse of runtime image measurements. Compiler construction costs remain separate; this does not qualify timing or final integration.",
+  "patch": "--- a/src/data/closed_compilation.zig\n+++ b/src/data/closed_compilation.zig\n@@ -289,6 +289,14 @@\n     stats.original_bytes = try image.encodedLength(original);\n     stats.baseline_bytes = try image.encodedLength(baseline.program);\n     stats.final_bytes = stats.baseline_bytes;\n+    // UNINSTALLED TEST CONTROL: same semantic selection and mandatory P01;\n+    // omit the investigated M2 transformation/search portfolio (spec section 9.1).\n+    if (options.contract == .semantic) {\n+        try allowBaseline(options, stats.baseline_bytes);\n+        stats.outcome = .no_change;\n+        keep_baseline = true;\n+        return baseline;\n+    }\n     if (options.contract == .structural) {\n         if (options.max_image_bytes) |limit| if (stats.final_bytes > limit) return error.Capacity;\n         stats.outcome = .structural;\n"
+}

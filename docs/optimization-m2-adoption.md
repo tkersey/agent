@@ -62,7 +62,23 @@ The frozen-implementation aggregate, including serial Node files and browser
 transfer checks, is active and receives no terminal pass credit yet.
 
 Final integrated/serial/browser qualification, execution/checkpoint/timing costs,
-consumer-policy completion and remaining M2 transformations are still open.
+consumer-policy execution qualification and remaining M2 closeout gates are still open.
+
+### Attribution control
+
+The uninstalled C1 copy uses the same `5f5c11e` implementation and semantic
+selection, retaining original checks and mandatory P01 while returning the
+ordinary baseline before the M2 transformation portfolio. Its standalone build
+passes 3/3 steps. All 18 emitted images are byte-identical to the retained cutover
+corpus (`conformance/agent4/m2-c1-control.json`). Existing exact-image runtime
+measurements against that corpus therefore apply to C1; this does not relabel
+compiler construction measurements or qualify unfinished timing cells.
+
+The existing World replay benchmark builds against the frozen tuple and its
+smoke outcome agrees with the authenticated WASM runtime. Replay inputs for C0,
+C1, cutover and candidate are kept separate. Additional scenario recording and
+paired timing wait for the active integrated tests to finish, avoiding competing
+sandbox workloads. No control is installed or exposed as a production option.
 
 ## Historical evidence at Boundary `8321156`
 

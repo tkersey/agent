@@ -4,7 +4,7 @@ const boundary = @import("boundary");
 const source = boundary.source;
 const data = boundary.data;
 const contracts = @import("agent_contracts");
-const Id = source.Id;
+const a = boundary.authoring;
 pub const chunk_bytes = 16;
 pub const maximum_subject_bytes = 65536;
 pub const Subject = struct { name: contracts.Text(64), version: [32]u8, length: u64 };
@@ -19,155 +19,198 @@ pub const name = "inspect_text";
 pub const description = "Count bytes and LF newlines in a declared immutable text subject";
 
 const Emit = struct {
-    b: *source.Builder,
-    unit: Id,
-    integer: Id,
-    boolean: Id,
-    failure: Id,
-    fn schema(e: Emit, comptime T: type) !Id {
-        return contracts.schema(T, e.b);
+    c: *a.Context,
+    unit: *const a.Schema,
+    integer: *const a.Schema,
+    failure: *const a.FailureLiteral,
+    fn schema(e: Emit, comptime T: type) !*const a.Schema {
+        switch (@typeInfo(T)) {
+            .@"struct" => |info| {
+                if (@hasDecl(T, "agent_value_kind")) return a.interop.schema(e.c, try contracts.schema(T, a.interop.builder(e.c)));
+                var fields: [info.fields.len]a.Field = undefined;
+                inline for (info.fields, 0..) |field, i| fields[i] = .{ .name = field.name, .schema = try e.schema(field.type) };
+                return e.c.record(&fields);
+            },
+            .@"union" => |info| {
+                var fields: [info.fields.len]a.Field = undefined;
+                inline for (info.fields, 0..) |field, i| fields[i] = .{ .name = field.name, .schema = try e.schema(field.type) };
+                return e.c.alternatives(&fields);
+            },
+            else => return a.interop.schema(e.c, try contracts.schema(T, a.interop.builder(e.c))),
+        }
     }
-    fn ref(e: Emit, variable: Id) !Id {
-        return e.b.reference(variable);
+    fn add(e: Emit, body: *a.Body, left: *const a.Value, right: *const a.Value) !*const a.Value {
+        return body.checkedAdd(left, right, e.failure);
     }
-    fn p(e: Emit, function: Id, parameter: usize) !Id {
-        return e.ref(e.b.parameter(function, parameter));
+    fn rejected(e: Emit, body: *a.Body, tag: []const u8) !*const a.Value {
+        return body.variant(try e.schema(Result), tag, try body.constant(void, {}));
     }
-    fn field(e: Emit, comptime T: type, value: Id, index: Id) !Id {
-        return e.b.primitive(try e.schema(T), .field, &.{value}, index);
-    }
-    fn integerValue(e: Emit, n: u64) !Id {
-        return e.b.constant(u64, n);
-    }
-    fn add(e: Emit, left: Id, right: Id) !Id {
-        return e.b.value(.{ .schema = e.integer, .expression = .{ .primitive = .{
-            .opcode = .integer_add,
-            .operands = &.{ left, right },
-            .failures = &.{.{ .kind = .arithmetic_overflow, .value = try e.b.failureLiteral(e.failure) }},
-        } } });
-    }
-    fn eq(e: Emit, left: Id, right: Id) !Id {
-        return e.b.primitive(e.boolean, .equal, &.{ left, right }, 0);
-    }
-    fn less(e: Emit, left: Id, right: Id) !Id {
-        return e.b.primitive(e.boolean, .less, &.{ left, right }, 0);
-    }
-    fn call(e: Emit, function: Id, args: []const Id) !Id {
-        return e.b.term(.{ .call = .{ .function = function, .arguments = args } });
-    }
-    fn branch(e: Emit, condition: Id, yes: Id, no: Id) !Id {
-        return e.b.term(.{ .conditional = .{ .condition = condition, .when_true = yes, .when_false = no } });
-    }
-    fn rejected(e: Emit, tag: Id) !Id {
-        return e.b.pure(try e.b.primitive(try e.schema(Result), .variant, &.{try e.b.constant(void, {})}, tag));
+    const Guard = struct {
+        e: Emit,
+        parent: *a.Body,
+        condition: *const a.Value,
+        work: *a.Body,
+        invalid: *a.Body,
+        accepts_true: bool,
+        fn finish(g: @This(), value: *const a.Value) !*const a.Value {
+            const yes = try g.work.ret(value);
+            const no = try g.invalid.ret(try g.e.rejected(g.invalid, "invalid_reply"));
+            return g.parent.conditional(g.condition, if (g.accepts_true) yes else no, if (g.accepts_true) no else yes);
+        }
+    };
+    fn guard(e: Emit, work: **a.Body, guards: *std.ArrayList(Guard), condition: *const a.Value, accepts_true: bool) !void {
+        const parent = work.*;
+        const valid = try parent.branch();
+        try guards.append(a.interop.builder(e.c).allocator(), .{ .e = e, .parent = parent, .condition = condition, .work = valid, .invalid = try parent.branch(), .accepts_true = accepts_true });
+        work.* = valid;
     }
 };
 
-fn counter(e: Emit) !Id {
-    const bytes = try e.schema(contracts.Bytes(chunk_bytes));
-    const function = try e.b.declare(&.{ bytes, e.integer, e.integer }, e.integer, &.{}, &.{});
-    const value = try e.p(function, 0);
-    const index = try e.p(function, 1);
-    const count = try e.p(function, 2);
-    const length = try e.b.primitive(e.integer, .blob_length, &.{value}, 0);
-    const byte_schema = try e.schema(u8);
-    const byte = try e.b.variable(byte_schema);
-    const optional = try e.b.schema(.{ .sum = &.{ e.unit, byte_schema } });
-    const next = try e.add(index, try e.integerValue(1));
-    const yes = try e.call(function, &.{ value, next, try e.add(count, try e.integerValue(1)) });
-    const no = try e.call(function, &.{ value, next, count });
-    const selected = try e.b.term(.{ .match_sum = .{
-        .value = try e.b.primitive(optional, .blob_byte, &.{ value, index }, 0),
-        .cases = &.{
-            .{ .variable = try e.b.variable(e.unit), .body = try e.b.term(.{ .fail = e.failure }) },
-            .{ .variable = byte, .body = try e.branch(try e.eq(try e.ref(byte), try e.b.constant(u8, 10)), yes, no) },
-        },
-    } });
-    try e.b.define(function, try e.branch(try e.less(index, length), selected, try e.b.pure(count)));
+fn counter(e: Emit) !*const a.Function {
+    const c = e.c;
+    const function = try c.function("count LF bytes", &.{ .{ .name = "bytes", .schema = try e.schema(contracts.Bytes(chunk_bytes)) }, .{ .name = "index", .schema = e.integer }, .{ .name = "count", .schema = e.integer } }, e.integer, &.{});
+    const body = try c.body(function);
+    const value = try body.parameter("bytes");
+    const index = try body.parameter("index");
+    const count = try body.parameter("count");
+    const active = try body.branch();
+    const ended = try body.branch();
+    const byte = try active.blobByte(value, index);
+    const missing = try active.caseOf(byte, "none");
+    const present = try active.caseOf(byte, "some");
+    const some = present.body();
+    const next = try e.add(some, index, try some.constant(u64, 1));
+    const newline = try some.branch();
+    const ordinary = try some.branch();
+    const yes = try newline.call(function, &.{ .{ .name = "bytes", .value = value }, .{ .name = "index", .value = next }, .{ .name = "count", .value = try e.add(newline, count, try newline.constant(u64, 1)) } });
+    const no = try ordinary.call(function, &.{ .{ .name = "bytes", .value = value }, .{ .name = "index", .value = next }, .{ .name = "count", .value = count } });
+    const counted = try some.conditional(try some.equal(present.payload(), try some.constant(u8, 10)), try newline.ret(yes), try ordinary.ret(no));
+    const selected = try active.match(byte, &.{ try missing.fail(e.integer, try missing.body().constant(void, {})), try present.ret(counted) });
+    try c.define(function, try body.ret(try body.conditional(try body.less(index, try body.blobLength(value)), try active.ret(selected), try ended.ret(count))));
     return function;
 }
 
-fn fold(e: Emit, read: Id) !Id {
-    const subject_schema = try e.schema(Subject);
-    const result_schema = try e.schema(Result);
-    const function = try e.b.declare(&.{ subject_schema, e.integer, e.integer }, result_schema, &.{read}, &.{});
-    const subject = try e.p(function, 0);
-    const offset = try e.p(function, 1);
-    const lines = try e.p(function, 2);
-    const request = try e.b.primitive(try e.schema(Read), .product, &.{ subject, offset, try e.integerValue(chunk_bytes) }, 0);
-    const response = try e.b.variable(try e.schema(Reply));
-    const chunk = try e.b.variable(try e.schema(Chunk));
-    const value = try e.ref(chunk);
-    const content = try e.field(contracts.Bytes(chunk_bytes), value, 2);
-    const size = try e.b.primitive(e.integer, .blob_length, &.{content}, 0);
-    const next = try e.add(offset, size);
-    const eof = try e.field(bool, value, 3);
-    const total = try e.field(u64, subject, 2);
-    const same_version = try e.b.variable(e.boolean);
-    const counted = try e.b.variable(e.integer);
-    const stats = try e.b.primitive(try e.schema(Stats), .product, &.{ next, try e.ref(counted) }, 0);
-    const done = try e.b.pure(try e.b.primitive(result_schema, .variant, &.{stats}, 0));
-    const more = try e.call(function, &.{ subject, next, try e.ref(counted) });
-    var valid = try e.b.bind(counted, try e.call(try counter(e), &.{ content, try e.integerValue(0), lines }), try e.branch(eof, done, more));
-    const invalid = try e.rejected(4);
-    valid = try e.branch(try e.eq(eof, try e.eq(next, total)), valid, invalid);
-    valid = try e.branch(try e.less(total, next), invalid, valid);
-    valid = try e.branch(try e.eq(size, try e.integerValue(0)), try e.branch(eof, valid, invalid), valid);
-    valid = try e.branch(try e.eq(try e.field(u64, value, 1), offset), valid, invalid);
-    valid = try e.branch(try e.ref(same_version), valid, invalid);
-    const equality = try @import("value_equality.zig").define(e.b, try e.schema([32]u8), e.failure);
-    valid = try e.b.bind(same_version, try e.call(equality, &.{ try e.field([32]u8, value, 0), try e.field([32]u8, subject, 1) }), valid);
-    const matched = try e.b.term(.{ .match_sum = .{ .value = try e.ref(response), .cases = &.{
-        .{ .variable = chunk, .body = valid },
-        .{ .variable = try e.b.variable(e.unit), .body = try e.rejected(1) },
-        .{ .variable = try e.b.variable(e.unit), .body = try e.rejected(2) },
-        .{ .variable = try e.b.variable(e.unit), .body = try e.rejected(3) },
-    } } });
-    try e.b.define(function, try e.b.bind(response, try e.b.term(.{ .perform = .{ .effect = read, .payload = request } }), matched));
+fn versionEquality(e: Emit) !*const a.Function {
+    const c = e.c;
+    const version = try e.schema([32]u8);
+    const boolean = try c.scalar(bool);
+    const function = try c.function("compare versions", &.{ .{ .name = "left", .schema = version }, .{ .name = "right", .schema = version }, .{ .name = "index", .schema = e.integer } }, boolean, &.{});
+    const body = try c.body(function);
+    const left = try body.parameter("left");
+    const right = try body.parameter("right");
+    const index = try body.parameter("index");
+    const active = try body.branch();
+    const ended = try body.branch();
+    const l = try active.sequenceGet(left, index);
+    const l_none = try active.caseOf(l, "none");
+    const l_some = try active.caseOf(l, "some");
+    const r = try l_some.body().sequenceGet(right, index);
+    const r_none = try l_some.body().caseOf(r, "none");
+    const r_some = try l_some.body().caseOf(r, "some");
+    const equal = try r_some.body().branch();
+    const different = try r_some.body().branch();
+    const next = try equal.call(function, &.{ .{ .name = "left", .value = left }, .{ .name = "right", .value = right }, .{ .name = "index", .value = try e.add(equal, index, try equal.constant(u64, 1)) } });
+    const compared = try r_some.body().conditional(try r_some.body().equal(l_some.payload(), r_some.payload()), try equal.ret(next), try different.ret(try different.constant(bool, false)));
+    const right_match = try l_some.body().match(r, &.{ try r_none.fail(boolean, try r_none.body().constant(void, {})), try r_some.ret(compared) });
+    const left_match = try active.match(l, &.{ try l_none.fail(boolean, try l_none.body().constant(void, {})), try l_some.ret(right_match) });
+    try c.define(function, try body.ret(try body.conditional(try body.less(index, try body.constant(u64, 32)), try active.ret(left_match), try ended.ret(try ended.constant(bool, true)))));
+    return function;
+}
+
+fn fold(e: Emit, read: *const a.Operation) !*const a.Function {
+    const c = e.c;
+    const function = try c.function("inspect chunks", &.{ .{ .name = "subject", .schema = try e.schema(Subject) }, .{ .name = "offset", .schema = e.integer }, .{ .name = "lines", .schema = e.integer } }, try e.schema(Result), &.{read});
+    const count = try counter(e);
+    const versions = try versionEquality(e);
+    const body = try c.body(function);
+    const subject = try body.parameter("subject");
+    const offset = try body.parameter("offset");
+    const lines = try body.parameter("lines");
+    const request = try body.product(try e.schema(Read), &.{ .{ .name = "subject", .value = subject }, .{ .name = "offset", .value = offset }, .{ .name = "maximum", .value = try body.constant(u64, chunk_bytes) } });
+    const reply = try body.perform(read, request);
+    const chunk = try body.caseOf(reply, "chunk");
+    var work = chunk.body();
+    var guards: std.ArrayList(Emit.Guard) = .empty;
+    defer guards.deinit(a.interop.builder(c).allocator());
+    const value = chunk.payload();
+    const same_version = try work.call(versions, &.{ .{ .name = "left", .value = try work.field(value, "version") }, .{ .name = "right", .value = try work.field(subject, "version") }, .{ .name = "index", .value = try work.constant(u64, 0) } });
+    try e.guard(&work, &guards, same_version, true);
+    try e.guard(&work, &guards, try work.equal(try work.field(value, "offset"), offset), true);
+    const content = try work.field(value, "bytes");
+    const size = try work.blobLength(content);
+    const eof = try work.field(value, "eof");
+    const zero = try work.branch();
+    const nonzero = try work.branch();
+    const progress = try work.conditional(try work.equal(size, try work.constant(u64, 0)), try zero.ret(eof), try nonzero.ret(try nonzero.constant(bool, true)));
+    try e.guard(&work, &guards, progress, true);
+    const next = try e.add(work, offset, size);
+    const total = try work.field(subject, "length");
+    try e.guard(&work, &guards, try work.less(total, next), false);
+    try e.guard(&work, &guards, try work.equal(eof, try work.equal(next, total)), true);
+    const counted = try work.call(count, &.{ .{ .name = "bytes", .value = content }, .{ .name = "index", .value = try work.constant(u64, 0) }, .{ .name = "count", .value = lines } });
+    const done = try work.branch();
+    const more = try work.branch();
+    const stats = try done.product(try e.schema(Stats), &.{ .{ .name = "bytes", .value = next }, .{ .name = "newlines", .value = counted } });
+    const continued = try more.call(function, &.{ .{ .name = "subject", .value = subject }, .{ .name = "offset", .value = next }, .{ .name = "lines", .value = counted } });
+    var result = try work.conditional(eof, try done.ret(try done.variant(try e.schema(Result), "ok", stats)), try more.ret(continued));
+    var remaining = guards.items.len;
+    while (remaining != 0) {
+        remaining -= 1;
+        result = try guards.items[remaining].finish(result);
+    }
+    const unavailable = try body.caseOf(reply, "unavailable");
+    const changed = try body.caseOf(reply, "changed");
+    const cancelled = try body.caseOf(reply, "cancelled");
+    try c.define(function, try body.ret(try body.match(reply, &.{ try chunk.ret(result), try unavailable.ret(try e.rejected(unavailable.body(), "unavailable")), try changed.ret(try e.rejected(changed.body(), "changed")), try cancelled.ret(try e.rejected(cancelled.body(), "cancelled")) })));
     return function;
 }
 
 pub fn emit(allocator: std.mem.Allocator) ![]u8 {
     var b = source.Builder.init(allocator);
     defer b.deinit();
-    const e: Emit = .{ .b = &b, .unit = try b.scalar(void), .integer = try b.scalar(u64), .boolean = try b.scalar(bool), .failure = try b.constant(void, {}) };
+    const c = try a.Context.init(&b);
+    const e: Emit = .{ .c = c, .unit = try c.scalar(void), .integer = try c.scalar(u64), .failure = try c.literalFailure(void, {}) };
     const subject_schema = try e.schema(Subject);
     const result_schema = try e.schema(Result);
-    const read = try b.effect(.{ .identity = read_identity, .payload = try e.schema(Read), .result = try e.schema(Reply) });
-    const close = try b.effect(.{ .identity = close_identity, .payload = subject_schema, .result = e.unit });
+    const read = try c.external(read_identity, try e.schema(Read), try e.schema(Reply));
+    const close = try c.external(close_identity, subject_schema, e.unit);
     const loop = try fold(e, read);
-    const captures = try b.allocator().alloc(Id, b.schemas.items.len);
-    for (captures, 0..) |*id, i| id.* = i;
-    const generator = try boundary.library.generator.defineExchange(&b, "agent.text.result.v1", e.unit, result_schema, e.unit, captures, &.{}, &.{}, .{ .effects = &.{ read, close } });
-    const main = try b.declare(&.{subject_schema}, result_schema, &.{ read, close }, &.{});
-    const subject = try e.p(main, 0);
-    const start = try b.declare(&.{generator.capability}, e.unit, &.{ read, close, generator.effect }, &.{});
-    const body = try b.declare(&.{}, e.unit, &.{ read, generator.effect }, &.{});
-    const result = try b.variable(result_schema);
-    const yielded = try b.term(.{ .perform = .{ .effect = generator.effect, .capability = try e.p(start, 0), .payload = try e.ref(result) } });
-    try b.define(body, try b.bind(result, try e.call(loop, &.{ subject, try e.integerValue(0), try e.integerValue(0) }), try b.bind(try b.variable(e.unit), yielded, try b.pure(try b.constant(void, {})))));
-    const exit = try boundary.library.cleanup.exitInfo(&b, e.unit);
-    const cleanup = try b.declare(&.{exit}, e.unit, &.{close}, &.{});
-    try b.define(cleanup, try b.term(.{ .perform = .{ .effect = close, .payload = subject } }));
-    const body_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{}, .result = e.unit, .effects = &.{ read, generator.effect }, .capture_bound = &.{ subject_schema, generator.capability } } } });
-    const cleanup_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{exit}, .result = e.unit, .effects = &.{close}, .capture_bound = &.{subject_schema} } } });
-    try b.define(start, try b.term(.{ .protect = .{ .body = try b.lambda(body, body_type), .cleanup = try b.lambda(cleanup, cleanup_type) } }));
-    const start_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{generator.capability}, .result = e.unit, .effects = &.{ read, close, generator.effect }, .capture_bound = &.{subject_schema} } } });
-    const answer = try b.variable(generator.answer);
-    const yielded_value = try b.variable(generator.yielded);
-    const returned = try b.variable(result_schema);
-    const package = try b.variable(generator.package);
-    const dispose = try b.bind(try b.variable(e.unit), try boundary.library.generator.close(&b, generator, try e.ref(package)), try b.pure(try e.ref(returned)));
-    const unpack = try b.term(.{ .unpack_product = .{ .value = try e.ref(yielded_value), .variables = &.{ returned, package }, .body = dispose } });
-    const matched = try b.term(.{ .match_sum = .{ .value = try e.ref(answer), .cases = &.{
-        .{ .variable = try b.variable(e.unit), .body = try e.rejected(4) },
-        .{ .variable = yielded_value, .body = unpack },
-    } } });
-    const handled = try b.bind(answer, try b.term(.{ .handle = .{ .handler = generator.handler, .body = try b.lambda(start, start_type) } }), matched);
-    try b.define(main, try e.branch(try e.less(try e.integerValue(maximum_subject_bytes), try e.field(u64, subject, 2)), try e.rejected(4), handled));
-    var compiled = try source.component.compile(allocator, b.module(main, e.unit), .{
-        .imports = &.{ .{ .name = "read", .reference = .{ .kind = .effect, .id = read } }, .{ .name = "close", .reference = .{ .kind = .effect, .id = close } } },
-        .exports = &.{.{ .name = "inspect", .reference = .{ .kind = .function, .id = main } }},
+    const generator = try boundary.library.generator.create(c, "agent.text.result.v1", e.unit, result_schema, e.unit, .{
+        .captures = .{ .continuation = &.{ e.unit, e.integer, subject_schema, result_schema, try e.schema(Read), try e.schema(Reply), try e.schema(Chunk), try e.schema(Stats), try e.schema([32]u8), try e.schema(contracts.Bytes(chunk_bytes)), try c.scalar(bool), try c.scalar(u8) }, .body = &.{subject_schema} },
+        .residual = &.{ read, close },
+        .body_use = .reusable,
+    });
+    const main = try c.function("inspect text", &.{.{ .name = "subject", .schema = subject_schema }}, result_schema, &.{ read, close });
+    const entry = try c.body(main);
+    const subject = try entry.parameter("subject");
+    const invalid = try entry.branch();
+    const valid = try entry.branch();
+    const start_type = try c.handledSchema(generator.handler());
+    const start_fn = try c.functionFor("owned text inspection", start_type);
+    const start = try valid.closureBody(start_fn);
+    const capability = try start.parameter("capability");
+    const work_type = try c.callable(&.{}, e.unit, &.{ read, generator.effect() }, .{ .use = .reusable, .captures = &.{ subject_schema, generator.capability() } });
+    const work_fn = try c.functionFor("read and offer", work_type);
+    const work = try start.closureBody(work_fn);
+    const result = try work.call(loop, &.{ .{ .name = "subject", .value = subject }, .{ .name = "offset", .value = try work.constant(u64, 0) }, .{ .name = "lines", .value = try work.constant(u64, 0) } });
+    _ = try work.performLocal(generator.effect(), capability, result);
+    try c.define(work_fn, try work.ret(try work.constant(void, {})));
+    const cleanup_type = try c.callable(&.{.{ .name = "exit", .schema = try c.cleanupInfo(e.unit) }}, e.unit, &.{close}, .{ .use = .reusable, .captures = &.{subject_schema} });
+    const cleanup_fn = try c.functionFor("close text subject", cleanup_type);
+    const cleanup = try start.closureBody(cleanup_fn);
+    try c.define(cleanup_fn, try cleanup.ret(try cleanup.perform(close, subject)));
+    try c.define(start_fn, try start.ret(try start.protect(try start.lambda(work_fn, work_type), try start.lambda(cleanup_fn, cleanup_type), &.{})));
+    const answer = try valid.handleWith(generator.handler(), try valid.lambda(start_fn, start_type), &.{});
+    const done = try valid.caseOf(answer, "done");
+    const yielded = try valid.caseOf(answer, "yielded");
+    const parts = try yielded.body().destructure(yielded.payload());
+    const returned = try parts.get("value");
+    _ = try yielded.body().disposePackage(try parts.get("future"));
+    const handled = try valid.match(answer, &.{ try done.ret(try e.rejected(done.body(), "invalid_reply")), try yielded.ret(returned) });
+    try c.define(main, try entry.ret(try entry.conditional(try entry.less(try entry.constant(u64, maximum_subject_bytes), try entry.field(subject, "length")), try invalid.ret(try e.rejected(invalid, "invalid_reply")), try valid.ret(handled))));
+    var compiled = try source.component.compile(allocator, try c.module(main, e.unit), .{
+        .imports = &.{ .{ .name = "read", .reference = .{ .kind = .effect, .id = try a.interop.operationId(c, read) } }, .{ .name = "close", .reference = .{ .kind = .effect, .id = try a.interop.operationId(c, close) } } },
+        .exports = &.{.{ .name = "inspect", .reference = .{ .kind = .function, .id = try a.interop.functionId(c, main) } }},
     });
     defer compiled.deinit();
     const bytes = try allocator.alloc(u8, try data.component.encodedLength(compiled.object));

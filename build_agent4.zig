@@ -665,7 +665,8 @@ pub fn build(b: *std.Build) void {
         runtime_post.step.dependOn(runtime_work);
         integration.dependOn(&runtime_post.step);
         const economy_module = g.module("test/agent4/economy.zig");
-        economy_module.addImport("document", g.module("test/consumers/document/consequence.zig"));
+        economy_module.addImport("document", g.module("test/consumers/document/main.zig"));
+        economy_module.addImport("review", g.module("test/consumers/review/main.zig"));
         economy_module.addImport("inquiry", inquiry_app);
         g.testModule(economy, economy_module);
         const economy_exe = g.emitter("economy-probe", economy_module);
@@ -673,6 +674,8 @@ pub fn build(b: *std.Build) void {
         economy_emit.addArgs(&.{ "emit", b.getInstallPath(.prefix, "agent4/economy") });
         const measure = b.addSystemCommand(&.{ "node", "tools/agent4/economy.mjs", "--world-runtime", runtime_path, "--fixtures", b.getInstallPath(.prefix, "agent4/economy"), "--output", b.getInstallPath(.prefix, "agent4/economy-results"), "--probe" });
         const installed_probe = b.addInstallArtifact(economy_exe, .{});
+        b.step("build-economy-probe", "Build the authenticated existing-workload economy probe")
+            .dependOn(&installed_probe.step);
         measure.addArg(b.getInstallPath(.bin, "economy-probe"));
         measure.addArgs(&.{ "--world-source", world_source });
         if (world_archive) |archive| measure.addArgs(&.{ "--world-archive", archive });

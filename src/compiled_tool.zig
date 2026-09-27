@@ -168,7 +168,7 @@ pub fn link(allocator: std.mem.Allocator, module: source.Module, registry: *cons
     _ = try compiled.encode(a, bytes);
     try instances.append(a, .{ .key = wrapper_key, .object = bytes });
     if (options.diagnostic) |diagnostic| diagnostic.phase = .target_check;
-    const linked = try data.linker.link(allocator, instances.items, bindings.items, .{ .instance = wrapper_key, .symbol = "main" });
+    const linked = try data.linker.linkWithOptions(allocator, instances.items, bindings.items, .{ .instance = wrapper_key, .symbol = "main" }, options.coalescing);
     if (options.diagnostic) |diagnostic| diagnostic.phase = .complete;
     // Move both owners into the ordinary compile result. No source or emitter
     // survives, and no independently supplied analysis is trusted at runtime.

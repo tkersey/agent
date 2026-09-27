@@ -3,8 +3,8 @@
     .version = "4.0.0-dev.0",
     .dependencies = .{
         .boundary = .{
-            .url = "https://github.com/tkersey/boundary/archive/f512dbbfb14ab61ed5e1d875518c2b683ff5d215.tar.gz",
-            .hash = "boundary-3.0.0-dev.0-flclaCUnGwAErKpf2Ql6uEt80nLBXe3T0tcjbd4SoXgS",
+            .url = "https://github.com/tkersey/boundary/archive/63137689bf788bc408ba638f47256f2a8f219b44.tar.gz",
+            .hash = "boundary-3.0.0-dev.0-flclaIZJWQAOQqcdOhsEGn6hW_zCLXKZg9jz56fn-ZlR",
         },
     },
     .minimum_zig_version = "0.16.0",
@@ -18,6 +18,7 @@
         "src",
         "runtime",
         "docs/architecture.md",
+        "docs/coalescing.md",
         "docs/compositional-execution.md",
         "docs/compiled-text-tool.md",
         "docs/recursive-interaction.md",

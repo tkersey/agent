@@ -49,7 +49,9 @@ const P = agent.model_invocation.Profile(union(enum) { proposal: Proposed }, .{.
     .provider_response_bytes = 4096,
 });
 const Environment = struct { model: P.ModelId, instructions: P.MessageText, offered: [1]bool, skills: [64]bool };
-const System = agent.system(.{ .InitialArgs = u64, .Result = Memory, .Failure = void, .application = Application });
+pub const System = agent.system(.{ .InitialArgs = u64, .Result = Memory, .Failure = void, .application = Application });
+
+pub const consequence = @import("consequence.zig");
 
 pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
@@ -57,7 +59,6 @@ pub fn main(init: std.process.Init) !void {
     const format = args.next() orelse "bpi3";
     if (args.next() != null) return error.UnknownArgument;
     if (std.mem.eql(u8, format, "args")) return writeArguments(init, u64, 7);
-    const consequence = @import("consequence.zig");
     if (std.mem.eql(u8, format, "consequence")) return writeImage(init, consequence.System);
     // A test construction for the paired cost comparison; omitted from use archives.
     if (std.mem.eql(u8, format, "consequence-clarify-first"))

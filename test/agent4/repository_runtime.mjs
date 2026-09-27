@@ -88,14 +88,20 @@ async function run(mode) {
         }
         try { reply = await environment[leaf](payload); }
         catch (error) {
-          if (!["source-drift", "suite-drift"].includes(mode) || leaf !== "test") throw error;
-          assert.match(error.message, mode === "source-drift" ? /test source changed/ : /test suite changed/);
+          if (leaf !== "test") throw error;
+          if (["source-drift", "suite-drift"].includes(mode)) {
+            assert.match(error.message, mode === "source-drift" ? /test source changed/ : /test suite changed/);
+          } else {
+            if (!["early-exit", "external-write"].includes(mode) || tests !== 2) throw error;
+            assert.equal(error.message, "repository test runner did not report completed tests");
+          }
           // No external observation was produced: the actual parked request is
           // still pending, not converted into baseline-failure evidence.
           const parked = world.decodeOutcome(kernel.invoke(world.encodeInput({image, state: outcome.state})));
           assert.equal(parked.kind, "requested");
           assert.deepEqual(parked.request, outcome.request);
           assert.deepEqual(parked.state, outcome.state);
+          assert.equal(await readFile(marker, "utf8"), "outside sentinel");
           return {kind: "unavailable", decisions, writes, tests, approvals};
         }
         if (leaf === "test") assert.equal(reply[1], tests > 1 && !["broken", "early-exit", "external-write", "denied"].includes(mode));
@@ -126,9 +132,14 @@ async function run(mode) {
 
 for (const mode of ["approved", "broken", "early-exit", "external-write", "denied"]) {
   const actual = await run(mode);
-  assert.equal(actual.kind, mode === "approved" ? "completed" : "failed", mode);
-  if (mode !== "approved") assert.equal(actual.decoded, 5, mode);
-  assert.equal(actual.decisions, 9, mode);
+  if (actual.kind === "unavailable") {
+    assert.ok(["early-exit", "external-write"].includes(mode), mode);
+    assert.equal(actual.decisions, 8, mode);
+  } else {
+    assert.equal(actual.kind, mode === "approved" ? "completed" : "failed", mode);
+    if (mode !== "approved") assert.equal(actual.decoded, 5, mode);
+    assert.equal(actual.decisions, 9, mode);
+  }
   assert.equal(actual.tests, 2, mode);
   assert.equal(actual.writes, mode === "denied" ? 0 : 1, mode);
   assert.equal(actual.approvals, 1, mode);

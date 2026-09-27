@@ -47,7 +47,10 @@ keys agree. Otherwise a complete finite domain with one exact action class
 returns Common without claiming that intent has been resolved.
 
 Structural comparison uses `agent.value_equality`; it compares the complete
-declared portable key. The application owns the claim that this key includes
+declared portable key. Its typed `create(context, schema, failure)` entry retains
+named schemas and returns a pure function with `left` and `right` parameters.
+The source-ID adapter currently delegates to the same implementation while its
+remaining callers migrate. The application owns the claim that this key includes
 every operative field. Candidates, keys, context and outgoing presentation reject
 nested internal types. Presentation is pure. Exploration permits declared model
 effects and non-external internal/simulation effects; existing protected

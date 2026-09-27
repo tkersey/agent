@@ -3,45 +3,45 @@
   "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "48f36c11f2400bbd69d2b6284a278c86dc9b71e5",
-    "gitTree": "008ea7a36556b56d732f76eb9102726875c836cb",
+    "commit": "517cfb1670671f8b9383aa8711b76c30a01f32ad",
+    "gitTree": "eb81eee186780f5f4065704e674c22f305010762",
     "version": "3.0.0-dev.0",
     "source": {
-      "inventorySha256": "0cb50ca32324c830b912132cc218c223a2bcf435bef29ac7d4b980e3a4b5f689",
-      "entries": 315,
-      "bytes": 10902795
+      "inventorySha256": "a509381b48826d23e769f43f2b24aff1def46bcb315da0739894b0c0680f52b4",
+      "entries": 353,
+      "bytes": 11806502
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/48f36c11f2400bbd69d2b6284a278c86dc9b71e5.tar.gz",
-      "bytes": 1509853,
-      "sha256": "01a491d96588fa7ea6fdb96ec98a397ccbbfb446b3ce6406a0a4dc62f37099ca"
+      "url": "https://github.com/tkersey/boundary/archive/517cfb1670671f8b9383aa8711b76c30a01f32ad.tar.gz",
+      "bytes": 1725071,
+      "sha256": "c8749702836111bd7727e8d0d472ef20285b005a00c3119b4ec198dea46c0b17"
     },
     "authentication": "Downloaded GitHub archive tree recomputed and matched to the GitHub commit API; archive and complete source/package inventories independently measured",
     "package": {
-      "zigHash": "boundary-3.0.0-dev.0-flclaOqqXQCOZ9hNZm5enwnt1CNwesiu3A5dbizq9Rot",
+      "zigHash": "boundary-3.0.0-dev.0-flclaPfBYgA7dxHLubFaTywoX1vtFngLXLDQ78iff3hZ",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "a281dd8df79caa4317cdd04b4126b42ebb14306506b60283d3cad4146b83ce05",
-          "entries": 276,
-          "bytes": 6138602
+          "inventorySha256": "a088337fbc3385ea208a04b6082c09987e84fa439d1b58e6e7b8ac75e5abbda2",
+          "entries": 308,
+          "bytes": 6472183
         },
         "archive-extracted": {
-          "inventorySha256": "a281dd8df79caa4317cdd04b4126b42ebb14306506b60283d3cad4146b83ce05",
-          "entries": 276,
-          "bytes": 6138602
+          "inventorySha256": "a088337fbc3385ea208a04b6082c09987e84fa439d1b58e6e7b8ac75e5abbda2",
+          "entries": 308,
+          "bytes": 6472183
         }
       },
       "archive": {
-        "bytes": 689088,
-        "sha256": "4cc33fd3ed3c55e79649e8cb28709bfd125cd33eb43687df894c9d250abba3ef"
+        "bytes": 744303,
+        "sha256": "d5ea581a3b398ad00b6122c0a02d8066403d1403146ec3c2d88e95707d34ad04"
       }
     },
     "api": {
       "authoring": "src/root.zig",
       "data": "src/data/root.zig",
       "source": "src/source.zig",
-      "profile": "Canonical typed authoring and unconditional checked coalescing; unchanged BMO1/BPI3/PST3 and invocation grammars",
+      "profile": "Checked structural/semantic closed compilation and final linking with mandatory P01; unchanged BMO1/BPI3/PST3 and invocation grammars",
       "files": [
         {
           "path": "src/root.zig",
@@ -49,11 +49,11 @@
         },
         {
           "path": "src/data/root.zig",
-          "sha256": "984e6043c50edf45987083f94117350640a56f236e52ec991680f271b045d446"
+          "sha256": "43cce3b144bd7bcca30c36cf87430a3f8d40d019146f23c1384d4b901ee1b2ea"
         },
         {
           "path": "src/source.zig",
-          "sha256": "b319665073e102551d3219ae8b692d4a1108efd8a687bed01f0985e80a26327d"
+          "sha256": "e08b69830d293045c87f4dc4c00ac6755ff85c931707ad0bd610035f37523dae"
         },
         {
           "path": "docs/bpi3-wire.md",
@@ -70,6 +70,18 @@
         {
           "path": "src/data/invocation.zig",
           "sha256": "2ab86f8a4cc902a1aff3b3b8766723f0097f25e46c87181d755d6f25c972a5c9"
+        },
+        {
+          "path": "src/data/closed_compilation.zig",
+          "sha256": "f5b092608a408c9c6ec6e966eb639d77dedc1f7b02411f5edccc66e762977f1e"
+        },
+        {
+          "path": "src/source/diagnostic.zig",
+          "sha256": "f42aa38b175dd6b15052f5b945d4fc4465317723eda0559821550d7fbfededd6"
+        },
+        {
+          "path": "src/authoring.zig",
+          "sha256": "97918c5127ad5fe09fa5a018b1b4e98749443da747752a95a4f0ee62ac4c5f32"
         }
       ]
     }

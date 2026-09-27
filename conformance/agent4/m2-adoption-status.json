@@ -1,0 +1,331 @@
+{
+  "status": "incomplete",
+  "boundaryCommit": "517cfb1670671f8b9383aa8711b76c30a01f32ad",
+  "worldBinding": "unchanged",
+  "workloads": [
+    {
+      "name": "direct",
+      "imageBytes": 90,
+      "imageSha256": "0868302e26c48ef5920ed4bef1746dab60edbc618f2e540ba6e5ea1049e6ed7b",
+      "semanticCompilation": {
+        "outcome": "no_change",
+        "original_bytes": 90,
+        "baseline_bytes": 90,
+        "final_bytes": 90,
+        "rounds": 1,
+        "stages_run": 0,
+        "stages_skipped": 14,
+        "changed_stages": 0,
+        "work_reserved": 0,
+        "stopped_stage": null,
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "facade",
+      "imageBytes": 90,
+      "imageSha256": "0868302e26c48ef5920ed4bef1746dab60edbc618f2e540ba6e5ea1049e6ed7b",
+      "semanticCompilation": {
+        "outcome": "no_change",
+        "original_bytes": 90,
+        "baseline_bytes": 90,
+        "final_bytes": 90,
+        "rounds": 1,
+        "stages_run": 0,
+        "stages_skipped": 14,
+        "changed_stages": 0,
+        "work_reserved": 0,
+        "stopped_stage": null,
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "sharing-1",
+      "imageBytes": 292,
+      "imageSha256": "f0a17ed97f5e5e66829fd1a10a990394c444aa2331fc2686abb3157eb72319c7",
+      "semanticCompilation": {
+        "outcome": "no_change",
+        "original_bytes": 321,
+        "baseline_bytes": 292,
+        "final_bytes": 292,
+        "rounds": 1,
+        "stages_run": 2,
+        "stages_skipped": 12,
+        "changed_stages": 0,
+        "work_reserved": 34598752,
+        "stopped_stage": null,
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "sharing-8",
+      "imageBytes": 460,
+      "imageSha256": "aad78077674f0f0c2f5a587c026f83d872157675f2734c57a2e10a448b879058",
+      "semanticCompilation": {
+        "outcome": "applied",
+        "original_bytes": 489,
+        "baseline_bytes": 460,
+        "final_bytes": 460,
+        "rounds": 2,
+        "stages_run": 4,
+        "stages_skipped": 24,
+        "changed_stages": 1,
+        "work_reserved": 134526656,
+        "stopped_stage": null,
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "sharing-64",
+      "imageBytes": 2032,
+      "imageSha256": "0b3dfa0f5598bfd365ade0fbd3b6052846eea524aeba4e28144053b6b373d328",
+      "semanticCompilation": {
+        "outcome": "work_limit",
+        "original_bytes": 2061,
+        "baseline_bytes": 2032,
+        "final_bytes": 2032,
+        "rounds": 0,
+        "stages_run": 1,
+        "stages_skipped": 2,
+        "changed_stages": 0,
+        "work_reserved": 1041631072,
+        "stopped_stage": "expressions",
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "conversation",
+      "imageBytes": 375,
+      "imageSha256": "e4b837164f3299d76e71f35329069d2d1f2cb8a60c4567705ab40d4ca6d90537",
+      "semanticCompilation": {
+        "outcome": "applied",
+        "original_bytes": 377,
+        "baseline_bytes": 377,
+        "final_bytes": 375,
+        "rounds": 2,
+        "stages_run": 7,
+        "stages_skipped": 21,
+        "changed_stages": 1,
+        "work_reserved": 186518944,
+        "stopped_stage": null,
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "document-consequence",
+      "imageBytes": 11517,
+      "imageSha256": "be844910a6fbd7278031bb861706fb29ec85ba6d7732863de856e8e6b1d6fd07",
+      "semanticCompilation": {
+        "outcome": "work_limit",
+        "original_bytes": 14021,
+        "baseline_bytes": 11517,
+        "final_bytes": 11517,
+        "rounds": 0,
+        "stages_run": 2,
+        "stages_skipped": 1,
+        "changed_stages": 0,
+        "work_reserved": 36933539136,
+        "stopped_stage": "expressions",
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "clarify-first",
+      "imageBytes": 9453,
+      "imageSha256": "b3dd1136fdf98cb0290c9ad905deb9dd09a54d872081c1a8f001f08fa587053e",
+      "semanticCompilation": {
+        "outcome": "work_limit",
+        "original_bytes": 13382,
+        "baseline_bytes": 9453,
+        "final_bytes": 9453,
+        "rounds": 0,
+        "stages_run": 2,
+        "stages_skipped": 1,
+        "changed_stages": 0,
+        "work_reserved": 26076956880,
+        "stopped_stage": "expressions",
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "inquiry-repair",
+      "imageBytes": 35591,
+      "imageSha256": "481bfc969682c1a3456679a438e75f37f58d5a45c9892cbb9cdb36b5e509cd47",
+      "semanticCompilation": {
+        "outcome": "work_limit",
+        "original_bytes": 43026,
+        "baseline_bytes": 35591,
+        "final_bytes": 35591,
+        "rounds": 0,
+        "stages_run": 1,
+        "stages_skipped": 1,
+        "changed_stages": 0,
+        "work_reserved": 84838230720,
+        "stopped_stage": "aggregates",
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "inquiry-repeated",
+      "imageBytes": 35973,
+      "imageSha256": "8de6e55dde1322dbed54892e47795f3bd76c06c038b1e024bb9a37b8284d0c51",
+      "semanticCompilation": {
+        "outcome": "work_limit",
+        "original_bytes": 43324,
+        "baseline_bytes": 35973,
+        "final_bytes": 35973,
+        "rounds": 0,
+        "stages_run": 1,
+        "stages_skipped": 1,
+        "changed_stages": 0,
+        "work_reserved": 86312391424,
+        "stopped_stage": "aggregates",
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "inquiry-react",
+      "imageBytes": 49604,
+      "imageSha256": "57a5d8fa300d5579412f45e7b580ce6fa40dc222d6303d2397d22ccdba3491f5",
+      "semanticCompilation": {
+        "outcome": "work_limit",
+        "original_bytes": 57027,
+        "baseline_bytes": 49604,
+        "final_bytes": 49604,
+        "rounds": 0,
+        "stages_run": 0,
+        "stages_skipped": 0,
+        "changed_stages": 0,
+        "work_reserved": 0,
+        "stopped_stage": "branch",
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "document",
+      "imageBytes": 7425,
+      "imageSha256": "6b8c9d204fcc2d2780bdcda7bcd35b01d9851c71baf45665086024baa25afa3e",
+      "semanticCompilation": {
+        "outcome": "work_limit",
+        "original_bytes": 7770,
+        "baseline_bytes": 7425,
+        "final_bytes": 7425,
+        "rounds": 0,
+        "stages_run": 3,
+        "stages_skipped": 0,
+        "changed_stages": 0,
+        "work_reserved": 19217219840,
+        "stopped_stage": "expressions",
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "review-mid_review",
+      "imageBytes": 3064,
+      "imageSha256": "319893be473d08a7e15046404f527ebf3cd952661cf1370792b1824b8c481972",
+      "semanticCompilation": {
+        "outcome": "work_limit",
+        "original_bytes": 3145,
+        "baseline_bytes": 3064,
+        "final_bytes": 3064,
+        "rounds": 0,
+        "stages_run": 3,
+        "stages_skipped": 0,
+        "changed_stages": 0,
+        "work_reserved": 3246197696,
+        "stopped_stage": "expressions",
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "review-clarify_first",
+      "imageBytes": 3063,
+      "imageSha256": "6d304173b7b59aebab484149a868291f90f17316bdd9f5def0e0e496902f8ee7",
+      "semanticCompilation": {
+        "outcome": "work_limit",
+        "original_bytes": 3144,
+        "baseline_bytes": 3063,
+        "final_bytes": 3063,
+        "rounds": 0,
+        "stages_run": 3,
+        "stages_skipped": 0,
+        "changed_stages": 0,
+        "work_reserved": 3246197696,
+        "stopped_stage": "expressions",
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "review-human",
+      "imageBytes": 414,
+      "imageSha256": "222e18e156a1a93d19cbbe3787725cf6f298e2b2e57a914c2e3e1a34be77af72",
+      "semanticCompilation": {
+        "outcome": "no_change",
+        "original_bytes": 429,
+        "baseline_bytes": 414,
+        "final_bytes": 414,
+        "rounds": 1,
+        "stages_run": 3,
+        "stages_skipped": 11,
+        "changed_stages": 0,
+        "work_reserved": 77753712,
+        "stopped_stage": null,
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "review-model",
+      "imageBytes": 2356,
+      "imageSha256": "9a57937127837aec22857efc103b96b8117f61af03b6f0966147c3f37fc71f93",
+      "semanticCompilation": {
+        "outcome": "work_limit",
+        "original_bytes": 2381,
+        "baseline_bytes": 2356,
+        "final_bytes": 2356,
+        "rounds": 0,
+        "stages_run": 3,
+        "stages_skipped": 0,
+        "changed_stages": 0,
+        "work_reserved": 2058331840,
+        "stopped_stage": "expressions",
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "review-rule",
+      "imageBytes": 269,
+      "imageSha256": "e159594845f0d01375a92eb46b2fc04bf3017881b9b69fbdff728384198c164e",
+      "semanticCompilation": {
+        "outcome": "no_change",
+        "original_bytes": 283,
+        "baseline_bytes": 269,
+        "final_bytes": 269,
+        "rounds": 1,
+        "stages_run": 2,
+        "stages_skipped": 12,
+        "changed_stages": 0,
+        "work_reserved": 56701504,
+        "stopped_stage": null,
+        "failed_stage": null
+      }
+    },
+    {
+      "name": "review-react",
+      "imageBytes": 302,
+      "imageSha256": "30d023517353c3e6f197b264daf0f8ac8b9640ee5e0cfc4c2d2afd3981514e4c",
+      "semanticCompilation": {
+        "outcome": "no_change",
+        "original_bytes": 323,
+        "baseline_bytes": 302,
+        "final_bytes": 302,
+        "rounds": 1,
+        "stages_run": 4,
+        "stages_skipped": 10,
+        "changed_stages": 0,
+        "work_reserved": 109406656,
+        "stopped_stage": null,
+        "failed_stage": null
+      }
+    }
+  ]
+}

@@ -13,7 +13,7 @@ pub fn main(init: std.process.Init) !void {
     if (std.mem.eql(u8, mode, "result-schema")) return schema(init, app.t.FinalResult);
     if (std.mem.eql(u8, mode, "failure-schema")) return schema(init, app.t.Failure);
     if (!std.mem.eql(u8, mode, "image")) return error.InvalidArgument;
-    var compiled = try agent.compile(init.gpa, app.System);
+    var compiled = try agent.compileObserved(init.gpa, app.System, .{ .boundary_options = .{ .contract = .semantic } });
     defer compiled.deinit();
     const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(bytes);

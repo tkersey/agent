@@ -528,7 +528,7 @@ pub fn main(init: std.process.Init) !void {
         if (args.next() != null) return error.UnexpectedArgument;
         Application.react_mode = true;
         Application.complete_only = true;
-        var compiled = try agent.compile(init.gpa, System);
+        var compiled = try agent.compileObserved(init.gpa, System, .{ .boundary_options = .{ .contract = .semantic } });
         defer compiled.deinit();
         const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
         defer init.gpa.free(bytes);
@@ -559,7 +559,7 @@ pub fn main(init: std.process.Init) !void {
         Application.reference_bytes = rb;
         Application.producer = pb;
         Application.consumer = cb;
-        var compiled = try agent.compile(init.gpa, System);
+        var compiled = try agent.compileObserved(init.gpa, System, .{ .boundary_options = .{ .contract = .semantic } });
         defer compiled.deinit();
         const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
         defer init.gpa.free(bytes);
@@ -1201,5 +1201,5 @@ pub fn linkParticipants(allocator: std.mem.Allocator, producer_bytes: []const u8
     Application.circular_consumer = false;
     Application.retain_idle = false;
     Application.selection = .none;
-    return agent.compile(allocator, System);
+    return agent.compileObserved(allocator, System, .{ .boundary_options = .{ .contract = .semantic } });
 }

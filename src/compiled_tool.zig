@@ -167,10 +167,31 @@ pub fn link(allocator: std.mem.Allocator, module: source.Module, registry: *cons
     const bytes = try a.alloc(u8, try data.component.encodedLength(compiled.object));
     _ = try compiled.encode(a, bytes);
     try instances.append(a, .{ .key = wrapper_key, .object = bytes });
-    if (options.diagnostic) |diagnostic| diagnostic.phase = .target_check;
-    const linked = try data.linker.linkWithOptions(allocator, instances.items, bindings.items, .{ .instance = wrapper_key, .symbol = "main" }, options.coalescing);
-    if (options.diagnostic) |diagnostic| diagnostic.phase = .complete;
+    options.stage(.target_check);
+    if (options.semantic_statistics) |stats| stats.* = .{};
+    var observer: LinkObserver = .{ .options = options };
+    const linked = try data.linker.linkWithCompilation(allocator, instances.items, bindings.items, .{ .instance = wrapper_key, .symbol = "main" }, .{
+        .contract = options.contract,
+        .objective = options.objective,
+        .image_growth_bytes = options.image_growth_bytes,
+        .max_image_bytes = options.max_image_bytes,
+        .work_limit = options.semantic_work_limit,
+        .round_limit = options.semantic_round_limit,
+        .statistics = options.semantic_statistics,
+        .observer = .{ .context = &observer, .enter = LinkObserver.enter },
+        .coalescing = options.coalescing,
+    });
+    options.stage(.complete);
     // Move both owners into the ordinary compile result. No source or emitter
     // survives, and no independently supplied analysis is trusted at runtime.
     return .{ .arena = linked.arena, .program = linked.program, .flow = linked.flow };
 }
+
+const LinkObserver = struct {
+    options: source.CompileOptions,
+    fn enter(pointer: *anyopaque, stage: data.closed_compilation.Stage) void {
+        const self: *LinkObserver = @ptrCast(@alignCast(pointer));
+        self.options.stage(if (stage == .p01) .coalescing else .semantic_optimization);
+        if (self.options.compilation_observer) |observer| observer.enter(observer.context, stage);
+    }
+};

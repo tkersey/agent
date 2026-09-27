@@ -170,6 +170,7 @@ const Phases = struct {
     direct_optimization: u64 = 0,
     canonicalization: u64 = 0,
     coalescing: u64 = 0,
+    semantic_optimization: u64 = 0,
 };
 const Observer = struct {
     io: std.Io,
@@ -240,6 +241,7 @@ fn coalescingMetrics(stats: data.coalescing.Statistics) CoalescingMetrics {
 
 const Metrics = struct {
     coalescing: ?CoalescingMetrics = null,
+    semanticCompilation: ?data.closed_compilation.Statistics = null,
     name: []const u8,
     installations: ?usize = null,
     imageBytes: usize,
@@ -309,9 +311,12 @@ fn measure(init: std.process.Init, directory: []const u8, name: []const u8, work
     const source_ns = elapsed(init.io, source_start);
     var observer: Observer = .{ .io = init.io };
     var stats: data.coalescing.Statistics = .{};
+    var semantic: data.closed_compilation.Statistics = .{};
     var diagnostic: boundary.program.Diagnostic = .{};
     const compile_start = std.Io.Clock.awake.now(init.io);
     var compiled = boundary.program.compileObserved(init.gpa, module, .{
+        .contract = .semantic,
+        .semantic_statistics = &semantic,
         .coalescing = .{ .statistics = &stats },
         .diagnostic = &diagnostic,
         .observer = .{ .context = &observer, .enter = Observer.enter },
@@ -326,6 +331,7 @@ fn measure(init: std.process.Init, directory: []const u8, name: []const u8, work
     const total_ns = elapsed(init.io, total_started);
     var metrics = try saveCompiled(init, directory, name, compiled);
     metrics.coalescing = coalescingMetrics(stats);
+    metrics.semanticCompilation = semantic;
     metrics.installations = if (workload == .sharing) workload.sharing else null;
     metrics.descriptorConstructionNs = descriptor_ns;
     metrics.sourceConstructionNs = source_ns;
@@ -344,15 +350,17 @@ fn compiledSystem(init: std.process.Init, directory: []const u8, name: []const u
     var authoring: AuthoringObserver = .{ .io = init.io };
     var compiler: Observer = .{ .io = init.io };
     var stats: data.coalescing.Statistics = .{};
+    var semantic: data.closed_compilation.Statistics = .{};
     const started = std.Io.Clock.awake.now(init.io);
     var compiled = try agent.compileObserved(init.gpa, System, .{
         .observer = .{ .context = &authoring, .enter = AuthoringObserver.enter },
-        .boundary_options = .{ .coalescing = .{ .statistics = &stats }, .observer = .{ .context = &compiler, .enter = Observer.enter } },
+        .boundary_options = .{ .contract = .semantic, .semantic_statistics = &semantic, .coalescing = .{ .statistics = &stats }, .observer = .{ .context = &compiler, .enter = Observer.enter } },
     });
     const duration = elapsed(init.io, started);
     defer compiled.deinit();
     var metrics = try saveCompiled(init, directory, name, compiled);
     metrics.coalescing = coalescingMetrics(stats);
+    metrics.semanticCompilation = semantic;
     metrics.descriptorConstructionNs = authoring.phases.descriptors;
     metrics.sourceConstructionNs = authoring.phases.application_source;
     metrics.descriptorAndSourceNs = authoring.phases.descriptors + authoring.phases.application_source;

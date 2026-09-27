@@ -223,7 +223,7 @@ pub fn main(init: std.process.Init) !void {
 
 fn writeImage(init: std.process.Init, comptime App: type) !void {
     var diagnostic: boundary.program.Diagnostic = .{};
-    var compiled = agent.compileObserved(init.gpa, App, .{ .boundary_options = .{ .diagnostic = &diagnostic } }) catch |err| {
+    var compiled = agent.compileObserved(init.gpa, App, .{ .boundary_options = .{ .contract = .semantic, .diagnostic = &diagnostic } }) catch |err| {
         std.debug.print("{any}\n", .{diagnostic});
         return err;
     };

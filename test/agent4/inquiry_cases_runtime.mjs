@@ -232,6 +232,8 @@ async function scenario(name, options, expected) {
     assert.equal(experiments, expected.experiments, `${name}: experiments`);
     assert.equal(approvals, expected.approvals ?? 0); assert.equal(writes, expected.writes ?? 0);
     assert.equal(questions, expected.questions ?? 0);
+    if (expected.maximumState !== undefined)
+      assert.ok(maximumState <= expected.maximumState, `${name}: checkpoint ${maximumState} exceeds ${expected.maximumState}`);
     assert.deepEqual([...cleanup].sort((a, b) => a - b), expected.cleanup ?? [1]);
     assert.equal(statistics.multiTemplates, expected.templates ?? 0);
     assert.equal(statistics.branchActivations, expected.activations ?? 0);
@@ -356,11 +358,14 @@ for (const intentChoice of [1, 2]) await scenario(`clarify-delivery-${intentChoi
   provider: () => [call("repair", { source: monotonic, observation: 0 })],
 }, { tag: intentChoice === 1 ? 9 : 0, models: 2, experiments: 1, questions: 1,
   approvals: intentChoice === 1 ? 0 : 1, writes: intentChoice === 1 ? 0 : 1, replacement: monotonic });
-for (const [intentReply, tag] of [["other", 10], ["unsure", 11], ["unoffered", 12],
-  ["abort", 13], ["close", 14], ["wrong-context", 15]]) {
+// Frozen f97a6b6 fixture peaks; apply the specified max(64 bytes, 1%) guard.
+// Retaining the constructed question across the interaction added over 4 KiB.
+for (const [intentReply, tag, priorState] of [["other", 10, 8573], ["unsure", 11, 8575], ["unoffered", 12, 8581],
+  ["abort", 13, 8573], ["close", 14, 8573], ["wrong-context", 15, 8589]]) {
   await scenario(`intent-${intentReply}`, { intent: 2, intentReply,
     provider: () => { throw new Error("unresolved intent cannot authorize model/tool work"); },
-  }, { tag, models: 0, experiments: 0, questions: 1, cleanup: [] });
+  }, { tag, models: 0, experiments: 0, questions: 1, cleanup: [],
+    maximumState: priorState + Math.max(64, priorState * 0.01) });
 }
 
 }

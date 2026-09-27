@@ -120,29 +120,21 @@ fn write(init: std.process.Init, bytes: []const u8) !void {
 pub fn main(init: std.process.Init) !void {
     var observed: Observed = .{};
     var coalescing_stats: data.coalescing.Statistics = .{};
-    var selected_mode = false;
     defer {
-        if (selected_mode) {
-            const functions = @intFromEnum(data.relocation.Kind.function);
-            const constructors = @intFromEnum(data.relocation.Kind.constructor);
-            std.debug.print("{{\"sourceChecks\":{d},\"lowerings\":{d}," ++
-                "\"coalescing\":\"{s}\",\"baselineBytes\":{d},\"selectedBytes\":{d}," ++
-                "\"baselineFunctions\":{d},\"selectedFunctions\":{d}," ++
-                "\"baselineConstructors\":{d},\"selectedConstructors\":{d}}}\n", .{
-                observed.checks,                               observed.lowerings,                               @tagName(coalescing_stats.outcome),
-                coalescing_stats.baseline.bytes,               coalescing_stats.selected.bytes,                  coalescing_stats.baseline.catalogs[functions],
-                coalescing_stats.selected.catalogs[functions], coalescing_stats.baseline.catalogs[constructors], coalescing_stats.selected.catalogs[constructors],
-            });
-        } else std.debug.print("{{\"sourceChecks\":{d},\"lowerings\":{d}}}\n", .{ observed.checks, observed.lowerings });
+        const functions = @intFromEnum(data.relocation.Kind.function);
+        const constructors = @intFromEnum(data.relocation.Kind.constructor);
+        std.debug.print("{{\"sourceChecks\":{d},\"lowerings\":{d}," ++
+            "\"coalescing\":\"{s}\",\"baselineBytes\":{d},\"selectedBytes\":{d}," ++
+            "\"baselineFunctions\":{d},\"selectedFunctions\":{d}," ++
+            "\"baselineConstructors\":{d},\"selectedConstructors\":{d}}}\n", .{
+            observed.checks,                               observed.lowerings,                               @tagName(coalescing_stats.outcome),
+            coalescing_stats.baseline.bytes,               coalescing_stats.selected.bytes,                  coalescing_stats.baseline.catalogs[functions],
+            coalescing_stats.selected.catalogs[functions], coalescing_stats.baseline.catalogs[constructors], coalescing_stats.selected.catalogs[constructors],
+        });
     }
     var args = std.process.Args.Iterator.init(init.minimal.args);
     _ = args.next();
     const mode = args.next() orelse return error.ExpectedMode;
-    const coalescing_mode = if (args.next()) |name| selection: {
-        selected_mode = true;
-        break :selection std.meta.stringToEnum(data.coalescing.Mode, name) orelse
-            return error.InvalidMode;
-    } else (data.coalescing.Options{}).mode;
     if (args.next() != null) return error.UnexpectedArgument;
     const doubled = std.mem.eql(u8, mode, "double");
     const agent_mode = std.mem.eql(u8, mode, "agent") or std.mem.eql(u8, mode, "agent-next");
@@ -160,7 +152,7 @@ pub fn main(init: std.process.Init) !void {
         count += 1;
         instances[i] = .{ .key = name, .object = objects[i] };
     }
-    var linked = try data.linker.linkWithOptions(init.gpa, instances[0..count], if (doubled) &examples.double_bindings else &examples.bindings, .{ .instance = if (doubled) "double" else "suspend", .symbol = "main" }, .{ .mode = if (agent_mode) .off else coalescing_mode, .statistics = if (agent_mode) null else &coalescing_stats });
+    var linked = try data.linker.linkWithOptions(init.gpa, instances[0..count], if (doubled) &examples.double_bindings else &examples.bindings, .{ .instance = if (doubled) "double" else "suspend", .symbol = "main" }, .{ .statistics = if (agent_mode) null else &coalescing_stats });
     defer linked.deinit();
     if (agent_mode) {
         const object = try toolObject(init.gpa, linked.program);
@@ -169,7 +161,6 @@ pub fn main(init: std.process.Init) !void {
         Application.increment = @intFromBool(std.mem.eql(u8, mode, "agent-next"));
         var compiled = try agent.compileObserved(init.gpa, System, .{
             .boundary_options = .{ .coalescing = .{
-                .mode = coalescing_mode,
                 .statistics = &coalescing_stats,
             }, .observer = .{
                 .context = &observed,

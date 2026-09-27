@@ -1,6 +1,10 @@
 # Coalescing consumer qualification
 
-The default is `safe`. The accepted Boundary specification v2.1
+Current Boundary compilation and final linking always run the canonical pass.
+Compiler and emitter `off`/`safe` selectors are removed. The recorded comparison
+results below belong to the preceding qualification at Boundary `6313768`.
+
+The accepted Boundary specification v2.1
 amendment makes speedup optional and accepts current compiler overhead and limited
 Agent reductions. Correctness, integration and review remain required.
 
@@ -22,15 +26,37 @@ runtime inventory. There is no World evaluator change or new wire version.
 
 ```zig
 var compiled = try agent.compileObserved(allocator, System, .{
-    .boundary_options = .{ .coalescing = .{ .mode = .safe } },
+    .boundary_options = .{ .coalescing = .{} },
 });
 defer compiled.deinit();
 ```
 
 The same option reaches direct lowering and the final compiled-tool link.
 Intermediate BMO1 emission defers coalescing. Agent admission remains before
-Boundary compilation. Ordinary calls now select `safe`; explicitly select `off`
-for diagnostics and ablation. The compiler and final linker share this default.
+Boundary compilation. Ordinary calls use the same canonical pass. Diagnostics and work bounds remain;
+there is no disabled production pipeline. Historical comparisons use separate
+predecessor artifacts, never a selector in the current compiler.
+
+## Canonical cutover observations
+
+The [current structural census](../conformance/agent4/canonical-coalescing-census.json)
+compares 18 emitted workloads against the ordinary default at Agent `dd336f0`,
+Boundary `6313768`, and World `c20695e`. The candidate uses Boundary `511fe38`.
+Image digests and metric-file hashes bind the measured artifacts. This records
+structure, not a timing qualification or acceptance of World-side regressions.
+
+| Workload | Reference bytes | Current bytes | Block change |
+| --- | ---: | ---: | ---: |
+| inquiry-repair | 36,756 | 36,809 | +4 |
+| inquiry-repeated | 37,137 | 37,190 | +4 |
+| inquiry-react | 48,218 | 48,231 | +1 |
+| document | 7,317 | 7,379 | +5 |
+| review-react | 302 | 313 | +1 |
+
+Instruction and function counts are unchanged for these five cases. The other
+13 images retain their sizes. The census checks the canonical pass's no-growth
+rule against its own input; cross-version deltas remain visible for runtime
+assessment. The historical results below concern the earlier qualification.
 
 ## Current observations
 
@@ -63,6 +89,9 @@ No Agent runtime speedup is claimed.
 
 ## Reproduction
 
+For optional historical comparisons, `AGENT_PREDECESSOR_BIN` identifies separately
+built, recorded predecessor tools outside the current package.
+
 After authenticated setup, set `WORLD_SOURCE` and `WORLD_RUNTIME` to its input
 and runtime directories. These paths select the same locked World for both arms.
 
@@ -72,11 +101,10 @@ node test/agent4/component_runtime.mjs zig-out/bin/agent4-component-objects \
   zig-out/bin/agent4-component-link "$WORLD_RUNTIME"
 zig build build-economy-probe -Doptimize=ReleaseSafe \
   -Dworld-source="$WORLD_SOURCE" -Dworld-runtime="$WORLD_RUNTIME"
-zig-out/bin/economy-probe emit .agent4/census-off off
-zig-out/bin/economy-probe emit .agent4/census-safe safe
-zig-out/bin/economy-probe emit .agent4/census-default
-node tools/agent4/coalescing-census.mjs .agent4/census-off .agent4/census-safe \
-  conformance/agent4/coalescing-census.json .agent4/census-default
+"$AGENT_PREDECESSOR_BIN/economy-probe" emit .agent4/census-before off
+zig-out/bin/economy-probe emit .agent4/census-current
+node tools/agent4/coalescing-census.mjs .agent4/census-before .agent4/census-current \
+  conformance/agent4/coalescing-census.json
 ```
 
 The maintained aggregate retains its predecessor assertions. The compiled-tool

@@ -142,7 +142,7 @@ fn seedFunction(e: E, d: agent.inquiry.broker.Definition, actor: Id, effects: []
     const hypothesis = try b.variable(try e.schema(t.Hypothesis));
     const continued = try e.call(f, &.{ try e.ref(pop.rest), try e.p(f, 1), try e.ref(next), try e.arithmetic(.integer_add, try e.p(f, 3), try e.value(u64, 1)) });
     const park = try b.bind(next, try e.call(d.custody.park, &.{ try e.p(f, 2), try e.p(f, 3), try e.ref(answer) }), continued);
-    const started = try b.bind(answer, try agent.dialogue.start(b, d.custody.dialogue, actor, &.{ try e.p(f, 1), try e.p(f, 3), try e.ref(hypothesis) }), park);
+    const started = try b.bind(answer, try boundary.library.generator.start(b, d.custody.dialogue, actor, &.{ try e.p(f, 1), try e.p(f, 3), try e.ref(hypothesis) }), park);
     const Case = std.meta.Child(@FieldType(@FieldType(source.ast.Term, "match_sum"), "cases"));
     var cases: [std.meta.fields(t.Answer).len]Case = undefined;
     inline for (std.meta.fields(t.Answer), 0..) |field, i| {

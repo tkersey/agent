@@ -274,7 +274,6 @@ pub fn build(b: *std.Build) void {
     admitted.addImport("admission", g.helper("admission"));
     g.testModule(check, admitted);
     const dialogue = g.module("test/agent4/dialogue_probe.zig");
-    dialogue.addImport("dialogue", g.helper("dialogue"));
     dialogue.addImport("interaction", g.helper("interaction"));
     g.testModule(check, dialogue);
     const inquiry = g.module("test/agent4/inquiry_probe.zig");

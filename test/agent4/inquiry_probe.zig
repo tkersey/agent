@@ -1,7 +1,7 @@
 //! Custody witnesses; all control executes as ordinary Boundary program data.
 const std = @import("std");
 const boundary = @import("boundary");
-const dialogue = @import("agent").dialogue;
+const dialogue = boundary.library.generator;
 const inquiry = @import("agent").inquiry;
 const source = boundary.computation;
 const Id = source.Id;
@@ -19,7 +19,7 @@ pub const Mode = enum {
 
 const Witness = struct {
     b: *Builder,
-    d: dialogue.Dialogue,
+    d: dialogue.Generator,
     integer: Id,
     unit: Id,
     model: Id,
@@ -91,7 +91,7 @@ const Witness = struct {
     fn consume(w: Witness, function: Id, step: Id, rest: Id, evidence: Id, total: Id) !Id {
         const b = w.b;
         const done = try b.variable(w.integer);
-        const waiting = try b.variable(w.d.awaiting);
+        const waiting = try b.variable(w.d.yielded);
         const demand = try b.variable(w.integer);
         const package = try b.variable(w.d.package);
         const resumed = try b.variable(w.d.answer);
@@ -100,7 +100,7 @@ const Witness = struct {
         const next_total = try w.add(total, try w.ref(done));
         const completed = try w.call(function, &.{ rest_value, evidence, next_total });
         const next_queue = try b.primitive(w.queue, .sequence_append, &.{ rest_value, try w.ref(resumed) }, 0);
-        var resume_term = try dialogue.resumeWith(b, w.d, try w.ref(package), evidence);
+        var resume_term = try dialogue.exchange(b, w.d, try w.ref(package), evidence);
         if (w.mode == .illicit_clone) {
             var signature = b.schemas.items[@intCast(w.d.resumption)].internal.resumption;
             signature.use = .multi;
@@ -113,11 +113,11 @@ const Witness = struct {
         }
         var advance = try b.bind(resumed, resume_term, try w.call(function, &.{ next_queue, evidence, total }));
         if (w.mode == .duplicate_resume) {
-            advance = try b.bind(try b.variable(w.d.answer), try dialogue.resumeWith(b, w.d, try w.ref(package), evidence), advance);
+            advance = try b.bind(try b.variable(w.d.answer), try dialogue.exchange(b, w.d, try w.ref(package), evidence), advance);
         }
-        var retire = try b.bind(ignored, try dialogue.dispose(b, w.d, try w.ref(package)), try w.call(function, &.{ rest_value, evidence, total }));
+        var retire = try b.bind(ignored, try dialogue.close(b, w.d, try w.ref(package)), try w.call(function, &.{ rest_value, evidence, total }));
         if (w.mode == .duplicate_dispose) {
-            retire = try b.bind(try b.variable(w.unit), try dialogue.dispose(b, w.d, try w.ref(package)), retire);
+            retire = try b.bind(try b.variable(w.unit), try dialogue.close(b, w.d, try w.ref(package)), retire);
         }
         const retiring = try b.primitive(try b.scalar(bool), .equal, &.{ try w.ref(demand), try b.constant(u64, 30) }, 0);
         const select = try b.term(.{ .conditional = .{
@@ -265,7 +265,7 @@ pub fn build(b: *Builder, mode: Mode) !source.Module {
         .failure = try b.constant(void, {}),
         .scope = scope,
     }) else null;
-    const d = if (definition) |value| value.dialogue else try dialogue.define(b, "agent.probe.inquiry.need.v1", integer, integer, integer, scope);
+    const d = if (definition) |value| value.dialogue else try dialogue.defineExchange(b, "agent.probe.inquiry.need.v1", integer, integer, integer, scope.captures, scope.owned_regions, scope.borrowed_regions, scope.residual);
     const w: Witness = .{ .b = b, .d = d, .integer = integer, .unit = unit, .model = model, .cleanup = cleanup, .experiment = experiment, .queue = try b.schema(.{ .seq = d.answer }), .effects = effects, .mode = mode };
     return if (definition) |value| w.compositionEntry(value) else w.entry();
 }

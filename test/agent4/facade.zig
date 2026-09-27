@@ -31,6 +31,7 @@ const Application = struct {
 };
 
 test "minimal Agent facade is the same canonical image as direct Boundary authoring" {
+    try std.testing.expect(!@hasDecl(agent, "dialogue"));
     const System = agent.system(.{
         .InitialArgs = u32,
         .Result = u32,

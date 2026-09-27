@@ -30,7 +30,7 @@ pub const Spec = struct {
     finding: Id,
     policy: Id,
     failure: Id,
-    scope: @import("dialogue.zig").Scope = .{},
+    scope: boundary.library.generator.Scope = .{},
 };
 
 pub const Types = struct {

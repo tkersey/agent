@@ -1,7 +1,7 @@
 //! A consumer owns all control. Agent only constructs ordinary dialogue terms.
 const std = @import("std");
 const boundary = @import("boundary");
-const dialogue = @import("dialogue");
+const dialogue = boundary.library.generator;
 const interaction = @import("interaction");
 const bsrc = boundary.computation;
 const Builder = bsrc.Builder;
@@ -37,7 +37,7 @@ pub fn build(b: *Builder, mode: Mode) !bsrc.Module {
         .payload = integer,
         .result = integer,
     });
-    const d = try dialogue.define(b, "agent.probe.dialogue.typed.v1", integer, integer, integer, .{ .captures = &.{integer} });
+    const d = try dialogue.defineExchange(b, "agent.probe.dialogue.typed.v1", integer, integer, integer, &.{integer}, &.{}, &.{}, .{ .effects = &.{} });
     const body = try b.declare(&.{d.capability}, integer, &.{d.effect}, &.{});
     const first = try b.variable(integer);
     const second = try b.variable(integer);
@@ -126,7 +126,7 @@ fn typedExchange(b: *Builder) !bsrc.Module {
 
 const Continuation = struct { variable: Id, body: Id };
 
-fn consumeAnswer(b: *Builder, d: dialogue.Dialogue, term: Id, next: Continuation) !Id {
+fn consumeAnswer(b: *Builder, d: dialogue.Generator, term: Id, next: Continuation) !Id {
     _ = d;
     return b.bind(next.variable, term, next.body);
 }
@@ -143,10 +143,10 @@ fn arithmetic(b: *Builder, opcode: boundary.data.program.Opcode, a: Id, c: Id) !
     } } });
 }
 
-fn finish(b: *Builder, d: dialogue.Dialogue) !Continuation {
+fn finish(b: *Builder, d: dialogue.Generator) !Continuation {
     const step = try b.variable(d.answer);
     const done = try b.variable(d.result);
-    const awaiting = try b.variable(d.awaiting);
+    const awaiting = try b.variable(d.yielded);
     const result = try arithmetic(b, .integer_mul, try b.reference(done), try b.constant(u64, 2));
     return .{ .variable = step, .body = try b.term(.{ .match_sum = .{
         .value = try b.reference(step),
@@ -157,11 +157,11 @@ fn finish(b: *Builder, d: dialogue.Dialogue) !Continuation {
     } }) };
 }
 
-fn disposeUnexpected(b: *Builder, d: dialogue.Dialogue, awaiting: Id) !Id {
-    const outgoing = try b.variable(d.outgoing);
+fn disposeUnexpected(b: *Builder, d: dialogue.Generator, awaiting: Id) !Id {
+    const outgoing = try b.variable(d.element);
     const future = try b.variable(d.package);
     const ignored = try b.variable(try b.scalar(void));
-    const closed = try dialogue.dispose(b, d, try b.reference(future));
+    const closed = try dialogue.close(b, d, try b.reference(future));
     return b.term(.{ .unpack_product = .{
         .value = try b.reference(awaiting),
         .variables = &.{ outgoing, future },
@@ -171,20 +171,20 @@ fn disposeUnexpected(b: *Builder, d: dialogue.Dialogue, awaiting: Id) !Id {
 
 fn awaitingStep(
     b: *Builder,
-    d: dialogue.Dialogue,
+    d: dialogue.Generator,
     input: Id,
     next: Continuation,
     duplicate: bool,
 ) !Continuation {
     const step = try b.variable(d.answer);
     const done = try b.variable(d.result);
-    const awaiting = try b.variable(d.awaiting);
-    const outgoing = try b.variable(d.outgoing);
+    const awaiting = try b.variable(d.yielded);
+    const outgoing = try b.variable(d.element);
     const future = try b.variable(d.package);
-    var advance = try consumeAnswer(b, d, try dialogue.resumeWith(b, d, try b.reference(future), input), next);
+    var advance = try consumeAnswer(b, d, try dialogue.exchange(b, d, try b.reference(future), input), next);
     if (duplicate) {
         const discarded = try b.variable(try b.scalar(void));
-        advance = try b.bind(discarded, try dialogue.dispose(b, d, try b.reference(future)), advance);
+        advance = try b.bind(discarded, try dialogue.close(b, d, try b.reference(future)), advance);
     }
     const unpack = try b.term(.{ .unpack_product = .{
         .value = try b.reference(awaiting),
@@ -202,21 +202,21 @@ fn awaitingStep(
 
 fn delayedStep(
     b: *Builder,
-    d: dialogue.Dialogue,
+    d: dialogue.Generator,
     delayed: Id,
     next: Continuation,
     duplicate: bool,
 ) !Continuation {
     const step = try b.variable(d.answer);
     const done = try b.variable(d.result);
-    const awaiting = try b.variable(d.awaiting);
-    const outgoing = try b.variable(d.outgoing);
+    const awaiting = try b.variable(d.yielded);
+    const outgoing = try b.variable(d.element);
     const future = try b.variable(d.package);
     const response = try b.variable(d.input);
-    var resumed = try consumeAnswer(b, d, try dialogue.resumeWith(b, d, try b.reference(future), try b.reference(response)), next);
+    var resumed = try consumeAnswer(b, d, try dialogue.exchange(b, d, try b.reference(future), try b.reference(response)), next);
     if (duplicate) {
         const ignored = try b.variable(try b.scalar(void));
-        resumed = try b.bind(ignored, try dialogue.dispose(b, d, try b.reference(future)), resumed);
+        resumed = try b.bind(ignored, try dialogue.close(b, d, try b.reference(future)), resumed);
     }
     const parked = try b.bind(response, try b.term(.{ .perform = .{
         .effect = delayed,
@@ -250,11 +250,7 @@ fn disposal(b: *Builder) !bsrc.Module {
         .payload = integer,
         .result = unit,
     });
-    const d = try dialogue.define(b, "agent.probe.dialogue.owned.v1", integer, integer, integer, .{
-        .captures = &.{ unit, integer, cell_type },
-        .owned_regions = &.{region},
-        .residual = .{ .effects = &.{release} },
-    });
+    const d = try dialogue.defineExchange(b, "agent.probe.dialogue.owned.v1", integer, integer, integer, &.{ unit, integer, cell_type }, &.{region}, &.{}, .{ .effects = &.{release} });
     const entry = try b.declare(&.{}, integer, &.{release}, &.{});
     const start_fn = try b.declare(&.{d.capability}, integer, &.{ release, d.effect }, &.{});
     const inside = try b.declare(&.{region_type}, integer, &.{ release, d.effect }, &.{region});
@@ -307,14 +303,14 @@ fn disposal(b: *Builder) !bsrc.Module {
     return b.module(entry, unit);
 }
 
-fn disposeStep(b: *Builder, d: dialogue.Dialogue) !Continuation {
+fn disposeStep(b: *Builder, d: dialogue.Generator) !Continuation {
     const step = try b.variable(d.answer);
     const done = try b.variable(d.result);
-    const awaiting = try b.variable(d.awaiting);
-    const outgoing = try b.variable(d.outgoing);
+    const awaiting = try b.variable(d.yielded);
+    const outgoing = try b.variable(d.element);
     const future = try b.variable(d.package);
     const ignored = try b.variable(try b.scalar(void));
-    const closed = try b.bind(ignored, try dialogue.dispose(b, d, try b.reference(future)), try b.pure(try b.reference(outgoing)));
+    const closed = try b.bind(ignored, try dialogue.close(b, d, try b.reference(future)), try b.pure(try b.reference(outgoing)));
     const unpack = try b.term(.{ .unpack_product = .{
         .value = try b.reference(awaiting),
         .variables = &.{ outgoing, future },
@@ -338,10 +334,7 @@ fn borrowedEscape(b: *Builder) !bsrc.Module {
         .element = integer,
         .region = region,
     } } });
-    const d = try dialogue.define(b, "agent.probe.dialogue.borrow.v1", integer, integer, integer, .{
-        .captures = &.{ integer, cell_type },
-        .borrowed_regions = &.{region},
-    });
+    const d = try dialogue.defineExchange(b, "agent.probe.dialogue.borrow.v1", integer, integer, integer, &.{ integer, cell_type }, &.{}, &.{region}, .{ .effects = &.{} });
     const entry = try b.declare(&.{}, integer, &.{}, &.{});
     const inside = try b.declare(&.{region_type}, d.answer, &.{}, &.{region});
     const body = try b.declare(&.{d.capability}, integer, &.{d.effect}, &.{region});

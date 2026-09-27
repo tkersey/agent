@@ -4,7 +4,7 @@
 const boundary = @import("boundary");
 const source = boundary.computation;
 const typed = boundary.authoring;
-const dialogue = @import("dialogue.zig");
+const dialogue = boundary.library.generator;
 const Id = source.Id;
 const Builder = source.Builder;
 pub const broker = @import("inquiry_broker.zig");
@@ -36,7 +36,7 @@ pub const Types = struct {
 };
 
 pub const Definition = struct {
-    dialogue: dialogue.Dialogue,
+    dialogue: dialogue.Generator,
     types: Types,
     /// (state, program-owned investigation occurrence, dialogue answer) -> state.
     park: Id,
@@ -62,7 +62,7 @@ fn defineTyped(b: *Builder, spec: Spec) typed.Error!Definition {
     const cached = try b.specialization(Definition, "agent.inquiry.custody/v1", .{spec});
     if (cached.cached) |value| return value;
     const integer = try b.scalar(u64);
-    const d = try dialogue.define(b, spec.identity, spec.demand, spec.reply, spec.finding, spec.scope);
+    const d = try dialogue.defineExchange(b, spec.identity, spec.reply, spec.demand, spec.finding, spec.scope.captures, spec.scope.owned_regions, spec.scope.borrowed_regions, spec.scope.residual);
     const view = try b.schema(.{ .product = &.{ integer, integer, spec.demand } });
     const waiting = try b.schema(.{ .product = &.{ view, d.package } });
     const queue = try b.schema(.{ .seq = waiting });
@@ -100,7 +100,7 @@ pub fn need(b: *Builder, definition: Definition, capability: Id, demand: Id) sou
 const Emit = struct {
     c: *typed.Context,
     b: *Builder,
-    d: dialogue.Dialogue,
+    d: dialogue.Generator,
     t: Types,
     spec: Spec,
     integer: Id,

@@ -27,6 +27,27 @@ capacity handling and interruption remain World obligations. Paid-model consent,
 role classification, speculative restrictions, exact-proposal binding, approvals,
 locks, cleanup and runtime acquisition retain their existing owners.
 
+### Owned-consumer policy audit
+
+Source inspection at `fb8478d` covers the deliberately selected semantic emitters
+and their actual host boundaries. This is a policy finding; final execution and
+cost qualification remain separate.
+
+| Consumer/boundary | Protected policy and owning source |
+| --- | --- |
+| Every Agent compile and compiled-tool link | `src/authoring.zig` verifies the original registry/module before either lowering or linking. `src/compiled_tool.zig` binds imported role, nominal identity and borrows before forwarding the complete compilation selection. Model effects cannot enter the read/simulation tool profile. |
+| Inquiry/ReAct | `runtime/inquiry_cli.mjs` enforces invocation-wide model, request-byte, experiment and elapsed-time allowances; charges external work before dispatch; checks inference/write authorization separately; and cancels the actual parked State on exhaustion. Those counters are outside World rollback. |
+| Parser and paired constructions | `runtime/parser_cli.mjs` owns shared model/check counters and explicit image-relative quanta. Parking retains the real checkpoint plus pending ingress; consumed ingress is cleared after each drive. The Program's construction allowance (`test/consumers/incremental-parser/main.zig`) controls authored rounds, rather than billing for internal interpreter steps. |
+| Review | `test/consumers/review/main.zig` owns review order and the one-call, nonparallel model-selection contract. Runtime tests supply responses and check those authored decisions. They do not derive authority from instruction counts. |
+| Document and repository | Their `main.zig`, `consequence_live.zig` and `replacement.zig` modules retain live evidence, exact-proposal revalidation and approval outside speculative delimiters. `runtime/document.mjs` / `repository.mjs` retain path/content/write capabilities, locks and conditional delivery. Uncertain delivery is not automatically retried. |
+| Cancellation, transfer and resumption | The runner and World remain the existing owners. Semantic compilation may change private progress points across images; it does not grant cross-image State transfer or alter same-image stepping. Saved requests and replies retain their exact bindings. |
+
+The audited selections preserve these business-level limits and authored choices.
+Parser quanta are explicitly an image-relative work allowance, not a security or
+billing surrogate. Broader reusable callers retain the structural default unless
+their owner explicitly selects semantic compilation. No authoring-uniformity
+migration is required by this audit.
+
 ## Current evidence and unresolved qualification
 
 At Boundary `e82386e`, the source archive, GitHub tree, extracted package,

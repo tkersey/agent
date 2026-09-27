@@ -249,7 +249,10 @@ test "typed simulation stays admissible inside actual internal multi-shot contro
     defer registry.deinit();
     const c: agent.Context = .{ .builder = &b, .registry = &registry };
     const d = try fixture(c);
-    const choice = try boundary.library.choice.family(&b, "consumer.choice");
+    const typed = boundary.authoring;
+    const author = try typed.Context.init(&b);
+    const family = try boundary.library.choice.family(author, "consumer.choice");
+    const choice = .{ .effect = try typed.interop.operationId(author, family.effect()), .capability = try typed.interop.schemaId(author, family.capability()) };
     try registry.classify(choice.effect, .internal);
     const boolean = try b.scalar(bool);
     const pair = try b.schema(.{ .product = &.{ boolean, d.observation } });
@@ -276,7 +279,8 @@ test "typed simulation stays admissible inside actual internal multi-shot contro
         .effects = &.{choice.effect},
         .use = .linear,
     } } });
-    const search = try boundary.library.choice.all(&b, choice, pair, &.{ choice.capability, boolean }, .{ .effects = &.{} });
+    const choice_interpretation = try boundary.library.choice.all(author, family, try typed.interop.schema(author, pair), .{ .captures = .{ .continuation = &.{ family.capability(), try author.scalar(bool) } }, .residual = &.{} });
+    const search = .{ .handler = try typed.interop.handlerId(author, choice_interpretation.handler), .answer = try typed.interop.schemaId(author, choice_interpretation.answer) };
     const entry = try b.declare(&.{}, search.answer, &.{}, &.{});
     try b.define(entry, try b.term(.{ .handle = .{
         .handler = search.handler,

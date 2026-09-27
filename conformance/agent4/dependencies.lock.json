@@ -3,38 +3,38 @@
   "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "ab8aacc77bb9f38165ea2dbff1eb5a1535157001",
-    "gitTree": "b1ad08fa6bc193c6c2f0346767f0c62902564a36",
+    "commit": "474192687150ced70e419f6d44ee263ff76d522a",
+    "gitTree": "2a6677a6c85ba2d377f292ab3a466f587c2aff24",
     "version": "3.0.0-dev.0",
     "source": {
-      "inventorySha256": "9828d1f0fbdddc70ae8747811593719c61ca19292cc5b75610985942deefd374",
+      "inventorySha256": "71f9da05ab33e4572499a8f491948c0e311f5e35113c1a5946ca5717d97d07f5",
       "entries": 314,
-      "bytes": 10826933
+      "bytes": 10830369
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/ab8aacc77bb9f38165ea2dbff1eb5a1535157001.tar.gz",
-      "bytes": 1492123,
-      "sha256": "562d93712761664d003a925ca7b5ad63b80c25e5baaca28ff2d5cb0ebfedc3e3"
+      "url": "https://github.com/tkersey/boundary/archive/474192687150ced70e419f6d44ee263ff76d522a.tar.gz",
+      "bytes": 1494070,
+      "sha256": "c04fbb4ea0cc15cbc2d0b06861c4fa9647af39fe73de8c60816c0c01d3cd0652"
     },
     "authentication": "Downloaded GitHub archive tree recomputed and matched to the GitHub commit API; archive and complete source/package inventories independently measured",
     "package": {
-      "zigHash": "boundary-3.0.0-dev.0-flclaJSCXAC9Bz-e0d5gyohLf1C9BfFxJUFwr1E3DBiS",
+      "zigHash": "boundary-3.0.0-dev.0-flclaACQXACa6Rk6s7B_ww-AM7hZIDeKiR2ippMmo7pW",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "6c38feb944c724d75ad1374ca8be278a78bb8f517ee33260a213e159c9a7c896",
+          "inventorySha256": "00d1f4f4d3b920c3a0e155814c93e7b2ad2ca7d84cfc4f3cc34bddaef5bc7253",
           "entries": 275,
-          "bytes": 6062740
+          "bytes": 6066176
         },
         "archive-extracted": {
-          "inventorySha256": "6c38feb944c724d75ad1374ca8be278a78bb8f517ee33260a213e159c9a7c896",
+          "inventorySha256": "00d1f4f4d3b920c3a0e155814c93e7b2ad2ca7d84cfc4f3cc34bddaef5bc7253",
           "entries": 275,
-          "bytes": 6062740
+          "bytes": 6066176
         }
       },
       "archive": {
-        "bytes": 673143,
-        "sha256": "4bb38ec3cdcf4b4954795ce0b57fb2686bdc2b61485d5c6b9bae5aaf7fad810d"
+        "bytes": 674634,
+        "sha256": "64dadf396a9034c129fbf7f7a0b913bab08c8c518dd4dc29c4accfc6349ff8a8"
       }
     },
     "api": {

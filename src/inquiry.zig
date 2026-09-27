@@ -55,6 +55,10 @@ pub const Definition = struct {
 /// caller assigns investigation occurrences in authored code, independently of
 /// model IDs. Demand generations remain authoritative for consuming operations.
 pub fn define(b: *Builder, spec: Spec) source.Error!Definition {
+    return defineTyped(b, spec) catch |err| return typed.sourceError(err);
+}
+
+fn defineTyped(b: *Builder, spec: Spec) typed.Error!Definition {
     const cached = try b.specialization(Definition, "agent.inquiry.custody/v1", .{spec});
     if (cached.cached) |value| return value;
     const integer = try b.scalar(u64);
@@ -67,13 +71,13 @@ pub fn define(b: *Builder, spec: Spec) source.Error!Definition {
     const state = try b.schema(.{ .product = &.{ queue, findings, integer } });
     const views = try b.schema(.{ .seq = view });
     const t: Types = .{ .view = view, .views = views, .waiting = waiting, .queue = queue, .found = found, .findings = findings, .state = state, .projected = try b.schema(.{ .product = &.{ state, views } }), .ids = try b.schema(.{ .seq = integer }) };
-    const e: Emit = .{ .b = b, .d = d, .t = t, .spec = spec, .integer = integer, .unit = try b.scalar(void) };
-    const park = try e.parker();
-    const contains = try e.membership();
+    const e: Emit = .{ .c = try typed.Context.init(b), .b = b, .d = d, .t = t, .spec = spec, .integer = integer };
+    const park = try e.typedParker();
+    const contains = try e.typedMembership();
     return cached.finish(b, .{
         .dialogue = d,
         .types = t,
-        .park = park,
+        .park = try typed.interop.functionId(e.c, park),
         .project = try e.projector(),
         .distribute = try e.delivery(park, contains, false),
         .retire = try e.delivery(park, contains, true),
@@ -94,52 +98,15 @@ pub fn need(b: *Builder, definition: Definition, capability: Id, demand: Id) sou
 }
 
 const Emit = struct {
+    c: *typed.Context,
     b: *Builder,
     d: dialogue.Dialogue,
     t: Types,
     spec: Spec,
     integer: Id,
-    unit: Id,
 
-    fn ref(e: Emit, variable: Id) source.Error!Id {
-        return e.b.reference(variable);
-    }
-    fn param(e: Emit, function: Id, index: usize) source.Error!Id {
-        return e.ref(e.b.parameter(function, index));
-    }
-    fn call(e: Emit, function: Id, arguments: []const Id) source.Error!Id {
-        return e.b.term(.{ .call = .{ .function = function, .arguments = arguments } });
-    }
-    fn product(e: Emit, schema: Id, values: []const Id) source.Error!Id {
-        return e.b.primitive(schema, .product, values, 0);
-    }
-    fn append(e: Emit, schema: Id, sequence: Id, item: Id) source.Error!Id {
-        return e.b.primitive(schema, .sequence_append, &.{ sequence, item }, 0);
-    }
-    fn conditional(e: Emit, condition: Id, yes: Id, no: Id) source.Error!Id {
-        return e.b.term(.{ .conditional = .{
-            .condition = condition,
-            .when_true = yes,
-            .when_false = no,
-        } });
-    }
-    fn unpack(e: Emit, value: Id, variables: []const Id, body: Id) source.Error!Id {
-        return e.b.term(.{ .unpack_product = .{
-            .value = value,
-            .variables = variables,
-            .body = body,
-        } });
-    }
-    fn field(e: Emit, schema: Id, value: Id, index: u64) source.Error!Id {
-        return e.b.primitive(schema, .field, &.{value}, index);
-    }
-
-    fn parker(e: Emit) source.Error!Id {
-        return e.typedParker() catch |err| return typed.sourceError(err);
-    }
-
-    fn typedParker(e: Emit) typed.Error!Id {
-        const c = try typed.Context.init(e.b);
+    fn typedParker(e: Emit) typed.Error!*const typed.Function {
+        const c = e.c;
         const state_type = try typed.interop.schema(c, e.t.state);
         const integer = try typed.interop.schema(c, e.integer);
         const answer_type = try typed.interop.schema(c, e.d.answer);
@@ -188,15 +155,11 @@ const Emit = struct {
         });
         const result = try body.match(answer, &.{ try done.ret(complete_state), try awaiting.ret(parked) });
         try c.define(function, try body.ret(result));
-        return typed.interop.functionId(c, function);
+        return function;
     }
 
-    fn membership(e: Emit) source.Error!Id {
-        return e.typedMembership() catch |err| return typed.sourceError(err);
-    }
-
-    fn typedMembership(e: Emit) typed.Error!Id {
-        const c = try typed.Context.init(e.b);
+    fn typedMembership(e: Emit) typed.Error!*const typed.Function {
+        const c = e.c;
         const ids = try typed.interop.schema(c, e.t.ids);
         const integer = try typed.interop.schema(c, e.integer);
         const function = try c.function("inquiry membership", &.{
@@ -223,126 +186,218 @@ const Emit = struct {
             try empty_case.ret(try empty_case.body().constant(bool, false)), try item.ret(found),
         });
         try c.define(function, try body.ret(result));
-        return typed.interop.functionId(c, function);
+        return function;
+    }
+
+    fn declareTyped(e: Emit, c: *typed.Context, name: []const u8, parameters: []const typed.Field, result: *const typed.Schema, effects: []const Id) typed.Error!*const typed.Function {
+        const regions = try e.b.allocator().alloc(*const typed.Region, e.spec.scope.borrowed_regions.len);
+        for (regions, e.spec.scope.borrowed_regions) |*item, id| item.* = try typed.interop.region(c, id);
+        const residual = try e.b.allocator().alloc(*const typed.Operation, effects.len);
+        for (residual, effects) |*item, id| item.* = try typed.interop.operation(c, id);
+        return c.functionFor(name, try c.callable(parameters, result, residual, .{
+            .use = .reusable,
+            .captures = &.{},
+            .regions = regions,
+        }));
     }
 
     fn projector(e: Emit) source.Error!Id {
-        const b = e.b;
-        const projected_queue = try b.schema(.{ .product = &.{ e.t.queue, e.t.views } });
-        const scan = try b.declare(&.{ e.t.queue, e.t.queue, e.t.views }, projected_queue, &.{}, e.spec.scope.borrowed_regions);
-        const pop = try Pop.init(e, e.t.queue, e.t.waiting);
-        const view = try b.variable(e.t.view);
-        const package = try b.variable(e.d.package);
-        const entry = try e.product(e.t.waiting, &.{ try e.ref(view), try e.ref(package) });
-        const next = try e.call(scan, &.{ try e.ref(pop.rest), try e.append(e.t.queue, try e.param(scan, 1), entry), try e.append(e.t.views, try e.param(scan, 2), try e.ref(view)) });
-        const nonempty = try e.unpack(try e.ref(pop.head), &.{ view, package }, next);
-        try b.define(scan, try pop.match(e, try e.param(scan, 0), try b.pure(try e.product(projected_queue, &.{ try e.param(scan, 1), try e.param(scan, 2) })), nonempty));
-        return e.projectEntry(scan, projected_queue);
+        return e.typedProjector() catch |err| return typed.sourceError(err);
     }
 
-    fn projectEntry(e: Emit, scan: Id, projected_queue: Id) source.Error!Id {
-        const b = e.b;
-        const f = try b.declare(&.{e.t.state}, e.t.projected, &.{}, e.spec.scope.borrowed_regions);
-        const q = try b.variable(e.t.queue);
-        const findings = try b.variable(e.t.findings);
-        const generation = try b.variable(e.integer);
-        const scanned = try b.variable(projected_queue);
-        const rebuilt = try b.variable(e.t.queue);
-        const views = try b.variable(e.t.views);
-        const result = try b.pure(try e.product(e.t.projected, &.{ try e.product(e.t.state, &.{ try e.ref(rebuilt), try e.ref(findings), try e.ref(generation) }), try e.ref(views) }));
-        const body = try b.bind(scanned, try e.call(scan, &.{ try e.ref(q), try b.primitive(e.t.queue, .sequence, &.{}, 0), try b.primitive(e.t.views, .sequence, &.{}, 0) }), try e.unpack(try e.ref(scanned), &.{ rebuilt, views }, result));
-        try b.define(f, try e.unpack(try e.param(f, 0), &.{ q, findings, generation }, body));
-        return f;
+    fn typedProjector(e: Emit) typed.Error!Id {
+        const c = e.c;
+        const queue_type = try typed.interop.schema(c, e.t.queue);
+        const views_type = try typed.interop.schema(c, e.t.views);
+        const projected_type = try c.record(&.{
+            .{ .name = "queue", .schema = queue_type }, .{ .name = "views", .schema = views_type },
+        });
+        const scan = try e.declareTyped(c, "project queue", &.{
+            .{ .name = "pending", .schema = queue_type },
+            .{ .name = "rebuilt", .schema = queue_type },
+            .{ .name = "views", .schema = views_type },
+        }, projected_type, &.{});
+        const body = try c.body(scan);
+        const rebuilt = try body.parameter("rebuilt");
+        const views = try body.parameter("views");
+        const popped = try body.pop(try body.parameter("pending"));
+        const empty_case = try body.caseOf(popped, "empty");
+        const completed = try empty_case.body().product(projected_type, &.{
+            .{ .name = "queue", .value = rebuilt }, .{ .name = "views", .value = views },
+        });
+        const item = try body.caseOf(popped, "item");
+        const working = item.body();
+        const parts = try working.destructure(item.payload());
+        const waiting = try working.destructure(try parts.get("head"));
+        const view = try waiting.get("0");
+        const entry = try working.product(try typed.interop.schema(c, e.t.waiting), &.{
+            .{ .name = "0", .value = view }, .{ .name = "1", .value = try waiting.get("1") },
+        });
+        const next = try working.call(scan, &.{
+            .{ .name = "pending", .value = try parts.get("tail") },
+            .{ .name = "rebuilt", .value = try working.append(rebuilt, entry) },
+            .{ .name = "views", .value = try working.append(views, view) },
+        });
+        try c.define(scan, try body.ret(try body.match(popped, &.{
+            try empty_case.ret(completed), try item.ret(next),
+        })));
+        return e.typedProjectEntry(c, scan, queue_type, views_type);
     }
 
-    fn delivery(e: Emit, park: Id, contains: Id, retire: bool) source.Error!Id {
-        const b = e.b;
-        const args = if (retire) &.{ e.t.queue, e.t.state, e.t.ids } else &.{ e.t.queue, e.t.state, e.t.ids, e.spec.reply };
-        const scan = try b.declare(args, e.t.state, e.spec.scope.residual.effects, e.spec.scope.borrowed_regions);
-        const pop = try Pop.init(e, e.t.queue, e.t.waiting);
-        const view = try b.variable(e.t.view);
-        const package = try b.variable(e.d.package);
-        const matches = try b.variable(try b.scalar(bool));
-        const selected = try e.deliverSelected(scan, park, pop.rest, view, package, retire);
-        const kept = try e.keepWaiting(scan, pop.rest, view, package, retire);
-        const test_id = try e.field(e.integer, try e.ref(view), 1);
-        const test_term = try b.bind(matches, try e.call(contains, &.{ try e.param(scan, 2), test_id }), try e.conditional(try e.ref(matches), selected, kept));
-        const nonempty = try e.unpack(try e.ref(pop.head), &.{ view, package }, test_term);
-        try b.define(scan, try pop.match(e, try e.param(scan, 0), try b.pure(try e.param(scan, 1)), nonempty));
-        return e.deliveryEntry(scan, retire);
+    fn typedProjectEntry(e: Emit, c: *typed.Context, scan: *const typed.Function, queue_type: *const typed.Schema, views_type: *const typed.Schema) typed.Error!Id {
+        const state_type = try typed.interop.schema(c, e.t.state);
+        const result_type = try typed.interop.schema(c, e.t.projected);
+        const entry = try e.declareTyped(c, "project inquiry state", &.{.{
+            .name = "state",
+            .schema = state_type,
+        }}, result_type, &.{});
+        const body = try c.body(entry);
+        const state = try body.destructure(try body.parameter("state"));
+        const scanned = try body.call(scan, &.{
+            .{ .name = "pending", .value = try state.get("0") },
+            .{ .name = "rebuilt", .value = try body.sequenceValue(queue_type, &.{}) },
+            .{ .name = "views", .value = try body.sequenceValue(views_type, &.{}) },
+        });
+        const parts = try body.destructure(scanned);
+        const rebuilt = try body.product(state_type, &.{
+            .{ .name = "0", .value = try parts.get("queue") },
+            .{ .name = "1", .value = try state.get("1") },
+            .{ .name = "2", .value = try state.get("2") },
+        });
+        try c.define(entry, try body.ret(try body.product(result_type, &.{
+            .{ .name = "0", .value = rebuilt }, .{ .name = "1", .value = try parts.get("views") },
+        })));
+        return typed.interop.functionId(c, entry);
     }
 
-    fn recurse(e: Emit, scan: Id, rest: Id, state: Id, retire: bool) source.Error!Id {
-        return e.call(scan, if (retire) &.{ try e.ref(rest), state, try e.param(scan, 2) } else &.{ try e.ref(rest), state, try e.param(scan, 2), try e.param(scan, 3) });
+    fn delivery(e: Emit, park: *const typed.Function, contains: *const typed.Function, retire: bool) typed.Error!Id {
+        const c = e.c;
+        const state_type = try typed.interop.schema(c, e.t.state);
+        const queue_type = try typed.interop.schema(c, e.t.queue);
+        const ids_type = try typed.interop.schema(c, e.t.ids);
+        const reply_type = try typed.interop.schema(c, e.spec.reply);
+        const parameters = [_]typed.Field{
+            .{ .name = "pending", .schema = queue_type }, .{ .name = "state", .schema = state_type },
+            .{ .name = "ids", .schema = ids_type },       .{ .name = "reply", .schema = reply_type },
+        };
+        const scan = try e.declareTyped(c, "deliver inquiry replies", parameters[0..@as(usize, if (retire) 3 else 4)], state_type, e.spec.scope.residual.effects);
+        const body = try c.body(scan);
+        const state = try body.parameter("state");
+        const ids = try body.parameter("ids");
+        const reply = if (retire) null else try body.parameter("reply");
+        const popped = try body.pop(try body.parameter("pending"));
+        const empty_case = try body.caseOf(popped, "empty");
+        const item = try body.caseOf(popped, "item");
+        const working = item.body();
+        const parts = try working.destructure(item.payload());
+        const waiting = try working.destructure(try parts.get("head"));
+        const rest = try parts.get("tail");
+        const view = try waiting.get("0");
+        const future = try waiting.get("1");
+        const matches = try working.call(contains, &.{
+            .{ .name = "ids", .value = ids }, .{ .name = "id", .value = try working.field(view, "1") },
+        });
+        const selected = try working.branch();
+        const token = try selected.unpack(future);
+        const next_state = if (retire) blk: {
+            _ = try selected.dispose(token);
+            break :blk state;
+        } else blk: {
+            const answer = try selected.resumeValue(token, reply.?);
+            break :blk try selected.call(park, &.{
+                .{ .name = "state", .value = state },
+                .{ .name = "id", .value = try selected.field(view, "0") },
+                .{ .name = "answer", .value = answer },
+            });
+        };
+        const delivered = try e.repeatDelivery(selected, scan, rest, next_state, ids, reply);
+        const kept = try working.branch();
+        const retained = try e.retainWaiting(kept, state_type, state, view, future);
+        const unchanged = try e.repeatDelivery(kept, scan, rest, retained, ids, reply);
+        const result = try working.conditional(matches, try selected.ret(delivered), try kept.ret(unchanged));
+        try c.define(scan, try body.ret(try body.match(popped, &.{
+            try empty_case.ret(state), try item.ret(result),
+        })));
+        return e.typedDeliveryEntry(scan, parameters[1..@as(usize, if (retire) 3 else 4)], retire);
     }
 
-    fn deliverSelected(e: Emit, scan: Id, park: Id, rest: Id, view: Id, package: Id, retire: bool) source.Error!Id {
-        const b = e.b;
-        if (retire) return b.bind(try b.variable(e.unit), try dialogue.dispose(b, e.d, try e.ref(package)), try e.recurse(scan, rest, try e.param(scan, 1), retire));
-        const answer = try b.variable(e.d.answer);
-        const state = try b.variable(e.t.state);
-        const next = try e.recurse(scan, rest, try e.ref(state), retire);
-        const saved = try b.bind(state, try e.call(park, &.{ try e.param(scan, 1), try e.field(e.integer, try e.ref(view), 0), try e.ref(answer) }), next);
-        return b.bind(answer, try dialogue.resumeWith(b, e.d, try e.ref(package), try e.param(scan, 3)), saved);
+    fn repeatDelivery(_: Emit, body: *typed.Body, scan: *const typed.Function, rest: *const typed.Value, state: *const typed.Value, ids: *const typed.Value, reply: ?*const typed.Value) typed.Error!*const typed.Value {
+        if (reply) |value| return body.call(scan, &.{
+            .{ .name = "pending", .value = rest }, .{ .name = "state", .value = state },
+            .{ .name = "ids", .value = ids },      .{ .name = "reply", .value = value },
+        });
+        return body.call(scan, &.{
+            .{ .name = "pending", .value = rest }, .{ .name = "state", .value = state },
+            .{ .name = "ids", .value = ids },
+        });
     }
 
-    fn keepWaiting(e: Emit, scan: Id, rest: Id, view: Id, package: Id, retire: bool) source.Error!Id {
-        const b = e.b;
-        const q = try b.variable(e.t.queue);
-        const findings = try b.variable(e.t.findings);
-        const generation = try b.variable(e.integer);
-        const waiting = try e.product(e.t.waiting, &.{ try e.ref(view), try e.ref(package) });
-        const state = try e.product(e.t.state, &.{ try e.append(e.t.queue, try e.ref(q), waiting), try e.ref(findings), try e.ref(generation) });
-        return e.unpack(try e.param(scan, 1), &.{ q, findings, generation }, try e.recurse(scan, rest, state, retire));
+    fn retainWaiting(e: Emit, body: *typed.Body, state_type: *const typed.Schema, state: *const typed.Value, view: *const typed.Value, future: *const typed.Value) typed.Error!*const typed.Value {
+        const parts = try body.destructure(state);
+        const waiting = try body.product(try typed.interop.schema(e.c, e.t.waiting), &.{
+            .{ .name = "0", .value = view }, .{ .name = "1", .value = future },
+        });
+        return body.product(state_type, &.{
+            .{ .name = "0", .value = try body.append(try parts.get("0"), waiting) },
+            .{ .name = "1", .value = try parts.get("1") },
+            .{ .name = "2", .value = try parts.get("2") },
+        });
     }
 
-    fn deliveryEntry(e: Emit, scan: Id, retire: bool) source.Error!Id {
-        const b = e.b;
-        const args = if (retire) &.{ e.t.state, e.t.ids } else &.{ e.t.state, e.t.ids, e.spec.reply };
-        const f = try b.declare(args, e.t.state, e.spec.scope.residual.effects, e.spec.scope.borrowed_regions);
-        const q = try b.variable(e.t.queue);
-        const findings = try b.variable(e.t.findings);
-        const generation = try b.variable(e.integer);
-        const empty_state = try e.product(e.t.state, &.{ try b.primitive(e.t.queue, .sequence, &.{}, 0), try e.ref(findings), try e.ref(generation) });
-        const body = try e.call(scan, if (retire)
-            &.{ try e.ref(q), empty_state, try e.param(f, 1) }
-        else
-            &.{ try e.ref(q), empty_state, try e.param(f, 1), try e.param(f, 2) });
-        try b.define(f, try e.unpack(try e.param(f, 0), &.{ q, findings, generation }, body));
-        return f;
+    fn typedDeliveryEntry(e: Emit, scan: *const typed.Function, parameters: []const typed.Field, retire: bool) typed.Error!Id {
+        const c = e.c;
+        const state_type = try typed.interop.schema(c, e.t.state);
+        const entry = try e.declareTyped(c, "deliver inquiry state", parameters, state_type, e.spec.scope.residual.effects);
+        const body = try c.body(entry);
+        const state = try body.destructure(try body.parameter("state"));
+        const initial = try body.product(state_type, &.{
+            .{ .name = "0", .value = try body.sequenceValue(try typed.interop.schema(c, e.t.queue), &.{}) },
+            .{ .name = "1", .value = try state.get("1") },
+            .{ .name = "2", .value = try state.get("2") },
+        });
+        const result = try e.repeatDelivery(body, scan, try state.get("0"), initial, try body.parameter("ids"), if (retire) null else try body.parameter("reply"));
+        try c.define(entry, try body.ret(result));
+        return typed.interop.functionId(c, entry);
     }
+
     fn finalizer(e: Emit) source.Error!Id {
-        const b = e.b;
-        const scan = try b.declare(&.{ e.t.queue, e.t.findings }, e.t.findings, e.spec.scope.residual.effects, e.spec.scope.borrowed_regions);
-        const pop = try Pop.init(e, e.t.queue, e.t.waiting);
-        const view = try b.variable(e.t.view);
-        const package = try b.variable(e.d.package);
-        const next = try b.bind(try b.variable(e.unit), try dialogue.dispose(b, e.d, try e.ref(package)), try e.call(scan, &.{ try e.ref(pop.rest), try e.param(scan, 1) }));
-        try b.define(scan, try pop.match(e, try e.param(scan, 0), try b.pure(try e.param(scan, 1)), try e.unpack(try e.ref(pop.head), &.{ view, package }, next)));
-        const f = try b.declare(&.{e.t.state}, e.t.findings, e.spec.scope.residual.effects, e.spec.scope.borrowed_regions);
-        const q = try b.variable(e.t.queue);
-        const findings = try b.variable(e.t.findings);
-        const generation = try b.variable(e.integer);
-        try b.define(f, try e.unpack(try e.param(f, 0), &.{ q, findings, generation }, try e.call(scan, &.{ try e.ref(q), try e.ref(findings) })));
-        return f;
+        return e.typedFinalizer() catch |err| return typed.sourceError(err);
     }
-};
 
-const Pop = struct {
-    optional: Id,
-    empty: Id,
-    present: Id,
-    head: Id,
-    rest: Id,
-
-    fn init(e: Emit, sequence: Id, element: Id) source.Error!Pop {
-        const pair = try e.b.schema(.{ .product = &.{ element, sequence } });
-        return .{ .optional = try e.b.schema(.{ .sum = &.{ e.unit, pair } }), .empty = try e.b.variable(e.unit), .present = try e.b.variable(pair), .head = try e.b.variable(element), .rest = try e.b.variable(sequence) };
-    }
-    fn match(p: Pop, e: Emit, sequence: Id, empty_body: Id, present: Id) source.Error!Id {
-        return e.b.term(.{ .match_sum = .{
-            .value = try e.b.primitive(p.optional, .sequence_pop, &.{sequence}, 0),
-            .cases = &.{ .{ .variable = p.empty, .body = empty_body }, .{ .variable = p.present, .body = try e.unpack(try e.ref(p.present), &.{ p.head, p.rest }, present) } },
-        } });
+    fn typedFinalizer(e: Emit) typed.Error!Id {
+        const c = e.c;
+        const queue_type = try typed.interop.schema(c, e.t.queue);
+        const findings_type = try typed.interop.schema(c, e.t.findings);
+        const scan = try e.declareTyped(c, "finalize inquiry queue", &.{
+            .{ .name = "pending", .schema = queue_type },
+            .{ .name = "findings", .schema = findings_type },
+        }, findings_type, e.spec.scope.residual.effects);
+        const body = try c.body(scan);
+        const findings = try body.parameter("findings");
+        const popped = try body.pop(try body.parameter("pending"));
+        const empty_case = try body.caseOf(popped, "empty");
+        const item = try body.caseOf(popped, "item");
+        const working = item.body();
+        const parts = try working.destructure(item.payload());
+        const waiting = try working.destructure(try parts.get("head"));
+        _ = try working.dispose(try working.unpack(try waiting.get("1")));
+        const next = try working.call(scan, &.{
+            .{ .name = "pending", .value = try parts.get("tail") },
+            .{ .name = "findings", .value = findings },
+        });
+        try c.define(scan, try body.ret(try body.match(popped, &.{
+            try empty_case.ret(findings), try item.ret(next),
+        })));
+        const entry = try e.declareTyped(c, "finalize inquiry state", &.{.{
+            .name = "state",
+            .schema = try typed.interop.schema(c, e.t.state),
+        }}, findings_type, e.spec.scope.residual.effects);
+        const root = try c.body(entry);
+        const state = try root.destructure(try root.parameter("state"));
+        try c.define(entry, try root.ret(try root.call(scan, &.{
+            .{ .name = "pending", .value = try state.get("0") },
+            .{ .name = "findings", .value = try state.get("1") },
+        })));
+        return typed.interop.functionId(c, entry);
     }
 };

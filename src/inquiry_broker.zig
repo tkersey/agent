@@ -68,9 +68,6 @@ pub const Definition = struct {
     custody: custody.Definition,
     types: Types,
     experiment: Id,
-    subject_equal: Id,
-    key_equal: Id,
-    observation_equal: Id,
 };
 
 pub const Functions = struct {
@@ -85,6 +82,10 @@ pub const Functions = struct {
 };
 
 pub fn define(b: *Builder, spec: Spec) Error!Definition {
+    try equality.checkPortableSchema(b, spec.subject);
+    _ = try b.failureLiteral(spec.failure);
+    try equality.checkPortableSchema(b, spec.key);
+    try equality.checkPortableSchema(b, spec.observation);
     const instance = try b.specialization(Definition, "agent.inquiry.broker/v1", .{spec});
     if (instance.cached) |value| return value;
     for (b.effects.items) |effect|
@@ -118,9 +119,6 @@ pub fn define(b: *Builder, spec: Spec) Error!Definition {
     return instance.finish(b, .{
         .custody = own,
         .experiment = experiment,
-        .subject_equal = try equality.define(b, spec.subject, spec.failure),
-        .key_equal = try equality.define(b, spec.key, spec.failure),
-        .observation_equal = try equality.define(b, spec.observation, spec.failure),
         .types = .{
             .admitted = admitted,
             .admission = try b.schema(.{ .sum = &.{ unit, admitted, unit } }),
@@ -538,7 +536,7 @@ const Emit = struct {
         const choice = try e.b.schema(.{ .sum = &.{ e.unit, e.d.types.eligible } });
         const lookup = try e.lookupFunction(optional);
         const fault = try typed.interop.literalFailure(c, e.s.failure, try typed.interop.schema(c, e.b.values.items[@intCast(e.s.failure)].schema));
-        const ops: LoopOps = .{ .loop = loop, .stop = try typed.interop.declaredFunction(c, try e.stopper()), .admit = try typed.interop.declaredFunction(c, try e.admitViews()), .lookup = try typed.interop.declaredFunction(c, lookup), .recipients = try typed.interop.declaredFunction(c, try e.recipients()), .selected = try typed.interop.declaredFunction(c, try e.selectedFunction(choice)), .cached_choice = try typed.interop.declaredFunction(c, try e.cachedChoice(lookup, optional)), .failure = fault };
+        const ops: LoopOps = .{ .loop = loop, .stop = try typed.interop.declaredFunction(c, try e.stopper()), .admit = try typed.interop.declaredFunction(c, try e.admitViews()), .lookup = try typed.interop.declaredFunction(c, lookup), .recipients = try typed.interop.declaredFunction(c, try e.recipients()), .selected = try typed.interop.declaredFunction(c, try e.selectedFunction(choice)), .cached_choice = try typed.interop.declaredFunction(c, try e.cachedChoice(lookup, optional)), .failure = fault, .subject_equal = try equality.create(c, try typed.interop.schema(c, e.s.subject), fault), .key_equal = try equality.create(c, try typed.interop.schema(c, e.s.key), fault), .observation_equal = try equality.create(c, try typed.interop.schema(c, e.s.observation), fault) };
         const body = try c.body(loop);
         var args: LoopArgs = undefined;
         inline for (@typeInfo(LoopArgs).@"struct".fields) |field| @field(args, field.name) = try body.parameter(field.name);
@@ -677,8 +675,8 @@ const Emit = struct {
         var work = body;
         for (&guards, 0..) |*guard, index| {
             const condition = switch (index) {
-                0 => try e.callSource(work, e.d.subject_equal, &.{ v.subject, try work.field(response, "0") }),
-                1 => try e.callSource(work, e.d.key_equal, &.{ try work.field(try work.field(selected, "1"), "0"), try work.field(response, "1") }),
+                0 => try work.call(o.subject_equal, &.{ .{ .name = "left", .value = v.subject }, .{ .name = "right", .value = try work.field(response, "0") } }),
+                1 => try work.call(o.key_equal, &.{ .{ .name = "left", .value = try work.field(try work.field(selected, "1"), "0") }, .{ .name = "right", .value = try work.field(response, "1") } }),
                 else => try work.equal(v.occurrence, try work.field(response, "2")),
             };
             const yes = try work.branch();
@@ -724,7 +722,7 @@ const Emit = struct {
         const prior = try reusable_case.call(o.lookup, &.{ .{ .name = "records", .value = v.records }, .{ .name = "key", .value = try reusable_case.field(try reusable_case.field(selected, "1"), "0") } });
         const absent = try reusable_case.caseOf(prior, "0");
         const present = try reusable_case.caseOf(prior, "1");
-        const same = try e.callSource(present.body(), e.d.observation_equal, &.{ try present.body().field(present.payload(), "2"), try present.body().field(record, "2") });
+        const same = try present.body().call(o.observation_equal, &.{ .{ .name = "left", .value = try present.body().field(present.payload(), "2") }, .{ .name = "right", .value = try present.body().field(record, "2") } });
         const yes = try present.body().branch();
         const no = try present.body().branch();
         const compared = try present.body().conditional(same, try yes.ret(try e.deliverNew(yes, o, v, state, ids, record)), try no.ret(try e.stopTyped(no, o, v, state, .conflicting_observations, try no.append(v.records, record), true)));
@@ -734,6 +732,9 @@ const Emit = struct {
 };
 
 const LoopOps = struct {
+    subject_equal: *const typed.Function,
+    key_equal: *const typed.Function,
+    observation_equal: *const typed.Function,
     loop: *const typed.Function,
     stop: *const typed.Function,
     admit: *const typed.Function,

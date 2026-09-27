@@ -23,6 +23,12 @@ try{
   await cp(join(source,'zig-out/agent4/parser-construction',name),join(fixture,name));
   if(name.endsWith('.bmo1'))await cp(join(fixture,name),join(objects,name));
  }
+ // The swap witness transports the same pinned producer used by its in-tree check.
+ const frozenProducer=join(source,'conformance/agent4/parser-producer-v2.bmo1');
+ await cp(frozenProducer,join(objects,'producer.bmo1'));
+ await cp(frozenProducer,join(fixture,'producer.bmo1'));
+ await mkdir(join(root,'conformance/agent4'),{recursive:true});
+ await cp(frozenProducer,join(root,'conformance/agent4/parser-producer-v2.bmo1'));
  await cp(join(source,'test/agent4/parser_comparison.mjs'),join(root,'test/agent4/parser_comparison.mjs'));
  await mkdir(join(root,'test/consumers/incremental-parser'),{recursive:true});
  await cp(join(source,'test/consumers/incremental-parser/candidates.mjs'),join(root,'test/consumers/incremental-parser/candidates.mjs'));
@@ -32,7 +38,7 @@ try{
  const denied=spawnSync('/usr/bin/sandbox-exec',['-p',profile,'/bin/cat',forbidden],{cwd:root,encoding:'utf8'});
  assert.notEqual(denied.status,0);assert.match(denied.stderr,/not permitted|denied/i);
  const producerBefore=hash(await readFile(join(objects,'producer.bmo1'))),runs=[];
- for(const [consumer,strategy,image]of [['consumer.bmo1','recursive','program.bpi3'],['consumer-alt.bmo1','alternate','alternate.bpi3']]){
+ for(const [consumer,strategy,image]of [['consumer.bmo1','recursive','consumer-fixed.bpi3'],['consumer-alt.bmo1','alternate','consumer-alt-fixed.bpi3']]){
   const linked=spawnSync('/usr/bin/sandbox-exec',['-p',profile,join(root,'link-parser'),join(objects,'producer.bmo1'),join(objects,consumer),join(objects,'reference.bmo1')],{cwd:root,maxBuffer:16<<20});
   assert.equal(linked.status,0,linked.stderr.toString());assert(linked.stdout.length>0);
   await writeFile(join(fixture,image),linked.stdout);

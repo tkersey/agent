@@ -1,31 +1,31 @@
 {
   "scope": "Recorded-reference/canonical structural census; pass savings use the canonical compiler input, and cross-version deltas do not establish causation or runtime acceptance",
-  "boundary": "511fe388587b36ae37307d277e04c22b0bb6f6d9",
-  "world": "c20695e00056186a4b74564da6e4ca1c368cb33b",
+  "boundary": "48f36c11f2400bbd69d2b6284a278c86dc9b71e5",
+  "world": "f8a1597d4ff62ae691dfca12f7ce3a2b4e6c0727",
   "referenceMetricsSha256": "28e2283b4f0faf6fc33ff87bff2b01842595e5c44cd08c51bde92616c7b6c883",
-  "canonicalMetricsSha256": "e267003003a227a3bef06e48834994d2a1a19ab083f5b0b122b6e3f470ed9570",
+  "canonicalMetricsSha256": "96a394aac74008e846b22db7a155af59328f111d318a79b5158db6c2e19b5df8",
   "kernelSha256": "7d31effb1d4e32523d0fcbd5b4d5f5a8a2289fbd4c731173a33b1c174524282f",
-  "lockSha256": "4db11f7d91ceb82aa54f2d8bc8cca600901dbe1b869ef6947d9c4f9eba07fa6e",
+  "lockSha256": "0449203df9d1c1dc45ddf882dc1d3323b9bd82529876d1a8b56106e0ab31c278",
   "workloadSources": [
     {
       "path": "test/consumers/document/main.zig",
-      "sha256": "13b2bf96bd6ae91faa1aaa5436d3387820b03a9b764b3e168266de050576b3ca"
+      "sha256": "44e8bba9dfe15c2d7c2cc69b558c02545c9c60ebd47584b7772dd1d3511add03"
     },
     {
       "path": "test/consumers/document/consequence.zig",
-      "sha256": "11adb9f700034e200d4faec6b52795565b82451b326257fe06c8f9b9f59f85d1"
+      "sha256": "914fcb73c15ff547c18b8eb8449c2877bdfb90e8740537bf57ee11f82a6e0e9a"
     },
     {
       "path": "test/consumers/review/main.zig",
-      "sha256": "1cc618f8a0dc272ef0585ca76435a497c2b59b1d58eb36c8a5dd0b930b9352bd"
+      "sha256": "32ee728738661d0e373e32f8c15066b77a6d42f238bbe5bff51e5c177da80dec"
     },
     {
       "path": "test/consumers/inquiry/main.zig",
-      "sha256": "916cd3ea188a569cd0d459cf04a18f88c2c1f8c3bb9f50c410f87b5123678bbe"
+      "sha256": "a9152a900c220958f0461a09423fdd2a3f8a67c4346064f47d8b399e1b525c11"
     },
     {
       "path": "test/agent4/economy.zig",
-      "sha256": "0e079fe3d6f3ccad40cab657b0fdc47d0e945dd4799fbf8c7aa00dd88f1a6aaf"
+      "sha256": "cab08777dba1a2dd696d609733a9fb545ea8fbc3af44c322af0cc74404cddbd3"
     }
   ],
   "catalogueOrder": [
@@ -40,7 +40,7 @@
     "resource",
     "constructor"
   ],
-  "realConsumerCodeBenefitObserved": false,
+  "realConsumerCodeBenefitObserved": true,
   "canonicalRepeatMatches": null,
   "rows": [
     {
@@ -223,7 +223,7 @@
       },
       "canonical": {
         "bytes": 292,
-        "sha256": "3a424258a480412a2952618ce9a10e0ad6ff9c0c6b07d5f129a43c4ef4fb7563",
+        "sha256": "f0a17ed97f5e5e66829fd1a10a990394c444aa2331fc2686abb3157eb72319c7",
         "catalogues": [
           7,
           3,
@@ -302,7 +302,7 @@
       },
       "canonical": {
         "bytes": 460,
-        "sha256": "a0e5451968682a12837cba3de0242da29595457791366fb90db6919986fcf514",
+        "sha256": "89a257a0c46c711c342aa92d1507bea537358e1140b753ac585ca3a805167458",
         "catalogues": [
           7,
           3,
@@ -381,7 +381,7 @@
       },
       "canonical": {
         "bytes": 2032,
-        "sha256": "ace112bea38db89d17db421c2e9e129420ae16193677e3f3133bbdce01eed271",
+        "sha256": "0b3dfa0f5598bfd365ade0fbd3b6052846eea524aeba4e28144053b6b373d328",
         "catalogues": [
           7,
           3,
@@ -460,7 +460,7 @@
       },
       "canonical": {
         "bytes": 377,
-        "sha256": "7876808bbfcdfbff76ca8cd94d886ab39b6eab9a84d58a1f98f927052d918800",
+        "sha256": "86a51a7e63cfdd94b36bd62af05d5bc1887788221d7ff48f81847e9503ff2e20",
         "catalogues": [
           9,
           3,
@@ -538,43 +538,43 @@
         "instructions": 753
       },
       "canonical": {
-        "bytes": 11422,
-        "sha256": "d333e574ecd70f8106b7464f8172464ae5b1c78cccb28805dd535fbbfab2504b",
+        "bytes": 11517,
+        "sha256": "be844910a6fbd7278031bb861706fb29ec85ba6d7732863de856e8e6b1d6fd07",
         "catalogues": [
           142,
           66,
           12,
           60,
-          407,
+          423,
           3,
           4,
           0,
           2,
           7
         ],
-        "instructions": 753
+        "instructions": 763
       },
       "outcome": "applied",
-      "functionBodiesRemoved": 0,
+      "functionBodiesRemoved": 26,
       "constructorsRemoved": 0,
-      "referenceBytesDelta": 0,
-      "passInputBytes": 11435,
+      "referenceBytesDelta": 95,
+      "passInputBytes": 13840,
       "fullCandidate": {
         "catalogs": [
           142,
           66,
           12,
           60,
-          407,
+          423,
           3,
           4,
           0,
           2,
           7
         ],
-        "instructions": 753,
-        "bytes": 11422,
-        "entries": 703
+        "instructions": 763,
+        "bytes": 11517,
+        "entries": 719
       },
       "descriptionsCandidate": {
         "catalogs": [
@@ -582,19 +582,19 @@
           66,
           12,
           60,
-          407,
+          423,
           3,
           4,
           0,
           2,
           7
         ],
-        "instructions": 753,
-        "bytes": 11422,
-        "entries": 703
+        "instructions": 763,
+        "bytes": 11517,
+        "entries": 719
       },
-      "discoveryWork": 326704,
-      "exactComparisons": 2561
+      "discoveryWork": 530934,
+      "exactComparisons": 3636
     },
     {
       "name": "clarify-first",
@@ -617,43 +617,43 @@
         "instructions": 646
       },
       "canonical": {
-        "bytes": 9360,
-        "sha256": "43421d3f0322c15fa13f6584aaa9889a2005a32ab726a1d87b4179054ea7a1b3",
+        "bytes": 9453,
+        "sha256": "b3dd1136fdf98cb0290c9ad905deb9dd09a54d872081c1a8f001f08fa587053e",
         "catalogues": [
           124,
           59,
           11,
           47,
-          333,
+          350,
           2,
           3,
           0,
           2,
           6
         ],
-        "instructions": 646
+        "instructions": 654
       },
       "outcome": "applied",
-      "functionBodiesRemoved": 0,
+      "functionBodiesRemoved": 16,
       "constructorsRemoved": 0,
-      "referenceBytesDelta": 0,
-      "passInputBytes": 9373,
+      "referenceBytesDelta": 93,
+      "passInputBytes": 10785,
       "fullCandidate": {
         "catalogs": [
           124,
           59,
           11,
           47,
-          333,
+          350,
           2,
           3,
           0,
           2,
           6
         ],
-        "instructions": 646,
-        "bytes": 9360,
-        "entries": 587
+        "instructions": 654,
+        "bytes": 9453,
+        "entries": 604
       },
       "descriptionsCandidate": {
         "catalogs": [
@@ -661,19 +661,19 @@
           59,
           11,
           47,
-          333,
+          350,
           2,
           3,
           0,
           2,
           6
         ],
-        "instructions": 646,
-        "bytes": 9360,
-        "entries": 587
+        "instructions": 654,
+        "bytes": 9453,
+        "entries": 604
       },
-      "discoveryWork": 248422,
-      "exactComparisons": 1884
+      "discoveryWork": 390786,
+      "exactComparisons": 2793
     },
     {
       "name": "inquiry-repair",
@@ -696,43 +696,43 @@
         "instructions": 2233
       },
       "canonical": {
-        "bytes": 36809,
-        "sha256": "61fff6b88af0a28a554d4f2274920fb0b6d544cfc776ba9774b707c5d6a4d757",
+        "bytes": 35591,
+        "sha256": "481bfc969682c1a3456679a438e75f37f58d5a45c9892cbb9cdb36b5e509cd47",
         "catalogues": [
           183,
           160,
           10,
           109,
-          1152,
+          1166,
           2,
           5,
           1,
           2,
           5
         ],
-        "instructions": 2233
+        "instructions": 2085
       },
-      "outcome": "no_change",
-      "functionBodiesRemoved": 0,
+      "outcome": "applied",
+      "functionBodiesRemoved": 72,
       "constructorsRemoved": 0,
-      "referenceBytesDelta": 53,
-      "passInputBytes": 36809,
+      "referenceBytesDelta": -1165,
+      "passInputBytes": 42222,
       "fullCandidate": {
         "catalogs": [
           183,
           160,
           10,
           109,
-          1152,
+          1166,
           2,
           5,
           1,
           2,
           5
         ],
-        "instructions": 2233,
-        "bytes": 36809,
-        "entries": 1629
+        "instructions": 2085,
+        "bytes": 35591,
+        "entries": 1643
       },
       "descriptionsCandidate": {
         "catalogs": [
@@ -740,19 +740,19 @@
           160,
           10,
           109,
-          1152,
+          1166,
           2,
           5,
           1,
           2,
           5
         ],
-        "instructions": 2233,
-        "bytes": 36809,
-        "entries": 1629
+        "instructions": 2085,
+        "bytes": 35591,
+        "entries": 1643
       },
-      "discoveryWork": 493485,
-      "exactComparisons": 2796
+      "discoveryWork": 1552737,
+      "exactComparisons": 8581
     },
     {
       "name": "inquiry-repeated",
@@ -775,43 +775,43 @@
         "instructions": 2242
       },
       "canonical": {
-        "bytes": 37190,
-        "sha256": "e74c85f4d09510dde3defd932e268e888b2eef2d9babb9f9b9e4b78f17dcd803",
+        "bytes": 35973,
+        "sha256": "8de6e55dde1322dbed54892e47795f3bd76c06c038b1e024bb9a37b8284d0c51",
         "catalogues": [
           186,
           161,
           11,
           112,
-          1162,
+          1176,
           2,
           5,
           1,
           2,
           5
         ],
-        "instructions": 2242
+        "instructions": 2094
       },
-      "outcome": "no_change",
-      "functionBodiesRemoved": 0,
+      "outcome": "applied",
+      "functionBodiesRemoved": 72,
       "constructorsRemoved": 0,
-      "referenceBytesDelta": 53,
-      "passInputBytes": 37190,
+      "referenceBytesDelta": -1164,
+      "passInputBytes": 42629,
       "fullCandidate": {
         "catalogs": [
           186,
           161,
           11,
           112,
-          1162,
+          1176,
           2,
           5,
           1,
           2,
           5
         ],
-        "instructions": 2242,
-        "bytes": 37190,
-        "entries": 1647
+        "instructions": 2094,
+        "bytes": 35973,
+        "entries": 1661
       },
       "descriptionsCandidate": {
         "catalogs": [
@@ -819,19 +819,19 @@
           161,
           11,
           112,
-          1162,
+          1176,
           2,
           5,
           1,
           2,
           5
         ],
-        "instructions": 2242,
-        "bytes": 37190,
-        "entries": 1647
+        "instructions": 2094,
+        "bytes": 35973,
+        "entries": 1661
       },
-      "discoveryWork": 498869,
-      "exactComparisons": 2827
+      "discoveryWork": 1566819,
+      "exactComparisons": 8668
     },
     {
       "name": "inquiry-react",
@@ -854,63 +854,63 @@
         "instructions": 3701
       },
       "canonical": {
-        "bytes": 48231,
-        "sha256": "6b68b9d96b65173698d0de2acef121ed1d88238d2fb5dcd567e056b953245d83",
+        "bytes": 49604,
+        "sha256": "57a5d8fa300d5579412f45e7b580ce6fa40dc222d6303d2397d22ccdba3491f5",
         "catalogues": [
           145,
-          148,
+          147,
           7,
           67,
-          857,
+          876,
           0,
           1,
           0,
           2,
           3
         ],
-        "instructions": 3701
+        "instructions": 3833
       },
       "outcome": "applied",
-      "functionBodiesRemoved": 0,
+      "functionBodiesRemoved": 51,
       "constructorsRemoved": 0,
-      "referenceBytesDelta": 13,
-      "passInputBytes": 48239,
+      "referenceBytesDelta": 1386,
+      "passInputBytes": 54073,
       "fullCandidate": {
         "catalogs": [
           145,
-          148,
+          147,
           7,
           67,
-          857,
+          876,
           0,
           1,
           0,
           2,
           3
         ],
-        "instructions": 3701,
-        "bytes": 48231,
-        "entries": 1230
+        "instructions": 3833,
+        "bytes": 49604,
+        "entries": 1248
       },
       "descriptionsCandidate": {
         "catalogs": [
           145,
-          148,
+          147,
           7,
           67,
-          857,
+          876,
           0,
           1,
           0,
           2,
           3
         ],
-        "instructions": 3701,
-        "bytes": 48231,
-        "entries": 1230
+        "instructions": 3833,
+        "bytes": 49604,
+        "entries": 1248
       },
-      "discoveryWork": 1112671,
-      "exactComparisons": 4404
+      "discoveryWork": 1590354,
+      "exactComparisons": 6138
     },
     {
       "name": "document",
@@ -933,43 +933,43 @@
         "instructions": 383
       },
       "canonical": {
-        "bytes": 7379,
-        "sha256": "559564d1d174dd9ced07e068a69c485dd02b2466a2dbd1d3247f5615b201f6a7",
+        "bytes": 7425,
+        "sha256": "6b8c9d204fcc2d2780bdcda7bcd35b01d9851c71baf45665086024baa25afa3e",
         "catalogues": [
           126,
           52,
           14,
           48,
-          267,
+          278,
           5,
           7,
           2,
           2,
           10
         ],
-        "instructions": 383
+        "instructions": 391
       },
       "outcome": "applied",
-      "functionBodiesRemoved": 0,
+      "functionBodiesRemoved": 3,
       "constructorsRemoved": 0,
-      "referenceBytesDelta": 62,
-      "passInputBytes": 7393,
+      "referenceBytesDelta": 108,
+      "passInputBytes": 7603,
       "fullCandidate": {
         "catalogs": [
           126,
           52,
           14,
           48,
-          267,
+          278,
           5,
           7,
           2,
           2,
           10
         ],
-        "instructions": 383,
-        "bytes": 7379,
-        "entries": 533
+        "instructions": 391,
+        "bytes": 7425,
+        "entries": 544
       },
       "descriptionsCandidate": {
         "catalogs": [
@@ -977,19 +977,19 @@
           52,
           14,
           48,
-          267,
+          278,
           5,
           7,
           2,
           2,
           10
         ],
-        "instructions": 383,
-        "bytes": 7379,
-        "entries": 533
+        "instructions": 391,
+        "bytes": 7425,
+        "entries": 544
       },
-      "discoveryWork": 182842,
-      "exactComparisons": 1804
+      "discoveryWork": 265626,
+      "exactComparisons": 2526
     },
     {
       "name": "review-mid_review",
@@ -1012,43 +1012,43 @@
         "instructions": 152
       },
       "canonical": {
-        "bytes": 2947,
-        "sha256": "b4d6f335811307cc2a6d5cd9d38ef0a3addaf2bcc4c7669ad87fc8d4ddfa760d",
+        "bytes": 3064,
+        "sha256": "319893be473d08a7e15046404f527ebf3cd952661cf1370792b1824b8c481972",
         "catalogues": [
           77,
           37,
           6,
           15,
-          87,
+          108,
           2,
           1,
           0,
           0,
           3
         ],
-        "instructions": 152
+        "instructions": 160
       },
       "outcome": "applied",
       "functionBodiesRemoved": 0,
       "constructorsRemoved": 0,
-      "referenceBytesDelta": 0,
-      "passInputBytes": 2955,
+      "referenceBytesDelta": 117,
+      "passInputBytes": 3072,
       "fullCandidate": {
         "catalogs": [
           77,
           37,
           6,
           15,
-          87,
+          108,
           2,
           1,
           0,
           0,
           3
         ],
-        "instructions": 152,
-        "bytes": 2947,
-        "entries": 228
+        "instructions": 160,
+        "bytes": 3064,
+        "entries": 249
       },
       "descriptionsCandidate": {
         "catalogs": [
@@ -1056,19 +1056,19 @@
           37,
           6,
           15,
-          87,
+          108,
           2,
           1,
           0,
           0,
           3
         ],
-        "instructions": 152,
-        "bytes": 2947,
-        "entries": 228
+        "instructions": 160,
+        "bytes": 3064,
+        "entries": 249
       },
-      "discoveryWork": 66378,
-      "exactComparisons": 810
+      "discoveryWork": 69696,
+      "exactComparisons": 818
     },
     {
       "name": "review-clarify_first",
@@ -1091,43 +1091,43 @@
         "instructions": 152
       },
       "canonical": {
-        "bytes": 2946,
-        "sha256": "a04fd24d0aaa1bedff2ba37271ff55214ad8469f06b7fb3b8a2b074816e9b1a4",
+        "bytes": 3063,
+        "sha256": "6d304173b7b59aebab484149a868291f90f17316bdd9f5def0e0e496902f8ee7",
         "catalogues": [
           77,
           37,
           6,
           15,
-          87,
+          108,
           2,
           1,
           0,
           0,
           3
         ],
-        "instructions": 152
+        "instructions": 160
       },
       "outcome": "applied",
       "functionBodiesRemoved": 0,
       "constructorsRemoved": 0,
-      "referenceBytesDelta": 0,
-      "passInputBytes": 2954,
+      "referenceBytesDelta": 117,
+      "passInputBytes": 3071,
       "fullCandidate": {
         "catalogs": [
           77,
           37,
           6,
           15,
-          87,
+          108,
           2,
           1,
           0,
           0,
           3
         ],
-        "instructions": 152,
-        "bytes": 2946,
-        "entries": 228
+        "instructions": 160,
+        "bytes": 3063,
+        "entries": 249
       },
       "descriptionsCandidate": {
         "catalogs": [
@@ -1135,19 +1135,19 @@
           37,
           6,
           15,
-          87,
+          108,
           2,
           1,
           0,
           0,
           3
         ],
-        "instructions": 152,
-        "bytes": 2946,
-        "entries": 228
+        "instructions": 160,
+        "bytes": 3063,
+        "entries": 249
       },
-      "discoveryWork": 66378,
-      "exactComparisons": 810
+      "discoveryWork": 69696,
+      "exactComparisons": 818
     },
     {
       "name": "review-human",
@@ -1171,7 +1171,7 @@
       },
       "canonical": {
         "bytes": 414,
-        "sha256": "a3a54c5cecbf3d6f9076febdb1005fbcd4007a6a02e69ddec495a5ca10221ca5",
+        "sha256": "222e18e156a1a93d19cbbe3787725cf6f298e2b2e57a914c2e3e1a34be77af72",
         "catalogues": [
           9,
           4,
@@ -1249,43 +1249,43 @@
         "instructions": 128
       },
       "canonical": {
-        "bytes": 2239,
-        "sha256": "eb25579ebbadbde11254104334516d4372722946490be5c94c9c074bc4c45d3d",
+        "bytes": 2356,
+        "sha256": "9a57937127837aec22857efc103b96b8117f61af03b6f0966147c3f37fc71f93",
         "catalogues": [
           66,
           32,
           2,
           9,
-          68,
+          89,
           1,
           1,
           0,
           0,
           2
         ],
-        "instructions": 128
+        "instructions": 136
       },
       "outcome": "applied",
       "functionBodiesRemoved": 0,
       "constructorsRemoved": 0,
-      "referenceBytesDelta": 0,
-      "passInputBytes": 2243,
+      "referenceBytesDelta": 117,
+      "passInputBytes": 2360,
       "fullCandidate": {
         "catalogs": [
           66,
           32,
           2,
           9,
-          68,
+          89,
           1,
           1,
           0,
           0,
           2
         ],
-        "instructions": 128,
-        "bytes": 2239,
-        "entries": 181
+        "instructions": 136,
+        "bytes": 2356,
+        "entries": 202
       },
       "descriptionsCandidate": {
         "catalogs": [
@@ -1293,19 +1293,19 @@
           32,
           2,
           9,
-          68,
+          89,
           1,
           1,
           0,
           0,
           2
         ],
-        "instructions": 128,
-        "bytes": 2239,
-        "entries": 181
+        "instructions": 136,
+        "bytes": 2356,
+        "entries": 202
       },
-      "discoveryWork": 48527,
-      "exactComparisons": 620
+      "discoveryWork": 51977,
+      "exactComparisons": 628
     },
     {
       "name": "review-rule",
@@ -1329,7 +1329,7 @@
       },
       "canonical": {
         "bytes": 269,
-        "sha256": "4dc62720dafc28b4109d350e12397212bcf9883e5135292592e7d0e840737e5e",
+        "sha256": "e159594845f0d01375a92eb46b2fc04bf3017881b9b69fbdff728384198c164e",
         "catalogues": [
           6,
           2,
@@ -1407,14 +1407,14 @@
         "instructions": 10
       },
       "canonical": {
-        "bytes": 313,
-        "sha256": "fcfd4becd17cc530a2b57da9e6ab0b224b33e370aac08a2674b3a74308676001",
+        "bytes": 302,
+        "sha256": "30d023517353c3e6f197b264daf0f8ac8b9640ee5e0cfc4c2d2afd3981514e4c",
         "catalogues": [
           7,
           3,
           0,
           5,
-          15,
+          14,
           0,
           1,
           0,
@@ -1426,15 +1426,15 @@
       "outcome": "applied",
       "functionBodiesRemoved": 0,
       "constructorsRemoved": 0,
-      "referenceBytesDelta": 11,
-      "passInputBytes": 321,
+      "referenceBytesDelta": 0,
+      "passInputBytes": 310,
       "fullCandidate": {
         "catalogs": [
           7,
           3,
           0,
           5,
-          15,
+          14,
           0,
           1,
           0,
@@ -1442,8 +1442,8 @@
           3
         ],
         "instructions": 10,
-        "bytes": 313,
-        "entries": 34
+        "bytes": 302,
+        "entries": 33
       },
       "descriptionsCandidate": {
         "catalogs": [
@@ -1451,7 +1451,7 @@
           3,
           0,
           5,
-          15,
+          14,
           0,
           1,
           0,
@@ -1459,10 +1459,10 @@
           3
         ],
         "instructions": 10,
-        "bytes": 313,
-        "entries": 34
+        "bytes": 302,
+        "entries": 33
       },
-      "discoveryWork": 7406,
+      "discoveryWork": 7218,
       "exactComparisons": 80
     }
   ]

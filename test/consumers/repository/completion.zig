@@ -2,6 +2,7 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
+const typed = boundary.authoring;
 const E = @import("source.zig").Emit;
 const t = @import("types.zig");
 const Id = boundary.source.Id;
@@ -27,7 +28,17 @@ fn containsFunction(e: E) !Id {
     const yes = try b.variable(try e.c.schema(Pair));
     const equal = try b.variable(try e.c.schema(bool));
     const next = try e.call(f, &.{ try e.field(Changes, try b.reference(yes), 1), try e.param(f, 1) });
-    const checked = try b.bind(equal, try compare(e, t.Path, try e.field(t.Path, try b.reference(yes), 0), try e.param(f, 1)), try b.term(.{ .conditional = .{ .condition = try b.reference(equal), .when_true = try b.pure(try e.c.literal(bool, true)), .when_false = next } }));
+    const construction = try typed.Context.init(b);
+    const fault = try typed.interop.literalFailure(construction, try e.c.literal(t.Failure, .invalid_variant), try typed.interop.schema(construction, try e.c.schema(t.Failure)));
+    const path_equal_schema = try typed.interop.schema(construction, try e.c.schema(t.Path));
+    const path_equal_function = try agent.value_equality.create(construction, path_equal_schema, fault);
+    const path_equal_body = try typed.interop.scope(construction);
+    const path_equal_value = try path_equal_body.call(path_equal_function, &.{
+        .{ .name = "left", .value = try typed.interop.adoptValue(path_equal_body, try e.field(t.Path, try b.reference(yes), 0), path_equal_schema) },
+        .{ .name = "right", .value = try typed.interop.adoptValue(path_equal_body, try e.param(f, 1), path_equal_schema) },
+    });
+    const path_equal = try typed.interop.computationId(construction, try path_equal_body.ret(path_equal_value));
+    const checked = try b.bind(equal, path_equal, try b.term(.{ .conditional = .{ .condition = try b.reference(equal), .when_true = try b.pure(try e.c.literal(bool, true)), .when_false = next } }));
     try b.define(f, try pop(e, try e.param(f, 0), no, yes, try b.pure(try e.c.literal(bool, false)), checked));
     return f;
 }
@@ -85,7 +96,16 @@ fn allowedFunction(e: E, subset: Id) !Id {
     const valid = try e.both(try b.reference(matching), try e.both(try b.reference(digest), try e.binary(.equal, actual_length, claimed_length)));
     const claimed_digest = try e.field(t.DigestHex, try e.param(f, 2), 3);
     const applied_digest = try e.field(t.DigestHex, try b.reference(applied), 1);
-    const same_digest = try compare(e, t.DigestHex, claimed_digest, applied_digest);
+    const construction = try typed.Context.init(b);
+    const fault = try typed.interop.literalFailure(construction, try e.c.literal(t.Failure, .invalid_variant), try typed.interop.schema(construction, try e.c.schema(t.Failure)));
+    const same_digest_schema = try typed.interop.schema(construction, try e.c.schema(t.DigestHex));
+    const same_digest_function = try agent.value_equality.create(construction, same_digest_schema, fault);
+    const same_digest_body = try typed.interop.scope(construction);
+    const same_digest_value = try same_digest_body.call(same_digest_function, &.{
+        .{ .name = "left", .value = try typed.interop.adoptValue(same_digest_body, claimed_digest, same_digest_schema) },
+        .{ .name = "right", .value = try typed.interop.adoptValue(same_digest_body, applied_digest, same_digest_schema) },
+    });
+    const same_digest = try typed.interop.computationId(construction, try same_digest_body.ret(same_digest_value));
     const checked_digest = try b.bind(digest, same_digest, try b.pure(valid));
     const matching_paths = try e.call(subset, &.{ try e.param(f, 1), paths });
     const checked = try b.bind(matching, matching_paths, checked_digest);
@@ -96,9 +116,6 @@ fn allowedFunction(e: E, subset: Id) !Id {
     return f;
 }
 
-fn compare(e: E, comptime T: type, a: Id, b: Id) !Id {
-    return agent.value_equality.compare(e.c.builder, try e.c.schema(T), a, b, try e.c.literal(t.Failure, .invalid_variant));
-}
 fn pop(e: E, value: Id, no: Id, yes: Id, empty: Id, more: Id) !Id {
     const b = e.c.builder;
     return b.term(.{ .match_sum = .{ .value = try b.primitive(try e.c.schema(?Pair), .sequence_pop, &.{value}, 0), .cases = &.{

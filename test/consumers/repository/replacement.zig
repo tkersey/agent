@@ -1,6 +1,7 @@
 //! Fresh read evidence and exact-proposal approval own conditional replacement.
 const agent = @import("agent");
 const boundary = @import("boundary");
+const typed = boundary.authoring;
 pub const types = @import("types.zig");
 const t = types;
 const E = @import("source.zig").Emit;
@@ -28,7 +29,17 @@ pub fn define(c: agent.Context) !Definition {
         try e.binary(.equal, principal, try e.field(u64, try e.param(authority, 0), 1)),
     )));
     const revalidate = try b.declare(&.{proposal_schema}, try c.schema(bool), &.{}, &.{});
-    try b.define(revalidate, try agent.value_equality.compare(b, proposal_schema, try e.param(revalidate, 0), try b.reference(selected), try c.literal(t.Failure, .invalid_variant)));
+    const construction = try typed.Context.init(b);
+    const fault = try typed.interop.literalFailure(construction, try c.literal(t.Failure, .invalid_variant), try typed.interop.schema(construction, try c.schema(t.Failure)));
+    const exact_schema = try typed.interop.schema(construction, proposal_schema);
+    const exact_function = try agent.value_equality.create(construction, exact_schema, fault);
+    const exact_body = try typed.interop.scope(construction);
+    const exact_value = try exact_body.call(exact_function, &.{
+        .{ .name = "left", .value = try typed.interop.adoptValue(exact_body, try e.param(revalidate, 0), exact_schema) },
+        .{ .name = "right", .value = try typed.interop.adoptValue(exact_body, try b.reference(selected), exact_schema) },
+    });
+    const exact = try typed.interop.computationId(construction, try exact_body.ret(exact_value));
+    try b.define(revalidate, exact);
     const project = try b.declare(&.{proposal_schema}, observed.data, &.{}, &.{});
     try b.define(project, try b.pure(try b.primitive(observed.data, .variant, &.{try e.param(project, 0)}, 0)));
     const approval = try agent.approval.define(c, .{
@@ -96,8 +107,24 @@ pub fn define(c: agent.Context) !Definition {
         .when_true = try b.bind(selected, try b.pure(proposal), acquire),
         .when_false = stale,
     } });
-    const digest_check = try b.bind(same_digest, try agent.value_equality.compare(b, try c.schema(t.DigestHex), try e.field(t.DigestHex, request, 1), try e.field(t.DigestHex, try b.reference(source), 3), try c.literal(t.Failure, .invalid_variant)), checked);
-    const path_check = try b.bind(same_path, try agent.value_equality.compare(b, try c.schema(t.Path), try e.field(t.Path, request, 0), try e.field(t.Path, try b.reference(source), 2), try c.literal(t.Failure, .invalid_variant)), digest_check);
+    const digest_equal_schema = try typed.interop.schema(construction, try c.schema(t.DigestHex));
+    const digest_equal_function = try agent.value_equality.create(construction, digest_equal_schema, fault);
+    const digest_equal_body = try typed.interop.scope(construction);
+    const digest_equal_value = try digest_equal_body.call(digest_equal_function, &.{
+        .{ .name = "left", .value = try typed.interop.adoptValue(digest_equal_body, try e.field(t.DigestHex, request, 1), digest_equal_schema) },
+        .{ .name = "right", .value = try typed.interop.adoptValue(digest_equal_body, try e.field(t.DigestHex, try b.reference(source), 3), digest_equal_schema) },
+    });
+    const digest_equal = try typed.interop.computationId(construction, try digest_equal_body.ret(digest_equal_value));
+    const path_equal_schema = try typed.interop.schema(construction, try c.schema(t.Path));
+    const path_equal_function = try agent.value_equality.create(construction, path_equal_schema, fault);
+    const path_equal_body = try typed.interop.scope(construction);
+    const path_equal_value = try path_equal_body.call(path_equal_function, &.{
+        .{ .name = "left", .value = try typed.interop.adoptValue(path_equal_body, try e.field(t.Path, request, 0), path_equal_schema) },
+        .{ .name = "right", .value = try typed.interop.adoptValue(path_equal_body, try e.field(t.Path, try b.reference(source), 2), path_equal_schema) },
+    });
+    const path_equal = try typed.interop.computationId(construction, try path_equal_body.ret(path_equal_value));
+    const digest_check = try b.bind(same_digest, digest_equal, checked);
+    const path_check = try b.bind(same_path, path_equal, digest_check);
     const retained_source = try b.term(.{ .match_sum = .{
         .value = try e.field(?t.ReadResult, try e.param(f, 0), 2),
         .cases = &.{ .{ .variable = missing, .body = stale }, .{ .variable = source, .body = path_check } },

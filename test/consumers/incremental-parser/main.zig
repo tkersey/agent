@@ -2,6 +2,7 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
+const typed = boundary.authoring;
 const source = boundary.source;
 const hyper = boundary.library.hyper;
 const parser = agent.parser_synthesis;
@@ -718,7 +719,14 @@ fn experimentPrompt(c: agent.Context, request: Id, optional: Id, prefix: []const
     } } });
 }
 
-fn experimentAndContinue(b: *source.Builder, t: Types, q: hyper.Query, report: Id) !Id {
+fn experimentAndContinue(b: *source.Builder, t: Types, q: hyper.Query, report: Id) source.Error!Id {
+    return experimentAndContinueTyped(b, t, q, report) catch |err| return switch (err) {
+        error.UnsupportedEqualitySchema => error.TypeMismatch,
+        else => typed.sourceError(@errorCast(err)),
+    };
+}
+
+fn experimentAndContinueTyped(b: *source.Builder, t: Types, q: hyper.Query, report: Id) !Id {
     const invalid = try unresolved(b, t, "Experiment report does not match the current candidate or occurrence.");
     const prior = try b.variable(try agent.contracts.schema(Report, b));
     const reference_reply = try b.variable(try agent.contracts.schema(parser.ReferenceReply, b));
@@ -743,10 +751,16 @@ fn experimentAndContinue(b: *source.Builder, t: Types, q: hyper.Query, report: I
         .when_false = invalid,
     } });
     const same_candidate = try b.variable(try b.scalar(bool));
-    verified = try b.bind(same_candidate, (agent.value_equality.compare(b, try agent.contracts.schema(parser.Candidate, b), candidate, try field(b, parser.Candidate, try b.reference(prior), 0), try b.constant(void, {})) catch |err| return switch (err) {
-        error.UnsupportedEqualitySchema => error.TypeMismatch,
-        else => @as(source.Error, @errorCast(err)),
-    }), try b.term(.{ .conditional = .{ .condition = try b.reference(same_candidate), .when_true = verified, .when_false = invalid } }));
+    const construction = try typed.Context.init(b);
+    const candidate_equal_schema = try typed.interop.schema(construction, try agent.contracts.schema(parser.Candidate, b));
+    const candidate_equal_function = try agent.value_equality.create(construction, candidate_equal_schema, try construction.literalFailure(void, {}));
+    const candidate_equal_body = try typed.interop.scope(construction);
+    const candidate_equal_value = try candidate_equal_body.call(candidate_equal_function, &.{
+        .{ .name = "left", .value = try typed.interop.adoptValue(candidate_equal_body, candidate, candidate_equal_schema) },
+        .{ .name = "right", .value = try typed.interop.adoptValue(candidate_equal_body, try field(b, parser.Candidate, try b.reference(prior), 0), candidate_equal_schema) },
+    });
+    const candidate_equal = try typed.interop.computationId(construction, try candidate_equal_body.ret(candidate_equal_value));
+    verified = try b.bind(same_candidate, candidate_equal, try b.term(.{ .conditional = .{ .condition = try b.reference(same_candidate), .when_true = verified, .when_false = invalid } }));
     const with_reference = try b.term(.{ .match_sum = .{ .value = try field(b, ?parser.ReferenceReply, q.state, 5), .cases = &.{
         .{ .variable = try b.variable(try b.scalar(void)), .body = invalid },
         .{ .variable = reference_reply, .body = verified },

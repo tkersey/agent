@@ -1,6 +1,7 @@
 //! Live revalidation and exact-operation approval, outside every multi delimiter.
 const agent = @import("agent");
 const source = @import("boundary").source;
+const typed = @import("boundary").authoring;
 const Id = source.Id;
 const emit = @import("source.zig");
 const t = @import("consequence_types.zig");
@@ -44,7 +45,16 @@ fn approvalContract(c: agent.Context, observed: agent.observation.Definition, se
     const policy = try b.declare(&.{action}, boolean, &.{}, &.{});
     // A different amendment is a new editing attempt. An identical amendment
     // still traverses the existing fresh-challenge path; no old grant is reused.
-    try b.define(policy, try agent.value_equality.compare(b, action, try b.reference(b.parameter(policy, 0)), try b.reference(selected), try b.constant(void, {})));
+    const construction = try typed.Context.init(b);
+    const exact_schema = try typed.interop.schema(construction, action);
+    const exact_function = try agent.value_equality.create(construction, exact_schema, try construction.literalFailure(void, {}));
+    const exact_body = try typed.interop.scope(construction);
+    const exact_value = try exact_body.call(exact_function, &.{
+        .{ .name = "left", .value = try typed.interop.adoptValue(exact_body, try b.reference(b.parameter(policy, 0)), exact_schema) },
+        .{ .name = "right", .value = try typed.interop.adoptValue(exact_body, try b.reference(selected), exact_schema) },
+    });
+    const exact = try typed.interop.computationId(construction, try exact_body.ret(exact_value));
+    try b.define(policy, exact);
     const project = try b.declare(&.{action}, observed.data, &.{}, &.{});
     const proposed = try emit.field(b, try c.schema(t.Proposal), try b.reference(b.parameter(project, 0)), 1);
     const base = try emit.field(b, try c.schema(t.Observation), proposed, 1);
@@ -87,7 +97,16 @@ fn revalidate(c: agent.Context, observed: agent.observation.Definition, approval
         .when_true = unchanged,
         .when_false = approve,
     } });
-    const matching = try b.bind(same, try agent.value_equality.compare(b, try c.schema(t.Observation), base, try b.reference(actual), try b.constant(void, {})), try b.term(.{ .conditional = .{
+    const construction = try typed.Context.init(b);
+    const observation_equal_schema = try typed.interop.schema(construction, try c.schema(t.Observation));
+    const observation_equal_function = try agent.value_equality.create(construction, observation_equal_schema, try construction.literalFailure(void, {}));
+    const observation_equal_body = try typed.interop.scope(construction);
+    const observation_equal_value = try observation_equal_body.call(observation_equal_function, &.{
+        .{ .name = "left", .value = try typed.interop.adoptValue(observation_equal_body, base, observation_equal_schema) },
+        .{ .name = "right", .value = try typed.interop.adoptValue(observation_equal_body, try b.reference(actual), observation_equal_schema) },
+    });
+    const observation_equal = try typed.interop.computationId(construction, try observation_equal_body.ret(observation_equal_value));
+    const matching = try b.bind(same, observation_equal, try b.term(.{ .conditional = .{
         .condition = try b.reference(same),
         .when_true = permitted,
         .when_false = conflict,

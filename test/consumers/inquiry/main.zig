@@ -3,6 +3,7 @@ const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
 const source = boundary.source;
+const typed = boundary.authoring;
 const t = @import("types.zig");
 const s = @import("source.zig");
 const Id = s.Id;
@@ -119,7 +120,6 @@ pub fn admitTask(e: E, task: Id, continuation: Id, invalid: Id) !Id {
         .{ try e.value(u64, 0), try e.field(u64, task, 4) }, .{ try e.field(u64, task, 4), try e.value(u64, 33) },
     }) |bounds| next = try e.cond(try e.less(bounds[0], bounds[1]), next, invalid);
     const subject = try e.field(t.Subject, task, 0);
-    const supported = try b.variable(try e.schema(bool));
     const expected = try e.product(t.Subject, &.{
         try e.value(agent.contracts.Text(32), .{ .bytes = "session.mjs" }),
         try e.field(t.Source, subject, 1),
@@ -130,7 +130,18 @@ pub fn admitTask(e: E, task: Id, continuation: Id, invalid: Id) !Id {
         try e.field(t.Hash, subject, 6),
         try e.field(u64, subject, 7),
     });
-    return b.bind(supported, try agent.value_equality.compare(b, try e.schema(t.Subject), subject, expected, try e.value(void, {})), try e.cond(try e.ref(supported), next, invalid));
+    const c = try typed.Context.init(b);
+    const body = try typed.interop.scope(c);
+    const subject_type = try typed.interop.schema(c, try e.schema(t.Subject));
+    const result = try typed.interop.schema(c, try e.schema(t.Result));
+    const equal = try agent.value_equality.create(c, subject_type, try c.literalFailure(void, {}));
+    const supported = try body.call(equal, &.{
+        .{ .name = "left", .value = try typed.interop.adoptValue(body, subject, subject_type) },
+        .{ .name = "right", .value = try typed.interop.adoptValue(body, expected, subject_type) },
+    });
+    const yes = try body.branch();
+    const no = try body.branch();
+    return typed.interop.computationId(c, try body.ret(try body.conditional(supported, try yes.ret(try typed.interop.term(yes, next, result)), try no.ret(try typed.interop.term(no, invalid, result)))));
 }
 
 fn seedFunction(e: E, d: agent.inquiry.broker.Definition, actor: Id, effects: []const Id) !Id {

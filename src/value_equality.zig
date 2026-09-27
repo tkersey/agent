@@ -16,29 +16,6 @@ pub fn create(c: *a.Context, schema: *const a.Schema, failure: *const a.FailureL
     return declare(c, schema, failure);
 }
 
-// Transitional source-ID adapter over the same typed construction.
-pub fn define(b: *source.Builder, schema: Id, failure: Id) Error!Id {
-    return adapted(b, schema, failure) catch |err| {
-        if (err == error.UnsupportedEqualitySchema) return error.UnsupportedEqualitySchema;
-        return a.sourceError(@errorCast(err));
-    };
-}
-fn adapted(b: *source.Builder, schema: Id, failure: Id) TypedError!Id {
-    try checkPortableSchema(b, schema);
-    const literal = try b.failureLiteral(failure);
-    const cached = try b.specialization(Id, "agent.value-equality/source-adapter/v2", .{ schema, literal });
-    if (cached.cached) |function| return function;
-    const c = try a.Context.init(b);
-    const contract = try a.interop.schema(c, schema);
-    const fault = try a.interop.literalFailure(c, failure, try a.interop.schema(c, b.values.items[@intCast(failure)].schema));
-    return cached.finish(b, try a.interop.functionId(c, try declare(c, contract, fault)));
-}
-pub fn compare(b: *source.Builder, schema: Id, left: Id, right: Id, failure: Id) Error!Id {
-    if (left >= b.values.items.len or right >= b.values.items.len) return error.InvalidReference;
-    if (b.values.items[@intCast(left)].schema != schema or b.values.items[@intCast(right)].schema != schema) return error.TypeMismatch;
-    return b.term(.{ .call = .{ .function = try define(b, schema, failure), .arguments = &.{ left, right } } });
-}
-
 /// Inspect a source schema for portable equality/presentation admission without
 /// emitting code. This is an IR admission boundary: IDs belong to this Builder,
 /// and every call rechecks the current graph, including recursive children.
@@ -170,7 +147,6 @@ test "all portable schema families lower to checked pure comparisons" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
     const unit = try b.scalar(void);
-    const failure = try b.constant(void, {});
     const integer = try b.scalar(i64);
     const tree = try b.reserveSchema();
     const children = try b.schema(.{ .product = &.{ integer, tree, tree } });
@@ -197,10 +173,12 @@ test "all portable schema families lower to checked pure comparisons" {
         tree,
     };
     const whole = try b.schema(.{ .product = &fields });
-    const function = try define(&b, whole, failure);
-    try std.testing.expectEqual(function, try define(&b, whole, try b.constant(void, {})));
-    try std.testing.expectEqual(@as(usize, 0), b.functions.items[@intCast(function)].effects.len);
-    var compiled = try boundary.program.compile(std.testing.allocator, b.module(function, unit));
+    const c = try a.Context.init(&b);
+    const contract = try a.interop.schema(c, whole);
+    const function = try create(c, contract, try c.literalFailure(void, {}));
+    try std.testing.expect(function == try create(c, contract, try c.literalFailure(void, {})));
+    try std.testing.expectEqual(@as(usize, 0), b.functions.items[@intCast(try a.interop.functionId(c, function))].effects.len);
+    var compiled = try c.compile(std.testing.allocator, function, try a.interop.schema(c, unit));
     defer compiled.deinit();
     try std.testing.expectEqual(@as(usize, 0), compiled.program.effects.len);
 }
@@ -208,7 +186,6 @@ test "all portable schema families lower to checked pure comparisons" {
 test "internal values reject at any recursive schema depth before declarations" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
-    const failure = try b.constant(void, {});
     const unit = try b.scalar(void);
     const region = b.region();
     const cell = try b.schema(.{ .internal = .{ .cell = .{ .element = unit, .region = region } } });
@@ -216,27 +193,29 @@ test "internal values reject at any recursive schema depth before declarations" 
     const nested = try b.schema(.{ .product = &.{ recursive, cell } });
     try b.defineSchema(recursive, .{ .sum = &.{ unit, nested } });
     const before = b.functions.items.len;
-    try std.testing.expectError(error.UnsupportedEqualitySchema, define(&b, recursive, failure));
+    const c = try a.Context.init(&b);
+    try std.testing.expectError(error.UnsupportedEqualitySchema, create(c, try a.interop.schema(c, recursive), try c.literalFailure(void, {})));
     try std.testing.expectEqual(before, b.functions.items.len);
 }
 
-test "compare validates values and returns an ordinary source call" {
+test "typed comparison calls validate schemas, origins and raw import bounds" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
-    const failure = try b.constant(void, {});
-    const integer = try b.scalar(u64);
-    const left = try b.constant(u64, 13);
-    const right = try b.constant(u64, 17);
-    const term = try compare(&b, integer, left, right, failure);
+    const c = try a.Context.init(&b);
+    const integer = try c.scalar(u64);
+    const function = try create(c, integer, try c.literalFailure(void, {}));
+    const body = try a.interop.scope(c);
+    const left = try body.constant(u64, 13);
+    const right = try body.constant(u64, 17);
+    const compared = try body.call(function, &.{ .{ .name = "left", .value = left }, .{ .name = "right", .value = right } });
+    const term = try a.interop.computationId(c, try body.ret(compared));
     try std.testing.expect(b.terms.items[@intCast(term)] == .call);
-    try std.testing.expectError(
-        error.TypeMismatch,
-        compare(&b, integer, left, try b.constant(bool, true), failure),
-    );
-    try std.testing.expectError(
-        error.InvalidReference,
-        compare(&b, integer, left, b.values.items.len, failure),
-    );
+    const bad = try a.interop.scope(c);
+    try std.testing.expectError(error.SchemaMismatch, bad.call(function, &.{ .{ .name = "left", .value = try bad.constant(u64, 13) }, .{ .name = "right", .value = try bad.constant(bool, true) } }));
+    const foreign = try a.Context.init(&b);
+    const imported = try a.interop.scope(foreign);
+    try std.testing.expectError(error.InvalidReference, a.interop.adoptValue(imported, b.values.items.len, try foreign.scalar(u64)));
+    try std.testing.expectError(error.ForeignHandle, imported.call(function, &.{ .{ .name = "left", .value = try imported.constant(u64, 13) }, .{ .name = "right", .value = try imported.constant(u64, 17) } }));
 }
 
 test "typed comparisons preserve named records and share equal failure literals" {

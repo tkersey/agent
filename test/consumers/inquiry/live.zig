@@ -1,5 +1,6 @@
 //! Exact checked candidate -> current read proof -> approval -> conditional write.
 const agent = @import("agent");
+const typed = @import("boundary").authoring;
 const t = @import("types.zig");
 const s = @import("source.zig");
 const Pop = @import("plans.zig").Pop;
@@ -58,7 +59,16 @@ fn approvalDefinition(e: E, observed: agent.observation.Definition, selected: Id
     const principal = try e.p(authority, 1);
     try b.define(authority, try e.cond(try e.less(try e.value(u64, 0), principal), try b.pure(try e.eq(principal, try e.field(u64, try e.p(authority, 0), 3))), try b.pure(try e.value(bool, false))));
     const policy = try b.declare(&.{proposal}, boolean, &.{}, &.{});
-    try b.define(policy, try agent.value_equality.compare(b, proposal, try e.p(policy, 0), try e.ref(selected), try e.value(void, {})));
+    const c = try typed.Context.init(b);
+    const exact_schema = try typed.interop.schema(c, proposal);
+    const exact_function = try agent.value_equality.create(c, exact_schema, try c.literalFailure(void, {}));
+    const exact_body = try typed.interop.scope(c);
+    const exact_value = try exact_body.call(exact_function, &.{
+        .{ .name = "left", .value = try typed.interop.adoptValue(exact_body, try e.p(policy, 0), exact_schema) },
+        .{ .name = "right", .value = try typed.interop.adoptValue(exact_body, try e.ref(selected), exact_schema) },
+    });
+    const exact = try typed.interop.computationId(c, try exact_body.ret(exact_value));
+    try b.define(policy, exact);
     const project = try b.declare(&.{proposal}, observed.data, &.{}, &.{});
     try b.define(project, try b.pure(try e.variant(t.Read, try e.p(project, 0), 0)));
     return agent.approval.define(e.c, .{
@@ -100,9 +110,35 @@ fn revalidate(e: E, observed: agent.observation.Definition, approval: agent.appr
     const approve = try b.bind(selected, try b.pure(proposed), try approveExact(e, approval, f, selected, proof));
     const artifact = try b.bind(discarded, consume, try result(e, 9, try e.product(t.Receipt, &.{ base, proposed })));
     const delivery = try e.cond(try e.eq(try e.field(u8, task, 9), try e.value(u8, 1)), artifact, approve);
-    const choose = try b.bind(unchanged, try agent.value_equality.compare(b, try e.schema(t.Source), try e.field(t.Source, candidate, 0), try e.field(t.Source, base, 0), try e.value(void, {})), try e.cond(try e.ref(unchanged), no_change, delivery));
-    const matching = try b.bind(same, try agent.value_equality.compare(b, try e.schema(t.Source), try e.field(t.Source, subject, 1), try e.field(t.Source, base, 0), try e.value(void, {})), try e.cond(try e.ref(same), choose, conflict));
-    const scoped = try b.bind(context_matches, try agent.value_equality.compare(b, try e.schema(t.Proposal), proposed, try e.ref(actual), try e.value(void, {})), try e.cond(try e.ref(context_matches), matching, invalid_context));
+    const c = try typed.Context.init(b);
+    const fault = try c.literalFailure(void, {});
+    const candidate_equal_schema = try typed.interop.schema(c, try e.schema(t.Source));
+    const candidate_equal_function = try agent.value_equality.create(c, candidate_equal_schema, fault);
+    const candidate_equal_body = try typed.interop.scope(c);
+    const candidate_equal_value = try candidate_equal_body.call(candidate_equal_function, &.{
+        .{ .name = "left", .value = try typed.interop.adoptValue(candidate_equal_body, try e.field(t.Source, candidate, 0), candidate_equal_schema) },
+        .{ .name = "right", .value = try typed.interop.adoptValue(candidate_equal_body, try e.field(t.Source, base, 0), candidate_equal_schema) },
+    });
+    const candidate_equal = try typed.interop.computationId(c, try candidate_equal_body.ret(candidate_equal_value));
+    const base_equal_schema = try typed.interop.schema(c, try e.schema(t.Source));
+    const base_equal_function = try agent.value_equality.create(c, base_equal_schema, fault);
+    const base_equal_body = try typed.interop.scope(c);
+    const base_equal_value = try base_equal_body.call(base_equal_function, &.{
+        .{ .name = "left", .value = try typed.interop.adoptValue(base_equal_body, try e.field(t.Source, subject, 1), base_equal_schema) },
+        .{ .name = "right", .value = try typed.interop.adoptValue(base_equal_body, try e.field(t.Source, base, 0), base_equal_schema) },
+    });
+    const base_equal = try typed.interop.computationId(c, try base_equal_body.ret(base_equal_value));
+    const proposal_equal_schema = try typed.interop.schema(c, try e.schema(t.Proposal));
+    const proposal_equal_function = try agent.value_equality.create(c, proposal_equal_schema, fault);
+    const proposal_equal_body = try typed.interop.scope(c);
+    const proposal_equal_value = try proposal_equal_body.call(proposal_equal_function, &.{
+        .{ .name = "left", .value = try typed.interop.adoptValue(proposal_equal_body, proposed, proposal_equal_schema) },
+        .{ .name = "right", .value = try typed.interop.adoptValue(proposal_equal_body, try e.ref(actual), proposal_equal_schema) },
+    });
+    const proposal_equal = try typed.interop.computationId(c, try proposal_equal_body.ret(proposal_equal_value));
+    const choose = try b.bind(unchanged, candidate_equal, try e.cond(try e.ref(unchanged), no_change, delivery));
+    const matching = try b.bind(same, base_equal, try e.cond(try e.ref(same), choose, conflict));
+    const scoped = try b.bind(context_matches, proposal_equal, try e.cond(try e.ref(context_matches), matching, invalid_context));
     const branch = try b.term(.{ .match_sum = .{ .value = try e.ref(data), .cases = &.{
         .{ .variable = actual, .body = scoped }, .{ .variable = failed, .body = failure },
     } } });

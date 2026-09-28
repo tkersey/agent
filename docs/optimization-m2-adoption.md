@@ -65,7 +65,7 @@ failures/cancellations. Chromium 153.0.8010.12 and Firefox 155.0 pass actual
 browser/file/browser transfer and cleanup. The exact log hash and tuple are in
 `conformance/agent4/m2-adoption-status.json`.
 
-Paired timing, compiler-cost reporting and final review closure remain open.
+Functional and economic qualification is complete for the measured tuple. Final serial-review closure remains open.
 
 Admission timing now completes all 72 native/WASM local and cumulative cells
 under the supplied alternating-window protocol. No C2/C1 cell has a reproducible
@@ -75,8 +75,7 @@ previously accepted cutover slowdowns: native review-clarify_first (1.089), nati
 review-model (1.192), and WASM review-model (1.171). Their local C2/C1 cells have no
 confirmed slowdown. The exact ratios remain visible rather than being replaced
 by the historical percentages; `m2-admission-timing.json` preserves every raw
-window/sample in compact JSON rows. This does not qualify execution/checkpoint
-timing, which is running separately.
+window/sample in compact JSON rows. Execution/checkpoint timing is qualified separately below.
 
 The unchanged inquiry/ReAct scenarios execute all 13 cases and 128 semantic
 boundaries identically for C0, C1 and C2: canonical request schemas/payloads,
@@ -100,9 +99,8 @@ compiler construction measurements or qualify unfinished timing cells.
 
 The existing World replay benchmark builds against the frozen tuple and its
 smoke outcome agrees with the authenticated WASM runtime. Replay inputs for C0,
-C1, cutover and candidate are kept separate. Additional scenario recording and
-paired timing wait for the active integrated tests to finish, avoiding competing
-sandbox workloads. No control is installed or exposed as a production option.
+C1, cutover and candidate are kept separate. Scenario recording and paired timing subsequently completed after the integrated
+tests finished; the results below retain their separate measurement scopes. No control is installed or exposed as a production option.
 
 ## Historical evidence at Boundary `8321156`
 
@@ -128,8 +126,9 @@ work over applicable regions, with independently indexed certificate validation.
 Fresh emission above supersedes the budget failure for this corpus; it does not
 relabel the earlier checks as new-head evidence.
 
-Native/Node/WASM/browser behavior, separate World admission/execution/memory and
-checkpoint costs, package bindings and cumulative C0 comparisons remain pending.
+At this historical checkpoint, Native/Node/WASM/browser behavior, separate World
+costs, package bindings and cumulative C0 comparisons were pending. The final
+qualification above and below supersedes that pending status.
 The accepted cutover costs remain in the baseline; no new World regression is
 accepted implicitly. No PR is ready to merge and no merge/release is authorized.
 
@@ -187,4 +186,34 @@ timeouts. The enclosing Zig aggregate was later terminated as superseded (exit 1
 of the unchanged inquiry CLI test passes both tests in 78.5 seconds, preserving
 its 120-second timeout. Per-scenario reports show contention in the concurrent
 attempt. The next integrated run serializes Node test files; every original case,
-assertion and deadline remains. Its complete outcome is not yet established.
+assertion and deadline remains. That successor aggregate subsequently passed, as recorded in the final qualification above.
+
+## Completed M2 timing and construction-cost disposition
+
+The three-arm execution comparison completes 78 scenario/engine/control cells.
+Every replay checks its expected canonical outcome. No full fresh-invocation
+slowdown is confirmed. Thirteen individual phase cells exceed the supplied
+criterion: ten checkpoint encodings (+0.3–3.6 µs / 6.0–11.7%), two restores
+(+23.8–38.3 µs / 7.3–12.3%), and one native execution (+16.2 µs / 7.3%).
+The user explicitly accepted these measured costs. That acceptance applies to
+these exact cells only; correctness, other qualification and later regressions
+remain governed by the specification. Exact paired observations and disposition
+are in [m2-execution-timing.json](../conformance/agent4/m2-execution-timing.json);
+raw windows are in [m2-execution-windows.json](performance/m2-execution-windows.json).
+
+Uninstrumented construction timing uses three alternating process windows, each
+with three warmup and nine measured emissions of all 18 workloads. All 1,296
+output images match their expected C1/C2 hashes. Separate allocation probes
+match all 36 images. [Compiler costs](performance/m2-compiler-costs.json) retain
+every stage sample and per-workload allocation result. ReAct compiler time grows
+from roughly 20 ms to 326 ms (median paired ratio 16.06, +306.8 ms). Requested
+construction peak grows from 36,486,216 to 429,364,762 bytes; total requested
+allocation is 2,155,455,384 bytes versus 52,301,178. These are allocator-request
+counts, not RSS. The extra checked transformation search and candidate
+validation are construction costs accepted under the corrected product policy,
+not a World speed claim. No historical compiler-speed target is a new gate.
+
+The production source/package/runtime tuple remains Boundary 5f5c11e and
+the unchanged authenticated World kernel. This report does not require rebuilding
+that kernel. Final installed serial reviews remain outstanding; M2.5 production
+affine capture-state synthesis follows that checkpoint.

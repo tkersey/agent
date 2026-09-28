@@ -3,7 +3,7 @@
   "boundaryCommit": "5f5c11e7f1331ba4b10e8520f48df8278765a704",
   "worldBinding": "unchanged",
   "sourceMetricsSha256": "346471bbb13afbb130e7f1ae951536ec84a9ef4ae5ecc1a8da1399e9e716de49",
-  "qualification": "Final authenticated M2 tuple: complete Agent authoring/native/integration/economy/browser aggregate passed. Paired timing and review closure remain incomplete.",
+  "qualification": "Authenticated M2 tuple functional and measured economic qualification complete; the user accepted the 13 listed phase timing costs. Final serial-review closure remains incomplete.",
   "priorObservation": {
     "boundaryCommit": "517cfb1670671f8b9383aa8711b76c30a01f32ad",
     "workLimitWorkloads": [
@@ -439,5 +439,12 @@
       "Chromium 153.0.8010.12",
       "Firefox 155.0"
     ]
+  },
+  "economicQualification": {
+    "admission": "conformance/agent4/m2-admission-timing.json",
+    "runtimeMemory": "conformance/agent4/m2-runtime-comparison.json",
+    "executionTiming": "conformance/agent4/m2-execution-timing.json",
+    "compilerCosts": "docs/performance/m2-compiler-costs.json",
+    "review": "pending"
   }
 }

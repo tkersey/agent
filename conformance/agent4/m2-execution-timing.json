@@ -1,0 +1,438 @@
+{
+  "status": "complete-measurement-accepted-tradeoff",
+  "boundaryCommit": "5f5c11e7f1331ba4b10e8520f48df8278765a704",
+  "kernelSha256": "7d31effb1d4e32523d0fcbd5b4d5f5a8a2289fbd4c731173a33b1c174524282f",
+  "scope": "Sum of independently replayed World boundaries, excluding environmental I/O; each boundary retains its own paired ratios and confirmation result. Not end-to-end application latency.",
+  "transport": "Native replay stdin is the actual input file descriptor; file loading is before its timing clock. The interrupted pipe-stdin attempt is not included.",
+  "protocol": "Three warmups and nine measured samples per independently launched boundary replay; three alternating control/candidate windows, plus two confirmation windows for suspected >5% phase ratios. Every canonical outcome is checked.",
+  "clockScope": "Native execution excludes outcome encoding; WASM public drive includes ABI outcome encoding/copy. Each engine is compared only to its matching control. Checkpoint encoding is separately timed.",
+  "confirmed": [
+    {
+      "engine": "native",
+      "control": "c0",
+      "name": "paired-inadequate-inquiry",
+      "index": "0008",
+      "phase": "executionNs",
+      "medianRatio": 1.072975205492437,
+      "confirmedSlowdown": true,
+      "pairedMedianDeltaNs": 16167,
+      "pairs": [
+        {
+          "before": 221541,
+          "after": 237708
+        },
+        {
+          "before": 222042,
+          "after": 235125
+        },
+        {
+          "before": 221042,
+          "after": 240583
+        },
+        {
+          "before": 222959,
+          "after": 237084
+        },
+        {
+          "before": 219958,
+          "after": 236750
+        }
+      ]
+    },
+    {
+      "engine": "wasm",
+      "control": "c1",
+      "name": "paired-rebinding-inquiry",
+      "index": "0002",
+      "phase": "checkpointNs",
+      "medianRatio": 1.0789467953045713,
+      "confirmedSlowdown": true,
+      "pairedMedianDeltaNs": 3625,
+      "pairs": [
+        {
+          "before": 46000,
+          "after": 50333
+        },
+        {
+          "before": 49583,
+          "after": 52917
+        },
+        {
+          "before": 46583,
+          "after": 49625
+        },
+        {
+          "before": 47375,
+          "after": 51500
+        },
+        {
+          "before": 45917,
+          "after": 49542
+        }
+      ]
+    },
+    {
+      "engine": "wasm",
+      "control": "c1",
+      "name": "paired-rebinding-react",
+      "index": "0010",
+      "phase": "checkpointNs",
+      "medianRatio": 1.103088648215002,
+      "confirmedSlowdown": true,
+      "pairedMedianDeltaNs": 1542,
+      "pairs": [
+        {
+          "before": 12083,
+          "after": 13792
+        },
+        {
+          "before": 10458,
+          "after": 13458
+        },
+        {
+          "before": 14750,
+          "after": 15667
+        },
+        {
+          "before": 14834,
+          "after": 13959
+        },
+        {
+          "before": 14958,
+          "after": 16500
+        }
+      ]
+    },
+    {
+      "engine": "wasm",
+      "control": "c1",
+      "name": "paired-reset-inquiry",
+      "index": "0008",
+      "phase": "checkpointNs",
+      "medianRatio": 1.0683760683760684,
+      "confirmedSlowdown": true,
+      "pairedMedianDeltaNs": 3000,
+      "pairs": [
+        {
+          "before": 43875,
+          "after": 46875
+        },
+        {
+          "before": 43583,
+          "after": 48417
+        },
+        {
+          "before": 47792,
+          "after": 46500
+        },
+        {
+          "before": 43916,
+          "after": 46458
+        },
+        {
+          "before": 42417,
+          "after": 45750
+        }
+      ]
+    },
+    {
+      "engine": "wasm",
+      "control": "c1",
+      "name": "paired-reset-inquiry",
+      "index": "0021",
+      "phase": "startOrRestoreNs",
+      "medianRatio": 1.07261052413128,
+      "confirmedSlowdown": true,
+      "pairedMedianDeltaNs": 23792,
+      "pairs": [
+        {
+          "before": 329250,
+          "after": 370000
+        },
+        {
+          "before": 327875,
+          "after": 351708
+        },
+        {
+          "before": 327666,
+          "after": 351458
+        },
+        {
+          "before": 335584,
+          "after": 326083
+        },
+        {
+          "before": 328208,
+          "after": 350875
+        }
+      ]
+    },
+    {
+      "engine": "wasm",
+      "control": "c1",
+      "name": "paired-reset-react",
+      "index": "0007",
+      "phase": "checkpointNs",
+      "medianRatio": 1.0907807512889762,
+      "confirmedSlowdown": true,
+      "pairedMedianDeltaNs": 2958,
+      "pairs": [
+        {
+          "before": 32375,
+          "after": 35958
+        },
+        {
+          "before": 32750,
+          "after": 35584
+        },
+        {
+          "before": 32375,
+          "after": 35375
+        },
+        {
+          "before": 32584,
+          "after": 35542
+        },
+        {
+          "before": 35208,
+          "after": 36167
+        }
+      ]
+    },
+    {
+      "engine": "wasm",
+      "control": "c1",
+      "name": "paired-reset-react",
+      "index": "0009",
+      "phase": "checkpointNs",
+      "medianRatio": 1.0876352669859854,
+      "confirmedSlowdown": true,
+      "pairedMedianDeltaNs": 3458,
+      "pairs": [
+        {
+          "before": 39459,
+          "after": 42917
+        },
+        {
+          "before": 39042,
+          "after": 43375
+        },
+        {
+          "before": 39375,
+          "after": 43083
+        },
+        {
+          "before": 40250,
+          "after": 42917
+        },
+        {
+          "before": 40958,
+          "after": 43083
+        }
+      ]
+    },
+    {
+      "engine": "wasm",
+      "control": "c1",
+      "name": "paired-reset-react",
+      "index": "0010",
+      "phase": "checkpointNs",
+      "medianRatio": 1.0779241019247252,
+      "confirmedSlowdown": true,
+      "pairedMedianDeltaNs": 1000,
+      "pairs": [
+        {
+          "before": 11458,
+          "after": 13709
+        },
+        {
+          "before": 12833,
+          "after": 13833
+        },
+        {
+          "before": 12959,
+          "after": 13792
+        },
+        {
+          "before": 11792,
+          "after": 13125
+        },
+        {
+          "before": 13125,
+          "after": 14042
+        }
+      ]
+    },
+    {
+      "engine": "wasm",
+      "control": "c1",
+      "name": "react-rejects-occurrence",
+      "index": "0002",
+      "phase": "checkpointNs",
+      "medianRatio": 1.0927322591703805,
+      "confirmedSlowdown": true,
+      "pairedMedianDeltaNs": 541,
+      "pairs": [
+        {
+          "before": 5875,
+          "after": 6292
+        },
+        {
+          "before": 5958,
+          "after": 8250
+        },
+        {
+          "before": 5834,
+          "after": 6375
+        },
+        {
+          "before": 6000,
+          "after": 6500
+        },
+        {
+          "before": 5667,
+          "after": 6416
+        }
+      ]
+    },
+    {
+      "engine": "wasm",
+      "control": "c0",
+      "name": "paired-already-correct-react",
+      "index": "0002",
+      "phase": "checkpointNs",
+      "medianRatio": 1.1169424083769635,
+      "confirmedSlowdown": true,
+      "pairedMedianDeltaNs": 2792,
+      "pairs": [
+        {
+          "before": 24208,
+          "after": 25834
+        },
+        {
+          "before": 25750,
+          "after": 27125
+        },
+        {
+          "before": 24084,
+          "after": 28125
+        },
+        {
+          "before": 23875,
+          "after": 26667
+        },
+        {
+          "before": 23791,
+          "after": 28041
+        }
+      ]
+    },
+    {
+      "engine": "wasm",
+      "control": "c0",
+      "name": "paired-inadequate-react",
+      "index": "0003",
+      "phase": "checkpointNs",
+      "medianRatio": 1.0602779281718102,
+      "confirmedSlowdown": true,
+      "pairedMedianDeltaNs": 334,
+      "pairs": [
+        {
+          "before": 5667,
+          "after": 6166
+        },
+        {
+          "before": 5541,
+          "after": 5875
+        },
+        {
+          "before": 5791,
+          "after": 5875
+        },
+        {
+          "before": 5542,
+          "after": 5833
+        },
+        {
+          "before": 5584,
+          "after": 5958
+        }
+      ]
+    },
+    {
+      "engine": "wasm",
+      "control": "c0",
+      "name": "paired-rebinding-inquiry",
+      "index": "0021",
+      "phase": "startOrRestoreNs",
+      "medianRatio": 1.122895023155949,
+      "confirmedSlowdown": true,
+      "pairedMedianDeltaNs": 38292,
+      "pairs": [
+        {
+          "before": 311583,
+          "after": 349875
+        },
+        {
+          "before": 312334,
+          "after": 350625
+        },
+        {
+          "before": 313083,
+          "after": 350125
+        },
+        {
+          "before": 311958,
+          "after": 350958
+        },
+        {
+          "before": 312167,
+          "after": 351125
+        }
+      ]
+    },
+    {
+      "engine": "wasm",
+      "control": "c0",
+      "name": "paired-reset-react",
+      "index": "0002",
+      "phase": "checkpointNs",
+      "medianRatio": 1.0927058823529412,
+      "confirmedSlowdown": true,
+      "pairedMedianDeltaNs": 2167,
+      "pairs": [
+        {
+          "before": 23375,
+          "after": 25542
+        },
+        {
+          "before": 25625,
+          "after": 27417
+        },
+        {
+          "before": 23708,
+          "after": 27583
+        },
+        {
+          "before": 24709,
+          "after": 28541
+        },
+        {
+          "before": 25875,
+          "after": 25292
+        }
+      ]
+    }
+  ],
+  "disposition": "Explicit user acceptance: the 13 measured M2 boundary/phase costs listed here are accepted. This does not waive correctness, other qualification requirements, or later regressions.",
+  "rawWindows": {
+    "path": "docs/performance/m2-execution-windows.json",
+    "sha256": "da2bfd97639c992408cabcc75d8e7294f57fa7fde2523daca6328bd867989d16",
+    "cells": 78
+  },
+  "acceptance": {
+    "decision": "Accept these measured costs",
+    "scope": "Ten checkpoint-encoding cells, two restore cells, one native execution cell; exact paired ratios and deltas retained in confirmed",
+    "source": "Explicit user reply to the section 9.5 disposition question"
+  }
+}

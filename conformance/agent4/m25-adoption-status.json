@@ -1,0 +1,732 @@
+{
+  "status": "qualification-in-progress",
+  "boundaryCommit": "8b900338818c084d0e752f191313a4535ee31699",
+  "worldBinding": "unchanged authenticated World f8a1597 runtime",
+  "authentication": {
+    "commit": "8b900338818c084d0e752f191313a4535ee31699",
+    "gitTree": "bc1819e92096e9bc267d682a01122c165b9b75e9",
+    "hash": "boundary-3.0.0-dev.0-flclaPQJZgCg4EAnpHhKcTUV4wpdpX4SoQcpq-KrOdDv",
+    "verified": {
+      "source": {
+        "inventorySha256": "0eadfe3f4b53ad37d63127f3f704566695fcf19993518c00ed32c0e7b7a46725",
+        "gitTree": "bc1819e92096e9bc267d682a01122c165b9b75e9"
+      },
+      "package": {
+        "profile": "archive-extracted",
+        "inventorySha256": "a890c53e3801331a5015d106a2c79ccb85350e1ed5cbd49b7e563312074a6ef2"
+      },
+      "archive": {
+        "bytes": 1810080,
+        "sha256": "fc1a6f123f7811f1c8889615b5162f3b40b924d34123299184b4442d0a38723b"
+      }
+    }
+  },
+  "managedVerification": {
+    "lockSha256": "600c71212e3ded82076e7c13096e6a4d5ac6c4422b193f0b44c19c5b56933edf",
+    "boundary": {
+      "source": {
+        "inventorySha256": "0eadfe3f4b53ad37d63127f3f704566695fcf19993518c00ed32c0e7b7a46725",
+        "gitTree": "bc1819e92096e9bc267d682a01122c165b9b75e9"
+      },
+      "package": {
+        "profile": "zig-managed",
+        "inventorySha256": "a890c53e3801331a5015d106a2c79ccb85350e1ed5cbd49b7e563312074a6ef2"
+      }
+    },
+    "world": {
+      "source": {
+        "inventorySha256": "892f54ef0a7579b4b1dd78a0fb3ad9babd06d30ff1f444b79d9dab82c3d13192",
+        "gitTree": "1e1da87672d83c810a0d8cda5474b5d0a3b89207"
+      },
+      "archive": {
+        "bytes": 337473,
+        "sha256": "13522bb3c558acf4674cfde459c1c74f392cedb60c396b058aa96cd33087c970"
+      },
+      "runtime": {
+        "inventorySha256": "ba84e0de889100dccb31436ad6193dd481a73a02d7f0bce6829249557bd6578b",
+        "kernelSha256": "7d31effb1d4e32523d0fcbd5b4d5f5a8a2289fbd4c731173a33b1c174524282f",
+        "entrypoint": "/Users/tk/.codex/worktrees/3183/agent-authoring/.agent4-qualified-f8a1597/out/world-runtime/runtime/src/embedding/index.mjs",
+        "kernelPath": "/Users/tk/.codex/worktrees/3183/agent-authoring/.agent4-qualified-f8a1597/out/world-runtime/runtime/world-kernel.wasm"
+      }
+    }
+  },
+  "validation": {
+    "managedTools": {
+      "steps": 7,
+      "exitCode": 0,
+      "logSha256": "7b78e8585baf3aa0e28d6bce3fede44408f3be5d64605754abfc3691936e2c22"
+    },
+    "emissionProbe": {
+      "steps": 3,
+      "exitCode": 0,
+      "logSha256": "9bcbd08a00b1acffea7a7cad87b21ab6d8ca086a30a49b32ebbeb52b9a1bcf81"
+    },
+    "inquiryReact": {
+      "scenarios": 13,
+      "exitCode": 0,
+      "logSha256": "90afe223053691cf66a18a358286c29de0b183d7468460d7297f0ec81757dcef"
+    },
+    "document": {
+      "cases": 13,
+      "exitCode": 0,
+      "imageSha256": "1da3f835259c060e2a7c97e7c3eaa391d6b421ac8f17136cc8683729f1d54b6f",
+      "logSha256": "781eb6a3040e611beb93ea4bddcb1c8fbae84c433456c6f37f44151f42b43068",
+      "runnerSha256": "54db1656a1b1ab74d848d02c3e63fd54a2334cc34c1c3a4b8b65967b9efb26bd",
+      "adaptation": "Unchanged assertions and production imports; temporary scratch destination"
+    },
+    "consequence": {
+      "cases": 36,
+      "exitCode": 0,
+      "nativeMatched": true,
+      "imageSha256": "d1f93895fad77827b816b2e29e491648b89a975d967d86fd4cc4d9d9c2d7211d",
+      "logSha256": "8644b734b1fc0647a3622daf5e31b24f04b305867d7404bb51da5f7b98523ea0",
+      "runnerSha256": "b472a1a5a7f1b3127e2d22f3760d0561e5ad95de55eed7ccb98359022208649b",
+      "adaptation": "Unchanged application-only assertions; temporary scratch/cache and already-installed locked Wasmtime environment"
+    },
+    "repeatedInquiry": {
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/tmp/m25-inquiry-repeated-approved.log",
+      "logSha256": "454fd5f993b9d0a4ec097cdf8613291e8c33eb00f6efe1545741bccba9622c55",
+      "result": {
+        "imageBytes": 35590,
+        "models": 28,
+        "experiments": 4,
+        "cleanups": 8,
+        "epochs": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "statistics": {
+          "multiTemplates": 8,
+          "branchActivations": 16,
+          "transitions": 21388
+        },
+        "boundaries": [
+          {
+            "turn": 1,
+            "stateBytes": 174,
+            "multiTemplates": 0,
+            "branches": 0,
+            "resources": 0,
+            "cells": 0,
+            "packages": 0,
+            "obligations": 0,
+            "nodes": 2,
+            "blobs": 1
+          },
+          {
+            "turn": 2,
+            "stateBytes": 174,
+            "multiTemplates": 0,
+            "branches": 0,
+            "resources": 0,
+            "cells": 0,
+            "packages": 0,
+            "obligations": 0,
+            "nodes": 2,
+            "blobs": 1
+          },
+          {
+            "turn": 3,
+            "stateBytes": 174,
+            "multiTemplates": 0,
+            "branches": 0,
+            "resources": 0,
+            "cells": 0,
+            "packages": 0,
+            "obligations": 0,
+            "nodes": 2,
+            "blobs": 1
+          },
+          {
+            "turn": 4,
+            "stateBytes": 174,
+            "multiTemplates": 0,
+            "branches": 0,
+            "resources": 0,
+            "cells": 0,
+            "packages": 0,
+            "obligations": 0,
+            "nodes": 2,
+            "blobs": 1
+          }
+        ]
+      },
+      "priorFailure": {
+        "logPath": "/tmp/m25-inquiry-repeated-runtime.log",
+        "reason": "Outer sandbox prevented executor profile probe; approved execution passed without weakened assertions."
+      }
+    },
+    "admissionTiming": {
+      "status": "complete",
+      "exitCode": 0,
+      "cells": 20,
+      "confirmedSlowdowns": 0,
+      "path": "/tmp/m25-admission-timing-results.json",
+      "sha256": "4f4eeb04edb92559e66692315e71a903de92b7005c034913ba9e2fa75d09381b",
+      "scope": "Cold Prepared admission for the five changed images; local M2.5/M2 predecessor and cumulative M2.5/C0 pairs; not an isolated pass-omission control and no execution/checkpoint claim"
+    }
+  },
+  "nativeMemory": {
+    "scope": "same prescribed scenario source and reused native executable; per-scenario peak and maximum checkpoint. No latency or WASM-memory claim.",
+    "sourceSha256": "8d519e57776d7963e07900b6eadcc850b6437caaa97db3f4acbfbe07913dde08",
+    "nativeSha256": "0d7b616711edf08fdbc7c97e32ce1547340ed093570fa753ba30ae25cae9278e",
+    "rows": [
+      {
+        "name": "paired-reset-inquiry",
+        "oldImage": "1ce4ff273a377f90d72dbebec520e807db47174c57c0a200db370fa308425ece",
+        "newImage": "ccbb9a49588024aa8e85cd046652d97d09bb6d7b7bd513be47f7f85400ac81b3",
+        "oldPeak": 1590568,
+        "newPeak": 1591042,
+        "peakDelta": 474,
+        "oldCheckpoint": 49025,
+        "newCheckpoint": 49025,
+        "checkpointDelta": 0
+      },
+      {
+        "name": "paired-reset-react",
+        "oldImage": "911542337e962e0ef75f0294c95d8d2f976beff80d781123cb4352ef2311c2d4",
+        "newImage": "8862538dcc82fa25286ba83dcc5dfe005c9e1ffdf84bc55bb190c635f08a191b",
+        "oldPeak": 1760202,
+        "newPeak": 1759910,
+        "peakDelta": -292,
+        "oldCheckpoint": 67697,
+        "newCheckpoint": 67697,
+        "checkpointDelta": 0
+      },
+      {
+        "name": "paired-rebinding-inquiry",
+        "oldImage": "1ce4ff273a377f90d72dbebec520e807db47174c57c0a200db370fa308425ece",
+        "newImage": "ccbb9a49588024aa8e85cd046652d97d09bb6d7b7bd513be47f7f85400ac81b3",
+        "oldPeak": 1589298,
+        "newPeak": 1589772,
+        "peakDelta": 474,
+        "oldCheckpoint": 48135,
+        "newCheckpoint": 48135,
+        "checkpointDelta": 0
+      },
+      {
+        "name": "paired-rebinding-react",
+        "oldImage": "911542337e962e0ef75f0294c95d8d2f976beff80d781123cb4352ef2311c2d4",
+        "newImage": "8862538dcc82fa25286ba83dcc5dfe005c9e1ffdf84bc55bb190c635f08a191b",
+        "oldPeak": 1759344,
+        "newPeak": 1759052,
+        "peakDelta": -292,
+        "oldCheckpoint": 67126,
+        "newCheckpoint": 67126,
+        "checkpointDelta": 0
+      },
+      {
+        "name": "paired-already-correct-inquiry",
+        "oldImage": "1ce4ff273a377f90d72dbebec520e807db47174c57c0a200db370fa308425ece",
+        "newImage": "ccbb9a49588024aa8e85cd046652d97d09bb6d7b7bd513be47f7f85400ac81b3",
+        "oldPeak": 1589070,
+        "newPeak": 1589544,
+        "peakDelta": 474,
+        "oldCheckpoint": 37043,
+        "newCheckpoint": 37043,
+        "checkpointDelta": 0
+      },
+      {
+        "name": "paired-already-correct-react",
+        "oldImage": "911542337e962e0ef75f0294c95d8d2f976beff80d781123cb4352ef2311c2d4",
+        "newImage": "8862538dcc82fa25286ba83dcc5dfe005c9e1ffdf84bc55bb190c635f08a191b",
+        "oldPeak": 1724652,
+        "newPeak": 1724360,
+        "peakDelta": -292,
+        "oldCheckpoint": 43997,
+        "newCheckpoint": 43997,
+        "checkpointDelta": 0
+      },
+      {
+        "name": "paired-inadequate-inquiry",
+        "oldImage": "1ce4ff273a377f90d72dbebec520e807db47174c57c0a200db370fa308425ece",
+        "newImage": "ccbb9a49588024aa8e85cd046652d97d09bb6d7b7bd513be47f7f85400ac81b3",
+        "oldPeak": 1589216,
+        "newPeak": 1589690,
+        "peakDelta": 474,
+        "oldCheckpoint": 29164,
+        "newCheckpoint": 29164,
+        "checkpointDelta": 0
+      },
+      {
+        "name": "paired-inadequate-react",
+        "oldImage": "911542337e962e0ef75f0294c95d8d2f976beff80d781123cb4352ef2311c2d4",
+        "newImage": "8862538dcc82fa25286ba83dcc5dfe005c9e1ffdf84bc55bb190c635f08a191b",
+        "oldPeak": 1697760,
+        "newPeak": 1697468,
+        "peakDelta": -292,
+        "oldCheckpoint": 26069,
+        "newCheckpoint": 26069,
+        "checkpointDelta": 0
+      },
+      {
+        "name": "react-rejects-subject",
+        "oldImage": "911542337e962e0ef75f0294c95d8d2f976beff80d781123cb4352ef2311c2d4",
+        "newImage": "8862538dcc82fa25286ba83dcc5dfe005c9e1ffdf84bc55bb190c635f08a191b",
+        "oldPeak": 1697868,
+        "newPeak": 1697576,
+        "peakDelta": -292,
+        "oldCheckpoint": 26141,
+        "newCheckpoint": 26141,
+        "checkpointDelta": 0
+      },
+      {
+        "name": "react-rejects-key",
+        "oldImage": "911542337e962e0ef75f0294c95d8d2f976beff80d781123cb4352ef2311c2d4",
+        "newImage": "8862538dcc82fa25286ba83dcc5dfe005c9e1ffdf84bc55bb190c635f08a191b",
+        "oldPeak": 1697832,
+        "newPeak": 1697540,
+        "peakDelta": -292,
+        "oldCheckpoint": 26117,
+        "newCheckpoint": 26117,
+        "checkpointDelta": 0
+      },
+      {
+        "name": "react-rejects-occurrence",
+        "oldImage": "911542337e962e0ef75f0294c95d8d2f976beff80d781123cb4352ef2311c2d4",
+        "newImage": "8862538dcc82fa25286ba83dcc5dfe005c9e1ffdf84bc55bb190c635f08a191b",
+        "oldPeak": 1697894,
+        "newPeak": 1697602,
+        "peakDelta": -292,
+        "oldCheckpoint": 26159,
+        "newCheckpoint": 26159,
+        "checkpointDelta": 0
+      },
+      {
+        "name": "react-rejects-acceptance",
+        "oldImage": "911542337e962e0ef75f0294c95d8d2f976beff80d781123cb4352ef2311c2d4",
+        "newImage": "8862538dcc82fa25286ba83dcc5dfe005c9e1ffdf84bc55bb190c635f08a191b",
+        "oldPeak": 1711154,
+        "newPeak": 1710862,
+        "peakDelta": -292,
+        "oldCheckpoint": 34999,
+        "newCheckpoint": 34999,
+        "checkpointDelta": 0
+      },
+      {
+        "name": "react-inconclusive-candidate",
+        "oldImage": "911542337e962e0ef75f0294c95d8d2f976beff80d781123cb4352ef2311c2d4",
+        "newImage": "8862538dcc82fa25286ba83dcc5dfe005c9e1ffdf84bc55bb190c635f08a191b",
+        "oldPeak": 1708558,
+        "newPeak": 1708266,
+        "peakDelta": -292,
+        "oldCheckpoint": 33268,
+        "newCheckpoint": 33268,
+        "checkpointDelta": 0
+      }
+    ]
+  },
+  "comparison": [
+    {
+      "name": "direct",
+      "beforeBytes": 90,
+      "afterBytes": 90,
+      "sameImage": true,
+      "sha256": "0868302e26c48ef5920ed4bef1746dab60edbc618f2e540ba6e5ea1049e6ed7b",
+      "semanticCompilation": {
+        "outcome": "no_change",
+        "original_bytes": 90,
+        "baseline_bytes": 90,
+        "final_bytes": 90,
+        "rounds": 1,
+        "stages_run": 0,
+        "stages_skipped": 18,
+        "changed_stages": 0,
+        "work_reserved": 0,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "baseline",
+        "admission_guard_rejections": 0
+      }
+    },
+    {
+      "name": "facade",
+      "beforeBytes": 90,
+      "afterBytes": 90,
+      "sameImage": true,
+      "sha256": "0868302e26c48ef5920ed4bef1746dab60edbc618f2e540ba6e5ea1049e6ed7b",
+      "semanticCompilation": {
+        "outcome": "no_change",
+        "original_bytes": 90,
+        "baseline_bytes": 90,
+        "final_bytes": 90,
+        "rounds": 1,
+        "stages_run": 0,
+        "stages_skipped": 18,
+        "changed_stages": 0,
+        "work_reserved": 0,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "baseline",
+        "admission_guard_rejections": 0
+      }
+    },
+    {
+      "name": "sharing-1",
+      "beforeBytes": 292,
+      "afterBytes": 292,
+      "sameImage": true,
+      "sha256": "f0a17ed97f5e5e66829fd1a10a990394c444aa2331fc2686abb3157eb72319c7",
+      "semanticCompilation": {
+        "outcome": "no_change",
+        "original_bytes": 321,
+        "baseline_bytes": 292,
+        "final_bytes": 292,
+        "rounds": 1,
+        "stages_run": 2,
+        "stages_skipped": 16,
+        "changed_stages": 0,
+        "work_reserved": 23041120,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "baseline",
+        "admission_guard_rejections": 0
+      }
+    },
+    {
+      "name": "sharing-8",
+      "beforeBytes": 460,
+      "afterBytes": 460,
+      "sameImage": true,
+      "sha256": "89a257a0c46c711c342aa92d1507bea537358e1140b753ac585ca3a805167458",
+      "semanticCompilation": {
+        "outcome": "no_change",
+        "original_bytes": 489,
+        "baseline_bytes": 460,
+        "final_bytes": 460,
+        "rounds": 1,
+        "stages_run": 2,
+        "stages_skipped": 16,
+        "changed_stages": 0,
+        "work_reserved": 23080992,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "baseline",
+        "admission_guard_rejections": 0
+      }
+    },
+    {
+      "name": "sharing-64",
+      "beforeBytes": 2032,
+      "afterBytes": 2032,
+      "sameImage": true,
+      "sha256": "0b3dfa0f5598bfd365ade0fbd3b6052846eea524aeba4e28144053b6b373d328",
+      "semanticCompilation": {
+        "outcome": "no_change",
+        "original_bytes": 2061,
+        "baseline_bytes": 2032,
+        "final_bytes": 2032,
+        "rounds": 1,
+        "stages_run": 2,
+        "stages_skipped": 16,
+        "changed_stages": 0,
+        "work_reserved": 23399968,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "baseline",
+        "admission_guard_rejections": 0
+      }
+    },
+    {
+      "name": "conversation",
+      "beforeBytes": 375,
+      "afterBytes": 375,
+      "sameImage": true,
+      "sha256": "e4b837164f3299d76e71f35329069d2d1f2cb8a60c4567705ab40d4ca6d90537",
+      "semanticCompilation": {
+        "outcome": "applied",
+        "original_bytes": 377,
+        "baseline_bytes": 377,
+        "final_bytes": 375,
+        "rounds": 2,
+        "stages_run": 7,
+        "stages_skipped": 29,
+        "changed_stages": 1,
+        "work_reserved": 90457312,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "full",
+        "admission_guard_rejections": 0
+      }
+    },
+    {
+      "name": "document-consequence",
+      "beforeBytes": 11488,
+      "afterBytes": 11485,
+      "sameImage": false,
+      "sha256": "d1f93895fad77827b816b2e29e491648b89a975d967d86fd4cc4d9d9c2d7211d",
+      "semanticCompilation": {
+        "outcome": "applied",
+        "original_bytes": 14021,
+        "baseline_bytes": 11517,
+        "final_bytes": 11485,
+        "rounds": 2,
+        "stages_run": 13,
+        "stages_skipped": 24,
+        "changed_stages": 3,
+        "work_reserved": 4787042688,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "full",
+        "admission_guard_rejections": 0
+      }
+    },
+    {
+      "name": "clarify-first",
+      "beforeBytes": 9428,
+      "afterBytes": 9428,
+      "sameImage": true,
+      "sha256": "4216be2b0e0f840405ae45bec038b098475e12a1a17b047b655de3372c35cd87",
+      "semanticCompilation": {
+        "outcome": "applied",
+        "original_bytes": 13382,
+        "baseline_bytes": 9453,
+        "final_bytes": 9428,
+        "rounds": 2,
+        "stages_run": 13,
+        "stages_skipped": 24,
+        "changed_stages": 3,
+        "work_reserved": 3481832176,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "shrinking",
+        "admission_guard_rejections": 1
+      }
+    },
+    {
+      "name": "inquiry-repair",
+      "beforeBytes": 35257,
+      "afterBytes": 35210,
+      "sameImage": false,
+      "sha256": "ccbb9a49588024aa8e85cd046652d97d09bb6d7b7bd513be47f7f85400ac81b3",
+      "semanticCompilation": {
+        "outcome": "applied",
+        "original_bytes": 43026,
+        "baseline_bytes": 35591,
+        "final_bytes": 35210,
+        "rounds": 2,
+        "stages_run": 14,
+        "stages_skipped": 23,
+        "changed_stages": 3,
+        "work_reserved": 33367383104,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "full",
+        "admission_guard_rejections": 0
+      }
+    },
+    {
+      "name": "inquiry-repeated",
+      "beforeBytes": 35637,
+      "afterBytes": 35590,
+      "sameImage": false,
+      "sha256": "51b85b9ec31636f02edbc687465d4c4bdd5c5ba82d47c17d04f578329a327ef4",
+      "semanticCompilation": {
+        "outcome": "applied",
+        "original_bytes": 43324,
+        "baseline_bytes": 35973,
+        "final_bytes": 35590,
+        "rounds": 2,
+        "stages_run": 14,
+        "stages_skipped": 23,
+        "changed_stages": 3,
+        "work_reserved": 33842392768,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "full",
+        "admission_guard_rejections": 0
+      }
+    },
+    {
+      "name": "inquiry-react",
+      "beforeBytes": 41021,
+      "afterBytes": 40966,
+      "sameImage": false,
+      "sha256": "8862538dcc82fa25286ba83dcc5dfe005c9e1ffdf84bc55bb190c635f08a191b",
+      "semanticCompilation": {
+        "outcome": "applied",
+        "original_bytes": 57027,
+        "baseline_bytes": 49604,
+        "final_bytes": 40966,
+        "rounds": 2,
+        "stages_run": 15,
+        "stages_skipped": 22,
+        "changed_stages": 4,
+        "work_reserved": 94153752368,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "full",
+        "admission_guard_rejections": 0
+      }
+    },
+    {
+      "name": "document",
+      "beforeBytes": 7394,
+      "afterBytes": 7391,
+      "sameImage": false,
+      "sha256": "1da3f835259c060e2a7c97e7c3eaa391d6b421ac8f17136cc8683729f1d54b6f",
+      "semanticCompilation": {
+        "outcome": "applied",
+        "original_bytes": 7770,
+        "baseline_bytes": 7425,
+        "final_bytes": 7391,
+        "rounds": 2,
+        "stages_run": 17,
+        "stages_skipped": 20,
+        "changed_stages": 3,
+        "work_reserved": 1875529360,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "full",
+        "admission_guard_rejections": 0
+      }
+    },
+    {
+      "name": "review-mid_review",
+      "beforeBytes": 3039,
+      "afterBytes": 3039,
+      "sameImage": true,
+      "sha256": "5ed04eb3bfb41dc37905f90c9b643cd7333b0466afb86ab4a8f071cb49482e09",
+      "semanticCompilation": {
+        "outcome": "applied",
+        "original_bytes": 3145,
+        "baseline_bytes": 3064,
+        "final_bytes": 3039,
+        "rounds": 2,
+        "stages_run": 14,
+        "stages_skipped": 23,
+        "changed_stages": 3,
+        "work_reserved": 477399552,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "shrinking",
+        "admission_guard_rejections": 1
+      }
+    },
+    {
+      "name": "review-clarify_first",
+      "beforeBytes": 3038,
+      "afterBytes": 3038,
+      "sameImage": true,
+      "sha256": "d39f58b356cc89f881610a499b69e20ccb55ca343ef75be92ba45b00c8e97b4a",
+      "semanticCompilation": {
+        "outcome": "applied",
+        "original_bytes": 3144,
+        "baseline_bytes": 3063,
+        "final_bytes": 3038,
+        "rounds": 2,
+        "stages_run": 14,
+        "stages_skipped": 23,
+        "changed_stages": 3,
+        "work_reserved": 477398784,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "shrinking",
+        "admission_guard_rejections": 1
+      }
+    },
+    {
+      "name": "review-human",
+      "beforeBytes": 414,
+      "afterBytes": 414,
+      "sameImage": true,
+      "sha256": "222e18e156a1a93d19cbbe3787725cf6f298e2b2e57a914c2e3e1a34be77af72",
+      "semanticCompilation": {
+        "outcome": "no_change",
+        "original_bytes": 429,
+        "baseline_bytes": 414,
+        "final_bytes": 414,
+        "rounds": 1,
+        "stages_run": 2,
+        "stages_skipped": 16,
+        "changed_stages": 0,
+        "work_reserved": 23108704,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "baseline",
+        "admission_guard_rejections": 0
+      }
+    },
+    {
+      "name": "review-model",
+      "beforeBytes": 2331,
+      "afterBytes": 2331,
+      "sameImage": true,
+      "sha256": "927469ff6b1b7c95ea9aac4124a4b6303961d585c858416d9fc5466b3a8612bd",
+      "semanticCompilation": {
+        "outcome": "applied",
+        "original_bytes": 2381,
+        "baseline_bytes": 2356,
+        "final_bytes": 2331,
+        "rounds": 2,
+        "stages_run": 12,
+        "stages_skipped": 25,
+        "changed_stages": 2,
+        "work_reserved": 322580864,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "shrinking",
+        "admission_guard_rejections": 1
+      }
+    },
+    {
+      "name": "review-rule",
+      "beforeBytes": 269,
+      "afterBytes": 269,
+      "sameImage": true,
+      "sha256": "e159594845f0d01375a92eb46b2fc04bf3017881b9b69fbdff728384198c164e",
+      "semanticCompilation": {
+        "outcome": "no_change",
+        "original_bytes": 283,
+        "baseline_bytes": 269,
+        "final_bytes": 269,
+        "rounds": 1,
+        "stages_run": 1,
+        "stages_skipped": 17,
+        "changed_stages": 0,
+        "work_reserved": 22060832,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "baseline",
+        "admission_guard_rejections": 0
+      }
+    },
+    {
+      "name": "review-react",
+      "beforeBytes": 302,
+      "afterBytes": 302,
+      "sameImage": true,
+      "sha256": "30d023517353c3e6f197b264daf0f8ac8b9640ee5e0cfc4c2d2afd3981514e4c",
+      "semanticCompilation": {
+        "outcome": "no_change",
+        "original_bytes": 323,
+        "baseline_bytes": 302,
+        "final_bytes": 302,
+        "rounds": 1,
+        "stages_run": 3,
+        "stages_skipped": 15,
+        "changed_stages": 0,
+        "work_reserved": 45195264,
+        "stopped_stage": null,
+        "failed_stage": null,
+        "selected_candidate": "baseline",
+        "admission_guard_rejections": 0
+      }
+    }
+  ],
+  "remaining": [
+    "Final integrated authoring/runtime/package/browser qualification",
+    "Same-contract/cumulative timing and remaining execution/checkpoint economic qualification"
+  ],
+  "admissionMemory": {
+    "path": "/tmp/m25-admission-memory-qualified.json",
+    "sha256": "0d620f7651931329b8410f8b5fd4a3360a993c6a2fc9679df76869db1f602c53",
+    "cases": 18,
+    "scope": "Native and production WASM admission only; C0 and M2 controls preserved. Largest local native increase474bytes; no local WASM increase."
+  },
+  "deliveryInstruction": "One active branch and draft PR per repository; reuse existing worktrees. Approved commands can now edit active worktrees."
+}

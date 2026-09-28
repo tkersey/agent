@@ -1,7 +1,7 @@
 # M2 semantic compilation adoption — in progress
 
 This successor preserves cutover PR #39 at `c181ef5`. Boundary authoring is rebound
-to `5f5c11e7f1331ba4b10e8520f48df8278765a704` (Boundary draft #162). The downloaded
+to `b32115dd42f828e2749ec62c4d63f20a0592c4fb` (Boundary draft #162). The downloaded
 GitHub archive's reconstructed Git tree matches the commit API, and the source,
 Zig-managed package and extracted-package inventories have been checked. The World
 lock, authenticated runtime and kernel are unchanged; no kernel was rebuilt or
@@ -217,3 +217,22 @@ The production source/package/runtime tuple remains Boundary 5f5c11e and
 the unchanged authenticated World kernel. This report does not require rebuilding
 that kernel. Final installed serial reviews remain outstanding; M2.5 production
 affine capture-state synthesis follows that checkpoint.
+
+## Statistics repair package rebind
+
+Boundary `b32115d` resets semantic statistics before final-link validation.
+This closes the review finding where a rejected link retained an earlier
+success. The archive tree matches the GitHub commit API; source, extracted
+package, actual Zig-managed package and unchanged World tuple verify.
+Managed component tools pass 7/7 steps and the emission probe passes 3/3.
+All 18 newly emitted images are byte-identical to the qualified `5f5c11e` images.
+The Agent authoring aggregate finishes with exit zero: 314/314 steps, 136/136
+Zig tests, and Node batches of 9/9 and 35/35. Boundary’s repaired aggregate
+passes 319/319 steps and 528/528 tests. Exact input identities and log hashes
+are in `conformance/agent4/m2-link-statistics-rebind.json`.
+
+Runtime, browser and accepted economic results are reused only for identical
+images under the unchanged authenticated runtime. Original compiler timing
+remains labeled with its original commit. No old artifact was relabeled and
+no World kernel was rebuilt. The first review sequence invalidated its head;
+fresh review closure on the repaired tuple remains pending.

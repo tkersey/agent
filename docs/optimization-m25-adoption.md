@@ -53,3 +53,22 @@ Accordingly the existing runtime behavior and user-accepted 8b90033 World costs
 apply to these exact unchanged images with the unchanged runtime and consumer
 code. This does not relabel the earlier runs as new executions, claim faster
 compilation, or close remaining full integration and synthesis obligations.
+
+## Final consumer integration
+
+On the authenticated 15c5356 package/runtime tuple, the selected authoring,
+integration and browser aggregate completed **411/411 steps and 202/202 Zig
+tests**, with Node groups of 9, 22, 35 and 95 tests reporting no failures.
+Chromium 153 and Firefox 155 completed real Worker/file/Worker transfer and
+cleanup checks. The separate economy target passed 208/208 steps and 4/4 tests.
+These are separate command outcomes, not an invented sum of their shared build
+steps. `conformance/agent4/m25-final-integration.json` retains the exact scope
+and log digests. Remaining synthetic cost disposition belongs to Boundary.
+
+The bounded M2.5 checkpoint is qualified. Boundary records the additional
+source-level witnesses, the completed synthetic native/WASM economics and
+the explicit acceptance of the 128-word native admission tradeoff. No new
+consumer runtime cost is inferred from smaller images: all 18 consumer images
+were compared byte-for-byte, and the final integration was executed on the
+actual authenticated package/runtime tuple. Continue M3 and the remaining
+programme on these same draft branches; final code review remains deferred.

@@ -1,5 +1,5 @@
 {
-  "status": "qualification-in-progress",
+  "status": "m25-bounded-checkpoint-qualified; full-programme-in-progress",
   "boundaryCommit": "8b900338818c084d0e752f191313a4535ee31699",
   "worldBinding": "unchanged authenticated World f8a1597 runtime",
   "authentication": {
@@ -732,8 +732,9 @@
     }
   ],
   "remaining": [
-    "Final integrated authoring/runtime/package/browser qualification",
-    "Final-image economics for subsequent production changes"
+    "M3 P06–P10/P21 minimum witnesses and negatives",
+    "Remaining M4–M8 implementation and technical qualification",
+    "Final installed serial-review contract after the complete programme"
   ],
   "admissionMemory": {
     "path": "/tmp/m25-admission-memory-qualified.json",
@@ -748,5 +749,10 @@
     "sha256": "037fabb2e4cccd39447c34122f2fc9bd8b5cf9031149d9886d3c1c4e705263d2",
     "all18ImagesIdenticalToRecordedBoundaryCommit": true,
     "runtimeCosts": "Reuse the explicitly accepted measurements only for the identical images, unchanged runtime and consumer code."
+  },
+  "finalIntegration": {
+    "evidence": "conformance/agent4/m25-final-integration.json",
+    "sha256": "2422da2b4badbaf7012c66a4a58d8737c8ed0eefaf8eece9f894d49116190826",
+    "status": "passed"
   }
 }

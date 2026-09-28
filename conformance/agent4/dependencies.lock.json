@@ -3,38 +3,38 @@
   "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "15c53569bae3e12131088a0141487b8385173184",
-    "gitTree": "1f95ea835bc143064587918aa8ad71158a09250b",
+    "commit": "c1f4baf48a5d07b6d8c166c4434070267c427c36",
+    "gitTree": "f1a3f43160c255d14e52fb482a56bcbc09e7d6eb",
     "version": "3.0.0-dev.0",
     "source": {
-      "inventorySha256": "dc83b0f4d4d2aaa6cfd36cd711989c3367b9c7e59b4c11a81907d9de691d5392",
-      "entries": 380,
-      "bytes": 12283621
+      "inventorySha256": "51ccfe1f91e27767518ad33432c43c780108f46a8e9c5f36313dc35f1bfc5227",
+      "entries": 473,
+      "bytes": 15587780
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/15c53569bae3e12131088a0141487b8385173184.tar.gz",
-      "bytes": 1820011,
-      "sha256": "be655a3adba7f04d31ccd97f989ae8acc85cf07d5331b47543dbe286d281a638"
+      "url": "https://github.com/tkersey/boundary/archive/c1f4baf48a5d07b6d8c166c4434070267c427c36.tar.gz",
+      "bytes": 2240855,
+      "sha256": "809fa41cb711b33a4aa49ff23f12b4da4416eb5edf9ef98b6e9fb75e6cdcb9c7"
     },
     "authentication": "Downloaded GitHub archive tree recomputed and matched to the GitHub commit API; archive and complete source/package inventories independently measured",
     "package": {
-      "zigHash": "boundary-3.0.0-dev.0-flclaAOIZgCZc5o_rj2mHnZpnz-WByn-hh3S7eshlUQE",
+      "zigHash": "boundary-3.0.0-dev.0-flclaAH7bAD8xscT2RAC-pLAVLjhg7pPryzvusPqhNSp",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "70a33d625ba9d050192e9eb54c52efdc011f31f6de1808785f1de025c0d8eeab",
-          "entries": 325,
-          "bytes": 6719491
+          "inventorySha256": "1f843a51f010099f3dc158ec8615cdb694bf93a52f39c347b411db5475b13446",
+          "entries": 368,
+          "bytes": 7142145
         },
         "archive-extracted": {
-          "inventorySha256": "70a33d625ba9d050192e9eb54c52efdc011f31f6de1808785f1de025c0d8eeab",
-          "entries": 325,
-          "bytes": 6719491
+          "inventorySha256": "1f843a51f010099f3dc158ec8615cdb694bf93a52f39c347b411db5475b13446",
+          "entries": 368,
+          "bytes": 7142145
         }
       },
       "archive": {
-        "bytes": 786960,
-        "sha256": "6aba286c8d1ed266b7aee9397765f204cf1eaebb4013ca225b96dba9cf2ae69e"
+        "bytes": 860919,
+        "sha256": "8f5b125e04d648255b1826ae06713d6f41e4f5c4a4649b4e0ed5be00a09e14d0"
       }
     },
     "api": {
@@ -49,7 +49,7 @@
         },
         {
           "path": "src/data/root.zig",
-          "sha256": "86df8bba27ef39075c22c9c602920f6ebabb83707508dfab971c57d5a5d482b8"
+          "sha256": "5627ae5f41b409b045b2b8c916fb6d5fc19a1de85f1d5272d095819d7c851f93"
         },
         {
           "path": "src/source.zig",
@@ -73,7 +73,7 @@
         },
         {
           "path": "src/data/closed_compilation.zig",
-          "sha256": "ab314af7dec24317ba5b212567100532eee881a49b5ea7d92669e34f8969ccef"
+          "sha256": "2b5cfaf208c2842adecc7fbe0e922d4b0d3270d11f9b1276950802968a7a9baf"
         },
         {
           "path": "src/source/diagnostic.zig",
@@ -357,12 +357,12 @@
     "architecture": "arm64"
   },
   "publicationObservation": {
-    "boundarySource": "draft PR 162 at 5f5c11e7f1331ba4b10e8520f48df8278765a704",
+    "boundarySource": "draft PR 161 at c1f4baf48a5d07b6d8c166c4434070267c427c36",
     "worldSource": "unchanged authenticated production source f8a1597d4ff62ae691dfca12f7ce3a2b4e6c0727",
     "compatiblePublishedReleaseObserved": false
   },
   "limitations": [
-    "Mandatory P01 and structural/semantic compilation contracts are retained. M2 adoption and final package/runtime/economic qualification remain incomplete.",
+    "Mandatory P01 and structural/semantic compilation contracts are retained. M3 source correctness is qualified; consumer economics and final authenticated integration remain pending.",
     "The unchanged authenticated World kernel is reused; its original build Boundary identity remains recorded in world.runtime.build."
   ]
 }

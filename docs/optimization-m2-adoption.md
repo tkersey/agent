@@ -1,7 +1,7 @@
 # M2 semantic compilation adoption — in progress
 
 This successor preserves cutover PR #39 at `c181ef5`. Boundary authoring is rebound
-to `b32115dd42f828e2749ec62c4d63f20a0592c4fb` (Boundary draft #162). The downloaded
+to `7d48c08364dd6d021c46ea64fad584937e9e930f` (Boundary draft #162). The downloaded
 GitHub archive's reconstructed Git tree matches the commit API, and the source,
 Zig-managed package and extracted-package inventories have been checked. The World
 lock, authenticated runtime and kernel are unchanged; no kernel was rebuilt or
@@ -236,3 +236,25 @@ images under the unchanged authenticated runtime. Original compiler timing
 remains labeled with its original commit. No old artifact was relabeled and
 no World kernel was rebuilt. The first review sequence invalidated its head;
 fresh review closure on the repaired tuple remains pending.
+
+## Invocation-boundary observation repair
+
+Boundary `7d48c08` centralizes semantic/P01 observation reset and applies it
+before typed publication and source-component preparation. Agent now invokes
+that reset before emitter/admission work and compiled-tool preparation. The
+original checks, errors, callbacks and closed-link contract remain intact.
+The new regression reuses successful statistics before emitter and invalid-entry
+failures under both structural and semantic contracts.
+
+Source, archive tree, extracted package, actual managed package and unchanged
+World tuple authenticate. Managed tools pass 7/7 steps; economy tests pass 4/4
+and the emitter build passes 3/3. All 18 fresh images equal the qualified M2
+images. Agent’s ReleaseSafe authoring aggregate completes with exit zero:
+314/314 steps, 136/136 Zig tests, and Node batches 9/9 and 35/35. Boundary’s
+aggregate passes 319/319 steps and 531/531 tests. Exact identities and log
+hashes are in `conformance/agent4/m2-observation-reset-rebind.json`.
+
+Existing runtime/browser/economic evidence applies by exact image identity
+under the unchanged authenticated World artifact, with original input labels
+retained. Compiler timing is not relabeled. Both previous initial review
+sequences are terminal and invalidated; fresh review closure remains pending.

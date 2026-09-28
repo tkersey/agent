@@ -115,6 +115,7 @@ pub fn declare(c: Context, spec: Specification) !Descriptor {
 }
 
 pub fn link(allocator: std.mem.Allocator, module: source.Module, registry: *const admission.Registry, options: source.CompileOptions) !source.Compiled {
+    options.resetObservations();
     errdefer |err| if (options.diagnostic) |diagnostic| {
         diagnostic.code = err;
     };

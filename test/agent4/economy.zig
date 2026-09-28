@@ -655,3 +655,40 @@ test "retention and shared-scope consumers compile using public compositions" {
     defer shared.deinit();
     try std.testing.expectEqual(@as(usize, 1), shared.program.handlers.len);
 }
+
+test "Agent resets Boundary observations before emitter and admission rejection" {
+    const FailingApplication = struct {
+        var invalid_entry = false;
+        pub fn emit(c: agent.Context) !source.Module {
+            if (!invalid_entry) return error.EmitterRejected;
+            var module = try Minimal.emit(c);
+            module.entry = module.functions.len;
+            return module;
+        }
+    };
+    const FailingSystem = agent.system(.{
+        .InitialArgs = u32,
+        .Result = u32,
+        .Failure = void,
+        .application = FailingApplication,
+    });
+    for ([_]data.closed_compilation.Contract{ .structural, .semantic }) |contract| {
+        var stats: data.closed_compilation.Statistics = .{};
+        var p01: data.coalescing.Statistics = .{};
+        const options: agent.CompileOptions = .{ .boundary_options = .{ .contract = contract, .semantic_statistics = &stats, .coalescing = .{ .statistics = &p01 } } };
+        for ([_]bool{ false, true }) |invalid| {
+            var valid = try agent.compileObserved(std.testing.allocator, MinimalSystem, options);
+            valid.deinit();
+            try std.testing.expect(stats.outcome != .not_run);
+            try std.testing.expect(p01.outcome != .not_run);
+            FailingApplication.invalid_entry = invalid;
+            if (invalid) {
+                try std.testing.expectError(error.InvalidEntry, agent.compileObserved(std.testing.allocator, FailingSystem, options));
+            } else {
+                try std.testing.expectError(error.EmitterRejected, agent.compileObserved(std.testing.allocator, FailingSystem, options));
+            }
+            try std.testing.expectEqualDeep(data.closed_compilation.Statistics{}, stats);
+            try std.testing.expectEqualDeep(data.coalescing.Statistics{}, p01);
+        }
+    }
+}

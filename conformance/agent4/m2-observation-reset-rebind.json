@@ -1,0 +1,187 @@
+{
+  "status": "qualified-rebind-reviews-pending",
+  "boundaryCommit": "7d48c08364dd6d021c46ea64fad584937e9e930f",
+  "previousBoundaryCommit": "b32115dd42f828e2749ec62c4d63f20a0592c4fb",
+  "change": "Shared observation reset before fallible typed publication, source-component preparation, Agent emitter/admission and compiled-tool preparation; original validation remains.",
+  "authentication": {
+    "commit": "7d48c08364dd6d021c46ea64fad584937e9e930f",
+    "gitTree": "a834eb48b26f2a0947f35c18f056b3c1c88aad6f",
+    "hash": "boundary-3.0.0-dev.0-flclaJujYwChyotExmPlgTOKqD_znIiSKaDeaIGt41oS",
+    "verified": {
+      "source": {
+        "inventorySha256": "febdb1fb35e27380825d24c86e7c89bb9f93b8da7a679cac39850efe904aa182",
+        "gitTree": "a834eb48b26f2a0947f35c18f056b3c1c88aad6f"
+      },
+      "package": {
+        "profile": "archive-extracted",
+        "inventorySha256": "d164b8c601c0e716e1e3683e8463dc67745e02a980eb8ada1f500e80dbb70f33"
+      },
+      "archive": {
+        "bytes": 1760068,
+        "sha256": "06c7fe73ad835a8c28cac630eda7b9f6ef9e9d6b72f79da565b3d9713cff6a28"
+      }
+    }
+  },
+  "managedVerification": {
+    "lockSha256": "f80354f993821d38ddbf16e481ba55c64d91c02c4c26db2d3277cfb6a09c4b8a",
+    "boundary": {
+      "source": {
+        "inventorySha256": "febdb1fb35e27380825d24c86e7c89bb9f93b8da7a679cac39850efe904aa182",
+        "gitTree": "a834eb48b26f2a0947f35c18f056b3c1c88aad6f"
+      },
+      "package": {
+        "profile": "zig-managed",
+        "inventorySha256": "d164b8c601c0e716e1e3683e8463dc67745e02a980eb8ada1f500e80dbb70f33"
+      }
+    },
+    "world": {
+      "source": {
+        "inventorySha256": "892f54ef0a7579b4b1dd78a0fb3ad9babd06d30ff1f444b79d9dab82c3d13192",
+        "gitTree": "1e1da87672d83c810a0d8cda5474b5d0a3b89207"
+      },
+      "archive": {
+        "bytes": 337473,
+        "sha256": "13522bb3c558acf4674cfde459c1c74f392cedb60c396b058aa96cd33087c970"
+      },
+      "runtime": {
+        "inventorySha256": "ba84e0de889100dccb31436ad6193dd481a73a02d7f0bce6829249557bd6578b",
+        "kernelSha256": "7d31effb1d4e32523d0fcbd5b4d5f5a8a2289fbd4c731173a33b1c174524282f",
+        "entrypoint": "/Users/tk/.codex/worktrees/3183/agent-authoring/.agent4-qualified-f8a1597/out/world-runtime/runtime/src/embedding/index.mjs",
+        "kernelPath": "/Users/tk/.codex/worktrees/3183/agent-authoring/.agent4-qualified-f8a1597/out/world-runtime/runtime/world-kernel.wasm"
+      }
+    }
+  },
+  "validation": {
+    "boundary": {
+      "steps": 319,
+      "tests": 531,
+      "exitCode": 0,
+      "logSha256": "c890b609d2d469d82bf81412d72113cb2f88cfea6c791dc9749f3a137e8e7916"
+    },
+    "focusedBoundary": {
+      "steps": 6,
+      "tests": 474,
+      "exitCode": 0,
+      "logSha256": "b8ae1436d365a16f0acc0bbdbd2bfd712a4eb50a0c0c52c40a3850e5ebd1331f"
+    },
+    "managedTools": {
+      "steps": 7,
+      "exitCode": 0,
+      "logSha256": "be82e959b4296d73e8880330b4ae4c83fa255d8f34a4ee1747af9f84b4812e60"
+    },
+    "economy": {
+      "tests": 4,
+      "testSteps": 3,
+      "emitterSteps": 3,
+      "exitCode": 0,
+      "logSha256": "5e94ece6008a27a76c1388812122c8c9c8043568b5e01855aaea589c5df39676"
+    },
+    "agentAuthoring": {
+      "steps": 314,
+      "zigTests": 136,
+      "nodeBatches": [
+        9,
+        35
+      ],
+      "exitCode": 0,
+      "logSha256": "3ef0a25f5da7d241f106f88e20f6471cf453e155f601ad708894a6817b4bbef2"
+    }
+  },
+  "images": [
+    {
+      "name": "clarify-first.bpi3",
+      "sha256": "4216be2b0e0f840405ae45bec038b098475e12a1a17b047b655de3372c35cd87",
+      "bytes": 9428
+    },
+    {
+      "name": "conversation.bpi3",
+      "sha256": "e4b837164f3299d76e71f35329069d2d1f2cb8a60c4567705ab40d4ca6d90537",
+      "bytes": 375
+    },
+    {
+      "name": "direct.bpi3",
+      "sha256": "0868302e26c48ef5920ed4bef1746dab60edbc618f2e540ba6e5ea1049e6ed7b",
+      "bytes": 90
+    },
+    {
+      "name": "document-consequence.bpi3",
+      "sha256": "e75ce2c8ace5022339e8c4c048810ffde8b8ff65bced3bf236fde2961f451dc2",
+      "bytes": 11488
+    },
+    {
+      "name": "document.bpi3",
+      "sha256": "ed6ede6828e2bbd222b698cf8ac519cbb875ac5af080ae596ef91e9ff4a66aa8",
+      "bytes": 7394
+    },
+    {
+      "name": "facade.bpi3",
+      "sha256": "0868302e26c48ef5920ed4bef1746dab60edbc618f2e540ba6e5ea1049e6ed7b",
+      "bytes": 90
+    },
+    {
+      "name": "inquiry-react.bpi3",
+      "sha256": "911542337e962e0ef75f0294c95d8d2f976beff80d781123cb4352ef2311c2d4",
+      "bytes": 41021
+    },
+    {
+      "name": "inquiry-repair.bpi3",
+      "sha256": "1ce4ff273a377f90d72dbebec520e807db47174c57c0a200db370fa308425ece",
+      "bytes": 35257
+    },
+    {
+      "name": "inquiry-repeated.bpi3",
+      "sha256": "88fd0bb0b928985a55ac9789c8a246c55bc5fe16180de61ef35c696d153d4689",
+      "bytes": 35637
+    },
+    {
+      "name": "review-clarify_first.bpi3",
+      "sha256": "d39f58b356cc89f881610a499b69e20ccb55ca343ef75be92ba45b00c8e97b4a",
+      "bytes": 3038
+    },
+    {
+      "name": "review-human.bpi3",
+      "sha256": "222e18e156a1a93d19cbbe3787725cf6f298e2b2e57a914c2e3e1a34be77af72",
+      "bytes": 414
+    },
+    {
+      "name": "review-mid_review.bpi3",
+      "sha256": "5ed04eb3bfb41dc37905f90c9b643cd7333b0466afb86ab4a8f071cb49482e09",
+      "bytes": 3039
+    },
+    {
+      "name": "review-model.bpi3",
+      "sha256": "927469ff6b1b7c95ea9aac4124a4b6303961d585c858416d9fc5466b3a8612bd",
+      "bytes": 2331
+    },
+    {
+      "name": "review-react.bpi3",
+      "sha256": "30d023517353c3e6f197b264daf0f8ac8b9640ee5e0cfc4c2d2afd3981514e4c",
+      "bytes": 302
+    },
+    {
+      "name": "review-rule.bpi3",
+      "sha256": "e159594845f0d01375a92eb46b2fc04bf3017881b9b69fbdff728384198c164e",
+      "bytes": 269
+    },
+    {
+      "name": "sharing-1.bpi3",
+      "sha256": "f0a17ed97f5e5e66829fd1a10a990394c444aa2331fc2686abb3157eb72319c7",
+      "bytes": 292
+    },
+    {
+      "name": "sharing-64.bpi3",
+      "sha256": "0b3dfa0f5598bfd365ade0fbd3b6052846eea524aeba4e28144053b6b373d328",
+      "bytes": 2032
+    },
+    {
+      "name": "sharing-8.bpi3",
+      "sha256": "89a257a0c46c711c342aa92d1507bea537358e1140b753ac585ca3a805167458",
+      "bytes": 460
+    }
+  ],
+  "reuse": {
+    "runtime": "All 18 fresh images match the 5f5c11e images and the authenticated World artifact is unchanged. Prior native/WASM/browser timing, memory and checkpoint evidence retains its original tuple and applies by exact image identity.",
+    "compiler": "No new construction timing claim. Prior measurements retain their original commit.",
+    "reviews": "Both prior initial sequences are terminal and invalidated. New sequence remains pending."
+  }
+}

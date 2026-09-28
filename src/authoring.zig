@@ -91,6 +91,7 @@ pub fn compileObserved(
     comptime System: type,
     options: CompileOptions,
 ) !source.Compiled {
+    options.boundary_options.resetObservations();
     options.stage(.descriptors);
     var builder = source.Builder.init(allocator);
     defer builder.deinit();

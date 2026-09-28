@@ -168,6 +168,19 @@
       "path": "/tmp/m25-admission-timing-results.json",
       "sha256": "4f4eeb04edb92559e66692315e71a903de92b7005c034913ba9e2fa75d09381b",
       "scope": "Cold Prepared admission for the five changed images; local M2.5/M2 predecessor and cumulative M2.5/C0 pairs; not an isolated pass-omission control and no execution/checkpoint claim"
+    },
+    "executionTiming": {
+      "status": "complete",
+      "exitCode": 0,
+      "comparisons": 78,
+      "confirmedComparisons": 8,
+      "confirmedPhases": 10,
+      "confirmedFreshInvocationSlowdowns": 0,
+      "confirmedNativePhaseSlowdowns": 0,
+      "path": "conformance/agent4/m25-execution-timing.json",
+      "sha256": "8688e7b78b62e413c23624ff101d16aa33244fa31cf2de7dbd3616e6bbb513c3",
+      "acceptance": "accepted by explicit user reply on 2026-09-28 for Boundary8b90033 only",
+      "scope": "Frozen Boundary8b90033 image comparisons versus M2 and pre-cutover C0; excludes environmental I/O and later direct-worker changes"
     }
   },
   "nativeMemory": {
@@ -720,7 +733,7 @@
   ],
   "remaining": [
     "Final integrated authoring/runtime/package/browser qualification",
-    "Same-contract/cumulative timing and remaining execution/checkpoint economic qualification"
+    "Final-image economics for subsequent production changes"
   ],
   "admissionMemory": {
     "path": "/tmp/m25-admission-memory-qualified.json",
@@ -728,5 +741,12 @@
     "cases": 18,
     "scope": "Native and production WASM admission only; C0 and M2 controls preserved. Largest local native increase474bytes; no local WASM increase."
   },
-  "deliveryInstruction": "One active branch and draft PR per repository; reuse existing worktrees. Approved commands can now edit active worktrees."
+  "deliveryInstruction": "One active branch and draft PR per repository; reuse existing worktrees. Approved commands can now edit active worktrees.",
+  "currentDependencyRebind": {
+    "boundaryCommit": "15c53569bae3e12131088a0141487b8385173184",
+    "evidence": "conformance/agent4/m25-direct-rebind.json",
+    "sha256": "037fabb2e4cccd39447c34122f2fc9bd8b5cf9031149d9886d3c1c4e705263d2",
+    "all18ImagesIdenticalToRecordedBoundaryCommit": true,
+    "runtimeCosts": "Reuse the explicitly accepted measurements only for the identical images, unchanged runtime and consumer code."
+  }
 }

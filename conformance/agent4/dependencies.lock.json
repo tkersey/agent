@@ -3,38 +3,38 @@
   "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "8b900338818c084d0e752f191313a4535ee31699",
-    "gitTree": "bc1819e92096e9bc267d682a01122c165b9b75e9",
+    "commit": "15c53569bae3e12131088a0141487b8385173184",
+    "gitTree": "1f95ea835bc143064587918aa8ad71158a09250b",
     "version": "3.0.0-dev.0",
     "source": {
-      "inventorySha256": "0eadfe3f4b53ad37d63127f3f704566695fcf19993518c00ed32c0e7b7a46725",
-      "entries": 376,
-      "bytes": 12235536
+      "inventorySha256": "dc83b0f4d4d2aaa6cfd36cd711989c3367b9c7e59b4c11a81907d9de691d5392",
+      "entries": 380,
+      "bytes": 12283621
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/8b900338818c084d0e752f191313a4535ee31699.tar.gz",
-      "bytes": 1810080,
-      "sha256": "fc1a6f123f7811f1c8889615b5162f3b40b924d34123299184b4442d0a38723b"
+      "url": "https://github.com/tkersey/boundary/archive/15c53569bae3e12131088a0141487b8385173184.tar.gz",
+      "bytes": 1820011,
+      "sha256": "be655a3adba7f04d31ccd97f989ae8acc85cf07d5331b47543dbe286d281a638"
     },
     "authentication": "Downloaded GitHub archive tree recomputed and matched to the GitHub commit API; archive and complete source/package inventories independently measured",
     "package": {
-      "zigHash": "boundary-3.0.0-dev.0-flclaPQJZgCg4EAnpHhKcTUV4wpdpX4SoQcpq-KrOdDv",
+      "zigHash": "boundary-3.0.0-dev.0-flclaAOIZgCZc5o_rj2mHnZpnz-WByn-hh3S7eshlUQE",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "a890c53e3801331a5015d106a2c79ccb85350e1ed5cbd49b7e563312074a6ef2",
-          "entries": 322,
-          "bytes": 6687220
+          "inventorySha256": "70a33d625ba9d050192e9eb54c52efdc011f31f6de1808785f1de025c0d8eeab",
+          "entries": 325,
+          "bytes": 6719491
         },
         "archive-extracted": {
-          "inventorySha256": "a890c53e3801331a5015d106a2c79ccb85350e1ed5cbd49b7e563312074a6ef2",
-          "entries": 322,
-          "bytes": 6687220
+          "inventorySha256": "70a33d625ba9d050192e9eb54c52efdc011f31f6de1808785f1de025c0d8eeab",
+          "entries": 325,
+          "bytes": 6719491
         }
       },
       "archive": {
-        "bytes": 780925,
-        "sha256": "23a13a14f87f0c561ae5e36057c8ff2b107e4e6f9c8b208be4294fe830939177"
+        "bytes": 786960,
+        "sha256": "6aba286c8d1ed266b7aee9397765f204cf1eaebb4013ca225b96dba9cf2ae69e"
       }
     },
     "api": {
@@ -73,7 +73,7 @@
         },
         {
           "path": "src/data/closed_compilation.zig",
-          "sha256": "c41bf9a31e30e640259862964c19df13c3e8f19859454ab774345fc78ed811f4"
+          "sha256": "ab314af7dec24317ba5b212567100532eee881a49b5ea7d92669e34f8969ccef"
         },
         {
           "path": "src/source/diagnostic.zig",

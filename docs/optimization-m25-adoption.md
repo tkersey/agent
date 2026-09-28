@@ -25,3 +25,31 @@ These are bounded observations, not final M2.5 acceptance. Execution/checkpoint
 paired timings, final integrated/browser qualification, remaining representation
 obligations, and later optimization milestones remain open. Code reviews follow
 the complete programme; they do not gate continued implementation.
+
+## Frozen-image execution timing
+
+The paired run completed 78 scenario/engine/control comparisons with three
+alternating windows and two additional confirmation windows when indicated.
+No fresh-invocation or native-phase slowdown was confirmed. Ten WASM phase
+comparisons exceeded 5%: eight checkpoint cells (+1.8–4.4 microseconds,
+6.0–14.2%), one start cell (+1 microsecond, 7.3%), and one restore cell
+(+18.4 microseconds, 5.9%). Only two are local M2.5/M2 regressions; the other
+eight are cumulative comparisons with the pre-cutover baseline.
+The exact rows, controls, raw-file digests and paired medians are retained in
+`conformance/agent4/m25-execution-timing.json`. The user explicitly accepted these ten bounded costs on 2026-09-28.
+These observations belong to Boundary8b90033 and do not qualify later changes.
+
+## Direct-worker compiler rebind
+
+The new compiler input is exact Boundary15c53569bae3e12131088a0141487b8385173184,
+authenticated from its GitHub commit tree and independently inventoried source
+and Zig package. Managed component tools passed 7/7 steps and the fresh
+economy emitter built in 3/3 steps. All 18 consumer images are **byte-identical**
+to the preceding 8b90033 images; reported semantic compilations have no
+work-limit outcome. `conformance/agent4/m25-direct-rebind.json` retains both
+image identities and the source/package/runtime verification.
+
+Accordingly the existing runtime behavior and user-accepted 8b90033 World costs
+apply to these exact unchanged images with the unchanged runtime and consumer
+code. This does not relabel the earlier runs as new executions, claim faster
+compilation, or close remaining full integration and synthesis obligations.

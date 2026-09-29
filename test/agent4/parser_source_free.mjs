@@ -10,17 +10,18 @@ const source=await realpath(resolve(import.meta.dirname,'../..'));
 const runtime=resolve(process.argv[2]??'.agent4-multishot/out/world-runtime/runtime');
 assert(process.argv[3],'native World invocation tool is required');
 const native=resolve(process.argv[3]);
+const installed=await realpath(resolve(process.argv[4]??join(source,'zig-out')));
 const area=await mkdtemp(join(tmpdir(),'parser-source-free-'));
 const hash=b=>createHash('sha256').update(b).digest('hex');
 try{
- execFileSync('tar',['-xzf',join(source,'zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),'-C',area]);
+ execFileSync('tar',['-xzf',join(installed,'agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),'-C',area]);
  const root=join(area,(await readdir(area))[0]),objects=join(root,'objects');await mkdir(objects);
- await cp(join(source,'zig-out/bin/link-parser'),join(root,'link-parser'));
+ await cp(join(installed,'bin/link-parser'),join(root,'link-parser'));
  await cp(runtime,join(area,'world-runtime'),{recursive:true});
  await cp(native,join(root,'world-invoke'));
  const fixture=join(root,'zig-out/agent4/parser-construction');await mkdir(fixture,{recursive:true});
  for(const name of ['producer.bmo1','consumer.bmo1','consumer-alt.bmo1','reference.bmo1','input-schema.bin','result-schema.bin','model-schema.bin','model-template.bin']){
-  await cp(join(source,'zig-out/agent4/parser-construction',name),join(fixture,name));
+  await cp(join(installed,'agent4/parser-construction',name),join(fixture,name));
   if(name.endsWith('.bmo1'))await cp(join(fixture,name),join(objects,name));
  }
  // The swap witness transports the same pinned producer used by its in-tree check.
@@ -34,9 +35,13 @@ try{
  await cp(join(source,'test/consumers/incremental-parser/candidates.mjs'),join(root,'test/consumers/incremental-parser/candidates.mjs'));
  const forbidden=join(source,'test/consumers/incremental-parser/main.zig');
  await readFile(forbidden); // Ensure denial is not merely a missing-file result.
- const profile=`(version 1) (allow default) (deny file-read* (subpath ${JSON.stringify(source)})) (deny process-exec (subpath ${JSON.stringify(source)}))`;
+ const profile=`(version 1) (allow default) (deny file-read* (subpath ${JSON.stringify(source)})) (deny process-exec (subpath ${JSON.stringify(source)})) (deny file-read* (subpath ${JSON.stringify(installed)})) (deny process-exec (subpath ${JSON.stringify(installed)}))`;
  const denied=spawnSync('/usr/bin/sandbox-exec',['-p',profile,'/bin/cat',forbidden],{cwd:root,encoding:'utf8'});
  assert.notEqual(denied.status,0);assert.match(denied.stderr,/not permitted|denied/i);
+ const installedInput=join(installed,'agent4/parser-construction/producer.bmo1');
+ await readFile(installedInput);
+ const deniedInput=spawnSync('/usr/bin/sandbox-exec',['-p',profile,'/bin/cat',installedInput],{cwd:root,encoding:'utf8'});
+ assert.notEqual(deniedInput.status,0);assert.match(deniedInput.stderr,/not permitted|denied/i);
  const producerBefore=hash(await readFile(join(objects,'producer.bmo1'))),runs=[];
  for(const [consumer,strategy,image]of [['consumer.bmo1','recursive','consumer-fixed.bpi3'],['consumer-alt.bmo1','alternate','consumer-alt-fixed.bpi3']]){
   const linked=spawnSync('/usr/bin/sandbox-exec',['-p',profile,join(root,'link-parser'),join(objects,'producer.bmo1'),join(objects,consumer),join(objects,'reference.bmo1')],{cwd:root,maxBuffer:16<<20});

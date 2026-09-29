@@ -576,6 +576,7 @@ pub fn build(b: *std.Build) void {
         if (inquiry_host) {
             const source_free = b.addSystemCommand(&.{ "node", "test/agent4/parser_source_free.mjs", runtime_path });
             source_free.addFileArg(native_exe.getEmittedBin());
+            source_free.addArg(b.getInstallPath(.prefix, ""));
             source_free.step.dependOn(distribution);
             source_free.step.dependOn(&runtime_guard.step);
             parser_source_free.dependOn(&source_free.step);

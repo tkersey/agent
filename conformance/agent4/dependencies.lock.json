@@ -3,38 +3,38 @@
   "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "5619ee81e89ebbeb18c5d24e9197dcade40196b1",
-    "gitTree": "777196f6400d3fe2444ec97fa343a0d56b296806",
+    "commit": "9912ffb90425f28a80bc7233da9f4360dd18b68f",
+    "gitTree": "c3dd5686f79d6847755bebcbd896cf8e1e5e03a5",
     "version": "3.0.0-dev.0",
     "source": {
-      "inventorySha256": "4d0a5822cff8e51e8be0ac790b2f544ea3ab7138e8b85dd2cc6059e8947279fa",
-      "entries": 623,
-      "bytes": 29603542
+      "inventorySha256": "786d54f509d221a6ed0d6258ec3a89a7d6aeae1f3d0b14eafca453034bc336b7",
+      "entries": 625,
+      "bytes": 29635899
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/5619ee81e89ebbeb18c5d24e9197dcade40196b1.tar.gz",
-      "bytes": 3785781,
-      "sha256": "3468b7f51c23ce8a1d5c71852d767c7342eabb994f9bfc7382addb3207885b0e"
+      "url": "https://github.com/tkersey/boundary/archive/9912ffb90425f28a80bc7233da9f4360dd18b68f.tar.gz",
+      "bytes": 3794088,
+      "sha256": "e4d8e6d7aa6738d5a136b281a292786527f5a774f6f6cb987c485787d4be4507"
     },
     "authentication": "Downloaded GitHub archive tree recomputed and matched to the GitHub commit API; archive and complete source/package inventories independently measured",
     "package": {
-      "zigHash": "boundary-3.0.0-dev.0-flclaM0OfQCwp2OIaSSFu35e4V13OtS2X6QJLtUW_mhb",
+      "zigHash": "boundary-3.0.0-dev.0-flclaH4_fQBzxBAbmZ6WQ5pyAF2z7A1pbGkgI_QhJ0KV",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "6e6f42e782c2ba244e74cdcd5f49ee012680d630e819c18e8934dd86d65d0757",
-          "entries": 485,
-          "bytes": 8195789
+          "inventorySha256": "becd6eb783b6e7fe9d3112dd8eb3cac779e0b660e10d9fe6ccfa6b9711205911",
+          "entries": 487,
+          "bytes": 8208254
         },
         "archive-extracted": {
-          "inventorySha256": "bb69ec492904e7e0c8f7961f61d3241c961f3c041066c60599c9bb801977074d",
-          "entries": 485,
-          "bytes": 8195789
+          "inventorySha256": "fd410ba417bd8411d75e754a7afe2d8c15da268f8006ee1179682d7ca1c4b3b0",
+          "entries": 487,
+          "bytes": 8208254
         }
       },
       "archive": {
-        "bytes": 1040601,
-        "sha256": "6bc0e2db6bcf39af4d06a6acc2682907dfb482d65a5e10d835ce075c2a4cf346"
+        "bytes": 1042604,
+        "sha256": "c98d896006152376b3abc47e59261b6de2d97ca9f571100d5c1f998105f37cf4"
       }
     },
     "api": {
@@ -358,13 +358,13 @@
     "architecture": "arm64"
   },
   "publicationObservation": {
-    "boundarySource": "draft PR 161 at 5619ee81e89ebbeb18c5d24e9197dcade40196b1",
+    "boundarySource": "draft PR 161 at 9912ffb90425f28a80bc7233da9f4360dd18b68f",
     "worldSource": "draft PR 59 at cb52f4ff43bbf23daf9cacb31ea26d9e3648235f; qualified runtime run 36629384504",
     "compatiblePublishedReleaseObserved": false
   },
   "limitations": [
     "Candidate integration: full final tuple qualification, historical cost decisions and final installed reviews remain open.",
     "P22 six recorded costs explicitly accepted; this does not accept separate earlier package costs.",
-    "World retains its independently locked Boundary511 build input; Agent uses the separately authenticated Boundary5619 package."
+    "World retains its independently locked Boundary511 build input; Agent uses the separately authenticated Boundary9912 package."
   ]
 }

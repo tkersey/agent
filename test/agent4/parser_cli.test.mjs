@@ -12,6 +12,7 @@ import {verifyRuntime} from '../../tools/agent4/dependencies.mjs';
 import {parseParserOptions} from '../../runtime/parser_cli.mjs';
 import {bufferUntilEOF,emitFinalRecord,decodedFields,rawRecords} from '../consumers/incremental-parser/candidates.mjs';
 const runtime=resolve(process.env.AGENT4_WORLD_RUNTIME??'.agent4-recursive-integrated/out/world-runtime/runtime');
+const archive=resolve(process.env.AGENT4_ARCHIVE??'zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz');
 test('parser provider configuration is explicit and credentials are not implicit',()=>{
  assert.equal(parseParserOptions(['--world-runtime',runtime]).calls,0);
  assert.equal(parseParserOptions(['--world-runtime',runtime]).selection,'single');
@@ -36,7 +37,7 @@ async function run(cwd,args,timeout=30000,input){
 test('parked participant view is diagnostic and cannot redirect resumption',async t=>{
  if(process.platform!=='darwin')return;
  const area=await mkdtemp(join(tmpdir(),'parser-cli-view-'));t.after(()=>rm(area,{recursive:true,force:true}));
- execFileSync('tar',['-xzf',resolve('zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),'-C',area]);
+ execFileSync('tar',['-xzf',archive,'-C',area]);
  const cwd=join(area,(await readdir(area))[0]);let stopped;
  for(let budget=1;budget<=8;budget++){
   const result=await run(cwd,['--endpoint','http://127.0.0.1:1','--model','fixture-model','--data-policy','fixture-only','--max-model-calls','1','--max-checks','1','--max-quanta',String(budget)]);
@@ -61,7 +62,7 @@ test('parked participant view is diagnostic and cannot redirect resumption',asyn
 test('model instructions agree with strict, emit and clarified EOF requirements',{timeout:240000},async t=>{
  if(process.platform!=='darwin')return;
  const area=await mkdtemp(join(tmpdir(),'parser-cli-eof-prompt-'));t.after(()=>rm(area,{recursive:true,force:true}));
- execFileSync('tar',['-xzf',resolve('zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),'-C',area]);
+ execFileSync('tar',['-xzf',archive,'-C',area]);
  const cwd=join(area,(await readdir(area))[0]);let policy='strict',calls=0;
  const server=createServer(async(req,res)=>{
   try{
@@ -88,7 +89,7 @@ test('model instructions agree with strict, emit and clarified EOF requirements'
 
 test('extracted parser command uses the real provider adapter without paid inference',{timeout:360000},async t=>{
  const area=await mkdtemp(join(tmpdir(),'parser-cli-package-'));t.after(()=>rm(area,{recursive:true,force:true}));
- execFileSync('tar',['-xzf',resolve('zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),'-C',area]);
+ execFileSync('tar',['-xzf',archive,'-C',area]);
  const cwd=join(area,(await readdir(area))[0]);
  const zero=await run(cwd,[]);assert.equal(zero.status,'unresolved');assert.equal(zero.spent.models,0);assert.equal(zero.spent.checks,0);assert.deepEqual(zero.observations,[]);
  for(const strategy of ['react','complete']){const baseline=await run(cwd,['--strategy',strategy]);assert.equal(baseline.strategy,strategy);assert.equal(baseline.status,'unresolved');assert.equal(baseline.spent.models,0);}
@@ -157,7 +158,7 @@ test('extracted parser command uses the real provider adapter without paid infer
 
 test('packaged selection uses one shared call allowance across both constructions',{timeout:360000},async t=>{
  const area=await mkdtemp(join(tmpdir(),'parser-cli-selection-'));t.after(()=>rm(area,{recursive:true,force:true}));
- execFileSync('tar',['-xzf',resolve('zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),'-C',area]);
+ execFileSync('tar',['-xzf',archive,'-C',area]);
  const cwd=join(area,(await readdir(area))[0]);
  for(const policy of ['first','last']){const zero=await run(cwd,['--selection',policy]);assert.equal(zero.selection,policy);assert.equal(zero.status,'unresolved');assert.equal(zero.spent.models,0);}
  if(process.platform!=='darwin')return;

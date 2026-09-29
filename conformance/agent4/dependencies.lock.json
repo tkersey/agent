@@ -3,38 +3,38 @@
   "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "c1f4baf48a5d07b6d8c166c4434070267c427c36",
-    "gitTree": "f1a3f43160c255d14e52fb482a56bcbc09e7d6eb",
+    "commit": "36023aad1507f5d50f7460d23b4c3daef242884f",
+    "gitTree": "1da4dd70ff3fcf4fcc8e22740dae39b15f994cfa",
     "version": "3.0.0-dev.0",
     "source": {
-      "inventorySha256": "51ccfe1f91e27767518ad33432c43c780108f46a8e9c5f36313dc35f1bfc5227",
-      "entries": 473,
-      "bytes": 15587780
+      "inventorySha256": "291aff9d71b0a3e5bca116deaf58747eaa5b6a4bb684ee25ea2007bde1f5ebfe",
+      "entries": 619,
+      "bytes": 26925007
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/c1f4baf48a5d07b6d8c166c4434070267c427c36.tar.gz",
-      "bytes": 2240855,
-      "sha256": "809fa41cb711b33a4aa49ff23f12b4da4416eb5edf9ef98b6e9fb75e6cdcb9c7"
+      "url": "https://github.com/tkersey/boundary/archive/36023aad1507f5d50f7460d23b4c3daef242884f.tar.gz",
+      "bytes": 3561788,
+      "sha256": "5dc4a720bd5dd57b13cf5feddc183ae0cc91939d610683aeb3dc2bcccbdeabe8"
     },
     "authentication": "Downloaded GitHub archive tree recomputed and matched to the GitHub commit API; archive and complete source/package inventories independently measured",
     "package": {
-      "zigHash": "boundary-3.0.0-dev.0-flclaAH7bAD8xscT2RAC-pLAVLjhg7pPryzvusPqhNSp",
+      "zigHash": "boundary-3.0.0-dev.0-flclaHPjfACEhcXNHd0TxDhXVnTZF0Nc4Abcw4QOnqa1",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "1f843a51f010099f3dc158ec8615cdb694bf93a52f39c347b411db5475b13446",
-          "entries": 368,
-          "bytes": 7142145
+          "inventorySha256": "a542d3862e52aae21a3a34dca55b37f489cc6a460e82bd32c575ac9224c0e8ef",
+          "entries": 483,
+          "bytes": 8184691
         },
         "archive-extracted": {
-          "inventorySha256": "1f843a51f010099f3dc158ec8615cdb694bf93a52f39c347b411db5475b13446",
-          "entries": 368,
-          "bytes": 7142145
+          "inventorySha256": "717f4b0c64f77f7324d7c80c214333ebafd9c9161c1031cae006217b7d512e4d",
+          "entries": 483,
+          "bytes": 8184691
         }
       },
       "archive": {
-        "bytes": 860919,
-        "sha256": "8f5b125e04d648255b1826ae06713d6f41e4f5c4a4649b4e0ed5be00a09e14d0"
+        "bytes": 1038602,
+        "sha256": "20ffd3474a359decdc2f7a7315bf7b9414067aca86d9c31fc95f7187ad04ec29"
       }
     },
     "api": {
@@ -49,11 +49,11 @@
         },
         {
           "path": "src/data/root.zig",
-          "sha256": "5627ae5f41b409b045b2b8c916fb6d5fc19a1de85f1d5272d095819d7c851f93"
+          "sha256": "67d026d41cacde77e677802918d6c2fef054a020e3e5a806af917a6ae3f68b06"
         },
         {
           "path": "src/source.zig",
-          "sha256": "e08b69830d293045c87f4dc4c00ac6755ff85c931707ad0bd610035f37523dae"
+          "sha256": "9cdc7e42512fdf9611ba04a7d629b8a019353f5c6cc76d3b0a87a7e6f9cce679"
         },
         {
           "path": "docs/bpi3-wire.md",
@@ -73,7 +73,7 @@
         },
         {
           "path": "src/data/closed_compilation.zig",
-          "sha256": "2b5cfaf208c2842adecc7fbe0e922d4b0d3270d11f9b1276950802968a7a9baf"
+          "sha256": "00f2355460da256ef7114d2f46ede35abcb87bc3b02fec882dbcafedbfbd7079"
         },
         {
           "path": "src/source/diagnostic.zig",
@@ -81,25 +81,25 @@
         },
         {
           "path": "src/authoring.zig",
-          "sha256": "cfe2e5bff24c47aca5be50736e8f62482379e94c31d8ab129d9471c362220cd6"
+          "sha256": "b55d05b8916d7c834d39d65fa496727b78d3a5260420e6760a01c75cfdd71bba"
         }
       ]
     }
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "f8a1597d4ff62ae691dfca12f7ce3a2b4e6c0727",
-    "gitTree": "1e1da87672d83c810a0d8cda5474b5d0a3b89207",
+    "commit": "e89b94ab32118efbad96cca5917f27ddb8510298",
+    "gitTree": "d177c5d4a144d778b8ed00eb1ac56285e9b52064",
     "version": "6.0.0-dev.0",
     "source": {
-      "inventorySha256": "892f54ef0a7579b4b1dd78a0fb3ad9babd06d30ff1f444b79d9dab82c3d13192",
-      "entries": 148,
-      "bytes": 1468271
+      "inventorySha256": "c0d160767aa25fcf32c21d768a7b2a013939e32f46db92e9d1851476c2503651",
+      "entries": 168,
+      "bytes": 1557902
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/f8a1597d4ff62ae691dfca12f7ce3a2b4e6c0727.tar.gz",
-      "bytes": 337473,
-      "sha256": "13522bb3c558acf4674cfde459c1c74f392cedb60c396b058aa96cd33087c970"
+      "url": "https://github.com/tkersey/world/archive/e89b94ab32118efbad96cca5917f27ddb8510298.tar.gz",
+      "bytes": 357793,
+      "sha256": "87248f42e0431251c8d2fa3e1b3a160480fd6402a04ada02fc80371bbd0e377c"
     },
     "authentication": "Downloaded archive tree recomputed and matched to GitHub commit API; complete source and runtime inventories bound",
     "runtime": {
@@ -274,17 +274,18 @@
           "path": "world-kernel.wasm",
           "kind": "file",
           "mode": 493,
-          "bytes": 462833,
-          "sha256": "7d31effb1d4e32523d0fcbd5b4d5f5a8a2289fbd4c731173a33b1c174524282f"
+          "bytes": 465420,
+          "sha256": "962d621fd781b19f0ec821e63d31688326467b6bba6f52fa697198c80b00a167"
         }
       ],
-      "inventorySha256": "ba84e0de889100dccb31436ad6193dd481a73a02d7f0bce6829249557bd6578b",
+      "inventorySha256": "2961db5657a97b8f83aea01b1ec5844b34886784a62a06e335536c4ef2ddaafc",
       "entries": 26,
-      "bytes": 555195,
+      "bytes": 557782,
       "kernel": {
         "path": "world-kernel.wasm",
-        "bytes": 462833,
-        "sha256": "7d31effb1d4e32523d0fcbd5b4d5f5a8a2289fbd4c731173a33b1c174524282f"
+        "bytes": 465420,
+        "sha256": "962d621fd781b19f0ec821e63d31688326467b6bba6f52fa697198c80b00a167",
+        "abi": 3
       },
       "abi": 3,
       "exports": [
@@ -325,22 +326,22 @@
         "capacityOverrides": [],
         "requestedOptimize": "ReleaseSafe"
       },
-      "provenance": "Qualified World producer; GitHub Actions run 36294378202, artifact 10923323364; archive and complete runtime inventory verified"
+      "provenance": "Qualified World producer; GitHub Actions run 36594076098, artifact 11046230435; verified archive, manifest, source tree and runtime inventory"
     },
     "delivery": {
-      "commit": "f8a1597d4ff62ae691dfca12f7ce3a2b4e6c0727",
-      "runId": 36294378202,
-      "artifactName": "world-runtime-f8a1597d4ff62ae691dfca12f7ce3a2b4e6c0727",
-      "expiresAt": "2026-10-27T04:33:48Z",
-      "manifestSha256": "9e13320dbcd5c230258aa4a81c76a592569c0ebc697f0600c707f7e2f91674c4",
+      "commit": "e89b94ab32118efbad96cca5917f27ddb8510298",
+      "runId": 36594076098,
+      "artifactName": "world-runtime-e89b94ab32118efbad96cca5917f27ddb8510298",
+      "expiresAt": "2026-10-29T16:05:19Z",
+      "manifestSha256": "a51b6378ee2f417297f3463e781c9c8aa7792813ccac8ae8fb89461db46ce5f7",
       "archive": {
-        "bytes": 216805,
-        "sha256": "932621ba55999a2418beb2d18ef6990eb7fc407f44e643eb7464a7c8e3d8eb4f"
+        "bytes": 217940,
+        "sha256": "0f0571b9c2d6f68aab751325bcde41f32b935dd58eb51818287d5fd62bdfef64"
       },
       "artifact": {
-        "apiPath": "repos/tkersey/world/actions/artifacts/10923323364/zip",
-        "bytes": 218213,
-        "sha256": "070f4bbd987fa0c5b25aabf159b30d4515e26bec56ddd1d4bc26d4f748ead5ab"
+        "apiPath": "repos/tkersey/world/actions/artifacts/11046230435/zip",
+        "bytes": 219348,
+        "sha256": "ccace29c45cdda97f39e95524661a0db6de69fa0db23f11f20b95b5f398fa377"
       }
     }
   },
@@ -357,12 +358,13 @@
     "architecture": "arm64"
   },
   "publicationObservation": {
-    "boundarySource": "draft PR 161 at c1f4baf48a5d07b6d8c166c4434070267c427c36",
-    "worldSource": "unchanged authenticated production source f8a1597d4ff62ae691dfca12f7ce3a2b4e6c0727",
+    "boundarySource": "draft PR 161 at 36023aad1507f5d50f7460d23b4c3daef242884f",
+    "worldSource": "draft PR 59 at e89b94ab32118efbad96cca5917f27ddb8510298; qualified runtime run 36594076098",
     "compatiblePublishedReleaseObserved": false
   },
   "limitations": [
-    "Mandatory P01 and structural/semantic compilation contracts are retained. M3 source correctness is qualified; consumer economics and final authenticated integration remain pending.",
-    "The unchanged authenticated World kernel is reused; its original build Boundary identity remains recorded in world.runtime.build."
+    "Candidate integration only: remaining historical cost dispositions and final full qualification/reviews are open.",
+    "Runtime artifact e89b94a has producer qualification and local smoke; newer uncommitted P22 physical packing is not included.",
+    "World runtime retains the locked Boundary build input recorded in world.runtime.build; Agent authoring uses its separately verified Boundary package."
   ]
 }

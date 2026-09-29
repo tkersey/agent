@@ -1,5 +1,12 @@
 # M3 measured cost decision
 
+> **Current disposition — September 29, 2026:** The user explicitly accepted
+> all recorded costs ("All costs are accepted."). This includes the measured
+> costs below and their recorded cumulative comparisons. Earlier pending
+> language is historical and superseded; future unmeasured costs are not
+> preaccepted. Correctness and final review obligations remain unchanged.
+
+
 Boundary `c1f4baf48a5d07b6d8c166c4434070267c427c36`; unchanged authenticated World kernel.
 
 All 24 admission comparisons, 36 native fresh-invocation comparisons and 36 WASM fresh-invocation comparisons have no confirmed slowdown. The current 89-byte PRE witness passes all 14 timing comparisons; its old 92-byte cost question is superseded. The unchanged 193-byte callable witness retains its previously measured +2.44 µs / 6.8% WASM fresh cost, still awaiting acceptance.

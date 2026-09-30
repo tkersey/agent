@@ -3,38 +3,38 @@
   "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "4d0649e9c93a3d9659f5899ad8d479c8eda205e2",
-    "gitTree": "57756e7f3b5a105c5796d6e8cc1a2e3ac14d5d83",
+    "commit": "6e0e88d28f525d460f8a52180d23ce2e07209468",
+    "gitTree": "e68670ea6bc742715ce25df3a359d8e5afbde984",
     "version": "3.0.0-dev.0",
     "source": {
-      "inventorySha256": "1624cb5633db96b3bbf82de84765df8bd9741f3a10fdcfc26f938de84eced56d",
-      "entries": 518,
-      "bytes": 10193015
+      "inventorySha256": "b9f730035b5dffbea1b96be038ef256402060f0510814a5de6520b510cb978b4",
+      "entries": 519,
+      "bytes": 10228888
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/4d0649e9c93a3d9659f5899ad8d479c8eda205e2.tar.gz",
-      "bytes": 1966691,
-      "sha256": "f051163a85c47fd3560d792fe4a40bdb3f88588bb8507322bbbad4138d0523c2"
+      "url": "https://github.com/tkersey/boundary/archive/6e0e88d28f525d460f8a52180d23ce2e07209468.tar.gz",
+      "bytes": 1974557,
+      "sha256": "70d0cb22d25d531e5a96a069ed916c5fe595b77bd02720cfa3424aa1d1874451"
     },
     "authentication": "Downloaded GitHub archive tree recomputed and matched to the GitHub commit API; archive and complete source/package inventories independently measured",
     "package": {
-      "zigHash": "boundary-3.0.0-dev.0-flclaJCKRABiOkScPLnI-UMZE8doWYaQkmuS9NPPCiTt",
+      "zigHash": "boundary-3.0.0-dev.0-flclaJzjRAAZjTu4cdBb_o0arFJFWn6l4G0Tnlzo_tJj",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "f0441fe851e9f65651dfc948305cddfff2564078f431461576add26bf00d13d9",
-          "entries": 474,
-          "bytes": 4491920
+          "inventorySha256": "8194b60cbfc4382df5664d700115bfb3b0acc9c5d38e709df6ea94ca19952101",
+          "entries": 475,
+          "bytes": 4514716
         },
         "archive-extracted": {
-          "inventorySha256": "078c817fa9599ba545513b38c81068384aed49b98ea8c8f3c7cad00155d34303",
-          "entries": 474,
-          "bytes": 4491920
+          "inventorySha256": "1f98628973280cee5ea9be7ca3eb89f729e2f8ea4fa7d5c3416fc01d03c0ffef",
+          "entries": 475,
+          "bytes": 4514716
         }
       },
       "archive": {
-        "bytes": 882163,
-        "sha256": "fda0b11071479791766f4034007f9f7d4e390a3eb9d082799c02dd89b43085d9"
+        "bytes": 885768,
+        "sha256": "8f10fcbe01ad73b4a73099723bb3fe333c74e85a936262f01e51baa16d45a5fb"
       }
     },
     "api": {
@@ -358,12 +358,12 @@
     "architecture": "arm64"
   },
   "publicationObservation": {
-    "boundarySource": "draft PR161 retained authoring probe migration at d43448a15669619f18fa95375c9f9d17d6c8c38e",
+    "boundarySource": "draft PR161 continuation-retention repair at 6e0e88d28f525d460f8a52180d23ce2e07209468",
     "worldSource": "draft PR 59 at cb52f4ff43bbf23daf9cacb31ea26d9e3648235f; qualified runtime run 36629384504",
     "compatiblePublishedReleaseObserved": false
   },
   "limitations": [
-    "Candidate integration: standalone package/probe migration qualified; final serial reviews remain open.",
+    "Candidate integration: capture-retention repair qualified in Boundary; final serial reviews remain open.",
     "All previously recorded costs explicitly accepted; measurements retain original identities.",
     "Runtime remains authenticated Worldcb52 kernel9356; documentation cleanup does not relabel or rebuild it."
   ]

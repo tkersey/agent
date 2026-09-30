@@ -9,7 +9,7 @@ const prompts = @import("prompt.zig");
 const skills = @import("skill.zig");
 const tool_library = @import("tools.zig");
 const interaction_library = @import("interaction.zig");
-const Id = boundary.computation.Id;
+const Id = boundary.source.Id;
 
 pub const Reasoning = struct { effort: ?models.ReasoningEffort, summary: ?models.ReasoningSummary };
 pub const Parameters = struct {

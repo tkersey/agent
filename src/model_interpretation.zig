@@ -2,7 +2,7 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const contracts = @import("agent_contracts");
-const ast = boundary.computation.ast;
+const ast = boundary.source.ast;
 const Id = boundary.data.program.Id;
 const Case = std.meta.Child(@FieldType(@FieldType(ast.Term, "match_sum"), "cases"));
 
@@ -25,17 +25,17 @@ pub fn Result(comptime Answer: type) type {
     return union(enum) { accepted: Answer, rejected: Failure };
 }
 
-pub fn define(comptime P: type, builder: *boundary.computation.Builder) !Id {
+pub fn define(comptime P: type, builder: *boundary.source.Builder) !Id {
     return Generator(P, false).define(builder);
 }
 
-pub fn defineAll(comptime P: type, builder: *boundary.computation.Builder) !Id {
+pub fn defineAll(comptime P: type, builder: *boundary.source.Builder) !Id {
     return Generator(P, true).define(builder);
 }
 
 fn Generator(comptime P: type, comptime batch: bool) type {
     return struct {
-        b: *boundary.computation.Builder,
+        b: *boundary.source.Builder,
         answer: Id,
         interpretation: Id,
         offered: Id,
@@ -87,7 +87,7 @@ fn Generator(comptime P: type, comptime batch: bool) type {
             return g.b.primitive(try g.schema(bool), .equal, &.{ left, right }, 0);
         }
 
-        fn define(b: *boundary.computation.Builder) !Id {
+        fn define(b: *boundary.source.Builder) !Id {
             const instance = try b.specialization(Id, "agent.model.answer-admission/v3", .{
                 @typeName(P), batch,
             });

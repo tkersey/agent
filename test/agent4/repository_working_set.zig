@@ -21,7 +21,7 @@ fn Harness(comptime kind: Kind) type {
         .final_allowed => bool,
     };
     const Application = struct {
-        pub fn emit(c: agent.Context) !boundary.computation.Module {
+        pub fn emit(c: agent.Context) !boundary.source.Module {
             const b = c.builder;
             const functions = try policy.define(c);
             const entry = try b.declare(&.{try c.schema(Input)}, try c.schema(Result), &.{}, &.{});
@@ -173,7 +173,7 @@ test "staged final guard requires all four independent evidence flags" {
 }
 
 const Trace = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const b = c.builder;
         const functions = try policy.define(c);
         const memory = try c.schema(t.Memory);

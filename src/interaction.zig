@@ -2,7 +2,7 @@
 //! Internal dialogue futures never belong in an interaction contract: Boundary
 //! admission checks external portability of the complete emitted module.
 const std = @import("std");
-const source = @import("boundary").computation;
+const source = @import("boundary").source;
 pub const Id = source.Id;
 pub const Error = source.Error || error{InvalidInteractionContract};
 pub const identity_prefix = "agent.interaction.exchange.v1.";

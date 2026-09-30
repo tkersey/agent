@@ -8,7 +8,7 @@ import { verifyRuntime } from "../../tools/agent4/dependencies.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const runtimePath = resolve(process.env.AGENT4_WORLD_RUNTIME ??
-  resolve(root, ".agent4/out/world-runtime"));
+  resolve(root, ".agent4/out/world-runtime/runtime"));
 const fixtures = resolve(process.env.AGENT4_FIXTURES ?? resolve(root, ".agent4/out"));
 const inspector = resolve(process.env.AGENT4_MULTI_INSPECTOR ??
   resolve(root, ".agent4/out/multi/bin/multi-probe"));

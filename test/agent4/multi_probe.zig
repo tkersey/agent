@@ -2,7 +2,7 @@
 const std = @import("std");
 const boundary = @import("boundary");
 const deliberation = @import("deliberation");
-const source = boundary.computation;
+const source = boundary.source;
 const Id = source.Id;
 
 pub fn main(init: std.process.Init) !void {
@@ -333,11 +333,14 @@ pub fn disposalProbe(b: *source.Builder) !source.Module {
         .result = unit,
     });
     const gen = boundary.library.generator;
-    const g = try gen.define(
+    const g = try gen.defineExchange(
         b,
         "agent4.probe.disposal-yield",
+        unit,
         integer,
+        unit,
         &.{ unit, integer },
+        &.{},
         &.{},
         .{ .effects = &.{release} },
     );

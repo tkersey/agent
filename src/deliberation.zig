@@ -1,6 +1,6 @@
 //! Scoped candidate evaluation: multi-shot exploration and sequential assessment.
 //! Alternatives and assessments are program values; no host snapshot is cloned.
-const source = @import("boundary").computation;
+const source = @import("boundary").source;
 pub const Id = source.Id;
 
 pub const Scope = struct {

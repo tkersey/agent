@@ -1,5 +1,5 @@
 //! Explicit EOF intent, using the existing consequence-sensitive resolver.
-const source = @import("boundary").computation;
+const source = @import("boundary").source;
 const Context = @import("authoring.zig").Context;
 const contracts = @import("agent_contracts");
 const parser = @import("parser_synthesis.zig");

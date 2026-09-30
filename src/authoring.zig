@@ -4,7 +4,7 @@ const boundary = @import("boundary");
 const contracts = @import("agent_contracts");
 const admission = @import("admission.zig");
 pub const catalogs = @import("catalogs.zig");
-const source = boundary.computation;
+const source = boundary.source;
 const p = boundary.data.program;
 
 /// Optional native authoring observations. These callbacks never enter a Module,
@@ -91,6 +91,7 @@ pub fn compileObserved(
     comptime System: type,
     options: CompileOptions,
 ) !source.Compiled {
+    options.boundary_options.resetObservations();
     options.stage(.descriptors);
     var builder = source.Builder.init(allocator);
     defer builder.deinit();

@@ -9,7 +9,7 @@ import { decodeModelInvocation, normalizeOpenAIResponses } from "../../runtime/m
 
 const root = path.resolve(import.meta.dirname, "../..");
 const images = process.env.AGENT4_REVIEW_IMAGES ?? path.join(root, ".agent4/out/review");
-const runtime = process.env.AGENT4_WORLD_RUNTIME ?? path.join(root, ".agent4/out/world-runtime");
+const runtime = process.env.AGENT4_WORLD_RUNTIME ?? path.join(root, ".agent4/out/world-runtime/runtime");
 const identity = verifyRuntime(runtime);
 const world = await import(pathToFileURL(identity.entrypoint));
 const kernelBytes = await readFile(identity.kernelPath);

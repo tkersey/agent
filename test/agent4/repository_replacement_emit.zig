@@ -13,7 +13,7 @@ const System = agent.system(.{
 });
 
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const b = c.builder;
         const operation = try replacement.define(c);
         const entry = try b.declare(&.{try c.schema(Input)}, try c.schema(t.ReplaceOutcome), operation.effects, &.{});
@@ -52,7 +52,7 @@ fn writeImage(init: std.process.Init, comptime App: type) !void {
 }
 
 fn writeSchema(init: std.process.Init, comptime T: type) !void {
-    var builder = boundary.computation.Builder.init(init.gpa);
+    var builder = boundary.source.Builder.init(init.gpa);
     defer builder.deinit();
     const root = try agent.contracts.schema(T, &builder);
     const bytes = try boundary.data.schema.encodeOwned(init.gpa, builder.schemas.items, root);

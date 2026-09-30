@@ -1,13 +1,14 @@
 //! Custody witnesses; all control executes as ordinary Boundary program data.
 const std = @import("std");
 const boundary = @import("boundary");
-const dialogue = @import("agent").dialogue;
+const dialogue = boundary.library.generator;
 const inquiry = @import("agent").inquiry;
-const source = boundary.computation;
+const source = boundary.source;
 const Id = source.Id;
 const Builder = source.Builder;
 
 pub const Mode = enum {
+    typed,
     owned,
     composition,
     followup,
@@ -19,7 +20,7 @@ pub const Mode = enum {
 
 const Witness = struct {
     b: *Builder,
-    d: dialogue.Dialogue,
+    d: dialogue.Generator,
     integer: Id,
     unit: Id,
     model: Id,
@@ -91,7 +92,7 @@ const Witness = struct {
     fn consume(w: Witness, function: Id, step: Id, rest: Id, evidence: Id, total: Id) !Id {
         const b = w.b;
         const done = try b.variable(w.integer);
-        const waiting = try b.variable(w.d.awaiting);
+        const waiting = try b.variable(w.d.yielded);
         const demand = try b.variable(w.integer);
         const package = try b.variable(w.d.package);
         const resumed = try b.variable(w.d.answer);
@@ -100,7 +101,7 @@ const Witness = struct {
         const next_total = try w.add(total, try w.ref(done));
         const completed = try w.call(function, &.{ rest_value, evidence, next_total });
         const next_queue = try b.primitive(w.queue, .sequence_append, &.{ rest_value, try w.ref(resumed) }, 0);
-        var resume_term = try dialogue.resumeWith(b, w.d, try w.ref(package), evidence);
+        var resume_term = try dialogue.exchange(b, w.d, try w.ref(package), evidence);
         if (w.mode == .illicit_clone) {
             var signature = b.schemas.items[@intCast(w.d.resumption)].internal.resumption;
             signature.use = .multi;
@@ -113,11 +114,11 @@ const Witness = struct {
         }
         var advance = try b.bind(resumed, resume_term, try w.call(function, &.{ next_queue, evidence, total }));
         if (w.mode == .duplicate_resume) {
-            advance = try b.bind(try b.variable(w.d.answer), try dialogue.resumeWith(b, w.d, try w.ref(package), evidence), advance);
+            advance = try b.bind(try b.variable(w.d.answer), try dialogue.exchange(b, w.d, try w.ref(package), evidence), advance);
         }
-        var retire = try b.bind(ignored, try dialogue.dispose(b, w.d, try w.ref(package)), try w.call(function, &.{ rest_value, evidence, total }));
+        var retire = try b.bind(ignored, try dialogue.close(b, w.d, try w.ref(package)), try w.call(function, &.{ rest_value, evidence, total }));
         if (w.mode == .duplicate_dispose) {
-            retire = try b.bind(try b.variable(w.unit), try dialogue.dispose(b, w.d, try w.ref(package)), retire);
+            retire = try b.bind(try b.variable(w.unit), try dialogue.close(b, w.d, try w.ref(package)), retire);
         }
         const retiring = try b.primitive(try b.scalar(bool), .equal, &.{ try w.ref(demand), try b.constant(u64, 30) }, 0);
         const select = try b.term(.{ .conditional = .{
@@ -247,6 +248,7 @@ const Witness = struct {
 };
 
 pub fn build(b: *Builder, mode: Mode) !source.Module {
+    if (mode == .typed) return typedWitness(b);
     const integer = try b.scalar(u64);
     const unit = try b.scalar(void);
     const experiment = try b.effect(.{ .identity = "agent.probe.inquiry.experiment.v1", .payload = integer, .result = integer });
@@ -265,9 +267,53 @@ pub fn build(b: *Builder, mode: Mode) !source.Module {
         .failure = try b.constant(void, {}),
         .scope = scope,
     }) else null;
-    const d = if (definition) |value| value.dialogue else try dialogue.define(b, "agent.probe.inquiry.need.v1", integer, integer, integer, scope);
+    const d = if (definition) |value| value.dialogue else try dialogue.defineExchange(b, "agent.probe.inquiry.need.v1", integer, integer, integer, scope.captures, scope.owned_regions, scope.borrowed_regions, scope.residual);
     const w: Witness = .{ .b = b, .d = d, .integer = integer, .unit = unit, .model = model, .cleanup = cleanup, .experiment = experiment, .queue = try b.schema(.{ .seq = d.answer }), .effects = effects, .mode = mode };
     return if (definition) |value| w.compositionEntry(value) else w.entry();
+}
+
+fn typedWitness(b: *Builder) !source.Module {
+    const a = boundary.authoring;
+    const c = try a.Context.init(b);
+    const integer = try c.scalar(u64);
+    const unit = try c.scalar(void);
+    const demand = try c.record(&.{.{ .name = "question", .schema = integer }});
+    const finding = try c.record(&.{.{ .name = "answer", .schema = integer }});
+    const d = try inquiry.create(c, .{
+        .identity = "agent.probe.inquiry.named",
+        .demand = demand,
+        .reply = integer,
+        .finding = finding,
+        .failure = try c.literalFailure(void, {}),
+        .captures = .{ .continuation = &.{ unit, integer, demand, finding } },
+        .parameters = &.{.{ .name = "seed", .schema = integer }},
+        .body_use = .reusable,
+    });
+    const producer_type = try c.handledSchema(d.dialogue.handler());
+    const producer_fn = try c.functionFor("named investigator", producer_type);
+    const producer = try c.body(producer_fn);
+    const answer = try producer.performLocal(d.dialogue.effect(), try producer.parameter("capability"), try producer.product(demand, &.{.{ .name = "question", .value = try producer.parameter("seed") }}));
+    try c.define(producer_fn, try producer.ret(try producer.product(finding, &.{.{ .name = "answer", .value = answer }})));
+    const output = try c.record(&.{ .{ .name = "findings", .schema = d.types.findings }, .{ .name = "views", .schema = d.types.views } });
+    const entry = try c.function("entry", &.{}, output, &.{});
+    const body = try c.body(entry);
+    const first = try body.handleWithArguments(d.dialogue.handler(), try body.lambda(producer_fn, producer_type), &.{.{ .name = "seed", .value = try body.constant(u64, 7) }}, &.{});
+    const parked = try body.call(d.park, &.{ .{ .name = "state", .value = try inquiry.initial(body, d) }, .{ .name = "id", .value = try body.constant(u64, 9) }, .{ .name = "answer", .value = first } });
+    const projected = try body.call(d.project, &.{.{ .name = "state", .value = parked }});
+    const parts = try body.destructure(projected);
+    const state = try parts.get("state");
+    const views = try parts.get("views");
+    const delivered = try body.call(d.distribute, &.{ .{ .name = "state", .value = state }, .{ .name = "ids", .value = try body.sequenceValue(d.types.ids, &.{try body.constant(u64, 1)}) }, .{ .name = "reply", .value = try body.constant(u64, 42) } });
+    const findings = try body.call(d.finish, &.{.{ .name = "state", .value = delivered }});
+    try c.define(entry, try body.ret(try body.product(output, &.{ .{ .name = "findings", .value = findings }, .{ .name = "views", .value = views } })));
+    return c.module(entry, unit);
+}
+
+test "typed inquiry retains named demand and finding contracts" {
+    var b = Builder.init(std.testing.allocator);
+    defer b.deinit();
+    var compiled = try boundary.program.compile(std.testing.allocator, try typedWitness(&b));
+    defer compiled.deinit();
 }
 
 test "three protected futures compile under unchanged Boundary ownership" {

@@ -7,7 +7,7 @@ const s = @import("source.zig");
 pub const System = agent.system(.{ .InitialArgs = t.Task, .Result = u64, .Failure = void, .application = Application });
 
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const e = s.E{ .c = c };
         const b = c.builder;
         const task = try main.defineTask(c);

@@ -1,10 +1,10 @@
 //! Consumer-owned child control: retain a critic's future while asking a human.
 const agent = @import("agent");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const Builder = source.Builder;
 const Id = source.Id;
-const Dialogue = agent.dialogue.Dialogue;
+const Dialogue = boundary.library.generator.Generator;
 const Cases = @FieldType(@FieldType(source.ast.Term, "match_sum"), "cases");
 const Case = @typeInfo(Cases).pointer.child;
 
@@ -24,13 +24,16 @@ pub fn define(b: *Builder, interaction: agent.interaction.Definition) !Id {
     if (instance.cached) |cached| return cached;
     const scope_identity = "document.critic.scope.v1";
     const family = try agent.decision.define(b, scope_identity, unit, integer);
-    const d = try agent.dialogue.define(
+    const d = try boundary.library.generator.defineExchange(
         b,
         "document.critic.question.v1",
         integer,
         integer,
         integer,
-        .{ .captures = &.{ integer, family.capability } },
+        &.{ integer, family.capability },
+        &.{},
+        &.{},
+        .{ .effects = &.{} },
     );
     const reader = try agent.scopes.define(b, scope_identity, integer, integer, .{
         .captures = &.{ integer, d.capability },
@@ -43,12 +46,12 @@ pub fn define(b: *Builder, interaction: agent.interaction.Definition) !Id {
         .effects = &.{d.effect},
     } } });
     const parent = try b.declare(&.{integer}, integer, &.{interaction.effect}, &.{});
-    const started = try agent.dialogue.start(b, d, try b.lambda(child, child_type), &.{
+    const started = try boundary.library.generator.start(b, d, try b.lambda(child, child_type), &.{
         try b.reference(b.parameter(parent, 0)),
     });
     const step = try b.variable(d.answer);
     const done = try b.variable(d.result);
-    const awaiting = try b.variable(d.awaiting);
+    const awaiting = try b.variable(d.yielded);
     const offered = try b.term(.{ .match_sum = .{
         .value = try b.reference(step),
         .cases = &.{
@@ -92,7 +95,7 @@ fn scopedBody(b: *Builder, d: Dialogue, reader: agent.scopes.Reader, inside: Id)
     const answer = try b.variable(integer);
     const question = try add(b, candidate, try b.reference(before));
     const result = try add(b, candidate, try b.reference(answer));
-    const offered = try agent.dialogue.offer(b, d, capability, question);
+    const offered = try boundary.library.generator.offer(b, d, capability, question);
     const same = try b.primitive(try b.scalar(bool), .equal, &.{
         try b.reference(before), try b.reference(after),
     }, 0);
@@ -124,7 +127,7 @@ fn askHuman(
     interaction: agent.interaction.Definition,
     awaiting: Id,
 ) !Id {
-    const outgoing = try b.variable(d.outgoing);
+    const outgoing = try b.variable(d.element);
     const future = try b.variable(d.package);
     const response = try b.variable(interaction.reply);
     const request = try agent.interaction.exchange(b, interaction, .{
@@ -156,7 +159,7 @@ fn replyCases(
 ) !Id {
     var cases: [3]Case = undefined;
     const input = try b.variable(d.input);
-    const resumed = try agent.dialogue.resumeWith(
+    const resumed = try boundary.library.generator.exchange(
         b,
         d,
         try b.reference(future),
@@ -182,8 +185,8 @@ fn replyCases(
 fn terminal(b: *Builder, d: Dialogue, resumed: Id) !Id {
     const step = try b.variable(d.answer);
     const done = try b.variable(d.result);
-    const awaiting = try b.variable(d.awaiting);
-    const outgoing = try b.variable(d.outgoing);
+    const awaiting = try b.variable(d.yielded);
+    const outgoing = try b.variable(d.element);
     const future = try b.variable(d.package);
     const unexpected = try b.term(.{ .unpack_product = .{
         .value = try b.reference(awaiting),
@@ -203,7 +206,7 @@ fn terminal(b: *Builder, d: Dialogue, resumed: Id) !Id {
 
 fn disposeAndFail(b: *Builder, d: Dialogue, future: Id) !Id {
     const ignored = try b.variable(try b.scalar(void));
-    return b.bind(ignored, try agent.dialogue.dispose(b, d, future), try fail(b));
+    return b.bind(ignored, try boundary.library.generator.close(b, d, future), try fail(b));
 }
 
 fn fail(b: *Builder) !Id {

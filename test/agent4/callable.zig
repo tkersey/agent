@@ -3,12 +3,12 @@ const bnd = @import("boundary");
 const agent = @import("agent");
 const admission = agent.admission;
 const callable = agent.callable;
-const Id = bnd.computation.Id;
-const B = bnd.computation.Builder;
+const Id = bnd.source.Id;
+const B = bnd.source.Builder;
 
 pub const Representation = enum { interned, static_code, unsafe_reuse, unsafe_code };
 
-pub fn build(b: *B, registry: *admission.Registry, representation: Representation, count: usize) !bnd.computation.Module {
+pub fn build(b: *B, registry: *admission.Registry, representation: Representation, count: usize) !bnd.source.Module {
     const unit = try b.scalar(void);
     const signature: bnd.data.program.ComputationType = .{ .parameters = &.{}, .result = unit };
     const safe = try b.declare(&.{}, unit, &.{}, &.{});
@@ -43,9 +43,13 @@ pub fn build(b: *B, registry: *admission.Registry, representation: Representatio
     const callback = supplied.schema;
 
     // One reusable higher-order helper receives the safe callback as a VALUE.
-    const choice = try bnd.library.choice.family(b, "probe/choice");
+    const typed = bnd.authoring;
+    const author = try typed.Context.init(b);
+    const family = try bnd.library.choice.family(author, "probe/choice");
+    const choice = .{ .effect = try typed.interop.operationId(author, family.effect()), .capability = try typed.interop.schemaId(author, family.capability()) };
     try registry.classify(choice.effect, .internal);
-    const all = try bnd.library.choice.all(b, choice, unit, &.{ unit, callback, choice.capability }, .{ .effects = &.{} });
+    const interpreted = try bnd.library.choice.all(author, family, try author.scalar(void), .{ .captures = .{ .continuation = &.{ try author.scalar(void), try typed.interop.schema(author, callback), family.capability() } }, .residual = &.{} });
+    const all = .{ .handler = try typed.interop.handlerId(author, interpreted.handler), .answer = try typed.interop.schemaId(author, interpreted.answer) };
     const body = try b.declare(&.{ choice.capability, callback }, unit, &.{choice.effect}, &.{});
     const decision = try b.variable(try b.scalar(bool));
     try b.define(body, try b.bind(decision, try b.term(.{ .perform = .{ .effect = choice.effect, .capability = try b.reference(b.parameter(body, 0)), .payload = try b.constant(void, {}) } }), try b.term(.{ .apply = .{ .computation = try b.reference(b.parameter(body, 1)), .arguments = &.{} } })));

@@ -150,11 +150,16 @@ works from an extracted source package without Git metadata.
 Acquire the locked World inputs explicitly, then run the integration checks. The
 full integration target currently exposes remaining application migrations:
 
+Setup downloads the qualified World runtime bundle using authenticated GitHub
+CLI (`gh`) access and `unzip`, then delegates acquisition to World. It requires
+the pinned CI artifact while uncached; cached verified inputs support `--offline`.
+The artifact expires on October 27, 2026. Setup does not rebuild the kernel.
+
 ```sh
-node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-boundary-6313768-world-c20695e"
+node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-boundary-48f36c1-world-f8a1597"
 zig build check-agent4-integration -Doptimize=ReleaseSafe \
-  -Dworld-source="$PWD/.agent4-boundary-6313768-world-c20695e/inputs/world" \
-  -Dworld-runtime="$PWD/.agent4-boundary-6313768-world-c20695e/out/world-runtime"
+  -Dworld-source="$PWD/.agent4-boundary-48f36c1-world-f8a1597/inputs/world" \
+  -Dworld-runtime="$PWD/.agent4-boundary-48f36c1-world-f8a1597/out/world-runtime/runtime"
 ```
 
 Use a new work directory when advancing the dependency lock. Setup verifies
@@ -191,7 +196,7 @@ const agent = @import("agent");
 const boundary = @import("boundary");
 
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const b = c.builder;
         const integer = try c.schema(u32);
         const unit = try c.schema(void);
@@ -240,8 +245,8 @@ With World acquired, run the economy checks separately:
 
 ```sh
 zig build check-agent4-economy -Doptimize=ReleaseSafe \
-  -Dworld-source="$PWD/.agent4-boundary-6313768-world-c20695e/inputs/world" \
-  -Dworld-runtime="$PWD/.agent4-boundary-6313768-world-c20695e/out/world-runtime"
+  -Dworld-source="$PWD/.agent4-boundary-48f36c1-world-f8a1597/inputs/world" \
+  -Dworld-runtime="$PWD/.agent4-boundary-48f36c1-world-f8a1597/out/world-runtime/runtime"
 ```
 
 Without the supported inquiry execution host, economy reports
@@ -256,7 +261,7 @@ Native agreement tests use the separately authenticated unchanged World source a
 
 For `node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-inputs"`, pass
 `-Dworld-source="$PWD/.agent4-inputs/inputs/world"` and
-`-Dworld-runtime="$PWD/.agent4-inputs/out/world-runtime"` to both aggregates.
+`-Dworld-runtime="$PWD/.agent4-inputs/out/world-runtime/runtime"` to both aggregates.
 The archive defaults to `world-<first seven commit characters>.tar.gz` beside the selected source;
 `-Dworld-archive=/absolute/immutable/archive.tar.gz` selects a different location.
 All selected inputs are checked against the same lock before and after execution.

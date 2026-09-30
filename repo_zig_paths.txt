@@ -24,7 +24,6 @@ src/contracts.zig
 src/conversation.zig
 src/decision.zig
 src/deliberation.zig
-src/dialogue.zig
 src/inquiry.zig
 src/inquiry_broker.zig
 src/interaction.zig

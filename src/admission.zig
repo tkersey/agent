@@ -2,7 +2,7 @@
 //! inspection of Boundary's source, never another executable representation.
 const std = @import("std");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const p = boundary.data.program;
 const Id = p.Id;
 

@@ -40,7 +40,7 @@ const agent = @import("agent");
 const boundary = @import("boundary");
 
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const b = c.builder;
         const integer = try c.schema(u32);
         const entry = try b.declare(&.{integer}, integer, &.{}, &.{});
@@ -162,13 +162,17 @@ computation with its declared effects and captures. It may use model or human
 I/O, compute a rule, or delegate; it can clarify before returning to the original
 call site. Answer substitution does not grant access to approval effects.
 
-For a child that returns unfinished control, use `agent.dialogue.define`,
-`start`, `offer`, `resumeWith`, and `dispose`. The internal result is
+For a child that returns unfinished control, use Boundary's
+`library.generator.defineExchange`, `start`, `offer`, `exchange`, and `close`.
+The internal result is
 `Done(R) | Awaiting(Out, owned future)` with a typed input to the future. Consume
 that future exactly once by resuming or disposing it. Put owned child regions
 inside the handled body and keep borrowed caller regions live. The parent can
 hold a child while doing another permitted interaction; no continuation handle
 is exported to the host. Transfer moves the whole PST3.
+
+Agent's separate dialogue implementation and export have been removed. Inquiry
+and document children use the same Boundary-owned exchange mechanism.
 
 `agent.deliberation` emits internal multi-shot control. Capture before acquiring
 approval or exclusive live resources, declare the residual effects and captures,

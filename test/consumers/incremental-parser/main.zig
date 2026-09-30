@@ -2,7 +2,8 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const typed = boundary.authoring;
+const source = boundary.source;
 const hyper = boundary.library.hyper;
 const parser = agent.parser_synthesis;
 const P = parser.proposals.Profile;
@@ -505,8 +506,8 @@ const Retained = struct {
         const resume_side = try b.bind(final, try generator.exchange(b, self.g, try b.reference(zp), try b.constant(u64, 7)), done);
         const close_local = try b.bind(try b.variable(try b.scalar(void)), try generator.close(b, self.g, try b.reference(ap)), resume_side);
         const run = try b.bind(saved, computation, close_local);
-        const second = try b.bind(z, try generator.begin(b, self.g, self.body, try b.constant(u64, 50)), try self.yielded(b, try b.reference(z), zp, run));
-        return b.bind(a, try generator.begin(b, self.g, self.body, try b.constant(u64, 5)), try self.yielded(b, try b.reference(a), ap, second));
+        const second = try b.bind(z, try generator.start(b, self.g, self.body, &.{try b.constant(u64, 50)}), try self.yielded(b, try b.reference(z), zp, run));
+        return b.bind(a, try generator.start(b, self.g, self.body, &.{try b.constant(u64, 5)}), try self.yielded(b, try b.reference(a), ap, second));
     }
 };
 const System = agent.system(.{ .InitialArgs = Input, .Result = Contribution, .Failure = void, .application = Application });
@@ -527,7 +528,7 @@ pub fn main(init: std.process.Init) !void {
         if (args.next() != null) return error.UnexpectedArgument;
         Application.react_mode = true;
         Application.complete_only = true;
-        var compiled = try agent.compile(init.gpa, System);
+        var compiled = try agent.compileObserved(init.gpa, System, .{ .boundary_options = .{ .contract = .semantic } });
         defer compiled.deinit();
         const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
         defer init.gpa.free(bytes);
@@ -558,7 +559,7 @@ pub fn main(init: std.process.Init) !void {
         Application.reference_bytes = rb;
         Application.producer = pb;
         Application.consumer = cb;
-        var compiled = try agent.compile(init.gpa, System);
+        var compiled = try agent.compileObserved(init.gpa, System, .{ .boundary_options = .{ .contract = .semantic } });
         defer compiled.deinit();
         const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
         defer init.gpa.free(bytes);
@@ -718,7 +719,14 @@ fn experimentPrompt(c: agent.Context, request: Id, optional: Id, prefix: []const
     } } });
 }
 
-fn experimentAndContinue(b: *source.Builder, t: Types, q: hyper.Query, report: Id) !Id {
+fn experimentAndContinue(b: *source.Builder, t: Types, q: hyper.Query, report: Id) source.Error!Id {
+    return experimentAndContinueTyped(b, t, q, report) catch |err| return switch (err) {
+        error.UnsupportedEqualitySchema => error.TypeMismatch,
+        else => typed.sourceError(@errorCast(err)),
+    };
+}
+
+fn experimentAndContinueTyped(b: *source.Builder, t: Types, q: hyper.Query, report: Id) !Id {
     const invalid = try unresolved(b, t, "Experiment report does not match the current candidate or occurrence.");
     const prior = try b.variable(try agent.contracts.schema(Report, b));
     const reference_reply = try b.variable(try agent.contracts.schema(parser.ReferenceReply, b));
@@ -743,10 +751,16 @@ fn experimentAndContinue(b: *source.Builder, t: Types, q: hyper.Query, report: I
         .when_false = invalid,
     } });
     const same_candidate = try b.variable(try b.scalar(bool));
-    verified = try b.bind(same_candidate, (agent.value_equality.compare(b, try agent.contracts.schema(parser.Candidate, b), candidate, try field(b, parser.Candidate, try b.reference(prior), 0), try b.constant(void, {})) catch |err| return switch (err) {
-        error.UnsupportedEqualitySchema => error.TypeMismatch,
-        else => @as(source.Error, @errorCast(err)),
-    }), try b.term(.{ .conditional = .{ .condition = try b.reference(same_candidate), .when_true = verified, .when_false = invalid } }));
+    const construction = try typed.Context.init(b);
+    const candidate_equal_schema = try typed.interop.schema(construction, try agent.contracts.schema(parser.Candidate, b));
+    const candidate_equal_function = try agent.value_equality.create(construction, candidate_equal_schema, try construction.literalFailure(void, {}));
+    const candidate_equal_body = try typed.interop.scope(construction);
+    const candidate_equal_value = try candidate_equal_body.call(candidate_equal_function, &.{
+        .{ .name = "left", .value = try typed.interop.adoptValue(candidate_equal_body, candidate, candidate_equal_schema) },
+        .{ .name = "right", .value = try typed.interop.adoptValue(candidate_equal_body, try field(b, parser.Candidate, try b.reference(prior), 0), candidate_equal_schema) },
+    });
+    const candidate_equal = try typed.interop.computationId(construction, try candidate_equal_body.ret(candidate_equal_value));
+    verified = try b.bind(same_candidate, candidate_equal, try b.term(.{ .conditional = .{ .condition = try b.reference(same_candidate), .when_true = verified, .when_false = invalid } }));
     const with_reference = try b.term(.{ .match_sum = .{ .value = try field(b, ?parser.ReferenceReply, q.state, 5), .cases = &.{
         .{ .variable = try b.variable(try b.scalar(void)), .body = invalid },
         .{ .variable = reference_reply, .body = verified },
@@ -1187,5 +1201,5 @@ pub fn linkParticipants(allocator: std.mem.Allocator, producer_bytes: []const u8
     Application.circular_consumer = false;
     Application.retain_idle = false;
     Application.selection = .none;
-    return agent.compile(allocator, System);
+    return agent.compileObserved(allocator, System, .{ .boundary_options = .{ .contract = .semantic } });
 }

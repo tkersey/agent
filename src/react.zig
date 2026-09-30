@@ -2,7 +2,8 @@
 //! The computations supplied to the loop are Boundary values, not native callbacks.
 const std = @import("std");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
+const typed = boundary.authoring;
 const Id = source.Id;
 
 /// Continue(Action) is ordinal 0; Done(Result) is ordinal 1.
@@ -40,46 +41,59 @@ pub fn define(b: *source.Builder, spec: Spec) source.Error!Loop {
     try checkComputation(b, spec.fold, &.{ spec.state, spec.observation }, spec.state, spec);
     const instance = try b.specialization(Loop, "agent.react/v1", spec);
     if (instance.cached) |cached| return cached;
-    const function = try b.declare(
-        &.{ spec.state, spec.decide, spec.execute, spec.fold },
-        spec.step.result,
-        spec.residual.effects,
-        spec.regions,
-    );
-    try b.define(function, try loopBody(b, spec, function));
+    const function = loopDefinition(b, spec) catch |err| return typed.sourceError(err);
     return instance.finish(b, .{ .function = function, .step = spec.step });
 }
 
-fn loopBody(b: *source.Builder, spec: Spec, function: Id) source.Error!Id {
-    const state = try b.reference(b.parameter(function, 0));
-    const decide = try b.reference(b.parameter(function, 1));
-    const execute = try b.reference(b.parameter(function, 2));
-    const fold = try b.reference(b.parameter(function, 3));
-    const selected = try b.variable(spec.step.schema);
-    const action = try b.variable(spec.step.action);
-    const result = try b.variable(spec.step.result);
-    const observation = try b.variable(spec.observation);
-    const next_state = try b.variable(spec.state);
-    const decision = try apply(b, decide, &.{state});
-    const executed = try apply(b, execute, &.{try b.reference(action)});
-    const folded = try apply(b, fold, &.{ state, try b.reference(observation) });
-    const again = try b.term(.{ .call = .{
-        .function = function,
-        .arguments = &.{ try b.reference(next_state), decide, execute, fold },
-    } });
-    const continuing = try b.bind(observation, executed, try b.bind(next_state, folded, again));
-    const selected_branch = try b.term(.{ .match_sum = .{
-        .value = try b.reference(selected),
-        .cases = &.{
-            .{ .variable = action, .body = continuing },
-            .{ .variable = result, .body = try b.pure(try b.reference(result)) },
-        },
-    } });
-    return b.bind(selected, decision, selected_branch);
-}
-
-fn apply(b: *source.Builder, computation: Id, arguments: []const Id) source.Error!Id {
-    return b.term(.{ .apply = .{ .computation = computation, .arguments = arguments } });
+fn loopDefinition(b: *source.Builder, spec: Spec) typed.Error!Id {
+    const c = try typed.Context.init(b);
+    const state_schema = try typed.interop.schema(c, spec.state);
+    const decide_schema = try typed.interop.namedCallable(c, spec.decide, &.{"state"});
+    const execute_schema = try typed.interop.namedCallable(c, spec.execute, &.{"action"});
+    const fold_schema = try typed.interop.namedCallable(c, spec.fold, &.{ "state", "observation" });
+    const residual = try b.allocator().alloc(*const typed.Operation, spec.residual.effects.len);
+    for (residual, spec.residual.effects) |*item, id| item.* = try typed.interop.operation(c, id);
+    const regions = try b.allocator().alloc(*const typed.Region, spec.regions.len);
+    for (regions, spec.regions) |*item, id| item.* = try typed.interop.region(c, id);
+    const signature = try c.callable(&.{
+        .{ .name = "state", .schema = state_schema },
+        .{ .name = "decide", .schema = decide_schema },
+        .{ .name = "execute", .schema = execute_schema },
+        .{ .name = "fold", .schema = fold_schema },
+    }, try typed.interop.schema(c, spec.step.result), residual, .{
+        .use = .reusable,
+        .captures = &.{},
+        .regions = regions,
+    });
+    const function = try c.functionFor("ReAct", signature);
+    const body = try c.body(function);
+    const state = try body.parameter("state");
+    const decide = try body.parameter("decide");
+    const execute = try body.parameter("execute");
+    const fold = try body.parameter("fold");
+    const selected = try body.apply(decide, &.{.{ .name = "state", .value = state }});
+    const continuing = try body.caseOf(selected, "0");
+    const working = continuing.body();
+    const observation = try working.apply(execute, &.{.{
+        .name = "action",
+        .value = continuing.payload(),
+    }});
+    const next = try working.apply(fold, &.{
+        .{ .name = "state", .value = state },
+        .{ .name = "observation", .value = observation },
+    });
+    const again = try working.call(function, &.{
+        .{ .name = "state", .value = next },
+        .{ .name = "decide", .value = decide },
+        .{ .name = "execute", .value = execute },
+        .{ .name = "fold", .value = fold },
+    });
+    const done = try body.caseOf(selected, "1");
+    const result = try body.match(selected, &.{
+        try continuing.ret(again), try done.ret(done.payload()),
+    });
+    try c.define(function, try body.ret(result));
+    return typed.interop.functionId(c, function);
 }
 
 fn checkStep(b: *source.Builder, declared: Step) source.Error!void {

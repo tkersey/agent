@@ -53,7 +53,7 @@ const Message = struct {
 };
 
 const Configured = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const model = try c.catalogs.model("writer");
         const prompt = try c.catalogs.prompt(0);
         const skill = try c.catalogs.skill("revision");
@@ -110,7 +110,7 @@ test "supplied catalogs install before application and become ordinary program c
 }
 
 const Empty = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const unit = try c.schema(void);
         const entry = try c.builder.declare(&.{unit}, unit, &.{}, &.{});
         try c.builder.define(entry, try c.builder.pure(try c.literal(void, {})));
@@ -215,7 +215,7 @@ test "duplicate installed tool and interaction identities reject" {
 
 test "bad initial result and variable bindings reject without indexing invalid source" {
     const Bad = struct {
-        pub fn emit(c: agent.Context) !boundary.computation.Module {
+        pub fn emit(c: agent.Context) !boundary.source.Module {
             const unit = try c.schema(void);
             const entry = try c.builder.declare(&.{unit}, unit, &.{}, &.{});
             c.builder.functions.items[@intCast(entry)].parameters = &.{std.math.maxInt(u64)};

@@ -66,30 +66,45 @@ async function invoke(input) {
 }
 
 try {
-  let outcome = await invoke({ image, initialArgs: new Uint8Array() });
-  for (const [kind, payload, reply, packages] of cases) {
-    assert.equal(outcome.kind, "requested");
-    const request = await world.decodeRequest(outcome.request);
-    assert.equal(request.semanticIdentity, `agent.probe.inquiry.${kind}.v1`);
-    assert.deepEqual(Buffer.from(request.payload), u64(payload));
-    const snapshot = join(scratch, "state.pst3");
-    await writeFile(snapshot, outcome.state);
-    const graph = JSON.parse(execFileSync(resolve(inspectorPath), ["inspect-state", snapshot]));
-    assert.equal(graph.packages, packages, `${kind}(${payload}): retained owners`);
-    assert.equal(graph.multiTemplates, 0);
-    records.push({ kind, payload, stateBytes: outcome.state.length, graph });
-    outcome = await invoke({ image: Uint8Array.from(image), state: outcome.state,
-      control: "reply", value: await world.encodeResult(outcome.request, reply) });
+  if (basename(imagePath) === "typed.bpi3") {
+    let transfers = 0;
+    let outcome = await invoke({ image, initialArgs: new Uint8Array(), quantum: 7 });
+    while (outcome.kind === "progressed") {
+      assert.ok(transfers++ < 256);
+      outcome = await invoke({ image, state: outcome.state, quantum: 7 });
+    }
+    assert.equal(outcome.kind, "completed");
+    // One finding for occurrence 9; its earlier view carries generation 1/demand 7.
+    assert.deepEqual(Buffer.from(outcome.value), Buffer.concat([
+      Buffer.from([1]), u64(9), u64(42), Buffer.from([1]), u64(9), u64(1), u64(7),
+    ]));
+    console.log(JSON.stringify({ check: "typed inquiry named contracts", imageBytes: image.length, transfers, kernelSha256: runtime.kernelSha256 }));
+  } else {
+    let outcome = await invoke({ image, initialArgs: new Uint8Array() });
+    for (const [kind, payload, reply, packages] of cases) {
+      assert.equal(outcome.kind, "requested");
+      const request = await world.decodeRequest(outcome.request);
+      assert.equal(request.semanticIdentity, `agent.probe.inquiry.${kind}.v1`);
+      assert.deepEqual(Buffer.from(request.payload), u64(payload));
+      const snapshot = join(scratch, "state.pst3");
+      await writeFile(snapshot, outcome.state);
+      const graph = JSON.parse(execFileSync(resolve(inspectorPath), ["inspect-state", snapshot]));
+      assert.equal(graph.packages, packages, `${kind}(${payload}): retained owners`);
+      assert.equal(graph.multiTemplates, 0);
+      records.push({ kind, payload, stateBytes: outcome.state.length, graph });
+      outcome = await invoke({ image: Uint8Array.from(image), state: outcome.state,
+        control: "reply", value: await world.encodeResult(outcome.request, reply) });
+    }
+    assert.equal(outcome.kind, "completed");
+    const findings = followup ? [[1, 54], [3, 74]] : [[1, 36], [3, 56]];
+    const expected = composition ? Buffer.concat([Buffer.from([2]),
+      ...findings.flat().map(u64)]) : u64(92);
+    assert.deepEqual(Buffer.from(outcome.value), expected);
+    console.log(JSON.stringify({ imageBytes: image.length,
+      imageSha256: createHash("sha256").update(image).digest("hex"),
+      kernelSha256: runtime.kernelSha256, experiments: 1, modelRequests: 2,
+      cleanupRequests: 3, result: composition ? findings : 92, records }));
   }
-  assert.equal(outcome.kind, "completed");
-  const findings = followup ? [[1, 54], [3, 74]] : [[1, 36], [3, 56]];
-  const expected = composition ? Buffer.concat([Buffer.from([2]),
-    ...findings.flat().map(u64)]) : u64(92);
-  assert.deepEqual(Buffer.from(outcome.value), expected);
-  console.log(JSON.stringify({ imageBytes: image.length,
-    imageSha256: createHash("sha256").update(image).digest("hex"),
-    kernelSha256: runtime.kernelSha256, experiments: 1, modelRequests: 2,
-    cleanupRequests: 3, result: composition ? findings : 92, records }));
 } finally {
   await rm(scratch, { recursive: true, force: true });
 }

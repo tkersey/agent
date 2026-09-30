@@ -1,7 +1,8 @@
 //! Approval and consumption are one ordinary staged computation. Only this
 //! computation owns its protected effects and its non-cloneable internal grant.
 const std = @import("std");
-const source = @import("boundary").computation;
+const source = @import("boundary").source;
+const typed = @import("boundary").authoring;
 const authoring = @import("authoring.zig");
 const interaction = @import("interaction.zig");
 const equality = @import("value_equality.zig");
@@ -296,25 +297,26 @@ fn answer(
     incoming: Id,
 ) !Id {
     const b = c.builder;
-    const echoed = try b.primitive(d.challenge, .field, &.{incoming}, 0);
-    const principal = try b.primitive(d.principal, .field, &.{incoming}, 1);
-    const selected = try b.primitive(d.decision, .field, &.{incoming}, 2);
-    const same = try b.variable(try b.scalar(bool));
-    const authorized = try b.variable(try b.scalar(bool));
-    const auth = try b.term(.{ .call = .{
-        .function = cfg.authority,
-        .arguments = &.{ proposal, principal },
-    } });
-    const checked = try b.bind(authorized, auth, try b.term(.{ .conditional = .{
-        .condition = try b.reference(authorized),
-        .when_true = try decisionBody(c, d, cfg, grant, proposal, selected),
-        .when_false = try emptyResult(b, d, 3),
-    } }));
-    return b.bind(same, try equality.compare(b, d.challenge, retained, echoed, cfg.failure), try b.term(.{ .conditional = .{
-        .condition = try b.reference(same),
-        .when_true = checked,
-        .when_false = try emptyResult(b, d, 2),
-    } }));
+    const t = try typed.Context.init(b);
+    const root = try typed.interop.scope(t);
+    const challenge = try typed.interop.schema(t, d.challenge);
+    _ = try b.failureLiteral(cfg.failure);
+    const fault = try typed.interop.literalFailure(t, cfg.failure, try typed.interop.schema(t, b.values.items[@intCast(cfg.failure)].schema));
+    const compare = try equality.create(t, challenge, fault);
+    const reply = try typed.interop.adoptValue(root, incoming, try typed.interop.schema(t, d.reply));
+    const expected = try typed.interop.adoptValue(root, retained, challenge);
+    const same = try root.call(compare, &.{ .{ .name = "left", .value = expected }, .{ .name = "right", .value = try root.field(reply, "0") } });
+    const matching = try root.branch();
+    const invalid = try root.branch();
+    const result = try typed.interop.schema(t, d.result);
+    const principal = try matching.field(reply, "1");
+    const auth = try b.term(.{ .call = .{ .function = cfg.authority, .arguments = &.{ proposal, try typed.interop.valueId(matching, principal) } } });
+    const allowed = try typed.interop.term(matching, auth, try t.scalar(bool));
+    const authorized = try matching.branch();
+    const denied = try matching.branch();
+    const decision = try decisionBody(c, d, cfg, grant, proposal, try typed.interop.valueId(authorized, try authorized.field(reply, "2")));
+    const checked = try matching.conditional(allowed, try authorized.ret(try typed.interop.term(authorized, decision, result)), try denied.ret(try denied.variant(result, "3", try denied.constant(void, {}))));
+    return typed.interop.computationId(t, try root.ret(try root.conditional(same, try matching.ret(checked), try invalid.ret(try invalid.variant(result, "2", try invalid.constant(void, {}))))));
 }
 
 fn decisionBody(
@@ -395,19 +397,20 @@ fn evidenceMatches(
     next: Id,
 ) !Id {
     const b = c.builder;
-    const data = b.functions.items[@intCast(e.consume)].result;
-    const projected = try b.variable(data);
-    const matches = try b.variable(try b.scalar(bool));
-    const project = try b.term(.{ .call = .{
-        .function = e.project,
-        .arguments = &.{proposal},
-    } });
-    const same = try equality.compare(b, data, try b.reference(projected), try b.reference(b.parameter(d.function, 1)), failure);
-    return b.bind(projected, project, try b.bind(matches, same, try b.term(.{ .conditional = .{
-        .condition = try b.reference(matches),
-        .when_true = next,
-        .when_false = try emptyResult(b, d, 3),
-    } })));
+    const t = try typed.Context.init(b);
+    const root = try typed.interop.scope(t);
+    const data = try typed.interop.schema(t, b.functions.items[@intCast(e.consume)].result);
+    _ = try b.failureLiteral(failure);
+    const fault = try typed.interop.literalFailure(t, failure, try typed.interop.schema(t, b.values.items[@intCast(failure)].schema));
+    const compare = try equality.create(t, data, fault);
+    const project = try b.term(.{ .call = .{ .function = e.project, .arguments = &.{proposal} } });
+    const projected = try typed.interop.term(root, project, data);
+    const actual = try typed.interop.adoptValue(root, try b.reference(b.parameter(d.function, 1)), data);
+    const same = try root.call(compare, &.{ .{ .name = "left", .value = projected }, .{ .name = "right", .value = actual } });
+    const yes = try root.branch();
+    const no = try root.branch();
+    const result = try typed.interop.schema(t, d.result);
+    return typed.interop.computationId(t, try root.ret(try root.conditional(same, try yes.ret(try typed.interop.term(yes, next, result)), try no.ret(try no.variant(result, "3", try no.constant(void, {}))))));
 }
 
 fn repeat(c: authoring.Context, d: Definition, proposal: Id) !Id {

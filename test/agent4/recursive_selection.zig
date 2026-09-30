@@ -2,7 +2,7 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const hyper = boundary.library.hyper;
 const Id = source.Id;
 const State = struct { candidate: u64, nested: bool };

@@ -9,7 +9,7 @@ import {verifyRuntime} from '../../tools/agent4/dependencies.mjs';
 import {decodeSchema,decodeValue,encodeValue} from '../../runtime/values.mjs';
 import {createParserTools} from '../../runtime/parser_tools.mjs';
 import {decodeModelInvocation,normalizeOpenAIResponses} from '../../runtime/model.mjs';
-const [runtimePath='.agent4-recursive-integrated/out/world-runtime',nativeTool,peerPath,browserTools,engine='chromium']=process.argv.slice(2);
+const [runtimePath='.agent4-recursive-integrated/out/world-runtime/runtime',nativeTool,peerPath,browserTools,engine='chromium']=process.argv.slice(2);
 const runtime=verifyRuntime(resolve(runtimePath));
 const {Kernel,decodeOutcome,decodeRequest,encodeResult,encodeInput}=await import(pathToFileURL(runtime.entrypoint));
 const peer=peerPath?await(await import(pathToFileURL(resolve(peerPath)))).wasmtimePeer(runtime.kernelPath,runtime.kernelSha256):null;

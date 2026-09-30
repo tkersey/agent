@@ -2,7 +2,8 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
+const typed = boundary.authoring;
 const t = @import("types.zig");
 const s = @import("source.zig");
 const Id = s.Id;
@@ -119,7 +120,6 @@ pub fn admitTask(e: E, task: Id, continuation: Id, invalid: Id) !Id {
         .{ try e.value(u64, 0), try e.field(u64, task, 4) }, .{ try e.field(u64, task, 4), try e.value(u64, 33) },
     }) |bounds| next = try e.cond(try e.less(bounds[0], bounds[1]), next, invalid);
     const subject = try e.field(t.Subject, task, 0);
-    const supported = try b.variable(try e.schema(bool));
     const expected = try e.product(t.Subject, &.{
         try e.value(agent.contracts.Text(32), .{ .bytes = "session.mjs" }),
         try e.field(t.Source, subject, 1),
@@ -130,7 +130,18 @@ pub fn admitTask(e: E, task: Id, continuation: Id, invalid: Id) !Id {
         try e.field(t.Hash, subject, 6),
         try e.field(u64, subject, 7),
     });
-    return b.bind(supported, try agent.value_equality.compare(b, try e.schema(t.Subject), subject, expected, try e.value(void, {})), try e.cond(try e.ref(supported), next, invalid));
+    const c = try typed.Context.init(b);
+    const body = try typed.interop.scope(c);
+    const subject_type = try typed.interop.schema(c, try e.schema(t.Subject));
+    const result = try typed.interop.schema(c, try e.schema(t.Result));
+    const equal = try agent.value_equality.create(c, subject_type, try c.literalFailure(void, {}));
+    const supported = try body.call(equal, &.{
+        .{ .name = "left", .value = try typed.interop.adoptValue(body, subject, subject_type) },
+        .{ .name = "right", .value = try typed.interop.adoptValue(body, expected, subject_type) },
+    });
+    const yes = try body.branch();
+    const no = try body.branch();
+    return typed.interop.computationId(c, try body.ret(try body.conditional(supported, try yes.ret(try typed.interop.term(yes, next, result)), try no.ret(try typed.interop.term(no, invalid, result)))));
 }
 
 fn seedFunction(e: E, d: agent.inquiry.broker.Definition, actor: Id, effects: []const Id) !Id {
@@ -142,7 +153,7 @@ fn seedFunction(e: E, d: agent.inquiry.broker.Definition, actor: Id, effects: []
     const hypothesis = try b.variable(try e.schema(t.Hypothesis));
     const continued = try e.call(f, &.{ try e.ref(pop.rest), try e.p(f, 1), try e.ref(next), try e.arithmetic(.integer_add, try e.p(f, 3), try e.value(u64, 1)) });
     const park = try b.bind(next, try e.call(d.custody.park, &.{ try e.p(f, 2), try e.p(f, 3), try e.ref(answer) }), continued);
-    const started = try b.bind(answer, try agent.dialogue.start(b, d.custody.dialogue, actor, &.{ try e.p(f, 1), try e.p(f, 3), try e.ref(hypothesis) }), park);
+    const started = try b.bind(answer, try boundary.library.generator.start(b, d.custody.dialogue, actor, &.{ try e.p(f, 1), try e.p(f, 3), try e.ref(hypothesis) }), park);
     const Case = std.meta.Child(@FieldType(@FieldType(source.ast.Term, "match_sum"), "cases"));
     var cases: [std.meta.fields(t.Answer).len]Case = undefined;
     inline for (std.meta.fields(t.Answer), 0..) |field, i| {
@@ -212,7 +223,7 @@ pub fn main(init: std.process.Init) !void {
 
 fn writeImage(init: std.process.Init, comptime App: type) !void {
     var diagnostic: boundary.program.Diagnostic = .{};
-    var compiled = agent.compileObserved(init.gpa, App, .{ .boundary_options = .{ .diagnostic = &diagnostic } }) catch |err| {
+    var compiled = agent.compileObserved(init.gpa, App, .{ .boundary_options = .{ .contract = .semantic, .diagnostic = &diagnostic } }) catch |err| {
         std.debug.print("{any}\n", .{diagnostic});
         return err;
     };

@@ -3,7 +3,7 @@ const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
 const world = @import("world");
-const Id = boundary.computation.Id;
+const Id = boundary.source.Id;
 const History = agent.contracts.Vector(u64, 2);
 const Input = struct { turns: u8, effects: u8, drop_oldest: bool };
 const Choice = union(enum) { observe: u64, finish: void };
@@ -12,7 +12,7 @@ const Pair = struct { head: u64, rest: History };
 const System = agent.system(.{ .InitialArgs = Input, .Result = History, .Failure = Failure, .application = Application });
 
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const b = c.builder;
         const decide = try c.external("history.decide", try c.schema(History), try c.schema(Choice), .read);
         const observe = try c.external("history.observe", try c.schema(u64), try c.schema(u64), .read);

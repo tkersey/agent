@@ -185,3 +185,70 @@ test "compiled tool construction releases all partial object and link owners" {
     defer a.free(Tool.bytes);
     try std.testing.checkAllAllocationFailures(a, allocationFailure, .{});
 }
+
+test "compiled tool final link forwards semantic contract and deterministic limits" {
+    Tool.bytes = try object(false);
+    defer a.free(Tool.bytes);
+    var stats: data.closed_compilation.Statistics = .{};
+    var coalescing: data.coalescing.Statistics = .{};
+    var structural = try agent.compile(a, System);
+    defer structural.deinit();
+    var limited = try agent.compileObserved(a, System, .{ .boundary_options = .{
+        .contract = .semantic,
+        .semantic_work_limit = 0,
+        .semantic_statistics = &stats,
+        .coalescing = .{ .statistics = &coalescing },
+    } });
+    defer limited.deinit();
+    try std.testing.expectEqual(data.closed_compilation.Outcome.work_limit, stats.outcome);
+    try std.testing.expect(coalescing.outcome != .not_run);
+    try std.testing.expectEqual(try data.program_image.identity(a, structural.program), try data.program_image.identity(a, limited.program));
+    var semantic = try agent.compileObserved(a, System, .{ .boundary_options = .{ .contract = .semantic, .semantic_statistics = &stats } });
+    defer semantic.deinit();
+    try std.testing.expect(stats.outcome == .applied or stats.outcome == .no_change);
+    try std.testing.expectError(error.Capacity, agent.compileObserved(a, System, .{ .boundary_options = .{ .contract = .semantic, .max_image_bytes = 0 } }));
+}
+
+test "compiled tool final link validates profiles before structural or work-limit returns" {
+    Tool.bytes = try object(false);
+    defer a.free(Tool.bytes);
+    const invalid: data.closed_compilation.ProfilePolicy = .{ .record = .{
+        .version = 0,
+        .image_identity = .{0} ** 32,
+        .block_counts = &.{},
+        .total = 0,
+    } };
+    for ([_]data.closed_compilation.Contract{ .structural, .semantic }) |contract| {
+        try std.testing.expectError(error.InvalidOptimizationProfile, agent.compileObserved(a, System, .{ .boundary_options = .{
+            .contract = contract,
+            .profile = invalid,
+            .semantic_work_limit = 0,
+        } }));
+    }
+}
+
+test "compiled tool final link preserves valid profiles and rejects stale identities" {
+    Tool.bytes = try object(false);
+    defer a.free(Tool.bytes);
+    // P01's documented zero-work rollback exposes the admitted original record
+    // to the collector; the profiled compilation still uses ordinary defaults.
+    var original = try agent.compileObserved(a, System, .{ .boundary_options = .{ .coalescing = .{ .work_limit = 0 } } });
+    defer original.deinit();
+    var collector = try data.optimization_profile.Collector.init(a, original.program);
+    defer collector.deinit();
+    var profile = try collector.snapshot(a);
+    defer profile.deinit();
+    var stats: data.closed_compilation.Statistics = .{};
+    var compiled = try agent.compileObserved(a, System, .{ .boundary_options = .{
+        .contract = .semantic,
+        .profile = .{ .record = profile.record },
+        .semantic_statistics = &stats,
+    } });
+    defer compiled.deinit();
+    try std.testing.expect(stats.profile_used);
+    var ordinary = try agent.compileObserved(a, System, .{ .boundary_options = .{ .contract = .semantic } });
+    defer ordinary.deinit();
+    try std.testing.expectEqual(try data.program_image.identity(a, ordinary.program), try data.program_image.identity(a, compiled.program));
+    profile.record.image_identity[0] ^= 1;
+    try std.testing.expectError(error.InvalidOptimizationProfile, agent.compileObserved(a, System, .{ .boundary_options = .{ .profile = .{ .record = profile.record } } }));
+}

@@ -3,7 +3,8 @@
 //! resource can satisfy a protected commitment's live-evidence requirement.
 const std = @import("std");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
+const typed = boundary.authoring;
 const authoring = @import("authoring.zig");
 const decision = @import("decision.zig");
 const Id = source.Id;
@@ -157,58 +158,63 @@ fn interpret(
         d.family, result, responder, scope, origin,
     });
     if (instance.cached) |cached| return cached;
-    const captures = try b.allocator().alloc(Id, scope.captures.len + 2);
-    @memcpy(captures[0..scope.captures.len], scope.captures);
-    captures[scope.captures.len] = d.family.capability;
-    captures[scope.captures.len + 1] = responder;
-    const token = try b.schema(.{ .internal = .{ .resumption = .{
-        .effect = d.family.effect,
-        .input = d.observation,
-        .answer = result,
-        .effects = scope.residual.effects,
-        .capture_bound = captures,
-        .handled = &.{d.family.effect},
+    const interpreted = try authoredInterpretation(b, d, result, responder, scope, origin);
+    return instance.finish(b, interpreted);
+}
+
+fn authoredInterpretation(
+    b: *source.Builder,
+    d: Definition,
+    result: Id,
+    responder: Id,
+    scope: decision.Scope,
+    origin: Origin,
+) !decision.Interpretation {
+    const c = try typed.Context.init(b);
+    const operation = try typed.interop.operation(c, d.family.effect);
+    const answer = try typed.interop.schema(c, result);
+    const observation = try typed.interop.schema(c, d.observation);
+    const response = try typed.interop.namedCallable(c, responder, &.{"question"});
+    const captures = try b.allocator().alloc(*const typed.Schema, scope.captures.len + 2);
+    for (scope.captures, 0..) |id, i| captures[i] = try typed.interop.schema(c, id);
+    captures[scope.captures.len] = try typed.interop.schema(c, d.family.capability);
+    captures[scope.captures.len + 1] = response;
+    const residual = try b.allocator().alloc(*const typed.Operation, scope.residual.effects.len);
+    for (scope.residual.effects, residual) |id, *item| item.* = try typed.interop.operation(c, id);
+    const owned = try b.allocator().alloc(*const typed.Region, scope.owned_regions.len);
+    for (scope.owned_regions, owned) |id, *item| item.* = try typed.interop.region(c, id);
+    const borrowed = try b.allocator().alloc(*const typed.Region, scope.borrowed_regions.len);
+    for (scope.borrowed_regions, borrowed) |id, *item| item.* = try typed.interop.region(c, id);
+    const handler = try c.handler(operation, answer, answer, .{
         .mode = .deep,
         .use = .linear,
-        .owned_regions = scope.owned_regions,
         .obligations = true,
-    } } });
-    const returns = try b.declare(&.{ responder, result }, result, &.{}, scope.borrowed_regions);
-    try b.define(returns, try b.pure(try b.reference(b.parameter(returns, 1))));
-    const clause = try b.declare(
-        &.{ responder, d.question, token },
-        result,
-        scope.residual.effects,
-        scope.borrowed_regions,
-    );
-    const observed = try b.variable(d.data);
-    const ask_responder = try b.term(.{ .apply = .{
-        .computation = try b.reference(b.parameter(clause, 0)),
-        .arguments = &.{try b.reference(b.parameter(clause, 1))},
-    } });
-    const answer = try b.primitive(
-        d.observation,
-        .variant,
-        &.{try b.reference(observed)},
-        @intFromEnum(origin),
-    );
-    const resumed = try b.term(.{ .resume_value = .{
-        .resumption = try b.reference(b.parameter(clause, 2)),
-        .argument = answer,
-    } });
-    try b.define(clause, try b.bind(observed, ask_responder, resumed));
-    return instance.finish(b, .{
-        .resumption = token,
-        .handler = try b.handler(.{
-            .mode = .deep,
-            .input = result,
-            .answer = result,
-            .return_function = returns,
-            .state = &.{responder},
-            .effects = scope.residual.effects,
-            .clauses = &.{.{ .effect = d.family.effect, .function = clause, .resumption = token }},
-        }),
+        .return_effects = &.{},
+        .residual = residual,
+        .captures = captures,
+        .owned_regions = owned,
+        .borrowed_regions = borrowed,
+        .state = &.{.{ .name = "responder", .schema = response }},
     });
+    const returns = try c.returnFunction(handler);
+    const return_body = try c.body(returns);
+    try c.define(returns, try return_body.ret(try return_body.parameter("result")));
+    const clause = try c.clauseFunction(handler);
+    const body = try c.body(clause);
+    const observed = try body.apply(try body.parameter("responder"), &.{.{
+        .name = "question",
+        .value = try body.parameter("payload"),
+    }});
+    const tagged = try body.variant(observation, switch (origin) {
+        .external => "0",
+        .simulated => "1",
+    }, observed);
+    const resumed = try body.resumeValue(try body.parameter("resumption"), tagged);
+    try c.define(clause, try body.ret(resumed));
+    return .{
+        .handler = try typed.interop.handlerId(c, handler),
+        .resumption = try typed.interop.schemaId(c, try typed.interop.resumptionSchema(c, handler)),
+    };
 }
 
 fn checkResponder(b: *source.Builder, d: Definition, schema: Id, residual: source.Row) !void {

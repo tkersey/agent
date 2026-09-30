@@ -1,32 +1,28 @@
-//! Structural equality for portable values, emitted as ordinary Boundary code.
-//! The native implementation runs only while authoring a source module.
+//! Structural equality for portable values, emitted through typed Boundary code.
 const std = @import("std");
 const boundary = @import("boundary");
-const source = boundary.computation;
-const p = boundary.data.program;
+const source = boundary.source;
+const a = boundary.authoring;
 const Id = source.Id;
-
 pub const Error = source.Error || error{UnsupportedEqualitySchema};
+pub const TypedError = a.Error || error{UnsupportedEqualitySchema};
 
-/// Declare a shared pure function `(schema, schema) -> bool`. `failure` is a
-/// literal source value of the enclosing module's failure schema. Boundary
-/// requires explicit fault edges even where a length/tag guard proves the
-/// relevant arithmetic/projection cannot fail for an admitted value.
-pub fn define(b: *source.Builder, schema: Id, failure: Id) Error!Id {
+/// Construct a pure comparison, retaining named schemas and recursive sharing.
+pub fn create(c: *a.Context, schema: *const a.Schema, failure: *const a.FailureLiteral) TypedError!*const a.Function {
+    const b = a.interop.builder(c);
+    const id = try a.interop.schemaId(c, schema);
+    _ = try a.interop.failureLiteralId(c, failure);
+    try checkPortableSchema(b, id);
+    return declare(c, schema, failure);
+}
+
+/// Inspect a source schema for portable equality/presentation admission without
+/// emitting code. This is an IR admission boundary: IDs belong to this Builder,
+/// and every call rechecks the current graph, including recursive children.
+pub fn checkPortableSchema(b: *source.Builder, schema: Id) Error!void {
     var visited = std.AutoHashMapUnmanaged(Id, void){};
     defer visited.deinit(b.allocator());
     try portable(b, schema, &visited);
-    return defineChecked(b, schema, try b.failureLiteral(failure));
-}
-
-/// Return a CALL TERM, not a value expression. Bind its boolean result before
-/// using it in a conditional or another value expression.
-pub fn compare(b: *source.Builder, schema: Id, left: Id, right: Id, failure: Id) Error!Id {
-    if (left >= b.values.items.len or right >= b.values.items.len) return error.InvalidReference;
-    const left_schema = b.values.items[@intCast(left)].schema;
-    const right_schema = b.values.items[@intCast(right)].schema;
-    if (left_schema != schema or right_schema != schema) return error.TypeMismatch;
-    return call(b, try define(b, schema, failure), &.{ left, right });
 }
 
 fn portable(
@@ -47,196 +43,110 @@ fn portable(
     }
 }
 
-fn defineChecked(b: *source.Builder, schema: Id, failure: Id) Error!Id {
-    const cached = try b.specialization(Id, "agent.value-equality/v1", .{ schema, failure });
-    if (cached.cached) |function| return function;
-    // Publish the declaration before recursively constructing its body. This
-    // gives mutually recursive portable schemas a finite function graph.
-    const function = try b.declare(&.{ schema, schema }, try b.scalar(bool), &.{}, &.{});
-    _ = try cached.finish(b, function);
-    const left = try b.reference(b.parameter(function, 0));
-    const right = try b.reference(b.parameter(function, 1));
-    const shape = b.schemas.items[@intCast(schema)];
-    const body = switch (shape) {
-        .unit => try truth(b, true),
-        .boolean, .i8, .i16, .i32, .i64, .u8, .u16, .u32, .u64 => try b.pure(try equal(
-            b,
-            left,
-            right,
-        )),
-        .enumeration => try b.pure(try equal(
-            b,
-            try b.primitive(try b.scalar(u32), .enum_tag, &.{left}, 0),
-            try b.primitive(try b.scalar(u32), .enum_tag, &.{right}, 0),
-        )),
-        .bytes, .text, .bounded_bytes, .bounded_text => try b.pure(try equal(
-            b,
-            try b.primitive(try b.scalar(i8), .blob_compare, &.{ left, right }, 0),
-            try b.constant(i8, 0),
-        )),
-        .product => |fields| try product(b, fields, left, right, failure),
-        .sum => |variants| try sum(b, variants, left, right, failure),
-        .seq => |element| try sequence(b, schema, element, left, right, failure),
-        .vector => |vector| try sequence(b, schema, vector.element, left, right, failure),
-        .array => |array| try sequence(b, schema, array.element, left, right, failure),
+fn declare(c: *a.Context, schema: *const a.Schema, failure: *const a.FailureLiteral) TypedError!*const a.Function {
+    const b = a.interop.builder(c);
+    const id = try a.interop.schemaId(c, schema);
+    const cached = try b.specialization(Id, "agent.value-equality/typed-v1", .{ @intFromPtr(c), @intFromPtr(schema), try a.interop.failureLiteralId(c, failure) });
+    if (cached.cached) |function| return a.interop.declaredFunction(c, function);
+    const function = try c.function("portable equality", &.{ .{ .name = "left", .schema = schema }, .{ .name = "right", .schema = schema } }, try c.scalar(bool), &.{});
+    // Register before descending into recursive portable schemas.
+    _ = try cached.finish(b, try a.interop.functionId(c, function));
+    const body = try c.body(function);
+    const left = try body.parameter("left");
+    const right = try body.parameter("right");
+    const result = switch (b.schemas.items[@intCast(id)]) {
+        .unit => try body.constant(bool, true),
+        .boolean, .i8, .i16, .i32, .i64, .u8, .u16, .u32, .u64 => try body.equal(left, right),
+        .enumeration => try body.equal(try body.enumTag(left), try body.enumTag(right)),
+        .bytes, .text, .bounded_bytes, .bounded_text => try body.equal(try body.blobCompare(left, right), try body.constant(i8, 0)),
+        .product => try product(c, body, schema, left, right, failure),
+        .sum => try sum(c, body, schema, left, right, failure),
+        .seq, .vector, .array => try sequence(c, body, schema, left, right, failure),
         .internal => return error.UnsupportedEqualitySchema,
     };
-    try b.define(function, body);
+    try c.define(function, try body.ret(result));
     return function;
 }
-
-fn product(b: *source.Builder, fields: []const Id, left: Id, right: Id, failure: Id) Error!Id {
-    var next = try truth(b, true);
-    var index = fields.len;
-    while (index != 0) {
-        index -= 1;
-        const schema = fields[index];
-        const comparison = try call(b, try defineChecked(b, schema, failure), &.{
-            try b.primitive(schema, .field, &.{left}, index),
-            try b.primitive(schema, .field, &.{right}, index),
-        });
-        next = try andThen(b, comparison, next);
+const Guard = struct {
+    parent: *a.Body,
+    condition: *const a.Value,
+    yes: *a.Body,
+    no: *a.Body,
+    fn finish(g: @This(), value: *const a.Value) TypedError!*const a.Value {
+        return g.parent.conditional(g.condition, try g.yes.ret(value), try g.no.ret(try g.no.constant(bool, false)));
     }
-    return next;
-}
-
-fn sum(b: *source.Builder, variants: []const Id, left: Id, right: Id, failure: Id) Error!Id {
-    const Case = std.meta.Child(@FieldType(@FieldType(source.ast.Term, "match_sum"), "cases"));
-    const cases = try b.allocator().alloc(Case, variants.len);
-    for (cases, variants, 0..) |*case, schema, index| {
-        const variable = try b.variable(schema);
-        const right_payload = try fallible(
-            b,
-            schema,
-            .variant_payload,
-            &.{right},
-            index,
-            .invalid_variant,
-            failure,
-        );
-        case.* = .{
-            .variable = variable,
-            .body = try call(b, try defineChecked(b, schema, failure), &.{
-                try b.reference(variable), right_payload,
-            }),
-        };
+};
+fn product(c: *a.Context, body: *a.Body, schema: *const a.Schema, left: *const a.Value, right: *const a.Value, failure: *const a.FailureLiteral) TypedError!*const a.Value {
+    const allocator = a.interop.builder(c).allocator();
+    var guards: std.ArrayList(Guard) = .empty;
+    defer guards.deinit(allocator);
+    var work = body;
+    for (schema.fields()) |field| {
+        const compared = try work.call(try declare(c, field.schema, failure), &.{ .{ .name = "left", .value = try work.field(left, field.name) }, .{ .name = "right", .value = try work.field(right, field.name) } });
+        const yes = try work.branch();
+        try guards.append(allocator, .{ .parent = work, .condition = compared, .yes = yes, .no = try work.branch() });
+        work = yes;
     }
-    return b.term(.{ .conditional = .{
-        .condition = try equal(
-            b,
-            try b.primitive(try b.scalar(u64), .variant_tag, &.{left}, 0),
-            try b.primitive(try b.scalar(u64), .variant_tag, &.{right}, 0),
-        ),
-        .when_true = try b.term(.{ .match_sum = .{ .value = left, .cases = cases } }),
-        .when_false = try truth(b, false),
-    } });
+    var result = try work.constant(bool, true);
+    var remaining = guards.items.len;
+    while (remaining != 0) {
+        remaining -= 1;
+        result = try guards.items[remaining].finish(result);
+    }
+    return result;
 }
-
-fn sequence(
-    b: *source.Builder,
-    schema: Id,
-    element: Id,
-    left: Id,
-    right: Id,
-    failure: Id,
-) Error!Id {
-    const integer = try b.scalar(u64);
-    const boolean = try b.scalar(bool);
-    const unit = try b.scalar(void);
-    const optional = try b.schema(.{ .sum = &.{ unit, element } });
-    const loop = try b.declare(&.{ schema, schema, integer, integer }, boolean, &.{}, &.{});
-    const l = try b.reference(b.parameter(loop, 0));
-    const r = try b.reference(b.parameter(loop, 1));
-    const index = try b.reference(b.parameter(loop, 2));
-    const length = try b.reference(b.parameter(loop, 3));
-    const l_none = try b.variable(unit);
-    const l_some = try b.variable(element);
-    const r_none = try b.variable(unit);
-    const r_some = try b.variable(element);
-    const increment = try fallible(
-        b,
-        integer,
-        .integer_add,
-        &.{ index, try b.constant(u64, 1) },
-        0,
-        .arithmetic_overflow,
-        failure,
-    );
-    const recurse = try call(b, loop, &.{ l, r, increment, length });
-    const element_equal = try call(b, try defineChecked(b, element, failure), &.{
-        try b.reference(l_some), try b.reference(r_some),
-    });
-    const right_match = try b.term(.{ .match_sum = .{
-        .value = try b.primitive(optional, .sequence_get, &.{ r, index }, 0),
-        .cases = &.{
-            .{ .variable = r_none, .body = try truth(b, false) },
-            .{ .variable = r_some, .body = try andThen(b, element_equal, recurse) },
-        },
-    } });
-    const left_match = try b.term(.{ .match_sum = .{
-        .value = try b.primitive(optional, .sequence_get, &.{ l, index }, 0),
-        .cases = &.{
-            .{ .variable = l_none, .body = try truth(b, false) },
-            .{ .variable = l_some, .body = right_match },
-        },
-    } });
-    try b.define(loop, try b.term(.{ .conditional = .{
-        .condition = try equal(b, index, length),
-        .when_true = try truth(b, true),
-        .when_false = left_match,
-    } }));
-    const left_length = try b.primitive(integer, .sequence_length, &.{left}, 0);
-    const right_length = try b.primitive(integer, .sequence_length, &.{right}, 0);
-    return b.term(.{ .conditional = .{
-        .condition = try equal(b, left_length, right_length),
-        .when_true = try call(b, loop, &.{ left, right, try b.constant(u64, 0), left_length }),
-        .when_false = try truth(b, false),
-    } });
+fn sum(c: *a.Context, body: *a.Body, schema: *const a.Schema, left: *const a.Value, right: *const a.Value, failure: *const a.FailureLiteral) TypedError!*const a.Value {
+    const same = try body.equal(try body.variantTag(left), try body.variantTag(right));
+    const matching = try body.branch();
+    const different = try body.branch();
+    const cases = try a.interop.builder(c).allocator().alloc(*const a.FinishedCase, schema.fields().len);
+    for (schema.fields(), cases) |field, *finished| {
+        const selected = try matching.caseOf(left, field.name);
+        const work = selected.body();
+        const payload = try work.variantPayload(right, field.name, failure);
+        const equal = try work.call(try declare(c, field.schema, failure), &.{ .{ .name = "left", .value = selected.payload() }, .{ .name = "right", .value = payload } });
+        finished.* = try selected.ret(equal);
+    }
+    return body.conditional(same, try matching.ret(try matching.match(left, cases)), try different.ret(try different.constant(bool, false)));
 }
-
-fn andThen(b: *source.Builder, condition: Id, next: Id) Error!Id {
-    const variable = try b.variable(try b.scalar(bool));
-    return b.bind(variable, condition, try b.term(.{ .conditional = .{
-        .condition = try b.reference(variable),
-        .when_true = next,
-        .when_false = try truth(b, false),
-    } }));
-}
-
-fn equal(b: *source.Builder, left: Id, right: Id) source.Error!Id {
-    return b.primitive(try b.scalar(bool), .equal, &.{ left, right }, 0);
-}
-
-fn truth(b: *source.Builder, value: bool) source.Error!Id {
-    return b.pure(try b.constant(bool, value));
-}
-
-fn call(b: *source.Builder, function: Id, arguments: []const Id) source.Error!Id {
-    return b.term(.{ .call = .{ .function = function, .arguments = arguments } });
-}
-
-fn fallible(
-    b: *source.Builder,
-    schema: Id,
-    opcode: p.Opcode,
-    operands: []const Id,
-    immediate: Id,
-    kind: p.Fault,
-    failure: Id,
-) source.Error!Id {
-    return b.value(.{ .schema = schema, .expression = .{ .primitive = .{
-        .opcode = opcode,
-        .operands = operands,
-        .immediate = immediate,
-        .failures = &.{.{ .kind = kind, .value = failure }},
-    } } });
+fn sequence(c: *a.Context, body: *a.Body, schema: *const a.Schema, left: *const a.Value, right: *const a.Value, failure: *const a.FailureLiteral) TypedError!*const a.Value {
+    const integer = try c.scalar(u64);
+    const boolean = try c.scalar(bool);
+    const loop_fn = try c.function("compare sequence elements", &.{ .{ .name = "left", .schema = schema }, .{ .name = "right", .schema = schema }, .{ .name = "index", .schema = integer }, .{ .name = "length", .schema = integer } }, boolean, &.{});
+    const loop = try c.body(loop_fn);
+    const l = try loop.parameter("left");
+    const r = try loop.parameter("right");
+    const index = try loop.parameter("index");
+    const length = try loop.parameter("length");
+    const ended = try loop.branch();
+    const active = try loop.branch();
+    const lv = try active.sequenceGet(l, index);
+    const l_none = try active.caseOf(lv, "none");
+    const l_some = try active.caseOf(lv, "some");
+    const rv = try l_some.body().sequenceGet(r, index);
+    const r_none = try l_some.body().caseOf(rv, "none");
+    const r_some = try l_some.body().caseOf(rv, "some");
+    const working = r_some.body();
+    const equal = try working.call(try declare(c, schema.resultSchema() orelse return error.InvalidSchema, failure), &.{ .{ .name = "left", .value = l_some.payload() }, .{ .name = "right", .value = r_some.payload() } });
+    const yes = try working.branch();
+    const no = try working.branch();
+    const next = try yes.call(loop_fn, &.{ .{ .name = "left", .value = l }, .{ .name = "right", .value = r }, .{ .name = "index", .value = try yes.checkedAdd(index, try yes.constant(u64, 1), failure) }, .{ .name = "length", .value = length } });
+    const compared = try working.conditional(equal, try yes.ret(next), try no.ret(try no.constant(bool, false)));
+    const right_match = try l_some.body().match(rv, &.{ try r_none.ret(try r_none.body().constant(bool, false)), try r_some.ret(compared) });
+    const left_match = try active.match(lv, &.{ try l_none.ret(try l_none.body().constant(bool, false)), try l_some.ret(right_match) });
+    try c.define(loop_fn, try loop.ret(try loop.conditional(try loop.equal(index, length), try ended.ret(try ended.constant(bool, true)), try active.ret(left_match))));
+    const left_length = try body.sequenceLength(left);
+    const right_length = try body.sequenceLength(right);
+    const same = try body.branch();
+    const different = try body.branch();
+    const compared_all = try same.call(loop_fn, &.{ .{ .name = "left", .value = left }, .{ .name = "right", .value = right }, .{ .name = "index", .value = try same.constant(u64, 0) }, .{ .name = "length", .value = left_length } });
+    return body.conditional(try body.equal(left_length, right_length), try same.ret(compared_all), try different.ret(try different.constant(bool, false)));
 }
 
 test "all portable schema families lower to checked pure comparisons" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
     const unit = try b.scalar(void);
-    const failure = try b.constant(void, {});
     const integer = try b.scalar(i64);
     const tree = try b.reserveSchema();
     const children = try b.schema(.{ .product = &.{ integer, tree, tree } });
@@ -263,10 +173,12 @@ test "all portable schema families lower to checked pure comparisons" {
         tree,
     };
     const whole = try b.schema(.{ .product = &fields });
-    const function = try define(&b, whole, failure);
-    try std.testing.expectEqual(function, try define(&b, whole, try b.constant(void, {})));
-    try std.testing.expectEqual(@as(usize, 0), b.functions.items[@intCast(function)].effects.len);
-    var compiled = try boundary.program.compile(std.testing.allocator, b.module(function, unit));
+    const c = try a.Context.init(&b);
+    const contract = try a.interop.schema(c, whole);
+    const function = try create(c, contract, try c.literalFailure(void, {}));
+    try std.testing.expect(function == try create(c, contract, try c.literalFailure(void, {})));
+    try std.testing.expectEqual(@as(usize, 0), b.functions.items[@intCast(try a.interop.functionId(c, function))].effects.len);
+    var compiled = try c.compile(std.testing.allocator, function, try a.interop.schema(c, unit));
     defer compiled.deinit();
     try std.testing.expectEqual(@as(usize, 0), compiled.program.effects.len);
 }
@@ -274,7 +186,6 @@ test "all portable schema families lower to checked pure comparisons" {
 test "internal values reject at any recursive schema depth before declarations" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
-    const failure = try b.constant(void, {});
     const unit = try b.scalar(void);
     const region = b.region();
     const cell = try b.schema(.{ .internal = .{ .cell = .{ .element = unit, .region = region } } });
@@ -282,25 +193,63 @@ test "internal values reject at any recursive schema depth before declarations" 
     const nested = try b.schema(.{ .product = &.{ recursive, cell } });
     try b.defineSchema(recursive, .{ .sum = &.{ unit, nested } });
     const before = b.functions.items.len;
-    try std.testing.expectError(error.UnsupportedEqualitySchema, define(&b, recursive, failure));
+    const c = try a.Context.init(&b);
+    try std.testing.expectError(error.UnsupportedEqualitySchema, create(c, try a.interop.schema(c, recursive), try c.literalFailure(void, {})));
     try std.testing.expectEqual(before, b.functions.items.len);
 }
 
-test "compare validates values and returns an ordinary source call" {
+test "typed comparison calls validate schemas, origins and raw import bounds" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
-    const failure = try b.constant(void, {});
-    const integer = try b.scalar(u64);
-    const left = try b.constant(u64, 13);
-    const right = try b.constant(u64, 17);
-    const term = try compare(&b, integer, left, right, failure);
+    const c = try a.Context.init(&b);
+    const integer = try c.scalar(u64);
+    const function = try create(c, integer, try c.literalFailure(void, {}));
+    const body = try a.interop.scope(c);
+    const left = try body.constant(u64, 13);
+    const right = try body.constant(u64, 17);
+    const compared = try body.call(function, &.{ .{ .name = "left", .value = left }, .{ .name = "right", .value = right } });
+    const term = try a.interop.computationId(c, try body.ret(compared));
     try std.testing.expect(b.terms.items[@intCast(term)] == .call);
-    try std.testing.expectError(
-        error.TypeMismatch,
-        compare(&b, integer, left, try b.constant(bool, true), failure),
-    );
-    try std.testing.expectError(
-        error.InvalidReference,
-        compare(&b, integer, left, b.values.items.len, failure),
-    );
+    const bad = try a.interop.scope(c);
+    try std.testing.expectError(error.SchemaMismatch, bad.call(function, &.{ .{ .name = "left", .value = try bad.constant(u64, 13) }, .{ .name = "right", .value = try bad.constant(bool, true) } }));
+    const foreign = try a.Context.init(&b);
+    const imported = try a.interop.scope(foreign);
+    try std.testing.expectError(error.InvalidReference, a.interop.adoptValue(imported, b.values.items.len, try foreign.scalar(u64)));
+    try std.testing.expectError(error.ForeignHandle, imported.call(function, &.{ .{ .name = "left", .value = try imported.constant(u64, 13) }, .{ .name = "right", .value = try imported.constant(u64, 17) } }));
+}
+
+test "typed comparisons preserve named records and share equal failure literals" {
+    var b = source.Builder.init(std.testing.allocator);
+    defer b.deinit();
+    const c = try a.Context.init(&b);
+    const unit = try c.scalar(void);
+    const choice = try c.alternatives(&.{ .{ .name = "empty", .schema = unit }, .{ .name = "count", .schema = try c.scalar(u64) } });
+    const schema = try c.record(&.{ .{ .name = "label", .schema = try a.interop.schema(c, try b.schema(.{ .bounded_text = 16 })) }, .{ .name = "choice", .schema = choice } });
+    const function = try create(c, schema, try c.literalFailure(void, {}));
+    const declarations = b.functions.items.len;
+    try std.testing.expect(function == try create(c, schema, try c.literalFailure(void, {})));
+    try std.testing.expectEqual(declarations, b.functions.items.len);
+    const foreign = try a.Context.init(&b);
+    try std.testing.expectError(error.ForeignHandle, create(foreign, schema, try foreign.literalFailure(void, {})));
+    var compiled = try c.compile(std.testing.allocator, function, unit);
+    defer compiled.deinit();
+}
+
+test "portable schema admission emits no code and rechecks recursive mutable graphs" {
+    var b = source.Builder.init(std.testing.allocator);
+    defer b.deinit();
+    const leaf = try b.reserveSchema();
+    try b.defineSchema(leaf, .u64);
+    const tree = try b.reserveSchema();
+    const node = try b.schema(.{ .product = &.{ leaf, tree } });
+    try b.defineSchema(tree, .{ .sum = &.{ leaf, node } });
+    try checkPortableSchema(&b, tree);
+    try std.testing.expectEqual(@as(usize, 0), b.functions.items.len);
+    try std.testing.expectEqual(@as(usize, 0), b.values.items.len);
+    // Source admission observes the present graph; a previous successful check
+    // is not a certificate for a subsequently changed source declaration.
+    b.schemas.items[@intCast(leaf)] = .{ .internal = .{ .cell = .{ .element = tree, .region = b.region() } } };
+    try std.testing.expectError(error.UnsupportedEqualitySchema, checkPortableSchema(&b, tree));
+    try std.testing.expectError(error.InvalidReference, checkPortableSchema(&b, b.schemas.items.len));
+    try std.testing.expectEqual(@as(usize, 0), b.functions.items.len);
 }

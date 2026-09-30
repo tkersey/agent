@@ -5,7 +5,7 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const Id = source.Id;
 pub const Content = agent.contracts.Text(512);
 pub const Change = struct { replacement: Content, archive_changed: bool };

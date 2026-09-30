@@ -18,14 +18,15 @@ if(scenario==='consumer-unavailable')assert.equal(strategy,'alternate');
 assert(!deniedRoot||nativeTool);assert(['invoke','file'].includes(nativeMode));
 const runtime=verifyRuntime(resolve(runtimePath)),world=await import(pathToFileURL(runtime.entrypoint));
 const read=name=>readFile('zig-out/agent4/parser-construction/'+name);
-const image=await read((strategy==='recursive'?'program':strategy)+'.bpi3');
+const imageName=scenario.startsWith('consumer')?(strategy==='recursive'?'consumer-fixed':'consumer-alt-fixed'):(strategy==='recursive'?'program':strategy);
+const image=await read(imageName+'.bpi3');
 const inputSchema=decodeSchema(await read('input-schema.bin')),resultSchema=decodeSchema(await read('result-schema.bin'));
 const model=decodeValue(decodeSchema(await read('model-schema.bin')),await read('model-template.bin'));
 const tools=await createParserTools();assert.equal(tools.kind,'qualified',JSON.stringify(tools));
 const hash=v=>createHash('sha256').update(v).digest('hex');
 // Protocol v2 fixture baseline. Both linked consumers must retain these producer bytes.
 if(scenario.startsWith('consumer')){
- assert.equal(hash(await read('producer.bmo1')),'672efdd6d55b36cd46711c0fb73461bbc1e7e425482f35f887d1f9bcb39811dc');
+ assert.equal(hash(await readFile('conformance/agent4/parser-producer-v2.bmo1')),'672efdd6d55b36cd46711c0fb73461bbc1e7e425482f35f887d1f9bcb39811dc');
  assert.notDeepEqual(await read('consumer.bmo1'),await read('consumer-alt.bmo1'));
 }
 assert(!peerPath||nativeTool&&!deniedRoot);assert(!browserTools||peerPath);

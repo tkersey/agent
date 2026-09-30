@@ -13,12 +13,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .imports = &.{.{ .name = "boundary_data", .module = data }},
     });
-    const dialogue = b.createModule(.{
-        .root_source_file = b.path("../../src/dialogue.zig"),
-        .target = b.graph.host,
-        .optimize = optimize,
-        .imports = &.{.{ .name = "boundary", .module = boundary }},
-    });
     const interaction = b.createModule(.{
         .root_source_file = b.path("../../src/interaction.zig"),
         .target = b.graph.host,
@@ -32,7 +26,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .imports = &.{
             .{ .name = "boundary", .module = boundary },
-            .{ .name = "dialogue", .module = dialogue },
             .{ .name = "interaction", .module = interaction },
         },
     });

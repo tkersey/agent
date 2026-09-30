@@ -2,7 +2,7 @@ const std = @import("std");
 const boundary = @import("boundary");
 const equality = @import("equality");
 const world = @import("world");
-const Id = boundary.computation.Id;
+const Id = boundary.source.Id;
 
 fn observe(program: boundary.data.activation.Program, left: []const u8, right: []const u8, expected: bool) !void {
     const args = try std.mem.concat(std.testing.allocator, u8, &.{ left, right });
@@ -16,10 +16,11 @@ fn observe(program: boundary.data.activation.Program, left: []const u8, right: [
     try std.testing.expectEqualSlices(u8, &.{@intFromBool(expected)}, outcome.record.completed);
 }
 
-fn check(b: *boundary.computation.Builder, schema: Id, left: []const u8, right: []const u8) !void {
-    const failure = try b.constant(void, {});
-    const function = try equality.define(b, schema, failure);
-    var compiled = try boundary.program.compile(std.testing.allocator, b.module(function, try b.scalar(void)));
+fn check(b: *boundary.source.Builder, schema: Id, left: []const u8, right: []const u8) !void {
+    const c = try boundary.authoring.Context.init(b);
+    const contract = try boundary.authoring.interop.schema(c, schema);
+    const function = try equality.create(c, contract, try c.literalFailure(void, {}));
+    var compiled = try c.compile(std.testing.allocator, function, try c.scalar(void));
     defer compiled.deinit();
     try observe(compiled.program, left, left, true);
     try observe(compiled.program, right, right, true);
@@ -28,7 +29,7 @@ fn check(b: *boundary.computation.Builder, schema: Id, left: []const u8, right: 
 }
 
 test "unchanged native World executes structural equality including recursive values" {
-    var b = boundary.computation.Builder.init(std.testing.allocator);
+    var b = boundary.source.Builder.init(std.testing.allocator);
     defer b.deinit();
     const unit = try b.scalar(void);
     const byte = try b.scalar(u8);

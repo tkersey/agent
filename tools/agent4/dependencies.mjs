@@ -131,6 +131,19 @@ export function readDependencyLock(lockPath = DEFAULT_LOCK) {
       fail("development inputs cannot be labeled released");
   }
   const runtime = lock.world.runtime;
+  const delivery = lock.world.delivery;
+  if (!delivery || delivery.commit !== lock.world.commit ||
+      !Number.isSafeInteger(delivery.runId) || delivery.runId <= 0 ||
+      delivery.artifactName !== `world-runtime-${lock.world.commit}` ||
+      !Number.isFinite(Date.parse(delivery.expiresAt)) ||
+      !/^[a-f0-9]{64}$/.test(delivery.manifestSha256 ?? "") ||
+      !/^repos\/tkersey\/world\/actions\/artifacts\/[1-9][0-9]*\/zip$/.test(delivery.artifact?.apiPath ?? ""))
+    fail("invalid World delivery binding");
+  for (const transport of [delivery.archive, delivery.artifact]) {
+    if (!/^[a-f0-9]{64}$/.test(transport?.sha256 ?? "") ||
+        !Number.isSafeInteger(transport.bytes) || transport.bytes <= 0 || transport.bytes > MAX_FILE_BYTES)
+      fail("invalid World delivery transport");
+  }
   const packageProfiles = lock.boundary.package?.profiles;
   if (lock.boundary.package?.defaultProfile !== "zig-managed") fail("invalid default package profile");
   for (const profile of ["zig-managed", "archive-extracted"]) {
@@ -204,7 +217,7 @@ export function snapshotDependencies({ boundarySource,
   boundaryArchive,
   boundaryPackage, boundaryPackageProfile = "zig-managed", worldSource = join(ROOT, ".agent4/inputs/world"),
   worldArchive,
-  worldRuntime = join(ROOT, ".agent4/out/world-runtime"),
+  worldRuntime = join(ROOT, ".agent4/out/world-runtime/runtime"),
   authoringOnly = false, lockPath = DEFAULT_LOCK } = {}) {
   const lock = readDependencyLock(lockPath);
   const sourceRoot = boundarySource ?? (boundaryPackage ? undefined : join(ROOT, ".agent4/inputs/boundary"));

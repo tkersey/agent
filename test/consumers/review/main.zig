@@ -2,7 +2,7 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const Builder = source.Builder;
 const Id = source.Id;
 pub const Mode = enum { mid_review, clarify_first, human, model, rule, react };
@@ -388,7 +388,7 @@ pub fn main(init: std.process.Init) !void {
         try out.interface.writeAll(bytes);
     } else if (std.mem.eql(u8, format, "bpi3")) {
         inline for (comptime std.meta.tags(Mode)) |candidate| if (mode == candidate) {
-            var compiled = try agent.compile(init.gpa, System(candidate));
+            var compiled = try agent.compileObserved(init.gpa, System(candidate), .{ .boundary_options = .{ .contract = .semantic } });
             defer compiled.deinit();
             const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
             defer init.gpa.free(bytes);

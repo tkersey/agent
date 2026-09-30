@@ -2,7 +2,7 @@ const std = @import("std");
 const boundary = @import("boundary");
 const agent = @import("agent");
 
-fn body(b: *boundary.computation.Builder, effect: u64) !boundary.computation.Module {
+fn body(b: *boundary.source.Builder, effect: u64) !boundary.source.Module {
     const integer = try b.scalar(u32);
     const unit = try b.scalar(void);
     const entry = try b.declare(&.{integer}, integer, &.{effect}, &.{});
@@ -12,7 +12,7 @@ fn body(b: *boundary.computation.Builder, effect: u64) !boundary.computation.Mod
 }
 
 const Direct = struct {
-    pub fn emit(b: *boundary.computation.Builder) !boundary.computation.Module {
+    pub fn emit(b: *boundary.source.Builder) !boundary.source.Module {
         const integer = try b.scalar(u32);
         const effect = try b.effect(.{
             .identity = "example.facade.read.v1",
@@ -24,20 +24,21 @@ const Direct = struct {
 };
 
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const integer = try c.schema(u32);
         return body(c.builder, try c.external("example.facade.read.v1", integer, integer, .read));
     }
 };
 
 test "minimal Agent facade is the same canonical image as direct Boundary authoring" {
+    try std.testing.expect(!@hasDecl(agent, "dialogue"));
     const System = agent.system(.{
         .InitialArgs = u32,
         .Result = u32,
         .Failure = void,
         .application = Application,
     });
-    var builder = boundary.computation.Builder.init(std.testing.allocator);
+    var builder = boundary.source.Builder.init(std.testing.allocator);
     defer builder.deinit();
     var direct = try boundary.program.compile(std.testing.allocator, try Direct.emit(&builder));
     defer direct.deinit();

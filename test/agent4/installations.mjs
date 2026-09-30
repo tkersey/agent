@@ -78,7 +78,7 @@ comptime {
         @compileError("Agent and its pure contracts must share nominal types");
 }
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const integer = try contracts.schema(u32, c.builder);
         const effect = try c.external("consumer.installed.read.v1", integer, integer, .read);
         const entry = try c.builder.declare(&.{integer}, integer, &.{effect}, &.{});

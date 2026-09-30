@@ -3,11 +3,11 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
+const a = boundary.authoring;
 const t = @import("types.zig");
 const s = @import("source.zig");
 const E = s.E;
 const Id = s.Id;
-const Pop = @import("plans.zig").Pop;
 const Text = agent.contracts.Text(4096);
 const State = struct {
     task: t.Task,
@@ -25,7 +25,7 @@ const Action = struct { state: State, plan: t.Plan };
 pub const System = agent.system(.{ .InitialArgs = t.Task, .Result = t.Result, .Failure = void, .application = Application });
 
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const e = E{ .c = c };
         const b = c.builder;
         const model = try t.P.declare(b);
@@ -46,7 +46,12 @@ const Application = struct {
         const decide = try b.declare(&.{try e.schema(State)}, step.schema, &.{model}, &.{});
         const execute = try b.declare(&.{try e.schema(Action)}, try e.schema(State), &.{d.experiment}, &.{});
         const fold = try b.declare(&.{ try e.schema(State), try e.schema(State) }, try e.schema(State), &.{}, &.{});
-        const g: G = .{ .e = e, .d = d, .step = step, .decide = decide, .execute = execute, .model = try @import("models.zig").directModel(e), .parse = try @import("plans.zig").define(e), .admit = try @import("policy.zig").admit(e, d), .observe = try @import("policy.zig").observationAdmission(e), .summary = try @import("evidence.zig").summary(e), .cache = try cache(e, d) };
+        // One context owns the shared comparators used by cache and evidence checks.
+        const comparisons = try a.Context.init(b);
+        const fault = try comparisons.literalFailure(void, {});
+        const key_equal = try agent.value_equality.create(comparisons, try a.interop.schema(comparisons, try e.schema(t.Key)), fault);
+        const subject_equal = try agent.value_equality.create(comparisons, try a.interop.schema(comparisons, try e.schema(t.Subject)), fault);
+        const g: G = .{ .typed_context = comparisons, .key_equal = key_equal, .subject_equal = subject_equal, .e = e, .d = d, .step = step, .decide = decide, .execute = execute, .model = try @import("models.zig").directModel(e), .parse = try @import("plans.zig").define(e), .admit = try @import("policy.zig").admit(e, d), .observe = try @import("policy.zig").observationAdmission(e), .summary = try @import("evidence.zig").summary(e), .cache = try cache(e, comparisons, key_equal) };
         try b.define(decide, try g.decision());
         try b.define(execute, try g.execution());
         try b.define(fold, try b.pure(try e.p(fold, 1)));
@@ -86,20 +91,34 @@ fn replace(e: E, comptime T: type, value: Id, comptime field_index: usize, item:
     return e.product(T, &fields);
 }
 
-fn cache(e: E, d: agent.inquiry.broker.Definition) !Id {
-    const b = e.b();
-    const f = try b.declare(&.{ try e.schema([]const t.Record), try e.schema(t.Key) }, try e.schema(?t.Record), &.{}, &.{});
-    const pop = try Pop.init(e, []const t.Record, t.Record);
-    const same = try b.variable(try e.schema(bool));
-    const record = try e.ref(pop.head);
-    const next = try e.call(f, &.{ try e.ref(pop.rest), try e.p(f, 1) });
-    const present = try b.pure(try e.variant(?t.Record, record, 1));
-    const matched = try b.bind(same, try e.call(d.key_equal, &.{ try e.field(t.Key, record, 1), try e.p(f, 1) }), try e.cond(try e.ref(same), present, next));
-    try b.define(f, try pop.match(e, try e.p(f, 0), try b.pure(try e.value(?t.Record, null)), try e.cond(try e.field(bool, record, 3), matched, next)));
-    return f;
+fn cache(e: E, c: *a.Context, equal: *const a.Function) !Id {
+    const records = try a.interop.schema(c, try e.schema([]const t.Record));
+    const key = try a.interop.schema(c, try e.schema(t.Key));
+    const optional = try a.interop.schema(c, try e.schema(?t.Record));
+    const f = try c.function("reusable ReAct observation", &.{ .{ .name = "records", .schema = records }, .{ .name = "key", .schema = key } }, optional, &.{});
+    const body = try c.body(f);
+    const wanted = try body.parameter("key");
+    const popped = try body.pop(try body.parameter("records"));
+    const empty = try body.caseOf(popped, "empty");
+    const item = try body.caseOf(popped, "item");
+    const work = item.body();
+    const record = try work.field(item.payload(), "head");
+    const tail = try work.field(item.payload(), "tail");
+    const reusable = try work.branch();
+    const fresh = try work.branch();
+    const same = try reusable.call(equal, &.{ .{ .name = "left", .value = try reusable.field(record, "1") }, .{ .name = "right", .value = wanted } });
+    const found = try reusable.branch();
+    const different = try reusable.branch();
+    const searched = try reusable.conditional(same, try found.ret(try found.variant(optional, "1", record)), try different.ret(try different.call(f, &.{ .{ .name = "records", .value = tail }, .{ .name = "key", .value = wanted } })));
+    const selected = try work.conditional(try work.field(record, "3"), try reusable.ret(searched), try fresh.ret(try fresh.call(f, &.{ .{ .name = "records", .value = tail }, .{ .name = "key", .value = wanted } })));
+    try c.define(f, try body.ret(try body.match(popped, &.{ try empty.ret(try empty.body().variant(optional, "0", try empty.body().constant(void, {}))), try item.ret(selected) })));
+    return a.interop.functionId(c, f);
 }
 
 const G = struct {
+    typed_context: *a.Context,
+    key_equal: *const a.Function,
+    subject_equal: *const a.Function,
     e: E,
     d: agent.inquiry.broker.Definition,
     step: agent.react.Step,
@@ -238,11 +257,29 @@ const G = struct {
             .{ .variable = unavailable, .body = try g.stopped(state, 5) },
         } } });
         const invalid = try g.stopped(state, 4);
-        next = try e.cond(try e.eq(observed_id, occurrence), next, invalid);
-        for ([_][3]Id{ .{ g.d.key_equal, observed_key, key }, .{ g.d.subject_equal, observed_subject, subject } }) |pair| {
-            const same = try b.variable(try e.schema(bool));
-            next = try b.bind(same, try e.call(pair[0], &.{ pair[1], pair[2] }), try e.cond(try e.ref(same), next, invalid));
-        }
+        const c = g.typed_context;
+        const validation = try a.interop.scope(c);
+        const subject_schema = try a.interop.schema(c, try e.schema(t.Subject));
+        const key_schema = try a.interop.schema(c, try e.schema(t.Key));
+        const outcome = try a.interop.schema(c, try e.schema(State));
+        const same_subject = try validation.call(g.subject_equal, &.{
+            .{ .name = "left", .value = try a.interop.adoptValue(validation, observed_subject, subject_schema) },
+            .{ .name = "right", .value = try a.interop.adoptValue(validation, subject, subject_schema) },
+        });
+        const subject_yes = try validation.branch();
+        const subject_no = try validation.branch();
+        const same_key = try subject_yes.call(g.key_equal, &.{
+            .{ .name = "left", .value = try a.interop.adoptValue(subject_yes, observed_key, key_schema) },
+            .{ .name = "right", .value = try a.interop.adoptValue(subject_yes, key, key_schema) },
+        });
+        const key_yes = try subject_yes.branch();
+        const key_no = try subject_yes.branch();
+        const same_id = try key_yes.equal(try a.interop.adoptValue(key_yes, observed_id, try c.scalar(u64)), try a.interop.adoptValue(key_yes, occurrence, try c.scalar(u64)));
+        const id_yes = try key_yes.branch();
+        const id_no = try key_yes.branch();
+        const checked_id = try key_yes.conditional(same_id, try id_yes.ret(try a.interop.term(id_yes, next, outcome)), try id_no.ret(try a.interop.term(id_no, invalid, outcome)));
+        const checked_key = try subject_yes.conditional(same_key, try key_yes.ret(checked_id), try key_no.ret(try a.interop.term(key_no, invalid, outcome)));
+        next = try a.interop.computationId(c, try validation.ret(try validation.conditional(same_subject, try subject_yes.ret(checked_key), try subject_no.ret(try a.interop.term(subject_no, invalid, outcome)))));
         const request = try b.primitive(g.d.types.request, .product, &.{ subject, key, demand, occurrence }, 0);
         const performed = try b.term(.{ .perform = .{ .effect = g.d.experiment, .payload = request } });
         try e.c.registry.protectSite(g.execute, performed, g.d.experiment);

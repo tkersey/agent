@@ -1,6 +1,6 @@
 //! Test-only clarify-first comparator. Reuses the actual proposal and live path.
 const agent = @import("agent");
-const source = @import("boundary").computation;
+const source = @import("boundary").source;
 const Id = source.Id;
 const emit = @import("source.zig");
 const t = @import("consequence_types.zig");

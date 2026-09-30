@@ -1,7 +1,7 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 fn construct(a: std.mem.Allocator) !void {
     var b = source.Builder.init(a);
     defer b.deinit();

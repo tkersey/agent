@@ -1,7 +1,7 @@
 //! A static function identity may select its own ordinary computation schema.
 //! This separates higher-order origins without changing runtime instructions,
 //! adding an evaluator, or asserting that the function's effects are safe.
-const source = @import("boundary").computation;
+const source = @import("boundary").source;
 const p = @import("boundary").data.program;
 
 pub const Definition = struct { function: p.Id, schema: p.Id };

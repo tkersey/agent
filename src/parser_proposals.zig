@@ -4,7 +4,7 @@ const parser = @import("parser_synthesis.zig");
 const contracts = @import("agent_contracts");
 const model = @import("model_invocation.zig");
 const Context = @import("authoring.zig").Context;
-const Id = @import("boundary").computation.Id;
+const Id = @import("boundary").source.Id;
 
 pub const Explanation = contracts.Text(512);
 pub const SourceProposal = struct { source: parser.Code, explanation: Explanation };

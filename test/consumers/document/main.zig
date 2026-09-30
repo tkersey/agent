@@ -2,7 +2,7 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const source = boundary.computation;
+const source = boundary.source;
 const Id = source.Id;
 const Text = agent.contracts.Text;
 const Observation = struct { content: Text(128), digest: Text(64) };
@@ -76,7 +76,7 @@ fn writeArguments(init: std.process.Init, comptime T: type, value: T) !void {
 }
 
 fn writeImage(init: std.process.Init, comptime Program: type) !void {
-    var compiled = try agent.compile(init.gpa, Program);
+    var compiled = try agent.compileObserved(init.gpa, Program, .{ .boundary_options = .{ .contract = .semantic } });
     defer compiled.deinit();
     const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(bytes);

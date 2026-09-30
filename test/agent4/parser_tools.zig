@@ -4,7 +4,7 @@ const agent = @import("agent");
 const boundary = @import("boundary");
 const parser = agent.parser_synthesis;
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const tools = try parser.declareTools(c);
         const b = c.builder;
         const entry = try b.declare(&.{try c.schema(parser.ExecutionRequest)}, try c.schema(parser.ExecutionReply), &.{tools.execution}, &.{});
@@ -31,7 +31,7 @@ pub fn main(init: std.process.Init) !void {
         _ = try compiled.encode(init.gpa, bytes);
         return output(init, bytes);
     }
-    var b = boundary.computation.Builder.init(init.gpa);
+    var b = boundary.source.Builder.init(init.gpa);
     defer b.deinit();
     const schema = if (std.mem.eql(u8, mode, "reference-request")) try agent.contracts.schema(parser.ReferenceRequest, &b) else if (std.mem.eql(u8, mode, "reference-reply")) try agent.contracts.schema(parser.ReferenceReply, &b) else if (std.mem.eql(u8, mode, "execution-request")) try agent.contracts.schema(parser.ExecutionRequest, &b) else if (std.mem.eql(u8, mode, "execution-reply")) try agent.contracts.schema(parser.ExecutionReply, &b) else return error.InvalidMode;
     const bytes = try boundary.data.schema.encodeOwned(init.gpa, b.schemas.items, schema);

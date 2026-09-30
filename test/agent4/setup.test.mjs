@@ -7,7 +7,7 @@ import { gzipSync } from "node:zlib";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { DEFAULT_LOCK, inventory, gitTree, sha256 } from "../../tools/agent4/dependencies.mjs";
+import { DEFAULT_LOCK, inventory, gitTree, sha256, readDependencyLock } from "../../tools/agent4/dependencies.mjs";
 import { setupPaths, authenticateArchive, extractArchive, setup } from "../../tools/agent4/setup.mjs";
 
 function temporary(context) {
@@ -149,6 +149,61 @@ test("verified existing tuple is reused offline without builds, fetches or sourc
   assert.equal(existsSync(f.cache), false);
   assert.equal(existsSync(f.temporary), false);
   assert.equal(existsSync(join(f.workDir, ".setup-lock")), false);
+});
+
+test("delivery lock rejects unbound source, endpoint and transport before acquisition", context => {
+  const root = temporary(context), lockPath = join(root, "lock.json");
+  for (const mutate of [
+    lock => { delete lock.world.delivery; },
+    lock => { lock.world.delivery.commit = "0".repeat(40); },
+    lock => { lock.world.delivery.artifact.apiPath = "user"; },
+    lock => { lock.world.delivery.archive.sha256 = "bad"; },
+    lock => { lock.world.delivery.artifact.bytes = 129 * 1024 * 1024; },
+  ]) {
+    const lock = JSON.parse(readFileSync(DEFAULT_LOCK));
+    mutate(lock); writeFileSync(lockPath, JSON.stringify(lock));
+    assert.throws(() => readDependencyLock(lockPath), /invalid World delivery/);
+  }
+});
+
+test("missing or corrupt offline bundle cannot trigger a kernel build", async context => {
+  const f = existingFixture(context);
+  rmSync(f.worldBundle, {recursive: true});
+  const options = {agentRoot: f.agentRoot, lockPath: f.lockPath, zig: f.zig, offline: true};
+  await assert.rejects(setup(options), /missing authenticated World bundle transport/);
+  writeFileSync(join(f.input, "world-runtime-bundle.tar.gz"), "invalid transport");
+  await assert.rejects(setup(options), /archive length mismatch/);
+  assert.equal(existsSync(f.worldBundle), false);
+});
+
+test("cached transport delegates acquisition to authenticated World source", async context => {
+  const f = existingFixture(context);
+  const expectedFiles = inventory(f.worldRuntime);
+  const archivePath = join(f.input, "world-runtime-bundle.tar.gz");
+  const bytes = Buffer.from("opaque World-owned transport fixture");
+  writeFileSync(archivePath, bytes);
+  f.lock.world.delivery.archive = {bytes: bytes.length, sha256: sha256(bytes)};
+  mkdirSync(join(f.worldSource, "bin"));
+  const args = ["runtime", "acquire", "--archive", archivePath,
+    "--archive-sha256", sha256(bytes), "--manifest-sha256", f.lock.world.delivery.manifestSha256,
+    "--output", f.worldBundle];
+  // Only World understands these bytes. The fixture witnesses delegation and
+  // the exact bindings, while real bundle format checks belong to World.
+  writeFileSync(join(f.worldSource, "bin/world.mjs"), `
+import assert from "node:assert/strict";
+import {mkdirSync, writeFileSync} from "node:fs";
+assert.deepEqual(process.argv.slice(2), ${JSON.stringify(args)});
+mkdirSync(${JSON.stringify(f.worldRuntime)}, {recursive: true});
+writeFileSync(${JSON.stringify(join(f.worldRuntime, "index.mjs"))}, "export const fixture = true;\\n");
+writeFileSync(${JSON.stringify(join(f.worldRuntime, "kernel.wasm"))}, "fixture kernel");
+`);
+  f.lock.world.source = inventory(f.worldSource);
+  f.lock.world.gitTree = gitTree(f.worldSource);
+  writeFileSync(f.lockPath, JSON.stringify(f.lock));
+  rmSync(f.worldBundle, {recursive: true});
+  const result = await setup({agentRoot: f.agentRoot, lockPath: f.lockPath, zig: f.zig, offline: true});
+  assert.equal(result.worldRuntime, f.worldRuntime);
+  assert.deepEqual(inventory(f.worldRuntime), expectedFiles);
 });
 
 test("an existing corrupt archive is rejected without replacing retained inputs", async context => {

@@ -7,9 +7,11 @@ live entry are implemented; live-model usefulness has not been measured.
 
 ## Custody construction
 
-`agent.inquiry.define` specializes one dialogue on application demand, reply,
-and finding schemas. Its emitted functions operate under ordinary Boundary
-ownership admission:
+`agent.inquiry.create(context, options)` constructs one inquiry family from typed
+demand, reply, finding, and failure contracts. Reuse that definition for each
+installation; `agent.inquiry.initial(body, definition)` creates its initial owned
+state. State and view records retain named fields. Its emitted functions operate
+under ordinary Boundary ownership admission:
 
 - `park(state, investigation, answer)` retains an actual awaiting package or
   appends a completed finding. Every new offer receives a checked, increasing
@@ -30,8 +32,14 @@ acquisition, admission, matching and storage of experimental observations.
 Each scan is bounded by its input queue length. Membership uses a linear scan
 of the fixed recipient list. New findings and offers can increase storage;
 the application must impose its declared capacities and work allowances.
-The builder owns source allocations. Returned definitions contain schema and
-function IDs, with no borrowed configuration slices or host continuations.
+The builder owns source allocations. Returned definitions contain typed schema
+and function handles borrowed from their authoring context, with no host
+continuations. The `typed` mode in `test/agent4/inquiry_probe.zig` demonstrates
+parking, projection, reply delivery, and finalization with named records.
+
+The older `define`/`empty`/`need` source adapter currently projects the same
+construction for broker and application callers that have not migrated. Its
+remaining caller migration and removal are required cutover work.
 
 ## Experiment broker
 
@@ -81,7 +89,7 @@ native World, a fresh Node/WASM instance, and an independent Wasmtime process:
 
 ```sh
 zig build check-inquiry-probe -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 The test continues using Wasmtime's actual returned bytes. All three engines
@@ -240,7 +248,7 @@ receipt retains the base, replacement, executed checks and qualified explanation
 
 ```sh
 zig build check-inquiry-application -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 The current positive witness uses a 44,338-byte BPI2 image, reaches a maximum
@@ -323,10 +331,10 @@ production executor.
 
 ```sh
 zig build emit-agent4 -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 node --test test/agent4/package_commands.test.mjs
 zig build check-agent4-economy -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 The archive test extracts the actual artifact and runs its own inquiry oracle,
@@ -366,7 +374,7 @@ it does not establish live-model repair quality or an optimal allocation policy.
 
 ```sh
 zig build check-inquiry-comparison -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 The pairs cover occurrence reset, adapter rebinding, already-correct source and
@@ -551,7 +559,7 @@ economy and emission/package gates:
 
 ```sh
 zig build check-agent4 check-agent4-integration check-agent4-economy emit-agent4 \
-  -Doptimize=ReleaseSafe -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Doptimize=ReleaseSafe -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 The strengthened multi-shot/follow-up fixture also passes the application case

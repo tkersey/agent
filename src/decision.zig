@@ -2,7 +2,7 @@
 //! These helpers emit Boundary source, never runtime Zig callbacks.
 const boundary = @import("boundary");
 const typed = boundary.authoring;
-const source = boundary.computation;
+const source = boundary.source;
 const Id = source.Id;
 
 pub const Family = struct { effect: Id, capability: Id, question: Id, answer: Id };
@@ -92,6 +92,7 @@ fn authoredInterpretation(
         .mode = .deep,
         .use = .linear,
         .obligations = true,
+        .return_effects = &.{},
         .residual = try operations(c, scope.residual.effects),
         .captures = captures,
         .owned_regions = try regions(c, scope.owned_regions),
@@ -99,8 +100,6 @@ fn authoredInterpretation(
         .state = &.{.{ .name = "responder", .schema = responder_schema }},
     });
     const returns = try c.returnFunction(handler);
-    // Agent's return arm is pure even when the responder clause uses residual effects.
-    b.functions.items[@intCast(try typed.interop.functionId(c, returns))].effects = &.{};
     const return_body = try c.body(returns);
     try c.define(returns, try return_body.ret(try return_body.parameter("result")));
     const clause = try c.clauseFunction(handler);

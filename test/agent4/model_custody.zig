@@ -4,7 +4,7 @@ const agent = @import("agent");
 const world = @import("world");
 const contracts = agent.contracts;
 const model = agent.model_invocation;
-const source = boundary.computation;
+const source = boundary.source;
 const data = boundary.data;
 const allocator = std.testing.allocator;
 

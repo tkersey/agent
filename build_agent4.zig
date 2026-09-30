@@ -207,6 +207,19 @@ pub fn build(b: *std.Build) void {
     parser_alternate_link.addFileArg(parser_reference_bytes);
     parser_episode.dependOn(&b.addInstallFileWithDir(parser_alternate_consumer_bytes, .prefix, "agent4/parser-construction/consumer-alt.bmo1").step);
     parser_episode.dependOn(&b.addInstallFileWithDir(parser_alternate_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/alternate.bpi3").step);
+    // The consumer-swap witness keeps its historical producer bytes immutable.
+    // Normal parser images above continue using the current emitted producer.
+    for ([_]struct { consumer: std.Build.LazyPath, name: []const u8 }{
+        .{ .consumer = parser_consumer_bytes, .name = "consumer-fixed" },
+        .{ .consumer = parser_alternate_consumer_bytes, .name = "consumer-alt-fixed" },
+    }) |witness| {
+        const linked = b.addRunArtifact(parser_app);
+        linked.addArg("link");
+        linked.addFileArg(b.path("conformance/agent4/parser-producer-v2.bmo1"));
+        linked.addFileArg(witness.consumer);
+        linked.addFileArg(parser_reference_bytes);
+        parser_episode.dependOn(&b.addInstallFileWithDir(linked.captureStdOut(.{}), .prefix, b.fmt("agent4/parser-construction/{s}.bpi3", .{witness.name})).step);
+    }
     const circular_consumer = b.addRunArtifact(parser_app);
     circular_consumer.addArg("consumer-circular");
     const circular_link = b.addRunArtifact(parser_app);
@@ -274,7 +287,6 @@ pub fn build(b: *std.Build) void {
     admitted.addImport("admission", g.helper("admission"));
     g.testModule(check, admitted);
     const dialogue = g.module("test/agent4/dialogue_probe.zig");
-    dialogue.addImport("dialogue", g.helper("dialogue"));
     dialogue.addImport("interaction", g.helper("interaction"));
     g.testModule(check, dialogue);
     const inquiry = g.module("test/agent4/inquiry_probe.zig");
@@ -367,7 +379,7 @@ pub fn build(b: *std.Build) void {
     emit.dependOn(inquiry_app_images);
     g.emit(emit, inquiry_broker_exe, &.{}, "inquiry/broker.bpi3");
     g.emit(inquiry_check, inquiry_broker_exe, &.{}, "inquiry/broker.bpi3");
-    for ([_][]const u8{ "owned", "composition", "followup" }) |mode| {
+    for ([_][]const u8{ "owned", "composition", "followup", "typed" }) |mode| {
         g.emit(emit, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi3", .{mode}));
         g.emit(inquiry_check, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi3", .{mode}));
     }
@@ -564,6 +576,7 @@ pub fn build(b: *std.Build) void {
         if (inquiry_host) {
             const source_free = b.addSystemCommand(&.{ "node", "test/agent4/parser_source_free.mjs", runtime_path });
             source_free.addFileArg(native_exe.getEmittedBin());
+            source_free.addArg(b.getInstallPath(.prefix, ""));
             source_free.step.dependOn(distribution);
             source_free.step.dependOn(&runtime_guard.step);
             parser_source_free.dependOn(&source_free.step);
@@ -619,7 +632,7 @@ pub fn build(b: *std.Build) void {
         g.emit(&broker_run.step, inquiry_broker_exe, &.{}, "inquiry/broker.bpi3");
         inquiry_check.dependOn(&broker_run.step);
         runtime_work.dependOn(&broker_run.step);
-        for ([_][]const u8{ "owned", "composition", "followup" }) |mode| {
+        for ([_][]const u8{ "owned", "composition", "followup", "typed" }) |mode| {
             const inquiry_run = b.addSystemCommand(&.{
                 "node",                                                               "test/agent4/inquiry_runtime.mjs", runtime_path,
                 b.getInstallPath(.prefix, b.fmt("agent4/inquiry/{s}.bpi3", .{mode})),

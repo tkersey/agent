@@ -98,7 +98,7 @@ test("runner rejects directories used as application inputs", async (t) => {
   assert.deepEqual(await readdir(f.runtime), []);
 });
 
-const runtimePath = process.env.AGENT4_WORLD_RUNTIME ?? fileURLToPath(new URL("../../.agent4/out/world-runtime", import.meta.url));
+const runtimePath = process.env.AGENT4_WORLD_RUNTIME ?? fileURLToPath(new URL("../../.agent4/out/world-runtime/runtime", import.meta.url));
 const dialogueDir = process.env.AGENT4_DIALOGUE_DIR ?? fileURLToPath(new URL("../../.agent4/out/dialogue", import.meta.url));
 const lockPath = fileURLToPath(new URL("../../conformance/agent4/dependencies.lock.json", import.meta.url));
 

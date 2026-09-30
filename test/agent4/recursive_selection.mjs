@@ -5,7 +5,7 @@ import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {verifyRuntime} from '../../tools/agent4/dependencies.mjs';
 import {execFileSync} from 'node:child_process';
-const [runtimePath='.agent4-recursive-integrated/out/world-runtime',nativeTool,peerPath,browserTools]=process.argv.slice(2);
+const [runtimePath='.agent4-recursive-integrated/out/world-runtime/runtime',nativeTool,peerPath,browserTools]=process.argv.slice(2);
 const runtime=verifyRuntime(resolve(runtimePath));
 const {Kernel,decodeOutcome,decodeRequest,encodeResult,encodeInput}=await import(pathToFileURL(runtime.entrypoint));
 const bytes=await readFile(runtime.kernelPath);let identity=1n;

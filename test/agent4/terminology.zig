@@ -12,8 +12,8 @@ const Input = struct {
     scope: u64,
 };
 
-fn compile() !boundary.computation.Compiled {
-    var b = boundary.computation.Builder.init(a);
+fn compile() !boundary.source.Compiled {
+    var b = boundary.source.Builder.init(a);
     defer b.deinit();
     var registry = agent.admission.Registry.init(b.allocator());
     defer registry.deinit();
@@ -90,7 +90,7 @@ test "grammar, marker mutation, empty term, foreign scope, and overflow are expl
 }
 
 test "every operative document field participates in the decisive key" {
-    var b = boundary.computation.Builder.init(a);
+    var b = boundary.source.Builder.init(a);
     defer b.deinit();
     const d = try agent.clarification.define(&b, .{
         .identity = "test.document.projection",

@@ -1,7 +1,7 @@
 //! Shared source construction helpers for the independent document modes.
 const std = @import("std");
 const agent = @import("agent");
-const source = @import("boundary").computation;
+const source = @import("boundary").source;
 const Id = source.Id;
 
 pub fn field(b: *source.Builder, schema: Id, value: Id, n: u64) !Id {

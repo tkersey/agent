@@ -5,7 +5,7 @@ const agent = @import("agent");
 const boundary = @import("boundary");
 pub const types = @import("types.zig");
 const t = types;
-const Id = boundary.computation.Id;
+const Id = boundary.source.Id;
 
 pub const initial: t.Memory = .{
     .listing = null,
@@ -28,7 +28,7 @@ pub fn define(c: agent.Context) !Functions {
     const b = c.builder;
     const observe = try b.declare(&.{ try c.schema(t.Memory), try c.schema(t.Observation) }, try c.schema(t.Memory), &.{}, &.{});
     const memory = try e.param(observe, 0);
-    const Case = std.meta.Child(@FieldType(@FieldType(boundary.computation.ast.Term, "match_sum"), "cases"));
+    const Case = std.meta.Child(@FieldType(@FieldType(boundary.source.ast.Term, "match_sum"), "cases"));
     var cases: [5]Case = undefined;
     inline for (std.meta.fields(t.Observation), 0..) |field, index| {
         const payload = try b.variable(try c.schema(field.type));

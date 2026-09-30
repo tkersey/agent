@@ -3,7 +3,7 @@ const std = @import("std");
 const boundary = @import("boundary");
 const agent = @import("agent");
 const broker = agent.inquiry.broker;
-const source = boundary.computation;
+const source = boundary.source;
 const Id = source.Id;
 const Builder = source.Builder;
 
@@ -163,7 +163,7 @@ const Emit = struct {
         const next = try b.variable(own.types.state);
         const recurse = try e.call(f, &.{ try b.reference(rest), try b.reference(next), try e.add(try e.p(f, 2), try b.constant(u64, 1)) });
         const park = try b.bind(next, try e.call(own.park, &.{ try e.p(f, 1), try e.p(f, 2), try b.reference(answer) }), recurse);
-        const start = try b.bind(answer, try agent.dialogue.start(b, own.dialogue, body_value, &.{try b.reference(head)}), park);
+        const start = try b.bind(answer, try boundary.library.generator.start(b, own.dialogue, body_value, &.{try b.reference(head)}), park);
         const unpack = try b.term(.{ .unpack_product = .{
             .value = try b.reference(present),
             .variables = &.{ head, rest },

@@ -45,7 +45,7 @@ test("all source-override module exports retain authentication in cached externa
   writeFileSync(join(source, "src/root.zig"),
     'pub const data = @import("boundary_data");\n' +
     'pub const program = struct { pub fn compileObserved() void {} };\n' +
-    'pub const computation = struct { pub const Compiled = struct { flow: void }; };\n');
+    'pub const source = struct { pub const Compiled = struct { flow: void }; };\n');
   writeFileSync(join(source, "src/data/root.zig"), 'pub const program = struct {};\n');
   const lockPath = join(agent, "conformance/agent4/dependencies.lock.json");
   const lock = JSON.parse(readFileSync(lockPath));

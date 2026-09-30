@@ -4,7 +4,7 @@ const boundary = @import("boundary");
 const delivery = agent.parser_delivery;
 const Input = struct { proposal: delivery.Proposal, apply: bool };
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.computation.Module {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
         const b = c.builder;
         const d = try delivery.define(c);
         const entry = try b.declare(&.{try c.schema(Input)}, try c.schema(delivery.Result), d.effects, &.{});
@@ -35,7 +35,7 @@ pub fn main(init: std.process.Init) !void {
         _ = try compiled.encode(init.gpa, bytes);
         return output(init, bytes);
     }
-    var b = boundary.computation.Builder.init(init.gpa);
+    var b = boundary.source.Builder.init(init.gpa);
     defer b.deinit();
     const schema = if (std.mem.eql(u8, mode, "input-schema")) try agent.contracts.schema(Input, &b) else if (std.mem.eql(u8, mode, "result-schema")) try agent.contracts.schema(delivery.Result, &b) else return error.InvalidMode;
     const bytes = try boundary.data.schema.encodeOwned(init.gpa, b.schemas.items, schema);

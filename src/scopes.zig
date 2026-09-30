@@ -2,7 +2,7 @@
 //! restores the enclosing handler; suspension retains the installed environment.
 const boundary = @import("boundary");
 const typed = boundary.authoring;
-const source = boundary.computation;
+const source = boundary.source;
 const Id = source.Id;
 const sets = @import("sets.zig");
 const decision = @import("decision.zig");
@@ -61,6 +61,7 @@ fn authoredReader(
         .mode = .deep,
         .use = .linear,
         .obligations = true,
+        .return_effects = &.{},
         .residual = residual,
         .captures = captures,
         .owned_regions = owned,
@@ -68,8 +69,6 @@ fn authoredReader(
         .state = &.{.{ .name = "environment", .schema = environment_schema }},
     });
     const returns = try c.returnFunction(handler);
-    // The reader's return arm is pure even if its clause allows residual effects.
-    b.functions.items[@intCast(try typed.interop.functionId(c, returns))].effects = &.{};
     const return_body = try c.body(returns);
     try c.define(returns, try return_body.ret(try return_body.parameter("result")));
     const clause = try c.clauseFunction(handler);

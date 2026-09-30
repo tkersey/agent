@@ -89,7 +89,7 @@ native World, a fresh Node/WASM instance, and an independent Wasmtime process:
 
 ```sh
 zig build check-inquiry-probe -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 The test continues using Wasmtime's actual returned bytes. All three engines
@@ -248,7 +248,7 @@ receipt retains the base, replacement, executed checks and qualified explanation
 
 ```sh
 zig build check-inquiry-application -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 The current positive witness uses a 44,338-byte BPI2 image, reaches a maximum
@@ -331,10 +331,10 @@ production executor.
 
 ```sh
 zig build emit-agent4 -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 node --test test/agent4/package_commands.test.mjs
 zig build check-agent4-economy -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 The archive test extracts the actual artifact and runs its own inquiry oracle,
@@ -374,7 +374,7 @@ it does not establish live-model repair quality or an optimal allocation policy.
 
 ```sh
 zig build check-inquiry-comparison -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 The pairs cover occurrence reset, adapter rebinding, already-correct source and
@@ -559,7 +559,7 @@ economy and emission/package gates:
 
 ```sh
 zig build check-agent4 check-agent4-integration check-agent4-economy emit-agent4 \
-  -Doptimize=ReleaseSafe -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Doptimize=ReleaseSafe -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 The strengthened multi-shot/follow-up fixture also passes the application case

@@ -127,6 +127,17 @@ const System = agent.system(.{
     .application = Application,
 });
 
+test "compiled participant final link rejects an invalid optimization profile" {
+    Application.bytes = try producer(a, false);
+    defer a.free(Application.bytes);
+    try std.testing.expectError(error.InvalidOptimizationProfile, agent.compileObserved(a, System, .{ .boundary_options = .{ .profile = .{ .record = .{
+        .version = 0,
+        .image_identity = .{0} ** 32,
+        .block_counts = &.{},
+        .total = 0,
+    } } } }));
+}
+
 test "compiled participant uses the actual checked model responder through normal compilation" {
     const bytes = try producer(a, false);
     defer a.free(bytes);

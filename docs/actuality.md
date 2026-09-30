@@ -15,7 +15,7 @@ with bounded checkpoint retention and authored budget termination:
 
 ```sh
 zig build check-repository-working-set -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 The [replacement gate](../test/consumers/repository/replacement.zig) requires a
@@ -27,7 +27,7 @@ native regressions exercise these outcomes across fresh checkpoint restores:
 
 ```sh
 zig build check-repository-replacement -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 The [model/action loop](../test/consumers/repository/application.zig) now authors
@@ -53,7 +53,7 @@ made outside that cooperative filesystem boundary.
 
 ```sh
 zig build check-repository-delivery -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 This check covers seven filesystem cases, seven replacement cases across 18
@@ -73,7 +73,7 @@ files and unavailable executors do not become failing-baseline observations.
 
 ```sh
 zig build check-repository-application -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime"
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 The application check covers valid repair, failed repair, attempted early exit,

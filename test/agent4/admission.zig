@@ -86,6 +86,31 @@ test "ordinary public source admits and compiles" {
     try f.compile();
 }
 
+test "reserved mobility identities cannot masquerade as reads even when unused" {
+    for ([_][]const u8{ "agent.mobility.resolve.v1", "agent.mobility.relocate.v1" }) |name| {
+        var f = try Fixture.init();
+        defer f.deinit();
+        _ = try f.effect(name, .read);
+        try f.definePureRoot();
+        try std.testing.expectError(error.EffectRoleMismatch, f.check());
+    }
+}
+
+test "mobility remains forbidden in speculation even when explicitly allowlisted" {
+    for ([_][]const u8{ "agent.mobility.resolve.v1", "agent.mobility.relocate.v1" }) |name| {
+        var f = try Fixture.init();
+        defer f.deinit();
+        const effect = try f.effect(name, .mobility);
+        f.b.functions.items[@intCast(f.entry)].effects = &.{effect};
+        const term = try f.perform(effect);
+        try f.registry.protectSite(f.entry, term, effect);
+        try f.b.define(f.entry, term);
+        try f.compile();
+        try f.registry.speculate(f.entry, &.{effect});
+        try std.testing.expectError(error.SpeculativeEffect, f.check());
+    }
+}
+
 test "protected exact site admits and copied DAG term in another owner rejects" {
     var f = try Fixture.init();
     defer f.deinit();

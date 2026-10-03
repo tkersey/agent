@@ -134,7 +134,7 @@ pub fn inspect(allocator: std.mem.Allocator, object: data.component.Object, item
     for (object.program.effects, 0..) |_, id| {
         const role = try roleOf(object, item, registry, id);
         if (allowed) |effects| {
-            if (role == .approval or role == .commit or role == .write)
+            if (role == .approval or role == .commit or role == .write or role == .mobility)
                 return error.SpeculativeEffect;
             if (role != .internal) {
                 var admitted = false;

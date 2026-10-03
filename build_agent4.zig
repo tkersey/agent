@@ -100,6 +100,9 @@ pub fn build(b: *std.Build) void {
     const g: Graph = .{ .b = b, .optimize = optimize, .agent = agent, .boundary = boundary, .data = data, .contracts = contracts, .gate = &source_guard.step };
     const check = b.step("agent4-authoring-tests", "Authoring test implementation");
     const aggregate = b.step("check-agent4", "Check authoring and pure contracts without World");
+    const mobility = b.step("check-mobility-authoring", "Check typed mobility contracts and protected admission");
+    g.testModule(mobility, g.module("src/mobility.zig"));
+    check.dependOn(mobility);
     const lint = b.step("lint", "Check formatting and the Zig source inventory");
     const format_check = b.addSystemCommand(&.{ b.graph.zig_exe, "fmt", "--check", "build.zig", "build_agent4.zig", "src", "test/agent4", "test/consumers" });
     const paths = b.addSystemCommand(&.{ "sh", "tools/check_zig_paths.sh" });
@@ -286,6 +289,7 @@ pub fn build(b: *std.Build) void {
     const admitted = g.module("test/agent4/admission.zig");
     admitted.addImport("admission", g.helper("admission"));
     g.testModule(check, admitted);
+    g.testModule(mobility, admitted);
     const dialogue = g.module("test/agent4/dialogue_probe.zig");
     dialogue.addImport("interaction", g.helper("interaction"));
     g.testModule(check, dialogue);

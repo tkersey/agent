@@ -27,6 +27,7 @@ src/deliberation.zig
 src/inquiry.zig
 src/inquiry_broker.zig
 src/interaction.zig
+src/mobility.zig
 src/model.zig
 src/model_codec.zig
 src/model_interpretation.zig

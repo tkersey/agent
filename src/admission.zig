@@ -6,7 +6,7 @@ const source = boundary.source;
 const p = boundary.data.program;
 const Id = p.Id;
 
-pub const Role = enum { internal, model, interaction, read, simulation, approval, commit, write };
+pub const Role = enum { internal, model, interaction, read, simulation, approval, commit, write, mobility };
 pub const Error = std.mem.Allocator.Error || error{
     InvalidSource,
     EffectRoleMismatch,
@@ -269,6 +269,9 @@ fn checkCatalogs(module: source.Module, registry: *const Registry) Error!void {
         if (protectedEmission(item.role) and !external) return error.EffectRoleMismatch;
     }
     for (module.effects, 0..) |effect, id| {
+        if ((std.mem.eql(u8, effect.identity, "agent.mobility.resolve.v1") or
+            std.mem.eql(u8, effect.identity, "agent.mobility.relocate.v1")) and
+            (!effect.external or registry.roleOf(id) != .mobility)) return error.EffectRoleMismatch;
         if (std.mem.eql(u8, effect.identity, "agent.model.invoke.v3") and
             (!effect.external or registry.roleOf(id) != .model)) return error.EffectRoleMismatch;
         for (module.effects[0..id], 0..) |earlier, previous| {
@@ -737,7 +740,7 @@ fn protectedResource(module: source.Module, registry: *const Registry, schema_id
 }
 
 fn authority(role: Role) bool {
-    return role == .approval or role == .commit or role == .write;
+    return role == .approval or role == .commit or role == .write or role == .mobility;
 }
 
 fn protectedEmission(role: Role) bool {

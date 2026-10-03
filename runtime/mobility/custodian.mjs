@@ -263,6 +263,7 @@ export class Custodian {
   #authorizeTransfer(offer, relocation) {
     const run = this.#run(offer.run_id);
     requireThat(run.status === 'OFFERED' && run.transfer_id === offer.transfer_id, 'TransferNotPending');
+    requireThat(run.cancel_requested === null, 'CancellationPending');
     requireThat(relocation !== null && relocation.destination_host_id === offer.destination_host_id, 'RelocationMismatch');
     this.#policy.mayExport(run, offer.destination_host_id, relocation.export_policy_ref);
   }
@@ -271,7 +272,12 @@ export class Custodian {
   }
   async retryTransfer(transferId) {
     const saved = this.#journal.transfer(transferId); requireThat(saved !== null, 'UnknownTransfer');
-    const offer = parse(saved.offer), peer = this.#peers.get(offer.destination_host_id); requireThat(peer, 'DestinationDenied');
+    const offer = parse(saved.offer), current = this.#run(offer.run_id);
+    // Retry the durable intent, including after restart. Withdrawal needs no
+    // fresh artifact-export permission and reconciles an acceptance that won.
+    if (current.status === 'OFFERED' && current.transfer_id === transferId && current.cancel_requested !== null)
+      return this.cancelRun(offer.run_id, current.cancel_requested);
+    const peer = this.#peers.get(offer.destination_host_id); requireThat(peer, 'DestinationDenied');
     try {
       let receipt = await peer.status(saved.offer);
       if (receipt === null) {

@@ -28,8 +28,8 @@ power-loss behavior. Process-crash tests use local APFS and SQLite EXTRA.
 | C03 | Journal collision matrix changes source, destination, outcome, state and requirements under one transfer ID; every case rejects and preserves the original decision. | PASS |
 | C04 | Host/mTLS lost acceptance tests let the destination execute while source remains OFFERED. | PASS |
 | C05 | mTLS withdrawal test explicitly observes unseen status while source stays OFFERED; status/network fault cases preserve the frozen outbox through restart. | PASS |
-| C06 | Journal and mTLS withdrawal-before-offer tests preserve refusal through restart and delayed staging. | PASS |
-| C07 | Journal acceptance cannot be reversed by refusal; mTLS cancellation after ambiguous acceptance forwards only. | PASS |
+| C06 | Journal and mTLS withdrawal-before-offer tests preserve refusal through restart and delayed staging. Refusal replaces staging at the exact record quota. Service/direct retry resumes pending withdrawal after restart without delivering cancelled work. | PASS |
+| C07 | Journal acceptance cannot be reversed by refusal; mTLS cancellation after ambiguous acceptance forwards only. The service retries pending cancellation after lost acceptance and failed withdrawal, with cleanup only at the destination. | PASS |
 | C08 | Separate source journal handles reject rival freezes; separate target handles reject a rival offer after one target acceptance. | PASS |
 | C09 | Host nonmatching predecessor case preserves the entire unresolved outbound record; valid return reconciles its exact old receipt first. | PASS |
 | C10 | Host late original receipt after the return leaves the complete current run unchanged. | PASS |
@@ -42,7 +42,7 @@ power-loss behavior. Process-crash tests use local APFS and SQLite EXTRA.
 | D05 | Lost-ack journal/host tests restart source frozen and retrieve the same target decision. | PASS |
 | D06 | Journal acceptance/refusal restart assertions compare exact receipt bytes. | PASS |
 | D07 | Acquired reply persists through restart; old executor cannot publish and new executor consumes the saved reply. | PASS |
-| D08 | Three actual World arena-exhaustion cases assert input/working/output capacity errors, preserved checkpoint/reply/occurrence and no repeated task input after recovery. | PASS |
+| D08 | Three actual World arena-exhaustion cases assert input/working/output capacity errors, preserved checkpoint/reply/occurrence and no repeated task input after recovery. Record-quota tests cover all six producers, exact replacement counts, atomic rollback and restart. | PASS |
 | D09 | Two custodians concurrently attach to the same journal; one loses CAS. Existing stale version/assignment publications reject. | PASS |
 | D10 | Artifact-before/after and acceptance transaction faults never publish accepted custody with missing artifacts. | PASS |
 | D11 | mTLS staging/collection test retains pending, accepted recovery inputs and terminal decisions. | PASS |
@@ -61,7 +61,7 @@ power-loss behavior. Process-crash tests use local APFS and SQLite EXTRA.
 | S12 | Both browsers scan actual private signing/TLS key material and session-token sentinels against image, all captured outcomes, payload logs, offers, receipts, process logs and decompressed use archive; local/session storage remain empty. | PASS |
 | S13 | Actual target rejects malformed image/outcome, oversized state and a valid ordinary non-mobility boundary; local signed/configured image/outcome limits reject before custody admission. Oversized successors preserve the parked state and acquired reply through restart. Unapproved image, wrong kernel, invalid signature and arbitrary endpoint cases reject before effects. | PASS |
 | S14 | Outstanding exact receipt verifies after normal key retirement; protocol rejects compromise exemption. | PASS |
-| S15 | Host revocation after placement blocks new reads but permits narrow cleanup, including authenticated browser cancellation. Named export-policy revocation before retry, during preflight and after restart blocks new disclosure while permitting reconciliation of saved acceptance. Departed source stays retired. | PASS |
+| S15 | Host revocation after placement blocks new reads but permits narrow cleanup, including authenticated browser cancellation. Named export-policy revocation before retry, during preflight and after restart blocks new disclosure while permitting reconciliation of saved acceptance. Pending cancellation progresses after principal/export revocation and restart, and prevents delivery when it arrives during retry preflight. Departed source stays retired. | PASS |
 | S16 | Expired admission leaves the source frozen until durable refusal; saved acceptance survives expiry and suspended new-admission policy. | PASS |
 | P01 | Extracted production modules execute with no application Zig source, emitter, Git metadata or bundled kernel; optional test directory removed. | PASS |
 | P02 | Both browser engines and Node independently use kernel `9627eb1e…` from the exact authenticated runtime inventory. | PASS |
@@ -111,3 +111,11 @@ independent Node/Wasmtime/native agreement (11 canonical records plus negatives)
 They used the same ReleaseSafe native executable and authenticated dependencies,
 with owner verification before and after. The unchanged passing observations are
 reused; no assertions, cases or deadlines were weakened.
+
+The subsequent cancellation/quota/CLI repair passed 187 Node cases across the
+mobility lanes, including the extracted service's bounded failure diagnostics,
+plus the native agreement and structural economy checks. Its first aggregate
+invocation omitted the required browser-tools option: the other steps passed,
+and the aggregate correctly failed. The missing browser lane was then run with
+the locked tools and passed in Chromium and Firefox. Four additional quota
+boundary cases brought the separately rerun journal suite to 72 passing tests.

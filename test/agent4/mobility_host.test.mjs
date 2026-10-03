@@ -9,6 +9,7 @@ import { parse, signRecord, runId, opaqueId, canonical } from '../../runtime/mob
 import { Custodian } from '../../runtime/mobility/custodian.mjs';
 import { version } from '../../runtime/mobility/custody.mjs';
 import { WorldAdmission } from '../../runtime/mobility/admission.mjs';
+import { pumpDeployment } from '../../runtime/mobility/deployment.mjs';
 
 test('peer authentication cannot register a principal outside the configured issuer grant', async t => {
   const f = await hostFixture(t), { signature: _, ...registered } = parse(f.registration);
@@ -186,6 +187,60 @@ test('cancellation during an unseen offer withdraws before source cleanup', asyn
   assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal');
   assert.equal(f.result('A').kind, 'cancelled'); assert.equal(f.counters.A.cleanup, 1); assert.equal(f.counters.B.cleanup, 0);
   assert.ok(f.journals.B.savedDecision(f.journals.A.transfer(offered.transfer_id).offer));
+});
+
+for (const route of ['pump', 'direct']) for (const revocation of ['none', 'export', 'principal'])
+test(`${route} retries durable cancellation after restart with ${revocation} revocation`, async t => {
+  const f = await hostFixture(t), offered = await f.hosts.A.run(f.id);
+  const peer = f.peerMaps.A.get('B'), withdraw = peer.withdraw;
+  peer.withdraw = async () => { throw Object.assign(new Error('offline'), { code: 'Offline' }); };
+  assert.equal((await f.hosts.A.cancelRun(f.id, 'stop')).kind, 'unknown');
+  if (revocation === 'export') f.deployment.exportPolicies['fixture-shared'] = [];
+  if (revocation === 'principal') f.revoked.A.add('tenant/user');
+  f.restart('A'); peer.withdraw = withdraw;
+  await assert.rejects(f.hosts.A.transferEnvelope(offered.transfer_id), { code: 'CancellationPending' });
+  const result = route === 'direct' ? await f.hosts.A.retryTransfer(offered.transfer_id)
+    : (await pumpDeployment({ config: { execution: 'node' }, journal: f.journals.A, custodian: f.hosts.A }))[0];
+  assert.equal(result.kind, 'cancel_requested');
+  const receipt = f.journals.B.savedDecision(f.journals.A.transfer(offered.transfer_id).offer);
+  assert.equal(parse(receipt).decision, 'refused');
+  assert.equal(f.journals.B.run(f.id), null); assert.equal(f.counters.deliveries.B, 0);
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal');
+  assert.equal(f.result('A').kind, 'cancelled'); assert.equal(f.counters.A.cleanup, 1);
+  assert.deepEqual(f.file.counts().reads, []);
+});
+
+test('cancellation arriving during retry preflight prevents fresh delivery', async t => {
+  const f = await hostFixture(t), offered = await f.hosts.A.run(f.id);
+  const peer = f.peerMaps.A.get('B'), preflight = peer.preflight, withdraw = peer.withdraw;
+  peer.withdraw = async () => { throw new Error('offline'); };
+  peer.preflight = async metadata => {
+    const observation = await preflight(metadata);
+    assert.equal((await f.hosts.A.cancelRun(f.id, 'stop')).kind, 'unknown');
+    return observation;
+  };
+  const pending = await f.hosts.A.retryTransfer(offered.transfer_id);
+  assert.equal(pending.kind, 'unknown'); assert.equal(pending.reason, 'CancellationPending');
+  assert.equal(f.counters.deliveries.B, 0); assert.equal(f.journals.B.run(f.id), null);
+  peer.withdraw = withdraw;
+  assert.equal((await f.hosts.A.retryTransfer(offered.transfer_id)).kind, 'cancel_requested');
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal');
+  assert.equal(f.result('A').kind, 'cancelled'); assert.deepEqual(f.file.counts().reads, []);
+});
+
+test('the service forwards pending cancellation when acceptance already won', async t => {
+  const f = await hostFixture(t, { lostAck: true }), offered = await f.hosts.A.run(f.id);
+  assert.equal((await f.hosts.A.retryTransfer(offered.transfer_id)).kind, 'unknown');
+  const peer = f.peerMaps.A.get('B'), withdraw = peer.withdraw;
+  peer.withdraw = async () => { throw new Error('offline'); };
+  assert.equal((await f.hosts.A.cancelRun(f.id, 'stop')).kind, 'unknown');
+  f.restart('A'); peer.withdraw = withdraw;
+  const results = await pumpDeployment({ config: { execution: 'node' }, journal: f.journals.A, custodian: f.hosts.A });
+  assert.equal(results[0].kind, 'cancel_forwarded');
+  assert.equal(f.hosts.A.status(f.id).custody, 'DEPARTED');
+  assert.equal((await f.hosts.B.run(f.id)).kind, 'terminal');
+  assert.equal(f.result('B').kind, 'cancelled'); assert.equal(f.counters.A.cleanup, 0); assert.equal(f.counters.B.cleanup, 1);
+  assert.deepEqual(f.file.counts().reads, []);
 });
 
 test('cancellation after lost acceptance is forwarded to the owner, never applied at source', async t => {

@@ -5,7 +5,7 @@ retains a child and cleanup marker, and presents the result. The moving variants
 complete A→B→A (epochs 0→1→2); stationary execution has the same capabilities
 and SQLite durability locally. No paid provider or production credential is used.
 The [raw observations](../conformance/agent4/mobility-measurements.json) include
-480 samples, artifact/input identities, phase timings, browser observations and
+640 samples, artifact/input identities, phase timings, browser observations and
 fresh-process recovery. These are bounded local measurements, not WAN estimates.
 
 The platform was Apple M2 Pro, Darwin 27.2 arm64, local APFS, Node 26.10.0,
@@ -170,6 +170,39 @@ from A1 attach through terminal A2. Five fresh-process recovery observations had
 median import/verify/open/restore/publication time 66.571 ms and median total
 process time 171.851 ms. These retain the earlier bounded local
 method and are not latency-distribution or power-loss claims.
+
+## Cancellation and quota repair measurements
+
+A second follow-up adds 160 samples after the cancellation retry, record quota,
+and CLI diagnostic repairs. The raw `post_cancellation_repairs` section records
+the dirty `b830805` source observation and hashes of the actual runtime and
+harness files. Both preceding studies remain unchanged. These separate sessions
+do not establish a causal performance change.
+
+| Mode | Cache | R | Total median ms | First read median ms | Commits |
+|---|---|---:|---:|---:|---:|
+| manual | cold | 1 | 45.154 | 26.906 | 0 |
+| manual | cold | 16 | 60.859 | 44.868 | 0 |
+| manual | warm | 1 | 20.005 | 8.610 | 0 |
+| manual | warm | 16 | 33.969 | 21.056 | 0 |
+| fixed | cold | 1 | 491.769 | 201.445 | 41 |
+| fixed | cold | 16 | 554.881 | 278.508 | 41 |
+| fixed | warm | 1 | 450.087 | 160.876 | 40 |
+| fixed | warm | 16 | 458.791 | 180.703 | 40 |
+| ensure | cold | 1 | 545.230 | 241.194 | 47 |
+| ensure | cold | 16 | 640.865 | 312.727 | 47 |
+| ensure | warm | 1 | 475.827 | 173.798 | 46 |
+| ensure | warm | 16 | 545.074 | 224.777 | 46 |
+| stationary | cold | 1 | 326.923 | 106.663 | 32 |
+| stationary | cold | 16 | 310.438 | 110.468 | 32 |
+| stationary | warm | 1 | 320.802 | 93.696 | 32 |
+| stationary | warm | 16 | 306.577 | 92.373 | 32 |
+
+All structural guards passed for every sample. Artifact sizes and peak World
+working-memory bounds remain as reported above. Browser observations were
+Chromium 878.739 ms and Firefox 1006.299 ms. Five fresh-process
+recovery observations had median internal time 68.478 ms and median process
+time 181.345 ms. The same local measurement limits apply.
 
 ## Reproduction
 

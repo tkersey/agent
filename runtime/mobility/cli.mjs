@@ -43,7 +43,10 @@ export async function main(argv) {
       print({ listening: service.url, host_id: host.config.hostId });
       try {
         while (!stopped) {
-          try { await pumpDeployment(host); }
+          try {
+            for (const result of await pumpDeployment(host))
+              if (result.kind === 'failed') console.error(JSON.stringify(result));
+          }
           catch (error) { console.error(JSON.stringify({ error: error.code ?? 'HostOperationFailed' })); }
           if (!stopped) await new Promise(resolve => { const timer = setTimeout(resolve, 250); wake = () => { clearTimeout(timer); resolve(); }; });
         }

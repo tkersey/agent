@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pumpDeployment } from '../../runtime/mobility/deployment.mjs';
+import { readFile, writeFile } from 'node:fs/promises';
+import { packageFixture } from './mobility_package_fixture.mjs';
 
 test('a repeatedly failing run does not starve execution, transfer retry or cancellation', async () => {
   const runs = [{ run_id: 'bad', status: 'ACTIVE' }, { run_id: 'good', status: 'ACTIVE' },
@@ -14,4 +16,25 @@ test('a repeatedly failing run does not starve execution, transfer retry or canc
     assert.deepEqual(results[0], { kind: 'failed', run_id: 'bad', reason: 'LeafBindingDenied' });
   }
   assert.deepEqual(calls, Array(3).fill(['bad', 'good', 'transfer', 'departed']).flat());
+});
+
+test('the extracted serve CLI reports a failed run and its bounded reason', async t => {
+  const f = await packageFixture(t, { dataExecution: 'browser' });
+  const offered = await f.hosts.A.run(f.id);
+  assert.equal((await f.hosts.A.retryTransfer(offered.transfer_id)).kind, 'accepted');
+  await f.stopB();
+  const config = JSON.parse(await readFile(f.configB, 'utf8'));
+  config.execution = 'node'; config.revoked = ['tenant/user'];
+  await writeFile(f.configB, JSON.stringify(config));
+  await f.startB();
+  let failure;
+  for (let i = 0; i < 100 && !failure; i++) {
+    for (const line of f.processLogs().stderr.split('\n')) {
+      try { const row = JSON.parse(line); if (row.kind === 'failed') failure = row; } catch {}
+    }
+    if (!failure) await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  assert.deepEqual(failure, { kind: 'failed', run_id: f.id, reason: 'PrincipalRevoked' });
+  assert.equal(f.statusB().custody, 'ACTIVE');
+  await f.stopB();
 });

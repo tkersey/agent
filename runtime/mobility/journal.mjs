@@ -142,9 +142,11 @@ export class CustodyJournal {
     requireThat(offer.destination_host_id === this.#host || offer.source_host_id === this.#host, 'WrongHost');
     return { offer, saved };
   }
-  #room(tenant, additions = 1) {
+  // Check the transaction's actual records, including replacements, before
+  // commit. A rejection rolls back every row and artifact in the operation.
+  #recordCapacity(tenant) {
     const count = this.#get('SELECT (SELECT count(*) FROM runs WHERE tenant=?) + (SELECT count(*) FROM transfers WHERE tenant=?) + (SELECT count(*) FROM occurrences JOIN runs USING(run_id) WHERE tenant=?) + (SELECT count(*) FROM staging WHERE tenant=?) AS n', tenant, tenant, tenant, tenant).n;
-    requireThat(count + additions <= this.#recordLimit, 'TenantRecordCapacity');
+    requireThat(count <= this.#recordLimit, 'TenantRecordCapacity');
   }
   register(registrationBytes, admitted, policy = null) {
     const data = this.#admission.read(admitted);
@@ -152,13 +154,13 @@ export class CustodyJournal {
       const registration = this.#registration(registrationBytes);
       requireThat(this.run(registration.run_id) === null, 'RunAlreadyRegistered');
       for (const key of ['image_digest', 'program_id', 'trusted_runtime_profile']) requireThat(registration[key] === data.metadata[key], 'RegistrationMismatch');
-      this.#room(registration.tenant_ref, 2);
       const state = core.initial(registration, hash(registrationBytes), this.#host, data.metadata, opaqueId());
       if (policy !== null) state.run = policyState(state.run, policy);
       artifactLimits(state.run.deployment_limits, data.image, data.outcome);
       this.#remember(registration); this.#artifact(registration.tenant_ref, registrationBytes);
       this.#artifact(registration.tenant_ref, data.image); this.#artifact(registration.tenant_ref, data.outcome);
-      this.#save(state.run); this.#saveOccurrence(state.occurrence, true); return state.run;
+      this.#save(state.run); this.#saveOccurrence(state.occurrence, true);
+      this.#recordCapacity(registration.tenant_ref); return state.run;
     });
   }
   attach(runId, wanted = null) { return this.#transaction('attach', () => { const current = this.run(runId); if (wanted !== null) core.expected(current, wanted); const run = core.attach(current); this.#save(run); return run; }); }
@@ -188,13 +190,14 @@ export class CustodyJournal {
       requireThat(data.image.length === offer.artifact_lengths.image && data.outcome.length === offer.artifact_lengths.outcome, 'ArtifactMismatch');
       requireThat(data.relocation.destination_host_id === offer.destination_host_id && data.relocation.placement_intent_id === offer.placement_intent_id && data.relocation.requirements_digest === offer.requirements_digest && data.relocation.remaining_move_budget > 0, 'RelocationMismatch');
       const next = { ...core.freeze(run, occurrence, wanted, offer, hash(offerBytes)), offered_at_ms: Date.now().toString() };
-      this.#room(run.tenant_ref); this.#remember(offer);
+      this.#remember(offer);
       this.artifact(run.tenant_ref, offer.image_digest); this.artifact(run.tenant_ref, offer.outcome_digest);
       const decisionKeys = [];
       for (const [id, key] of this.#keys) if (key.owner === offer.destination_host_id && key.status === 'active') decisionKeys.push({ id, owner: key.owner, spki: key.publicKey.export({ type: 'spki', format: 'der' }).toString('base64url') });
       requireThat(decisionKeys.length > 0, 'UnknownDestination');
       this.#run('INSERT INTO transfers VALUES (?, ?, ?, ?, ?, NULL, NULL, ?)', offer.transfer_id, offer.run_id, run.tenant_ref, 'source', offerBytes, json(decisionKeys));
-      this.#run('INSERT INTO outbox VALUES (?, ?)', offer.transfer_id, offerBytes); this.#save(next); return next;
+      this.#run('INSERT INTO outbox VALUES (?, ?)', offer.transfer_id, offerBytes); this.#save(next);
+      this.#recordCapacity(run.tenant_ref); return next;
     });
   }
   beginTransfer(runId, wanted, admitted, { observationDigest, exportPolicyRevision, admissionDeadline = null }) {
@@ -229,8 +232,9 @@ export class CustodyJournal {
         for (const field of ['registration', 'requirements', 'constraints']) requireThat(equal(prior[field], envelope[field]), 'TransferConflict');
         requireThat(equal(prior.observation, canonical(envelope.observation)) && (prior.predecessor === null ? envelope.predecessor === null : envelope.predecessor !== null && equal(prior.predecessor, envelope.predecessor)), 'TransferConflict');
       } else {
-        this.#room(registration.tenant_ref); this.#remember(offer); this.#remember(registration);
+        this.#remember(offer); this.#remember(registration);
         this.#run('INSERT INTO staging VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)', offer.transfer_id, registration.tenant_ref, envelope.offer, envelope.registration, envelope.predecessor, canonical(envelope.observation), envelope.requirements, envelope.constraints);
+        this.#recordCapacity(registration.tenant_ref);
       }
       this.#artifact(registration.tenant_ref, envelope.registration);
       if (envelope.predecessor !== null) this.#artifact(registration.tenant_ref, envelope.predecessor);
@@ -263,12 +267,13 @@ export class CustodyJournal {
       if (saved?.receipt) return Uint8Array.from(saved.receipt);
       const registration = this.#registration(registrationBytes, offer.run_registration_digest);
       requireThat(offer.run_id === registration.run_id, 'RegistrationMismatch');
-      this.#room(registration.tenant_ref); this.#remember(offer); this.#remember(registration);
+      this.#remember(offer); this.#remember(registration);
       const receipt = this.#decision(offer, null, reason); this.#remember(parse(receipt));
       this.#artifact(registration.tenant_ref, registrationBytes);
       this.#artifact(registration.tenant_ref, receipt);
       this.#run('INSERT INTO transfers VALUES (?, ?, ?, ?, ?, ?, NULL, ?)', offer.transfer_id, offer.run_id, registration.tenant_ref, 'target', offerBytes, receipt, '[]');
       this.#run('DELETE FROM staging WHERE id=?', offer.transfer_id);
+      this.#recordCapacity(registration.tenant_ref);
       return receipt;
     });
   }
@@ -294,13 +299,14 @@ export class CustodyJournal {
       artifactLimits(acceptedCore.deployment_limits, data.image, data.outcome);
       const receipt = this.#decision(offer, acceptedCore, null), arrival = encodeArrival(offer, hash(receipt), observation);
       const next = core.accept(this.run(offer.run_id), registration, offer, acceptedCore, hash(receipt), hash(arrival));
-      this.#room(registration.tenant_ref, this.run(offer.run_id) === null ? 3 : 2); this.#remember(offer); this.#remember(registration); this.#remember(parse(receipt));
+      this.#remember(offer); this.#remember(registration); this.#remember(parse(receipt));
       this.#artifact(registration.tenant_ref, registrationBytes); this.#artifact(registration.tenant_ref, data.image); this.#artifact(registration.tenant_ref, data.outcome); this.#artifact(registration.tenant_ref, arrival);
       this.#artifact(registration.tenant_ref, receipt);
       if (predecessorBytes !== null) this.#artifact(registration.tenant_ref, predecessorBytes);
       this.#save(next.run); this.#saveOccurrence(next.occurrence, true);
       this.#run('INSERT INTO transfers VALUES (?, ?, ?, ?, ?, ?, ?, ?)', offer.transfer_id, offer.run_id, registration.tenant_ref, 'target', offerBytes, receipt, canonical(acceptedCore), '[]');
       this.#run('DELETE FROM staging WHERE id=?', offer.transfer_id);
+      this.#recordCapacity(registration.tenant_ref);
       return receipt;
     });
   }
@@ -366,9 +372,10 @@ export class CustodyJournal {
       const run = this.run(runId); requireThat(run.image_digest === data.metadata.image_digest && run.program_id === data.metadata.program_id, 'ImageMismatch');
       artifactLimits(run.deployment_limits, data.image, data.outcome);
       requireThat(data.predecessor?.outcome_digest === run.outcome_digest && hash(canonical(data.predecessor.control)) === hash(canonical(control)), 'UnboundSuccessor');
-      if (data.metadata.kind === 'requested') this.#room(run.tenant_ref);
       const next = core.publish(run, this.#occurrence(run), wanted, control, data.metadata, opaqueId());
-      this.#artifact(run.tenant_ref, data.outcome); this.#save(next.run); this.#saveOccurrence(next.previous); this.#saveOccurrence(next.occurrence, true); return next.run;
+      this.#artifact(run.tenant_ref, data.outcome); this.#save(next.run); this.#saveOccurrence(next.previous); this.#saveOccurrence(next.occurrence, true);
+      if (next.occurrence !== null) this.#recordCapacity(run.tenant_ref);
+      return next.run;
     });
   }
   requestCancel(runId, reason) { return this.#transaction('cancel', () => { const next = core.cancel(this.run(runId), reason); this.#save(next); return next; }); }

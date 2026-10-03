@@ -43,10 +43,10 @@ async function fixture(t, token = moving) {
   const pairs = Object.fromEntries(['issuer', 'A', 'B'].map(name => [name, generateKeyPairSync('ed25519')]));
   const keys = new Map(Object.entries(pairs).map(([owner, pair]) => [owner, { owner, status: 'active', publicKey: pair.publicKey }]));
   const opened = new Set(); let failure = null;
-  const open = (host, create = false, generation = 'generation-1') => {
+  const open = (host, create = false, generation = 'generation-1', options = {}) => {
     const journal = new CustodyJournal({ directory: join(directory, host), hostId: host, deploymentGeneration: generation, keys,
       signer: { keyId: host, privateKey: pairs[host].privateKey, policyRevision: 'p1' }, admission, create,
-      fault(point) { if (point === failure) throw new Error(`injected ${point}`); } });
+      fault(point) { if (point === failure) throw new Error(`injected ${point}`); }, ...options });
     opened.add(journal); return journal;
   };
   const close = journal => { journal.close(); opened.delete(journal); };
@@ -71,6 +71,68 @@ async function fixture(t, token = moving) {
   const accept = (journal, proposal) => journal.accept(proposal.bytes, registration, moving, { policyRevision: 'p1', classification: ['shared'], deploymentLimits: limits, observation: proposal.observation });
   return { directory, pairs, keys, a, b, open, close, id, registration, offer, accept, fault: point => { failure = point; } };
 }
+
+for (const staged of [false, true]) for (const decision of ['refuse', 'accept'])
+test(`${decision} uses the exact record quota with staged=${staged}`, async t => {
+  const f = await fixture(t), proposal = f.offer(), transferId = parse(proposal.bytes).transfer_id;
+  f.close(f.b);
+  const b = f.open('B', false, 'generation-1', { maximumRecords: decision === 'refuse' ? 1 : 3 });
+  if (staged) b.stage({ offer: proposal.bytes, registration: f.registration, predecessor: null, observation: proposal.observation,
+    requirements: canonicalRequirements([]), constraints: encodeValue(schemas.constraints, [[], { tag: 1, value: 'B' }, { tag: 0, value: null }, 8388608n]) }, 'image', image);
+  const receipt = decision === 'refuse' ? b.refuse(proposal.bytes, f.registration) : f.accept(b, proposal);
+  assert.equal(parse(receipt).decision, decision === 'refuse' ? 'refused' : 'accepted');
+  assert.equal(b.stagedOffer(transferId), null);
+  f.close(b);
+  const restarted = f.open('B', false, 'generation-1', { maximumRecords: decision === 'refuse' ? 1 : 3 });
+  assert.deepEqual(restarted.savedDecision(proposal.bytes), receipt);
+  assert.deepEqual(restarted.refuse(proposal.bytes, f.registration), receipt);
+  assert.throws(() => restarted.refuse(f.offer().bytes, f.registration), { code: 'TenantRecordCapacity' });
+});
+
+test('record quota failure rolls back acceptance and retains staged withdrawal', async t => {
+  const f = await fixture(t), proposal = f.offer(), transferId = parse(proposal.bytes).transfer_id;
+  f.close(f.b); const b = f.open('B', false, 'generation-1', { maximumRecords: 2 });
+  b.stage({ offer: proposal.bytes, registration: f.registration, predecessor: null, observation: proposal.observation,
+    requirements: canonicalRequirements([]), constraints: encodeValue(schemas.constraints, [[], { tag: 1, value: 'B' }, { tag: 0, value: null }, 8388608n]) }, 'image', image);
+  assert.throws(() => f.accept(b, proposal), { code: 'TenantRecordCapacity' });
+  assert.equal(b.run(f.id), null); assert.equal(b.transfer(transferId), null);
+  assert.equal(b.hasArtifact('tenant', hash(moveBytes)), false);
+  assert.deepEqual(b.stagedOffer(transferId), proposal.bytes);
+  f.close(b); const restarted = f.open('B', false, 'generation-1', { maximumRecords: 2 });
+  assert.deepEqual(restarted.stagedOffer(transferId), proposal.bytes);
+  assert.equal(parse(restarted.refuse(proposal.bytes, f.registration)).decision, 'refused');
+});
+
+for (const operation of ['register', 'freeze', 'stage', 'publish'])
+test(`${operation} rolls back at the record limit and succeeds at its exact size`, async t => {
+  const f = await fixture(t, operation === 'publish' || operation === 'register' ? initial : moving);
+  const host = operation === 'stage' ? 'B' : 'A'; f.close(host === 'A' ? f.a : f.b);
+  const maximumRecords = operation === 'stage' ? 0 : 2;
+  let journal = f.open(host, false, 'generation-1', { maximumRecords });
+  const before = journal.run(f.id), proposal = operation === 'stage' || operation === 'freeze' ? f.offer(operation === 'stage' ? f.a : journal) : null;
+  let invoke, finalSize;
+  if (operation === 'register') {
+    const { signature: _, ...original } = parse(f.registration), id = runId('issuer');
+    const registration = signRecord('run', { ...original, run_id: id }, f.pairs.issuer.privateKey);
+    invoke = () => journal.register(registration, initial); finalSize = 4;
+  } else if (operation === 'freeze') {
+    invoke = () => journal.freeze(f.id, version(before), proposal.bytes, moving); finalSize = 3;
+  } else if (operation === 'stage') {
+    invoke = () => journal.stage({ offer: proposal.bytes, registration: f.registration, predecessor: null, observation: proposal.observation,
+      requirements: canonicalRequirements([]), constraints: encodeValue(schemas.constraints, [[], { tag: 1, value: 'B' }, { tag: 0, value: null }, 8388608n]) }, 'image', image); finalSize = 1;
+  } else {
+    const attached = journal.attach(f.id), occurrence = journal.admitLeaf(f.id, version(attached), ['shared']);
+    journal.recordReply(f.id, occurrence.attempt_id, taskReply, ['shared']);
+    invoke = () => journal.publishOutcome(f.id, version(journal.run(f.id)), { kind: 'reply', reply_digest: hash(taskReply) }, nextResolve); finalSize = 3;
+  }
+  const runs = journal.recover(), outbox = journal.outbox();
+  assert.throws(invoke, { code: 'TenantRecordCapacity' });
+  assert.deepEqual(journal.recover(), runs); assert.deepEqual(journal.outbox(), outbox);
+  if (proposal) { assert.equal(journal.transfer(parse(proposal.bytes).transfer_id), null); assert.equal(journal.stagedOffer(parse(proposal.bytes).transfer_id), null); }
+  if (operation === 'publish') assert.equal(journal.hasArtifact('tenant', hash(resolveBytes)), false);
+  f.close(journal); journal = f.open(host, false, 'generation-1', { maximumRecords: finalSize });
+  assert.deepEqual(journal.recover(), runs); assert.doesNotThrow(invoke);
+});
 
 test('freeze precedes publication; lost acceptance reply and restarts never thaw source', async t => {
   const f = await fixture(t), offer = f.offer();

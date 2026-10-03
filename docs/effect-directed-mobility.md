@@ -163,7 +163,7 @@ zig build check-mobility-protocol check-mobility-journal \
 ```
 
 Six protocol tests cover RFC Unicode ordering/escaping, duplicate keys, malformed
-records, signatures, key ownership/retirement and counters. Sixty-three journal tests
+records, signatures, key ownership/retirement and counters. Seventy-two journal tests
 cover accepted/refused recovery, exact retries, frozen outboxes, injected storage
 failure, stale executors, persisted uncertain/acquired occurrences, schema parity,
 and six actual SIGKILL points around freeze, acceptance and reply-acquisition
@@ -290,7 +290,10 @@ origin custodian. The latter does not drive application steps in the service
 pump. Choose a private local journal directory and an externally maintained
 `deploymentGeneration`; never derive that generation from a restored database.
 The default journal bounds are 256 MiB of artifact bytes per tenant and 10,000
-combined run/transfer/occurrence/staging records per tenant. Accepted/refused decisions and their verification
+combined run/transfer/occurrence/staging records per tenant. Record limits apply
+to the actual transaction result: replacing staging with a terminal decision
+does not consume a second record. An over-limit transaction rolls back its
+records and artifacts. Accepted/refused decisions and their verification
 bindings are retained indefinitely; the journal's explicit artifact collector
 deletes only unreferenced large bytes. Operators must monitor capacity. No
 timeout deletes a decision or releases ambiguous custody.
@@ -327,8 +330,8 @@ table of past sessions. Executor assignments are bounded while attachment is in
 flight and released at terminal publication. A revoked principal can attach and
 drive an already requested cancellation under the same tenant/audience checks;
 ordinary leaf dispatch still requires its current grant. A failed run in the
-Node pump reports its run ID and reason without preventing other runs from being
-visited.
+Node pump reports its run ID and bounded reason on the service's stderr without
+preventing other runs from being visited.
 
 Stop the peer service before local mutation/recovery commands. These commands
 print metadata and receipts, not private captured values:
@@ -346,7 +349,10 @@ print metadata and receipts, not private captured values:
 `ACTIVE` authorizes only the current incarnation and occurrence; incoming active
 custody can wait for an executor. `OFFERED` is frozen, including after timeout.
 `DEPARTED` cannot execute at its old epoch. `TERMINAL` has no next application
-step. Retry preserves the exact signed offer. `accepted` and `refused` require a
+step. Retry preserves the exact signed offer. If that offer has a pending
+cancellation, retry requests withdrawal and forwards cancellation if acceptance
+already won; it does not initiate another artifact delivery. This also applies
+after restart or revocation of ordinary execution/export permission. `accepted` and `refused` require a
 matching saved signed receipt; `unknown` means the source remains frozen. A
 pending cancellation at departed custody is a separate delivery question.
 Recovery converts interrupted dispatch to unknown delivery without redispatch.

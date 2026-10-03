@@ -358,6 +358,13 @@ pub fn build(b: *std.Build) void {
     const text_object = g.emitter("agent-text-object", g.module("test/agent4/text_object.zig"));
     const mobility_consumer = g.emitter("agent-mobility-consumer", g.module("test/consumers/mobility/main.zig"));
     const mobility_images = b.step("mobility-images", "Emit the independent mobility consumer");
+    const mobility_approval_images = b.step("mobility-approval-images", "Emit the movable approval and fixture replacement consumer");
+    emit.dependOn(mobility_approval_images);
+    const mobility_approval_consumer = g.emitter("agent-mobility-approval", g.module("test/consumers/mobility/approval.zig"));
+    g.emit(mobility_approval_images, mobility_approval_consumer, &.{"image"}, "mobility-approval/program.bpi3");
+    g.emit(mobility_approval_images, mobility_approval_consumer, &.{"identity"}, "mobility-approval/program-id.bin");
+    for ([_][]const u8{ "task", "report", "proposal", "read", "delivery", "human", "human-reply", "identifier", "integer", "boolean" }) |name|
+        g.emit(mobility_approval_images, mobility_approval_consumer, &.{name}, b.fmt("mobility-approval/{s}.schema", .{name}));
     const mobility_ensure = g.emitter("agent-mobility-ensure", g.module("test/agent4/mobility_ensure.zig"));
     for ([_][]const u8{ "image", "input", "result" }) |name|
         g.emit(mobility_images, mobility_ensure, &.{name}, b.fmt("mobility/ensure-{s}.bin", .{name}));
@@ -467,6 +474,8 @@ pub fn build(b: *std.Build) void {
     const mobility_native = b.step("check-mobility-native", "Compare native and WASM canonical mobility outcomes at every boundary");
     const mobility_journal = b.step("check-mobility-journal", "Check durable custody, signed decisions and process-crash recovery");
     const mobility_integration = b.step("check-mobility-integration", "Check real custody, placement, privacy and grants through the reference host");
+    const mobility_approval = b.step("check-mobility-approval", "Check exact live evidence and approved fixture mutation across custody moves");
+    g.testModule(mobility_approval, g.module("test/agent4/approval_probe.zig"));
     const mobility_browser = b.step("check-mobility-browser-continuation", "Check browser/data/fresh-browser continuation (custody scaffold)");
     const mobility_durable_browser = b.step("check-mobility-browser", "Check source-free browser execution through durable custody and a separate mTLS process");
     const components_check = b.step("check-component-tools", "Reuse three effectful objects in Agent and two standalone Programs");
@@ -553,6 +562,11 @@ pub fn build(b: *std.Build) void {
         ensure_run.has_side_effects = true;
         mobility_continuation.dependOn(&ensure_run.step);
         const journal_run = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_journal.test.mjs" });
+        const approval_run = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_approval.test.mjs" });
+        approval_run.setEnvironmentVariable("AGENT_MOBILITY_RUNTIME", runtime_path);
+        approval_run.step.dependOn(mobility_approval_images);
+        approval_run.step.dependOn(&runtime_guard.step);
+        mobility_approval.dependOn(&approval_run.step);
         journal_run.setEnvironmentVariable("AGENT_MOBILITY_RUNTIME", runtime_path);
         journal_run.step.dependOn(mobility_images);
         journal_run.step.dependOn(&runtime_guard.step);
@@ -792,6 +806,7 @@ pub fn build(b: *std.Build) void {
         mobility_native.dependOn(&missing.step);
         mobility_journal.dependOn(&missing.step);
         mobility_integration.dependOn(&missing.step);
+        mobility_approval.dependOn(&missing.step);
         mobility_browser.dependOn(&missing.step);
         mobility_durable_browser.dependOn(&missing.step);
         components_check.dependOn(&missing.step);

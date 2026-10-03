@@ -129,6 +129,7 @@ test/consumers/inquiry/react.zig
 test/consumers/inquiry/repeated.zig
 test/consumers/inquiry/source.zig
 test/consumers/inquiry/types.zig
+test/consumers/mobility/approval.zig
 test/consumers/mobility/build.zig
 test/consumers/mobility/main.zig
 test/consumers/repository/application.zig

@@ -13,6 +13,16 @@ pub fn build(b: *std.Build) void {
     });
     const emitter = b.addExecutable(.{ .name = "mobility-emitter", .root_module = root });
     b.installArtifact(emitter);
+    const approval_root = b.createModule(.{
+        .root_source_file = b.path("approval.zig"),
+        .target = b.graph.host,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "agent", .module = dependency.module("agent") },
+            .{ .name = "boundary", .module = dependency.module("boundary") },
+        },
+    });
+    b.installArtifact(b.addExecutable(.{ .name = "mobility-approval-emitter", .root_module = approval_root }));
     if (b.option([]const u8, "text-object", "Independently emitted text inspection BMO1")) |object| {
         const run = b.addRunArtifact(emitter);
         run.addArgs(&.{ "image", object });

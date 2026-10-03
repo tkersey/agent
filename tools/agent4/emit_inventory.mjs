@@ -43,6 +43,26 @@ await add('mobility/cleanup.bin','synthetic-fixture',encodeValue(mobilitySchemas
   contract('agent.text.close.v1','subject','unit','cleanup',subject[0],'close',null,textVersion),
   contract('agent.mobility.fixture.child-cleanup.v1','integer','unit','cleanup','child','cleanup'),
 ]));
+const approval = {};
+for (const name of ['task','report','proposal','read','delivery','human','human-reply','identifier','integer','boolean']) {
+  approval[name] = await readFile(join(output, `mobility-approval/${name}.schema`));
+  await add(`mobility-approval/${name}.bin`, 'schema', approval[name]);
+}
+const approvalRequirement = (operation,input,result,role,subjectRef,scope,audience=null) => requirement({
+  operation,payloadSchema:approval[input],resultSchema:approval[result],role,subject:subjectRef,subjectVersion:null,scope,audience,trustDomain:'fixture',
+});
+const approvalPlacement = (wanted,moves) => [[[wanted],[[],{tag:0,value:null},{tag:0,value:null},8n<<20n]],'fixture-write','shared',[moves,3]];
+const originalDocument = Buffer.from('An isolated fixture.\n');
+const proposal = [['document.txt',hash(originalDocument),'An approved replacement.\n','Replace the isolated fixture'],7n];
+await add('mobility-approval/program.bpi3','image');
+await add('mobility-approval/program-id.bin','synthetic-fixture');
+await add('mobility-approval/document.txt','synthetic-fixture',originalDocument);
+await add('mobility-approval/initial.args','initial-args',encodeValue(decodeSchema(approval.task),[9001n,proposal,
+  approvalPlacement(approvalRequirement('agent.mobility.fixture.target-read.v1','proposal','read','read','fixture/document','read'),3),
+  approvalPlacement(approvalRequirement('agent.interaction.exchange.v1.mobility.replace','human','human-reply','approval','human-A','approve','human-A'),2),
+  approvalPlacement(approvalRequirement('agent.mobility.fixture.replace.v1','proposal','delivery','commit','fixture/document','replace'),1),
+]));
+examples.push({name:'mobility-approval',image:'mobility-approval/program.bpi3',initialArgs:'mobility-approval/initial.args'});
 await add('text/tool.bmo1','component');
 for(const name of ['subject','task','result','report'])await add(`text/${name}-schema.bin`,'schema');
 await add('text/model-reply.bin','synthetic-fixture');

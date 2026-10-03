@@ -1,5 +1,8 @@
 # Effect-directed mobility (in development)
 
+The [acceptance matrix](mobility-acceptance.md) maps every required section 17 ID
+to its current evidence and explicitly marks the remaining gaps.
+
 The public `agent.mobility` module defines the v1 placement schemas and explicit
 `resolve(context, owner, input)` and `relocate(context, owner, input)` authoring
 operations. These construct ordinary Boundary effects. They do not perform
@@ -52,8 +55,8 @@ zig build check-mobility-continuation check-mobility-browser-continuation \
 These are **test scaffolds, not the durable custody reference route**. Their
 synthetic arrival receipts and empty immediate-requirement lists isolate
 continuation behavior; they provide no authority or custody safety evidence.
-The approval/write variant, remaining recovery cases and matched measurements
-remain required. The durable source-free browser lane is described below.
+Remaining recovery/model cases and matched measurements are still required.
+The durable source-free browser lane and approval variant are described below.
 The full acceptance suite and serial review closeout remain unfinished.
 
 The continuation target also executes fifteen independent `ensure` cases in
@@ -67,6 +70,40 @@ All 24 canonical outcomes agree byte-for-byte with WASM, including the pending
 request/state at each semantic boundary. The independent final-result, request
 order and cleanup assertions remain in force; native agreement alone is not a
 custody or authority proof. Supply the same runtime/source/archive arguments.
+
+## Approval across a move
+
+`agent.approval.Config.placement` optionally supplies a program function with
+signature `(proposal) -> bool` whose external effect row contains only mobility
+operations. The default is null, preserving ordinary approval behavior. After an
+exact authorized approval, the existing checked owner retains its private
+one-shot grant while calling placement. On success it consumes that same grant,
+revalidates at the destination, and performs the protected commit. On placement
+failure it consumes the grant and returns the existing denied result. No public
+grant constructor/eliminator or split approve/commit protocol is introduced.
+Placement cannot perform ordinary reads, writes or another approval; final
+revalidation retains its separate read-only effect restriction. External adapters
+still enforce actual current authority and atomic resource preconditions.
+
+`test/consumers/mobility/approval.zig` is a second public consuming program. It
+moves A→B to acquire real live evidence, B→A while retaining the private evidence,
+then A→B with the exact approved grant. The final environment uses the existing
+repository delivery adapter and document filesystem safety code to replace one
+isolated fixture. The approval challenge contains the entire proposal and a fresh
+256-bit environmental occurrence ID; it carries no credential. The caller retains
+marker 9001 through epochs 0→1→2→3. The emitted image is 4,229 bytes and is included
+with its schemas and typed fixture inputs in `emit-agent4`.
+
+`check-mobility-approval` runs the protected approval authoring tests plus eight
+durable runtime cases: successful conditional replacement after all three moves;
+stale evidence; stale approval occurrence; a file changed during the final move;
+replay of a consumed approval against another run with identical proposal bytes;
+lost write delivery across restart/cancellation; definitive placement refusal;
+and cancellation while the grant is in transit. Stale source versions and old
+commit occurrences cannot dispatch. An uncertain write remains parked and is not
+repeated. The tests use deterministic synthetic human replies and temporary files,
+not a production human authorization provider. `check-agent4` and `check-native`
+also pass with the optional placement extension.
 
 ## Durable reference host
 

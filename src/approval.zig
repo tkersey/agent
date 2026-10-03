@@ -33,6 +33,10 @@ pub const Config = struct {
     failure: Id,
     channel: []const u8,
     evidence: ?Evidence = null,
+    /// Optional program-owned (proposal) -> bool placement after exact approval.
+    /// Only protected mobility effects are permitted. The private one-shot grant
+    /// stays in this owner across placement; revalidation still runs afterwards.
+    placement: ?Id = null,
 };
 
 pub const Definition = struct {
@@ -90,6 +94,7 @@ pub fn define(c: authoring.Context, cfg: Config) !Definition {
         b,
         &.{ issuer, exchange.effect, cfg.commit_effect },
         cfg.revalidate,
+        cfg.placement,
     );
     const regions = try regionRow(b, cfg);
     const data = if (cfg.evidence) |e| b.functions.items[@intCast(e.consume)].result else null;
@@ -189,6 +194,16 @@ fn validate(c: authoring.Context, cfg: Config) !void {
     if (outcome != .sum or outcome.sum.len != 4) return error.InvalidCommitOutcome;
     try checkFunction(b, cfg.authority, &.{ cfg.proposal, cfg.principal }, boolean);
     try checkFunction(b, cfg.revalidate, &.{cfg.proposal}, boolean);
+    if (cfg.placement) |placement| {
+        try checkFunction(b, placement, &.{cfg.proposal}, boolean);
+        for (b.functions.items[@intCast(placement)].effects) |effect| {
+            var movable = false;
+            for (c.registry.classifications.items) |item| {
+                if (item.effect == effect and item.role == .mobility) movable = true;
+            }
+            if (!movable) return error.InvalidApprovalPlacement;
+        }
+    }
     if (cfg.evidence) |e| {
         if (e.proof >= b.schemas.items.len or e.consume >= b.functions.items.len)
             return error.InvalidLiveEvidence;
@@ -230,25 +245,33 @@ fn checkFunction(b: *source.Builder, function: Id, parameters: []const Id, resul
         if (b.variables.items[@intCast(actual)] != expected) return error.InvalidApprovalContract;
 }
 
-fn effectRow(b: *source.Builder, initial: []const Id, revalidate: Id) ![]const Id {
+fn effectRow(b: *source.Builder, initial: []const Id, revalidate: Id, placement: ?Id) ![]const Id {
     var effects: std.ArrayList(Id) = .empty;
     try effects.appendSlice(b.allocator(), initial);
     for (b.functions.items[@intCast(revalidate)].effects) |effect| {
         if (std.mem.indexOfScalar(Id, effects.items, effect) == null)
             try effects.append(b.allocator(), effect);
     }
+    if (placement) |function| for (b.functions.items[@intCast(function)].effects) |effect| {
+        if (std.mem.indexOfScalar(Id, effects.items, effect) == null)
+            try effects.append(b.allocator(), effect);
+    };
     std.mem.sort(Id, effects.items, {}, std.sort.asc(Id));
     return effects.toOwnedSlice(b.allocator());
 }
 
 fn regionRow(b: *source.Builder, cfg: Config) ![]const Id {
     var regions: std.ArrayList(Id) = .empty;
-    var functions = [_]Id{ cfg.authority, cfg.revalidate, 0, 0 };
+    var functions = [_]Id{ cfg.authority, cfg.revalidate, 0, 0, 0 };
     var count: usize = 2;
     if (cfg.evidence) |e| {
         functions[2] = e.consume;
         functions[3] = e.project;
         count = 4;
+    }
+    if (cfg.placement) |placement| {
+        functions[count] = placement;
+        count += 1;
     }
     for (functions[0..count]) |function| {
         for (b.functions.items[@intCast(function)].regions) |region| {
@@ -339,6 +362,7 @@ fn decisionBody(
 }
 
 fn commitBody(c: authoring.Context, d: Definition, cfg: Config, grant: Id, proposal: Id) !Id {
+    if (cfg.placement) |placement| return placedCommitBody(c, d, cfg, grant, proposal, placement);
     const b = c.builder;
     const allowed = try b.variable(try b.scalar(bool));
     const permission = try b.variable(grant);
@@ -359,6 +383,33 @@ fn commitBody(c: authoring.Context, d: Definition, cfg: Config, grant: Id, propo
         .when_true = commit,
         .when_false = try emptyResult(b, d, 3),
     } }));
+}
+
+fn placedCommitBody(c: authoring.Context, d: Definition, cfg: Config, grant: Id, proposal: Id, placement: Id) !Id {
+    const b = c.builder;
+    const permission = try b.variable(grant);
+    const placed = try b.variable(try b.scalar(bool));
+    const consumed = try b.variable(d.proposal);
+    const allowed = try b.variable(try b.scalar(bool));
+    const observed = try b.variable(b.effects.items[@intCast(cfg.commit_effect)].result);
+    const commit = try b.bind(observed, try protectedPerform(c, d.function, cfg.commit_effect, try b.reference(consumed)), try b.pure(try b.primitive(d.result, .variant, &.{try b.reference(observed)}, 0)));
+    const revalidate = try b.term(.{ .call = .{ .function = cfg.revalidate, .arguments = &.{try b.reference(consumed)} } });
+    const checked = try b.bind(allowed, revalidate, try b.term(.{ .conditional = .{
+        .condition = try b.reference(allowed),
+        .when_true = commit,
+        .when_false = try emptyResult(b, d, 3),
+    } }));
+    const selected = try b.term(.{ .conditional = .{
+        .condition = try b.reference(placed),
+        .when_true = checked,
+        .when_false = try emptyResult(b, d, 3),
+    } });
+    const move = try b.term(.{ .call = .{ .function = placement, .arguments = &.{proposal} } });
+    const mint = try b.pure(try b.primitive(grant, .resource_pack, &.{proposal}, 0));
+    const consume = try b.pure(try b.primitive(d.proposal, .resource_unpack, &.{try b.reference(permission)}, 0));
+    // Both placement branches consume the same retained grant. No caller can
+    // extract it, skip final revalidation, or turn refusal into commit authority.
+    return b.bind(permission, mint, try b.bind(placed, move, try b.bind(consumed, consume, selected)));
 }
 
 fn protectedPerform(c: authoring.Context, owner: Id, effect: Id, payload: Id) !Id {
@@ -385,7 +436,7 @@ fn sameConfig(a: Config, b: Config) bool {
         a.reason == b.reason and a.commit_effect == b.commit_effect and
         a.authority == b.authority and
         a.revalidate == b.revalidate and a.failure == b.failure and
-        std.meta.eql(a.evidence, b.evidence);
+        std.meta.eql(a.evidence, b.evidence) and a.placement == b.placement;
 }
 
 fn evidenceMatches(

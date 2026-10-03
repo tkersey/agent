@@ -23,6 +23,8 @@ const Mode = enum {
     raw_commit,
     private_call,
     speculative,
+    placement_read,
+    placement_commit,
 };
 
 pub fn build(c: agent.Context, mode: Mode) !source.Module {
@@ -50,6 +52,12 @@ pub fn build(c: agent.Context, mode: Mode) !source.Module {
         try liveWitness(c, proposal)
     else
         null;
+    const placement: ?Id = if (mode == .placement_read or mode == .placement_commit) blk: {
+        const effect = if (mode == .placement_commit) commit else try c.external("test.placement.read", proposal, boolean, .read);
+        const function = try b.declare(&.{proposal}, boolean, &.{effect}, &.{});
+        try b.define(function, try b.pure(try b.constant(bool, true)));
+        break :blk function;
+    } else null;
     const d = try agent.approval.define(c, .{
         .name = "probe.document",
         .proposal = proposal,
@@ -62,6 +70,7 @@ pub fn build(c: agent.Context, mode: Mode) !source.Module {
         .failure = failure,
         .channel = "document-owner",
         .evidence = if (witness) |w| .{ .proof = w.proof, .consume = w.consume, .project = w.project } else null,
+        .placement = placement,
     });
     const functions_before = b.functions.items.len;
     for (0..64) |_| {
@@ -82,7 +91,7 @@ pub fn build(c: agent.Context, mode: Mode) !source.Module {
             .function = d.function,
             .arguments = &.{input},
         } }),
-        .valid, .speculative, .scoped, .scoped_evidence => try agent.approval.approveAndCommit(c, d, entry, input),
+        .valid, .speculative, .scoped, .scoped_evidence, .placement_read, .placement_commit => try agent.approval.approveAndCommit(c, d, entry, input),
         .evidence, .forged_evidence, .reused_evidence => blk: {
             const w = witness.?;
             try std.testing.expectError(error.LiveEvidenceRequired, agent.approval.approveAndCommit(c, d, entry, input));
@@ -111,6 +120,16 @@ test "approval emits ordinary checked BPI3 with a consumed private grant" {
     defer compiled.deinit();
     try std.testing.expectEqual(@as(usize, 1), module.resources.len);
     try std.testing.expect(compiled.program.functions.len > 1);
+}
+
+test "approval placement cannot hide ordinary I/O or commitment before final revalidation" {
+    inline for (.{ Mode.placement_read, Mode.placement_commit }) |mode| {
+        var b = source.Builder.init(std.testing.allocator);
+        defer b.deinit();
+        var registry = agent.admission.Registry.init(std.testing.allocator);
+        defer registry.deinit();
+        try std.testing.expectError(error.InvalidApprovalPlacement, build(.{ .builder = &b, .registry = &registry }, mode));
+    }
 }
 
 test "protected source rejects raw commit, stolen private call, and speculative authority" {

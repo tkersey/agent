@@ -3,6 +3,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { decodeSchema, decodeValue, encodeValue } from '../../runtime/values.mjs';
+import { requirement } from '../../runtime/mobility/policy.mjs';
+import { schemas as mobilitySchemas } from '../../runtime/mobility/values.mjs';
 const root=resolve(import.meta.dirname,'../..');
 const [directory,...extra]=process.argv.slice(2);
 assert(directory && !extra.length,'usage: emit_inventory.mjs EMITTED_DIRECTORY');
@@ -16,6 +18,51 @@ async function add(path,role,bytes){
 }
 const textContent=Buffer.from('alpha\nbeta gamma\ndelta epsilon zeta\nomega\n');
 const subject=['fixture/story',[...createHash('sha256').update(textContent).digest()],BigInt(textContent.length)];
+// Pure fixture values and contracts; the traveling image owns all control.
+const mobility = {};
+for (const name of ['task','report','read','text-reply','subject','inspection','integer','unit','resolve','resolution','relocate','relocation-reply']) {
+  mobility[name] = await readFile(join(output, `mobility/${name}.schema`));
+  await add(`mobility/${name}.bin`, 'schema', mobility[name]);
+}
+await add('mobility/program.bpi3', 'image');
+await add('mobility/program-id.bin', 'synthetic-fixture');
+await add('mobility/initial.args', 'initial-args', encodeValue(decodeSchema(mobility.integer), 123n));
+examples.push({name:'mobility',image:'mobility/program.bpi3',initialArgs:'mobility/initial.args'});
+const contract = (operation, input, result, role, subjectRef, scope, audience = null, subjectVersion = null) => requirement({
+  operation, payloadSchema: mobility[input], resultSchema: mobility[result], role, subject: subjectRef, subjectVersion, scope, audience, trustDomain:'fixture',
+});
+const textVersion = Buffer.from(subject[1]).toString('hex');
+const readRequirement = contract('agent.text.read-chunk.v1','read','text-reply','read',subject[0],'read',null,textVersion);
+const presentRequirement = contract('agent.mobility.fixture.present.v1','inspection','unit','interaction','human-A','present','human-A');
+const placement = (wanted,moves,intent) => [[wanted,[[],{tag:0,value:null},{tag:0,value:null},8n<<20n]],intent,'fixture-shared',[moves,3]];
+await add('mobility/task-reply.bin','synthetic-fixture',encodeValue(decodeSchema(mobility.task),[123n,9001n,subject,placement([readRequirement],2,'inspect'),placement([presentRequirement],1,'present')]));
+await add('mobility/subject-value.bin','synthetic-fixture',encodeValue(decodeSchema(mobility.subject),subject));
+await add('mobility/unit-reply.bin','synthetic-fixture',new Uint8Array());
+await add('mobility/story.txt','synthetic-fixture',textContent);
+await add('mobility/cleanup.bin','synthetic-fixture',encodeValue(mobilitySchemas.requirements,[
+  contract('agent.text.close.v1','subject','unit','cleanup',subject[0],'close',null,textVersion),
+  contract('agent.mobility.fixture.child-cleanup.v1','integer','unit','cleanup','child','cleanup'),
+]));
+const approval = {};
+for (const name of ['task','report','proposal','read','delivery','human','human-reply','identifier','integer','boolean']) {
+  approval[name] = await readFile(join(output, `mobility-approval/${name}.schema`));
+  await add(`mobility-approval/${name}.bin`, 'schema', approval[name]);
+}
+const approvalRequirement = (operation,input,result,role,subjectRef,scope,audience=null) => requirement({
+  operation,payloadSchema:approval[input],resultSchema:approval[result],role,subject:subjectRef,subjectVersion:null,scope,audience,trustDomain:'fixture',
+});
+const approvalPlacement = (wanted,moves) => [[[wanted],[[],{tag:0,value:null},{tag:0,value:null},8n<<20n]],'fixture-write','shared',[moves,3]];
+const originalDocument = Buffer.from('An isolated fixture.\n');
+const proposal = [['document.txt',hash(originalDocument),'An approved replacement.\n','Replace the isolated fixture'],7n];
+await add('mobility-approval/program.bpi3','image');
+await add('mobility-approval/program-id.bin','synthetic-fixture');
+await add('mobility-approval/document.txt','synthetic-fixture',originalDocument);
+await add('mobility-approval/initial.args','initial-args',encodeValue(decodeSchema(approval.task),[9001n,proposal,
+  approvalPlacement(approvalRequirement('agent.mobility.fixture.target-read.v1','proposal','read','read','fixture/document','read'),3),
+  approvalPlacement(approvalRequirement('agent.interaction.exchange.v1.mobility.replace','human','human-reply','approval','human-A','approve','human-A'),2),
+  approvalPlacement(approvalRequirement('agent.mobility.fixture.replace.v1','proposal','delivery','commit','fixture/document','replace'),1),
+]));
+examples.push({name:'mobility-approval',image:'mobility-approval/program.bpi3',initialArgs:'mobility-approval/initial.args'});
 await add('text/tool.bmo1','component');
 for(const name of ['subject','task','result','report'])await add(`text/${name}-schema.bin`,'schema');
 await add('text/model-reply.bin','synthetic-fixture');

@@ -92,6 +92,22 @@ test "internal model participants cannot enter through a read-tool alias" {
     try std.testing.expectError(error.InvalidCompiledTool, agent.compile(a, System));
 }
 
+test "compiled imports cannot hide mobility behind a read role or harmless alias" {
+    for ([_][]const u8{ "agent.mobility.resolve.v1", "agent.mobility.relocate.v1" }) |identity| {
+        Tool.identity = identity;
+        defer Tool.identity = "fixture/compiled-read";
+        Tool.bytes = try objectNamed(false, false, false, identity);
+        defer a.free(Tool.bytes);
+        try std.testing.expectError(error.EffectRoleMismatch, agent.compile(a, System));
+        Tool.role = .mobility;
+        defer Tool.role = .read;
+        try std.testing.expectError(error.InvalidCompiledTool, agent.compile(a, System));
+        Tool.rename = true;
+        defer Tool.rename = false;
+        try std.testing.expectError(error.InvalidCompiledTool, agent.compile(a, System));
+    }
+}
+
 test "compiled internal requirements retain nominal and role bindings" {
     Tool.bytes = try objectProfile(false, false, true);
     defer a.free(Tool.bytes);

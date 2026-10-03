@@ -100,6 +100,21 @@ pub fn build(b: *std.Build) void {
     const g: Graph = .{ .b = b, .optimize = optimize, .agent = agent, .boundary = boundary, .data = data, .contracts = contracts, .gate = &source_guard.step };
     const check = b.step("agent4-authoring-tests", "Authoring test implementation");
     const aggregate = b.step("check-agent4", "Check authoring and pure contracts without World");
+    const mobility = b.step("check-mobility-authoring", "Check typed mobility contracts and protected admission");
+    const mobility_protocol = b.step("check-mobility-protocol", "Check canonical mobility records and Ed25519 bindings");
+    const protocol_tests = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_protocol.test.mjs" });
+    protocol_tests.removeEnvironmentVariable("NODE_TEST_CONTEXT");
+    mobility_protocol.dependOn(&protocol_tests.step);
+    check.dependOn(mobility_protocol);
+    const mobility_model = b.step("check-mobility-model", "Explore the bounded single-transfer custody model and timeout counterexample");
+    const model_run = b.addSystemCommand(&.{ "uv", "run", "--no-project", "test/agent4/mobility_model.py" });
+    mobility_model.dependOn(&model_run.step);
+    const model_properties = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_model.test.mjs" });
+    model_properties.removeEnvironmentVariable("NODE_TEST_CONTEXT");
+    mobility_model.dependOn(&model_properties.step);
+    g.testModule(mobility, g.module("src/mobility.zig"));
+    g.testModule(mobility, g.module("test/agent4/mobility_ensure.zig"));
+    check.dependOn(mobility);
     const lint = b.step("lint", "Check formatting and the Zig source inventory");
     const format_check = b.addSystemCommand(&.{ b.graph.zig_exe, "fmt", "--check", "build.zig", "build_agent4.zig", "src", "test/agent4", "test/consumers" });
     const paths = b.addSystemCommand(&.{ "sh", "tools/check_zig_paths.sh" });
@@ -286,6 +301,7 @@ pub fn build(b: *std.Build) void {
     const admitted = g.module("test/agent4/admission.zig");
     admitted.addImport("admission", g.helper("admission"));
     g.testModule(check, admitted);
+    g.testModule(mobility, admitted);
     const dialogue = g.module("test/agent4/dialogue_probe.zig");
     dialogue.addImport("interaction", g.helper("interaction"));
     g.testModule(check, dialogue);
@@ -344,6 +360,37 @@ pub fn build(b: *std.Build) void {
         g.emit(recursive_images, recursive_exe, &.{mode}, b.fmt("recursive/{s}.bin", .{mode}));
     emit.dependOn(recursive_images);
     const text_object = g.emitter("agent-text-object", g.module("test/agent4/text_object.zig"));
+    const mobility_consumer = g.emitter("agent-mobility-consumer", g.module("test/consumers/mobility/main.zig"));
+    const mobility_images = b.step("mobility-images", "Emit the independent mobility consumer");
+    const mobility_approval_images = b.step("mobility-approval-images", "Emit the movable approval and fixture replacement consumer");
+    emit.dependOn(mobility_approval_images);
+    const mobility_approval_consumer = g.emitter("agent-mobility-approval", g.module("test/consumers/mobility/approval.zig"));
+    g.emit(mobility_approval_images, mobility_approval_consumer, &.{"image"}, "mobility-approval/program.bpi3");
+    g.emit(mobility_approval_images, mobility_approval_consumer, &.{"identity"}, "mobility-approval/program-id.bin");
+    for ([_][]const u8{ "task", "report", "proposal", "read", "delivery", "human", "human-reply", "identifier", "integer", "boolean" }) |name|
+        g.emit(mobility_approval_images, mobility_approval_consumer, &.{name}, b.fmt("mobility-approval/{s}.schema", .{name}));
+    const mobility_ensure = g.emitter("agent-mobility-ensure", g.module("test/agent4/mobility_ensure.zig"));
+    for ([_][]const u8{ "loop-image", "loop-identity" }) |name|
+        g.emit(mobility_images, mobility_ensure, &.{name}, b.fmt("mobility/{s}.bin", .{name}));
+    for ([_][]const u8{ "image", "input", "result" }) |name|
+        g.emit(mobility_images, mobility_ensure, &.{name}, b.fmt("mobility/ensure-{s}.bin", .{name}));
+    const mobility_image = b.addRunArtifact(mobility_consumer);
+    mobility_image.addArg("image");
+    mobility_image.addFileArg(b.addRunArtifact(text_object).captureStdOut(.{}));
+    mobility_images.dependOn(&b.addInstallFileWithDir(mobility_image.captureStdOut(.{}), .prefix, "agent4/mobility/program.bpi3").step);
+    const mobility_identity = b.addRunArtifact(mobility_consumer);
+    mobility_identity.addArg("identity");
+    mobility_identity.addFileArg(b.addRunArtifact(text_object).captureStdOut(.{}));
+    mobility_images.dependOn(&b.addInstallFileWithDir(mobility_identity.captureStdOut(.{}), .prefix, "agent4/mobility/program-id.bin").step);
+    for ([_][]const u8{ "fixed-image", "fixed-identity", "yield-image", "yield-identity" }) |mode| {
+        const variant = b.addRunArtifact(mobility_consumer);
+        variant.addArg(mode);
+        variant.addFileArg(b.addRunArtifact(text_object).captureStdOut(.{}));
+        mobility_images.dependOn(&b.addInstallFileWithDir(variant.captureStdOut(.{}), .prefix, b.fmt("agent4/mobility/{s}.bin", .{mode})).step);
+    }
+    emit.dependOn(mobility_images);
+    for ([_][]const u8{ "task", "report", "resolve", "resolution", "relocate", "relocation-reply", "read", "text-reply", "subject", "inspection", "integer", "unit" }) |name|
+        g.emit(mobility_images, mobility_consumer, &.{b.fmt("{s}-schema", .{name})}, b.fmt("mobility/{s}.schema", .{name}));
     const text_link = g.emitter("agent-text-link", g.module("test/agent4/text_link.zig"));
     const text_object_bytes = b.addRunArtifact(text_object).captureStdOut(.{});
     emit.dependOn(&b.addInstallFileWithDir(text_object_bytes, .prefix, "agent4/text/tool.bmo1").step);
@@ -435,6 +482,17 @@ pub fn build(b: *std.Build) void {
     const parser_selection = b.step("check-parser-selection", "Execute two recursively assessed parser constructions");
     const selection_runtime = b.step("check-selection-runtime", "Check recursive assessment and completion isolation");
     const compiled_tools_check = b.step("check-compiled-tools", "Execute one compiled text tool in standalone and Agent callers");
+    const mobility_continuation = b.step("check-mobility-continuation", "Check explicit relocation, retained ownership, refusal and cancellation");
+    const mobility_native = b.step("check-mobility-native", "Compare native and WASM canonical mobility outcomes at every boundary");
+    const mobility_journal = b.step("check-mobility-journal", "Check durable custody, signed decisions and process-crash recovery");
+    const mobility_integration = b.step("check-mobility-integration", "Check real custody, placement, privacy and grants through the reference host");
+    const mobility_approval = b.step("check-mobility-approval", "Check exact live evidence and approved fixture mutation across custody moves");
+    g.testModule(mobility_approval, g.module("test/agent4/approval_probe.zig"));
+    const mobility_browser = b.step("check-mobility-browser-continuation", "Check browser/data/fresh-browser continuation (custody scaffold)");
+    const mobility_durable_browser = b.step("check-mobility-browser", "Check source-free browser execution through durable custody and a separate mTLS process");
+    const mobility_economy = b.step("check-mobility-economy", "Check matched mobility workload results, cache traffic and resident memory bounds");
+    const mobility_all = b.step("check-mobility", "Check all mobility authoring, runtime, custody, browser and economy lanes");
+    for ([_]*std.Build.Step{ mobility, mobility_protocol, mobility_model, mobility_continuation, mobility_native, mobility_journal, mobility_integration, mobility_approval, mobility_durable_browser, mobility_economy }) |step| mobility_all.dependOn(step);
     const components_check = b.step("check-component-tools", "Reuse three effectful objects in Agent and two standalone Programs");
     const component_objects = g.emitter("agent4-component-objects", g.module("test/agent4/component_objects.zig"));
     const component_link = g.emitter("agent4-component-link", g.module("test/agent4/component_link.zig"));
@@ -457,6 +515,16 @@ pub fn build(b: *std.Build) void {
         addBoundary(b, runtime_guard, source, target, optimize);
         runtime_guard.has_side_effects = true;
         _ = runtime_guard.captureStdOut(.{});
+        var previous_economy: ?*std.Build.Step = null;
+        for ([_][]const u8{ "manual", "fixed", "ensure", "stationary" }) |mode| {
+            const sample = b.addSystemCommand(&.{ "node", "test/agent4/mobility_measure.mjs", "--sample", mode, "warm", "16" });
+            sample.setEnvironmentVariable("AGENT_MOBILITY_RUNTIME", runtime_path);
+            sample.step.dependOn(mobility_images);
+            sample.step.dependOn(&runtime_guard.step);
+            if (previous_economy) |previous| sample.step.dependOn(previous);
+            previous_economy = &sample.step;
+            mobility_economy.dependOn(&sample.step);
+        }
         const intent_run = b.addSystemCommand(&.{ "node", "test/agent4/parser_intent_runtime.mjs", runtime_path });
         intent_run.step.dependOn(parser_episode);
         intent_run.step.dependOn(&runtime_guard.step);
@@ -508,6 +576,43 @@ pub fn build(b: *std.Build) void {
         text_check.step.dependOn(&runtime_guard.step);
         text_check.has_side_effects = true;
         compiled_tools_check.dependOn(&text_check.step);
+        const mobility_run = b.addSystemCommand(&.{ "node", "test/agent4/mobility_continuation.mjs", runtime_path });
+        mobility_run.step.dependOn(mobility_images);
+        mobility_run.step.dependOn(&runtime_guard.step);
+        mobility_run.has_side_effects = true;
+        mobility_continuation.dependOn(&mobility_run.step);
+        const ensure_run = b.addSystemCommand(&.{ "node", "test/agent4/mobility_ensure.mjs", runtime_path });
+        ensure_run.step.dependOn(mobility_images);
+        ensure_run.step.dependOn(&runtime_guard.step);
+        ensure_run.has_side_effects = true;
+        mobility_continuation.dependOn(&ensure_run.step);
+        const journal_run = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_journal.test.mjs" });
+        journal_run.removeEnvironmentVariable("NODE_TEST_CONTEXT");
+        const approval_run = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_approval.test.mjs" });
+        approval_run.removeEnvironmentVariable("NODE_TEST_CONTEXT");
+        approval_run.setEnvironmentVariable("AGENT_MOBILITY_RUNTIME", runtime_path);
+        approval_run.step.dependOn(mobility_approval_images);
+        approval_run.step.dependOn(&runtime_guard.step);
+        mobility_approval.dependOn(&approval_run.step);
+        journal_run.setEnvironmentVariable("AGENT_MOBILITY_RUNTIME", runtime_path);
+        journal_run.step.dependOn(mobility_images);
+        journal_run.step.dependOn(&runtime_guard.step);
+        journal_run.has_side_effects = true;
+        mobility_journal.dependOn(&journal_run.step);
+        const host_run = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_host.test.mjs", "test/agent4/mobility_deployment.test.mjs", "test/agent4/mobility_browser_bridge.test.mjs" });
+        host_run.removeEnvironmentVariable("NODE_TEST_CONTEXT");
+        host_run.setEnvironmentVariable("AGENT_MOBILITY_RUNTIME", runtime_path);
+        host_run.step.dependOn(mobility_images);
+        host_run.step.dependOn(&runtime_guard.step);
+        host_run.has_side_effects = true;
+        mobility_integration.dependOn(&host_run.step);
+        const transport_run = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_transport.test.mjs" });
+        transport_run.removeEnvironmentVariable("NODE_TEST_CONTEXT");
+        transport_run.setEnvironmentVariable("AGENT_MOBILITY_RUNTIME", runtime_path);
+        transport_run.step.dependOn(mobility_images);
+        transport_run.step.dependOn(&runtime_guard.step);
+        transport_run.has_side_effects = true;
+        mobility_integration.dependOn(&transport_run.step);
         const component_check = b.addSystemCommand(&.{ "node", "test/agent4/component_runtime.mjs" });
         component_check.addFileArg(component_objects.getEmittedBin());
         component_check.addFileArg(component_link.getEmittedBin());
@@ -516,6 +621,19 @@ pub fn build(b: *std.Build) void {
         component_check.has_side_effects = true;
         components_check.dependOn(&component_check.step);
         if (browser_tools_path) |browser_tools| {
+            const durable_browser_run = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_durable_browser.test.mjs" });
+            durable_browser_run.removeEnvironmentVariable("NODE_TEST_CONTEXT");
+            durable_browser_run.setEnvironmentVariable("AGENT_MOBILITY_RUNTIME", runtime_path);
+            durable_browser_run.setEnvironmentVariable("AGENT_MOBILITY_BROWSER_TOOLS", browser_tools);
+            durable_browser_run.step.dependOn(mobility_images);
+            durable_browser_run.step.dependOn(&runtime_guard.step);
+            durable_browser_run.has_side_effects = true;
+            mobility_durable_browser.dependOn(&durable_browser_run.step);
+            const mobility_browser_run = b.addSystemCommand(&.{ "node", "test/agent4/mobility_browser.mjs", runtime_path, browser_tools });
+            mobility_browser_run.step.dependOn(mobility_images);
+            mobility_browser_run.step.dependOn(&runtime_guard.step);
+            mobility_browser_run.has_side_effects = true;
+            mobility_browser.dependOn(&mobility_browser_run.step);
             const browser = b.addSystemCommand(&.{ "node", "test/agent4/text_browser.mjs" });
             browser.addFileArg(text_object.getEmittedBin());
             browser.addFileArg(text_link.getEmittedBin());
@@ -524,7 +642,12 @@ pub fn build(b: *std.Build) void {
             browser.step.dependOn(&runtime_guard.step);
             browser.has_side_effects = true;
             browser_check.dependOn(&browser.step);
-        } else browser_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
+        } else {
+            const missing_browser = b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools");
+            browser_check.dependOn(&missing_browser.step);
+            mobility_browser.dependOn(&missing_browser.step);
+            mobility_durable_browser.dependOn(&missing_browser.step);
+        }
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
         runtime_work.dependOn(parser_intent);
         runtime_work.dependOn(parser_circular);
@@ -573,6 +696,11 @@ pub fn build(b: *std.Build) void {
             .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data", .module = data } },
         });
         const native_exe = native_graph.emitter("agent4-native", native_module);
+        const mobility_native_run = b.addSystemCommand(&.{ "node", "test/agent4/mobility_continuation.mjs", runtime_path });
+        mobility_native_run.addFileArg(native_exe.getEmittedBin());
+        mobility_native_run.step.dependOn(mobility_images);
+        mobility_native_run.step.dependOn(&runtime_guard.step);
+        mobility_native.dependOn(&mobility_native_run.step);
         if (inquiry_host) {
             const source_free = b.addSystemCommand(&.{ "node", "test/agent4/parser_source_free.mjs", runtime_path });
             source_free.addFileArg(native_exe.getEmittedBin());
@@ -704,6 +832,14 @@ pub fn build(b: *std.Build) void {
     } else {
         const missing = b.addFail("provide -Dworld-runtime=/absolute/authenticated/world-runtime");
         compiled_tools_check.dependOn(&missing.step);
+        mobility_continuation.dependOn(&missing.step);
+        mobility_native.dependOn(&missing.step);
+        mobility_journal.dependOn(&missing.step);
+        mobility_integration.dependOn(&missing.step);
+        mobility_approval.dependOn(&missing.step);
+        mobility_browser.dependOn(&missing.step);
+        mobility_durable_browser.dependOn(&missing.step);
+        mobility_economy.dependOn(&missing.step);
         components_check.dependOn(&missing.step);
         browser_check.dependOn(&missing.step);
         native_checks.dependOn(&missing.step);

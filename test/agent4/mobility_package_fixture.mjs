@@ -15,8 +15,8 @@ import { READ, CLOSE } from '../../runtime/text_inspection.mjs';
 import { hostFixture } from './mobility_host_fixture.mjs';
 import { certificates } from './mobility_tls_fixture.mjs';
 
-export async function packageFixture(t, { dataExecution = 'node' } = {}) {
-  const f = await hostFixture(t, { register: false, cleanup: false }), tls = await certificates(f.area);
+export async function packageFixture(t, { dataExecution = 'node', imageMode = 'ensure' } = {}) {
+  const f = await hostFixture(t, { register: false, cleanup: false, imageMode }), tls = await certificates(f.area);
   f.stop('A'); f.stop('B');
   const input = join(f.area, 'inputs'), output = join(f.area, 'archive'), extracted = join(f.area, 'extracted');
   await mkdir(input); await mkdir(extracted);

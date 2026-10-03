@@ -15,7 +15,7 @@ power-loss behavior. Process-crash tests use local APFS and SQLite EXTRA.
 |---|---|---|
 | A01 | `test/consumers/mobility` independently builds public authoring; `mobility-images`, `mobility-approval-images` emit actual programs. | PASS |
 | A02 | `mobility_host.test.mjs`: “Here executes the same typed file operation locally without a custody move”. | PASS |
-| A03 | `mobility_continuation.mjs` exact parked-state/request restore; `mobility_durable_browser.test.mjs` retained task/marker through both moves. | PASS |
+| A03 | `mobility_continuation.mjs` exact parked-state/request restore; `mobility_durable_browser.test.mjs` retained task/marker through both moves. The yielding consumer resumes top-level yields before work and after each move, with owned cleanup retained; Node tests also restart each yielded custodian. | PASS |
 | A04 | Main consumer retains an owned generator, its scoped interpretation and captured protected cleanup; fresh Worker result/cleanup assertions. | PASS |
 | A05 | `admission.zig` direct, recursive, higher-order and handler cases; `mobility_ensure.zig` indirect speculation; `compiled_tool.zig` reserved mobility read-role/alias rejection. | PASS |
 | A06 | `mobility_host.test.mjs`: actual dispatch mismatches; file-version conflict; `mobility_approval.test.mjs` final precondition conflict. | PASS |
@@ -43,7 +43,7 @@ power-loss behavior. Process-crash tests use local APFS and SQLite EXTRA.
 | D06 | Journal acceptance/refusal restart assertions compare exact receipt bytes. | PASS |
 | D07 | Acquired reply persists through restart; old executor cannot publish and new executor consumes the saved reply. | PASS |
 | D08 | Three actual World arena-exhaustion cases assert input/working/output capacity errors, preserved checkpoint/reply/occurrence and no repeated task input after recovery. Record-quota tests cover all six producers, exact replacement counts, atomic rollback and restart. | PASS |
-| D09 | Two custodians concurrently attach to the same journal; one loses CAS. Existing stale version/assignment publications reject. | PASS |
+| D09 | Two custodians concurrently attach to the same journal; one loses CAS. Existing stale version/assignment publications reject, including a browser successor computed from a yield before cancellation changes its assignment. | PASS |
 | D10 | Artifact-before/after and acceptance transaction faults never publish accepted custody with missing artifacts. | PASS |
 | D11 | mTLS staging/collection test retains pending, accepted recovery inputs and terminal decisions. | PASS |
 | D12 | Known changed external deployment generation rejects; guide forbids silent old-backup activation and documents undetectable rollback. | PASS |
@@ -119,3 +119,11 @@ invocation omitted the required browser-tools option: the other steps passed,
 and the aggregate correctly failed. The missing browser lane was then run with
 the locked tools and passed in Chromium and Firefox. Four additional quota
 boundary cases brought the separately rerun journal suite to 72 passing tests.
+
+The yielded-continuation repair then passed the complete ReleaseSafe
+`check-mobility emit-agent4 lint` aggregate with the explicit locked browser
+tools: 192 Node cases, including ordinary and yielding two-hop witnesses in both
+engines, plus the native and structural checks. The new compiled yield fixture
+first reproduced the missing progress. One new host assertion initially used
+JSON strings instead of the local binding's bigint offsets; correcting that
+oracle preserved the required exact offsets and all continuation assertions.

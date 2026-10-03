@@ -382,11 +382,11 @@ pub fn build(b: *std.Build) void {
     mobility_identity.addArg("identity");
     mobility_identity.addFileArg(b.addRunArtifact(text_object).captureStdOut(.{}));
     mobility_images.dependOn(&b.addInstallFileWithDir(mobility_identity.captureStdOut(.{}), .prefix, "agent4/mobility/program-id.bin").step);
-    for ([_][]const u8{ "fixed-image", "fixed-identity" }) |mode| {
-        const fixed = b.addRunArtifact(mobility_consumer);
-        fixed.addArg(mode);
-        fixed.addFileArg(b.addRunArtifact(text_object).captureStdOut(.{}));
-        mobility_images.dependOn(&b.addInstallFileWithDir(fixed.captureStdOut(.{}), .prefix, b.fmt("agent4/mobility/{s}.bin", .{mode})).step);
+    for ([_][]const u8{ "fixed-image", "fixed-identity", "yield-image", "yield-identity" }) |mode| {
+        const variant = b.addRunArtifact(mobility_consumer);
+        variant.addArg(mode);
+        variant.addFileArg(b.addRunArtifact(text_object).captureStdOut(.{}));
+        mobility_images.dependOn(&b.addInstallFileWithDir(variant.captureStdOut(.{}), .prefix, b.fmt("agent4/mobility/{s}.bin", .{mode})).step);
     }
     emit.dependOn(mobility_images);
     for ([_][]const u8{ "task", "report", "resolve", "resolution", "relocate", "relocation-reply", "read", "text-reply", "subject", "inspection", "integer", "unit" }) |name|

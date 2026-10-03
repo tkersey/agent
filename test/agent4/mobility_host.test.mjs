@@ -11,6 +11,41 @@ import { version } from '../../runtime/mobility/custody.mjs';
 import { WorldAdmission } from '../../runtime/mobility/admission.mjs';
 import { pumpDeployment } from '../../runtime/mobility/deployment.mjs';
 
+test('yielded control resumes through both custody moves and custodian restarts', async t => {
+  const f = await hostFixture(t, { imageMode: 'yielding' });
+  assert.equal(f.result('A').kind, 'yielded');
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'yielded');
+  assert.equal(f.counters.A.task, 1); assert.equal(f.counters.A.cleanup, 0);
+  f.restart('A');
+  const outbound = await f.hosts.A.run(f.id); assert.equal(outbound.kind, 'offered');
+  assert.equal((await f.hosts.A.retryTransfer(outbound.transfer_id)).kind, 'accepted');
+  assert.equal((await f.hosts.B.run(f.id)).kind, 'yielded');
+  assert.deepEqual(f.file.counts().reads, []);
+  f.restart('B');
+  const inbound = await f.hosts.B.run(f.id); assert.equal(inbound.kind, 'offered');
+  assert.equal((await f.hosts.B.retryTransfer(inbound.transfer_id)).kind, 'accepted');
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'yielded');
+  assert.equal(f.counters.A.present, 0);
+  f.restart('A');
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal');
+  assert.equal(f.result('A').kind, 'completed');
+  assert.equal(f.hosts.A.status(f.id).epoch, '2');
+  assert.equal(f.counters.A.task, 1); assert.equal(f.counters.A.present, 1);
+  assert.equal(f.counters.A.side, 1); assert.equal(f.counters.A.cleanup, 1);
+  assert.deepEqual(f.file.counts().reads, [0n, 16n, 32n]);
+});
+
+test('pending cancellation takes precedence over resuming a yielded owned continuation', async t => {
+  const f = await hostFixture(t, { imageMode: 'yielding' });
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'yielded');
+  assert.equal(f.counters.A.task, 1);
+  await f.hosts.A.cancelRun(f.id, 'stop'); f.revoked.A.add('tenant/user'); f.restart('A');
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal');
+  assert.equal(f.result('A').kind, 'cancelled');
+  assert.equal(f.counters.A.cleanup, 1); assert.equal(f.counters.A.side, 0);
+  assert.equal(f.counters.deliveries.B, 0); assert.deepEqual(f.file.counts().reads, []);
+});
+
 test('peer authentication cannot register a principal outside the configured issuer grant', async t => {
   const f = await hostFixture(t), { signature: _, ...registered } = parse(f.registration);
   const other = { ...registered, run_id: runId('A'), issuer_id: 'A', key_id: 'A' };

@@ -7,6 +7,7 @@ const source = boundary.source;
 const text = agent.tools.textInspection;
 const mobility = agent.mobility;
 var fixed_placement = false;
+var yielding = false;
 
 pub const Task = struct {
     task_id: u64,
@@ -142,11 +143,13 @@ const Application = struct {
         const arrived = try body.caseOf(outbound, "Ready");
         const refused = try body.caseOf(outbound, "Failed");
         const work = arrived.body();
+        if (yielding) _ = try work.yieldNow();
         const subject = try work.field(task, "subject");
         const result = try a.interop.term(work, try agent.tools.perform(ctx, tool, try a.interop.valueId(work, subject)), try e.schema(text.Result));
         const inbound = try e.place(work, try work.field(task, "inbound"));
         const home = try work.caseOf(inbound, "Ready");
         const away = try work.caseOf(inbound, "Failed");
+        if (yielding) _ = try home.body().yieldNow();
         _ = try home.body().perform(present_op, result);
         const returned = try work.match(inbound, &.{ try home.ret(result), try away.ret(try e.refused(away.body())) });
         try c.define(inspect, try body.ret(try body.match(outbound, &.{ try arrived.ret(returned), try refused.ret(try e.refused(refused.body())) })));
@@ -161,6 +164,7 @@ const Application = struct {
         const start_type = try c.handledSchema(child.handler());
         const entry = try c.function("retained caller", &.{.{ .name = "task_id", .schema = integer }}, try e.schema(Report), &.{ task_op, resolve_op, move_op, read_op, close_op, present_op, side_op, cleanup_op });
         const root = try c.body(entry);
+        if (yielding) _ = try root.yieldNow();
         const input = try root.perform(task_op, try root.parameter("task_id"));
         const marker = try root.field(input, "caller_marker");
         const task_id = try root.field(input, "task_id");
@@ -183,6 +187,7 @@ const Application = struct {
         const pending = try root.caseOf(suspended, "yielded");
         const parts = try pending.body().destructure(pending.payload());
         const future = try parts.get("future");
+        if (yielding) _ = try pending.body().yieldNow();
         const inspection = try pending.body().call(inspect, &.{.{ .name = "task", .value = input }});
         const resumed = try pending.body().resumePackage(future, try pending.body().constant(void, {}));
         const done = try pending.body().caseOf(resumed, "done");
@@ -217,7 +222,8 @@ pub fn main(init: std.process.Init) !void {
         }
     }
     fixed_placement = std.mem.eql(u8, mode, "fixed-image") or std.mem.eql(u8, mode, "fixed-identity");
-    if (!fixed_placement and !std.mem.eql(u8, mode, "image") and !std.mem.eql(u8, mode, "identity")) return error.InvalidMode;
+    yielding = std.mem.eql(u8, mode, "yield-image") or std.mem.eql(u8, mode, "yield-identity");
+    if (!fixed_placement and !yielding and !std.mem.eql(u8, mode, "image") and !std.mem.eql(u8, mode, "identity")) return error.InvalidMode;
     const path = args.next() orelse return error.ExpectedObject;
     const bytes = try std.Io.Dir.cwd().readFileAlloc(init.io, path, init.gpa, .limited(8 << 20));
     defer init.gpa.free(bytes);
@@ -225,7 +231,7 @@ pub fn main(init: std.process.Init) !void {
     defer Tool.object = &.{};
     var compiled = try agent.compile(init.gpa, System);
     defer compiled.deinit();
-    if (std.mem.eql(u8, mode, "identity") or std.mem.eql(u8, mode, "fixed-identity")) return write(init, &(try boundary.data.program_image.identity(init.gpa, compiled.program)));
+    if (std.mem.eql(u8, mode, "identity") or std.mem.eql(u8, mode, "fixed-identity") or std.mem.eql(u8, mode, "yield-identity")) return write(init, &(try boundary.data.program_image.identity(init.gpa, compiled.program)));
     const image = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(image);
     _ = try compiled.encode(init.gpa, image);

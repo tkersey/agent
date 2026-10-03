@@ -9,8 +9,8 @@ import { encodeValue } from '../../runtime/values.mjs';
 import { hostFixture } from './mobility_host_fixture.mjs';
 import { certificates } from './mobility_tls_fixture.mjs';
 
-async function bridge(t) {
-  const f = await hostFixture(t, { localData: true }), tls = await certificates(f.area);
+async function bridge(t, options = {}) {
+  const f = await hostFixture(t, { localData: true, ...options }), tls = await certificates(f.area);
   const origin = await serveBrowser(f.hosts.A, { ...tls.A, audience: 'human-A', runtimePath: process.env.AGENT_MOBILITY_RUNTIME,
     kernelBytes: await readFile(join(process.env.AGENT_MOBILITY_RUNTIME, 'world-kernel.wasm')), maximumAssignments: 1,
     authenticate: req => ({ sessionId: req.headers.cookie ?? 'first', principal: 'user', tenant: 'tenant', audiences: ['human-A'] }) });
@@ -30,6 +30,29 @@ async function bridge(t) {
   }
   return { ...f, api };
 }
+
+test('cancellation fences a browser successor computed from a yielded checkpoint', async t => {
+  const f = await bridge(t, { imageMode: 'yielding' });
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'yielded');
+  const csrf = (await f.api('/v1/browser/session')).json().csrf;
+  const route = operation => `/v1/browser/runs/${f.id}/${operation}`;
+  const assignment = (await f.api(route('attach'), { method: 'POST', csrf })).json();
+  const options = { assignment, csrf };
+  const outcome = (await f.api(route('outcome'), options)).bytes;
+  const executor = await f.admissions.A.resume(await f.admissions.A.stored(f.image, outcome, f.deployment.programId));
+  try {
+    const command = (await f.api(route('command'), { ...options, method: 'POST' })).json();
+    assert.equal(command.kind, 'drive'); assert.equal(command.control, 'resume_yield');
+    const next = await executor.drive({ kind: command.control });
+    assert.equal((await f.api(route('cancel'), { ...options, method: 'POST', body: canonical({ reason: 'stop' }) })).status, 200);
+    const late = await f.api(route('report'), { ...options, method: 'POST', body: f.admissions.A.read(next).outcome });
+    assert.equal(late.status, 409); assert.equal(late.json().error, 'StaleAssignment');
+    assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal');
+    assert.equal(f.result('A').kind, 'cancelled');
+    assert.equal(f.counters.A.cleanup, 1); assert.equal(f.counters.A.side, 0);
+    assert.deepEqual(f.file.counts().reads, []);
+  } finally { executor.retire(); }
+});
 
 test('browser sessions do not consume historical capacity and CSRF remains session-bound', async t => {
   const f = await bridge(t), first = (await f.api('/v1/browser/session')).json().csrf;

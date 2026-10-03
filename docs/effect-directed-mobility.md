@@ -333,6 +333,13 @@ ordinary leaf dispatch still requires its current grant. A failed run in the
 Node pump reports its run ID and bounded reason on the service's stderr without
 preventing other runs from being visited.
 
+`Custodian.step()` and the browser's Continue action resume a committed
+`Yielded` checkpoint with World's `resume_yield` control; `Progressed` uses
+`none`. `Custodian.run()` returns when execution produces a new yield, so the
+next call or service-pump iteration resumes it. Pending cancellation takes
+precedence. Yielding never creates a relocation reply slot or bypasses custody,
+executor-version checks, or durable successor publication.
+
 Stop the peer service before local mutation/recovery commands. These commands
 print metadata and receipts, not private captured values:
 

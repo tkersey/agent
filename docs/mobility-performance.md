@@ -5,7 +5,7 @@ retains a child and cleanup marker, and presents the result. The moving variants
 complete A→B→A (epochs 0→1→2); stationary execution has the same capabilities
 and SQLite durability locally. No paid provider or production credential is used.
 The [raw observations](../conformance/agent4/mobility-measurements.json) include
-640 samples, artifact/input identities, phase timings, browser observations and
+800 samples, artifact/input identities, phase timings, browser observations and
 fresh-process recovery. These are bounded local measurements, not WAN estimates.
 
 The platform was Apple M2 Pro, Darwin 27.2 arm64, local APFS, Node 26.10.0,
@@ -203,6 +203,39 @@ working-memory bounds remain as reported above. Browser observations were
 Chromium 878.739 ms and Firefox 1006.299 ms. Five fresh-process
 recovery observations had median internal time 68.478 ms and median process
 time 181.345 ms. The same local measurement limits apply.
+
+## Yielded-continuation repair measurements
+
+A third follow-up adds 160 samples after both execution controllers adopted the
+same continuation selector. The raw `post_yield_repairs` section records the
+dirty `a94f923` observation and actual runtime/harness file hashes. The matched
+workload and compiled images are unchanged; the separate yielding consumer is
+a correctness discriminator, not an input to these timing comparisons. All 640
+earlier observations remain intact. No causal speedup is claimed.
+
+| Mode | Cache | R | Total median ms | First read median ms | Commits |
+|---|---|---:|---:|---:|---:|
+| manual | cold | 1 | 45.063 | 27.337 | 0 |
+| manual | cold | 16 | 57.148 | 41.505 | 0 |
+| manual | warm | 1 | 19.861 | 8.639 | 0 |
+| manual | warm | 16 | 32.725 | 20.114 | 0 |
+| fixed | cold | 1 | 486.066 | 195.127 | 41 |
+| fixed | cold | 16 | 530.102 | 265.084 | 41 |
+| fixed | warm | 1 | 432.045 | 157.837 | 40 |
+| fixed | warm | 16 | 467.916 | 181.933 | 40 |
+| ensure | cold | 1 | 548.783 | 231.148 | 47 |
+| ensure | cold | 16 | 601.865 | 300.305 | 47 |
+| ensure | warm | 1 | 532.556 | 193.397 | 46 |
+| ensure | warm | 16 | 576.114 | 243.642 | 46 |
+| stationary | cold | 1 | 334.530 | 103.481 | 32 |
+| stationary | cold | 16 | 299.072 | 108.461 | 32 |
+| stationary | warm | 1 | 391.985 | 100.428 | 32 |
+| stationary | warm | 16 | 338.557 | 98.776 | 32 |
+
+All structural guards passed. The unchanged workload also completed in Chromium
+(895.674 ms) and Firefox (1052.605 ms). Five fresh-process recoveries
+had median internal time 62.622 ms and median process time
+172.063 ms. These use the same bounded local method and limitations.
 
 ## Reproduction
 

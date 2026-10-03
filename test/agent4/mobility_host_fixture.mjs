@@ -15,10 +15,11 @@ import { subject, bindSubject, READ, CLOSE } from '../../runtime/text_inspection
 import { fileBinding } from '../../runtime/text_file.mjs';
 export async function hostFixture(t, { privateData = false, privateCapture = false, lostAck = false, uncertainRead = false, register = true, cleanup = true, localData = false, expectedInspection = { tag: 0, value: [42n, 4n] }, imageMode = 'ensure', explicitDestination = false, requirementCount = 1, instrumentWorld = value => value, journalFault = () => {} } = {}) {
   assert.ok(process.env.AGENT_MOBILITY_RUNTIME, 'AGENT_MOBILITY_RUNTIME required');
-  assert.ok(['ensure', 'fixed'].includes(imageMode)); assert.ok(Number.isInteger(requirementCount) && requirementCount >= 1 && requirementCount <= 16);
+  assert.ok(['ensure', 'fixed', 'yielding'].includes(imageMode)); assert.ok(Number.isInteger(requirementCount) && requirementCount >= 1 && requirementCount <= 16);
   const runtime = resolve(process.env.AGENT_MOBILITY_RUNTIME), identity = verifyRuntime(runtime), world = instrumentWorld(await import(pathToFileURL(identity.entrypoint)));
-  const kernelBytes = await readFile(identity.kernelPath), image = await readFile(`zig-out/agent4/mobility/${imageMode === 'fixed' ? 'fixed-image.bin' : 'program.bpi3'}`);
-  const programId = (await readFile(`zig-out/agent4/mobility/${imageMode === 'fixed' ? 'fixed-identity.bin' : 'program-id.bin'}`)).toString('hex');
+  const prefix = imageMode === 'yielding' ? 'yield' : 'fixed';
+  const kernelBytes = await readFile(identity.kernelPath), image = await readFile(`zig-out/agent4/mobility/${imageMode === 'ensure' ? 'program.bpi3' : `${prefix}-image.bin`}`);
+  const programId = (await readFile(`zig-out/agent4/mobility/${imageMode === 'ensure' ? 'program-id.bin' : `${prefix}-identity.bin`}`)).toString('hex');
   const area = await mkdtemp(join(tmpdir(), 'mobility-host-'));
   const content = new TextEncoder().encode('alpha\nbeta gamma\ndelta epsilon zeta\nomega\n');
   await writeFile(join(area, 'story.txt'), content);

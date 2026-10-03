@@ -11,10 +11,11 @@ import { packageFixture } from './mobility_package_fixture.mjs';
 assert.ok(process.env.AGENT_MOBILITY_BROWSER_TOOLS, 'AGENT_MOBILITY_BROWSER_TOOLS required');
 const { chromium, firefox } = await import(pathToFileURL(join(resolve(process.env.AGENT_MOBILITY_BROWSER_TOOLS), 'node_modules/playwright-core/index.mjs')));
 
-for (const [engine, type] of [['chromium', chromium], ['firefox', firefox]]) test(`${engine}: source-free durable browser→separate mTLS Node process→fresh browser`, async t => {
-  const f = await packageFixture(t), { tls, serveBrowser } = f;
+for (const imageMode of ['ensure', 'yielding']) for (const [engine, type] of [['chromium', chromium], ['firefox', firefox]]) test(`${engine} ${imageMode}: source-free durable browser→separate mTLS Node process→fresh browser`, async t => {
+  const f = await packageFixture(t, { imageMode }), { tls, serveBrowser } = f;
+  const measure = process.env.AGENT_MOBILITY_BROWSER_MEASURE && imageMode === 'ensure';
   const timings = { mirror_publication_ms: 0, command_ms: 0 };
-  if (process.env.AGENT_MOBILITY_BROWSER_MEASURE) for (const [method, metric] of [['publishExecutor', 'mirror_publication_ms'], ['executorCommand', 'command_ms']]) {
+  if (measure) for (const [method, metric] of [['publishExecutor', 'mirror_publication_ms'], ['executorCommand', 'command_ms']]) {
     const original = f.hosts.A[method].bind(f.hosts.A);
     f.hosts.A[method] = async (...args) => { const begin = performance.now(); try { return await original(...args); } finally { timings[metric] += performance.now() - begin; } };
   }
@@ -37,10 +38,11 @@ for (const [engine, type] of [['chromium', chromium], ['firefox', firefox]]) tes
   const page = await context.newPage(); await page.goto(origin.url);
   await page.evaluate(async ({ id }) => {
     const { BrowserExecutor } = await import('/client.mjs');
-    window.presentations = []; window.snapshots = []; window.payloadLog = [];
+    window.presentations = []; window.snapshots = []; window.payloadLog = []; window.yields = 0;
     window.bridge = await new BrowserExecutor(id, value => {
       document.querySelector('#request').textContent = JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item);
       window.snapshots.push(Array.from(window.bridge.output)); window.payloadLog.push(document.querySelector('#request').textContent);
+      if (value.kind === 'yielded') window.yields++;
       if (value.operation?.endsWith('.present.v1')) window.presentations.push(JSON.parse(document.querySelector('#request').textContent));
     }).initialize();
     window.api = (...args) => window.bridge.api(...args);
@@ -67,6 +69,7 @@ for (const [engine, type] of [['chromium', chromium], ['firefox', firefox]]) tes
   const output = new Uint8Array(await page.evaluate(() => Array.from(window.bridge.output)));
   assert.deepEqual(decodeValue(f.schemas.report, f.world.decodeOutcome(output).value), [123n, 9001n, { tag: 0, value: [42n, 4n] }, 91n]);
   assert.equal(await page.evaluate(() => window.bridge.retired), 2);
+  assert.equal(await page.evaluate(() => window.yields), imageMode === 'yielding' ? 3 : 0);
   assert.deepEqual(await page.evaluate(() => window.presentations), [{ kind: 'requested', operation: 'agent.mobility.fixture.present.v1', payload: { tag: 0, value: ['42', '4'] } }]);
   assert.deepEqual(f.dataStatistics()['agent.text.read-chunk.v1'], { calls: 3, reads: ['0', '16', '32'], releases: 0 });
   assert.equal(f.dataStatistics()['agent.text.close.v1'].calls, 1);
@@ -82,7 +85,7 @@ for (const [engine, type] of [['chromium', chromium], ['firefox', firefox]]) tes
   }
   for (const [label, bytes] of artifacts) for (const secret of privateSeeds) assert.equal(Buffer.from(bytes).includes(secret), false, `credential sentinel leaked into ${label}`);
   assert.deepEqual(await page.evaluate(() => [localStorage.length, sessionStorage.length, document.cookie]), [0, 0, '']);
-  if (process.env.AGENT_MOBILITY_BROWSER_MEASURE) await appendFile(process.env.AGENT_MOBILITY_BROWSER_MEASURE, JSON.stringify({ engine, version: browser.version(), total_ms: totalMs, ...timings,
+  if (measure) await appendFile(process.env.AGENT_MOBILITY_BROWSER_MEASURE, JSON.stringify({ engine, version: browser.version(), total_ms: totalMs, ...timings,
     method: 'Attach Worker A1 through terminal A2 including separate Node-process retirement; browser launch/provisioning excluded; test orchestration and bounded host polling included. Mirror publication includes durable journal commit.' }) + '\n');
   const replacementPid = await f.startB(); assert.notEqual(replacementPid, f.pid); await f.stopB();
   assert.equal(f.dataStatistics()['agent.text.read-chunk.v1'].calls, 0, 'departed custody must not restart application work');

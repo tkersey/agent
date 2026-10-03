@@ -95,7 +95,8 @@ export class Custodian {
     const occurrence = this.#journal.occurrence(run.current_occurrence_id);
     if (run.cancel_requested !== null && !run.cancel_applied && (!occurrence || occurrence.status === 'READY' || (occurrence.status === 'SETTLED_REPLY' && occurrence.operation === RELOCATE))) return { kind: 'cancel', reason: run.cancel_requested };
     if (occurrence?.status === 'SETTLED_REPLY') return { kind: 'reply', value: this.#journal.artifact(run.tenant_ref, occurrence.reply_digest) };
-    if (!occurrence && run.outcome_kind === 'progressed') return { kind: 'none' };
+    if (!occurrence && ['progressed', 'yielded'].includes(run.outcome_kind))
+      return { kind: run.outcome_kind === 'yielded' ? 'resume_yield' : 'none' };
     return null;
   }
   async executorCommand(id, wanted) {
@@ -176,16 +177,7 @@ export class Custodian {
       if (initial.cancel_requested !== null && (status === 'OFFERED' || (status === 'DEPARTED' && !initial.cancel_forwarded))) return this.cancelRun(id, initial.cancel_requested);
       if (status !== 'ACTIVE') return { kind: status.toLowerCase(), status: this.status(id) };
       const { run, cached } = await this.#resident(id);
-      const occurrence = this.#journal.occurrence(run.current_occurrence_id);
-      let command;
-      if (run.cancel_requested !== null && !run.cancel_applied && (!occurrence || occurrence.status === 'READY' || (occurrence.status === 'SETTLED_REPLY' && occurrence.operation === RELOCATE)))
-        command = { kind: 'cancel', reason: run.cancel_requested };
-      else if (occurrence?.status === 'SETTLED_REPLY') command = { kind: 'reply', value: this.#journal.artifact(run.tenant_ref, occurrence.reply_digest) };
-      else if (occurrence && ['UNKNOWN', 'DISPATCHING'].includes(occurrence.status)) return { kind: 'effect_unknown', status: this.status(id) };
-      else if (!occurrence) {
-        if (run.outcome_kind === 'yielded') return { kind: 'yielded', status: this.status(id) };
-        command = { kind: 'none' };
-      }
+      const command = this.#command(run);
       if (command) {
         const input = command.kind === 'reply' ? { kind: 'reply', reply_digest: hash(command.value) } : command;
         try {
@@ -193,9 +185,11 @@ export class Custodian {
           const published = this.#journal.publishOutcome(id, version(run), input, next);
           cached.version = version(published);
           if (published.status === 'TERMINAL') this.#retire(id);
-          return { kind: published.status === 'TERMINAL' ? 'terminal' : 'published', status: this.status(id) };
+          return { kind: published.status === 'TERMINAL' ? 'terminal' : published.outcome_kind === 'yielded' ? 'yielded' : 'published', status: this.status(id) };
         } catch (error) { this.#retire(id); throw error; }
       }
+      const occurrence = this.#journal.occurrence(run.current_occurrence_id);
+      if (occurrence && ['UNKNOWN', 'DISPATCHING'].includes(occurrence.status)) return { kind: 'effect_unknown', status: this.status(id) };
       return await this.#dispatch(run, cached.executor.current());
     } finally { this.#busy.delete(id); }
   }

@@ -6,6 +6,7 @@ const a = boundary.authoring;
 const source = boundary.source;
 const text = agent.tools.textInspection;
 const mobility = agent.mobility;
+var fixed_placement = false;
 
 pub const Task = struct {
     task_id: u64,
@@ -63,13 +64,58 @@ const Emit = struct {
         return op;
     }
     fn place(e: Emit, body: *a.Body, input: *const a.Value) !*const a.Value {
-        const term = try mobility.ensure(e.agent_context, try a.interop.valueId(body, input), try e.agent_context.builder.constant(void, {}));
+        const term = if (fixed_placement) try fixedPlace(e.agent_context, try a.interop.valueId(body, input)) else try mobility.ensure(e.agent_context, try a.interop.valueId(body, input), try e.agent_context.builder.constant(void, {}));
         return a.interop.term(body, term, try e.schema(mobility.PlacementResult));
     }
     fn refused(e: Emit, body: *a.Body) !*const a.Value {
         return body.variant(try e.schema(text.Result), "unavailable", try body.constant(void, {}));
     }
 };
+
+// Measurement counterpart: one explicit authored destination, with identical
+// capability requirements and custody. It is not another public ensure API.
+fn fixedPlace(ctx: agent.Context, input: source.Id) !source.Id {
+    const b = ctx.builder;
+    const cache = try b.specialization(source.Id, "mobility.fixture.fixed", .{});
+    const function = cache.cached orelse create: {
+        const d = try mobility.define(ctx);
+        const result = try ctx.schema(mobility.PlacementResult);
+        const f = try b.declare(&.{try ctx.schema(mobility.EnsureInput)}, result, &.{d.relocate}, &.{});
+        const value = try b.reference(b.parameter(f, 0));
+        const resolve = try b.primitive(try ctx.schema(mobility.ResolveInput), .field, &.{value}, 0);
+        const constraints = try b.primitive(try ctx.schema(mobility.Constraints), .field, &.{resolve}, 1);
+        const required = try b.primitive(try ctx.schema(?mobility.Identifier), .field, &.{constraints}, 1);
+        const budget = try b.primitive(try ctx.schema(mobility.Budget), .field, &.{value}, 3);
+        const moves = try b.primitive(try b.scalar(u32), .field, &.{budget}, 0);
+        const absent = try b.variable(try b.scalar(void));
+        const host = try b.variable(try ctx.schema(mobility.Identifier));
+        const arrived = try b.variable(try ctx.schema(mobility.Arrival));
+        const refused = try b.variable(try ctx.schema(mobility.Refusal));
+        const reply = try b.variable(try ctx.schema(mobility.RelocationReply));
+        const payload = try b.primitive(try ctx.schema(mobility.RelocateInput), .product, &.{
+            try b.reference(host),
+            try b.primitive(try ctx.schema(mobility.Requirements), .field, &.{resolve}, 0),
+            try b.primitive(try ctx.schema(mobility.Identifier), .field, &.{value}, 1),
+            try b.primitive(try ctx.schema(mobility.Identifier), .field, &.{value}, 2),
+            moves,
+        }, 0);
+        const ready = try b.primitive(try ctx.schema(mobility.Placement), .product, &.{
+            try b.primitive(try ctx.schema(mobility.Observation), .field, &.{try b.reference(arrived)}, 4),
+            try b.value(.{ .schema = try b.scalar(u32), .expression = .{ .primitive = .{ .opcode = .integer_sub, .operands = &.{ moves, try b.constant(u32, 1) }, .failures = &.{.{ .kind = .arithmetic_overflow, .value = try b.failureLiteral(try b.constant(void, {})) }} } } }),
+        }, 0);
+        const denied = try b.pure(try b.primitive(result, .variant, &.{try b.primitive(try ctx.schema(mobility.Reason), .variant, &.{try b.constant(void, {})}, 9)}, 1));
+        const relocate = try b.bind(reply, try mobility.relocate(ctx, f, payload), try b.term(.{ .match_sum = .{ .value = try b.reference(reply), .cases = &.{
+            .{ .variable = arrived, .body = try b.pure(try b.primitive(result, .variant, &.{ready}, 0)) },
+            .{ .variable = refused, .body = try b.pure(try b.primitive(result, .variant, &.{try b.primitive(try ctx.schema(mobility.Reason), .field, &.{try b.reference(refused)}, 0)}, 1)) },
+        } } }));
+        const selected = try b.term(.{ .match_sum = .{ .value = required, .cases = &.{
+            .{ .variable = absent, .body = denied }, .{ .variable = host, .body = relocate },
+        } } });
+        try b.define(f, try b.term(.{ .conditional = .{ .condition = try b.primitive(try b.scalar(bool), .less, &.{ try b.constant(u32, 0), moves }, 0), .when_true = selected, .when_false = denied } }));
+        break :create try cache.finish(b, f);
+    };
+    return b.term(.{ .call = .{ .function = function, .arguments = &.{input} } });
+}
 
 const Application = struct {
     pub fn emit(ctx: agent.Context) !source.Module {
@@ -170,7 +216,8 @@ pub fn main(init: std.process.Init) !void {
             return write(init, bytes);
         }
     }
-    if (!std.mem.eql(u8, mode, "image") and !std.mem.eql(u8, mode, "identity")) return error.InvalidMode;
+    fixed_placement = std.mem.eql(u8, mode, "fixed-image") or std.mem.eql(u8, mode, "fixed-identity");
+    if (!fixed_placement and !std.mem.eql(u8, mode, "image") and !std.mem.eql(u8, mode, "identity")) return error.InvalidMode;
     const path = args.next() orelse return error.ExpectedObject;
     const bytes = try std.Io.Dir.cwd().readFileAlloc(init.io, path, init.gpa, .limited(8 << 20));
     defer init.gpa.free(bytes);
@@ -178,7 +225,7 @@ pub fn main(init: std.process.Init) !void {
     defer Tool.object = &.{};
     var compiled = try agent.compile(init.gpa, System);
     defer compiled.deinit();
-    if (std.mem.eql(u8, mode, "identity")) return write(init, &(try boundary.data.program_image.identity(init.gpa, compiled.program)));
+    if (std.mem.eql(u8, mode, "identity") or std.mem.eql(u8, mode, "fixed-identity")) return write(init, &(try boundary.data.program_image.identity(init.gpa, compiled.program)));
     const image = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(image);
     _ = try compiled.encode(init.gpa, image);

@@ -13,11 +13,12 @@ import { HostPolicy, requirement } from '../../runtime/mobility/policy.mjs';
 import { hash, runId, signRecord, parse } from '../../runtime/mobility/protocol.mjs';
 import { subject, bindSubject, READ, CLOSE } from '../../runtime/text_inspection.mjs';
 import { fileBinding } from '../../runtime/text_file.mjs';
-export async function hostFixture(t, { privateData = false, privateCapture = false, lostAck = false, uncertainRead = false, register = true, cleanup = true, localData = false, expectedInspection = { tag: 0, value: [42n, 4n] } } = {}) {
+export async function hostFixture(t, { privateData = false, privateCapture = false, lostAck = false, uncertainRead = false, register = true, cleanup = true, localData = false, expectedInspection = { tag: 0, value: [42n, 4n] }, imageMode = 'ensure', explicitDestination = false, requirementCount = 1, instrumentWorld = value => value, journalFault = () => {} } = {}) {
   assert.ok(process.env.AGENT_MOBILITY_RUNTIME, 'AGENT_MOBILITY_RUNTIME required');
-  const runtime = resolve(process.env.AGENT_MOBILITY_RUNTIME), identity = verifyRuntime(runtime), world = await import(pathToFileURL(identity.entrypoint));
-  const kernelBytes = await readFile(identity.kernelPath), image = await readFile('zig-out/agent4/mobility/program.bpi3');
-  const programId = (await readFile('zig-out/agent4/mobility/program-id.bin')).toString('hex');
+  assert.ok(['ensure', 'fixed'].includes(imageMode)); assert.ok(Number.isInteger(requirementCount) && requirementCount >= 1 && requirementCount <= 16);
+  const runtime = resolve(process.env.AGENT_MOBILITY_RUNTIME), identity = verifyRuntime(runtime), world = instrumentWorld(await import(pathToFileURL(identity.entrypoint)));
+  const kernelBytes = await readFile(identity.kernelPath), image = await readFile(`zig-out/agent4/mobility/${imageMode === 'fixed' ? 'fixed-image.bin' : 'program.bpi3'}`);
+  const programId = (await readFile(`zig-out/agent4/mobility/${imageMode === 'fixed' ? 'fixed-identity.bin' : 'program-id.bin'}`)).toString('hex');
   const area = await mkdtemp(join(tmpdir(), 'mobility-host-'));
   const content = new TextEncoder().encode('alpha\nbeta gamma\ndelta epsilon zeta\nomega\n');
   await writeFile(join(area, 'story.txt'), content);
@@ -56,10 +57,13 @@ export async function hostFixture(t, { privateData = false, privateCapture = fal
         handle: ({ payload }) => { assert.deepEqual(payload, expectedInspection); counters.A.present++; return new Uint8Array(); } }));
     }
     bindingSets[host] = bindings;
+    const reader = bindings.find(binding => binding.operation === READ);
+    if (reader) for (let i = 1; i < requirementCount; i++) bindings.push({ ...reader, scope: `read-${i}` });
   }
   const read = bindingSets.B.find(binding => binding.operation === READ), present = bindingSets.A.find(binding => binding.operation.endsWith('.present.v1'));
   const placement = (requirements, moves, intent, policy) => [[requirements, [[], { tag: 0, value: null }, { tag: 0, value: null }, 8n << 20n]], intent, policy, [moves, 3]];
-  taskValue = [123n, 9001n, declared, placement([requirement(read)], 2, 'inspect', 'fixture-shared'), placement([requirement(present)], 1, 'present', privateData ? 'public' : 'fixture-shared')];
+  taskValue = [123n, 9001n, declared, placement(bindingSets.B.filter(binding => binding.operation === READ).map(requirement), 2, 'inspect', 'fixture-shared'), placement([requirement(present)], 1, 'present', privateData ? 'public' : 'fixture-shared')];
+  if (explicitDestination || imageMode === 'fixed') { taskValue[3][0][1][1] = { tag: 1, value: localData ? 'A' : 'B' }; taskValue[4][0][1][1] = { tag: 1, value: 'A' }; }
   const deployment = { imageDigest: hash(image), programId, tenant: 'tenant', principals: ['user'], issuers: ['issuer'], hosts: ['A', 'B'], classification: ['shared'], limits,
     cleanup: bindingSets.A.filter(binding => binding.cleanup).map(requirement), controlPeers: ['A', 'B'], exportPolicies: { 'fixture-shared': ['A', 'B'], public: ['A', 'B'] } };
   const peerMaps = { A: new Map(), B: new Map() }, hosts = {}, journals = {}, policies = {}, admissions = {}, revoked = { A: new Set(), B: new Set() };
@@ -71,7 +75,7 @@ export async function hostFixture(t, { privateData = false, privateCapture = fal
   function stop(host) { if (!closed.has(host)) { hosts[host].retireAll(); journals[host].close(); closed.add(host); } }
   function open(host, create) {
     journals[host] = new CustodyJournal({ directory: join(area, host), hostId: host, deploymentGeneration: 'generation-1', keys,
-      signer: { keyId: host, privateKey: pairs[host].privateKey, policyRevision: 'p1' }, admission: admissions[host], create });
+      signer: { keyId: host, privateKey: pairs[host].privateKey, policyRevision: 'p1' }, admission: admissions[host], create, fault: point => journalFault(host, point) });
     hosts[host] = new Custodian({ journal: journals[host], admission: admissions[host], world, policy: policies[host], peers: peerMaps[host] });
     closed.delete(host);
   }

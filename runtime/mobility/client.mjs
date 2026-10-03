@@ -75,7 +75,17 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
   });
   document.querySelector('#continue').onclick = action(async () => {
     if (!executor) throw new Error('Enter a run and connect first.');
-    if (!executor.worker) { await executor.attach(); status.textContent = 'Connected'; return; }
+    if (!executor.worker) {
+      const current = await (await executor.api('status', 'GET')).json();
+      if (current.custody === 'OFFERED') {
+        const decision = await (await executor.api('retry')).json();
+        status.textContent = decision.kind === 'unknown' ? 'Waiting for a custody decision. The run remains paused.' : decision.kind === 'refused' ? 'Move declined. Continue here.' : 'Continuing at another host. Reconnect when it returns.';
+        return;
+      }
+      if (current.custody === 'DEPARTED') { status.textContent = 'Continuing at another host. Reconnect when it returns.'; return; }
+      if (current.custody === 'TERMINAL') { status.textContent = 'Finished'; return; }
+      await executor.attach(); status.textContent = 'Connected'; return;
+    }
     const result = await executor.advance();
     if (result.kind === 'offered') {
       await executor.retire();
@@ -88,7 +98,7 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
     if (!executor) throw new Error('Enter a run and connect first.');
     await executor.retire();
     const result = await (await executor.api('cancel', 'POST', canonical({ reason: 'User cancelled' }))).json();
-    status.textContent = result.kind === 'cancel_pending' ? 'Cancellation is waiting for the current host.' : 'Cancellation requested';
+    status.textContent = ['cancel_pending', 'unknown'].includes(result.kind) ? 'Cancellation is waiting for the current host or a custody decision.' : 'Cancellation requested';
   });
   addEventListener('pagehide', () => executor?.worker?.terminate());
 }

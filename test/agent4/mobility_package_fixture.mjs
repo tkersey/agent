@@ -15,7 +15,7 @@ import { READ, CLOSE } from '../../runtime/text_inspection.mjs';
 import { hostFixture } from './mobility_host_fixture.mjs';
 import { certificates } from './mobility_tls_fixture.mjs';
 
-export async function packageFixture(t) {
+export async function packageFixture(t, { dataExecution = 'node' } = {}) {
   const f = await hostFixture(t, { register: false, cleanup: false }), tls = await certificates(f.area);
   f.stop('A'); f.stop('B');
   const input = join(f.area, 'inputs'), output = join(f.area, 'archive'), extracted = join(f.area, 'extracted');
@@ -50,7 +50,7 @@ export async function packageFixture(t) {
     const peer = host === 'A' ? 'B' : 'A';
     configs[host] = {
       format: 'agent-mobility-deployment/v1', hostId: host, trustDomain: 'fixture', revision: 'p1', worldRuntime: resolve(process.env.AGENT_MOBILITY_RUNTIME),
-      directory: join(f.area, `deployed-${host}`), deploymentGeneration: 'generation-1', execution: host === 'A' ? 'browser' : 'node',
+      directory: join(f.area, `deployed-${host}`), deploymentGeneration: 'generation-1', execution: host === 'A' ? 'browser' : dataExecution,
       keys: Object.keys(f.pairs).map(owner => ({ keyId: owner, owner, status: 'active', publicKey: join(secrets, `${owner}.public.pem`) })),
       signer: { keyId: host, privateKey: join(secrets, `${host}.private.pem`), policyRevision: 'p1' },
       deployments: [{ ...f.deployment, cleanup: join(examples, 'cleanup.bin') }],
@@ -110,7 +110,7 @@ export async function packageFixture(t) {
   const pid = await startB();
   await a.custodian.registerRun(f.registration, await readFile(join(examples, 'mobility.bpi3')), await readFile(join(examples, 'initial.args')));
   return { ...f, hosts: { A: a.custodian }, journals: { A: a.journal }, tls, serveBrowser, deploymentA: a, root, receipt, pid, stopB, startB,
-    archiveContents: gunzipSync(await readFile(join(output, receipt.archive.name))), processLogs: () => ({ stdout: outputText, stderr: errorText }),
+    archiveContents: gunzipSync(await readFile(join(output, receipt.archive.name))), processLogs: () => ({ stdout: outputText, stderr: errorText }), configB: configPaths.B,
     dataStatistics: () => statistics,
     async waitForReturn() {
       for (let i = 0; i < 200; i++) { const run = a.custodian.status(f.id); if (run.custody === 'ACTIVE' && run.epoch === '2') return; await new Promise(resolve => setTimeout(resolve, 50)); }

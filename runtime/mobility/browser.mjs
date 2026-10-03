@@ -39,13 +39,14 @@ export async function serveBrowser(custodian, { key, cert, authenticate, audienc
         if (!csrf.has(identity.sessionId)) { requireThat(csrf.size < maximumAssignments, 'SessionCapacity'); csrf.set(identity.sessionId, opaque()); }
         return json(res, { csrf: csrf.get(identity.sessionId), host_id: custodian.hostId });
       }
-      const route = /^\/v1\/browser\/runs\/([^/]+)\/(attach|command|report|image|outcome|reply|status|retry|cancel)$/.exec(req.url);
+      const route = /^\/v1\/browser\/runs\/([^/]+)\/(attach|command|report|image|outcome|reply|status|metrics|retry|cancel)$/.exec(req.url);
       requireThat(route !== null, 'UnknownRoute'); const id = decodeURIComponent(route[1]), operation = route[2];
-      const run = custodian.authorizeUser(id, identity, operation === 'cancel' || operation === 'status');
+      const run = custodian.authorizeUser(id, identity, ['cancel', 'status', 'metrics'].includes(operation));
       if (req.method === 'POST') {
         requireThat(req.headers.origin === origin && req.headers['x-agent-csrf'] === csrf.get(identity.sessionId) && csrf.has(identity.sessionId), 'CsrfDenied');
       }
       if (req.method === 'GET' && operation === 'status') return json(res, custodian.status(id));
+      if (req.method === 'GET' && operation === 'metrics') return json(res, custodian.metrics(id));
       if (req.method === 'POST' && operation === 'cancel') {
         const value = parse(await body(req, CONTROL_LIMIT)); requireThat(Object.keys(value).length === 1 && typeof value.reason === 'string', 'InvalidControl');
         return json(res, await custodian.cancelRun(id, value.reason));
@@ -66,7 +67,9 @@ export async function serveBrowser(custodian, { key, cert, authenticate, audienc
       const encodedVersion = req.headers['x-agent-version'];
       requireThat(typeof encodedVersion === 'string' && /^[A-Za-z0-9_-]{1,4096}$/.test(encodedVersion), 'StaleAssignment');
       const wanted = parse(Buffer.from(encodedVersion, 'base64url'));
-      requireThat(assigned && assigned.id === id && assigned.session === identity.sessionId && same(wanted, assigned.version) && same(assigned.version, version(run)) && ['ACTIVE', 'TERMINAL'].includes(run.status), 'StaleAssignment');
+      const current = assigned && assigned.id === id && assigned.session === identity.sessionId && same(wanted, assigned.version) && same(assigned.version, version(run)) && ['ACTIVE', 'TERMINAL'].includes(run.status);
+      if (!current && req.method === 'POST' && operation === 'command') custodian.noteStaleDispatch(id);
+      requireThat(current, 'StaleAssignment');
       if (req.method === 'GET' && ['image', 'outcome', 'reply'].includes(operation)) {
         requireThat(assigned[operation] instanceof Uint8Array, 'ReplyNotAcquired'); return binary(res, assigned[operation]);
       }

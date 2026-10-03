@@ -74,7 +74,25 @@ export class HostPolicy {
   preflight(registration, requirements, constraints, classification) {
     const run = { ...registration, classification }; this.authorizeRun(run); this.checkCleanup(run);
     const requirementsDigest = hash(canonicalRequirements(requirements));
-    const selected = requirements.map(wanted => this.bindingForRequirement(run, wanted));
+    // Metadata is stable within this synchronous inspection. Normalize each
+    // encountered binding once, not once per requested capability. Nothing is
+    // cached across calls: revocation, reconfiguration and actual leaf dispatch
+    // still observe current local policy.
+    const encoded = new Map();
+    const selected = requirements.map(wanted => {
+      const bytes = canonicalRequirements([wanted]), domainFree = wanted[7].tag === 0;
+      return this.#bindings.find(binding => {
+        if (binding.enabled === false || !binding.tenants.includes(run.tenant_ref) || !binding.principals.includes(run.principal_ref)) return false;
+        let row = encoded.get(binding);
+        if (!row) { row = { value: requirement(binding) }; encoded.set(binding, row); }
+        const key = domainFree ? 'domainFree' : 'exact';
+        if (!row[key]) {
+          const value = [...row.value]; if (domainFree) value[7] = option(null);
+          row[key] = canonicalRequirements([value]);
+        }
+        return equal(bytes, row[key]);
+      }) ?? null;
+    });
     requireThat(selected.every(Boolean), 'CapabilityUnavailable');
     const [domains, required] = constraints;
     requireThat(domains.length === 0 || domains.includes(this.#domain), 'TrustDomainDenied');

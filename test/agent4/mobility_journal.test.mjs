@@ -265,6 +265,31 @@ test('pure custody bounds reject overflowing incarnations and stale or retired t
   assert.deepEqual(f.a.run(f.id), run); assert.equal(f.b.run(f.id), null);
 });
 
+test('scoped metrics retain ambiguity and refusal counts without changing execution authority', async t => {
+  const f = await fixture(t), proposal = f.offer(), originalNow = Date.now;
+  let a = f.a;
+  try {
+    Date.now = () => 1000;
+    a.resourcePin(f.id, version(a.run(f.id)), 'origin-lock', true);
+    assert.deepEqual(a.metrics(f.id).active_pins, ['origin-lock']);
+    a.resourcePin(f.id, version(a.run(f.id)), 'origin-lock', false);
+    a.freeze(f.id, version(a.run(f.id)), proposal.bytes, moving); Date.now = () => 1250;
+    const frozen = a.run(f.id);
+    assert.equal(a.metrics(f.id).known_custodian, null); assert.equal(a.metrics(f.id).transfer_decision, 'unknown');
+    assert.equal(a.metrics(f.id).ambiguity_duration_ms, '250'); assert.equal(a.metrics(f.id).local_move_attempts, '1');
+    assert.throws(() => a.admitLeaf(f.id, version(frozen), []), { code: 'CustodyFrozen' });
+    assert.equal(a.metrics(f.id).stale_dispatch_rejections_since_open, 1); assert.deepEqual(a.run(f.id), frozen);
+    f.close(a); a = f.open('A'); assert.equal(a.metrics(f.id).ambiguity_duration_ms, '250'); assert.equal(a.metrics(f.id).stale_dispatch_rejections_since_open, 0);
+    const refusal = f.b.refuse(proposal.bytes, f.registration, 'withdrawn'); a.receiveDecision(proposal.bytes, refusal);
+    assert.equal(a.metrics(f.id).known_custodian, 'A'); assert.equal(a.metrics(f.id).transfer_decision, 'refused');
+    assert.equal(a.metrics(f.id).refusals_by_reason.withdrawn, 1); assert.equal(a.metrics(f.id).ambiguity_duration_ms, '0');
+    const run = a.attach(f.id), reply = a.artifact('tenant', run.reply_digest);
+    const next = await admission.successor(moving, { kind: 'reply', value: reply });
+    a.publishOutcome(f.id, version(run), { kind: 'reply', reply_digest: hash(reply) }, next); a.collectArtifacts('tenant');
+    assert.equal(a.hasArtifact('tenant', hash(reply)), false); assert.equal(a.metrics(f.id).refusals_by_reason.withdrawn, 1);
+  } finally { Date.now = originalNow; }
+});
+
 for (const operation of ['register', 'attach', 'cleanup-policy', 'policy', 'stage', 'refuse', 'decision', 'dispatch', 'unknown', 'acquire', 'unsent-refusal', 'publish', 'cancel', 'cancel-forwarded', 'retirement-diagnostic', 'pin', 'collect']) {
   for (const when of ['before_commit', 'after_commit']) test(`transaction fault ${operation}.${when} recovers the exact committed boundary`, async t => {
     const ordinary = ['register', 'dispatch', 'unknown', 'acquire', 'publish', 'collect'].includes(operation);

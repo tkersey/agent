@@ -99,17 +99,20 @@ export async function servePeers(custodian, { key, cert, ca, peerCertificates, h
     close: () => new Promise((resolve, reject) => { server.closeAllConnections(); server.close(error => error ? reject(error) : resolve()); }) };
 }
 export class PeerClient {
-  #url; #agent; #timeout;
-  constructor({ url, servername, fingerprint256, key, cert, ca, timeout = 10000 }) {
+  #url; #agent; #timeout; #traffic;
+  constructor({ url, servername, fingerprint256, key, cert, ca, timeout = 10000, onTraffic = () => {} }) {
     this.#url = new URL(url);
     requireThat(this.#url.protocol === 'https:' && this.#url.pathname === '/' && !this.#url.username && !this.#url.password && !this.#url.search && !this.#url.hash, 'PeerEndpointRejected');
     digest(fingerprint(fingerprint256)); requireThat(Number.isInteger(timeout) && timeout > 0 && timeout <= 60000, 'InvalidTimeout'); this.#timeout = timeout;
+    requireThat(typeof onTraffic === 'function', 'InvalidObserver'); this.#traffic = onTraffic;
     this.#agent = new Agent({ key, cert, ca, servername, rejectUnauthorized: true, minVersion: 'TLSv1.3', keepAlive: true, maxSockets: 4, maxFreeSockets: 2, proxyEnv: {},
       checkServerIdentity(name, remote) { return checkServerIdentity(name, remote) ?? (fingerprint(remote.fingerprint256) === fingerprint(fingerprint256) ? undefined : Object.assign(new Error('PeerCertificateMismatch'), { code: 'PeerCertificateMismatch' })); } });
   }
   close() { this.#agent.destroy(); }
+  #observe(value) { try { const pending = this.#traffic(value); if (pending && typeof pending.then === 'function') Promise.resolve(pending).catch(() => {}); } catch {} }
   #request(method, path, body = null, headers = {}) {
     return new Promise((resolve, reject) => {
+      this.#observe({ direction: 'send', method, path, body_bytes: body?.length ?? 0, metadata_bytes: Buffer.byteLength(headers['x-agent-mobility'] ?? '') });
       const req = request(new URL(path, this.#url), { method, agent: this.#agent, signal: AbortSignal.timeout(this.#timeout),
         headers: { 'content-type': 'application/json', 'content-length': body?.length ?? 0, ...headers } }, async res => {
         try {
@@ -117,7 +120,7 @@ export class PeerClient {
           // server-provided endpoint, forward credentials, or infer refusal.
           requireThat(res.statusCode === 200, 'TransportStatus');
           requireThat(res.headers['content-type'] === 'application/json', 'TransportEncoding');
-          const bytes = await readBody(res, CONTROL_LIMIT); resolve(parse(bytes));
+          const bytes = await readBody(res, CONTROL_LIMIT); this.#observe({ direction: 'receive', method, path, body_bytes: bytes.length, metadata_bytes: 0 }); resolve(parse(bytes));
         } catch (error) { res.destroy(); reject(error); }
       });
       req.on('error', reject); req.end(body);

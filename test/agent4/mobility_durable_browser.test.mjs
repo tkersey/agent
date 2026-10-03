@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, appendFile } from 'node:fs/promises';
+import { performance } from 'node:perf_hooks';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { randomBytes, createPrivateKey } from 'node:crypto';
@@ -12,6 +13,11 @@ const { chromium, firefox } = await import(pathToFileURL(join(resolve(process.en
 
 for (const [engine, type] of [['chromium', chromium], ['firefox', firefox]]) test(`${engine}: source-free durable browser→separate mTLS Node process→fresh browser`, async t => {
   const f = await packageFixture(t), { tls, serveBrowser } = f;
+  const timings = { mirror_publication_ms: 0, command_ms: 0 };
+  if (process.env.AGENT_MOBILITY_BROWSER_MEASURE) for (const [method, metric] of [['publishExecutor', 'mirror_publication_ms'], ['executorCommand', 'command_ms']]) {
+    const original = f.hosts.A[method].bind(f.hosts.A);
+    f.hosts.A[method] = async (...args) => { const begin = performance.now(); try { return await original(...args); } finally { timings[metric] += performance.now() - begin; } };
+  }
   const sessionToken = randomBytes(32).toString('hex');
   const otherToken = randomBytes(32).toString('hex');
   const wrongAudienceToken = randomBytes(32).toString('hex');
@@ -43,6 +49,7 @@ for (const [engine, type] of [['chromium', chromium], ['firefox', firefox]]) tes
     window.retire = () => window.bridge.retire();
     window.encodeVersion = value => btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(value, Object.keys(value).sort())))).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
   }, { id: f.id });
+  const begin = performance.now();
   await page.evaluate(() => window.attach());
   const oldAssignment = await page.evaluate(() => window.bridge.assignment);
   let departure;
@@ -56,6 +63,7 @@ for (const [engine, type] of [['chromium', chromium], ['firefox', firefox]]) tes
   const fresh = await page.evaluate(() => window.bridge.assignment); assert.notEqual(fresh.nonce, oldAssignment.nonce); assert.equal(fresh.version.custody_epoch, '2');
   for (let i = 0; i < 16; i++) { const result = await page.evaluate(() => window.advance()); if (result.status?.custody === 'TERMINAL') break; }
   assert.equal(f.hosts.A.status(f.id).custody, 'TERMINAL'); await page.evaluate(() => window.retire());
+  const totalMs = performance.now() - begin;
   const output = new Uint8Array(await page.evaluate(() => Array.from(window.bridge.output)));
   assert.deepEqual(decodeValue(f.schemas.report, f.world.decodeOutcome(output).value), [123n, 9001n, { tag: 0, value: [42n, 4n] }, 91n]);
   assert.equal(await page.evaluate(() => window.bridge.retired), 2);
@@ -74,6 +82,8 @@ for (const [engine, type] of [['chromium', chromium], ['firefox', firefox]]) tes
   }
   for (const [label, bytes] of artifacts) for (const secret of privateSeeds) assert.equal(Buffer.from(bytes).includes(secret), false, `credential sentinel leaked into ${label}`);
   assert.deepEqual(await page.evaluate(() => [localStorage.length, sessionStorage.length, document.cookie]), [0, 0, '']);
+  if (process.env.AGENT_MOBILITY_BROWSER_MEASURE) await appendFile(process.env.AGENT_MOBILITY_BROWSER_MEASURE, JSON.stringify({ engine, version: browser.version(), total_ms: totalMs, ...timings,
+    method: 'Attach Worker A1 through terminal A2 including separate Node-process retirement; browser launch/provisioning excluded; test orchestration and bounded host polling included. Mirror publication includes durable journal commit.' }) + '\n');
   const replacementPid = await f.startB(); assert.notEqual(replacementPid, f.pid); await f.stopB();
   assert.equal(f.dataStatistics()['agent.text.read-chunk.v1'].calls, 0, 'departed custody must not restart application work');
   const csrfDenied = await page.evaluate(async () => (await fetch(window.bridge.base + 'attach', { method: 'POST' })).status);
@@ -82,6 +92,10 @@ for (const [engine, type] of [['chromium', chromium], ['firefox', firefox]]) tes
   assert.equal((await context.request.post(origin.url + `/v1/browser/runs/${encodeURIComponent(f.id)}/attach`, { headers: { origin: 'https://wrong.invalid', 'x-agent-csrf': csrf }, data: Buffer.alloc(0) })).status(), 403);
   const stale = await page.evaluate(async old => (await fetch(window.bridge.base + 'outcome', { headers: { 'x-agent-assignment': old.nonce, 'x-agent-version': window.encodeVersion(old.version) } })).status, oldAssignment);
   assert.equal(stale, 409);
+  const staleCommand = await page.evaluate(async old => (await fetch(window.bridge.base + 'command', { method: 'POST', headers: { 'x-agent-csrf': window.bridge.session.csrf, 'x-agent-assignment': old.nonce, 'x-agent-version': window.encodeVersion(old.version) } })).status, oldAssignment);
+  assert.equal(staleCommand, 409);
+  const metrics = await page.evaluate(async () => (await window.api('metrics', 'GET')).json());
+  assert.equal(metrics.stale_dispatch_rejections_since_open, 1); assert.equal(metrics.known_custodian, 'A');
   const unauthenticated = await browser.newContext({ ignoreHTTPSErrors: true });
   assert.equal((await unauthenticated.request.get(origin.url + '/v1/browser/session')).status(), 403); await unauthenticated.close();
   const other = await browser.newContext({ ignoreHTTPSErrors: true });

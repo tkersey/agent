@@ -14,7 +14,7 @@ const json = value => new TextDecoder().decode(canonical(value));
 const readJson = value => value === null || value === undefined ? null : parse(new TextEncoder().encode(value));
 
 export class CustodyJournal {
-  #db; #host; #keys; #signer; #admission; #fault; #quota; #recordLimit;
+  #db; #host; #keys; #signer; #admission; #fault; #quota; #recordLimit; #staleDispatch = new Map();
   constructor({ directory, hostId, deploymentGeneration, keys, signer, admission, create = false, tenantBytes = 256 << 20, maximumRecords = 10000, fault = () => {} }) {
     identifier(hostId); identifier(deploymentGeneration); requireThat(keys instanceof Map, 'InvalidKeys');
     const root = resolve(directory), path = join(root, 'custody.sqlite');
@@ -178,7 +178,7 @@ export class CustodyJournal {
       requireThat(data.metadata.outcome_digest === run.outcome_digest && data.metadata.image_digest === run.image_digest && data.relocation !== null, 'ArtifactMismatch');
       requireThat(data.image.length === offer.artifact_lengths.image && data.outcome.length === offer.artifact_lengths.outcome, 'ArtifactMismatch');
       requireThat(data.relocation.destination_host_id === offer.destination_host_id && data.relocation.placement_intent_id === offer.placement_intent_id && data.relocation.requirements_digest === offer.requirements_digest && data.relocation.remaining_move_budget > 0, 'RelocationMismatch');
-      const next = core.freeze(run, occurrence, wanted, offer, hash(offerBytes));
+      const next = { ...core.freeze(run, occurrence, wanted, offer, hash(offerBytes)), offered_at_ms: Date.now().toString() };
       this.#room(run.tenant_ref); this.#remember(offer);
       this.artifact(run.tenant_ref, offer.image_digest); this.artifact(run.tenant_ref, offer.outcome_digest);
       const decisionKeys = [];
@@ -306,6 +306,8 @@ export class CustodyJournal {
       const run = this.run(offer.run_id), occurrence = this.#occurrence(run);
       const refusal = receipt.decision === 'refused' ? encodeRefusal(offer.destination_host_id, receipt.reason_code, hash(receiptBytes)) : null;
       const next = core.decideSource(run, occurrence, offer, receipt, hash(receiptBytes), refusal === null ? null : hash(refusal));
+      next.run = { ...next.run, last_transfer_id: offer.transfer_id };
+      if (refusal !== null) next.occurrence = { ...next.occurrence, refusal_reason: receipt.reason_code };
       if (refusal !== null) this.#artifact(run.tenant_ref, refusal);
       this.#artifact(run.tenant_ref, receiptBytes);
       this.#remember(receipt); this.#save(next.run); this.#saveOccurrence(next.occurrence);
@@ -314,10 +316,16 @@ export class CustodyJournal {
     });
   }
   admitLeaf(runId, wanted, classification, options = {}) {
-    return this.#transaction('dispatch', () => {
+    try { return this.#transaction('dispatch', () => {
       const run = this.run(runId), next = core.dispatch(run, this.#occurrence(run), wanted, opaqueId(), classification, options);
       this.#save(next.run); this.#saveOccurrence(next.occurrence); return next.occurrence;
-    });
+    }); } catch (error) {
+      // Diagnostics cannot mutate custody or replace the rejected operation.
+      if (['StaleExecutor', 'CustodyFrozen'].includes(error.code)) {
+        this.noteStaleDispatch(runId);
+      }
+      throw error;
+    }
   }
   markUnknown(runId, attemptId) {
     return this.#transaction('unknown', () => { const run = this.run(runId), next = core.unknown(run, this.#occurrence(run), attemptId); this.#saveOccurrence(next); return next; });
@@ -339,7 +347,7 @@ export class CustodyJournal {
       requireThat(occurrence.status === 'READY' && occurrence.operation === core.RELOCATE && data.relocation !== null && data.metadata.outcome_digest === run.outcome_digest, 'RelocationMismatch');
       const reply = encodeRefusal(data.relocation.destination_host_id, reason), replyDigest = this.#artifact(run.tenant_ref, reply);
       const next = { ...run, reply_digest: replyDigest };
-      this.#save(next); this.#saveOccurrence({ ...occurrence, status: 'SETTLED_REPLY', reply_digest: replyDigest }); return next;
+      this.#save(next); this.#saveOccurrence({ ...occurrence, status: 'SETTLED_REPLY', reply_digest: replyDigest, refusal_reason: reason }); return next;
     });
   }
   publishOutcome(runId, wanted, control, admitted) {
@@ -369,6 +377,26 @@ export class CustodyJournal {
   }
   resourcePin(runId, wanted, name, add) { return this.#transaction('pin', () => { const next = core.pin(this.run(runId), wanted, name, add); this.#save(next); return next; }); }
   recover() { return this.#all('SELECT body FROM runs ORDER BY run_id').map(row => { const run = readJson(row.body); return { run, occurrence: this.#occurrence(run) }; }); }
+  noteStaleDispatch(runId) {
+    try { if (this.run(runId) && (this.#staleDispatch.has(runId) || this.#staleDispatch.size < this.#recordLimit)) this.#staleDispatch.set(runId, Math.min(Number.MAX_SAFE_INTEGER, (this.#staleDispatch.get(runId) ?? 0) + 1)); } catch {}
+  }
+  metrics(runId) {
+    const run = this.run(runId); requireThat(run !== null, 'UnknownRun');
+    const refused = Object.create(null);
+    for (const row of this.#all('SELECT body FROM occurrences WHERE run_id=?', runId)) {
+      const reason = readJson(row.body).refusal_reason;
+      if (reason !== undefined) refused[reason] = (refused[reason] ?? 0) + 1;
+    }
+    return { run_id: runId, host_id: this.#host, local_move_attempts: run.local_move_attempts, ...this.custodyKnowledge(run), refusals_by_reason: refused, stale_dispatch_rejections_since_open: this.#staleDispatch.get(runId) ?? 0 };
+  }
+  custodyKnowledge(run) {
+    const pending = run.status === 'OFFERED', id = run.transfer_id ?? run.last_transfer_id, transfer = id ? this.transfer(id) : null;
+    const offer = transfer ? parse(transfer.offer) : null, receipt = transfer?.receipt ? parse(transfer.receipt) : null;
+    return { known_custodian: pending ? null : run.status === 'DEPARTED' ? offer?.destination_host_id ?? null : this.#host,
+      transfer_destination: offer?.destination_host_id ?? null, transfer_decision: pending ? 'unknown' : receipt?.decision ?? null,
+      ambiguity_duration_ms: pending ? run.offered_at_ms === undefined ? null : Math.max(0, Date.now() - Number(run.offered_at_ms)).toString() : '0',
+      active_pins: [...run.resource_pins] };
+  }
   collectArtifacts(tenant) {
     identifier(tenant);
     return this.#transaction('collect', () => {

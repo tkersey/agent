@@ -86,7 +86,7 @@ Each checks durable ownership/dispatch eligibility and recovery or explicit
 uncertainty. Database reopen, injected exceptions and process termination do not
 establish arbitrary storage or power-loss safety.
 
-Remaining mandatory work: section 19 matched cold/warm/fixed/discovered/stationary
-measurements and bounded operational metrics, final affected integration checks,
-and serial reviews of the completed candidate. This matrix is not a substitute
-for those results.
+Section 19 matched cold/warm/fixed/discovered/stationary measurements and bounded
+operational metrics are complete; see the [performance report](mobility-performance.md).
+Remaining mandatory work: final affected integration checks and serial reviews
+of the completed candidate. This matrix is not a substitute for those results.

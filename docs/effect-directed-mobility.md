@@ -55,7 +55,8 @@ zig build check-mobility-continuation check-mobility-browser-continuation \
 These are **test scaffolds, not the durable custody reference route**. Their
 synthetic arrival receipts and empty immediate-requirement lists isolate
 continuation behavior; they provide no authority or custody safety evidence.
-Matched measurements, operational metrics and final review are still required.
+Matched measurements and operational metrics are documented in the
+[performance report](mobility-performance.md); final review is still required.
 The durable source-free browser lane and approval variant are described below.
 The full acceptance suite and serial review closeout remain unfinished.
 
@@ -124,8 +125,8 @@ Publication tokens now bind the exact predecessor outcome and actual saved
 control input. Only World execution creates these tokens. A structurally admitted
 checkpoint cannot masquerade as a successor. The optional browser-report verifier
 executes the same bounded step in the pinned kernel and compares the result;
-it does not redispatch external effects. Its cost remains to be measured in the
-integrated browser lane. Cancellation consumption commits with its World successor,
+it does not redispatch external effects. The performance report includes measured
+publication and executor-command spans in both browser engines. Cancellation consumption commits with its World successor,
 so recovery answers pending cleanup rather than repeatedly submitting cancellation.
 
 The journal stores artifacts in the transaction, freezes the source with its exact
@@ -161,7 +162,7 @@ zig build check-mobility-protocol check-mobility-journal \
 ```
 
 Six protocol tests cover RFC Unicode ordering/escaping, duplicate keys, malformed
-records, signatures, key ownership/retirement and counters. Sixty-two journal tests
+records, signatures, key ownership/retirement and counters. Sixty-three journal tests
 cover accepted/refused recovery, exact retries, frozen outboxes, injected storage
 failure, stale executors, persisted uncertain/acquired occurrences, schema parity,
 and six actual SIGKILL points around freeze, acceptance and reply-acquisition
@@ -175,7 +176,7 @@ arbitrary hardware failures. See the [Node SQLite API](https://nodejs.org/api/sq
 and [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785.html) for the underlying interfaces.
 
 `check-mobility-integration` uses the same dependency arguments and currently runs
-fifty-one host cases plus eighteen mTLS transport cases. The host cases complete A→B→A using real
+fifty-two host cases plus eighteen mTLS transport cases. The host cases complete A→B→A using real
 requirements and signed receipts, restarts both custodians, reconciles a lost old
 acceptance before a return, rejects stale/unbound successor publication, blocks
 uncertain delivery, and preserves cancellation/cleanup under revocation. The
@@ -325,6 +326,7 @@ print metadata and receipts, not private captured values:
 
 ```sh
 "$NODE" runtime/mobility/cli.mjs status "$CONFIG" "$RUN"
+"$NODE" runtime/mobility/cli.mjs metrics "$CONFIG" "$RUN"
 "$NODE" runtime/mobility/cli.mjs retry "$CONFIG" "$TRANSFER"
 "$NODE" runtime/mobility/cli.mjs receipt "$CONFIG" "$TRANSFER"
 "$NODE" runtime/mobility/cli.mjs withdraw "$CONFIG" "$TRANSFER"
@@ -339,6 +341,15 @@ step. Retry preserves the exact signed offer. `accepted` and `refused` require a
 matching saved signed receipt; `unknown` means the source remains frozen. A
 pending cancellation at departed custody is a separate delivery question.
 Recovery converts interrupted dispatch to unknown delivery without redispatch.
+
+`metrics` reports local move attempts, refusals by bounded reason, active pins,
+ambiguity duration and stale-dispatch rejections since this journal handle opened.
+Attempts/refusals survive restart; stale-dispatch counters are bounded diagnostics
+and reset on open. A departed host’s `known_custodian` is its last known destination,
+not a global proof of current custody after later moves. During an unresolved offer
+it is null. Ambiguity duration is a clamped wall-clock observation, never a lease
+or takeover permission; legacy records without a timestamp report null. Status
+and metrics expose identities/reason codes without captured private payloads.
 
 If the journal is lost, ordinary `serve`/`recover` fails closed; do **not** run
 `init` under the same live identity as a recovery shortcut. A known rollback

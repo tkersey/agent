@@ -18,6 +18,17 @@ test('peer authentication cannot register a principal outside the configured iss
   assert.equal(f.journals.A.run(other.run_id), null); assert.equal(f.counters.A.task, 0);
 });
 
+test('preflight normalization preserves wildcard domains and observes changed metadata on the next call', async t => {
+  const f = await hostFixture(t, { requirementCount: 16 }), wanted = f.taskValue[3][0][0], constraints = f.taskValue[3][0][1], registration = parse(f.registration);
+  assert.equal(f.policies.B.preflight(registration, wanted, constraints, ['shared']).host_id, 'B');
+  const domainFree = structuredClone(wanted); for (const item of domainFree) item[7] = { tag: 0, value: null };
+  assert.equal(f.policies.B.preflight(registration, domainFree, constraints, ['shared']).host_id, 'B');
+  const binding = f.bindings.B.find(item => item.scope === 'read-15'); binding.scope = 'changed-scope';
+  assert.throws(() => f.policies.B.preflight(registration, wanted, constraints, ['shared']), { code: 'CapabilityUnavailable' });
+  binding.scope = 'read-15'; binding.enabled = false;
+  assert.throws(() => f.policies.B.preflight(registration, wanted, constraints, ['shared']), { code: 'CapabilityUnavailable' });
+});
+
 test('Here executes the same typed file operation locally without a custody move', async t => {
   const f = await hostFixture(t, { localData: true });
   assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal');

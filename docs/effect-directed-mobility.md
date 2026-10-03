@@ -58,7 +58,8 @@ continuation behavior; they provide no authority or custody safety evidence.
 Matched measurements and operational metrics are documented in the
 [performance report](mobility-performance.md); final review is still required.
 The durable source-free browser lane and approval variant are described below.
-The full acceptance suite and serial review closeout remain unfinished.
+Functional and regression qualification is recorded in the acceptance matrix;
+serial review closeout remains unfinished.
 
 The continuation target also executes fifteen independent `ensure` cases in
 World, including `Here`, constraints, affinity, deterministic ties, unknown and

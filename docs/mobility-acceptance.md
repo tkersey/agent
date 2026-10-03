@@ -68,7 +68,7 @@ power-loss behavior. Process-crash tests use local APFS and SQLite EXTRA.
 | P03 | Worker A1 terminates before delivery; data process exits and ESRCH is checked before fresh Worker A2; departed process restart executes no work. | PASS |
 | P04 | Shipped browser/host controllers follow only current World outcomes; inventory and fixture oracles are absent from production control. | PASS |
 | P05 | Temporary certificates/keys and isolated fixture files; deterministic human/model inputs; no paid or production operation. | PASS |
-| P06 | `check-agent4` and `check-native` pass after approval placement; remaining affected integration/packaging final-candidate checks are pending. | PARTIAL |
+| P06 | ReleaseSafe authoring/native (216 tests), runtime/integration, compiled tools/browser, component tools, repository delivery, dependency and package checks qualified; the source-package runner failure was recovered as described below. | PASS |
 
 The section 25 model passes its 28-state exploration and intentional unsafe-timeout
 counterexample. The production-adjacent model additionally exercises 128 seeded
@@ -88,5 +88,26 @@ establish arbitrary storage or power-loss safety.
 
 Section 19 matched cold/warm/fixed/discovered/stationary measurements and bounded
 operational metrics are complete; see the [performance report](mobility-performance.md).
-Remaining mandatory work: final affected integration checks and serial reviews
-of the completed candidate. This matrix is not a substitute for those results.
+Remaining mandatory work: serial reviews of the completed candidate. This matrix
+is not a substitute for those results.
+
+## Regression qualification
+
+The ReleaseSafe `check-mobility` aggregate, compiled tools/browser, component
+tools, repository delivery, archive emission and lint checks passed. The broader
+`check-agent4 check-native check-agent4-integration` run completed with 216/216
+Zig tests passing and one failed step: the source-package authoring assertion
+detected that inherited `NODE_TEST_CONTEXT` silently skipped the newly added
+protocol test. Its other 94 Node cases and the remaining runtime build steps
+passed. This original aggregate is recorded as failed, not relabeled green.
+
+All seven mobility `node:test` build steps now clear that inherited context,
+following the existing repository pattern. On the corrected candidate, the exact
+`consumer_build.test.mjs` manifest-selected source-package test passed with zero
+skips; `NODE_TEST_CONTEXT=child-v8 zig build check-mobility` also passed. The five
+downstream checks blocked by the earlier failure then passed in their original
+order: dialogue, multi, document, consequence clarification (38 cases), and
+independent Node/Wasmtime/native agreement (11 canonical records plus negatives).
+They used the same ReleaseSafe native executable and authenticated dependencies,
+with owner verification before and after. The unchanged passing observations are
+reused; no assertions, cases or deadlines were weakened.

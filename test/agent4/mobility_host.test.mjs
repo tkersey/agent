@@ -111,3 +111,46 @@ test('a structurally valid browser report cannot replace the actual successor', 
   await assert.rejects(f.admissions.A.successor(token, { kind: 'reply', value: reply }, current), { code: 'SuccessorMismatch' });
   assert.deepEqual(f.journals.A.run(f.id), run); assert.deepEqual(f.counters.deliveries, { A: 0, B: 0 });
 });
+
+test('cancellation during an unseen offer withdraws before source cleanup', async t => {
+  const f = await hostFixture(t), offered = await f.hosts.A.run(f.id);
+  assert.equal((await f.hosts.A.cancelRun(f.id, 'stop')).kind, 'cancel_requested');
+  assert.equal(f.journals.B.run(f.id), null);
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal');
+  assert.equal(f.result('A').kind, 'cancelled'); assert.equal(f.counters.A.cleanup, 1); assert.equal(f.counters.B.cleanup, 0);
+  assert.ok(f.journals.B.savedDecision(f.journals.A.transfer(offered.transfer_id).offer));
+});
+
+test('cancellation after lost acceptance is forwarded to the owner, never applied at source', async t => {
+  const f = await hostFixture(t, { lostAck: true }), offered = await f.hosts.A.run(f.id);
+  assert.equal((await f.hosts.A.retryTransfer(offered.transfer_id)).kind, 'unknown');
+  assert.equal((await f.hosts.A.cancelRun(f.id, 'stop')).kind, 'cancel_forwarded');
+  assert.equal(f.hosts.A.status(f.id).custody, 'DEPARTED');
+  f.restart('B'); assert.equal((await f.hosts.B.run(f.id)).kind, 'terminal');
+  assert.equal(f.result('B').kind, 'cancelled'); assert.equal(f.counters.A.cleanup, 0); assert.equal(f.counters.B.cleanup, 1);
+  assert.deepEqual(f.file.counts().reads, []);
+});
+
+test('failed cancellation forwarding remains durable and is retried after restart', async t => {
+  const f = await hostFixture(t), offered = await f.hosts.A.run(f.id);
+  await f.hosts.A.retryTransfer(offered.transfer_id);
+  const peer = f.peerMaps.A.get('B'), control = peer.control;
+  peer.control = async () => { throw Object.assign(new Error('offline'), { code: 'Offline' }); };
+  assert.equal((await f.hosts.A.cancelRun(f.id, 'stop')).kind, 'cancel_pending');
+  assert.equal(f.hosts.A.status(f.id).custody, 'DEPARTED');
+  f.restart('A'); peer.control = control;
+  assert.equal((await f.hosts.A.step(f.id)).kind, 'cancel_forwarded');
+  assert.equal((await f.hosts.A.step(f.id)).kind, 'departed');
+  assert.equal((await f.hosts.B.run(f.id)).kind, 'terminal'); assert.equal(f.result('B').kind, 'cancelled');
+});
+
+test('a returning run retains an earlier cancellation whose forwarding was unavailable', async t => {
+  const f = await hostFixture(t), offered = await f.hosts.A.run(f.id);
+  await f.hosts.A.retryTransfer(offered.transfer_id);
+  const peer = f.peerMaps.A.get('B'); peer.control = async () => { throw new Error('offline'); };
+  assert.equal((await f.hosts.A.cancelRun(f.id, 'stop')).kind, 'cancel_pending');
+  const returning = await f.hosts.B.run(f.id); await f.hosts.B.retryTransfer(returning.transfer_id);
+  assert.equal(f.hosts.A.status(f.id).epoch, '2'); assert.equal(f.hosts.A.status(f.id).cancellation_pending, true);
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal'); assert.equal(f.result('A').kind, 'cancelled');
+  assert.equal(f.counters.A.present, 0); assert.equal(f.counters.A.cleanup, 1); assert.equal(f.counters.B.cleanup, 0);
+});

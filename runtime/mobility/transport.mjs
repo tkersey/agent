@@ -83,8 +83,8 @@ export async function servePeers(custodian, { key, cert, ca, peerCertificates, h
       }
       const control = /^\/v1\/runs\/([^/]{1,1024})\/control$/.exec(req.url);
       if (req.method === 'POST' && control) {
-        const value = parse(await readBody(req, CONTROL_LIMIT)); closed(value, ['registration', 'action', 'reason']);
-        return response(res, custodian.control(peer, binary(value.registration), decodeURIComponent(control[1]), value.action, value.reason));
+        const value = parse(await readBody(req, CONTROL_LIMIT)); closed(value, ['registration', 'action', 'reason', 'hops']);
+        return response(res, await custodian.control(peer, binary(value.registration), decodeURIComponent(control[1]), value.action, value.reason, value.hops));
       }
       response(res, { error: 'UnknownRoute' }, 404);
     } catch (error) {
@@ -156,7 +156,7 @@ export class PeerClient {
     const result = await this.#request('POST', `/v1/mobility/transfers/${id}/withdraw`, canonical({ offer: b64(envelope.offer), registration: b64(envelope.registration) }));
     closed(result, ['state', 'receipt']); requireThat(result.state === 'terminal', 'UnknownDecision'); return binary(result.receipt);
   }
-  async control(registration, runId, action, reason = null) {
-    return this.#request('POST', `/v1/runs/${encodeURIComponent(runId)}/control`, canonical({ registration: b64(registration), action, reason }));
+  async control(registration, runId, action, reason = null, hops = 32) {
+    return this.#request('POST', `/v1/runs/${encodeURIComponent(runId)}/control`, canonical({ registration: b64(registration), action, reason, hops }));
   }
 }

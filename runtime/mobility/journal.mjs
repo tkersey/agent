@@ -353,6 +353,12 @@ export class CustodyJournal {
     });
   }
   requestCancel(runId, reason) { return this.#transaction('cancel', () => { const next = core.cancel(this.run(runId), reason); this.#save(next); return next; }); }
+  cancellationForwarded(runId, epoch) {
+    return this.#transaction('cancel-forwarded', () => {
+      const run = this.run(runId);
+      if (run.custody_epoch === epoch && run.status === 'DEPARTED' && run.cancel_requested !== null) this.#save({ ...run, cancel_forwarded: true });
+    });
+  }
   retirementIssue(runId, executorVersion, code) {
     requireThat(executorVersion.run_id === runId && /^[A-Za-z0-9_]{1,80}$/.test(code), 'InvalidDiagnostic');
     return this.#transaction('retirement-diagnostic', () => {

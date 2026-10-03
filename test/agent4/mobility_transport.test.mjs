@@ -108,3 +108,11 @@ test('staging is inert and collection retains pending/accepted recovery inputs a
   assert.deepEqual(await f.clients.A.decide(envelope.offer), refused); assert.equal(f.hosts.A.status(f.id).custody, 'OFFERED');
   assert.ok(f.journals.A.hasArtifact('tenant', hash(envelope.outcome)));
 });
+
+test('mTLS cancellation reconciles ambiguous custody and reaches only the accepted owner', async t => {
+  const f = await network(t, { dropReceipt: true }), offered = await f.hosts.A.run(f.id);
+  assert.equal((await f.hosts.A.retryTransfer(offered.transfer_id)).kind, 'unknown');
+  assert.equal((await f.hosts.A.cancelRun(f.id, 'stop')).kind, 'cancel_forwarded');
+  assert.equal((await f.hosts.B.run(f.id)).kind, 'terminal'); assert.equal(f.result('B').kind, 'cancelled');
+  assert.equal(f.counters.A.cleanup, 0); assert.equal(f.counters.B.cleanup, 1);
+});

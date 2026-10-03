@@ -52,8 +52,7 @@ zig build check-mobility-continuation check-mobility-browser-continuation \
 These are **test scaffolds, not the durable custody reference route**. Their
 synthetic arrival receipts and empty immediate-requirement lists isolate
 continuation behavior; they provide no authority or custody safety evidence.
-The durable browser bridge, cancellation forwarding across departed/ambiguous
-custodians, the approval/write variant,
+The separate-process packaged host, the approval/write variant,
 source-free use archive, recovery tests and matched measurements remain required.
 The full acceptance suite and serial review closeout remain unfinished.
 
@@ -62,13 +61,13 @@ World, including `Here`, constraints, affinity, deterministic ties, unknown and
 overflowing costs, malformed candidates, refusal retries, exhaustion and the
 32-candidate bound. The browser consumer uses `ensure` for both legs.
 
-## Durable reference host (browser bridge pending)
+## Durable reference host
 
 `runtime/mobility` now contains a restricted canonical JSON codec, closed signed
 registration/offer/decision records, pure custody transitions, public-World
 admission, a SQLite journal, the policy gateway, and the custodian. Journal methods
 are privileged environmental operations; they are not user-facing RPCs. The mTLS
-peer server is implemented; the durable browser-origin bridge is still pending.
+peer server and authenticated browser-origin bridge are implemented.
 
 The custodian drives actual World outcomes, retains its resident executor between
 durability boundaries, and dispatches only the current committed request. Local
@@ -132,7 +131,7 @@ the complete protocol fault matrix. See the [Node SQLite API](https://nodejs.org
 and [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785.html) for the underlying interfaces.
 
 `check-mobility-integration` uses the same dependency arguments and currently runs
-nine host cases plus six mTLS transport cases. The host cases complete A→B→A using real
+thirteen host cases plus seven mTLS transport cases. The host cases complete A→B→A using real
 requirements and signed receipts, restarts both custodians, reconciles a lost old
 acceptance before a return, rejects stale/unbound successor publication, blocks
 uncertain delivery, and preserves cancellation/cleanup under revocation. The
@@ -148,8 +147,8 @@ decision endpoints, lost responses after acceptance, withdrawal, exact status
 reconciliation, body/encoding bounds, unknown peers, private export rejection,
 and artifact collection. Image cache hits transfer only the outcome. Endpoints
 come from deployment configuration; the client rejects redirects and arbitrary
-URLs. Both services run locally in this lane; the durable browser-origin bridge
-and separate-process packaged deployment remain to be qualified.
+URLs. Both services run locally in this lane; the separate-process packaged
+deployment remains to be qualified.
 
 `servePeers` exposes preflight, bounded image/outcome staging, decision, status,
 withdrawal and narrowly authorized run-control endpoints. A peer certificate maps
@@ -160,6 +159,27 @@ uncertainty, never as a refusal receipt. Test certificates are generated under a
 isolated temporary directory and do not alter system trust stores. The transport
 uses the platform [HTTPS](https://nodejs.org/api/https.html) and
 [TLS identity checks](https://nodejs.org/api/tls.html#tlscheckserveridentityhostname-cert).
+
+Cancellation during unknown custody first obtains a serialized withdrawal
+decision. Refusal resumes only cancellation at the source; acceptance forwards
+the request to the owner through authenticated control. Forwarding is bounded
+and a failed delivery remains a durable pending intent. A returning custodian
+retains an earlier unresolved cancellation. Neither forwarding nor cancellation
+reactivates a departed epoch.
+
+`check-mobility-browser` runs Chromium and Firefox against the durable origin
+bridge and actual mTLS peers. The deployer supplies session authentication;
+there is no permissive default. State access checks principal, tenant and audience.
+Mutations check the exact origin/port and session CSRF token. Assignments have
+fresh nonces and exact epoch/revision/incarnation bindings. Old tabs cannot
+publish into later assignments. The Worker receives only approved image/state,
+the pinned kernel identity, and saved control input. The host's resident World
+instance verifies the reported successor before journal publication.
+
+This lane terminates Worker A1 and restores the actual incoming checkpoint in
+fresh Worker A2, preserving captured cleanup. It also rejects missing sessions,
+CSRF tokens and stale assignments. Its data-host custodian currently runs in the
+test process; the required extracted, separate-process deployment is still pending.
 
 The selected foundation is Agent `b1f9d2866b5717d16339e7022a3b4d08951f0770`
 and its unchanged `conformance/agent4/dependencies.lock.json`: Boundary

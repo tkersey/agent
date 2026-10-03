@@ -25,7 +25,7 @@ export function initial(registration, registrationDigest, host, outcome, occurre
     principal_ref: registration.principal_ref, tenant_ref: registration.tenant_ref, image_digest: registration.image_digest, program_id: registration.program_id,
     trusted_runtime_profile: registration.trusted_runtime_profile, registration_digest: registrationDigest, predecessor_receipt_digest: registrationDigest,
     classification: [...registration.initial_classification], deployment_limits: { ...registration.deployment_limits }, policy_revision: registration.deployment_policy_revision,
-    cleanup_requirements: [], resource_pins: [], transfer_id: null, cancel_requested: null, cancel_applied: false, reply_digest: null, local_move_attempts: '0' };
+    cleanup_requirements: [], resource_pins: [], transfer_id: null, cancel_requested: null, cancel_applied: false, cancel_forwarded: false, reply_digest: null, local_move_attempts: '0' };
   return installOutcome(run, outcome, occurrenceId);
 }
 function installOutcome(run, outcome, occurrenceId) {
@@ -81,7 +81,7 @@ export function accept(existing, registration, offer, core, receiptDigest, arriv
     principal_ref: registration.principal_ref, tenant_ref: registration.tenant_ref, image_digest: offer.image_digest, program_id: offer.program_id,
     trusted_runtime_profile: offer.trusted_runtime_profile, registration_digest: offer.run_registration_digest, predecessor_receipt_digest: receiptDigest,
     classification: [...core.classification], deployment_limits: { ...core.deployment_limits }, policy_revision: core.policy_revision,
-    cleanup_requirements: [...offer.cleanup_requirements], resource_pins: [], transfer_id: null, cancel_requested: null, cancel_applied: false, local_move_attempts: existing?.local_move_attempts ?? '0',
+    cleanup_requirements: [...offer.cleanup_requirements], resource_pins: [], transfer_id: null, cancel_requested: existing?.cancel_requested ?? null, cancel_applied: false, cancel_forwarded: false, local_move_attempts: existing?.local_move_attempts ?? '0',
     outcome_kind: 'requested', outcome_digest: offer.outcome_digest, state_digest: offer.state_digest, request_digest: offer.request_digest,
     current_occurrence_id: offer.relocation_occurrence_id, reply_digest: arrivalDigest };
   return { run, occurrence: { id: offer.relocation_occurrence_id, run_id: offer.run_id, request_digest: offer.request_digest,
@@ -132,7 +132,7 @@ export function publish(run, occurrence, wanted, control, outcome, nextOccurrenc
   return { ...result, previous: occurrence === null ? null : { ...occurrence, status: 'ADMITTED' } };
 }
 export function cancel(run, reason) {
-  requireThat(['ACTIVE', 'OFFERED'].includes(run.status), 'CustodyNotLocal');
+  requireThat(['ACTIVE', 'OFFERED', 'DEPARTED'].includes(run.status), 'CustodyNotLocal');
   requireThat(typeof reason === 'string' && reason.length > 0 && Buffer.byteLength(reason) <= 256, 'InvalidCancellation');
   if (run.cancel_requested !== null) return run;
   return { ...run, cancel_requested: reason, attached: false, executor_incarnation: increment(run.executor_incarnation) };

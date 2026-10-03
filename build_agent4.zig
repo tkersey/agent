@@ -463,6 +463,7 @@ pub fn build(b: *std.Build) void {
     const mobility_journal = b.step("check-mobility-journal", "Check durable custody, signed decisions and process-crash recovery");
     const mobility_integration = b.step("check-mobility-integration", "Check real custody, placement, privacy and grants through the reference host");
     const mobility_browser = b.step("check-mobility-browser-continuation", "Check browser/data/fresh-browser continuation (custody scaffold)");
+    const mobility_durable_browser = b.step("check-mobility-browser", "Check authenticated browser execution through durable custody and mTLS");
     const components_check = b.step("check-component-tools", "Reuse three effectful objects in Agent and two standalone Programs");
     const component_objects = g.emitter("agent4-component-objects", g.module("test/agent4/component_objects.zig"));
     const component_link = g.emitter("agent4-component-link", g.module("test/agent4/component_link.zig"));
@@ -572,6 +573,13 @@ pub fn build(b: *std.Build) void {
         component_check.has_side_effects = true;
         components_check.dependOn(&component_check.step);
         if (browser_tools_path) |browser_tools| {
+            const durable_browser_run = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_durable_browser.test.mjs" });
+            durable_browser_run.setEnvironmentVariable("AGENT_MOBILITY_RUNTIME", runtime_path);
+            durable_browser_run.setEnvironmentVariable("AGENT_MOBILITY_BROWSER_TOOLS", browser_tools);
+            durable_browser_run.step.dependOn(mobility_images);
+            durable_browser_run.step.dependOn(&runtime_guard.step);
+            durable_browser_run.has_side_effects = true;
+            mobility_durable_browser.dependOn(&durable_browser_run.step);
             const mobility_browser_run = b.addSystemCommand(&.{ "node", "test/agent4/mobility_browser.mjs", runtime_path, browser_tools });
             mobility_browser_run.step.dependOn(mobility_images);
             mobility_browser_run.step.dependOn(&runtime_guard.step);
@@ -589,6 +597,7 @@ pub fn build(b: *std.Build) void {
             const missing_browser = b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools");
             browser_check.dependOn(&missing_browser.step);
             mobility_browser.dependOn(&missing_browser.step);
+            mobility_durable_browser.dependOn(&missing_browser.step);
         }
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
         runtime_work.dependOn(parser_intent);
@@ -773,6 +782,7 @@ pub fn build(b: *std.Build) void {
         mobility_journal.dependOn(&missing.step);
         mobility_integration.dependOn(&missing.step);
         mobility_browser.dependOn(&missing.step);
+        mobility_durable_browser.dependOn(&missing.step);
         components_check.dependOn(&missing.step);
         browser_check.dependOn(&missing.step);
         native_checks.dependOn(&missing.step);

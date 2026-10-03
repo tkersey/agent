@@ -83,6 +83,7 @@ export async function hostFixture(t, { privateData = false, privateCapture = fal
       return receipt;
     },
     withdraw(envelope) { return hosts[destination].withdraw(source, envelope); },
+    control(registration, id, action, reason, hops) { return hosts[destination].control(source, registration, id, action, reason, hops); },
   });
   t.after(async () => { for (const host of ['A', 'B']) { hosts[host].retireAll(); journals[host].close(); } await rm(area, { recursive: true, force: true }); });
   const registration = signRecord('run', { format: 'agent-mobility-run/v1', run_id: runId('issuer'), issuer_id: 'issuer', principal_ref: 'user', tenant_ref: 'tenant', image_digest: hash(image), program_id: programId,

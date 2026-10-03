@@ -599,7 +599,7 @@ pub fn build(b: *std.Build) void {
         journal_run.step.dependOn(&runtime_guard.step);
         journal_run.has_side_effects = true;
         mobility_journal.dependOn(&journal_run.step);
-        const host_run = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_host.test.mjs" });
+        const host_run = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_host.test.mjs", "test/agent4/mobility_deployment.test.mjs", "test/agent4/mobility_browser_bridge.test.mjs" });
         host_run.removeEnvironmentVariable("NODE_TEST_CONTEXT");
         host_run.setEnvironmentVariable("AGENT_MOBILITY_RUNTIME", runtime_path);
         host_run.step.dependOn(mobility_images);

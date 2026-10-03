@@ -322,6 +322,14 @@ after custody returns to create a fresh assignment. **Cancel** records intent at
 the custodian and follows the same cleanup protocol. Closing a tab is physical
 executor loss, not semantic cancellation.
 
+Session-bound CSRF tokens use the origin's ephemeral secret and do not retain a
+table of past sessions. Executor assignments are bounded while attachment is in
+flight and released at terminal publication. A revoked principal can attach and
+drive an already requested cancellation under the same tenant/audience checks;
+ordinary leaf dispatch still requires its current grant. A failed run in the
+Node pump reports its run ID and reason without preventing other runs from being
+visited.
+
 Stop the peer service before local mutation/recovery commands. These commands
 print metadata and receipts, not private captured values:
 
@@ -342,6 +350,11 @@ step. Retry preserves the exact signed offer. `accepted` and `refused` require a
 matching saved signed receipt; `unknown` means the source remains frozen. A
 pending cancellation at departed custody is a separate delivery question.
 Recovery converts interrupted dispatch to unknown delivery without redispatch.
+Retry rechecks the relocation's named export policy before preflight and artifact
+delivery. An already saved acceptance can still be reconciled after revocation.
+Image and outcome limits apply to initial local admission, accepted transfers,
+policy tightening and every durable successor; rejection preserves the prior
+checkpoint and any acquired reply.
 
 `metrics` reports local move attempts, refusals by bounded reason, active pins,
 ambiguity duration and stale-dispatch rejections since this journal handle opened.

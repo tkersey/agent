@@ -12,6 +12,15 @@ import * as core from './custody.mjs';
 const equal = (a, b) => a.length === b.length && a.every((byte, i) => byte === b[i]);
 const json = value => new TextDecoder().decode(canonical(value));
 const readJson = value => value === null || value === undefined ? null : parse(new TextEncoder().encode(value));
+function artifactLimits(limits, image, outcome) {
+  requireThat(image.length <= limits.maximum_image_bytes && outcome.length <= limits.maximum_outcome_bytes, 'ArtifactCapacity');
+}
+function policyState(run, { cleanupRequirements, classification, deploymentLimits, policyRevision }) {
+  labels(cleanupRequirements, 16); cleanupRequirements.forEach(digest); labels(classification);
+  requireThat(run.classification.every(label => classification.includes(label)), 'ClassificationDowngrade');
+  for (const key of Object.keys(run.deployment_limits)) requireThat(deploymentLimits[key] <= run.deployment_limits[key], 'LimitsWidened');
+  return { ...run, cleanup_requirements: [...cleanupRequirements], classification: [...classification], deployment_limits: { ...deploymentLimits }, policy_revision: policyRevision };
+}
 
 export class CustodyJournal {
   #db; #host; #keys; #signer; #admission; #fault; #quota; #recordLimit; #staleDispatch = new Map();
@@ -137,7 +146,7 @@ export class CustodyJournal {
     const count = this.#get('SELECT (SELECT count(*) FROM runs WHERE tenant=?) + (SELECT count(*) FROM transfers WHERE tenant=?) + (SELECT count(*) FROM occurrences JOIN runs USING(run_id) WHERE tenant=?) + (SELECT count(*) FROM staging WHERE tenant=?) AS n', tenant, tenant, tenant, tenant).n;
     requireThat(count + additions <= this.#recordLimit, 'TenantRecordCapacity');
   }
-  register(registrationBytes, admitted) {
+  register(registrationBytes, admitted, policy = null) {
     const data = this.#admission.read(admitted);
     return this.#transaction('register', () => {
       const registration = this.#registration(registrationBytes);
@@ -145,6 +154,8 @@ export class CustodyJournal {
       for (const key of ['image_digest', 'program_id', 'trusted_runtime_profile']) requireThat(registration[key] === data.metadata[key], 'RegistrationMismatch');
       this.#room(registration.tenant_ref, 2);
       const state = core.initial(registration, hash(registrationBytes), this.#host, data.metadata, opaqueId());
+      if (policy !== null) state.run = policyState(state.run, policy);
+      artifactLimits(state.run.deployment_limits, data.image, data.outcome);
       this.#remember(registration); this.#artifact(registration.tenant_ref, registrationBytes);
       this.#artifact(registration.tenant_ref, data.image); this.#artifact(registration.tenant_ref, data.outcome);
       this.#save(state.run); this.#saveOccurrence(state.occurrence, true); return state.run;
@@ -157,13 +168,11 @@ export class CustodyJournal {
       const next = { ...run, cleanup_requirements: [...requirements] }; this.#save(next); return next;
     });
   }
-  applyPolicy(runId, wanted, { cleanupRequirements, classification, deploymentLimits, policyRevision }) {
+  applyPolicy(runId, wanted, policy) {
     return this.#transaction('policy', () => {
       const run = this.run(runId); core.active(run, wanted, false);
-      labels(cleanupRequirements, 16); cleanupRequirements.forEach(digest); labels(classification);
-      requireThat(run.classification.every(label => classification.includes(label)), 'ClassificationDowngrade');
-      for (const key of Object.keys(run.deployment_limits)) requireThat(deploymentLimits[key] <= run.deployment_limits[key], 'LimitsWidened');
-      const next = { ...run, cleanup_requirements: [...cleanupRequirements], classification: [...classification], deployment_limits: { ...deploymentLimits }, policy_revision: policyRevision };
+      const next = policyState(run, policy);
+      artifactLimits(next.deployment_limits, this.artifact(run.tenant_ref, run.image_digest), this.artifact(run.tenant_ref, run.outcome_digest));
       this.#save(next); return next;
     });
   }
@@ -282,6 +291,7 @@ export class CustodyJournal {
       requireThat(registration.initial_classification.every(label => offer.classification.includes(label)), 'ClassificationDowngrade');
       requireThat(offer.admission_deadline === null || counter(offer.admission_deadline) >= BigInt(Date.now()), 'AdmissionExpired');
       const acceptedCore = core.acceptedCore(offer, policyRevision, classification, deploymentLimits);
+      artifactLimits(acceptedCore.deployment_limits, data.image, data.outcome);
       const receipt = this.#decision(offer, acceptedCore, null), arrival = encodeArrival(offer, hash(receipt), observation);
       const next = core.accept(this.run(offer.run_id), registration, offer, acceptedCore, hash(receipt), hash(arrival));
       this.#room(registration.tenant_ref, this.run(offer.run_id) === null ? 3 : 2); this.#remember(offer); this.#remember(registration); this.#remember(parse(receipt));
@@ -354,6 +364,7 @@ export class CustodyJournal {
     const data = this.#admission.read(admitted);
     return this.#transaction('publish', () => {
       const run = this.run(runId); requireThat(run.image_digest === data.metadata.image_digest && run.program_id === data.metadata.program_id, 'ImageMismatch');
+      artifactLimits(run.deployment_limits, data.image, data.outcome);
       requireThat(data.predecessor?.outcome_digest === run.outcome_digest && hash(canonical(data.predecessor.control)) === hash(canonical(control)), 'UnboundSuccessor');
       if (data.metadata.kind === 'requested') this.#room(run.tenant_ref);
       const next = core.publish(run, this.#occurrence(run), wanted, control, data.metadata, opaqueId());

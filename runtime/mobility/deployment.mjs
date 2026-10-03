@@ -17,7 +17,7 @@ import { hash } from './protocol.mjs';
 import { schemas } from './values.mjs';
 
 export async function openDeployment(configPath, { create = false } = {}) {
-  const root = dirname(resolve(configPath)), config = parse(readRegular(configPath, 1 << 20));
+  const root = dirname(resolve(configPath)), config = parse(readRegular(configPath, 1 << 20), { maximum: 1 << 20, canonicalOnly: false });
   closed(config, ['format', 'hostId', 'trustDomain', 'revision', 'worldRuntime', 'directory', 'deploymentGeneration', 'keys', 'signer', 'deployments', 'bindings', 'labelDestinations', 'revoked', 'peers', 'tls', 'execution']);
   requireThat(config.format === 'agent-mobility-deployment/v1' && ['node', 'browser'].includes(config.execution), 'DeploymentConfiguration');
   const path = value => { requireThat(typeof value === 'string' && value.length > 0, 'DeploymentPath'); return resolve(root, value); };
@@ -89,10 +89,14 @@ export async function openDeployment(configPath, { create = false } = {}) {
 export async function pumpDeployment(deployment) {
   const results = [];
   for (const { run } of deployment.journal.recover()) {
-    if (run.status === 'ACTIVE' && deployment.config.execution === 'node') results.push(await deployment.custodian.run(run.run_id));
-    const current = deployment.journal.run(run.run_id);
-    if (current.status === 'OFFERED') results.push(await deployment.custodian.retryTransfer(current.transfer_id));
-    else if (current.status === 'DEPARTED' && current.cancel_requested !== null && !current.cancel_forwarded) results.push(await deployment.custodian.cancelRun(current.run_id, current.cancel_requested));
+    try {
+      if (run.status === 'ACTIVE' && deployment.config.execution === 'node') results.push(await deployment.custodian.run(run.run_id));
+      const current = deployment.journal.run(run.run_id);
+      if (current.status === 'OFFERED') results.push(await deployment.custodian.retryTransfer(current.transfer_id));
+      else if (current.status === 'DEPARTED' && current.cancel_requested !== null && !current.cancel_forwarded) results.push(await deployment.custodian.cancelRun(current.run_id, current.cancel_requested));
+    } catch (error) {
+      results.push({ kind: 'failed', run_id: run.run_id, reason: /^[A-Za-z0-9_]{1,80}$/.test(error.code ?? '') ? error.code : 'RunFailed' });
+    }
   }
   return results;
 }

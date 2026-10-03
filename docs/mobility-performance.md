@@ -5,7 +5,7 @@ retains a child and cleanup marker, and presents the result. The moving variants
 complete A→B→A (epochs 0→1→2); stationary execution has the same capabilities
 and SQLite durability locally. No paid provider or production credential is used.
 The [raw observations](../conformance/agent4/mobility-measurements.json) include
-320 samples, artifact/input identities, phase timings, browser observations and
+480 samples, artifact/input identities, phase timings, browser observations and
 fresh-process recovery. These are bounded local measurements, not WAN estimates.
 
 The platform was Apple M2 Pro, Darwin 27.2 arm64, local APFS, Node 26.10.0,
@@ -13,7 +13,7 @@ SQLite 3.53.4 and Zig 0.16.0. Boundary `65f46131f366bdd21aa98701f4110ecb801d2c8d
 and World `a48d5fd0cb2d4fcbe79bc3188f354d7d036d29f5` are unchanged. The kernel is
 `9627eb1e66239119bccb4ddcd43b4f6c757180dab930a9feb276671262f735d1`; the verified
 runtime inventory is `d96a01edd4bbfa22ab1d1540f5eb7b2d29f1c350e424012c4d33d19fbd5fba86`.
-Both measurement sets came from the explicitly dirty `73f449f` worktree while
+The historical baseline and candidate sets came from the explicitly dirty `73f449f` worktree while
 constructing this harness. The baseline uses that commit's preflight behavior;
 the candidate reuses immutable encoding within each preflight call. Actual image
 and complete synthetic task-reply hashes are recorded per sample; these results
@@ -128,6 +128,48 @@ SQLite, restore World, consume the saved arrival and publish the next READY read
 without redispatching a leaf. Median internal time is 64.313 ms; median process
 start-to-exit is 171.590 ms (range 170.255–173.130). This tests process recovery on
 local APFS with SQLite EXTRA, not power loss or backup rollback.
+
+## Post-review repair measurements
+
+The repaired implementation was measured again with ten processes per cell
+(160 additional samples), on the same dependency tuple and platform. The raw
+`post_review_repairs` section records the dirty `cd6856d` source observation and
+SHA-256 identities of the actual runtime and harness files. The preceding tables
+retain the earlier optimization study; this follow-up measures the repaired code.
+No causal speedup is inferred from comparing these separate sessions.
+
+| Mode | Cache | R | Total median ms | First read median ms | Commits |
+|---|---|---:|---:|---:|---:|
+| manual | cold | 1 | 44.990 | 27.167 | 0 |
+| manual | cold | 16 | 57.143 | 41.376 | 0 |
+| manual | warm | 1 | 20.367 | 8.723 | 0 |
+| manual | warm | 16 | 33.437 | 20.815 | 0 |
+| fixed | cold | 1 | 483.323 | 197.490 | 41 |
+| fixed | cold | 16 | 544.062 | 277.205 | 41 |
+| fixed | warm | 1 | 418.946 | 151.771 | 40 |
+| fixed | warm | 16 | 470.862 | 194.468 | 40 |
+| ensure | cold | 1 | 548.789 | 233.259 | 47 |
+| ensure | cold | 16 | 613.845 | 314.351 | 47 |
+| ensure | warm | 1 | 518.966 | 184.498 | 46 |
+| ensure | warm | 16 | 556.011 | 233.776 | 46 |
+| stationary | cold | 1 | 330.088 | 103.938 | 32 |
+| stationary | cold | 16 | 308.413 | 106.868 | 32 |
+| stationary | warm | 1 | 405.154 | 103.074 | 32 |
+| stationary | warm | 16 | 332.637 | 99.509 | 32 |
+
+Registration and initial policy admission now commit atomically, removing one
+transaction per run. The existing reconstruction and working-memory guards are
+unchanged and passed for every sample. Artifact sizes, network-byte accounting
+and peak working-memory bounds remain as in the earlier study. The harness
+records artifacts from actual delivery instead of separately admitting an
+envelope for observation; the first qualification attempt detected those extra
+restores, and its failure was retained before correcting the observation path.
+
+Fresh browser observations were chromium 856.388 ms and firefox 913.476 ms
+from A1 attach through terminal A2. Five fresh-process recovery observations had
+median import/verify/open/restore/publication time 66.571 ms and median total
+process time 171.851 ms. These retain the earlier bounded local
+method and are not latency-distribution or power-loss claims.
 
 ## Reproduction
 

@@ -32,11 +32,12 @@ export class Custodian {
   async registerRun(registrationBytes, image, initialArgs) {
     const registration = this.#journal.registration(registrationBytes); this.#policy.authorizeRun(registration); this.#policy.checkCleanup(registration);
     requireThat(registration.initial_host_id === this.hostId && hash(image) === registration.image_digest, 'RegistrationMismatch');
+    const policy = this.#policyValues({ ...registration, classification: registration.initial_classification });
+    requireThat(image.length <= policy.deploymentLimits.maximum_image_bytes, 'ArtifactCapacity');
     const executor = await this.#admission.start(image, initialArgs, registration.program_id);
     try {
-      let run = this.#journal.register(registrationBytes, executor.current());
+      let run = this.#journal.register(registrationBytes, executor.current(), policy);
       if (run.status === 'ACTIVE') {
-        run = this.#journal.applyPolicy(run.run_id, version(run), this.#policyValues(run));
         run = this.#journal.attach(run.run_id, version(run)); this.#residents.set(run.run_id, { executor, version: version(run) });
       } else executor.retire();
       return run;
@@ -71,10 +72,10 @@ export class Custodian {
   diagnostics() { return structuredClone(this.#diagnostics); }
   metrics(id) { return this.#journal.metrics(id); }
   noteStaleDispatch(id) { this.#journal.noteStaleDispatch(id); }
-  authorizeUser(id, identity, cleanup = false) {
+  authorizeUser(id, identity, { cleanup = false, executor = false } = {}) {
     const run = this.#run(id);
     requireThat(identity?.principal === run.principal_ref && identity?.tenant === run.tenant_ref, 'UserDenied');
-    this.#policy.authorizeRun(run, { cleanup }); return run;
+    this.#policy.authorizeRun(run, { cleanup: cleanup || (executor && run.cancel_requested !== null) }); return run;
   }
   async executorAssignment(id) {
     requireThat(!this.#busy.has(id), 'ExecutorBusy'); this.#busy.add(id);
@@ -246,16 +247,27 @@ export class Custodian {
       return { kind: 'refused', status: this.status(id) };
     }
   }
-  transferEnvelope(transferId) {
+  async #outgoingTransfer(transferId) {
     const saved = this.#journal.transfer(transferId); requireThat(saved !== null, 'UnknownTransfer');
     const offer = parse(saved.offer), run = this.#run(offer.run_id);
     requireThat(offer.source_host_id === this.hostId && run.status === 'OFFERED' && run.transfer_id === transferId, 'TransferNotPending');
-    this.#policy.mayExport(run, offer.destination_host_id);
+    const image = this.#journal.artifact(run.tenant_ref, offer.image_digest), outcome = this.#journal.artifact(run.tenant_ref, offer.outcome_digest);
+    const token = await this.#admission.parked(image, outcome), relocation = this.#admission.read(token).relocation;
+    this.#authorizeTransfer(offer, relocation);
     const observation = run.placement_evidence?.observations.find(value => value.host_id === offer.destination_host_id);
     // A fresh preflight may have a newer observation than discovery. Recompute
     // delivery metadata through preflight in retryTransfer and bind its digest.
-    return { offer: saved.offer, registration: this.#registration(run), predecessor: offer.source_epoch === '0' ? null : this.#journal.artifact(run.tenant_ref, offer.predecessor_receipt_digest), observation,
-      image: this.#journal.artifact(run.tenant_ref, offer.image_digest), outcome: this.#journal.artifact(run.tenant_ref, offer.outcome_digest) };
+    return { relocation, envelope: { offer: saved.offer, registration: this.#registration(run), predecessor: offer.source_epoch === '0' ? null : this.#journal.artifact(run.tenant_ref, offer.predecessor_receipt_digest), observation,
+      image, outcome } };
+  }
+  #authorizeTransfer(offer, relocation) {
+    const run = this.#run(offer.run_id);
+    requireThat(run.status === 'OFFERED' && run.transfer_id === offer.transfer_id, 'TransferNotPending');
+    requireThat(relocation !== null && relocation.destination_host_id === offer.destination_host_id, 'RelocationMismatch');
+    this.#policy.mayExport(run, offer.destination_host_id, relocation.export_policy_ref);
+  }
+  async transferEnvelope(transferId) {
+    return (await this.#outgoingTransfer(transferId)).envelope;
   }
   async retryTransfer(transferId) {
     const saved = this.#journal.transfer(transferId); requireThat(saved !== null, 'UnknownTransfer');
@@ -263,12 +275,13 @@ export class Custodian {
     try {
       let receipt = await peer.status(saved.offer);
       if (receipt === null) {
-        const envelope = this.transferEnvelope(transferId);
-        const token = await this.#admission.parked(envelope.image, envelope.outcome), relocation = this.#admission.read(token).relocation;
+        const { envelope, relocation } = await this.#outgoingTransfer(transferId);
         const run = this.#run(offer.run_id), savedConstraints = run.placement_evidence?.requirements_digest === relocation.requirements_digest ? run.placement_evidence.constraints : null;
         const constraints = savedConstraints ? decodeValue(schemas.constraints, Buffer.from(savedConstraints, 'base64url')) : [[], { tag: 1, value: offer.destination_host_id }, { tag: 0, value: null }, BigInt(run.deployment_limits.maximum_outcome_bytes)];
+        this.#authorizeTransfer(offer, relocation);
         const ready = await peer.preflight(this.#metadata(run, relocation.requirements, constraints));
         requireThat(hash(encodeValue(schemas.observation, observationValue(ready.observation))) === offer.destination_observation_digest, 'ObservationMismatch');
+        this.#authorizeTransfer(offer, relocation);
         envelope.observation = ready.observation; envelope.requirements = canonicalRequirements(relocation.requirements); envelope.constraints = encodeValue(schemas.constraints, constraints); envelope.image_cached = ready.has_image === true; receipt = await peer.deliver(envelope);
       }
       this.#journal.receiveDecision(saved.offer, receipt);

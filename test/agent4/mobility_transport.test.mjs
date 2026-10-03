@@ -109,7 +109,7 @@ test('server-only classification prevents network upload even with an explicit p
 });
 
 test('staging is inert and collection retains pending/accepted recovery inputs and terminal receipts', async t => {
-  const f = await network(t), out = await f.hosts.A.run(f.id), envelope = f.hosts.A.transferEnvelope(out.transfer_id);
+  const f = await network(t), out = await f.hosts.A.run(f.id), envelope = await f.hosts.A.transferEnvelope(out.transfer_id);
   const token = await f.admissions.A.parked(envelope.image, envelope.outcome);
   envelope.requirements = canonicalRequirements(f.admissions.A.read(token).relocation.requirements);
   envelope.constraints = Buffer.from(f.journals.A.run(f.id).placement_evidence.constraints, 'base64url');
@@ -145,7 +145,7 @@ for (const badReply of ['http202', 'http503', 'redirect', 'malformedJSON', 'unkn
 });
 
 test('duplicate and reordered artifact/decision messages preserve one saved target decision', async t => {
-  const f = await network(t), out = await f.hosts.A.run(f.id), envelope = f.hosts.A.transferEnvelope(out.transfer_id);
+  const f = await network(t), out = await f.hosts.A.run(f.id), envelope = await f.hosts.A.transferEnvelope(out.transfer_id);
   const token = await f.admissions.A.parked(envelope.image, envelope.outcome);
   envelope.requirements = canonicalRequirements(f.admissions.A.read(token).relocation.requirements);
   envelope.constraints = Buffer.from(f.journals.A.run(f.id).placement_evidence.constraints, 'base64url');

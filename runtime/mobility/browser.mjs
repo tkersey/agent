@@ -1,7 +1,7 @@
 // Authenticated origin bridge. The deployer supplies session authentication;
 // browser reports cannot mint replies, authority, images or successor tokens.
 import { createServer } from 'node:https';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, timingSafeEqual, createHmac } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { canonical, parse, requireThat, CONTROL_LIMIT } from './canonical.mjs';
@@ -19,7 +19,11 @@ async function body(req, maximum) {
 }
 export async function serveBrowser(custodian, { key, cert, authenticate, audience, runtimePath, kernelBytes, host = '127.0.0.1', port = 0, publicOrigin = null, maximumAssignments = 64 }) {
   requireThat(typeof authenticate === 'function' && typeof audience === 'string', 'BrowserAuthenticationRequired');
-  const csrf = new Map(), assignments = new Map(); let origin;
+  requireThat(Number.isSafeInteger(maximumAssignments) && maximumAssignments > 0, 'AssignmentCapacity');
+  const csrfKey = randomBytes(32), assignments = new Map(); let origin;
+  // Authentication is checked on every request. A session-bound token needs no
+  // historical session table and carries no authority after logout.
+  const csrf = identity => createHmac('sha256', csrfKey).update(canonical([identity.sessionId, identity.principal, identity.tenant, audience])).digest('hex');
   const modules = new Set(['index.mjs', 'kernel.mjs', 'codec.mjs', 'errors.mjs', 'values.mjs', 'wire.mjs', 'wasm.mjs']);
   const worker = await readFile(new URL('./worker.mjs', import.meta.url));
   const assets = new Map(await Promise.all([['/client.mjs', './client.mjs'], ['/canonical.mjs', './canonical.mjs'], ['/agent-values.mjs', '../values.mjs']].map(async ([route, path]) => [route, await readFile(new URL(path, import.meta.url))])));
@@ -36,14 +40,14 @@ export async function serveBrowser(custodian, { key, cert, authenticate, audienc
       const asset = /^\/world\/([a-z-]+\.mjs)$/.exec(req.url);
       if (req.method === 'GET' && asset && modules.has(asset[1])) return binary(res, await readFile(join(runtimePath, 'src/embedding', asset[1])), 'text/javascript');
       if (req.method === 'GET' && req.url === '/v1/browser/session') {
-        if (!csrf.has(identity.sessionId)) { requireThat(csrf.size < maximumAssignments, 'SessionCapacity'); csrf.set(identity.sessionId, opaque()); }
-        return json(res, { csrf: csrf.get(identity.sessionId), host_id: custodian.hostId });
+        return json(res, { csrf: csrf(identity), host_id: custodian.hostId });
       }
       const route = /^\/v1\/browser\/runs\/([^/]+)\/(attach|command|report|image|outcome|reply|status|metrics|retry|cancel)$/.exec(req.url);
       requireThat(route !== null, 'UnknownRoute'); const id = decodeURIComponent(route[1]), operation = route[2];
-      const run = custodian.authorizeUser(id, identity, ['cancel', 'status', 'metrics'].includes(operation));
+      const run = custodian.authorizeUser(id, identity, { cleanup: ['cancel', 'status', 'metrics'].includes(operation),
+        executor: ['attach', 'command', 'report', 'image', 'outcome', 'reply'].includes(operation) });
       if (req.method === 'POST') {
-        requireThat(req.headers.origin === origin && req.headers['x-agent-csrf'] === csrf.get(identity.sessionId) && csrf.has(identity.sessionId), 'CsrfDenied');
+        requireThat(req.headers.origin === origin && typeof req.headers['x-agent-csrf'] === 'string' && same(req.headers['x-agent-csrf'], csrf(identity)), 'CsrfDenied');
       }
       if (req.method === 'GET' && operation === 'status') return json(res, custodian.status(id));
       if (req.method === 'GET' && operation === 'metrics') return json(res, custodian.metrics(id));
@@ -57,11 +61,17 @@ export async function serveBrowser(custodian, { key, cert, authenticate, audienc
       }
       if (req.method === 'POST' && operation === 'attach') {
         await body(req, 0);
-        for (const [nonce, assigned] of assignments) if (assigned.id === id) assignments.delete(nonce);
+        for (const [nonce, assigned] of assignments) {
+          requireThat(assigned.id !== id || !assigned.pending, 'ExecutorBusy');
+          if (!assigned.pending && (assigned.id === id || ['TERMINAL', 'DEPARTED'].includes(custodian.status(assigned.id).custody))) assignments.delete(nonce);
+        }
         requireThat(assignments.size < maximumAssignments, 'AssignmentCapacity');
-        const data = await custodian.executorAssignment(id), nonce = opaque();
-        assignments.set(nonce, { ...data, id, session: identity.sessionId, reply: null });
-        return json(res, { nonce, version: data.version, runtime_profile: data.runtime_profile, quantum: '10000' });
+        const nonce = opaque(); assignments.set(nonce, { id, pending: true });
+        try {
+          const data = await custodian.executorAssignment(id);
+          assignments.set(nonce, { ...data, id, session: identity.sessionId, reply: null });
+          return json(res, { nonce, version: data.version, runtime_profile: data.runtime_profile, quantum: '10000' });
+        } catch (error) { assignments.delete(nonce); throw error; }
       }
       const nonce = req.headers['x-agent-assignment'], assigned = assignments.get(nonce);
       const encodedVersion = req.headers['x-agent-version'];
@@ -83,6 +93,7 @@ export async function serveBrowser(custodian, { key, cert, authenticate, audienc
         const output = await body(req, 8 << 20);
         const result = await custodian.publishExecutor(id, assigned.version, output);
         assigned.version = result.version; assigned.outcome = Uint8Array.from(output); assigned.reply = null;
+        if (result.status.custody === 'TERMINAL') assignments.delete(nonce);
         return json(res, result);
       }
       requireThat(false, 'UnknownRoute');

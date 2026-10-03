@@ -223,7 +223,7 @@ test('a returning run retains an earlier cancellation whose forwarding was unava
 });
 
 test('concurrent duplicate offers produce one exact decision and one destination execution', async t => {
-  const f = await hostFixture(t), out = await f.hosts.A.run(f.id), envelope = f.hosts.A.transferEnvelope(out.transfer_id);
+  const f = await hostFixture(t), out = await f.hosts.A.run(f.id), envelope = await f.hosts.A.transferEnvelope(out.transfer_id);
   const receipts = await Promise.all([f.hosts.B.receiveOffer('A', envelope), f.hosts.B.receiveOffer('A', envelope)]);
   assert.deepEqual(receipts[0], receipts[1]); assert.equal(f.journals.B.run(f.id).executor_incarnation, '0');
   f.journals.A.receiveDecision(envelope.offer, receipts[0]);
@@ -248,7 +248,7 @@ test('concurrent executor attachment through two custodians fences the losing as
 test('a returning offer with a nonmatching predecessor cannot overwrite unresolved outbound custody', async t => {
   const f = await hostFixture(t, { lostAck: true }), out = await f.hosts.A.run(f.id);
   assert.equal((await f.hosts.A.retryTransfer(out.transfer_id)).kind, 'unknown');
-  const back = await f.hosts.B.run(f.id), envelope = f.hosts.B.transferEnvelope(back.transfer_id), before = f.journals.A.run(f.id);
+  const back = await f.hosts.B.run(f.id), envelope = await f.hosts.B.transferEnvelope(back.transfer_id), before = f.journals.A.run(f.id);
   envelope.predecessor = canonical({ not_a_receipt: true });
   assert.equal(parse(await f.hosts.A.receiveOffer('B', envelope)).decision, 'refused');
   assert.deepEqual(f.journals.A.run(f.id), before); assert.equal(f.hosts.A.status(f.id).custody, 'OFFERED');
@@ -257,7 +257,7 @@ test('a returning offer with a nonmatching predecessor cannot overwrite unresolv
 
 test('a fresh transfer cannot reactivate a terminal run using an earlier valid checkpoint', async t => {
   const f = await hostFixture(t), out = await f.hosts.A.run(f.id); await f.hosts.A.retryTransfer(out.transfer_id);
-  const back = await f.hosts.B.run(f.id), envelope = f.hosts.B.transferEnvelope(back.transfer_id);
+  const back = await f.hosts.B.run(f.id), envelope = await f.hosts.B.transferEnvelope(back.transfer_id);
   await f.hosts.B.retryTransfer(back.transfer_id); await f.hosts.A.run(f.id);
   const before = f.journals.A.run(f.id), { signature: _, ...offer } = parse(envelope.offer);
   envelope.offer = signRecord('offer', { ...offer, transfer_id: opaqueId() }, f.pairs.B.privateKey);
@@ -346,7 +346,7 @@ test('dispatch admission precedes queued I/O and an unsettled ordinary occurrenc
 for (const corrupt of ['image', 'outcome', 'oversized', 'ordinary-boundary']) test(`${corrupt} input is refused by actual target admission before any effect`, async t => {
   const f = await hostFixture(t), initial = f.journals.A.run(f.id);
   const initialBytes = f.journals.A.artifact('tenant', initial.outcome_digest);
-  const out = await f.hosts.A.run(f.id), envelope = f.hosts.A.transferEnvelope(out.transfer_id);
+  const out = await f.hosts.A.run(f.id), envelope = await f.hosts.A.transferEnvelope(out.transfer_id);
   if (corrupt === 'image') envelope.image = Uint8Array.of(0);
   else if (corrupt === 'outcome') envelope.outcome = Uint8Array.of(0);
   else if (corrupt === 'oversized') envelope.outcome = new Uint8Array((8 << 20) + 1);
@@ -366,7 +366,7 @@ test('a valid but unapproved image and a wrong trusted kernel are denied before 
 });
 
 test('an invalid offer signature is a protocol rejection, never a fabricated custody refusal', async t => {
-  const f = await hostFixture(t), offered = await f.hosts.A.run(f.id), envelope = f.hosts.A.transferEnvelope(offered.transfer_id), original = envelope.offer;
+  const f = await hostFixture(t), offered = await f.hosts.A.run(f.id), envelope = await f.hosts.A.transferEnvelope(offered.transfer_id), original = envelope.offer;
   const signed = parse(original); signed.signature = (signed.signature[0] === 'A' ? 'B' : 'A') + signed.signature.slice(1);
   envelope.offer = canonical(signed);
   await assert.rejects(f.hosts.B.receiveOffer('A', envelope), { code: 'InvalidSignature' });
@@ -444,4 +444,101 @@ for (const when of ['before', 'after']) test(`leaf response fault ${when} I/O re
   assert.equal(f.hosts.B.status(f.id).occurrence, 'UNKNOWN'); assert.deepEqual(f.file.counts().reads, when === 'after' ? [0n] : []);
   f.restart('B'); assert.equal((await f.hosts.B.run(f.id)).kind, 'effect_unknown');
   assert.deepEqual(f.file.counts().reads, when === 'after' ? [0n] : []); assert.equal(f.hosts.A.status(f.id).custody, 'DEPARTED');
+});
+
+test('distinct wildcard and exact requirements may select the same binding', async t => {
+  const f = await hostFixture(t), wanted = f.taskValue[3][0][0][0], wildcard = structuredClone(wanted);
+  wildcard[7] = { tag: 0, value: null };
+  const inspect = requirements => f.policies.B.preflight(parse(f.registration), requirements, f.taskValue[3][0][1], ['shared']);
+  assert.equal(inspect([wanted, wildcard]).binding_digest, inspect([wanted]).binding_digest);
+  assert.throws(() => inspect([wanted, wanted]), { code: 'DuplicateRequirement' });
+});
+
+for (const restriction of ['state', 'result']) test(`preflight and cleanup admission reject known ${restriction} disclosure denial`, async t => {
+  const f = await hostFixture(t), run = f.journals.A.run(f.id), reader = f.bindings.B.find(binding => binding.scope === 'read');
+  const restrict = binding => { if (restriction === 'state') binding.allowedStateLabels = []; else binding.classification = ['origin-only']; };
+  restrict(reader);
+  assert.throws(() => f.policies.B.preflight(parse(f.registration), f.taskValue[3][0][0], f.taskValue[3][0][1], ['shared']), { code: 'CapabilityUnavailable' });
+  restrict(f.bindings.B.find(binding => binding.cleanup));
+  assert.throws(() => f.policies.B.checkCleanup(run), { code: 'CleanupUnsupported' });
+});
+
+test('dispatch skips a disclosure-ineligible binding without exposing payload to its authorizer', async t => {
+  const f = await hostFixture(t, { requirementCount: 2 }), readers = f.bindings.B.filter(binding => binding.scope.startsWith('read'));
+  let deniedCalls = 0; readers[0].allowedStateLabels = []; readers[0].authorize = () => { deniedCalls++; return true; };
+  const request = { semanticIdentity: readers[0].operation, payloadSchema: readers[0].payloadSchema, resumeSchema: readers[0].resultSchema,
+    payload: encodeValue(f.schemas.read, [f.declared, 0n, 16n]) };
+  assert.equal(f.policies.B.dispatch(f.journals.A.run(f.id), request).binding, readers[1]);
+  assert.equal(deniedCalls, 0);
+  f.revoked.B.add('tenant/user');
+  assert.throws(() => f.policies.B.dispatch(f.journals.A.run(f.id), request), { code: 'PrincipalRevoked' });
+});
+
+for (const when of ['before-retry', 'during-preflight', 'after-restart']) test(`named export revocation ${when} prevents transfer disclosure`, async t => {
+  const f = await hostFixture(t), offered = await f.hosts.A.run(f.id), peer = f.peerMaps.A.get('B'), preflight = peer.preflight;
+  if (when === 'during-preflight') peer.preflight = async metadata => { const ready = await preflight(metadata); f.deployment.exportPolicies['fixture-shared'] = []; return ready; };
+  else f.deployment.exportPolicies['fixture-shared'] = [];
+  if (when === 'after-restart') f.restart('A');
+  const before = f.counters.preflights.B;
+  const result = await f.hosts.A.retryTransfer(offered.transfer_id);
+  assert.equal(result.kind, 'unknown'); assert.equal(result.reason, 'ExportPolicyDenied');
+  assert.equal(f.counters.bytes.B, 0); assert.equal(f.journals.B.run(f.id), null);
+  assert.equal(f.counters.preflights.B - before, when === 'during-preflight' ? 1 : 0);
+  peer.preflight = preflight; f.deployment.exportPolicies['fixture-shared'] = ['A', 'B'];
+  assert.equal((await f.hosts.A.retryTransfer(offered.transfer_id)).kind, 'accepted');
+});
+
+for (const source of ['registration', 'local']) for (const kind of ['image', 'outcome']) test(`${source} ${kind} limit rejects local registration without custody`, async t => {
+  const f = await hostFixture(t, { register: false });
+  let registration = f.registration;
+  if (source === 'local') f.deployment.limits = { ...f.deployment.limits, [`maximum_${kind}_bytes`]: 1 };
+  else {
+    const { signature: _, ...record } = parse(registration);
+    registration = signRecord('run', { ...record, deployment_limits: { ...record.deployment_limits, [`maximum_${kind}_bytes`]: 1 } }, f.pairs.issuer.privateKey);
+  }
+  await assert.rejects(f.hosts.A.registerRun(registration, f.image, encodeValue(f.schemas.integer, 123n)), { code: 'ArtifactCapacity' });
+  assert.equal(f.journals.A.run(f.id), null); assert.equal(f.counters.A.task, 0);
+});
+
+test('oversized successor preserves the parked outcome and acquired reply across restart', async t => {
+  const f = await hostFixture(t), initial = f.journals.A.run(f.id);
+  const maximum = f.journals.A.artifact('tenant', initial.outcome_digest).length;
+  f.journals.A.applyPolicy(f.id, version(initial), { cleanupRequirements: initial.cleanup_requirements, classification: initial.classification,
+    deploymentLimits: { ...initial.deployment_limits, maximum_outcome_bytes: maximum }, policyRevision: 'p2' });
+  assert.equal((await f.hosts.A.step(f.id)).kind, 'reply_saved');
+  const parked = f.journals.A.run(f.id);
+  await assert.rejects(f.hosts.A.step(f.id), { code: 'ArtifactCapacity' });
+  assert.equal(f.journals.A.run(f.id).outcome_digest, parked.outcome_digest);
+  assert.equal(f.journals.A.run(f.id).reply_digest, parked.reply_digest);
+  f.restart('A'); await assert.rejects(f.hosts.A.step(f.id), { code: 'ArtifactCapacity' });
+  assert.equal(f.counters.A.task, 1);
+});
+
+test('policy tightening cannot install limits below already retained artifacts', async t => {
+  const f = await hostFixture(t), before = f.journals.A.run(f.id);
+  assert.throws(() => f.journals.A.applyPolicy(f.id, version(before), { cleanupRequirements: before.cleanup_requirements, classification: before.classification,
+    deploymentLimits: { ...before.deployment_limits, maximum_outcome_bytes: 1 }, policyRevision: 'p2' }), { code: 'ArtifactCapacity' });
+  assert.deepEqual(f.journals.A.run(f.id), before);
+});
+
+test('export revocation does not prevent reconciliation of an already accepted transfer', async t => {
+  const f = await hostFixture(t, { lostAck: true }), offered = await f.hosts.A.run(f.id);
+  assert.equal((await f.hosts.A.retryTransfer(offered.transfer_id)).kind, 'unknown');
+  f.deployment.exportPolicies['fixture-shared'] = [];
+  const bytes = f.counters.bytes.B;
+  assert.equal((await f.hosts.A.retryTransfer(offered.transfer_id)).kind, 'accepted');
+  assert.equal(f.counters.bytes.B, bytes);
+});
+
+test('cleanup dispatch uses the same wildcard requirement match as cleanup admission', async t => {
+  const f = await hostFixture(t), binding = f.bindings.A.find(binding => binding.operation.endsWith('.child-cleanup.v1'));
+  const wanted = f.deployment.cleanup.find(value => value[0] === binding.operation); wanted[7] = { tag: 0, value: null };
+  const run = f.journals.A.run(f.id); f.revoked.A.add('tenant/user');
+  f.policies.A.checkCleanup(run);
+  let deniedCalls = 0;
+  f.bindings.A.unshift({ ...binding, cleanup: false, role: 'read', scope: 'ordinary', authorize: () => { deniedCalls++; return true; } });
+  const selected = f.policies.A.dispatch(run, { semanticIdentity: binding.operation, payloadSchema: binding.payloadSchema, resumeSchema: binding.resultSchema, payload: encodeValue(f.schemas.integer, 9001n) });
+  assert.equal(selected.binding, binding); assert.equal(selected.cleanup, true); assert.equal(deniedCalls, 0);
+  binding.scope = 'changed-scope';
+  assert.throws(() => f.policies.A.dispatch(run, { semanticIdentity: binding.operation, payloadSchema: binding.payloadSchema, resumeSchema: binding.resultSchema, payload: encodeValue(f.schemas.integer, 9001n) }), { code: 'PrincipalRevoked' });
 });

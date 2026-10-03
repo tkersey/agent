@@ -29,9 +29,8 @@ export class HostPolicy {
       requireThat(!['agent.mobility.resolve.v1', 'agent.mobility.relocate.v1'].includes(binding.operation), 'ProtectedBinding');
       requireThat(binding.trustDomain === trustDomain && typeof binding.authorize === 'function' && typeof binding.handle === 'function', 'InvalidBinding');
       for (const bytes of [binding.payloadSchema, binding.resultSchema]) requireThat(equal(encodeSchema(decodeSchema(bytes)), bytes), 'InvalidBindingSchema');
-      binding.id = requirementId(requirement(binding));
     }
-    requireThat(new Set(bindings.map(binding => binding.id)).size === bindings.length, 'DuplicateBinding');
+    requireThat(new Set(bindings.map(binding => requirementId(requirement(binding)))).size === bindings.length, 'DuplicateBinding');
   }
   get hostId() { return this.#host; }
   get revision() { return this.#revision; }
@@ -68,8 +67,13 @@ export class HostPolicy {
   }
   bindingForRequirement(run, wanted, cleanup = false) {
     this.authorizeRun(run, { cleanup });
-    return this.#bindings.find(binding => binding.enabled !== false && binding.tenants.includes(run.tenant_ref) && binding.principals.includes(run.principal_ref) &&
+    return this.#bindings.find(binding => this.#eligible(run, binding) &&
       (!cleanup || binding.cleanup === true) && sameRequirement(wanted, binding)) ?? null;
+  }
+  #eligible(run, binding) {
+    return binding.enabled !== false && binding.tenants.includes(run.tenant_ref) && binding.principals.includes(run.principal_ref) &&
+      (run.classification ?? run.initial_classification).every(label => binding.allowedStateLabels.includes(label)) &&
+      binding.classification.every(label => this.#exports[label]?.includes(this.#host));
   }
   preflight(registration, requirements, constraints, classification) {
     const run = { ...registration, classification }; this.authorizeRun(run); this.checkCleanup(run);
@@ -82,7 +86,7 @@ export class HostPolicy {
     const selected = requirements.map(wanted => {
       const bytes = canonicalRequirements([wanted]), domainFree = wanted[7].tag === 0;
       return this.#bindings.find(binding => {
-        if (binding.enabled === false || !binding.tenants.includes(run.tenant_ref) || !binding.principals.includes(run.principal_ref)) return false;
+        if (!this.#eligible(run, binding)) return false;
         let row = encoded.get(binding);
         if (!row) { row = { value: requirement(binding) }; encoded.set(binding, row); }
         const key = domainFree ? 'domainFree' : 'exact';
@@ -97,17 +101,17 @@ export class HostPolicy {
     const [domains, required] = constraints;
     requireThat(domains.length === 0 || domains.includes(this.#domain), 'TrustDomainDenied');
     requireThat(required.tag === 0 || required.value === this.#host, 'DestinationDenied');
-    const bindingBytes = canonicalRequirements(selected.map(requirement));
+    const bindingBytes = canonicalRequirements([...new Set(selected)].map(requirement));
     return { host_id: this.#host, requirements_digest: requirementsDigest, binding_digest: hash(bindingBytes), policy_revision: this.#revision, runtime_profile: this.#profile };
   }
   dispatch(run, request) {
-    const entry = this.deployment(run);
+    const entry = this.authorizeRun(run, { cleanup: true }), revoked = this.#revoked.has(`${run.tenant_ref}/${run.principal_ref}`);
     const candidates = this.#bindings.filter(binding => binding.enabled !== false && binding.operation === request.semanticIdentity && equal(binding.payloadSchema, request.payloadSchema) && equal(binding.resultSchema, request.resumeSchema) &&
       binding.tenants.includes(run.tenant_ref) && binding.principals.includes(run.principal_ref));
     for (const binding of candidates) {
-      const cleanup = binding.cleanup === true && entry.cleanup.some(value => requirementId(value) === binding.id);
-      this.authorizeRun(run, { cleanup });
-      requireThat(run.classification.every(label => binding.allowedStateLabels.includes(label)) && binding.classification.every(label => this.#exports[label]?.includes(this.#host)), 'LeafDisclosureDenied');
+      const cleanup = binding.cleanup === true && entry.cleanup.some(value => sameRequirement(value, binding));
+      if (revoked && !cleanup) continue;
+      if (!this.#eligible(run, binding)) continue;
       const payload = decodeValue(decodeSchema(request.payloadSchema), request.payload);
       // Payload authorization is synchronous so policy checking and durable
       // dispatch admission have no asynchronous check-then-act gap.
@@ -115,7 +119,7 @@ export class HostPolicy {
       requireThat(!(allowed instanceof Promise), 'AsyncBindingAuthorization');
       if (allowed) return { binding, payload, cleanup };
     }
-    requireThat(false, 'LeafBindingDenied');
+    requireThat(false, revoked ? 'PrincipalRevoked' : 'LeafBindingDenied');
   }
   encodeResult(binding, value) { return encodeValue(decodeSchema(binding.resultSchema), value); }
 }

@@ -71,6 +71,8 @@ async function sample(mode, cache, requirements) {
     for (const host of ['A', 'B']) { const other = host === 'A' ? 'B' : 'A'; servers[host] = await servePeers(f.hosts[host], { ...tls[host], ca: tls.ca, peerCertificates: new Map([[tls[other].fingerprint256, other]]) }); services.push(servers[host]); }
     for (const [from, to] of [['A', 'B'], ['B', 'A']]) {
       const peer = new PeerClient({ url: servers[to].url, servername: 'localhost', fingerprint256: tls[to].fingerprint256, ca: tls.ca, key: tls[from].key, cert: tls[from].cert, onTraffic: p.onTraffic });
+      const deliver = peer.deliver.bind(peer);
+      peer.deliver = envelope => { if (p.active) transferred.push({ image: envelope.image, outcome: envelope.outcome }); return deliver(envelope); };
       clients.push(peer); f.peerMaps[from].set(to, peer);
     }
   }
@@ -85,9 +87,8 @@ async function sample(mode, cache, requirements) {
         const run = f.journals[host].run(id), output = f.world.decodeOutcome(f.journals[host].artifact('tenant', run.outcome_digest));
         assert.deepEqual(decodeValue(f.schemas.report, output.value), expected); assert.equal(moves, mode === 'stationary' ? 0 : 2); return;
       }
-      assert.equal(result.kind, 'offered'); const envelope = f.hosts[host].transferEnvelope(result.transfer_id);
-      if (p.active) transferred.push({ image: envelope.image, outcome: envelope.outcome });
-      const target = parse(envelope.offer).destination_host_id;
+      assert.equal(result.kind, 'offered');
+      const target = parse(f.journals[host].transfer(result.transfer_id).offer).destination_host_id;
       assert.equal((await f.hosts[host].retryTransfer(result.transfer_id)).kind, 'accepted'); host = target; moves++;
     }
     assert.fail('bounded benchmark did not complete');

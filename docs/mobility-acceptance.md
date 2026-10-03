@@ -53,15 +53,15 @@ power-loss behavior. Process-crash tests use local APFS and SQLite EXTRA.
 | S04 | Eight approval cases retain exact evidence/grant across three moves, reject stale/consumed replies and revalidate the destination file. | PASS |
 | S05 | Host cancellation before/after acceptance, mTLS forwarding, returning pending cancellation and private-grant cancellation cases. | PASS |
 | S06 | Actual child cleanup suspends, survives custodian restart with the same occurrence, and completes once at the owner. | PASS |
-| S07 | Actual-host missing cleanup binding and origin-lock pin cases reject movement before upload; journal pin guard also passes. | PASS |
+| S07 | Actual-host missing cleanup binding, denied state/result labels and origin-lock pin cases reject movement before upload; journal pin guard also passes. | PASS |
 | S08 | Forged destination binding observation is refused; an unconfigured program destination produces no transfer or file read. | PASS |
-| S09 | Host tenant/principal/subject/schema/issuer checks plus browser wrong principal, audience, origin, session and CSRF rejection. | PASS |
+| S09 | Host tenant/principal/subject/schema/issuer checks plus browser wrong principal, audience, origin, session and CSRF rejection. HTTPS bridge tests cover session turnover and assignment reclamation with a one-assignment limit. | PASS |
 | S10 | Server-only read taints retained state and denies even preflight/upload to A despite requested public policy. | PASS |
 | S11 | Origin-only captured cleanup marker blocks export despite a public-looking relocation payload. | PASS |
 | S12 | Both browsers scan actual private signing/TLS key material and session-token sentinels against image, all captured outcomes, payload logs, offers, receipts, process logs and decompressed use archive; local/session storage remain empty. | PASS |
-| S13 | Actual target rejects malformed image/outcome, oversized state and a valid ordinary non-mobility boundary; unapproved image, wrong kernel, invalid signature and arbitrary endpoint cases reject before effects. | PASS |
+| S13 | Actual target rejects malformed image/outcome, oversized state and a valid ordinary non-mobility boundary; local signed/configured image/outcome limits reject before custody admission. Oversized successors preserve the parked state and acquired reply through restart. Unapproved image, wrong kernel, invalid signature and arbitrary endpoint cases reject before effects. | PASS |
 | S14 | Outstanding exact receipt verifies after normal key retirement; protocol rejects compromise exemption. | PASS |
-| S15 | Host revocation after placement blocks new reads but permits narrow cleanup; departed source stays retired. | PASS |
+| S15 | Host revocation after placement blocks new reads but permits narrow cleanup, including authenticated browser cancellation. Named export-policy revocation before retry, during preflight and after restart blocks new disclosure while permitting reconciliation of saved acceptance. Departed source stays retired. | PASS |
 | S16 | Expired admission leaves the source frozen until durable refusal; saved acceptance survives expiry and suspended new-admission policy. | PASS |
 | P01 | Extracted production modules execute with no application Zig source, emitter, Git metadata or bundled kernel; optional test directory removed. | PASS |
 | P02 | Both browser engines and Node independently use kernel `9627eb1e…` from the exact authenticated runtime inventory. | PASS |

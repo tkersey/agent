@@ -72,7 +72,7 @@ export async function packageFixture(t, { dataExecution = 'node' } = {}) {
     };
   }
   const configPaths = Object.fromEntries(['A', 'B'].map(host => [host, join(f.area, `${host}.json`)]));
-  const writeConfig = host => writeFile(configPaths[host], canonical(configs[host]), { mode: 0o600 });
+  const writeConfig = host => writeFile(configPaths[host], JSON.stringify(configs[host], null, 2) + '\n', { mode: 0o600 });
   await writeConfig('A');
   const { openDeployment } = await import(pathToFileURL(join(root, 'runtime/mobility/deployment.mjs')));
   const { PeerClient } = await import(pathToFileURL(join(root, 'runtime/mobility/transport.mjs')));

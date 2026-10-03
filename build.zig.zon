@@ -21,6 +21,7 @@
         "docs/coalescing.md",
         "docs/compositional-execution.md",
         "docs/compiled-text-tool.md",
+        "docs/effect-directed-mobility.md",
         "docs/recursive-interaction.md",
         "docs/parser-synthesis.md",
         "docs/security_model.md",

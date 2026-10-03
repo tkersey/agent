@@ -348,6 +348,14 @@ pub fn build(b: *std.Build) void {
         g.emit(recursive_images, recursive_exe, &.{mode}, b.fmt("recursive/{s}.bin", .{mode}));
     emit.dependOn(recursive_images);
     const text_object = g.emitter("agent-text-object", g.module("test/agent4/text_object.zig"));
+    const mobility_consumer = g.emitter("agent-mobility-consumer", g.module("test/consumers/mobility/main.zig"));
+    const mobility_images = b.step("mobility-images", "Emit the independent mobility consumer");
+    const mobility_image = b.addRunArtifact(mobility_consumer);
+    mobility_image.addArg("image");
+    mobility_image.addFileArg(b.addRunArtifact(text_object).captureStdOut(.{}));
+    mobility_images.dependOn(&b.addInstallFileWithDir(mobility_image.captureStdOut(.{}), .prefix, "agent4/mobility/program.bpi3").step);
+    for ([_][]const u8{ "task", "report", "resolve", "resolution", "relocate", "relocation-reply" }) |name|
+        g.emit(mobility_images, mobility_consumer, &.{b.fmt("{s}-schema", .{name})}, b.fmt("mobility/{s}.schema", .{name}));
     const text_link = g.emitter("agent-text-link", g.module("test/agent4/text_link.zig"));
     const text_object_bytes = b.addRunArtifact(text_object).captureStdOut(.{});
     emit.dependOn(&b.addInstallFileWithDir(text_object_bytes, .prefix, "agent4/text/tool.bmo1").step);
@@ -439,6 +447,8 @@ pub fn build(b: *std.Build) void {
     const parser_selection = b.step("check-parser-selection", "Execute two recursively assessed parser constructions");
     const selection_runtime = b.step("check-selection-runtime", "Check recursive assessment and completion isolation");
     const compiled_tools_check = b.step("check-compiled-tools", "Execute one compiled text tool in standalone and Agent callers");
+    const mobility_continuation = b.step("check-mobility-continuation", "Check explicit relocation, retained ownership, refusal and cancellation");
+    const mobility_browser = b.step("check-mobility-browser-continuation", "Check browser/data/fresh-browser continuation (custody scaffold)");
     const components_check = b.step("check-component-tools", "Reuse three effectful objects in Agent and two standalone Programs");
     const component_objects = g.emitter("agent4-component-objects", g.module("test/agent4/component_objects.zig"));
     const component_link = g.emitter("agent4-component-link", g.module("test/agent4/component_link.zig"));
@@ -512,6 +522,11 @@ pub fn build(b: *std.Build) void {
         text_check.step.dependOn(&runtime_guard.step);
         text_check.has_side_effects = true;
         compiled_tools_check.dependOn(&text_check.step);
+        const mobility_run = b.addSystemCommand(&.{ "node", "test/agent4/mobility_continuation.mjs", runtime_path });
+        mobility_run.step.dependOn(mobility_images);
+        mobility_run.step.dependOn(&runtime_guard.step);
+        mobility_run.has_side_effects = true;
+        mobility_continuation.dependOn(&mobility_run.step);
         const component_check = b.addSystemCommand(&.{ "node", "test/agent4/component_runtime.mjs" });
         component_check.addFileArg(component_objects.getEmittedBin());
         component_check.addFileArg(component_link.getEmittedBin());
@@ -520,6 +535,11 @@ pub fn build(b: *std.Build) void {
         component_check.has_side_effects = true;
         components_check.dependOn(&component_check.step);
         if (browser_tools_path) |browser_tools| {
+            const mobility_browser_run = b.addSystemCommand(&.{ "node", "test/agent4/mobility_browser.mjs", runtime_path, browser_tools });
+            mobility_browser_run.step.dependOn(mobility_images);
+            mobility_browser_run.step.dependOn(&runtime_guard.step);
+            mobility_browser_run.has_side_effects = true;
+            mobility_browser.dependOn(&mobility_browser_run.step);
             const browser = b.addSystemCommand(&.{ "node", "test/agent4/text_browser.mjs" });
             browser.addFileArg(text_object.getEmittedBin());
             browser.addFileArg(text_link.getEmittedBin());
@@ -528,7 +548,11 @@ pub fn build(b: *std.Build) void {
             browser.step.dependOn(&runtime_guard.step);
             browser.has_side_effects = true;
             browser_check.dependOn(&browser.step);
-        } else browser_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
+        } else {
+            const missing_browser = b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools");
+            browser_check.dependOn(&missing_browser.step);
+            mobility_browser.dependOn(&missing_browser.step);
+        }
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
         runtime_work.dependOn(parser_intent);
         runtime_work.dependOn(parser_circular);
@@ -708,6 +732,8 @@ pub fn build(b: *std.Build) void {
     } else {
         const missing = b.addFail("provide -Dworld-runtime=/absolute/authenticated/world-runtime");
         compiled_tools_check.dependOn(&missing.step);
+        mobility_continuation.dependOn(&missing.step);
+        mobility_browser.dependOn(&missing.step);
         components_check.dependOn(&missing.step);
         browser_check.dependOn(&missing.step);
         native_checks.dependOn(&missing.step);

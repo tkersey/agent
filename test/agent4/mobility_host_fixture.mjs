@@ -13,7 +13,7 @@ import { HostPolicy, requirement } from '../../runtime/mobility/policy.mjs';
 import { hash, runId, signRecord, parse } from '../../runtime/mobility/protocol.mjs';
 import { subject, bindSubject, READ, CLOSE } from '../../runtime/text_inspection.mjs';
 import { fileBinding } from '../../runtime/text_file.mjs';
-export async function hostFixture(t, { privateData = false, privateCapture = false, lostAck = false, uncertainRead = false } = {}) {
+export async function hostFixture(t, { privateData = false, privateCapture = false, lostAck = false, uncertainRead = false, register = true, cleanup = true } = {}) {
   assert.ok(process.env.AGENT_MOBILITY_RUNTIME, 'AGENT_MOBILITY_RUNTIME required');
   const runtime = resolve(process.env.AGENT_MOBILITY_RUNTIME), identity = verifyRuntime(runtime), world = await import(pathToFileURL(identity.entrypoint));
   const kernelBytes = await readFile(identity.kernelPath), image = await readFile('zig-out/agent4/mobility/program.bpi3');
@@ -67,10 +67,13 @@ export async function hostFixture(t, { privateData = false, privateCapture = fal
     admissions[host] = new WorldAdmission(world, { kernelBytes, expectedSha256: identity.kernelSha256 });
     policies[host] = new HostPolicy({ hostId: host, trustDomain: 'fixture', runtimeProfile: identity.kernelSha256, revision: 'p1', deployments: [deployment], bindings: bindingSets[host], labelDestinations: { shared: ['A', 'B'], 'server-only': ['B'], 'origin-only': ['A'] }, revoked: revoked[host] });
   }
+  const closed = new Set();
+  function stop(host) { if (!closed.has(host)) { hosts[host].retireAll(); journals[host].close(); closed.add(host); } }
   function open(host, create) {
     journals[host] = new CustodyJournal({ directory: join(area, host), hostId: host, deploymentGeneration: 'generation-1', keys,
       signer: { keyId: host, privateKey: pairs[host].privateKey, policyRevision: 'p1' }, admission: admissions[host], create });
     hosts[host] = new Custodian({ journal: journals[host], admission: admissions[host], world, policy: policies[host], peers: peerMaps[host] });
+    closed.delete(host);
   }
   open('A', true); open('B', true);
   for (const [source, destination] of [['A', 'B'], ['B', 'A']]) peerMaps[source].set(destination, {
@@ -85,13 +88,14 @@ export async function hostFixture(t, { privateData = false, privateCapture = fal
     withdraw(envelope) { return hosts[destination].withdraw(source, envelope); },
     control(registration, id, action, reason, hops) { return hosts[destination].control(source, registration, id, action, reason, hops); },
   });
-  t.after(async () => { for (const host of ['A', 'B']) { hosts[host].retireAll(); journals[host].close(); } await rm(area, { recursive: true, force: true }); });
+  async function dispose() { for (const host of ['A', 'B']) stop(host); await rm(area, { recursive: true, force: true }); }
+  if (cleanup) t.after(dispose);
   const registration = signRecord('run', { format: 'agent-mobility-run/v1', run_id: runId('issuer'), issuer_id: 'issuer', principal_ref: 'user', tenant_ref: 'tenant', image_digest: hash(image), program_id: programId,
     trusted_runtime_profile: identity.kernelSha256, allowed_host_policy_ref: 'fixture-hosts', deployment_policy_revision: 'p1', initial_classification: ['shared'], initial_host_id: 'A', initial_epoch: '0', deployment_limits: limits, key_id: 'issuer' }, pairs.issuer.privateKey);
   const id = parse(registration).run_id;
-  await hosts.A.registerRun(registration, image, encodeValue(schemas.integer, 123n));
-  return { hosts, journals, policies, admissions, peerMaps, pairs, keys, id, registration, image, world, counters, file, schemas, bindings: bindingSets, revoked, area,
-    restart(host) { hosts[host].retireAll(); journals[host].close(); open(host, false); hosts[host].recover(); },
+  if (register) await hosts.A.registerRun(registration, image, encodeValue(schemas.integer, 123n));
+  return { hosts, journals, policies, admissions, peerMaps, pairs, keys, id, registration, image, world, counters, file, schemas, schemaBytes, taskValue, declared, deployment, identity, bindings: bindingSets, revoked, area, stop, dispose,
+    restart(host) { stop(host); open(host, false); hosts[host].recover(); },
     result(host) { const run = journals[host].run(id); return world.decodeOutcome(journals[host].artifact('tenant', run.outcome_digest)); },
   };
 }

@@ -52,8 +52,8 @@ zig build check-mobility-continuation check-mobility-browser-continuation \
 These are **test scaffolds, not the durable custody reference route**. Their
 synthetic arrival receipts and empty immediate-requirement lists isolate
 continuation behavior; they provide no authority or custody safety evidence.
-The separate-process packaged host, the approval/write variant,
-source-free use archive, recovery tests and matched measurements remain required.
+The approval/write variant, remaining recovery cases and matched measurements
+remain required. The durable source-free browser lane is described below.
 The full acceptance suite and serial review closeout remain unfinished.
 
 The continuation target also executes fifteen independent `ensure` cases in
@@ -147,8 +147,8 @@ decision endpoints, lost responses after acceptance, withdrawal, exact status
 reconciliation, body/encoding bounds, unknown peers, private export rejection,
 and artifact collection. Image cache hits transfer only the outcome. Endpoints
 come from deployment configuration; the client rejects redirects and arbitrary
-URLs. Both services run locally in this lane; the separate-process packaged
-deployment remains to be qualified.
+URLs. Both services run locally in this transport lane; the browser lane below
+also exercises a separate data-host process from an extracted package.
 
 `servePeers` exposes preflight, bounded image/outcome staging, decision, status,
 withdrawal and narrowly authorized run-control endpoints. A peer certificate maps
@@ -176,10 +176,121 @@ publish into later assignments. The Worker receives only approved image/state,
 the pinned kernel identity, and saved control input. The host's resident World
 instance verifies the reported successor before journal publication.
 
-This lane terminates Worker A1 and restores the actual incoming checkpoint in
-fresh Worker A2, preserving captured cleanup. It also rejects missing sessions,
-CSRF tokens and stale assignments. Its data-host custodian currently runs in the
-test process; the required extracted, separate-process deployment is still pending.
+This lane builds and extracts the existing `agent4-use-archive` format, removes
+its optional test oracles, and loads both hosts' production modules from the
+extracted tree. Application Zig source, emitters and a bundled WASM kernel are
+absent. The separately supplied runtime is fully authenticated before import.
+The data host runs the shipped CLI in a separate Node process with no compiler
+on its PATH. Worker A1 terminates before transfer delivery; the data process exits
+before fresh Worker A2 restores the actual incoming checkpoint. Restarting that
+data service leaves its departed run inert. Both engines preserve captured
+cleanup, perform three real file reads and one close, and display the actual
+typed presentation (42 bytes, four newlines) through the shipped browser client.
+Missing sessions, wrong principal/origin, CSRF failures and stale assignments
+remain negative checks. All keys/certificates are temporary test provisioning
+outside the archive. These are local processes using real mTLS, not a measured
+two-machine network deployment.
+
+`zig build check-mobility-model` runs the specification's exact section 25 Python
+model with `uv run --no-project`. It explores 28 states and finds the required
+two-custodian counterexample when timeout takeover is deliberately enabled. This
+small model omits real storage, cryptography, continuation data and multiple
+epochs; it is not a proof of the implementation or the full fault matrix.
+
+## Running the reference deployment
+
+The use archive now includes `runtime/mobility`, the CLI and generic browser
+client. It contains no signing keys, session credentials, TLS private keys or
+World kernel. Supply the independently authenticated locked World runtime and
+deployment-approved image, typed arguments and schemas. The existing inventory
+locates and hashes artifacts; it never chooses the next application action.
+
+Copy [the deployment example](mobility-deployment.example.json) outside the
+archive and fill its paths and approved image/program/subject identities. Paths
+are relative to that configuration file. Protect it and its private-key files
+with local permissions. `keys` binds Ed25519 public keys to issuers/hosts; `peers`
+binds logical host IDs to configured HTTPS endpoints and TLS certificate pins.
+Message-signing keys and TLS keys are separate. `deployments` specifies tenant,
+principal, destination, cleanup and export grants. `bindings` selects only
+installed adapters, complete schema files, subject/version and allowed state
+labels. The text adapter rechecks the actual file version on every read.
+`fixed-reply` is an explicitly synthetic typed leaf adapter: it authorizes an
+exact input digest and returns configured bytes, with no phase counter. It is
+used by the isolated witness, not as a production human or model provider.
+
+Set `execution` to `node` for a data executor and `browser` for a browser's durable
+origin custodian. The latter does not drive application steps in the service
+pump. Choose a private local journal directory and an externally maintained
+`deploymentGeneration`; never derive that generation from a restored database.
+The default journal bounds are 256 MiB of artifact bytes per tenant and 10,000
+records per bounded table. Accepted/refused decisions and their verification
+bindings are retained indefinitely; the journal's explicit artifact collector
+deletes only unreferenced large bytes. Operators must monitor capacity. No
+timeout deletes a decision or releases ambiguous custody.
+
+```sh
+# NODE is an absolute path to the qualified Node executable; CONFIG is local.
+"$NODE" runtime/mobility/cli.mjs init "$CONFIG"
+"$NODE" runtime/mobility/cli.mjs start "$CONFIG" run-registration.json program.bpi3 initial.args
+"$NODE" runtime/mobility/cli.mjs serve "$CONFIG"
+```
+
+`init` is an explicit new-storage operation. An issuer creates `run-registration`
+with `signRecord('run', record, issuerPrivateKey)` from `protocol.mjs`, using a
+fresh `runId(issuer)` and the deployment-approved image/program/runtime and
+principal/tenant tuple. Neither the CLI nor a peer can mint that authority from
+an uploaded image. Start the initial run only at its registered initial host;
+incoming hosts learn it through authenticated transfer, without replaying args.
+
+For a browser origin, embed `openDeployment(CONFIG)` and pass its custodian to
+`serveBrowser` with the verified `runtimePath` and `kernelBytes`, HTTPS key/cert,
+the exact public origin, audience and an `authenticate(request)` function. This
+function must validate the deployment's existing session and return
+`{sessionId, principal, tenant, audiences}` or null. There is no default identity
+or unauthenticated login. The reference client keeps assignment/CSRF data only
+in memory; provision the session through the deployment's secure authentication
+flow. Open the origin, enter the run ID and select **Connect**. **Continue** drives
+the current typed outcome; after a move, the old Worker terminates. Connect again
+after custody returns to create a fresh assignment. **Cancel** records intent at
+the custodian and follows the same cleanup protocol. Closing a tab is physical
+executor loss, not semantic cancellation.
+
+Stop the peer service before local mutation/recovery commands. These commands
+print metadata and receipts, not private captured values:
+
+```sh
+"$NODE" runtime/mobility/cli.mjs status "$CONFIG" "$RUN"
+"$NODE" runtime/mobility/cli.mjs retry "$CONFIG" "$TRANSFER"
+"$NODE" runtime/mobility/cli.mjs receipt "$CONFIG" "$TRANSFER"
+"$NODE" runtime/mobility/cli.mjs withdraw "$CONFIG" "$TRANSFER"
+"$NODE" runtime/mobility/cli.mjs cancel "$CONFIG" "$RUN" 'User cancelled'
+"$NODE" runtime/mobility/cli.mjs recover "$CONFIG"
+```
+
+`ACTIVE` authorizes only the current incarnation and occurrence; incoming active
+custody can wait for an executor. `OFFERED` is frozen, including after timeout.
+`DEPARTED` cannot execute at its old epoch. `TERMINAL` has no next application
+step. Retry preserves the exact signed offer. `accepted` and `refused` require a
+matching saved signed receipt; `unknown` means the source remains frozen. A
+pending cancellation at departed custody is a separate delivery question.
+Recovery converts interrupted dispatch to unknown delivery without redispatch.
+
+If the journal is lost, ordinary `serve`/`recover` fails closed; do **not** run
+`init` under the same live identity as a recovery shortcut. A known rollback
+generation mismatch is quarantined. Reconcile and fence externally before
+provisioning a replacement host identity/generation. Ordinary key rotation keeps
+old public verification bindings for historical decisions and outstanding
+offers; mark compromised keys as compromised rather than retired. Neither a
+rotation nor a failed local retirement grants a second custodian.
+
+For two machines, provision the same locked runtime and approved image/contracts
+on each, distinct host signing/TLS keys, mutual CA trust and exact certificate
+pins. Set each peer URL to the other's reachable HTTPS service and restrict
+network access to configured peers. Put the file adapter and its local filesystem
+grant only on the data host; put the authenticated human origin on the other.
+Use a persistent qualified local filesystem for each journal. An origin or peer
+that stores checkpoint bytes is inside their confidentiality boundary. The local
+acceptance lane does not establish power-loss durability or WAN performance.
 
 The selected foundation is Agent `b1f9d2866b5717d16339e7022a3b4d08951f0770`
 and its unchanged `conformance/agent4/dependencies.lock.json`: Boundary

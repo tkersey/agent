@@ -1,0 +1,30 @@
+{
+  "format": "agent-mobility-deployment/v1",
+  "hostId": "B",
+  "trustDomain": "fixture",
+  "revision": "p1",
+  "worldRuntime": "../world-runtime",
+  "directory": "../custody-B",
+  "deploymentGeneration": "externally-provisioned-generation",
+  "execution": "node",
+  "keys": [
+    { "keyId": "issuer", "owner": "issuer", "status": "active", "publicKey": "keys/issuer.public.pem" },
+    { "keyId": "A", "owner": "A", "status": "active", "publicKey": "keys/A.public.pem" },
+    { "keyId": "B", "owner": "B", "status": "active", "publicKey": "keys/B.public.pem" }
+  ],
+  "signer": { "keyId": "B", "privateKey": "keys/B.private.pem", "policyRevision": "p1" },
+  "peers": [{ "hostId": "A", "url": "https://origin.example:9443", "servername": "origin.example", "fingerprint256": "REPLACE_WITH_PEER_TLS_SHA256" }],
+  "tls": { "host": "0.0.0.0", "port": 9443, "key": "tls/B.key", "cert": "tls/B.pem", "ca": "tls/ca.pem" },
+  "deployments": [{
+    "imageDigest": "REPLACE_WITH_APPROVED_IMAGE_SHA256",
+    "programId": "REPLACE_WITH_EMITTED_PROGRAM_ID",
+    "tenant": "tenant", "principals": ["user"], "hosts": ["A", "B"],
+    "classification": ["shared"],
+    "limits": { "maximum_moves": 16, "maximum_image_bytes": 8388608, "maximum_outcome_bytes": 8388608 },
+    "cleanup": "examples/cleanup.bin", "controlPeers": ["A", "B"],
+    "exportPolicies": { "fixture-shared": ["A", "B"] }
+  }],
+  "bindings": [],
+  "labelDestinations": { "shared": ["A", "B"], "server-only": ["B"], "origin-only": ["A"] },
+  "revoked": []
+}

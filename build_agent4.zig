@@ -105,6 +105,9 @@ pub fn build(b: *std.Build) void {
     const protocol_tests = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_protocol.test.mjs" });
     mobility_protocol.dependOn(&protocol_tests.step);
     check.dependOn(mobility_protocol);
+    const mobility_model = b.step("check-mobility-model", "Explore the bounded single-transfer custody model and timeout counterexample");
+    const model_run = b.addSystemCommand(&.{ "uv", "run", "--no-project", "test/agent4/mobility_model.py" });
+    mobility_model.dependOn(&model_run.step);
     g.testModule(mobility, g.module("src/mobility.zig"));
     g.testModule(mobility, g.module("test/agent4/mobility_ensure.zig"));
     check.dependOn(mobility);
@@ -366,6 +369,7 @@ pub fn build(b: *std.Build) void {
     mobility_identity.addArg("identity");
     mobility_identity.addFileArg(b.addRunArtifact(text_object).captureStdOut(.{}));
     mobility_images.dependOn(&b.addInstallFileWithDir(mobility_identity.captureStdOut(.{}), .prefix, "agent4/mobility/program-id.bin").step);
+    emit.dependOn(mobility_images);
     for ([_][]const u8{ "task", "report", "resolve", "resolution", "relocate", "relocation-reply", "read", "text-reply", "subject", "inspection", "integer", "unit" }) |name|
         g.emit(mobility_images, mobility_consumer, &.{b.fmt("{s}-schema", .{name})}, b.fmt("mobility/{s}.schema", .{name}));
     const text_link = g.emitter("agent-text-link", g.module("test/agent4/text_link.zig"));
@@ -463,7 +467,7 @@ pub fn build(b: *std.Build) void {
     const mobility_journal = b.step("check-mobility-journal", "Check durable custody, signed decisions and process-crash recovery");
     const mobility_integration = b.step("check-mobility-integration", "Check real custody, placement, privacy and grants through the reference host");
     const mobility_browser = b.step("check-mobility-browser-continuation", "Check browser/data/fresh-browser continuation (custody scaffold)");
-    const mobility_durable_browser = b.step("check-mobility-browser", "Check authenticated browser execution through durable custody and mTLS");
+    const mobility_durable_browser = b.step("check-mobility-browser", "Check source-free browser execution through durable custody and a separate mTLS process");
     const components_check = b.step("check-component-tools", "Reuse three effectful objects in Agent and two standalone Programs");
     const component_objects = g.emitter("agent4-component-objects", g.module("test/agent4/component_objects.zig"));
     const component_link = g.emitter("agent4-component-link", g.module("test/agent4/component_link.zig"));

@@ -22,13 +22,15 @@ export async function serveBrowser(custodian, { key, cert, authenticate, audienc
   const csrf = new Map(), assignments = new Map(); let origin;
   const modules = new Set(['index.mjs', 'kernel.mjs', 'codec.mjs', 'errors.mjs', 'values.mjs', 'wire.mjs', 'wasm.mjs']);
   const worker = await readFile(new URL('./worker.mjs', import.meta.url));
+  const assets = new Map(await Promise.all([['/client.mjs', './client.mjs'], ['/canonical.mjs', './canonical.mjs'], ['/agent-values.mjs', '../values.mjs']].map(async ([route, path]) => [route, await readFile(new URL(path, import.meta.url))])));
   const server = createServer({ key, cert, minVersion: 'TLSv1.3', maxHeaderSize: 16384 }, async (req, res) => {
     try {
       requireThat(req.headers.host === new URL(origin).host, 'OriginDenied');
       const identity = await authenticate(req);
       requireThat(identity && typeof identity.sessionId === 'string' && identity.sessionId.length > 0 && identity.sessionId.length <= 256 && Array.isArray(identity.audiences) && identity.audiences.includes(audience), 'UserDenied');
       requireThat(req.url.length <= 1024 && !req.url.includes('?') && !req.url.includes('#'), 'InvalidRoute');
-      if (req.method === 'GET' && req.url === '/') return binary(res, Buffer.from('<!doctype html><meta charset="utf-8"><title>Mobile Agent</title><main id="result">Ready</main>'), 'text/html; charset=utf-8');
+      if (req.method === 'GET' && req.url === '/') return binary(res, Buffer.from('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Mobile Agent</title><main><h1>Mobile Agent</h1><label>Run <input id="run" autocomplete="off"></label> <button id="connect">Connect</button> <button id="continue">Continue</button> <button id="cancel">Cancel</button><p id="status" role="status">Ready</p><pre id="request"></pre></main><script type="module" src="/client.mjs"></script>'), 'text/html; charset=utf-8');
+      if (req.method === 'GET' && assets.has(req.url)) return binary(res, assets.get(req.url), 'text/javascript');
       if (req.method === 'GET' && req.url === '/worker.mjs') return binary(res, worker, 'text/javascript');
       if (req.method === 'GET' && req.url === '/kernel.wasm') return binary(res, kernelBytes, 'application/wasm');
       const asset = /^\/world\/([a-z-]+\.mjs)$/.exec(req.url);

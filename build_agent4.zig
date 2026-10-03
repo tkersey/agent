@@ -464,6 +464,7 @@ pub fn build(b: *std.Build) void {
     const selection_runtime = b.step("check-selection-runtime", "Check recursive assessment and completion isolation");
     const compiled_tools_check = b.step("check-compiled-tools", "Execute one compiled text tool in standalone and Agent callers");
     const mobility_continuation = b.step("check-mobility-continuation", "Check explicit relocation, retained ownership, refusal and cancellation");
+    const mobility_native = b.step("check-mobility-native", "Compare native and WASM canonical mobility outcomes at every boundary");
     const mobility_journal = b.step("check-mobility-journal", "Check durable custody, signed decisions and process-crash recovery");
     const mobility_integration = b.step("check-mobility-integration", "Check real custody, placement, privacy and grants through the reference host");
     const mobility_browser = b.step("check-mobility-browser-continuation", "Check browser/data/fresh-browser continuation (custody scaffold)");
@@ -651,6 +652,11 @@ pub fn build(b: *std.Build) void {
             .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data", .module = data } },
         });
         const native_exe = native_graph.emitter("agent4-native", native_module);
+        const mobility_native_run = b.addSystemCommand(&.{ "node", "test/agent4/mobility_continuation.mjs", runtime_path });
+        mobility_native_run.addFileArg(native_exe.getEmittedBin());
+        mobility_native_run.step.dependOn(mobility_images);
+        mobility_native_run.step.dependOn(&runtime_guard.step);
+        mobility_native.dependOn(&mobility_native_run.step);
         if (inquiry_host) {
             const source_free = b.addSystemCommand(&.{ "node", "test/agent4/parser_source_free.mjs", runtime_path });
             source_free.addFileArg(native_exe.getEmittedBin());
@@ -783,6 +789,7 @@ pub fn build(b: *std.Build) void {
         const missing = b.addFail("provide -Dworld-runtime=/absolute/authenticated/world-runtime");
         compiled_tools_check.dependOn(&missing.step);
         mobility_continuation.dependOn(&missing.step);
+        mobility_native.dependOn(&missing.step);
         mobility_journal.dependOn(&missing.step);
         mobility_integration.dependOn(&missing.step);
         mobility_browser.dependOn(&missing.step);

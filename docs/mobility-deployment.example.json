@@ -21,7 +21,7 @@
     "tenant": "tenant", "principals": ["user"], "hosts": ["A", "B"],
     "classification": ["shared"],
     "limits": { "maximum_moves": 16, "maximum_image_bytes": 8388608, "maximum_outcome_bytes": 8388608 },
-    "cleanup": "examples/cleanup.bin", "controlPeers": ["A", "B"],
+    "cleanup": "examples/mobility/cleanup.bin", "controlPeers": ["A", "B"],
     "exportPolicies": { "fixture-shared": ["A", "B"] }
   }],
   "bindings": [],

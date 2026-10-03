@@ -1,8 +1,52 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { decodeValue, decodeSchema, encodeValue } from '../../runtime/values.mjs';
 import { requirement } from '../../runtime/mobility/policy.mjs';
 import { hostFixture } from './mobility_host_fixture.mjs';
+
+test('Here executes the same typed file operation locally without a custody move', async t => {
+  const f = await hostFixture(t, { localData: true });
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal');
+  assert.equal(f.hosts.A.status(f.id).epoch, '0');
+  assert.deepEqual(f.counters.deliveries, { A: 0, B: 0 });
+  assert.deepEqual(f.file.counts(), { reads: [0n, 16n, 32n], releases: 1 });
+  assert.deepEqual(decodeValue(f.schemas.report, f.result('A').value), [123n, 9001n, { tag: 0, value: [42n, 4n] }, 91n]);
+  assert.equal(f.counters.A.present, 1); assert.equal(f.counters.A.cleanup, 1);
+});
+
+test('an unavailable destination follows program fallback without any transfer or file read', async t => {
+  const f = await hostFixture(t); f.peerMaps.A.clear();
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal');
+  assert.deepEqual(decodeValue(f.schemas.report, f.result('A').value), [123n, 9001n, { tag: 1, value: null }, 91n]);
+  assert.deepEqual(f.file.counts(), { reads: [], releases: 0 });
+  assert.equal(f.counters.A.cleanup, 1); assert.equal(f.hosts.A.status(f.id).epoch, '0');
+});
+
+test('a file changed after placement returns the actual typed conflict through the moved continuation', async t => {
+  const f = await hostFixture(t, { expectedInspection: { tag: 2, value: null } });
+  const out = await f.hosts.A.run(f.id); assert.equal((await f.hosts.A.retryTransfer(out.transfer_id)).kind, 'accepted');
+  await writeFile(join(f.area, 'story.txt'), 'different version\n');
+  const back = await f.hosts.B.run(f.id); assert.equal(back.kind, 'offered');
+  assert.equal((await f.hosts.B.retryTransfer(back.transfer_id)).kind, 'accepted');
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal');
+  assert.deepEqual(decodeValue(f.schemas.report, f.result('A').value), [123n, 9001n, { tag: 2, value: null }, 91n]);
+  assert.deepEqual(f.file.counts(), { reads: [], releases: 1 });
+  assert.equal(f.counters.A.present, 1); assert.equal(f.counters.A.cleanup, 1);
+});
+
+test('an unsupported ordinary leaf remains parked without relocation or an invented reply', async t => {
+  const f = await hostFixture(t), out = await f.hosts.A.run(f.id);
+  assert.equal((await f.hosts.A.retryTransfer(out.transfer_id)).kind, 'accepted');
+  await f.hosts.B.step(f.id);
+  const before = f.journals.B.run(f.id);
+  f.bindings.B.find(binding => binding.operation === 'agent.text.read-chunk.v1').enabled = false;
+  await assert.rejects(f.hosts.B.step(f.id), { code: 'LeafBindingDenied' });
+  assert.deepEqual(f.journals.B.run(f.id), before);
+  assert.equal(f.hosts.B.status(f.id).occurrence, 'READY');
+  assert.deepEqual(f.counters.deliveries, { A: 0, B: 1 }); assert.deepEqual(f.file.counts().reads, []);
+});
 
 test('durable host executes actual A→B→A with real requirements, grants and arrival receipts', async t => {
   const f = await hostFixture(t);

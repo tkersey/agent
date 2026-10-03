@@ -4,6 +4,7 @@ import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { verifyRuntime, readDependencyLock } from '../../tools/agent4/dependencies.mjs';
 import { decodeSchema, decodeValue, encodeValue } from '../../runtime/values.mjs';
 import { fileBinding } from '../../runtime/text_file.mjs';
@@ -11,6 +12,8 @@ import { subject, READ, CLOSE } from '../../runtime/text_inspection.mjs';
 import { placement, resolution } from './mobility_fixture.mjs';
 
 const runtimePath = resolve(process.argv[2]);
+const nativePath = process.argv[3] ? resolve(process.argv[3]) : null;
+let nativeComparisons = 0;
 const identity = verifyRuntime(runtimePath);
 const world = await import(pathToFileURL(identity.entrypoint));
 const bytes = await readFile(identity.kernelPath);
@@ -38,7 +41,18 @@ try {
     const binding = await fileBinding(declared, { root: area, path: 'story.txt' });
     let current = await make(), host = 'A', epoch = 0n, moves = 0, child = 0, cleanup = 0, presented = 0;
     let session = current.kernel.start(current.prepared, initial);
-    let output = current.kernel.drive(session, { checkpoint: true });
+    let output;
+    async function advance(options = {}) {
+      const input = { image, ...(output === undefined ? { initialArgs: initial } : { state: world.decodeOutcome(output).state }), ...options };
+      const next = current.kernel.drive(session, { ...options, checkpoint: true });
+      if (nativePath) {
+        const path = join(area, 'native-input.pki3'); await writeFile(path, world.encodeInput(input));
+        const expected = new Uint8Array(execFileSync(nativePath, [path], { maxBuffer: 16 << 20 }));
+        assert.deepEqual(next, expected, 'native and WASM canonical semantic boundary/outcome must agree'); nativeComparisons++;
+      }
+      output = next;
+    }
+    await advance();
     const trace = [], retired = [];
     for (let turn = 0; turn < 32; turn++) {
       const outcome = world.decodeOutcome(output);
@@ -67,7 +81,7 @@ try {
         value = resolution(input, host, identity.kernelSha256);
       } else if (request.semanticIdentity === MOVE) {
         if (cancelAtMove) {
-          output = current.kernel.drive(session, { control: 'cancel_text', value: 'test cancellation', checkpoint: true });
+          await advance({ control: 'cancel_text', value: 'test cancellation' });
           continue;
         }
         if (refuse) {
@@ -98,7 +112,7 @@ try {
       } else if (request.semanticIdentity === READ || request.semanticIdentity === CLOSE) {
         assert.equal(host, 'B', 'browser host has no file binding');
         const reply = await binding.handle(request);
-        output = current.kernel.drive(session, { control: 'reply', value: await world.encodeResult(outcome.request, reply), checkpoint: true });
+        await advance({ control: 'reply', value: await world.encodeResult(outcome.request, reply) });
         continue;
       } else if (request.semanticIdentity === PRESENT) {
         assert.equal(host, 'A', 'data host has no bound human audience');
@@ -109,11 +123,11 @@ try {
         assert.equal(input, 9001n); cleanup++; value = null;
       } else throw new Error(`Unsupported leaf remains parked: ${request.semanticIdentity}`);
       const reply = encodeValue(decodeSchema(request.resumeSchema), value);
-      output = current.kernel.drive(session, { control: 'reply', value: await world.encodeResult(outcome.request, reply), checkpoint: true });
+      await advance({ control: 'reply', value: await world.encodeResult(outcome.request, reply) });
     }
     throw new Error('Consumer exceeded bounded test steps');
   }
   const roundtrip = await run(), refused = await run({ refuse: true }), cancelled = await run({ cancelAtMove: true });
   console.log(JSON.stringify({ check: 'mobility-continuation-scaffold', kernelSha256: identity.kernelSha256,
-    imageBytes: image.length, roundtrip, refused, cancelled }));
+    imageBytes: image.length, nativeComparisons, roundtrip, refused, cancelled }));
 } finally { await rm(area, { recursive: true, force: true }); }

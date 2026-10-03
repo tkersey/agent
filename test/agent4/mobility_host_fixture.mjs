@@ -13,7 +13,7 @@ import { HostPolicy, requirement } from '../../runtime/mobility/policy.mjs';
 import { hash, runId, signRecord, parse } from '../../runtime/mobility/protocol.mjs';
 import { subject, bindSubject, READ, CLOSE } from '../../runtime/text_inspection.mjs';
 import { fileBinding } from '../../runtime/text_file.mjs';
-export async function hostFixture(t, { privateData = false, privateCapture = false, lostAck = false, uncertainRead = false, register = true, cleanup = true } = {}) {
+export async function hostFixture(t, { privateData = false, privateCapture = false, lostAck = false, uncertainRead = false, register = true, cleanup = true, localData = false, expectedInspection = { tag: 0, value: [42n, 4n] } } = {}) {
   assert.ok(process.env.AGENT_MOBILITY_RUNTIME, 'AGENT_MOBILITY_RUNTIME required');
   const runtime = resolve(process.env.AGENT_MOBILITY_RUNTIME), identity = verifyRuntime(runtime), world = await import(pathToFileURL(identity.entrypoint));
   const kernelBytes = await readFile(identity.kernelPath), image = await readFile('zig-out/agent4/mobility/program.bpi3');
@@ -40,20 +40,20 @@ export async function hostFixture(t, { privateData = false, privateCapture = fal
     const bindings = [
       makeBinding(host, CLOSE, 'subject', 'unit', { role: 'cleanup', subject: declared[0], subjectVersion, scope: 'close', cleanup: true,
         authorize: value => value[0] === declared[0] && Buffer.from(value[1]).toString('hex') === subjectVersion,
-        handle: ({ request }) => (host === 'B' ? file : closeOnly).handle(request) }),
+        handle: ({ request }) => (host === 'B' || localData ? file : closeOnly).handle(request) }),
       makeBinding(host, 'agent.mobility.fixture.child-resumed.v1', 'integer', 'unit', { authorize: value => value === 77n,
         handle: () => { counters[host].side++; return new Uint8Array(); } }),
       makeBinding(host, 'agent.mobility.fixture.child-cleanup.v1', 'integer', 'unit', { role: 'cleanup', scope: 'cleanup', cleanup: true, authorize: value => value === 9001n,
         handle: () => { counters[host].cleanup++; return new Uint8Array(); } }),
     ];
-    if (host === 'B') bindings.push(makeBinding(host, READ, 'read', 'text-reply', { subject: declared[0], subjectVersion, scope: 'read', classification: privateData ? ['server-only'] : ['shared'],
+    if (host === 'B' || localData) bindings.push(makeBinding(host, READ, 'read', 'text-reply', { subject: declared[0], subjectVersion, scope: 'read', classification: privateData ? ['server-only'] : ['shared'],
       authorize: value => value[0][0] === declared[0] && Buffer.from(value[0][1]).toString('hex') === subjectVersion,
       async handle({ request }) { const reply = await file.handle(request); if (uncertainRead) throw Object.assign(new Error('delivery uncertain'), { code: 'FixtureDeliveryUnknown' }); return reply; } }));
     if (host === 'A') {
       bindings.push(makeBinding(host, 'agent.mobility.fixture.task.v1', 'integer', 'task', { role: 'interaction', subject: 'human-A', scope: 'task', audience: 'human-A', allowedStateLabels: ['shared'], classification: privateCapture ? ['origin-only'] : ['shared'], authorize: value => value === 123n,
         handle: () => { counters.A.task++; return encodeValue(schemas.task, taskValue); } }));
       bindings.push(makeBinding(host, 'agent.mobility.fixture.present.v1', 'inspection', 'unit', { role: 'interaction', subject: 'human-A', scope: 'present', audience: 'human-A', allowedStateLabels: ['shared'], authorize: () => true,
-        handle: ({ payload }) => { assert.deepEqual(payload, { tag: 0, value: [42n, 4n] }); counters.A.present++; return new Uint8Array(); } }));
+        handle: ({ payload }) => { assert.deepEqual(payload, expectedInspection); counters.A.present++; return new Uint8Array(); } }));
     }
     bindingSets[host] = bindings;
   }

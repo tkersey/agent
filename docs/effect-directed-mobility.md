@@ -61,6 +61,13 @@ World, including `Here`, constraints, affinity, deterministic ties, unknown and
 overflowing costs, malformed candidates, refusal retries, exhaustion and the
 32-candidate bound. The browser consumer uses `ensure` for both legs.
 
+`check-mobility-native` additionally invokes the native public World protocol
+consumer on each exact input for the round-trip, refusal and cancellation cases.
+All 24 canonical outcomes agree byte-for-byte with WASM, including the pending
+request/state at each semantic boundary. The independent final-result, request
+order and cleanup assertions remain in force; native agreement alone is not a
+custody or authority proof. Supply the same runtime/source/archive arguments.
+
 ## Durable reference host
 
 `runtime/mobility` now contains a restricted canonical JSON codec, closed signed
@@ -131,7 +138,7 @@ the complete protocol fault matrix. See the [Node SQLite API](https://nodejs.org
 and [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785.html) for the underlying interfaces.
 
 `check-mobility-integration` uses the same dependency arguments and currently runs
-thirteen host cases plus seven mTLS transport cases. The host cases complete A→B→A using real
+seventeen host cases plus seven mTLS transport cases. The host cases complete A→B→A using real
 requirements and signed receipts, restarts both custodians, reconciles a lost old
 acceptance before a return, rejects stale/unbound successor publication, blocks
 uncertain delivery, and preserves cancellation/cleanup under revocation. The
@@ -141,6 +148,10 @@ negatives cover tenant, principal, complete schema, semantic role and subject.
 Another privacy case retains an origin-only marker in the child's cleanup capture
 and rejects export despite a public-looking current placement payload. Successful
 round trips also assert that cleanup receives this captured marker at the new host.
+Additional application cases execute an authorized local `Here` without a move,
+take authored fallback for an unavailable destination, carry an actual file-version
+conflict back to presentation, and leave an unsupported ordinary leaf parked
+without inventing a relocation or reply.
 The network cases use HTTPS with mutually authenticated, explicitly pinned peer
 certificates and independent Ed25519 message keys. They exercise all staging and
 decision endpoints, lost responses after acceptance, withdrawal, exact status

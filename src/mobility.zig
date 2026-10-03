@@ -89,6 +89,23 @@ pub const Refusal = struct {
     evidence: RefusalEvidence,
 };
 pub const RelocationReply = union(enum) { Arrived: Arrival, Refused: Refusal };
+pub const Budget = struct { moves: u32 = 16, attempts: u32 = 3 };
+pub const EnsureInput = struct {
+    placement: ResolveInput,
+    placement_intent_id: Identifier,
+    export_policy_ref: Identifier,
+    budget: Budget,
+};
+pub const Placement = struct { observation: Observation, remaining_moves: u32 };
+pub const PlacementResult = union(enum) { Ready: Placement, Failed: Reason };
+
+/// Emit the bounded default strategy into the program. Here consumes no move;
+/// each refusal tries a distinct candidate, at most min(attempts, 32) times.
+/// Applications with another strategy can compose resolve/relocate directly.
+pub fn ensure(context: Context, input: Id, failure: Id) !Id {
+    const function = try @import("mobility_ensure.zig").define(context, failure);
+    return context.builder.term(.{ .call = .{ .function = function, .arguments = &.{input} } });
+}
 
 pub const Definition = struct { resolve: Id, relocate: Id };
 

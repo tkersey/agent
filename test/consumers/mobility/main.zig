@@ -11,8 +11,8 @@ pub const Task = struct {
     task_id: u64,
     caller_marker: u64,
     subject: text.Subject,
-    outbound: mobility.RelocateInput,
-    inbound: mobility.RelocateInput,
+    outbound: mobility.EnsureInput,
+    inbound: mobility.EnsureInput,
 };
 pub const Report = struct { task_id: u64, caller_marker: u64, inspection: text.Result, child_result: u64 };
 pub const TASK = "agent.mobility.fixture.task.v1";
@@ -62,9 +62,9 @@ const Emit = struct {
         try e.agent_context.registry.classify(try a.interop.operationId(e.c, op), role);
         return op;
     }
-    fn move(e: Emit, owner: *const a.Function, body: *a.Body, input: *const a.Value) !*const a.Value {
-        const term = try mobility.relocate(e.agent_context, try a.interop.functionId(e.c, owner), try a.interop.valueId(body, input));
-        return a.interop.term(body, term, try e.schema(mobility.RelocationReply));
+    fn place(e: Emit, body: *a.Body, input: *const a.Value) !*const a.Value {
+        const term = try mobility.ensure(e.agent_context, try a.interop.valueId(body, input), try e.agent_context.builder.constant(void, {}));
+        return a.interop.term(body, term, try e.schema(mobility.PlacementResult));
     }
     fn refused(e: Emit, body: *a.Body) !*const a.Value {
         return body.variant(try e.schema(text.Result), "unavailable", try body.constant(void, {}));
@@ -80,6 +80,7 @@ const Application = struct {
         const integer = try c.scalar(u64);
         const definition = try mobility.define(ctx);
         const move_op = try a.interop.operation(c, definition.relocate);
+        const resolve_op = try a.interop.operation(c, definition.resolve);
         const tool = try ctx.catalogs.tool("mobility-text");
         const read_op = try a.interop.operation(c, b.functions.items[@intCast(tool.implementation.local)].effects[0]);
         const close_op = try a.interop.operation(c, b.functions.items[@intCast(tool.implementation.local)].effects[1]);
@@ -87,19 +88,19 @@ const Application = struct {
         const present_op = try e.external(PRESENT, text.Result, void, .interaction);
         const side_op = try e.external(SIDE, u64, void, .read);
         const cleanup_op = try e.external(CLEANUP, u64, void, .read);
-        const effects = &.{ move_op, read_op, close_op, present_op };
+        const effects = &.{ resolve_op, move_op, read_op, close_op, present_op };
         const inspect = try c.function("move, inspect, return and present", &.{.{ .name = "task", .schema = try e.schema(Task) }}, try e.schema(text.Result), effects);
         const body = try c.body(inspect);
         const task = try body.parameter("task");
-        const outbound = try e.move(inspect, body, try body.field(task, "outbound"));
-        const arrived = try body.caseOf(outbound, "Arrived");
-        const refused = try body.caseOf(outbound, "Refused");
+        const outbound = try e.place(body, try body.field(task, "outbound"));
+        const arrived = try body.caseOf(outbound, "Ready");
+        const refused = try body.caseOf(outbound, "Failed");
         const work = arrived.body();
         const subject = try work.field(task, "subject");
         const result = try a.interop.term(work, try agent.tools.perform(ctx, tool, try a.interop.valueId(work, subject)), try e.schema(text.Result));
-        const inbound = try e.move(inspect, work, try work.field(task, "inbound"));
-        const home = try work.caseOf(inbound, "Arrived");
-        const away = try work.caseOf(inbound, "Refused");
+        const inbound = try e.place(work, try work.field(task, "inbound"));
+        const home = try work.caseOf(inbound, "Ready");
+        const away = try work.caseOf(inbound, "Failed");
         _ = try home.body().perform(present_op, result);
         const returned = try work.match(inbound, &.{ try home.ret(result), try away.ret(try e.refused(away.body())) });
         try c.define(inspect, try body.ret(try body.match(outbound, &.{ try arrived.ret(returned), try refused.ret(try e.refused(refused.body())) })));
@@ -112,7 +113,7 @@ const Application = struct {
             .body_use = .reusable,
         });
         const start_type = try c.handledSchema(child.handler());
-        const entry = try c.function("retained caller", &.{.{ .name = "task_id", .schema = integer }}, try e.schema(Report), &.{ task_op, move_op, read_op, close_op, present_op, side_op, cleanup_op });
+        const entry = try c.function("retained caller", &.{.{ .name = "task_id", .schema = integer }}, try e.schema(Report), &.{ task_op, resolve_op, move_op, read_op, close_op, present_op, side_op, cleanup_op });
         const root = try c.body(entry);
         const input = try root.perform(task_op, try root.parameter("task_id"));
         const marker = try root.field(input, "caller_marker");

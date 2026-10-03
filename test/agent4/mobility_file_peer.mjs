@@ -5,6 +5,8 @@ import { pathToFileURL } from 'node:url';
 import { verifyRuntime } from '../../tools/agent4/dependencies.mjs';
 import { fileBinding } from '../../runtime/text_file.mjs';
 import { READ, CLOSE } from '../../runtime/text_inspection.mjs';
+import { decodeSchema, decodeValue, encodeValue } from '../../runtime/values.mjs';
+import { resolution } from './mobility_fixture.mjs';
 const [runtimePath, inputPath, outputPath] = process.argv.slice(2);
 const identity = verifyRuntime(runtimePath), world = await import(pathToFileURL(identity.entrypoint));
 const input = JSON.parse(await readFile(inputPath, 'utf8'));
@@ -25,7 +27,13 @@ for (let step = 0; step < 32; step++) {
     await writeFile(outputPath, JSON.stringify({ output: Array.from(output), reads: binding.counts().reads.map(String), releases: binding.counts().releases, pid: process.pid, kernelSha256: identity.kernelSha256 }));
     process.exit(0);
   }
-  assert.ok([READ, CLOSE].includes(request.semanticIdentity), 'data host has only configured fixture bindings');
-  output = k.drive(session, { control: 'reply', value: await world.encodeResult(outcome.request, await binding.handle(request)), checkpoint: true });
+  let reply;
+  if (request.semanticIdentity === 'agent.mobility.resolve.v1') {
+    reply = encodeValue(decodeSchema(request.resumeSchema), resolution(decodeValue(decodeSchema(request.payloadSchema), request.payload), 'B', identity.kernelSha256));
+  } else {
+    assert.ok([READ, CLOSE].includes(request.semanticIdentity), 'data host has only configured fixture bindings');
+    reply = await binding.handle(request);
+  }
+  output = k.drive(session, { control: 'reply', value: await world.encodeResult(outcome.request, reply), checkpoint: true });
 }
 throw new Error('Data executor did not reach relocation within test bound');

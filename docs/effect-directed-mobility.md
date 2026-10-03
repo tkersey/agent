@@ -5,6 +5,19 @@ The public `agent.mobility` module defines the v1 placement schemas and explicit
 operations. These construct ordinary Boundary effects. They do not perform
 network I/O or transfer custody themselves.
 
+`ensure(context, input, failure)` compiles the default bounded placement strategy
+into the program. `input` is a source value of `mobility.EnsureInput`; `failure`
+is a literal of the enclosing program's failure type for checked arithmetic.
+The result is `Ready { observation, remaining_moves }` or `Failed(Reason)`.
+`Here` succeeds even with a zero move/attempt budget. Candidate selection enforces
+host/domain constraints, rejects malformed identifiers, prefers explicit affinity,
+orders known saturating cost sums before unknown costs, and breaks ties by host
+ID. Refusal retries distinct hosts up to `min(budget.attempts, 32)`; successful
+arrival consumes one move. The default budget is 16 moves and three attempts.
+There is no implicit delay or unbounded re-resolution loop. Applications can
+compose `resolve` and `relocate` for another authored strategy or backoff policy.
+The host must independently enforce registered move limits and actual authority.
+
 Both operations carry the distinct `mobility` role. Their identities are
 reserved, emissions require a registered construction site, and protected
 speculation cannot admit them through an allowlist. The existing opaque-tool
@@ -24,7 +37,7 @@ discharges the suspended child's cleanup without resuming its normal work.
 
 `check-mobility-continuation` checks fresh resident instances and exact parked
 state/request preservation. `check-mobility-browser-continuation` executes the
-same 2,310-byte image in Chromium and Firefox Workers and a separate Node process.
+same 4,245-byte image in Chromium and Firefox Workers and a separate Node process.
 It physically terminates the first Worker before data execution and verifies
 that the data process has exited before the new Worker restores its successor.
 
@@ -39,10 +52,15 @@ zig build check-mobility-continuation check-mobility-browser-continuation \
 These are **test scaffolds, not the durable custody reference route**. Their
 synthetic arrival receipts and empty immediate-requirement lists isolate
 continuation behavior; they provide no authority or custody safety evidence.
-The authored bounded `ensure` strategy, durable SQLite custodian, authenticated
+The durable SQLite custodian, authenticated
 transport, occurrence fencing, complete-state policy, fully admitted application,
 source-free use archive, recovery tests and matched measurements remain required.
 The full acceptance suite and serial review closeout remain unfinished.
+
+The continuation target also executes fifteen independent `ensure` cases in
+World, including `Here`, constraints, affinity, deterministic ties, unknown and
+overflowing costs, malformed candidates, refusal retries, exhaustion and the
+32-candidate bound. The browser consumer uses `ensure` for both legs.
 
 The selected foundation is Agent `b1f9d2866b5717d16339e7022a3b4d08951f0770`
 and its unchanged `conformance/agent4/dependencies.lock.json`: Boundary

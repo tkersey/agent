@@ -28,6 +28,7 @@ src/inquiry.zig
 src/inquiry_broker.zig
 src/interaction.zig
 src/mobility.zig
+src/mobility_ensure.zig
 src/model.zig
 src/model_codec.zig
 src/model_interpretation.zig
@@ -73,6 +74,7 @@ test/agent4/economy_build.zig
 test/agent4/facade.zig
 test/agent4/inquiry_broker_probe.zig
 test/agent4/inquiry_probe.zig
+test/agent4/mobility_ensure.zig
 test/agent4/model_admission.zig
 test/agent4/model_custody.zig
 test/agent4/model_noncanonical_temperature.zig

@@ -8,6 +8,7 @@ import { verifyRuntime, readDependencyLock } from '../../tools/agent4/dependenci
 import { decodeSchema, decodeValue, encodeValue } from '../../runtime/values.mjs';
 import { fileBinding } from '../../runtime/text_file.mjs';
 import { subject, READ, CLOSE } from '../../runtime/text_inspection.mjs';
+import { placement, resolution } from './mobility_fixture.mjs';
 
 const runtimePath = resolve(process.argv[2]);
 const identity = verifyRuntime(runtimePath);
@@ -62,7 +63,9 @@ try {
       const input = decodeValue(decodeSchema(request.payloadSchema), request.payload);
       trace.push([host, request.semanticIdentity]);
       let value;
-      if (request.semanticIdentity === MOVE) {
+      if (request.semanticIdentity === 'agent.mobility.resolve.v1') {
+        value = resolution(input, host, identity.kernelSha256);
+      } else if (request.semanticIdentity === MOVE) {
         if (cancelAtMove) {
           output = current.kernel.drive(session, { control: 'cancel_text', value: 'test cancellation', checkpoint: true });
           continue;
@@ -90,7 +93,7 @@ try {
         assert.equal(host, 'A'); assert.equal(input, 123n);
         // Empty requirements here isolate continuation transport; the durable
         // application suite supplies complete admitted capability contracts.
-        value = [123n, 9001n, declared, ['B', [], 'inspect', 'fixture-shared', 2], ['A', [], 'present', 'fixture-shared', 1]];
+        value = [123n, 9001n, declared, placement('B', 2, 'inspect'), placement('A', 1, 'present')];
         assert.deepEqual(encodeValue(taskSchema, value), encodeValue(decodeSchema(request.resumeSchema), value));
       } else if (request.semanticIdentity === READ || request.semanticIdentity === CLOSE) {
         assert.equal(host, 'B', 'browser host has no file binding');

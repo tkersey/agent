@@ -102,6 +102,7 @@ pub fn build(b: *std.Build) void {
     const aggregate = b.step("check-agent4", "Check authoring and pure contracts without World");
     const mobility = b.step("check-mobility-authoring", "Check typed mobility contracts and protected admission");
     g.testModule(mobility, g.module("src/mobility.zig"));
+    g.testModule(mobility, g.module("test/agent4/mobility_ensure.zig"));
     check.dependOn(mobility);
     const lint = b.step("lint", "Check formatting and the Zig source inventory");
     const format_check = b.addSystemCommand(&.{ b.graph.zig_exe, "fmt", "--check", "build.zig", "build_agent4.zig", "src", "test/agent4", "test/consumers" });
@@ -350,6 +351,9 @@ pub fn build(b: *std.Build) void {
     const text_object = g.emitter("agent-text-object", g.module("test/agent4/text_object.zig"));
     const mobility_consumer = g.emitter("agent-mobility-consumer", g.module("test/consumers/mobility/main.zig"));
     const mobility_images = b.step("mobility-images", "Emit the independent mobility consumer");
+    const mobility_ensure = g.emitter("agent-mobility-ensure", g.module("test/agent4/mobility_ensure.zig"));
+    for ([_][]const u8{ "image", "input", "result" }) |name|
+        g.emit(mobility_images, mobility_ensure, &.{name}, b.fmt("mobility/ensure-{s}.bin", .{name}));
     const mobility_image = b.addRunArtifact(mobility_consumer);
     mobility_image.addArg("image");
     mobility_image.addFileArg(b.addRunArtifact(text_object).captureStdOut(.{}));
@@ -527,6 +531,11 @@ pub fn build(b: *std.Build) void {
         mobility_run.step.dependOn(&runtime_guard.step);
         mobility_run.has_side_effects = true;
         mobility_continuation.dependOn(&mobility_run.step);
+        const ensure_run = b.addSystemCommand(&.{ "node", "test/agent4/mobility_ensure.mjs", runtime_path });
+        ensure_run.step.dependOn(mobility_images);
+        ensure_run.step.dependOn(&runtime_guard.step);
+        ensure_run.has_side_effects = true;
+        mobility_continuation.dependOn(&ensure_run.step);
         const component_check = b.addSystemCommand(&.{ "node", "test/agent4/component_runtime.mjs" });
         component_check.addFileArg(component_objects.getEmittedBin());
         component_check.addFileArg(component_link.getEmittedBin());

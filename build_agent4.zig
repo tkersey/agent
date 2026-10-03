@@ -101,6 +101,10 @@ pub fn build(b: *std.Build) void {
     const check = b.step("agent4-authoring-tests", "Authoring test implementation");
     const aggregate = b.step("check-agent4", "Check authoring and pure contracts without World");
     const mobility = b.step("check-mobility-authoring", "Check typed mobility contracts and protected admission");
+    const mobility_protocol = b.step("check-mobility-protocol", "Check canonical mobility records and Ed25519 bindings");
+    const protocol_tests = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_protocol.test.mjs" });
+    mobility_protocol.dependOn(&protocol_tests.step);
+    check.dependOn(mobility_protocol);
     g.testModule(mobility, g.module("src/mobility.zig"));
     g.testModule(mobility, g.module("test/agent4/mobility_ensure.zig"));
     check.dependOn(mobility);
@@ -452,6 +456,7 @@ pub fn build(b: *std.Build) void {
     const selection_runtime = b.step("check-selection-runtime", "Check recursive assessment and completion isolation");
     const compiled_tools_check = b.step("check-compiled-tools", "Execute one compiled text tool in standalone and Agent callers");
     const mobility_continuation = b.step("check-mobility-continuation", "Check explicit relocation, retained ownership, refusal and cancellation");
+    const mobility_journal = b.step("check-mobility-journal", "Check durable custody, signed decisions and process-crash recovery");
     const mobility_browser = b.step("check-mobility-browser-continuation", "Check browser/data/fresh-browser continuation (custody scaffold)");
     const components_check = b.step("check-component-tools", "Reuse three effectful objects in Agent and two standalone Programs");
     const component_objects = g.emitter("agent4-component-objects", g.module("test/agent4/component_objects.zig"));
@@ -536,6 +541,12 @@ pub fn build(b: *std.Build) void {
         ensure_run.step.dependOn(&runtime_guard.step);
         ensure_run.has_side_effects = true;
         mobility_continuation.dependOn(&ensure_run.step);
+        const journal_run = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_journal.test.mjs" });
+        journal_run.setEnvironmentVariable("AGENT_MOBILITY_RUNTIME", runtime_path);
+        journal_run.step.dependOn(mobility_images);
+        journal_run.step.dependOn(&runtime_guard.step);
+        journal_run.has_side_effects = true;
+        mobility_journal.dependOn(&journal_run.step);
         const component_check = b.addSystemCommand(&.{ "node", "test/agent4/component_runtime.mjs" });
         component_check.addFileArg(component_objects.getEmittedBin());
         component_check.addFileArg(component_link.getEmittedBin());
@@ -742,6 +753,7 @@ pub fn build(b: *std.Build) void {
         const missing = b.addFail("provide -Dworld-runtime=/absolute/authenticated/world-runtime");
         compiled_tools_check.dependOn(&missing.step);
         mobility_continuation.dependOn(&missing.step);
+        mobility_journal.dependOn(&missing.step);
         mobility_browser.dependOn(&missing.step);
         components_check.dependOn(&missing.step);
         browser_check.dependOn(&missing.step);

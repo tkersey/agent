@@ -52,8 +52,7 @@ zig build check-mobility-continuation check-mobility-browser-continuation \
 These are **test scaffolds, not the durable custody reference route**. Their
 synthetic arrival receipts and empty immediate-requirement lists isolate
 continuation behavior; they provide no authority or custody safety evidence.
-The durable SQLite custodian, authenticated
-transport, occurrence fencing, complete-state policy, fully admitted application,
+The integrated custodian, authenticated transport, complete-state policy, fully admitted application,
 source-free use archive, recovery tests and matched measurements remain required.
 The full acceptance suite and serial review closeout remain unfinished.
 
@@ -61,6 +60,58 @@ The continuation target also executes fifteen independent `ensure` cases in
 World, including `Here`, constraints, affinity, deterministic ties, unknown and
 overflowing costs, malformed candidates, refusal retries, exhaustion and the
 32-candidate bound. The browser consumer uses `ensure` for both legs.
+
+## Durable components (not yet a deployable host)
+
+`runtime/mobility` now contains a restricted canonical JSON codec, closed signed
+registration/offer/decision records, pure custody transitions, public-World
+admission, and a SQLite journal. Journal methods are privileged environmental
+operations; they are not user-facing RPCs or a substitute for destination grants
+and export policy. The authenticated server and policy gateway are still pending.
+
+The journal stores artifacts in the transaction, freezes the source with its exact
+outbox, serializes target acceptance against permanent refusal, and preserves
+saved receipt and arrival bytes. Epoch/revision/incarnation checks fence executor
+publication. Dispatch admission, unknown occurrences, acquired replies and
+classification joins use the same database. Unknown never thaws custody. A
+returning host must have retired its previous custody before accepting a newer
+epoch. Small replay-prevention records are retained; there is no timeout GC.
+
+Acceptance hashes an immutable core first, signs the receipt containing that core
+hash, then encodes arrival using the receipt hash. The core, receipt, arrival and
+incoming artifacts commit atomically. This ordering has no recursive row hash.
+Signing keys stay environmental. Saved verification bindings support exact
+historical decisions and receipts for outstanding offers across ordinary rotation;
+compromised keys do not receive that exception.
+
+The reference store requires an owned private directory, rollback-journal mode,
+`synchronous=EXTRA`, and `fullfsync=ON`. Initialization is explicit; ordinary open
+refuses missing storage. The operator supplies a trusted deployment generation
+independently of the database. A known mismatched generation is quarantined.
+A self-consistent old backup cannot reveal its own rollback: never restore one
+under a live host identity without external fencing and reconciliation. Sensitive
+deployments additionally require a qualified encrypted storage boundary.
+
+```sh
+zig build check-mobility-protocol check-mobility-journal \
+  -Dworld-runtime=/absolute/authenticated/world-runtime \
+  -Dworld-source=/absolute/authenticated/world-source \
+  -Dworld-archive=/absolute/authenticated/world-source.tar.gz
+```
+
+Five protocol tests cover RFC Unicode ordering/escaping, duplicate keys, malformed
+records, signatures, key ownership/retirement and counters. Nineteen journal tests
+cover accepted/refused recovery, exact retries, frozen outboxes, injected storage
+failure, stale executors, persisted uncertain/acquired occurrences, schema parity,
+and six actual SIGKILL points around freeze, acceptance and reply-acquisition
+commits. They use real admitted World bytes and isolated temporary Ed25519 keys.
+
+The tested crash profile is macOS 27.2 arm64, local APFS, Node v26.10.0 and SQLite
+3.53.4. Process termination and transactional fault injection do **not** establish
+power-loss durability, network-filesystem safety, storage-rollback detection, or
+the complete protocol fault matrix. See the [Node SQLite API](https://nodejs.org/api/sqlite.html),
+[SQLite synchronization semantics](https://www.sqlite.org/pragma.html#pragma_synchronous),
+and [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785.html) for the underlying interfaces.
 
 The selected foundation is Agent `b1f9d2866b5717d16339e7022a3b4d08951f0770`
 and its unchanged `conformance/agent4/dependencies.lock.json`: Boundary

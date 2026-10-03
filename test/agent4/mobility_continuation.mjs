@@ -106,7 +106,7 @@ try {
       } else if (request.semanticIdentity === SIDE) {
         assert.equal(input, 77n); child++; value = null;
       } else if (request.semanticIdentity === CLEANUP) {
-        assert.equal(input, 88n); cleanup++; value = null;
+        assert.equal(input, 9001n); cleanup++; value = null;
       } else throw new Error(`Unsupported leaf remains parked: ${request.semanticIdentity}`);
       const reply = encodeValue(decodeSchema(request.resumeSchema), value);
       output = current.kernel.drive(session, { control: 'reply', value: await world.encodeResult(outcome.request, reply), checkpoint: true });

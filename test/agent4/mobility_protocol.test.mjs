@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { canonical, parse, hash, runId, signRecord, verifyRecord } from '../../runtime/mobility/protocol.mjs';
 import { increment } from '../../runtime/mobility/canonical.mjs';
+import { encodeRefusal, schemas } from '../../runtime/mobility/values.mjs';
+import { decodeValue } from '../../runtime/values.mjs';
 const bytes = text => new TextEncoder().encode(text), text = value => new TextDecoder().decode(value);
 function registration(overrides = {}) {
   return { format: 'agent-mobility-run/v1', run_id: runId('issuer'), issuer_id: 'issuer', principal_ref: 'user', tenant_ref: 'tenant', image_digest: '1'.repeat(64), program_id: '2'.repeat(64), trusted_runtime_profile: '3'.repeat(64),
@@ -60,4 +62,11 @@ test('decimal counters never wrap or accept alternate spellings', () => {
   assert.equal(increment('18446744073709551614'), '18446744073709551615');
   assert.throws(() => increment('18446744073709551615'), { code: 'CounterOverflow' });
   for (const invalid of ['00', '+1', '-1', '1e1', '18446744073709551616', 1]) assert.throws(() => increment(invalid), { code: 'InvalidCounter' });
+});
+
+test('v1 refusal meanings keep the specified numeric variant order', () => {
+  const names = ['unavailable', 'policy_denied', 'export_denied', 'binding_mismatch', 'runtime_mismatch', 'capacity', 'unsettled_occurrence', 'pinned_resource', 'cleanup_unsupported', 'budget_exhausted', 'withdrawn', 'expired_offer', 'already_here', 'invalid_state', 'busy', 'unsupported'];
+  for (const [tag, name] of names.entries()) assert.deepEqual(decodeValue(schemas.relocationReply, encodeRefusal('A', name)), {
+    tag: 1, value: [{ tag, value: null }, 'A', { tag: 0, value: { tag, value: null } }],
+  });
 });

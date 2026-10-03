@@ -18,7 +18,7 @@ pub fn build(b: *std.Build) void {
         run.addArgs(&.{ "image", object });
         b.getInstallStep().dependOn(&b.addInstallFile(run.captureStdOut(.{}), "program.bpi3").step);
     }
-    for ([_][]const u8{ "task", "report", "resolve", "resolution", "relocate", "relocation-reply" }) |name| {
+    for ([_][]const u8{ "task", "report", "resolve", "resolution", "relocate", "relocation-reply", "read", "text-reply", "subject", "inspection", "integer", "unit" }) |name| {
         const run = b.addRunArtifact(emitter);
         run.addArg(b.fmt("{s}-schema", .{name}));
         b.getInstallStep().dependOn(&b.addInstallFile(run.captureStdOut(.{}), b.fmt("{s}.schema", .{name})).step);

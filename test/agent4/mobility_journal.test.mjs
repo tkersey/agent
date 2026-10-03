@@ -36,6 +36,7 @@ const resolveReply = encodeValue(decodeSchema(resolveRequest.resumeSchema), reso
 const moveBytes = kernel.drive(session, { control: 'reply', value: await world.encodeResult(world.decodeOutcome(resolveBytes).request, resolveReply), checkpoint: true });
 kernel.checkpoint(session, { transfer: true }); kernel.releasePrepared(prepared);
 const initial = await admission.parked(image, initialBytes), resolving = await admission.parked(image, resolveBytes), moving = await admission.parked(image, moveBytes);
+const nextResolve = await admission.successor(initial, { kind: 'reply', value: taskReply }, resolveBytes);
 
 async function fixture(t, token = moving) {
   const directory = await mkdtemp(join(tmpdir(), 'mobility-journal-'));
@@ -139,13 +140,14 @@ test('dispatch uncertainty and acquired replies persist; replaced executor canno
   f.close(f.a); const recovered = f.open('A');
   assert.equal(recovered.occurrence(operation.id).status, 'UNKNOWN');
   assert.throws(() => recovered.admitLeaf(f.id, oldVersion, []), { code: 'UnsettledOccurrence' });
-  assert.throws(() => recovered.publishParked(f.id, oldVersion, { kind: 'reply', reply_digest: hash(taskReply) }, resolving), { code: 'ReplyNotAcquired' });
+  assert.throws(() => recovered.publishOutcome(f.id, oldVersion, { kind: 'reply', reply_digest: hash(taskReply) }, nextResolve), { code: 'ReplyNotAcquired' });
   recovered.recordReply(f.id, operation.attempt_id, taskReply, ['shared']);
   const reply = recovered.artifact('tenant', recovered.run(f.id).reply_digest); assert.deepEqual(reply, taskReply);
   assert.deepEqual(recovered.run(f.id).classification, ['server-only', 'shared']);
   const current = recovered.attach(f.id);
-  assert.throws(() => recovered.publishParked(f.id, oldVersion, { kind: 'reply', reply_digest: hash(taskReply) }, resolving), { code: 'StaleExecutor' });
-  recovered.publishParked(f.id, version(current), { kind: 'reply', reply_digest: hash(taskReply) }, resolving);
+  assert.throws(() => recovered.publishOutcome(f.id, oldVersion, { kind: 'reply', reply_digest: hash(taskReply) }, nextResolve), { code: 'StaleExecutor' });
+  assert.throws(() => recovered.publishOutcome(f.id, version(current), { kind: 'reply', reply_digest: hash(taskReply) }, resolving), { code: 'UnboundSuccessor' });
+  recovered.publishOutcome(f.id, version(current), { kind: 'reply', reply_digest: hash(taskReply) }, nextResolve);
   assert.equal(recovered.occurrence(operation.id).status, 'ADMITTED');
   assert.notEqual(recovered.run(f.id).current_occurrence_id, operation.id);
   assert.equal(recovered.run(f.id).execution_revision, '1');
@@ -158,6 +160,17 @@ test('retired decision key remains valid only for its exact outstanding transfer
   assert.equal(f.a.receiveDecision(proposal.bytes, receipt).status, 'DEPARTED');
   f.keys.set('A', { ...f.keys.get('A'), status: 'retired' });
   assert.deepEqual(f.b.savedDecision(proposal.bytes), receipt);
+});
+
+test('a newly accepted cancellation fences an earlier executor publication', async t => {
+  const f = await fixture(t, initial), assigned = f.a.attach(f.id), oldVersion = version(assigned);
+  const operation = f.a.admitLeaf(f.id, oldVersion, ['shared']);
+  f.a.recordReply(f.id, operation.attempt_id, taskReply, ['shared']);
+  const cancelled = f.a.requestCancel(f.id, 'stop');
+  assert.equal(cancelled.attached, false);
+  assert.notEqual(cancelled.executor_incarnation, assigned.executor_incarnation);
+  assert.throws(() => f.a.publishOutcome(f.id, oldVersion, { kind: 'reply', reply_digest: hash(taskReply) }, nextResolve), { code: 'StaleExecutor' });
+  assert.deepEqual(canonical(f.a.requestCancel(f.id, 'stop again')), canonical(cancelled), 'duplicate cancellation preserves the complete authoritative record');
 });
 
 test('known stale deployment generation, duplicate run and origin pins fail closed', async t => {

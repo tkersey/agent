@@ -22,6 +22,7 @@ const refusal = product([reason, id, evidence]);
 const relocationReplyRoot = add({ sum: [arrival, refusal] });
 export const schemas = Object.freeze({
   requirements: { types, root: requirementsRoot }, observation: { types, root: observationRoot },
+  constraints: { types, root: constraints },
   resolve: { types, root: resolveRoot }, resolution: { types, root: resolutionRoot },
   relocate: { types, root: relocateRoot }, relocationReply: { types, root: relocationReplyRoot },
 });

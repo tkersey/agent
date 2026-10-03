@@ -1,0 +1,100 @@
+// Deployment-owned grants and conservative state restrictions. Neither a
+// placement observation nor an image's effect names create authority.
+import { encodeSchema, decodeSchema, encodeValue, decodeValue } from '../values.mjs';
+import { hash } from './protocol.mjs';
+import { identifier, requireThat, labels, digest } from './canonical.mjs';
+import { canonicalRequirements } from './admission.mjs';
+const equal = (a, b) => a.length === b.length && a.every((byte, i) => byte === b[i]);
+const option = value => value === null ? { tag: 0, value: null } : { tag: 1, value };
+export function requirement(binding) {
+  return [binding.operation, [...Buffer.from(hash(binding.payloadSchema), 'hex')], [...Buffer.from(hash(binding.resultSchema), 'hex')], binding.role,
+    binding.subject, option(binding.subjectVersion === null ? null : [...Buffer.from(binding.subjectVersion, 'hex')]), binding.scope,
+    option(binding.trustDomain), option(binding.audience)];
+}
+export function requirementId(value) { return hash(canonicalRequirements([value])); }
+function sameRequirement(wanted, binding) {
+  const offered = requirement(binding);
+  // No application trust-domain constraint means the deployment still decides.
+  if (wanted[7].tag === 0) offered[7] = option(null);
+  return equal(canonicalRequirements([wanted]), canonicalRequirements([offered]));
+}
+export class HostPolicy {
+  #host; #domain; #profile; #revision; #deployments; #bindings; #exports; #revoked;
+  constructor({ hostId, trustDomain, runtimeProfile, revision, deployments, bindings, labelDestinations, revoked = new Set() }) {
+    this.#host = identifier(hostId); this.#domain = identifier(trustDomain); this.#profile = digest(runtimeProfile); this.#revision = identifier(revision);
+    this.#deployments = deployments; this.#bindings = bindings; this.#exports = labelDestinations; this.#revoked = revoked;
+    for (const binding of bindings) {
+      identifier(binding.operation, 256); identifier(binding.role); identifier(binding.subject); identifier(binding.scope); labels(binding.classification);
+      labels(binding.allowedStateLabels);
+      requireThat(!['agent.mobility.resolve.v1', 'agent.mobility.relocate.v1'].includes(binding.operation), 'ProtectedBinding');
+      requireThat(binding.trustDomain === trustDomain && typeof binding.authorize === 'function' && typeof binding.handle === 'function', 'InvalidBinding');
+      for (const bytes of [binding.payloadSchema, binding.resultSchema]) requireThat(equal(encodeSchema(decodeSchema(bytes)), bytes), 'InvalidBindingSchema');
+      binding.id = requirementId(requirement(binding));
+    }
+    requireThat(new Set(bindings.map(binding => binding.id)).size === bindings.length, 'DuplicateBinding');
+  }
+  get hostId() { return this.#host; }
+  get revision() { return this.#revision; }
+  get trustDomain() { return this.#domain; }
+  deployment(run) {
+    const entry = this.#deployments.find(item => item.imageDigest === run.image_digest && item.programId === run.program_id && item.tenant === run.tenant_ref && item.principals.includes(run.principal_ref));
+    requireThat(entry && run.trusted_runtime_profile === this.#profile && entry.hosts.includes(this.#host), 'DeploymentDenied');
+    return entry;
+  }
+  authorizeRun(run, { cleanup = false } = {}) {
+    const entry = this.deployment(run);
+    requireThat(cleanup || !this.#revoked.has(`${run.tenant_ref}/${run.principal_ref}`), 'PrincipalRevoked');
+    const classification = run.classification ?? run.initial_classification;
+    requireThat(entry.classification.every(label => classification.includes(label)), 'ClassificationDowngrade');
+    requireThat((run.initial_classification ?? []).every(label => classification.includes(label)), 'ClassificationDowngrade');
+    requireThat(classification.every(label => this.#exports[label]?.includes(this.#host)), 'StateImportDenied');
+    return entry;
+  }
+  cleanupRequirements(run) { return this.deployment(run).cleanup.map(requirementId).sort(); }
+  checkCleanup(run, offered = null) {
+    const entry = this.deployment(run), expected = this.cleanupRequirements(run);
+    if (offered !== null) requireThat(expected.length === offered.length && expected.every((value, i) => value === offered[i]), 'CleanupManifestMismatch');
+    requireThat(entry.cleanup.every(item => this.bindingForRequirement(run, item, true) !== null), 'CleanupUnsupported');
+    return expected;
+  }
+  mayExport(run, destination, exportPolicy = null) {
+    const entry = this.authorizeRun(run);
+    requireThat(entry.hosts.includes(destination), 'DestinationDenied');
+    requireThat(run.classification.every(label => this.#exports[label]?.includes(destination)), 'StateExportDenied');
+    if (exportPolicy !== null) requireThat(entry.exportPolicies[exportPolicy]?.includes(destination), 'ExportPolicyDenied');
+  }
+  bindingForRequirement(run, wanted, cleanup = false) {
+    this.authorizeRun(run, { cleanup });
+    return this.#bindings.find(binding => binding.enabled !== false && binding.tenants.includes(run.tenant_ref) && binding.principals.includes(run.principal_ref) &&
+      (!cleanup || binding.cleanup === true) && sameRequirement(wanted, binding)) ?? null;
+  }
+  preflight(registration, requirements, constraints, classification) {
+    const run = { ...registration, classification }; this.authorizeRun(run); this.checkCleanup(run);
+    const requirementsDigest = hash(canonicalRequirements(requirements));
+    const selected = requirements.map(wanted => this.bindingForRequirement(run, wanted));
+    requireThat(selected.every(Boolean), 'CapabilityUnavailable');
+    const [domains, required] = constraints;
+    requireThat(domains.length === 0 || domains.includes(this.#domain), 'TrustDomainDenied');
+    requireThat(required.tag === 0 || required.value === this.#host, 'DestinationDenied');
+    const bindingBytes = canonicalRequirements(selected.map(requirement));
+    return { host_id: this.#host, requirements_digest: requirementsDigest, binding_digest: hash(bindingBytes), policy_revision: this.#revision, runtime_profile: this.#profile };
+  }
+  dispatch(run, request) {
+    const entry = this.deployment(run);
+    const candidates = this.#bindings.filter(binding => binding.enabled !== false && binding.operation === request.semanticIdentity && equal(binding.payloadSchema, request.payloadSchema) && equal(binding.resultSchema, request.resumeSchema) &&
+      binding.tenants.includes(run.tenant_ref) && binding.principals.includes(run.principal_ref));
+    for (const binding of candidates) {
+      const cleanup = binding.cleanup === true && entry.cleanup.some(value => requirementId(value) === binding.id);
+      this.authorizeRun(run, { cleanup });
+      requireThat(run.classification.every(label => binding.allowedStateLabels.includes(label)) && binding.classification.every(label => this.#exports[label]?.includes(this.#host)), 'LeafDisclosureDenied');
+      const payload = decodeValue(decodeSchema(request.payloadSchema), request.payload);
+      // Payload authorization is synchronous so policy checking and durable
+      // dispatch admission have no asynchronous check-then-act gap.
+      const allowed = binding.authorize(payload, run);
+      requireThat(!(allowed instanceof Promise), 'AsyncBindingAuthorization');
+      if (allowed) return { binding, payload, cleanup };
+    }
+    requireThat(false, 'LeafBindingDenied');
+  }
+  encodeResult(binding, value) { return encodeValue(decodeSchema(binding.resultSchema), value); }
+}

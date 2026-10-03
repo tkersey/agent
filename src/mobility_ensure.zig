@@ -135,6 +135,26 @@ fn identifierValid(e: Emit) !*const a.Function {
     return f;
 }
 
+fn distinctCandidates(e: Emit) !*const a.Function {
+    const c = e.c;
+    const contains = try membership(e, Tried);
+    const f = try c.function("mobility candidate identity set", &.{ .{ .name = "candidates", .schema = try e.schema(Candidates) }, .{ .name = "index", .schema = try c.scalar(u64) }, .{ .name = "seen", .schema = try e.schema(Tried) } }, try c.scalar(bool), &.{});
+    const body = try c.body(f);
+    const candidates = try body.parameter("candidates");
+    const index = try body.parameter("index");
+    const seen = try body.parameter("seen");
+    const item = try e.candidateAt(body, candidates, index);
+    const none = try body.caseOf(item, "none");
+    const some = try body.caseOf(item, "some");
+    const host = try e.host(some.body(), some.payload());
+    const duplicate = try some.body().call(contains, &.{ .{ .name = "items", .value = seen }, .{ .name = "needle", .value = host }, .{ .name = "index", .value = try some.body().constant(u64, 0) } });
+    const bad = try some.body().branch();
+    const good = try some.body().branch();
+    const next = try good.call(f, &.{ .{ .name = "candidates", .value = candidates }, .{ .name = "index", .value = try e.increment(good, index) }, .{ .name = "seen", .value = try good.append(seen, host) } });
+    try c.define(f, try body.ret(try body.match(item, &.{ try none.ret(try none.body().constant(bool, true)), try some.ret(try some.body().conditional(duplicate, try bad.ret(try bad.constant(bool, false)), try good.ret(next))) })));
+    return f;
+}
+
 fn preferable(e: Emit, price: *const a.Function) !*const a.Function {
     const c = e.c;
     const f = try c.function("mobility deterministic ordering", &.{ .{ .name = "left", .schema = try e.schema(m.Candidate) }, .{ .name = "right", .schema = try e.schema(m.Candidate) }, .{ .name = "constraints", .schema = try e.schema(m.Constraints) } }, try c.scalar(bool), &.{});
@@ -237,6 +257,7 @@ pub fn define(context: Context, failure: Id) !Id {
     const resolve_op = try a.interop.operation(c, definition.resolve);
     const move_op = try a.interop.operation(c, definition.relocate);
     const attempt = try attempts(e, try selector(e), move_op);
+    const distinct = try distinctCandidates(e);
     const f = try c.function("ensure placement", &.{.{ .name = "input", .schema = try e.schema(m.EnsureInput) }}, try e.schema(m.PlacementResult), &.{ resolve_op, move_op });
     const body = try c.body(f);
     const input = try body.parameter("input");
@@ -244,8 +265,12 @@ pub fn define(context: Context, failure: Id) !Id {
     const here = try body.caseOf(resolution, "Here");
     const candidates = try body.caseOf(resolution, "Candidates");
     const unavailable = try body.caseOf(resolution, "Unavailable");
-    const placed = try candidates.body().call(attempt, &.{ .{ .name = "input", .value = input }, .{ .name = "candidates", .value = candidates.payload() }, .{ .name = "tried", .value = try candidates.body().sequenceValue(try e.schema(Tried), &.{}) }, .{ .name = "attempt", .value = try candidates.body().constant(u32, 0) } });
-    const result = try body.match(resolution, &.{ try here.ret(try e.ready(here.body(), here.payload(), try here.body().field(try here.body().field(input, "budget"), "moves"))), try candidates.ret(placed), try unavailable.ret(try unavailable.body().variant(try e.schema(m.PlacementResult), "Failed", unavailable.payload())) });
+    const valid = try candidates.body().call(distinct, &.{ .{ .name = "candidates", .value = candidates.payload() }, .{ .name = "index", .value = try candidates.body().constant(u64, 0) }, .{ .name = "seen", .value = try candidates.body().sequenceValue(try e.schema(Tried), &.{}) } });
+    const accepted = try candidates.body().branch();
+    const rejected = try candidates.body().branch();
+    const placed = try accepted.call(attempt, &.{ .{ .name = "input", .value = input }, .{ .name = "candidates", .value = candidates.payload() }, .{ .name = "tried", .value = try accepted.sequenceValue(try e.schema(Tried), &.{}) }, .{ .name = "attempt", .value = try accepted.constant(u32, 0) } });
+    const checked = try candidates.body().conditional(valid, try accepted.ret(placed), try rejected.ret(try e.failed(rejected, "binding_mismatch")));
+    const result = try body.match(resolution, &.{ try here.ret(try e.ready(here.body(), here.payload(), try here.body().field(try here.body().field(input, "budget"), "moves"))), try candidates.ret(checked), try unavailable.ret(try unavailable.body().variant(try e.schema(m.PlacementResult), "Failed", unavailable.payload())) });
     try c.define(f, try body.ret(result));
     return cached.finish(context.builder, try a.interop.functionId(c, f));
 }

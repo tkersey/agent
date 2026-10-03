@@ -108,7 +108,7 @@ const Application = struct {
         // The child has a live protected cleanup scope when it yields. Its
         // actual suspension package remains owned by the caller across moves.
         const child = try boundary.library.generator.create(c, "agent.mobility.fixture.child.v1", unit, integer, integer, .{
-            .captures = .{ .continuation = &.{ unit, integer } },
+            .captures = .{ .continuation = &.{ unit, integer }, .body = &.{integer} },
             .residual = &.{ side_op, cleanup_op },
             .body_use = .reusable,
         });
@@ -127,10 +127,10 @@ const Application = struct {
         _ = try child_body.performLocal(child.effect(), capability, try child_body.constant(u64, 7));
         _ = try child_body.perform(side_op, try child_body.constant(u64, 77));
         try c.define(child_fn, try child_body.ret(try child_body.constant(u64, 91)));
-        const cleanup_type = try c.callable(&.{.{ .name = "exit", .schema = try c.cleanupInfo(unit) }}, unit, &.{cleanup_op}, .{ .use = .reusable, .captures = &.{} });
+        const cleanup_type = try c.callable(&.{.{ .name = "exit", .schema = try c.cleanupInfo(unit) }}, unit, &.{cleanup_op}, .{ .use = .reusable, .captures = &.{integer} });
         const cleanup_fn = try c.functionFor("child cleanup", cleanup_type);
         const cleanup = try start.closureBody(cleanup_fn);
-        try c.define(cleanup_fn, try cleanup.ret(try cleanup.perform(cleanup_op, try cleanup.constant(u64, 88))));
+        try c.define(cleanup_fn, try cleanup.ret(try cleanup.perform(cleanup_op, marker)));
         try c.define(start_fn, try start.ret(try start.protect(try start.lambda(child_fn, work_type), try start.lambda(cleanup_fn, cleanup_type), &.{})));
         const suspended = try root.handleWith(child.handler(), try root.lambda(start_fn, start_type), &.{});
         const early = try root.caseOf(suspended, "done");
@@ -160,7 +160,7 @@ pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();
     const mode = args.next() orelse return error.ExpectedMode;
-    inline for (.{ .{ "task-schema", Task }, .{ "report-schema", Report }, .{ "resolve-schema", mobility.ResolveInput }, .{ "resolution-schema", mobility.Resolution }, .{ "relocate-schema", mobility.RelocateInput }, .{ "relocation-reply-schema", mobility.RelocationReply } }) |item| {
+    inline for (.{ .{ "task-schema", Task }, .{ "report-schema", Report }, .{ "resolve-schema", mobility.ResolveInput }, .{ "resolution-schema", mobility.Resolution }, .{ "relocate-schema", mobility.RelocateInput }, .{ "relocation-reply-schema", mobility.RelocationReply }, .{ "read-schema", text.Read }, .{ "text-reply-schema", text.Reply }, .{ "subject-schema", text.Subject }, .{ "inspection-schema", text.Result }, .{ "integer-schema", u64 }, .{ "unit-schema", void } }) |item| {
         if (std.mem.eql(u8, mode, item[0])) {
             var b = source.Builder.init(init.gpa);
             defer b.deinit();
@@ -170,7 +170,7 @@ pub fn main(init: std.process.Init) !void {
             return write(init, bytes);
         }
     }
-    if (!std.mem.eql(u8, mode, "image")) return error.InvalidMode;
+    if (!std.mem.eql(u8, mode, "image") and !std.mem.eql(u8, mode, "identity")) return error.InvalidMode;
     const path = args.next() orelse return error.ExpectedObject;
     const bytes = try std.Io.Dir.cwd().readFileAlloc(init.io, path, init.gpa, .limited(8 << 20));
     defer init.gpa.free(bytes);
@@ -178,6 +178,7 @@ pub fn main(init: std.process.Init) !void {
     defer Tool.object = &.{};
     var compiled = try agent.compile(init.gpa, System);
     defer compiled.deinit();
+    if (std.mem.eql(u8, mode, "identity")) return write(init, &(try boundary.data.program_image.identity(init.gpa, compiled.program)));
     const image = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(image);
     _ = try compiled.encode(init.gpa, image);

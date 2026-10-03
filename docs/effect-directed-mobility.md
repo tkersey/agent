@@ -37,7 +37,7 @@ discharges the suspended child's cleanup without resuming its normal work.
 
 `check-mobility-continuation` checks fresh resident instances and exact parked
 state/request preservation. `check-mobility-browser-continuation` executes the
-same 4,245-byte image in Chromium and Firefox Workers and a separate Node process.
+same 4,421-byte image in Chromium and Firefox Workers and a separate Node process.
 It physically terminates the first Worker before data execution and verifies
 that the data process has exited before the new Worker restores its successor.
 
@@ -52,7 +52,8 @@ zig build check-mobility-continuation check-mobility-browser-continuation \
 These are **test scaffolds, not the durable custody reference route**. Their
 synthetic arrival receipts and empty immediate-requirement lists isolate
 continuation behavior; they provide no authority or custody safety evidence.
-The integrated custodian, authenticated transport, complete-state policy, fully admitted application,
+The durable browser bridge, cancellation forwarding across departed/ambiguous
+custodians, the approval/write variant,
 source-free use archive, recovery tests and matched measurements remain required.
 The full acceptance suite and serial review closeout remain unfinished.
 
@@ -61,13 +62,28 @@ World, including `Here`, constraints, affinity, deterministic ties, unknown and
 overflowing costs, malformed candidates, refusal retries, exhaustion and the
 32-candidate bound. The browser consumer uses `ensure` for both legs.
 
-## Durable components (not yet a deployable host)
+## Durable reference host (browser bridge pending)
 
 `runtime/mobility` now contains a restricted canonical JSON codec, closed signed
 registration/offer/decision records, pure custody transitions, public-World
-admission, and a SQLite journal. Journal methods are privileged environmental
-operations; they are not user-facing RPCs or a substitute for destination grants
-and export policy. The authenticated server and policy gateway are still pending.
+admission, a SQLite journal, the policy gateway, and the custodian. Journal methods
+are privileged environmental operations; they are not user-facing RPCs. The mTLS
+peer server is implemented; the durable browser-origin bridge is still pending.
+
+The custodian drives actual World outcomes, retains its resident executor between
+durability boundaries, and dispatches only the current committed request. Local
+grants bind tenant, principal, complete schemas, role, subject/version, scope and
+audience. An image-bound conservative cleanup manifest must be supported at the
+destination. Classification joins happen before results enter World; neither a
+requested export policy nor a public-looking current payload lowers the label.
+
+Publication tokens now bind the exact predecessor outcome and actual saved
+control input. Only World execution creates these tokens. A structurally admitted
+checkpoint cannot masquerade as a successor. The optional browser-report verifier
+executes the same bounded step in the pinned kernel and compares the result;
+it does not redispatch external effects. Its cost remains to be measured in the
+integrated browser lane. Cancellation consumption commits with its World successor,
+so recovery answers pending cleanup rather than repeatedly submitting cancellation.
 
 The journal stores artifacts in the transaction, freezes the source with its exact
 outbox, serializes target acceptance against permanent refusal, and preserves
@@ -76,6 +92,8 @@ publication. Dispatch admission, unknown occurrences, acquired replies and
 classification joins use the same database. Unknown never thaws custody. A
 returning host must have retired its previous custody before accepting a newer
 epoch. Small replay-prevention records are retained; there is no timeout GC.
+Explicit artifact collection preserves current, offered, staged and accepted
+recovery references and removes only unreferenced bytes, never terminal decisions.
 
 Acceptance hashes an immutable core first, signs the receipt containing that core
 hash, then encodes arrival using the receipt hash. The core, receipt, arrival and
@@ -99,8 +117,8 @@ zig build check-mobility-protocol check-mobility-journal \
   -Dworld-archive=/absolute/authenticated/world-source.tar.gz
 ```
 
-Five protocol tests cover RFC Unicode ordering/escaping, duplicate keys, malformed
-records, signatures, key ownership/retirement and counters. Nineteen journal tests
+Six protocol tests cover RFC Unicode ordering/escaping, duplicate keys, malformed
+records, signatures, key ownership/retirement and counters. Twenty journal tests
 cover accepted/refused recovery, exact retries, frozen outboxes, injected storage
 failure, stale executors, persisted uncertain/acquired occurrences, schema parity,
 and six actual SIGKILL points around freeze, acceptance and reply-acquisition
@@ -112,6 +130,36 @@ power-loss durability, network-filesystem safety, storage-rollback detection, or
 the complete protocol fault matrix. See the [Node SQLite API](https://nodejs.org/api/sqlite.html),
 [SQLite synchronization semantics](https://www.sqlite.org/pragma.html#pragma_synchronous),
 and [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785.html) for the underlying interfaces.
+
+`check-mobility-integration` uses the same dependency arguments and currently runs
+nine host cases plus six mTLS transport cases. The host cases complete A→B→A using real
+requirements and signed receipts, restarts both custodians, reconciles a lost old
+acceptance before a return, rejects stale/unbound successor publication, blocks
+uncertain delivery, and preserves cancellation/cleanup under revocation. The
+server-only fixture case denies return before any state bytes or preflight go to
+the browser host—even when the program requests a public export policy. Dispatch
+negatives cover tenant, principal, complete schema, semantic role and subject.
+Another privacy case retains an origin-only marker in the child's cleanup capture
+and rejects export despite a public-looking current placement payload. Successful
+round trips also assert that cleanup receives this captured marker at the new host.
+The network cases use HTTPS with mutually authenticated, explicitly pinned peer
+certificates and independent Ed25519 message keys. They exercise all staging and
+decision endpoints, lost responses after acceptance, withdrawal, exact status
+reconciliation, body/encoding bounds, unknown peers, private export rejection,
+and artifact collection. Image cache hits transfer only the outcome. Endpoints
+come from deployment configuration; the client rejects redirects and arbitrary
+URLs. Both services run locally in this lane; the durable browser-origin bridge
+and separate-process packaged deployment remain to be qualified.
+
+`servePeers` exposes preflight, bounded image/outcome staging, decision, status,
+withdrawal and narrowly authorized run-control endpoints. A peer certificate maps
+to a configured logical host ID; no request header can choose that identity.
+Staging metadata is authenticated and authorized before its body is buffered.
+The client treats all HTTP errors, malformed replies and lost connections as
+uncertainty, never as a refusal receipt. Test certificates are generated under an
+isolated temporary directory and do not alter system trust stores. The transport
+uses the platform [HTTPS](https://nodejs.org/api/https.html) and
+[TLS identity checks](https://nodejs.org/api/tls.html#tlscheckserveridentityhostname-cert).
 
 The selected foundation is Agent `b1f9d2866b5717d16339e7022a3b4d08951f0770`
 and its unchanged `conformance/agent4/dependencies.lock.json`: Boundary

@@ -65,7 +65,7 @@ const cases = [
   { resolution: tagged(1, [candidate('A', 1n)]), domains: ['private'], expected: { hosts: [], result: failed(0) } },
   { resolution: tagged(2, tagged(1)), expected: { hosts: [], result: failed(1) } },
   { resolution: tagged(1, [candidate('', 0n), candidate('bad\0host', 0n), candidate('A', 1n)]), expected: { hosts: ['A'], result: ready('A') } },
-  { resolution: tagged(1, [candidate('A', 1n), candidate('A', 2n), candidate('B', 3n)]), refuse: 1, expected: { hosts: ['A', 'B'], result: ready('B') } },
+  { resolution: tagged(1, [candidate('A', 1n), candidate('A', 2n), candidate('B', 3n)]), expected: { hosts: [], result: failed(3) } },
   { resolution: tagged(1, Array.from({ length: 32 }, (_, i) => candidate(`host-${String(i).padStart(2, '0')}`, BigInt(i)))), attempts: 0xffffffff, refuse: 32, expected: { hosts: Array.from({ length: 32 }, (_, i) => `host-${String(i).padStart(2, '0')}`), result: failed(9) } },
 ];
 for (const [i, value] of cases.entries()) { try { await run(value); } catch (error) { error.message = `case ${i}: ${error.message}`; throw error; } }

@@ -12,7 +12,7 @@ import { WorldAdmission, canonicalRequirements } from '../../runtime/mobility/ad
 import { CustodyJournal } from '../../runtime/mobility/journal.mjs';
 import { hash, opaqueId, runId, signRecord, verifyRecord, parse, canonical } from '../../runtime/mobility/protocol.mjs';
 import { schemas, observationValue } from '../../runtime/mobility/values.mjs';
-import { version } from '../../runtime/mobility/custody.mjs';
+import { version, attach as coreAttach, accept as coreAccept, acceptedCore } from '../../runtime/mobility/custody.mjs';
 import { subject } from '../../runtime/text_inspection.mjs';
 import { placement, resolution } from './mobility_fixture.mjs';
 
@@ -133,6 +133,52 @@ test('concurrent handles serialize one source offer and refuse conflicting ident
   assert.throws(() => f.b.refuse(modified.bytes, f.registration), { code: 'TransferConflict' });
 });
 
+test('transfer identity collisions cannot change source, destination, checkpoint or requirements', async t => {
+  const f = await fixture(t), proposal = f.offer(), id = parse(proposal.bytes).transfer_id;
+  f.a.freeze(f.id, version(f.a.run(f.id)), proposal.bytes, moving); const refusal = f.b.refuse(proposal.bytes, f.registration);
+  for (const changes of [{ source_host_id: 'C' }, { destination_host_id: 'C' }, { outcome_digest: '2'.repeat(64) }, { state_digest: '2'.repeat(64) }, { requirements_digest: '2'.repeat(64) }]) {
+    const changed = f.offer(f.a, { transfer_id: id, ...changes });
+    assert.throws(() => f.b.refuse(changed.bytes, f.registration), { code: 'TransferConflict' });
+    assert.deepEqual(f.b.savedDecision(proposal.bytes), refusal); assert.equal(f.b.run(f.id), null);
+  }
+  assert.equal(f.a.run(f.id).status, 'OFFERED');
+});
+
+test('rival target offers cannot both acquire the same local run', async t => {
+  const f = await fixture(t), first = f.offer(), rival = f.offer();
+  f.a.freeze(f.id, version(f.a.run(f.id)), first.bytes, moving);
+  const accepted = f.accept(f.b, first), secondHandle = f.open('B');
+  assert.throws(() => f.accept(secondHandle, rival), { code: 'LocalCustodyConflict' });
+  assert.deepEqual(secondHandle.savedDecision(first.bytes), accepted); assert.equal(secondHandle.savedDecision(rival.bytes), null);
+  assert.equal(secondHandle.run(f.id).custody_epoch, '1'); assert.equal(f.a.run(f.id).status, 'OFFERED');
+});
+
+test('expired admission never thaws a source and a saved acceptance outlives its deadline', async t => {
+  const f = await fixture(t), expired = f.offer(f.a, { admission_deadline: '1' });
+  f.a.freeze(f.id, version(f.a.run(f.id)), expired.bytes, moving);
+  assert.throws(() => f.accept(f.b, expired), { code: 'AdmissionExpired' });
+  assert.equal(f.a.run(f.id).status, 'OFFERED'); assert.equal(f.b.run(f.id), null); assert.equal(f.b.savedDecision(expired.bytes), null);
+  const refusal = f.b.refuse(expired.bytes, f.registration, 'expired_offer');
+  assert.equal(f.a.receiveDecision(expired.bytes, refusal).status, 'ACTIVE');
+  const other = await fixture(t), pending = other.offer(other.a, { admission_deadline: '1000' });
+  const realNow = Date.now;
+  try {
+    Date.now = () => 999; other.a.freeze(other.id, version(other.a.run(other.id)), pending.bytes, moving);
+    const accepted = other.accept(other.b, pending); Date.now = () => 1001;
+    assert.deepEqual(other.accept(other.b, pending), accepted);
+    assert.deepEqual(other.b.refuse(pending.bytes, other.registration, 'expired_offer'), accepted);
+    assert.equal(other.a.receiveDecision(pending.bytes, accepted).status, 'DEPARTED');
+  } finally { Date.now = realNow; }
+});
+
+test('forged predecessor lineage cannot create a later epoch', async t => {
+  const f = await fixture(t), forged = f.offer(f.a, { source_epoch: '1', destination_epoch: '2', predecessor_receipt_digest: '2'.repeat(64) });
+  assert.throws(() => f.accept(f.b, forged), { code: 'InvalidLineage' });
+  assert.equal(f.b.run(f.id), null); assert.equal(f.b.savedDecision(forged.bytes), null);
+  const wrongInitial = f.offer(f.a, { predecessor_receipt_digest: '2'.repeat(64) });
+  assert.throws(() => f.accept(f.b, wrongInitial), { code: 'InvalidLineage' }); assert.equal(f.b.run(f.id), null);
+});
+
 test('dispatch uncertainty and acquired replies persist; replaced executor cannot publish', async t => {
   const f = await fixture(t, initial), assigned = f.a.attach(f.id), oldVersion = version(assigned);
   const operation = f.a.admitLeaf(f.id, oldVersion, ['server-only']);
@@ -186,6 +232,118 @@ test('portable mobility schemas independently match compiled Zig contracts', asy
   for (const [key, name] of Object.entries({ resolve: 'resolve', resolution: 'resolution', relocate: 'relocate', relocationReply: 'relocation-reply' }))
     assert.deepEqual(encodeSchema(schemas[key]), new Uint8Array(await readFile(`zig-out/agent4/mobility/${name}.schema`)));
   assert.equal(hash(canonicalRequirements([])), admission.read(moving).relocation.requirements_digest);
+});
+
+test('a real infinite loop with byte-identical ERQ content receives distinct durable occurrences', async t => {
+  const loopImage = await readFile('zig-out/agent4/mobility/loop-image.bin'), loopId = (await readFile('zig-out/agent4/mobility/loop-identity.bin')).toString('hex');
+  const executor = await admission.start(loopImage, new Uint8Array(), loopId); t.after(() => executor.retire());
+  const f = await fixture(t, executor.current()), requests = [], occurrences = [];
+  let run = f.a.attach(f.id);
+  for (let i = 0; i < 4; i++) {
+    requests.push(world.decodeOutcome(admission.read(executor.current()).outcome).request);
+    occurrences.push(run.current_occurrence_id);
+    const attempt = f.a.admitLeaf(f.id, version(run), ['shared']);
+    const acquired = f.a.recordReply(f.id, attempt.attempt_id, new Uint8Array(), ['shared']);
+    f.a.recordReply(f.id, attempt.attempt_id, new Uint8Array(), ['shared']);
+    const next = await executor.drive({ kind: 'reply', value: new Uint8Array() });
+    const before = version(f.a.run(f.id));
+    run = f.a.publishOutcome(f.id, before, { kind: 'reply', reply_digest: hash(new Uint8Array()) }, next);
+    assert.equal(f.a.occurrence(attempt.id).status, 'ADMITTED');
+    assert.throws(() => f.a.recordReply(f.id, attempt.attempt_id, new Uint8Array(), ['shared']), { code: 'AttemptMismatch' });
+    assert.throws(() => f.a.publishOutcome(f.id, before, { kind: 'reply', reply_digest: hash(new Uint8Array()) }, next), { code: 'StaleExecutor' });
+  }
+  for (const request of requests.slice(1)) assert.deepEqual(request, requests[0]);
+  assert.equal(new Set(occurrences).size, 4); assert.equal(run.execution_revision, '4');
+});
+
+test('pure custody bounds reject overflowing incarnations and stale or retired target epochs', async t => {
+  const f = await fixture(t), run = f.a.run(f.id), proposal = f.offer(), offer = parse(proposal.bytes);
+  assert.throws(() => coreAttach({ ...run, executor_incarnation: '18446744073709551615' }), { code: 'CounterOverflow' });
+  const core = acceptedCore(offer, 'p1', ['shared'], limits);
+  assert.throws(() => coreAccept({ ...run, host_id: 'B', status: 'DEPARTED', custody_epoch: '1' }, parse(f.registration), offer, core, '3'.repeat(64), '4'.repeat(64)), { code: 'StaleEpoch' });
+  assert.throws(() => coreAccept({ ...run, host_id: 'B', status: 'TERMINAL' }, parse(f.registration), offer, core, '3'.repeat(64), '4'.repeat(64)), { code: 'RetiredRun' });
+  assert.deepEqual(f.a.run(f.id), run); assert.equal(f.b.run(f.id), null);
+});
+
+for (const operation of ['register', 'attach', 'cleanup-policy', 'policy', 'stage', 'refuse', 'decision', 'dispatch', 'unknown', 'acquire', 'unsent-refusal', 'publish', 'cancel', 'cancel-forwarded', 'retirement-diagnostic', 'pin', 'collect']) {
+  for (const when of ['before_commit', 'after_commit']) test(`transaction fault ${operation}.${when} recovers the exact committed boundary`, async t => {
+    const ordinary = ['register', 'dispatch', 'unknown', 'acquire', 'publish', 'collect'].includes(operation);
+    const f = await fixture(t, ordinary ? initial : moving); let journal = f.a, host = 'A', invoke, observe, expected;
+    if (operation === 'register') {
+      const { signature: _, ...original } = parse(f.registration), id = runId('issuer');
+      const registration = signRecord('run', { ...original, run_id: id }, f.pairs.issuer.privateKey);
+      invoke = () => journal.register(registration, initial); observe = db => db.run(id)?.status ?? null; expected = 'ACTIVE';
+    } else if (operation === 'attach') {
+      invoke = () => journal.attach(f.id); observe = db => db.run(f.id).executor_incarnation; expected = '1';
+    } else if (operation === 'cleanup-policy') {
+      invoke = () => journal.setCleanupRequirements(f.id, version(journal.run(f.id)), ['1'.repeat(64)]);
+      observe = db => db.run(f.id).cleanup_requirements; expected = ['1'.repeat(64)];
+    } else if (operation === 'policy') {
+      invoke = () => journal.applyPolicy(f.id, version(journal.run(f.id)), { cleanupRequirements: [], classification: ['server-only', 'shared'], deploymentLimits: { ...limits, maximum_moves: 8 }, policyRevision: 'p2' });
+      observe = db => { const run = db.run(f.id); return [run.classification, run.deployment_limits.maximum_moves, run.policy_revision]; }; expected = [['server-only', 'shared'], 8, 'p2'];
+    } else if (['stage', 'refuse', 'decision', 'cancel-forwarded', 'retirement-diagnostic'].includes(operation)) {
+      const proposal = f.offer(); f.a.freeze(f.id, version(f.a.run(f.id)), proposal.bytes, moving);
+      if (operation === 'stage' || operation === 'refuse') { journal = f.b; host = 'B'; }
+      if (operation === 'stage') {
+        const envelope = { offer: proposal.bytes, registration: f.registration, predecessor: null, observation: proposal.observation,
+          requirements: canonicalRequirements([]), constraints: encodeValue(schemas.constraints, [[], { tag: 1, value: 'B' }, { tag: 0, value: null }, 8388608n]) };
+        invoke = () => journal.stage(envelope, 'image', image);
+        observe = db => [db.stagedOffer(parse(proposal.bytes).transfer_id) !== null, db.hasArtifact('tenant', hash(image)), db.run(f.id)]; expected = [true, true, null];
+      } else if (operation === 'refuse') {
+        invoke = () => journal.refuse(proposal.bytes, f.registration);
+        observe = db => { const saved = db.savedDecision(proposal.bytes); return [saved === null ? null : parse(saved).decision, db.run(f.id)]; }; expected = ['refused', null];
+      } else if (operation === 'retirement-diagnostic') {
+        invoke = () => journal.retirementIssue(f.id, version(journal.run(f.id)), 'FixtureRetirementFailure');
+        observe = db => [db.run(f.id).status, db.run(f.id).retirement_issues?.length ?? 0]; expected = ['OFFERED', 1];
+      } else {
+        const accepted = f.accept(f.b, proposal);
+        if (operation === 'cancel-forwarded') { journal.receiveDecision(proposal.bytes, accepted); journal.requestCancel(f.id, 'stop'); }
+        invoke = () => operation === 'decision' ? journal.receiveDecision(proposal.bytes, accepted) : journal.cancellationForwarded(f.id, '0');
+        observe = db => operation === 'decision' ? [db.run(f.id).status, db.outbox().length] : [db.run(f.id).status, db.run(f.id).cancel_forwarded];
+        expected = operation === 'decision' ? ['DEPARTED', 0] : ['DEPARTED', true];
+      }
+    } else if (['dispatch', 'unknown', 'acquire', 'publish', 'collect'].includes(operation)) {
+      journal.attach(f.id); let attempt;
+      if (operation !== 'dispatch') attempt = journal.admitLeaf(f.id, version(journal.run(f.id)), ['shared']).attempt_id;
+      if (operation === 'publish' || operation === 'collect') journal.recordReply(f.id, attempt, taskReply, ['shared']);
+      if (operation === 'collect') journal.publishOutcome(f.id, version(journal.run(f.id)), { kind: 'reply', reply_digest: hash(taskReply) }, nextResolve);
+      if (operation === 'dispatch') { invoke = () => journal.admitLeaf(f.id, version(journal.run(f.id)), ['shared']); expected = 'DISPATCHING'; }
+      if (operation === 'unknown') { invoke = () => journal.markUnknown(f.id, attempt); expected = 'UNKNOWN'; }
+      if (operation === 'acquire') { invoke = () => journal.recordReply(f.id, attempt, taskReply, ['shared']); expected = 'SETTLED_REPLY'; }
+      observe = db => db.occurrence(db.run(f.id).current_occurrence_id).status;
+      if (operation === 'publish') {
+        invoke = () => journal.publishOutcome(f.id, version(journal.run(f.id)), { kind: 'reply', reply_digest: hash(taskReply) }, nextResolve);
+        observe = db => [db.run(f.id).execution_revision, db.run(f.id).outcome_digest, db.hasArtifact('tenant', hash(resolveBytes))]; expected = ['1', hash(resolveBytes), true];
+      }
+      if (operation === 'collect') {
+        invoke = () => journal.collectArtifacts('tenant');
+        observe = db => [db.hasArtifact('tenant', hash(initialBytes)), db.hasArtifact('tenant', hash(resolveBytes)), db.run(f.id).status]; expected = [false, true, 'ACTIVE'];
+      }
+    } else if (operation === 'unsent-refusal') {
+      invoke = () => journal.settleUnsentRelocation(f.id, version(journal.run(f.id)), moving, 'unavailable');
+      observe = db => [db.run(f.id).status, db.occurrence(db.run(f.id).current_occurrence_id).status, db.outbox().length]; expected = ['ACTIVE', 'SETTLED_REPLY', 0];
+    } else if (operation === 'cancel') {
+      invoke = () => journal.requestCancel(f.id, 'stop'); observe = db => [db.run(f.id).cancel_requested, db.run(f.id).attached]; expected = ['stop', false];
+    } else if (operation === 'pin') {
+      invoke = () => journal.resourcePin(f.id, version(journal.run(f.id)), 'origin-lock', true); observe = db => db.run(f.id).resource_pins; expected = ['origin-lock'];
+    }
+    const before = observe(journal), record = journal.run(f.id);
+    f.fault(`${operation}.${when}`); assert.throws(invoke, /injected/); f.fault(null); f.close(journal);
+    const recovered = f.open(host); assert.deepEqual(observe(recovered), when === 'after_commit' ? expected : before);
+    if (when === 'before_commit') assert.deepEqual(recovered.run(f.id), record);
+    if (recovered.run(f.id)) {
+      const run = recovered.run(f.id); assert.ok(recovered.hasArtifact('tenant', run.image_digest)); assert.ok(recovered.hasArtifact('tenant', run.outcome_digest));
+      if (run.reply_digest) assert.ok(recovered.hasArtifact('tenant', run.reply_digest));
+    }
+  });
+}
+
+for (const when of ['before_commit', 'after_commit']) test(`initialization fault ${when} is empty durable custody or fail-closed storage`, async t => {
+  const f = await fixture(t), directory = join(f.directory, 'initialization');
+  const configuration = { directory, hostId: 'A', deploymentGeneration: 'generation-1', keys: f.keys, signer: { keyId: 'A', privateKey: f.pairs.A.privateKey, policyRevision: 'p1' }, admission };
+  assert.throws(() => new CustodyJournal({ ...configuration, create: true, fault(point) { if (point === `initialize.${when}`) throw new Error('injected initialization'); } }), /injected initialization/);
+  if (when === 'before_commit') assert.throws(() => new CustodyJournal(configuration));
+  else { const reopened = new CustodyJournal(configuration); try { assert.deepEqual(reopened.recover(), []); assert.deepEqual(reopened.outbox(), []); } finally { reopened.close(); } }
 });
 
 for (const operation of ['freeze', 'accept', 'acquire']) for (const when of ['before_commit', 'after_commit']) test(`SIGKILL during ${operation}.${when} recovers the committed ownership state`, async t => {

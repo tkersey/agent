@@ -16,7 +16,25 @@ async function network(t, options = {}) {
     servers[host] = await servePeers(fixture.hosts[host], { ...tls[host], ca: tls.ca, peerCertificates: new Map([[tls[other].fingerprint256, other], [tls.C.fingerprint256, 'C']]),
       fault(point, event) {
         if (point === 'stage.before_body') uploads[host].push(event.kind);
+        if (options.dropStage === event.kind && host === 'B' && point === (options.dropWhen === 'before' ? 'stage.before_body' : 'stage.after_commit') && !dropped) {
+          dropped = true; event.response.destroy(); throw new Error('injected artifact disconnect');
+        }
         if (options.dropReceipt && host === 'B' && point === 'decision.after_commit' && !dropped) { dropped = true; event.response.destroy(); }
+        if (options.badReply && host === 'B' && point === 'decision.after_commit' && !dropped) {
+          dropped = true;
+          const saved = parse(fixture.journals.B.transfer(event.id).receipt);
+          let status = 200, body;
+          if (options.badReply === 'http202') { status = 202; body = canonical({ accepted: true }); }
+          else if (options.badReply === 'http503') { status = 503; body = canonical({ error: 'Unavailable' }); }
+          else if (options.badReply === 'redirect') { status = 307; body = canonical({}); }
+          else if (options.badReply === 'malformedJSON') body = Buffer.from('{');
+          else {
+            const changed = options.badReply === 'unknownField' ? { ...saved, unknown: true } : { ...saved, signature: (saved.signature[0] === 'A' ? 'B' : 'A') + saved.signature.slice(1) };
+            body = canonical({ state: 'terminal', receipt: Buffer.from(canonical(changed)).toString('base64url') });
+          }
+          event.response.writeHead(status, { 'content-type': 'application/json', 'content-length': body.length, ...(status === 307 ? { location: 'https://unconfigured.invalid' } : {}) });
+          event.response.end(body);
+        }
       } });
   }
   for (const [from, to] of [['A', 'B'], ['B', 'A']]) {
@@ -115,4 +133,41 @@ test('mTLS cancellation reconciles ambiguous custody and reaches only the accept
   assert.equal((await f.hosts.A.cancelRun(f.id, 'stop')).kind, 'cancel_forwarded');
   assert.equal((await f.hosts.B.run(f.id)).kind, 'terminal'); assert.equal(f.result('B').kind, 'cancelled');
   assert.equal(f.counters.A.cleanup, 0); assert.equal(f.counters.B.cleanup, 1);
+});
+
+for (const badReply of ['http202', 'http503', 'redirect', 'malformedJSON', 'unknownField', 'badSignature']) test(`${badReply} after target commit preserves unknown source custody until exact reconciliation`, async t => {
+  const f = await network(t, { badReply }), out = await f.hosts.A.run(f.id);
+  assert.equal((await f.hosts.A.retryTransfer(out.transfer_id)).kind, 'unknown');
+  assert.equal(f.hosts.A.status(f.id).custody, 'OFFERED'); assert.equal(f.hosts.B.status(f.id).custody, 'ACTIVE');
+  assert.deepEqual(f.file.counts().reads, []); assert.equal(f.counters.A.cleanup, 0);
+  assert.equal((await f.hosts.A.retryTransfer(out.transfer_id)).kind, 'accepted');
+  assert.equal(f.hosts.A.status(f.id).custody, 'DEPARTED'); assert.equal(f.hosts.B.status(f.id).epoch, '1');
+});
+
+test('duplicate and reordered artifact/decision messages preserve one saved target decision', async t => {
+  const f = await network(t), out = await f.hosts.A.run(f.id), envelope = f.hosts.A.transferEnvelope(out.transfer_id);
+  const token = await f.admissions.A.parked(envelope.image, envelope.outcome);
+  envelope.requirements = canonicalRequirements(f.admissions.A.read(token).relocation.requirements);
+  envelope.constraints = Buffer.from(f.journals.A.run(f.id).placement_evidence.constraints, 'base64url');
+  await f.clients.A.stage(envelope, 'outcome', envelope.outcome);
+  await f.clients.A.stage(envelope, 'outcome', envelope.outcome);
+  assert.equal(await f.clients.A.status(envelope.offer), null); assert.equal(f.journals.B.run(f.id), null);
+  await f.clients.A.stage(envelope, 'image', envelope.image);
+  const receipts = await Promise.all([f.clients.A.decide(envelope.offer), f.clients.A.decide(envelope.offer)]);
+  assert.deepEqual(receipts[0], receipts[1]);
+  const staleUpload = await f.clients.A.stage(envelope, 'outcome', envelope.outcome);
+  assert.deepEqual(Buffer.from(staleUpload.receipt, 'base64url'), Buffer.from(receipts[0]));
+  assert.equal(f.journals.B.run(f.id).executor_incarnation, '0'); assert.deepEqual(f.file.counts().reads, []);
+  f.journals.A.receiveDecision(envelope.offer, receipts[0]); assert.equal(f.hosts.A.status(f.id).custody, 'DEPARTED');
+});
+
+for (const dropStage of ['image', 'outcome']) for (const dropWhen of ['before', 'after']) test(`mTLS artifact disconnect ${dropStage}.${dropWhen} leaves inert recoverable staging and frozen source`, async t => {
+  const f = await network(t, { dropStage, dropWhen }), offered = await f.hosts.A.run(f.id);
+  const offer = parse(f.journals.A.transfer(offered.transfer_id).offer);
+  assert.equal((await f.hosts.A.retryTransfer(offered.transfer_id)).kind, 'unknown');
+  assert.equal(f.hosts.A.status(f.id).custody, 'OFFERED'); assert.equal(f.journals.B.run(f.id), null);
+  assert.equal(f.journals.B.hasArtifact('tenant', offer.image_digest), dropStage === 'outcome' || dropWhen === 'after');
+  assert.equal(f.journals.B.hasArtifact('tenant', offer.outcome_digest), dropStage === 'outcome' && dropWhen === 'after');
+  assert.equal((await f.hosts.A.retryTransfer(offered.transfer_id)).kind, 'accepted');
+  assert.equal(f.hosts.A.status(f.id).custody, 'DEPARTED'); assert.equal(f.hosts.B.status(f.id).custody, 'ACTIVE'); assert.deepEqual(f.file.counts().reads, []);
 });

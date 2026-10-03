@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createPrivateKey } from 'node:crypto';
+import { parse } from '../../runtime/mobility/protocol.mjs';
 import { decodeValue } from '../../runtime/values.mjs';
 import { packageFixture } from './mobility_package_fixture.mjs';
 assert.ok(process.env.AGENT_MOBILITY_BROWSER_TOOLS, 'AGENT_MOBILITY_BROWSER_TOOLS required');
@@ -13,9 +14,11 @@ for (const [engine, type] of [['chromium', chromium], ['firefox', firefox]]) tes
   const f = await packageFixture(t), { tls, serveBrowser } = f;
   const sessionToken = randomBytes(32).toString('hex');
   const otherToken = randomBytes(32).toString('hex');
+  const wrongAudienceToken = randomBytes(32).toString('hex');
   const sessions = new Map([
     [`mobility_session=${sessionToken}`, { sessionId: sessionToken, principal: 'user', tenant: 'tenant', audiences: ['human-A'] }],
     [`mobility_session=${otherToken}`, { sessionId: otherToken, principal: 'other', tenant: 'tenant', audiences: ['human-A'] }],
+    [`mobility_session=${wrongAudienceToken}`, { sessionId: wrongAudienceToken, principal: 'user', tenant: 'tenant', audiences: ['different-human'] }],
   ]);
   const origin = await serveBrowser(f.hosts.A, { ...tls.A, audience: 'human-A', runtimePath: resolve(process.env.AGENT_MOBILITY_RUNTIME),
     kernelBytes: new Uint8Array(await readFile(join(process.env.AGENT_MOBILITY_RUNTIME, 'world-kernel.wasm'))),
@@ -28,9 +31,10 @@ for (const [engine, type] of [['chromium', chromium], ['firefox', firefox]]) tes
   const page = await context.newPage(); await page.goto(origin.url);
   await page.evaluate(async ({ id }) => {
     const { BrowserExecutor } = await import('/client.mjs');
-    window.presentations = [];
+    window.presentations = []; window.snapshots = []; window.payloadLog = [];
     window.bridge = await new BrowserExecutor(id, value => {
       document.querySelector('#request').textContent = JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item);
+      window.snapshots.push(Array.from(window.bridge.output)); window.payloadLog.push(document.querySelector('#request').textContent);
       if (value.operation?.endsWith('.present.v1')) window.presentations.push(JSON.parse(document.querySelector('#request').textContent));
     }).initialize();
     window.api = (...args) => window.bridge.api(...args);
@@ -47,7 +51,7 @@ for (const [engine, type] of [['chromium', chromium], ['firefox', firefox]]) tes
   assert.equal((await page.evaluate(async () => (await window.api('retry')).json())).kind, 'accepted');
   assert.equal(f.hosts.A.status(f.id).custody, 'DEPARTED');
   await f.waitForReturn(); await f.stopB();
-  assert.equal(f.statusB().custody, 'DEPARTED');
+  const dataStatus = f.statusB(); assert.equal(dataStatus.custody, 'DEPARTED');
   await page.evaluate(() => window.attach());
   const fresh = await page.evaluate(() => window.bridge.assignment); assert.notEqual(fresh.nonce, oldAssignment.nonce); assert.equal(fresh.version.custody_epoch, '2');
   for (let i = 0; i < 16; i++) { const result = await page.evaluate(() => window.advance()); if (result.status?.custody === 'TERMINAL') break; }
@@ -59,6 +63,17 @@ for (const [engine, type] of [['chromium', chromium], ['firefox', firefox]]) tes
   assert.deepEqual(f.dataStatistics()['agent.text.read-chunk.v1'], { calls: 3, reads: ['0', '16', '32'], releases: 0 });
   assert.equal(f.dataStatistics()['agent.text.close.v1'].calls, 1);
   assert.equal(f.deploymentA.statistics()['agent.mobility.fixture.child-cleanup.v1'].calls, 1);
+  const privateSeeds = [...Object.values(f.pairs).map(pair => Buffer.from(pair.privateKey.export({ format: 'jwk' }).d, 'base64url')),
+    ...['A', 'B'].map(host => Buffer.from(createPrivateKey(tls[host].key).export({ format: 'jwk' }).d, 'base64url')), Buffer.from(sessionToken)];
+  const artifacts = [['image', f.image], ['use archive', f.archiveContents], ['process logs', Buffer.from(JSON.stringify(f.processLogs()))],
+    ['payload log', Buffer.from(await page.evaluate(() => window.payloadLog.join('\n')))],
+    ...await page.evaluate(() => window.snapshots).then(values => values.map((bytes, index) => [`browser outcome ${index}`, Buffer.from(bytes)]))];
+  for (const id of [departure.transfer_id, dataStatus.transfer_id]) {
+    const transfer = f.journals.A.transfer(id), offer = parse(transfer.offer);
+    artifacts.push(['offer', transfer.offer], ['receipt', transfer.receipt], ['parked outcome', f.journals.A.artifact('tenant', offer.outcome_digest)]);
+  }
+  for (const [label, bytes] of artifacts) for (const secret of privateSeeds) assert.equal(Buffer.from(bytes).includes(secret), false, `credential sentinel leaked into ${label}`);
+  assert.deepEqual(await page.evaluate(() => [localStorage.length, sessionStorage.length, document.cookie]), [0, 0, '']);
   const replacementPid = await f.startB(); assert.notEqual(replacementPid, f.pid); await f.stopB();
   assert.equal(f.dataStatistics()['agent.text.read-chunk.v1'].calls, 0, 'departed custody must not restart application work');
   const csrfDenied = await page.evaluate(async () => (await fetch(window.bridge.base + 'attach', { method: 'POST' })).status);
@@ -72,4 +87,7 @@ for (const [engine, type] of [['chromium', chromium], ['firefox', firefox]]) tes
   const other = await browser.newContext({ ignoreHTTPSErrors: true });
   await other.addCookies([{ name: 'mobility_session', value: otherToken, url: origin.url, httpOnly: true, secure: true, sameSite: 'Strict' }]);
   assert.equal((await other.request.get(origin.url + `/v1/browser/runs/${encodeURIComponent(f.id)}/status`)).status(), 403); await other.close();
+  const wrongAudience = await browser.newContext({ ignoreHTTPSErrors: true });
+  await wrongAudience.addCookies([{ name: 'mobility_session', value: wrongAudienceToken, url: origin.url, httpOnly: true, secure: true, sameSite: 'Strict' }]);
+  assert.equal((await wrongAudience.request.get(origin.url + `/v1/browser/runs/${encodeURIComponent(f.id)}/status`)).status(), 403); await wrongAudience.close();
 });

@@ -108,6 +108,8 @@ pub fn build(b: *std.Build) void {
     const mobility_model = b.step("check-mobility-model", "Explore the bounded single-transfer custody model and timeout counterexample");
     const model_run = b.addSystemCommand(&.{ "uv", "run", "--no-project", "test/agent4/mobility_model.py" });
     mobility_model.dependOn(&model_run.step);
+    const model_properties = b.addSystemCommand(&.{ "node", "--test", "test/agent4/mobility_model.test.mjs" });
+    mobility_model.dependOn(&model_properties.step);
     g.testModule(mobility, g.module("src/mobility.zig"));
     g.testModule(mobility, g.module("test/agent4/mobility_ensure.zig"));
     check.dependOn(mobility);
@@ -366,6 +368,8 @@ pub fn build(b: *std.Build) void {
     for ([_][]const u8{ "task", "report", "proposal", "read", "delivery", "human", "human-reply", "identifier", "integer", "boolean" }) |name|
         g.emit(mobility_approval_images, mobility_approval_consumer, &.{name}, b.fmt("mobility-approval/{s}.schema", .{name}));
     const mobility_ensure = g.emitter("agent-mobility-ensure", g.module("test/agent4/mobility_ensure.zig"));
+    for ([_][]const u8{ "loop-image", "loop-identity" }) |name|
+        g.emit(mobility_images, mobility_ensure, &.{name}, b.fmt("mobility/{s}.bin", .{name}));
     for ([_][]const u8{ "image", "input", "result" }) |name|
         g.emit(mobility_images, mobility_ensure, &.{name}, b.fmt("mobility/ensure-{s}.bin", .{name}));
     const mobility_image = b.addRunArtifact(mobility_consumer);

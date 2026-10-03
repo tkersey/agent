@@ -61,10 +61,10 @@ export async function servePeers(custodian, { key, cert, ca, peerCertificates, h
           if (metadata.receipt !== null) { req.resume(); return response(res, terminal(metadata.receipt)); }
           // Authenticate, authorize metadata and check declared size before
           // buffering any image/checkpoint bytes.
-          fault('stage.before_body', { id, kind });
+          fault('stage.before_body', { id, kind, response: res });
           const bytes = await readBody(req, metadata.offer.artifact_lengths[kind], metadata.offer.artifact_lengths[kind]);
           const staged = custodian.stageArtifact(peer, envelope, kind, bytes);
-          fault('stage.after_commit', { id, kind });
+          fault('stage.after_commit', { id, kind, response: res });
           return response(res, staged.receipt ? terminal(staged.receipt) : { state: 'staged', artifact: staged.stored, digest: staged.digest });
         }
         if (req.method === 'PUT' && operation === 'decision') {

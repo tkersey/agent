@@ -37,7 +37,10 @@ export class HostPolicy {
   get revision() { return this.#revision; }
   get trustDomain() { return this.#domain; }
   deployment(run) {
-    const entry = this.#deployments.find(item => item.imageDigest === run.image_digest && item.programId === run.program_id && item.tenant === run.tenant_ref && item.principals.includes(run.principal_ref));
+    // The signed registration fixes this issuer prefix. Peer authentication is
+    // a separate grant and cannot authorize registration of another principal.
+    const issuer = run.run_id.slice(0, -65);
+    const entry = this.#deployments.find(item => item.imageDigest === run.image_digest && item.programId === run.program_id && item.tenant === run.tenant_ref && item.principals.includes(run.principal_ref) && Array.isArray(item.issuers) && item.issuers.includes(issuer));
     requireThat(entry && run.trusted_runtime_profile === this.#profile && entry.hosts.includes(this.#host), 'DeploymentDenied');
     return entry;
   }

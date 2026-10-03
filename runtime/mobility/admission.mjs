@@ -7,16 +7,16 @@ import { encodeValue } from '../values.mjs';
 const equal = (a, b) => a.length === b.length && a.every((byte, i) => byte === b[i]);
 export class WorldAdmission {
   #world; #bytes; #expected; #limit; #tokens = new WeakMap();
-  constructor(world, { kernelBytes, expectedSha256, maximumArtifactBytes = 8 << 20, maximumWorkingBytes = 64 << 20 }) {
+  constructor(world, { kernelBytes, expectedSha256, maximumArtifactBytes = 8 << 20, maximumWorkingBytes = 64 << 20, maximumInputBytes = maximumArtifactBytes, maximumOutputBytes = maximumArtifactBytes }) {
     requireThat(hash(kernelBytes) === expectedSha256, 'RuntimeMismatch');
     this.#world = world; this.#bytes = Uint8Array.from(kernelBytes); this.#expected = expectedSha256;
-    this.#limit = { artifact: maximumArtifactBytes, working: maximumWorkingBytes };
+    this.#limit = { artifact: maximumArtifactBytes, working: maximumWorkingBytes, input: maximumInputBytes, output: maximumOutputBytes };
   }
   get runtimeProfile() { return this.#expected; }
   #bounded(bytes) { requireThat(bytes instanceof Uint8Array && bytes.length <= this.#limit.artifact, 'ArtifactCapacity'); return Uint8Array.from(bytes); }
   async #kernel(image) {
     const kernel = await this.#world.Kernel.create({ bytes: this.#bytes, expectedSha256: this.#expected });
-    kernel.setLimits({ input: this.#limit.artifact, working: this.#limit.working, output: this.#limit.artifact });
+    kernel.setLimits({ input: this.#limit.input, working: this.#limit.working, output: this.#limit.output });
     return { kernel, prepared: kernel.prepare(image) };
   }
   async #seal(image, imageDigest, outcome, programId, predecessor = null) {

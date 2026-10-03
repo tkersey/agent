@@ -60,7 +60,7 @@ export async function hostFixture(t, { privateData = false, privateCapture = fal
   const read = bindingSets.B.find(binding => binding.operation === READ), present = bindingSets.A.find(binding => binding.operation.endsWith('.present.v1'));
   const placement = (requirements, moves, intent, policy) => [[requirements, [[], { tag: 0, value: null }, { tag: 0, value: null }, 8n << 20n]], intent, policy, [moves, 3]];
   taskValue = [123n, 9001n, declared, placement([requirement(read)], 2, 'inspect', 'fixture-shared'), placement([requirement(present)], 1, 'present', privateData ? 'public' : 'fixture-shared')];
-  const deployment = { imageDigest: hash(image), programId, tenant: 'tenant', principals: ['user'], hosts: ['A', 'B'], classification: ['shared'], limits,
+  const deployment = { imageDigest: hash(image), programId, tenant: 'tenant', principals: ['user'], issuers: ['issuer'], hosts: ['A', 'B'], classification: ['shared'], limits,
     cleanup: bindingSets.A.filter(binding => binding.cleanup).map(requirement), controlPeers: ['A', 'B'], exportPolicies: { 'fixture-shared': ['A', 'B'], public: ['A', 'B'] } };
   const peerMaps = { A: new Map(), B: new Map() }, hosts = {}, journals = {}, policies = {}, admissions = {}, revoked = { A: new Set(), B: new Set() };
   for (const host of ['A', 'B']) {

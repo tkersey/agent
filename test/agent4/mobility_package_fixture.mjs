@@ -6,6 +6,7 @@ import { once } from 'node:events';
 import { mkdir, readFile, writeFile, rm, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { gunzipSync } from 'node:zlib';
 import { packageArtifacts } from '../../tools/agent4/package.mjs';
 import { canonical, hash } from '../../runtime/mobility/protocol.mjs';
 import { encodeValue } from '../../runtime/values.mjs';
@@ -109,6 +110,7 @@ export async function packageFixture(t) {
   const pid = await startB();
   await a.custodian.registerRun(f.registration, await readFile(join(examples, 'mobility.bpi3')), await readFile(join(examples, 'initial.args')));
   return { ...f, hosts: { A: a.custodian }, journals: { A: a.journal }, tls, serveBrowser, deploymentA: a, root, receipt, pid, stopB, startB,
+    archiveContents: gunzipSync(await readFile(join(output, receipt.archive.name))), processLogs: () => ({ stdout: outputText, stderr: errorText }),
     dataStatistics: () => statistics,
     async waitForReturn() {
       for (let i = 0; i < 200; i++) { const run = a.custodian.status(f.id); if (run.custody === 'ACTIVE' && run.epoch === '2') return; await new Promise(resolve => setTimeout(resolve, 50)); }

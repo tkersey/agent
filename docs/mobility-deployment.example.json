@@ -18,7 +18,7 @@
   "deployments": [{
     "imageDigest": "REPLACE_WITH_APPROVED_IMAGE_SHA256",
     "programId": "REPLACE_WITH_EMITTED_PROGRAM_ID",
-    "tenant": "tenant", "principals": ["user"], "hosts": ["A", "B"],
+    "tenant": "tenant", "principals": ["user"], "issuers": ["issuer"], "hosts": ["A", "B"],
     "classification": ["shared"],
     "limits": { "maximum_moves": 16, "maximum_image_bytes": 8388608, "maximum_outcome_bytes": 8388608 },
     "cleanup": "examples/mobility/cleanup.bin", "controlPeers": ["A", "B"],

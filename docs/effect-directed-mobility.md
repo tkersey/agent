@@ -55,7 +55,7 @@ zig build check-mobility-continuation check-mobility-browser-continuation \
 These are **test scaffolds, not the durable custody reference route**. Their
 synthetic arrival receipts and empty immediate-requirement lists isolate
 continuation behavior; they provide no authority or custody safety evidence.
-Remaining recovery/model cases and matched measurements are still required.
+Matched measurements, operational metrics and final review are still required.
 The durable source-free browser lane and approval variant are described below.
 The full acceptance suite and serial review closeout remain unfinished.
 
@@ -161,7 +161,7 @@ zig build check-mobility-protocol check-mobility-journal \
 ```
 
 Six protocol tests cover RFC Unicode ordering/escaping, duplicate keys, malformed
-records, signatures, key ownership/retirement and counters. Twenty journal tests
+records, signatures, key ownership/retirement and counters. Sixty-two journal tests
 cover accepted/refused recovery, exact retries, frozen outboxes, injected storage
 failure, stale executors, persisted uncertain/acquired occurrences, schema parity,
 and six actual SIGKILL points around freeze, acceptance and reply-acquisition
@@ -170,12 +170,12 @@ commits. They use real admitted World bytes and isolated temporary Ed25519 keys.
 The tested crash profile is macOS 27.2 arm64, local APFS, Node v26.10.0 and SQLite
 3.53.4. Process termination and transactional fault injection do **not** establish
 power-loss durability, network-filesystem safety, storage-rollback detection, or
-the complete protocol fault matrix. See the [Node SQLite API](https://nodejs.org/api/sqlite.html),
+arbitrary hardware failures. See the [Node SQLite API](https://nodejs.org/api/sqlite.html),
 [SQLite synchronization semantics](https://www.sqlite.org/pragma.html#pragma_synchronous),
 and [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785.html) for the underlying interfaces.
 
 `check-mobility-integration` uses the same dependency arguments and currently runs
-seventeen host cases plus seven mTLS transport cases. The host cases complete A→B→A using real
+fifty-one host cases plus eighteen mTLS transport cases. The host cases complete A→B→A using real
 requirements and signed receipts, restarts both custodians, reconciles a lost old
 acceptance before a return, rejects stale/unbound successor publication, blocks
 uncertain delivery, and preserves cancellation/cleanup under revocation. The
@@ -224,6 +224,12 @@ publish into later assignments. The Worker receives only approved image/state,
 the pinned kernel identity, and saved control input. The host's resident World
 instance verifies the reported successor before journal publication.
 
+`WorldAdmission` accepts independent input, working-memory and output limits.
+The reference defaults are 8 MiB input/output/artifact bytes and 64 MiB working
+memory; the embedding may set stricter budgets or qualified larger limits without
+changing the pinned kernel. Arena-exhaustion tests preserve the saved checkpoint,
+occurrence and acquired reply, then recover without redispatching the leaf.
+
 This lane builds and extracts the existing `agent4-use-archive` format, removes
 its optional test oracles, and loads both hosts' production modules from the
 extracted tree. Application Zig source, emitters and a bundled WASM kernel are
@@ -235,7 +241,11 @@ data service leaves its departed run inert. Both engines preserve captured
 cleanup, perform three real file reads and one close, and display the actual
 typed presentation (42 bytes, four newlines) through the shipped browser client.
 Missing sessions, wrong principal/origin, CSRF failures and stale assignments
-remain negative checks. All keys/certificates are temporary test provisioning
+remain negative checks, including an incorrect interaction audience. Credential
+sentinel checks scan actual private signing/TLS key material and session-token
+bytes against image, outcomes, payload/process logs, offers, receipts and the
+decompressed archive; local/session storage stay empty. These samples supplement
+authority separation and are not a general secret detector. All keys/certificates are temporary test provisioning
 outside the archive. These are local processes using real mTLS, not a measured
 two-machine network deployment.
 
@@ -243,7 +253,12 @@ two-machine network deployment.
 model with `uv run --no-project`. It explores 28 states and finds the required
 two-custodian counterexample when timeout takeover is deliberately enabled. This
 small model omits real storage, cryptography, continuation data and multiple
-epochs; it is not a proof of the implementation or the full fault matrix.
+epochs. The same target also runs a production-adjacent Node property model with
+128 seeds, 192 random steps per seed and three hosts through epoch 4. Required return
+conflicts have explicit prefixes, so random sampling cannot silently omit them.
+Its independent oracles check unique active custody, monotonic epochs/revisions,
+permanent retirement, no uncertain redispatch, classification and stale executors.
+It is bounded property coverage rather than an unbounded proof.
 
 ## Running the reference deployment
 
@@ -259,7 +274,9 @@ are relative to that configuration file. Protect it and its private-key files
 with local permissions. `keys` binds Ed25519 public keys to issuers/hosts; `peers`
 binds logical host IDs to configured HTTPS endpoints and TLS certificate pins.
 Message-signing keys and TLS keys are separate. `deployments` specifies tenant,
-principal, destination, cleanup and export grants. `bindings` selects only
+principal, issuer, destination, cleanup and export grants. Its explicit `issuers`
+list is mandatory: a trusted peer signing key is not permission to register a
+principal. The issuer is bound by the signed run-ID prefix throughout custody. `bindings` selects only
 installed adapters, complete schema files, subject/version and allowed state
 labels. The text adapter rechecks the actual file version on every read.
 `fixed-reply` is an explicitly synthetic typed leaf adapter: it authorizes an
@@ -271,7 +288,7 @@ origin custodian. The latter does not drive application steps in the service
 pump. Choose a private local journal directory and an externally maintained
 `deploymentGeneration`; never derive that generation from a restored database.
 The default journal bounds are 256 MiB of artifact bytes per tenant and 10,000
-records per bounded table. Accepted/refused decisions and their verification
+combined run/transfer/occurrence/staging records per tenant. Accepted/refused decisions and their verification
 bindings are retained indefinitely; the journal's explicit artifact collector
 deletes only unreferenced large bytes. Operators must monitor capacity. No
 timeout deletes a decision or releases ambiguous custody.

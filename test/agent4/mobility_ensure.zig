@@ -13,6 +13,19 @@ const Application = struct {
     }
 };
 const System = agent.system(.{ .InitialArgs = m.EnsureInput, .Result = m.PlacementResult, .Failure = void, .application = Application });
+const Loop = struct {
+    pub fn emit(c: agent.Context) !source.Module {
+        const b = c.builder;
+        const unit = try b.scalar(void);
+        const effect = try c.external("agent.mobility.fixture.repeat.v1", unit, unit, .read);
+        const entry = try b.declare(&.{unit}, unit, &.{effect}, &.{});
+        const reply = try b.variable(unit);
+        const next = try b.term(.{ .call = .{ .function = entry, .arguments = &.{try b.constant(void, {})} } });
+        try b.define(entry, try b.bind(reply, try b.term(.{ .perform = .{ .effect = effect, .payload = try b.constant(void, {}) } }), next));
+        return b.module(entry, unit);
+    }
+};
+const LoopSystem = agent.system(.{ .InitialArgs = void, .Result = void, .Failure = void, .application = Loop });
 
 test "ensure preserves caller failure type and cannot hide mobility in speculation" {
     var b = source.Builder.init(std.testing.allocator);
@@ -34,6 +47,15 @@ pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();
     const mode = args.next() orelse return error.ExpectedMode;
+    if (std.mem.eql(u8, mode, "loop-image") or std.mem.eql(u8, mode, "loop-identity")) {
+        var compiled = try agent.compile(init.gpa, LoopSystem);
+        defer compiled.deinit();
+        if (std.mem.eql(u8, mode, "loop-identity")) return write(init, &(try boundary.data.program_image.identity(init.gpa, compiled.program)));
+        const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+        defer init.gpa.free(bytes);
+        _ = try compiled.encode(init.gpa, bytes);
+        return write(init, bytes);
+    }
     if (std.mem.eql(u8, mode, "image")) {
         var compiled = try agent.compile(init.gpa, System);
         defer compiled.deinit();

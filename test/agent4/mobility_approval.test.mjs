@@ -55,7 +55,7 @@ async function fixture(t, { staleEvidence = false, staleApproval = false, uncert
   const pairs = Object.fromEntries(['issuer', 'A', 'B'].map(owner => [owner, generateKeyPairSync('ed25519')]));
   const keys = new Map(Object.entries(pairs).map(([owner, pair]) => [owner, { owner, status: 'active', publicKey: pair.publicKey }]));
   const limits = { maximum_moves: 8, maximum_image_bytes: 8 << 20, maximum_outcome_bytes: 8 << 20 };
-  const deployment = { imageDigest: hash(image), programId, tenant: 'tenant', principals: ['user'], hosts: ['A', 'B'], classification: ['shared'], cleanup: [], controlPeers: ['A', 'B'], limits, exportPolicies: { shared: ['A', 'B'] } };
+  const deployment = { imageDigest: hash(image), programId, tenant: 'tenant', principals: ['user'], issuers: ['issuer'], hosts: ['A', 'B'], classification: ['shared'], cleanup: [], controlPeers: ['A', 'B'], limits, exportPolicies: { shared: ['A', 'B'] } };
   const hosts = {}, journals = {}, peers = { A: new Map(), B: new Map() }, admissions = {}, policies = {};
   for (const host of ['A', 'B']) {
     admissions[host] = new WorldAdmission(world, { kernelBytes, expectedSha256: runtime.kernelSha256 });

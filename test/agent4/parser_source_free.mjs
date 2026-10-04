@@ -17,7 +17,7 @@ const hash=b=>createHash('sha256').update(b).digest('hex');
 try{
  execFileSync('tar',['-xzf',join(installed,'agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),'-C',area]);
  const root=join(area,(await readdir(area))[0]),objects=join(root,'objects');await mkdir(objects);
- await cp(join(installed,'bin/link-parser'),join(root,'link-parser'));
+ await cp(process.argv[5]??join(installed,'bin/link-parser'),join(root,'link-parser'));
  await cp(runtime,join(area,'world-runtime'),{recursive:true});
  await cp(native,join(root,'world-invoke'));
  const fixture=join(root,'zig-out/agent4/parser-construction');await mkdir(fixture,{recursive:true});

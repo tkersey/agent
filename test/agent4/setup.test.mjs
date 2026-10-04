@@ -141,11 +141,14 @@ function existingFixture(context) {
   chmodSync(zig, 0o755);
   // These sequential fixtures own their compiler selection. The stub still
   // rejects compilation/fetch, proving offline reuse does neither.
-  const inherited = process.env.AGENT_ZIG_EXE;
-  process.env.AGENT_ZIG_EXE = zig;
+  const selection = { AGENT_ZIG_EXE: zig, AGENT_ZIG_LIB: library, ZIG_LIB_DIR: library };
+  const inherited = Object.fromEntries(Object.keys(selection).map(key => [key, process.env[key]]));
+  Object.assign(process.env, selection);
   context.after(() => {
-    if (inherited === undefined) delete process.env.AGENT_ZIG_EXE;
-    else process.env.AGENT_ZIG_EXE = inherited;
+    for (const [key, value] of Object.entries(inherited)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
   });
   return { ...paths, agentRoot, lockPath, zig, lock, boundaryPackage };
 }

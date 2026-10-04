@@ -830,6 +830,7 @@ pub fn build(b: *std.Build) void {
             source_free.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
             source_free.addFileArg2(native_exe.getEmittedBin(), .{});
             source_free.addDirectoryArg2(b.graph.path(.install_prefix, ""), .{ .make_absolute = true });
+            source_free.addFileArg2(parser_link_only.getEmittedBin(), .{ .make_absolute = true });
             source_free.step.dependOn(distribution);
             source_free.step.dependOn(&runtime_guard.step);
             parser_source_free.dependOn(&source_free.step);

@@ -66,3 +66,29 @@ test('artifact paths honor a selected prefix including spaces and Unicode', () =
   const actual = execFileSync(process.execPath, ['--input-type=module', '-e', 'import { artifactRoot } from "./test/agent4/artifacts.mjs"; console.log(artifactRoot)'], { encoding: 'utf8', env: { ...process.env, AGENT4_BUILD_PREFIX: path } });
   assert.equal(actual.trim(), path);
 });
+
+test('nested toolchain selection preserves the inherited library', async t => {
+  const { execFileSync: run } = await import('node:child_process');
+  const { realpath, symlink } = await import('node:fs/promises');
+  const { selectZig: select } = await import('../../tools/agent4/toolchain.mjs');
+  const root = await mkdtemp(join(tmpdir(), 'nested zig library '));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const a = join(root, 'a'), b = join(root, 'b'), alias = join(root, 'alias');
+  await mkdir(a); await mkdir(b); await symlink(a, alias);
+  await writeFile(join(a, 'std.zig'), '// selected\n');
+  await writeFile(join(b, 'std.zig'), '// alternate\n');
+  const zig = join(root, 'zig');
+  await writeFile(zig, '#!/bin/sh\ncase "$1" in\nversion) echo 0.17.0;;\nenv) printf ".{\\n    .lib_dir = \\\"%s\\\",\\n}\\n" "$ZIG_LIB_DIR";;\nesac\n');
+  await chmod(zig, 0o755);
+  const parent = select(['--zig-exe', zig, '--zig-lib', a], { inherited: null });
+  const moduleUrl = new URL('../../tools/agent4/toolchain.mjs', import.meta.url).href;
+  const child = (args, env = parent.env) => run(process.execPath, ['--input-type=module', '-e',
+    'import {selectZig} from ' + JSON.stringify(moduleUrl) + '; const c=selectZig(' + JSON.stringify(args) + '); console.log(c.identity.library);'],
+    { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  assert.equal(child([]), await realpath(a));
+  assert.equal(child(['--zig-lib', alias]), await realpath(a));
+  assert.throws(() => child(['--zig-lib', b]), error => /Conflicting Zig library/.test(error.stderr));
+  assert.throws(() => child([], { ...parent.env, ZIG_LIB_DIR: b }), error => /Conflicting Zig library/.test(error.stderr));
+  assert.equal(parent.env.AGENT_ZIG_LIB, await realpath(a));
+  parent.assertUnchanged();
+});

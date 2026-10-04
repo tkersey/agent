@@ -9,7 +9,7 @@ import { inventory, readDependencyLock, readRegular, sha256,
   withVerifiedDependencies } from "../../tools/agent4/dependencies.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const MODULES = new Set(["std", "boundary", "boundary_data", "agent_contracts"]);
+const MODULES = new Set(["std", "builtin", "boundary", "boundary_data", "agent_contracts"]);
 const FORBIDDEN = /(?:^|\/)(?:system_compiler|strategy_v3|flow|runtime|world|kernel)(?:[._/]|$)/;
 
 function authoringFiles(sourceRoot) {

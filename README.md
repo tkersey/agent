@@ -130,9 +130,9 @@ are finite execution checks, not claims about live-model quality.
 Use **exact Zig 0.17.0 only** and **Node 26.8.1 or newer**. Agent 4 pins Boundary 3.0.0-dev.0 and
 World 6.0.0-dev.0 source commits in its [dependency lock](conformance/agent4/dependencies.lock.json); use
 that exact Boundary/World combination rather than substituting other versions.
-The locked source-installation profile is POSIX, qualified on Darwin arm64;
-Windows setup is not qualified. The Zig 0.17 migration is still completing its
-full integration and Linux qualification; see [runtime status](docs/agent4-runtime.md).
+The locked source-installation profile is POSIX, qualified on Darwin arm64 and
+Linux x86_64; Windows setup is not qualified. See [runtime status](docs/agent4-runtime.md)
+and the [Zig 0.17 execution and cost evidence](https://github.com/tkersey/boundary/blob/a39014232db44c6780a3a2d953dacea111168aec/docs/zig-0.17-upgrade.md).
 
 ### Compile and check the examples
 
@@ -149,18 +149,18 @@ works from an extracted source package without Git metadata.
 ### Execute the integration examples
 
 Acquire the locked World inputs explicitly, then run the integration checks. The
-full integration target currently exposes remaining application migrations:
+full integration target exercises the portable consumers and supported host adapters.
 
 Setup downloads the qualified World runtime bundle using authenticated GitHub
 CLI (`gh`) access and `unzip`, then delegates acquisition to World. It requires
 the pinned CI artifact while uncached; cached verified inputs support `--offline`.
-The artifact expires on October 27, 2026. Setup does not rebuild the kernel.
+The artifact expiry is recorded in the dependency lock. Setup does not rebuild the kernel.
 
 ```sh
-node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-boundary-48f36c1-world-f8a1597"
+node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-zig17"
 zig build check-agent4-integration -Doptimize=safe \
-  -Dworld-source="$PWD/.agent4-boundary-48f36c1-world-f8a1597/inputs/world" \
-  -Dworld-runtime="$PWD/.agent4-boundary-48f36c1-world-f8a1597/out/world-runtime/runtime"
+  -Dworld-source="$PWD/.agent4-zig17/inputs/world" \
+  -Dworld-runtime="$PWD/.agent4-zig17/out/world-runtime/runtime"
 ```
 
 Use a new work directory when advancing the dependency lock. Setup verifies
@@ -246,8 +246,8 @@ With World acquired, run the economy checks separately:
 
 ```sh
 zig build check-agent4-economy -Doptimize=safe \
-  -Dworld-source="$PWD/.agent4-boundary-48f36c1-world-f8a1597/inputs/world" \
-  -Dworld-runtime="$PWD/.agent4-boundary-48f36c1-world-f8a1597/out/world-runtime/runtime"
+  -Dworld-source="$PWD/.agent4-zig17/inputs/world" \
+  -Dworld-runtime="$PWD/.agent4-zig17/out/world-runtime/runtime"
 ```
 
 Without the supported inquiry execution host, economy reports

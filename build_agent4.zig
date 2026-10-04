@@ -78,6 +78,8 @@ pub fn build(b: *std.Build) void {
     });
     const source_guard = nodeCommand(b);
     source_guard.addArgs(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--authoring-only" });
+    // Side effects keep authentication live; this input also wakes watchers.
+    source_guard.addFileInput(b.path("conformance/agent4/dependencies.lock.json"));
     addBoundary(b, source_guard, source, target, optimize);
     source_guard.has_side_effects = true;
     source_guard.setCwd(b.path("."));
@@ -580,6 +582,7 @@ pub fn build(b: *std.Build) void {
         });
         const runtime_guard = nodeCommand(b);
         runtime_guard.addArgs(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--world-runtime" });
+        runtime_guard.addFileInput(b.path("conformance/agent4/dependencies.lock.json"));
         runtime_guard.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
         runtime_guard.addArg("--world-source");
         runtime_guard.addDirectoryArg2(world_source, .{ .make_absolute = true });
@@ -943,6 +946,7 @@ pub fn build(b: *std.Build) void {
         runtime_work.dependOn(&run.step);
         const runtime_post = nodeCommand(b);
         runtime_post.addArgs(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--world-runtime" });
+        runtime_post.addFileInput(b.path("conformance/agent4/dependencies.lock.json"));
         runtime_post.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
         runtime_post.addArg("--world-source");
         runtime_post.addDirectoryArg2(world_source, .{ .make_absolute = true });
@@ -1034,6 +1038,7 @@ pub fn build(b: *std.Build) void {
     check.dependOn(&installation.step);
     const post = nodeCommand(b);
     post.addArgs(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--authoring-only" });
+    post.addFileInput(b.path("conformance/agent4/dependencies.lock.json"));
     addBoundary(b, post, source, target, optimize);
     post.has_side_effects = true;
     _ = post.captureStdOut(.{});

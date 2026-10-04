@@ -123,15 +123,21 @@ jobs:
           key: zig-feedback-v1-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane }}-${{ hashFiles('build.zig.zon', 'conformance/agent4/dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
   # Preserve the old check name as a strict all-lanes gate; a focused run is not full qualification.
   native:
-    name: native
+    name: ${{ (inputs.lane == '' || inputs.lane == 'all') && 'native' || format('Focused result / {0}', inputs.lane) }}
     needs: [source, qualify]
-    if: ${{ !cancelled() && (inputs.lane == '' || inputs.lane == 'all') }}
+    if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Require source accounting and every qualification lane
         env:
+          LANE: ${{ inputs.lane }}
           SOURCE: ${{ needs.source.result }}
           QUALIFICATION: ${{ needs.qualify.result }}
         run: |
-          test "$SOURCE" = success && test "$QUALIFICATION" = success
+          test "$SOURCE" = success
+          if [ "$LANE" = source ]; then
+            test "$QUALIFICATION" = skipped
+          else
+            test "$QUALIFICATION" = success
+          fi

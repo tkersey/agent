@@ -33,12 +33,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node tools/agent4/setup.mjs --zig-exe "$(command -v zig)"
-      - name: Native authoring and runtime contracts
+      - name: Native contracts and economy with a custom executable directory
         run: |
-          zig build check-agent4 check-zig17 check-native -Doptimize=safe \
-            -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime" --summary all
-      - name: Economy probe with a custom executable directory
-        run: |
-          zig build check-agent4-economy -Doptimize=safe \
+          zig build check-agent4 check-zig17 check-native check-agent4-economy -Doptimize=safe \
             -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime" \
-            --prefix "$RUNNER_TEMP/agent-economy" --prefix-exe-dir executables --summary all
+            --prefix "$RUNNER_TEMP/agent-qualification" --prefix-exe-dir executables --summary all

@@ -1054,7 +1054,7 @@ fn addBoundary(b: *std.Build, run: *std.Build.Step.Run, source: ?std.Build.LazyP
         run.addDirectoryArg2(path, .{ .make_absolute = true });
     } else {
         run.addArg("--boundary-package");
-        run.addDirectoryArg2(b.dependency("boundary", .{ .target = target, .optimize = optimize }).path("."), .{});
+        run.addDirectoryArg2(b.dependency("boundary", .{ .target = target, .optimize = optimize }).path("."), .{ .make_absolute = true });
     }
 }
 

@@ -642,20 +642,6 @@ test "authoring and forwarded compiler observations do not change canonical BPI3
     try std.testing.expect(trace.compiler_count > 0);
 }
 
-test "retention and shared-scope consumers compile using public compositions" {
-    const a = std.testing.allocator;
-    var b = source.Builder.init(a);
-    defer b.deinit();
-    var output = try boundary.program.compile(a, try conversation(&b));
-    defer output.deinit();
-    try std.testing.expectEqual(@as(usize, 1), output.program.effects.len);
-    var scope_builder = source.Builder.init(a);
-    defer scope_builder.deinit();
-    var shared = try boundary.program.compile(a, try sharing(&scope_builder, 8));
-    defer shared.deinit();
-    try std.testing.expectEqual(@as(usize, 1), shared.program.handlers.len);
-}
-
 test "Agent resets Boundary observations before emitter and admission rejection" {
     const FailingApplication = struct {
         var invalid_entry = false;

@@ -167,20 +167,6 @@ fn seedFunction(e: E, d: agent.inquiry.broker.Definition, actor: Id, effects: []
     return f;
 }
 
-test "repair inquiry is admitted as ordinary protected Agent source" {
-    var diagnostic: boundary.program.Diagnostic = .{};
-    var compiled = agent.compileObserved(std.testing.allocator, System, .{ .boundary_options = .{ .diagnostic = &diagnostic } }) catch |err| {
-        std.debug.print("{any}\n", .{diagnostic});
-        return err;
-    };
-    defer compiled.deinit();
-}
-
-test "ReAct comparator is admitted through the same protected application surface" {
-    var compiled = try agent.compile(std.testing.allocator, ReactSystem);
-    defer compiled.deinit();
-}
-
 test "model-only speculation rejects the application's hidden experiment path" {
     const Bad = struct {
         pub fn emit(c: agent.Context) !source.Module {

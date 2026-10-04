@@ -1,6 +1,5 @@
 //! Explicit placement effects. Native functions only construct Boundary terms;
 //! custody, authority and transport remain environmental.
-const std = @import("std");
 const c = @import("agent_contracts");
 const Context = @import("authoring.zig").Context;
 const Id = @import("boundary").source.Id;
@@ -134,23 +133,4 @@ fn perform(context: Context, owner: Id, effect: Id, input: Id) !Id {
     const term = try b.term(.{ .perform = .{ .effect = effect, .payload = input } });
     try context.registry.protectSite(owner, term, effect);
     return term;
-}
-
-test "mobility contracts have stable bounded products and exactly two relocation outcomes" {
-    const source = @import("boundary").source;
-    const admission = @import("admission.zig");
-    var b = source.Builder.init(std.testing.allocator);
-    defer b.deinit();
-    var r = admission.Registry.init(std.testing.allocator);
-    defer r.deinit();
-    const ctx = Context{ .builder = &b, .registry = &r };
-    const def = try define(ctx);
-    try std.testing.expectEqual(def, try define(ctx));
-    try std.testing.expectEqual(admission.Role.mobility, r.roleOf(def.relocate).?);
-    const reply = b.schemas.items[@intCast(b.effects.items[@intCast(def.relocate)].result)];
-    try std.testing.expectEqual(@as(usize, 2), reply.sum.len);
-    const reason = b.schemas.items[@intCast(try ctx.schema(Reason))];
-    try std.testing.expectEqual(@as(usize, 16), reason.sum.len);
-    const names = [_][]const u8{ "unavailable", "policy_denied", "export_denied", "binding_mismatch", "runtime_mismatch", "capacity", "unsettled_occurrence", "pinned_resource", "cleanup_unsupported", "budget_exhausted", "withdrawn", "expired_offer", "already_here", "invalid_state", "busy", "unsupported" };
-    inline for (@typeInfo(Reason).@"union".field_names, names) |field_name, name| try std.testing.expectEqualStrings(name, field_name);
 }

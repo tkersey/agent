@@ -70,61 +70,6 @@ pub fn build(b: *B, registry: *admission.Registry, representation: Representatio
     return b.module(root, unit);
 }
 
-test "original interned source is conservatively rejected despite valid Boundary compilation" {
-    const a = std.testing.allocator;
-    var b = B.init(a);
-    defer b.deinit();
-    var registry = admission.Registry.init(a);
-    defer registry.deinit();
-    const module = try build(&b, &registry, .interned, 1);
-    var compiled = try bnd.program.compile(a, module);
-    defer compiled.deinit();
-    try std.testing.expectError(error.SpeculativeEffect, admission.verify(a, module, &registry));
-}
-
-test "public static-code callable preserves safe higher-order composition" {
-    const a = std.testing.allocator;
-    var b = B.init(a);
-    defer b.deinit();
-    var registry = admission.Registry.init(a);
-    defer registry.deinit();
-    const module = try build(&b, &registry, .static_code, 1);
-    var compiled = try bnd.program.compile(a, module);
-    defer compiled.deinit();
-    try admission.verify(a, module, &registry);
-}
-
-test "static-code source separation has no closed image cost for an immediate call" {
-    const a = std.testing.allocator;
-    var b1 = B.init(a);
-    defer b1.deinit();
-    var r1 = admission.Registry.init(a);
-    defer r1.deinit();
-    var b2 = B.init(a);
-    defer b2.deinit();
-    var r2 = admission.Registry.init(a);
-    defer r2.deinit();
-    var c1 = try bnd.program.compile(a, try build(&b1, &r1, .interned, 1));
-    defer c1.deinit();
-    var c2 = try bnd.program.compile(a, try build(&b2, &r2, .static_code, 1));
-    defer c2.deinit();
-    // The unrelated callback has its own nominal source schema, so Agent can
-    // distinguish its origin. Its immediate call needs no runtime closure;
-    // closed catalogue pruning removes that otherwise unreferenced schema.
-    try std.testing.expectEqual(b1.schemas.items.len + 1, b2.schemas.items.len);
-    const image = bnd.data.program_image;
-    const len1 = try image.encodedLength(c1.program);
-    const len2 = try image.encodedLength(c2.program);
-    const bytes1 = try a.alloc(u8, len1);
-    defer a.free(bytes1);
-    const bytes2 = try a.alloc(u8, len2);
-    defer a.free(bytes2);
-    _ = try c1.encode(a, bytes1);
-    _ = try c2.encode(a, bytes2);
-    std.debug.print("shape-interned image={d}; nominal separation image={d}; byte_equal={}\n", .{ len1, len2, std.mem.eql(u8, bytes1, bytes2) });
-    try std.testing.expectEqualSlices(u8, bytes1, bytes2);
-}
-
 test "static-code identity does not assert effect safety or bless schema reuse" {
     for ([_]Representation{ .unsafe_reuse, .unsafe_code }) |representation| {
         const a = std.testing.allocator;

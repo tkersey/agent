@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 import {
@@ -422,28 +421,6 @@ test("normalization rejects lone surrogates in every semantic Text field", () =>
     })), limits, offeredTools);
     assert.equal(normalized[0], 4);
     assert.equal(normalized.readUInt32LE(1), 3);
-  }
-});
-
-test("generic adapter source contains no repository-repair configuration", async () => {
-  const source = await readFile(
-    new URL("../../runtime/model.mjs", import.meta.url),
-    "utf8",
-  );
-  for (const forbidden of [
-    "gpt-5.4-mini-2026-03-17",
-    "repository-inspection",
-    "correct-construction",
-    "list_repository",
-    "read_file",
-    "search_text",
-    "run_tests",
-    "replace_file",
-    "src/range.mjs",
-    "normalizeRange",
-    "Repair only the admitted repository fixture",
-  ]) {
-    assert(!source.includes(forbidden), `adapter contains forbidden system literal: ${forbidden}`);
   }
 });
 

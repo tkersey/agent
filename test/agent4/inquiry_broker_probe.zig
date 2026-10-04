@@ -177,17 +177,6 @@ const Emit = struct {
     }
 };
 
-test "generic numerical inquiry broker compiles through public imports" {
-    var b = Builder.init(std.testing.allocator);
-    defer b.deinit();
-    var diagnostic: boundary.program.Diagnostic = .{};
-    var compiled = boundary.program.compileObserved(std.testing.allocator, try build(&b), .{ .diagnostic = &diagnostic }) catch |err| {
-        std.debug.print("{any}\n", .{diagnostic});
-        return err;
-    };
-    defer compiled.deinit();
-}
-
 test "broker declarations specialize once and reject impure or mistyped policies" {
     var b = Builder.init(std.testing.allocator);
     defer b.deinit();

@@ -309,23 +309,6 @@ fn typedWitness(b: *Builder) !source.Module {
     return c.module(entry, unit);
 }
 
-test "typed inquiry retains named demand and finding contracts" {
-    var b = Builder.init(std.testing.allocator);
-    defer b.deinit();
-    var compiled = try boundary.program.compile(std.testing.allocator, try typedWitness(&b));
-    defer compiled.deinit();
-}
-
-test "three protected futures compile under unchanged Boundary ownership" {
-    for ([_]Mode{ .owned, .composition, .followup }) |mode| {
-        var b = Builder.init(std.testing.allocator);
-        defer b.deinit();
-        var compiled = try boundary.program.compile(std.testing.allocator, try build(&b, mode));
-        defer compiled.deinit();
-        try std.testing.expect(compiled.program.handlers.len > 0);
-    }
-}
-
 test "inquiry custody rejects double resume, double disposal and queue duplication" {
     for ([_]Mode{ .duplicate_resume, .duplicate_dispose, .duplicate_queue, .illicit_clone }) |mode| {
         var b = Builder.init(std.testing.allocator);

@@ -16,16 +16,67 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: '26.9.0'
-      - name: Apply exact reviewed source changes
-        env:
-          PATCH: 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
+      - name: Apply and identify exact reviewed source changes
         run: |
           python - <<'PY'
-          import base64,gzip,hashlib,os,pathlib,subprocess
-          patch=gzip.decompress(base64.b64decode(os.environ['PATCH']))
-          assert hashlib.sha256(patch).hexdigest()=='b5600f93058d51d9cd974a0782da26ab2556ac1f16039804baf7096945f6798e'
-          subprocess.run(['git','apply','--check','-'],input=patch,check=True)
-          subprocess.run(['git','apply','-'],input=patch,check=True)
+          from pathlib import Path
+          import hashlib,subprocess
+          p=Path('test/agent4/installations.mjs');s=p.read_text()
+          s=s.replace('new Set(["std", "boundary",','new Set(["std", "builtin", "boundary",')
+          s=s.replace('function authoringFiles(sourceRoot) {','export function authoringFiles(sourceRoot = ROOT) {')
+          s=s.replace('  const toolchain = selectZig([]);\n  const lock', '  // Account for source before selecting a compiler, fetching, or creating output.\n  const source = authoringFiles(sourceRoot);\n  const toolchain = selectZig([]);\n  const lock',1)
+          s=s.replace('  const source = authoringFiles(sourceRoot);\n  for (const [path, bytes]', '  for (const [path, bytes]',1)
+          start=s.index('    let output;\n',s.index('if (isMain(import.meta))'))
+          end=s.index('\n  } catch (error)',start)
+          s=s[:start]+'''    let output, sourceRoot, scanOnly = false;
+              const seen = new Set();
+              for (let i = 0; i < args.length; i++) {
+                const flag = args[i];
+                if (seen.has(flag)) throw new Error(`duplicate option: ${flag}`);
+                seen.add(flag);
+                if (flag === "--scan-only") { scanOnly = true; continue; }
+                if (!["--output", "--source-root"].includes(flag) || !args[i + 1] || args[i + 1].startsWith("--"))
+                  throw new Error("usage: installations.mjs [--scan-only] [--source-root DIR] [--output FILE]");
+                const value = resolve(args[++i]);
+                if (flag === "--output") output = value;
+                else sourceRoot = value;
+              }
+              if (scanOnly) {
+                const files = authoringFiles(sourceRoot);
+                const result = { check: "authoring-source-accounting", result: "passed", files: [...files.keys()].sort() };
+                if (output) { mkdirSync(dirname(output), { recursive: true }); writeFileSync(output, JSON.stringify(result, null, 2) + "\\n"); }
+                console.log(JSON.stringify(result, null, 2));
+              } else console.log(JSON.stringify(await authoringInstallation({ sourceRoot, output }), null, 2));''' + s[end:]
+          p.write_text(s)
+          p=Path('build_agent4.zig');s=p.read_text()
+          s=s.replace('    const installation = nodeCommand(b);','''    const accounting = b.addSystemCommand(&.{ "node", "test/agent4/installations.mjs", "--scan-only" });
+              accounting.has_side_effects = true;
+              b.step("check-source-accounting", "Classify installed authoring imports without consumer compilation").dependOn(&accounting.step);
+              const installation = nodeCommand(b);''')
+          s=s.replace('    check.dependOn(&installation.step);','''    installation.step.dependOn(&accounting.step);
+              const installation_check = b.step("check-authoring-installation", "Check only the external public authoring installation");
+              installation_check.dependOn(&installation.step);''')
+          s=s.replace('    aggregate.dependOn(&post.step);','''    b.step("check-authoring-core", "Check authoring contracts without repeating external installation").dependOn(&post.step);
+              aggregate.dependOn(&post.step);
+              aggregate.dependOn(installation_check);''')
+          s=s.replace('    const multi_exe = g.emitter("agent4-multi", multi);','''    const multi_exe = g.emitter("agent4-multi", multi);
+              const multi_images = b.step("multi-images", "Emit shared multi-shot fixtures");
+              emit.dependOn(multi_images);''')
+          s=s.replace('g.emit(emit, multi_exe,','g.emit(multi_images, multi_exe,')
+          s=s.replace('    g.emit(emit, clarification_economy, &.{}, "clarification/scaling.json");','''    const clarification_images = b.step("clarification-images", "Emit shared clarification scaling evidence");
+              g.emit(clarification_images, clarification_economy, &.{}, "clarification/scaling.json");
+              emit.dependOn(clarification_images);''')
+          s=s.replace('        const measure = nodeCommand(b);','''        const measure = nodeCommand(b);
+                  measure.addFileArg2(b.graph.path(.install_bin, "agent4-multi"), .{ .prefix = "AGENT4_MULTI_INSPECTOR=", .make_absolute = true });''')
+          s=s.replace('        measure.step.dependOn(&installed_probe.step);','''        measure.step.dependOn(&installed_probe.step);
+                  measure.step.dependOn(&installed_multi.step);''')
+          s=s.replace('        measure.step.dependOn(emit);','''        // Focused economy reruns need these inputs, not the entire authoring corpus.
+                  measure.step.dependOn(multi_images);
+                  measure.step.dependOn(clarification_images);
+                  measure.step.dependOn(inquiry_app_images);''')
+          p.write_text(s)
+          for name,expected in [('build_agent4.zig','7a04d20ed7c55423fb76124153c9417ad8934c4f12d001db553f23d9bb9b52cd'),('test/agent4/installations.mjs','4601ca8a89ac4b77aa7cd0f42f55589b885571d187ae15163812f68aeab51eab')]:
+              assert hashlib.sha256(Path(name).read_bytes()).hexdigest()==expected,name
           subprocess.run(['git','add','build_agent4.zig','test/agent4/installations.mjs'],check=True)
           assert subprocess.check_output(['git','write-tree'],text=True).strip()=='f0e8f0a049436014286eb09f5c64ac957e5a0fd3'
           PY
@@ -49,7 +100,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python - <<'PY'
-          import base64,json,os,pathlib,subprocess,urllib.request
+          import base64,json,os,pathlib,urllib.request
           api='https://api.github.com/repos/tkersey/agent/git/'
           def post(path,data):
               request=urllib.request.Request(api+path,data=json.dumps(data).encode(),headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'})

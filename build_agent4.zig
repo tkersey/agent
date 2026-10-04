@@ -441,6 +441,12 @@ pub fn build(b: *std.Build) void {
     emit.dependOn(recursive_images);
     const text_object = fixture_driver.select("agent-text-object");
     const mobility_consumer = fixture_driver.select("agent-mobility-consumer");
+    const mobile_repository_images = b.step("mobile-repository-images", "Emit the mobile repository application and ordinary contracts");
+    const mobile_repository_check = b.step("check-mobile-repository", "Check the authored mobile repository application");
+    const mobile_repository_emitter = g.emitter("mobile-repository-emitter", g.module("test/consumers/mobile_repository/main.zig"));
+    g.emit(mobile_repository_images, mobile_repository_emitter, &.{"image"}, "mobile-repository/program.bpi3");
+    for ([_][]const u8{ "task", "report", "snapshot-request", "snapshot", "read", "evidence", "question", "answer", "cleanup", "unit" }) |name|
+        g.emit(mobile_repository_images, mobile_repository_emitter, &.{name}, b.fmt("mobile-repository/{s}.schema", .{name}));
     const mobility_images = b.step("mobility-images", "Emit the independent mobility consumer");
     const mobility_approval_images = b.step("mobility-approval-images", "Emit the movable approval and fixture replacement consumer");
     emit.dependOn(mobility_approval_images);
@@ -614,6 +620,14 @@ pub fn build(b: *std.Build) void {
         addBoundary(b, runtime_guard, source, target, optimize);
         runtime_guard.has_side_effects = true;
         _ = runtime_guard.captureStdOut(.{});
+        const mobile_repository_run = nodeCommand(b);
+        mobile_repository_run.addArgs(&.{ "node", "test/agent4/mobile_repository_continuation.mjs" });
+        mobile_repository_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
+        mobile_repository_run.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/mobile-repository"), .{ .make_absolute = true });
+        mobile_repository_run.step.dependOn(mobile_repository_images);
+        mobile_repository_run.step.dependOn(&runtime_guard.step);
+        mobile_repository_run.has_side_effects = true;
+        mobile_repository_check.dependOn(&mobile_repository_run.step);
         var previous_economy: ?*std.Build.Step = null;
         for ([_][]const u8{ "manual", "fixed", "ensure", "stationary" }) |mode| {
             const sample = nodeCommand(b);
@@ -1021,6 +1035,7 @@ pub fn build(b: *std.Build) void {
         economy.dependOn(&measure.step);
     } else {
         const missing = b.addFail("provide -Dworld-runtime=/absolute/authenticated/world-runtime");
+        mobile_repository_check.dependOn(&missing.step);
         compiled_tools_check.dependOn(&missing.step);
         mobility_continuation.dependOn(&missing.step);
         mobility_native.dependOn(&missing.step);

@@ -179,11 +179,11 @@ test "portable descriptor intersection covers 31 32 63 and rejects unavailable i
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
     const set = try agent.sets.define(&b, 64);
-    var outer = [_]bool{false} ** 64;
+    var outer = @as([64]bool, @splat(false));
     outer[31] = true;
     outer[32] = true;
     outer[63] = true;
-    var restriction = [_]bool{true} ** 64;
+    var restriction = @as([64]bool, @splat(true));
     restriction[32] = false;
     const outer_value = try agent.sets.literal(&b, set, &outer);
     try std.testing.expectError(error.InvalidReference, agent.sets.member(&b, set, outer_value, 64));
@@ -291,10 +291,10 @@ test "scope contributions preserve lexical instructions memory and permission in
     defer b.deinit();
     const number = try b.scalar(u64);
     const shape = try agent.scopes.layout(&b, number, number, 2, 64, 64);
-    var tools = [_]bool{false} ** 64;
+    var tools = @as([64]bool, @splat(false));
     tools[31] = true;
     tools[32] = true;
-    var skills = [_]bool{false} ** 64;
+    var skills = @as([64]bool, @splat(false));
     skills[31] = true;
     skills[63] = true;
     const initial = try agent.scopes.value(&b, shape, .{

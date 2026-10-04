@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
@@ -11,9 +12,9 @@ import {decodeSchema,encodeValue,decodeValue} from '../../runtime/values.mjs';
 const [entry,kernelPath]=process.argv.slice(2);
 const world=await import(pathToFileURL(resolve(entry)));
 const bytes=new Uint8Array(await readFile(kernelPath)),hash=x=>createHash('sha256').update(x).digest('hex');
-const image=new Uint8Array(await readFile('zig-out/agent4/parser-delivery/program.bin'));
-const inputSchema=decodeSchema(await readFile('zig-out/agent4/parser-delivery/input-schema.bin'));
-const resultSchema=decodeSchema(await readFile('zig-out/agent4/parser-delivery/result-schema.bin'));
+const image=new Uint8Array(await readFile((artifactRoot + '/agent4/parser-delivery/program.bin')));
+const inputSchema=decodeSchema(await readFile((artifactRoot + '/agent4/parser-delivery/input-schema.bin')));
+const resultSchema=decodeSchema(await readFile((artifactRoot + '/agent4/parser-delivery/result-schema.bin')));
 const area=await mkdtemp(join(tmpdir(),'parser-delivery-'));
 const results=[];
 try {

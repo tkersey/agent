@@ -112,12 +112,12 @@ fn Generator(comptime P: type, comptime batch: bool) type {
             const selection = try b.reference(b.parameter(entry, 2));
             const output = try b.variable(try g.schema(P.Output));
             const call = try g.recurse(try g.field(try b.reference(output), 0, P.OutputItems), try g.literal(Held, if (batch) &.{} else null), offered, selection);
-            const result_fields = @typeInfo(P.Result).@"union".fields;
+            const result_fields = @typeInfo(P.Result).@"union".field_types;
             var cases: [result_fields.len]Case = undefined;
             cases[0] = .{ .variable = output, .body = call };
-            inline for (result_fields[1..], 1..) |field_info, index| {
+            inline for (result_fields[1..], 1..) |FieldType, index| {
                 const reasons = [_]Failure{ .refusal, .transport, .provider, .unsupported };
-                cases[index] = .{ .variable = try b.variable(try g.schema(field_info.type)), .body = try g.reject(reasons[index - 1]) };
+                cases[index] = .{ .variable = try b.variable(try g.schema(FieldType)), .body = try g.reject(reasons[index - 1]) };
             }
             const matched = try b.term(.{ .match_sum = .{ .value = incoming, .cases = &cases } });
             const maximum = try g.field(selection, 1, u32);
@@ -182,10 +182,10 @@ fn Generator(comptime P: type, comptime batch: bool) type {
         }
 
         fn itemBody(g: G, item: Id, rest: Id, held: Id, offered: Id) !Id {
-            const fields = @typeInfo(P.OutputItem).@"union".fields;
+            const fields = @typeInfo(P.OutputItem).@"union".field_types;
             var cases: [fields.len]Case = undefined;
-            inline for (fields, 0..) |field_info, index| {
-                const variable = try g.b.variable(try g.schema(field_info.type));
+            inline for (fields, 0..) |FieldType, index| {
+                const variable = try g.b.variable(try g.schema(FieldType));
                 cases[index] = .{ .variable = variable, .body = if (index == 0)
                     try g.callBody(try g.b.reference(variable), rest, held, offered)
                 else
@@ -213,10 +213,10 @@ fn Generator(comptime P: type, comptime batch: bool) type {
         }
 
         fn checkAnswer(g: G, call: Id, rest: Id, answer: Id, held: Id, offered: Id) !Id {
-            const fields = @typeInfo(Answer).@"union".fields;
+            const fields = @typeInfo(Answer).@"union".field_types;
             var cases: [fields.len]Case = undefined;
-            inline for (fields, 0..) |field_info, index| {
-                cases[index] = .{ .variable = try g.b.variable(try g.schema(field_info.type)), .body = try g.checkDeclaration(call, rest, answer, held, offered, index) };
+            inline for (fields, 0..) |FieldType, index| {
+                cases[index] = .{ .variable = try g.b.variable(try g.schema(FieldType)), .body = try g.checkDeclaration(call, rest, answer, held, offered, index) };
             }
             return g.b.term(.{ .match_sum = .{ .value = answer, .cases = &cases } });
         }

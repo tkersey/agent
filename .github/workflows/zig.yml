@@ -1,0 +1,32 @@
+name: Zig 0.17 qualification
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '26.9.0'
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: '0.17.0'
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+      - name: Authenticate the locked source and delivered runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/agent4/setup.mjs --zig-exe "$(command -v zig)"
+      - name: Native authoring and runtime contracts
+        run: |
+          zig build check-agent4 check-zig17 check-native -Doptimize=safe \
+            -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime" --summary all

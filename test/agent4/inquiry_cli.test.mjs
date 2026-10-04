@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { execFileSync } from 'node:child_process';
@@ -11,7 +12,7 @@ import { reset, monotonic } from '../consumers/inquiry/fixtures/cases.mjs';
 
 const describe = value => JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item);
 const runtime = resolve(process.env.AGENT4_WORLD_RUNTIME ?? '.agent4/out/world-runtime/runtime');
-const images = resolve(process.env.AGENT4_INQUIRY_IMAGES ?? 'zig-out/agent4/inquiry');
+const images = resolve(process.env.AGENT4_INQUIRY_IMAGES ?? (artifactRoot + '/agent4/inquiry'));
 const action = (name, args) => ({ type: 'function_call', status: 'completed', call_id: 'reused-provider-id', name, arguments: JSON.stringify(args) });
 
 test('unsupported host selection refuses experiment execution', () => {

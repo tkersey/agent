@@ -59,13 +59,13 @@ pub const NormalizationLimits = struct {
 
 fn checkDeclarations(comptime Answer: type, comptime declarations: anytype) void {
     const info = @typeInfo(Answer).@"union";
-    if (declarations.len != info.fields.len)
+    if (declarations.len != info.field_names.len)
         @compileError("Agent model requires one declaration per Answer variant");
     inline for (declarations, 0..) |declaration, index| {
-        inline for (std.meta.fields(@TypeOf(declaration))) |field| {
-            if (!std.mem.eql(u8, field.name, "name") and
-                !std.mem.eql(u8, field.name, "description"))
-                @compileError("Agent model declaration has unknown field '" ++ field.name ++ "'");
+        inline for (@typeInfo(@TypeOf(declaration)).@"struct".field_names) |field_name| {
+            if (!std.mem.eql(u8, field_name, "name") and
+                !std.mem.eql(u8, field_name, "description"))
+                @compileError("Agent model declaration has unknown field '" ++ field_name ++ "'");
         }
         const name: []const u8 = declaration.name;
         if (name.len == 0 or name.len > 64)
@@ -93,20 +93,20 @@ pub fn Profile(
     @setEvalBranchQuota(100_000);
     const CodecProfile = codecs.Profile(Answer);
     comptime checkDeclarations(Answer, declarations);
-    comptime for (std.meta.fields(Limits)) |field| {
-        if (@field(limits, field.name) == 0)
-            @compileError("Agent model limit must be positive: " ++ field.name);
+    comptime for (@typeInfo(Limits).@"struct".field_names) |name| {
+        if (@field(limits, name) == 0)
+            @compileError("Agent model limit must be positive: " ++ name);
     };
     const maxima = comptime blk: {
         var name: usize = 1;
         var description: usize = 0;
         var schema: usize = 2;
-        for (declarations, @typeInfo(Answer).@"union".fields) |declaration, variant| {
+        for (declarations, @typeInfo(Answer).@"union".field_types) |declaration, Variant| {
             name = @max(name, declaration.name.len);
             description = @max(description, declaration.description.len);
-            schema = @max(schema, codecs.json.ToolSchema(variant.type).value.len);
+            schema = @max(schema, codecs.json.ToolSchema(Variant).value.len);
             if (limits.arguments_json_bytes <
-                codecs.json.maximumToolArgumentsByteLength(variant.type))
+                codecs.json.maximumToolArgumentsByteLength(Variant))
                 @compileError("Agent model arguments_json_bytes cannot represent every admitted answer");
         }
         break :blk .{ .name = name, .description = description, .schema = schema };
@@ -194,13 +194,13 @@ pub fn Profile(
             const items = comptime blk: {
                 var result: [declarations.len]ToolDeclaration = undefined;
                 const info = @typeInfo(Answer).@"union";
-                for (declarations, info.fields, 0..) |descriptor, variant, index| {
+                for (declarations, info.field_names, info.field_types, 0..) |descriptor, name, Variant, index| {
                     result[index] = .{
                         .action_ordinal = @intCast(index),
-                        .action_tag = @intCast(@intFromEnum(@field(info.tag_type.?, variant.name))),
+                        .action_tag = @intCast(@backingInt(@field(info.tag_type.?, name))),
                         .name = .{ .bytes = descriptor.name },
                         .description = .{ .bytes = descriptor.description },
-                        .input_schema_json = .{ .bytes = &codecs.json.ToolSchema(variant.type).value },
+                        .input_schema_json = .{ .bytes = &codecs.json.ToolSchema(Variant).value },
                         .strict = true,
                         .argument_codec = CodecProfile.value(index),
                     };
@@ -219,12 +219,12 @@ pub fn Profile(
             });
             if (slot.cached) |cached| return cached;
             const declaration = allDeclarations().items[index];
-            const fields = @typeInfo(ToolDeclaration).@"struct".fields;
-            var values: [fields.len]u64 = undefined;
-            inline for (fields, 0..) |field, field_index| {
+            const fields = @typeInfo(ToolDeclaration).@"struct";
+            var values: [fields.field_names.len]u64 = undefined;
+            inline for (fields.field_names, fields.field_types, 0..) |name, FieldType, field_index| {
                 values[field_index] = try builder.literal(.{
-                    .schema = try contracts.schema(field.type, builder),
-                    .bytes = try contracts.encodeOwned(field.type, builder.allocator(), @field(declaration, field.name)),
+                    .schema = try contracts.schema(FieldType, builder),
+                    .bytes = try contracts.encodeOwned(FieldType, builder.allocator(), @field(declaration, name)),
                 });
             }
             const product = try builder.primitive(try contracts.schema(ToolDeclaration, builder), .product, &values, 0);

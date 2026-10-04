@@ -16,13 +16,13 @@ const Emit = struct {
         switch (@typeInfo(T)) {
             .@"struct" => |info| {
                 if (@hasDecl(T, "agent_value_kind")) return a.interop.schema(e.c, try e.agent.schema(T));
-                var fields: [info.fields.len]a.Field = undefined;
-                inline for (info.fields, 0..) |field, i| fields[i] = .{ .name = field.name, .schema = try e.schema(field.type) };
+                var fields: [info.field_names.len]a.Field = undefined;
+                inline for (info.field_names, info.field_types, 0..) |field_name, FieldType, i| fields[i] = .{ .name = field_name, .schema = try e.schema(FieldType) };
                 return e.c.record(&fields);
             },
             .@"union" => |info| {
-                var fields: [info.fields.len]a.Field = undefined;
-                inline for (info.fields, 0..) |field, i| fields[i] = .{ .name = field.name, .schema = try e.schema(field.type) };
+                var fields: [info.field_names.len]a.Field = undefined;
+                inline for (info.field_names, info.field_types, 0..) |field_name, FieldType, i| fields[i] = .{ .name = field_name, .schema = try e.schema(FieldType) };
                 return e.c.alternatives(&fields);
             },
             .optional => |info| return e.c.alternatives(&.{ .{ .name = "none", .schema = try e.c.scalar(void) }, .{ .name = "some", .schema = try e.schema(info.child) } }),

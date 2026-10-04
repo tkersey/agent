@@ -114,7 +114,7 @@ pub fn define(b: *Builder, spec: Spec) Error!Definition {
     const eligible = try b.schema(.{ .product = &.{ own.types.view, admitted } });
     const request = try b.schema(.{ .product = &.{ spec.subject, spec.key, spec.demand, integer } });
     const envelope = try b.schema(.{ .product = &.{ spec.subject, spec.key, integer, completion } });
-    const identity = try std.fmt.allocPrint(b.allocator(), "{s}.experiment.v1", .{spec.identity});
+    const identity = try b.allocator().print("{s}.experiment.v1", .{spec.identity});
     const experiment = try b.effect(.{ .identity = identity, .payload = request, .result = envelope });
     return instance.finish(b, .{
         .custody = own,
@@ -539,7 +539,7 @@ const Emit = struct {
         const ops: LoopOps = .{ .loop = loop, .stop = try typed.interop.declaredFunction(c, try e.stopper()), .admit = try typed.interop.declaredFunction(c, try e.admitViews()), .lookup = try typed.interop.declaredFunction(c, lookup), .recipients = try typed.interop.declaredFunction(c, try e.recipients()), .selected = try typed.interop.declaredFunction(c, try e.selectedFunction(choice)), .cached_choice = try typed.interop.declaredFunction(c, try e.cachedChoice(lookup, optional)), .failure = fault, .subject_equal = try equality.create(c, try typed.interop.schema(c, e.s.subject), fault), .key_equal = try equality.create(c, try typed.interop.schema(c, e.s.key), fault), .observation_equal = try equality.create(c, try typed.interop.schema(c, e.s.observation), fault) };
         const body = try c.body(loop);
         var args: LoopArgs = undefined;
-        inline for (@typeInfo(LoopArgs).@"struct".fields) |field| @field(args, field.name) = try body.parameter(field.name);
+        inline for (@typeInfo(LoopArgs).@"struct".field_names) |field_name| @field(args, field_name) = try body.parameter(field_name);
         try c.define(loop, try body.ret(try e.loopTyped(body, ops, args)));
         const entry = try c.functionFor("start inquiry controller", try c.callable(fields[0..5], outcome, effects, .{ .use = .reusable, .captures = &.{}, .regions = regions }));
         const root = try c.body(entry);
@@ -574,7 +574,7 @@ const Emit = struct {
 
     fn stopTyped(_: Emit, body: *typed.Body, o: LoopOps, v: LoopArgs, state: *const typed.Value, status: Status, records: *const typed.Value, acquired: bool) ConstructionError!*const typed.Value {
         const count = if (acquired) try body.checkedAdd(v.acquisitions, try body.constant(u64, 1), o.failure) else v.acquisitions;
-        return body.call(o.stop, &.{ .{ .name = "state", .value = state }, .{ .name = "status", .value = try body.constant(u8, @intFromEnum(status)) }, .{ .name = "records", .value = records }, .{ .name = "acquisitions", .value = count }, .{ .name = "reused", .value = v.reused }, .{ .name = "recipients", .value = v.recipients } });
+        return body.call(o.stop, &.{ .{ .name = "state", .value = state }, .{ .name = "status", .value = try body.constant(u8, @backingInt(status)) }, .{ .name = "records", .value = records }, .{ .name = "acquisitions", .value = count }, .{ .name = "reused", .value = v.reused }, .{ .name = "recipients", .value = v.recipients } });
     }
     fn againTyped(_: Emit, body: *typed.Body, o: LoopOps, v: LoopArgs, state: *const typed.Value, records: *const typed.Value, acquired: bool, reused: bool, recipients_count: *const typed.Value) ConstructionError!*const typed.Value {
         return body.call(o.loop, &.{

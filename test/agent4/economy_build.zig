@@ -2,17 +2,17 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
-    const boundary_path = b.option([]const u8, "boundary-source", "Frozen Boundary source") orelse
-        b.pathFromRoot("../../.agent4/inputs/boundary");
-    const economy_path = b.option([]const u8, "economy-source", "Isolated emitter source") orelse
-        b.pathFromRoot("economy.zig");
+    const boundary_path = b.option(std.Build.LazyPath, "boundary-source", "Frozen Boundary source") orelse
+        b.path("../../.agent4/inputs/boundary");
+    const economy_path = b.option(std.Build.LazyPath, "economy-source", "Isolated emitter source") orelse
+        b.path("economy.zig");
     const data = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ boundary_path, "src/data/root.zig" }) },
+        .root_source_file = boundary_path.path(b, "src/data/root.zig"),
         .target = b.graph.host,
         .optimize = optimize,
     });
     const boundary = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ boundary_path, "src/root.zig" }) },
+        .root_source_file = boundary_path.path(b, "src/root.zig"),
         .target = b.graph.host,
         .optimize = optimize,
         .imports = &.{.{ .name = "boundary_data", .module = data }},
@@ -33,7 +33,7 @@ pub fn build(b: *std.Build) void {
         },
     });
     const probe = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = economy_path },
+        .root_source_file = economy_path,
         .target = b.graph.host,
         .optimize = optimize,
         .imports = &.{

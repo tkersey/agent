@@ -119,9 +119,9 @@ fn inspectExecution(init: std.process.Init, image_path: []const u8, state_path: 
         break :blk .{
             .effect = operation.effect,
             .identity = if (std.unicode.utf8ValidateSlice(effect.identity)) effect.identity else null,
-            .identityHex = try std.fmt.allocPrint(a, "{x}", .{effect.identity}),
-            .payloadSchemaHex = try std.fmt.allocPrint(a, "{x}", .{payload_schema}),
-            .resultSchemaHex = try std.fmt.allocPrint(a, "{x}", .{result_schema}),
+            .identityHex = try a.print("{x}", .{effect.identity}),
+            .payloadSchemaHex = try a.print("{x}", .{payload_schema}),
+            .resultSchemaHex = try a.print("{x}", .{result_schema}),
             .location = .{ .function = block.function, .block = operation.source_block, .instruction = block.instructions.len },
         };
     } else null;

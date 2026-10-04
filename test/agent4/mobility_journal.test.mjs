@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
@@ -19,7 +20,7 @@ import { placement, resolution } from './mobility_fixture.mjs';
 assert.ok(process.env.AGENT_MOBILITY_RUNTIME, 'Set AGENT_MOBILITY_RUNTIME to the independently authenticated runtime');
 const runtime = resolve(process.env.AGENT_MOBILITY_RUNTIME);
 const identity = verifyRuntime(runtime), world = await import(pathToFileURL(identity.entrypoint));
-const kernelBytes = await readFile(identity.kernelPath), image = await readFile('zig-out/agent4/mobility/program.bpi3');
+const kernelBytes = await readFile(identity.kernelPath), image = await readFile((artifactRoot + '/agent4/mobility/program.bpi3'));
 const admission = new WorldAdmission(world, { kernelBytes, expectedSha256: identity.kernelSha256 });
 const text = new TextEncoder().encode('alpha\nbeta gamma\ndelta epsilon zeta\nomega\n');
 const declared = await subject('fixture/story', text);
@@ -292,12 +293,12 @@ test('known stale deployment generation, duplicate run and origin pins fail clos
 
 test('portable mobility schemas independently match compiled Zig contracts', async () => {
   for (const [key, name] of Object.entries({ resolve: 'resolve', resolution: 'resolution', relocate: 'relocate', relocationReply: 'relocation-reply' }))
-    assert.deepEqual(encodeSchema(schemas[key]), new Uint8Array(await readFile(`zig-out/agent4/mobility/${name}.schema`)));
+    assert.deepEqual(encodeSchema(schemas[key]), new Uint8Array(await readFile(`${artifactRoot}/agent4/mobility/${name}.schema`)));
   assert.equal(hash(canonicalRequirements([])), admission.read(moving).relocation.requirements_digest);
 });
 
 test('a real infinite loop with byte-identical ERQ content receives distinct durable occurrences', async t => {
-  const loopImage = await readFile('zig-out/agent4/mobility/loop-image.bin'), loopId = (await readFile('zig-out/agent4/mobility/loop-identity.bin')).toString('hex');
+  const loopImage = await readFile((artifactRoot + '/agent4/mobility/loop-image.bin')), loopId = (await readFile((artifactRoot + '/agent4/mobility/loop-identity.bin'))).toString('hex');
   const executor = await admission.start(loopImage, new Uint8Array(), loopId); t.after(() => executor.retire());
   const f = await fixture(t, executor.current()), requests = [], occurrences = [];
   let run = f.a.attach(f.id);

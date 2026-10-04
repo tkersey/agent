@@ -88,7 +88,7 @@ imported-borrow contracts, performance acceptance, or legacy retirement.
 ## Inspect a suspended execution
 
 From an Agent source checkout, build the existing native inspector with `zig build build-inspector
--Doptimize=ReleaseSafe`, then run:
+-Doptimize=safe`, then run:
 
 ```sh
 zig-out/bin/agent4-multi inspect-execution application.bpi3 checkpoint.pst3

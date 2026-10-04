@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import assert from 'node:assert/strict';
 import {spawnSync,execFileSync} from 'node:child_process';
 import {mkdtemp,readdir,writeFile,rm} from 'node:fs/promises';
@@ -7,7 +8,7 @@ import {createHash} from 'node:crypto';
 import {rejectAll} from '../consumers/incremental-parser/candidates.mjs';
 const area=await mkdtemp(join(tmpdir(),'parser-evaluation-package-'));
 try {
-  execFileSync('tar',['-xzf',resolve('zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),'-C',area]);
+  execFileSync('tar',['-xzf',resolve((artifactRoot + '/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz')),'-C',area]);
   const cwd=join(area,(await readdir(area))[0]),candidate=join(area,'candidate.mjs');
   await writeFile(candidate,rejectAll);
   const run=spawnSync(process.execPath,['runtime/parser_evaluation.mjs','--candidate',candidate],{cwd,encoding:'utf8',timeout:30000,maxBuffer:1<<20});

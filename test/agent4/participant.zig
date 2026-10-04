@@ -132,7 +132,7 @@ test "compiled participant final link rejects an invalid optimization profile" {
     defer a.free(Application.bytes);
     try std.testing.expectError(error.InvalidOptimizationProfile, agent.compileObserved(a, System, .{ .boundary_options = .{ .profile = .{ .record = .{
         .version = 0,
-        .image_identity = .{0} ** 32,
+        .image_identity = @splat(0),
         .block_counts = &.{},
         .total = 0,
     } } } }));
@@ -236,7 +236,7 @@ pub fn replyBytes(allocator: std.mem.Allocator) ![]u8 {
             .tool_ordinal_claim = 0,
             .decoded_action = .{ .decoded = .{ .contribute = .{ .value = 42 } } },
         } }} },
-        .normalized_output_digest = [_]u8{0} ** 32,
+        .normalized_output_digest = @as([32]u8, @splat(0)),
     } });
 }
 

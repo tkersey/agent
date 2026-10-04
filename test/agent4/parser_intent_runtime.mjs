@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -15,7 +16,7 @@ const {Kernel,decodeOutcome,decodeRequest,encodeResult,encodeInput}=await import
 const peer=peerPath?await(await import(pathToFileURL(resolve(peerPath)))).wasmtimePeer(runtime.kernelPath,runtime.kernelSha256):null;
 const browser=browserTools?await(await import('./recursive_browser.mjs')).browserPeer({worldEntry:runtime.entrypoint,kernelPath:runtime.kernelPath,tools:browserTools,engine,sha256:runtime.kernelSha256}):null;
 try {
-const read=async n=>new Uint8Array(await readFile(`zig-out/agent4/parser-construction/${n}`));
+const read=async n=>new Uint8Array(await readFile(`${artifactRoot}/agent4/parser-construction/${n}`));
 const image=await read('program.bpi3'),inputSchema=decodeSchema(await read('input-schema.bin')),outputSchema=decodeSchema(await read('result-schema.bin'));
 const model=decodeValue(decodeSchema(await read('model-schema.bin')),await read('model-template.bin'));
 const strict=await createParserTools(),emit=await createParserTools({eofPolicy:'emit'});

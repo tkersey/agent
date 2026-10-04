@@ -241,3 +241,50 @@ test "declared result type cannot be silently ignored" {
     });
     try std.testing.expectError(error.TypeMismatch, agent.compile(allocator, System));
 }
+
+test "only private descriptor constructors admit public metadata on Zig 0.17" {
+    const FakeModel = struct {
+        pub const name = Writer.name;
+        pub const protocol = Writer.protocol;
+        pub const model_id = Writer.model_id;
+        pub const ParametersType = Writer.ParametersType;
+        pub const parameters = Writer.parameters;
+    };
+    const FakePrompt = struct {
+        pub const prompt_role = Instructions.prompt_role;
+        pub const content = Instructions.content;
+    };
+    const FakeSkill = struct {
+        pub const id = Revision.id;
+        pub const description = Revision.description;
+        pub const instructions = Revision.instructions;
+        pub const role = Revision.role;
+        pub const position = Revision.position;
+        pub const activation = Revision.activation;
+        pub const actions = Revision.actions;
+    };
+    const MutableModel = struct {
+        pub var name: []const u8 = Writer.name;
+        pub const protocol = Writer.protocol;
+        pub const model_id = Writer.model_id;
+        pub const ParametersType = Writer.ParametersType;
+        pub const parameters = Writer.parameters;
+    };
+    const UndefinedModel = struct {
+        pub const name: []const u8 = undefined;
+        pub const protocol = Writer.protocol;
+        pub const model_id = Writer.model_id;
+        pub const ParametersType = Writer.ParametersType;
+        pub const parameters = Writer.parameters;
+    };
+    try std.testing.expectEqual(null, comptime catalogs.sourceIssue(.{ .models = .{Writer}, .prompts = .{Instructions}, .skills = .{Revision}, .tools = .{Read} }));
+    inline for (.{ FakeModel, MutableModel, UndefinedModel }) |Fake| {
+        try std.testing.expectEqual(catalogs.SourceIssue.UnsupportedModelDescriptor, comptime catalogs.sourceIssue(.{ .models = .{Fake} }).?);
+    }
+    try std.testing.expectEqual(catalogs.SourceIssue.UnsupportedPromptDescriptor, comptime catalogs.sourceIssue(.{ .prompts = .{FakePrompt} }).?);
+    try std.testing.expectEqual(catalogs.SourceIssue.UnsupportedSkillDescriptor, comptime catalogs.sourceIssue(.{ .skills = .{FakeSkill} }).?);
+    // Constructor identity stays private; admission adds no public seal surface.
+    try std.testing.expectEqual(5, @typeInfo(Writer).@"struct".decl_names.len);
+    try std.testing.expectEqual(2, @typeInfo(Instructions).@"struct".decl_names.len);
+    try std.testing.expectEqual(7, @typeInfo(Revision).@"struct".decl_names.len);
+}

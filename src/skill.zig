@@ -3,11 +3,25 @@ const prompt = @import("prompt.zig");
 
 pub const Activation = enum { always, conditional, explicit };
 pub const RenderPosition = enum { before_user, after_user };
-const CanonicalSkillSeal = struct {};
-
 pub fn isAdmitted(comptime Skill: type) bool {
-    return @hasDecl(Skill, "agent_skill_seal") and
-        Skill.agent_skill_seal == CanonicalSkillSeal;
+    if (@typeInfo(Skill) != .@"struct" or @typeInfo(Skill).@"struct".field_names.len != 0) return false;
+    inline for (.{ "id", "description", "instructions", "role", "position", "activation", "actions" }) |name| {
+        if (!@hasDecl(Skill, name)) return false;
+        if (!@typeInfo(@TypeOf(&@field(Skill, name))).pointer.attrs.@"const") return false;
+    }
+    return Skill == Descriptor(Skill.id, Skill.description, Skill.instructions, Skill.role, Skill.position, Skill.activation, Skill.actions);
+}
+
+fn Descriptor(comptime id_value: anytype, comptime description_value: anytype, comptime instructions_value: anytype, comptime role_value: anytype, comptime position_value: anytype, comptime activation_value: anytype, comptime actions_value: anytype) type {
+    return struct {
+        pub const id = id_value;
+        pub const description = description_value;
+        pub const instructions = instructions_value;
+        pub const role = role_value;
+        pub const position = position_value;
+        pub const activation = activation_value;
+        pub const actions = actions_value;
+    };
 }
 
 pub fn skill(comptime spec: anytype) type {
@@ -21,16 +35,16 @@ pub fn skill(comptime spec: anytype) type {
     {
         @compileError("agent.skill requires id, description, instructions, role, position, activation, and actions");
     }
-    inline for (std.meta.fields(@TypeOf(spec))) |field| {
-        if (!std.mem.eql(u8, field.name, "id") and
-            !std.mem.eql(u8, field.name, "description") and
-            !std.mem.eql(u8, field.name, "instructions") and
-            !std.mem.eql(u8, field.name, "role") and
-            !std.mem.eql(u8, field.name, "position") and
-            !std.mem.eql(u8, field.name, "activation") and
-            !std.mem.eql(u8, field.name, "actions"))
+    inline for (@typeInfo(@TypeOf(spec)).@"struct".field_names) |field_name| {
+        if (!std.mem.eql(u8, field_name, "id") and
+            !std.mem.eql(u8, field_name, "description") and
+            !std.mem.eql(u8, field_name, "instructions") and
+            !std.mem.eql(u8, field_name, "role") and
+            !std.mem.eql(u8, field_name, "position") and
+            !std.mem.eql(u8, field_name, "activation") and
+            !std.mem.eql(u8, field_name, "actions"))
         {
-            @compileError("agent.skill unknown source field '" ++ field.name ++ "'");
+            @compileError("agent.skill unknown source field '" ++ field_name ++ "'");
         }
     }
     const activation_value: Activation = spec.activation;
@@ -39,16 +53,7 @@ pub fn skill(comptime spec: anytype) type {
     if (spec.id.len == 0 or spec.description.len == 0 or spec.instructions.len == 0) {
         @compileError("agent skill identity and content must not be empty");
     }
-    return struct {
-        const agent_skill_seal = CanonicalSkillSeal;
-        pub const id = spec.id;
-        pub const description = spec.description;
-        pub const instructions = spec.instructions;
-        pub const role = role_value;
-        pub const position = position_value;
-        pub const activation = activation_value;
-        pub const actions = spec.actions;
-    };
+    return Descriptor(spec.id, spec.description, spec.instructions, role_value, position_value, activation_value, spec.actions);
 }
 
 pub fn validateUnique(comptime skills: anytype) void {

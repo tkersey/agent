@@ -44,7 +44,7 @@ pub fn define(builder: *source.Builder, contract: Contract) Error!Definition {
         if (!sameContract(present.contract, contract)) return error.InvalidInteractionContract;
         return present;
     }
-    const identity = try std.fmt.allocPrint(builder.allocator(), "{s}{s}", .{
+    const identity = try builder.allocator().print("{s}{s}", .{
         identity_prefix, contract.name,
     });
     // A raw effect with the same name has no declaration proving the meaning

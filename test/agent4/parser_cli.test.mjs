@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
@@ -12,7 +13,7 @@ import {verifyRuntime} from '../../tools/agent4/dependencies.mjs';
 import {parseParserOptions} from '../../runtime/parser_cli.mjs';
 import {bufferUntilEOF,emitFinalRecord,decodedFields,rawRecords} from '../consumers/incremental-parser/candidates.mjs';
 const runtime=resolve(process.env.AGENT4_WORLD_RUNTIME??'.agent4-recursive-integrated/out/world-runtime/runtime');
-const archive=resolve(process.env.AGENT4_ARCHIVE??'zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz');
+const archive=resolve(process.env.AGENT4_ARCHIVE??(artifactRoot + '/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'));
 test('parser provider configuration is explicit and credentials are not implicit',()=>{
  assert.equal(parseParserOptions(['--world-runtime',runtime]).calls,0);
  assert.equal(parseParserOptions(['--world-runtime',runtime]).selection,'single');

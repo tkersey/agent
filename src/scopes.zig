@@ -171,7 +171,7 @@ pub fn field(b: *source.Builder, shape: Layout, environment: Id, selected: Field
         .skills => shape.skills.schema,
         .memory => shape.memory,
     };
-    return b.primitive(schema, .field, &.{environment}, @intFromEnum(selected));
+    return b.primitive(schema, .field, &.{environment}, @backingInt(selected));
 }
 
 /// A skill/policy contribution can only restrict authority. Instructions append

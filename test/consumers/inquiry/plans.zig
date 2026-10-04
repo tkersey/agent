@@ -14,10 +14,10 @@ pub fn define(e: E) !Id {
     const answers = try e.p(f, 0);
     const pop = try Pop.init(e, []const t.Answer, t.Answer);
     const invalid = try invalidPlan(e);
-    const fields = std.meta.fields(t.Answer);
+    const fields = @typeInfo(t.Answer).@"union".field_types;
     var cases: [fields.len]Case = undefined;
-    inline for (fields, 0..) |field, i| {
-        const v = try b.variable(try e.schema(field.type));
+    inline for (fields, 0..) |FieldType, i| {
+        const v = try b.variable(try e.schema(FieldType));
         var body = invalid;
         if (i == 1) {
             const empty = try e.value(@FieldType(t.Trace, "steps"), .{ .items = &.{} });
@@ -42,9 +42,9 @@ fn stepDecoder(e: E) !Id {
     const optional = try e.schema(?t.Step);
     const f = try b.declare(&.{try e.schema(t.Answer)}, optional, &.{}, &.{});
     const no = try b.pure(try e.value(?t.Step, null));
-    var cases: [std.meta.fields(t.Answer).len]Case = undefined;
-    inline for (std.meta.fields(t.Answer), 0..) |field, i| {
-        const v = try b.variable(try e.schema(field.type));
+    var cases: [@typeInfo(t.Answer).@"union".field_names.len]Case = undefined;
+    inline for (@typeInfo(t.Answer).@"union".field_types, 0..) |FieldType, i| {
+        const v = try b.variable(try e.schema(FieldType));
         var body = no;
         if (i >= 2 and i <= 7) {
             const payload = switch (i) {

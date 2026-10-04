@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -6,9 +7,9 @@ import { verifyRuntime } from '../../tools/agent4/dependencies.mjs';
 import { decodeSchema, decodeValue, encodeValue } from '../../runtime/values.mjs';
 const identity = verifyRuntime(resolve(process.argv[2]));
 const world = await import(pathToFileURL(identity.entrypoint));
-const bytes = await readFile(identity.kernelPath), image = await readFile('zig-out/agent4/mobility/ensure-image.bin');
-const inputSchema = decodeSchema(await readFile('zig-out/agent4/mobility/ensure-input.bin'));
-const resultSchema = decodeSchema(await readFile('zig-out/agent4/mobility/ensure-result.bin'));
+const bytes = await readFile(identity.kernelPath), image = await readFile((artifactRoot + '/agent4/mobility/ensure-image.bin'));
+const inputSchema = decodeSchema(await readFile((artifactRoot + '/agent4/mobility/ensure-input.bin')));
+const resultSchema = decodeSchema(await readFile((artifactRoot + '/agent4/mobility/ensure-result.bin')));
 const tagged = (tag, value = null) => ({ tag, value });
 const optional = value => value === null ? tagged(0) : tagged(1, value);
 const zeros = Array(32).fill(0);

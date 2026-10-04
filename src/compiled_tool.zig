@@ -116,9 +116,12 @@ pub fn declare(c: Context, spec: Specification) !Descriptor {
 
 pub fn link(allocator: std.mem.Allocator, module: source.Module, registry: *const admission.Registry, options: source.CompileOptions) !source.Compiled {
     options.resetObservations();
-    errdefer |err| if (options.diagnostic) |diagnostic| {
-        diagnostic.code = err;
+    return linkInternal(allocator, module, registry, options) catch |err| {
+        if (options.diagnostic) |diagnostic| diagnostic.code = err;
+        return err;
     };
+}
+fn linkInternal(allocator: std.mem.Allocator, module: source.Module, registry: *const admission.Registry, options: source.CompileOptions) !source.Compiled {
     var scratch = std.heap.ArenaAllocator.init(allocator);
     defer scratch.deinit();
     const a = scratch.allocator();
@@ -130,7 +133,7 @@ pub fn link(allocator: std.mem.Allocator, module: source.Module, registry: *cons
     var effects: std.ArrayList(Id) = .empty;
     try exports.append(a, .{ .name = "main", .reference = .{ .kind = .function, .id = module.entry } });
     for (registry.compiled_imports.items, 0..) |item, index| {
-        const name = try std.fmt.allocPrint(a, "import-{d}", .{index});
+        const name = try a.print("import-{d}", .{index});
         try imports.append(a, .{ .name = name, .reference = .{ .kind = .function, .id = item.function } });
         // The value-only tool boundary requires this guarantee. The linker
         // derives it from the bound implementation; an effect role is no proof.
@@ -143,7 +146,7 @@ pub fn link(allocator: std.mem.Allocator, module: source.Module, registry: *cons
         if (existing) continue;
         try instances.append(a, .{ .key = item.instance, .object = item.object });
         for (item.functions, 0..) |function, function_index| {
-            const symbol = try std.fmt.allocPrint(a, "helper-{d}-{d}", .{ index, function_index });
+            const symbol = try a.print("helper-{d}-{d}", .{ index, function_index });
             try exports.append(a, .{ .name = symbol, .reference = .{ .kind = .function, .id = function.function } });
             try bindings.append(a, .{
                 .required = .{ .instance = item.instance, .symbol = function.symbol },
@@ -151,7 +154,7 @@ pub fn link(allocator: std.mem.Allocator, module: source.Module, registry: *cons
             });
         }
         for (item.effects) |effect| {
-            const symbol = try std.fmt.allocPrint(a, "effect-{d}", .{effect.effect});
+            const symbol = try a.print("effect-{d}", .{effect.effect});
             if (std.mem.indexOfScalar(Id, effects.items, effect.effect) == null) {
                 try effects.append(a, effect.effect);
                 try exports.append(a, .{ .name = symbol, .reference = .{ .kind = .effect, .id = effect.effect } });

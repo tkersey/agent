@@ -24,21 +24,22 @@ pub fn render(comptime T: type, e: E) anyerror!Id {
         .@"enum" => |info| blk: {
             const tag = try b.primitive(try e.c.schema(u32), .enum_tag, &.{value}, 0);
             var text = try literal(e, "invalid");
-            inline for (info.fields) |field|
-                text = try e.select(Text, try e.binary(.equal, tag, try e.c.literal(u32, field.value)), try literal(e, field.name), text);
+            inline for (info.field_names, info.field_values) |field_name, field_value|
+                text = try e.select(Text, try e.binary(.equal, tag, try e.c.literal(u32, field_value)), try literal(e, field_name), text);
             break :blk try b.pure(text);
         },
         .@"struct" => |info| blk: {
             var body = try b.pure(try literal(e, "}"));
-            comptime var i: usize = info.fields.len;
+            comptime var i: usize = info.field_names.len;
             inline while (i > 0) {
                 i -= 1;
-                const field = info.fields[i];
+                const field_name = info.field_names[i];
+                const FieldType = info.field_types[i];
                 const rendered = try b.variable(try e.c.schema(Text));
                 const rest = try b.variable(try e.c.schema(Text));
-                const joined = try e.concat(Text, try literal(e, field.name ++ ": "), try b.reference(rendered));
+                const joined = try e.concat(Text, try literal(e, field_name ++ ": "), try b.reference(rendered));
                 const line = try e.concat(Text, joined, try literal(e, "\n"));
-                body = try b.bind(rendered, try e.call(try render(field.type, e), &.{try e.field(field.type, value, i)}), try b.bind(rest, body, try b.pure(try e.concat(Text, line, try b.reference(rest)))));
+                body = try b.bind(rendered, try e.call(try render(FieldType, e), &.{try e.field(FieldType, value, i)}), try b.bind(rest, body, try b.pure(try e.concat(Text, line, try b.reference(rest)))));
             }
             const fields = try b.variable(try e.c.schema(Text));
             break :blk try b.bind(fields, body, try b.pure(try e.concat(Text, try literal(e, "{\n"), try b.reference(fields))));
@@ -52,11 +53,11 @@ pub fn render(comptime T: type, e: E) anyerror!Id {
             } } });
         },
         .@"union" => |info| blk: {
-            var cases: [info.fields.len]Case = undefined;
-            inline for (info.fields, 0..) |field, i| {
-                const v = try b.variable(try e.c.schema(field.type));
+            var cases: [info.field_names.len]Case = undefined;
+            inline for (info.field_names, info.field_types, 0..) |field_name, FieldType, i| {
+                const v = try b.variable(try e.c.schema(FieldType));
                 const text = try b.variable(try e.c.schema(Text));
-                cases[i] = .{ .variable = v, .body = try b.bind(text, try e.call(try render(field.type, e), &.{try b.reference(v)}), try b.pure(try e.concat(Text, try literal(e, field.name ++ ": "), try b.reference(text)))) };
+                cases[i] = .{ .variable = v, .body = try b.bind(text, try e.call(try render(FieldType, e), &.{try b.reference(v)}), try b.pure(try e.concat(Text, try literal(e, field_name ++ ": "), try b.reference(text)))) };
             }
             break :blk try b.term(.{ .match_sum = .{ .value = value, .cases = &cases } });
         },

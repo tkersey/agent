@@ -127,11 +127,11 @@ fn request(c: agent.Context, frozen: Id, environment: Id) !Id {
         .maximum_calls = 1,
         .parallel_calls = false,
     });
-    var fields: [std.meta.fields(P.Request).len]Id = undefined;
-    inline for (std.meta.fields(P.Request), 0..) |field, i| fields[i] = switch (i) {
+    var fields: [@typeInfo(P.Request).@"struct".field_names.len]Id = undefined;
+    inline for (@typeInfo(P.Request).@"struct".field_names, @typeInfo(P.Request).@"struct".field_types, 0..) |field_name, FieldType, i| fields[i] = switch (i) {
         1 => try emit.field(b, try c.schema(P.ModelId), environment, 0),
         3 => try b.primitive(try c.schema(P.Messages), .sequence, &messages, 0),
-        else => try c.literal(field.type, @field(template, field.name)),
+        else => try c.literal(FieldType, @field(template, field_name)),
     };
     return emit.product(b, try c.schema(P.Request), &fields);
 }

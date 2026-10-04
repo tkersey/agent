@@ -18,7 +18,7 @@ const runtimeFiles = ["runtime/world.mjs", "runtime/world.d.mts", "runtime/value
   ...["canonical", "protocol", "values", "custody", "admission", "journal", "policy", "custodian", "transport", "browser", "worker", "client", "deployment", "cli"].map(name => `runtime/mobility/${name}.mjs`)];
 // Optional test oracles supply prescribed external values and independently
 // assert application behavior. Production execution never imports these files.
-const fixtureTests = ["test/agent4/document_runtime.mjs", "test/agent4/review_runtime.mjs", "test/agent4/repository_runtime.mjs",
+const fixtureTests = ["test/agent4/artifacts.mjs", "test/agent4/document_runtime.mjs", "test/agent4/review_runtime.mjs", "test/agent4/repository_runtime.mjs",
   "fixtures/repository-repair-v1/README.md", "fixtures/repository-repair-v1/package.json",
   "fixtures/repository-repair-v1/src/range.mjs", "fixtures/repository-repair-v1/test/range.test.mjs",
   "test/agent4/inquiry_application_runtime.mjs", "test/agent4/inquiry_cli.test.mjs", "test/consumers/inquiry/contract.txt",

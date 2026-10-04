@@ -84,15 +84,15 @@ pub const Application = struct {
         } } });
         const accepted = try b.variable(try c.schema(Answer));
         var cases: [7]Case = undefined;
-        inline for (std.meta.fields(Answer), 0..) |field, index| {
-            const v = try b.variable(try c.schema(field.type));
+        inline for (@typeInfo(Answer).@"union".field_types, 0..) |FieldType, index| {
+            const v = try b.variable(try c.schema(FieldType));
             const value = try b.reference(v);
             const body = if (index == 5)
                 try finish(e, policy.final_allowed, completed.allowed, state, changes, value)
             else if (index == 6)
                 try b.term(.{ .fail = value })
             else blk: {
-                const O = std.meta.fields(t.Observation)[index].type;
+                const O = @typeInfo(t.Observation).@"union".field_types[index];
                 const observed = try b.variable(try c.schema(O));
                 const updated = try b.variable(try c.schema(t.Memory));
                 const operation = if (index == 4)
@@ -142,11 +142,11 @@ fn request(e: E, task: Id, context: Id) !Id {
         try e.product(P.Message, &.{ try e.c.literal(agent.model_invocation.MessageRole, .user), context }),
     };
     const template = try P.templateValue(Model, .{ .items = &.{} }, .{ .minimum_calls = 1, .maximum_calls = 1, .parallel_calls = false });
-    var fields: [std.meta.fields(P.Request).len]Id = undefined;
-    inline for (std.meta.fields(P.Request), 0..) |field, i| fields[i] = switch (i) {
+    var fields: [@typeInfo(P.Request).@"struct".field_names.len]Id = undefined;
+    inline for (@typeInfo(P.Request).@"struct".field_names, @typeInfo(P.Request).@"struct".field_types, 0..) |field_name, FieldType, i| fields[i] = switch (i) {
         1 => try e.field(P.ModelId, task, 1),
         3 => try b.primitive(try e.c.schema(P.Messages), .sequence, &messages, 0),
-        else => try e.c.literal(field.type, @field(template, field.name)),
+        else => try e.c.literal(FieldType, @field(template, field_name)),
     };
     return e.product(P.Request, &fields);
 }

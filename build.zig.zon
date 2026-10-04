@@ -3,11 +3,11 @@
     .version = "4.0.0-dev.0",
     .dependencies = .{
         .boundary = .{
-            .url = "https://github.com/tkersey/boundary/archive/93340dade30b7d27a1e139f107359f91fb66fad3.tar.gz",
-            .hash = "boundary-3.0.0-dev.0-flclaEdzRQBpnNrUM2gj62qP_jA65zcVHZgFfmxIPqxe",
+            .url = "https://github.com/tkersey/boundary/archive/9e68b6e8382a24e22f8b34986e4e7fb21ec80d31.tar.gz",
+            .hash = "boundary-3.0.0-dev.0-flclaDQMRgDnoHmn6ypGSeftzcM8u4aSozWRo7KwpcPK",
         },
     },
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .paths = .{
         "LICENSE",
         "README.md",

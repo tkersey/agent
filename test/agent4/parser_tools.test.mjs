@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createParserTools} from '../../runtime/parser_tools.mjs';
@@ -6,7 +7,7 @@ import {decodedFields,rejectAll} from '../consumers/incremental-parser/candidate
 const tools=await createParserTools();assert.equal(tools.kind,'qualified',JSON.stringify(tools));
 const schemas={};
 for(const name of ['reference-request','reference-reply','execution-request','execution-reply'])
-  schemas[name]=decodeSchema(await readFile(`zig-out/agent4/parser/${name}.bin`));
+  schemas[name]=decodeSchema(await readFile(`${artifactRoot}/agent4/parser/${name}.bin`));
 const wire=(name,value)=>decodeValue(schemas[name],encodeValue(schemas[name],value));
 const subject=tools.subject('a'.repeat(64));
 const trace=[[[92n],false],[[110n,10n],true]];

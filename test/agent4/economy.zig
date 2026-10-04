@@ -182,9 +182,9 @@ const Observer = struct {
         const now = std.Io.Clock.awake.now(self.io);
         if (self.previous) |previous| {
             const ns: u64 = @intCast(self.started.durationTo(now).nanoseconds);
-            inline for (std.meta.fields(Phases)) |field|
-                if (previous == @field(source.CompileStage, field.name)) {
-                    @field(self.phases, field.name) += ns;
+            inline for (@typeInfo(Phases).@"struct".field_names) |field_name|
+                if (previous == @field(source.CompileStage, field_name)) {
+                    @field(self.phases, field_name) += ns;
                 };
         }
         self.previous = stage;
@@ -208,9 +208,9 @@ const AuthoringObserver = struct {
         const now = std.Io.Clock.awake.now(self.io);
         if (self.previous) |previous| {
             const ns: u64 = @intCast(self.started.durationTo(now).nanoseconds);
-            inline for (std.meta.fields(AuthoringPhases)) |field|
-                if (previous == @field(agent.CompileStage, field.name)) {
-                    @field(self.phases, field.name) += ns;
+            inline for (@typeInfo(AuthoringPhases).@"struct".field_names) |field_name|
+                if (previous == @field(agent.CompileStage, field_name)) {
+                    @field(self.phases, field_name) += ns;
                 };
         }
         self.previous = stage;
@@ -377,7 +377,7 @@ fn saveCompiled(init: std.process.Init, directory: []const u8, name: []const u8,
     defer init.gpa.free(storage);
     const image = try compiled.encode(init.gpa, storage);
     const duration = elapsed(init.io, started);
-    try save(init, directory, try std.fmt.allocPrint(init.gpa, "{s}.bpi3", .{name}), image);
+    try save(init, directory, try init.gpa.print("{s}.bpi3", .{name}), image);
     const hex = std.fmt.bytesToHex(data.wire.digest(image), .lower);
     const identity = try init.gpa.dupe(u8, &hex);
     const program = compiled.program;
@@ -483,7 +483,7 @@ fn emit(init: std.process.Init, directory: []const u8) !void {
         return error.FacadeCanonicalMismatch;
     var installations: [3]Metrics = undefined;
     for (&installations, [_]usize{ 1, 8, 64 }) |*item, count| {
-        const name = try std.fmt.allocPrint(init.gpa, "sharing-{d}", .{count});
+        const name = try init.gpa.print("sharing-{d}", .{count});
         item.* = try measure(init, directory, name, .{ .sharing = count });
         if (item.helperFunctionCount != 1 or item.helperIncomingCalls != count or
             item.sharedPromptCopies != 1 or item.handlerDefinitions != 1)
@@ -499,7 +499,7 @@ fn emit(init: std.process.Init, directory: []const u8) !void {
     const react = try compiledSystem(init, directory, "inquiry-react", inquiry.ReactSystem);
     const document_base = try compiledSystem(init, directory, "document", @import("document").System);
     const review = @import("review");
-    var reviews: [std.meta.fields(review.Mode).len]Metrics = undefined;
+    var reviews: [@typeInfo(review.Mode).@"enum".field_names.len]Metrics = undefined;
     inline for (std.enums.values(review.Mode), 0..) |variant, index| {
         reviews[index] = try compiledSystem(init, directory, "review-" ++ @tagName(variant), review.System(variant));
     }
@@ -541,9 +541,9 @@ fn inspectState(init: std.process.Init, path: []const u8) !void {
         try data.graph_order.references(data.process_state.Node, node, &references, init.gpa);
         edges += references.items.len;
     }
-    const fields = std.meta.fields(data.graph.NodeTag);
-    var counts = [_]usize{0} ** fields.len;
-    for (decoded.state.nodes) |node| counts[@intFromEnum(std.meta.activeTag(node.record))] += 1;
+    const fields = @typeInfo(data.graph.NodeTag).@"enum".field_names;
+    var counts = @as([fields.len]usize, @splat(0));
+    for (decoded.state.nodes) |node| counts[@backingInt(std.meta.activeTag(node.record))] += 1;
     var blob_bytes: usize = 0;
     for (decoded.state.blobs) |blob| blob_bytes += blob.bytes.len;
     var output_buffer: [4096]u8 = undefined;

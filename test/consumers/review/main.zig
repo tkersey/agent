@@ -186,9 +186,9 @@ fn modelRequest(c: agent.Context, question: Id) !Id {
         try c.literal(agent.model_invocation.MessageRole, .user), content,
     }, 0);
     const messages = try b.primitive(try c.schema(P.Messages), .sequence, &.{message}, 0);
-    var fields: [std.meta.fields(P.Request).len]Id = undefined;
-    inline for (std.meta.fields(P.Request), 0..) |field, index| {
-        fields[index] = if (comptime std.mem.eql(u8, field.name, "messages")) messages else try b.primitive(try c.schema(field.type), .field, &.{base}, index);
+    var fields: [@typeInfo(P.Request).@"struct".field_names.len]Id = undefined;
+    inline for (@typeInfo(P.Request).@"struct".field_names, @typeInfo(P.Request).@"struct".field_types, 0..) |field_name, FieldType, index| {
+        fields[index] = if (comptime std.mem.eql(u8, field_name, "messages")) messages else try b.primitive(try c.schema(FieldType), .field, &.{base}, index);
     }
     return b.primitive(try c.schema(P.Request), .product, &fields, 0);
 }

@@ -86,8 +86,8 @@ const Application = struct {
 };
 
 fn replace(e: E, comptime T: type, value: Id, comptime field_index: usize, item: Id) !Id {
-    var fields: [std.meta.fields(T).len]Id = undefined;
-    inline for (std.meta.fields(T), 0..) |field, i| fields[i] = if (i == field_index) item else try e.field(field.type, value, i);
+    var fields: [@typeInfo(T).@"struct".field_names.len]Id = undefined;
+    inline for (@typeInfo(T).@"struct".field_types, 0..) |FieldType, i| fields[i] = if (i == field_index) item else try e.field(FieldType, value, i);
     return e.product(T, &fields);
 }
 

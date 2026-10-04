@@ -230,7 +230,7 @@ test "compiled tool final link validates profiles before structural or work-limi
     defer a.free(Tool.bytes);
     const invalid: data.closed_compilation.ProfilePolicy = .{ .record = .{
         .version = 0,
-        .image_identity = .{0} ** 32,
+        .image_identity = @splat(0),
         .block_counts = &.{},
         .total = 0,
     } };

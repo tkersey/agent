@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 // Semantic reply binding is enforced in the compiled Program, after World framing.
 import assert from 'node:assert/strict';
@@ -12,9 +13,9 @@ const [worldEntry,kernelPath]=process.argv.slice(2);
 const {Kernel,decodeOutcome,decodeRequest,encodeResult}=await import(pathToFileURL(resolve(worldEntry)));
 const bytes=new Uint8Array(await readFile(kernelPath));
 const expectedSha256=createHash('sha256').update(bytes).digest('hex');
-const image=new Uint8Array(await readFile('zig-out/agent4/parser/program.bpi3'));
-const requestSchema=decodeSchema(await readFile('zig-out/agent4/parser/execution-request.bin'));
-const replySchema=decodeSchema(await readFile('zig-out/agent4/parser/execution-reply.bin'));
+const image=new Uint8Array(await readFile((artifactRoot + '/agent4/parser/program.bpi3')));
+const requestSchema=decodeSchema(await readFile((artifactRoot + '/agent4/parser/execution-request.bin')));
+const replySchema=decodeSchema(await readFile((artifactRoot + '/agent4/parser/execution-reply.bin')));
 const tools=await createParserTools();assert.equal(tools.kind,'qualified',JSON.stringify(tools));
 const subject=tools.subject('a'.repeat(64)), trace=[[[92],false],[[110,10],true]];
 const input=[subject,1n,[decodedFields,1n,0],{tag:0,value:trace}];

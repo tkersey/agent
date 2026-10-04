@@ -11,7 +11,6 @@ adequacy/router-policy-v1/src/epistemics_test.zig
 adequacy/router-policy-v1/src/wasm_main.zig
 build.zig
 build_agent4.zig
-economy_tooling_root.zig
 src/admission.zig
 src/agent4.zig
 src/approval.zig

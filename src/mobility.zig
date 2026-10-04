@@ -152,5 +152,5 @@ test "mobility contracts have stable bounded products and exactly two relocation
     const reason = b.schemas.items[@intCast(try ctx.schema(Reason))];
     try std.testing.expectEqual(@as(usize, 16), reason.sum.len);
     const names = [_][]const u8{ "unavailable", "policy_denied", "export_denied", "binding_mismatch", "runtime_mismatch", "capacity", "unsettled_occurrence", "pinned_resource", "cleanup_unsupported", "budget_exhausted", "withdrawn", "expired_offer", "already_here", "invalid_state", "busy", "unsupported" };
-    inline for (std.meta.fields(Reason), names) |field, name| try std.testing.expectEqualStrings(name, field.name);
+    inline for (@typeInfo(Reason).@"union".field_names, names) |field_name, name| try std.testing.expectEqualStrings(name, field_name);
 }

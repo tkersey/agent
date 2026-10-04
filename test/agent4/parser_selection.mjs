@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 // Real candidate tools; World retains all selection and reciprocal control.
 import assert from 'node:assert/strict';
@@ -15,7 +16,7 @@ import {decodedFields,rawRecords,bufferUntilEOF} from '../consumers/incremental-
 const [runtimePath,policy='first',nativeTool,peerPath,browserTools]=process.argv.slice(2);
 assert.equal(Boolean(nativeTool),Boolean(peerPath));assert(!browserTools||peerPath);assert(['first','last','unavailable'].includes(policy));
 const runtime=verifyRuntime(resolve(runtimePath)),world=await import(pathToFileURL(runtime.entrypoint));
-const read=name=>readFile('zig-out/agent4/parser-construction/'+name);
+const read=name=>readFile((artifactRoot + '/agent4/parser-construction/')+name);
 const image=await read('select-'+(policy==='unavailable'?'first':policy)+'.bpi3');
 const inputSchema=decodeSchema(await read('input-schema.bin')),resultSchema=decodeSchema(await read('result-schema.bin'));
 const model=decodeValue(decodeSchema(await read('model-schema.bin')),await read('model-template.bin'));

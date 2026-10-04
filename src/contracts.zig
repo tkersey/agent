@@ -52,14 +52,14 @@ fn requireInteger(comptime T: type) void {
         @compileError("Agent portable integers must have width 8, 16, 32, or 64");
 }
 
-fn enumTags(comptime T: type) [@typeInfo(T).@"enum".fields.len]u32 {
+fn enumTags(comptime T: type) [@typeInfo(T).@"enum".field_values.len]u32 {
     const info = @typeInfo(T).@"enum";
-    if (!info.is_exhaustive) @compileError("Agent portable enums must be exhaustive");
-    var tags: [info.fields.len]u32 = undefined;
-    inline for (info.fields, 0..) |field, index| {
-        if (field.value < 0 or field.value > std.math.maxInt(u32))
+    if (info.mode != .exhaustive) @compileError("Agent portable enums must be exhaustive");
+    var tags: [info.field_values.len]u32 = undefined;
+    inline for (info.field_values, 0..) |value, index| {
+        if (value < 0 or value > std.math.maxInt(u32))
             @compileError("Agent portable enum tags must fit u32");
-        tags[index] = @intCast(field.value);
+        tags[index] = @intCast(value);
     }
     std.mem.sort(u32, &tags, {}, std.sort.asc(u32));
     return tags;
@@ -85,18 +85,18 @@ pub fn schema(comptime T: type, builder: anytype) !p.Id {
             break :blk builder.schema(.{ .enumeration = &tags });
         },
         .@"struct" => |info| blk: {
-            var fields: [info.fields.len]p.Id = undefined;
-            inline for (info.fields, 0..) |field, index| {
-                if (field.is_comptime) @compileError("Agent portable fields must be runtime values");
-                fields[index] = try schema(field.type, builder);
+            var fields: [info.field_types.len]p.Id = undefined;
+            inline for (info.field_types, info.field_attrs, 0..) |FieldType, attrs, index| {
+                if (attrs.@"comptime") @compileError("Agent portable fields must be runtime values");
+                fields[index] = try schema(FieldType, builder);
             }
             break :blk builder.schema(.{ .product = &fields });
         },
         .@"union" => |info| blk: {
             if (info.tag_type == null) @compileError("Agent requires tagged unions");
-            var variants: [info.fields.len]p.Id = undefined;
-            inline for (info.fields, 0..) |field, index|
-                variants[index] = try schema(field.type, builder);
+            var variants: [info.field_types.len]p.Id = undefined;
+            inline for (info.field_types, 0..) |FieldType, index|
+                variants[index] = try schema(FieldType, builder);
             break :blk builder.schema(.{ .sum = &variants });
         },
         .optional => |info| blk: {
@@ -199,16 +199,16 @@ fn write(comptime T: type, value: T, output: *wire.Writer) Error!void {
         },
         .@"enum" => {
             _ = comptime enumTags(T);
-            try output.fixed(u32, @intCast(@intFromEnum(value)));
+            try output.fixed(u32, @intCast(@backingInt(value)));
         },
-        .@"struct" => |info| inline for (info.fields) |field|
-            try write(field.type, @field(value, field.name), output),
+        .@"struct" => |info| inline for (info.field_names, info.field_types) |field_name, FieldType|
+            try write(FieldType, @field(value, field_name), output),
         .@"union" => |info| {
             if (info.tag_type == null) @compileError("Agent requires tagged unions");
-            inline for (info.fields, 0..) |field, index| {
-                if (std.meta.activeTag(value) == @field(info.tag_type.?, field.name)) {
+            inline for (info.field_names, info.field_types, 0..) |field_name, FieldType, index| {
+                if (std.meta.activeTag(value) == @field(info.tag_type.?, field_name)) {
                     try output.natural(index);
-                    try write(field.type, @field(value, field.name), output);
+                    try write(FieldType, @field(value, field_name), output);
                     return;
                 }
             }
@@ -244,7 +244,7 @@ fn minimumSize(comptime T: type) usize {
         .@"enum" => 4,
         .@"struct" => |info| blk: {
             var size: usize = 0;
-            inline for (info.fields) |field| size += minimumSize(field.type);
+            inline for (info.field_types) |FieldType| size += minimumSize(FieldType);
             break :blk size;
         },
         .array => |info| info.len * minimumSize(info.child),
@@ -278,22 +278,22 @@ fn read(comptime T: type, allocator: std.mem.Allocator, input: *wire.Reader) Err
         .@"enum" => blk: {
             _ = comptime enumTags(T);
             const tag = try input.fixed(u32);
-            inline for (@typeInfo(T).@"enum".fields) |field| {
-                if (tag == field.value) break :blk @field(T, field.name);
+            inline for (@typeInfo(T).@"enum".field_names, @typeInfo(T).@"enum".field_values) |field_name, field_value| {
+                if (tag == field_value) break :blk @field(T, field_name);
             }
             break :blk error.InvalidValue;
         },
         .@"struct" => |info| blk: {
             var result: T = undefined;
-            inline for (info.fields) |field|
-                @field(result, field.name) = try read(field.type, allocator, input);
+            inline for (info.field_names, info.field_types) |field_name, FieldType|
+                @field(result, field_name) = try read(FieldType, allocator, input);
             break :blk result;
         },
         .@"union" => |info| blk: {
             if (info.tag_type == null) @compileError("Agent requires tagged unions");
             const tag = try input.natural();
-            inline for (info.fields, 0..) |field, index| {
-                if (tag == index) break :blk @unionInit(T, field.name, try read(field.type, allocator, input));
+            inline for (info.field_names, info.field_types, 0..) |field_name, FieldType, index| {
+                if (tag == index) break :blk @unionInit(T, field_name, try read(FieldType, allocator, input));
             }
             break :blk error.InvalidValue;
         },

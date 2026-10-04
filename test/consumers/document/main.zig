@@ -254,7 +254,7 @@ fn firstTurn(c: agent.Context, owner: Id, pair: Id, memory: Id, observation: Id,
     const read_result = try b.term(.{ .match_sum = .{ .value = try b.reference(observed), .cases = &.{ .{ .variable = base, .body = evaluated }, .{ .variable = failed, .body = read_failure } } } });
     const unpack = try b.term(.{ .unpack_product = .{ .value = try b.reference(evidence), .variables = &.{ observed, proof }, .body = read_result } });
     const after_clarification = try b.term(.{ .match_sum = .{ .value = try b.reference(requirement), .cases = &.{ .{ .variable = ready, .body = try b.bind(evidence, try agent.observation.readEvidence(c, live, owner, try c.literal(Text(32), .{ .bytes = "document.txt" })), unpack) }, .{ .variable = aborted, .body = try b.pure(empty) } } } });
-    var enabled = [_]bool{false} ** 64;
+    var enabled = @as([64]bool, @splat(false));
     enabled[31] = true;
     enabled[32] = true;
     enabled[63] = true;
@@ -324,8 +324,8 @@ fn modelRequest(c: agent.Context, candidate: Id, requirement: Id, environment: I
     const clarified = try product(b, try c.schema(P.Message), &.{ try c.literal(agent.model_invocation.MessageRole, .user), try decimal(c, requirement) });
     const document = try product(b, try c.schema(P.Message), &.{ try c.literal(agent.model_invocation.MessageRole, .user), try field(b, try c.schema(P.MessageText), base, 0) });
     const messages = try b.primitive(try c.schema(P.Messages), .sequence, &.{ first, message, clarified, document }, 0);
-    var fields: [std.meta.fields(P.Request).len]Id = undefined;
-    inline for (std.meta.fields(P.Request), 0..) |descriptor, i| fields[i] = if (i == 3) messages else if (i == 1) try field(b, try c.schema(descriptor.type), environment, 0) else try c.literal(descriptor.type, @field(template, descriptor.name));
+    var fields: [@typeInfo(P.Request).@"struct".field_names.len]Id = undefined;
+    inline for (@typeInfo(P.Request).@"struct".field_names, @typeInfo(P.Request).@"struct".field_types, 0..) |descriptor_name, FieldType, i| fields[i] = if (i == 3) messages else if (i == 1) try field(b, try c.schema(FieldType), environment, 0) else try c.literal(FieldType, @field(template, descriptor_name));
     return product(b, try c.schema(P.Request), &fields);
 }
 

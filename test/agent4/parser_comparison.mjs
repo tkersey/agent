@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 import assert from 'node:assert/strict';
 import {readFile,writeFile,mkdtemp,rm} from 'node:fs/promises';
@@ -17,7 +18,7 @@ if(scenario.startsWith('consumer'))assert(['recursive','alternate'].includes(str
 if(scenario==='consumer-unavailable')assert.equal(strategy,'alternate');
 assert(!deniedRoot||nativeTool);assert(['invoke','file'].includes(nativeMode));
 const runtime=verifyRuntime(resolve(runtimePath)),world=await import(pathToFileURL(runtime.entrypoint));
-const read=name=>readFile('zig-out/agent4/parser-construction/'+name);
+const read=name=>readFile((artifactRoot + '/agent4/parser-construction/')+name);
 const imageName=scenario.startsWith('consumer')?(strategy==='recursive'?'consumer-fixed':'consumer-alt-fixed'):(strategy==='recursive'?'program':strategy);
 const image=await read(imageName+'.bpi3');
 const inputSchema=decodeSchema(await read('input-schema.bin')),resultSchema=decodeSchema(await read('result-schema.bin'));

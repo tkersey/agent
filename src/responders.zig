@@ -208,11 +208,11 @@ fn Generator(comptime P: type, comptime batch: bool) type {
             }
         }
         fn request(g: G, body: *typed.Body, template: *const typed.Value, tools: *const typed.Value) !*const typed.Value {
-            const fields = std.meta.fields(P.Request);
+            const fields = @typeInfo(P.Request).@"struct".field_names;
             var values: [fields.len]typed.Argument = undefined;
-            inline for (fields, 0..) |entry, index| values[index] = .{
+            inline for (fields, 0..) |name, index| values[index] = .{
                 .name = std.fmt.comptimePrint("{d}", .{index}),
-                .value = if (comptime std.mem.eql(u8, entry.name, "tools")) tools else try g.field(body, template, P.Request, entry.name),
+                .value = if (comptime std.mem.eql(u8, name, "tools")) tools else try g.field(body, template, P.Request, name),
             };
             return body.product(try g.schema(P.Request), &values);
         }

@@ -27,9 +27,9 @@ pub fn directModel(e: E) !Id {
     const effect = try P.declare(b);
     const f = try b.declare(&.{ try e.schema(t.Task), try e.schema(u64), try e.schema(u64), try e.schema(t.Working), try e.schema(bool) }, try e.schema(P.BatchInterpretation), &.{effect}, &.{});
     const initial = try e.p(f, 4);
-    var first = [_]bool{false} ** P.declaration_count;
+    var first = @as([P.declaration_count]bool, @splat(false));
     first[0] = true;
-    var later = [_]bool{true} ** P.declaration_count;
+    var later = @as([P.declaration_count]bool, @splat(true));
     later[0] = false;
     const offered = try b.primitive(try e.schema([P.declaration_count]bool), .select, &.{ initial, try e.value([P.declaration_count]bool, first), try e.value([P.declaration_count]bool, later) }, 0);
     const request = try requestValue(e, f);
@@ -78,12 +78,12 @@ fn requestValue(e: E, f: Id) !Id {
         .maximum_calls = 25,
         .parallel_calls = true,
     });
-    var fields: [std.meta.fields(P.Request).len]Id = undefined;
-    inline for (std.meta.fields(P.Request), 0..) |field, i| fields[i] = switch (i) {
+    var fields: [@typeInfo(P.Request).@"struct".field_names.len]Id = undefined;
+    inline for (@typeInfo(P.Request).@"struct".field_names, @typeInfo(P.Request).@"struct".field_types, 0..) |field_name, FieldType, i| fields[i] = switch (i) {
         1 => try e.field(P.ModelId, task, 1),
         3 => try b.primitive(try e.schema(P.Messages), .sequence, &messages, 0),
-        5 => try e.product(field.type, &.{ try e.value(u32, 1), try b.primitive(try e.schema(u32), .select, &.{ initial, hypotheses, try e.value(u32, 25) }, 0), try e.value(bool, true) }),
-        else => try e.value(field.type, @field(template, field.name)),
+        5 => try e.product(FieldType, &.{ try e.value(u32, 1), try b.primitive(try e.schema(u32), .select, &.{ initial, hypotheses, try e.value(u32, 25) }, 0), try e.value(bool, true) }),
+        else => try e.value(FieldType, @field(template, field_name)),
     };
     return e.product(P.Request, &fields);
 }

@@ -197,10 +197,10 @@ fn appendSummary(c: agent.Context, request: Id, rows: Id) !Id {
 fn appendMessage(c: agent.Context, request: Id, content: Id) !Id {
     const b = c.builder;
     const message = try b.primitive(try c.schema(P.Message), .product, &.{ try c.literal(agent.model_invocation.MessageRole, .user), content }, 0);
-    var fields: [std.meta.fields(P.Request).len]Id = undefined;
-    inline for (std.meta.fields(P.Request), 0..) |item, index| {
-        const value = try field(b, item.type, request, index);
-        fields[index] = if (comptime std.mem.eql(u8, item.name, "messages")) try b.value(.{
+    var fields: [@typeInfo(P.Request).@"struct".field_names.len]Id = undefined;
+    inline for (@typeInfo(P.Request).@"struct".field_names, @typeInfo(P.Request).@"struct".field_types, 0..) |item_name, FieldType, index| {
+        const value = try field(b, FieldType, request, index);
+        fields[index] = if (comptime std.mem.eql(u8, item_name, "messages")) try b.value(.{
             .schema = try c.schema(P.Messages),
             .expression = .{ .primitive = .{
                 .opcode = .sequence_append,
@@ -247,8 +247,8 @@ fn candidateProposal(c: agent.Context, t: Types, answer: Id, state: Id, referenc
     const b = c.builder;
     const version = try field(b, u64, state, 2);
     var cases: [5]struct { variable: Id, body: Id } = undefined;
-    inline for (std.meta.fields(parser.proposals.Proposal), 0..) |item, index| {
-        const variable = try b.variable(try c.schema(item.type));
+    inline for (@typeInfo(parser.proposals.Proposal).@"union".field_types, 0..) |FieldType, index| {
+        const variable = try b.variable(try c.schema(FieldType));
         var body = try unresolved(b, t, "The proposal does not answer the current fragment demand.");
         if (index == 0 or index == 1) {
             const code = try field(b, parser.Code, try b.reference(variable), 0);
@@ -410,10 +410,10 @@ fn chooseInput(c: agent.Context, t: Types, intent: agent.parser_intent.Definitio
     const alternate = try b.variable(try c.schema(Alternative));
     const resolution = try b.variable(try c.schema(agent.parser_intent.Result));
     const id = try b.variable(try b.scalar(u64));
-    var strict_fields: [std.meta.fields(Input).len]Id = undefined;
-    var emit_fields: [std.meta.fields(Input).len]Id = undefined;
-    inline for (std.meta.fields(Input), 0..) |item, index| {
-        strict_fields[index] = if (index == 9) try literal(b, ?Alternative, null) else try field(b, item.type, input, index);
+    var strict_fields: [@typeInfo(Input).@"struct".field_names.len]Id = undefined;
+    var emit_fields: [@typeInfo(Input).@"struct".field_names.len]Id = undefined;
+    inline for (@typeInfo(Input).@"struct".field_types, 0..) |FieldType, index| {
+        strict_fields[index] = if (index == 9) try literal(b, ?Alternative, null) else try field(b, FieldType, input, index);
         emit_fields[index] = if (index == 0) try field(b, parser.Subject, try b.reference(alternate), 0) else if (index == 1) try field(b, P.Request, try b.reference(alternate), 1) else strict_fields[index];
     }
     const strict = try b.pure(try b.primitive(option, .variant, &.{try b.primitive(t.input, .product, &strict_fields, 0)}, 1));
@@ -627,9 +627,9 @@ fn checkedReference(b: *source.Builder, t: Types, input: Id, value: Id) !Id {
 }
 
 fn successor(b: *source.Builder, state: Id) !Id {
-    var values: [std.meta.fields(State).len]Id = undefined;
-    inline for (std.meta.fields(State), 0..) |item, index|
-        values[index] = if (index == 1) try b.constant(bool, true) else try field(b, item.type, state, index);
+    var values: [@typeInfo(State).@"struct".field_names.len]Id = undefined;
+    inline for (@typeInfo(State).@"struct".field_types, 0..) |FieldType, index|
+        values[index] = if (index == 1) try b.constant(bool, true) else try field(b, FieldType, state, index);
     return b.primitive(try agent.contracts.schema(State, b), .product, &values, 0);
 }
 fn arithmetic(b: *source.Builder, opcode: boundary.data.program.Opcode, left: Id, right: Id) !Id {
@@ -1009,8 +1009,8 @@ fn selectConstructions(c: agent.Context, t: Types, assessor: Id, allowed: []cons
     }
     try b.define(choose, choice);
     const select = try agent.deliberation.selectSequential(c, .{ .candidate = t.state, .assessment = t.contribution, .maximum = 2, .assess = assessor, .choose = choose, .allowed = allowed, .failure = try b.constant(void, {}) });
-    var fields: [std.meta.fields(Input).len]Id = undefined;
-    inline for (std.meta.fields(Input), 0..) |f, i| fields[i] = try field(b, f.type, input, i);
+    var fields: [@typeInfo(Input).@"struct".field_names.len]Id = undefined;
+    inline for (@typeInfo(Input).@"struct".field_types, 0..) |FieldType, i| fields[i] = try field(b, FieldType, input, i);
     // Each construction has a disjoint observation occurrence interval. Its
     // model samples are fresh; identical prompts do not share execution.
     fields[3] = try arithmetic(b, .integer_add, fields[3], try arithmetic(b, .integer_add, fields[4], try b.constant(u64, 1)));
@@ -1168,13 +1168,13 @@ fn additionalConsumerProbe(b: *source.Builder, t: Types, state: Id, candidate: I
         .{ .chunk = .{ .items = &.{97} }, .end_of_input = false },
         .{ .chunk = .{ .items = &.{10} }, .end_of_input = false },
     } });
-    var inputs: [std.meta.fields(Input).len]Id = undefined;
-    inline for (std.meta.fields(Input), 0..) |f, i| inputs[i] = try field(b, f.type, input, i);
+    var inputs: [@typeInfo(Input).@"struct".field_names.len]Id = undefined;
+    inline for (@typeInfo(Input).@"struct".field_types, 0..) |FieldType, i| inputs[i] = try field(b, FieldType, input, i);
     inputs[2] = trace;
     // Reserve a disjoint occurrence interval for these additional probes.
     inputs[3] = try arithmetic(b, .integer_add, inputs[3], try arithmetic(b, .integer_add, inputs[4], try b.constant(u64, 1)));
-    var fields: [std.meta.fields(State).len]Id = undefined;
-    inline for (std.meta.fields(State), 0..) |f, i| fields[i] = if (i == 0) try b.primitive(t.input, .product, &inputs, 0) else try field(b, f.type, state, i);
+    var fields: [@typeInfo(State).@"struct".field_names.len]Id = undefined;
+    inline for (@typeInfo(State).@"struct".field_types, 0..) |FieldType, i| fields[i] = if (i == 0) try b.primitive(t.input, .product, &inputs, 0) else try field(b, FieldType, state, i);
     const probe_state = try b.primitive(t.state, .product, &fields, 0);
     const observed = try b.variable(try agent.contracts.schema(parser.ExecutionReply, b));
     const experiment = try literal(b, ?parser.proposals.Experiment, .{ .input_hex = .{ .bytes = "610a" }, .first_chunk_bytes = 1, .chunk_bytes = 1, .finalize = false, .reason = .{ .bytes = "Does a literal record terminator emit immediately before final EOF?" } });

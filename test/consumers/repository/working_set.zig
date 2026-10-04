@@ -30,8 +30,8 @@ pub fn define(c: agent.Context) !Functions {
     const memory = try e.param(observe, 0);
     const Case = std.meta.Child(@FieldType(@FieldType(boundary.source.ast.Term, "match_sum"), "cases"));
     var cases: [5]Case = undefined;
-    inline for (std.meta.fields(t.Observation), 0..) |field, index| {
-        const payload = try b.variable(try c.schema(field.type));
+    inline for (@typeInfo(t.Observation).@"union".field_types, 0..) |FieldType, index| {
+        const payload = try b.variable(try c.schema(FieldType));
         const value = try b.reference(payload);
         const body = switch (index) {
             0 => try b.pure(try e.memory(memory, .{ .listing = try e.some(?t.CompactListing, value) })),
@@ -48,7 +48,7 @@ pub fn define(c: agent.Context) !Functions {
     const project = try b.declare(&.{try c.schema(t.Memory)}, try c.schema(t.DecisionView), &.{}, &.{});
     const m = try e.param(project, 0);
     var fields: [8]Id = undefined;
-    inline for (std.meta.fields(t.Memory)[0..7], 0..) |field, i| fields[i] = try e.field(field.type, m, i);
+    inline for (@typeInfo(t.Memory).@"struct".field_types[0..7], 0..) |FieldType, i| fields[i] = try e.field(FieldType, m, i);
     fields[7] = try e.product(t.DecisionEvidence, &.{ try e.field(bool, m, 7), try e.field(bool, m, 8), try e.field(bool, m, 9) });
     try b.define(project, try b.pure(try e.product(t.DecisionView, &fields)));
 
@@ -65,7 +65,7 @@ fn observeRead(e: Emit, memory: Id, read: Id) !Id {
     const code = try e.field(u8, read, 1);
     var body = try e.c.builder.term(.{ .fail = try e.c.literal(t.Failure, .invalid_variant) });
     inline for (.{ t.DocumentRole.@"test", t.DocumentRole.source, t.DocumentRole.package }) |role| {
-        const index = @intFromEnum(role);
+        const index = @backingInt(role);
         const normalized = try e.product(t.ReadResult, &.{
             try e.c.literal(t.DocumentRole, role), code,                             try e.field(t.Path, read, 2),
             try e.field(t.DigestHex, read, 3),     try e.field(t.FileText, read, 4),

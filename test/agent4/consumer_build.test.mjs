@@ -1,9 +1,12 @@
+import { selectZig } from "../../tools/agent4/toolchain.mjs";
 import assert from "node:assert/strict";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
+const toolchain = selectZig([]);
+after(() => toolchain.assertUnchanged());
 import { gitTree, inventory } from "../../tools/agent4/dependencies.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
@@ -25,9 +28,9 @@ function copyPackage(destination) {
   }
 }
 function build(cwd, directory, extra = []) {
-  const result = spawnSync("zig", ["build", "-Doptimize=ReleaseSafe", ...extra,
-    "--cache-dir", join(directory, "cache"), "--global-cache-dir", join(directory, "global-cache"),
-    "--prefix", join(directory, "out")], { cwd, encoding: "utf8", stdio: "pipe", timeout: 600000,
+  const result = spawnSync(toolchain.executable, ["build", "-Doptimize=safe", ...extra,
+    "--cache-dir", join(directory, "cache"),
+    "--prefix", join(directory, "out")], { cwd, env: { ...toolchain.env, ZIG_GLOBAL_CACHE_DIR: join(directory, "global-cache"), ZIG_LOCAL_PKG_DIR: join(directory, "packages") }, encoding: "utf8", stdio: "pipe", timeout: 600000,
     maxBuffer: 8 * 1024 * 1024 });
   if (result.error) throw result.error;
   if (result.status !== 0) throw Object.assign(new Error(result.stderr.slice(-4000)), result);

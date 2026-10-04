@@ -66,9 +66,9 @@ pub fn traceValidator(e: E) !Id {
     const scan = try b.declare(&.{ try e.schema(sequence), try e.schema([]const u64) }, try e.schema(bool), &.{}, &.{});
     const pop = try Pop.init(e, sequence, t.Step);
     const no = try b.pure(try e.value(bool, false));
-    var cases: [std.meta.fields(t.Step).len]Case = undefined;
-    inline for (std.meta.fields(t.Step), 0..) |field, i| {
-        const v = try b.variable(try e.schema(field.type));
+    var cases: [@typeInfo(t.Step).@"union".field_names.len]Case = undefined;
+    inline for (@typeInfo(t.Step).@"union".field_types, 0..) |FieldType, i| {
+        const v = try b.variable(try e.schema(FieldType));
         const seen = try e.p(scan, 1);
         const added = try b.primitive(try e.schema([]const u64), .sequence_append, &.{ seen, try e.value(u64, i) }, 0);
         var next = try e.call(scan, &.{ try e.ref(pop.rest), added });

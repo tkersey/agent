@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
@@ -19,13 +20,13 @@ const READ = 'agent.mobility.fixture.target-read.v1', CHECK = 'agent.mobility.fi
 const ISSUE = 'agent.approval.issue.v1.mobility.replace', HUMAN = 'agent.interaction.exchange.v1.mobility.replace';
 async function fixture(t, { staleEvidence = false, staleApproval = false, uncertainWrite = false } = {}) {
   const runtime = verifyRuntime(resolve(process.env.AGENT_MOBILITY_RUNTIME)), world = await import(pathToFileURL(runtime.entrypoint));
-  const image = await readFile('zig-out/agent4/mobility-approval/program.bpi3'), programId = (await readFile('zig-out/agent4/mobility-approval/program-id.bin')).toString('hex');
+  const image = await readFile((artifactRoot + '/agent4/mobility-approval/program.bpi3')), programId = (await readFile((artifactRoot + '/agent4/mobility-approval/program-id.bin'))).toString('hex');
   const kernelBytes = await readFile(runtime.kernelPath), area = await mkdtemp(join(tmpdir(), 'mobility-approval-'));
   const file = join(area, 'document.txt'), original = 'An isolated fixture.\n', replacement = 'An approved replacement.\n';
   await writeFile(file, original); const base = hash(Buffer.from(original));
   const proposal = [['document.txt', base, replacement, 'Replace the isolated fixture'], 7n];
   const names = ['task', 'report', 'proposal', 'read', 'delivery', 'human', 'human-reply', 'identifier', 'integer', 'boolean'];
-  const schemaBytes = Object.fromEntries(await Promise.all(names.map(async name => [name, await readFile(`zig-out/agent4/mobility-approval/${name}.schema`)])));
+  const schemaBytes = Object.fromEntries(await Promise.all(names.map(async name => [name, await readFile(`${artifactRoot}/agent4/mobility-approval/${name}.schema`)])));
   const schemas = Object.fromEntries(names.map(name => [name, decodeSchema(schemaBytes[name])]));
   const delivery = await createRepositoryDelivery({ root: area });
   const counts = { reads: 0, checks: 0, writes: 0, approvals: 0 }, issued = [], answers = [], commits = [];

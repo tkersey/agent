@@ -127,18 +127,19 @@ are finite execution checks, not claims about live-model quality.
 
 ## Get started
 
-Use **Zig 0.16.0** and **Node 26.8.1 or newer**. Agent 4 pins Boundary 3.0.0-dev.0 and
+Use **exact Zig 0.17.0 only** and **Node 26.8.1 or newer**. Agent 4 pins Boundary 3.0.0-dev.0 and
 World 6.0.0-dev.0 source commits in its [dependency lock](conformance/agent4/dependencies.lock.json); use
 that exact Boundary/World combination rather than substituting other versions.
 The locked source-installation profile is POSIX, qualified on Darwin arm64;
-Windows setup is not qualified.
+Windows setup is not qualified. The Zig 0.17 migration is still completing its
+full integration and Linux qualification; see [runtime status](docs/agent4-runtime.md).
 
 ### Compile and check the examples
 
 ```sh
 git clone https://github.com/tkersey/agent.git
 cd agent
-zig build check-agent4 -Doptimize=ReleaseSafe
+zig build check-agent4 -Doptimize=safe
 ```
 
 This fetches the exact locked Boundary package and checks authoring, contracts,
@@ -157,7 +158,7 @@ The artifact expires on October 27, 2026. Setup does not rebuild the kernel.
 
 ```sh
 node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-boundary-48f36c1-world-f8a1597"
-zig build check-agent4-integration -Doptimize=ReleaseSafe \
+zig build check-agent4-integration -Doptimize=safe \
   -Dworld-source="$PWD/.agent4-boundary-48f36c1-world-f8a1597/inputs/world" \
   -Dworld-runtime="$PWD/.agent4-boundary-48f36c1-world-f8a1597/out/world-runtime/runtime"
 ```
@@ -233,7 +234,7 @@ Creating a use archive is separate from checking authoring. Run this from an
 Agent Git checkout so packaging can record its source provenance:
 
 ```sh
-zig build emit-agent4 -Doptimize=ReleaseSafe
+zig build emit-agent4 -Doptimize=safe
 ```
 
 The archive contains compiled examples and runtime support; World remains a
@@ -244,7 +245,7 @@ contents, receipts, and source-independent use.
 With World acquired, run the economy checks separately:
 
 ```sh
-zig build check-agent4-economy -Doptimize=ReleaseSafe \
+zig build check-agent4-economy -Doptimize=safe \
   -Dworld-source="$PWD/.agent4-boundary-48f36c1-world-f8a1597/inputs/world" \
   -Dworld-runtime="$PWD/.agent4-boundary-48f36c1-world-f8a1597/out/world-runtime/runtime"
 ```

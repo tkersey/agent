@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 // The guest has reciprocal waiting contexts; the embedding owns its work allowance.
 import assert from 'node:assert/strict';
@@ -8,7 +9,7 @@ import {verifyRuntime} from '../../tools/agent4/dependencies.mjs';
 import {decodeSchema,decodeValue,encodeValue} from '../../runtime/values.mjs';
 const runtime=verifyRuntime(resolve(process.argv[2]));
 const {Kernel,decodeOutcome}=await import(pathToFileURL(runtime.entrypoint));
-const read=name=>readFile('zig-out/agent4/parser-construction/'+name);
+const read=name=>readFile((artifactRoot + '/agent4/parser-construction/')+name);
 const image=await read('circular.bpi3'),schema=decodeSchema(await read('input-schema.bin'));
 const model=decodeValue(decodeSchema(await read('model-schema.bin')),await read('model-template.bin'));
 const input=[['0'.repeat(64),'0'.repeat(64),'0'.repeat(64),'0'.repeat(64),'agent.incremental-byte-parser/v1'],model,[],17n,2n,'parser.mjs',7n,false,false,{tag:0,value:null}];

@@ -1,0 +1,77 @@
+name: Export complete test ablation evidence
+on:
+  push:
+    branches: [codex/test-ablation-final-export-20261004]
+    paths: [.github/workflows/test-ablation-final-export.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: tkersey/boundary
+          ref: c7038ce866e1a9aa8dc069bbc8d455d6dea2b4d7
+          path: boundary
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: tkersey/world
+          ref: 9e2fa84e4e92de9fa87131dadfa846d15d3f729d
+          path: world
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: a94bbc65ddc473b9bde2b3339c8100f6b6ec85fd
+          path: agent
+          persist-credentials: false
+      - name: Export source-bound cumulative patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/export/patches" "$RUNNER_TEMP/export/validation"
+          python3 - <<'PY'
+          import subprocess,json,os,hashlib
+          from pathlib import Path
+          out=Path(os.environ['RUNNER_TEMP'])/'export'
+          subjects={
+            'boundary':('2dea1cc5ecfdb8054ec892f491f4a98bf5e94421','c7038ce866e1a9aa8dc069bbc8d455d6dea2b4d7','e80726526afcbb0b854433ff56243de513fa7144'),
+            'world':('3c3729107042ab85b7a080ad9577999afd359c4d','9e2fa84e4e92de9fa87131dadfa846d15d3f729d','c7f4ed12df54b602fa79e3f485203761fbe6188b'),
+            'agent':('9fd9ec0e2104106452f92c925ea7b6e4fa8df218','a94bbc65ddc473b9bde2b3339c8100f6b6ec85fd','9b903d62d2d485d9c4f35e54eab2efc363a398b6'),
+          }
+          records={}
+          for repo,(base,head,tree) in subjects.items():
+              def git(*args):return subprocess.check_output(['git','-C',repo,*args])
+              assert git('rev-parse','HEAD').decode().strip()==head
+              assert git('rev-parse','HEAD^{tree}').decode().strip()==tree
+              subprocess.run(['git','-C',repo,'fetch','--depth=1','origin',base],check=True)
+              patch=git('diff','--binary','--full-index',base,head,'--')
+              (out/'patches'/f'{repo}.patch').write_bytes(patch)
+              stats=git('diff','--numstat',base,head,'--').decode()
+              (out/'patches'/f'{repo}.numstat').write_text(stats)
+              records[repo]={'base':base,'head':head,'tree':tree,'patchSha256':hashlib.sha256(patch).hexdigest()}
+          (out/'patch-subjects.json').write_text(json.dumps(records,indent=2)+'\n')
+          PY
+      - name: Export available CI records
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for record in 'boundary 37222391770 111495198012' 'world 37222230657 111494723825' 'agent 37222400917 111495226335'; do
+            read -r repo run job <<< "$record"
+            gh api "repos/tkersey/$repo/actions/runs/$run/jobs" > "$RUNNER_TEMP/export/validation/$repo-jobs.json"
+            if ! gh api "repos/tkersey/$repo/actions/jobs/$job/logs" > "$RUNNER_TEMP/export/validation/$repo-ci.log"; then
+              rm -f "$RUNNER_TEMP/export/validation/$repo-ci.log"
+            fi
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: test-ablation-complete-patches-and-evidence
+          path: ${{ runner.temp }}/export/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0

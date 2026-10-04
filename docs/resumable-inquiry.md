@@ -81,14 +81,14 @@ explicit assumption; an envelope cannot prove that a malicious host ran a tool.
 Run the focused authoring/ownership checks without World:
 
 ```sh
-zig build check-inquiry-probe -Doptimize=ReleaseSafe
+zig build check-inquiry-probe -Doptimize=safe
 ```
 
 Add the unchanged authenticated runtime to execute every saved boundary in
 native World, a fresh Node/WASM instance, and an independent Wasmtime process:
 
 ```sh
-zig build check-inquiry-probe -Doptimize=ReleaseSafe \
+zig build check-inquiry-probe -Doptimize=safe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
@@ -247,7 +247,7 @@ proposal cannot obtain a challenge backed by old validation. The final portable
 receipt retains the base, replacement, executed checks and qualified explanation.
 
 ```sh
-zig build check-inquiry-application -Doptimize=ReleaseSafe \
+zig build check-inquiry-application -Doptimize=safe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
@@ -315,7 +315,7 @@ The application also builds as an independent compiler-only consumer:
 
 ```sh
 zig build --build-file test/consumers/inquiry/build.zig \
-  -Doptimize=ReleaseSafe --prefix "$PWD/.agent4/out/inquiry-external"
+  -Doptimize=safe --prefix "$PWD/.agent4/out/inquiry-external"
 ```
 
 Its repair, repeated-use and ReAct images match the root build byte for byte.
@@ -330,10 +330,10 @@ Optional provider fixtures remain under `test/` and are never imported by the
 production executor.
 
 ```sh
-zig build emit-agent4 -Doptimize=ReleaseSafe \
+zig build emit-agent4 -Doptimize=safe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 node --test test/agent4/package_commands.test.mjs
-zig build check-agent4-economy -Doptimize=ReleaseSafe \
+zig build check-agent4-economy -Doptimize=safe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
@@ -373,7 +373,7 @@ one executable trajectory with retained inquiry under declared fixture choices;
 it does not establish live-model repair quality or an optimal allocation policy.
 
 ```sh
-zig build check-inquiry-comparison -Doptimize=ReleaseSafe \
+zig build check-inquiry-comparison -Doptimize=safe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
@@ -546,7 +546,7 @@ deterministic paired tests independently measure both provider directions.
 Select held-out cases and varied causes before a later live study. No live-model
 usefulness study or paid inference was performed for this milestone.
 
-`zig build check-inquiry-cli -Doptimize=ReleaseSafe -Dworld-runtime=...` tests
+`zig build check-inquiry-cli -Doptimize=safe -Dworld-runtime=...` tests
 both strategies against a local synthetic HTTP provider, actual isolated
 candidate execution, saved-state recovery, stale-result rejection, intent,
 exact approval, conditional delivery, resource cancellation and source-scope
@@ -559,7 +559,7 @@ economy and emission/package gates:
 
 ```sh
 zig build check-agent4 check-agent4-integration check-agent4-economy emit-agent4 \
-  -Doptimize=ReleaseSafe -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
+  -Doptimize=safe -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 The strengthened multi-shot/follow-up fixture also passes the application case

@@ -60,16 +60,16 @@ pub fn intentEntry(e: E, task_function: Id) !Id {
     const entry = try b.declare(&.{ try e.schema(t.Task), try e.schema(u64) }, try e.schema(t.Result), try e.row(b.functions.items[task_function].effects, &.{question.effect}), &.{});
     const supplied = try e.p(entry, 0);
     const subject = try e.field(t.Subject, supplied, 0);
-    var subject_fields: [std.meta.fields(t.Subject).len]Id = undefined;
-    inline for (std.meta.fields(t.Subject), 0..) |field, i| subject_fields[i] = if (i == 7)
+    var subject_fields: [@typeInfo(t.Subject).@"struct".field_names.len]Id = undefined;
+    inline for (@typeInfo(t.Subject).@"struct".field_types, 0..) |FieldType, i| subject_fields[i] = if (i == 7)
         try e.p(entry, 1)
     else
-        try e.field(field.type, subject, i);
-    var task_fields: [std.meta.fields(t.Task).len]Id = undefined;
-    inline for (std.meta.fields(t.Task), 0..) |field, i| task_fields[i] = switch (i) {
+        try e.field(FieldType, subject, i);
+    var task_fields: [@typeInfo(t.Task).@"struct".field_names.len]Id = undefined;
+    inline for (@typeInfo(t.Task).@"struct".field_types, 0..) |FieldType, i| task_fields[i] = switch (i) {
         0 => try e.product(t.Subject, &subject_fields),
         7 => try e.p(entry, 1),
-        else => try e.field(field.type, supplied, i),
+        else => try e.field(FieldType, supplied, i),
     };
     const answer = try b.variable(try e.schema(t.IntentResolution));
     const task = try b.variable(try e.schema(t.Task));
@@ -155,10 +155,10 @@ fn seedFunction(e: E, d: agent.inquiry.broker.Definition, actor: Id, effects: []
     const park = try b.bind(next, try e.call(d.custody.park, &.{ try e.p(f, 2), try e.p(f, 3), try e.ref(answer) }), continued);
     const started = try b.bind(answer, try boundary.library.generator.start(b, d.custody.dialogue, actor, &.{ try e.p(f, 1), try e.p(f, 3), try e.ref(hypothesis) }), park);
     const Case = std.meta.Child(@FieldType(@FieldType(source.ast.Term, "match_sum"), "cases"));
-    var cases: [std.meta.fields(t.Answer).len]Case = undefined;
-    inline for (std.meta.fields(t.Answer), 0..) |field, i| {
+    var cases: [@typeInfo(t.Answer).@"union".field_names.len]Case = undefined;
+    inline for (@typeInfo(t.Answer).@"union".field_types, 0..) |FieldType, i| {
         cases[i] = if (i == 0) .{ .variable = hypothesis, .body = started } else .{
-            .variable = try b.variable(try e.schema(field.type)),
+            .variable = try b.variable(try e.schema(FieldType)),
             .body = try b.term(.{ .fail = try e.value(void, {}) }),
         };
     }

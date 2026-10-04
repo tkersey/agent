@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 // Environmental leaves only. Reciprocal ordering and candidate state live in BPI3.
 import assert from 'node:assert/strict';
@@ -14,7 +15,7 @@ import {createParserTools} from '../../runtime/parser_tools.mjs';
 import {bufferUntilEOF,decodedFields,wrongOffset,malformedRows} from '../consumers/incremental-parser/candidates.mjs';
 const [worldEntry,kernelPath,peerPath,nativeTool,browserTools,browserEngine='chromium']=process.argv.slice(2);
 const {Kernel,decodeOutcome,decodeRequest,encodeResult,encodeInput}=await import(pathToFileURL(resolve(worldEntry)));
-const read=async name=>new Uint8Array(await readFile(`zig-out/agent4/parser-construction/${name}`));
+const read=async name=>new Uint8Array(await readFile(`${artifactRoot}/agent4/parser-construction/${name}`));
 const scenario=process.argv[8]??'repair';
 const experiment=scenario.startsWith('experiment');
 const initialSource=scenario==='malformed-repair'?malformedRows:bufferUntilEOF;

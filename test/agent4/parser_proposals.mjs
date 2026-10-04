@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 // Synthetic provider data passes through the actual compiled model interpreter.
 import assert from 'node:assert/strict';
@@ -12,7 +13,7 @@ const [worldEntry,kernelPath]=process.argv.slice(2);
 const {Kernel,decodeOutcome,decodeRequest,encodeResult}=await import(pathToFileURL(resolve(worldEntry)));
 const bytes=new Uint8Array(await readFile(kernelPath));
 const expectedSha256=createHash('sha256').update(bytes).digest('hex');
-const read=async name=>new Uint8Array(await readFile(`zig-out/agent4/parser-proposals/${name}.bin`));
+const read=async name=>new Uint8Array(await readFile(`${artifactRoot}/agent4/parser-proposals/${name}.bin`));
 const image=await read('program'),input=await read('input'),schema=decodeSchema(await read('result-schema'));
 let identity=1n;
 const fresh=()=>createParserKernel(Kernel, {bytes,expectedSha256,instanceId:identity++});

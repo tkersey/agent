@@ -121,8 +121,8 @@ pub fn main(init: std.process.Init) !void {
     var observed: Observed = .{};
     var coalescing_stats: data.coalescing.Statistics = .{};
     defer {
-        const functions = @intFromEnum(data.relocation.Kind.function);
-        const constructors = @intFromEnum(data.relocation.Kind.constructor);
+        const functions = @backingInt(data.relocation.Kind.function);
+        const constructors = @backingInt(data.relocation.Kind.constructor);
         std.debug.print("{{\"sourceChecks\":{d},\"lowerings\":{d}," ++
             "\"coalescing\":\"{s}\",\"baselineBytes\":{d},\"selectedBytes\":{d}," ++
             "\"baselineFunctions\":{d},\"selectedFunctions\":{d}," ++

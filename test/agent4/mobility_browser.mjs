@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 // Early physical continuation witness. Not the durable custody acceptance lane.
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -13,8 +14,8 @@ import { placement, resolution } from './mobility_fixture.mjs';
 const [runtimePath, browserTools] = process.argv.slice(2).map(value => resolve(value));
 const { chromium, firefox } = await import(pathToFileURL(join(browserTools, 'node_modules/playwright-core/index.mjs')));
 const identity = verifyRuntime(runtimePath), world = await import(pathToFileURL(identity.entrypoint));
-const image = await readFile('zig-out/agent4/mobility/program.bpi3'), kernel = await readFile(identity.kernelPath);
-const reports = decodeSchema(await readFile('zig-out/agent4/mobility/report.schema'));
+const image = await readFile((artifactRoot + '/agent4/mobility/program.bpi3')), kernel = await readFile(identity.kernelPath);
+const reports = decodeSchema(await readFile((artifactRoot + '/agent4/mobility/report.schema')));
 const area = await mkdtemp(join(tmpdir(), 'agent-mobility-browser-'));
 const content = new TextEncoder().encode('alpha\nbeta gamma\ndelta epsilon zeta\nomega\n');
 const declared = await subject('fixture/story', content), zeros = Array(32).fill(0);

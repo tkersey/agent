@@ -244,7 +244,7 @@ fn call(comptime name: std.meta.Tag(Answer), value: u64) P.OutputItem {
 fn result(items: []const P.OutputItem) P.Result {
     return .{ .output = .{
         .items = .{ .items = items },
-        .normalized_output_digest = [_]u8{0} ** 32,
+        .normalized_output_digest = @as([32]u8, @splat(0)),
     } };
 }
 
@@ -411,7 +411,7 @@ test "model responder rejects forged names variants ordinals and a later caller 
         .declaration_mismatch, .declaration_mismatch, .declaration_mismatch,
         .unoffered,            .invalid_arguments,
     };
-    var cases = [_]P.OutputItem{call(.choose, 42)} ** failures.len;
+    var cases = @as([failures.len]P.OutputItem, @splat(call(.choose, 42)));
     cases[0].function_call.name.bytes = "other";
     cases[1].function_call.tool_ordinal_claim = 1;
     cases[2].function_call.decoded_action.decoded = .{ .other = .{ .value = 42 } };
@@ -443,7 +443,7 @@ test "batch responder retains ordered candidates and enforces captured call poli
     try std.testing.expectEqual(42, accepted.value.accepted[0].choose.value);
     try std.testing.expectEqual(73, accepted.value.accepted[1].other.value);
 
-    var policies = [_]model.Selection{batch} ** 3;
+    var policies = @as([3]model.Selection, @splat(batch));
     policies[0].parallel_calls = false;
     policies[1].maximum_calls = 1;
     policies[2].minimum_calls = 3;
@@ -571,7 +571,7 @@ fn manyReply(comptime Q: type, comptime index: usize) Q.Result {
     } }};
     return .{ .output = .{
         .items = .{ .items = &items },
-        .normalized_output_digest = [_]u8{0} ** 32,
+        .normalized_output_digest = @as([32]u8, @splat(0)),
     } };
 }
 
@@ -599,7 +599,7 @@ test "model responder executes indexes 31 32 and 63 while an unoffered declarati
     var compiled = try compileModel(Q, false);
     defer compiled.deinit();
     try expectSharedSchema(Q, compiled.program);
-    var offered = [_]bool{false} ** 64;
+    var offered = @as([64]bool, @splat(false));
     offered[31] = true;
     offered[32] = true;
     offered[63] = true;

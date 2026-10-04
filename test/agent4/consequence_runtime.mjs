@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 // Prescribed provider/person inputs drive the actual image, never its policy.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -18,7 +19,7 @@ assert.equal(extra.length, 0);
 assert([undefined, "--economy-only", "--application-only"].includes(mode));
 const economyOnly = mode === "--economy-only";
 const runtimePath = resolve(runtimeArg ?? join(root, ".agent4/out/world-runtime/runtime"));
-const imagePath = resolve(imageArg ?? join(root, "zig-out/agent4/document/consequence.bpi3"));
+const imagePath = resolve(imageArg ?? (artifactRoot + '/agent4/document/consequence.bpi3'));
 const runtime = await loadWorldRuntime({ runtimePath });
 const world = await import(pathToFileURL(runtime.identity.entrypoint));
 const mainImage = await readFile(imagePath);
@@ -180,7 +181,7 @@ async function scenario(name, options = {}) {
         if (options.transfer) {
           const snapshot = join(scratch, "model.pst3");
           await writeFile(snapshot, outcome.state);
-          const inspector = resolve(process.env.AGENT4_MULTI_INSPECTOR ?? join(root, "zig-out/bin/agent4-multi"));
+          const inspector = resolve(process.env.AGENT4_MULTI_INSPECTOR ?? (artifactRoot + '/bin/agent4-multi'));
           const graph = JSON.parse(execFileSync(inspector, ["inspect-state", snapshot], { encoding: "utf8" }));
           assert.equal(graph.multiTemplates, 1);
           // Activated branches execute as ordinary control. A parked graph need
@@ -268,7 +269,7 @@ async function scenario(name, options = {}) {
         if (turns > 2) {
           const snapshot = join(scratch, "history.pst3");
           await writeFile(snapshot, outcome.state);
-          const inspector = resolve(process.env.AGENT4_MULTI_INSPECTOR ?? join(root, "zig-out/bin/agent4-multi"));
+          const inspector = resolve(process.env.AGENT4_MULTI_INSPECTOR ?? (artifactRoot + '/bin/agent4-multi'));
           const graph = JSON.parse(execFileSync(inspector, ["inspect-state", snapshot], { encoding: "utf8" }));
           assert.equal(graph.multiTemplates, 0); assert.equal(graph.branches, 0);
           assert.equal(graph.resources, 0); assert.equal(graph.packages, 0);

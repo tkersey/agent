@@ -71,8 +71,8 @@ fn choose(e: E, c: *a.Context, body: *a.Body, task: *const a.Value, answer: *con
     const second = try work.equal(selected.payload(), try work.constant(u8, 2));
     const admitted = try work.branch();
     const invalid = try work.branch();
-    var fields: [std.meta.fields(t.Task).len]a.Argument = undefined;
-    inline for (std.meta.fields(t.Task), 0..) |_, i| {
+    var fields: [@typeInfo(t.Task).@"struct".field_names.len]a.Argument = undefined;
+    inline for (0..@typeInfo(t.Task).@"struct".field_names.len) |i| {
         const name = std.fmt.comptimePrint("{d}", .{i});
         fields[i] = .{ .name = name, .value = if (i == 9) try admitted.select(first, try admitted.constant(u8, 1), try admitted.constant(u8, 0)) else try admitted.field(task, name) };
     }

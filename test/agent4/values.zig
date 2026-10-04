@@ -105,6 +105,27 @@ test "tagged unions use ordinal tags while enums retain their explicit tags" {
     try std.testing.expectError(error.NonCanonical, contracts.decodeOwned(T, a, &.{ 0x81, 0 }));
 }
 
+test "sparse union tag values do not replace declaration ordinals on the wire" {
+    const Tag = enum(u32) { first = 63, later = 7 };
+    const Choice = union(Tag) { first: void, later: u8 };
+    const first = try contracts.encodeOwned(Choice, a, .{ .first = {} });
+    defer a.free(first);
+    const later = try contracts.encodeOwned(Choice, a, .{ .later = 42 });
+    defer a.free(later);
+    try std.testing.expectEqualSlices(u8, &.{0}, first);
+    try std.testing.expectEqualSlices(u8, &.{ 1, 42 }, later);
+    var decoded = try contracts.decodeOwned(Choice, a, &.{ 1, 42 });
+    defer decoded.deinit();
+    try std.testing.expectEqual(Tag.later, std.meta.activeTag(decoded.value));
+    try std.testing.expectEqual(@as(u8, 42), decoded.value.later);
+    var builder = boundary.source.Builder.init(a);
+    defer builder.deinit();
+    const root = try contracts.schema(Choice, &builder);
+    try data.schema.validateValue(a, .{ .root = root, .types = builder.schemas.items }, first);
+    try data.schema.validateValue(a, .{ .root = root, .types = builder.schemas.items }, later);
+    try std.testing.expectError(error.InvalidValue, contracts.decodeOwned(Choice, a, &.{ 63, 42 }));
+}
+
 test "fixed integers retain full width and signed extrema" {
     inline for (.{ i8, i16, i32, i64, u8, u16, u32, u64 }) |T| {
         inline for (.{ std.math.minInt(T), std.math.maxInt(T) }) |value| {

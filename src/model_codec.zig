@@ -28,9 +28,9 @@ fn checkField(comptime name: []const u8, comptime T: type) void {
             @compileError("Agent model codec integer width is unsupported: " ++ name);
         },
         .@"enum" => |info| {
-            if (!info.is_exhaustive)
+            if (info.mode != .exhaustive)
                 @compileError("Agent model codec requires an exhaustive enum: " ++ name);
-            for (info.fields) |field| if (field.value < 0 or field.value > std.math.maxInt(u32))
+            for (info.field_values) |value| if (value < 0 or value > std.math.maxInt(u32))
                 @compileError("Agent model codec enum tags must fit u32: " ++ name);
         },
         else => @compileError("Agent model codec is unsupported for '" ++ name ++
@@ -43,7 +43,7 @@ pub fn checkPayload(comptime T: type) void {
     switch (@typeInfo(T)) {
         .@"struct" => |info| {
             if (info.is_tuple) @compileError("Agent model codec does not admit tuple payloads");
-            for (info.fields) |field| checkField(field.name, field.type);
+            for (info.field_names, info.field_types) |name, FieldType| checkField(name, FieldType);
         },
         .@"enum" => checkField("value", T),
         else => @compileError("Agent model payload must be a product or enum: " ++
@@ -52,31 +52,31 @@ pub fn checkPayload(comptime T: type) void {
 }
 
 fn fieldCount(comptime T: type) usize {
-    return if (@typeInfo(T) == .@"enum") 1 else @typeInfo(T).@"struct".fields.len;
+    return if (@typeInfo(T) == .@"enum") 1 else @typeInfo(T).@"struct".field_names.len;
 }
 
 pub fn Profile(comptime Answer: type) type {
     if (@typeInfo(Answer) != .@"union" or @typeInfo(Answer).@"union".tag_type == null)
         @compileError("Agent model Answer must be a tagged union");
-    const variants = @typeInfo(Answer).@"union".fields;
+    const variants = @typeInfo(Answer).@"union".field_types;
     const maxima = comptime blk: {
         var names: usize = 1;
         var fields: usize = 0;
         var enums: usize = 0;
-        for (variants) |variant| {
-            checkPayload(variant.type);
-            fields = @max(fields, fieldCount(variant.type));
-            if (@typeInfo(variant.type) == .@"enum") {
+        for (variants) |Variant| {
+            checkPayload(Variant);
+            fields = @max(fields, fieldCount(Variant));
+            if (@typeInfo(Variant) == .@"enum") {
                 names = @max(names, "value".len);
-                const info = @typeInfo(variant.type).@"enum";
-                enums = @max(enums, info.fields.len);
-                for (info.fields) |field| names = @max(names, field.name.len);
-            } else for (@typeInfo(variant.type).@"struct".fields) |field| {
-                names = @max(names, field.name.len);
-                if (@typeInfo(field.type) == .@"enum") {
-                    const info = @typeInfo(field.type).@"enum";
-                    enums = @max(enums, info.fields.len);
-                    for (info.fields) |member| names = @max(names, member.name.len);
+                const info = @typeInfo(Variant).@"enum";
+                enums = @max(enums, info.field_names.len);
+                for (info.field_names) |name| names = @max(names, name.len);
+            } else for (@typeInfo(Variant).@"struct".field_names, @typeInfo(Variant).@"struct".field_types) |name, FieldType| {
+                names = @max(names, name.len);
+                if (@typeInfo(FieldType) == .@"enum") {
+                    const info = @typeInfo(FieldType).@"enum";
+                    enums = @max(enums, info.field_names.len);
+                    for (info.field_names) |member| names = @max(names, member.len);
                 }
             }
         }
@@ -99,12 +99,12 @@ pub fn Profile(comptime Answer: type) type {
 
         fn fieldValue(comptime name: []const u8, comptime T: type) Field {
             const enumeration = comptime if (@typeInfo(T) == .@"enum") blk: {
-                const members = @typeInfo(T).@"enum".fields;
-                var names: [members.len]FieldName = undefined;
-                var tags: [members.len]u32 = undefined;
-                for (members, 0..) |member, i| {
-                    names[i] = .{ .bytes = member.name };
-                    tags[i] = @intCast(member.value);
+                const info = @typeInfo(T).@"enum";
+                var names: [info.field_names.len]FieldName = undefined;
+                var tags: [info.field_values.len]u32 = undefined;
+                for (info.field_names, info.field_values, 0..) |member_name, member_value, i| {
+                    names[i] = .{ .bytes = member_name };
+                    tags[i] = @intCast(member_value);
                 }
                 const frozen_names = names;
                 const frozen_tags = tags;
@@ -130,13 +130,13 @@ pub fn Profile(comptime Answer: type) type {
 
         /// Type-owned immutable metadata, never a slice into a live native stack.
         pub fn value(comptime index: usize) Codec {
-            const Payload = variants[index].type;
+            const Payload = variants[index];
             const values = comptime blk: {
                 var result: [fieldCount(Payload)]Field = undefined;
                 if (@typeInfo(Payload) == .@"enum") {
                     result[0] = fieldValue("value", Payload);
-                } else for (@typeInfo(Payload).@"struct".fields, 0..) |field, i| {
-                    result[i] = fieldValue(field.name, field.type);
+                } else for (@typeInfo(Payload).@"struct".field_names, @typeInfo(Payload).@"struct".field_types, 0..) |name, FieldType, i| {
+                    result[i] = fieldValue(name, FieldType);
                 }
                 break :blk result;
             };

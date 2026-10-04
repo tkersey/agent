@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -18,14 +19,14 @@ export async function hostFixture(t, { privateData = false, privateCapture = fal
   assert.ok(['ensure', 'fixed', 'yielding'].includes(imageMode)); assert.ok(Number.isInteger(requirementCount) && requirementCount >= 1 && requirementCount <= 16);
   const runtime = resolve(process.env.AGENT_MOBILITY_RUNTIME), identity = verifyRuntime(runtime), world = instrumentWorld(await import(pathToFileURL(identity.entrypoint)));
   const prefix = imageMode === 'yielding' ? 'yield' : 'fixed';
-  const kernelBytes = await readFile(identity.kernelPath), image = await readFile(`zig-out/agent4/mobility/${imageMode === 'ensure' ? 'program.bpi3' : `${prefix}-image.bin`}`);
-  const programId = (await readFile(`zig-out/agent4/mobility/${imageMode === 'ensure' ? 'program-id.bin' : `${prefix}-identity.bin`}`)).toString('hex');
+  const kernelBytes = await readFile(identity.kernelPath), image = await readFile(`${artifactRoot}/agent4/mobility/${imageMode === 'ensure' ? 'program.bpi3' : `${prefix}-image.bin`}`);
+  const programId = (await readFile(`${artifactRoot}/agent4/mobility/${imageMode === 'ensure' ? 'program-id.bin' : `${prefix}-identity.bin`}`)).toString('hex');
   const area = await mkdtemp(join(tmpdir(), 'mobility-host-'));
   const content = new TextEncoder().encode('alpha\nbeta gamma\ndelta epsilon zeta\nomega\n');
   await writeFile(join(area, 'story.txt'), content);
   const declared = await subject('fixture/story', content), subjectVersion = Buffer.from(declared[1]).toString('hex');
   const names = ['task', 'report', 'read', 'text-reply', 'subject', 'inspection', 'integer', 'unit'];
-  const schemaBytes = Object.fromEntries(await Promise.all(names.map(async name => [name, new Uint8Array(await readFile(`zig-out/agent4/mobility/${name}.schema`))])));
+  const schemaBytes = Object.fromEntries(await Promise.all(names.map(async name => [name, new Uint8Array(await readFile(`${artifactRoot}/agent4/mobility/${name}.schema`))])));
   const schemas = Object.fromEntries(names.map(name => [name, decodeSchema(schemaBytes[name])]));
   const pairs = Object.fromEntries(['issuer', 'A', 'B'].map(host => [host, generateKeyPairSync('ed25519')]));
   const keys = new Map(Object.entries(pairs).map(([owner, pair]) => [owner, { owner, status: 'active', publicKey: pair.publicKey }]));

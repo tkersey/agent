@@ -137,8 +137,8 @@ const Application = struct {
         } } });
         const message = try b.primitive(try c.schema(Profile.Message), .product, &.{ try c.literal(agent.model_invocation.MessageRole, .user), prompt }, 0);
         const messages = try b.primitive(try c.schema(Profile.Messages), .sequence, &.{message}, 0);
-        var fields: [std.meta.fields(Profile.Request).len]source.Id = undefined;
-        inline for (std.meta.fields(Profile.Request), 0..) |field, i| fields[i] = if (comptime std.mem.eql(u8, field.name, "messages")) messages else try b.primitive(try c.schema(field.type), .field, &.{template}, i);
+        var fields: [@typeInfo(Profile.Request).@"struct".field_names.len]source.Id = undefined;
+        inline for (@typeInfo(Profile.Request).@"struct".field_names, @typeInfo(Profile.Request).@"struct".field_types, 0..) |field_name, FieldType, i| fields[i] = if (comptime std.mem.eql(u8, field_name, "messages")) messages else try b.primitive(try c.schema(FieldType), .field, &.{template}, i);
         const request = try b.primitive(try c.schema(Profile.Request), .product, &fields, 0);
         const selected = try b.variable(try c.schema(Profile.Interpretation));
         const accept = try b.variable(try c.schema(Action));
@@ -167,7 +167,7 @@ pub fn main(init: std.process.Init) !void {
                 .tool_ordinal_claim = 0,
                 .decoded_action = .{ .decoded = .{ .inspect_text = .{} } },
             } }} },
-            .normalized_output_digest = [_]u8{0} ** 32,
+            .normalized_output_digest = @as([32]u8, @splat(0)),
         } });
         defer init.gpa.free(bytes);
         return write(init, bytes);

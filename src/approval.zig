@@ -74,8 +74,7 @@ pub fn define(c: authoring.Context, cfg: Config) !Definition {
     const decision = try b.schema(.{ .sum = &.{ unit, cfg.reason, cfg.proposal } });
     const reply = try b.schema(.{ .product = &.{ challenge, cfg.principal, decision } });
     const result = try b.schema(.{ .sum = &.{ operation_result, cfg.reason, unit, unit } });
-    const issuer_name = try std.fmt.allocPrint(
-        b.allocator(),
+    const issuer_name = try b.allocator().print(
         "agent.approval.issue.v1.{s}",
         .{cfg.name},
     );

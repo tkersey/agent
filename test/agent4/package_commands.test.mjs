@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
@@ -9,7 +10,7 @@ import { loadWorldRuntime } from "../../runtime/world.mjs";
 test("documented commands execute from the actual source-independent archive", async (t) => {
   const area = await mkdtemp(join(tmpdir(), "agent4-documented-commands-"));
   t.after(() => rm(area, { recursive: true, force: true }));
-  const archive = resolve(process.env.AGENT4_ARCHIVE ?? "zig-out/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz");
+  const archive = resolve(process.env.AGENT4_ARCHIVE ?? (artifactRoot + "/agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz"));
   const runtimePath = resolve(process.env.AGENT4_WORLD_RUNTIME ?? ".agent4/out/world-runtime/runtime");
   execFileSync("tar", ["-xzf", archive, "-C", area]);
   const [folder] = await readdir(area);

@@ -1,3 +1,4 @@
+import { selectZig } from "./toolchain.mjs";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, chmodSync,
   writeFileSync, renameSync, rmSync, realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -120,19 +121,24 @@ function sourceAt(path, bytes, expected, paths, verifyOnly) {
   verify(path);
 }
 
-function packageAt(paths, lock, boundaryArchive, { verifyOnly, lockPath, zig }) {
+function packageAt(paths, lock, { verifyOnly, lockPath, zig, toolchain }) {
   const packageRoot = join(paths.input, "boundary-package", lock.boundary.package.zigHash);
   assertNoSymlinks(packageRoot, paths.agentRoot);
   if (!existsSync(packageRoot)) {
     if (verifyOnly) fail(`missing Boundary package: ${packageRoot}`);
-    mkdirSync(paths.packageCache, { recursive: true });
-    const hash = command(zig, ["fetch", "--global-cache-dir", paths.packageCache, boundaryArchive]).trim();
-    equal(hash, lock.boundary.package.zigHash, "Zig package hash mismatch");
-    const packageArchive = join(paths.packageCache, "p", `${hash}.tar.gz`);
-    const bytes = readRegular(packageArchive);
     mkdirSync(paths.temporary, { recursive: true });
     const staging = mkdtempSync(join(paths.temporary, "package-")), candidate = join(staging, "package");
     try {
+      // The source directory was authenticated before this call. Zig 0.17's
+      // local-tar path can retain an extra archive prefix under the same hash.
+      // Fetch this canonical source root into a fresh, owned package cache.
+      const cache = join(staging, "cache");
+      mkdirSync(cache);
+      const hash = command(zig, ["fetch", paths.boundarySource], {
+        env: { ...toolchain.env, ZIG_GLOBAL_CACHE_DIR: cache },
+      }).trim();
+      equal(hash, lock.boundary.package.zigHash, "Zig package hash mismatch");
+      const bytes = readRegular(join(cache, "p", `${hash}.tar.gz`));
       extractArchive(bytes, lock.boundary.package.archive, hash, candidate, paths.temporary);
       verifyBoundary({ packageRoot: candidate, packageProfile: "archive-extracted", lockPath });
       mkdirSync(dirname(packageRoot), { recursive: true });
@@ -196,9 +202,10 @@ function runtimeAt(paths, lock, options) {
 
 export async function setup(options = {}) {
   const paths = setupPaths(options), lockPath = resolve(options.lockPath ?? DEFAULT_LOCK);
-  const lock = readDependencyLock(lockPath), zig = options.zig ?? "zig";
+  const lock = readDependencyLock(lockPath);
+  const toolchain = selectZig(options.zig ? ["--zig-exe", options.zig] : []), zig = toolchain.executable;
   const report = options.report ?? (() => {});
-  const selected = { ...options, lockPath, zig, report };
+  const selected = { ...options, lockPath, zig, toolchain, report };
   equal(command(zig, ["version"]).trim(), lock.toolchain.zig.version, "Zig version mismatch");
   const boundaryArchive = join(paths.input, `boundary-${lock.boundary.commit.slice(0, 7)}.tar.gz`);
   const worldArchive = join(paths.input, `world-${lock.world.commit.slice(0, 7)}.tar.gz`);
@@ -206,7 +213,7 @@ export async function setup(options = {}) {
     report("Authenticating locked Boundary source and package");
     const boundaryBytes = await archiveAt(boundaryArchive, lock.boundary.archive, selected);
     sourceAt(paths.boundarySource, boundaryBytes, lock.boundary, paths, options.verifyOnly);
-    const boundaryPackage = packageAt(paths, lock, boundaryArchive, selected);
+    const boundaryPackage = packageAt(paths, lock, selected);
     if (!options.authoringOnly) {
       report("Authenticating locked World source and runtime");
       const worldBytes = await archiveAt(worldArchive, lock.world.archive, selected);
@@ -216,22 +223,22 @@ export async function setup(options = {}) {
     const observations = snapshotDependencies({ ...paths, boundaryArchive, worldArchive,
       boundaryPackage, boundaryPackageProfile: "archive-extracted",
       authoringOnly: options.authoringOnly, lockPath });
-    return { status: lock.status, workDir: paths.workDir, boundaryPackage,
+    return { status: lock.status, toolchain: toolchain.identity, workDir: paths.workDir, boundaryPackage,
       boundaryPackageProfile: "archive-extracted",
       boundarySource: paths.boundarySource,
       ...(options.authoringOnly ? {} : { worldRuntime: paths.worldRuntime }), observations };
   };
-  if (options.verifyOnly) return perform();
+  if (options.verifyOnly) { const result = await perform(); toolchain.assertUnchanged(); return result; }
   mkdirSync(paths.workDir, { recursive: true });
   const guard = join(paths.workDir, ".setup-lock");
   mkdirSync(guard);
-  try { return await perform(); }
+  try { const result = await perform(); toolchain.assertUnchanged(); return result; }
   finally { rmSync(guard, { recursive: true }); }
 }
 
 function parse(args) {
   const options = {}, seen = new Set();
-  const values = new Map([["--work-dir", "workDir"], ["--lock", "lockPath"], ["--zig", "zig"]]);
+  const values = new Map([["--work-dir", "workDir"], ["--lock", "lockPath"], ["--zig", "zig"], ["--zig-exe", "zig"]]);
   const toggles = new Map([["--offline", "offline"], ["--verify-only", "verifyOnly"],
     ["--authoring-only", "authoringOnly"]]);
   while (args.length) {
@@ -242,6 +249,7 @@ function parse(args) {
     else {
       const key = values.get(arg), value = args.shift();
       if (!key || !value || value.startsWith("--")) fail(`invalid option: ${arg}`);
+      if (Object.hasOwn(options, key)) fail(`duplicate selection: ${arg}`);
       options[key] = value;
     }
   }

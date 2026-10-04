@@ -1,3 +1,4 @@
+import { selectZig } from "./toolchain.mjs";
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
@@ -7,6 +8,7 @@ const root=resolve(import.meta.dirname,'../..');
 const [boundary,kind,zig,...rest]=process.argv.slice(2);
 assert(boundary && ['source','package'].includes(kind) && zig && !rest.length,
   'usage: negative.mjs BOUNDARY source|package ZIG');
+const toolchain=selectZig(['--zig-exe',zig]);
 const options=kind==='source'?{sourceRoot:boundary}:{packageRoot:boundary};
 const before=verifyBoundary(options);
 const cache=join(root,'.agent4/cache/negative');
@@ -22,18 +24,20 @@ const cases=[
 ];
 try {
   for(const [name,message] of cases){
-    const args=['test','-fno-emit-bin','-OReleaseSafe','--dep','agent',
+    const args=['test','-fno-emit-bin','-Osafe','--dep','agent',
       '-Mroot='+join(root,`test/agent4/${name}.zig`),
-      '-OReleaseSafe','--dep','boundary','--dep','boundary_data','--dep','agent_contracts',
+      '-Osafe','--dep','boundary','--dep','boundary_data','--dep','agent_contracts',
       '-Magent='+join(root,'src/agent4.zig'),
-      '-OReleaseSafe','--dep','boundary_data','-Mboundary='+join(boundary,'src/root.zig'),
-      '-OReleaseSafe','-Mboundary_data='+join(boundary,'src/data/root.zig'),
-      '-OReleaseSafe','--dep','boundary_data','-Magent_contracts='+join(root,'src/contracts.zig'),
+      '-Osafe','--dep','boundary_data','-Mboundary='+join(boundary,'src/root.zig'),
+      '-Osafe','-Mboundary_data='+join(boundary,'src/data/root.zig'),
+      '-Osafe','--dep','boundary_data','-Magent_contracts='+join(root,'src/contracts.zig'),
       '--cache-dir',join(cache,'local'),'--global-cache-dir',join(cache,'global')];
-    const result=spawnSync(zig,args,{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
+    const result=spawnSync(toolchain.executable,args,{cwd:root,env:toolchain.env,encoding:'utf8',maxBuffer:8*1024*1024});
     if(result.error)throw result.error;
     assert.notEqual(result.status,0,`${name} unexpectedly compiled`);
     assert(result.stderr.includes(message),`${name}: expected ${message}\n${result.stderr}`);
     console.log(`${name}: rejected at authoring admission`);
   }
 } finally {assert.deepEqual(verifyBoundary(options),before);}
+
+toolchain.assertUnchanged();

@@ -43,7 +43,7 @@ fn item(value: u64) P.OutputItem {
 fn input(items: []const P.OutputItem) Inputs {
     return .{ .result = .{ .output = .{
         .items = .{ .items = items },
-        .normalized_output_digest = [_]u8{0} ** 32,
+        .normalized_output_digest = @as([32]u8, @splat(0)),
     } }, .offered = .{ true, false }, .policy = batch_policy };
 }
 

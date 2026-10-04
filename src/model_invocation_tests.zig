@@ -81,7 +81,7 @@ test "normalized Answer uses sum ordinal while enum payload keeps explicit tags"
             .tool_ordinal_claim = 1,
             .decoded_action = .{ .decoded = .{ .decline = .later } },
         } }} },
-        .normalized_output_digest = [_]u8{0} ** 32,
+        .normalized_output_digest = @as([32]u8, @splat(0)),
     } };
     const bytes = try contracts.encodeOwned(Fixture.Result, std.testing.allocator, result);
     defer std.testing.allocator.free(bytes);
@@ -146,7 +146,7 @@ fn Many() type {
 
 test "model declarations and offered sets preserve indexes 31 32 and 63" {
     const P = Many();
-    var offered = [_]bool{false} ** 64;
+    var offered = @as([64]bool, @splat(false));
     offered[31] = true;
     offered[32] = true;
     offered[63] = true;

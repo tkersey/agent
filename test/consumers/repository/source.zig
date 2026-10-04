@@ -45,8 +45,8 @@ pub const Emit = struct {
         return e.c.builder.primitive(try e.c.schema(T), .select, &.{ condition, yes, no }, 0);
     }
     pub fn memory(e: Emit, original: Id, changes: anytype) !Id {
-        var fields: [std.meta.fields(t.Memory).len]Id = undefined;
-        inline for (std.meta.fields(t.Memory), 0..) |field_, i| fields[i] = if (@hasField(@TypeOf(changes), field_.name)) @field(changes, field_.name) else try e.field(field_.type, original, i);
+        var fields: [@typeInfo(t.Memory).@"struct".field_names.len]Id = undefined;
+        inline for (@typeInfo(t.Memory).@"struct".field_names, @typeInfo(t.Memory).@"struct".field_types, 0..) |field__name, FieldType, i| fields[i] = if (@hasField(@TypeOf(changes), field__name)) @field(changes, field__name) else try e.field(FieldType, original, i);
         return e.product(t.Memory, &fields);
     }
 };

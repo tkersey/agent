@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
@@ -5,7 +6,7 @@ import {pathToFileURL} from 'node:url';
 import {verifyRuntime} from '../../tools/agent4/dependencies.mjs';
 const runtime=verifyRuntime(resolve(process.argv[2]));
 const {Kernel,decodeOutcome,decodeRequest,encodeResult}=await import(pathToFileURL(runtime.entrypoint));
-const bytes=await readFile(runtime.kernelPath),image=await readFile('zig-out/agent4/composed-owners.bpi3');
+const bytes=await readFile(runtime.kernelPath),image=await readFile((artifactRoot + '/agent4/composed-owners.bpi3'));
 let instanceId=1n;
 const fresh=()=>Kernel.create({bytes,expectedSha256:runtime.kernelSha256,instanceId:instanceId++});
 let k=await fresh(),p=k.prepare(image),s=k.start(p,new Uint8Array());k.releasePrepared(p);

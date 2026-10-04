@@ -38,7 +38,7 @@ pub fn define(c: authoring.Context, name: []const u8, live_effect: Id) !Definiti
     try validate(c, name, live_effect);
     const effect = b.effects.items[@intCast(live_effect)];
     const observation = try b.schema(.{ .sum = &.{ effect.result, effect.result } });
-    const identity = try std.fmt.allocPrint(b.allocator(), "agent.observation.ask.v1.{s}", .{name});
+    const identity = try b.allocator().print("agent.observation.ask.v1.{s}", .{name});
     const family = try decision.define(b, identity, effect.payload, observation);
     try c.registry.classify(family.effect, .internal);
     const proof = try b.resource(effect.result);

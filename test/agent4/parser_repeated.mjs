@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import {createParserKernel} from '../../runtime/parser_kernel.mjs';
 // Four complete unresolved executions reuse one resident kernel and prepared Program.
 // Only the task occurrence changes; prior replies and provider IDs grant no reuse.
@@ -13,7 +14,7 @@ const root=resolve(import.meta.dirname,'../..');
 assert.equal(process.argv.length,3,'usage: node test/agent4/parser_repeated.mjs WORLD_RUNTIME');
 const runtime=verifyRuntime(resolve(process.argv[2]));
 const {Kernel,decodeOutcome,decodeRequest,encodeResult}=await import(pathToFileURL(runtime.entrypoint));
-const read=async name=>new Uint8Array(await readFile(root+'/zig-out/agent4/parser-construction/'+name));
+const read=async name=>new Uint8Array(await readFile(artifactRoot+'/agent4/parser-construction/'+name));
 const image=await read('retained.bpi3'),inputSchema=decodeSchema(await read('input-schema.bin'));
 const resultSchema=decodeSchema(await read('result-schema.bin'));
 const model=decodeValue(decodeSchema(await read('model-schema.bin')),await read('model-template.bin'));

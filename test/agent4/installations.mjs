@@ -1,3 +1,4 @@
+import { selectZig } from "../../tools/agent4/toolchain.mjs";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -8,7 +9,7 @@ import { inventory, readDependencyLock, readRegular, sha256,
   withVerifiedDependencies } from "../../tools/agent4/dependencies.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const MODULES = new Set(["std", "boundary", "boundary_data", "agent_contracts"]);
+const MODULES = new Set(["std", "builtin", "boundary", "boundary_data", "agent_contracts"]);
 const FORBIDDEN = /(?:^|\/)(?:system_compiler|strategy_v3|flow|runtime|world|kernel)(?:[._/]|$)/;
 
 function authoringFiles(sourceRoot) {
@@ -62,7 +63,7 @@ pub fn build(b: *std.Build) void {
 const MANIFEST = `.{
     .name = .agent_review_consumer,
     .version = "4.0.0-dev.0",
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .fingerprint = 0x0d924ec48f15f9eb,
     .dependencies = .{ .agent = .{ .path = "../agent" } },
     .paths = .{ "build.zig", "build.zig.zon", "main.zig" },
@@ -108,6 +109,7 @@ pub fn main(init: std.process.Init) !void {
 
 /** A02: real external authoring using only the installed public Zig package surfaces. */
 export async function authoringInstallation({ sourceRoot = ROOT, output } = {}) {
+  const toolchain = selectZig([]);
   const lock = readDependencyLock(join(sourceRoot, "conformance/agent4/dependencies.lock.json"));
   const area = join(sourceRoot, ".agent4/installation-tests"); mkdirSync(area, { recursive: true });
   const work = mkdtempSync(join(area, "authoring-"));
@@ -127,24 +129,25 @@ export async function authoringInstallation({ sourceRoot = ROOT, output } = {}) 
   writeFileSync(join(consumer, "build.zig"), BUILD);
   writeFileSync(join(consumer, "build.zig.zon"), MANIFEST);
   writeFileSync(join(consumer, "main.zig"), MAIN);
-  const args = ["build", "-Doptimize=ReleaseSafe", "--cache-dir", join(work, "cache/local"),
-    "--global-cache-dir", join(work, "cache/global"), "--prefix", join(work, "out")];
+  const args = ["build", "-Doptimize=safe", "--cache-dir", join(work, "cache/local"),
+    "--prefix", join(work, "out")];
   const options = { cwd: consumer, encoding: "utf8", timeout: 600000, maxBuffer: 4 * 1024 * 1024,
-    env: { ...process.env, ZIG_GLOBAL_CACHE_DIR: join(work, "cache/global") } };
-  execFileSync("zig", [args[0], "--fetch=all", ...args.slice(1)], options);
-  const packageRoot = join(consumer, "zig-pkg", lock.boundary.package.zigHash);
+    env: { ...toolchain.env, ZIG_GLOBAL_CACHE_DIR: join(work, "cache/global"), ZIG_LOCAL_PKG_DIR: join(work, "packages") } };
+  execFileSync(toolchain.executable, [args[0], "--fetch=all", ...args.slice(1)], options);
+  const packageRoot = join(work, "packages", lock.boundary.package.zigHash);
   let packageEvidence;
   try {
     await withVerifiedDependencies({ boundaryPackage: packageRoot, authoringOnly: true,
       lockPath: join(sourceRoot, "conformance/agent4/dependencies.lock.json") }, observations => {
       packageEvidence = observations.boundary;
-      execFileSync("zig", args, options);
+      execFileSync(toolchain.executable, args, options);
     });
   } finally {
     assert.deepEqual(inventory(installed), before, "authoring installation changed while compiling");
     for (const [path, bytes] of source)
       assert(readRegular(join(sourceRoot, path)).equals(bytes), `source changed during A02: ${path}`);
   }
+  toolchain.assertUnchanged();
   const image = readRegular(join(work, "out/application.bpi3"));
   assert.equal(image.subarray(0, 8).toString(), "ABL_BPI3", "external author did not emit a Boundary 3 image");
   assert.equal(image.readUInt16LE(8), 3, "unexpected Boundary record version");
@@ -154,7 +157,7 @@ export async function authoringInstallation({ sourceRoot = ROOT, output } = {}) 
     consumerSha256: sha256(Buffer.from(BUILD + MANIFEST + MAIN)), boundary: packageEvidence,
     image: { bytes: image.length, sha256: sha256(image) },
     moduleIdentity: "agent.contracts.Utf8 equals separately imported agent_contracts.Utf8",
-    workDirectory: work, command: ["zig", ...args],
+    workDirectory: work, command: [toolchain.executable, ...args],
     limitations: ["This case emits BPI3; runtime execution is covered by separate integration cases."] };
   if (output) { mkdirSync(dirname(resolve(output)), { recursive: true }); writeFileSync(output, JSON.stringify(result, null, 2) + "\n"); }
   return result;

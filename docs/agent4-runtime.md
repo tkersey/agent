@@ -3,9 +3,15 @@
 Agent authoring emits BPI3 using the Boundary `3.0.0-dev.0` revision selected in
 `build.zig.zon`. The candidate integration lock selects World `6.0.0-dev.0` and
 its ABI 3 runtime. The public authoring surface is `boundary.program`, with `boundary.data`
-and the `boundary_data` Zig module. The normal bridge/runner, native semantics, inquiry CLI, full application
-integration and extracted use-archive checks pass. The compiled text-tool browser/file/browser witness also passes; performance
-acceptance and legacy retirement remain in progress. See [the tool contract](compiled-text-tool.md). See [current status](compositional-execution.md).
+and the `boundary_data` Zig module. The 0.17-only code passes the full macOS
+bridge/runner, native, inquiry, application, extracted-archive, mobility and browser
+checks (528 steps and 218 tests), plus Linux authoring/native qualification
+(430 steps and 218 tests). All 188 emitted artifacts match the frozen predecessor.
+The [upgrade evidence](https://github.com/tkersey/boundary/blob/a39014232db44c6780a3a2d953dacea111168aec/docs/zig-0.17-upgrade.md)
+records exact executed subjects, the cumulative costs and the user's conditional
+acceptance. Source/provenance rebinding and live review readiness are reported
+on the implementation PRs; no merge or release is implied. Earlier qualification
+remains in [historical status](compositional-execution.md).
 The exact runtime contents, kernel digest,
 public API and physical profile are in
 `conformance/agent4/dependencies.lock.json`. The loader checks this Agent-owned

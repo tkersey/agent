@@ -96,9 +96,9 @@ fn writeSchema(comptime T: type, writer: anytype) void {
         },
         .@"enum" => |info| {
             writer.raw("{\"type\":\"string\",\"enum\":[");
-            inline for (info.fields, 0..) |field, index| {
+            inline for (info.field_names, 0..) |field_name, index| {
                 if (index != 0) writer.byte(',');
-                writeString(writer, field.name);
+                writeString(writer, field_name);
             }
             writer.raw("]}");
         },
@@ -107,16 +107,16 @@ fn writeSchema(comptime T: type, writer: anytype) void {
                 @compileError("agent JSON tuple schemas are not implemented yet");
             }
             writer.raw("{\"type\":\"object\",\"properties\":{");
-            inline for (info.fields, 0..) |field, index| {
+            inline for (info.field_names, info.field_types, 0..) |field_name, FieldType, index| {
                 if (index != 0) writer.byte(',');
-                writeString(writer, field.name);
+                writeString(writer, field_name);
                 writer.byte(':');
-                writeSchema(field.type, writer);
+                writeSchema(FieldType, writer);
             }
             writer.raw("},\"required\":[");
-            inline for (info.fields, 0..) |field, index| {
+            inline for (info.field_names, 0..) |field_name, index| {
                 if (index != 0) writer.byte(',');
-                writeString(writer, field.name);
+                writeString(writer, field_name);
             }
             writer.raw("],\"additionalProperties\":false}");
         },
@@ -184,17 +184,17 @@ fn maximumValueBytes(comptime T: type) usize {
         ),
         .@"enum" => |info| blk: {
             var maximum: usize = 2;
-            inline for (info.fields) |field| {
-                maximum = @max(maximum, 2 + 6 * field.name.len);
+            inline for (info.field_names) |field_name| {
+                maximum = @max(maximum, 2 + 6 * field_name.len);
             }
             break :blk maximum;
         },
         .@"struct" => |info| blk: {
             var maximum: usize = 2;
-            inline for (info.fields, 0..) |field, index| {
+            inline for (info.field_names, info.field_types, 0..) |field_name, FieldType, index| {
                 if (index != 0) maximum += 1;
-                maximum += 2 + 6 * field.name.len + 1;
-                maximum += maximumValueBytes(field.type);
+                maximum += 2 + 6 * field_name.len + 1;
+                maximum += maximumValueBytes(FieldType);
             }
             break :blk maximum;
         },

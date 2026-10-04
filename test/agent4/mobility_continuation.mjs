@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 // M1 continuation scaffold only: durable custody is qualified separately.
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
@@ -17,8 +18,8 @@ let nativeComparisons = 0;
 const identity = verifyRuntime(runtimePath);
 const world = await import(pathToFileURL(identity.entrypoint));
 const bytes = await readFile(identity.kernelPath);
-const image = await readFile('zig-out/agent4/mobility/program.bpi3');
-const schema = async name => decodeSchema(await readFile(`zig-out/agent4/mobility/${name}.schema`));
+const image = await readFile((artifactRoot + '/agent4/mobility/program.bpi3'));
+const schema = async name => decodeSchema(await readFile(`${artifactRoot}/agent4/mobility/${name}.schema`));
 const taskSchema = await schema('task'), reportSchema = await schema('report');
 const area = await mkdtemp(join(tmpdir(), 'agent-mobility-continuation-'));
 const content = new TextEncoder().encode('alpha\nbeta gamma\ndelta epsilon zeta\nomega\n');

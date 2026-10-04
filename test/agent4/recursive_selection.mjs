@@ -1,3 +1,4 @@
+import { artifactRoot } from "./artifacts.mjs";
 import assert from 'node:assert/strict';
 import {readFile,mkdtemp,writeFile,stat,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -16,7 +17,7 @@ try {
 for(const [mode,minimize,candidates,chosen]of [['link',false,[2n,5n],5n],['link',true,[2n,5n],2n],['pure',false,[2n,5n],5n],['invalid',false,[2n,5n],null],['link',false,[],null],['link',false,[2n],null],['link',false,[10n,11n],11n],['link',true,[0n,5n],null]]){
  const area=await mkdtemp(join(tmpdir(),'selection-completion-')),target=join(area,'result');
  try{
- const image=new Uint8Array(await readFile(`zig-out/agent4/selection/${mode}.bpi3`));
+ const image=new Uint8Array(await readFile(`${artifactRoot}/agent4/selection/${mode}.bpi3`));
  const input=new Uint8Array(2+candidates.length*8);input[0]=Number(minimize);input[1]=candidates.length;candidates.forEach((n,i)=>new DataView(input.buffer).setBigUint64(2+i*8,n,true));
  const fresh=()=>Kernel.create({bytes,expectedSha256:runtime.kernelSha256,instanceId:identity++});
  let k=await fresh(),p=k.prepare(image),s=k.start(p,input);k.releasePrepared(p);

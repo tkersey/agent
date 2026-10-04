@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Agent contributors. MIT license.
 // Consumer measurements only: all computation is performed by unchanged World.
 import assert from 'node:assert/strict';
+import { selectZig } from './toolchain.mjs';
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdir, lstat, realpath, writeFile, rename } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -127,14 +128,15 @@ function requireOutcome(outcome, expected, where) {
 async function measureBuilds(options) {
   const directory = join(options.output, 'compile-measurements');
   await noSymlinkPath(directory); await mkdir(directory, { recursive: false });
+  const toolchain = selectZig([]);
   const original = await requiredFile(join(ROOT, 'test/agent4/economy.zig'));
   const source = join(directory, 'economy.zig');
   await writeFile(source, original, { flag: 'wx' });
   const args = ['build', '--build-file', join(ROOT, 'test/agent4/economy_build.zig'),
-    '-Doptimize=ReleaseSafe',
+    '-Doptimize=safe',
     `-Dboundary-source=${options.boundarySource ?? options.boundaryPackage ?? join(ROOT, '.agent4/inputs/boundary')}`,
     `-Deconomy-source=${source}`, '--cache-dir', join(directory, 'cache'),
-    '--global-cache-dir', join(directory, 'global-cache'), '--prefix', join(directory, 'prefix')];
+    '--prefix', join(directory, 'prefix')];
   const records = [];
   for (const phase of ['cold', 'warm-no-change', 'edited-source']) {
     if (phase === 'edited-source') {
@@ -143,10 +145,11 @@ async function measureBuilds(options) {
       if (text.split(marker).length !== 2) throw new Error('EditedSourceMeasurementMarkerMissingOrAmbiguous');
       await writeFile(source, text.replace(marker, 'const edited_source_value: u32 = 8;'));
     }
-    const result = await invoke('zig', args, { output: options.output, label: `build-${phase}`, measure: true });
+    const result = await invoke(toolchain.executable, args, { output: options.output, label: `build-${phase}`, measure: true, env: { ...toolchain.env, ZIG_GLOBAL_CACHE_DIR: join(directory, 'global-cache'), ZIG_LOCAL_PKG_DIR: join(directory, 'packages') } });
     records.push({ phase, elapsedMilliseconds: result.elapsedMilliseconds, source: identity(await requiredFile(source)),
-      command: ['zig', ...args] });
+      command: [toolchain.executable, ...args] });
   }
+  toolchain.assertUnchanged();
   return { status: 'MEASURED_EXPLICITLY_DECLARED_UNCONTENDED',
     qualification: 'Uncontended is an explicit operator declaration; the harness cannot prove absence of other machine activity.', builds: records };
 }

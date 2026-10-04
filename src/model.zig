@@ -1,10 +1,24 @@
 const std = @import("std");
 
-const CanonicalModelSeal = struct {};
-
 pub fn isAdmitted(comptime Model: type) bool {
-    return @hasDecl(Model, "agent_model_seal") and
-        Model.agent_model_seal == CanonicalModelSeal;
+    if (@typeInfo(Model) != .@"struct" or @typeInfo(Model).@"struct".field_names.len != 0) return false;
+    inline for (.{ "name", "protocol", "model_id", "ParametersType", "parameters" }) |name| {
+        if (!@hasDecl(Model, name)) return false;
+        if (!@typeInfo(@TypeOf(&@field(Model, name))).pointer.attrs.@"const") return false;
+    }
+    return Model == Descriptor(Model.name, Model.protocol, Model.model_id, Model.parameters);
+}
+
+// Exact private-constructor identity admits factory results, not lookalikes.
+// No public seal can be copied and no private declaration lookup is required.
+fn Descriptor(comptime name_value: anytype, comptime protocol_value: anytype, comptime identifier: anytype, comptime parameters_value: anytype) type {
+    return struct {
+        pub const name = name_value;
+        pub const protocol = protocol_value;
+        pub const model_id = identifier;
+        pub const ParametersType = @TypeOf(parameters_value);
+        pub const parameters = parameters_value;
+    };
 }
 
 pub const ReasoningEffort = enum {
@@ -51,13 +65,13 @@ fn validateReasoning(comptime reasoning: anytype) void {
     if (@typeInfo(@TypeOf(reasoning)) != .@"struct") {
         @compileError("agent model reasoning configuration must be a struct");
     }
-    inline for (std.meta.fields(@TypeOf(reasoning))) |field| {
-        if (!std.mem.eql(u8, field.name, "effort") and
-            !std.mem.eql(u8, field.name, "summary"))
+    inline for (@typeInfo(@TypeOf(reasoning)).@"struct".field_names) |field_name| {
+        if (!std.mem.eql(u8, field_name, "effort") and
+            !std.mem.eql(u8, field_name, "summary"))
         {
             @compileError(
                 "agent model reasoning contains unsupported field '" ++
-                    field.name ++ "'",
+                    field_name ++ "'",
             );
         }
     }
@@ -78,9 +92,9 @@ fn validateReasoning(comptime reasoning: anytype) void {
 
 fn validateParameters(comptime parameters: anytype) void {
     if (@TypeOf(parameters) == void) return;
-    inline for (std.meta.fields(@TypeOf(parameters))) |field| {
-        if (!parameterFieldAdmitted(field.name)) {
-            @compileError("agent model parameters contain unsupported field '" ++ field.name ++ "'");
+    inline for (@typeInfo(@TypeOf(parameters)).@"struct".field_names) |field_name| {
+        if (!parameterFieldAdmitted(field_name)) {
+            @compileError("agent model parameters contain unsupported field '" ++ field_name ++ "'");
         }
     }
     if (@hasField(@TypeOf(parameters), "max_output_tokens")) {
@@ -103,9 +117,9 @@ fn validateParameters(comptime parameters: anytype) void {
 }
 
 pub fn model(comptime spec: anytype) type {
-    inline for (std.meta.fields(@TypeOf(spec))) |field| {
-        if (!modelFieldAdmitted(field.name)) {
-            @compileError("agent.model unknown source field '" ++ field.name ++ "'");
+    inline for (@typeInfo(@TypeOf(spec)).@"struct".field_names) |field_name| {
+        if (!modelFieldAdmitted(field_name)) {
+            @compileError("agent.model unknown source field '" ++ field_name ++ "'");
         }
     }
     if (!@hasField(@TypeOf(spec), "name") or
@@ -128,14 +142,7 @@ pub fn model(comptime spec: anytype) type {
         spec.parameters
     else {};
     comptime validateParameters(parameters_value);
-    return struct {
-        const agent_model_seal = CanonicalModelSeal;
-        pub const name = spec.name;
-        pub const protocol = Protocol;
-        pub const model_id = spec.model;
-        pub const ParametersType = Parameters;
-        pub const parameters = parameters_value;
-    };
+    return Descriptor(spec.name, Protocol, spec.model, parameters_value);
 }
 
 pub fn validateUnique(comptime models: anytype) void {

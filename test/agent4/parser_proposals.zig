@@ -74,7 +74,7 @@ fn response(allocator: std.mem.Allocator, mode: []const u8) ![]u8 {
             .tool_ordinal_claim = ordinal,
             .decoded_action = .{ .decoded = action },
         } }} },
-        .normalized_output_digest = [_]u8{0} ** 32,
+        .normalized_output_digest = @as([32]u8, @splat(0)),
     } });
 }
 fn output(init: std.process.Init, bytes: []const u8) !void {

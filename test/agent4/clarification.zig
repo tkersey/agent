@@ -450,7 +450,7 @@ test "protected composition resumes captured futures, groups non-tail results, a
             try std.testing.expectEqualStrings(if (id == 1) "1" else "2", messages[1].content.bytes);
             try std.testing.expectEqualStrings("11", messages[2].content.bytes);
             const value: u64 = if (divergent) id else 40;
-            const json = try std.fmt.allocPrint(a, "{{\"value\":{d}}}", .{value});
+            const json = try a.print("{{\"value\":{d}}}", .{value});
             defer a.free(json);
             const items = [_]P.OutputItem{.{ .function_call = .{
                 .call_id = .{ .bytes = "fixture" },
@@ -461,7 +461,7 @@ test "protected composition resumes captured futures, groups non-tail results, a
             } }};
             try respond(&outcome, f.compiled.program, P.Result, .{ .output = .{
                 .items = .{ .items = &items },
-                .normalized_output_digest = [_]u8{0} ** 32,
+                .normalized_output_digest = @as([32]u8, @splat(0)),
             } }, &statistics);
         }
         if (divergent) {
@@ -522,9 +522,9 @@ fn numericRequest(c: agent.Context, values: []const Id) !Id {
             try c.literal(agent.model_invocation.MessageRole, .user), bounded,
         }, 0);
     }
-    var fields: [std.meta.fields(P.Request).len]Id = undefined;
-    inline for (std.meta.fields(P.Request), 0..) |field, i| {
-        fields[i] = if (i == 3) try b.primitive(try c.schema(P.Messages), .sequence, messages, 0) else try c.literal(field.type, @field(template, field.name));
+    var fields: [@typeInfo(P.Request).@"struct".field_names.len]Id = undefined;
+    inline for (@typeInfo(P.Request).@"struct".field_names, @typeInfo(P.Request).@"struct".field_types, 0..) |field_name, FieldType, i| {
+        fields[i] = if (i == 3) try b.primitive(try c.schema(P.Messages), .sequence, messages, 0) else try c.literal(FieldType, @field(template, field_name));
     }
     return b.primitive(try c.schema(P.Request), .product, &fields, 0);
 }
@@ -620,7 +620,7 @@ fn growingDomain(count: usize) !void {
         try std.testing.expectEqualStrings("11", context.value.messages.items[2].content.bytes);
         try respond(&outcome, f.compiled.program, P.Result, .{ .output = .{
             .items = .{ .items = &items },
-            .normalized_output_digest = [_]u8{0} ** 32,
+            .normalized_output_digest = @as([32]u8, @splat(0)),
         } }, &statistics);
     }
     try std.testing.expect(outcome.record == .completed);

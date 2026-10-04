@@ -14,7 +14,7 @@ Run the five native policy regressions, including 32 actual portable observation
 with bounded checkpoint retention and authored budget termination:
 
 ```sh
-zig build check-repository-working-set -Doptimize=ReleaseSafe \
+zig build check-repository-working-set -Doptimize=safe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
@@ -26,7 +26,7 @@ changed files return conflicts and uncertain delivery fails explicitly. Nine
 native regressions exercise these outcomes across fresh checkpoint restores:
 
 ```sh
-zig build check-repository-replacement -Doptimize=ReleaseSafe \
+zig build check-repository-replacement -Doptimize=safe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
@@ -52,7 +52,7 @@ It carries no approval or working-set state. Approval does not prevent changes
 made outside that cooperative filesystem boundary.
 
 ```sh
-zig build check-repository-delivery -Doptimize=ReleaseSafe \
+zig build check-repository-delivery -Doptimize=safe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
@@ -72,7 +72,7 @@ search returns at most eight 256-byte excerpts with explicit truncation. Missing
 files and unavailable executors do not become failing-baseline observations.
 
 ```sh
-zig build check-repository-application -Doptimize=ReleaseSafe \
+zig build check-repository-application -Doptimize=safe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 

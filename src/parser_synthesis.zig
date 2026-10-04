@@ -94,7 +94,7 @@ pub fn execute(c: Context, tools: Tools, request: Id, failure: Id) !Id {
         var accepted = try probeEvidence(c, outcome, try b.pure(received), failure);
         const complete = try b.primitive(try c.schema(Completeness), .field, &.{candidate}, 2);
         const complete_tag = try b.primitive(try b.scalar(u32), .enum_tag, &.{complete}, 0);
-        const valid_complete = try equal(c, complete_tag, try b.constant(u32, @intFromEnum(Completeness.complete)));
+        const valid_complete = try equal(c, complete_tag, try b.constant(u32, @backingInt(Completeness.complete)));
         const is_assessment = try equal(c, outcome_tag, try b.constant(u64, 1));
         accepted = try b.term(.{ .conditional = .{ .condition = is_assessment, .when_true = try ensure(c, valid_complete, accepted, failure), .when_false = accepted } });
         const unavailable = try equal(c, outcome_tag, try b.constant(u64, 2));

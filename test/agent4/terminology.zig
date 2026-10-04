@@ -83,9 +83,9 @@ test "grammar, marker mutation, empty term, foreign scope, and overflow are expl
     try check(compiled.program, valid, "policy", "rule", 2, null, false);
     try check(compiled.program, valid, "Archive", "History", 2, null, false);
     try check(compiled.program, valid, "x", "Archive:\n", 1, null, false);
-    const exact = "Active policy:\n" ++ "x" ** (512 - 15 - 9) ++ "Archive:\n";
+    const exact = "Active policy:\n" ++ @as([512 - 15 - 9]u8, @splat('x')) ++ "Archive:\n";
     try std.testing.expectEqual(@as(usize, 512), exact.len);
-    try check(compiled.program, exact, "x", "y", 1, "Active policy:\n" ++ "y" ** (512 - 15 - 9) ++ "Archive:\n", false);
+    try check(compiled.program, exact, "x", "y", 1, "Active policy:\n" ++ @as([512 - 15 - 9]u8, @splat('y')) ++ "Archive:\n", false);
     try check(compiled.program, exact, "x", "yy", 1, null, false);
 }
 
@@ -114,7 +114,7 @@ test "every operative document field participates in the decisive key" {
         .task = t.default_request,
         .policy_id = 1,
     };
-    var mutations = [_]t.Action{base} ** 15;
+    var mutations = @as([15]t.Action, @splat(base));
     mutations[0].operation = .no_change;
     mutations[1].proposal.path.bytes = "another.txt";
     mutations[2].proposal.base.content.bytes = "different content with the same alleged digest";

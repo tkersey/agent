@@ -133,9 +133,23 @@ function existingFixture(context) {
   Object.assign(lock.world.runtime, inventory(paths.worldRuntime), { entrypoint: "index.mjs",
     kernel: { path: "kernel.wasm", bytes: 14, sha256: sha256(Buffer.from("fixture kernel")) } });
   const lockPath = join(agentRoot, "lock.json"); writeFileSync(lockPath, JSON.stringify(lock));
-  const zig = join(agentRoot, "fixture-zig");
-  writeFileSync(zig, `#!/bin/sh\n[ "$1" = version ] || exit 71\nprintf '%s\\n' '${lock.toolchain.zig.version}'\n`);
+  const zig = join(agentRoot, "fixture-zig"), library = join(agentRoot, "fixture-lib");
+  mkdirSync(library); writeFileSync(join(library, "std.zig"), "// fixture library\n");
+  const description = '.{\n    .lib_dir = ' + JSON.stringify(library) + ',\n}\n';
+  const quote = text => "'" + text.replaceAll("'", "'\\''") + "'";
+  writeFileSync(zig, '#!/bin/sh\ncase "$1" in\nversion) printf "%s\\n" ' + quote(lock.toolchain.zig.version) + ';;\nenv) printf "%s" ' + quote(description) + ';;\n*) exit 71;;\nesac\n');
   chmodSync(zig, 0o755);
+  // These sequential fixtures own their compiler selection. The stub still
+  // rejects compilation/fetch, proving offline reuse does neither.
+  const selection = { AGENT_ZIG_EXE: zig, AGENT_ZIG_LIB: library, ZIG_LIB_DIR: library };
+  const inherited = Object.fromEntries(Object.keys(selection).map(key => [key, process.env[key]]));
+  Object.assign(process.env, selection);
+  context.after(() => {
+    for (const [key, value] of Object.entries(inherited)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
   return { ...paths, agentRoot, lockPath, zig, lock, boundaryPackage };
 }
 
@@ -232,4 +246,28 @@ test("CLI and its aliases reject unknown and repeated setup options before acqui
   for (const entry of [cli, alias])
     for (const args of [["--unknown"], ["--offline", "--offline"], ["--work-dir"]])
       assert.throws(() => execFileSync(process.execPath, [entry, ...args], { stdio: "pipe" }));
+});
+
+test("new packages use the authenticated source root and cannot reuse a polluted package cache", async context => {
+  const f = existingFixture(context);
+  const payload = readFileSync(join(f.boundaryPackage, "source.zig"));
+  const bytes = archive([
+    { name: `${f.lock.boundary.package.zigHash}/`, type: "5" },
+    { name: `${f.lock.boundary.package.zigHash}/source.zig`, value: payload.toString() },
+  ]);
+  f.lock.boundary.package.archive = { bytes: bytes.length, sha256: sha256(bytes) };
+  writeFileSync(f.lockPath, JSON.stringify(f.lock));
+  const transport = join(f.agentRoot, "qualified-package.tar.gz"), observedCache = join(f.agentRoot, "used-cache.txt");
+  writeFileSync(transport, bytes);
+  const poison = join(f.packageCache, "p", `${f.lock.boundary.package.zigHash}.tar.gz`);
+  mkdirSync(join(f.packageCache, "p"), {recursive:true}); writeFileSync(poison, "unrelated cached archive");
+  rmSync(f.boundaryPackage, {recursive:true});
+  const quote = text => "'" + text.replaceAll("'", "'\\''") + "'";
+  const fetch = `fetch) [ "$2" = ${quote(f.boundarySource)} ] || exit 72; mkdir -p "$ZIG_GLOBAL_CACHE_DIR/p"; cp ${quote(transport)} "$ZIG_GLOBAL_CACHE_DIR/p/${f.lock.boundary.package.zigHash}.tar.gz"; printf '%s' "$ZIG_GLOBAL_CACHE_DIR" > ${quote(observedCache)}; printf '%s\\n' ${quote(f.lock.boundary.package.zigHash)};;\n`;
+  writeFileSync(f.zig, readFileSync(f.zig, "utf8").replace("*) exit 71;;", fetch + "*) exit 71;;"));
+  const result = await setup({agentRoot:f.agentRoot,lockPath:f.lockPath,zig:f.zig,authoringOnly:true,offline:true});
+  assert.equal(result.boundaryPackage, f.boundaryPackage);
+  assert(readFileSync(join(result.boundaryPackage, "source.zig")).equals(payload));
+  assert.equal(readFileSync(poison, "utf8"), "unrelated cached archive");
+  assert(!existsSync(readFileSync(observedCache, "utf8")), "run-owned acquisition cache must be cleaned");
 });

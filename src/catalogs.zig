@@ -110,10 +110,10 @@ pub const SourceIssue = enum {
 /// descriptor types. Runtime values/function pointers are not declarations.
 pub fn sourceIssue(comptime spec: anytype) ?SourceIssue {
     if (@typeInfo(@TypeOf(spec)) != .@"struct") return .InvalidSystemSource;
-    inline for (std.meta.fields(@TypeOf(spec))) |entry_field| {
+    inline for (@typeInfo(@TypeOf(spec)).@"struct".field_names) |entry_field_name| {
         const names = .{ "InitialArgs", "Result", "Failure", "application", "models", "prompts", "skills", "tools", "interactions" };
         var known = false;
-        inline for (names) |name| known = known or std.mem.eql(u8, name, entry_field.name);
+        inline for (names) |name| known = known or std.mem.eql(u8, name, entry_field_name);
         if (!known) return .UnknownSystemField;
     }
     inline for (.{ "models", "prompts", "skills", "tools", "interactions" }) |name| {
@@ -175,7 +175,7 @@ fn entryIssue(comptime kind: []const u8, comptime Entry: anytype) ?SourceIssue {
             if (!text(action_name)) return .InvalidDescriptorText;
         }
     } else {
-        if (@typeInfo(Entry).@"struct".fields.len != 0) return .RuntimeCallbackDescriptor;
+        if (@typeInfo(Entry).@"struct".field_names.len != 0) return .RuntimeCallbackDescriptor;
         if (!@hasDecl(Entry, "declare")) return .UnsupportedDeclarationType;
         if (@typeInfo(@TypeOf(Entry.declare)) != .@"fn") return .RuntimeCallbackDescriptor;
     }

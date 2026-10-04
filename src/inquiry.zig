@@ -152,7 +152,7 @@ fn defineTyped(b: *Builder, spec: Spec) typed.Error!Definition {
     });
     const d = value.dialogue;
     var types: Types = undefined;
-    inline for (@typeInfo(Types).@"struct".fields) |field| @field(types, field.name) = try typed.interop.schemaId(c, @field(value.types, field.name));
+    inline for (@typeInfo(Types).@"struct".field_names) |field_name| @field(types, field_name) = try typed.interop.schemaId(c, @field(value.types, field_name));
     return cached.finish(b, .{
         .dialogue = .{
             .input = try typed.interop.schemaId(c, d.input()),

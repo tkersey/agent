@@ -1,6 +1,6 @@
 import { selectZig } from "../../tools/agent4/toolchain.mjs";
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -27,10 +27,10 @@ function copyPackage(destination) {
       filter: path => ![".git", ".agent4", ".zig-cache", "zig-cache", "zig-out", "zig-pkg"].includes(basename(path)) });
   }
 }
-function build(cwd, directory, extra = []) {
+function build(cwd, directory, extra = [], environment = {}) {
   const result = spawnSync(toolchain.executable, ["build", "-Doptimize=safe", ...extra,
     "--cache-dir", join(directory, "cache"),
-    "--prefix", join(directory, "out")], { cwd, env: { ...toolchain.env, ZIG_GLOBAL_CACHE_DIR: join(directory, "global-cache"), ZIG_LOCAL_PKG_DIR: join(directory, "packages") }, encoding: "utf8", stdio: "pipe", timeout: 600000,
+    "--prefix", join(directory, "out")], { cwd, env: { ...toolchain.env, ZIG_GLOBAL_CACHE_DIR: join(directory, "global-cache"), ZIG_LOCAL_PKG_DIR: join(directory, "packages"), ...environment }, encoding: "utf8", stdio: "pipe", timeout: 600000,
     maxBuffer: 8 * 1024 * 1024 });
   if (result.error) throw result.error;
   if (result.status !== 0) throw Object.assign(new Error(result.stderr.slice(-4000)), result);
@@ -75,11 +75,55 @@ test("all source-override module exports retain authentication in cached externa
   for (const surface of ["agent", "agent_contracts", "boundary", "boundary_data"]) {
     const options = [`-Dsource=${source}`, `-Dsurface=${surface}`];
     build(consumer, directory, options);
+    if (surface === "agent") {
+      const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
+      // Warm graphs must inherit the current caller's tool selection, while
+      // nested node:test runners must not inherit the enclosing runner context.
+      for (const variant of ["first", "second"]) {
+        const bin = join(directory, variant), marker = join(bin, "invoked");
+        mkdirSync(bin);
+        const node = join(bin, "node");
+        writeFileSync(node, `#!/bin/sh\n[ "\${NODE_TEST_CONTEXT+x}" != x ] || exit 73\nprintf '%s\\n' selected >> ${quote(marker)}\nexec ${quote(process.execPath)} "$@"\n`);
+        chmodSync(node, 0o755);
+        build(consumer, directory, options, {
+          PATH: `${bin}:${toolchain.env.PATH}`,
+          NODE_TEST_CONTEXT: "child-v8",
+        });
+        assert.equal(readFileSync(marker, "utf8"), "selected\n");
+      }
+    }
     const marker = join(source, "unadmitted-file"); writeFileSync(marker, "not in the admitted inventory");
     try {
       assert.throws(() => build(consumer, directory, options),
         error => /Boundary source inventory/.test(error.stderr?.toString()), surface);
     } finally { rmSync(marker); }
+    const rootFile = join(source, "src/root.zig");
+    const original = readFileSync(rootFile), originalMode = statSync(rootFile).mode & 0o777;
+    for (const mutation of ["contents", "rename", "delete", "executable-intent"]) {
+      const renamed = join(source, "src/renamed-root.zig");
+      if (mutation === "contents") writeFileSync(rootFile, Buffer.concat([original, Buffer.from("\n// changed after admission\n")]));
+      else if (mutation === "rename") renameSync(rootFile, renamed);
+      else if (mutation === "delete") rmSync(rootFile);
+      else chmodSync(rootFile, originalMode ^ 0o100);
+      try {
+        assert.throws(() => build(consumer, directory, options),
+          error => /Boundary source inventory/.test(error.stderr?.toString()), `${surface}: ${mutation}`);
+      } finally {
+        if (existsSync(renamed)) renameSync(renamed, rootFile);
+        writeFileSync(rootFile, original);
+        chmodSync(rootFile, originalMode);
+      }
+    }
+    // The graph is still warm; a changed trusted expectation must be observed too.
+    const originalLock = readFileSync(lockPath);
+    const changed = JSON.parse(originalLock);
+    changed.boundary.gitTree = "0".repeat(40);
+    writeFileSync(lockPath, JSON.stringify(changed));
+    try {
+      assert.throws(() => build(consumer, directory, options),
+        error => /Agent4DependencyMismatch: Boundary Git tree/.test(error.stderr?.toString()), `${surface}: lock`);
+    } finally { writeFileSync(lockPath, originalLock); }
+    build(consumer, directory, options);
   }
 });
 

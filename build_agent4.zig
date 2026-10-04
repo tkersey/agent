@@ -1055,9 +1055,9 @@ fn addBoundary(b: *std.Build, run: *std.Build.Step.Run, source: ?std.Build.LazyP
 
 // Keep nested Node qualifiers on the build's selected toolchain and prefix.
 fn nodeCommand(b: *std.Build) *std.Build.Step.Run {
-    const run = b.addSystemCommand(&.{"env"});
-    // Each qualifier owns its runner, including builds launched by node:test.
-    run.removeEnvironmentVariable("NODE_TEST_CONTEXT");
+    // Remove the runner context at launch, without caching the caller's PATH
+    // or package/cache environment in the configured graph.
+    const run = b.addSystemCommand(&.{ "env", "-u", "NODE_TEST_CONTEXT" });
     run.addFileArg2(.zig_exe, .{ .prefix = "AGENT_ZIG_EXE=", .make_absolute = true });
     run.addDirectoryArg2(.zig_lib, .{ .prefix = "ZIG_LIB_DIR=", .make_absolute = true });
     run.addDirectoryArg2(b.graph.path(.install_prefix, ""), .{ .prefix = "AGENT4_BUILD_PREFIX=", .make_absolute = true });

@@ -101,3 +101,36 @@ executable and no usable dependency checkout. Cache admission checks empty,
 metadata-only, within-budget, oversized and aliased inputs without changing them.
 The workflow graph gates all routine compilation on that source result. Full
 success remains specific to the exact executed commit and selected platforms.
+
+## Shared authoring compilation
+
+The authoring aggregate shares 20 compatible fixture constructors across
+`test/fixture_driver.zig` and `test/application_driver.zig`. The build supplies
+`AGENT4_FIXTURE` as an explicit execution input; changing the selected constructor
+does not create another compiler/module graph. Each invocation remains a fresh
+process and calls the original fixture `main` with its original arguments,
+standard input and standard output. Existing output paths and focused image
+targets are unchanged. Negative harnesses receive the same selection explicitly.
+
+The aggregate also imports compatible public contracts through
+`test/authoring_tests.zig`, instead of compiling a test executable per feature.
+The original focused targets keep their narrow roots. The private root,
+alternate-module admission/dialogue roots, native policy roots and external
+installation witness remain independent. No test body or oracle is replaced.
+
+The dialogue and multi-shot tools retain their deliberately different module
+identities. Both the installed parser linker and transported text linker remain
+standalone: a source-free linker witness must not accidentally carry its fixture
+producer. These are assurance boundaries, not arbitrary sharding preferences.
+
+No optimization mode changes: the existing `safe` selection applies to both
+shared drivers and retained runtime checks. A cold build of the authoring target
+now requires four test binaries and six fixture/helper binaries, rather than
+thirteen and twenty-four. Counts exclude compiler-negative probes and dependency
+setup. Shared drivers may repeat across separate CI jobs; no cross-job linkage
+or previously passing test result is reused as correctness evidence.
+
+When changing this grouping, compare discovered named-test multisets and the
+complete emitted-file inventory, including byte hashes, on the same authenticated
+dependency tuple. Keep per-fixture execution separate where isolation matters.
+An extra anonymous import-root test is scaffolding, not new behavioral coverage.

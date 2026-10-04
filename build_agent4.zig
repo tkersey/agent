@@ -1,4 +1,24 @@
 const std = @import("std");
+// A fixture selection changes execution, not its compiler/module graph.
+const Executable = struct {
+    artifact: *std.Build.Step.Compile,
+    fixture: ?[]const u8 = null,
+
+    fn select(executable: Executable, name: []const u8) Executable {
+        std.debug.assert(executable.fixture == null);
+        return .{ .artifact = executable.artifact, .fixture = name };
+    }
+    fn addArgument(executable: Executable, run: *std.Build.Step.Run) void {
+        run.addArtifactArg2(executable.artifact, .{});
+        if (executable.fixture) |name| run.setEnvironmentVariable("AGENT4_FIXTURE", name);
+    }
+    fn getEmittedBin(executable: Executable) std.Build.LazyPath {
+        // Callers that invoke the raw path must not lose a fixture selection.
+        std.debug.assert(executable.fixture == null);
+        return executable.artifact.getEmittedBin();
+    }
+};
+
 const Graph = struct {
     b: *std.Build,
     optimize: std.lang.Optimize,
@@ -30,13 +50,21 @@ const Graph = struct {
         tests.step.dependOn(g.gate);
         step.dependOn(&g.b.addRunArtifact(tests).step);
     }
-    fn emitter(g: Graph, name: []const u8, module_value: *std.Build.Module) *std.Build.Step.Compile {
+    fn emitter(g: Graph, name: []const u8, module_value: *std.Build.Module) Executable {
         const executable = g.b.addExecutable(.{ .name = name, .root_module = module_value });
         executable.step.dependOn(g.gate);
-        return executable;
+        return .{ .artifact = executable };
     }
-    fn emit(g: Graph, step: *std.Build.Step, executable: *std.Build.Step.Compile, args: []const []const u8, name: []const u8) void {
-        const run = g.b.addRunArtifact(executable);
+    fn runArtifact(g: Graph, executable: Executable) *std.Build.Step.Run {
+        const run = g.b.addRunArtifact(executable.artifact);
+        if (executable.fixture) |name| {
+            run.setEnvironmentVariable("AGENT4_FIXTURE", name);
+            run.step.name = g.b.fmt("run fixture {s}", .{name});
+        }
+        return run;
+    }
+    fn emit(g: Graph, step: *std.Build.Step, executable: Executable, args: []const []const u8, name: []const u8) void {
+        const run = g.runArtifact(executable);
         run.addArgs(args);
         step.dependOn(&g.b.addInstallFileWithDir(run.captureStdOut(.{}), .prefix, g.b.fmt("agent4/{s}", .{name})).step);
     }
@@ -140,6 +168,8 @@ pub fn build(b: *std.Build) void {
     b.modules.put(b.allocator, b.dupe("agent_contracts"), public_contracts) catch @panic("out of memory");
     b.modules.put(b.allocator, b.dupe("agent"), public_agent) catch @panic("out of memory");
     const g: Graph = .{ .b = b, .optimize = optimize, .agent = agent, .boundary = boundary, .data = data, .contracts = contracts, .gate = &source_guard.step };
+    const fixture_driver = g.emitter("agent4-fixtures", g.module("test/fixture_driver.zig"));
+    const application_driver = g.emitter("agent4-applications", g.module("test/application_driver.zig"));
     const check = b.step("agent4-authoring-tests", "Authoring test implementation");
     const aggregate = b.step("check-agent4", "Check authoring and pure contracts without World");
     const mobility = b.step("check-mobility-authoring", "Check typed mobility contracts and protected admission");
@@ -155,15 +185,14 @@ pub fn build(b: *std.Build) void {
     model_properties.addArgs(&.{ "node", "--test", "test/agent4/mobility_model.test.mjs" });
     mobility_model.dependOn(&model_properties.step);
     g.testModule(mobility, g.module("test/agent4/mobility_ensure.zig"));
-    check.dependOn(mobility);
     const lint = b.step("lint", "Check formatting and the Zig source inventory");
     const format_check = b.addRunFile(.zig_exe);
-    format_check.addArgs(&.{ "fmt", "--check", "build.zig", "build_agent4.zig", "src", "test/agent4", "test/consumers" });
+    format_check.addArgs(&.{ "fmt", "--check", "build.zig", "build_agent4.zig", "src", "test/agent4", "test/consumers", "test/fixture_driver.zig", "test/application_driver.zig", "test/authoring_tests.zig" });
     const paths = b.addSystemCommand(&.{ "sh", "tools/check_zig_paths.sh" });
     lint.dependOn(&format_check.step);
     lint.dependOn(&paths.step);
     check.dependOn(lint);
-    g.testModule(check, g.module("test/agent4/authoring_tests.zig"));
+    g.testModule(check, g.module("test/authoring_tests.zig"));
     const zig17 = b.step("check-zig17", "Check private descriptor admission and compiler/output selection");
     const catalog_tests = b.addTest(.{ .root_module = g.module("test/agent4/catalogs.zig") });
     catalog_tests.step.dependOn(g.gate);
@@ -172,26 +201,24 @@ pub fn build(b: *std.Build) void {
     const zig17_node = nodeCommand(b);
     zig17_node.addArgs(&.{ "node", "--test", "test/agent4/zig17.test.mjs" });
     zig17.dependOn(&zig17_node.step);
-    check.dependOn(zig17);
+    check.dependOn(&zig17_node.step);
     const participants = b.step("check-participants", "Check compiled internal participant admission");
     g.testModule(participants, g.module("test/agent4/participant.zig"));
     g.testModule(participants, g.module("test/agent4/composed_owners.zig"));
-    check.dependOn(participants);
     const composed_images = b.step("composed-owner-images", "Emit admitted composed-owner cleanup");
-    const composed_emitter = g.emitter("composed-owners", g.module("test/agent4/composed_owners.zig"));
+    const composed_emitter = fixture_driver.select("composed-owners");
     g.emit(composed_images, composed_emitter, &.{}, "composed-owners.bpi3");
     check.dependOn(composed_images);
     const selection_images = b.step("selection-images", "Emit checked recursive numerical selection");
     const selection_check = b.step("check-selection", "Check generic selection construction and admission");
     g.testModule(selection_check, g.module("test/agent4/selection.zig"));
-    check.dependOn(selection_check);
-    const selection_emitter = g.emitter("recursive-selection", g.module("test/agent4/recursive_selection.zig"));
-    const selection_producer = b.addRunArtifact(selection_emitter);
+    const selection_emitter = fixture_driver.select("recursive-selection");
+    const selection_producer = g.runArtifact(selection_emitter);
     selection_producer.addArg("producer");
     const selection_object = selection_producer.captureStdOut(.{});
     selection_images.dependOn(&b.addInstallFileWithDir(selection_object, .prefix, "agent4/selection/producer.bmo1").step);
     for ([_][]const u8{ "link", "pure", "invalid" }) |mode| {
-        const linked = b.addRunArtifact(selection_emitter);
+        const linked = g.runArtifact(selection_emitter);
         linked.addArg(mode);
         linked.addFileArg2(selection_object, .{});
         selection_images.dependOn(&b.addInstallFileWithDir(linked.captureStdOut(.{}), .prefix, b.fmt("agent4/selection/{s}.bpi3", .{mode})).step);
@@ -199,42 +226,42 @@ pub fn build(b: *std.Build) void {
     check.dependOn(selection_images);
     const selection_negative = nodeCommand(b);
     selection_negative.addArgs(&.{ "node", "test/agent4/selection_negative.mjs" });
-    selection_negative.addArtifactArg2(selection_emitter, .{});
+    selection_emitter.addArgument(selection_negative);
     selection_negative.addFileArg2(selection_object, .{});
     selection_images.dependOn(&selection_negative.step);
     const parser_tools = b.step("check-parser-tools", "Check typed parser tool bindings");
     check.dependOn(parser_tools);
     const parser_delivery = b.step("parser-delivery-images", "Emit protected parser delivery");
-    const delivery_emitter = g.emitter("parser-delivery", g.module("test/agent4/parser_delivery.zig"));
+    const delivery_emitter = fixture_driver.select("parser-delivery");
     for ([_][]const u8{ "program", "input-schema", "result-schema" }) |mode|
         g.emit(parser_delivery, delivery_emitter, &.{mode}, b.fmt("parser-delivery/{s}.bin", .{mode}));
     check.dependOn(parser_delivery);
     const parser_proposals = b.step("parser-proposal-images", "Emit checked parser model proposals");
-    const proposal_emitter = g.emitter("parser-proposals", g.module("test/agent4/parser_proposals.zig"));
+    const proposal_emitter = fixture_driver.select("parser-proposals");
     for ([_][]const u8{ "program", "input", "result-schema", "fragment", "experiment", "constraint", "unresolved", "unknown", "unoffered" }) |mode|
         g.emit(parser_proposals, proposal_emitter, &.{mode}, b.fmt("parser-proposals/{s}.bin", .{mode}));
     check.dependOn(parser_proposals);
     const parser_episode = b.step("parser-construction-images", "Emit consumer-directed parser construction");
-    const parser_app = g.emitter("parser-construction", g.module("test/consumers/incremental-parser/main.zig"));
+    const parser_app = application_driver.select("parser-construction");
     g.emit(parser_episode, parser_app, &.{"react"}, "parser-construction/react.bpi3");
     const parser_link_module = g.module("tools/agent4/link_parser.zig");
     parser_link_module.addImport("parser_application", g.module("test/consumers/incremental-parser/main.zig"));
     const parser_link_only = g.emitter("link-parser", parser_link_module);
-    parser_episode.dependOn(&b.addInstallArtifact(parser_link_only, .{}).step);
+    parser_episode.dependOn(&b.addInstallArtifact(parser_link_only.artifact, .{}).step);
     const disposition_negative = nodeCommand(b);
     disposition_negative.addArgs(&.{ "node", "test/agent4/parser_disposition_negative.mjs" });
-    disposition_negative.addArtifactArg2(parser_app, .{});
+    parser_app.addArgument(disposition_negative);
     parser_episode.dependOn(&disposition_negative.step);
-    const parser_producer = b.addRunArtifact(parser_app);
+    const parser_producer = g.runArtifact(parser_app);
     parser_producer.addArg("producer");
     const parser_producer_bytes = parser_producer.captureStdOut(.{});
-    const parser_consumer = b.addRunArtifact(parser_app);
+    const parser_consumer = g.runArtifact(parser_app);
     parser_consumer.addArg("consumer");
     const parser_consumer_bytes = parser_consumer.captureStdOut(.{});
-    const parser_reference = b.addRunArtifact(parser_app);
+    const parser_reference = g.runArtifact(parser_app);
     parser_reference.addArg("reference");
     const parser_reference_bytes = parser_reference.captureStdOut(.{});
-    const parser_link = b.addRunArtifact(parser_app);
+    const parser_link = g.runArtifact(parser_app);
     parser_link.addArg("link");
     parser_link.addFileArg2(parser_producer_bytes, .{});
     parser_link.addFileArg2(parser_consumer_bytes, .{});
@@ -244,29 +271,29 @@ pub fn build(b: *std.Build) void {
     parser_episode.dependOn(&b.addInstallFileWithDir(parser_consumer_bytes, .prefix, "agent4/parser-construction/consumer.bmo1").step);
     parser_episode.dependOn(&b.addInstallFileWithDir(parser_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/program.bpi3").step);
     for ([_][]const u8{ "first", "last" }) |policy| {
-        const selected_link = b.addRunArtifact(parser_app);
+        const selected_link = g.runArtifact(parser_app);
         selected_link.addArg(b.fmt("link-select-{s}", .{policy}));
         selected_link.addFileArg2(parser_producer_bytes, .{});
         selected_link.addFileArg2(parser_consumer_bytes, .{});
         selected_link.addFileArg2(parser_reference_bytes, .{});
         parser_episode.dependOn(&b.addInstallFileWithDir(selected_link.captureStdOut(.{}), .prefix, b.fmt("agent4/parser-construction/select-{s}.bpi3", .{policy})).step);
     }
-    const complete_link = b.addRunArtifact(parser_app);
+    const complete_link = g.runArtifact(parser_app);
     complete_link.addArg("link-complete");
     complete_link.addFileArg2(parser_producer_bytes, .{});
     complete_link.addFileArg2(parser_consumer_bytes, .{});
     complete_link.addFileArg2(parser_reference_bytes, .{});
     parser_episode.dependOn(&b.addInstallFileWithDir(complete_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/complete.bpi3").step);
-    const retained_link = b.addRunArtifact(parser_app);
+    const retained_link = g.runArtifact(parser_app);
     retained_link.addArg("link-retained");
     retained_link.addFileArg2(parser_producer_bytes, .{});
     retained_link.addFileArg2(parser_consumer_bytes, .{});
     retained_link.addFileArg2(parser_reference_bytes, .{});
     parser_episode.dependOn(&b.addInstallFileWithDir(retained_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/retained.bpi3").step);
-    const parser_alternate_consumer = b.addRunArtifact(parser_app);
+    const parser_alternate_consumer = g.runArtifact(parser_app);
     parser_alternate_consumer.addArg("consumer-alt");
     const parser_alternate_consumer_bytes = parser_alternate_consumer.captureStdOut(.{});
-    const parser_alternate_link = b.addRunArtifact(parser_app);
+    const parser_alternate_link = g.runArtifact(parser_app);
     parser_alternate_link.addArg("link");
     parser_alternate_link.addFileArg2(parser_producer_bytes, .{});
     parser_alternate_link.addFileArg2(parser_alternate_consumer_bytes, .{});
@@ -279,24 +306,24 @@ pub fn build(b: *std.Build) void {
         .{ .consumer = parser_consumer_bytes, .name = "consumer-fixed" },
         .{ .consumer = parser_alternate_consumer_bytes, .name = "consumer-alt-fixed" },
     }) |witness| {
-        const linked = b.addRunArtifact(parser_app);
+        const linked = g.runArtifact(parser_app);
         linked.addArg("link");
         linked.addFileArg2(b.path("conformance/agent4/parser-producer-v2.bmo1"), .{});
         linked.addFileArg2(witness.consumer, .{});
         linked.addFileArg2(parser_reference_bytes, .{});
         parser_episode.dependOn(&b.addInstallFileWithDir(linked.captureStdOut(.{}), .prefix, b.fmt("agent4/parser-construction/{s}.bpi3", .{witness.name})).step);
     }
-    const circular_consumer = b.addRunArtifact(parser_app);
+    const circular_consumer = g.runArtifact(parser_app);
     circular_consumer.addArg("consumer-circular");
-    const circular_link = b.addRunArtifact(parser_app);
+    const circular_link = g.runArtifact(parser_app);
     circular_link.addArg("link");
     circular_link.addFileArg2(parser_producer_bytes, .{});
     circular_link.addFileArg2(circular_consumer.captureStdOut(.{}), .{});
     circular_link.addFileArg2(parser_reference_bytes, .{});
     parser_episode.dependOn(&b.addInstallFileWithDir(circular_link.captureStdOut(.{}), .prefix, "agent4/parser-construction/circular.bpi3").step);
-    const forged_consumer = b.addRunArtifact(parser_app);
+    const forged_consumer = g.runArtifact(parser_app);
     forged_consumer.addArg("consumer-forged");
-    const forged_link = b.addRunArtifact(parser_app);
+    const forged_link = g.runArtifact(parser_app);
     forged_link.addArg("link");
     forged_link.addFileArg2(parser_producer_bytes, .{});
     forged_link.addFileArg2(forged_consumer.captureStdOut(.{}), .{});
@@ -305,7 +332,7 @@ pub fn build(b: *std.Build) void {
     for ([_][]const u8{ "model-template", "input-schema", "result-schema", "model-schema", "model-reply-schema" }) |mode|
         g.emit(parser_episode, parser_app, &.{mode}, b.fmt("parser-construction/{s}.bin", .{mode}));
     check.dependOn(parser_episode);
-    const parser_schema = g.emitter("parser-schema", g.module("test/agent4/parser_tools.zig"));
+    const parser_schema = fixture_driver.select("parser-schema");
     g.emit(parser_tools, parser_schema, &.{"program"}, "parser/program.bpi3");
     for ([_][]const u8{ "reference-request", "reference-reply", "execution-request", "execution-reply" }) |mode|
         g.emit(parser_tools, parser_schema, &.{mode}, b.fmt("parser/{s}.bin", .{mode}));
@@ -362,25 +389,22 @@ pub fn build(b: *std.Build) void {
     dialogue.addImport("interaction", g.helper("interaction"));
     g.testModule(check, dialogue);
     const inquiry = g.module("test/agent4/inquiry_probe.zig");
-    g.testModule(check, inquiry);
     const inquiry_check = b.step("check-inquiry-probe", "Check retained inquiry custody");
     g.testModule(inquiry_check, inquiry);
     const inquiry_broker = g.module("test/agent4/inquiry_broker_probe.zig");
-    g.testModule(check, inquiry_broker);
     g.testModule(inquiry_check, inquiry_broker);
     const inquiry_app = g.module("test/consumers/inquiry/main.zig");
     const inquiry_app_check = b.step("check-inquiry-application", "Check the model-directed repair application");
     g.testModule(inquiry_app_check, inquiry_app);
-    g.testModule(check, inquiry_app);
 
     const emit = b.step("agent4-images", "Compile the consumer images");
     emit.dependOn(parser_episode);
     const participant_images = b.step("participant-images", "Emit and link the internal model participant");
-    const participant_exe = g.emitter("agent-participant", g.module("test/agent4/participant.zig"));
-    const participant_object = b.addRunArtifact(participant_exe);
+    const participant_exe = fixture_driver.select("agent-participant");
+    const participant_object = g.runArtifact(participant_exe);
     participant_object.addArg("object");
     const participant_bytes = participant_object.captureStdOut(.{});
-    const participant_link = b.addRunArtifact(participant_exe);
+    const participant_link = g.runArtifact(participant_exe);
     participant_link.addArg("link");
     participant_link.addFileArg2(participant_bytes, .{});
     participant_images.dependOn(&b.addInstallFileWithDir(participant_bytes, .prefix, "agent4/participant/producer.bmo1").step);
@@ -389,24 +413,24 @@ pub fn build(b: *std.Build) void {
         g.emit(participant_images, participant_exe, &.{mode}, b.fmt("participant/{s}.bin", .{mode}));
     emit.dependOn(participant_images);
     const recursive_images = b.step("recursive-participant-images", "Emit reciprocal task participants");
-    const recursive_exe = g.emitter("agent-recursive-participant", g.module("test/agent4/recursive_participant.zig"));
-    const producer_run = b.addRunArtifact(recursive_exe);
+    const recursive_exe = fixture_driver.select("agent-recursive-participant");
+    const producer_run = g.runArtifact(recursive_exe);
     producer_run.addArg("producer");
     const producer_bytes = producer_run.captureStdOut(.{});
-    const consumer_run = b.addRunArtifact(recursive_exe);
+    const consumer_run = g.runArtifact(recursive_exe);
     consumer_run.addArg("consumer");
     const consumer_bytes = consumer_run.captureStdOut(.{});
-    const recursive_link = b.addRunArtifact(recursive_exe);
+    const recursive_link = g.runArtifact(recursive_exe);
     recursive_link.addArg("link");
     recursive_link.addFileArg2(producer_bytes, .{});
     recursive_link.addFileArg2(consumer_bytes, .{});
     recursive_images.dependOn(&b.addInstallFileWithDir(producer_bytes, .prefix, "agent4/recursive/producer.bmo1").step);
     recursive_images.dependOn(&b.addInstallFileWithDir(consumer_bytes, .prefix, "agent4/recursive/consumer.bmo1").step);
     recursive_images.dependOn(&b.addInstallFileWithDir(recursive_link.captureStdOut(.{}), .prefix, "agent4/recursive/program.bpi3").step);
-    const alternate_run = b.addRunArtifact(recursive_exe);
+    const alternate_run = g.runArtifact(recursive_exe);
     alternate_run.addArg("consumer-alt");
     const alternate_bytes = alternate_run.captureStdOut(.{});
-    const alternate_link = b.addRunArtifact(recursive_exe);
+    const alternate_link = g.runArtifact(recursive_exe);
     alternate_link.addArg("link");
     alternate_link.addFileArg2(producer_bytes, .{});
     alternate_link.addFileArg2(alternate_bytes, .{});
@@ -415,43 +439,43 @@ pub fn build(b: *std.Build) void {
     for ([_][]const u8{ "input", "reply" }) |mode|
         g.emit(recursive_images, recursive_exe, &.{mode}, b.fmt("recursive/{s}.bin", .{mode}));
     emit.dependOn(recursive_images);
-    const text_object = g.emitter("agent-text-object", g.module("test/agent4/text_object.zig"));
-    const mobility_consumer = g.emitter("agent-mobility-consumer", g.module("test/consumers/mobility/main.zig"));
+    const text_object = fixture_driver.select("agent-text-object");
+    const mobility_consumer = fixture_driver.select("agent-mobility-consumer");
     const mobility_images = b.step("mobility-images", "Emit the independent mobility consumer");
     const mobility_approval_images = b.step("mobility-approval-images", "Emit the movable approval and fixture replacement consumer");
     emit.dependOn(mobility_approval_images);
-    const mobility_approval_consumer = g.emitter("agent-mobility-approval", g.module("test/consumers/mobility/approval.zig"));
+    const mobility_approval_consumer = fixture_driver.select("agent-mobility-approval");
     g.emit(mobility_approval_images, mobility_approval_consumer, &.{"image"}, "mobility-approval/program.bpi3");
     g.emit(mobility_approval_images, mobility_approval_consumer, &.{"identity"}, "mobility-approval/program-id.bin");
     for ([_][]const u8{ "task", "report", "proposal", "read", "delivery", "human", "human-reply", "identifier", "integer", "boolean" }) |name|
         g.emit(mobility_approval_images, mobility_approval_consumer, &.{name}, b.fmt("mobility-approval/{s}.schema", .{name}));
-    const mobility_ensure = g.emitter("agent-mobility-ensure", g.module("test/agent4/mobility_ensure.zig"));
+    const mobility_ensure = fixture_driver.select("agent-mobility-ensure");
     for ([_][]const u8{ "loop-image", "loop-identity" }) |name|
         g.emit(mobility_images, mobility_ensure, &.{name}, b.fmt("mobility/{s}.bin", .{name}));
     for ([_][]const u8{ "image", "input", "result" }) |name|
         g.emit(mobility_images, mobility_ensure, &.{name}, b.fmt("mobility/ensure-{s}.bin", .{name}));
-    const mobility_image = b.addRunArtifact(mobility_consumer);
+    const mobility_image = g.runArtifact(mobility_consumer);
     mobility_image.addArg("image");
-    mobility_image.addFileArg2(b.addRunArtifact(text_object).captureStdOut(.{}), .{});
+    mobility_image.addFileArg2(g.runArtifact(text_object).captureStdOut(.{}), .{});
     mobility_images.dependOn(&b.addInstallFileWithDir(mobility_image.captureStdOut(.{}), .prefix, "agent4/mobility/program.bpi3").step);
-    const mobility_identity = b.addRunArtifact(mobility_consumer);
+    const mobility_identity = g.runArtifact(mobility_consumer);
     mobility_identity.addArg("identity");
-    mobility_identity.addFileArg2(b.addRunArtifact(text_object).captureStdOut(.{}), .{});
+    mobility_identity.addFileArg2(g.runArtifact(text_object).captureStdOut(.{}), .{});
     mobility_images.dependOn(&b.addInstallFileWithDir(mobility_identity.captureStdOut(.{}), .prefix, "agent4/mobility/program-id.bin").step);
     for ([_][]const u8{ "fixed-image", "fixed-identity", "yield-image", "yield-identity" }) |mode| {
-        const variant = b.addRunArtifact(mobility_consumer);
+        const variant = g.runArtifact(mobility_consumer);
         variant.addArg(mode);
-        variant.addFileArg2(b.addRunArtifact(text_object).captureStdOut(.{}), .{});
+        variant.addFileArg2(g.runArtifact(text_object).captureStdOut(.{}), .{});
         mobility_images.dependOn(&b.addInstallFileWithDir(variant.captureStdOut(.{}), .prefix, b.fmt("agent4/mobility/{s}.bin", .{mode})).step);
     }
     emit.dependOn(mobility_images);
     for ([_][]const u8{ "task", "report", "resolve", "resolution", "relocate", "relocation-reply", "read", "text-reply", "subject", "inspection", "integer", "unit" }) |name|
         g.emit(mobility_images, mobility_consumer, &.{b.fmt("{s}-schema", .{name})}, b.fmt("mobility/{s}.schema", .{name}));
     const text_link = g.emitter("agent-text-link", g.module("test/agent4/text_link.zig"));
-    const text_object_bytes = b.addRunArtifact(text_object).captureStdOut(.{});
+    const text_object_bytes = g.runArtifact(text_object).captureStdOut(.{});
     emit.dependOn(&b.addInstallFileWithDir(text_object_bytes, .prefix, "agent4/text/tool.bmo1").step);
     for ([_][]const u8{ "standalone", "agent" }) |mode| {
-        const linked = b.addRunArtifact(text_link);
+        const linked = g.runArtifact(text_link);
         linked.addArg(mode);
         linked.addFileArg2(text_object_bytes, .{});
         emit.dependOn(&b.addInstallFileWithDir(linked.captureStdOut(.{}), .prefix, b.fmt("agent4/text/{s}.bpi3", .{mode})).step);
@@ -461,16 +485,16 @@ pub fn build(b: *std.Build) void {
     const distribution = b.step("emit-agent4", "Emit compiled examples and the source-independent use archive");
     const repository_application = b.step("check-repository-application", "Repair actual repository fixtures through the compiled application");
     const repository_images = b.step("repository-application-images", "Emit repository repair and its portable schemas");
-    const repository_app = g.emitter("repository-application", g.module("test/consumers/repository/main.zig"));
+    const repository_app = application_driver.select("repository-application");
     g.emit(repository_images, repository_app, &.{}, "repository/repair.bpi3");
     for ([_][]const u8{ "task-schema", "result-schema", "failure-schema" }) |mode|
         g.emit(repository_images, repository_app, &.{mode}, b.fmt("repository/{s}.bin", .{mode}));
     emit.dependOn(repository_images);
     repository_application.dependOn(repository_images);
     const dialogue_exe = g.emitter("agent4-dialogue", dialogue);
-    const inquiry_exe = g.emitter("agent4-inquiry-probe", inquiry);
-    const inquiry_broker_exe = g.emitter("agent4-inquiry-broker", inquiry_broker);
-    const inquiry_app_exe = g.emitter("agent4-inquiry-application", inquiry_app);
+    const inquiry_exe = fixture_driver.select("agent4-inquiry-probe");
+    const inquiry_broker_exe = fixture_driver.select("agent4-inquiry-broker");
+    const inquiry_app_exe = application_driver.select("agent4-inquiry-application");
     const inquiry_app_images = b.step("inquiry-application-images", "Emit the inquiry consumer and schemas");
     g.emit(inquiry_app_images, inquiry_app_exe, &.{}, "inquiry/repair.bpi3");
     g.emit(inquiry_app_images, inquiry_app_exe, &.{"repeat"}, "inquiry/repeated.bpi3");
@@ -495,27 +519,26 @@ pub fn build(b: *std.Build) void {
     emit.dependOn(multi_images);
     for ([_][]const u8{ "multi", "cleanup", "dispose" }) |mode|
         g.emit(multi_images, multi_exe, &.{mode}, b.fmt("multi/{s}.bpi3", .{mode}));
-    const installed_multi = b.addInstallArtifact(multi_exe, .{});
+    const installed_multi = b.addInstallArtifact(multi_exe.artifact, .{});
     emit.dependOn(&installed_multi.step);
     b.step("build-inspector", "Build the read-only Program/State inspector").dependOn(&installed_multi.step);
-    const approval_exe = g.emitter("agent4-approval", g.module("test/agent4/approval_probe.zig"));
+    const approval_exe = fixture_driver.select("agent4-approval");
     g.emit(emit, approval_exe, &.{}, "approval/approval.bpi3");
     g.emit(emit, approval_exe, &.{"evidence"}, "approval/approval-evidence.bpi3");
     g.emit(emit, approval_exe, &.{"scoped"}, "approval/approval-scoped.bpi3");
     g.emit(emit, approval_exe, &.{"scoped_evidence"}, "approval/approval-scoped-evidence.bpi3");
-    const review = g.module("test/consumers/review/main.zig");
-    const review_exe = g.emitter("agent4-review", review);
+    const review_exe = application_driver.select("agent4-review");
     for ([_][]const u8{ "mid_review", "clarify_first", "human", "model", "rule", "react" }) |mode| {
         for ([_][]const u8{ "bpi3", "args" }) |format|
             g.emit(emit, review_exe, &.{ mode, format }, b.fmt("review/{s}.{s}", .{ mode, format }));
     }
-    const document_exe = g.emitter("agent4-document", g.module("test/consumers/document/main.zig"));
+    const document_exe = application_driver.select("agent4-document");
     g.emit(emit, document_exe, &.{}, "document/document.bpi3");
     g.emit(emit, document_exe, &.{"args"}, "document/document.args");
     g.emit(emit, document_exe, &.{"consequence"}, "document/consequence.bpi3");
     g.emit(emit, document_exe, &.{"consequence-args"}, "document/consequence.args");
     g.emit(emit, document_exe, &.{"consequence-clarify-first"}, "document/clarify-first.bpi3");
-    const clarification_economy = g.emitter("clarification-scaling", g.module("test/agent4/clarification.zig"));
+    const clarification_economy = application_driver.select("clarification-scaling");
     const clarification_images = b.step("clarification-images", "Emit shared clarification scaling evidence");
     g.emit(clarification_images, clarification_economy, &.{}, "clarification/scaling.json");
     emit.dependOn(clarification_images);
@@ -565,8 +588,8 @@ pub fn build(b: *std.Build) void {
     const component_objects = g.emitter("agent4-component-objects", g.module("test/agent4/component_objects.zig"));
     const component_link = g.emitter("agent4-component-link", g.module("test/agent4/component_link.zig"));
     const component_tools = b.step("build-component-tools", "Build the independent component emitter and client linker without World");
-    component_tools.dependOn(&b.addInstallArtifact(component_objects, .{}).step);
-    component_tools.dependOn(&b.addInstallArtifact(component_link, .{}).step);
+    component_tools.dependOn(&b.addInstallArtifact(component_objects.artifact, .{}).step);
+    component_tools.dependOn(&b.addInstallArtifact(component_link.artifact, .{}).step);
     const browser_check = b.step("check-compiled-tool-browser", "Transfer the compiled Agent tool through real browser Workers and a file server");
     const native_checks = b.step("check-native", "Check native Agent semantics against the selected World");
     const repository_delivery = b.step("check-repository-delivery", "Check repository replacement through real file I/O and fresh kernels");
@@ -675,7 +698,7 @@ pub fn build(b: *std.Build) void {
         selection_runtime.dependOn(&selection_run.step);
         const text_check = nodeCommand(b);
         text_check.addArgs(&.{ "node", "test/agent4/text_tool_runtime.mjs" });
-        text_check.addFileArg2(text_object.getEmittedBin(), .{});
+        text_object.addArgument(text_check);
         text_check.addFileArg2(text_link.getEmittedBin(), .{});
         text_check.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
         text_check.step.dependOn(&runtime_guard.step);
@@ -741,7 +764,7 @@ pub fn build(b: *std.Build) void {
             mobility_durable_browser.dependOn(&durable_browser_run.step);
             const browser = nodeCommand(b);
             browser.addArgs(&.{ "node", "test/agent4/text_browser.mjs" });
-            browser.addFileArg2(text_object.getEmittedBin(), .{});
+            text_object.addArgument(browser);
             browser.addFileArg2(text_link.getEmittedBin(), .{});
             browser.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
             browser.addDirectoryArg2(browser_tools, .{ .make_absolute = true });
@@ -959,7 +982,7 @@ pub fn build(b: *std.Build) void {
         economy_module.addImport("inquiry", inquiry_app);
         g.testModule(economy, economy_module);
         const economy_exe = g.emitter("economy-probe", economy_module);
-        const economy_emit = b.addRunArtifact(economy_exe);
+        const economy_emit = g.runArtifact(economy_exe);
         economy_emit.addArg("emit");
         economy_emit.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/economy"), .{ .make_absolute = true });
         const measure = nodeCommand(b);
@@ -971,7 +994,7 @@ pub fn build(b: *std.Build) void {
         measure.addArg("--output");
         measure.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/economy-results"), .{ .make_absolute = true });
         measure.addArg("--probe");
-        const installed_probe = b.addInstallArtifact(economy_exe, .{});
+        const installed_probe = b.addInstallArtifact(economy_exe.artifact, .{});
         b.step("build-economy-probe", "Build the authenticated existing-workload economy probe")
             .dependOn(&installed_probe.step);
         measure.addFileArg2(b.graph.path(.install_bin, "economy-probe"), .{ .make_absolute = true });

@@ -102,6 +102,8 @@ test/agent4/terminology.zig
 test/agent4/text_link.zig
 test/agent4/text_object.zig
 test/agent4/values.zig
+test/application_driver.zig
+test/authoring_tests.zig
 test/consumers/document/build.zig
 test/consumers/document/clarification.zig
 test/consumers/document/consequence.zig
@@ -143,4 +145,5 @@ test/consumers/repository/types.zig
 test/consumers/repository/working_set.zig
 test/consumers/review/build.zig
 test/consumers/review/main.zig
+test/fixture_driver.zig
 tools/agent4/link_parser.zig

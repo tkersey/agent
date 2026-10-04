@@ -1,0 +1,77 @@
+name: Prepare audited test ablation
+on:
+  push:
+    branches: [codex/test-ablation-prepare-20261004]
+    paths: [.github/workflows/test-ablation-prepare.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: d21451789f3f25297ca99bcd3bbe5c1fca631905
+      - name: Apply hash-bound audited source edits
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, hashlib
+          from pathlib import Path
+          ops = json.loads(r'''[
+          {"path":"build_agent4.zig","old":"9f4d6f53b59b24fa02406ee7674bbb32e3edc572","new":"86eaa031365997a8bc9c82a2d4aa54b0b43daaa3","edits":[[152,153,""],[162,164,"    g.testModule(check, g.module(\"test/agent4/authoring_tests.zig\"));\n"],[203,204,""],[341,347,"    g.testModule(check, g.module(\"src/test_root.zig\"));\n"],[508,509,""],[560,561,""],[743,751,""],[763,764,""],[911,912,"        // These roots share exact module identities; compile their retained\n        // tests together instead of rebuilding the same compiler eleven times.\n        const native_suite = g.module(\"test/agent4/native_tests.zig\");\n        native_suite.addImport(\"world\", world);\n        native_suite.addImport(\"document\", g.module(\"test/consumers/document/consequence.zig\"));\n        native_graph.testModule(native_checks, native_suite);\n        // Repository policy modules have distinct import roots and retain their\n        // focused runners rather than changing their nominal type identities.\n        for ([_][]const u8{ \"repository_working_set\", \"repository_replacement\" }) |name| {\n"],[914,927,"            const working_set = std.mem.eql(u8, name, \"repository_working_set\");\n            native.addImport(if (working_set) \"repository\" else \"repository_replace\", g.module(if (working_set) \"test/consumers/repository/working_set.zig\" else \"test/consumers/repository/replacement.zig\"));\n            const tests = b.addTest(.{ .root_module = native });\n            tests.step.dependOn(native_graph.gate);\n            const run_policy = b.addRunArtifact(tests);\n            native_checks.dependOn(&run_policy.step);\n            b.step(if (working_set) \"check-repository-working-set\" else \"check-repository-replacement\", if (working_set) \"Check staged repository memory and evidence rules\" else \"Check live repository replacement approval\")\n                .dependOn(&run_policy.step);\n"],[1007,1008,""]]},
+          {"path":"docs/effect-directed-mobility.md","old":"f4c62d26ad58dd7595ac14c98a82c4721ad8c618","new":"ee2320c8c1e89bade2ada34a5e7f27bdaeca0980","edits":[[41,45,"state/request preservation. `check-mobility-browser` exercises the maintained\ndurable route in Chromium and Firefox: authenticated browser execution, a\nseparate mTLS data process, and a fresh browser executor after the original\nexecutors retire. It checks exact reads/results, retained children and cleanup.\n"],[47,48,"zig build check-mobility-continuation check-mobility-browser \\\n"],[54,59,"The earlier non-durable browser scaffold and its synthetic-arrival worker/peer\nwere retired in favor of this actual custody route. Continuation-only checks\nstill isolate control semantics; they are not custody authorization evidence.\nMatched measurements are documented in the [performance report](mobility-performance.md).\n"]]},
+          {"path":"repo_zig_paths.txt","old":"7c509f3d046b83d32fa355293cb8fcc5e91b2fdb","new":"8d5d8e9e0bf7dcd35eed2c485a12c12c34187615","edits":[[49,49,"src/test_root.zig\n"],[57,57,"test/agent4/authoring_tests.zig\n"],[67,68,""],[72,73,""],[86,86,"test/agent4/native_tests.zig\n"]]},
+          {"path":"src/mobility.zig","old":"4fa650c115342937f633d0d0c53b5fbc82dda8bb","new":"19f5471a49ed63d90705d75741bccee4f4de5f13","edits":[[2,3,""],[137,156,""]]},
+          {"path":"src/model_invocation_tests.zig","old":"6ea26956c1d9e0af430a75117fd11fd06fcf117d","new":"d062bf6212124c9b4044d6cb5e51aa96d4ad8575","edits":[[3,4,""],[17,29,""],[52,52,"    try std.testing.expectEqual(16, fields[0].maximum_bytes);\n    try std.testing.expect(std.mem.indexOf(u8, declarations[0].input_schema_json.bytes, \"\\\"maxLength\\\":16\") != null);\n"],[55,72,""],[112,172,""]]},
+          {"path":"src/react.zig","old":"3e340d92e5c929f8d0db6e59044478d17806163d","new":"752b82180c2a18e373a433f24b7d94de87969e22","edits":[[174,201,""]]},
+          {"path":"src/test_root.zig","old":null,"new":"7f1de8e91c50abee62f27187b24be816c3d2f688","content":"//! Private authoring checks; never imported by the public production module.\ntest {\n    _ = @import(\"model_invocation_tests.zig\");\n    _ = @import(\"conversation.zig\");\n    _ = @import(\"react.zig\");\n    _ = @import(\"value_equality.zig\");\n    _ = @import(\"clarification.zig\");\n}\n"},
+          {"path":"src/value_equality.zig","old":"d6d8d26aaba37f87ea3d65c99b90fe91ba691197","new":"779a0b62600ad8b5d2a487589f41e35222faddce","edits":[[145,185,""]]},
+          {"path":"test/agent4/admission.zig","old":"d684fcd3b5fd445902ee114deb294c21592f6b1e","new":"e767ed6070d173347eac3b17a9ade6f301fe7235","edits":[[80,87,""]]},
+          {"path":"test/agent4/approval_equality.zig","old":"fe717d375bf435247b4e73ae0a999adc76709a5c","new":"3ece6909765364a4d295262bbc1c2268a56981c4","edits":[[2,3,"const equality = @import(\"agent\").value_equality;\n"]]},
+          {"path":"test/agent4/authoring_tests.zig","old":null,"new":"0ce7286632b183edc06393cb36e95b624794ffae","content":"//! Authoring contracts with one shared compiler/module graph.\ntest {\n    _ = @import(\"values.zig\");\n    _ = @import(\"approval_probe.zig\");\n    _ = @import(\"callable.zig\");\n    _ = @import(\"compiled_tool.zig\");\n}\n"},
+          {"path":"test/agent4/compiled_tool.zig","old":"4c2e662e57212e892be63932ab9941ac618b1497","new":"ddbb21af6664413d9e0040fd29cc8ea11ca4362d","edits":[[168,177,""]]},
+          {"path":"test/agent4/descriptor_contracts.zig","old":"69c5d1d273bb83ae2273ac86d925333589889e3a","new":null},
+          {"path":"test/agent4/dialogue_probe.zig","old":"de50d0317e15e4002ff10e16188b6ccb4ff8f59b","new":"0974284b5773ee1d74c26d048accb7a2f6d12efd","edits":[[367,385,""]]},
+          {"path":"test/agent4/economy.zig","old":"14563e8e0f57609a34ac069df93adf99232f10ca","new":"54f735b5422186ada43ad0af521c96788f240efc","edits":[[644,658,""]]},
+          {"path":"test/agent4/facade.zig","old":"0fda9a56ec0109714cd48ea84e6d8f6689cf285b","new":null},
+          {"path":"test/agent4/inquiry_broker_probe.zig","old":"4d417da99279776cda993603d169ee3fe687064d","new":"54c93fbb3fe4ecd0c47358399a74552bfb7a5937","edits":[[179,190,""]]},
+          {"path":"test/agent4/inquiry_probe.zig","old":"d52a351e4d2734a079f40681af391eae21c3aef9","new":"302337b7b2c398d27a78c6bb11f36c0cb57d7478","edits":[[311,328,""]]},
+          {"path":"test/agent4/mobility_browser.mjs","old":"c9956cf22106ab3bc9db575419b1c9b1ab6226c2","new":null},
+          {"path":"test/agent4/mobility_file_peer.mjs","old":"a3b6fef851edab72d075d9122258a853a7384ac7","new":null},
+          {"path":"test/agent4/mobility_worker.mjs","old":"708c13121b93a3bce30acb57b547419705f11f2e","new":null},
+          {"path":"test/agent4/model.test.mjs","old":"f82737667b1c6c8b00f7139f8b5f93a5b6a829a7","new":"7940a6b6ccbe6458acddd35a74568644e6709c2d","edits":[[1,2,""],[427,449,""]]},
+          {"path":"test/agent4/native_tests.zig","old":null,"new":"a2c0bfac358d06e7a7b5eb5df07a30bf604fbe3b","content":"//! Native semantic checks with one shared World/Agent module graph.\ntest {\n    _ = @import(\"bounded_history.zig\");\n    _ = @import(\"decision_scopes.zig\");\n    _ = @import(\"model_admission.zig\");\n    _ = @import(\"model_custody.zig\");\n    _ = @import(\"observation.zig\");\n    _ = @import(\"approval_equality.zig\");\n    _ = @import(\"callable_runtime.zig\");\n    _ = @import(\"clarification.zig\");\n    _ = @import(\"terminology.zig\");\n}\n"},
+          {"path":"test/agent4/parser_tools.zig","old":"1c76d521e28210a996b03101eb0b450bdfdf9259","new":"bb6d3d7868068ba1f7494fe4a7da90c431d4e8b4","edits":[[15,20,""]]},
+          {"path":"test/consumers/document/consequence.zig","old":"49877c0a602ecba6cbf0740463f103b6c9606e38","new":"7ce472a46c7208bbd3b2de7e3bd5a06e3dc5a8c0","edits":[[236,242,""]]},
+          {"path":"test/consumers/document/consequence_proposals.zig","old":"305f4089eb48f3234d09924111e64750fc12e58d","new":"26cad5e18b211d4f3d15f4a2fd405be12df00bc7","edits":[[1,2,""],[229,245,""]]},
+          {"path":"test/consumers/inquiry/main.zig","old":"6b1c90ff52194265641dd1c8b1940705da6f70ee","new":"13017ba5cf0743beaecfe81c08d66705a0fa3e1d","edits":[[169,183,""]]},
+          {"path":"test/consumers/review/main.zig","old":"32c116ec110cffa0afd2a7409289ee5035d27599","new":"89416d4067f1ec214f8a4a46155f32eb145b62ef","edits":[[362,374,""]]}
+          ]''')
+          def blob(data):
+              return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+          for op in ops:
+              p = Path(op['path'])
+              if op['old'] is None:
+                  assert not p.exists(), op['path']
+                  result = op['content'].encode()
+              else:
+                  data = p.read_bytes()
+                  assert blob(data) == op['old'], op['path']
+                  if op['new'] is None:
+                      p.unlink()
+                      continue
+                  lines = data.decode().splitlines(keepends=True)
+                  for start, end, text in reversed(op['edits']):
+                      lines[start:end] = text.splitlines(keepends=True)
+                  result = ''.join(lines).encode()
+              assert blob(result) == op['new'], op['path']
+              p.write_bytes(result)
+          PY
+          git add -A
+          git diff --cached --check
+          test "$(git write-tree)" = "9b903d62d2d485d9c4f35e54eab2efc363a398b6"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Delete redundant test definitions and obsolete mobility scaffold; share test compilation'
+          git push origin HEAD:refs/heads/codex/test-ablation-candidate-20261004

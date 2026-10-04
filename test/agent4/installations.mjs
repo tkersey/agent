@@ -9,10 +9,10 @@ import { inventory, readDependencyLock, readRegular, sha256,
   withVerifiedDependencies } from "../../tools/agent4/dependencies.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const MODULES = new Set(["std", "boundary", "boundary_data", "agent_contracts"]);
+const MODULES = new Set(["std", "builtin", "boundary", "boundary_data", "agent_contracts"]);
 const FORBIDDEN = /(?:^|\/)(?:system_compiler|strategy_v3|flow|runtime|world|kernel)(?:[._/]|$)/;
 
-function authoringFiles(sourceRoot) {
+export function authoringFiles(sourceRoot = ROOT) {
   const files = new Map();
   const pending = ["src/agent4.zig", "src/contracts.zig", "build.zig", "build_agent4.zig"];
   while (pending.length) {
@@ -109,12 +109,13 @@ pub fn main(init: std.process.Init) !void {
 
 /** A02: real external authoring using only the installed public Zig package surfaces. */
 export async function authoringInstallation({ sourceRoot = ROOT, output } = {}) {
+  // Account for source before selecting a compiler, fetching, or creating output.
+  const source = authoringFiles(sourceRoot);
   const toolchain = selectZig([]);
   const lock = readDependencyLock(join(sourceRoot, "conformance/agent4/dependencies.lock.json"));
   const area = join(sourceRoot, ".agent4/installation-tests"); mkdirSync(area, { recursive: true });
   const work = mkdtempSync(join(area, "authoring-"));
   const installed = join(work, "agent"), consumer = join(work, "consumer");
-  const source = authoringFiles(sourceRoot);
   for (const [path, bytes] of source) {
     const destination = join(installed, path); mkdirSync(dirname(destination), { recursive: true });
     writeFileSync(destination, bytes, { flag: "wx" });
@@ -166,12 +167,24 @@ export async function authoringInstallation({ sourceRoot = ROOT, output } = {}) 
 if (isMain(import.meta)) {
   try {
     const args = process.argv.slice(2);
-    let output;
-    if (args.length) {
-      if (args.length !== 2 || args[0] !== "--output" || args[1].startsWith("--"))
-        throw new Error("usage: installations.mjs [--output FILE]");
-      output = args[1];
+    let output, sourceRoot, scanOnly = false;
+    const seen = new Set();
+    for (let i = 0; i < args.length; i++) {
+      const flag = args[i];
+      if (seen.has(flag)) throw new Error(`duplicate option: ${flag}`);
+      seen.add(flag);
+      if (flag === "--scan-only") { scanOnly = true; continue; }
+      if (!["--output", "--source-root"].includes(flag) || !args[i + 1] || args[i + 1].startsWith("--"))
+        throw new Error("usage: installations.mjs [--scan-only] [--source-root DIR] [--output FILE]");
+      const value = resolve(args[++i]);
+      if (flag === "--output") output = value;
+      else sourceRoot = value;
     }
-    console.log(JSON.stringify(await authoringInstallation({ output }), null, 2));
+    if (scanOnly) {
+      const files = authoringFiles(sourceRoot);
+      const result = { check: "authoring-source-accounting", result: "passed", files: [...files.keys()].sort() };
+      if (output) { mkdirSync(dirname(output), { recursive: true }); writeFileSync(output, JSON.stringify(result, null, 2) + "\n"); }
+      console.log(JSON.stringify(result, null, 2));
+    } else console.log(JSON.stringify(await authoringInstallation({ sourceRoot, output }), null, 2));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

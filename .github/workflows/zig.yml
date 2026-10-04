@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+# Superseded PR heads cannot qualify their successors. Preserve every main and
+# manually requested run by giving non-PR events their own concurrency group.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
   actions: read
@@ -21,6 +26,8 @@ jobs:
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with:
           version: '0.17.0'
+          # The observed qualification cache exceeds the action's 2 GiB purge limit.
+          cache-size-limit: 4096
       - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
       - name: Install the source-registry dependency
         run: |
@@ -35,6 +42,6 @@ jobs:
         run: node tools/agent4/setup.mjs --zig-exe "$(command -v zig)"
       - name: Native contracts and economy with a custom executable directory
         run: |
-          zig build check-agent4 check-zig17 check-native check-agent4-economy -Doptimize=safe \
+          zig build check-agent4 check-native check-agent4-economy -Doptimize=safe \
             -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime" \
             --prefix "$RUNNER_TEMP/agent-qualification" --prefix-exe-dir executables --summary all

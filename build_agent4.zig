@@ -43,6 +43,10 @@ const Graph = struct {
 };
 
 pub fn build(b: *std.Build) void {
+    comptime {
+        if (!std.mem.eql(u8, @import("builtin").zig_version_string, "0.17.0"))
+            @compileError("Zig 0.17.0 is required");
+    }
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const source = b.option(std.Build.LazyPath, "boundary-source", "Authenticated immutable Boundary source copy");

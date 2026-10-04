@@ -3,38 +3,38 @@
   "status": "candidate-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "9e68b6e8382a24e22f8b34986e4e7fb21ec80d31",
-    "gitTree": "05b8d9e43a7606c5b2864630490c7fe1bd45d91d",
+    "commit": "2981507d9d0967babf69c5140674e6536263bfea",
+    "gitTree": "acc80b646395139fed1d3078d66642e73082ad43",
     "version": "3.0.0-dev.0",
     "source": {
-      "inventorySha256": "f6429f9a7057de192354056c23fed886ec1fd8afda981a53f53b5cc4bff625cc",
-      "entries": 531,
-      "bytes": 11086052
+      "inventorySha256": "c03333cdad35699d048a22b3370041b85bd35dd154bcfc301a6c4fef98a860ec",
+      "entries": 534,
+      "bytes": 12029308
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/9e68b6e8382a24e22f8b34986e4e7fb21ec80d31.tar.gz",
-      "bytes": 2123364,
-      "sha256": "81d768c2ededa7ebc2ae1c826e9405556fb2d0a12e925e262725739f9297e69d"
+      "url": "https://github.com/tkersey/boundary/archive/2981507d9d0967babf69c5140674e6536263bfea.tar.gz",
+      "bytes": 2952988,
+      "sha256": "e162b0f1d618019ad3da170c3e87150db40977e5232960239f8d0a576909885e"
     },
     "authentication": "Downloaded archive tree recomputed against selected raw Git commit; separate complete inventory retained.",
     "package": {
-      "zigHash": "boundary-3.0.0-dev.0-flclaDQMRgDnoHmn6ypGSeftzcM8u4aSozWRo7KwpcPK",
+      "zigHash": "boundary-3.0.0-dev.0-flclaPgnRgCDjLomSmJEBKBaxS3iQM8vMBhRUdukWRX9",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "0bf55d6b2b8c4b24d0fd9b0fcb1aaa9ae7ff0d08fa718ed81c0f22acf9ca84a7",
-          "entries": 482,
-          "bytes": 4590644
+          "inventorySha256": "6efe910e35a677d4080b4c840b1de2f1fd8269126a244db18c578cc83f7eaede",
+          "entries": 483,
+          "bytes": 4597752
         },
         "archive-extracted": {
-          "inventorySha256": "efa0334cbc6840133898215d5ea26fc65da0147214dd8370a57886c97aa98c54",
-          "entries": 482,
-          "bytes": 4590644
+          "inventorySha256": "a8a3527482452c5ce5d8fa291dc2c2e15d9fedd377af2e19719ea1fd40e83d04",
+          "entries": 483,
+          "bytes": 4597752
         }
       },
       "archive": {
-        "bytes": 898684,
-        "sha256": "4d5476133f26b1bf0e0b3e3364df19d1f944a211397b68eb2bd86b41f6d147d2"
+        "bytes": 901136,
+        "sha256": "bfe214e2202777b7fcc0d5817520cd7f2a491c6b26814398357d53057ce9d995"
       }
     },
     "api": {
@@ -88,18 +88,18 @@
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "50cc310d2027a1392ad1c864506300c3ab55f442",
-    "gitTree": "18d159acc79ec97226005219d2fc62e07ea215a6",
+    "commit": "60214850e1be215c57e52a7b36f9ab82cd9cae92",
+    "gitTree": "620689925bdb704c3845dc071baf5d9234ec63df",
     "version": "6.0.0-dev.0",
     "source": {
-      "inventorySha256": "f5b7f670b1bc4c646796da2fc3d5df0b5e1f1eb5fd308e6c0a54f1be03cc8cda",
+      "inventorySha256": "9d6b3993422c97b2f16c707de4a7cbdc76b812c0b5fde8616f7cad427977fd33",
       "entries": 199,
-      "bytes": 17758165
+      "bytes": 17758157
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/50cc310d2027a1392ad1c864506300c3ab55f442.tar.gz",
-      "bytes": 15757408,
-      "sha256": "f00eb6bdf71770fa89d51204df1cd8556829807f99c1f9ac7918ebd2600f3214"
+      "url": "https://github.com/tkersey/world/archive/60214850e1be215c57e52a7b36f9ab82cd9cae92.tar.gz",
+      "bytes": 15757401,
+      "sha256": "c871e6b18a4b35f230b29da28628a7a5d9e2c178647bc45a12b20879f5c680ed"
     },
     "authentication": "Downloaded archive tree recomputed against selected raw Git commit; separate complete inventory retained.",
     "runtime": {
@@ -268,7 +268,7 @@
           "kind": "file",
           "mode": 420,
           "bytes": 851,
-          "sha256": "f4a1fd3189493bcf3b1ad37a5dec39ff927bb0b82ec3bb19ea466602e353ec07"
+          "sha256": "e5a73615374a173fb6274726098164d919d447cc480c41c047085a22a48061f0"
         },
         {
           "path": "src/node/runtime-smoke.mjs",
@@ -292,7 +292,7 @@
           "sha256": "e6a982f3f13790e3dec7a5e26770549a6be8d0cb5e97a25cd97cead993f2b394"
         }
       ],
-      "inventorySha256": "7dbe3acbe495f0135ac52e99e95a56ae73a3cc8e30dfa6e7c13108e63fc94b7e",
+      "inventorySha256": "b40e473f2771c26b681bf4cc47e2aba1f681dd938c0b91490aa207952ef86cdf",
       "entries": 28,
       "bytes": 560863,
       "kernel": {
@@ -336,7 +336,7 @@
         "target": "qualified-runtime-bundle",
         "optimize": "small",
         "machine": "wasm32-freestanding",
-        "boundarySourceCommit": "9e68b6e8382a24e22f8b34986e4e7fb21ec80d31",
+        "boundarySourceCommit": "2981507d9d0967babf69c5140674e6536263bfea",
         "capacityOverrides": [],
         "requestedOptimize": "safe",
         "zig": "0.17.0",
@@ -354,34 +354,34 @@
         ],
         "toolchain": {
           "version": "0.17.0",
-          "executable": "/home/runner/work/_temp/c995d51e-84c1-430a-88f6-d6cf4b015208/zig-x86_64-linux-0.17.0/zig",
+          "executable": "/home/runner/work/_temp/12318114-8672-4116-931a-8c54e48bee53/zig-x86_64-linux-0.17.0/zig",
           "executableIdentity": {
             "bytes": 185514480,
             "mode": 493,
             "sha256": "7c61539af19fa4082c94848f1c2b57b89e76dc6cfd5bd4c57764c3caf8f82272"
           },
-          "library": "/home/runner/work/_temp/c995d51e-84c1-430a-88f6-d6cf4b015208/zig-x86_64-linux-0.17.0/lib",
+          "library": "/home/runner/work/_temp/12318114-8672-4116-931a-8c54e48bee53/zig-x86_64-linux-0.17.0/lib",
           "libraryInventorySha256": "57c284a5bd1fb1b41d0f83b0de35287873f622eb912e25ca214a1307263596a4",
           "libraryEntries": 20770,
           "libraryBytes": 187639324
         }
       },
-      "provenance": "Qualified World 0.17-only producer; Actions37161061514 artifact11288265683; independent acquisition and installed smoke passed"
+      "provenance": "Qualified World 0.17-only producer; Actions37181860187 artifact11295054241; independent acquisition and installed smoke passed"
     },
     "delivery": {
-      "commit": "50cc310d2027a1392ad1c864506300c3ab55f442",
-      "runId": 37161061514,
-      "artifactName": "world-runtime-50cc310d2027a1392ad1c864506300c3ab55f442",
-      "expiresAt": "2026-11-02T23:24:39Z",
-      "manifestSha256": "3f314bae1acddd41d1fa7240402a6880233bbbd3a5abf8fd548067f7025adab3",
+      "commit": "60214850e1be215c57e52a7b36f9ab82cd9cae92",
+      "runId": 37181860187,
+      "artifactName": "world-runtime-60214850e1be215c57e52a7b36f9ab82cd9cae92",
+      "expiresAt": "2026-11-03T06:14:39Z",
+      "manifestSha256": "1a559532e737562d1cffc950e4039468ea298efaf50fa475dca4e9aa94d47f79",
       "archive": {
-        "bytes": 224585,
-        "sha256": "0ac618ef4c6f08bad6454828b7f30bb709e7d72931329bf2d7b97c59c87e2e16"
+        "bytes": 224637,
+        "sha256": "38de83adc9010da7d96c2ffdce03be512e8e0dc3c18fdd9a0c6b14e0f17e7ffe"
       },
       "artifact": {
-        "apiPath": "repos/tkersey/world/actions/artifacts/11288265683/zip",
-        "bytes": 226086,
-        "sha256": "f40aec766594428d374e8e618acde877ec6c5145c52d429849bb2638ea635192"
+        "apiPath": "repos/tkersey/world/actions/artifacts/11295054241/zip",
+        "bytes": 226138,
+        "sha256": "6c6274bc686ca6dbec762b75dda4e092b356e1acd3202a86b392a996ca06ac41"
       }
     }
   },
@@ -398,12 +398,12 @@
     "architecture": "arm64"
   },
   "publicationObservation": {
-    "boundarySource": "Draft PR164 9e68b6e8382a24e22f8b34986e4e7fb21ec80d31; Linux Actions37159982244",
-    "worldSource": "Draft PR62 50cc310d2027a1392ad1c864506300c3ab55f442; Linux Actions37161061514",
+    "boundarySource": "Draft PR164 2981507d9d0967babf69c5140674e6536263bfea; Linux Actions37181358353",
+    "worldSource": "Draft PR62 60214850e1be215c57e52a7b36f9ab82cd9cae92; Linux Actions37181860187",
     "compatiblePublishedReleaseObserved": false
   },
   "limitations": [
-    "Zig0.17-only migration candidate. Boundary and World native Linux/macOS qualification passed; Agent authoring passed and all188 emitted artifacts match the frozen predecessor.",
-    "Agent full integration rerun, separate mobility aggregate, experiments and final coordinated qualification remain open; no performance, merge or release claim."
+    "Candidate integration using independently authenticated final Boundary/World sources and the Linux-delivered runtime; both upstream repositories passed final native macOS/Linux qualification.",
+    "Final Agent aggregate, cumulative F evidence, explicit performance-cost acceptance and serial reviews remain pending. No merge or release is claimed."
   ]
 }

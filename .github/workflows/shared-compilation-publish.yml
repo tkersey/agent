@@ -1,0 +1,28 @@
+name: Publish shared compilation update
+on:
+  push:
+    branches: [codex/shared-compilation-publish-20261004]
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 02abb019275d886e7dc06c8df8a9f4c82c4050da
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Publish only if the user branch still has the inspected head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD^{tree})" = 14e7122aad9cf8a4618c40853b3ae6f5c2462015
+          git merge-base --is-ancestor 94ed267bac3cf7ba5b35fc11f00728f029d56a5c HEAD
+          git diff --exit-code 94ed267bac3cf7ba5b35fc11f00728f029d56a5c -- conformance/agent4/dependencies.lock.json
+          header=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $header" \
+            push --force-with-lease=refs/heads/codex/ci-test-ablation-20261004:5e2c9ba11d01e52f1bf690ba9667c881dc91792c \
+            origin HEAD:refs/heads/codex/ci-test-ablation-20261004

@@ -47,6 +47,7 @@ src/responders.zig
 src/scopes.zig
 src/sets.zig
 src/skill.zig
+src/test_root.zig
 src/text_inspection.zig
 src/tools.zig
 src/value_equality.zig
@@ -55,6 +56,7 @@ test/agent4/admission_build.zig
 test/agent4/approval_build.zig
 test/agent4/approval_equality.zig
 test/agent4/approval_probe.zig
+test/agent4/authoring_tests.zig
 test/agent4/bounded_history.zig
 test/agent4/callable.zig
 test/agent4/callable_runtime.zig
@@ -65,12 +67,10 @@ test/agent4/component_link.zig
 test/agent4/component_objects.zig
 test/agent4/composed_owners.zig
 test/agent4/decision_scopes.zig
-test/agent4/descriptor_contracts.zig
 test/agent4/dialogue_build.zig
 test/agent4/dialogue_probe.zig
 test/agent4/economy.zig
 test/agent4/economy_build.zig
-test/agent4/facade.zig
 test/agent4/inquiry_broker_probe.zig
 test/agent4/inquiry_probe.zig
 test/agent4/mobility_ensure.zig
@@ -84,6 +84,7 @@ test/agent4/model_unsupported_codec.zig
 test/agent4/multi_build.zig
 test/agent4/multi_probe.zig
 test/agent4/native.zig
+test/agent4/native_tests.zig
 test/agent4/observation.zig
 test/agent4/parser_delivery.zig
 test/agent4/parser_proposals.zig

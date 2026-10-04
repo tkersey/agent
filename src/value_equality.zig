@@ -143,46 +143,6 @@ fn sequence(c: *a.Context, body: *a.Body, schema: *const a.Schema, left: *const 
     return body.conditional(try body.equal(left_length, right_length), try same.ret(compared_all), try different.ret(try different.constant(bool, false)));
 }
 
-test "all portable schema families lower to checked pure comparisons" {
-    var b = source.Builder.init(std.testing.allocator);
-    defer b.deinit();
-    const unit = try b.scalar(void);
-    const integer = try b.scalar(i64);
-    const tree = try b.reserveSchema();
-    const children = try b.schema(.{ .product = &.{ integer, tree, tree } });
-    try b.defineSchema(tree, .{ .sum = &.{ unit, children } });
-    const fields = [_]Id{
-        unit,
-        try b.scalar(bool),
-        try b.scalar(i8),
-        try b.scalar(i16),
-        try b.scalar(i32),
-        integer,
-        try b.scalar(u8),
-        try b.scalar(u16),
-        try b.scalar(u32),
-        try b.scalar(u64),
-        try b.schema(.{ .enumeration = &.{ 1, 19, 4000000000 } }),
-        try b.schema(.bytes),
-        try b.schema(.text),
-        try b.schema(.{ .bounded_bytes = 16 }),
-        try b.schema(.{ .bounded_text = 16 }),
-        try b.schema(.{ .seq = tree }),
-        try b.schema(.{ .vector = .{ .element = integer, .maximum = 32 } }),
-        try b.schema(.{ .array = .{ .element = integer, .length = 64 } }),
-        tree,
-    };
-    const whole = try b.schema(.{ .product = &fields });
-    const c = try a.Context.init(&b);
-    const contract = try a.interop.schema(c, whole);
-    const function = try create(c, contract, try c.literalFailure(void, {}));
-    try std.testing.expect(function == try create(c, contract, try c.literalFailure(void, {})));
-    try std.testing.expectEqual(@as(usize, 0), b.functions.items[@intCast(try a.interop.functionId(c, function))].effects.len);
-    var compiled = try c.compile(std.testing.allocator, function, try a.interop.schema(c, unit));
-    defer compiled.deinit();
-    try std.testing.expectEqual(@as(usize, 0), compiled.program.effects.len);
-}
-
 test "internal values reject at any recursive schema depth before declarations" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();

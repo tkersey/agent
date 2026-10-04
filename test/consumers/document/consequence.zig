@@ -234,9 +234,3 @@ fn finishSession(c: agent.Context, author: *typed.Context, session: Id, family: 
     } }));
     return b.module(entry, unit);
 }
-
-test "complete terminology conversation compiles through protected Agent" {
-    var compiled = try agent.compile(std.testing.allocator, System);
-    defer compiled.deinit();
-    try std.testing.expect(compiled.program.blocks.len > 0);
-}

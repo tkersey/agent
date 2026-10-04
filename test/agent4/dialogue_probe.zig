@@ -365,24 +365,6 @@ fn borrowedEscape(b: *Builder) !bsrc.Module {
     return b.module(entry, unit);
 }
 
-test "typed dialogue and disposal compile through the public Boundary compiler" {
-    for ([_]Mode{ .twice, .dispose_owned }) |mode| {
-        var b = Builder.init(std.testing.allocator);
-        defer b.deinit();
-        var compiled = try boundary.program.compile(std.testing.allocator, try build(&b, mode));
-        defer compiled.deinit();
-        try std.testing.expect(compiled.program.handlers.len > 0);
-    }
-}
-
-test "external interaction compiles without runtime dependencies" {
-    var b = Builder.init(std.testing.allocator);
-    defer b.deinit();
-    var compiled = try boundary.program.compile(std.testing.allocator, try build(&b, .exchange));
-    defer compiled.deinit();
-    try std.testing.expectEqual(@as(usize, 1), compiled.program.effects.len);
-}
-
 test "consumed dialogue future cannot be resumed" {
     var b = Builder.init(std.testing.allocator);
     defer b.deinit();

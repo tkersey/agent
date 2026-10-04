@@ -39,24 +39,23 @@ an authored fallback without performing the read. Cancellation at relocation
 discharges the suspended child's cleanup without resuming its normal work.
 
 `check-mobility-continuation` checks fresh resident instances and exact parked
-state/request preservation. `check-mobility-browser-continuation` executes the
-same 4,421-byte image in Chromium and Firefox Workers and a separate Node process.
-It physically terminates the first Worker before data execution and verifies
-that the data process has exited before the new Worker restores its successor.
+state/request preservation. `check-mobility-browser` exercises the maintained
+durable route in Chromium and Firefox: authenticated browser execution, a
+separate mTLS data process, and a fresh browser executor after the original
+executors retire. It checks exact reads/results, retained children and cleanup.
 
 ```sh
-zig build check-mobility-continuation check-mobility-browser-continuation \
+zig build check-mobility-continuation check-mobility-browser \
   -Dworld-runtime=/absolute/authenticated/world-runtime \
   -Dworld-source=/absolute/authenticated/world-source \
   -Dworld-archive=/absolute/authenticated/world-source.tar.gz \
   -Dbrowser-tools=/absolute/locked-playwright-tools
 ```
 
-These are **test scaffolds, not the durable custody reference route**. Their
-synthetic arrival receipts and empty immediate-requirement lists isolate
-continuation behavior; they provide no authority or custody safety evidence.
-Matched measurements and operational metrics are documented in the
-[performance report](mobility-performance.md); final review is still required.
+The earlier non-durable browser scaffold and its synthetic-arrival worker/peer
+were retired in favor of this actual custody route. Continuation-only checks
+still isolate control semantics; they are not custody authorization evidence.
+Matched measurements are documented in the [performance report](mobility-performance.md).
 The durable source-free browser lane and approval variant are described below.
 Functional and regression qualification is recorded in the acceptance matrix;
 serial review closeout remains unfinished.

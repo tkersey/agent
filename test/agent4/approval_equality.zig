@@ -1,6 +1,6 @@
 const std = @import("std");
 const boundary = @import("boundary");
-const equality = @import("equality");
+const equality = @import("agent").value_equality;
 const world = @import("world");
 const Id = boundary.source.Id;
 

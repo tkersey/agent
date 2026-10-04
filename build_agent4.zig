@@ -491,8 +491,10 @@ pub fn build(b: *std.Build) void {
     const multi = g.module("test/agent4/multi_probe.zig");
     multi.addImport("deliberation", g.helper("deliberation"));
     const multi_exe = g.emitter("agent4-multi", multi);
+    const multi_images = b.step("multi-images", "Emit shared multi-shot fixtures");
+    emit.dependOn(multi_images);
     for ([_][]const u8{ "multi", "cleanup", "dispose" }) |mode|
-        g.emit(emit, multi_exe, &.{mode}, b.fmt("multi/{s}.bpi3", .{mode}));
+        g.emit(multi_images, multi_exe, &.{mode}, b.fmt("multi/{s}.bpi3", .{mode}));
     const installed_multi = b.addInstallArtifact(multi_exe, .{});
     emit.dependOn(&installed_multi.step);
     b.step("build-inspector", "Build the read-only Program/State inspector").dependOn(&installed_multi.step);
@@ -514,7 +516,9 @@ pub fn build(b: *std.Build) void {
     g.emit(emit, document_exe, &.{"consequence-args"}, "document/consequence.args");
     g.emit(emit, document_exe, &.{"consequence-clarify-first"}, "document/clarify-first.bpi3");
     const clarification_economy = g.emitter("clarification-scaling", g.module("test/agent4/clarification.zig"));
-    g.emit(emit, clarification_economy, &.{}, "clarification/scaling.json");
+    const clarification_images = b.step("clarification-images", "Emit shared clarification scaling evidence");
+    g.emit(clarification_images, clarification_economy, &.{}, "clarification/scaling.json");
+    emit.dependOn(clarification_images);
     const inventory = nodeCommand(b);
     inventory.addArgs(&.{ "node", "tools/agent4/emit_inventory.mjs" });
     inventory.addDirectoryArg2(b.graph.path(.install_prefix, "agent4"), .{ .make_absolute = true });
@@ -959,6 +963,7 @@ pub fn build(b: *std.Build) void {
         economy_emit.addArg("emit");
         economy_emit.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/economy"), .{ .make_absolute = true });
         const measure = nodeCommand(b);
+        measure.addFileArg2(b.graph.path(.install_bin, "agent4-multi"), .{ .prefix = "AGENT4_MULTI_INSPECTOR=", .make_absolute = true });
         measure.addArgs(&.{ "node", "tools/agent4/economy.mjs", "--world-runtime" });
         measure.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
         measure.addArg("--fixtures");
@@ -982,9 +987,13 @@ pub fn build(b: *std.Build) void {
         measure.addFileArg2(native_exe.getEmittedBin(), .{});
         addBoundary(b, measure, source, target, optimize);
         measure.step.dependOn(&installed_probe.step);
+        measure.step.dependOn(&installed_multi.step);
         if (measure_economy) measure.addArgs(&.{ "--measure", "--uncontended" });
         measure.has_side_effects = true;
-        measure.step.dependOn(emit);
+        // Focused economy reruns need these inputs, not the entire authoring corpus.
+        measure.step.dependOn(multi_images);
+        measure.step.dependOn(clarification_images);
+        measure.step.dependOn(inquiry_app_images);
         measure.step.dependOn(&economy_emit.step);
         economy.dependOn(&measure.step);
     } else {
@@ -1019,12 +1028,17 @@ pub fn build(b: *std.Build) void {
     pure.has_side_effects = true;
     pure.step.dependOn(&source_guard.step);
     check.dependOn(&pure.step);
+    const accounting = b.addSystemCommand(&.{ "node", "test/agent4/installations.mjs", "--scan-only" });
+    accounting.has_side_effects = true;
+    b.step("check-source-accounting", "Classify installed authoring imports without consumer compilation").dependOn(&accounting.step);
     const installation = nodeCommand(b);
     installation.addArgs(&.{ "node", "test/agent4/installations.mjs", "--output" });
     installation.addFileArg2(b.path(".agent4/out/installation-authoring.json"), .{ .make_absolute = true });
     installation.has_side_effects = true;
     installation.step.dependOn(&source_guard.step);
-    check.dependOn(&installation.step);
+    installation.step.dependOn(&accounting.step);
+    const installation_check = b.step("check-authoring-installation", "Check only the external public authoring installation");
+    installation_check.dependOn(&installation.step);
     const post = nodeCommand(b);
     post.addArgs(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--authoring-only" });
     post.addFileInput(b.path("conformance/agent4/dependencies.lock.json"));
@@ -1032,7 +1046,9 @@ pub fn build(b: *std.Build) void {
     post.has_side_effects = true;
     _ = post.captureStdOut(.{});
     post.step.dependOn(check);
+    b.step("check-authoring-core", "Check authoring contracts without repeating external installation").dependOn(&post.step);
     aggregate.dependOn(&post.step);
+    aggregate.dependOn(installation_check);
     b.step("check", "Check Agent 4 authoring").dependOn(aggregate);
     b.default_step = aggregate;
 }

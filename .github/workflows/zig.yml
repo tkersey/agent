@@ -22,6 +22,13 @@ jobs:
         with:
           version: '0.17.0'
       - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+      - name: Install the source-registry dependency
+        run: |
+          if ! command -v rg >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install --yes ripgrep
+          fi
+          rg --version
       - name: Authenticate the locked source and delivered runtime
         env:
           GH_TOKEN: ${{ github.token }}

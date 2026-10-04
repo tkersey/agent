@@ -546,7 +546,7 @@ deterministic paired tests independently measure both provider directions.
 Select held-out cases and varied causes before a later live study. No live-model
 usefulness study or paid inference was performed for this milestone.
 
-`zig build check-inquiry-cli -Doptimize=ReleaseSafe -Dworld-runtime=...` tests
+`zig build check-inquiry-cli -Doptimize=safe -Dworld-runtime=...` tests
 both strategies against a local synthetic HTTP provider, actual isolated
 candidate execution, saved-state recovery, stale-result rejection, intent,
 exact approval, conditional delivery, resource cancellation and source-scope

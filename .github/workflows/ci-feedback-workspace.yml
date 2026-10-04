@@ -1,0 +1,48 @@
+name: CI feedback workspace
+on:
+  push:
+    branches: [codex/ci-feedback-workspace-20261004]
+permissions:
+  contents: read
+jobs:
+  sources:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: a94bbc65ddc473b9bde2b3339c8100f6b6ec85fd
+          path: agent
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: tkersey/boundary
+          ref: ea132913024ac79fa4f22cfd34c8379102695560
+          path: boundary
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: tkersey/world
+          ref: 46a66cf32cf95649d96784b7cae959053a76431b
+          path: world
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: mlugg/setup-zig
+          ref: d1434d08867e3ee9daa34448df10607b98908d29
+          path: setup-zig
+          persist-credentials: false
+      - name: Archive tracked public sources
+        run: |
+          mkdir archives
+          for repo in agent boundary world setup-zig; do
+            git -C "$repo" rev-parse HEAD > "archives/$repo.commit"
+            git -C "$repo" archive HEAD | gzip > "archives/$repo.tar.gz"
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ci-feedback-sources
+          path: archives
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error

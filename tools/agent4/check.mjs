@@ -32,7 +32,7 @@ const env={...process.env, AGENT4_WORLD_RUNTIME:options.worldRuntime,
   AGENT4_APPROVAL_SCOPED_EVIDENCE_IMAGE:join(fixtures,'approval/approval-scoped-evidence.bpi3'),
   AGENT4_NATIVE:native,
   AGENT4_ARCHIVE:resolve(fixtures,'../agent4-release/agent-v4.0.0-dev.0-resumable-interactions-v1.tar.gz'),
-  AGENT4_MULTI_INSPECTOR:resolve(fixtures,'../bin/agent4-multi')};
+  AGENT4_MULTI_INSPECTOR:process.env.AGENT4_MULTI_INSPECTOR ?? resolve(fixtures,'../bin/agent4-multi')};
 // Each requested test command owns a fresh runner, even when this build was
 // launched by another node:test process.
 delete env.NODE_TEST_CONTEXT;

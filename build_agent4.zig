@@ -890,7 +890,7 @@ pub fn build(b: *std.Build) void {
         const broker_run = nodeCommand(b);
         broker_run.addArgs(&.{ "node", "test/agent4/inquiry_broker_runtime.mjs" });
         broker_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        broker_run.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/inquiry/broker.bpi3"), .{ .make_absolute = true });
+        broker_run.addFileArg2(b.graph.path(.install_prefix, "agent4/inquiry/broker.bpi3"), .{ .make_absolute = true });
         broker_run.addFileArg2(native_exe.getEmittedBin(), .{});
         broker_run.addFileArg2(multi_exe.getEmittedBin(), .{});
         broker_run.step.dependOn(&runtime_guard.step);
@@ -927,6 +927,7 @@ pub fn build(b: *std.Build) void {
             } else native_graph.testModule(native_checks, native);
         }
         const run = nodeCommand(b);
+        run.addFileArg2(multi_exe.getEmittedBin(), .{ .prefix = "AGENT4_MULTI_INSPECTOR=", .make_absolute = true });
         run.addArgs(&.{ "node", "tools/agent4/check.mjs", "integration", "--world-runtime" });
         run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
         run.addArg("--fixtures");

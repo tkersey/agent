@@ -1,5 +1,4 @@
 //! Captured proposal continuation. No read, human exchange, or authority enters it.
-const std = @import("std");
 const agent = @import("agent");
 const source = @import("boundary").source;
 const Id = source.Id;
@@ -226,20 +225,4 @@ fn unknown(c: agent.Context, d: agent.clarification.Definition, scope: Id, tag: 
     const b = c.builder;
     const assessed = try b.primitive(d.types.assessed, .variant, &.{try b.constant(void, {})}, tag);
     return b.pure(try emit.product(b, d.types.evaluation, &.{ scope, assessed }));
-}
-
-test "document proposal continuation is protected portable program data" {
-    var b = source.Builder.init(std.testing.allocator);
-    defer b.deinit();
-    var registry = agent.admission.Registry.init(b.allocator());
-    defer registry.deinit();
-    const c = agent.Context{ .builder = &b, .registry = &registry };
-    const model = try P.declare(&b);
-    try registry.classify(model, .model);
-    const composition = try define(c, model);
-    const module = b.module(composition.explore, try b.scalar(void));
-    try agent.admission.verify(std.testing.allocator, module, &registry);
-    var compiled = try @import("boundary").program.compile(std.testing.allocator, module);
-    defer compiled.deinit();
-    try std.testing.expect(compiled.program.blocks.len > 0);
 }

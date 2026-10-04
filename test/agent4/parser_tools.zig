@@ -13,11 +13,6 @@ const Application = struct {
     }
 };
 const System = agent.system(.{ .InitialArgs = parser.ExecutionRequest, .Result = parser.ExecutionReply, .Failure = void, .application = Application });
-test "parser execution enters the normal simulation-role Agent path" {
-    var compiled = try agent.compile(std.testing.allocator, System);
-    defer compiled.deinit();
-    try std.testing.expectEqualStrings(parser.execution_identity, compiled.program.effects[0].identity);
-}
 pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();

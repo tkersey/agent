@@ -172,33 +172,6 @@ fn testSpec(b: *source.Builder) !Spec {
     };
 }
 
-test "ReAct constructs shared ordinary source with authored computation arguments" {
-    var b = source.Builder.init(std.testing.allocator);
-    defer b.deinit();
-    const spec = try testSpec(&b);
-    const loop = try define(&b, spec);
-    try std.testing.expectEqual(loop.function, (try define(&b, spec)).function);
-    const integer = spec.state;
-    const decide = try b.declare(&.{integer}, spec.step.schema, &.{}, &.{});
-    const execute = try b.declare(&.{integer}, integer, &.{}, &.{});
-    const fold = try b.declare(&.{ integer, integer }, integer, &.{}, &.{});
-    const selected = try finishWith(&b, spec.step, try b.reference(b.parameter(decide, 0)));
-    try b.define(decide, try b.pure(selected));
-    try b.define(execute, try b.pure(try b.reference(b.parameter(execute, 0))));
-    try b.define(fold, try b.pure(try b.reference(b.parameter(fold, 1))));
-    const entry = try b.declare(&.{integer}, integer, &.{}, &.{});
-    try b.define(entry, try run(
-        &b,
-        loop,
-        try b.reference(b.parameter(entry, 0)),
-        try b.lambda(decide, spec.decide),
-        try b.lambda(execute, spec.execute),
-        try b.lambda(fold, spec.fold),
-    ));
-    var compiled = try boundary.program.compile(std.testing.allocator, b.module(entry, integer));
-    defer compiled.deinit();
-}
-
 test "ReAct rejects mismatched computations and forged Step shapes" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();

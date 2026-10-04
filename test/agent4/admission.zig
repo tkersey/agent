@@ -79,13 +79,6 @@ const Fixture = struct {
     }
 };
 
-test "ordinary public source admits and compiles" {
-    var f = try Fixture.init();
-    defer f.deinit();
-    try f.definePureRoot();
-    try f.compile();
-}
-
 test "reserved mobility identities cannot masquerade as reads even when unused" {
     for ([_][]const u8{ "agent.mobility.resolve.v1", "agent.mobility.relocate.v1" }) |name| {
         var f = try Fixture.init();

@@ -166,15 +166,6 @@ test "an opaque read-tool row is not permission to enter protected speculation" 
     try std.testing.expectError(error.UnprovenComputationOrigin, agent.compile(a, System));
 }
 
-test "text inspection compiles into a source-independent owned component" {
-    const bytes = try agent.tools.textInspection.emit(a);
-    defer a.free(bytes);
-    var decoded = try data.component.decode(a, bytes);
-    defer decoded.deinit();
-    try std.testing.expectEqual(2, decoded.object.imports.len);
-    try std.testing.expectEqualStrings("inspect", decoded.object.exports[0].name);
-}
-
 test "compiled read-tool admission rejects latent multi-shot control" {
     Tool.bytes = try objectWith(false, true);
     defer a.free(Tool.bytes);

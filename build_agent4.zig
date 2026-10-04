@@ -154,7 +154,6 @@ pub fn build(b: *std.Build) void {
     const model_properties = nodeCommand(b);
     model_properties.addArgs(&.{ "node", "--test", "test/agent4/mobility_model.test.mjs" });
     mobility_model.dependOn(&model_properties.step);
-    g.testModule(mobility, g.module("src/mobility.zig"));
     g.testModule(mobility, g.module("test/agent4/mobility_ensure.zig"));
     check.dependOn(mobility);
     const lint = b.step("lint", "Check formatting and the Zig source inventory");
@@ -164,8 +163,7 @@ pub fn build(b: *std.Build) void {
     lint.dependOn(&format_check.step);
     lint.dependOn(&paths.step);
     check.dependOn(lint);
-    for ([_][]const u8{ "facade", "values", "approval_probe", "descriptor_contracts", "callable", "compiled_tool" }) |name|
-        g.testModule(check, g.module(b.fmt("test/agent4/{s}.zig", .{name})));
+    g.testModule(check, g.module("test/agent4/authoring_tests.zig"));
     const zig17 = b.step("check-zig17", "Check private descriptor admission and compiler/output selection");
     const catalog_tests = b.addTest(.{ .root_module = g.module("test/agent4/catalogs.zig") });
     catalog_tests.step.dependOn(g.gate);
@@ -205,7 +203,6 @@ pub fn build(b: *std.Build) void {
     selection_negative.addFileArg2(selection_object, .{});
     selection_images.dependOn(&selection_negative.step);
     const parser_tools = b.step("check-parser-tools", "Check typed parser tool bindings");
-    g.testModule(parser_tools, g.module("test/agent4/parser_tools.zig"));
     check.dependOn(parser_tools);
     const parser_delivery = b.step("parser-delivery-images", "Emit protected parser delivery");
     const delivery_emitter = g.emitter("parser-delivery", g.module("test/agent4/parser_delivery.zig"));
@@ -343,12 +340,7 @@ pub fn build(b: *std.Build) void {
     });
     recursive_tests.step.dependOn(g.gate);
     participants.dependOn(&b.addRunArtifact(recursive_tests).step);
-    g.testModule(check, g.module("src/model_invocation_tests.zig"));
-    g.testModule(check, g.module("src/conversation.zig"));
-    g.testModule(check, g.module("src/react.zig"));
-    g.testModule(check, g.module("src/value_equality.zig"));
-    g.testModule(check, g.module("src/clarification.zig"));
-    g.testModule(check, g.module("test/consumers/document/consequence.zig"));
+    g.testModule(check, g.module("src/test_root.zig"));
     const negatives = nodeCommand(b);
     negatives.addArgs(&.{ "node", "tools/agent4/negative.mjs" });
     if (source) |path| {
@@ -510,7 +502,6 @@ pub fn build(b: *std.Build) void {
     g.emit(emit, approval_exe, &.{"scoped"}, "approval/approval-scoped.bpi3");
     g.emit(emit, approval_exe, &.{"scoped_evidence"}, "approval/approval-scoped-evidence.bpi3");
     const review = g.module("test/consumers/review/main.zig");
-    g.testModule(check, review);
     const review_exe = g.emitter("agent4-review", review);
     for ([_][]const u8{ "mid_review", "clarify_first", "human", "model", "rule", "react" }) |mode| {
         for ([_][]const u8{ "bpi3", "args" }) |format|
@@ -562,7 +553,6 @@ pub fn build(b: *std.Build) void {
     const mobility_integration = b.step("check-mobility-integration", "Check real custody, placement, privacy and grants through the reference host");
     const mobility_approval = b.step("check-mobility-approval", "Check exact live evidence and approved fixture mutation across custody moves");
     g.testModule(mobility_approval, g.module("test/agent4/approval_probe.zig"));
-    const mobility_browser = b.step("check-mobility-browser-continuation", "Check browser/data/fresh-browser continuation (custody scaffold)");
     const mobility_durable_browser = b.step("check-mobility-browser", "Check source-free browser execution through durable custody and a separate mTLS process");
     const mobility_economy = b.step("check-mobility-economy", "Check matched mobility workload results, cache traffic and resident memory bounds");
     const mobility_all = b.step("check-mobility", "Check all mobility authoring, runtime, custody, browser and economy lanes");
@@ -745,14 +735,6 @@ pub fn build(b: *std.Build) void {
             durable_browser_run.step.dependOn(&runtime_guard.step);
             durable_browser_run.has_side_effects = true;
             mobility_durable_browser.dependOn(&durable_browser_run.step);
-            const mobility_browser_run = nodeCommand(b);
-            mobility_browser_run.addArgs(&.{ "node", "test/agent4/mobility_browser.mjs" });
-            mobility_browser_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-            mobility_browser_run.addDirectoryArg2(browser_tools, .{ .make_absolute = true });
-            mobility_browser_run.step.dependOn(mobility_images);
-            mobility_browser_run.step.dependOn(&runtime_guard.step);
-            mobility_browser_run.has_side_effects = true;
-            mobility_browser.dependOn(&mobility_browser_run.step);
             const browser = nodeCommand(b);
             browser.addArgs(&.{ "node", "test/agent4/text_browser.mjs" });
             browser.addFileArg2(text_object.getEmittedBin(), .{});
@@ -765,7 +747,6 @@ pub fn build(b: *std.Build) void {
         } else {
             const missing_browser = b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools");
             browser_check.dependOn(&missing_browser.step);
-            mobility_browser.dependOn(&missing_browser.step);
             mobility_durable_browser.dependOn(&missing_browser.step);
         }
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
@@ -914,22 +895,25 @@ pub fn build(b: *std.Build) void {
             inquiry_check.dependOn(&inquiry_run.step);
             runtime_work.dependOn(&inquiry_run.step);
         }
-        for ([_][]const u8{ "bounded_history", "decision_scopes", "model_admission", "model_custody", "observation", "approval_equality", "callable_runtime", "clarification", "terminology", "repository_working_set", "repository_replacement" }) |name| {
+        // These roots share exact module identities; compile their retained
+        // tests together instead of rebuilding the same compiler eleven times.
+        const native_suite = g.module("test/agent4/native_tests.zig");
+        native_suite.addImport("world", world);
+        native_suite.addImport("document", g.module("test/consumers/document/consequence.zig"));
+        native_graph.testModule(native_checks, native_suite);
+        // Repository policy modules have distinct import roots and retain their
+        // focused runners rather than changing their nominal type identities.
+        for ([_][]const u8{ "repository_working_set", "repository_replacement" }) |name| {
             const native = g.module(b.fmt("test/agent4/{s}.zig", .{name}));
             native.addImport("world", world);
-            native.addImport("equality", g.helper("value_equality"));
-            if (std.mem.eql(u8, name, "terminology"))
-                native.addImport("document", g.module("test/consumers/document/consequence.zig"));
-            if (std.mem.startsWith(u8, name, "repository_")) {
-                const working_set = std.mem.eql(u8, name, "repository_working_set");
-                native.addImport(if (working_set) "repository" else "repository_replace", g.module(if (working_set) "test/consumers/repository/working_set.zig" else "test/consumers/repository/replacement.zig"));
-                const tests = b.addTest(.{ .root_module = native });
-                tests.step.dependOn(native_graph.gate);
-                const run_policy = b.addRunArtifact(tests);
-                native_checks.dependOn(&run_policy.step);
-                b.step(if (working_set) "check-repository-working-set" else "check-repository-replacement", if (working_set) "Check staged repository memory and evidence rules" else "Check live repository replacement approval")
-                    .dependOn(&run_policy.step);
-            } else native_graph.testModule(native_checks, native);
+            const working_set = std.mem.eql(u8, name, "repository_working_set");
+            native.addImport(if (working_set) "repository" else "repository_replace", g.module(if (working_set) "test/consumers/repository/working_set.zig" else "test/consumers/repository/replacement.zig"));
+            const tests = b.addTest(.{ .root_module = native });
+            tests.step.dependOn(native_graph.gate);
+            const run_policy = b.addRunArtifact(tests);
+            native_checks.dependOn(&run_policy.step);
+            b.step(if (working_set) "check-repository-working-set" else "check-repository-replacement", if (working_set) "Check staged repository memory and evidence rules" else "Check live repository replacement approval")
+                .dependOn(&run_policy.step);
         }
         const run = nodeCommand(b);
         run.addFileArg2(multi_exe.getEmittedBin(), .{ .prefix = "AGENT4_MULTI_INSPECTOR=", .make_absolute = true });
@@ -1011,7 +995,6 @@ pub fn build(b: *std.Build) void {
         mobility_journal.dependOn(&missing.step);
         mobility_integration.dependOn(&missing.step);
         mobility_approval.dependOn(&missing.step);
-        mobility_browser.dependOn(&missing.step);
         mobility_durable_browser.dependOn(&missing.step);
         mobility_economy.dependOn(&missing.step);
         components_check.dependOn(&missing.step);

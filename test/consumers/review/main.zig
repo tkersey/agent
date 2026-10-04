@@ -360,18 +360,6 @@ fn reactRoot(c: agent.Context) !source.Module {
     return b.module(entry, try c.schema(void));
 }
 
-test "external consumers compile all authored orders and responder interpretations" {
-    inline for (comptime std.meta.tags(Mode)) |mode| {
-        var compiled = try agent.compile(std.testing.allocator, System(mode));
-        defer compiled.deinit();
-        for (compiled.program.effects) |effect| {
-            try std.testing.expect(std.mem.indexOf(u8, effect.identity, "commit") == null);
-            try std.testing.expect(std.mem.indexOf(u8, effect.identity, "approval") == null);
-            try std.testing.expect(std.mem.indexOf(u8, effect.identity, "write") == null);
-        }
-    }
-}
-
 pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();

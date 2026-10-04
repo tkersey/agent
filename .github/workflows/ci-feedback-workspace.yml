@@ -3,46 +3,71 @@ on:
   push:
     branches: [codex/ci-feedback-workspace-20261004]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  sources:
+  prepare:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: a94bbc65ddc473b9bde2b3339c8100f6b6ec85fd
-          path: agent
+          ref: 9c620795210bcd874f1bb2e61d56f51abae596da
           persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
-          repository: tkersey/boundary
-          ref: ea132913024ac79fa4f22cfd34c8379102695560
-          path: boundary
-          persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: tkersey/world
-          ref: 46a66cf32cf95649d96784b7cae959053a76431b
-          path: world
-          persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: mlugg/setup-zig
-          ref: d1434d08867e3ee9daa34448df10607b98908d29
-          path: setup-zig
-          persist-credentials: false
-      - name: Archive tracked public sources
+          node-version: '26.9.0'
+      - name: Apply exact reviewed source changes
+        env:
+          PATCH: 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
         run: |
-          mkdir archives
-          for repo in agent boundary world setup-zig; do
-            git -C "$repo" rev-parse HEAD > "archives/$repo.commit"
-            git -C "$repo" archive HEAD | gzip > "archives/$repo.tar.gz"
-          done
+          python - <<'PY'
+          import base64,gzip,hashlib,os,pathlib,subprocess
+          patch=gzip.decompress(base64.b64decode(os.environ['PATCH']))
+          assert hashlib.sha256(patch).hexdigest()=='b5600f93058d51d9cd974a0782da26ab2556ac1f16039804baf7096945f6798e'
+          subprocess.run(['git','apply','--check','-'],input=patch,check=True)
+          subprocess.run(['git','apply','-'],input=patch,check=True)
+          subprocess.run(['git','add','build_agent4.zig','test/agent4/installations.mjs'],check=True)
+          assert subprocess.check_output(['git','write-tree'],text=True).strip()=='f0e8f0a049436014286eb09f5c64ac957e5a0fd3'
+          PY
+      - name: Verify preflight without a compiler
+        run: |
+          node test/agent4/installations.mjs --scan-only
+          node --test test/agent4/installations.test.mjs .github/scripts/zig-cache.test.mjs
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
+        with:
+          version: '0.17.0'
+          use-cache: false
+      - name: Validate exact Zig syntax and workflow
+        run: |
+          zig fmt --check build_agent4.zig
+          git diff --cached --check
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 -shellcheck= -pyflakes= .github/workflows/zig.yml
+      - name: Execute installation-only target
+        run: zig build check-authoring-installation -Doptimize=safe --summary all
+      - name: Publish only immutable candidate Git objects
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import base64,json,os,pathlib,subprocess,urllib.request
+          api='https://api.github.com/repos/tkersey/agent/git/'
+          def post(path,data):
+              request=urllib.request.Request(api+path,data=json.dumps(data).encode(),headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'})
+              with urllib.request.urlopen(request) as response:return json.load(response)
+          entries=[]
+          for name in ['build_agent4.zig','test/agent4/installations.mjs']:
+              blob=post('blobs',{'content':base64.b64encode(pathlib.Path(name).read_bytes()).decode(),'encoding':'base64'})
+              entries.append({'path':name,'mode':'100644','type':'blob','sha':blob['sha']})
+          tree=post('trees',{'base_tree':'59ec6b66cf6e436922f71bda75d2f74838f520b1','tree':entries})
+          assert tree['sha']=='f0e8f0a049436014286eb09f5c64ac957e5a0fd3'
+          commit=post('commits',{'message':'Reuse installation accounting before compilation and expose focused authoring/economy targets','tree':tree['sha'],'parents':['9c620795210bcd874f1bb2e61d56f51abae596da']})
+          result={'commit':commit['sha'],'tree':tree['sha'],'checks':['Node 26 preflight and cache admission','Zig 0.17 format','actionlint','installation-only build target']}
+          print(json.dumps(result))
+          pathlib.Path(os.environ['RUNNER_TEMP'],'candidate.json').write_text(json.dumps(result,indent=2)+'\n')
+          PY
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: ci-feedback-sources
-          path: archives
-          retention-days: 1
-          compression-level: 0
+          name: ci-feedback-candidate
+          path: ${{ runner.temp }}/candidate.json
+          retention-days: 7
           if-no-files-found: error

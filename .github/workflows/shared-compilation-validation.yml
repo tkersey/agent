@@ -1,0 +1,44 @@
+name: Shared compilation validation
+on:
+  push:
+    branches: [codex/shared-compilation-validation-20261004]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  tools:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 5e2c9ba11d01e52f1bf690ba9667c881dc91792c
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '26.9.0'
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
+        with:
+          version: '0.17.0'
+          use-cache: false
+      - name: Authenticate existing locked inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/agent4/setup.mjs --zig-exe "$(command -v zig)"
+      - name: Archive selected tools and immutable dependency inputs
+        run: |
+          set -eu
+          mkdir -p validation-inputs
+          zig_root=$(dirname "$(command -v zig)")
+          tar -czf validation-inputs/zig.tar.gz -C "$zig_root" zig lib LICENSE
+          tar -czf validation-inputs/node.tar.gz -C "$(dirname "$(command -v node)")" node
+          tar -czf validation-inputs/dependencies.tar.gz .agent4/inputs .agent4/out/world-runtime
+          git rev-parse HEAD > validation-inputs/source.commit
+          sha256sum validation-inputs/*.tar.gz > validation-inputs/SHA256SUMS
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: shared-compilation-inputs
+          path: validation-inputs
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error

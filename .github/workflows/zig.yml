@@ -37,3 +37,8 @@ jobs:
         run: |
           zig build check-agent4 check-zig17 check-native -Doptimize=safe \
             -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime" --summary all
+      - name: Economy probe with a custom executable directory
+        run: |
+          zig build check-agent4-economy -Doptimize=safe \
+            -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime" \
+            --prefix "$RUNNER_TEMP/agent-economy" --prefix-exe-dir executables --summary all

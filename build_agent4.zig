@@ -979,7 +979,7 @@ pub fn build(b: *std.Build) void {
         const installed_probe = b.addInstallArtifact(economy_exe, .{});
         b.step("build-economy-probe", "Build the authenticated existing-workload economy probe")
             .dependOn(&installed_probe.step);
-        measure.addFileArg2(b.graph.path(.install_prefix, "bin/economy-probe"), .{ .make_absolute = true });
+        measure.addFileArg2(b.graph.path(.install_bin, "economy-probe"), .{ .make_absolute = true });
         {
             measure.addArg("--world-source");
             measure.addDirectoryArg2(world_source, .{ .make_absolute = true });

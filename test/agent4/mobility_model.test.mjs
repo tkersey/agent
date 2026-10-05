@@ -98,8 +98,19 @@ test('seeded three-host traces preserve custody through epochs, duplicate decisi
                 assert.notEqual(next.run.current_occurrence_id, occurrence.id); install(host, next); count('publish');
               });
             }
-            if (run.cancel_requested !== null && !run.cancel_applied && (occurrence.status === 'READY' || (occurrence.status === 'SETTLED_REPLY' && occurrence.operation === core.RELOCATE))) actions.push(() => {
+            if (run.cancel_requested !== null && !run.cancel_applied && (['READY', 'AWAITING'].includes(occurrence.status) || (occurrence.status === 'SETTLED_REPLY' && occurrence.operation === core.RELOCATE))) actions.push(() => {
               install(host, core.publish(run, occurrence, wanted, { kind: 'cancel', reason: run.cancel_requested }, outcome(CLEANUP), fresh())); count('cancel_apply');
+            });
+          }
+          if (live[host] && occurrence.status === 'READY' && occurrence.operation === LEAF && run.cancel_requested === null) actions.push(() => {
+            install(host, core.awaiting(run, occurrence, wanted, fresh(), digest('question'), ['classified'])); count('defer');
+          });
+          if (occurrence.status === 'AWAITING') {
+            const binding = { occurrence_id: occurrence.id, request_digest: occurrence.request_digest, pending_digest: occurrence.pending_digest };
+            actions.push(() => {
+              const next = () => core.answered(run, occurrence, wanted, binding, digest('answer'), digest('reply'), ['classified']);
+              if (run.cancel_requested) { assert.throws(next, { code: 'CancellationPending' }); count('answer_loses'); }
+              else { install(host, next()); count('answer_wins'); }
             });
           }
           if (['DISPATCHING', 'UNKNOWN'].includes(occurrence.status)) {
@@ -160,6 +171,30 @@ test('seeded three-host traces preserve custody through epochs, duplicate decisi
       }
     }
   }
-  for (const name of ['attach', 'stale', 'dispatch', 'cleanup', 'publish', 'cancel_apply', 'unknown', 'acquire', 'no_redispatch', 'freeze', 'pin', 'crash', 'frozen', 'cancel', 'refuse', 'accept', 'duplicate', 'receipt', 'target_conflict', 'epoch_four', 'forward']) assert.ok(coverage[name] > 0, `unexercised model transition ${name}`);
+  for (const name of ['attach', 'stale', 'dispatch', 'cleanup', 'publish', 'cancel_apply', 'unknown', 'acquire', 'no_redispatch', 'freeze', 'pin', 'crash', 'frozen', 'cancel', 'refuse', 'accept', 'duplicate', 'receipt', 'target_conflict', 'epoch_four', 'forward', 'defer', 'answer_wins', 'answer_loses']) assert.ok(coverage[name] > 0, `unexercised model transition ${name}`);
   console.log(JSON.stringify({ model: 'custody-three-host-seeded/v1', seeds: 128, randomSteps: 192, maximumPrefixHops: 4, maximumEpoch: 4, coverage }));
+});
+
+test('deferred answer/cancellation order preserves the winner across detach, restart and duplicate attempts', () => {
+  for (const ordering of [['answer', 'cancel'], ['cancel', 'answer']]) {
+    let state = core.initial(registration, registrationDigest, 'A', outcome(LEAF), digest('question-occurrence'));
+    state.run = core.attach(state.run);
+    state = core.awaiting(state.run, state.occurrence, core.version(state.run), digest('attempt'), digest('question'), []);
+    const binding = { occurrence_id: state.occurrence.id, request_digest: state.occurrence.request_digest, pending_digest: state.occurrence.pending_digest };
+    let acquired = 0;
+    for (const action of ordering) {
+      state = structuredClone(state);
+      if (action === 'cancel') state.run = core.cancel(state.run, 'stop');
+      else {
+        const invoke = () => core.answered(state.run, state.occurrence, core.version(state.run), binding, digest('yes'), digest('reply'), []);
+        if (state.run.cancel_requested) assert.throws(invoke, { code: 'CancellationPending' });
+        else { state = invoke(); acquired++; state = invoke(); }
+      }
+    }
+    assert.equal(acquired, ordering[0] === 'answer' ? 1 : 0);
+    state.run = core.attach(state.run);
+    const control = acquired ? { kind: 'reply', reply_digest: digest('reply') } : { kind: 'cancel', reason: 'stop' };
+    const next = core.publish(state.run, state.occurrence, core.version(state.run), control, outcome(CLEANUP), digest('next'));
+    assert.throws(() => core.answered(next.run, next.occurrence, core.version(next.run), binding, digest('no'), digest('other'), []), { code: 'QuestionMismatch' });
+  }
 });

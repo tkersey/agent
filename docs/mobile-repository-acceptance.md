@@ -108,10 +108,28 @@ artifact pins, deployment dispatch integration for all repository operations,
 native-runner package acquisition, and publication remain open. Per-object/import
 bounds do not establish complete lifetime storage accounting.
 
+## Durable human interaction (W3, partial)
+
+The [deferred reply and reference session seam](mobile-repository-human.md) is
+implemented in the existing custodian, journal, deployment loader and browser
+client. `AWAITING` is durably registered before display. Answers are fenced by
+current occurrence/version, exact question/request, authenticated identity and
+audience; duplicates, cancellation and GC use the existing journal owner.
+
+Reference operator-issued one-use logins and session cookies have passed TLS,
+expiry, revocation, restart and scope tests. An extracted installed CLI issues
+credentials for existing deployment grants only. Chromium and Firefox exercise
+the real login and answer forms, inert source rendering, origin restart during
+waiting, a fresh Worker and completion of the inherited compiled fixture.
+The combined mobility journal/integration/model/browser and repository-continuation
+check passed 94/94 build steps. Final deferred-record guards passed 87 journal,
+model and bridge tests. These remain synthetic human tests; they do not establish the full application's
+proposal/approval UI or actual-person qualification.
+
 ## Remaining acceptance
 
 W2–W8 remain open: complete repository/check deployment integration;
-durable human answers and authenticated UI; real provider integration
+complete application integration of durable answers and authenticated UI; real provider integration
 and replay/budgets; exact protected publication and reconciliation; complete
 application/package commands; faults/models/mutants, matched measurements and
 the complete MR-001–MR-096 evidence mapping; serial review closeout.

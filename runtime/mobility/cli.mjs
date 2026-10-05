@@ -4,6 +4,7 @@ import { openDeployment, pumpDeployment } from './deployment.mjs';
 
 const help = `Usage: node runtime/mobility/cli.mjs COMMAND CONFIG [ARGUMENTS]
   init CONFIG                         explicitly create empty local custody storage
+  login-issue CONFIG PRINCIPAL TENANT  locally issue a one-use browser login credential
   serve CONFIG                        recover and serve authenticated configured peers
   start CONFIG REGISTRATION IMAGE ARGS start an issuer-authorized run
   status CONFIG [RUN]                  inspect custody without executing
@@ -13,18 +14,19 @@ const help = `Usage: node runtime/mobility/cli.mjs COMMAND CONFIG [ARGUMENTS]
   receipt CONFIG TRANSFER             print the saved signed receipt as base64url
   withdraw CONFIG TRANSFER            request a permanent destination decision
   cancel CONFIG RUN REASON             request cancellation at the known custodian
-Stop the service before using a local mutation command. No force-resume exists.
+Stop the service before using a local custody mutation command. Login issuance is independent. No force-resume exists.
 `;
 export async function main(argv) {
   if (argv.length === 0 || (argv.length === 1 && ['--help', '-h'].includes(argv[0]))) { console.log(help); return; }
   const [command, config, ...args] = argv;
-  const arity = { init: [0], serve: [0], start: [3], status: [0, 1], metrics: [1], recover: [0], retry: [1], receipt: [1], withdraw: [1], cancel: [2] };
+  const arity = { init: [0], serve: [0], start: [3], status: [0, 1], metrics: [1], recover: [0], retry: [1], receipt: [1], withdraw: [1], cancel: [2], 'login-issue': [2] };
   if (!config || !arity[command]?.includes(args.length)) throw new Error(help);
   const host = await openDeployment(config, { create: command === 'init' });
   const print = value => console.log(JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item));
   let serving = false;
   try {
     if (command === 'init') print({ initialized: host.config.hostId });
+    else if (command === 'login-issue') { if (!host.sessions) throw new Error('BrowserSessionsNotConfigured'); print(host.sessions.issue({ principal: args[0], tenant: args[1], audience: host.config.browser.audience })); }
     else if (command === 'status') print(args.length ? host.custodian.status(args[0]) : host.journal.recover().map(({ run }) => host.custodian.status(run.run_id)));
     else if (command === 'metrics') print(host.custodian.metrics(args[0]));
     else if (command === 'recover') print(host.custodian.recover());
@@ -40,7 +42,7 @@ export async function main(argv) {
       let stopped = false, wake;
       const stop = () => { stopped = true; wake?.(); };
       process.once('SIGTERM', stop); process.once('SIGINT', stop);
-      print({ listening: service.url, host_id: host.config.hostId });
+      print({ listening: service.url, browser: service.browser_url, host_id: host.config.hostId });
       try {
         while (!stopped) {
           try {

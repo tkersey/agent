@@ -59,19 +59,38 @@ export class BrowserExecutor {
 }
 
 if (typeof document !== 'undefined' && document.querySelector('#connect')) {
-  let executor;
+  let executor, pending;
   const status = document.querySelector('#status'), request = document.querySelector('#request');
   const action = handler => async event => {
     const buttons = [...document.querySelectorAll('button')]; buttons.forEach(button => { button.disabled = true; });
     try { await handler(event); } catch (error) { status.textContent = error.message; }
     finally { buttons.forEach(button => { button.disabled = false; }); }
   };
+  const answerForm = document.querySelector('#answer');
+  async function showQuestion() {
+    if (!answerForm) return;
+    pending = await (await executor.api('question', 'GET')).json();
+    answerForm.hidden = !pending || pending.acquired;
+    if (!pending || pending.acquired) return;
+    document.querySelector('#question').textContent = JSON.stringify(pending.pending.question, null, 2);
+    const choices = document.querySelector('#choice'); choices.replaceChildren();
+    for (const value of pending.pending.alternatives) { const option = document.createElement('option'); option.value = value; option.textContent = value; choices.append(option); }
+    document.querySelector('#answer-text').maxLength = pending.pending.maximum_text_bytes;
+    status.textContent = 'Awaiting your response';
+  }
+  if (answerForm) answerForm.onsubmit = action(async event => {
+    event.preventDefault(); if (!pending) throw new Error('Reconnect to the current question.');
+    const { version, occurrence_id, request_digest, pending_digest } = pending;
+    await executor.api('answer', 'POST', canonical({ version, occurrence_id, request_digest, pending_digest,
+      answer: { choice: document.querySelector('#choice').value, text: document.querySelector('#answer-text').value } }));
+    answerForm.hidden = true; document.querySelector('#answer-text').value = ''; status.textContent = 'Response saved. Continue when ready.';
+  });
   document.querySelector('#connect').onclick = action(async () => {
     if (executor) await executor.retire();
     executor = await new BrowserExecutor(document.querySelector('#run').value, value => {
       request.textContent = JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item, 2);
     }).initialize();
-    await executor.attach(); status.textContent = 'Connected';
+    await executor.attach(); status.textContent = 'Connected'; await showQuestion();
   });
   document.querySelector('#continue').onclick = action(async () => {
     if (!executor) throw new Error('Enter a run and connect first.');
@@ -84,7 +103,7 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
       }
       if (current.custody === 'DEPARTED') { status.textContent = 'Continuing at another host. Reconnect when it returns.'; return; }
       if (current.custody === 'TERMINAL') { status.textContent = 'Finished'; return; }
-      await executor.attach(); status.textContent = 'Connected'; return;
+      await executor.attach(); status.textContent = 'Connected'; await showQuestion(); return;
     }
     const result = await executor.advance();
     if (result.kind === 'offered') {
@@ -92,11 +111,11 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
       const decision = await (await executor.api('retry')).json();
       status.textContent = decision.kind === 'accepted' ? 'Continuing at another host. Reconnect when it returns.' : decision.kind === 'refused' ? 'Move declined. Continue here.' : 'Waiting for a custody decision. The run remains paused.';
     } else if (result.status?.custody === 'TERMINAL') { await executor.retire(); status.textContent = 'Finished'; }
-    else status.textContent = result.kind === 'blocked' ? 'Waiting for a response' : 'Ready';
+    else { status.textContent = result.kind === 'blocked' ? 'Waiting for a response' : 'Ready'; await showQuestion(); }
   });
   document.querySelector('#cancel').onclick = action(async () => {
     if (!executor) throw new Error('Enter a run and connect first.');
-    await executor.retire();
+    await executor.retire(); if (answerForm) answerForm.hidden = true; pending = null;
     const result = await (await executor.api('cancel', 'POST', canonical({ reason: 'User cancelled' }))).json();
     status.textContent = ['cancel_pending', 'unknown'].includes(result.kind) ? 'Cancellation is waiting for the current host or a custody decision.' : 'Cancellation requested';
   });

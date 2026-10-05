@@ -112,3 +112,58 @@ test('browser assignment capacity includes in-flight attachment and failed reser
   f.hosts.A.executorAssignment = attach;
   assert.equal((await f.api(`/v1/browser/runs/${second}/attach`, { method: 'POST', csrf })).status, 200);
 });
+
+test('deferred browser question survives restart, rejects stale tabs, and acquires one saved reply', async t => {
+  const f = await bridge(t), binding = f.bindings.A.find(value => value.operation.endsWith('.task.v1'));
+  binding.deferredRevision = 'question-v1';
+  binding.defer = () => ({ audience: 'human-A', question: { text: 'Inspect this repository?', generation: '1' }, alternatives: ['accept', 'decline'], maximum_text_bytes: 32 });
+  let encodings = 0;
+  binding.answer = ({ answer }) => { encodings++; assert.equal(answer.choice, 'accept'); return encodeValue(f.schemas.task, f.taskValue); };
+  assert.equal((await f.hosts.A.step(f.id)).kind, 'awaiting');
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'awaiting');
+  assert.equal(f.counters.A.task, 0);
+  const route = operation => `/v1/browser/runs/${f.id}/${operation}`;
+  const csrf = (await f.api('/v1/browser/session')).json().csrf;
+  const question = (await f.api(route('question'))).json();
+  assert.equal(question.pending.question.generation, '1'); assert.equal(question.acquired, false);
+  const answer = { ...question, answer: { choice: 'accept', text: '' } };
+  assert.equal((await f.api(route('answer'), { method: 'POST', body: canonical(answer) })).json().error, 'CsrfDenied');
+  // Restart the owning custodian/journal while retaining the HTTP bridge object.
+  // The independent restart test below creates a fresh custodian and drives it.
+  const assigned = (await f.api(route('attach'), { method: 'POST', csrf })).json();
+  assert.ok(assigned.version.executor_incarnation !== question.version.executor_incarnation);
+  assert.equal((await f.api(route('answer'), { method: 'POST', csrf, body: canonical(answer) })).json().error, 'StaleExecutor');
+  const fresh = (await f.api(route('question'))).json(), current = { ...fresh, answer: { choice: 'accept', text: '' } };
+  const acquired = await f.api(route('answer'), { method: 'POST', csrf, body: canonical(current) }); assert.equal(acquired.status, 200);
+  assert.deepEqual((await f.api(route('answer'), { method: 'POST', csrf, body: canonical(current) })).json(), acquired.json());
+  const conflict = await f.api(route('answer'), { method: 'POST', csrf, body: canonical({ ...current, answer: { choice: 'accept', text: 'different' } }) });
+  assert.equal(conflict.json().error, 'ReplyConflict'); assert.equal(encodings, 1);
+  assert.equal((await f.api(route('question'))).json().acquired, true);
+  f.restart('A');
+  assert.equal(f.hosts.A.pendingQuestion(f.id, { principal: 'user', tenant: 'tenant', audiences: ['human-A'] }).acquired, true);
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal');
+  assert.equal(f.counters.A.task, 0); assert.equal(f.counters.A.present, 1);
+});
+
+for (const cancel of [false, true]) test(`pending question restores without a live promise; cancel=${cancel}`, async t => {
+  const f = await hostFixture(t, { localData: true }), binding = f.bindings.A.find(value => value.operation.endsWith('.task.v1'));
+  binding.deferredRevision = 'question-v1';
+  binding.defer = () => ({ audience: 'human-A', question: 'Continue?', alternatives: ['accept'], maximum_text_bytes: 0 });
+  binding.answer = () => encodeValue(f.schemas.task, f.taskValue);
+  await f.hosts.A.step(f.id);
+  const identity = { principal: 'user', tenant: 'tenant', audiences: ['human-A'] }, before = f.hosts.A.pendingQuestion(f.id, identity);
+  f.restart('A');
+  assert.equal((await f.hosts.A.step(f.id)).kind, 'awaiting');
+  const restored = f.hosts.A.pendingQuestion(f.id, identity);
+  assert.equal(restored.pending_digest, before.pending_digest);
+  assert.equal(restored.occurrence_id, before.occurrence_id);
+  await assert.rejects(f.hosts.A.answerQuestion(f.id, identity, { ...before, answer: { choice: 'accept', text: '' } }), { code: 'StaleExecutor' });
+  if (cancel) {
+    await f.hosts.A.cancelRun(f.id, 'stop');
+    await assert.rejects(f.hosts.A.answerQuestion(f.id, identity, { ...restored, answer: { choice: 'accept', text: '' } }), { code: 'StaleExecutor' });
+    assert.equal(f.hosts.A.pendingQuestion(f.id, identity), null);
+  } else await f.hosts.A.answerQuestion(f.id, identity, { ...restored, answer: { choice: 'accept', text: '' } });
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal');
+  assert.equal(f.result('A').kind, cancel ? 'cancelled' : 'completed');
+  assert.equal(f.counters.A.task, 0);
+});

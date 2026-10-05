@@ -93,7 +93,7 @@ export class Custodian {
   }
   #command(run) {
     const occurrence = this.#journal.occurrence(run.current_occurrence_id);
-    if (run.cancel_requested !== null && !run.cancel_applied && (!occurrence || occurrence.status === 'READY' || (occurrence.status === 'SETTLED_REPLY' && occurrence.operation === RELOCATE))) return { kind: 'cancel', reason: run.cancel_requested };
+    if (run.cancel_requested !== null && !run.cancel_applied && (!occurrence || ['READY', 'AWAITING'].includes(occurrence.status) || (occurrence.status === 'SETTLED_REPLY' && occurrence.operation === RELOCATE))) return { kind: 'cancel', reason: run.cancel_requested };
     if (occurrence?.status === 'SETTLED_REPLY') return { kind: 'reply', value: this.#journal.artifact(run.tenant_ref, occurrence.reply_digest) };
     if (!occurrence && ['progressed', 'yielded'].includes(run.outcome_kind))
       return { kind: run.outcome_kind === 'yielded' ? 'resume_yield' : 'none' };
@@ -190,6 +190,7 @@ export class Custodian {
       }
       const occurrence = this.#journal.occurrence(run.current_occurrence_id);
       if (occurrence && ['UNKNOWN', 'DISPATCHING'].includes(occurrence.status)) return { kind: 'effect_unknown', status: this.status(id) };
+      if (occurrence?.status === 'AWAITING') return { kind: 'awaiting', status: this.status(id) };
       return await this.#dispatch(run, cached.executor.current());
     } finally { this.#busy.delete(id); }
   }
@@ -199,6 +200,15 @@ export class Custodian {
       if (request.semanticIdentity === RELOCATE) return this.#beginTransfer(run, token);
       const selected = request.semanticIdentity === RESOLVE ? null : this.#policy.dispatch(run, request);
       if (selected === null) this.#policy.authorizeRun(run);
+      if (selected?.binding.defer) {
+        const pending = selected.binding.defer({ payload: selected.payload, request, run });
+        requireThat(!(pending instanceof Promise), 'AsyncDeferredRegistration');
+        requireThat(pending.audience === selected.binding.audience, 'QuestionAudienceMismatch');
+        this.#journal.deferLeaf(id, version(run), { ...pending, format: 'agent-deferred-leaf/v1',
+          principal: run.principal_ref, tenant: run.tenant_ref, request_digest: run.request_digest,
+          binding_revision: selected.binding.deferredRevision, result_schema: Buffer.from(request.resumeSchema).toString('base64url') }, selected.binding.classification);
+        return { kind: 'awaiting', status: this.status(id) };
+      }
       const admitted = this.#journal.admitLeaf(id, version(run), selected?.binding.classification ?? [], { cleanup: selected?.cleanup ?? false });
       try {
         let reply, evidence = null;
@@ -209,6 +219,40 @@ export class Custodian {
         this.#journal.recordReply(id, admitted.attempt_id, reply, selected?.binding.classification ?? [], null, { placementEvidence: evidence });
         return { kind: 'reply_saved', status: this.status(id) };
       } catch (error) { this.#journal.markUnknown(id, admitted.attempt_id); throw error; }
+  }
+  pendingQuestion(id, identity) {
+    const run = this.authorizeUser(id, identity), occurrence = this.#journal.occurrence(run.current_occurrence_id);
+    if (!occurrence?.pending_digest || !['AWAITING', 'SETTLED_REPLY'].includes(occurrence.status) || run.cancel_requested !== null || run.status !== 'ACTIVE') return null;
+    const pending = parse(this.#journal.artifact(run.tenant_ref, occurrence.pending_digest));
+    requireThat(identity.audiences?.includes(pending.audience), 'UserDenied');
+    return { version: version(run), occurrence_id: occurrence.id, request_digest: occurrence.request_digest,
+      pending_digest: occurrence.pending_digest, acquired: occurrence.status === 'SETTLED_REPLY', pending };
+  }
+  async answerQuestion(id, identity, submission) {
+    requireThat(!this.#busy.has(id), 'ExecutorBusy'); this.#busy.add(id);
+    try {
+      const run = this.authorizeUser(id, identity), occurrence = this.#journal.occurrence(run.current_occurrence_id);
+      active(run, submission.version, false);
+      requireThat(occurrence?.pending_digest && ['AWAITING', 'SETTLED_REPLY'].includes(occurrence.status), 'QuestionNotPending');
+      const pending = parse(this.#journal.artifact(run.tenant_ref, occurrence.pending_digest));
+      requireThat(identity.audiences?.includes(pending.audience), 'UserDenied');
+      requireThat(submission.occurrence_id === occurrence.id && submission.request_digest === occurrence.request_digest && submission.pending_digest === occurrence.pending_digest, 'QuestionMismatch');
+      const answer = submission.answer;
+      requireThat(answer && Object.keys(answer).sort().join(',') === 'choice,text' && pending.alternatives.includes(answer.choice) && typeof answer.text === 'string' && Buffer.byteLength(answer.text) <= pending.maximum_text_bytes, 'InvalidAnswer');
+      if (occurrence.status === 'SETTLED_REPLY') {
+        requireThat(run.cancel_requested === null, 'CancellationPending');
+        requireThat(hash(canonical(answer)) === occurrence.answer_digest, 'ReplyConflict');
+        return { occurrence_id: occurrence.id, reply_digest: occurrence.reply_digest, status: this.status(id) };
+      }
+      const decoded = this.#world.decodeOutcome(this.#journal.artifact(run.tenant_ref, run.outcome_digest));
+      const request = await this.#world.decodeRequest(decoded.request), selected = this.#policy.dispatch(run, request);
+      requireThat(selected.binding.deferredRevision === pending.binding_revision && typeof selected.binding.answer === 'function', 'DeferredBindingChanged');
+      const reply = selected.binding.answer({ answer: submission.answer, pending, request, run });
+      requireThat(!(reply instanceof Promise), 'AsyncDeferredAnswer');
+      this.#world.validateValue(request.resumeSchema, reply);
+      const acquired = this.#journal.answerDeferred(id, submission.version, submission, identity, submission.answer, reply, selected.binding.classification);
+      return { occurrence_id: acquired.id, reply_digest: acquired.reply_digest, status: this.status(id) };
+    } finally { this.#busy.delete(id); }
   }
   async run(id, maximumSteps = 128) {
     requireThat(Number.isInteger(maximumSteps) && maximumSteps > 0 && maximumSteps <= 10000, 'StepBudget');

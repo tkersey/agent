@@ -7,7 +7,7 @@ import { createPublicKey } from 'node:crypto';
 import { canonical, parse, requireThat, identifier, digest, counter, labels } from './canonical.mjs';
 import { hash, opaqueId, verifyRecord, signRecord, validate, matchesDecision } from './protocol.mjs';
 import { encodeArrival, encodeRefusal, schemas, observationValue } from './values.mjs';
-import { encodeValue } from '../values.mjs';
+import { encodeValue, decodeSchema, encodeSchema } from '../values.mjs';
 import * as core from './custody.mjs';
 const equal = (a, b) => a.length === b.length && a.every((byte, i) => byte === b[i]);
 const json = value => new TextDecoder().decode(canonical(value));
@@ -343,6 +343,34 @@ export class CustodyJournal {
       throw error;
     }
   }
+  deferLeaf(runId, wanted, pending, classification) {
+    const bytes = canonical(pending);
+    identifier(pending.binding_revision); digest(pending.request_digest);
+    requireThat(Object.hasOwn(pending, 'question') && typeof pending.result_schema === 'string' && /^[A-Za-z0-9_-]+$/.test(pending.result_schema), 'InvalidPendingQuestion');
+    const schema = Buffer.from(pending.result_schema, 'base64url');
+    requireThat(schema.toString('base64url') === pending.result_schema && equal(encodeSchema(decodeSchema(schema)), schema), 'InvalidPendingQuestion');
+    requireThat(pending.format === 'agent-deferred-leaf/v1' && typeof pending.audience === 'string' && pending.audience.length > 0, 'InvalidPendingQuestion');
+    requireThat(Array.isArray(pending.alternatives) && pending.alternatives.length > 0 && pending.alternatives.length <= 16 && new Set(pending.alternatives).size === pending.alternatives.length, 'InvalidPendingQuestion');
+    pending.alternatives.forEach(value => identifier(value));
+    requireThat(Number.isSafeInteger(pending.maximum_text_bytes) && pending.maximum_text_bytes >= 0 && pending.maximum_text_bytes <= 8192, 'InvalidPendingQuestion');
+    return this.#transaction('defer', () => {
+      const run = this.run(runId), next = core.awaiting(run, this.#occurrence(run), wanted, opaqueId(), hash(bytes), classification);
+      requireThat(pending.principal === run.principal_ref && pending.tenant === run.tenant_ref && pending.request_digest === run.request_digest, 'QuestionMismatch');
+      this.#artifact(run.tenant_ref, bytes); this.#save(next.run); this.#saveOccurrence(next.occurrence); return next.occurrence;
+    });
+  }
+  answerDeferred(runId, wanted, binding, identity, answer, reply, classification) {
+    return this.#transaction('answer', () => {
+      const run = this.run(runId), occurrence = this.#occurrence(run);
+      core.active(run, wanted, false); core.current(run, occurrence);
+      requireThat(typeof occurrence.pending_digest === 'string', 'QuestionNotPending');
+      const pending = parse(this.artifact(run.tenant_ref, occurrence.pending_digest));
+      requireThat(identity?.principal === run.principal_ref && identity?.tenant === run.tenant_ref && Array.isArray(identity.audiences) && identity.audiences.includes(pending.audience), 'UserDenied');
+      requireThat(answer && Object.keys(answer).sort().join(',') === 'choice,text' && pending.alternatives.includes(answer.choice) && typeof answer.text === 'string' && Buffer.byteLength(answer.text) <= pending.maximum_text_bytes, 'InvalidAnswer');
+      const next = core.answered(run, occurrence, wanted, binding, hash(canonical(answer)), hash(reply), classification);
+      this.#artifact(run.tenant_ref, reply); this.#save(next.run); this.#saveOccurrence(next.occurrence); return next.occurrence;
+    });
+  }
   markUnknown(runId, attemptId) {
     return this.#transaction('unknown', () => { const run = this.run(runId), next = core.unknown(run, this.#occurrence(run), attemptId); this.#saveOccurrence(next); return next; });
   }
@@ -423,6 +451,7 @@ export class CustodyJournal {
       for (const row of this.#all('SELECT body FROM runs WHERE tenant=?', tenant)) {
         const run = readJson(row.body);
         for (const key of ['image_digest', 'outcome_digest', 'reply_digest', 'registration_digest', 'predecessor_receipt_digest']) retain(run[key]);
+        retain(this.#occurrence(run)?.pending_digest);
       }
       for (const row of this.#all('SELECT offer, receipt FROM transfers WHERE tenant=?', tenant)) {
         const offer = parse(row.offer); retain(offer.run_registration_digest); retain(offer.predecessor_receipt_digest);

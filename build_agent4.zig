@@ -775,7 +775,7 @@ pub fn build(b: *std.Build) void {
         mobility_journal.dependOn(&journal_run.step);
         const host_run = nodeCommand(b);
         host_run.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
-        host_run.addArgs(&.{ "node", "--test", "test/agent4/mobility_host.test.mjs", "test/agent4/mobility_deployment.test.mjs", "test/agent4/mobility_browser_bridge.test.mjs" });
+        host_run.addArgs(&.{ "node", "--test", "test/agent4/mobility_host.test.mjs", "test/agent4/mobility_deployment.test.mjs", "test/agent4/mobility_browser_bridge.test.mjs", "test/agent4/mobility_sessions.test.mjs" });
         host_run.step.dependOn(mobility_images);
         host_run.step.dependOn(&runtime_guard.step);
         host_run.has_side_effects = true;
@@ -799,7 +799,7 @@ pub fn build(b: *std.Build) void {
             const durable_browser_run = nodeCommand(b);
             durable_browser_run.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
             durable_browser_run.addDirectoryArg2(browser_tools, .{ .prefix = "AGENT_MOBILITY_BROWSER_TOOLS=", .make_absolute = true });
-            durable_browser_run.addArgs(&.{ "node", "--test", "test/agent4/mobility_durable_browser.test.mjs" });
+            durable_browser_run.addArgs(&.{ "node", "--test", "test/agent4/mobility_durable_browser.test.mjs", "test/agent4/mobility_reference_browser.test.mjs" });
             durable_browser_run.step.dependOn(mobility_images);
             durable_browser_run.step.dependOn(&runtime_guard.step);
             durable_browser_run.has_side_effects = true;

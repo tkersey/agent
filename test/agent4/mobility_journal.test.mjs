@@ -468,3 +468,59 @@ for (const operation of ['freeze', 'accept', 'acquire']) for (const when of ['be
     assert.throws(() => recovered.admitLeaf(f.id, version(run), []), { code: 'UnsettledOccurrence' });
   }
 });
+
+for (const first of ['answer', 'cancel']) test(`durable deferred reply: restart, authentication, duplicates and ${first}-first race`, async t => {
+  const f = await fixture(t, initial), id = f.id;
+  const run = f.a.attach(id), pending = { format: 'agent-deferred-leaf/v1', audience: 'review', principal: 'user', tenant: 'tenant',
+    request_digest: run.request_digest, alternatives: ['accept', 'decline'], maximum_text_bytes: 20,
+    question: { text: 'Inspect this exact proposal?', generation: '1' }, result_schema: Buffer.from(initialRequest.resumeSchema).toString('base64url'), binding_revision: 'v1' };
+  const occurrence = f.a.deferLeaf(id, version(run), pending, ['shared']);
+  assert.equal(occurrence.status, 'AWAITING');
+  assert.throws(() => f.a.admitLeaf(id, version(run), []), { code: 'UnsettledOccurrence' });
+  assert.throws(() => f.a.recordReply(id, occurrence.attempt_id, taskReply, []), { code: 'DeferredReplyRequired' });
+  f.close(f.a); const restored = f.open('A');
+  assert.deepEqual(canonical(restored.occurrence(occurrence.id)), canonical(occurrence));
+  restored.collectArtifacts('tenant');
+  assert.deepEqual(canonical(parse(restored.artifact('tenant', occurrence.pending_digest))), canonical(pending));
+  const identity = { principal: 'user', tenant: 'tenant', audiences: ['review'] };
+  const binding = { occurrence_id: occurrence.id, request_digest: occurrence.request_digest, pending_digest: occurrence.pending_digest };
+  const answer = { choice: 'accept', text: '' }, wanted = version(restored.run(id));
+  const acquire = (overrides = {}) => restored.answerDeferred(id, overrides.wanted ?? wanted, overrides.binding ?? binding, overrides.identity ?? identity, overrides.answer ?? answer, overrides.reply ?? taskReply, ['shared']);
+  for (const changed of [{ principal: 'other' }, { tenant: 'other' }, { audiences: ['other'] }])
+    assert.throws(() => acquire({ identity: { ...identity, ...changed } }), { code: 'UserDenied' });
+  for (const key of Object.keys(binding)) assert.throws(() => acquire({ binding: { ...binding, [key]: 'f'.repeat(64) } }), { code: 'QuestionMismatch' });
+  for (const invalid of [{ choice: 'invent', text: '' }, { choice: 'accept', text: 'x'.repeat(21) }, { choice: 'accept', text: '', approved: true }])
+    assert.throws(() => acquire({ answer: invalid }), { code: 'InvalidAnswer' });
+  if (first === 'cancel') {
+    const cancelled = restored.requestCancel(id, 'stop');
+    assert.throws(() => acquire(), { code: 'StaleExecutor' });
+    assert.throws(() => acquire({ wanted: version(cancelled) }), { code: 'CancellationPending' });
+    assert.equal(restored.occurrence(occurrence.id).status, 'AWAITING');
+  } else {
+    const saved = acquire(); assert.equal(saved.status, 'SETTLED_REPLY');
+    assert.deepEqual(canonical(acquire()), canonical(saved));
+    assert.throws(() => acquire({ answer: { choice: 'decline', text: '' } }), { code: 'ReplyConflict' });
+    f.close(restored); const afterAnswer = f.open('A');
+    assert.deepEqual(afterAnswer.artifact('tenant', afterAnswer.run(id).reply_digest), taskReply);
+    const current = afterAnswer.attach(id);
+    assert.throws(() => afterAnswer.answerDeferred(id, wanted, binding, identity, answer, taskReply, []), { code: 'StaleExecutor' });
+    afterAnswer.publishOutcome(id, version(current), { kind: 'reply', reply_digest: hash(taskReply) }, nextResolve);
+    assert.throws(() => afterAnswer.answerDeferred(id, version(afterAnswer.run(id)), binding, identity, answer, taskReply, []), { code: 'QuestionNotPending' });
+  }
+});
+
+for (const point of ['defer.before_commit', 'defer.after_commit', 'answer.before_commit', 'answer.after_commit'])
+test(`deferred transaction crash at ${point}`, async t => {
+  const f = await fixture(t, initial), run = f.a.attach(f.id);
+  const pending = { format: 'agent-deferred-leaf/v1', audience: 'review', principal: 'user', tenant: 'tenant', request_digest: run.request_digest,
+    alternatives: ['accept'], maximum_text_bytes: 0, question: 'Exact question', binding_revision: 'v1', result_schema: Buffer.from(initialRequest.resumeSchema).toString('base64url') };
+  const defer = () => f.a.deferLeaf(f.id, version(run), pending, ['shared']);
+  if (point.startsWith('answer')) defer();
+  const occurrence = f.a.occurrence(run.current_occurrence_id);
+  f.fault(point);
+  assert.throws(() => point.startsWith('defer') ? defer() : f.a.answerDeferred(f.id, version(f.a.run(f.id)), {
+    occurrence_id: occurrence.id, request_digest: occurrence.request_digest, pending_digest: occurrence.pending_digest,
+  }, { principal: 'user', tenant: 'tenant', audiences: ['review'] }, { choice: 'accept', text: '' }, taskReply, ['shared']), /injected/);
+  f.fault(null); f.close(f.a); const reopened = f.open('A'), saved = reopened.occurrence(run.current_occurrence_id);
+  assert.equal(saved.status, point.startsWith('defer') ? (point.endsWith('before_commit') ? 'READY' : 'AWAITING') : (point.endsWith('before_commit') ? 'AWAITING' : 'SETTLED_REPLY'));
+});

@@ -27,7 +27,7 @@ export class HostPolicy {
       identifier(binding.operation, 256); identifier(binding.role); identifier(binding.subject); identifier(binding.scope); labels(binding.classification);
       labels(binding.allowedStateLabels);
       requireThat(!['agent.mobility.resolve.v1', 'agent.mobility.relocate.v1'].includes(binding.operation), 'ProtectedBinding');
-      requireThat(binding.trustDomain === trustDomain && typeof binding.authorize === 'function' && typeof binding.handle === 'function', 'InvalidBinding');
+      requireThat(binding.trustDomain === trustDomain && typeof binding.authorize === 'function' && (typeof binding.handle === 'function' || (typeof binding.defer === 'function' && typeof binding.answer === 'function' && typeof binding.deferredRevision === 'string' && binding.deferredRevision.length > 0)), 'InvalidBinding');
       for (const bytes of [binding.payloadSchema, binding.resultSchema]) requireThat(equal(encodeSchema(decodeSchema(bytes)), bytes), 'InvalidBindingSchema');
     }
     requireThat(new Set(bindings.map(binding => requirementId(requirement(binding)))).size === bindings.length, 'DuplicateBinding');

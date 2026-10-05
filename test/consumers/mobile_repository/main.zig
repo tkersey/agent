@@ -75,6 +75,7 @@ pub const Application = struct {
             .{ .name = "results", .value = try e.literal(work, model.Results, .{ .items = &.{} }) },
             .{ .name = "remaining_steps", .value = try work.field(input, "maximum_steps") },
             .{ .name = "remaining_checks", .value = try work.field(input, "maximum_checks") },
+            .{ .name = "remaining_revisions", .value = try work.constant(u16, 8) },
             .{ .name = "remaining_moves", .value = moves_input },
             .{ .name = "edits", .value = try e.literal(work, @FieldType(model.State, "edits"), .{ .items = &.{} }) },
             .{ .name = "candidate", .value = try e.literal(work, @FieldType(model.State, "candidate"), .{ .bytes = "" }) },

@@ -37,6 +37,7 @@ pub const State = struct {
     results: Results,
     remaining_steps: u16,
     remaining_checks: u16,
+    remaining_revisions: u16,
     remaining_moves: u32,
     edits: agent.contracts.Vector(Edit, 4),
     candidate: Text(2 * 1024 * 1024),

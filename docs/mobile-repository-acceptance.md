@@ -41,7 +41,7 @@ progressed; this is regression evidence, not final application qualification.
 
 `test/consumers/mobile_repository` uses public Agent/Boundary APIs, existing
 `mobility.ensure`, model normalization, and an owned `agent.inquiry` investigator.
-The 33,226-byte image owns list/read/search, staging up to four exact edits,
+The 33,474-byte task image owns list/read/search, staging up to four exact edits,
 check selection and interpretation, clarification, human review, and completion.
 No environment selects the next application action.
 
@@ -192,8 +192,26 @@ Durable attempt, request-byte and output-token allowances are charged with the
 dispatch transaction, bound to W and the signed run registration, and preserved
 across restart. Background model I/O releases the run lock; unknown calls are
 not repeated, and cancellation fences late replies without refunding attempts.
-The authored loop also retains logical step/check allowances. Question and amendment
-tests reject per-return resets and preserve complete provider replay.
+The authored loop also retains logical step/check/revision allowances. Question
+and amendment tests reject per-return resets and preserve complete provider replay.
+
+The candidate-revision audit found that a task with sufficient step/check grants
+could validate nine distinct candidates, exceeding the specification's eight-generation
+limit. The program now carries a separate remaining-revision counter in its owned
+investigator state. A newly prepared generation spends one; rechecking the existing
+candidate does not. A new task initializes eight, while clarification, amendment,
+relocation and origin restart preserve the remaining count. No host workflow counter
+or reduction of the independent sixteen-check allowance was added.
+
+Four focused regression cases use the real loopback provider: eight generations
+complete; a ninth edit is rejected after eight checks; sixteen checks of one
+candidate complete; and an amendment after origin restart cannot replenish the
+revision budget. The ninth-generation and amendment cases fail against the prior
+image and pass against the corrected image. The broader application/catalogue
+suite passes 42 cases, including Chromium/Firefox and an actual isolated Agent
+repair. Native qualification passes 163 continuation comparisons and another
+264 comparisons across six custody/publication scenarios. Final aggregate and
+package qualification remain required on the resulting subject.
 
 ## Managed publication (W5, partial)
 

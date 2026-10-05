@@ -195,3 +195,17 @@ test('session propose then publish gets a fresh check and exact approval at gene
   assert.equal(f.modelAllowance().used.attempts, 6); assert.equal(f.checkAllowance().used.attempts, 2);
   assert.notEqual(await f.store.current(), f.base);
 });
+
+
+for (const revisionScenario of ['eight', 'nine', 'repeat', 'amend']) test(`candidate revision budget: ${revisionScenario}`, async t => {
+  const f = await fixture(t, { mobile: true, mode: 1, logicalSteps: 32, revisionScenario,
+    ...(revisionScenario === 'amend' ? { reviewFollowup: 'amend', restartReview: true } : {}) });
+  assert.equal((await f.run()).kind, 'terminal');
+  const rejected = revisionScenario === 'nine' || revisionScenario === 'amend';
+  assert.equal(f.outcomeKind(), rejected ? 'failed' : 'completed');
+  assert.equal(f.counts.check, revisionScenario === 'repeat' ? 16 : 8);
+  assert.equal(f.modelCalls, revisionScenario === 'repeat' || revisionScenario === 'amend' ? 18 : 17);
+  assert.equal(f.counts.publish, 0); assert.equal(await f.store.current(), f.base);
+  assert.equal(f.cleanupCalls, 1);
+  if (revisionScenario === 'amend') assert.deepEqual(f.moves, [['U', 'W'], ['W', 'U'], ['U', 'W']], 'amendment after origin restart must not replenish candidate revisions');
+});

@@ -61,7 +61,8 @@ function nativeComparedWorld(world, directory, observed) {
     } });
   } } };
 }
-export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, qualified = false, intake = false, sessionTasks = 0, nextMode = null, comparison = null, deterministicBase = false } = {}) {
+export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, qualified = false, intake = false, sessionTasks = 0, nextMode = null, comparison = null, deterministicBase = false, revisionScenario = null } = {}) {
+  if (revisionScenario) assert(mobile && mode === 1 && !qualified && !comparison && ['eight', 'nine', 'repeat', 'amend'].includes(revisionScenario));
   const sessionInput = mobile && Boolean(process.env.AGENT_MOBILE_PACKAGE || intake || sessionTasks || comparison);
   if (comparison) assert(mobile && mode === 1 && !qualified && !engine && !reviewFollowup && !sessionTasks, "comparison uses the same single-task propose workload");
   const stationary = comparison?.topology === "stationary", spendingHost = stationary ? "U" : "W";
@@ -105,7 +106,7 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
   const humanPlacement = [[[requirement(humanMetadata)], [[], { tag: 0, value: null }, { tag: 0, value: null }, 8n << 20n]], 'review', 'shared', [2, 1]];
   const workspace = mobile ? [[[requirement(metadata('agent.repository.snapshot.v1', 'snapshot-request', 'snapshot', 'read'))], [[], { tag: 0, value: null }, { tag: 0, value: null }, 8n << 20n]], 'workspace', 'shared', [reviewFollowup ? 6 : 4, 1]] : null;
   const task = encodeValue(schemas.task, mobile ? [1n, 1n, mode, 'Make the bounded independently checked change.', 'fixture', base, targetPath, workspace, humanPlacement,
-    ['fixture-model', [{ tag: 1, value: 512 }, { tag: 0, value: null }, { tag: 0, value: null }]], logicalSteps, reviewFollowup === 'amend' ? 2 : 1, 7n] : [7n, text(candidate), humanPlacement, placement]);
+    ['fixture-model', [{ tag: 1, value: 512 }, { tag: 0, value: null }, { tag: 0, value: null }]], logicalSteps, revisionScenario ? 16 : reviewFollowup === 'amend' ? 2 : 1, 7n] : [7n, text(candidate), humanPlacement, placement]);
   let expectedTask = decodeValue(schemas.task, task);
   // Derive the program identity from its actual first request, before effects.
   const kernel = await world.Kernel.create({ bytes: kernelBytes, expectedSha256: identity.kernelSha256 });
@@ -151,11 +152,11 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
     subjectVersion: provisioned.manifestSha256 }, { hostId: 'W',
     profile: { owner: 'W', repository: options.repository, generation: options.generation, manifest: provisioned.manifestSha256,
       profileId: 'fixture-content', profileDigest, runner, disclosure: { audience: null, labels: ['shared'] },
-      allowance: { attempts: sessionTasks || (reviewFollowup === 'amend' ? 2 : 1), request_bytes: 4 << 20, concurrent: 1 } },
+      allowance: { attempts: revisionScenario ? 16 : sessionTasks || (reviewFollowup === 'amend' ? 2 : 1), request_bytes: 4 << 20, concurrent: 1 } },
     runner: { runner, profiles: [{ id: 'fixture-content', digest: profileDigest }], async check({ candidate: exact, occurrence }) {
       counts.check++; if (realChecks) return realChecks.check({ snapshot: exact.snapshot, candidate: exact, occurrence, profileId: 'fixture-content' });
       const inputs = await store.checkInputs({ snapshot: exact.snapshot, candidate: exact, requiredPaths: [targetPath] });
-      assert.deepEqual(inputs.files[targetPath], Buffer.from(reviewFollowup === 'amend' && counts.check > 1 ? content + 'revised\n' : content));
+      assert.deepEqual(inputs.files[targetPath], Buffer.from(revisionScenario ? content + `revision-${revisionScenario === 'repeat' ? 1 : counts.check}\n` : reviewFollowup === 'amend' && counts.check > 1 ? content + 'revised\n' : content));
       const record = { format: 'agent.repository.check/v1', occurrence, snapshot: exact.snapshot, candidate: exact.id, tree: exact.tree,
         profile: 'fixture-content', profileDigest, runner, status: checkStatus, completedChecks: checkStatus === 'Passed' ? ['fixture-content'] : [] };
       return { ...record, id: hash(canonical(record, 2 << 20)) };
@@ -196,7 +197,15 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
       assert.equal(calls.length, turn, 'the provider can resume entirely from supplied replay');
       if (reviewFollowup === 'question' && turn >= 3) { assert(!request.tools.some(tool => ['edit', 'check'].includes(tool.name))); }
       const actionTurn = turn - workload.extraReads, followup = actionTurn >= 3;
-      const action = turn < workload.extraReads ? ['read', { path: targetPath, offset: 0 }] : followup ? (reviewFollowup === 'question' ? (actionTurn === 3 ? [misuse ? 'edit' : 'read', misuse ? { operation: 'replace', path: targetPath, old_digest: candidate.edits[0].oldDigest, content: 'forbidden\n' } : { path: targetPath, offset: 0 }] : ['finish', { summary: 'Read-only question answered; candidate unchanged.' }]) : (actionTurn === 3 ? ['edit', { operation: 'replace', path: targetPath, old_digest: candidate.edits[0].oldDigest, content: content + 'revised\n' }] : actionTurn === 4 ? ['check', {}] : ['finish', { summary: 'Amended candidate independently checked.' }])) : mode === 0 ? ['finish', { summary: 'Inspected; no changes.' }] : actionTurn === 0 ? ['edit', { operation: 'replace', path: targetPath, old_digest: candidate.edits[0].oldDigest, content }] : actionTurn === 1 ? ['check', {}] : ['finish', { summary: 'Candidate independently checked.' }];
+      let action = turn < workload.extraReads ? ['read', { path: targetPath, offset: 0 }] : followup ? (reviewFollowup === 'question' ? (actionTurn === 3 ? [misuse ? 'edit' : 'read', misuse ? { operation: 'replace', path: targetPath, old_digest: candidate.edits[0].oldDigest, content: 'forbidden\n' } : { path: targetPath, offset: 0 }] : ['finish', { summary: 'Read-only question answered; candidate unchanged.' }]) : (actionTurn === 3 ? ['edit', { operation: 'replace', path: targetPath, old_digest: candidate.edits[0].oldDigest, content: content + 'revised\n' }] : actionTurn === 4 ? ['check', {}] : ['finish', { summary: 'Amended candidate independently checked.' }])) : mode === 0 ? ['finish', { summary: 'Inspected; no changes.' }] : actionTurn === 0 ? ['edit', { operation: 'replace', path: targetPath, old_digest: candidate.edits[0].oldDigest, content }] : actionTurn === 1 ? ['check', {}] : ['finish', { summary: 'Candidate independently checked.' }];
+      if (revisionScenario) {
+        const revisions = revisionScenario === 'nine' ? 9 : 8;
+        const edit = revision => ['edit', { operation: 'replace', path: targetPath, old_digest: candidate.edits[0].oldDigest, content: content + `revision-${revision}\n` }];
+        const finish = ['finish', { summary: 'Independently checked bounded candidates.' }];
+        action = revisionScenario === 'repeat' ? (turn === 0 ? edit(1) : turn <= 16 ? ['check', {}] : finish) :
+          turn < revisions * 2 ? (turn % 2 === 0 ? edit(turn / 2 + 1) : ['check', {}]) :
+          revisionScenario === 'amend' && turn === 17 ? edit(9) : revisionScenario === 'amend' && turn === 18 ? ['check', {}] : finish;
+      }
       res.end(JSON.stringify({ status: 'completed', error: null, output: [
         { type: 'reasoning', id: `reason-${turn}`, summary: [], encrypted_content: `opaque-${turn}` + 'x'.repeat(workload.replayPaddingBytes) },
         { type: 'function_call', id: `function-${turn}`, status: 'completed', call_id: `call-${turn}`, name: action[0], arguments: JSON.stringify(action[1]) },
@@ -208,7 +217,7 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
       kind: 'openai-responses-replay', owner: 'W', mode: 'loopback-fixture', endpoint: `http://127.0.0.1:${provider.address().port}/v1/responses`,
       credentialEnv: null, model: 'fixture-model', parameters: { maxOutputTokens: 512, temperature: null, reasoning: null }, timeoutMs: 10000,
       maximumRequestBytes: 2 << 20, maximumResponseBytes: 2 << 20, disclosure: { audience: null, policyRevision: revision, labels: ['shared'] },
-      allowance: { attempts: comparison ? 3 + workload.extraReads : sessionTasks ? sessionTasks * 3 : reviewFollowup === 'amend' ? 6 : reviewFollowup ? 5 : 3, request_bytes: 16 << 20, output_tokens: 3072, concurrent: 1 },
+      allowance: { attempts: revisionScenario ? 32 : comparison ? 3 + workload.extraReads : sessionTasks ? sessionTasks * 3 : reviewFollowup === 'amend' ? 6 : reviewFollowup ? 5 : 3, request_bytes: 16 << 20, output_tokens: revisionScenario ? 16384 : 3072, concurrent: 1 },
     }, 'W'));
   }
   const workspaceBindings = [check, prepare, current, publish, ...additional];

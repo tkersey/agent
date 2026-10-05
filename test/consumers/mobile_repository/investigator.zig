@@ -101,9 +101,14 @@ pub fn define(e: Emit, inquiry: agent.inquiry.Inquiry, leaves: Leaves, movement:
     const edits = try active.field(state, "edits");
     const changed = try active.less(try active.constant(u64, 0), try active.sequenceLength(edits));
     const mutable = try active.select(inspect, try active.constant(bool, false), try active.select(try active.field(state, "view_only"), try active.constant(bool, false), try active.constant(bool, true)));
-    const checkable = try active.select(mutable, try active.select(changed, try active.less(try active.constant(u16, 0), try active.field(state, "remaining_checks")), try active.constant(bool, false)), try active.constant(bool, false));
+    const revision_room = try active.less(try active.constant(u16, 0), try active.field(state, "remaining_revisions"));
+    const existing_candidate = try active.less(try active.constant(u64, 0), try active.blobLength(try active.field(state, "candidate")));
+    const editable = try active.select(mutable, revision_room, try active.constant(bool, false));
+    const validation_room = try active.select(existing_candidate, try active.constant(bool, true), revision_room);
+    const check_budget = try active.select(validation_room, try active.less(try active.constant(u16, 0), try active.field(state, "remaining_checks")), try active.constant(bool, false));
+    const checkable = try active.select(mutable, try active.select(changed, check_budget, try active.constant(bool, false)), try active.constant(bool, false));
     const finishable = try active.select(changed, try active.field(state, "passed"), try active.constant(bool, true));
-    const offered_values = [_]V{ try active.constant(bool, true), try active.constant(bool, true), try active.constant(bool, true), mutable, checkable, try active.constant(bool, true), finishable };
+    const offered_values = [_]V{ try active.constant(bool, true), try active.constant(bool, true), try active.constant(bool, true), editable, checkable, try active.constant(bool, true), finishable };
     var offered_ids: [P.declaration_count]boundary.source.Id = undefined;
     for (offered_values, &offered_ids) |v, *id| id.* = try a.interop.valueId(active, v);
     const offered = try a.interop.adoptValue(active, try e.agent_context.builder.primitive(try e.agent_context.schema([P.declaration_count]bool), .sequence, &offered_ids, 0), try e.schema([P.declaration_count]bool));
@@ -135,7 +140,8 @@ pub fn define(e: Emit, inquiry: agent.inquiry.Inquiry, leaves: Leaves, movement:
             4 => {
                 const candidate = try write(e, body, loop, leaves.prepare, try body.product(try e.schema(t.Preparation), &.{ .{ .name = "snapshot", .value = snapshot }, .{ .name = "edits", .value = edits } }), publication.Proposal);
                 const checked = try write(e, body, loop, leaves.check, candidate, publication.CheckResult);
-                successor = try update(e, body, next, .{ .candidate = candidate, .validation = try body.field(checked, "record"), .passed = try body.equal(try body.enumTag(try body.field(checked, "status")), try body.constant(u32, 0)), .remaining_checks = try body.checked(.subtract, try body.field(next, "remaining_checks"), try body.constant(u16, 1), .{ .overflow = failure }) });
+                const revision_cost = try body.select(existing_candidate, try body.constant(u16, 0), try body.constant(u16, 1));
+                successor = try update(e, body, next, .{ .candidate = candidate, .validation = try body.field(checked, "record"), .passed = try body.equal(try body.enumTag(try body.field(checked, "status")), try body.constant(u32, 0)), .remaining_checks = try body.checked(.subtract, try body.field(next, "remaining_checks"), try body.constant(u16, 1), .{ .overflow = failure }), .remaining_revisions = try body.checked(.subtract, try body.field(next, "remaining_revisions"), revision_cost, .{ .overflow = failure }) });
                 // Preserve independently bound diagnostics. Exceeding the model context
                 // capacity takes the authored failure; never silently truncate a check.
                 observation = try render(e, body, publication.Proposal, try body.field(checked, "record"));

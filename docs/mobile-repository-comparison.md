@@ -109,10 +109,8 @@ adds admitted but unread context content; it does not establish whole-repository
 build scaling. These results do not justify a performance optimization or a
 claim that mobility makes the full browser/person workflow faster.
 
-The [compressed raw report](measurements/mobile-repository-0d90b80.json.gz)
-retains every attempt, all phase observations, p95/min/max summaries and paired
-differences. Its uncompressed SHA-256 is
-`585a8e53ada6a010dd1d0a3a75b6f555584fed0b2b50bda384279404ada89e4a`.
+Per-round reports are local build outputs and are not committed to the repository.
+The commands above reproduce the comparison; this document retains its findings.
 Quantiles use nearest rank; thirty samples do not give a precise tail guarantee.
 The raw process-resource counters cover each whole child process, including
 setup and any warmup, and must not be attributed solely to the timed task.
@@ -191,18 +189,15 @@ variance. It must not be presented as SQLite-only overhead or full service-proce
 startup. Every recovery sample retained the same published commit and finished
 with three model calls, one check, one publisher invocation and one cleanup.
 
-The [compressed raw attribution report](measurements/mobile-repository-attribution-3bc8d12.json.gz)
-contains every observation, exact input sizes/hashes, source hashes and distributions.
-Its uncompressed SHA-256 is
-`1b1cf3a7668c007a89c8a968de5f1497a5c1195780ec6e0f82914275eb37a627`.
+The attribution target writes observations and input/source identities to its
+local build output. Per-round data is not versioned.
 These measurements add phase evidence; they do not reverse the primary comparison's
 unfavorable latency result or establish a full-browser end-to-end speed advantage.
 
 ## Observed operator actions
 
-The [installed-workflow action record](measurements/mobile-repository-operator-actions.json)
-comes from the shipped Chromium UI and generated deployment, with one clarification
-per task. It binds the driver and client source hashes. The login used one credential
+The installed-workflow observations come from the shipped Chromium UI and
+generated deployment, with one clarification per task. The login used one credential
 field fill and one submit for all three tasks. Each task used one run-ID fill and
 one Connect activation, followed by these observed controls:
 
@@ -218,9 +213,9 @@ human click count. The current UI requires explicit advancement and progress
 checking; the large polling component is a usability cost, not useful task work.
 CLI-start and export were used rather than the browser's start/download controls.
 
-All 27 CLI invocations are retained separately: 17 successes and 10 expected
+The run made 27 CLI invocations: 17 successes and 10 expected
 rejections, including setup and negative qualification probes. Those probes and
 the disabled-inference configuration are not required for every normal task.
-The action record asserts ten model calls, two checks and one publication across
+The workflow asserts ten model calls, two checks and one publication across
 these three tasks. No latency distribution or actual-person dwell is claimed
 from this single operator-script execution.

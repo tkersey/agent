@@ -273,9 +273,10 @@ equivalent-image/input/patch/work-count checks, actual cold/warm image-cache
 checks, and proxy payload-substitution rejection. Thirty matched pairs in each
 of nine cells completed with all 576 attempts retained (including warmups).
 Mobility was slower in every tested cell; extra-read and opaque-replay workloads
-transferred fewer bytes. The comparison report retains the raw data and scope.
+transferred fewer bytes. The comparison document summarizes the results and scope.
 Supplemental browser/recovery attribution and observed UI operation counts are
-now reported separately, with exact timing boundaries and all raw observations.
+now reported separately, with explicit timing boundaries. Per-round outputs are
+local build artifacts, not repository content.
 
 Remaining work includes qualification evidence reconciliation,
 lifetime resource-accounting reconciliation, the complete MR-001–MR-096
@@ -450,8 +451,8 @@ The supplemental attribution target passed all 256 attempts (240 measured and
 16 warmup), with thirty paired observations per browser/recovery cell. Fresh
 production Workers reproduce the exact transferred parked outcome; all recovery
 samples reconcile one publication without another check, model call or write.
-The report retains the browser outlier, timer-resolution limits, source/helper
-hashes and raw observations. Custodian/journal reopen is explicitly not a whole
+The summary includes the browser outlier and timer-resolution limits.
+Custodian/journal reopen is explicitly not a whole
 service-process restart measurement.
 
 The installed three-mode qualification also records actual UI controls and every

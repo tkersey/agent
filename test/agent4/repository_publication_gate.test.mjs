@@ -1,3 +1,4 @@
+import { repositoryWriteHelper } from './repository_storage_fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, execFileSync, fork } from 'node:child_process';
@@ -107,7 +108,7 @@ if (process.argv[2] === 'gate-parent') {
     const options = { directory: join(f.root, 'managed'), sourceGitDirectory: join(f.root, 'repo'), base: f.base,
       gitExecutable: f.options.command.path, repository: 'fixture', generation: 'fixture-1', managedRef: 'refs/heads/agent/probe',
       readPaths: ['fix.txt'], writablePaths: ['fix.txt'] };
-    const receipt = await provisionRepository(options), store = await openRepositorySnapshotStore({ ...options, ...receipt });
+    const receipt = await provisionRepository(options), store = await openRepositorySnapshotStore({ writeHelper: await repositoryWriteHelper(), ...options, ...receipt });
     async function proposal(base, content, previous, number) {
       const snapshot = await store.snapshot(base), candidate = await store.prepare(snapshot, [{ path: 'fix.txt',
         operation: previous === null ? 'create' : 'replace', oldDigest: previous === null ? null : hash(previous),
@@ -172,7 +173,7 @@ if (process.argv[2] !== 'gate-parent') for (const fault of ['none', 'unavailable
   const options = { directory, sourceGitDirectory: join(f.root, 'repo'), base: f.base,
     gitExecutable: f.options.command.path, repository: 'fixture', generation: 'fixture-1', managedRef: 'refs/heads/agent/probe',
     readPaths: ['fix.txt'], writablePaths: ['fix.txt'] };
-  const provisioned = await provisionRepository(options), store = await openRepositorySnapshotStore({ ...options, ...provisioned });
+  const provisioned = await provisionRepository(options), store = await openRepositorySnapshotStore({ writeHelper: await repositoryWriteHelper(), ...options, ...provisioned });
   const snapshot = await store.snapshot(f.base), candidate = await store.prepare(snapshot,
     [{ path: 'fix.txt', operation: 'create', oldDigest: null, oldMode: null, content: 'fixed\n' }]);
   const record = { format: 'agent.repository.check/v1', snapshot, candidate: candidate.id, tree: candidate.tree,

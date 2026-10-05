@@ -80,7 +80,8 @@ async function prepareDeployment(configPath) {
     const binding = { ...metadata, payloadSchema: bytes(metadata.payloadSchema), resultSchema: bytes(metadata.resultSchema) };
     const counts = { calls: 0 }; statistics.set(binding.operation, counts);
     if (['repository-query', 'repository-prepare'].includes(adapter.kind)) {
-      closed(adapter, ['kind', 'store', 'classification']);
+      closed(adapter, ['kind', 'store', 'classification', ...(adapter.kind === 'repository-prepare' ? ['helper'] : [])]);
+      if (adapter.kind === 'repository-prepare') closed(adapter.helper, ['path', 'sha256']);
       closed(adapter.store, ['directory', 'gitExecutable', 'repository', 'generation', 'manifestSha256']);
       const methods = new Map([
         ['agent.repository.snapshot.v1', 'snapshot'], ['agent.repository.read.v1', 'read'],
@@ -93,7 +94,7 @@ async function prepareDeployment(configPath) {
         binding.subjectVersion === adapter.store.manifestSha256 &&
         JSON.stringify(binding.classification) === JSON.stringify(adapter.classification), 'AdapterContract');
       const leaf = await createManagedRepositoryEnvironment({ ...adapter.store, directory: path(adapter.store.directory),
-        gitExecutable: path(adapter.store.gitExecutable), resourceOwner: config.hostId, classification: adapter.classification });
+        gitExecutable: path(adapter.store.gitExecutable), ...(adapter.kind === 'repository-prepare' ? { writeHelper: { ...adapter.helper, path: path(adapter.helper.path) } } : {}), resourceOwner: config.hostId, classification: adapter.classification });
       const result = decodeSchema(binding.resultSchema);
       binding.authorize = payload => Array.isArray(payload) && (method === 'snapshot' ? payload[0] === adapter.store.repository :
         Array.isArray(payload[0]) && payload[0][0] === adapter.store.repository && payload[0][1] === adapter.store.generation);
@@ -116,10 +117,11 @@ async function prepareDeployment(configPath) {
       return leaf;
     }
     if (adapter.kind === 'repository-proposal') {
-      closed(adapter, ['kind', 'store', 'protectedImages', 'authorizationDigest', 'validationPolicyDigest', 'requiredProfiles', 'checkResultSchema', 'commit']);
+      closed(adapter, ['kind', 'store', 'helper', 'protectedImages', 'authorizationDigest', 'validationPolicyDigest', 'requiredProfiles', 'checkResultSchema', 'commit']);
       closed(adapter.store, ['directory', 'gitExecutable', 'repository', 'generation', 'manifestSha256']);
       requireThat(binding.subject === adapter.store.repository && binding.subjectVersion === adapter.store.manifestSha256, 'AdapterContract');
-      const store = await openRepositorySnapshotStore({ ...adapter.store, directory: path(adapter.store.directory), gitExecutable: path(adapter.store.gitExecutable) });
+      closed(adapter.helper, ['path', 'sha256']);
+      const store = await openRepositorySnapshotStore({ writeHelper: { ...adapter.helper, path: path(adapter.helper.path) }, ...adapter.store, directory: path(adapter.store.directory), gitExecutable: path(adapter.store.gitExecutable) });
       const leaf = repositoryProposalBinding(binding, { ...adapter, store, checkResultSchema: bytes(adapter.checkResultSchema), services: () => publicationServices });
       const handle = leaf.handle; leaf.handle = context => { counts.calls++; return handle(context); };
       return leaf;

@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
-import { lstat, mkdir, mkdtemp, open, realpath, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, open, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { admitDocumentPath } from './document.mjs';
 import { canonical } from './mobility/canonical.mjs';
@@ -23,6 +23,7 @@ const text = (value, maximum) => typeof value === 'string' && value.isWellFormed
 const identity = stat => [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].map(String).join(':');
 const modes = new Map([['40000', 'tree'], ['100644', 'blob'], ['100755', 'blob'], ['120000', 'blob'], ['160000', 'commit']]);
 const defaults = Object.freeze({ entries: 16384, bytes: 128 << 20, blobBytes: 16 << 20, commandMs: 30000 });
+const storageDefaults = Object.freeze({ bytes: 256 << 20, files: 65536 });
 const gitArgs = (root, args) => ['--no-replace-objects',
   '-c', 'core.hooksPath=/dev/null', '-c', 'core.attributesFile=/dev/null',
   '-c', 'credential.helper=', '-c', 'protocol.allow=never', '-c', 'gc.auto=0',
@@ -137,7 +138,29 @@ async function command(git, root, args, { input = Buffer.alloc(0), maximum = 4 <
   });
 }
 
-async function objects(git, root, format, limits) {
+// Includes abandoned Git temporary files. Compression and filesystem allocation
+// are distinct: the quota counts regular-file lengths, including compressed
+// objects; directory/allocation overhead is bounded separately by the file cap.
+async function objectStorage(root, quota) {
+  let bytes = 0, files = 0, directories = 0;
+  async function visit(directory, depth) {
+    require(depth <= 3 && ++directories <= 260, 'RepositoryStorageCapacity');
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const name = join(directory, entry.name), stat = await lstat(name);
+      require(!stat.isSymbolicLink(), 'RepositoryStorageChanged');
+      if (stat.isDirectory()) await visit(name, depth + 1);
+      else {
+        require(stat.isFile(), 'RepositoryStorageChanged');
+        bytes += stat.size; files++;
+        require(bytes <= quota.bytes && files <= quota.files, 'RepositoryStorageCapacity');
+      }
+    }
+  }
+  await visit(join(root, 'objects'), 0);
+  return { bytes, files };
+}
+
+async function objects(git, root, format, limits, writer = null) {
   async function read(type, name) {
     oid(name, format);
     const size = Number((await command(git, root, ['cat-file', '-s', name], { timeout: limits.commandMs })).toString().trim());
@@ -148,9 +171,31 @@ async function objects(git, root, format, limits) {
   }
   async function write(type, bytes) {
     require(bytes.length <= limits.blobBytes, 'RepositoryObjectCapacity');
-    const name = (await command(git, root, ['hash-object', '-w', '-t', type, '--stdin'], { input: bytes, timeout: limits.commandMs })).toString().trim();
-    require(name === objectId(format, type, bytes), 'RepositoryObjectIntegrity');
-    return name;
+    require(writer, 'RepositoryWriterUnavailable');
+    const expected = objectId(format, type, bytes);
+    const writeObject = async execute => {
+      // Existing immutable objects require no new allocation, even at quota.
+      const exists = (await command(git, root, ['cat-file', '--batch-check=%(objectname)'], { input: Buffer.from(`${expected}\n`) })).toString().trim();
+      require(exists === expected || exists === `${expected} missing`, 'RepositoryObjectIntegrity');
+      if (exists === expected) {
+        require((await read(type, expected)).equals(bytes), 'RepositoryObjectIntegrity');
+        return expected;
+      }
+      const used = await objectStorage(root, writer.quota);
+      // zlib's documented default deflate bound, including Git's object header.
+      const size = bytes.length + Buffer.byteLength(`${type} ${bytes.length}\0`);
+      const reserve = size + Math.floor(size / 4096) + Math.floor(size / 16384) + Math.floor(size / 33554432) + 13;
+      // Git can link the final name before unlinking its temporary name.
+      // Charge both names even if the writer dies in that interval.
+      require(used.bytes + 2 * reserve <= writer.quota.bytes && used.files + 2 <= writer.quota.files, 'RepositoryStorageCapacity');
+      await execute();
+      require((await read(type, expected)).equals(bytes), 'RepositoryObjectIntegrity');
+      return expected;
+    };
+    const args = ['hash-object', '-w', '-t', type, '--stdin'];
+    if (writer.cold) return writeObject(() => command(git, root, args, { input: bytes, timeout: limits.commandMs }));
+    return withPublicationGate({ helper: writer.helper, lock: writer.lock, timeoutMs: limits.commandMs,
+      command: { path: git.executable, sha256: git.sha256, args: gitArgs(root, args), env: gitEnv(), input: bytes } }, writeObject);
   }
   async function tree(name, copy = null) {
     const rows = [], names = [], budget = { entries: 0, bytes: 0 };
@@ -202,7 +247,7 @@ async function objects(git, root, format, limits) {
 
 /** Privileged local provisioning, never reachable from a model leaf. The source
  * is an existing Git directory and an exact commit, not a URL or fetch ref. */
-export async function provisionRepository({ directory, sourceGitDirectory, base, gitExecutable: executable, repository, generation, managedRef, readPaths, writablePaths, protectedPaths = [], limits = defaults }) {
+export async function provisionRepository({ directory, sourceGitDirectory, base, gitExecutable: executable, repository, generation, managedRef, readPaths, writablePaths, protectedPaths = [], limits = defaults, storage = storageDefaults }) {
   require(isAbsolute(directory) && isAbsolute(sourceGitDirectory), 'RepositoryDirectory');
   require(text(repository, 128) && repository && text(generation, 128) && generation, 'RepositoryIdentity');
   ref(managedRef);
@@ -210,6 +255,8 @@ export async function provisionRepository({ directory, sourceGitDirectory, base,
   require(writes.every(name => reads.includes(name) && !protectedSet.includes(name)), 'RepositoryScope');
   for (const key of Object.keys(defaults)) require(Number.isSafeInteger(limits[key]) && limits[key] > 0 && limits[key] <= defaults[key], 'RepositoryLimits');
   require(Object.keys(limits).length === Object.keys(defaults).length, 'RepositoryLimits');
+  require(storage && Object.keys(storage).sort().join(',') === 'bytes,files' && Object.keys(storageDefaults).every(key => Number.isSafeInteger(storage[key]) && storage[key] > 0 && storage[key] <= storageDefaults[key]), 'RepositoryStorageLimits');
+  storage = { ...storage };
   const git = await gitExecutable(executable);
   const source = await realpath(sourceGitDirectory);
   require((await lstat(source)).isDirectory(), 'RepositoryDirectory');
@@ -223,7 +270,7 @@ export async function provisionRepository({ directory, sourceGitDirectory, base,
   try {
     const destination = join(directory, 'objects.git');
     await command(git, null, ['init', '--bare', '--template=', `--object-format=${format}`, destination]);
-    const output = await objects(git, destination, format, limits);
+    const output = await objects(git, destination, format, limits, { cold: true, quota: storage });
     const imported = await input.tree(tree, output), byPath = new Map(imported.rows.map(row => [row[0], row]));
     await filesystemAliases(directory, [...imported.names, ...reads], limits.entries);
     for (const name of reads) {
@@ -244,8 +291,8 @@ export async function provisionRepository({ directory, sourceGitDirectory, base,
       const stat = await gate.stat({ bigint: true });
       publicationLock = { dev: String(stat.dev), ino: String(stat.ino) };
     } finally { await gate.close(); }
-    const metadata = { format: 'agent-managed-repository/v1', repository, generation, objectFormat: format, base, managedRef,
-      readPaths: reads, writablePaths: writes, protectedPaths: protectedSet, limits, gitSha256: git.sha256,
+    const metadata = { format: 'agent-managed-repository/v2', repository, generation, objectFormat: format, base, managedRef,
+      readPaths: reads, writablePaths: writes, protectedPaths: protectedSet, limits, storage, gitSha256: git.sha256,
       gitConfigSha256: hash(await readRegular(join(destination, 'config'), 65536)), publicationLock };
     const fd = await open(join(directory, 'repository.json'), 'wx', 0o600);
     try { await fd.writeFile(encoded(metadata)); await fd.sync(); } finally { await fd.close(); }
@@ -253,17 +300,27 @@ export async function provisionRepository({ directory, sourceGitDirectory, base,
   } catch (error) { await rm(directory, { recursive: true, force: true }); throw error; }
 }
 
-export async function openRepositorySnapshotStore({ directory, gitExecutable: executable, repository, generation, manifestSha256 }) {
+export async function openRepositorySnapshotStore({ directory, gitExecutable: executable, repository, generation, manifestSha256, writeHelper = null }) {
   require(isAbsolute(directory), 'RepositoryDirectory');
   const root = await lstat(directory, { bigint: true });
   require(root.isDirectory() && !root.isSymbolicLink() && (root.mode & 0o077n) === 0n, 'RepositoryDirectory');
   const metadataBytes = await readRegular(join(directory, 'repository.json'), 8 << 20);
   require(hash(metadataBytes) === manifestSha256, 'RepositoryMetadataIntegrity');
   const metadata = JSON.parse(utf8.decode(metadataBytes));
-  require(metadata.format === 'agent-managed-repository/v1' && metadata.repository === repository && metadata.generation === generation, 'RepositoryIdentity');
+  require(metadata.format === 'agent-managed-repository/v2' && metadata.repository === repository && metadata.generation === generation, 'RepositoryIdentity');
   const git = await gitExecutable(executable);
   require(git.sha256 === metadata.gitSha256, 'RepositoryGitChanged');
-  const gitRoot = join(directory, 'objects.git'), object = await objects(git, gitRoot, metadata.objectFormat, metadata.limits);
+  require(metadata.storage && Object.keys(metadata.storage).sort().join(',') === 'bytes,files' && Object.keys(storageDefaults).every(key => Number.isSafeInteger(metadata.storage[key]) && metadata.storage[key] > 0 && metadata.storage[key] <= storageDefaults[key]), 'RepositoryStorageLimits');
+  const helper = writeHelper ? structuredClone(writeHelper) : null;
+  if (helper) {
+    require(isAbsolute(helper.path) && /^[a-f0-9]{64}$/.test(helper.sha256), 'RepositoryWriterIdentity');
+    helper.path = await realpath(helper.path);
+    require(hash(await readRegular(helper.path, 128 << 20)) === helper.sha256, 'RepositoryWriterIdentity');
+  }
+  const gitRoot = join(directory, 'objects.git'), object = await objects(git, gitRoot, metadata.objectFormat, metadata.limits,
+    helper ? { helper, quota: metadata.storage,
+      lock: { path: join(directory, 'publication.lock'), ...metadata.publicationLock } } : null);
+  await objectStorage(gitRoot, metadata.storage);
   const directories = await Promise.all([gitRoot, join(gitRoot, 'objects')].map(async path => {
     const stat = await lstat(path, { bigint: true });
     require(stat.isDirectory() && !stat.isSymbolicLink(), 'RepositoryStorageChanged');
@@ -592,6 +649,7 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
   await current();
   return Object.freeze({ snapshot, list, read, search, prepare, verifyCandidate, checkInputs, current,
     describe: () => structuredClone({ repository, generation, base: metadata.base, managedRef: metadata.managedRef,
-      readPaths: metadata.readPaths, writablePaths: metadata.writablePaths, protectedPaths: metadata.protectedPaths, limits: metadata.limits }),
+      readPaths: metadata.readPaths, writablePaths: metadata.writablePaths, protectedPaths: metadata.protectedPaths, limits: metadata.limits, storage: metadata.storage }),
+    storageUsage: () => objectStorage(gitRoot, metadata.storage),
     preparePublication, verifyPublication, publishManaged, reconcilePublication });
 }

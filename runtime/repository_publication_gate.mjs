@@ -35,7 +35,7 @@ export async function withPublicationGate({ helper, lock, command, timeoutMs = 3
   const git = await pinnedExecutable(command.path, command.sha256);
   require(Array.isArray(command.args) && command.args.length > 0 && command.args.length <= 110 &&
     command.args.every(arg => typeof arg === 'string' && !arg.includes('\0')) &&
-    Buffer.isBuffer(command.input) && command.input.length <= 4096, 'PublicationGateCommand');
+    Buffer.isBuffer(command.input) && command.input.length <= (16 << 20), 'PublicationGateCommand');
   const input = Buffer.from(command.input);
   const child = spawn(executable, [lock.path, lock.dev, lock.ino, git, ...command.args], {
     env: { ...command.env }, stdio: ['pipe', 'pipe', 'pipe'], detached: true,

@@ -1,3 +1,4 @@
+import { repositoryWriteHelper } from './repository_storage_fixture.mjs';
 // Actual authored model/inquiry control, independently expected observations,
 // and fresh World instances on every transfer. Provider replies are synthetic.
 import assert from 'node:assert/strict';
@@ -186,7 +187,7 @@ try {
     gitExecutable: await realpath(execFileSync('/usr/bin/which', ['git'], { encoding: 'utf8' }).trim()),
     repository: 'project', generation: 'import-1', managedRef: 'refs/heads/agent/delivery', readPaths: [evidence[1]], writablePaths: [evidence[1]] };
   const receipt = await provisionRepository(options);
-  const leaf = await createManagedRepositoryEnvironment({ ...options, ...receipt, resourceOwner: 'workspace', classification: ['shared'] });
+  const leaf = await createManagedRepositoryEnvironment({ writeHelper: await repositoryWriteHelper(), ...options, ...receipt, resourceOwner: 'workspace', classification: ['shared'] });
   const selectedSnapshot = await leaf.snapshot(['project', options.base]), selectedEvidence = await leaf.read([selectedSnapshot, evidence[1]]);
   assert.equal(selectedEvidence[3], evidence[3]);
   for (const [method, inputName, outputName, input] of [

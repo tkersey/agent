@@ -66,7 +66,7 @@ export async function main(argv) {
     const path = value => { requireThat(typeof value === 'string' && value.length > 0, 'DeploymentPath'); return resolve(dirname(resolve(config)), value); };
     if (command === 'provision-repository') {
       closed(input, ['directory', 'sourceGitDirectory', 'base', 'gitExecutable', 'repository', 'generation', 'managedRef', 'readPaths', 'writablePaths',
-        ...(Object.hasOwn(input, 'protectedPaths') ? ['protectedPaths'] : []), ...(Object.hasOwn(input, 'limits') ? ['limits'] : [])]);
+        ...(Object.hasOwn(input, 'protectedPaths') ? ['protectedPaths'] : []), ...(Object.hasOwn(input, 'limits') ? ['limits'] : []), ...(Object.hasOwn(input, 'storage') ? ['storage'] : [])]);
       const receipt = await provisionRepository({ ...input, directory: path(input.directory), sourceGitDirectory: path(input.sourceGitDirectory), gitExecutable: path(input.gitExecutable) });
       console.log(JSON.stringify(receipt));
     } else {

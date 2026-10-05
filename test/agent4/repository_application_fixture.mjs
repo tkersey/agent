@@ -1,3 +1,4 @@
+import { repositoryWriteHelper } from './repository_storage_fixture.mjs';
 // Actual compiled approval, World custody, SQLite and managed Git. The human
 // and independent content check are deterministic reference capabilities.
 import { createServer } from 'node:http';
@@ -81,7 +82,7 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
   command('update-ref', 'refs/heads/fixture', base);
   const options = { directory: join(root, 'managed'), sourceGitDirectory: source, base, gitExecutable: git,
     repository: 'fixture', generation: 'generation', managedRef: 'refs/heads/agent/result', readPaths: comparison ? ['context.txt', targetPath] : [targetPath], writablePaths: [targetPath] };
-  const provisioned = await provisionRepository(options), store = await openRepositorySnapshotStore({ ...options, ...provisioned });
+  const provisioned = await provisionRepository(options), store = await openRepositorySnapshotStore({ writeHelper: await repositoryWriteHelper(), ...options, ...provisioned });
   const snapshot = await store.snapshot(base), candidate = await store.prepare(snapshot, [
     { path: targetPath, operation: mobile ? 'replace' : 'create', oldDigest: mobile ? (await store.read(snapshot, targetPath)).digest : null, oldMode: mobile ? '100644' : null, content }]);
   const identity = verifyRuntime(resolve(process.env.AGENT_MOBILITY_RUNTIME)), world = await import(pathToFileURL(identity.entrypoint));
@@ -125,7 +126,7 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
     for (const [name, file] of [['launcher', 'agent-check-limit'], ['processLock', 'libagent-check-lock.dylib']]) {
       const path = await realpath(process.env.AGENT_MOBILE_PACKAGE ? join(nativeRoot, file) : process.env[name === 'launcher' ? 'AGENT_CHECK_LIMIT' : 'AGENT_CHECK_LOCK'] ?? join(nativeRoot, file)); helpers[name] = { path, sha256: hash(await readFile(path)) };
     }
-    const sandbox = await createZigRepositorySandbox({ toolchain: selectZig([]), ...helpers });
+    const sandbox = await createZigRepositorySandbox({ toolchain: selectZig([]), ...helpers, scratchRoot: root });
     assert.equal(sandbox.kind, 'qualified', JSON.stringify(sandbox));
     const source = 'const subject = @import("subject"); pub export fn agent_observe(_: u32) u64 { return subject.maximumToolArgumentsByteLength(bool); }';
     realChecks = createRepositoryCheckRunner({ store, sandbox, profiles: [{ id: 'fixture-content', description: 'Independent JSON boolean bound', requiredPaths: [targetPath],
@@ -181,7 +182,7 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
   }
   let modelTurn = 0, modelCalls = 0, cleanupCalls = 0, reviewAnswers = 0, reviewRestarted = false, provider;
   if (mobile) {
-    const leaf = await createManagedRepositoryEnvironment({ ...options, ...provisioned, resourceOwner: 'W', classification: ['shared'] });
+    const leaf = await createManagedRepositoryEnvironment({ writeHelper: await repositoryWriteHelper(), ...options, ...provisioned, resourceOwner: 'W', classification: ['shared'] });
     additional.push(fixed('agent.repository.snapshot.v1', 'snapshot-request', 'snapshot', 'read', ({ payload }) => leaf.snapshot(payload)),
       fixed('agent.repository.read.v1', 'read', 'evidence', 'read', ({ payload }) => leaf.read(payload)),
       fixed('agent.repository.read-window.v1', 'read-window', 'read-window-result', 'read', ({ payload }) => leaf.readWindow(payload)),

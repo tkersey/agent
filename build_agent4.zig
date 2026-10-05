@@ -449,7 +449,6 @@ pub fn build(b: *std.Build) void {
     const mobile_repository_measure = b.step("measure-mobile-repository", "Collect thirty paired application measurements per declared cell");
     const mobile_repository_attribution = b.step("measure-mobile-repository-attribution", "Measure browser verification and publication recovery separately");
     const mobile_repository_objects = nodeCommand(b);
-    mobile_repository_objects.addArgs(&.{ "node", "--test", "test/agent4/repository_snapshot.test.mjs", "test/agent4/mobile_repository_qualification.test.mjs" });
     mobile_repository_objects.has_side_effects = true;
     mobile_repository_check.dependOn(&mobile_repository_objects.step);
     const mobile_repository_zig = b.step("check-mobile-repository-zig", "Qualify the bounded native Zig repository check profile");
@@ -480,6 +479,8 @@ pub fn build(b: *std.Build) void {
         }) });
         emit.dependOn(&b.addInstallFileWithDir(gate_exe.getEmittedBin(), .prefix, "agent4/native/agent-publication-gate").step);
         publication_gate.dependOn(&b.addInstallFileWithDir(gate_exe.getEmittedBin(), .prefix, "repository-publication/agent-publication-gate").step);
+        mobile_repository_objects.addFileArg2(gate_exe.getEmittedBin(), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
+        mobile_repository_zig_test.addFileArg2(gate_exe.getEmittedBin(), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
         publication_test.addFileArg2(gate_exe.getEmittedBin(), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
         repository_approval_test.addFileArg2(gate_exe.getEmittedBin(), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
         const limit_exe = b.addExecutable(.{ .name = "agent-check-limit", .root_module = b.createModule(.{
@@ -503,6 +504,7 @@ pub fn build(b: *std.Build) void {
         mobile_repository_zig_test.addFileArg2(limit_exe.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LIMIT=", .make_absolute = true });
         mobile_repository_zig_test.addFileArg2(process_lock.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LOCK=", .make_absolute = true });
     }
+    mobile_repository_objects.addArgs(&.{ "node", "--test", "test/agent4/repository_snapshot.test.mjs", "test/agent4/repository_scratch.test.mjs", "test/agent4/mobile_repository_qualification.test.mjs" });
     mobile_repository_zig_test.addArgs(&.{ "node", "--test", "test/agent4/repository_zig_sandbox.test.mjs" });
     publication_test.addArgs(&.{ "node", "--test", "test/agent4/repository_publication_gate.test.mjs", "test/agent4/repository_publication_journal.test.mjs", "test/agent4/repository_publication_binding.test.mjs", "test/agent4/repository_check_binding.test.mjs" });
     const mobile_repository_emitter = g.emitter("mobile-repository-emitter", g.module("test/consumers/mobile_repository/main.zig"));
@@ -694,6 +696,8 @@ pub fn build(b: *std.Build) void {
         mobile_repository_zig_test.step.dependOn(&runtime_guard.step);
         _ = runtime_guard.captureStdOut(.{});
         const mobile_repository_run = nodeCommand(b);
+        mobile_repository_run.addFileArg2(b.graph.path(.install_prefix, "repository-publication/agent-publication-gate"), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
+        mobile_repository_run.step.dependOn(publication_gate);
         mobile_repository_run.addArgs(&.{ "node", "test/agent4/mobile_repository_continuation.mjs" });
         mobile_repository_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
         mobile_repository_run.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/mobile-repository"), .{ .make_absolute = true });
@@ -976,6 +980,8 @@ pub fn build(b: *std.Build) void {
         });
         const native_exe = native_graph.emitter("agent4-native", native_module);
         const repository_native_run = nodeCommand(b);
+        repository_native_run.addFileArg2(b.graph.path(.install_prefix, "repository-publication/agent-publication-gate"), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
+        repository_native_run.step.dependOn(publication_gate);
         repository_native_run.addArgs(&.{ "node", "test/agent4/mobile_repository_continuation.mjs" });
         repository_native_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
         repository_native_run.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/mobile-repository"), .{ .make_absolute = true });

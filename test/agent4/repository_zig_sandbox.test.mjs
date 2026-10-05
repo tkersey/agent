@@ -1,8 +1,9 @@
+import { repositoryWriteHelper } from './repository_storage_fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { selectZig } from '../../tools/agent4/toolchain.mjs';
@@ -35,8 +36,10 @@ test('qualified Zig checks distinguish an actual Agent repair from its incorrect
       });
     helpers[name] = { path, sha256: sha(await readFile(path)) };
   }
-  const runner = await createZigRepositorySandbox({ toolchain, ...helpers });
+  const runner = await createZigRepositorySandbox({ toolchain, ...helpers, scratchRoot: root });
   assert.equal(runner.kind, 'qualified', JSON.stringify(runner));
+  assert.equal(runner.contract.scratchSlots, 4);
+  assert.deepEqual((await readdir(root)).filter(name => name.startsWith('agent-zig-')), []);
   assert.equal(runner.qualification.denials.status, 'Passed');
   assert.equal(runner.qualification.full.status, 'Passed');
   assert.equal(runner.qualification.timeout.status, 'TimedOut');
@@ -68,7 +71,7 @@ pub export fn agent_observe(_: u32) u64 { return subject.maximumToolArgumentsByt
     managedRef: 'refs/heads/agent/result', readPaths: ['src/model_json.zig', 'harness.zig'],
     writablePaths: ['src/model_json.zig'], protectedPaths: ['harness.zig'] };
   const receipt = await provisionRepository(options);
-  const store = await openRepositorySnapshotStore({ ...options, ...receipt });
+  const store = await openRepositorySnapshotStore({ writeHelper: await repositoryWriteHelper(), ...options, ...receipt });
   const snapshot = await store.snapshot(base);
   const candidate = await store.prepare(snapshot, [{ operation: 'replace', path: 'src/model_json.zig',
     oldDigest: sha(incorrect), oldMode: '100644', content: correct }]);
@@ -130,7 +133,7 @@ pub export fn agent_observe(_: u32) u64 { return subject.maximumToolArgumentsByt
     const options = { directory: join(root, id + '-managed'), sourceGitDirectory: join(source, '.git'), base,
       gitExecutable: await realpath('/usr/bin/git'), repository: id, generation: '1', managedRef: 'refs/heads/agent/result',
       readPaths: [path], writablePaths: [path] };
-    const receipt = await provisionRepository(options), store = await openRepositorySnapshotStore({ ...options, ...receipt });
+    const receipt = await provisionRepository(options), store = await openRepositorySnapshotStore({ writeHelper: await repositoryWriteHelper(), ...options, ...receipt });
     const snapshot = await store.snapshot(base), checks = createRepositoryCheckRunner({ store, sandbox: runner, profiles: [profile] });
     const request = { snapshot, profileId: id, occurrence: 'correct' };
     const correct = await checks.check(request);
@@ -143,6 +146,7 @@ pub export fn agent_observe(_: u32) u64 { return subject.maximumToolArgumentsByt
     assert.equal(git(source, 'status', '--porcelain'), '');
     catalogue.push({ id, sourceSha256: sha(original), correct, incorrect });
   }
+  assert.deepEqual((await readdir(root)).filter(name => name.startsWith('agent-zig-')), [], 'repeated completed native checks release all scratch slots');
   if (process.env.AGENT_REPOSITORY_PROOF) await writeFile(process.env.AGENT_REPOSITORY_PROOF, JSON.stringify({
     profile: runner.contract, qualification: runner.qualification, forgedVerdict: forged, incorrectBase: failed, repairedCandidate: passed,
     managedRefUnchanged: true, originalCheckoutUnchanged: true, catalogue,

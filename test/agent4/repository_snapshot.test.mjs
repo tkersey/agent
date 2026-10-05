@@ -1,7 +1,8 @@
+import { repositoryWriteHelper } from './repository_storage_fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, writeFile, readFile, rm, realpath, symlink, access, lstat } from 'node:fs/promises';
+import { link, mkdtemp, mkdir, writeFile, readFile, rm, realpath, symlink, access, lstat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -11,7 +12,7 @@ import { canonical } from '../../runtime/mobility/canonical.mjs';
 
 const hash = text => createHash('sha256').update(text).digest('hex');
 const git = (root, ...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', env: { PATH: process.env.PATH, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 'Fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid', GIT_COMMITTER_NAME: 'Fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid' } }).trim();
-async function fixture(t, { format = 'sha1', extra = null, configure = null } = {}) {
+async function fixture(t, { format = 'sha1', extra = null, configure = null, storage = undefined } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'repository snapshot-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = join(root, 'source'); await mkdir(source);
@@ -25,11 +26,11 @@ async function fixture(t, { format = 'sha1', extra = null, configure = null } = 
   const base = git(source, 'rev-parse', 'HEAD');
   await configure?.(source);
   const executable = await realpath(execFileSync('/bin/sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim());
-  const options = { directory: join(root, 'managed'), sourceGitDirectory: join(source, '.git'), base,
+  const options = { ...(storage ? { storage } : {}), writeHelper: await repositoryWriteHelper(), directory: join(root, 'managed'), sourceGitDirectory: join(source, '.git'), base,
     gitExecutable: executable, repository: 'fixture', generation: 'generation-1', managedRef: 'refs/heads/agent/delivery',
     readPaths: [...contents.keys(), 'new/nested.txt'], writablePaths: ['file-00.txt', 'file-01.txt', 'file-03.txt', 'new/nested.txt'], protectedPaths: ['protected.test.mjs'] };
   const receipt = await provisionRepository(options);
-  const store = await openRepositorySnapshotStore({ ...options, ...receipt });
+  const store = await openRepositorySnapshotStore({ writeHelper: await repositoryWriteHelper(), ...options, ...receipt });
   return { root, source, contents, base, options, receipt, store };
 }
 const replacement = (f, path, content) => ({ operation: 'replace', path, oldDigest: hash(f.contents.get(path)), oldMode: '100644', content });
@@ -222,4 +223,64 @@ test('publication proposal binds exact nonrecursive commit bytes; read-only reva
   const metadata = JSON.parse(await readFile(join(f.options.directory, 'repository.json')));
   const lock = await lstat(join(f.options.directory, 'publication.lock'), { bigint: true });
   assert.deepEqual(metadata.publicationLock, { dev: String(lock.dev), ino: String(lock.ino) });
+});
+
+
+test('retained object quota spans preparations and reopen; existing candidates remain readable at capacity', async t => {
+  const f = await fixture(t, { storage: { bytes: 256 << 20, files: 47 } });
+  const selected = await f.store.snapshot(f.base), before = await f.store.storageUsage();
+  assert.equal(before.files, 44);
+  const edits = [replacement(f, 'file-00.txt', 'first generation\n'.repeat(1024))];
+  const candidate = await f.store.prepare(selected, edits);
+  assert.equal((await f.store.storageUsage()).files, 46);
+  assert.deepEqual(await f.store.prepare(selected, edits), candidate, 'idempotent object reuse does not consume capacity');
+  const reopened = await openRepositorySnapshotStore({ ...f.options, ...f.receipt });
+  await assert.rejects(reopened.prepare(selected, [replacement(f, 'file-00.txt', 'another generation\n')]), { code: 'RepositoryStorageCapacity' });
+  assert.equal((await reopened.storageUsage()).files, 46);
+  assert.deepEqual(await reopened.verifyCandidate(candidate), candidate);
+  assert.equal(await reopened.current(), f.base);
+  await assert.rejects(openRepositorySnapshotStore({ ...f.options, ...f.receipt, writeHelper: { ...f.options.writeHelper, sha256: '0'.repeat(64) } }), { code: 'RepositoryWriterIdentity' });
+  const readonly = await openRepositorySnapshotStore({ ...f.options, ...f.receipt, writeHelper: null });
+  assert.deepEqual(await readonly.verifyCandidate(candidate), candidate);
+  await assert.rejects(readonly.prepare(selected, edits), { code: 'RepositoryWriterUnavailable' });
+});
+
+test('byte quota charges abandoned object files and rejects new writes without removing recovery data', async t => {
+  const f = await fixture(t, { storage: { bytes: 131072, files: 128 } });
+  const original = await f.store.storageUsage(), selected = await f.store.snapshot(f.base);
+  const treeFile = join(f.options.directory, 'objects.git', 'objects', selected.tree.slice(0, 2), selected.tree.slice(2));
+  await link(treeFile, join(f.options.directory, 'objects.git', 'objects', 'tmp_obj_linked'));
+  const before = await f.store.storageUsage();
+  assert.equal(before.files, original.files + 1);
+  assert.equal(before.bytes, original.bytes + (await lstat(treeFile)).size, 'a crash between link and unlink leaves both names charged');
+  const abandoned = join(f.options.directory, 'objects.git', 'objects', 'tmp_obj_abandoned');
+  await writeFile(abandoned, Buffer.alloc(131072 - before.bytes - 16));
+  await assert.rejects(f.store.prepare(selected, [replacement(f, 'file-00.txt', 'a new candidate needing more than sixteen bytes')]), { code: 'RepositoryStorageCapacity' });
+  assert.equal((await f.store.storageUsage()).bytes, 131056);
+  assert.equal((await readFile(abandoned)).length, 131072 - before.bytes - 16);
+  assert.equal(await f.store.current(), f.base);
+});
+
+
+test('independent writers share the persisted object ceiling', async t => {
+  const f = await fixture(t, { storage: { bytes: 256 << 20, files: 47 } });
+  const other = await openRepositorySnapshotStore({ ...f.options, ...f.receipt });
+  const selected = await f.store.snapshot(f.base);
+  const results = await Promise.allSettled([f.store.prepare(selected, [replacement(f, 'file-00.txt', 'left\n')]),
+    other.prepare(selected, [replacement(f, 'file-01.txt', 'right\n')])]);
+  assert(results.some(row => row.status === 'rejected'));
+  for (const row of results) if (row.status === 'rejected')
+    assert(['RepositoryStorageCapacity', 'PublicationGateBusy'].includes(row.reason.code), row.reason.stack);
+  const usage = await other.storageUsage();
+  assert(usage.files <= 47 && usage.bytes <= (256 << 20));
+  for (const row of results) if (row.status === 'fulfilled') assert.deepEqual(await other.verifyCandidate(row.value), row.value);
+  assert.equal(await other.current(), f.base);
+});
+
+test('cold import enforces the object quota and removes only its newly reserved failed store', async t => {
+  const f = await fixture(t), directory = join(f.root, 'bounded-import');
+  await assert.rejects(provisionRepository({ ...f.options, directory, storage: { bytes: 65536, files: 1 } }), { code: 'RepositoryStorageCapacity' });
+  await assert.rejects(access(directory), { code: 'ENOENT' });
+  assert.equal(await f.store.current(), f.base);
+  assert.equal(git(f.source, 'status', '--porcelain'), '');
 });

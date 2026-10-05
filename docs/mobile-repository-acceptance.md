@@ -151,9 +151,9 @@ Three operator-selectable manifests now cover Boundary wire naturals, World
 allocation budgets, and Agent JSON argument-size bounds. The qualified runner
 passes each real module and rejects a compiling semantic mutation after actual
 execution. Their narrow contracts, source dependencies, deployment selection and
-excluded claims are documented with the manifests. Physical allowance/storage
-accounting and complete extracted-loader qualification remain open; per-object
-bounds do not establish complete lifetime storage accounting.
+excluded claims are documented with the manifests. Physical allowance, extracted-loader, and lifetime storage qualification are
+recorded in the later sections of this report; per-object bounds alone do not
+establish lifetime storage accounting.
 
 ## Durable human interaction (W3, partial)
 
@@ -555,7 +555,7 @@ External rows are explicitly not run. No row is upgraded merely by a green aggre
 | MR-079 | Final run pending | repository_publication_journal.test.mjs; approval tests — pre-admission cancellation and retained publication |
 | MR-080 | Final run pending | sandbox qualifier; mobility_deployment.test.mjs — kill/reap and unrelated-run progress |
 | MR-081 | Final run pending | mobility_host.test.mjs; journal quota/fault tests — committed checkpoint/reply survives capacity failure |
-| MR-082 | Open — storage/lifetime audit | Repeated-session/browser capacity tests cover owned state; external Git/scratch lifetime accounting requires further audit |
+| MR-082 | Final run pending | repository_snapshot.test.mjs — retained byte/file quotas, reopened/concurrent writers, orphan files; repository_scratch.test.mjs — finite durable slots; installed deployment — no completed scratch remains |
 | MR-083 | Final run pending | mobility_journal.test.mjs — corruption/generation/known rollback; no consistent-backup self-detection claim |
 | MR-084 | Final run pending | mobility_journal.test.mjs; publication journal tests — GC roots and unresolved outcomes |
 | MR-085 | Final run pending | mobile_repository_package.test.mjs; installed deployment — no source/oracle execution fallback |
@@ -590,3 +590,48 @@ The fixture provider independently rejects any Authorization header or sentinel
 in its request body. The separate real-Git concurrent-candidate test also passed:
 the winner admitted once, the loser never reached admission, and later read-only
 reconciliation reported conflict without another ref update.
+
+
+## Retained storage accounting
+
+A source-head `da4a657` probe prepared four valid candidates without a journal.
+Each tree used 32,801 bytes under a 65,536-byte per-tree limit, while retained
+uncompressed Git objects grew from 201 to 131,405 bytes. This distinguished the
+per-tree bound from the missing lifetime account; it did not claim that the tree
+limit was itself a store-wide quota.
+
+The managed-object owner now enforces independent provisioned byte/file limits,
+including abandoned temporary objects, under the existing native writer gate.
+Cold import uses its exclusively reserved directory. Every later new blob, tree,
+and proposal commit crosses the same gate; read-only verification does not write.
+Default object limits are 256 MiB of regular-file lengths and 65,536 files. Lower
+limits are supported. Existing objects can be reused at capacity; quota refusal
+never deletes recovery data or advances the managed ref. Store metadata is v2,
+and generated preparation/proposal adapters bind the pinned writer helper.
+
+Scratch allocation has four persistent directory slots per configured root,
+including qualification canaries. Atomic directory creation owns capacity across
+processes and restarts. A failed or uncertain allocation retains its slot; only
+post-reap, successful detach/cleanup releases it. Legacy scratch blocks new
+allocation until reconciled. The runner contract records the slot count. The
+[operator documentation](mobile-repository-zig-profile.md) states separate
+object, journal, and conservative scratch bounds, including what the byte account
+excludes. No age-based GC or shared journal-ceiling increase was introduced.
+
+The object tests cover capacity across reopen, idempotent reuse, independent
+writers, abandoned files, read-only admission, and unchanged managed refs. The
+scratch allocator tests cover twelve concurrent claims for four slots, repeated
+fresh-caller refusal, explicit release/reuse, symlinks, and legacy retention.
+`check-mobile-repository check-repository-publication-gate` passes on the final
+resource implementation: 22 storage/configuration tests, 28 publication tests,
+and the authored continuation scenarios. The native profile qualification also
+passes, including the real Boundary/World/Agent positive and mutated cases and
+zero remaining scratch slots after repeated completed checks.
+
+The extracted workflow passes all three modes and the thirteen nested browser,
+publication and native-check cases. It also asserts zero completed scratch
+remains after service shutdown. That archive preceded the final two-name Git
+reservation and early helper-identity check; those corrections have the focused
+object/gate proof above. Final exact-head aggregate/package qualification and
+serial review closure remain pending. The existing performance reports retain
+their explicitly frozen subjects; they are not new timing claims for this writer.

@@ -197,7 +197,48 @@ commit, `gitExecutable`, logical `repository` and `generation`, `managedRef`,
 the repository owner's existing bounds. Paths resolve relative to this JSON
 file. Import reads the selected commit's tracked tree; it does not fetch or
 include dirty checkout content. Existing destination storage is never replaced.
-The command prints the resulting manifest receipt.
+The command prints the resulting manifest receipt. Optional `storage` is
+`{"bytes":268435456,"files":65536}` by default; either positive limit may be
+lowered at provisioning. These are lifetime managed-object limits, separate from
+per-tree and journal quotas. The byte count is the sum of regular-file lengths
+under `objects.git/objects`, including compressed objects and abandoned Git
+temporary files; the file cap also bounds filesystem metadata overhead. Allocation
+blocks and directory overhead are not reported as object bytes.
+
+New stores use `agent-managed-repository/v2`. Earlier application preview stores
+without these limits are refused; preserve them for recovery and provision a new
+generation rather than editing their manifest. Generated prepare/proposal bindings
+now name the same pinned native helper as publication. Direct trusted adapter
+callers pass `writeHelper: {path, sha256}` to open a writable store; omitting it
+permits read-only operations. The process gate spans quota observation and the Git
+writer, including parent death. Admission reserves the [zlib default deflate
+bound](https://github.com/madler/zlib/blob/v1.3.1/deflate.c) for both temporary and
+final names before a new object; Git can retain both names if interrupted between
+[link and unlink](https://github.com/git/git/blob/v2.51.0/object-file.c).
+This can conservatively refuse a compressible object close to capacity. Reusing
+an already verified object allocates nothing. Partial failed preparations remain
+charged, and no quota failure deletes recovery data or changes the managed ref.
+`storageUsage()` reports the current object byte/file account to trusted callers.
+
+Check scratch requires an explicit private directory (mode 0700) as
+`scratchRoot`; there is no shared system-temporary-directory default. It uses
+four atomic directory slots per root.
+The runner contract records this capacity. A slot remains occupied across process
+death or uncertain setup, and only successful post-reap volume detach/cleanup
+releases it. Repeated failures therefore exhaust capacity instead of creating
+unbounded new directories. There is no age-based cleanup. Legacy `agent-zig-*`
+directories outside the four slots block new allocation until the operator has
+reconciled their processes/mounts and preserved any required evidence.
+
+Qualification also reserves its small canary directory from these slots. A check
+slot contains one fixed-size image, at most 128 MiB of admitted
+input, and at most one image-sized binary copy. At the default 256 MiB image size,
+four homogeneous slots account for at most 2.5 GiB of file content, plus bounded
+filesystem metadata. Sharing a root with profiles of different sizes uses the
+largest profile's bound; the admitted 1 GiB image ceiling gives an absolute
+8.5 GiB content ceiling across four slots. These are conservative reservations,
+not observed physical allocation. Use independent explicitly provisioned roots
+when operators intend independent capacity. Existing journal quotas are unchanged.
 
 `check.json` contains `sandbox` and the selected manifest as `checkProfile`.
 The sandbox fields are the same as the deployment adapter: `zigExecutable`,

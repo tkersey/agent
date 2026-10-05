@@ -3,9 +3,9 @@
 // No repository build.zig is executed. Deployment-owned roots/harnesses decide
 // the finite command contract; this module does not choose application work.
 import { createHash, randomBytes } from 'node:crypto';
-import { lstat, mkdir, mkdtemp, readFile, realpath, rm, statfs, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readdir, readFile, realpath, rm, statfs, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { release, tmpdir } from 'node:os';
+import { release } from 'node:os';
 import { sandboxLibraries, sandboxString as q, launchSandboxProcess as launch } from './inquiry_sandbox.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -13,6 +13,7 @@ const identity = stat => [stat.dev, stat.ino, stat.size, stat.mtimeMs, stat.ctim
 const diskutil = '/usr/sbin/diskutil';
 const dyld = '/System/Library/Sandbox/Profiles/dyld-support.sb';
 const fail = reason => { throw new Error(reason); };
+const scratchSlots = 4;
 const defaults = Object.freeze({ timeoutMs: 30000, maximumOutputBytes: 262144, scratchBytes: 256 << 20 });
 
 function profile({ files, input, scratch, library, trustedRuntimeThreads = false }) {
@@ -38,10 +39,26 @@ async function trusted(command, args, cwd) {
   return result.stdout;
 }
 
+// An occupied slot is durable ownership, not an expiring lease. Parent death or
+// an uncertain disk utility outcome cannot free it. Each slot contains at most
+// one bounded image, 128 MiB of input, and one bounded binary copy. Different
+// processes share this finite namespace through atomic mkdir, without a counter
+// that could be reset on restart. Operators must use a dedicated scratch root.
+export async function reserveRepositoryScratch(root) {
+  if ((await readdir(root)).some(name => name.startsWith('agent-zig-') && !/^agent-zig-slot-[0-3]$/.test(name)))
+    fail('scratch_legacy_storage');
+  for (let slot = 0; slot < scratchSlots; slot++) {
+    const directory = join(root, `agent-zig-slot-${slot}`);
+    try { await mkdir(directory, { mode: 0o700 }); return directory; }
+    catch (error) { if (error.code !== 'EEXIST') throw error; }
+  }
+  fail('scratch_slots_exhausted');
+}
+
 // The backing image has a fixed logical length. Candidate writes can exhaust
 // this volume but cannot grow its backing file or write to the host filesystem.
 async function volume(root, bytes) {
-  const directory = await mkdtemp(join(root, 'agent-zig-'));
+  const directory = await reserveRepositoryScratch(root);
   const image = join(directory, 'scratch.dmg'), mount = join(directory, 'volume');
   let mounted = false;
   try {
@@ -80,7 +97,7 @@ const verdict = result => result.kind === 'completed' ? (result.code === 0 ? 'Pa
  * Inputs are explicitly materialized bytes, never a checkout/path to be followed.
  * roots is a finite deployment-owned module graph; no user/model command text.
  */
-export async function createZigRepositorySandbox({ toolchain, launcher, processLock, scratchRoot = tmpdir(),
+export async function createZigRepositorySandbox({ toolchain, launcher, processLock, scratchRoot,
   timeoutMs = defaults.timeoutMs, maximumOutputBytes = defaults.maximumOutputBytes,
   scratchBytes = defaults.scratchBytes } = {}) {
   if (process.platform !== 'darwin') return { kind: 'unavailable', reason: 'unsupported_host' };
@@ -97,6 +114,8 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
   try {
     toolchain.assertUnchanged();
     root = await realpath(scratchRoot);
+    const scratchStat = await lstat(root);
+    if (!scratchStat.isDirectory() || (scratchStat.mode & 0o077) !== 0) fail('scratch_root_not_private');
     dependencies = await sandboxLibraries(toolchain.executable);
     nodeExecutable = await realpath(process.execPath); nodeDependencies = await sandboxLibraries(nodeExecutable);
     observerBytes = await readFile(new URL('./repository_wasm_observer.mjs', import.meta.url));
@@ -115,7 +134,7 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
     observer: { nodeVersion: process.version, executable: nodeExecutable, dependencies: nodeDependencies.map(({ path, sha256 }) => ({ path, sha256 })), scriptSha256: hash(observerBytes), imports: [], abi: 'agent_observe(u32)->u64', maximumObservations: 64, maximumModuleBytes: 16 << 20 },
     implementation: hash(await readFile(import.meta.filename)),
     isolation: hash(await readFile(new URL('./inquiry_sandbox.mjs', import.meta.url))),
-    timeoutMs, provisioningCommandMs: 60000, maximumOutputBytes, scratchBytes, compilerJobs: 1, candidateFork: false, subsequentExec: false,
+    timeoutMs, provisioningCommandMs: 60000, maximumOutputBytes, scratchBytes, scratchSlots, compilerJobs: 1, candidateFork: false, subsequentExec: false,
     compilerMemoryMiB: 1024, candidateMemoryMiB: 64, candidateThreads: 1,
     cpuSeconds: Math.ceil(timeoutMs / 1000), openFiles: 128, coreBytes: 0 };
   const runner = hash(JSON.stringify(contract));
@@ -153,7 +172,7 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
       if (!names.length || names.length > 4096) throw new TypeError('input count');
       let total = 0;
       for (const name of names) {
-        if (!/^(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_.-]+\.zig$/.test(name) || name.split('/').includes('..'))
+        if (name.length > 256 || !/^(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_.-]+\.zig$/.test(name) || name.split('/').includes('..'))
           throw new TypeError('input path');
         total += Buffer.byteLength(files[name]);
       }
@@ -225,7 +244,7 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
       reason: result.reason ?? result.spawnError ?? null,
       stdout: result.stdout?.toString('utf8') ?? '', stderr: result.stderr?.toString('utf8') ?? '' };
   }
-  const canary = await mkdtemp(join(root, 'agent-zig-canary-'));
+  const canary = await reserveRepositoryScratch(root);
   const secret = join(canary, 'secret'), forbidden = join(canary, 'forbidden');
   let qualification;
   const observationProbe = await invoke({ 'main.zig': 'pub export fn agent_observe(_: u32) u64 { return 5; }' }, {

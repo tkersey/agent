@@ -7,7 +7,7 @@ import { createServer } from 'node:http';
 import { generateKeyPairSync, randomBytes, createPrivateKey } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { gunzipSync } from 'node:zlib';
-import { mkdtemp, mkdir, readFile, writeFile, rm, realpath, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, readFile, writeFile, rm, realpath, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -221,6 +221,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   child.kill('SIGTERM'); const [code, signal] = await childExit; assert.equal(code, 0, stderr); assert.equal(signal, null);
   const stats = JSON.parse(stdout.trim().split('\n').at(-1)).statistics;
   assert.equal(stats['agent.repository.check.v1'].calls, 2); assert.equal(stats['agent.repository.publish.v1'].calls, 1);
+  assert.deepEqual((await readdir(area)).filter(name => name.startsWith('agent-zig-')), [], 'qualification, repeated checks and service restart release all completed scratch ownership');
   const needles = [Buffer.from(privateSentinel)];
   for (const key of [...Object.values(pairs).map(pair => pair.privateKey), ...['A','B'].map(host => createPrivateKey(tls[host].key))]) {
     const seed = Buffer.from(key.export({ format: 'jwk' }).d, 'base64url'), pem = key.export({ format: 'pem', type: 'pkcs8' });

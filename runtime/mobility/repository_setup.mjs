@@ -98,12 +98,13 @@ export async function configureRepository(filename, destination) {
   const binding = (row, adapter) => ({ ...row, adapter });
   const release = { ...meta('agent.repository.investigation-release.v1', 'cleanup', 'unit', 'read'), cleanup: true };
   const helperRelative = 'native/agent-publication-gate', helperBytes = await asset(helperRelative);
+  const helper = { path: join(path(input.workspace.installation), 'examples', helperRelative), sha256: hash(helperBytes) };
   const workspaceBindings = [
-    ...[['snapshot', 'snapshot-request', 'snapshot'], ['read', 'read', 'evidence'], ['list', 'list', 'listing'], ['search', 'search', 'search-result'], ['read-window', 'read-window', 'read-window-result'], ['prepare', 'candidate-preparation', 'proposal']].map(([op, from, to]) => binding(meta(`agent.repository.${op}.v1`, from, to, op === 'prepare' ? 'write' : 'read'), { kind: op === 'prepare' ? 'repository-prepare' : 'repository-query', store: storeConfig, classification: [input.label] })),
+    ...[['snapshot', 'snapshot-request', 'snapshot'], ['read', 'read', 'evidence'], ['list', 'list', 'listing'], ['search', 'search', 'search-result'], ['read-window', 'read-window', 'read-window-result'], ['prepare', 'candidate-preparation', 'proposal']].map(([op, from, to]) => binding(meta(`agent.repository.${op}.v1`, from, to, op === 'prepare' ? 'write' : 'read'), { kind: op === 'prepare' ? 'repository-prepare' : 'repository-query', store: storeConfig, classification: [input.label], ...(op === 'prepare' ? { helper } : {}) })),
     binding(meta('agent.repository.check.v1', 'proposal', 'check-result', 'write'), { kind: 'repository-check', store: storeConfig, sandbox, checkProfile: check.checkProfile,
       profile: { owner: input.workspace.hostId, repository: scope.repository, generation: scope.generation, manifest: storeConfig.manifestSha256, profileId: profile.id, profileDigest: profile.digest, runner: qualification.runner,
         disclosure: { audience: null, labels: [input.label] }, allowance: { attempts: input.task.maximumTasks * input.task.checks, request_bytes: 4 << 20, concurrent: 1 } } }),
-    binding(meta('agent.repository.proposal.v1', 'preparation', 'proposal', 'write'), { kind: 'repository-proposal', ...common, commit: input.commit }),
+    binding(meta('agent.repository.proposal.v1', 'preparation', 'proposal', 'write'), { kind: 'repository-proposal', ...common, helper, commit: input.commit }),
     ...[['publication-current', 'boolean', 'read'], ['publish', 'delivery', 'commit']].map(([op, to, role]) => binding(meta(`agent.repository.${op}.v1`, 'proposal', to, role), { kind: 'repository-publication', ...common,
       helper: { path: join(path(input.workspace.installation), 'examples', helperRelative), sha256: hash(helperBytes) } })),
     ...(provider ? [binding(meta('agent.model.invoke.v4', 'model-request', 'model-result', 'model'), provider)] : []), binding(release, { kind: 'repository-release' }),

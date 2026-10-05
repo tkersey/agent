@@ -3,6 +3,40 @@
 import { createDocumentEnvironment } from "./document.mjs";
 import { createRepositoryDelivery } from "./repository_delivery.mjs";
 import { runRepositorySnapshot } from "./repository_tests.mjs";
+import { openRepositorySnapshotStore } from "./repository_snapshot.mjs";
+export { provisionRepository } from "./repository_snapshot.mjs";
+
+/** Snapshot leaves for the mobile application. Their actual dispatch remains
+ * under the mobility policy/current occurrence; these resource IDs are data. */
+export async function createManagedRepositoryEnvironment(options) {
+  const { resourceOwner, classification, ...storage } = options;
+  if (!text(resourceOwner, 128) || !resourceOwner || !Array.isArray(classification) ||
+      classification.length > 16 || classification.some(label => !text(label, 128) || !label) ||
+      new Set(classification).size !== classification.length) throw new TypeError('invalid repository classification/owner');
+  const labels = [...classification].sort(), store = await openRepositorySnapshotStore(storage);
+  const bytes = hex => Array.from(Buffer.from(hex, 'hex'));
+  function snapshotValue(value) {
+    if (!Array.isArray(value) || value.length !== 9 || value[0] !== storage.repository || value[1] !== storage.generation ||
+        JSON.stringify(value[7]) !== JSON.stringify(labels) || value[8] !== resourceOwner || ![0, 1].includes(value[2]) ||
+        ![value[5], value[6]].every(digest => Array.isArray(digest) && digest.length === 32 && digest.every(byte => Number.isInteger(byte) && byte >= 0 && byte <= 255)))
+      throw new TypeError('repository snapshot binding mismatch');
+    return { repository: value[0], generation: value[1], objectFormat: value[2] === 0 ? 'sha1' : 'sha256', base: value[3], tree: value[4],
+      manifest: Buffer.from(value[5]).toString('hex'), scopeManifest: Buffer.from(value[6]).toString('hex') };
+  }
+  return Object.freeze({
+    async snapshot(input) {
+      if (!Array.isArray(input) || input.length !== 2 || input[0] !== storage.repository) throw new TypeError('repository snapshot request mismatch');
+      const value = await store.snapshot(input[1]);
+      return [value.repository, value.generation, value.objectFormat === 'sha1' ? 0 : 1, value.base, value.tree,
+        bytes(value.manifest), bytes(value.scopeManifest), [...labels], resourceOwner];
+    },
+    async read(input) {
+      if (!Array.isArray(input) || input.length !== 2) throw new TypeError('repository read request mismatch');
+      const value = await store.read(snapshotValue(input[0]), input[1]);
+      return [bytes(value.snapshot), value.path, bytes(value.digest), value.content, value.truncated];
+    },
+  });
+}
 
 // Identity of the qualified default range suite, independent of writable input.
 const suiteDigest = "556d27be95a9db73d36bc21f621870327dc64097b42f2c6ad6fc2407ac78e7fd";

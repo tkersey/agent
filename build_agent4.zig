@@ -443,6 +443,10 @@ pub fn build(b: *std.Build) void {
     const mobility_consumer = fixture_driver.select("agent-mobility-consumer");
     const mobile_repository_images = b.step("mobile-repository-images", "Emit the mobile repository application and ordinary contracts");
     const mobile_repository_check = b.step("check-mobile-repository", "Check the authored mobile repository application");
+    const mobile_repository_objects = nodeCommand(b);
+    mobile_repository_objects.addArgs(&.{ "node", "--test", "test/agent4/repository_snapshot.test.mjs" });
+    mobile_repository_objects.has_side_effects = true;
+    mobile_repository_check.dependOn(&mobile_repository_objects.step);
     const mobile_repository_emitter = g.emitter("mobile-repository-emitter", g.module("test/consumers/mobile_repository/main.zig"));
     g.emit(mobile_repository_images, mobile_repository_emitter, &.{"image"}, "mobile-repository/program.bpi3");
     for ([_][]const u8{ "task", "report", "snapshot-request", "snapshot", "read", "evidence", "question", "answer", "cleanup", "unit" }) |name|

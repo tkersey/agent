@@ -27,8 +27,10 @@ including the external installed-authoring consumer. The selected mobility
 continuation, native, journal, integration, and approval targets passed 97 build
 steps. The inherited extracted-package Chromium/Firefox mobility lane passed
 59 build steps. These counts exclude separately reported Node assertions.
-The broader inherited `check-agent4-integration` aggregate remains in progress
-at this first slice; no aggregate pass is claimed here.
+The broader inherited `check-agent4-integration` aggregate completed 361/361
+steps and 63/63 Zig tests, including its Node and packaged execution lanes. It
+started on the foundation and completed while additive application work
+progressed; this is regression evidence, not final application qualification.
 
 ## Authored continuation (W1)
 
@@ -39,14 +41,15 @@ parked investigator, retained goal/evidence, outer task occurrence, and captured
 cleanup cross the return move. The program threads the returned move allowance;
 the human placement template cannot replenish it.
 
-The 4,940-byte image passes nine deterministic fresh-kernel scenarios through
+The 4,940-byte image passes ten deterministic fresh-kernel scenarios through
 `check-mobile-repository`: a round trip preserving each of the three mode
 values, local `Here`, exhausted return budget, cancellation with one cleanup,
 and rejection of zero generation, empty goal, and excessive placement attempts
-before any effects. The mode tests establish preservation only; propose and
-publish behavior are not implemented yet. Leaf observations and human answers
-in this first test are synthetic. It does not qualify repository I/O, custody,
-browser interaction, or approval for the new application.
+before any effects, plus the same round trip through real managed Git snapshot
+and read leaves. The mode tests establish preservation only; propose and
+publish behavior are not implemented yet. Human answers remain synthetic.
+These checks do not qualify custody, browser interaction, or approval for the
+new application.
 
 Reproduce this slice using the existing authenticated setup:
 
@@ -56,6 +59,36 @@ zig build check-mobile-repository -Doptimize=safe \
   -Dworld-source="$PWD/.agent4-mobile/inputs/world" \
   -Dworld-runtime="$PWD/.agent4-mobile/out/world-runtime/runtime"
 ```
+
+## Immutable repository preparation (W2, partial)
+
+The existing repository owner now offers managed snapshot/read bindings. Its
+private Git object adapter provisions only an explicitly selected local commit,
+admits a pinned repository manifest and Git executable, and performs raw object
+reads/writes without checkout, filters, hooks, replacements, or network fetch.
+Preparation constructs an exact bounded tree; it never advances the delivery
+ref. Candidate verification reconstructs the tree from the admitted preimages
+and edit set rather than trusting a caller's candidate ID.
+
+Seven repository tests cover real SHA-1 and SHA-256 stores; four-file
+create/replace/delete deltas; more than 32 paths and bound list/search cursors;
+UTF-8 excerpt boundaries; frozen reads after source branch changes; mismatched
+preimages/scope/mode, binary replacements and forged trees; symlink grants,
+metadata/configuration corruption; and inert filter/hook traps. Alias admission
+uses a private name-lookup probe on the managed filesystem, including Unicode
+cases that cannot be decided by lowercasing alone. A targeted Unicode probe
+also passed. Temporary test and package paths include spaces.
+
+`check-mobile-repository` passed 30/30 build steps. Existing document tests
+passed after sharing their lexical path admission. A custom-prefix extracted
+use archive imported the new adapters and passed the existing repository
+execution witness: five cases, ten isolated test processes, and 99 fresh-kernel
+transfers. The complete mobile application is not yet installed in that archive.
+
+The qualified Zig runner, physical allowance/storage accounting and artifact
+pins, deployment dispatch integration for all repository operations, and
+publication remain open. Per-object/import bounds in this slice do not establish
+complete lifetime storage accounting or the final execution profile.
 
 ## Remaining acceptance
 

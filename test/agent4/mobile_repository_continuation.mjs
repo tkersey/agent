@@ -1,12 +1,15 @@
 // First application slice: actual World continuation, independently expected
 // evidence and retained inquiry. Custodian, real adapters and UI qualify later.
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdtemp, mkdir, writeFile, rm, realpath } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { verifyRuntime, readDependencyLock } from '../../tools/agent4/dependencies.mjs';
 import { decodeSchema, decodeValue, encodeValue } from '../../runtime/values.mjs';
 import { placement, resolution, observation, zeroDigest } from './mobility_fixture.mjs';
+import { provisionRepository, createManagedRepositoryEnvironment } from '../../runtime/repository.mjs';
 
 const [runtimePath, imagesPath] = process.argv.slice(2);
 assert(runtimePath && imagesPath);
@@ -27,8 +30,8 @@ const evidence = [snapshot[5], 'src/ordinary.zig', Array(32).fill(3), 'pub const
 const goal = 'Explain the admitted source before proposing a change.';
 const humanAnswer = 'Keep this value; investigate its callers next.';
 
-async function scenario({ local = false, moves = 2, cancelReturn = false, mode = 0, invalid = null } = {}) {
-  const task = [731n, 19n, mode, goal, 'project', snapshot[3], evidence[1], placement(local ? 'A' : 'B', moves, 'repository'), placement('A', 16, 'human')];
+async function scenario({ local = false, moves = 2, cancelReturn = false, mode = 0, invalid = null, leaf = null, selectedSnapshot = snapshot, selectedEvidence = evidence } = {}) {
+  const task = [731n, 19n, mode, goal, selectedSnapshot[0], selectedSnapshot[3], selectedEvidence[1], placement(local ? 'A' : 'B', moves, 'repository'), placement('A', 16, 'human')];
   if (invalid === 'generation') task[1] = 0n;
   if (invalid === 'empty-goal') task[3] = '';
   if (invalid === 'attempts') task[7][3][1] = 4;
@@ -51,10 +54,10 @@ async function scenario({ local = false, moves = 2, cancelReturn = false, mode =
           assert.equal(transfers, 1, 'the human template cannot replenish the spent move budget');
         } else {
           assert.equal(out.kind, 'completed'); assert.equal(questions, 1);
-          assert.deepEqual(decodeValue(reportSchema, out.value), [731n, 19n, mode, moves - transfers, [[1n, [goal, evidence, humanAnswer]]]]);
+          assert.deepEqual(decodeValue(reportSchema, out.value), [731n, 19n, mode, moves - transfers, [[1n, [goal, selectedEvidence, humanAnswer]]]]);
           assert.equal(transfers, local ? 0 : 2);
         }
-        return { mode, local, moves, cancelReturn, invalid, outcome: out.kind, transfers, cleanups, trace };
+        return { mode, local, moves, cancelReturn, invalid, realRepository: leaf !== null, outcome: out.kind, transfers, cleanups, trace };
       }
       if (out.kind === 'progressed' || out.kind === 'yielded') {
         bytes = current.kernel.drive(session, { control: out.kind === 'yielded' ? 'resume_yield' : 'none', checkpoint: true });
@@ -86,11 +89,11 @@ async function scenario({ local = false, moves = 2, cancelReturn = false, mode =
           break;
         }
         case 'agent.repository.snapshot.v1':
-          assert.equal(host, local ? 'A' : 'B'); assert.deepEqual(payload, ['project', snapshot[3]]); reply = snapshot; break;
+          assert.equal(host, local ? 'A' : 'B'); assert.deepEqual(payload, [selectedSnapshot[0], selectedSnapshot[3]]); reply = leaf ? await leaf.snapshot(payload) : selectedSnapshot; break;
         case 'agent.repository.read.v1':
-          assert.equal(host, local ? 'A' : 'B'); assert.deepEqual(payload, [snapshot, evidence[1]]); reply = evidence; break;
+          assert.equal(host, local ? 'A' : 'B'); assert.deepEqual(payload, [selectedSnapshot, selectedEvidence[1]]); reply = leaf ? await leaf.read(payload) : selectedEvidence; break;
         case 'agent.repository.human.v1':
-          assert.equal(host, 'A'); assert.deepEqual(payload, [731n, 19n, goal, evidence]);
+          assert.equal(host, 'A'); assert.deepEqual(payload, [731n, 19n, goal, selectedEvidence]);
           questions++; reply = humanAnswer; break;
         case 'agent.repository.investigation-release.v1':
           assert.deepEqual(payload, [731n, 19n], 'cleanup retains the original task occurrence');
@@ -109,4 +112,23 @@ const results = [];
 for (const mode of [0, 1, 2]) results.push(await scenario({ mode }));
 results.push(await scenario({ local: true }), await scenario({ moves: 1 }), await scenario({ cancelReturn: true }));
 for (const invalid of ['generation', 'empty-goal', 'attempts']) results.push(await scenario({ invalid }));
+const area = await mkdtemp(join(tmpdir(), 'mobile repository-'));
+try {
+  const source = join(area, 'source'); await mkdir(join(source, 'src'), { recursive: true });
+  await writeFile(join(source, evidence[1]), evidence[3]);
+  const git = (...args) => execFileSync('git', ['-C', source, '-c', 'core.hooksPath=/dev/null', ...args], {
+    encoding: 'utf8', env: { PATH: process.env.PATH, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null',
+      GIT_AUTHOR_NAME: 'Fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid', GIT_COMMITTER_NAME: 'Fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid' },
+  }).trim();
+  git('init', '--quiet'); git('add', '.'); git('commit', '--quiet', '-m', 'admitted source');
+  const options = { directory: join(area, 'managed'), sourceGitDirectory: join(source, '.git'), base: git('rev-parse', 'HEAD'),
+    gitExecutable: await realpath(execFileSync('/usr/bin/which', ['git'], { encoding: 'utf8' }).trim()),
+    repository: 'project', generation: 'import-1', managedRef: 'refs/heads/agent/delivery', readPaths: [evidence[1]], writablePaths: [evidence[1]] };
+  const receipt = await provisionRepository(options);
+  const leaf = await createManagedRepositoryEnvironment({ ...options, ...receipt, resourceOwner: 'workspace', classification: ['shared'] });
+  const selectedSnapshot = await leaf.snapshot(['project', options.base]), selectedEvidence = await leaf.read([selectedSnapshot, evidence[1]]);
+  assert.equal(selectedEvidence[3], evidence[3]);
+  results.push(await scenario({ leaf, selectedSnapshot, selectedEvidence }));
+  assert.equal(git('status', '--porcelain'), '');
+} finally { await rm(area, { recursive: true, force: true }); }
 console.log(JSON.stringify({ check: 'mobile-repository-continuation', kernel: identity.kernelSha256, imageBytes: image.length, results }));

@@ -9,7 +9,7 @@ import { DEFAULT_LOCK, readDependencyLock, readRegular, sha256, verifyRuntime } 
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const runtimeFiles = ["runtime/world.mjs", "runtime/world.d.mts", "runtime/values.mjs", "runtime/runner.mjs", "runtime/cli.mjs",
-  "runtime/model.mjs", "runtime/document.mjs", "runtime/repository_delivery.mjs", "runtime/repository.mjs", "runtime/repository_tests.mjs", "runtime/inquiry.mjs", "runtime/inquiry_sandbox.mjs",
+  "runtime/model.mjs", "runtime/document.mjs", "runtime/repository_delivery.mjs", "runtime/repository.mjs", "runtime/repository_snapshot.mjs", "runtime/repository_tests.mjs", "runtime/inquiry.mjs", "runtime/inquiry_sandbox.mjs",
   "runtime/inquiry_driver.mjs", "runtime/inquiry_wire.mjs", "runtime/inquiry_delivery.mjs", "runtime/inquiry_cli.mjs", "runtime/text_inspection.mjs", "runtime/text_file.mjs", "tools/agent4/dependencies.mjs",
   "runtime/parser_cli.mjs", "runtime/parser_kernel.mjs", "runtime/parser_tools.mjs", "runtime/parser_executor.mjs", "runtime/parser_evaluation.mjs", "runtime/parser_oracle.mjs", "runtime/parser_driver.mjs", "runtime/parser_delivery.mjs", "docs/parser-synthesis.md",
   "fixtures/incremental-parser-v1/batch.mjs", "fixtures/incremental-parser-v1/requirements.md",

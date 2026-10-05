@@ -60,13 +60,13 @@ function nativeComparedWorld(world, directory, observed) {
     } });
   } } };
 }
-export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, qualified = false, intake = false, sessionTasks = 0, nextMode = null, comparison = null } = {}) {
+export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, qualified = false, intake = false, sessionTasks = 0, nextMode = null, comparison = null, deterministicBase = false } = {}) {
   const sessionInput = mobile && Boolean(process.env.AGENT_MOBILE_PACKAGE || intake || sessionTasks || comparison);
   if (comparison) assert(mobile && mode === 1 && !qualified && !engine && !reviewFollowup && !sessionTasks, "comparison uses the same single-task propose workload");
   const stationary = comparison?.topology === "stationary", spendingHost = stationary ? "U" : "W";
   const revision = comparison ? `measure-${comparison.topology}-v1` : "p1";
   const workload = comparison?.workload ?? { repositoryBytes: 0, extraReads: 0, replayPaddingBytes: 0 };
-  const gitEnvironment = comparison ? { ...env, GIT_AUTHOR_DATE: "1791150000 +0000", GIT_COMMITTER_DATE: "1791150000 +0000" } : env;
+  const gitEnvironment = comparison || deterministicBase ? { ...env, GIT_AUTHOR_DATE: "1791150000 +0000", GIT_COMMITTER_DATE: "1791150000 +0000" } : env;
   const root = await mkdtemp(join(tmpdir(), 'repository-approval-'));
   const git = await realpath(execFileSync('/bin/sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim());
   const targetPath = qualified ? 'subject.zig' : 'fix.txt';

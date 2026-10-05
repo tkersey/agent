@@ -447,6 +447,7 @@ pub fn build(b: *std.Build) void {
     const mobile_repository_mutants = b.step("check-mobile-repository-mutants", "Detect explicit repository and custody mutants in isolated source copies");
     const mobile_repository_comparison = b.step("check-mobile-repository-comparison", "Check matched mobile and stationary proxy workloads");
     const mobile_repository_measure = b.step("measure-mobile-repository", "Collect thirty paired application measurements per declared cell");
+    const mobile_repository_attribution = b.step("measure-mobile-repository-attribution", "Measure browser verification and publication recovery separately");
     const mobile_repository_objects = nodeCommand(b);
     mobile_repository_objects.addArgs(&.{ "node", "--test", "test/agent4/repository_snapshot.test.mjs" });
     mobile_repository_objects.has_side_effects = true;
@@ -730,6 +731,20 @@ pub fn build(b: *std.Build) void {
             comparison_run.has_side_effects = true;
         }
         repository_approval_test.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
+        const attribution_run = nodeCommand(b);
+        attribution_run.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
+        attribution_run.addFileArg2(b.graph.path(.install_prefix, "repository-publication/agent-publication-gate"), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
+        if (browser_tools_path) |browser_tools| {
+            attribution_run.addDirectoryArg2(browser_tools, .{ .prefix = "AGENT_MOBILITY_BROWSER_TOOLS=", .make_absolute = true });
+        } else attribution_run.step.dependOn(&b.addFail("provide -Dbrowser-tools for browser attribution").step);
+        attribution_run.addArgs(&.{ "node", "test/agent4/mobile_repository_attribution.mjs" });
+        const attribution_report = attribution_run.addOutputFileArg2("mobile-repository-attribution.json", .{ .make_absolute = true });
+        attribution_run.step.dependOn(mobile_repository_images);
+        attribution_run.step.dependOn(repository_approval_images);
+        attribution_run.step.dependOn(publication_gate);
+        attribution_run.step.dependOn(&runtime_guard.step);
+        attribution_run.has_side_effects = true;
+        mobile_repository_attribution.dependOn(&b.addInstallFileWithDir(attribution_report, .prefix, "agent4/mobile-repository-attribution.json").step);
         if (browser_tools_path) |browser_tools| {
             repository_approval_test.addDirectoryArg2(browser_tools, .{ .prefix = "AGENT_MOBILITY_BROWSER_TOOLS=", .make_absolute = true });
         } else repository_approval_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);

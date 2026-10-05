@@ -120,3 +120,37 @@ setup and any warmup, and must not be attributed solely to the timed task.
 Browser-verification and restart attribution, actual UI operation counts, and
 final acceptance reconciliation remain open. This is a scoped mechanics result,
 not full reference, deployment or live qualification.
+
+## Supplemental browser and recovery attribution
+
+`measure-mobile-repository-attribution` uses the same source/runtime/prefix flags
+plus `-Dbrowser-tools`. Run measurement targets serially. It writes
+`agent4/mobile-repository-attribution.json` under the selected prefix and retains
+two warmup pairs followed by thirty measured pairs per cell.
+
+The browser cells restore the actual parked W-to-U relocation outcome from the
+full session program, then drive it without a reply and require byte-identical
+outcome bytes before retirement. Chromium and Firefox receive identical captured
+inputs, with alternating engine/workload order. The base and opaque-replay
+workloads produce different checkpoint sizes. Each sample has a fresh production
+Worker; module/kernel HTTP loading, preparation, restoration and message cloning
+are included. Browser/context creation, page setup, fixture generation and
+Playwright transport are excluded. Browser services and connections are warm.
+Host `WorldAdmission.parked` verification is reported separately with runtime and
+kernel bytes already loaded; it is not an equivalent browser-latency baseline.
+
+Recovery cells start after a real publication whose reply is deliberately lost.
+They compare reconciliation with the current custodian against executor retirement
+and journal close/reopen followed by the same reconciliation and authored return.
+Both must retain the exact published commit, invoke the publisher once, and finish
+with identical tool-work counts. The measurement excludes fixture creation,
+whole OS-process startup and native check-runner qualification. Source and helper
+hashes must remain unchanged during collection. No state bytes, keys or credentials
+are included in the report.
+
+The full installed deployment test can additionally write actual UI/CLI operation
+counts with `AGENT_REPOSITORY_OPERATOR_PROOF=OUTPUT.json`. These count the automated
+driver, including its 50 ms Continue polling and qualification-only negative CLI
+checks. They do not measure human dwell or establish a minimum number of required
+human gestures. An unchanged-state Continue is a before/after observation, not a
+claim that another click caused progress.

@@ -62,7 +62,8 @@ zig build check-mobile-repository -Doptimize=safe \
 
 ## Immutable repository preparation (W2, partial)
 
-The existing repository owner now offers managed snapshot/read bindings. Its
+The existing repository owner now offers managed snapshot, read, list, search,
+and read-window bindings. Its
 private Git object adapter provisions only an explicitly selected local commit,
 admits a pinned repository manifest and Git executable, and performs raw object
 reads/writes without checkout, filters, hooks, replacements, or network fetch.
@@ -84,6 +85,14 @@ passed after sharing their lexical path admission. A custom-prefix extracted
 use archive imported the new adapters and passed the existing repository
 execution witness: five cases, ten isolated test processes, and 99 fresh-kernel
 transfers. The complete mobile application is not yet installed in that archive.
+
+The portable query extension passes `check-mobile-repository` (42/42 steps),
+including compiled request/result schema round trips against a real managed
+repository. Pagination tests cover more than 32 entries, query-bound cursors,
+snapshot/owner rejection, safe integer offsets, and UTF-8 byte boundaries.
+The deployment loader accepts `repository-query` adapters for those five read
+operations, bound to the configured repository, manifest, host, and classification.
+This does not yet qualify the complete model-selected investigation loop.
 
 The [bounded Zig profile](mobile-repository-zig-profile.md) now passes its native
 qualification on Darwin 27.2.0 arm64. Nine probe cases exercise compiler reads,

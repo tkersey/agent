@@ -209,6 +209,16 @@ pub fn main(init: std.process.Init) !void {
             return write(init, bytes);
         }
     }
+    inline for (.{ .{ "list", t.ListRequest }, .{ "listing", t.Listing }, .{ "search", t.SearchRequest }, .{ "search-result", t.SearchResult }, .{ "read-window", t.ReadWindowRequest }, .{ "read-window-result", t.ReadWindow } }) |item| {
+        if (std.mem.eql(u8, mode, item[0])) {
+            var b = boundary.source.Builder.init(init.gpa);
+            defer b.deinit();
+            const schema = try agent.contracts.schema(item[1], &b);
+            const bytes = try boundary.data.schema.encodeOwned(init.gpa, b.schemas.items, schema);
+            defer init.gpa.free(bytes);
+            return write(init, bytes);
+        }
+    }
     if (!std.mem.eql(u8, mode, "image")) return error.InvalidMode;
     var compiled = try agent.compile(init.gpa, System);
     defer compiled.deinit();

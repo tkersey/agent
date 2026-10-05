@@ -21,6 +21,15 @@ pub const Snapshot = struct {
     resource_owner: Identifier,
 };
 pub const ReadRequest = struct { snapshot: Snapshot, path: Path };
+pub const Cursor = Text(2048);
+pub const ListRequest = struct { snapshot: Snapshot, prefix: Path, after: Cursor };
+pub const FileEntry = struct { path: Path, mode: Text(6), oid: Oid, bytes: u64, digest: Digest };
+pub const Listing = struct { snapshot_manifest: Digest, entries: Vector(FileEntry, 32), cursor: Cursor, total: u64 };
+pub const SearchRequest = struct { snapshot: Snapshot, query: Text(256), prefix: Path, after: Cursor };
+pub const SearchHit = struct { path: Path, digest: Digest, line: u64, excerpt: Text(256), truncated: bool };
+pub const SearchResult = struct { snapshot_manifest: Digest, entries: Vector(SearchHit, 32), cursor: Cursor, truncated: bool };
+pub const ReadWindowRequest = struct { snapshot: Snapshot, path: Path, offset: u64, maximum: u32 };
+pub const ReadWindow = struct { evidence: Evidence, offset: u64, next_offset: u64, bytes: u64 };
 pub const Evidence = struct {
     snapshot_manifest: Digest,
     path: Path,
@@ -53,5 +62,8 @@ pub const Report = struct {
 };
 pub const SNAPSHOT = "agent.repository.snapshot.v1";
 pub const READ = "agent.repository.read.v1";
+pub const LIST = "agent.repository.list.v1";
+pub const SEARCH = "agent.repository.search.v1";
+pub const READ_WINDOW = "agent.repository.read-window.v1";
 pub const HUMAN = "agent.repository.human.v1";
 pub const RELEASE = "agent.repository.investigation-release.v1";

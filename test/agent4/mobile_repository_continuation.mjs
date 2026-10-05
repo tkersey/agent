@@ -128,6 +128,22 @@ try {
   const leaf = await createManagedRepositoryEnvironment({ ...options, ...receipt, resourceOwner: 'workspace', classification: ['shared'] });
   const selectedSnapshot = await leaf.snapshot(['project', options.base]), selectedEvidence = await leaf.read([selectedSnapshot, evidence[1]]);
   assert.equal(selectedEvidence[3], evidence[3]);
+  for (const [method, inputName, outputName, input] of [
+    ['list', 'list', 'listing', [selectedSnapshot, '', '']],
+    ['search', 'search', 'search-result', [selectedSnapshot, 'answer', '', '']],
+    ['readWindow', 'read-window', 'read-window-result', [selectedSnapshot, evidence[1], 0n, 32768]],
+  ]) {
+    const inputSchema = await schema(inputName), outputSchema = await schema(outputName);
+    const admitted = decodeValue(inputSchema, encodeValue(inputSchema, input));
+    const value = await leaf[method](admitted);
+    const decoded = decodeValue(outputSchema, encodeValue(outputSchema, value));
+    assert.deepEqual(decoded[0], method === 'readWindow' ? selectedEvidence : selectedSnapshot[5]);
+    if (method === 'list') {
+      assert.equal(decoded[1][0][0], evidence[1]); assert.equal(decoded[3], 1n);
+    } else if (method === 'search') {
+      assert.equal(decoded[1][0][0], evidence[1]); assert.equal(decoded[1][0][2], 1n);
+    } else assert.equal(decoded[2], BigInt(Buffer.byteLength(evidence[3])));
+  }
   results.push(await scenario({ leaf, selectedSnapshot, selectedEvidence }));
   assert.equal(git('status', '--porcelain'), '');
 } finally { await rm(area, { recursive: true, force: true }); }

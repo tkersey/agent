@@ -15,6 +15,20 @@ export async function createManagedRepositoryEnvironment(options) {
       new Set(classification).size !== classification.length) throw new TypeError('invalid repository classification/owner');
   const labels = [...classification].sort(), store = await openRepositorySnapshotStore(storage);
   const bytes = hex => Array.from(Buffer.from(hex, 'hex'));
+  const evidence = value => [bytes(value.snapshot), value.path, bytes(value.digest), value.content, value.truncated];
+  function request(input, length) {
+    if (!Array.isArray(input) || input.length !== length) throw new TypeError('repository query request mismatch');
+    return snapshotValue(input[0]);
+  }
+  function cursor(value) {
+    if (!text(value, 2048)) throw new TypeError('repository cursor mismatch');
+    return value === '' ? null : value;
+  }
+  function integer(value) {
+    const number = typeof value === 'bigint' ? Number(value) : value;
+    if (!Number.isSafeInteger(number) || number < 0) throw new TypeError('repository query bounds');
+    return number;
+  }
   function snapshotValue(value) {
     if (!Array.isArray(value) || value.length !== 9 || value[0] !== storage.repository || value[1] !== storage.generation ||
         JSON.stringify(value[7]) !== JSON.stringify(labels) || value[8] !== resourceOwner || ![0, 1].includes(value[2]) ||
@@ -31,9 +45,22 @@ export async function createManagedRepositoryEnvironment(options) {
         bytes(value.manifest), bytes(value.scopeManifest), [...labels], resourceOwner];
     },
     async read(input) {
-      if (!Array.isArray(input) || input.length !== 2) throw new TypeError('repository read request mismatch');
-      const value = await store.read(snapshotValue(input[0]), input[1]);
-      return [bytes(value.snapshot), value.path, bytes(value.digest), value.content, value.truncated];
+      return evidence(await store.read(request(input, 2), input[1]));
+    },
+    async readWindow(input) {
+      const selected = request(input, 4);
+      const value = await store.read(selected, input[1], { offset: integer(input[2]), maximum: integer(input[3]) });
+      return [evidence(value), value.offset, value.nextOffset, value.bytes];
+    },
+    async list(input) {
+      const selected = request(input, 3);
+      const value = await store.list(selected, { prefix: input[1], after: cursor(input[2]) });
+      return [bytes(selected.manifest), value.entries.map(row => [row[0], row[1], row[2], row[3], bytes(row[4])]), value.cursor ?? '', value.total];
+    },
+    async search(input) {
+      const selected = request(input, 4);
+      const value = await store.search(selected, { query: input[1], prefix: input[2], after: cursor(input[3]) });
+      return [bytes(selected.manifest), value.entries.map(hit => [hit.path, bytes(hit.digest), hit.line, hit.excerpt, hit.truncated]), value.cursor ?? '', value.truncated];
     },
   });
 }

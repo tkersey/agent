@@ -14,6 +14,7 @@ import { modelBinding } from './model.mjs';
 import { repositoryApprovalBinding } from './repository_approval.mjs';
 import { repositoryPublicationBinding } from './repository_publication.mjs';
 import { openRepositorySnapshotStore } from '../repository_snapshot.mjs';
+import { createManagedRepositoryEnvironment } from '../repository.mjs';
 import { BrowserSessions } from './sessions.mjs';
 import { serveBrowser } from './browser.mjs';
 import { HostPolicy } from './policy.mjs';
@@ -43,6 +44,26 @@ export async function openDeployment(configPath, { create = false } = {}) {
     const { adapter, ...metadata } = entry;
     const binding = { ...metadata, payloadSchema: bytes(metadata.payloadSchema), resultSchema: bytes(metadata.resultSchema) };
     const counts = { calls: 0 }; statistics.set(binding.operation, counts);
+    if (adapter.kind === 'repository-query') {
+      closed(adapter, ['kind', 'store', 'classification']);
+      closed(adapter.store, ['directory', 'gitExecutable', 'repository', 'generation', 'manifestSha256']);
+      const methods = new Map([
+        ['agent.repository.snapshot.v1', 'snapshot'], ['agent.repository.read.v1', 'read'],
+        ['agent.repository.list.v1', 'list'], ['agent.repository.search.v1', 'search'],
+        ['agent.repository.read-window.v1', 'readWindow'],
+      ]);
+      const method = methods.get(binding.operation);
+      requireThat(method && binding.role === 'read' && binding.subject === adapter.store.repository &&
+        binding.subjectVersion === adapter.store.manifestSha256 &&
+        JSON.stringify(binding.classification) === JSON.stringify(adapter.classification), 'AdapterContract');
+      const leaf = await createManagedRepositoryEnvironment({ ...adapter.store, directory: path(adapter.store.directory),
+        gitExecutable: path(adapter.store.gitExecutable), resourceOwner: config.hostId, classification: adapter.classification });
+      const result = decodeSchema(binding.resultSchema);
+      binding.authorize = payload => Array.isArray(payload) && (method === 'snapshot' ? payload[0] === adapter.store.repository :
+        Array.isArray(payload[0]) && payload[0][0] === adapter.store.repository && payload[0][1] === adapter.store.generation);
+      binding.handle = async ({ payload }) => { counts.calls++; return encodeValue(result, await leaf[method](payload)); };
+      return binding;
+    }
     if (adapter.kind === 'openai-responses-replay') {
       const leaf = modelBinding(binding, adapter, config.hostId), handle = leaf.handle;
       leaf.handle = context => { counts.calls++; return handle(context); };

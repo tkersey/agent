@@ -498,7 +498,7 @@ pub fn build(b: *std.Build) void {
     for ([_][]const u8{ "task", "preparation", "result", "proposal", "receipt", "delivery", "human", "human-reply", "identifier", "boolean" }) |name|
         g.emit(repository_approval_images, repository_approval_emitter, &.{name}, b.fmt("repository-approval/{s}.schema", .{name}));
     g.emit(mobile_repository_images, mobile_repository_emitter, &.{"image"}, "mobile-repository/program.bpi3");
-    for ([_][]const u8{ "task", "report", "snapshot-request", "snapshot", "read", "evidence", "question", "answer", "cleanup", "unit" }) |name|
+    for ([_][]const u8{ "task", "report", "snapshot-request", "snapshot", "read", "evidence", "list", "listing", "search", "search-result", "read-window", "read-window-result", "question", "answer", "cleanup", "unit" }) |name|
         g.emit(mobile_repository_images, mobile_repository_emitter, &.{name}, b.fmt("mobile-repository/{s}.schema", .{name}));
     const mobility_images = b.step("mobility-images", "Emit the independent mobility consumer");
     const mobility_approval_images = b.step("mobility-approval-images", "Emit the movable approval and fixture replacement consumer");

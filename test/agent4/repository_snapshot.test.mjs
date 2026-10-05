@@ -106,6 +106,38 @@ test('managed leaf wire binds repository, generation, classification and owner w
   await assert.rejects(access(sentinel), { code: 'ENOENT' });
 });
 
+test('portable snapshot queries preserve pagination, byte boundaries and query provenance', async t => {
+  const f = await fixture(t);
+  const leaf = await createManagedRepositoryEnvironment({ ...f.options, ...f.receipt, resourceOwner: 'workspace', classification: ['shared'] });
+  const selected = await leaf.snapshot(['fixture', f.base]);
+  const first = await leaf.list([selected, '', '']);
+  const last = await leaf.list([selected, '', first[2]]);
+  assert.deepEqual(first[0], selected[5]);
+  assert.equal(first[1].length, 32); assert.equal(last[1].length, 10);
+  assert.equal(last[2], ''); assert.equal(last[3], 42);
+  const entry = first[1].find(row => row[0] === 'file-00.txt');
+  assert.equal(entry[1], '100644');
+  assert.equal(entry[3], Buffer.byteLength(f.contents.get(entry[0])));
+  assert.equal(Buffer.from(entry[4]).toString('hex'), hash(f.contents.get(entry[0])));
+  await assert.rejects(leaf.list([selected, 'file-', first[2]]), { code: 'RepositoryCursor' });
+  const hits = await leaf.search([selected, 'needle', '', '']);
+  const tail = await leaf.search([selected, 'needle', '', hits[2]]);
+  assert.deepEqual(hits[0], selected[5]); assert.equal(hits[1].length + tail[1].length, 40);
+  assert.equal(tail[2], ''); assert.equal(tail[3], false);
+  await assert.rejects(leaf.search([selected, 'changed', '', hits[2]]), { code: 'RepositoryCursor' });
+  const head = await leaf.readWindow([selected, 'unicode.txt', 0n, 32767]);
+  const rest = await leaf.readWindow([selected, 'unicode.txt', BigInt(head[2]), 32768]);
+  assert.equal(head[2], 32764); assert.equal(rest[2], 36000); assert.equal(rest[3], 36000);
+  assert.equal(head[0][3] + rest[0][3], f.contents.get('unicode.txt'));
+  await assert.rejects(leaf.readWindow([selected, 'unicode.txt', 1n, 32768]), { code: 'RepositoryReadBounds' });
+  await assert.rejects(leaf.readWindow([selected, 'unicode.txt', 2n ** 63n, 32768]), /query bounds/);
+  for (const method of ['list', 'search', 'readWindow']) {
+    const forged = structuredClone(selected); forged[8] = 'other-owner';
+    const input = method === 'list' ? [forged, '', ''] : method === 'search' ? [forged, 'needle', '', ''] : [forged, 'unicode.txt', 0, 1];
+    await assert.rejects(leaf[method](input), /binding mismatch/);
+  }
+});
+
 test('candidate preimages, scopes, modes, binary replacements and forged snapshots reject before publication', async t => {
   const f = await fixture(t), selected = await f.store.snapshot(f.base), edit = replacement(f, 'file-00.txt', 'changed\n');
   for (const [edits, code] of [

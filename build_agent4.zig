@@ -445,6 +445,8 @@ pub fn build(b: *std.Build) void {
     const mobile_repository_check = b.step("check-mobile-repository", "Check the authored mobile repository application");
     const mobile_repository_native = b.step("check-mobile-repository-native", "Compare native and WASM repository application continuations");
     const mobile_repository_mutants = b.step("check-mobile-repository-mutants", "Detect explicit repository and custody mutants in isolated source copies");
+    const mobile_repository_comparison = b.step("check-mobile-repository-comparison", "Check matched mobile and stationary proxy workloads");
+    const mobile_repository_measure = b.step("measure-mobile-repository", "Collect thirty paired application measurements per declared cell");
     const mobile_repository_objects = nodeCommand(b);
     mobile_repository_objects.addArgs(&.{ "node", "--test", "test/agent4/repository_snapshot.test.mjs" });
     mobile_repository_objects.has_side_effects = true;
@@ -704,6 +706,24 @@ pub fn build(b: *std.Build) void {
         repository_mutants_run.step.dependOn(&runtime_guard.step);
         repository_mutants_run.has_side_effects = true;
         mobile_repository_mutants.dependOn(&repository_mutants_run.step);
+        for ([_]bool{ false, true }) |measure| {
+            const comparison_run = nodeCommand(b);
+            comparison_run.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
+            comparison_run.addFileArg2(b.graph.path(.install_prefix, "repository-publication/agent-publication-gate"), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
+            if (measure) {
+                comparison_run.addArgs(&.{ "node", "test/agent4/mobile_repository_measure.mjs" });
+                const report = comparison_run.addOutputFileArg2("mobile-repository-comparison.json", .{ .make_absolute = true });
+                mobile_repository_measure.dependOn(&b.addInstallFileWithDir(report, .prefix, "agent4/mobile-repository-comparison.json").step);
+            } else {
+                comparison_run.addArgs(&.{ "node", "--test", "test/agent4/repository_comparison.test.mjs" });
+                mobile_repository_comparison.dependOn(&comparison_run.step);
+            }
+            comparison_run.step.dependOn(mobile_repository_images);
+            comparison_run.step.dependOn(repository_approval_images);
+            comparison_run.step.dependOn(publication_gate);
+            comparison_run.step.dependOn(&runtime_guard.step);
+            comparison_run.has_side_effects = true;
+        }
         repository_approval_test.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
         if (browser_tools_path) |browser_tools| {
             repository_approval_test.addDirectoryArg2(browser_tools, .{ .prefix = "AGENT_MOBILITY_BROWSER_TOOLS=", .make_absolute = true });
@@ -1148,6 +1168,8 @@ pub fn build(b: *std.Build) void {
         mobile_repository_check.dependOn(&missing.step);
         mobile_repository_native.dependOn(&missing.step);
         mobile_repository_mutants.dependOn(&missing.step);
+        mobile_repository_comparison.dependOn(&missing.step);
+        mobile_repository_measure.dependOn(&missing.step);
         repository_approval_check.dependOn(&missing.step);
         compiled_tools_check.dependOn(&missing.step);
         mobility_continuation.dependOn(&missing.step);

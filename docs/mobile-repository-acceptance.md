@@ -247,6 +247,12 @@ yet exercise the new check configuration through the extracted loader.
 
 ## Remaining acceptance
 
+The [matched comparison harness](mobile-repository-comparison.md) now passes
+equivalent-image/input/patch/work-count checks, actual cold/warm image-cache
+checks, and proxy payload-substitution rejection. Its thirty-pair measurements
+and separate browser-verification attribution remain pending; smoke-test timing
+is not a performance conclusion.
+
 Remaining work includes complete deployment-loader/check-profile examples,
 lifetime resource-accounting reconciliation, the complete MR-001–MR-096
 mapping, inherited exact-head regressions, complete fault qualification,

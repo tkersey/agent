@@ -455,6 +455,7 @@ pub fn build(b: *std.Build) void {
     const publication_gate = b.step("repository-publication-gate", "Install the process-owned managed Git publication gate");
     const publication_check = b.step("check-repository-publication-gate", "Qualify publication exclusion across parent death");
     const publication_test = nodeCommand(b);
+    const repository_package_check = b.step("check-mobile-repository-package", "Qualify the extracted full application with browser Workers and native checks");
     const repository_approval_check = b.step("check-repository-approval", "Check authenticated protected publication across two custodians and browsers");
     const repository_approval_test = nodeCommand(b);
     repository_approval_test.has_side_effects = true;
@@ -468,6 +469,7 @@ pub fn build(b: *std.Build) void {
             .optimize = .safe,
             .link_libc = true,
         }) });
+        emit.dependOn(&b.addInstallFileWithDir(gate_exe.getEmittedBin(), .prefix, "agent4/native/agent-publication-gate").step);
         publication_gate.dependOn(&b.addInstallFileWithDir(gate_exe.getEmittedBin(), .prefix, "repository-publication/agent-publication-gate").step);
         publication_test.addFileArg2(gate_exe.getEmittedBin(), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
         repository_approval_test.addFileArg2(gate_exe.getEmittedBin(), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
@@ -483,8 +485,12 @@ pub fn build(b: *std.Build) void {
             .optimize = .safe,
             .link_libc = true,
         }) });
+        emit.dependOn(&b.addInstallFileWithDir(limit_exe.getEmittedBin(), .prefix, "agent4/native/agent-check-limit").step);
+        emit.dependOn(&b.addInstallFileWithDir(process_lock.getEmittedBin(), .prefix, "agent4/native/libagent-check-lock.dylib").step);
         repository_runner.dependOn(&b.addInstallFileWithDir(limit_exe.getEmittedBin(), .prefix, "repository-check/agent-check-limit").step);
         repository_runner.dependOn(&b.addInstallFileWithDir(process_lock.getEmittedBin(), .prefix, "repository-check/libagent-check-lock.dylib").step);
+        repository_approval_test.addFileArg2(limit_exe.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LIMIT=", .make_absolute = true });
+        repository_approval_test.addFileArg2(process_lock.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LOCK=", .make_absolute = true });
         mobile_repository_zig_test.addFileArg2(limit_exe.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LIMIT=", .make_absolute = true });
         mobile_repository_zig_test.addFileArg2(process_lock.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LOCK=", .make_absolute = true });
     }
@@ -498,6 +504,8 @@ pub fn build(b: *std.Build) void {
     g.emit(repository_approval_images, repository_approval_emitter, &.{"image"}, "repository-approval/program.bpi3");
     for ([_][]const u8{ "task", "preparation", "result", "check-result", "proposal", "receipt", "delivery", "human", "human-reply", "identifier", "boolean" }) |name|
         g.emit(repository_approval_images, repository_approval_emitter, &.{name}, b.fmt("repository-approval/{s}.schema", .{name}));
+    emit.dependOn(mobile_repository_images);
+    emit.dependOn(repository_approval_images);
     g.emit(mobile_repository_images, mobile_repository_emitter, &.{"image"}, "mobile-repository/program.bpi3");
     for ([_][]const u8{ "task", "report", "snapshot-request", "snapshot", "read", "evidence", "list", "listing", "search", "search-result", "read-window", "read-window-result", "question", "answer", "cleanup", "unit", "model-request", "model-result", "candidate-preparation", "publication-preparation", "review", "review-answer" }) |name|
         g.emit(mobile_repository_images, mobile_repository_emitter, &.{name}, b.fmt("mobile-repository/{s}.schema", .{name}));
@@ -686,8 +694,18 @@ pub fn build(b: *std.Build) void {
         if (browser_tools_path) |browser_tools| {
             repository_approval_test.addDirectoryArg2(browser_tools, .{ .prefix = "AGENT_MOBILITY_BROWSER_TOOLS=", .make_absolute = true });
         } else repository_approval_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
-        repository_approval_test.addArgs(&.{ "node", "--test", "test/agent4/repository_publication_approval.test.mjs" });
+        repository_approval_test.addArgs(&.{ "node", "--test", "test/agent4/repository_publication_approval.test.mjs", "test/agent4/mobility_task_catalogue.test.mjs" });
         repository_approval_test.step.dependOn(&runtime_guard.step);
+        const repository_package_test = nodeCommand(b);
+        repository_package_test.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
+        if (browser_tools_path) |browser_tools| {
+            repository_package_test.addDirectoryArg2(browser_tools, .{ .prefix = "AGENT_MOBILITY_BROWSER_TOOLS=", .make_absolute = true });
+        } else repository_package_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
+        repository_package_test.addArgs(&.{ "node", "--test", "test/agent4/mobile_repository_package.test.mjs" });
+        repository_package_test.step.dependOn(&package.step);
+        repository_package_test.step.dependOn(&runtime_guard.step);
+        repository_package_test.has_side_effects = true;
+        repository_package_check.dependOn(&repository_package_test.step);
         var previous_economy: ?*std.Build.Step = null;
         for ([_][]const u8{ "manual", "fixed", "ensure", "stationary" }) |mode| {
             const sample = nodeCommand(b);

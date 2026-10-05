@@ -17,7 +17,7 @@ async function body(req, maximum) {
   for await (const chunk of req) { size += chunk.length; requireThat(size <= maximum, 'BodyCapacity'); chunks.push(chunk); }
   requireThat(size === Number(length), 'TruncatedBody'); return Buffer.concat(chunks, size);
 }
-export async function serveBrowser(custodian, { key, cert, authenticate, redeem = null, audience, runtimePath, kernelBytes, host = '127.0.0.1', port = 0, publicOrigin = null, maximumAssignments = 64 }) {
+export async function serveBrowser(custodian, { key, cert, authenticate, redeem = null, catalogue = null, audience, runtimePath, kernelBytes, host = '127.0.0.1', port = 0, publicOrigin = null, maximumAssignments = 64 }) {
   requireThat(typeof authenticate === 'function' && typeof audience === 'string', 'BrowserAuthenticationRequired');
   requireThat(Number.isSafeInteger(maximumAssignments) && maximumAssignments > 0, 'AssignmentCapacity');
   const csrfKey = randomBytes(32), assignments = new Map(); let origin;
@@ -47,7 +47,7 @@ export async function serveBrowser(custodian, { key, cert, authenticate, redeem 
       const identity = await authenticate(req);
       requireThat(identity && typeof identity.sessionId === 'string' && identity.sessionId.length > 0 && identity.sessionId.length <= 256 && Array.isArray(identity.audiences) && identity.audiences.includes(audience), 'UserDenied');
       requireThat(req.url.length <= 1024 && !req.url.includes('?') && !req.url.includes('#'), 'InvalidRoute');
-      if (req.method === 'GET' && req.url === '/') return binary(res, Buffer.from('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Mobile Agent</title><main><h1>Mobile Agent</h1><label>Run <input id="run" autocomplete="off"></label> <button id="connect">Connect</button> <button id="continue">Continue</button> <button id="cancel">Cancel</button><p id="status" role="status">Ready</p><pre id="request"></pre><form id="answer" hidden><h2>Pending question</h2><div id="question"></div><label>Response <select id="choice" required></select></label><label>Text <textarea id="answer-text"></textarea></label><button>Send response</button></form></main><script type="module" src="/client.mjs"></script>'), 'text/html; charset=utf-8');
+      if (req.method === 'GET' && req.url === '/') return binary(res, Buffer.from('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Mobile Agent</title><main><h1>Mobile Agent</h1><form id="start-task" hidden><h2>New repository task</h2><label>Repository configuration <select id="task-entry" required></select></label><pre id="task-scope"></pre><label>Mode <select id="task-mode" required></select></label><label>Goal and acceptance expectations <textarea id="task-goal" required></textarea></label><button>Start task</button></form><label>Run <input id="run" autocomplete="off"></label> <button id="connect">Connect</button> <button id="continue">Continue</button> <button id="cancel">Cancel</button><p id="status" role="status">Ready</p><pre id="request"></pre><a id="export-result" hidden download="repository-task-result.json">Download task result and proposal</a><form id="answer" hidden><h2>Pending question</h2><div id="question"></div><label>Response <select id="choice" required></select></label><label>Text <textarea id="answer-text"></textarea></label><button>Send response</button></form></main><script type="module" src="/client.mjs"></script>'), 'text/html; charset=utf-8');
       if (req.method === 'GET' && assets.has(req.url)) return binary(res, assets.get(req.url), 'text/javascript');
       if (req.method === 'GET' && req.url === '/worker.mjs') return binary(res, worker, 'text/javascript');
       if (req.method === 'GET' && req.url === '/kernel.wasm') return binary(res, kernelBytes, 'application/wasm');
@@ -56,12 +56,22 @@ export async function serveBrowser(custodian, { key, cert, authenticate, redeem 
       if (req.method === 'GET' && req.url === '/v1/browser/session') {
         return json(res, { csrf: csrf(identity), host_id: custodian.hostId });
       }
-      const route = /^\/v1\/browser\/runs\/([^/]+)\/(attach|command|report|image|outcome|reply|status|metrics|retry|cancel|question|answer)$/.exec(req.url);
+      if (req.method === 'GET' && req.url === '/v1/browser/tasks') return json(res, catalogue?.list(identity) ?? [], 200, 1 << 20);
+      if (req.method === 'POST' && req.url === '/v1/browser/tasks') {
+        requireThat(catalogue !== null, 'TaskIntakeUnavailable');
+        requireThat(req.headers.origin === origin && typeof req.headers['x-agent-csrf'] === 'string' && same(req.headers['x-agent-csrf'], csrf(identity)), 'CsrfDenied');
+        return json(res, await catalogue.start(identity, parse(await body(req, 32768))));
+      }
+      const route = /^\/v1\/browser\/runs\/([^/]+)\/(attach|command|report|image|outcome|reply|status|metrics|retry|cancel|question|answer|result-schema)$/.exec(req.url);
       requireThat(route !== null, 'UnknownRoute'); const id = decodeURIComponent(route[1]), operation = route[2];
       const run = custodian.authorizeUser(id, identity, { cleanup: ['cancel', 'status', 'metrics'].includes(operation),
         executor: ['attach', 'command', 'report', 'image', 'outcome', 'reply'].includes(operation) });
+      if (catalogue && !['cancel', 'metrics', 'retry'].includes(operation)) catalogue.authorizeView(identity, run);
       if (req.method === 'POST') {
         requireThat(req.headers.origin === origin && typeof req.headers['x-agent-csrf'] === 'string' && same(req.headers['x-agent-csrf'], csrf(identity)), 'CsrfDenied');
+      }
+      if (req.method === 'GET' && operation === 'result-schema') {
+        const schema = catalogue?.resultSchema(run.image_digest); requireThat(schema, 'ResultSchemaUnavailable'); return binary(res, schema);
       }
       if (req.method === 'GET' && operation === 'status') return json(res, custodian.status(id));
       if (req.method === 'GET' && operation === 'question') return json(res, custodian.pendingQuestion(id, identity), 200, (2 << 20) + 8192);

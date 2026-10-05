@@ -432,6 +432,17 @@ export class CustodyJournal {
       .filter(row => row.operation === operation && row.reply_digest)
       .map(row => this.artifact(run.tenant_ref, row.reply_digest));
   }
+  latestPublication(runId) {
+    const run = this.run(runId); requireThat(run, 'UnknownRun');
+    const rows = this.#all('SELECT body FROM occurrences WHERE run_id=? ORDER BY rowid DESC', runId);
+    for (const row of rows) {
+      const occurrence = readJson(row.body);
+      if (!occurrence.publication_receipt_digest) continue;
+      const receipt = parse(this.artifact(run.tenant_ref, occurrence.publication_receipt_digest), { maximum: 2 << 20 });
+      if (receipt.status === 'Published') return receipt;
+    }
+    return null;
+  }
   publicationRecords(tenant, repository, generation, managedRef) {
     // Occurrences already have a tenant-wide record quota. Do not create a
     // second workflow database or infer successful publication from a reflog.

@@ -135,7 +135,8 @@ export class Custodian {
   retireAll() { for (const id of this.#residents.keys()) this.#retire(id); }
   status(id) {
     const run = this.#run(id), occurrence = this.#journal.occurrence(run.current_occurrence_id);
-    return { ...this.#journal.custodyKnowledge(run), run_id: id, host_id: this.hostId, custody: run.status, epoch: run.custody_epoch, revision: run.execution_revision,
+    const publication = this.#journal.latestPublication(id);
+    return { ...(publication ? { delivery: { status: 'published', presentation: run.status === 'TERMINAL' && run.outcome_kind === 'completed' ? 'available' : 'pending', receipt: publication } } : {}), ...this.#journal.custodyKnowledge(run), run_id: id, host_id: this.hostId, custody: run.status, epoch: run.custody_epoch, revision: run.execution_revision,
       executor_incarnation: run.executor_incarnation, operation: occurrence?.operation ?? null, occurrence: occurrence?.status ?? null,
       classification: [...run.classification], transfer_id: run.transfer_id, cancellation_pending: run.cancel_requested !== null && run.status !== 'TERMINAL' && !(run.status === 'DEPARTED' && run.cancel_forwarded), cancellation_applied: run.cancel_applied, cancellation_forwarded: run.cancel_forwarded ?? false, local_move_attempts: run.local_move_attempts };
   }

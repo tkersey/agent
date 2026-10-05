@@ -12,7 +12,7 @@ import { certificates } from './mobility_tls_fixture.mjs';
 async function bridge(t, options = {}) {
   const f = await hostFixture(t, { localData: true, ...options }), tls = await certificates(f.area);
   const origin = await serveBrowser(f.hosts.A, { ...tls.A, audience: 'human-A', runtimePath: process.env.AGENT_MOBILITY_RUNTIME,
-    kernelBytes: await readFile(join(process.env.AGENT_MOBILITY_RUNTIME, 'world-kernel.wasm')), maximumAssignments: 1,
+    kernelBytes: await readFile(join(process.env.AGENT_MOBILITY_RUNTIME, 'world-kernel.wasm')), maximumAssignments: 1, catalogue: options.catalogue ?? null,
     authenticate: req => ({ sessionId: req.headers.cookie ?? 'first', principal: 'user', tenant: 'tenant', audiences: ['human-A'] }) });
   t.after(() => origin.close());
   async function api(path, { method = 'GET', session = 'first', csrf, assignment, body = new Uint8Array() } = {}) {
@@ -199,4 +199,19 @@ for (const cancelSafe of [false, true]) test(`unknown background work is not ret
   await f.hosts.A.cancelRun(f.id, 'stop');
   assert.equal((await f.hosts.A.run(f.id)).kind, cancelSafe ? 'terminal' : 'effect_unknown');
   assert.equal(calls, 1); assert.equal(f.journals.A.allowance(f.id, 'model').used.attempts, 1);
+});
+
+
+test('browser task intake requires session-bound CSRF and passes only authenticated identity', async t => {
+  const starts = [], catalogue = { list: identity => [{ id: 'allowed', principal: identity.principal }],
+    async start(identity, request) { starts.push({ identity, request }); return { run_id: 'registered' }; } };
+  const f = await bridge(t, { catalogue }), csrf = (await f.api('/v1/browser/session')).json().csrf;
+  assert.deepEqual(canonical((await f.api('/v1/browser/tasks')).json()), canonical([{ id: 'allowed', principal: 'user' }]));
+  const body = canonical({ entry: 'allowed', mode: 'propose', goal: 'Inspect this repository' });
+  assert.equal((await f.api('/v1/browser/tasks', { method: 'POST', body })).status, 403);
+  assert.equal((await f.api('/v1/browser/tasks', { method: 'POST', body, csrf, session: 'other' })).status, 403);
+  assert.equal(starts.length, 0);
+  assert.equal((await f.api('/v1/browser/tasks', { method: 'POST', body, csrf })).status, 200);
+  assert.equal(starts[0].identity.principal, 'user'); assert.equal(starts[0].identity.tenant, 'tenant');
+  assert.deepEqual(canonical(starts[0].request), canonical({ entry: 'allowed', mode: 'propose', goal: 'Inspect this repository' }));
 });

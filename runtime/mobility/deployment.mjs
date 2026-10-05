@@ -19,6 +19,7 @@ import { createZigRepositorySandbox } from '../repository_zig_sandbox.mjs';
 import { selectZig } from '../../tools/agent4/toolchain.mjs';
 import { openRepositorySnapshotStore } from '../repository_snapshot.mjs';
 import { createManagedRepositoryEnvironment } from '../repository.mjs';
+import { taskCatalogue } from './task_catalogue.mjs';
 import { BrowserSessions } from './sessions.mjs';
 import { serveBrowser } from './browser.mjs';
 import { HostPolicy } from './policy.mjs';
@@ -29,8 +30,8 @@ import { schemas } from './values.mjs';
 
 export async function openDeployment(configPath, { create = false } = {}) {
   const root = dirname(resolve(configPath)), config = parse(readRegular(configPath, 1 << 20), { maximum: 1 << 20, canonicalOnly: false });
-  closed(config, ['format', 'hostId', 'trustDomain', 'revision', 'worldRuntime', 'directory', 'deploymentGeneration', 'keys', 'signer', 'deployments', 'bindings', 'labelDestinations', 'revoked', 'peers', 'tls', 'execution', ...(Object.hasOwn(config, 'browser') ? ['browser'] : [])]);
-  requireThat(config.format === 'agent-mobility-deployment/v1' && ['node', 'browser'].includes(config.execution), 'DeploymentConfiguration');
+  closed(config, ['format', 'hostId', 'trustDomain', 'revision', 'worldRuntime', 'directory', 'deploymentGeneration', 'keys', 'signer', 'deployments', 'bindings', 'labelDestinations', 'revoked', 'peers', 'tls', 'execution', ...(Object.hasOwn(config, 'browser') ? ['browser'] : []), ...(config.format === 'agent-mobility-deployment/v2' ? ['catalogue'] : [])]);
+  requireThat(['agent-mobility-deployment/v1', 'agent-mobility-deployment/v2'].includes(config.format) && ['node', 'browser'].includes(config.execution), 'DeploymentConfiguration');
   const path = value => { requireThat(typeof value === 'string' && value.length > 0, 'DeploymentPath'); return resolve(root, value); };
   const bytes = value => readRegular(path(value));
   // Authenticate the complete installed runtime before importing any of it.
@@ -177,6 +178,7 @@ export async function openDeployment(configPath, { create = false } = {}) {
       const client = new PeerClient({ ...entry, ...tls }); clients.push(client); peers.set(entry.hostId, client);
     }
     const custodian = new Custodian({ journal, admission, world, policy, peers });
+    const catalogue = config.format === 'agent-mobility-deployment/v2' ? taskCatalogue(config.catalogue, { bytes, keys, custodian, config, runtimeProfile: identity.kernelSha256 }) : null;
     let service = null, browserService = null, sessions = null;
     if (config.browser) {
       closed(config.browser, ['directory', 'audience', 'host', 'port', 'publicOrigin']);
@@ -185,13 +187,13 @@ export async function openDeployment(configPath, { create = false } = {}) {
         authorize: identity => identity.audiences[0] === config.browser.audience && !config.revoked.includes(`${identity.tenant}/${identity.principal}`) &&
           deployments.some(entry => entry.tenant === identity.tenant && entry.principals.includes(identity.principal)) });
     }
-    return { config, identity, world, journal, custodian, admission, peers, runtimePath, kernelBytes, sessions,
+    return { config, identity, world, journal, custodian, admission, peers, runtimePath, kernelBytes, sessions, catalogue,
       statistics: () => Object.fromEntries([...statistics].map(([name, value]) => [name, { calls: value.calls, ...(value.text ? value.text() : {}) }])),
       async serve() {
         requireThat(service === null, 'AlreadyServing');
         service = await servePeers(custodian, { ...tls, host: config.tls.host, port: config.tls.port, peerCertificates: new Map(config.peers.map(entry => [entry.fingerprint256, entry.hostId])) });
         try {
-          if (sessions) browserService = await serveBrowser(custodian, { ...tls, ...config.browser, runtimePath, kernelBytes,
+          if (sessions) browserService = await serveBrowser(custodian, { ...tls, ...config.browser, runtimePath, kernelBytes, catalogue,
             authenticate: request => sessions.authenticate(request), redeem: (credential, audience) => sessions.redeem(credential, audience) });
           return { ...service, browser_url: browserService?.url ?? null };
         } catch (error) { await service.close(); service = null; throw error; }

@@ -2,8 +2,8 @@
 // and independent content check are deterministic reference capabilities.
 import test from 'node:test';
 import { createServer } from 'node:http';
-import { createManagedRepositoryEnvironment } from '../../runtime/repository.mjs';
-import { modelBinding } from '../../runtime/mobility/model.mjs';
+const { createManagedRepositoryEnvironment } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/repository.mjs')));
+const { modelBinding } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/model.mjs')));
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
@@ -13,45 +13,54 @@ import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { artifactRoot } from './artifacts.mjs';
-import { verifyRuntime } from '../../tools/agent4/dependencies.mjs';
-import { encodeValue, decodeValue, decodeSchema } from '../../runtime/values.mjs';
-import { provisionRepository, openRepositorySnapshotStore } from '../../runtime/repository_snapshot.mjs';
-import { repositoryCheckBinding } from '../../runtime/mobility/repository_check.mjs';
-import { repositoryApprovalBinding, repositoryReviewBinding } from '../../runtime/mobility/repository_approval.mjs';
-import { repositoryPublicationBinding, repositoryProposalBinding, PUBLICATION } from '../../runtime/mobility/repository_publication.mjs';
-import { WorldAdmission } from '../../runtime/mobility/admission.mjs';
-import { CustodyJournal } from '../../runtime/mobility/journal.mjs';
-import { BrowserSessions } from '../../runtime/mobility/sessions.mjs';
-import { serveBrowser } from '../../runtime/mobility/browser.mjs';
+const { verifyRuntime } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'tools/agent4/dependencies.mjs')));
+const { encodeValue, decodeValue, decodeSchema } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/values.mjs')));
+const { provisionRepository, openRepositorySnapshotStore } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/repository_snapshot.mjs')));
+const { repositoryCheckBinding } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/repository_check.mjs')));
+const { repositoryApprovalBinding, repositoryReviewBinding } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/repository_approval.mjs')));
+const { repositoryPublicationBinding, repositoryProposalBinding, PUBLICATION } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/repository_publication.mjs')));
+const { WorldAdmission } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/admission.mjs')));
+const { CustodyJournal } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/journal.mjs')));
+const { BrowserSessions } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/sessions.mjs')));
+const { serveBrowser } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/browser.mjs')));
 import { certificates } from './mobility_tls_fixture.mjs';
-import { Custodian } from '../../runtime/mobility/custodian.mjs';
-import { HostPolicy, requirement } from '../../runtime/mobility/policy.mjs';
-import { hash, canonical, runId, signRecord } from '../../runtime/mobility/protocol.mjs';
+const { Custodian } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/custodian.mjs')));
+const { HostPolicy, requirement } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/policy.mjs')));
+const { hash, canonical, runId, signRecord } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/protocol.mjs')));
 
+const applicationArtifacts = process.env.AGENT_MOBILE_PACKAGE ? join(process.env.AGENT_MOBILE_PACKAGE, 'examples') : join(artifactRoot, 'agent4');
+const schemaExtension = process.env.AGENT_MOBILE_PACKAGE ? 'bin' : 'schema';
+const { createZigRepositorySandbox } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/repository_zig_sandbox.mjs')));
+const { createRepositoryCheckRunner } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/repository_checks.mjs')));
+const { taskCatalogue } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/task_catalogue.mjs')));
+const { selectZig } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'tools/agent4/toolchain.mjs')));
 const text = value => Buffer.from(canonical(value, 2 << 20)).toString('utf8');
 const env = { PATH: '/usr/bin:/bin', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null',
   GIT_AUTHOR_NAME: 'Approval fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid',
   GIT_COMMITTER_NAME: 'Approval fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid' };
-async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false } = {}) {
+async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, qualified = false, intake = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'repository-approval-'));
   const git = await realpath(execFileSync('/bin/sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim());
+  const targetPath = qualified ? 'subject.zig' : 'fix.txt';
+  if (qualified) content = await readFile(new URL('../../src/model_json.zig', import.meta.url), 'utf8');
+  const before = qualified ? content.replace('.bool => 5,', '.bool => 4,') : 'before\n';
   const source = join(root, 'source.git');
   const command = (...args) => execFileSync(git, ['--git-dir=' + source, ...args], { env, encoding: 'utf8' }).trim();
   command('init', '--bare', '--quiet', '--template=');
-  const tree = mobile ? execFileSync(git, ['--git-dir=' + source, 'mktree'], { env, encoding: 'utf8', input: `100644 blob ${execFileSync(git, ['--git-dir=' + source, 'hash-object', '-w', '--stdin'], { env, encoding: 'utf8', input: 'before\n' }).trim()}\tfix.txt\n` }).trim() : command('mktree');
+  const tree = mobile ? execFileSync(git, ['--git-dir=' + source, 'mktree'], { env, encoding: 'utf8', input: `100644 blob ${execFileSync(git, ['--git-dir=' + source, 'hash-object', '-w', '--stdin'], { env, encoding: 'utf8', input: before }).trim()}\t${targetPath}\n` }).trim() : command('mktree');
   const base = command('commit-tree', tree, '-m', 'base');
   command('update-ref', 'refs/heads/fixture', base);
   const options = { directory: join(root, 'managed'), sourceGitDirectory: source, base, gitExecutable: git,
-    repository: 'fixture', generation: 'generation', managedRef: 'refs/heads/agent/result', readPaths: ['fix.txt'], writablePaths: ['fix.txt'] };
+    repository: 'fixture', generation: 'generation', managedRef: 'refs/heads/agent/result', readPaths: [targetPath], writablePaths: [targetPath] };
   const provisioned = await provisionRepository(options), store = await openRepositorySnapshotStore({ ...options, ...provisioned });
   const snapshot = await store.snapshot(base), candidate = await store.prepare(snapshot, [
-    { path: 'fix.txt', operation: mobile ? 'replace' : 'create', oldDigest: mobile ? (await store.read(snapshot, 'fix.txt')).digest : null, oldMode: mobile ? '100644' : null, content }]);
+    { path: targetPath, operation: mobile ? 'replace' : 'create', oldDigest: mobile ? (await store.read(snapshot, targetPath)).digest : null, oldMode: mobile ? '100644' : null, content }]);
   const identity = verifyRuntime(resolve(process.env.AGENT_MOBILITY_RUNTIME)), world = await import(pathToFileURL(identity.entrypoint));
-  const kernelBytes = await readFile(identity.kernelPath), image = await readFile(`${artifactRoot}/agent4/${mobile ? 'mobile-repository' : 'repository-approval'}/program.bpi3`);
+  const kernelBytes = await readFile(identity.kernelPath), image = await readFile(`${applicationArtifacts}/${mobile ? 'mobile-repository' : 'repository-approval'}/program.bpi3`);
   const names = ['task', 'preparation', 'result', 'check-result', 'proposal', 'receipt', 'delivery', 'human', 'human-reply', 'identifier', 'boolean'];
-  const bytes = Object.fromEntries(await Promise.all(names.map(async name => [name, await readFile(`${artifactRoot}/agent4/repository-approval/${name}.schema`)])));
+  const bytes = Object.fromEntries(await Promise.all(names.map(async name => [name, await readFile(`${applicationArtifacts}/repository-approval/${name}.${schemaExtension}`)])));
   if (mobile) for (const name of ['task', 'report', 'snapshot-request', 'snapshot', 'read', 'evidence', 'cleanup', 'unit', 'model-request', 'model-result', 'candidate-preparation', 'review', 'review-answer', 'read-window', 'read-window-result']) {
-    bytes[name === 'report' ? 'result' : name] = await readFile(`${artifactRoot}/agent4/mobile-repository/${name}.schema`);
+    bytes[name === 'report' ? 'result' : name] = await readFile(`${applicationArtifacts}/mobile-repository/${name}.${schemaExtension}`);
   }
   const schemas = Object.fromEntries(Object.entries(bytes).map(([name, value]) => [name, decodeSchema(value)]));
   const metadata = (operation, input, output, role) => ({ operation, payloadSchema: bytes[input], resultSchema: bytes[output], role,
@@ -62,8 +71,9 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
   const humanMetadata = metadata('agent.interaction.exchange.v1.repository.publish', 'human', 'human-reply', 'approval');
   const humanPlacement = [[[requirement(humanMetadata)], [[], { tag: 0, value: null }, { tag: 0, value: null }, 8n << 20n]], 'review', 'shared', [2, 1]];
   const workspace = mobile ? [[[requirement(metadata('agent.repository.snapshot.v1', 'snapshot-request', 'snapshot', 'read'))], [[], { tag: 0, value: null }, { tag: 0, value: null }, 8n << 20n]], 'workspace', 'shared', [reviewFollowup ? 6 : 4, 1]] : null;
-  const task = encodeValue(schemas.task, mobile ? [1n, 1n, mode, 'Make the bounded independently checked change.', 'fixture', base, 'fix.txt', workspace, humanPlacement,
+  const task = encodeValue(schemas.task, mobile ? [1n, 1n, mode, 'Make the bounded independently checked change.', 'fixture', base, targetPath, workspace, humanPlacement,
     ['fixture-model', [{ tag: 1, value: 512 }, { tag: 0, value: null }, { tag: 0, value: null }]], logicalSteps, reviewFollowup === 'amend' ? 2 : 1, 7n] : [7n, text(candidate), humanPlacement, placement]);
+  let expectedTask = decodeValue(schemas.task, task);
   // Derive the program identity from its actual first request, before effects.
   const kernel = await world.Kernel.create({ bytes: kernelBytes, expectedSha256: identity.kernelSha256 });
   kernel.setLimits({ input: 8 << 20, working: 64 << 20, output: 8 << 20 });
@@ -76,7 +86,21 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
   const journals = {}, hosts = {}, policies = {}, admissions = {}, peers = { W: new Map(), U: new Map() };
   let activeHost = mobile ? 'U' : 'W';
   const counts = { check: 0, publish: 0, human: 0 }, issued = new Set();
-  const profileDigest = '3'.repeat(64), runner = '4'.repeat(64);
+  let realChecks = null;
+  if (qualified) {
+    const nativeRoot = process.env.AGENT_MOBILE_PACKAGE ? join(process.env.AGENT_MOBILE_PACKAGE, 'examples/native') : join(applicationArtifacts, 'native');
+    const helpers = {};
+    for (const [name, file] of [['launcher', 'agent-check-limit'], ['processLock', 'libagent-check-lock.dylib']]) {
+      const path = await realpath(process.env.AGENT_MOBILE_PACKAGE ? join(nativeRoot, file) : process.env[name === 'launcher' ? 'AGENT_CHECK_LIMIT' : 'AGENT_CHECK_LOCK'] ?? join(nativeRoot, file)); helpers[name] = { path, sha256: hash(await readFile(path)) };
+    }
+    const sandbox = await createZigRepositorySandbox({ toolchain: selectZig([]), ...helpers });
+    assert.equal(sandbox.kind, 'qualified', JSON.stringify(sandbox));
+    const source = 'const std = @import("std"); const subject = @import("subject"); pub fn main() void { if (subject.maximumToolArgumentsByteLength(bool) != "false".len) std.c.exit(7); const text = "bound verified\\n"; _ = std.c.write(1, text.ptr, text.len); }';
+    realChecks = createRepositoryCheckRunner({ store, sandbox, profiles: [{ id: 'fixture-content', description: 'Independent JSON boolean bound', requiredPaths: [targetPath],
+      modules: [{ name: 'subject', path: targetPath, dependencies: [] }], harness: { source, sha256: hash(source) }, expectedStdout: 'bound verified\n', deterministic: true }] });
+    assert.equal((await realChecks.check({ snapshot, profileId: 'fixture-content', occurrence: 'baseline-control' })).status, 'Failed');
+  }
+  const profileDigest = realChecks?.profiles[0].digest ?? '3'.repeat(64), runner = realChecks?.runner ?? '4'.repeat(64);
   const configuration = { store, helper: { path: process.env.AGENT_PUBLICATION_GATE, sha256: hash(await readFile(process.env.AGENT_PUBLICATION_GATE)) },
     protectedImages: [{ image: hash(image), program: programId }], authorizationDigest: '1'.repeat(64), validationPolicyDigest: '2'.repeat(64),
     requiredProfiles: [{ id: 'fixture-content', profileDigest, runner }], checkResultSchema: bytes['check-result'],
@@ -96,8 +120,9 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
       profileId: 'fixture-content', profileDigest, runner, disclosure: { audience: null, labels: ['shared'] },
       allowance: { attempts: reviewFollowup === 'amend' ? 2 : 1, request_bytes: 4 << 20, concurrent: 1 } },
     runner: { runner, profiles: [{ id: 'fixture-content', digest: profileDigest }], async check({ candidate: exact, occurrence }) {
-      counts.check++; const inputs = await store.checkInputs({ snapshot: exact.snapshot, candidate: exact, requiredPaths: ['fix.txt'] });
-      assert.deepEqual(inputs.files['fix.txt'], Buffer.from(reviewFollowup === 'amend' && counts.check > 1 ? content + 'revised\n' : content));
+      counts.check++; if (realChecks) return realChecks.check({ snapshot: exact.snapshot, candidate: exact, occurrence, profileId: 'fixture-content' });
+      const inputs = await store.checkInputs({ snapshot: exact.snapshot, candidate: exact, requiredPaths: [targetPath] });
+      assert.deepEqual(inputs.files[targetPath], Buffer.from(reviewFollowup === 'amend' && counts.check > 1 ? content + 'revised\n' : content));
       const record = { format: 'agent.repository.check/v1', occurrence, snapshot: exact.snapshot, candidate: exact.id, tree: exact.tree,
         profile: 'fixture-content', profileDigest, runner, status: checkStatus, completedChecks: checkStatus === 'Passed' ? ['fixture-content'] : [] };
       return { ...record, id: hash(canonical(record, 2 << 20)) };
@@ -128,7 +153,7 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
       fixed('agent.repository.read.v1', 'read', 'evidence', 'read', ({ payload }) => leaf.read(payload)),
       fixed('agent.repository.read-window.v1', 'read-window', 'read-window-result', 'read', ({ payload }) => leaf.readWindow(payload)),
       fixed('agent.repository.prepare.v1', 'candidate-preparation', 'proposal', 'write', ({ payload }) => leaf.prepare(payload)));
-    cleanupBindings.push(fixed('agent.repository.investigation-release.v1', 'cleanup', 'unit', 'read', ({ payload }) => { assert.deepEqual(payload, [1n, 1n]); cleanupCalls++; return null; }));
+    cleanupBindings.push(fixed('agent.repository.investigation-release.v1', 'cleanup', 'unit', 'read', ({ payload }) => { assert.deepEqual(payload, expectedTask.slice(0, 2)); cleanupCalls++; return null; }));
     cleanupBindings[0].cleanup = true;
     provider = createServer(async (req, res) => {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -137,7 +162,7 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
       assert.equal(calls.length, turn, 'the provider can resume entirely from supplied replay');
       if (reviewFollowup === 'question' && turn >= 3) { assert(!request.tools.some(tool => ['edit', 'check'].includes(tool.name))); }
       const followup = turn >= 3;
-      const action = followup ? (reviewFollowup === 'question' ? (turn === 3 ? [misuse ? 'edit' : 'read', misuse ? { operation: 'replace', path: 'fix.txt', old_digest: candidate.edits[0].oldDigest, content: 'forbidden\n' } : { path: 'fix.txt', offset: 0 }] : ['finish', { summary: 'Read-only question answered; candidate unchanged.' }]) : (turn === 3 ? ['edit', { operation: 'replace', path: 'fix.txt', old_digest: candidate.edits[0].oldDigest, content: content + 'revised\n' }] : turn === 4 ? ['check', {}] : ['finish', { summary: 'Amended candidate independently checked.' }])) : mode === 0 ? ['finish', { summary: 'Inspected; no changes.' }] : turn === 0 ? ['edit', { operation: 'replace', path: 'fix.txt', old_digest: candidate.edits[0].oldDigest, content }] : turn === 1 ? ['check', {}] : ['finish', { summary: 'Candidate independently checked.' }];
+      const action = followup ? (reviewFollowup === 'question' ? (turn === 3 ? [misuse ? 'edit' : 'read', misuse ? { operation: 'replace', path: targetPath, old_digest: candidate.edits[0].oldDigest, content: 'forbidden\n' } : { path: targetPath, offset: 0 }] : ['finish', { summary: 'Read-only question answered; candidate unchanged.' }]) : (turn === 3 ? ['edit', { operation: 'replace', path: targetPath, old_digest: candidate.edits[0].oldDigest, content: content + 'revised\n' }] : turn === 4 ? ['check', {}] : ['finish', { summary: 'Amended candidate independently checked.' }])) : mode === 0 ? ['finish', { summary: 'Inspected; no changes.' }] : turn === 0 ? ['edit', { operation: 'replace', path: targetPath, old_digest: candidate.edits[0].oldDigest, content }] : turn === 1 ? ['check', {}] : ['finish', { summary: 'Candidate independently checked.' }];
       res.end(JSON.stringify({ status: 'completed', error: null, output: [
         { type: 'reasoning', id: `reason-${turn}`, summary: [], encrypted_content: `opaque-${turn}` },
         { type: 'function_call', id: `function-${turn}`, status: 'completed', call_id: `call-${turn}`, name: action[0], arguments: JSON.stringify(action[1]) },
@@ -166,21 +191,66 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
   }
   for (const host of ['W', 'U']) open(host, true);
   for (const [sourceHost, destination] of [['W', 'U'], ['U', 'W']]) peers[sourceHost].set(destination, {
-    preflight: metadata => hosts[destination].preflight(sourceHost, metadata), status: offer => hosts[destination].queryTransfer(sourceHost, offer),
+    preflight: metadata => { if (refuseReturn && sourceHost === 'W' && counts.publish) throw Object.assign(Error('ReturnUnavailable'), { code: 'DestinationDenied' }); return hosts[destination].preflight(sourceHost, metadata); }, status: offer => hosts[destination].queryTransfer(sourceHost, offer),
     deliver: envelope => hosts[destination].receiveOffer(sourceHost, envelope), withdraw: envelope => hosts[destination].withdraw(sourceHost, envelope),
     control: (...args) => hosts[destination].control(sourceHost, ...args),
   });
   t.after(async () => { for (const host of ['W', 'U']) { await hosts[host].stopOperations(); hosts[host].retireAll(); journals[host].close(); } await rm(root, { recursive: true, force: true }); });
-  const id = runId('issuer'), registration = signRecord('run', { format: 'agent-mobility-run/v1', run_id: id, issuer_id: 'issuer', principal_ref: 'user', tenant_ref: 'tenant',
+  let id = runId('issuer'); const registration = signRecord('run', { format: 'agent-mobility-run/v1', run_id: id, issuer_id: 'issuer', principal_ref: 'user', tenant_ref: 'tenant',
     image_digest: hash(image), program_id: programId, trusted_runtime_profile: identity.kernelSha256, allowed_host_policy_ref: 'fixture', deployment_policy_revision: 'p1',
     initial_classification: ['shared'], initial_host_id: mobile ? 'U' : 'W', initial_epoch: '0', deployment_limits: limits, key_id: 'issuer' }, pairs.issuer.privateKey);
-  await hosts[activeHost].registerRun(registration, image, task);
+  let catalogue = null;
+  if (intake) {
+    assert(mobile && engine);
+    const assets = { image, schema: bytes.task, report: bytes.result, task, key: pairs.issuer.privateKey.export({ type: 'pkcs8', format: 'pem' }) };
+    catalogue = taskCatalogue({ issuer: { id: 'issuer', keyId: 'issuer', privateKey: 'key' }, entries: [{ id: 'repository', title: 'Qualified managed repository', image: 'image', programId,
+      taskSchema: 'schema', reportSchema: 'report', initialTask: 'task', modes: ['inspect', 'propose', 'publish'], principals: [{ tenant: 'tenant', principal: 'user', taskPrincipal: '7' }],
+      scope: { read: [targetPath], write: [targetPath], checks: ['fixture-content'], target: 'refs/heads/agent/result' }, profile: 'bounded', presentation: { audience: 'human', labels: ['shared'], revision: 'p1' },
+    }] }, { bytes: name => assets[name], keys, runtimeProfile: identity.kernelSha256,
+      config: { hostId: 'U', trustDomain: 'fixture', revision: 'p1', revoked: [], deployments: [{ imageDigest: hash(image), programId, tenant: 'tenant', principals: ['user'], issuers: ['issuer'], hosts: ['U', 'W'], classification: ['shared'], limits }] },
+      custodian: { async registerRun(record, image, args) { expectedTask = decodeValue(schemas.task, args); return hosts.U.registerRun(record, image, args); }, status: id => hosts.U.status(id) } });
+  } else await hosts[activeHost].registerRun(registration, image, task);
+  let browserPage;
+  if (engine) {
+    assert(mobile);
+    const tls = await certificates(root), origin = await serveBrowser(hosts.U, { ...tls.A, catalogue, audience: 'human', runtimePath: resolve(process.env.AGENT_MOBILITY_RUNTIME), kernelBytes,
+      authenticate: () => ({ sessionId: 'worker-test', principal: 'user', tenant: 'tenant', audiences: ['human'] }) });
+    const browser = await engine.launch({ headless: true });
+    t.after(async () => { await browser.close(); await origin.close(); });
+    browserPage = await (await browser.newContext({ ignoreHTTPSErrors: true })).newPage();
+    await browserPage.goto(origin.url);
+    if (intake) {
+      await browserPage.locator('#start-task').waitFor({ state: 'visible' });
+      assert.equal(await browserPage.locator('#task-mode').inputValue(), 'propose');
+      await browserPage.locator('#task-mode').selectOption(['inspect', 'propose', 'publish'][mode]);
+      await browserPage.locator('#task-goal').fill('Make the bounded independently checked change.');
+      await browserPage.locator('#start-task button').click();
+      await browserPage.locator('#status').filter({ hasText: 'Task registered' }).waitFor();
+      id = await browserPage.locator('#run').inputValue(); assert.match(id, /^issuer:/);
+    }
+    await browserPage.evaluate(async id => { const { BrowserExecutor } = await import('/client.mjs'); window.executor = await new BrowserExecutor(id).initialize(); }, id);
+  }
+  async function runOriginWorker() {
+    for (let n = 0; n < 1000; n++) {
+      const result = await browserPage.evaluate(async () => {
+        if (!window.executor.worker) await window.executor.attach();
+        const result = await window.executor.advance();
+        if (result.kind === 'offered' || result.status?.custody === 'TERMINAL') await window.executor.retire();
+        return result;
+      });
+      if (result.kind === 'offered') return result;
+      if (result.status?.custody === 'TERMINAL') return { kind: 'terminal', status: result.status };
+      if (result.kind === 'blocked' && result.status?.occurrence === 'AWAITING') return { kind: 'awaiting', status: result.status };
+      await delay(1);
+    }
+    assert.fail('browser Worker transition bound');
+  }
   const moves = [];
   return { id, counts, store, base, moves, get modelCalls() { return modelCalls; }, get cleanupCalls() { return cleanupCalls; }, get journal() { return journals[activeHost]; },
     async run() {
       let transitions = 0;
       for (let n = 0; n < 1000; n++) {
-        const result = await hosts[activeHost].run(id);
+        const result = browserPage && activeHost === 'U' ? await runOriginWorker() : await hosts[activeHost].run(id);
         if (result.kind === 'dispatching') { await delay(10); continue; }
         assert(++transitions <= (mobile ? reviewFollowup ? 10 : 7 : 5), 'bounded authored transitions');
         if (result.kind === 'awaiting') {
@@ -210,6 +280,7 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
     outcomeKind() { const journal = journals[activeHost], run = journal.run(id); return world.decodeOutcome(journal.artifact('tenant', run.outcome_digest)).kind; },
     outcome() { const journal = journals[activeHost], run = journal.run(id), outcome = world.decodeOutcome(journal.artifact('tenant', run.outcome_digest));
       assert.equal(outcome.kind, 'completed'); return decodeValue(schemas.result, outcome.value); },
+    status(host = activeHost) { return hosts[host].status(id); },
     checkAllowance() { return journals.W.allowance(id, 'check'); },
     modelAllowance() { return journals.W.allowance(id, 'model'); },
     result() { const outcome = this.outcome(); assert.equal(outcome.tag, 0); return outcome.value; } };
@@ -236,6 +307,7 @@ test('lost publication reply resumes its actual checkpoint and recovers without 
   assert.deepEqual(f.moves, [['W', 'U'], ['U', 'W']]);
   const result = f.result(), receipt = JSON.parse(result.value.value);
   assert.equal(result.tag, 0); assert.equal(result.value.tag, 0); assert.equal(receipt.commit, commit); assert.equal(receipt.recovered, true);
+  assert.equal(f.status().delivery.status, "published"); assert.equal(f.status().delivery.receipt.commit, commit);
   assert.deepEqual(f.counts, { check: 1, publish: 1, human: 1 });
   assert.equal(f.checkAllowance().used.attempts, 1);
 });
@@ -332,4 +404,43 @@ test('cancellation at full-application review disposes its retained investigator
   assert.equal((await f.run()).kind, 'terminal'); assert.equal(f.outcomeKind(), 'cancelled');
   assert.equal(f.cleanupCalls, 1); assert.equal(f.modelCalls, 3); assert.equal(f.counts.publish, 0);
   assert.equal(await f.store.current(), f.base);
+});
+
+
+test('successful publication remains durable when the authored return is unavailable', async t => {
+  const f = await fixture(t, { mobile: true, refuseReturn: true });
+  assert.equal((await f.run()).kind, 'terminal'); assert.equal(f.outcomeKind(), 'failed');
+  assert.equal(f.counts.publish, 1); const commit = await f.store.current(); assert.notEqual(commit, f.base);
+  assert.equal(f.status().delivery.status, 'published'); assert.equal(f.status().delivery.presentation, 'pending');
+  assert.equal(f.status().delivery.receipt.commit, commit);
+  f.restart(); assert.equal(f.status().delivery.receipt.commit, commit); assert.equal(f.status().delivery.presentation, 'pending');
+  assert.equal((await f.run()).kind, 'terminal'); assert.equal(f.counts.publish, 1);
+});
+if (process.env.AGENT_MOBILITY_BROWSER_TOOLS) {
+  const { chromium, firefox } = await import(pathToFileURL(join(resolve(process.env.AGENT_MOBILITY_BROWSER_TOOLS), 'node_modules/playwright-core/index.mjs')));
+  for (const [name, engine] of [['chromium', chromium], ['firefox', firefox]]) for (const mode of [0, 1, 2]) test(name + ': full repository mode ' + mode + ' executes in real origin Workers across custody moves', async t => {
+    const f = await fixture(t, { mobile: true, mode, engine });
+    assert.equal((await f.run()).kind, 'terminal'); assert.equal(f.outcomeKind(), 'completed');
+    assert.equal(f.outcome()[2], mode); assert.equal(f.cleanupCalls, 1);
+    assert.equal(f.counts.publish, mode === 2 ? 1 : 0);
+    assert.deepEqual(f.moves, mode === 2 ? [['U', 'W'], ['W', 'U'], ['U', 'W'], ['W', 'U']] : [['U', 'W'], ['W', 'U']]);
+  });
+}
+
+if (process.env.AGENT_MOBILITY_BROWSER_TOOLS) test('full Agent source repair uses a real Worker, qualified Zig check and managed publication', async t => {
+  const { chromium } = await import(pathToFileURL(join(resolve(process.env.AGENT_MOBILITY_BROWSER_TOOLS), 'node_modules/playwright-core/index.mjs')));
+  const f = await fixture(t, { mobile: true, engine: chromium, qualified: true });
+  assert.equal((await f.run()).kind, 'terminal'); assert.equal(f.outcomeKind(), 'completed');
+  assert.equal(f.counts.check, 1); assert.equal(f.counts.publish, 1); assert.equal(f.cleanupCalls, 1);
+  const proposal = JSON.parse(f.outcome()[5]); assert.equal(proposal.core.validation[0].status, 'Passed');
+  assert.equal(proposal.core.validation[0].physicalExecutions, 2);
+  assert.equal(proposal.core.candidate.edits[0].path, 'subject.zig');
+  assert.notEqual(await f.store.current(), f.base);
+});
+
+if (process.env.AGENT_MOBILITY_BROWSER_TOOLS) test('browser catalogue starts an authenticated full task without protocol bytes', async t => {
+  const { chromium } = await import(pathToFileURL(join(resolve(process.env.AGENT_MOBILITY_BROWSER_TOOLS), 'node_modules/playwright-core/index.mjs')));
+  const f = await fixture(t, { mobile: true, engine: chromium, intake: true });
+  assert.equal((await f.run()).kind, 'terminal'); assert.equal(f.outcomeKind(), 'completed');
+  assert.equal(f.outcome()[2], 2); assert.equal(f.counts.publish, 1); assert.equal(f.cleanupCalls, 1);
 });

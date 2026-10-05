@@ -3,7 +3,11 @@
 The [accepted specification](mobile-repository-agent-spec.md) governs W0–W8 and
 MR-001–MR-096. This is an incomplete implementation, not a reference-qualified
 application. The draft PR includes the authored investigation/review/publication
-loop; intake, installed delivery, and final qualification remain open.
+loop, authorized catalogue intake, installed images/contracts/native helpers,
+and full Chromium/Firefox Worker execution. Final qualification remains open. The extracted package also passes a complete
+Worker-to-native-check-to-publication test over an isolated Agent source repair: an
+independent JSON boolean-bound harness fails the seeded incorrect base and passes
+the proposed correction under the qualified Zig profile.
 
 ## Foundation (W0)
 
@@ -48,7 +52,7 @@ invalid intake performs no effects. One scenario uses real managed Git. The mode
 transport is a fresh synthetic loopback endpoint on each turn; exact opaque replay
 items and paired tool results survive. These are not live-model usefulness tests.
 
-The full two-custodian suite passes 21 tests, including actual managed publication,
+The full two-custodian suite passes 30 application/component tests, including actual managed publication,
 all three application modes, read-only review questions, amendments, logical-budget
 exhaustion, attempted edits during read-only review, origin restart, and cancellation
 of the retained investigator. A review question preserves the candidate and check;
@@ -58,16 +62,22 @@ U→W→U→W→U with its private grant and exact managed receipt; inspect/prop
 the ref unchanged. The final remaining-move allowance includes approval placement.
 
 The same suite preserves the shared approval component's Chromium/Firefox tests
-and all six non-passing check dispositions. The full application has not yet been
-qualified in browser Workers or from the extracted use archive.
+and all six non-passing check dispositions. All three full-application modes also
+pass through real Chromium/Firefox Workers using extracted package modules and
+images, after deleting the archive's optional test oracles. A failed authored
+return after publication preserves the saved receipt and projects published;
+presentation pending, including after restart. These use synthetic provider and
+human inputs; they do not establish live-model usefulness or actual-person proof.
 
 Reproduce this slice using the existing authenticated setup:
 
 ```sh
 node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-mobile"
 zig build check-mobile-repository -Doptimize=safe \
+  -Dboundary-source="$PWD/.agent4-mobile/inputs/boundary" \
   -Dworld-source="$PWD/.agent4-mobile/inputs/world" \
-  -Dworld-runtime="$PWD/.agent4-mobile/out/world-runtime/runtime"
+  -Dworld-runtime="$PWD/.agent4-mobile/out/world-runtime/runtime" \
+  --prefix "$PWD/.agent4-mobile/out"
 ```
 
 ## Immutable repository preparation (W2, partial)
@@ -94,7 +104,10 @@ also passed. Temporary test and package paths include spaces.
 passed after sharing their lexical path admission. A custom-prefix extracted
 use archive imported the new adapters and passed the existing repository
 execution witness: five cases, ten isolated test processes, and 99 fresh-kernel
-transfers. The complete mobile application is not yet installed in that archive.
+transfers. The complete mobile image and all leaf contracts are now installed in that archive.
+On macOS it also carries the qualified check launcher, loader restriction and
+publication gate with inventory digests; executable helpers preserve executable
+archive modes. No authoring fallback is used.
 
 The portable query extension passes `check-mobile-repository` (42/42 steps),
 including compiled request/result schema round trips against a real managed
@@ -232,3 +245,11 @@ release deployment configurations still need their complete extracted-loader tes
 Live-provider, actual-person, and two-machine qualifications are not run and
 require separately authorized inputs. No core changes, live model calls,
 user-repository mutation, upstream publication, merge, promotion, or release occurred.
+
+The extracted qualification target is `check-mobile-repository-package` with
+the same source/runtime/prefix flags and
+`-Dbrowser-tools=/absolute/path/to/locked-playwright-tools`. It requires both
+browsers and executes eight independently checked cases after removing the
+archive's optional test oracles, including a qualified native Agent source repair.
+Catalogue admission has three focused tests; the browser bridge also rejects
+missing and cross-session CSRF before registration.

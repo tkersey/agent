@@ -7,6 +7,8 @@ const help = `Usage: node runtime/mobility/cli.mjs COMMAND CONFIG [ARGUMENTS]
   login-issue CONFIG PRINCIPAL TENANT  locally issue a one-use browser login credential
   serve CONFIG                        recover and serve authenticated configured peers
   start CONFIG REGISTRATION IMAGE ARGS start an issuer-authorized run
+  tasks CONFIG PRINCIPAL TENANT       list operator-authorized task configurations
+  task CONFIG PRINCIPAL TENANT ENTRY MODE GOAL  start a task from the catalogue
   status CONFIG [RUN]                  inspect custody without executing
   metrics CONFIG RUN                   inspect scoped counts, pins and ambiguity
   recover CONFIG                      fence interrupted effects and inspect custody
@@ -19,7 +21,7 @@ Stop the service before using a local custody mutation command. Login issuance i
 export async function main(argv) {
   if (argv.length === 0 || (argv.length === 1 && ['--help', '-h'].includes(argv[0]))) { console.log(help); return; }
   const [command, config, ...args] = argv;
-  const arity = { init: [0], serve: [0], start: [3], status: [0, 1], metrics: [1], recover: [0], retry: [1], receipt: [1], withdraw: [1], cancel: [2], 'login-issue': [2] };
+  const arity = { init: [0], serve: [0], start: [3], tasks: [2], task: [5], status: [0, 1], metrics: [1], recover: [0], retry: [1], receipt: [1], withdraw: [1], cancel: [2], 'login-issue': [2] };
   if (!config || !arity[command]?.includes(args.length)) throw new Error(help);
   const host = await openDeployment(config, { create: command === 'init' });
   const print = value => console.log(JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item));
@@ -27,6 +29,11 @@ export async function main(argv) {
   try {
     if (command === 'init') print({ initialized: host.config.hostId });
     else if (command === 'login-issue') { if (!host.sessions) throw new Error('BrowserSessionsNotConfigured'); print(host.sessions.issue({ principal: args[0], tenant: args[1], audience: host.config.browser.audience })); }
+    else if (command === 'tasks' || command === 'task') {
+      if (!host.catalogue) throw new Error('TaskIntakeUnavailable');
+      const identity = { principal: args[0], tenant: args[1] };
+      print(command === 'tasks' ? host.catalogue.list(identity) : await host.catalogue.start(identity, { entry: args[2], mode: args[3], goal: args[4] }));
+    }
     else if (command === 'status') print(args.length ? host.custodian.status(args[0]) : host.journal.recover().map(({ run }) => host.custodian.status(run.run_id)));
     else if (command === 'metrics') print(host.custodian.metrics(args[0]));
     else if (command === 'recover') print(host.custodian.recover());

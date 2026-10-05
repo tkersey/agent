@@ -2,8 +2,8 @@
 
 The existing mobility custodian and journal now support a known deferred leaf.
 This is environmental reply acquisition; the compiled World image still decides
-what happens after the reply. The repository application's complete proposal and
-approval UI is not yet implemented.
+what happens after the reply. The repository application presents its exact proposal and approval through this
+acquisition boundary.
 
 A trusted binding may provide synchronous `defer` and `answer` functions plus a
 `deferredRevision`. `defer` returns the audience, display question, allowed choice
@@ -90,9 +90,8 @@ Chromium and Firefox tests use the actual login form, show inert question text,
 restart the origin/custodian while waiting, reconnect with a fresh Worker, submit
 an answer and complete the inherited compiled fixture.
 
-These are synthetic-human tests, not actual-person qualification. They exercise
-the generic owner seam and inherited fixture; full Mobile Repository application
-and proposal/approval integration remain separate work.
+These are synthetic-human tests, not actual-person qualification. The full Mobile Repository image also completes all three modes through real
+Chromium/Firefox Workers, including the publication round trip.
 
 ## Retained application review
 
@@ -104,3 +103,61 @@ parked until review resolves; questions withhold mutation, and amendments invali
 the old candidate/check. The UI renders both proposal and publication diffs as text.
 A restarted origin retains the exact pending question; cancellation disposes the
 investigator once and cannot publish.
+
+## Authorized task intake
+
+Deployment configuration v1 stays closed. To enable intake, use
+`agent-mobility-deployment/v2` and add a `catalogue` with an explicit issuer and
+at most 64 entries. The issuer private key must match an active trusted issuer
+key; each entry/principal must already have an image/program deployment grant.
+The service never obtains issuer authority from a browser request.
+
+```json
+"catalogue": {
+  "issuer": { "id": "operator", "keyId": "operator-key", "privateKey": "private/operator.pem" },
+  "entries": [{
+    "id": "repository-default", "title": "Managed repository",
+    "image": "examples/mobile-repository/program.bpi3",
+    "programId": "OPERATOR_VERIFIED_PROGRAM_ID",
+    "taskSchema": "examples/mobile-repository/task.bin",
+    "reportSchema": "examples/mobile-repository/report.bin",
+    "initialTask": "private/authorized-task.args",
+    "modes": ["inspect", "propose", "publish"],
+    "principals": [{ "tenant": "team", "principal": "person", "taskPrincipal": "7" }],
+    "scope": { "read": ["src/example.zig"], "write": ["src/example.zig"],
+      "checks": ["operator-required-check"], "target": "refs/heads/agent/result" },
+    "profile": "Qualified bounded Zig check",
+    "presentation": { "audience": "human-A", "labels": ["shared"], "revision": "p1" }
+  }]
+}
+```
+
+The operator provisions the typed initial task with its exact repository/base,
+requirements, check/model profile and allowances. Scope descriptions must describe
+those operator grants; enforcement still belongs to the snapshot/check/publication
+owners. The packaged zero-work sample is not an executable authorization grant.
+All file paths resolve relative to the configuration file.
+
+The presentation grant independently gates browser state, proposals and report
+export by authenticated audience and the whole current state classification. A
+custody grant alone does not grant browser disclosure.
+
+The signed-in browser shows only that principal's entries, including base, scope,
+profile and work allowance. It defaults to `propose`. The person supplies a mode
+and goal/acceptance expectations, then starts and connects. Neither identity,
+image, repository, scope nor budget can be supplied in the start request. Each
+start gets a fresh registered run and task identity. The result can be downloaded
+as JSON containing the complete typed report, proposal and receipt. Browser
+content is rendered through text nodes, never interpreted as markup.
+
+The local operator CLI exposes the same catalogue without requiring manually
+encoded protocol records:
+
+```sh
+node runtime/mobility/cli.mjs tasks CONFIG PRINCIPAL TENANT
+node runtime/mobility/cli.mjs task CONFIG PRINCIPAL TENANT ENTRY propose 'Goal and acceptance expectations'
+```
+
+As with `start`, stop the custody service before using the local mutation command.
+The local operator owns the configuration/issuer key; these CLI identity arguments
+are not a remote authentication mechanism. Browser identity comes from its session.

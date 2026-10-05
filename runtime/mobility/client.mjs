@@ -32,6 +32,10 @@ export class BrowserExecutor {
       const request = await decodeRequest(outcome.request);
       observation = { ...observation, operation: request.semanticIdentity, payload: decodeValue(decodeSchema(request.payloadSchema), request.payload) };
     }
+    if (outcome.kind === 'completed') {
+      const response = await this.api('result-schema', 'GET').catch(() => null);
+      if (response) observation.value = decodeValue(decodeSchema(new Uint8Array(await response.arrayBuffer())), outcome.value);
+    }
     await this.onOutcome(observation);
   }
   async attach() {
@@ -115,6 +119,11 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
     if (executor) await executor.retire();
     executor = await new BrowserExecutor(document.querySelector('#run').value, value => {
       request.textContent = JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item, 2);
+      const download = document.querySelector('#export-result');
+      if (download && value.kind === 'completed' && value.value !== undefined) {
+        if (download.href.startsWith('blob:')) URL.revokeObjectURL(download.href);
+        download.href = URL.createObjectURL(new Blob([request.textContent], { type: 'application/json' })); download.hidden = false;
+      }
     }).initialize();
     await executor.attach(); status.textContent = 'Connected'; await showQuestion();
   });
@@ -128,7 +137,8 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
         return;
       }
       if (current.custody === 'DEPARTED') { status.textContent = 'Continuing at another host. Reconnect when it returns.'; return; }
-      if (current.custody === 'TERMINAL') { status.textContent = 'Finished'; return; }
+      if (current.delivery?.presentation === 'pending') { status.textContent = 'Published; presentation pending'; request.textContent = JSON.stringify(current.delivery.receipt, null, 2); }
+      if (current.custody === 'TERMINAL') { if (!current.delivery) status.textContent = 'Finished'; return; }
       await executor.attach(); status.textContent = 'Connected'; await showQuestion(); return;
     }
     const result = await executor.advance();
@@ -145,5 +155,32 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
     const result = await (await executor.api('cancel', 'POST', canonical({ reason: 'User cancelled' }))).json();
     status.textContent = ['cancel_pending', 'unknown'].includes(result.kind) ? 'Cancellation is waiting for the current host or a custody decision.' : 'Cancellation requested';
   });
+  const startForm = document.querySelector('#start-task');
+  if (startForm) {
+    const selector = document.querySelector('#task-entry'), mode = document.querySelector('#task-mode');
+    let catalogue = [];
+    const selected = () => catalogue.find(entry => entry.id === selector.value);
+    selector.onchange = () => {
+      const entry = selected(); mode.replaceChildren();
+      if (!entry) return;
+      document.querySelector('#task-scope').textContent = JSON.stringify({ repository: entry.repository, base: entry.base, scope: entry.scope, profile: entry.profile, budget: entry.budget }, null, 2);
+      for (const name of entry.modes) { const option = document.createElement('option'); option.value = name; option.textContent = name; mode.append(option); }
+      mode.value = entry.defaultMode;
+    };
+    fetch('/v1/browser/tasks').then(async response => { if (!response.ok) throw new Error('Task catalogue unavailable'); return response.json(); }).then(entries => {
+      catalogue = entries;
+      for (const entry of entries) { const option = document.createElement('option'); option.value = entry.id; option.textContent = entry.title; selector.append(option); }
+      startForm.hidden = entries.length === 0; selector.onchange();
+    }).catch(error => { status.textContent = error.message; });
+    startForm.onsubmit = action(async event => {
+      event.preventDefault();
+      const session = await (await fetch('/v1/browser/session')).json();
+      const response = await fetch('/v1/browser/tasks', { method: 'POST', headers: { 'x-agent-csrf': session.csrf },
+        body: canonical({ entry: selector.value, mode: mode.value, goal: document.querySelector('#task-goal').value }) });
+      const result = await response.json(); if (!response.ok) throw new Error(result.error);
+      document.querySelector('#run').value = result.run_id;
+      status.textContent = 'Task registered. Connect to start execution.';
+    });
+  }
   addEventListener('pagehide', () => executor?.worker?.terminate());
 }

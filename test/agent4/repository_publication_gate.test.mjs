@@ -133,10 +133,21 @@ if (process.argv[2] === 'gate-parent') {
     await assert.rejects(store.publishManaged(first, f.options.helper, () => { moveRef(racing.commitOid, f.base); return admitted; }, history));
     assert.equal(await store.current(), racing.commitOid);
     moveRef(f.base, racing.commitOid); // Reset only this isolated fault fixture.
-    const published = await store.publishManaged(first, f.options.helper, () => admitted, history);
+    let entered, release, winningAdmissions = 0, losingAdmissions = 0;
+    const admittedGate = new Promise(resolve => { entered = resolve; });
+    const finishAdmission = new Promise(resolve => { release = resolve; });
+    const winner = store.publishManaged(first, f.options.helper, async () => { winningAdmissions++; entered(); await finishAdmission; return admitted; }, history);
+    await admittedGate;
+    try {
+      await assert.rejects(store.publishManaged(racing, f.options.helper, () => { losingAdmissions++; return admitted; }, history), { code: 'PublicationGateBusy' });
+    } finally { release(); }
+    const published = await winner;
+    assert.equal(winningAdmissions, 1); assert.equal(losingAdmissions, 0);
     records.proposals.push(first); records.publishedCommits.push(first.commitOid);
     assert.equal(published.status, 'Published'); assert.deepEqual(published.admission, admitted);
     assert.equal(published.commit, first.commitOid);
+    const loser = await store.reconcilePublication(racing, f.options.helper, [first, racing], [first.commitOid]);
+    assert.equal(loser.status, 'Conflict'); assert.equal(loser.commit, null); assert.equal(await store.current(), first.commitOid);
     assert.equal((await store.reconcilePublication(first, f.options.helper, [first], [first.commitOid])).status, 'Published');
     const sameTree = await proposal(f.base, 'first\n', null, 3);
     assert.equal(sameTree.core.candidate.tree, first.core.candidate.tree); assert.notEqual(sameTree.commitOid, first.commitOid);

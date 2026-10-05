@@ -464,3 +464,129 @@ evidence packet also requires workspace metrics/usage and the operator’s indep
 judgment; origin metrics and structural contract matches do not establish a model
 success rate or discharge every acceptance row. See the operator documentation
 for fresh-origin, service, opt-in and wait-deadline behavior.
+
+## Acceptance-ID audit inventory
+
+This inventory identifies the deciding proof surfaces; it is not a blanket pass.
+`Final run pending` means the named checks exist and have scoped evidence above,
+but the final source subject and full assertion coverage still require reconciliation.
+External rows are explicitly not run. No row is upgraded merely by a green aggregate.
+
+| ID | Current disposition | Deciding evidence / remaining scope |
+|---|---|---|
+| MR-001 | Final run pending | dependencies.test.mjs; package_commands.test.mjs — authenticated tuple and mismatch rejection |
+| MR-002 | Final run pending | zig17.test.mjs; consumer_build.test.mjs — selected compiler/library and conflict checks |
+| MR-003 | Final run pending | check-agent4 + check-agent4-integration — final aggregate not yet executed |
+| MR-004 | Final run pending | mobile_repository_continuation.mjs; native agreement — public consumer, unchanged evaluator |
+| MR-005 | Final run pending | mobile_repository_deployment.test.mjs — separate installed hosts; recovery witnesses still need final correlation |
+| MR-006 | Final run pending | mobile_repository_deployment.test.mjs — extracted production loader; optional archive oracles removed |
+| MR-007 | Final run pending | mobility_task_catalogue.test.mjs; mobility_deployment.test.mjs — v1/v2 closed configuration |
+| MR-008 | Final run pending | mobility_host.test.mjs; package_commands.test.mjs; deployment validation — artifact/schema/program rejection |
+| MR-009 | Final run pending | mobile_repository_package.test.mjs; mobile_repository_deployment.test.mjs — extracted runtime path |
+| MR-010 | Final run pending | runtime/mobility/custodian.mjs + journal.mjs; installed deployment — one authoritative run store |
+| MR-011 | No core repair introduced | PR diff is Agent-only; dependency lock retains accepted Boundary/World tuple |
+| MR-012 | Final run pending | package_commands.test.mjs; installed test paths contain spaces; final aggregate uses custom prefix |
+| MR-013 | Final run pending | repository_publication_approval.test.mjs; installed deployment — full publish trace and exact commit |
+| MR-014 | Final run pending | mobility_ensure.mjs; mobile_repository_continuation.mjs — Here consumes no move |
+| MR-015 | Final run pending | mobility_host.test.mjs; deployment validation — missing binding and explicit failure |
+| MR-016 | Final run pending | mobility_host.test.mjs; mobility_protocol.test.mjs — requirement/schema/subject/version checks |
+| MR-017 | Final run pending | mobility_continuation.mjs; inquiry_runtime.mjs — retained caller values affect final output |
+| MR-018 | Final run pending | repository_publication_approval.test.mjs — retained question/amendment without reinitialization |
+| MR-019 | Final run pending | inquiry_runtime.mjs — fresh-engine transfers, cleanup(30), surviving model(27), owner counts and final 92 |
+| MR-020 | Final run pending | mobility_host.test.mjs — resource pin and unsupported cleanup prevent movement |
+| MR-021 | Final run pending | mobility_durable_browser.test.mjs; full browser modes — terminated old Worker and fresh assignment |
+| MR-022 | Final run pending | mobility_durable_browser.test.mjs; mobility_browser_bridge.test.mjs — yielded/cancel controls |
+| MR-023 | Final run pending | mobile_repository_continuation.mjs; retained review budget tests — bounded repeated ensures |
+| MR-024 | Final run pending | mobile_repository_deployment.test.mjs — all three modes, non-publishing refs unchanged |
+| MR-025 | Final run pending | repository_snapshot.test.mjs — frozen snapshot despite moving live branch |
+| MR-026 | Final run pending | repository_snapshot.test.mjs — more than 32 paths, query-bound cursors |
+| MR-027 | Final run pending | repository_snapshot.test.mjs; model tool contracts — explicit excerpts and replacement preimages |
+| MR-028 | Final run pending | repository_snapshot.test.mjs; document owner — path/alias/mode constraints |
+| MR-029 | Final run pending | repository_snapshot.test.mjs — SHA-1/SHA-256 four-path exact deltas |
+| MR-030 | Final run pending | repository_snapshot.test.mjs — invalid preimages, conflicting edits and forged trees |
+| MR-031 | Final run pending | repository_zig_sandbox.test.mjs; installed deployment — ref and original checkout unchanged |
+| MR-032 | Final run pending | repository_zig_sandbox.test.mjs — exit/output forgery rejected; host-owned raw observations |
+| MR-033 | Final run pending | repository_zig_sandbox.test.mjs — actual Agent repair and all three repository profiles |
+| MR-034 | Final run pending | repository_zig_sandbox.test.mjs — native qualifier probes and unavailable fallback rejection |
+| MR-035 | Final run pending | repository_publication_approval.test.mjs; sandbox qualifier — six non-passing dispositions |
+| MR-036 | Final run pending | inquiry_broker_runtime.mjs; repository_check_binding.test.mjs — exact applicability and profile binding |
+| MR-037 | Final run pending | repository_publication_approval.test.mjs — actual private grant relocation and consumption |
+| MR-038 | Final run pending | mobility_approval.test.mjs; publication/browser bindings — principal and occurrence rejection |
+| MR-039 | Final run pending | repository_snapshot.test.mjs; mobility_approval.test.mjs — exact action and evidence binding |
+| MR-040 | Final run pending | repository_publication_approval.test.mjs; snapshot proposal tests — complete diff/commit identity |
+| MR-041 | Final run pending | repository_publication_gate.test.mjs — actual Git old-value CAS and stale proposal |
+| MR-042 | Final run pending | repository_publication_gate.test.mjs — concurrent prepared candidates, one admission/write, loser reconciles conflict |
+| MR-043 | Final run pending | repository_snapshot.test.mjs — direct authorized managed ref only |
+| MR-044 | Final run pending | repository_snapshot.test.mjs — inert hooks/filters/config; fixed Git command environment |
+| MR-045 | Final run pending | repository_publication_approval.test.mjs; journal faults — lost reply and exact reconciliation |
+| MR-046 | Final run pending | repository_publication_gate.test.mjs — same tree under another intent does not count |
+| MR-047 | Final run pending | repository_publication_gate.test.mjs — stopped Git survives parent, retains lock, blocks another writer |
+| MR-048 | Final run pending | repository_publication_gate.test.mjs + journal — post-write mismatch/unavailable read retains receipt |
+| MR-049 | Final run pending | mobility_sessions.test.mjs; installed deployment — issue/redeem for existing principal |
+| MR-050 | Final run pending | mobility_sessions.test.mjs; mobility_browser_bridge.test.mjs — origin/CSRF/audience/revocation |
+| MR-051 | Final run pending | mobility_reference_browser.test.mjs; application review restart — durable question |
+| MR-052 | Final run pending | mobility_journal.test.mjs; deferred bridge crash tests — acquired answer survives restart |
+| MR-053 | Final run pending | mobility_browser_bridge.test.mjs — same answer idempotent; conflicting answer rejected |
+| MR-054 | Final run pending | mobility_browser_bridge.test.mjs; repeated-session tests — stale occurrence/incarnation/generation |
+| MR-055 | Final run pending | mobility_reference_browser.test.mjs; exact-change browser tests — inert text rendering |
+| MR-056 | Final run pending | repository_publication_approval.test.mjs — decline/amendment and fresh check/approval |
+| MR-057 | Final run pending | installed deployment clarification + retained review question tests — resumed authored investigation |
+| MR-058 | Final run pending | mobility_journal.test.mjs; mobility_browser_bridge.test.mjs — serialized answer/cancel races |
+| MR-059 | Final run pending | mobile_repository_package.test.mjs + reference browser — both engines and real Workers |
+| MR-060 | Not run — external | Not run: an actual person must perform the separately authorized qualification |
+| MR-061 | Final run pending | model.test.mjs; installed configuration generator — real adapter and disabled inference default |
+| MR-062 | Final run pending | model.test.mjs; model_admission.zig; retained review misuse — offered actions and normalization |
+| MR-063 | Final run pending | mobility_model.test.mjs; fresh-process replay probes — no provider-session dependency |
+| MR-064 | Final run pending | model.test.mjs; mobile_repository_continuation.mjs; opaque-replay mutant — exact replay data |
+| MR-065 | Final run pending | mobility_journal.test.mjs; background model tests — durable pre-dispatch allowance |
+| MR-066 | Final run pending | model.test.mjs — exact credentialed endpoint and disclosure profile restrictions |
+| MR-067 | Final run pending | mobility_host.test.mjs — whole-state label/export denial before upload |
+| MR-068 | Final run pending | mobility_host.test.mjs; whole-state mutant — retained capture/replay label restrictions |
+| MR-069 | Final run pending | mobility_task_catalogue.test.mjs; model bindings; export command — independent view/egress grants |
+| MR-070 | Final run pending | installed deployment scans actual keys, ambient sentinel, all journal artifacts/transfers/logs and browser-visible persistence; inherited durable browser scans |
+| MR-071 | Final run pending | mobility_protocol.test.mjs; mobility_host.test.mjs — issuer/key owner/program/resource admission |
+| MR-072 | Final run pending | model.test.mjs; retained-review misuse; fixed profile selection — no unoffered authority |
+| MR-073 | Final run pending | mobility_host.test.mjs; mobility_journal.test.mjs — lost acceptance and original decision retry |
+| MR-074 | Final run pending | mobility_host.test.mjs — onward return and cancellation reconciliation |
+| MR-075 | Final run pending | mobility_journal.test.mjs; model/check restart tests — acquired replies avoid redispatch |
+| MR-076 | Final run pending | mobility_browser_bridge.test.mjs; publication reconciliation — unknown outcomes stay distinct |
+| MR-077 | Final run pending | mobility_host.test.mjs — before/after World publication fault, saved reply retained |
+| MR-078 | Final run pending | mobility_host.test.mjs; cancellation/withdrawal tests — one cleanup authority |
+| MR-079 | Final run pending | repository_publication_journal.test.mjs; approval tests — pre-admission cancellation and retained publication |
+| MR-080 | Final run pending | sandbox qualifier; mobility_deployment.test.mjs — kill/reap and unrelated-run progress |
+| MR-081 | Final run pending | mobility_host.test.mjs; journal quota/fault tests — committed checkpoint/reply survives capacity failure |
+| MR-082 | Open — storage/lifetime audit | Repeated-session/browser capacity tests cover owned state; external Git/scratch lifetime accounting requires further audit |
+| MR-083 | Final run pending | mobility_journal.test.mjs — corruption/generation/known rollback; no consistent-backup self-detection claim |
+| MR-084 | Final run pending | mobility_journal.test.mjs; publication journal tests — GC roots and unresolved outcomes |
+| MR-085 | Final run pending | mobile_repository_package.test.mjs; installed deployment — no source/oracle execution fallback |
+| MR-086 | Final run pending | check-mobile-repository-native — byte agreement plus independent expected outputs |
+| MR-087 | Not run — external | Not run: separate authorized machines/storage/network and fault exercise required |
+| MR-088 | Not run — external | Not run: operator-approved provider/data/budget/corpus and independent judgment required |
+| MR-089 | Passed at recorded frozen revisions | Frozen 0d90b80 comparison report — identical image/args/work/authority, all 576 attempts |
+| MR-090 | Passed at recorded frozen revisions | Comparison and attribution reports — separately scoped phases and excluded human/provider dwell |
+| MR-091 | Passed at recorded frozen revisions | Comparison cache proof + frozen 3bc8d12 browser attribution — actual cold/warm image traffic and Worker costs |
+| MR-092 | Final run pending | mobile_repository_mutants.mjs; production-adjacent custody model — twelve mutants and bounded seeds |
+| MR-093 | Final run pending | Installed template/config/validate/start/serve/cancel/export/qualifier tests; negative inputs |
+| MR-094 | Final run pending | Exact publication receipt/proposal tests and UI disclosure — managed ref only |
+| MR-095 | Open — final reconciliation | This map is an audit inventory; final exact-head disposition remains open |
+| MR-096 | Final run pending | Live PR #44 readback: draft, assigned tkersey, exact current head; no merge/release authorization |
+
+Test paths above are under `test/agent4/` unless a build target or runtime owner is named.
+MR-019 uses the actual inquiry primitive shared by the application: cleanup of one
+retained child leaves another executable, with package counts inspected after each
+fresh-engine transfer. MR-042 composes the separately qualified private-approval
+owner with the process-gated, real-Git concurrent publication witness. MR-070 is a
+bounded sentinel check, including raw/hex/base64url key seeds and PEM forms; it is
+not a universal detector. Intentional one-use login delivery is excluded from logs,
+and HttpOnly authentication cookies are distinct from script-visible persistence.
+
+The current audit pass executed `check-mobile-repository-package` and
+`check-inquiry-probe` together against the authenticated tuple. Both installed
+package cases and the retained inquiry traces passed. The application case scans
+all stored artifact bytes and transfer offers/receipts from both actual journals,
+process/command logs, rendered text and script-visible storage against actual
+signing/TLS private-key representations and a host-only ambient key sentinel.
+The fixture provider independently rejects any Authorization header or sentinel
+in its request body. The separate real-Git concurrent-candidate test also passed:
+the winner admitted once, the loser never reached admission, and later read-only
+reconciliation reported conflict without another ref update.

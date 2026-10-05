@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, randomBytes, createPrivateKey } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
+import { gunzipSync } from 'node:zlib';
 import { mkdtemp, mkdir, readFile, writeFile, rm, realpath, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -27,7 +29,8 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
     await rm(area, { recursive: true, force: true });
   });
   const name = 'agent-v4.0.0-dev.0-resumable-interactions-v1';
-  execFileSync('tar', ['-xzf', resolve(process.env.AGENT4_ARCHIVE ?? `${artifactRoot}/agent4-release/${name}.tar.gz`), '-C', area]);
+  const archive = resolve(process.env.AGENT4_ARCHIVE ?? `${artifactRoot}/agent4-release/${name}.tar.gz`);
+  execFileSync('tar', ['-xzf', archive, '-C', area]);
   const root = join(area, name), load = path => import(pathToFileURL(join(root, path)));
   await rm(join(root, 'test'), { recursive: true, force: true });
   const { decodeSchema, decodeValue } = await load('runtime/values.mjs');
@@ -37,11 +40,18 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   const { PeerClient } = await load('runtime/mobility/transport.mjs');
   const cli = join(root, 'runtime/mobility/cli.mjs');
   const cliEnv = { ...process.env, PATH: '/nonexistent' }; delete cliEnv.NODE_TEST_CONTEXT;
+  const privateSentinel = 'host-only-' + randomBytes(32).toString('hex'); cliEnv.OPENAI_API_KEY = privateSentinel;
+  const commandLogs = [];
   const operatorCommands = [], uiOperations = [];
   const command = (...args) => {
     const row = { command: args[0], status: 'failed' }; operatorCommands.push(row);
-    const result = JSON.parse(execFileSync(process.execPath, [cli, ...args], { cwd: root, env: cliEnv, encoding: 'utf8', timeout: 240000, maxBuffer: 4 << 20, stdio: ['ignore', 'pipe', 'pipe'] }));
-    row.status = 'passed'; return result;
+    try {
+      const output = execFileSync(process.execPath, [cli, ...args], { cwd: root, env: cliEnv, encoding: 'utf8', timeout: 240000, maxBuffer: 4 << 20, stdio: ['ignore', 'pipe', 'pipe'] });
+      // One-use login delivery is intentionally secret-bearing operator output,
+      // not an application log. It is consumed and never retained here.
+      if (args[0] !== 'login-issue') commandLogs.push(output);
+      const result = JSON.parse(output); row.status = 'passed'; return result;
+    } catch (error) { commandLogs.push(String(error.stdout ?? ''), String(error.stderr ?? '')); throw error; }
   };
   const templatePath = join(area, 'template.json'); command('repository-template', templatePath);
   const template = JSON.parse(await readFile(templatePath)); assert.equal(template.provider.enabled, false);
@@ -77,6 +87,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
     try {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
       const request = JSON.parse(Buffer.concat(chunks)), turn = request.input.filter(item => item.type === 'function_call').length; modelCalls++;
+      assert.equal(req.headers.authorization, undefined); assert.equal(JSON.stringify(request).includes(privateSentinel), false);
       assert.deepEqual(request.reasoning, { effort: 'medium', summary: 'auto' });
       const actions = [['edit', { operation: 'replace', path: target, old_digest: beforeDigest, content: correct }], ['check', {}], ['finish', { summary: 'Boolean bound repaired and independently checked.' }]];
       assert(turn <= actions.length);
@@ -210,6 +221,24 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   child.kill('SIGTERM'); const [code, signal] = await childExit; assert.equal(code, 0, stderr); assert.equal(signal, null);
   const stats = JSON.parse(stdout.trim().split('\n').at(-1)).statistics;
   assert.equal(stats['agent.repository.check.v1'].calls, 2); assert.equal(stats['agent.repository.publish.v1'].calls, 1);
+  const needles = [Buffer.from(privateSentinel)];
+  for (const key of [...Object.values(pairs).map(pair => pair.privateKey), ...['A','B'].map(host => createPrivateKey(tls[host].key))]) {
+    const seed = Buffer.from(key.export({ format: 'jwk' }).d, 'base64url'), pem = key.export({ format: 'pem', type: 'pkcs8' });
+    needles.push(seed, Buffer.from(seed.toString('hex')), Buffer.from(seed.toString('base64url')), Buffer.from(pem), Buffer.from(JSON.stringify(pem).slice(1,-1)));
+  }
+  const artifacts = [image, gunzipSync(await readFile(archive)), Buffer.from(stdout), Buffer.from(stderr), ...commandLogs.map(value => Buffer.from(value))];
+  for (const directory of [setup.origin.directory, setup.workspace.directory]) {
+    const db = new DatabaseSync(join(directory, 'custody.sqlite'), { readOnly: true });
+    try {
+      for (const row of db.prepare('SELECT bytes FROM artifacts').all()) artifacts.push(Buffer.from(row.bytes));
+      for (const row of db.prepare('SELECT offer, receipt FROM transfers').all()) for (const value of [row.offer,row.receipt]) if (value) artifacts.push(Buffer.from(value));
+    } finally { db.close(); }
+  }
+  const persistence = await page.evaluate(async () => ({ local: Object.entries(localStorage), session: Object.entries(sessionStorage), cookie: document.cookie,
+    caches: await caches.keys(), databases: (await indexedDB.databases()).map(row => row.name), rendered: document.body.textContent }));
+  assert.deepEqual([persistence.local, persistence.session, persistence.cookie, persistence.caches, persistence.databases], [[], [], '', [], []]);
+  artifacts.push(Buffer.from(JSON.stringify(persistence)));
+  for (const bytes of artifacts) for (const needle of needles) assert.equal(bytes.includes(needle), false, 'host-only value entered a portable artifact, log or script-visible browser state');
   if (process.env.AGENT_REPOSITORY_OPERATOR_PROOF) await writeFile(process.env.AGENT_REPOSITORY_OPERATOR_PROOF, JSON.stringify({
     format: 'mobile-repository-operator-actions/v1', sourceHead: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
     testSha256: hash(await readFile(import.meta.filename)), clientSha256: hash(await readFile(join(root, 'runtime/mobility/client.mjs'))), browser: browser.version(),

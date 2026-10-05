@@ -4,6 +4,7 @@ import { createDocumentEnvironment } from "./document.mjs";
 import { createRepositoryDelivery } from "./repository_delivery.mjs";
 import { runRepositorySnapshot } from "./repository_tests.mjs";
 import { openRepositorySnapshotStore } from "./repository_snapshot.mjs";
+import { canonical } from "./mobility/canonical.mjs";
 export { provisionRepository } from "./repository_snapshot.mjs";
 
 /** Snapshot leaves for the mobile application. Their actual dispatch remains
@@ -46,6 +47,20 @@ export async function createManagedRepositoryEnvironment(options) {
     },
     async read(input) {
       return evidence(await store.read(request(input, 2), input[1]));
+    },
+    async prepare(input) {
+      const selected = request(input, 2);
+      if (!Array.isArray(input[1]) || input[1].length < 1 || input[1].length > 4) throw new TypeError('repository edit bounds');
+      const edits = input[1].map(value => {
+        if (!Array.isArray(value) || value.length !== 4 || ![0, 1, 2].includes(value[0]) ||
+            !text(value[1], 256) || !text(value[2], 64) || !text(value[3], 32768) ||
+            (value[0] === 0 ? value[2] !== '' : !/^[a-f0-9]{64}$/.test(value[2])) ||
+            (value[0] === 2 && value[3] !== '')) throw new TypeError('repository edit contract');
+        return { operation: ['create', 'replace', 'delete'][value[0]], path: value[1],
+          oldDigest: value[0] === 0 ? null : value[2], oldMode: value[0] === 0 ? null : '100644',
+          content: value[0] === 2 ? null : value[3] };
+      });
+      return Buffer.from(canonical(await store.prepare(selected, edits), 2 << 20)).toString('utf8');
     },
     async readWindow(input) {
       const selected = request(input, 4);

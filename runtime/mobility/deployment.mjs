@@ -11,8 +11,8 @@ import { WorldAdmission } from './admission.mjs';
 import { CustodyJournal } from './journal.mjs';
 import { Custodian } from './custodian.mjs';
 import { modelBinding } from './model.mjs';
-import { repositoryApprovalBinding } from './repository_approval.mjs';
-import { repositoryPublicationBinding } from './repository_publication.mjs';
+import { repositoryApprovalBinding, repositoryReviewBinding } from './repository_approval.mjs';
+import { repositoryPublicationBinding, repositoryProposalBinding } from './repository_publication.mjs';
 import { repositoryCheckBinding } from './repository_check.mjs';
 import { createRepositoryCheckRunner } from '../repository_checks.mjs';
 import { createZigRepositorySandbox } from '../repository_zig_sandbox.mjs';
@@ -48,16 +48,17 @@ export async function openDeployment(configPath, { create = false } = {}) {
     const { adapter, ...metadata } = entry;
     const binding = { ...metadata, payloadSchema: bytes(metadata.payloadSchema), resultSchema: bytes(metadata.resultSchema) };
     const counts = { calls: 0 }; statistics.set(binding.operation, counts);
-    if (adapter.kind === 'repository-query') {
+    if (['repository-query', 'repository-prepare'].includes(adapter.kind)) {
       closed(adapter, ['kind', 'store', 'classification']);
       closed(adapter.store, ['directory', 'gitExecutable', 'repository', 'generation', 'manifestSha256']);
       const methods = new Map([
         ['agent.repository.snapshot.v1', 'snapshot'], ['agent.repository.read.v1', 'read'],
         ['agent.repository.list.v1', 'list'], ['agent.repository.search.v1', 'search'],
         ['agent.repository.read-window.v1', 'readWindow'],
+        ['agent.repository.prepare.v1', 'prepare'],
       ]);
       const method = methods.get(binding.operation);
-      requireThat(method && binding.role === 'read' && binding.subject === adapter.store.repository &&
+      requireThat(method && (adapter.kind === 'repository-prepare' ? method === 'prepare' && binding.role === 'write' : method !== 'prepare' && binding.role === 'read') && binding.subject === adapter.store.repository &&
         binding.subjectVersion === adapter.store.manifestSha256 &&
         JSON.stringify(binding.classification) === JSON.stringify(adapter.classification), 'AdapterContract');
       const leaf = await createManagedRepositoryEnvironment({ ...adapter.store, directory: path(adapter.store.directory),
@@ -73,9 +74,23 @@ export async function openDeployment(configPath, { create = false } = {}) {
       leaf.handle = context => { counts.calls++; return handle(context); };
       return leaf;
     }
+    if (adapter.kind === 'repository-review-human') {
+      const leaf = repositoryReviewBinding(binding, adapter), answer = leaf.answer;
+      leaf.answer = context => { counts.calls++; return answer(context); };
+      return leaf;
+    }
     if (['repository-approval-issuer', 'repository-approval-human'].includes(adapter.kind)) {
       const leaf = repositoryApprovalBinding(binding, adapter), method = leaf.answer ? 'answer' : 'handle', original = leaf[method];
       leaf[method] = context => { counts.calls++; return original(context); };
+      return leaf;
+    }
+    if (adapter.kind === 'repository-proposal') {
+      closed(adapter, ['kind', 'store', 'protectedImages', 'authorizationDigest', 'validationPolicyDigest', 'requiredProfiles', 'checkResultSchema', 'commit']);
+      closed(adapter.store, ['directory', 'gitExecutable', 'repository', 'generation', 'manifestSha256']);
+      requireThat(binding.subject === adapter.store.repository && binding.subjectVersion === adapter.store.manifestSha256, 'AdapterContract');
+      const store = await openRepositorySnapshotStore({ ...adapter.store, directory: path(adapter.store.directory), gitExecutable: path(adapter.store.gitExecutable) });
+      const leaf = repositoryProposalBinding(binding, { ...adapter, store, checkResultSchema: bytes(adapter.checkResultSchema), services: () => publicationServices });
+      const handle = leaf.handle; leaf.handle = context => { counts.calls++; return handle(context); };
       return leaf;
     }
     if (adapter.kind === 'repository-publication') {
@@ -104,6 +119,18 @@ export async function openDeployment(configPath, { create = false } = {}) {
       const leaf = repositoryCheckBinding(binding, { runner, profile: adapter.profile, hostId: config.hostId });
       const handle = leaf.handle; leaf.handle = context => { counts.calls++; return handle(context); };
       return leaf;
+    }
+    if (adapter.kind === 'repository-release') {
+      closed(adapter, ['kind']);
+      const payload = decodeSchema(binding.payloadSchema), result = decodeSchema(binding.resultSchema), fields = payload.types[payload.root]?.product;
+      requireThat(binding.operation === 'agent.repository.investigation-release.v1' && binding.role === 'read' && binding.cleanup === true &&
+        fields?.length === 2 && fields.every(id => payload.types[id] === 'u64') && result.types[result.root] === 'unit', 'AdapterContract');
+      binding.authorize = value => Array.isArray(value) && value.length === 2 && value.every(id => typeof id === 'bigint' && id > 0n);
+      // Checks own and reap their physical children/scratch before returning.
+      // The investigation owns portable state only; acknowledging its cleanup
+      // is still an ordinary journaled leaf occurrence, never host progression.
+      binding.handle = () => { counts.calls++; return encodeValue(result, null); };
+      return binding;
     }
     if (adapter.kind === 'fixed-reply') {
       closed(adapter, ['kind', 'payloadDigest', 'reply']);

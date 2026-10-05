@@ -5,56 +5,14 @@ const agent = @import("agent");
 const boundary = @import("boundary");
 const a = boundary.authoring;
 pub const t = @import("types.zig");
+const publication = @import("publication.zig");
 const mobility = agent.mobility;
+const model = @import("model.zig");
+const investigator = @import("investigator.zig");
+const completion = @import("completion.zig");
 pub const System = agent.system(.{ .InitialArgs = t.Task, .Result = t.Report, .Failure = t.Failure, .application = Application });
 
-const Emit = struct {
-    agent_context: agent.Context,
-    c: *a.Context,
-
-    fn schema(e: Emit, comptime T: type) anyerror!*const a.Schema {
-        switch (@typeInfo(T)) {
-            .@"struct" => |info| {
-                if (@hasDecl(T, "agent_value_kind")) return a.interop.schema(e.c, try e.agent_context.schema(T));
-                var fields: [info.field_names.len]a.Field = undefined;
-                inline for (info.field_names, info.field_types, 0..) |name, F, i| fields[i] = .{ .name = name, .schema = try e.schema(F) };
-                return e.c.record(&fields);
-            },
-            .@"union" => |info| {
-                var fields: [info.field_names.len]a.Field = undefined;
-                inline for (info.field_names, info.field_types, 0..) |name, F, i| fields[i] = .{ .name = name, .schema = try e.schema(F) };
-                return e.c.alternatives(&fields);
-            },
-            .pointer => |info| if (info.size == .slice and info.child != u8) {
-                return e.c.sequence(try e.schema(info.child));
-            } else return a.interop.schema(e.c, try e.agent_context.schema(T)),
-            else => return a.interop.schema(e.c, try e.agent_context.schema(T)),
-        }
-    }
-    fn external(e: Emit, name: []const u8, comptime Input: type, comptime Output: type, role: agent.admission.Role) !*const a.Operation {
-        const op = try e.c.external(name, try e.schema(Input), try e.schema(Output));
-        try e.agent_context.registry.classify(try a.interop.operationId(e.c, op), role);
-        return op;
-    }
-    fn literal(e: Emit, body: *a.Body, comptime T: type, value: T) !*const a.Value {
-        return a.interop.adoptValue(body, try e.agent_context.literal(T, value), try e.schema(T));
-    }
-    // A later destination cannot reset the allowance supplied by an earlier
-    // ensure. The template contributes requirements/policy and attempt bounds.
-    fn place(e: Emit, body: *a.Body, template: *const a.Value, moves: *const a.Value) !*const a.Value {
-        const budget = try body.field(template, "budget");
-        const input = try body.product(try e.schema(mobility.EnsureInput), &.{
-            .{ .name = "placement", .value = try body.field(template, "placement") },
-            .{ .name = "placement_intent_id", .value = try body.field(template, "placement_intent_id") },
-            .{ .name = "export_policy_ref", .value = try body.field(template, "export_policy_ref") },
-            .{ .name = "budget", .value = try body.product(try e.schema(mobility.Budget), &.{
-                .{ .name = "moves", .value = moves },
-                .{ .name = "attempts", .value = try body.field(budget, "attempts") },
-            }) },
-        });
-        return a.interop.term(body, try mobility.ensure(e.agent_context, try a.interop.valueId(body, input), try e.agent_context.literal(t.Failure, .placement_failed)), try e.schema(mobility.PlacementResult));
-    }
-};
+const Emit = @import("emit.zig").Emit;
 
 pub const Application = struct {
     pub fn emit(ctx: agent.Context) !boundary.source.Module {
@@ -73,40 +31,50 @@ pub const Application = struct {
         const read_op = try e.external(t.READ, t.ReadRequest, t.Evidence, .read);
         const human_op = try e.external(t.HUMAN, t.Question, t.Answer, .interaction);
         const cleanup_op = try e.external(t.RELEASE, t.Cleanup, void, .read);
-        const effects = &.{ resolve, relocate, snapshot_op, read_op, human_op, cleanup_op };
+        const leaves = try investigator.Leaves.init(e);
+        const investigation_effects = [_]*const a.Operation{ resolve, relocate, snapshot_op, read_op, human_op, cleanup_op, leaves.list, leaves.read, leaves.search, leaves.prepare, leaves.check, leaves.model };
         const failure = try a.interop.literalFailure(c, try ctx.literal(t.Failure, .invalid_task), try e.schema(t.Failure));
         const inquiry = try agent.inquiry.create(c, .{
             .identity = "agent.repository.investigator.v1",
-            .demand = try e.schema(t.Question),
-            .reply = try e.schema(t.Answer),
+            .demand = try e.schema(t.Demand),
+            .reply = try e.schema(t.Reply),
             .finding = try e.schema(t.Finding),
             .failure = failure,
-            .captures = .{ .continuation = &.{ unit, integer, try e.schema(t.Task), try e.schema(t.Evidence), try e.schema(t.Cleanup), try e.schema(t.Question), try e.schema(t.Answer) }, .body = &.{ try e.schema(t.Task), try e.schema(t.Evidence) } },
-            .residual = &.{cleanup_op},
-            .parameters = &.{ .{ .name = "task", .schema = try e.schema(t.Task) }, .{ .name = "evidence", .schema = try e.schema(t.Evidence) } },
+            .captures = .{ .continuation = &.{ unit, integer, try e.schema(t.Task), try e.schema(t.Snapshot), try e.schema(t.Evidence), try e.schema(t.Cleanup), try e.schema(t.Demand), try e.schema(t.Finding), try e.schema(t.Reply), try e.schema(model.State), try e.schema(model.P.CallId), try e.schema(u32), try e.schema(u16), try e.schema(model.P.ReplayResult) }, .body = &.{ try e.schema(t.Task), try e.schema(t.Snapshot), try e.schema(t.Evidence), try e.schema(u32) } },
+            .residual = &.{ cleanup_op, resolve, relocate, leaves.list, leaves.read, leaves.search, leaves.prepare, leaves.check, leaves.model },
+            .parameters = &.{ .{ .name = "task", .schema = try e.schema(t.Task) }, .{ .name = "snapshot", .schema = try e.schema(t.Snapshot) }, .{ .name = "evidence", .schema = try e.schema(t.Evidence) }, .{ .name = "moves", .schema = try e.schema(u32) } },
             .body_use = .reusable,
         });
+        const complete = try completion.define(e, resolve, relocate);
+        const effects = try ctx.builder.allocator().alloc(*const a.Operation, investigation_effects.len + complete.effects.len);
+        @memcpy(effects[0..investigation_effects.len], &investigation_effects);
+        @memcpy(effects[investigation_effects.len..], complete.effects);
         const producer_type = try c.handledSchema(inquiry.dialogue.handler());
         const producer_fn = try c.functionFor("repository investigator", producer_type);
         const producer = try c.body(producer_fn);
         const input = try producer.parameter("task");
         const evidence = try producer.parameter("evidence");
         const capability = try producer.parameter("capability");
-        const work_type = try c.callable(&.{}, try e.schema(t.Finding), &.{inquiry.dialogue.effect()}, .{ .use = .reusable, .captures = &.{ inquiry.dialogue.capability(), try e.schema(t.Task), try e.schema(t.Evidence) } });
+        const snapshot_input = try producer.parameter("snapshot");
+        const moves_input = try producer.parameter("moves");
+        const loop = try investigator.define(e, inquiry, leaves, &.{ resolve, relocate });
+        const work_type = try c.callable(&.{}, try e.schema(t.Finding), &.{ inquiry.dialogue.effect(), resolve, relocate, leaves.list, leaves.read, leaves.search, leaves.prepare, leaves.check, leaves.model }, .{ .use = .reusable, .captures = &.{ inquiry.dialogue.capability(), try e.schema(t.Task), try e.schema(t.Snapshot), try e.schema(t.Evidence), try e.schema(u32) } });
         const work_fn = try c.functionFor("retained investigation", work_type);
         const work = try producer.closureBody(work_fn);
-        const question = try work.product(try e.schema(t.Question), &.{
-            .{ .name = "task_id", .value = try work.field(input, "task_id") },
-            .{ .name = "generation", .value = try work.field(input, "generation") },
-            .{ .name = "goal", .value = try work.field(input, "goal") },
-            .{ .name = "evidence", .value = evidence },
+        const initial = try work.product(try e.schema(model.State), &.{
+            .{ .name = "replay", .value = try e.literal(work, model.P.ReplayBytes, .{ .bytes = "" }) },
+            .{ .name = "results", .value = try e.literal(work, model.Results, .{ .items = &.{} }) },
+            .{ .name = "remaining_steps", .value = try work.field(input, "maximum_steps") },
+            .{ .name = "remaining_checks", .value = try work.field(input, "maximum_checks") },
+            .{ .name = "remaining_moves", .value = moves_input },
+            .{ .name = "edits", .value = try e.literal(work, @FieldType(model.State, "edits"), .{ .items = &.{} }) },
+            .{ .name = "candidate", .value = try e.literal(work, @FieldType(model.State, "candidate"), .{ .bytes = "" }) },
+            .{ .name = "validation", .value = try e.literal(work, @FieldType(model.State, "validation"), .{ .bytes = "" }) },
+            .{ .name = "passed", .value = try work.constant(bool, false) },
+            .{ .name = "view_only", .value = try work.constant(bool, false) },
+            .{ .name = "guidance", .value = try e.literal(work, t.Answer, .{ .bytes = "" }) },
         });
-        const answer = try work.performLocal(inquiry.dialogue.effect(), capability, question);
-        try c.define(work_fn, try work.ret(try work.product(try e.schema(t.Finding), &.{
-            .{ .name = "goal", .value = try work.field(input, "goal") },
-            .{ .name = "evidence", .value = evidence },
-            .{ .name = "answer", .value = answer },
-        })));
+        try c.define(work_fn, try work.ret(try work.call(loop, &.{ .{ .name = "task", .value = input }, .{ .name = "snapshot", .value = snapshot_input }, .{ .name = "evidence", .value = evidence }, .{ .name = "state", .value = initial }, .{ .name = "capability", .value = capability } })));
         const cleanup_type = try c.callable(&.{.{ .name = "exit", .schema = try c.cleanupInfo(try e.schema(t.Failure)) }}, unit, &.{cleanup_op}, .{ .use = .reusable, .captures = &.{try e.schema(t.Task)} });
         const cleanup_fn = try c.functionFor("release investigation", cleanup_type);
         const cleanup = try producer.closureBody(cleanup_fn);
@@ -133,41 +101,46 @@ pub const Application = struct {
             .{ .name = "snapshot", .value = snapshot },
             .{ .name = "path", .value = try at_workspace.field(task, "initial_path") },
         }));
-        const started = try at_workspace.handleWithArguments(inquiry.dialogue.handler(), try at_workspace.lambda(producer_fn, producer_type), &.{ .{ .name = "task", .value = task }, .{ .name = "evidence", .value = observed } }, &.{});
+        const started = try at_workspace.handleWithArguments(inquiry.dialogue.handler(), try at_workspace.lambda(producer_fn, producer_type), &.{ .{ .name = "task", .value = task }, .{ .name = "snapshot", .value = snapshot }, .{ .name = "evidence", .value = observed }, .{ .name = "moves", .value = try at_workspace.field(arrived.payload(), "remaining_moves") } }, &.{});
         const parked = try at_workspace.call(inquiry.park, &.{ .{ .name = "state", .value = try agent.inquiry.initial(at_workspace, inquiry) }, .{ .name = "id", .value = try at_workspace.constant(u64, 1) }, .{ .name = "answer", .value = started } });
-        // The actual owned investigation remains unfinished during relocation.
-        const inbound = try e.place(at_workspace, try at_workspace.field(task, "human"), try at_workspace.field(arrived.payload(), "remaining_moves"));
-        const home = try at_workspace.caseOf(inbound, "Ready");
-        const away = try at_workspace.caseOf(inbound, "Failed");
-        const origin = home.body();
-        const projected = try origin.call(inquiry.project, &.{.{ .name = "state", .value = parked }});
-        const parts = try origin.destructure(projected);
-        const state = try parts.get("state");
+        const driver = try c.function("service retained investigation", &.{ .{ .name = "task", .schema = try e.schema(t.Task) }, .{ .name = "state", .schema = inquiry.types.state } }, try e.schema(t.Report), effects);
+        const dispatch = try c.body(driver);
+        const dispatch_task = try dispatch.parameter("task");
+        const projected = try dispatch.call(inquiry.project, &.{.{ .name = "state", .value = try dispatch.parameter("state") }});
+        const parts = try dispatch.destructure(projected);
+        const retained = try parts.get("state");
         const views = try parts.get("views");
-        const selected = try origin.sequenceGet(views, try origin.constant(u64, 0));
-        const missing = try origin.caseOf(selected, "none");
-        const found = try origin.caseOf(selected, "some");
-        const at_home = found.body();
-        const view = found.payload();
-        const human = try at_home.perform(human_op, try at_home.field(view, "demand"));
-        const resumed = try at_home.call(inquiry.distribute, &.{
-            .{ .name = "state", .value = state },
-            .{ .name = "ids", .value = try at_home.sequenceValue(inquiry.types.ids, &.{try at_home.field(view, "generation")}) },
-            .{ .name = "reply", .value = human },
-        });
-        const findings = try at_home.call(inquiry.finish, &.{.{ .name = "state", .value = resumed }});
-        const result = try at_home.product(try e.schema(t.Report), &.{
-            .{ .name = "task_id", .value = try at_home.field(task, "task_id") },
-            .{ .name = "generation", .value = try at_home.field(task, "generation") },
-            .{ .name = "mode", .value = try at_home.field(task, "mode") },
-            .{ .name = "remaining_moves", .value = try at_home.field(home.payload(), "remaining_moves") },
-            .{ .name = "findings", .value = findings },
-        });
-        _ = try missing.body().call(inquiry.finish, &.{.{ .name = "state", .value = state }});
-        const returned_home = try origin.match(selected, &.{ try found.ret(result), try missing.fail(try e.schema(t.Report), try e.literal(missing.body(), t.Failure, .invalid_task)) });
-        _ = try away.body().call(inquiry.finish, &.{.{ .name = "state", .value = parked }});
-        const returned = try at_workspace.match(inbound, &.{ try home.ret(returned_home), try away.fail(try e.schema(t.Report), try e.literal(away.body(), t.Failure, .placement_failed)) });
-        try c.define(entry, try body.ret(try body.match(outbound, &.{ try arrived.ret(returned), try refused.fail(try e.schema(t.Report), try e.literal(refused.body(), t.Failure, .placement_failed)) })));
+        const selected = try dispatch.sequenceGet(views, try dispatch.constant(u64, 0));
+        const done = try dispatch.caseOf(selected, "none");
+        const pending = try dispatch.caseOf(selected, "some");
+        const wait = pending.body();
+        const view = pending.payload();
+        const demand = try wait.field(view, "demand");
+        const clarification = try wait.caseOf(demand, "clarification");
+        const question = clarification.body();
+        const question_value = clarification.payload();
+        const inbound = try e.place(question, try question.field(dispatch_task, "human"), try question.field(question_value, "remaining_moves"));
+        const home = try question.caseOf(inbound, "Ready");
+        const away = try question.caseOf(inbound, "Failed");
+        const origin = home.body();
+        const human = try origin.perform(human_op, question_value);
+        const response = try origin.variant(try e.schema(t.Reply), "clarification", try origin.product(try e.schema(t.ClarificationReply), &.{ .{ .name = "answer", .value = human }, .{ .name = "remaining_moves", .value = try origin.field(home.payload(), "remaining_moves") } }));
+        _ = try away.body().call(inquiry.finish, &.{.{ .name = "state", .value = retained }});
+        const answered = try question.match(inbound, &.{ try home.ret(response), try away.fail(try e.schema(t.Reply), try e.literal(away.body(), t.Failure, .placement_failed)) });
+        const review = try wait.caseOf(demand, "review");
+        const reviewer = review.body();
+        const reviewed = try reviewer.call(complete.function, &.{ .{ .name = "task", .value = dispatch_task }, .{ .name = "finding", .value = review.payload() } });
+        const reply = try wait.match(demand, &.{ try clarification.ret(answered), try review.ret(try reviewer.variant(try e.schema(t.Reply), "review", reviewed)) });
+        const resumed = try wait.call(inquiry.distribute, &.{ .{ .name = "state", .value = retained }, .{ .name = "ids", .value = try wait.sequenceValue(inquiry.types.ids, &.{try wait.field(view, "generation")}) }, .{ .name = "reply", .value = reply } });
+        const pending_result = try wait.call(driver, &.{ .{ .name = "task", .value = dispatch_task }, .{ .name = "state", .value = resumed } });
+        const finished = done.body();
+        const findings = try finished.call(inquiry.finish, &.{.{ .name = "state", .value = retained }});
+        const found = try finished.variantPayload(try finished.sequenceGet(findings, try finished.constant(u64, 0)), "some", failure);
+        const finding = try finished.field(found, "finding");
+        const report = try finished.product(try e.schema(t.Report), &.{ .{ .name = "task_id", .value = try finished.field(dispatch_task, "task_id") }, .{ .name = "generation", .value = try finished.field(dispatch_task, "generation") }, .{ .name = "mode", .value = try finished.field(dispatch_task, "mode") }, .{ .name = "remaining_moves", .value = try finished.field(finding, "remaining_moves") }, .{ .name = "findings", .value = findings }, .{ .name = "proposal", .value = try finished.field(finding, "proposal") }, .{ .name = "publication", .value = try finished.field(finding, "publication") } });
+        try c.define(driver, try dispatch.ret(try dispatch.match(selected, &.{ try pending.ret(pending_result), try done.ret(report) })));
+        const completed = try at_workspace.call(driver, &.{ .{ .name = "task", .value = task }, .{ .name = "state", .value = parked } });
+        try c.define(entry, try body.ret(try body.match(outbound, &.{ try arrived.ret(completed), try refused.fail(try e.schema(t.Report), try e.literal(refused.body(), t.Failure, .placement_failed)) })));
         const admitted = try c.function("admit repository task", &.{.{ .name = "task", .schema = try e.schema(t.Task) }}, try e.schema(t.Report), effects);
         const admission = try c.body(admitted);
         const supplied = try admission.parameter("task");
@@ -176,6 +149,11 @@ pub const Application = struct {
         inline for (.{ "goal", "repository", "base", "initial_path" }) |name| {
             const present = try admission.less(try admission.constant(u64, 0), try admission.blobLength(try admission.field(supplied, name)));
             valid = try admission.select(valid, present, try admission.constant(bool, false));
+        }
+        inline for (.{ "maximum_steps", "maximum_checks" }) |name| {
+            const amount = try admission.field(supplied, name);
+            valid = try admission.select(valid, try admission.less(try admission.constant(u16, 0), amount), try admission.constant(bool, false));
+            valid = try admission.select(valid, try admission.less(amount, try admission.constant(u16, 65)), try admission.constant(bool, false));
         }
         inline for (.{ "workspace", "human" }) |name| {
             const budget = try admission.field(try admission.field(supplied, name), "budget");
@@ -210,6 +188,16 @@ pub fn main(init: std.process.Init) !void {
         }
     }
     inline for (.{ .{ "list", t.ListRequest }, .{ "listing", t.Listing }, .{ "search", t.SearchRequest }, .{ "search-result", t.SearchResult }, .{ "read-window", t.ReadWindowRequest }, .{ "read-window-result", t.ReadWindow } }) |item| {
+        if (std.mem.eql(u8, mode, item[0])) {
+            var b = boundary.source.Builder.init(init.gpa);
+            defer b.deinit();
+            const schema = try agent.contracts.schema(item[1], &b);
+            const bytes = try boundary.data.schema.encodeOwned(init.gpa, b.schemas.items, schema);
+            defer init.gpa.free(bytes);
+            return write(init, bytes);
+        }
+    }
+    inline for (.{ .{ "model-request", model.P.ReplayRequest }, .{ "model-result", model.P.ReplayResult }, .{ "candidate-preparation", t.Preparation }, .{ "publication-preparation", publication.Preparation }, .{ "review", t.ReviewInput }, .{ "review-answer", t.ReviewAnswer } }) |item| {
         if (std.mem.eql(u8, mode, item[0])) {
             var b = boundary.source.Builder.init(init.gpa);
             defer b.deinit();

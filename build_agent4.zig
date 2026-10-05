@@ -493,12 +493,13 @@ pub fn build(b: *std.Build) void {
     const mobile_repository_emitter = g.emitter("mobile-repository-emitter", g.module("test/consumers/mobile_repository/main.zig"));
     const repository_approval_images = b.step("repository-approval-images", "Emit the shared managed publication approval composition");
     repository_approval_test.step.dependOn(repository_approval_images);
+    repository_approval_test.step.dependOn(mobile_repository_images);
     const repository_approval_emitter = g.emitter("repository-approval-emitter", g.module("test/consumers/mobile_repository/publication.zig"));
     g.emit(repository_approval_images, repository_approval_emitter, &.{"image"}, "repository-approval/program.bpi3");
     for ([_][]const u8{ "task", "preparation", "result", "check-result", "proposal", "receipt", "delivery", "human", "human-reply", "identifier", "boolean" }) |name|
         g.emit(repository_approval_images, repository_approval_emitter, &.{name}, b.fmt("repository-approval/{s}.schema", .{name}));
     g.emit(mobile_repository_images, mobile_repository_emitter, &.{"image"}, "mobile-repository/program.bpi3");
-    for ([_][]const u8{ "task", "report", "snapshot-request", "snapshot", "read", "evidence", "list", "listing", "search", "search-result", "read-window", "read-window-result", "question", "answer", "cleanup", "unit" }) |name|
+    for ([_][]const u8{ "task", "report", "snapshot-request", "snapshot", "read", "evidence", "list", "listing", "search", "search-result", "read-window", "read-window-result", "question", "answer", "cleanup", "unit", "model-request", "model-result", "candidate-preparation", "publication-preparation", "review", "review-answer" }) |name|
         g.emit(mobile_repository_images, mobile_repository_emitter, &.{name}, b.fmt("mobile-repository/{s}.schema", .{name}));
     const mobility_images = b.step("mobility-images", "Emit the independent mobility consumer");
     const mobility_approval_images = b.step("mobility-approval-images", "Emit the movable approval and fixture replacement consumer");

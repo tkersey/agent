@@ -134,8 +134,14 @@ test/consumers/inquiry/react.zig
 test/consumers/inquiry/repeated.zig
 test/consumers/inquiry/source.zig
 test/consumers/inquiry/types.zig
+test/consumers/mobile_repository/completion.zig
+test/consumers/mobile_repository/emit.zig
+test/consumers/mobile_repository/investigator.zig
 test/consumers/mobile_repository/main.zig
+test/consumers/mobile_repository/model.zig
+test/consumers/mobile_repository/prompt.zig
 test/consumers/mobile_repository/publication.zig
+test/consumers/mobile_repository/raw.zig
 test/consumers/mobile_repository/types.zig
 test/consumers/mobility/approval.zig
 test/consumers/mobility/build.zig

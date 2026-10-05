@@ -7,7 +7,7 @@ pub const Path = Text(256);
 pub const Oid = Text(64);
 pub const Digest = [32]u8;
 pub const Mode = enum { inspect, propose, publish };
-pub const Failure = enum { invalid_task, placement_failed };
+pub const Failure = enum { invalid_task, placement_failed, invalid_model, capacity_exceeded, budget_exhausted };
 pub const SnapshotRequest = struct { repository: Identifier, base: Oid };
 pub const Snapshot = struct {
     repository: Identifier,
@@ -47,18 +47,34 @@ pub const Task = struct {
     initial_path: Path,
     workspace: agent.mobility.EnsureInput,
     human: agent.mobility.EnsureInput,
+    model: @import("model.zig").Configuration,
+    maximum_steps: u16,
+    maximum_checks: u16,
+    principal: u64,
 };
 pub const Cleanup = struct { task_id: u64, generation: u64 };
-pub const Question = struct { task_id: u64, generation: u64, goal: Text(4096), evidence: Evidence };
+pub const Question = struct { task_id: u64, generation: u64, goal: Text(4096), evidence: Evidence, question: Text(4096), remaining_moves: u32 };
+pub const ClarificationReply = struct { answer: Answer, remaining_moves: u32 };
+pub const ReviewOutcome = struct { proposal: Text(2 * 1024 * 1024), publication: Publication };
+pub const ReviewAction = union(enum) { done: ReviewOutcome, question: Text(4096), amend: Text(4096) };
+pub const ReviewReply = struct { action: ReviewAction, remaining_moves: u32 };
+pub const Reply = union(enum) { clarification: ClarificationReply, review: ReviewReply };
+pub const Demand = union(enum) { clarification: Question, review: Finding };
+pub const ReviewInput = struct { task_id: u64, generation: u64, mode: Mode, summary: Answer, proposal: Text(2 * 1024 * 1024) };
+pub const ReviewAnswer = union(enum) { finish, decline: Text(4096), question: Text(4096), amend: Text(4096) };
 pub const Answer = Text(4096);
-pub const Finding = struct { goal: Text(4096), evidence: Evidence, answer: Answer };
+pub const Finding = struct { goal: Text(4096), evidence: Evidence, answer: Answer, candidate: Text(2 * 1024 * 1024), validation: Text(2 * 1024 * 1024), remaining_moves: u32, proposal: Text(2 * 1024 * 1024), publication: Publication };
+pub const Preparation = struct { snapshot: Snapshot, edits: @FieldType(@import("model.zig").State, "edits") };
 pub const Found = struct { occurrence: u64, finding: Finding };
+pub const Publication = union(enum) { none, approval: @import("publication.zig").Result };
 pub const Report = struct {
     task_id: u64,
     generation: u64,
     mode: Mode,
     remaining_moves: u32,
     findings: []const Found,
+    proposal: Text(2 * 1024 * 1024),
+    publication: Publication,
 };
 pub const SNAPSHOT = "agent.repository.snapshot.v1";
 pub const READ = "agent.repository.read.v1";

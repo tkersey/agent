@@ -11,17 +11,24 @@ pub const Reason = Text(128);
 pub const Delivery = union(enum) { published: Receipt, conflict: Receipt, not_applied: Receipt, uncertain: Reason };
 pub const CheckStatus = enum { Passed, Failed, Unavailable, TimedOut, Cancelled, InvalidOutput, Incomplete };
 pub const CheckResult = struct { status: CheckStatus, record: Proposal };
-pub const Result = union(enum) { delivered: Delivery, declined: Reason, invalid, denied };
+pub const ReviewReason = union(enum) { decline: Text(4096), question: Text(4096), amend: Text(4096) };
+pub const Result = union(enum) { delivered: Delivery, declined: ReviewReason, invalid, denied };
 pub const Outcome = union(enum) { approval: Result, check_failed: CheckResult };
 pub const Task = struct { principal: u64, candidate: Proposal, human: agent.mobility.EnsureInput, placement: agent.mobility.EnsureInput };
-pub const Preparation = struct { candidate: Proposal, validation: Proposal };
+pub const Preparation = struct { candidate: Proposal, validation: Proposal, task_id: u64, generation: u64 };
 pub const Challenge = struct { occurrence: Text(128), proposal: Proposal };
-pub const Decision = union(enum) { approve, reject: Reason, amend: Proposal };
+pub const Decision = union(enum) { approve, reject: ReviewReason, amend: Proposal };
 pub const Answer = struct { challenge: Challenge, principal: u64, decision: Decision };
 pub const HumanInput = struct { channel: agent.contracts.Utf8, purpose: agent.contracts.Utf8, presentation: void, outgoing: Challenge };
 pub const HumanReply = union(enum) { response: Answer };
 
 pub fn define(c: agent.Context, principal: Id, placement_input: Id) !agent.approval.Definition {
+    return defineRetained(c, principal, placement_input, try c.builder.constant(void, {}), null);
+}
+pub const MovementState = struct { cell: Id, region: Id };
+/// The caller owns this portable region. The approval owner retains its private
+/// grant while placement updates the same remaining allowance used on return.
+pub fn defineRetained(c: agent.Context, principal: Id, placement_input: Id, failure: Id, movement_state: ?MovementState) !agent.approval.Definition {
     const b = c.builder;
     const proposal = try c.schema(Proposal);
     const boolean = try b.scalar(bool);
@@ -32,14 +39,19 @@ pub fn define(c: agent.Context, principal: Id, placement_input: Id) !agent.appro
     const revalidate = try b.declare(&.{proposal}, boolean, &.{current}, &.{});
     try b.define(revalidate, try b.term(.{ .perform = .{ .effect = current, .payload = try b.reference(b.parameter(revalidate, 0)) } }));
     const mobility = try agent.mobility.define(c);
-    const placement = try b.declare(&.{proposal}, boolean, &.{ mobility.resolve, mobility.relocate }, &.{});
+    const placement = try b.declare(&.{proposal}, boolean, &.{ mobility.resolve, mobility.relocate }, if (movement_state) |state| &.{state.region} else &.{});
     const result = try b.variable(try c.schema(agent.mobility.PlacementResult));
     const ready = try b.variable(try c.schema(agent.mobility.Placement));
     const failed = try b.variable(try c.schema(agent.mobility.Reason));
-    try b.define(placement, try b.bind(result, try agent.mobility.ensure(c, placement_input, try b.constant(void, {})), try b.term(.{ .match_sum = .{
+    const ready_body = if (movement_state) |state| blk: {
+        const stored = try b.variable(try b.scalar(void));
+        const remaining = try b.primitive(try b.scalar(u32), .field, &.{try b.reference(ready)}, 1);
+        break :blk try b.bind(stored, try b.pure(try b.primitive(try b.scalar(void), .cell_set, &.{ state.cell, remaining }, 0)), try b.pure(try b.constant(bool, true)));
+    } else try b.pure(try b.constant(bool, true));
+    try b.define(placement, try b.bind(result, try agent.mobility.ensure(c, placement_input, failure), try b.term(.{ .match_sum = .{
         .value = try b.reference(result),
         .cases = &.{
-            .{ .variable = ready, .body = try b.pure(try b.constant(bool, true)) },
+            .{ .variable = ready, .body = ready_body },
             .{ .variable = failed, .body = try b.pure(try b.constant(bool, false)) },
         },
     } })));
@@ -48,11 +60,11 @@ pub fn define(c: agent.Context, principal: Id, placement_input: Id) !agent.appro
         .proposal = proposal,
         .occurrence = try c.schema(Text(128)),
         .principal = try b.scalar(u64),
-        .reason = try c.schema(Reason),
+        .reason = try c.schema(ReviewReason),
         .commit_effect = commit,
         .authority = authority,
         .revalidate = revalidate,
-        .failure = try b.constant(void, {}),
+        .failure = failure,
         .channel = "repository-human",
         .placement = placement,
     });
@@ -73,7 +85,7 @@ const Application = struct {
         b.functions.items[@intCast(entry)].effects = row.effects;
         const validation = try b.variable(try c.schema(CheckResult));
         const proposal = try b.variable(try c.schema(Proposal));
-        const input = try b.primitive(try c.schema(Preparation), .product, &.{ candidate, try b.primitive(try c.schema(Proposal), .field, &.{try b.reference(validation)}, 1) }, 0);
+        const input = try b.primitive(try c.schema(Preparation), .product, &.{ candidate, try b.primitive(try c.schema(Proposal), .field, &.{try b.reference(validation)}, 1), try c.literal(u64, 1), try c.literal(u64, 1) }, 0);
         const checked = try b.term(.{ .perform = .{ .effect = check, .payload = candidate } });
         const prepared = try b.term(.{ .perform = .{ .effect = prepare, .payload = input } });
         // These sites authorize bounded scratch preparation, never publication.

@@ -93,3 +93,14 @@ an answer and complete the inherited compiled fixture.
 These are synthetic-human tests, not actual-person qualification. They exercise
 the generic owner seam and inherited fixture; full Mobile Repository application
 and proposal/approval integration remain separate work.
+
+## Retained application review
+
+`repository-review-human` presents inspect/propose results with finish, decline,
+question, and amend choices. `repository-approval-human` offers approve, decline,
+question, and amend through the existing private approval owner. Question/amend
+are typed rejection reasons, not approval grants. The authored investigator stays
+parked until review resolves; questions withhold mutation, and amendments invalidate
+the old candidate/check. The UI renders both proposal and publication diffs as text.
+A restarted origin retains the exact pending question; cancellation disposes the
+investigator once and cannot publish.

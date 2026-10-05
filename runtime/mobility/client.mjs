@@ -74,12 +74,13 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
     if (!pending || pending.acquired) return;
     const question = document.querySelector('#question'), value = pending.pending.question;
     question.replaceChildren();
-    if (value?.kind === 'repository-publication-approval') {
-      const proposal = JSON.parse(value.challenge[1]), core = proposal.core;
+    if (value?.kind === 'repository-publication-approval' || (value?.kind === 'repository-review' && value.proposal)) {
+      const publishing = value.kind === 'repository-publication-approval';
+      const proposal = JSON.parse(publishing ? value.challenge[1] : value.proposal), core = proposal.core;
       if (!Array.isArray(core.diff) || core.diff.length !== core.candidate.edits.length) throw new Error('The complete change is unavailable for review.');
       const paragraph = text => { const p = document.createElement('p'); p.textContent = text; question.append(p); };
-      paragraph(`Publish to managed branch ${core.destination.managedRef} in ${core.destination.repository}.`);
-      paragraph('This creates a commit in the service-owned repository. Your checkout and upstream repository are not updated.');
+      paragraph(`${publishing ? "Publish to" : "Review a proposal for"} managed branch ${core.destination.managedRef} in ${core.destination.repository}.`);
+      paragraph(publishing ? 'Approval publishes this exact commit in the service-owned repository. Your checkout and upstream repository are not updated.' : 'This task does not publish. You can finish, ask a question, or amend the requested task.');
       paragraph(`Base: ${core.destination.expectedBase}\nPrepared commit: ${proposal.commitOid}\nProposal: ${proposal.digest}`);
       for (const check of core.validation) paragraph(`Check: ${check.profile} — ${check.status}. Profile ${check.profileDigest}; runner ${check.runner}.`);
       paragraph('Validation covers the listed check contracts. Other behavior has not been established by these checks.');
@@ -93,9 +94,9 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
         }
         question.append(details);
       }
-    } else question.textContent = JSON.stringify(value, null, 2);
+    } else question.textContent = value?.kind === 'repository-review' ? value.summary : JSON.stringify(value, null, 2);
     const choices = document.querySelector('#choice'); choices.replaceChildren();
-    if (value?.kind === 'repository-publication-approval') {
+    if (['repository-publication-approval', 'repository-review'].includes(value?.kind)) {
       const placeholder = document.createElement('option'); placeholder.value = ''; placeholder.textContent = 'Choose a response';
       placeholder.disabled = true; placeholder.selected = true; choices.append(placeholder);
     }

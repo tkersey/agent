@@ -2,7 +2,8 @@
 
 The [accepted specification](mobile-repository-agent-spec.md) governs W0–W8 and
 MR-001–MR-096. This is an incomplete implementation, not a reference-qualified
-application. The draft PR exposes the first substantive authored slice.
+application. The draft PR includes the authored investigation/review/publication
+loop; intake, installed delivery, and final qualification remain open.
 
 ## Foundation (W0)
 
@@ -35,21 +36,30 @@ progressed; this is regression evidence, not final application qualification.
 ## Authored continuation (W1)
 
 `test/consumers/mobile_repository` uses public Agent/Boundary APIs, existing
-`mobility.ensure`, and an owned `agent.inquiry` investigator. Its current scope
-is snapshot-bound source inspection followed by a human question. The actual
-parked investigator, retained goal/evidence, outer task occurrence, and captured
-cleanup cross the return move. The program threads the returned move allowance;
-the human placement template cannot replenish it.
+`mobility.ensure`, model normalization, and an owned `agent.inquiry` investigator.
+The 33,226-byte image owns list/read/search, staging up to four exact edits,
+check selection and interpretation, clarification, human review, and completion.
+No environment selects the next application action.
 
-The 4,940-byte image passes ten deterministic fresh-kernel scenarios through
-`check-mobile-repository`: a round trip preserving each of the three mode
-values, local `Here`, exhausted return budget, cancellation with one cleanup,
-and rejection of zero generation, empty goal, and excessive placement attempts
-before any effects, plus the same round trip through real managed Git snapshot
-and read leaves. The mode tests establish preservation only; propose and
-publish behavior are not implemented yet. Human answers remain synthetic.
-These checks do not qualify custody, browser interaction, or approval for the
-new application.
+The fresh-World continuation test passes ten deterministic scenarios: all three
+modes retain the original goal/evidence; clarification causes four real transfers;
+local `Here` causes none; exhausted movement and cancellation clean up once;
+invalid intake performs no effects. One scenario uses real managed Git. The model
+transport is a fresh synthetic loopback endpoint on each turn; exact opaque replay
+items and paired tool results survive. These are not live-model usefulness tests.
+
+The full two-custodian suite passes 21 tests, including actual managed publication,
+all three application modes, read-only review questions, amendments, logical-budget
+exhaustion, attempted edits during read-only review, origin restart, and cancellation
+of the retained investigator. A review question preserves the candidate and check;
+an amendment discards both and must check a new candidate. Physical model/check
+charges persist and agree with independently expected counts. Publish completes
+U→W→U→W→U with its private grant and exact managed receipt; inspect/propose leave
+the ref unchanged. The final remaining-move allowance includes approval placement.
+
+The same suite preserves the shared approval component's Chromium/Firefox tests
+and all six non-passing check dispositions. The full application has not yet been
+qualified in browser Workers or from the extracted use archive.
 
 Reproduce this slice using the existing authenticated setup:
 
@@ -147,15 +157,15 @@ Two fresh Node adapter processes reconstruct the next request from ordinary data
 Authoring validation passed 337/337 steps and 117 Zig tests; the final native
 responder check passed 10/10 steps and 65 Zig tests. Provider/journal/bridge and
 extracted-deployment checks passed 121 Node tests; the final fresh-process model
-lane passed 25 tests. These establish the provider/owner seams, not the complete
-Mobile Repository investigation loop or live-model usefulness.
+lane passed 25 tests. These establish the provider/owner seams. The current authored-loop evidence is
+reported above; live-model usefulness remains unqualified.
 
 Durable attempt, request-byte and output-token allowances are charged with the
 dispatch transaction, bound to W and the signed run registration, and preserved
 across restart. Background model I/O releases the run lock; unknown calls are
 not repeated, and cancellation fences late replies without refunding attempts.
-Complete authored model/investigation/revision composition and logical work
-allowances are still open.
+The authored loop also retains logical step/check allowances. Question and amendment
+tests reject per-return resets and preserve complete provider replay.
 
 ## Managed publication (W5, partial)
 
@@ -190,9 +200,9 @@ interaction regressions passed 8/8 tests; final intent-reuse and adapter checks
 passed 12/12. Full snapshot checks passed 8/8 before the additional targeted binary
 provisioning case. These witnesses use deterministic human/check capabilities and
 the production approval, custody, session, browser, store and publication owners.
-They do not establish the full investigation application or actual-person lane.
-Complete application integration, installed helper acquisition, and the remaining
-fault/acceptance matrix are still open.
+These earlier component witnesses do not establish the actual-person lane. The
+current full application loop is covered above; installed helper acquisition and
+the final fault/acceptance matrix remain open.
 
 ## Typed check dispatch
 
@@ -212,13 +222,13 @@ yet exercise the new check configuration through the extracted loader.
 
 ## Remaining acceptance
 
-W2–W8 remain open: complete repository/check deployment integration;
-complete application integration of durable answers and authenticated UI; real provider integration
-and replay/budgets; exact protected publication and reconciliation; complete
-application/package commands; faults/models/mutants, matched measurements and
-the complete MR-001–MR-096 evidence mapping; serial review closeout.
+Remaining work includes authenticated task intake and repeated-task UX, complete
+browser-Worker and extracted-archive execution, installed helper acquisition and
+check-profile examples, lifetime resource accounting, the complete MR-001–MR-096
+mapping, inherited exact-head regressions, fault/model/mutant qualification,
+matched measurements, and serial review closeout. The new prepare/proposal/review/
+release deployment configurations still need their complete extracted-loader test.
 
-No new application acceptance row is claimed complete from the scaffold.
 Live-provider, actual-person, and two-machine qualifications are not run and
-require their separately authorized inputs. No core changes, live model calls,
-user-repository mutation, upstream publication, merge, or release occurred.
+require separately authorized inputs. No core changes, live model calls,
+user-repository mutation, upstream publication, merge, promotion, or release occurred.

@@ -1,6 +1,8 @@
-// First application slice: actual World continuation, independently expected
-// evidence and retained inquiry. Custodian, real adapters and UI qualify later.
+// Actual authored model/inquiry control, independently expected observations,
+// and fresh World instances on every transfer. Provider replies are synthetic.
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { decodeReplayModelInvocation, performReplayModelInvocation } from '../../runtime/model.mjs';
 import { readFile, mkdtemp, mkdir, writeFile, rm, realpath } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -30,18 +32,18 @@ const evidence = [snapshot[5], 'src/ordinary.zig', Array(32).fill(3), 'pub const
 const goal = 'Explain the admitted source before proposing a change.';
 const humanAnswer = 'Keep this value; investigate its callers next.';
 
-async function scenario({ local = false, moves = 2, cancelReturn = false, mode = 0, invalid = null, leaf = null, selectedSnapshot = snapshot, selectedEvidence = evidence } = {}) {
-  const task = [731n, 19n, mode, goal, selectedSnapshot[0], selectedSnapshot[3], selectedEvidence[1], placement(local ? 'A' : 'B', moves, 'repository'), placement('A', 16, 'human')];
+async function scenario({ local = false, moves = 4, cancelReturn = false, mode = 0, invalid = null, leaf = null, selectedSnapshot = snapshot, selectedEvidence = evidence } = {}) {
+  const task = [731n, 19n, mode, goal, selectedSnapshot[0], selectedSnapshot[3], selectedEvidence[1], placement(local ? 'A' : 'B', moves, 'repository'), placement('A', 16, 'human'), ['fixture-model', [{ tag: 1, value: 512 }, { tag: 0, value: null }, { tag: 0, value: null }]], 8, 2, 71n];
   if (invalid === 'generation') task[1] = 0n;
   if (invalid === 'empty-goal') task[3] = '';
   if (invalid === 'attempts') task[7][3][1] = 4;
   const initial = encodeValue(taskSchema, task);
   let current = await make(), session = current.kernel.start(current.prepared, initial), host = 'A';
   let bytes = current.kernel.drive(session, { checkpoint: true });
-  let transfers = 0, cleanups = 0, questions = 0, epoch = 0n, cancelled = false;
+  let transfers = 0, cleanups = 0, questions = 0, epoch = 0n, cancelled = false, modelTurns = 0;
   const trace = [];
   try {
-    for (let step = 0; step < 64; step++) {
+    for (let step = 0; step < 128; step++) {
       const out = world.decodeOutcome(bytes);
       if (['completed', 'failed', 'cancelled'].includes(out.kind)) {
         assert.equal(cleanups, invalid ? 0 : 1, 'the original owned investigation cleans up exactly once');
@@ -54,8 +56,8 @@ async function scenario({ local = false, moves = 2, cancelReturn = false, mode =
           assert.equal(transfers, 1, 'the human template cannot replenish the spent move budget');
         } else {
           assert.equal(out.kind, 'completed'); assert.equal(questions, 1);
-          assert.deepEqual(decodeValue(reportSchema, out.value), [731n, 19n, mode, moves - transfers, [[1n, [goal, selectedEvidence, humanAnswer]]]]);
-          assert.equal(transfers, local ? 0 : 2);
+          assert.deepEqual(decodeValue(reportSchema, out.value), [731n, 19n, mode, moves - transfers, [[1n, [goal, selectedEvidence, humanAnswer, '', '', moves - transfers, '', { tag: 0, value: null }]]], '', { tag: 0, value: null }]);
+          assert.equal(transfers, local ? 0 : 4);
         }
         return { mode, local, moves, cancelReturn, invalid, realRepository: leaf !== null, outcome: out.kind, transfers, cleanups, trace };
       }
@@ -67,7 +69,7 @@ async function scenario({ local = false, moves = 2, cancelReturn = false, mode =
       const request = await world.decodeRequest(out.request);
       const payload = decodeValue(decodeSchema(request.payloadSchema), request.payload);
       trace.push([host, request.semanticIdentity]);
-      let reply;
+      let reply, encodedReply;
       switch (request.semanticIdentity) {
         case 'agent.mobility.resolve.v1': reply = resolution(payload, host, identity.kernelSha256); break;
         case 'agent.mobility.relocate.v1': {
@@ -92,15 +94,45 @@ async function scenario({ local = false, moves = 2, cancelReturn = false, mode =
           assert.equal(host, local ? 'A' : 'B'); assert.deepEqual(payload, [selectedSnapshot[0], selectedSnapshot[3]]); reply = leaf ? await leaf.snapshot(payload) : selectedSnapshot; break;
         case 'agent.repository.read.v1':
           assert.equal(host, local ? 'A' : 'B'); assert.deepEqual(payload, [selectedSnapshot, selectedEvidence[1]]); reply = leaf ? await leaf.read(payload) : selectedEvidence; break;
+        case 'agent.model.invoke.v4': {
+          assert.equal(host, local ? 'A' : 'B');
+          const invocation = decodeReplayModelInvocation(request.payload);
+          assert.equal(invocation.invocation.model, 'fixture-model');
+          const turn = modelTurns++;
+          if (turn > 0) {
+            assert(invocation.input.some(item => item.type === 'reasoning' && item.encrypted_content === 'opaque-retained-0'));
+            assert(invocation.input.some(item => item.type === 'function_call_output' && item.call_id === 'call-0' && item.output === humanAnswer));
+          }
+          if (turn === 2) assert(invocation.input.some(item => item.type === 'function_call_output' && item.call_id === 'call-1' && item.output.includes(selectedEvidence[3])));
+          assert(turn < 3, 'the authored loop terminates without resetting after clarification');
+          const action = turn === 0 ? ['ask', { question: 'Should this value be kept?' }] : turn === 1 ? ['read', { path: selectedEvidence[1], offset: 0 }] : ['finish', { summary: humanAnswer }];
+          // A fresh transport endpoint per invocation retains no provider-side session.
+          const provider = createServer(async (req, res) => {
+            for await (const _ of req) { /* consume bounded fixture request */ }
+            res.end(JSON.stringify({ status: 'completed', error: null, output: [
+              { type: 'reasoning', id: `reason-${turn}`, summary: [], encrypted_content: `opaque-retained-${turn}` },
+              { type: 'function_call', id: `function-${turn}`, status: 'completed', call_id: `call-${turn}`, name: action[0], arguments: JSON.stringify(action[1]) },
+            ] }));
+          });
+          await new Promise(resolve => provider.listen(0, '127.0.0.1', resolve));
+          try { encodedReply = await performReplayModelInvocation(request.payload, { endpoint: `http://127.0.0.1:${provider.address().port}/v1/responses` }); }
+          finally { provider.closeAllConnections(); await new Promise(resolve => provider.close(resolve)); }
+          break;
+        }
+        case 'agent.repository.read-window.v1':
+          assert.equal(host, local ? 'A' : 'B'); assert.deepEqual(payload, [selectedSnapshot, selectedEvidence[1], 0n, 32768]);
+          reply = leaf ? await leaf.readWindow(payload) : [selectedEvidence, 0n, BigInt(Buffer.byteLength(selectedEvidence[3])), BigInt(Buffer.byteLength(selectedEvidence[3]))]; break;
         case 'agent.repository.human.v1':
-          assert.equal(host, 'A'); assert.deepEqual(payload, [731n, 19n, goal, selectedEvidence]);
+          assert.equal(host, 'A'); assert.deepEqual(payload, [731n, 19n, goal, selectedEvidence, 'Should this value be kept?', moves - transfers + (local ? 0 : 1)]);
           questions++; reply = humanAnswer; break;
+        case 'agent.repository.review.v1':
+          assert.equal(host, 'A'); assert.deepEqual(payload, [731n, 19n, mode, humanAnswer, '']); reply = { tag: 0, value: null }; break;
         case 'agent.repository.investigation-release.v1':
           assert.deepEqual(payload, [731n, 19n], 'cleanup retains the original task occurrence');
           cleanups++; reply = null; break;
         default: assert.fail(`unexpected operation ${request.semanticIdentity}`);
       }
-      bytes = current.kernel.drive(session, { control: 'reply', value: await world.encodeResult(out.request, encodeValue(decodeSchema(request.resumeSchema), reply)), checkpoint: true });
+      bytes = current.kernel.drive(session, { control: 'reply', value: await world.encodeResult(out.request, encodedReply ?? encodeValue(decodeSchema(request.resumeSchema), reply)), checkpoint: true });
     }
     assert.fail('bounded application did not terminate');
   } finally {

@@ -94,3 +94,18 @@ before/after source using inert text. Approve requires an explicit selection.
 Chromium and Firefox cover authenticated login and complete proposals exceeding
 64 KiB. Pending question artifacts are bounded at 2 MiB; answer limits remain
 unchanged. Ordinary free-text deferred questions retain their existing behavior.
+
+## Application composition
+
+The full mobile program uses the same private approval construction. A portable
+region cell retains the placement hook's returned move allowance for the final
+return; the hook's boolean result cannot reset the caller's budget. The cell carries
+no external handle or approval token.
+
+`repository-proposal` accepts the exact candidate and check record with task and
+generation. It requires that the configured profile/runner record was acquired by
+this signed run before preparing the canonical proposal. Its commit identity and
+metadata are explicit deployment selections. Preparation never updates a ref.
+The runtime loader also exposes `repository-prepare` for bounded staged edits and
+`repository-release` for the journaled disposal of the portable investigation;
+physical check children and scratch remain owned by the check runner.

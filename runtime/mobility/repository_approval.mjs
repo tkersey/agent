@@ -24,12 +24,26 @@ export function repositoryApprovalBinding(metadata, adapter) {
       const proposal = parse(Buffer.from(payload[3][1]), { maximum: 2 << 20 });
       return proposal.core.binding.run === run.run_id && proposal.core.binding.principal === run.principal_ref && proposal.core.binding.tenant === run.tenant_ref;
     };
-    binding.defer = ({ payload }) => ({ audience: binding.audience, alternatives: ['approve', 'decline'], maximum_text_bytes: 128,
+    binding.defer = ({ payload }) => ({ audience: binding.audience, alternatives: ['approve', 'decline', 'question', 'amend'], maximum_text_bytes: 4096,
       question: { kind: 'repository-publication-approval', challenge: payload[3] } });
     binding.answer = ({ answer, pending, run }) => {
       return encodeValue(result, { tag: 0, value: [pending.question.challenge, BigInt(principals[run.principal_ref]),
-        answer.choice === 'approve' ? { tag: 0, value: null } : { tag: 1, value: answer.text }] });
+        answer.choice === 'approve' ? { tag: 0, value: null } : { tag: 1, value: { tag: ['decline', 'question', 'amend'].indexOf(answer.choice), value: answer.text } }] });
     };
   }
   return binding;
+}
+
+// Non-publishing review is ordinary authenticated interaction. Its response can
+// resume an investigation, but cannot create a private publication grant.
+export function repositoryReviewBinding(metadata, adapter) {
+  closed(adapter, ['kind', 'revision']);
+  requireThat(adapter.kind === 'repository-review-human' && metadata.operation === 'agent.repository.review.v1' &&
+    metadata.role === 'interaction' && typeof metadata.audience === 'string' && typeof adapter.revision === 'string' && adapter.revision.length > 0, 'AdapterContract');
+  const result = decodeSchema(metadata.resultSchema);
+  return { ...metadata, deferredRevision: adapter.revision, authorize: () => true,
+    defer: ({ payload }) => ({ audience: metadata.audience, alternatives: ['finish', 'decline', 'question', 'amend'], maximum_text_bytes: 4096,
+      question: { kind: 'repository-review', task_id: String(payload[0]), generation: String(payload[1]), mode: payload[2], summary: payload[3], proposal: payload[4] } }),
+    answer: ({ answer }) => encodeValue(result, { tag: ['finish', 'decline', 'question', 'amend'].indexOf(answer.choice), value: answer.choice === 'finish' ? null : answer.text }),
+  };
 }

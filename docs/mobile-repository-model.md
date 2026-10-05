@@ -3,8 +3,9 @@
 The reference deployment loader supports `openai-responses-replay` as an ordinary
 model leaf. It returns normalized proposals; the authored program owns tool
 selection, local admission, execution, recovery and subsequent model calls.
-Full Mobile Repository application integration remains in progress. No live
-provider qualification has been run.
+The authored mobile repository loop now consumes this leaf, retaining replay,
+paired tool results, staged edits, checks, and logical allowances across human
+review. No live provider qualification has been run.
 
 The existing `agent.model.invoke.v3` request and result are unchanged. The additive
 `agent.model.invoke.v4` contract nests that request with bounded replay bytes and
@@ -93,3 +94,18 @@ replay and pair ordering, unsupported/missing items and overflow, profile and
 disclosure rejection, native World offer custody, transaction fault boundaries,
 restart-preserved charges, concurrency, cancellation and late replies. No tests
 in this lane use a production credential or send repository data to a provider.
+
+## Authored investigation
+
+The application offers list/read/search, edit, check, ask, and finish. Inspect mode
+never offers edits or checks. Edits replace the staged entry at the same path and
+invalidate the prior candidate and validation. The program prepares/checks the
+exact staged set; finishing a changed candidate requires a passing disposition.
+Diagnostic records are supplied intact within the model context bound; overflow
+stops explicitly rather than silently truncating a check.
+
+The owned investigator remains suspended during review. A read-only question
+returns to its original call site with mutation actions withheld. An amendment
+clears staged edits/candidate/checks and supplies new guidance within the original
+scope. Neither path resets logical work, movement, physical charges, or replay.
+Final disposition alone completes and cleans up the investigator.

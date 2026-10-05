@@ -181,3 +181,29 @@ requested change. A passing narrow profile cannot authorize an unrelated semanti
 change; the operator must provide a matching mandatory contract or leave that
 candidate unvalidated. Documentation edits can use the relevant profile as a
 regression check, but prose correctness still requires independent review.
+
+## Installed operator commands
+
+The extracted archive exposes the same owners through the mobility CLI:
+
+```sh
+node runtime/mobility/cli.mjs provision-repository provision.json
+node runtime/mobility/cli.mjs qualify-check check.json
+```
+
+`provision.json` contains `directory`, `sourceGitDirectory`, an exact `base`
+commit, `gitExecutable`, logical `repository` and `generation`, `managedRef`,
+`readPaths` and `writablePaths`. Optional `protectedPaths` and `limits` retain
+the repository owner's existing bounds. Paths resolve relative to this JSON
+file. Import reads the selected commit's tracked tree; it does not fetch or
+include dirty checkout content. Existing destination storage is never replaced.
+The command prints the resulting manifest receipt.
+
+`check.json` contains `sandbox` and the selected manifest as `checkProfile`.
+The sandbox fields are the same as the deployment adapter: `zigExecutable`,
+`libraryDirectory`, `launcher`, `processLock`, `scratchRoot`, `timeoutMs`,
+`maximumOutputBytes`, and `scratchBytes`; each helper has `path` and `sha256`.
+Qualification prints the runner contract, probe results and admitted profile
+identity. An unavailable profile exits unsuccessfully. Helper paths are resolved
+to their physical files before identity admission, including macOS temporary
+path aliases. These commands do not start a task, invoke a provider or publish.

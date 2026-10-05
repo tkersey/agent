@@ -1,9 +1,18 @@
 import { readRegular } from '../../tools/agent4/dependencies.mjs';
 import { isMain } from '../cli.mjs';
 import { openDeployment, pumpDeployment } from './deployment.mjs';
+import { dirname, resolve } from 'node:path';
+import { realpath } from 'node:fs/promises';
+import { parse, closed, requireThat } from './canonical.mjs';
+import { provisionRepository } from '../repository_snapshot.mjs';
+import { createZigRepositorySandbox } from '../repository_zig_sandbox.mjs';
+import { describeRepositoryCheckProfile } from '../repository_checks.mjs';
+import { selectZig } from '../../tools/agent4/toolchain.mjs';
 
 const help = `Usage: node runtime/mobility/cli.mjs COMMAND CONFIG [ARGUMENTS]
   init CONFIG                         explicitly create empty local custody storage
+  provision-repository CONFIG         import one approved local commit into a new managed store
+  qualify-check CONFIG                qualify a configured runner and print its profile identities
   login-issue CONFIG PRINCIPAL TENANT  locally issue a one-use browser login credential
   serve CONFIG                        recover and serve authenticated configured peers
   start CONFIG REGISTRATION IMAGE ARGS start an issuer-authorized run
@@ -21,6 +30,29 @@ Stop the service before using a local custody mutation command. Login issuance i
 export async function main(argv) {
   if (argv.length === 0 || (argv.length === 1 && ['--help', '-h'].includes(argv[0]))) { console.log(help); return; }
   const [command, config, ...args] = argv;
+  if (['provision-repository', 'qualify-check'].includes(command)) {
+    requireThat(config && args.length === 0, 'OperatorArguments');
+    const input = parse(readRegular(config, 1 << 20), { maximum: 1 << 20, canonicalOnly: false });
+    const path = value => { requireThat(typeof value === 'string' && value.length > 0, 'DeploymentPath'); return resolve(dirname(resolve(config)), value); };
+    if (command === 'provision-repository') {
+      closed(input, ['directory', 'sourceGitDirectory', 'base', 'gitExecutable', 'repository', 'generation', 'managedRef', 'readPaths', 'writablePaths',
+        ...(Object.hasOwn(input, 'protectedPaths') ? ['protectedPaths'] : []), ...(Object.hasOwn(input, 'limits') ? ['limits'] : [])]);
+      const receipt = await provisionRepository({ ...input, directory: path(input.directory), sourceGitDirectory: path(input.sourceGitDirectory), gitExecutable: path(input.gitExecutable) });
+      console.log(JSON.stringify(receipt));
+    } else {
+      closed(input, ['sandbox', 'checkProfile']);
+      const profile = describeRepositoryCheckProfile(input.checkProfile), selected = input.sandbox;
+      closed(selected, ['zigExecutable', 'libraryDirectory', 'launcher', 'processLock', 'scratchRoot', 'timeoutMs', 'maximumOutputBytes', 'scratchBytes']);
+      for (const helper of [selected.launcher, selected.processLock]) closed(helper, ['path', 'sha256']);
+      const sandbox = await createZigRepositorySandbox({ ...selected,
+        toolchain: selectZig(['--zig-exe', path(selected.zigExecutable), '--zig-lib', path(selected.libraryDirectory)], { inherited: null, inheritedLibrary: null }),
+        scratchRoot: path(selected.scratchRoot), launcher: { ...selected.launcher, path: await realpath(path(selected.launcher.path)) },
+        processLock: { ...selected.processLock, path: await realpath(path(selected.processLock.path)) } });
+      console.log(JSON.stringify({ ...sandbox, execute: undefined, profile }));
+      requireThat(sandbox.kind === 'qualified', 'EnvironmentUnavailable');
+    }
+    return;
+  }
   const arity = { init: [0], serve: [0], start: [3], tasks: [2], task: [5], status: [0, 1], metrics: [1], recover: [0], retry: [1], receipt: [1], withdraw: [1], cancel: [2], 'login-issue': [2] };
   if (!config || !arity[command]?.includes(args.length)) throw new Error(help);
   const host = await openDeployment(config, { create: command === 'init' });

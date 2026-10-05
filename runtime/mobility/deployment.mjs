@@ -2,6 +2,7 @@
 // a traveling image or peer request. Adapter selection is environmental only.
 import { createPrivateKey, createPublicKey } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
+import { realpath } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { verifyRuntime, readRegular } from '../../tools/agent4/dependencies.mjs';
 import { decodeSchema, decodeValue, encodeValue } from '../values.mjs';
@@ -114,8 +115,8 @@ export async function openDeployment(configPath, { create = false } = {}) {
       const store = await openRepositorySnapshotStore({ ...adapter.store, directory: path(adapter.store.directory), gitExecutable: path(adapter.store.gitExecutable) });
       const toolchain = selectZig(['--zig-exe', path(adapter.sandbox.zigExecutable), '--zig-lib', path(adapter.sandbox.libraryDirectory)], { inherited: null, inheritedLibrary: null });
       const sandbox = await createZigRepositorySandbox({ ...adapter.sandbox, toolchain, scratchRoot: path(adapter.sandbox.scratchRoot),
-        launcher: { ...adapter.sandbox.launcher, path: path(adapter.sandbox.launcher.path) },
-        processLock: { ...adapter.sandbox.processLock, path: path(adapter.sandbox.processLock.path) } });
+        launcher: { ...adapter.sandbox.launcher, path: await realpath(path(adapter.sandbox.launcher.path)) },
+        processLock: { ...adapter.sandbox.processLock, path: await realpath(path(adapter.sandbox.processLock.path)) } });
       const runner = createRepositoryCheckRunner({ store, sandbox, profiles: [adapter.checkProfile] });
       const leaf = repositoryCheckBinding(binding, { runner, profile: adapter.profile, hostId: config.hostId });
       const handle = leaf.handle; leaf.handle = context => { counts.calls++; return handle(context); };

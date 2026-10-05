@@ -41,6 +41,11 @@ function admitProfile(input) {
   return p;
 }
 
+export function describeRepositoryCheckProfile(input) {
+  const profile = admitProfile(input);
+  return { id: profile.id, digest: digest(profile), description: profile.description, deterministic: profile.deterministic };
+}
+
 export function createRepositoryCheckRunner({ store, sandbox, profiles }) {
   require(store && typeof store.checkInputs === 'function', 'RepositoryCheckStore');
   require(sandbox?.kind === 'qualified' && /^[a-f0-9]{64}$/.test(sandbox.runner) && typeof sandbox.execute === 'function', 'EnvironmentUnavailable');

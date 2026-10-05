@@ -245,8 +245,8 @@ the independent failing-base and unchanged-ref/checkout assertions. All twelve
 compiled approval scenarios pass, including both browsers, six non-passing
 statuses, and a retained check charge after publication recovery. Nine adapter
 tests and three extracted deployment/CLI regression tests pass. The extracted
-tests cover package import closure and existing deployment behavior; they do not
-yet exercise the new check configuration through the extracted loader.
+earlier tests cover package import closure and existing deployment behavior.
+The full v2 loader qualification below now exercises the new check configuration.
 
 ## Remaining acceptance
 
@@ -258,11 +258,11 @@ Mobility was slower in every tested cell; extra-read and opaque-replay workloads
 transferred fewer bytes. The comparison report retains the raw data and scope.
 Separate browser/restart attribution and UI operation counts remain pending.
 
-Remaining work includes complete deployment-loader/check-profile examples,
+Remaining work includes complete operator configuration generation, read-only
+deployment validation, result-export and application-qualification commands,
 lifetime resource-accounting reconciliation, the complete MR-001–MR-096
 mapping, inherited exact-head regressions, complete fault qualification,
-browser/recovery measurements, and serial review closeout. The new prepare/proposal/review/
-release deployment configurations still need their complete extracted-loader test.
+browser/recovery measurements, and serial review closeout.
 
 Live-provider, actual-person, and two-machine qualifications are not run and
 require separately authorized inputs. No core changes, live model calls,
@@ -343,3 +343,32 @@ failure, ref mismatch, missing tree, all three verification statuses after journ
 restart, and the inherited publication faults. Actual private approval and lost
 reply recovery also pass. Verification checks Git ref/object identity; additional
 behavioral postchecks are not implied.
+
+## Installed v2 deployment qualification
+
+The extracted CLI now exposes `provision-repository` and `qualify-check` through
+the existing repository and runner owners. The installed qualification provisions
+a private immutable base, rejects replacement of its store, qualifies the selected
+profile, initializes U and W from v2 configurations, lists and starts catalogue
+tasks, issues a reference login and starts W with the installed `serve` command.
+U uses the extracted loader in the test process; W runs in a separate Node process.
+They communicate over real mutual TLS, and Chromium drives the shipped UI/Worker.
+Optional archive test oracles and authoring sources are absent from both hosts.
+
+All three modes pass through this route. Inspect and propose leave the managed
+ref unchanged. Publish presents the exact checked change, consumes one synthetic
+human approval and publishes once. Independent assertions require seven total
+model calls, two checks, one publication, the exact corrected Agent source bytes,
+and an unchanged original checkout. Existing deployment/serve/login regressions
+also pass. The new case is included serially in `check-mobile-repository-package`
+alongside its thirteen earlier application/browser/check scenarios.
+
+This test exposed and fixed rejection of valid helper files reached through
+macOS temporary-directory aliases. CLI qualification and deployment startup now
+resolve their helper paths before the existing digest/identity checks. The same
+case failed before normalization and completed after it.
+
+These are two local host processes with a deterministic provider and synthetic
+human input, not two machines, live inference or actual-person qualification.
+The test provisions its typed template as an oracle; operator-facing template
+generation remains required so users need not encode those values themselves.

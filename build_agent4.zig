@@ -740,7 +740,7 @@ pub fn build(b: *std.Build) void {
         if (browser_tools_path) |browser_tools| {
             repository_package_test.addDirectoryArg2(browser_tools, .{ .prefix = "AGENT_MOBILITY_BROWSER_TOOLS=", .make_absolute = true });
         } else repository_package_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
-        repository_package_test.addArgs(&.{ "node", "--test", "test/agent4/mobile_repository_package.test.mjs" });
+        repository_package_test.addArgs(&.{ "node", "--test", "--test-concurrency=1", "test/agent4/mobile_repository_package.test.mjs", "test/agent4/mobile_repository_deployment.test.mjs" });
         repository_package_test.step.dependOn(&package.step);
         repository_package_test.step.dependOn(&runtime_guard.step);
         repository_package_test.has_side_effects = true;

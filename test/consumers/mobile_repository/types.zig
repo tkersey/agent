@@ -77,6 +77,12 @@ pub const Report = struct {
     publication: Publication,
 };
 pub const SNAPSHOT = "agent.repository.snapshot.v1";
+// Fresh per-task allowances come from this immutable session template.
+// Custodian-wide limits are independent and never reset between tasks.
+pub const Session = struct { task: Task, maximum_tasks: u16 };
+pub const NextTask = struct { report: Report, next_generation: u64, maximum_steps: u16, maximum_checks: u16, maximum_moves: u32 };
+pub const NextTaskAnswer = union(enum) { stop, start: struct { goal: Text(4096), mode: Mode } };
+pub const NEXT_TASK = "agent.repository.next-task.v1";
 pub const READ = "agent.repository.read.v1";
 pub const LIST = "agent.repository.list.v1";
 pub const SEARCH = "agent.repository.search.v1";

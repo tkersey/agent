@@ -71,8 +71,8 @@ human inputs; they do not establish live-model usefulness or actual-person proof
 
 Reproduce this slice using the existing authenticated setup:
 
-`check-mobile-repository-native` also runs these ten continuation scenarios
-against the native interpreter. All 106 canonical outcomes match WASM byte for
+`check-mobile-repository-native` also runs fourteen continuation scenarios
+against the native interpreter. All 163 canonical outcomes match WASM byte for
 byte, including cancellation, exhausted budgets, invalid intake, and the real
 repository case. Provider replies remain synthetic; this comparison does not
 qualify live-model behavior or the full edit/check/publication path.
@@ -241,9 +241,8 @@ yet exercise the new check configuration through the extracted loader.
 
 ## Remaining acceptance
 
-Remaining work includes authenticated task intake and repeated-task UX, complete
-browser-Worker and extracted-archive execution, installed helper acquisition and
-check-profile examples, lifetime resource accounting, the complete MR-001–MR-096
+Remaining work includes complete deployment-loader/check-profile examples,
+lifetime resource-accounting reconciliation, the complete MR-001–MR-096
 mapping, inherited exact-head regressions, fault/model/mutant qualification,
 matched measurements, and serial review closeout. The new prepare/proposal/review/
 release deployment configurations still need their complete extracted-loader test.
@@ -255,7 +254,27 @@ user-repository mutation, upstream publication, merge, promotion, or release occ
 The extracted qualification target is `check-mobile-repository-package` with
 the same source/runtime/prefix flags and
 `-Dbrowser-tools=/absolute/path/to/locked-playwright-tools`. It requires both
-browsers and executes eight independently checked cases after removing the
+browsers and executes thirteen independently checked cases after removing the
 archive's optional test oracles, including a qualified native Agent source repair.
-Catalogue admission has three focused tests; the browser bridge also rejects
+Catalogue/next-task admission has four focused tests; the browser bridge also rejects
 missing and cross-session CSRF before registration.
+
+## Repeated authored tasks
+
+The packaged application and catalogue now use `session.bpi3`. Its bounded loop
+assigns generation 1 and advances generations in World state. Initial templates
+cannot supply a generation. Each task invokes the same investigation and
+completion construction, releases its owned investigation, and offers the next
+task with explicit allowances. No model transcript, candidate, check result or
+approval is reused as the next task's state. The repository/base/grants remain
+fixed; another scope or base requires a new authorized session. Custodian-wide
+allowances stay cumulative.
+
+Production deferred interaction admits only a goal and an operator-granted mode,
+or a stop response. Chromium and Firefox both execute two tasks in real Workers,
+export the first completed report, answer the next-task prompt through the UI,
+and resume after page reload. A separate custody test restarts the origin at the
+next-task prompt. The propose-then-publish witness performs two independent
+checks and publishes once with fresh exact approval at generation 2. Reusing an
+old answer cannot change the next task. Native/WASM comparison additionally
+covers two completed tasks, early stop and rejected session bounds.

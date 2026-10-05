@@ -23,27 +23,29 @@ const image = await readFile(join(imagesPath, 'program.bpi3'));
 const schema = async name => decodeSchema(await readFile(join(imagesPath, `${name}.schema`)));
 const taskSchema = await schema('task'), reportSchema = await schema('report');
 const limit = readDependencyLock().world.runtime.physicalProfile.maximumMemoryBytes;
-const make = async () => {
+const make = async (program = image) => {
   const kernel = await world.Kernel.create({ bytes: kernelBytes, expectedSha256: identity.kernelSha256 });
   kernel.setLimits({ input: limit, working: limit, output: limit });
-  return { kernel, prepared: kernel.prepare(image) };
+  return { kernel, prepared: kernel.prepare(program) };
 };
 const snapshot = ['project', 'import-1', 0, 'a'.repeat(40), 'b'.repeat(40), Array(32).fill(1), Array(32).fill(2), ['shared'], 'workspace'];
 const evidence = [snapshot[5], 'src/ordinary.zig', Array(32).fill(3), 'pub const answer: u32 = 42;\n', false];
 const goal = 'Explain the admitted source before proposing a change.';
 const humanAnswer = 'Keep this value; investigate its callers next.';
 
-async function scenario({ local = false, moves = 4, cancelReturn = false, mode = 0, invalid = null, leaf = null, selectedSnapshot = snapshot, selectedEvidence = evidence } = {}) {
+async function scenario({ local = false, moves = 4, cancelReturn = false, mode = 0, invalid = null, leaf = null, selectedSnapshot = snapshot, selectedEvidence = evidence, sessionTasks = null, stopAfter = null } = {}) {
+  const program = sessionTasks === null ? image : await readFile(join(imagesPath, 'session.bpi3'));
+  let generation = sessionTasks === null ? 19n : 1n, taskTransfers = 0, completedTasks = 0;
   const task = [731n, 19n, mode, goal, selectedSnapshot[0], selectedSnapshot[3], selectedEvidence[1], placement(local ? 'A' : 'B', moves, 'repository'), placement('A', 16, 'human'), ['fixture-model', [{ tag: 1, value: 512 }, { tag: 0, value: null }, { tag: 0, value: null }]], 8, 2, 71n];
   if (invalid === 'generation') task[1] = 0n;
   if (invalid === 'empty-goal') task[3] = '';
   if (invalid === 'attempts') task[7][3][1] = 4;
-  const initial = encodeValue(taskSchema, task);
-  let current = await make(), session = current.kernel.start(current.prepared, initial), host = 'A';
+  const initial = sessionTasks === null ? encodeValue(taskSchema, task) : encodeValue(await schema('session'), [task, sessionTasks]);
+  let current = await make(program), session = current.kernel.start(current.prepared, initial), host = 'A';
   const nativeArea = nativePath ? await mkdtemp(join(tmpdir(), 'repository-native-')) : null;
   let bytes;
   async function advance(options = {}) {
-    const input = { image, ...(bytes === undefined ? { initialArgs: initial } : { state: world.decodeOutcome(bytes).state }), ...options };
+    const input = { image: program, ...(bytes === undefined ? { initialArgs: initial } : { state: world.decodeOutcome(bytes).state }), ...options };
     const next = current.kernel.drive(session, { ...options, checkpoint: true });
     if (nativeArea) {
       const path = join(nativeArea, 'input.pki3');
@@ -61,7 +63,8 @@ async function scenario({ local = false, moves = 4, cancelReturn = false, mode =
     for (let step = 0; step < 128; step++) {
       const out = world.decodeOutcome(bytes);
       if (['completed', 'failed', 'cancelled'].includes(out.kind)) {
-        assert.equal(cleanups, invalid ? 0 : 1, 'the original owned investigation cleans up exactly once');
+        const expectedTasks = sessionTasks === null ? 1 : (stopAfter ?? sessionTasks);
+        assert.equal(cleanups, invalid ? 0 : expectedTasks, 'each owned investigation cleans up exactly once');
         if (invalid) {
           assert.equal(out.kind, 'failed'); assert.deepEqual(trace, [], 'invalid intake performs no effects');
         } else if (cancelReturn) {
@@ -70,11 +73,11 @@ async function scenario({ local = false, moves = 4, cancelReturn = false, mode =
           assert.equal(out.kind, 'failed'); assert.equal(questions, 0);
           assert.equal(transfers, 1, 'the human template cannot replenish the spent move budget');
         } else {
-          assert.equal(out.kind, 'completed'); assert.equal(questions, 1);
-          assert.deepEqual(decodeValue(reportSchema, out.value), [731n, 19n, mode, moves - transfers, [[1n, [goal, selectedEvidence, humanAnswer, '', '', moves - transfers, '', { tag: 0, value: null }]]], '', { tag: 0, value: null }]);
-          assert.equal(transfers, local ? 0 : 4);
+          assert.equal(out.kind, 'completed'); assert.equal(questions, expectedTasks);
+          assert.deepEqual(decodeValue(reportSchema, out.value), [731n, generation, mode, moves - taskTransfers, [[1n, [goal, selectedEvidence, humanAnswer, '', '', moves - taskTransfers, '', { tag: 0, value: null }]]], '', { tag: 0, value: null }]);
+          assert.equal(transfers, local ? 0 : 4 * expectedTasks);
         }
-        return { mode, local, moves, cancelReturn, invalid, realRepository: leaf !== null, outcome: out.kind, transfers, cleanups, trace };
+        return { mode, local, moves, cancelReturn, invalid, sessionTasks, stopAfter, realRepository: leaf !== null, outcome: out.kind, transfers, cleanups, trace };
       }
       if (out.kind === 'progressed' || out.kind === 'yielded') {
         await advance({ control: out.kind === 'yielded' ? 'resume_yield' : 'none' });
@@ -99,7 +102,7 @@ async function scenario({ local = false, moves = 4, cancelReturn = false, mode =
           assert.throws(() => current.kernel.drive(session), { code: 'WORLD_HANDLE_INVALID' });
           current.kernel.releasePrepared(current.prepared);
           assert.equal(current.kernel.usage().workingLive, 0n);
-          current = await make(); host = payload[0]; transfers++; epoch++;
+          current = await make(program); host = payload[0]; transfers++; taskTransfers++; epoch++;
           session = current.kernel.restore(current.prepared, checkpoint);
           assert.deepEqual(current.kernel.drive(session, { checkpoint: true }), bytes, 'restore exposes the exact pending successor');
           reply = { tag: 0, value: [host, epoch, `transfer-${epoch}`, zeroDigest, observation(host, identity.kernelSha256)] };
@@ -138,13 +141,21 @@ async function scenario({ local = false, moves = 4, cancelReturn = false, mode =
           assert.equal(host, local ? 'A' : 'B'); assert.deepEqual(payload, [selectedSnapshot, selectedEvidence[1], 0n, 32768]);
           reply = leaf ? await leaf.readWindow(payload) : [selectedEvidence, 0n, BigInt(Buffer.byteLength(selectedEvidence[3])), BigInt(Buffer.byteLength(selectedEvidence[3]))]; break;
         case 'agent.repository.human.v1':
-          assert.equal(host, 'A'); assert.deepEqual(payload, [731n, 19n, goal, selectedEvidence, 'Should this value be kept?', moves - transfers + (local ? 0 : 1)]);
+          assert.equal(host, 'A'); assert.deepEqual(payload, [731n, generation, goal, selectedEvidence, 'Should this value be kept?', moves - taskTransfers + (local ? 0 : 1)]);
           questions++; reply = humanAnswer; break;
         case 'agent.repository.review.v1':
-          assert.equal(host, 'A'); assert.deepEqual(payload, [731n, 19n, mode, humanAnswer, '']); reply = { tag: 0, value: null }; break;
+          assert.equal(host, 'A'); assert.deepEqual(payload, [731n, generation, mode, humanAnswer, '']); reply = { tag: 0, value: null }; break;
         case 'agent.repository.investigation-release.v1':
-          assert.deepEqual(payload, [731n, 19n], 'cleanup retains the original task occurrence');
+          assert.deepEqual(payload, [731n, generation], 'cleanup retains the original task occurrence');
           cleanups++; reply = null; break;
+        case 'agent.repository.next-task.v1':
+          completedTasks++;
+          assert.equal(host, 'A'); assert.equal(cleanups, completedTasks, 'cleanup precedes admission of another task');
+          assert.deepEqual(payload.slice(1), [generation + 1n, 8, 2, moves], 'new allowance is explicit and independent of the spent task');
+          assert.equal(payload[0][1], generation); assert.equal(payload[0][3], moves - taskTransfers);
+          if (stopAfter === completedTasks) reply = { tag: 0, value: null };
+          else { reply = { tag: 1, value: [goal, mode] }; generation++; taskTransfers = 0; modelTurns = 0; }
+          break;
         default: assert.fail(`unexpected operation ${request.semanticIdentity}`);
       }
       await advance({ control: 'reply', value: await world.encodeResult(out.request, encodedReply ?? encodeValue(decodeSchema(request.resumeSchema), reply)) });
@@ -160,6 +171,8 @@ const results = [];
 for (const mode of [0, 1, 2]) results.push(await scenario({ mode }));
 results.push(await scenario({ local: true }), await scenario({ moves: 1 }), await scenario({ cancelReturn: true }));
 for (const invalid of ['generation', 'empty-goal', 'attempts']) results.push(await scenario({ invalid }));
+results.push(await scenario({ sessionTasks: 2 }), await scenario({ sessionTasks: 3, stopAfter: 1 }));
+for (const sessionTasks of [0, 17]) results.push(await scenario({ sessionTasks, invalid: 'session-bound' }));
 const area = await mkdtemp(join(tmpdir(), 'mobile repository-'));
 try {
   const source = join(area, 'source'); await mkdir(join(source, 'src'), { recursive: true });

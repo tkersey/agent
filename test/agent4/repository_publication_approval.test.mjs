@@ -17,7 +17,7 @@ const { verifyRuntime } = await import(pathToFileURL(resolve(process.env.AGENT_M
 const { encodeValue, decodeValue, decodeSchema } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/values.mjs')));
 const { provisionRepository, openRepositorySnapshotStore } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/repository_snapshot.mjs')));
 const { repositoryCheckBinding } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/repository_check.mjs')));
-const { repositoryApprovalBinding, repositoryReviewBinding } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/repository_approval.mjs')));
+const { repositoryApprovalBinding, repositoryReviewBinding, repositoryNextTaskBinding } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/repository_approval.mjs')));
 const { repositoryPublicationBinding, repositoryProposalBinding, PUBLICATION } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/repository_publication.mjs')));
 const { WorldAdmission } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/admission.mjs')));
 const { CustodyJournal } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/journal.mjs')));
@@ -38,7 +38,8 @@ const text = value => Buffer.from(canonical(value, 2 << 20)).toString('utf8');
 const env = { PATH: '/usr/bin:/bin', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null',
   GIT_AUTHOR_NAME: 'Approval fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid',
   GIT_COMMITTER_NAME: 'Approval fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid' };
-async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, qualified = false, intake = false } = {}) {
+async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, qualified = false, intake = false, sessionTasks = 0, nextMode = null } = {}) {
+  const sessionInput = mobile && Boolean(process.env.AGENT_MOBILE_PACKAGE || intake || sessionTasks);
   const root = await mkdtemp(join(tmpdir(), 'repository-approval-'));
   const git = await realpath(execFileSync('/bin/sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim());
   const targetPath = qualified ? 'subject.zig' : 'fix.txt';
@@ -56,12 +57,13 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
   const snapshot = await store.snapshot(base), candidate = await store.prepare(snapshot, [
     { path: targetPath, operation: mobile ? 'replace' : 'create', oldDigest: mobile ? (await store.read(snapshot, targetPath)).digest : null, oldMode: mobile ? '100644' : null, content }]);
   const identity = verifyRuntime(resolve(process.env.AGENT_MOBILITY_RUNTIME)), world = await import(pathToFileURL(identity.entrypoint));
-  const kernelBytes = await readFile(identity.kernelPath), image = await readFile(`${applicationArtifacts}/${mobile ? 'mobile-repository' : 'repository-approval'}/program.bpi3`);
+  const kernelBytes = await readFile(identity.kernelPath), image = await readFile(`${applicationArtifacts}/${mobile ? 'mobile-repository' : 'repository-approval'}/${sessionInput ? 'session' : 'program'}.bpi3`);
   const names = ['task', 'preparation', 'result', 'check-result', 'proposal', 'receipt', 'delivery', 'human', 'human-reply', 'identifier', 'boolean'];
   const bytes = Object.fromEntries(await Promise.all(names.map(async name => [name, await readFile(`${applicationArtifacts}/repository-approval/${name}.${schemaExtension}`)])));
-  if (mobile) for (const name of ['task', 'report', 'snapshot-request', 'snapshot', 'read', 'evidence', 'cleanup', 'unit', 'model-request', 'model-result', 'candidate-preparation', 'review', 'review-answer', 'read-window', 'read-window-result']) {
+  if (mobile) for (const name of ['task', 'report', 'snapshot-request', 'snapshot', 'read', 'evidence', 'cleanup', 'unit', 'model-request', 'model-result', 'candidate-preparation', 'review', 'review-answer', 'read-window', 'read-window-result', 'next-task', 'next-task-answer']) {
     bytes[name === 'report' ? 'result' : name] = await readFile(`${applicationArtifacts}/mobile-repository/${name}.${schemaExtension}`);
   }
+  if (sessionInput) bytes.session = await readFile(`${applicationArtifacts}/mobile-repository/session.${schemaExtension}`);
   const schemas = Object.fromEntries(Object.entries(bytes).map(([name, value]) => [name, decodeSchema(value)]));
   const metadata = (operation, input, output, role) => ({ operation, payloadSchema: bytes[input], resultSchema: bytes[output], role,
     subject: 'fixture', subjectVersion: null, scope: operation, audience: role === 'approval' ? 'human' : null,
@@ -77,7 +79,7 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
   // Derive the program identity from its actual first request, before effects.
   const kernel = await world.Kernel.create({ bytes: kernelBytes, expectedSha256: identity.kernelSha256 });
   kernel.setLimits({ input: 8 << 20, working: 64 << 20, output: 8 << 20 });
-  const prepared = kernel.prepare(image), session = kernel.start(prepared, task);
+  const prepared = kernel.prepare(image), session = kernel.start(prepared, sessionInput ? encodeValue(schemas.session, [expectedTask, sessionTasks || 1]) : task);
   const first = world.decodeOutcome(kernel.drive(session, { checkpoint: true }));
   const programId = Buffer.from((await world.decodeRequest(first.request)).programIdentity).toString('hex');
   kernel.checkpoint(session, { transfer: true }); kernel.releasePrepared(prepared);
@@ -118,7 +120,7 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
     subjectVersion: provisioned.manifestSha256 }, { hostId: 'W',
     profile: { owner: 'W', repository: options.repository, generation: options.generation, manifest: provisioned.manifestSha256,
       profileId: 'fixture-content', profileDigest, runner, disclosure: { audience: null, labels: ['shared'] },
-      allowance: { attempts: reviewFollowup === 'amend' ? 2 : 1, request_bytes: 4 << 20, concurrent: 1 } },
+      allowance: { attempts: sessionTasks || (reviewFollowup === 'amend' ? 2 : 1), request_bytes: 4 << 20, concurrent: 1 } },
     runner: { runner, profiles: [{ id: 'fixture-content', digest: profileDigest }], async check({ candidate: exact, occurrence }) {
       counts.check++; if (realChecks) return realChecks.check({ snapshot: exact.snapshot, candidate: exact, occurrence, profileId: 'fixture-content' });
       const inputs = await store.checkInputs({ snapshot: exact.snapshot, candidate: exact, requiredPaths: [targetPath] });
@@ -142,11 +144,12 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
   const answer = deferred.answer; deferred.answer = context => { counts.human++; return answer(context); };
   const human = staleAnswer || wrongPrincipal ? synthetic : deferred;
   const additional = [], cleanupBindings = [], reviewBindings = [];
+  if (sessionTasks) reviewBindings.push(repositoryNextTaskBinding({ ...metadata('agent.repository.next-task.v1', 'next-task', 'next-task-answer', 'interaction'), audience: 'human' }, { kind: 'repository-next-task-human', revision: 'next-1', modes: [['inspect', 'propose', 'publish'][nextMode ?? mode]] }));
   if (mobile) {
     const review = repositoryReviewBinding({ ...metadata('agent.repository.review.v1', 'review', 'review-answer', 'interaction'), audience: 'human' }, { kind: 'repository-review-human', revision: 'review-1' });
     const answer = review.answer; review.answer = context => { counts.human++; return answer(context); }; reviewBindings.push(review);
   }
-  let modelCalls = 0, cleanupCalls = 0, reviewAnswers = 0, reviewRestarted = false, provider;
+  let modelTurn = 0, modelCalls = 0, cleanupCalls = 0, reviewAnswers = 0, reviewRestarted = false, provider;
   if (mobile) {
     const leaf = await createManagedRepositoryEnvironment({ ...options, ...provisioned, resourceOwner: 'W', classification: ['shared'] });
     additional.push(fixed('agent.repository.snapshot.v1', 'snapshot-request', 'snapshot', 'read', ({ payload }) => leaf.snapshot(payload)),
@@ -157,7 +160,7 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
     cleanupBindings[0].cleanup = true;
     provider = createServer(async (req, res) => {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
-      const request = JSON.parse(Buffer.concat(chunks)), turn = modelCalls++;
+      const request = JSON.parse(Buffer.concat(chunks)), turn = modelTurn++; modelCalls++;
       const calls = request.input.filter(item => item.type === 'function_call');
       assert.equal(calls.length, turn, 'the provider can resume entirely from supplied replay');
       if (reviewFollowup === 'question' && turn >= 3) { assert(!request.tools.some(tool => ['edit', 'check'].includes(tool.name))); }
@@ -174,10 +177,10 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
       kind: 'openai-responses-replay', owner: 'W', mode: 'loopback-fixture', endpoint: `http://127.0.0.1:${provider.address().port}/v1/responses`,
       credentialEnv: null, model: 'fixture-model', parameters: { maxOutputTokens: 512, temperature: null, reasoning: null }, timeoutMs: 10000,
       maximumRequestBytes: 2 << 20, maximumResponseBytes: 2 << 20, disclosure: { audience: null, policyRevision: 'p1', labels: ['shared'] },
-      allowance: { attempts: reviewFollowup === 'amend' ? 6 : reviewFollowup ? 5 : 3, request_bytes: 16 << 20, output_tokens: 3072, concurrent: 1 },
+      allowance: { attempts: sessionTasks ? sessionTasks * 3 : reviewFollowup === 'amend' ? 6 : reviewFollowup ? 5 : 3, request_bytes: 16 << 20, output_tokens: 3072, concurrent: 1 },
     }, 'W'));
   }
-  const limits = { maximum_moves: mobile ? reviewFollowup ? 6 : 4 : 2, maximum_image_bytes: 8 << 20, maximum_outcome_bytes: 8 << 20 };
+  const limits = { maximum_moves: sessionTasks ? sessionTasks * 4 : mobile ? reviewFollowup ? 6 : 4 : 2, maximum_image_bytes: 8 << 20, maximum_outcome_bytes: 8 << 20 };
   for (const host of ['W', 'U']) {
     admissions[host] = new WorldAdmission(world, { kernelBytes, expectedSha256: identity.kernelSha256 });
     policies[host] = new HostPolicy({ hostId: host, trustDomain: 'fixture', runtimeProfile: identity.kernelSha256, revision: 'p1', labelDestinations: { shared: ['W', 'U'] },
@@ -202,14 +205,17 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
   let catalogue = null;
   if (intake) {
     assert(mobile && engine);
-    const assets = { image, schema: bytes.task, report: bytes.result, task, key: pairs.issuer.privateKey.export({ type: 'pkcs8', format: 'pem' }) };
+    const assets = { image, schema: bytes.session, report: bytes.result, task: encodeValue(schemas.session, [decodeValue(schemas.task, task), sessionTasks || 1]), key: pairs.issuer.privateKey.export({ type: 'pkcs8', format: 'pem' }) };
     catalogue = taskCatalogue({ issuer: { id: 'issuer', keyId: 'issuer', privateKey: 'key' }, entries: [{ id: 'repository', title: 'Qualified managed repository', image: 'image', programId,
       taskSchema: 'schema', reportSchema: 'report', initialTask: 'task', modes: ['inspect', 'propose', 'publish'], principals: [{ tenant: 'tenant', principal: 'user', taskPrincipal: '7' }],
       scope: { read: [targetPath], write: [targetPath], checks: ['fixture-content'], target: 'refs/heads/agent/result' }, profile: 'bounded', presentation: { audience: 'human', labels: ['shared'], revision: 'p1' },
     }] }, { bytes: name => assets[name], keys, runtimeProfile: identity.kernelSha256,
       config: { hostId: 'U', trustDomain: 'fixture', revision: 'p1', revoked: [], deployments: [{ imageDigest: hash(image), programId, tenant: 'tenant', principals: ['user'], issuers: ['issuer'], hosts: ['U', 'W'], classification: ['shared'], limits }] },
-      custodian: { async registerRun(record, image, args) { expectedTask = decodeValue(schemas.task, args); return hosts.U.registerRun(record, image, args); }, status: id => hosts.U.status(id) } });
-  } else await hosts[activeHost].registerRun(registration, image, task);
+      custodian: { async registerRun(record, image, args) { expectedTask = decodeValue(schemas.session, args)[0]; expectedTask[1] = 1n; return hosts.U.registerRun(record, image, args); }, status: id => hosts.U.status(id) } });
+  } else {
+    if (sessionInput) expectedTask[1] = 1n;
+    await hosts[activeHost].registerRun(registration, image, sessionInput ? encodeValue(schemas.session, [expectedTask, sessionTasks || 1]) : task);
+  }
   let browserPage;
   if (engine) {
     assert(mobile);
@@ -252,13 +258,38 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
       for (let n = 0; n < 1000; n++) {
         const result = browserPage && activeHost === 'U' ? await runOriginWorker() : await hosts[activeHost].run(id);
         if (result.kind === 'dispatching') { await delay(10); continue; }
-        assert(++transitions <= (mobile ? reviewFollowup ? 10 : 7 : 5), 'bounded authored transitions');
+        assert(++transitions <= (sessionTasks ? sessionTasks * 7 : mobile ? reviewFollowup ? 10 : 7 : 5), 'bounded authored transitions');
         if (result.kind === 'awaiting') {
           const identity = { principal: 'user', tenant: 'tenant', audiences: ['human'] };
           const pending = hosts[activeHost].pendingQuestion(id, identity);
+          if (pending.pending.question.kind === 'repository-next-task') {
+            assert.equal(cleanupCalls, Number(expectedTask[1]));
+            if (!browserPage) {
+              await hosts[activeHost].stopOperations(); hosts[activeHost].retireAll(); journals[activeHost].close(); open(activeHost, false);
+              assert.deepEqual(hosts[activeHost].pendingQuestion(id, identity), pending, 'next-task prompt survives origin restart');
+            }
+            const { version, occurrence_id, request_digest, pending_digest } = pending;
+            const reply = { version, occurrence_id, request_digest, pending_digest, answer: { choice: ['inspect', 'propose', 'publish'][nextMode ?? mode], text: 'Perform the next independently checked task.' } };
+            if (browserPage) {
+              await browserPage.evaluate(() => window.executor.retire());
+              await browserPage.locator('#run').fill(id); await browserPage.locator('#connect').click();
+              await browserPage.locator('#answer').waitFor({ state: 'visible' });
+              assert.match(await browserPage.locator('#question').textContent(), /Task 1 is finished/);
+              const exported = await browserPage.evaluate(async () => (await fetch(document.querySelector('#export-result').href)).json());
+              assert.equal(exported.value[1], '1', 'the completed task report is exportable before the next task');
+              await browserPage.locator('#choice').selectOption('inspect');
+              await browserPage.locator('#answer-text').fill(reply.answer.text); await browserPage.locator('#answer button').click();
+              await browserPage.locator('#status').filter({ hasText: 'Response saved' }).waitFor();
+              await browserPage.reload();
+              await browserPage.evaluate(async id => { const { BrowserExecutor } = await import('/client.mjs'); window.executor = await new BrowserExecutor(id).initialize(); }, id);
+            } else await hosts[activeHost].answerQuestion(id, identity, reply);
+            await assert.rejects(hosts[activeHost].answerQuestion(id, identity, { ...reply, answer: { choice: 'publish', text: 'Reuse old approval.' } }));
+            expectedTask[1]++; mode = nextMode ?? mode; expectedTask[2] = mode; modelTurn = 0;
+            continue;
+          }
           assert.equal(pending.pending.question.kind, mobile && mode !== 2 ? 'repository-review' : 'repository-publication-approval');
           if (onQuestion) { await onQuestion({ root, host: hosts[activeHost], id, identity, kernelBytes, pending, content }); continue; }
-          if (mobile) assert.equal(cleanupCalls, 0, 'the original investigator is still retained during review');
+          if (mobile) assert.equal(cleanupCalls, sessionTasks ? Number(expectedTask[1]) - 1 : 0, 'the original investigator is still retained during review');
           if (restartReview && !reviewRestarted) {
             reviewRestarted = true; await hosts[activeHost].stopOperations(); hosts[activeHost].retireAll(); journals[activeHost].close(); open(activeHost, false);
             assert.deepEqual(hosts[activeHost].pendingQuestion(id, identity), pending, 'pending review survives origin process memory loss');
@@ -443,4 +474,32 @@ if (process.env.AGENT_MOBILITY_BROWSER_TOOLS) test('browser catalogue starts an 
   const f = await fixture(t, { mobile: true, engine: chromium, intake: true });
   assert.equal((await f.run()).kind, 'terminal'); assert.equal(f.outcomeKind(), 'completed');
   assert.equal(f.outcome()[2], 2); assert.equal(f.counts.publish, 1); assert.equal(f.cleanupCalls, 1);
+});
+
+test('authored session advances generations across origin restart with independent tasks and cumulative allowances', async t => {
+  const f = await fixture(t, { mobile: true, mode: 0, sessionTasks: 2 });
+  assert.equal((await f.run()).kind, 'terminal');
+  assert.equal(f.outcome()[1], 2n); assert.equal(f.modelCalls, 2); assert.equal(f.cleanupCalls, 2);
+  assert.equal(f.modelAllowance().used.attempts, 2, 'host allowance is cumulative across task generations');
+  assert.equal(f.counts.publish, 0); assert.equal(await f.store.current(), f.base);
+  assert.equal(f.moves.length, 4);
+});
+
+if (process.env.AGENT_MOBILITY_BROWSER_TOOLS) {
+  const { chromium, firefox } = await import(pathToFileURL(join(resolve(process.env.AGENT_MOBILITY_BROWSER_TOOLS), 'node_modules/playwright-core/index.mjs')));
+  for (const [name, engine] of [['chromium', chromium], ['firefox', firefox]]) test(name + ': browser repeated tasks use authored generations and export the completed report', async t => {
+    const f = await fixture(t, { mobile: true, mode: 0, sessionTasks: 2, intake: true, engine });
+    assert.equal((await f.run()).kind, 'terminal');
+    assert.equal(f.outcome()[1], 2n); assert.equal(f.cleanupCalls, 2); assert.equal(f.modelAllowance().used.attempts, 2);
+    assert.equal(f.counts.publish, 0);
+  });
+}
+
+test('session propose then publish gets a fresh check and exact approval at generation two', async t => {
+  const f = await fixture(t, { mobile: true, mode: 1, nextMode: 2, sessionTasks: 2 });
+  assert.equal((await f.run()).kind, 'terminal');
+  const report = f.outcome(); assert.equal(report[1], 2n); assert.equal(report[2], 2);
+  assert.equal(f.cleanupCalls, 2); assert.equal(f.counts.check, 2); assert.equal(f.counts.publish, 1);
+  assert.equal(f.modelAllowance().used.attempts, 6); assert.equal(f.checkAllowance().used.attempts, 2);
+  assert.notEqual(await f.store.current(), f.base);
 });

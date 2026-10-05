@@ -117,9 +117,9 @@ The service never obtains issuer authority from a browser request.
   "issuer": { "id": "operator", "keyId": "operator-key", "privateKey": "private/operator.pem" },
   "entries": [{
     "id": "repository-default", "title": "Managed repository",
-    "image": "examples/mobile-repository/program.bpi3",
+    "image": "examples/mobile-repository/session.bpi3",
     "programId": "OPERATOR_VERIFIED_PROGRAM_ID",
-    "taskSchema": "examples/mobile-repository/task.bin",
+    "taskSchema": "examples/mobile-repository/session.bin",
     "reportSchema": "examples/mobile-repository/report.bin",
     "initialTask": "private/authorized-task.args",
     "modes": ["inspect", "propose", "publish"],
@@ -136,7 +136,28 @@ The operator provisions the typed initial task with its exact repository/base,
 requirements, check/model profile and allowances. Scope descriptions must describe
 those operator grants; enforcement still belongs to the snapshot/check/publication
 owners. The packaged zero-work sample is not an executable authorization grant.
-All file paths resolve relative to the configuration file.
+All file paths resolve relative to the configuration file. The session input is
+`{ task, maximum_tasks }`, with one to sixteen tasks. The authored program ignores
+the template's generation, starts at 1, and increments it after each completed
+task. The single-task image remains a component qualification entrypoint; the
+catalogue and packaged application use the session image.
+
+For repeated tasks, admit `agent.repository.next-task.v1` at the interaction
+origin with the `next-task` / `next-task-answer` contracts, interaction role,
+explicit audience and this adapter:
+
+```json
+{ "kind": "repository-next-task-human", "revision": "next-1", "modes": ["inspect", "propose", "publish"] }
+```
+
+The adapter's modes are an explicit operator grant. A reply supplies only a new
+goal and one of those modes, or stops the session. Repository, base, principal,
+scope and per-task budget template stay fixed. A different base or scope requires
+a separately authorized session. Every task gets fresh investigation/model state;
+no model conversation memory is selected for retention. Custodian-wide move,
+model and check allowances remain cumulative and may stop work before the next
+task uses its full allocation. Approval occurrences are never retained as new
+task authority.
 
 The presentation grant independently gates browser state, proposals and report
 export by authenticated audience and the whole current state classification. A

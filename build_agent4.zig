@@ -508,7 +508,8 @@ pub fn build(b: *std.Build) void {
     emit.dependOn(mobile_repository_images);
     emit.dependOn(repository_approval_images);
     g.emit(mobile_repository_images, mobile_repository_emitter, &.{"image"}, "mobile-repository/program.bpi3");
-    for ([_][]const u8{ "task", "report", "snapshot-request", "snapshot", "read", "evidence", "list", "listing", "search", "search-result", "read-window", "read-window-result", "question", "answer", "cleanup", "unit", "model-request", "model-result", "candidate-preparation", "publication-preparation", "review", "review-answer" }) |name|
+    g.emit(mobile_repository_images, mobile_repository_emitter, &.{"session-image"}, "mobile-repository/session.bpi3");
+    for ([_][]const u8{ "session", "next-task", "next-task-answer", "task", "report", "snapshot-request", "snapshot", "read", "evidence", "list", "listing", "search", "search-result", "read-window", "read-window-result", "question", "answer", "cleanup", "unit", "model-request", "model-result", "candidate-preparation", "publication-preparation", "review", "review-answer" }) |name|
         g.emit(mobile_repository_images, mobile_repository_emitter, &.{name}, b.fmt("mobile-repository/{s}.schema", .{name}));
     const mobility_images = b.step("mobility-images", "Emit the independent mobility consumer");
     const mobility_approval_images = b.step("mobility-approval-images", "Emit the movable approval and fixture replacement consumer");

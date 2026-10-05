@@ -67,20 +67,20 @@ examples.push({name:'mobility-approval',image:'mobility-approval/program.bpi3',i
 // deliberately unconfigured and has no work allowance; the trusted catalogue
 // supplies operator-granted bindings and budgets for an actual task.
 const mobileRepository = {};
-for (const name of ['task', 'report', 'snapshot-request', 'snapshot', 'read', 'evidence', 'list', 'listing', 'search', 'search-result', 'read-window', 'read-window-result', 'question', 'answer', 'cleanup', 'unit', 'model-request', 'model-result', 'candidate-preparation', 'publication-preparation', 'review', 'review-answer']) {
+for (const name of ['session', 'next-task', 'next-task-answer', 'task', 'report', 'snapshot-request', 'snapshot', 'read', 'evidence', 'list', 'listing', 'search', 'search-result', 'read-window', 'read-window-result', 'question', 'answer', 'cleanup', 'unit', 'model-request', 'model-result', 'candidate-preparation', 'publication-preparation', 'review', 'review-answer']) {
   mobileRepository[name] = await readFile(join(output, 'mobile-repository/' + name + '.schema'));
   await add('mobile-repository/' + name + '.bin', 'schema', mobileRepository[name]);
 }
 for (const name of ['task', 'preparation', 'result', 'check-result', 'proposal', 'receipt', 'delivery', 'human', 'human-reply', 'identifier', 'boolean'])
   await add('repository-approval/' + name + '.bin', 'schema', await readFile(join(output, 'repository-approval/' + name + '.schema')));
-await add('mobile-repository/program.bpi3', 'image');
+await add('mobile-repository/session.bpi3', 'image');
 if (process.platform === 'darwin') for (const name of ['agent-publication-gate', 'agent-check-limit', 'libagent-check-lock.dylib']) await add('native/' + name, 'native-helper');
 const noPlacement = [[[], [[], {tag:0,value:null}, {tag:0,value:null}, 8n<<20n]], 'unconfigured', 'shared', [0,1]];
-await add('mobile-repository/initial.args', 'initial-args', encodeValue(decodeSchema(mobileRepository.task), [
+await add('mobile-repository/initial.args', 'initial-args', encodeValue(decodeSchema(mobileRepository.session), [[
   1n, 1n, 1, 'Configure a deployment-authorized task catalogue.', 'unconfigured', '0'.repeat(40), '', noPlacement, noPlacement,
   ['unconfigured', [{tag:0,value:null}, {tag:0,value:null}, {tag:0,value:null}]], 0, 0, 1n,
-]));
-examples.push({name:'mobile-repository', image:'mobile-repository/program.bpi3', initialArgs:'mobile-repository/initial.args'});
+], 4]));
+examples.push({name:'mobile-repository', image:'mobile-repository/session.bpi3', initialArgs:'mobile-repository/initial.args'});
 await add('text/tool.bmo1','component');
 for(const name of ['subject','task','result','report'])await add(`text/${name}-schema.bin`,'schema');
 await add('text/model-reply.bin','synthetic-fixture');

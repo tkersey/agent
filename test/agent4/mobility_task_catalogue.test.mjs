@@ -4,18 +4,19 @@ import { generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { taskCatalogue } from '../../runtime/mobility/task_catalogue.mjs';
+import { repositoryNextTaskBinding } from '../../runtime/mobility/repository_approval.mjs';
 import { decodeSchema, decodeValue, encodeValue } from '../../runtime/values.mjs';
 import { hash, verifyRecord } from '../../runtime/mobility/protocol.mjs';
 
 const prefix = resolve(process.env.AGENT4_BUILD_PREFIX ?? 'zig-out');
-const schemaBytes = readFileSync(`${prefix}/agent4/mobile-repository/task.schema`), schema = decodeSchema(schemaBytes);
+const schemaBytes = readFileSync(`${prefix}/agent4/mobile-repository/session.schema`), schema = decodeSchema(schemaBytes);
 const placement = [[[], [[], { tag: 0, value: null }, { tag: 0, value: null }, 8n << 20n]], 'work', 'shared', [4, 1]];
 const initial = [1n, 1n, 1, 'Template', 'repo', 'a'.repeat(40), 'file.txt', placement, placement,
   ['model', [{ tag: 1, value: 512 }, { tag: 0, value: null }, { tag: 0, value: null }]], 8, 2, 1n];
 function fixture() {
   const pair = generateKeyPairSync('ed25519'), image = Buffer.from('catalogue image'), registrations = [];
   const keys = new Map([['issuer-key', { owner: 'issuer', status: 'active', publicKey: pair.publicKey }]]);
-  const assets = { key: pair.privateKey.export({ type: 'pkcs8', format: 'pem' }), image, schema: schemaBytes, task: encodeValue(schema, initial) };
+  const assets = { key: pair.privateKey.export({ type: 'pkcs8', format: 'pem' }), image, schema: schemaBytes, task: encodeValue(schema, [initial, 4]) };
   const deployment = { imageDigest: hash(image), programId: '1'.repeat(64), tenant: 'tenant', principals: ['alice'], issuers: ['issuer'], hosts: ['U'], classification: ['shared'], limits: { maximum_moves: 4, maximum_image_bytes: 8 << 20, maximum_outcome_bytes: 8 << 20 } };
   const config = { hostId: 'U', trustDomain: 'domain', revision: 'p1', revoked: [], deployments: [deployment] };
   const configuration = { issuer: { id: 'issuer', keyId: 'issuer-key', privateKey: 'key' }, entries: [{
@@ -23,7 +24,7 @@ function fixture() {
     principals: [{ tenant: 'tenant', principal: 'alice', taskPrincipal: '7' }], scope: { read: ['file.txt'], write: ['file.txt'], checks: ['zig'], target: 'refs/heads/agent/result' }, profile: 'bounded', presentation: { audience: 'person', labels: ['shared'], revision: 'p1' },
   }] };
   const catalogue = taskCatalogue(configuration, { bytes: name => assets[name], keys, config, runtimeProfile: '2'.repeat(64), custodian: {
-    async registerRun(record, receivedImage, args) { registrations.push({ record: verifyRecord('run', record, keys), image: receivedImage, task: decodeValue(schema, args) }); },
+    async registerRun(record, receivedImage, args) { registrations.push({ record: verifyRecord('run', record, keys), image: receivedImage, task: decodeValue(schema, args)[0] }); },
     status: run_id => ({ run_id, custody: 'ACTIVE' }),
   } });
   return { catalogue, config, registrations, configuration };
@@ -67,4 +68,14 @@ test('deployment v1 rejects catalogue and v2 requires its explicit closed field'
     await writeFile(path, JSON.stringify({ ...config, execution: 'browser', ...fields }));
     await assert.rejects(openDeployment(path), { code: 'RecordFields' });
   }
+});
+
+test('next-task interaction cannot widen mode grants or submit an empty task', () => {
+  const resultSchema = readFileSync(`${prefix}/agent4/mobile-repository/next-task-answer.schema`);
+  const adapter = { kind: 'repository-next-task-human', revision: 'p1', modes: ['inspect'] };
+  const binding = repositoryNextTaskBinding({ operation: 'agent.repository.next-task.v1', role: 'interaction', audience: 'person', resultSchema }, adapter);
+  adapter.modes.push('publish');
+  for (const answer of [{ choice: 'publish', text: 'Publish now' }, { choice: 'inspect', text: '' }, { choice: 'inspect', text: 'é'.repeat(2049) }]) assert.throws(() => binding.answer({ answer }), /InvalidTaskAnswer/);
+  assert.deepEqual(decodeValue(decodeSchema(resultSchema), binding.answer({ answer: { choice: 'inspect', text: 'Inspect the caller.' } })), { tag: 1, value: ['Inspect the caller.', 0] });
+  assert.deepEqual(decodeValue(decodeSchema(resultSchema), binding.answer({ answer: { choice: 'stop', text: '' } })), { tag: 0, value: null });
 });

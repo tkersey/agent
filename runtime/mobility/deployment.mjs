@@ -11,7 +11,7 @@ import { WorldAdmission } from './admission.mjs';
 import { CustodyJournal } from './journal.mjs';
 import { Custodian } from './custodian.mjs';
 import { modelBinding } from './model.mjs';
-import { repositoryApprovalBinding, repositoryReviewBinding } from './repository_approval.mjs';
+import { repositoryApprovalBinding, repositoryReviewBinding, repositoryNextTaskBinding } from './repository_approval.mjs';
 import { repositoryPublicationBinding, repositoryProposalBinding } from './repository_publication.mjs';
 import { repositoryCheckBinding } from './repository_check.mjs';
 import { createRepositoryCheckRunner } from '../repository_checks.mjs';
@@ -75,8 +75,8 @@ export async function openDeployment(configPath, { create = false } = {}) {
       leaf.handle = context => { counts.calls++; return handle(context); };
       return leaf;
     }
-    if (adapter.kind === 'repository-review-human') {
-      const leaf = repositoryReviewBinding(binding, adapter), answer = leaf.answer;
+    if (['repository-review-human', 'repository-next-task-human'].includes(adapter.kind)) {
+      const leaf = (adapter.kind === 'repository-next-task-human' ? repositoryNextTaskBinding : repositoryReviewBinding)(binding, adapter), answer = leaf.answer;
       leaf.answer = context => { counts.calls++; return answer(context); };
       return leaf;
     }

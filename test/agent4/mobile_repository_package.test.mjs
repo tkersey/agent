@@ -17,15 +17,15 @@ test('extracted full repository program executes in both browser Workers and qua
   const root = join(area, name);
   await rm(join(root, 'test'), { recursive: true, force: true });
   const inventory = JSON.parse(await readFile(join(root, 'examples/inventory.json')));
-  assert(inventory.examples.some(example => example.name === 'mobile-repository'));
-  for (const name of ['task', 'report', 'model-request', 'model-result', 'review', 'review-answer']) assert(inventory.files.some(row => row.path === `mobile-repository/${name}.bin`));
+  assert(inventory.examples.some(example => example.name === 'mobile-repository' && example.image === 'mobile-repository/session.bpi3'));
+  for (const name of ['session', 'next-task', 'next-task-answer', 'task', 'report', 'model-request', 'model-result', 'review', 'review-answer']) assert(inventory.files.some(row => row.path === `mobile-repository/${name}.bin`));
   for (const name of ['agent-check-limit', 'agent-publication-gate']) assert((await stat(join(root, 'examples/native', name))).mode & 0o100);
   await assert.rejects(stat(join(root, 'src'))); await assert.rejects(stat(join(root, 'test')));
   const env = { ...process.env, AGENT_MOBILE_PACKAGE: root,
     AGENT_PUBLICATION_GATE: join(root, 'examples/native/agent-publication-gate') };
   delete env.NODE_TEST_CONTEXT;
-  const output = execFileSync(process.execPath, ['--test', '--test-name-pattern=full repository mode|full Agent source repair|authored return',
+  const output = execFileSync(process.execPath, ['--test', '--test-name-pattern=full repository mode|full Agent source repair|authored return|browser catalogue starts|authored session advances|browser repeated|session propose then publish',
     resolve(import.meta.dirname, 'repository_publication_approval.test.mjs')], { env, encoding: 'utf8', timeout: 300000, maxBuffer: 4 << 20 });
-  assert.match(output, /tests 8/); assert.match(output, /pass 8/); assert.match(output, /fail 0/);
+  assert.match(output, /tests 13/); assert.match(output, /pass 13/); assert.match(output, /fail 0/);
   console.log(output);
 });

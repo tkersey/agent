@@ -31,6 +31,7 @@ export class BrowserExecutor {
     if (outcome.kind === 'requested') {
       const request = await decodeRequest(outcome.request);
       observation = { ...observation, operation: request.semanticIdentity, payload: decodeValue(decodeSchema(request.payloadSchema), request.payload) };
+      if (request.semanticIdentity === 'agent.repository.next-task.v1') observation.taskReport = observation.payload[0];
     }
     if (outcome.kind === 'completed') {
       const response = await this.api('result-schema', 'GET').catch(() => null);
@@ -78,7 +79,7 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
     if (!pending || pending.acquired) return;
     const question = document.querySelector('#question'), value = pending.pending.question;
     question.replaceChildren();
-    if (value?.kind === 'repository-publication-approval' || (value?.kind === 'repository-review' && value.proposal)) {
+    if (value?.kind === 'repository-publication-approval' || (['repository-review', 'repository-next-task'].includes(value?.kind) && value.proposal)) {
       const publishing = value.kind === 'repository-publication-approval';
       const proposal = JSON.parse(publishing ? value.challenge[1] : value.proposal), core = proposal.core;
       if (!Array.isArray(core.diff) || core.diff.length !== core.candidate.edits.length) throw new Error('The complete change is unavailable for review.');
@@ -98,9 +99,14 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
         }
         question.append(details);
       }
-    } else question.textContent = value?.kind === 'repository-review' ? value.summary : JSON.stringify(value, null, 2);
+    } else question.textContent = ['repository-review', 'repository-next-task'].includes(value?.kind) ? value.summary : JSON.stringify(value, null, 2);
+    if (value?.kind === 'repository-next-task') {
+      const explanation = document.createElement('p');
+      explanation.textContent = `Task ${value.generation} is finished. Choose stop, or select a mode and enter the next goal. Task ${value.next_generation} has up to ${value.allocation.steps} model steps, ${value.allocation.checks} checks and ${value.allocation.moves} moves, subject to the remaining session-wide limits. ${value.memory}`;
+      question.append(explanation);
+    }
     const choices = document.querySelector('#choice'); choices.replaceChildren();
-    if (['repository-publication-approval', 'repository-review'].includes(value?.kind)) {
+    if (['repository-publication-approval', 'repository-review', 'repository-next-task'].includes(value?.kind)) {
       const placeholder = document.createElement('option'); placeholder.value = ''; placeholder.textContent = 'Choose a response';
       placeholder.disabled = true; placeholder.selected = true; choices.append(placeholder);
     }
@@ -120,9 +126,11 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
     executor = await new BrowserExecutor(document.querySelector('#run').value, value => {
       request.textContent = JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item, 2);
       const download = document.querySelector('#export-result');
-      if (download && value.kind === 'completed' && value.value !== undefined) {
+      const report = value.kind === 'completed' ? value.value : value.taskReport;
+      if (download && report !== undefined) {
         if (download.href.startsWith('blob:')) URL.revokeObjectURL(download.href);
-        download.href = URL.createObjectURL(new Blob([request.textContent], { type: 'application/json' })); download.hidden = false;
+        const exported = JSON.stringify({ kind: 'completed', value: report }, (_, item) => typeof item === 'bigint' ? item.toString() : item, 2);
+        download.href = URL.createObjectURL(new Blob([exported], { type: 'application/json' })); download.hidden = false;
       }
     }).initialize();
     await executor.attach(); status.textContent = 'Connected'; await showQuestion();

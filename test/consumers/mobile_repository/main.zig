@@ -11,11 +11,20 @@ const model = @import("model.zig");
 const investigator = @import("investigator.zig");
 const completion = @import("completion.zig");
 pub const System = agent.system(.{ .InitialArgs = t.Task, .Result = t.Report, .Failure = t.Failure, .application = Application });
+pub const SessionSystem = agent.system(.{ .InitialArgs = t.Session, .Result = t.Report, .Failure = t.Failure, .application = SessionApplication });
+const SessionApplication = struct {
+    pub fn emit(ctx: agent.Context) !boundary.source.Module {
+        return Application.emitMode(ctx, true);
+    }
+};
 
 const Emit = @import("emit.zig").Emit;
 
 pub const Application = struct {
     pub fn emit(ctx: agent.Context) !boundary.source.Module {
+        return emitMode(ctx, false);
+    }
+    fn emitMode(ctx: agent.Context, comptime session: bool) !boundary.source.Module {
         const c = try a.Context.init(ctx.builder);
         errdefer {
             const diagnostic = c.lastDiagnostic().renderAlloc(ctx.builder.allocator()) catch "diagnostic unavailable";
@@ -169,15 +178,59 @@ pub const Application = struct {
         const rejected = try admission.branch();
         const called = try accepted.call(entry, &.{.{ .name = "task", .value = supplied }});
         try c.define(admitted, try admission.ret(try admission.conditional(valid, try accepted.ret(called), try rejected.fail(try e.schema(t.Report), try e.literal(rejected, t.Failure, .invalid_task)))));
-        return c.module(admitted, try e.schema(t.Failure));
+        return c.module(if (session) try sessionEntry(e, admitted, effects) else admitted, try e.schema(t.Failure));
     }
 };
+
+fn sessionEntry(e: Emit, task_entry: *const a.Function, task_effects: []const *const a.Operation) !*const a.Function {
+    const c = e.c;
+    const failure = try a.interop.literalFailure(c, try e.agent_context.literal(t.Failure, .invalid_task), try e.schema(t.Failure));
+    const next = try e.external(t.NEXT_TASK, t.NextTask, t.NextTaskAnswer, .interaction);
+    const effects = try e.agent_context.builder.allocator().alloc(*const a.Operation, task_effects.len + 1);
+    @memcpy(effects[0..task_effects.len], task_effects);
+    effects[task_effects.len] = next;
+    const loop = try c.function("repository session", &.{ .{ .name = "task", .schema = try e.schema(t.Task) }, .{ .name = "remaining", .schema = try e.schema(u16) } }, try e.schema(t.Report), effects);
+    const body = try c.body(loop);
+    const task = try body.parameter("task");
+    const remaining = try body.parameter("remaining");
+    const report = try body.call(task_entry, &.{.{ .name = "task", .value = task }});
+    const more = try body.branch();
+    const done = try body.branch();
+    const generation = try more.checkedAdd(try more.field(task, "generation"), try more.constant(u64, 1), failure);
+    const answer = try more.perform(next, try more.product(try e.schema(t.NextTask), &.{
+        .{ .name = "report", .value = report },                                                                                      .{ .name = "next_generation", .value = generation },
+        .{ .name = "maximum_steps", .value = try more.field(task, "maximum_steps") },                                                .{ .name = "maximum_checks", .value = try more.field(task, "maximum_checks") },
+        .{ .name = "maximum_moves", .value = try more.field(try more.field(try more.field(task, "workspace"), "budget"), "moves") },
+    }));
+    const stop = try more.caseOf(answer, "stop");
+    const start = try more.caseOf(answer, "start");
+    const again = start.body();
+    var fields: [@typeInfo(t.Task).@"struct".field_names.len]a.Argument = undefined;
+    inline for (@typeInfo(t.Task).@"struct".field_names, 0..) |name, i| fields[i] = .{ .name = name, .value = if (comptime std.mem.eql(u8, name, "generation")) generation else if (comptime std.mem.eql(u8, name, "goal") or std.mem.eql(u8, name, "mode")) try again.field(start.payload(), name) else try again.field(task, name) };
+    const fresh = try again.product(try e.schema(t.Task), &fields);
+    const repeated = try again.call(loop, &.{ .{ .name = "task", .value = fresh }, .{ .name = "remaining", .value = try again.checked(.subtract, remaining, try again.constant(u16, 1), .{ .overflow = failure }) } });
+    const selected = try more.match(answer, &.{ try stop.ret(report), try start.ret(repeated) });
+    try c.define(loop, try body.ret(try body.conditional(try body.less(try body.constant(u16, 1), remaining), try more.ret(selected), try done.ret(report))));
+    const entry = try c.function("start repository session", &.{.{ .name = "session", .schema = try e.schema(t.Session) }}, try e.schema(t.Report), effects);
+    const initial = try c.body(entry);
+    const supplied = try initial.parameter("session");
+    const maximum = try initial.field(supplied, "maximum_tasks");
+    const template = try initial.field(supplied, "task");
+    inline for (@typeInfo(t.Task).@"struct".field_names, 0..) |name, i| fields[i] = .{ .name = name, .value = if (comptime std.mem.eql(u8, name, "generation")) try initial.constant(u64, 1) else try initial.field(template, name) };
+    const first = try initial.product(try e.schema(t.Task), &fields);
+    const accepted = try initial.branch();
+    const rejected = try initial.branch();
+    const valid = try initial.select(try initial.less(try initial.constant(u16, 0), maximum), try initial.less(maximum, try initial.constant(u16, 17)), try initial.constant(bool, false));
+    const result = try accepted.call(loop, &.{ .{ .name = "task", .value = first }, .{ .name = "remaining", .value = maximum } });
+    try c.define(entry, try initial.ret(try initial.conditional(valid, try accepted.ret(result), try rejected.fail(try e.schema(t.Report), try e.literal(rejected, t.Failure, .invalid_task)))));
+    return entry;
+}
 
 pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();
     const mode = args.next() orelse "image";
-    inline for (.{ .{ "task", t.Task }, .{ "report", t.Report }, .{ "snapshot-request", t.SnapshotRequest }, .{ "snapshot", t.Snapshot }, .{ "read", t.ReadRequest }, .{ "evidence", t.Evidence }, .{ "question", t.Question }, .{ "answer", t.Answer }, .{ "cleanup", t.Cleanup }, .{ "unit", void } }) |item| {
+    inline for (.{ .{ "session", t.Session }, .{ "next-task", t.NextTask }, .{ "next-task-answer", t.NextTaskAnswer }, .{ "task", t.Task }, .{ "report", t.Report }, .{ "snapshot-request", t.SnapshotRequest }, .{ "snapshot", t.Snapshot }, .{ "read", t.ReadRequest }, .{ "evidence", t.Evidence }, .{ "question", t.Question }, .{ "answer", t.Answer }, .{ "cleanup", t.Cleanup }, .{ "unit", void } }) |item| {
         if (std.mem.eql(u8, mode, item[0])) {
             var b = boundary.source.Builder.init(init.gpa);
             defer b.deinit();
@@ -207,8 +260,8 @@ pub fn main(init: std.process.Init) !void {
             return write(init, bytes);
         }
     }
-    if (!std.mem.eql(u8, mode, "image")) return error.InvalidMode;
-    var compiled = try agent.compile(init.gpa, System);
+    if (!std.mem.eql(u8, mode, "image") and !std.mem.eql(u8, mode, "session-image")) return error.InvalidMode;
+    var compiled = if (std.mem.eql(u8, mode, "session-image")) try agent.compile(init.gpa, SessionSystem) else try agent.compile(init.gpa, System);
     defer compiled.deinit();
     const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer init.gpa.free(bytes);

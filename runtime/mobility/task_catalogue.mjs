@@ -23,7 +23,9 @@ export function taskCatalogue(configuration, { bytes, keys, custodian, config, r
     for (const field of ['read', 'write', 'checks']) requireThat(Array.isArray(entry.scope[field]) && entry.scope[field].length <= 4096 && entry.scope[field].every(v => typeof v === 'string' && v.length <= 256), 'CatalogueScope');
     requireThat(typeof entry.scope.target === 'string' && entry.scope.target.length <= 256, 'CatalogueScope');
     requireThat(Array.isArray(entry.modes) && entry.modes.length > 0 && entry.modes.length <= 3 && new Set(entry.modes).size === entry.modes.length && entry.modes.every(mode => modes.includes(mode)), 'CatalogueModes');
-    const image = bytes(entry.image), schema = decodeSchema(bytes(entry.taskSchema)), initial = decodeValue(schema, bytes(entry.initialTask));
+    const image = bytes(entry.image), schema = decodeSchema(bytes(entry.taskSchema)), session = decodeValue(schema, bytes(entry.initialTask));
+    requireThat(Array.isArray(session) && session.length === 2 && Number.isInteger(session[1]) && session[1] > 0 && session[1] <= 16, 'CatalogueSession');
+    const initial = session[0];
     requireThat(Array.isArray(initial) && initial.length === 13 && typeof initial[3] === 'string' && typeof initial[12] === 'bigint', 'CatalogueTask');
     const grants = entry.principals.map(grant => {
       closed(grant, ['tenant', 'principal', 'taskPrincipal']); identifier(grant.tenant); identifier(grant.principal);
@@ -33,7 +35,7 @@ export function taskCatalogue(configuration, { bytes, keys, custodian, config, r
       return { ...grant, deployment: structuredClone(deployment) };
     });
     const reportSchema = Uint8Array.from(bytes(entry.reportSchema)); decodeSchema(reportSchema);
-    entries.set(entry.id, { reportSchema, entry: structuredClone(entry), image, schema, initial, grants });
+    entries.set(entry.id, { reportSchema, entry: structuredClone(entry), image, schema, initial, maximumTasks: session[1], grants });
   }
   const admitted = (item, identity) => item.grants.find(g => g.tenant === identity.tenant && g.principal === identity.principal && !config.revoked.includes(`${g.tenant}/${g.principal}`));
   return Object.freeze({
@@ -45,9 +47,9 @@ export function taskCatalogue(configuration, { bytes, keys, custodian, config, r
       return item ? Uint8Array.from(item.reportSchema) : null;
     },
     list(identity) {
-      return [...entries.values()].filter(item => admitted(item, identity)).map(({ entry, initial }) => ({
+      return [...entries.values()].filter(item => admitted(item, identity)).map(({ entry, initial, maximumTasks }) => ({
         id: entry.id, title: entry.title, repository: initial[4], base: initial[5], scope: structuredClone(entry.scope), profile: entry.profile, modes: [...entry.modes], defaultMode: entry.modes.includes('propose') ? 'propose' : entry.modes[0],
-        budget: { steps: initial[10], checks: initial[11], moves: initial[7][3][0] },
+        maximumTasks, budget: { steps: initial[10], checks: initial[11], moves: initial[7][3][0] },
       }));
     },
     async start(identity, request) {
@@ -56,9 +58,9 @@ export function taskCatalogue(configuration, { bytes, keys, custodian, config, r
       requireThat(grant && item.entry.modes.includes(request.mode), 'TaskDenied');
       requireThat(typeof request.goal === 'string' && request.goal.trim().length > 0 && Buffer.byteLength(request.goal) <= 4096, 'TaskGoal');
       const task = structuredClone(item.initial);
-      task[0] = randomBytes(8).readBigUInt64LE() || 1n; task[1] = 1n;
+      task[0] = randomBytes(8).readBigUInt64LE() || 1n; task[1] = 0n;
       task[2] = modes.indexOf(request.mode); task[3] = request.goal; task[12] = BigInt(grant.taskPrincipal);
-      const args = encodeValue(item.schema, task), id = runId(issuer.id);
+      const args = encodeValue(item.schema, [task, item.maximumTasks]), id = runId(issuer.id);
       const registration = signRecord('run', { format: 'agent-mobility-run/v1', run_id: id, issuer_id: issuer.id,
         principal_ref: grant.principal, tenant_ref: grant.tenant, image_digest: hash(item.image), program_id: item.entry.programId,
         trusted_runtime_profile: runtimeProfile, allowed_host_policy_ref: config.trustDomain, deployment_policy_revision: config.revision,

@@ -47,3 +47,24 @@ export function repositoryReviewBinding(metadata, adapter) {
     answer: ({ answer }) => encodeValue(result, { tag: ['finish', 'decline', 'question', 'amend'].indexOf(answer.choice), value: answer.choice === 'finish' ? null : answer.text }),
   };
 }
+
+// Only an authenticated person's goal/mode enters the next authored iteration.
+// Identity, repository, scope, generation and allowances cannot be supplied here.
+export function repositoryNextTaskBinding(metadata, adapter) {
+  closed(adapter, ['kind', 'revision', 'modes']);
+  const modes = ['inspect', 'propose', 'publish'];
+  requireThat(adapter.kind === 'repository-next-task-human' && metadata.operation === 'agent.repository.next-task.v1' &&
+    metadata.role === 'interaction' && typeof metadata.audience === 'string' && typeof adapter.revision === 'string' && adapter.revision.length > 0 &&
+    Array.isArray(adapter.modes) && adapter.modes.length > 0 && adapter.modes.length <= 3 && new Set(adapter.modes).size === adapter.modes.length && adapter.modes.every(mode => modes.includes(mode)), 'AdapterContract');
+  const allowed = [...adapter.modes], result = decodeSchema(metadata.resultSchema);
+  return { ...metadata, deferredRevision: adapter.revision, authorize: () => true,
+    defer: ({ payload }) => ({ audience: metadata.audience, alternatives: ['stop', ...allowed], maximum_text_bytes: 4096,
+      question: { kind: 'repository-next-task', task_id: String(payload[0][0]), generation: String(payload[0][1]), next_generation: String(payload[1]),
+        summary: payload[0][4][0]?.[1]?.[2] ?? '', proposal: payload[0][5],
+        allocation: { steps: payload[2], checks: payload[3], moves: payload[4] }, memory: 'No model transcript or candidate is reused.' } }),
+    answer: ({ answer }) => {
+      requireThat(answer.choice === 'stop' || (allowed.includes(answer.choice) && typeof answer.text === 'string' && answer.text.trim().length > 0 && Buffer.byteLength(answer.text) <= 4096), 'InvalidTaskAnswer');
+      return encodeValue(result, answer.choice === 'stop' ? { tag: 0, value: null } : { tag: 1, value: [answer.text, modes.indexOf(answer.choice)] });
+    },
+  };
+}

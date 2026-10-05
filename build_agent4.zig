@@ -443,6 +443,7 @@ pub fn build(b: *std.Build) void {
     const mobility_consumer = fixture_driver.select("agent-mobility-consumer");
     const mobile_repository_images = b.step("mobile-repository-images", "Emit the mobile repository application and ordinary contracts");
     const mobile_repository_check = b.step("check-mobile-repository", "Check the authored mobile repository application");
+    const mobile_repository_native = b.step("check-mobile-repository-native", "Compare native and WASM repository application continuations");
     const mobile_repository_objects = nodeCommand(b);
     mobile_repository_objects.addArgs(&.{ "node", "--test", "test/agent4/repository_snapshot.test.mjs" });
     mobile_repository_objects.has_side_effects = true;
@@ -921,6 +922,14 @@ pub fn build(b: *std.Build) void {
             .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data", .module = data } },
         });
         const native_exe = native_graph.emitter("agent4-native", native_module);
+        const repository_native_run = nodeCommand(b);
+        repository_native_run.addArgs(&.{ "node", "test/agent4/mobile_repository_continuation.mjs" });
+        repository_native_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
+        repository_native_run.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/mobile-repository"), .{ .make_absolute = true });
+        repository_native_run.addFileArg2(native_exe.getEmittedBin(), .{});
+        repository_native_run.step.dependOn(mobile_repository_images);
+        repository_native_run.has_side_effects = true;
+        mobile_repository_native.dependOn(&repository_native_run.step);
         const mobility_native_run = nodeCommand(b);
         mobility_native_run.addArgs(&.{ "node", "test/agent4/mobility_continuation.mjs" });
         mobility_native_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
@@ -1114,6 +1123,7 @@ pub fn build(b: *std.Build) void {
     } else {
         const missing = b.addFail("provide -Dworld-runtime=/absolute/authenticated/world-runtime");
         mobile_repository_check.dependOn(&missing.step);
+        mobile_repository_native.dependOn(&missing.step);
         repository_approval_check.dependOn(&missing.step);
         compiled_tools_check.dependOn(&missing.step);
         mobility_continuation.dependOn(&missing.step);

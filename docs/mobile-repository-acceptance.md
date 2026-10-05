@@ -71,6 +71,12 @@ human inputs; they do not establish live-model usefulness or actual-person proof
 
 Reproduce this slice using the existing authenticated setup:
 
+`check-mobile-repository-native` also runs these ten continuation scenarios
+against the native interpreter. All 106 canonical outcomes match WASM byte for
+byte, including cancellation, exhausted budgets, invalid intake, and the real
+repository case. Provider replies remain synthetic; this comparison does not
+qualify live-model behavior or the full edit/check/publication path.
+
 ```sh
 node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-mobile"
 zig build check-mobile-repository -Doptimize=safe \

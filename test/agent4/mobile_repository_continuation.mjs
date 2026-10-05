@@ -13,7 +13,8 @@ import { decodeSchema, decodeValue, encodeValue } from '../../runtime/values.mjs
 import { placement, resolution, observation, zeroDigest } from './mobility_fixture.mjs';
 import { provisionRepository, createManagedRepositoryEnvironment } from '../../runtime/repository.mjs';
 
-const [runtimePath, imagesPath] = process.argv.slice(2);
+const [runtimePath, imagesPath, nativePath] = process.argv.slice(2);
+let nativeComparisons = 0;
 assert(runtimePath && imagesPath);
 const identity = verifyRuntime(resolve(runtimePath));
 const world = await import(pathToFileURL(identity.entrypoint));
@@ -39,10 +40,24 @@ async function scenario({ local = false, moves = 4, cancelReturn = false, mode =
   if (invalid === 'attempts') task[7][3][1] = 4;
   const initial = encodeValue(taskSchema, task);
   let current = await make(), session = current.kernel.start(current.prepared, initial), host = 'A';
-  let bytes = current.kernel.drive(session, { checkpoint: true });
+  const nativeArea = nativePath ? await mkdtemp(join(tmpdir(), 'repository-native-')) : null;
+  let bytes;
+  async function advance(options = {}) {
+    const input = { image, ...(bytes === undefined ? { initialArgs: initial } : { state: world.decodeOutcome(bytes).state }), ...options };
+    const next = current.kernel.drive(session, { ...options, checkpoint: true });
+    if (nativeArea) {
+      const path = join(nativeArea, 'input.pki3');
+      await writeFile(path, world.encodeInput(input));
+      const expected = new Uint8Array(execFileSync(resolve(nativePath), [path], { maxBuffer: 16 << 20 }));
+      assert.deepEqual(next, expected, 'native and WASM canonical outcomes agree at every application boundary');
+      nativeComparisons++;
+    }
+    bytes = next;
+  }
   let transfers = 0, cleanups = 0, questions = 0, epoch = 0n, cancelled = false, modelTurns = 0;
   const trace = [];
   try {
+    await advance();
     for (let step = 0; step < 128; step++) {
       const out = world.decodeOutcome(bytes);
       if (['completed', 'failed', 'cancelled'].includes(out.kind)) {
@@ -62,7 +77,7 @@ async function scenario({ local = false, moves = 4, cancelReturn = false, mode =
         return { mode, local, moves, cancelReturn, invalid, realRepository: leaf !== null, outcome: out.kind, transfers, cleanups, trace };
       }
       if (out.kind === 'progressed' || out.kind === 'yielded') {
-        bytes = current.kernel.drive(session, { control: out.kind === 'yielded' ? 'resume_yield' : 'none', checkpoint: true });
+        await advance({ control: out.kind === 'yielded' ? 'resume_yield' : 'none' });
         continue;
       }
       assert.equal(out.kind, 'requested');
@@ -75,7 +90,7 @@ async function scenario({ local = false, moves = 4, cancelReturn = false, mode =
         case 'agent.mobility.relocate.v1': {
           if (cancelReturn && transfers === 1 && !cancelled) {
             cancelled = true;
-            bytes = current.kernel.drive(session, { control: 'cancel_text', value: 'cancel retained investigation', checkpoint: true });
+            await advance({ control: 'cancel_text', value: 'cancel retained investigation' });
             continue;
           }
           assert.notEqual(payload[0], host);
@@ -132,11 +147,12 @@ async function scenario({ local = false, moves = 4, cancelReturn = false, mode =
           cleanups++; reply = null; break;
         default: assert.fail(`unexpected operation ${request.semanticIdentity}`);
       }
-      bytes = current.kernel.drive(session, { control: 'reply', value: await world.encodeResult(out.request, encodedReply ?? encodeValue(decodeSchema(request.resumeSchema), reply)), checkpoint: true });
+      await advance({ control: 'reply', value: await world.encodeResult(out.request, encodedReply ?? encodeValue(decodeSchema(request.resumeSchema), reply)) });
     }
     assert.fail('bounded application did not terminate');
   } finally {
     current.kernel.close(session); current.kernel.releasePrepared(current.prepared);
+    if (nativeArea) await rm(nativeArea, { recursive: true, force: true });
     assert.equal(current.kernel.usage().workingLive, 0n);
   }
 }
@@ -179,4 +195,4 @@ try {
   results.push(await scenario({ leaf, selectedSnapshot, selectedEvidence }));
   assert.equal(git('status', '--porcelain'), '');
 } finally { await rm(area, { recursive: true, force: true }); }
-console.log(JSON.stringify({ check: 'mobile-repository-continuation', kernel: identity.kernelSha256, imageBytes: image.length, results }));
+console.log(JSON.stringify({ check: 'mobile-repository-continuation', kernel: identity.kernelSha256, imageBytes: image.length, nativeComparisons, results }));

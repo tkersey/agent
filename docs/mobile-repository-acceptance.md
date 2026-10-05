@@ -147,9 +147,12 @@ candidate, runner/profile/toolchain/contract identities and completed checks.
 A protected startup channel distinguishes isolation setup failure from a check
 that actually ran; the candidate cannot retain that channel.
 
-The full ecosystem profile catalog, physical allowance/storage accounting and
-artifact pins, deployment dispatch integration for all repository operations,
-native-runner package acquisition, and publication remain open. Per-object/import
+Three operator-selectable manifests now cover Boundary wire naturals, World
+allocation budgets, and Agent JSON argument-size bounds. The qualified runner
+passes each real module and rejects a compiling semantic mutation after actual
+execution. Their narrow contracts, source dependencies, deployment selection and
+excluded claims are documented with the manifests. Physical allowance/storage
+accounting and complete extracted-loader qualification remain open; per-object
 bounds do not establish complete lifetime storage accounting.
 
 ## Durable human interaction (W3, partial)
@@ -226,8 +229,8 @@ passed 12/12. Full snapshot checks passed 8/8 before the additional targeted bin
 provisioning case. These witnesses use deterministic human/check capabilities and
 the production approval, custody, session, browser, store and publication owners.
 These earlier component witnesses do not establish the actual-person lane. The
-current full application loop is covered above; installed helper acquisition and
-the final fault/acceptance matrix remain open.
+current full application loop and installed helpers are covered above; the final
+fault/acceptance matrix remains open.
 
 ## Typed check dispatch
 
@@ -249,14 +252,16 @@ yet exercise the new check configuration through the extracted loader.
 
 The [matched comparison harness](mobile-repository-comparison.md) now passes
 equivalent-image/input/patch/work-count checks, actual cold/warm image-cache
-checks, and proxy payload-substitution rejection. Its thirty-pair measurements
-and separate browser-verification attribution remain pending; smoke-test timing
-is not a performance conclusion.
+checks, and proxy payload-substitution rejection. Thirty matched pairs in each
+of nine cells completed with all 576 attempts retained (including warmups).
+Mobility was slower in every tested cell; extra-read and opaque-replay workloads
+transferred fewer bytes. The comparison report retains the raw data and scope.
+Separate browser/restart attribution and UI operation counts remain pending.
 
 Remaining work includes complete deployment-loader/check-profile examples,
 lifetime resource-accounting reconciliation, the complete MR-001–MR-096
 mapping, inherited exact-head regressions, complete fault qualification,
-matched measurements, and serial review closeout. The new prepare/proposal/review/
+browser/recovery measurements, and serial review closeout. The new prepare/proposal/review/
 release deployment configurations still need their complete extracted-loader test.
 
 Live-provider, actual-person, and two-machine qualifications are not run and
@@ -320,3 +325,21 @@ The production-adjacent custody model also passes 128 deterministic seeds with
 192 generated steps per seed, at most four prefix hops/epochs, and explicit
 answer/cancellation orderings. These are bounded witnesses, not exhaustive
 coverage of every mutation, interleaving, storage failure or power-loss event.
+
+## Publication and browser regression repairs
+
+The check evaluator now observes raw Wasm return values outside the candidate
+and computes its verdict in the host. The incorrect Agent bound fails despite
+a normal process exit; the corrected bound passes. The extracted full application
+has passed its native-check and browser cases with this observer.
+
+Both browsers reproduce and now reject the former “Ready” status for an unknown
+effect result. Four reference UI tests pass, including repeated Continue with
+exactly one effect attempt and the existing restart/answer flow.
+
+Confirmed publication remains recorded when subsequent verification fails or is
+unavailable. Twenty-five gate/binding/journal tests cover real post-write read
+failure, ref mismatch, missing tree, all three verification statuses after journal
+restart, and the inherited publication faults. Actual private approval and lost
+reply recovery also pass. Verification checks Git ref/object identity; additional
+behavioral postchecks are not implied.

@@ -79,6 +79,44 @@ apparent file size, not allocated disk blocks. Full browser/person latency must
 not be inferred from these Node-origin measurements; browser verification needs
 its separately identified observations.
 
-The correctness and cold/warm cache smoke tests pass. Thirty-pair measurements,
-browser-verification attribution and the final comparative findings are pending.
-No speedup is claimed from the smoke tests.
+## Frozen-revision results
+
+All 576 attempts passed: 36 retained warmups and 540 measured samples, giving
+30 matched pairs per cell. Measurements executed from detached revision
+`0d90b8032fc01ae83c8f4723e20399828aa7d3c2` on Apple M2 Pro / arm64,
+Darwin 27.2.0, Node v26.10.0. The image was
+`d75155bfd55548a5f42e96154f7538795c303d81fc7eb8e42b6e66d4a8df70de`;
+the authenticated World kernel was
+`e6a982f3f13790e3dec7a5e26770549a6be8d0cb5e97a25cd97cead993f2b394`.
+
+| Cell | Mobile p50 ms | Stationary p50 ms | Paired difference p50 ms | Protocol bytes, mobile / stationary |
+|---|---:|---:|---:|---:|
+| base / cold / local | 1513.4 | 1177.0 | +335.7 | 89053 / 40296 |
+| base / cold / metro | 1685.2 | 1291.0 | +392.2 | 89053 / 40296 |
+| base / cold / wide | 2450.3 | 1757.7 | +692.6 | 89053 / 40296 |
+| base / warm / local | 1451.6 | 1202.7 | +249.9 | 49703 / 40296 |
+| base / warm / metro | 1594.2 | 1342.2 | +257.4 | 49703 / 40296 |
+| base / warm / wide | 2290.0 | 1839.6 | +471.5 | 49703 / 40296 |
+| repository / warm / local | 1443.6 | 1179.5 | +261.6 | 49703 / 40296 |
+| reads / warm / local | 2337.0 | 2168.6 | +177.5 | 54138 / 97326 |
+| checkpoint / warm / local | 1469.0 | 1203.6 | +265.1 | 98858 / 187757 |
+
+Mobility was slower in all tested cells. It transferred less data for the
+extra-read and opaque-replay workloads, but those byte savings did not offset
+its execution/custody cost under these conditions. Cold mobile runs sent the
+33,728-byte image; warm runs sent no image bytes. The larger-repository cell
+adds admitted but unread context content; it does not establish whole-repository
+build scaling. These results do not justify a performance optimization or a
+claim that mobility makes the full browser/person workflow faster.
+
+The [compressed raw report](measurements/mobile-repository-0d90b80.json.gz)
+retains every attempt, all phase observations, p95/min/max summaries and paired
+differences. Its uncompressed SHA-256 is
+`585a8e53ada6a010dd1d0a3a75b6f555584fed0b2b50bda384279404ada89e4a`.
+Quantiles use nearest rank; thirty samples do not give a precise tail guarantee.
+The raw process-resource counters cover each whole child process, including
+setup and any warmup, and must not be attributed solely to the timed task.
+
+Browser-verification and restart attribution, actual UI operation counts, and
+final acceptance reconciliation remain open. This is a scoped mechanics result,
+not full reference, deployment or live qualification.

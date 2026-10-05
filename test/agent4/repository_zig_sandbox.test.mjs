@@ -113,8 +113,38 @@ pub export fn agent_observe(_: u32) u64 { return subject.maximumToolArgumentsByt
   const cancelled = await runner.execute({ 'main.zig': 'pub fn main() void {}' }, {
     signal: controller.signal, expectedStdout: '["0"]\n' });
   assert.equal(cancelled.status, 'Cancelled'); assert.equal(cancelled.physicalExecutions, 0);
+  const catalogue = [];
+  for (const [id, sourceRoot, before, after] of [
+    ['boundary.wire-natural.v1', process.env.AGENT_PROFILE_BOUNDARY_SOURCE, 'if (next == 0) return error.NonCanonical;', 'if (false) return error.NonCanonical;'],
+    ['world.allocation-budget.v1', process.env.AGENT_PROFILE_WORLD_SOURCE, 'required > self.limit', 'required > self.limit + 64'],
+    ['agent.model-json-bounds.v1', new URL('../..', import.meta.url).pathname, '.bool => 5,', '.bool => 4,'],
+  ]) {
+    assert(sourceRoot, `source root required for ${id}`);
+    const profile = JSON.parse(await readFile(new URL(`../../runtime/repository-profiles/${id}.json`, import.meta.url)));
+    const path = profile.requiredPaths[0], original = await readFile(join(sourceRoot, path), 'utf8');
+    assert(original.includes(before), `${id}: current source must contain the independently selected mutation site`);
+    const source = join(root, id); await mkdir(join(source, path.slice(0, path.lastIndexOf('/'))), { recursive: true });
+    await writeFile(join(source, path), original);
+    git(source, 'init', '--quiet'); git(source, 'add', '.'); git(source, 'commit', '--quiet', '-m', 'admitted profile source');
+    const base = git(source, 'rev-parse', 'HEAD');
+    const options = { directory: join(root, id + '-managed'), sourceGitDirectory: join(source, '.git'), base,
+      gitExecutable: await realpath('/usr/bin/git'), repository: id, generation: '1', managedRef: 'refs/heads/agent/result',
+      readPaths: [path], writablePaths: [path] };
+    const receipt = await provisionRepository(options), store = await openRepositorySnapshotStore({ ...options, ...receipt });
+    const snapshot = await store.snapshot(base), checks = createRepositoryCheckRunner({ store, sandbox: runner, profiles: [profile] });
+    const request = { snapshot, profileId: id, occurrence: 'correct' };
+    const correct = await checks.check(request);
+    assert.equal(correct.status, 'Passed', JSON.stringify(correct));
+    const candidate = await store.prepare(snapshot, [{ path, operation: 'replace', oldDigest: sha(original), oldMode: '100644', content: original.replace(before, after) }]);
+    const incorrect = await checks.check({ ...request, candidate, occurrence: 'incorrect' });
+    assert.equal(incorrect.status, 'Failed', JSON.stringify(incorrect));
+    assert.equal(incorrect.physicalExecutions, 2, 'the negative candidate must compile and execute');
+    assert.equal(await store.current(), base);
+    assert.equal(git(source, 'status', '--porcelain'), '');
+    catalogue.push({ id, sourceSha256: sha(original), correct, incorrect });
+  }
   if (process.env.AGENT_REPOSITORY_PROOF) await writeFile(process.env.AGENT_REPOSITORY_PROOF, JSON.stringify({
     profile: runner.contract, qualification: runner.qualification, forgedVerdict: forged, incorrectBase: failed, repairedCandidate: passed,
-    managedRefUnchanged: true, originalCheckoutUnchanged: true,
+    managedRefUnchanged: true, originalCheckoutUnchanged: true, catalogue,
   }, null, 2) + '\n');
 });

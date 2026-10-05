@@ -10,7 +10,10 @@ Build the two native isolation artifacts with the selected Zig 0.17.0 compiler:
 
 ```sh
 zig build repository-check-runner -Doptimize=safe --prefix '/tmp/agent check runner'
-zig build check-mobile-repository-zig -Doptimize=safe --summary all
+zig build check-mobile-repository-zig -Doptimize=safe \
+  -Dboundary-source="$PWD/.agent4-mobile/inputs/boundary" \
+  -Dworld-source="$PWD/.agent4-mobile/inputs/world" \
+  -Dworld-runtime="$PWD/.agent4-mobile/out/world-runtime/runtime" --summary all
 ```
 
 The first command installs `repository-check/agent-check-limit` and
@@ -139,8 +142,42 @@ acquired record. The reference approval test uses this same binding and verifies
 its retained charge after restart. The real Zig qualifier sends the repaired
 candidate through it, independently requiring the incorrect base to fail.
 
-This slice does not yet supply the full Boundary/World/Agent profile catalog or
-complete mobile application. The use archive includes the JavaScript adapters; automatic acquisition
-and inventory binding of the native runner in the complete application package
-remain part of the package work. A single JSON-bound repair does not certify
-arbitrary edits elsewhere in Agent.
+## Operator-selectable profiles
+
+The use archive includes these manifests under `runtime/repository-profiles/`.
+Copy the selected JSON object into the deployment adapter's `checkProfile` field;
+its admitted digest and qualified runner identity bind the separate `profile`
+grant. Repository registration still fixes the base, readable/writable scope and
+required profile. A task or model cannot select arbitrary commands or change the
+manifest. The package includes inventoried native helpers; it does not download
+or compile helpers at dispatch.
+
+| Manifest | Selected source and independent contract | Excluded claims |
+|---|---|---|
+| [Boundary wire](../runtime/repository-profiles/boundary.wire-natural.v1.json) | `src/data/wire.zig`: u64 boundary values and rejection of overlong, truncated and overflowing naturals | Full data admission, compiler and interpreter behavior |
+| [World budget](../runtime/repository-profiles/world.allocation-budget.v1.json) | `src/interpreter_v2/allocation_budget.zig`: limit rejection, live/required/peak counts, freeing, reuse and reset | OS memory limits and other interpreter semantics |
+| [Agent JSON bounds](../runtime/repository-profiles/agent.model-json-bounds.v1.json) | `src/model_json.zig`: bool, u8, i8, u64 and i64 maximum encoded lengths | Arbitrary schemas and model/provider behavior |
+
+These standalone modules import only the authenticated Zig standard library.
+The inspected post-migration build graphs put Boundary's wire tests under
+`check-data`, World's allocation contracts under `check-storage`, and Agent's
+JSON support under its authoring tests. The manifests extract narrower explicit
+contracts; they do not claim to run those whole targets. The normal dependency
+verifier authenticates the selected Boundary and World sources before profile
+qualification. The exact module bytes, standard library, protected harness and
+runner are included in check identities. No network dependency acquisition is
+needed in the candidate process.
+
+The qualifier runs each unchanged module and a compiling semantic mutation in
+an isolated managed snapshot: accepting an overlong natural, allowing allocation
+past the byte limit, or undercounting `false`. The base must pass and the mutation
+must fail after compilation and execution, with both source checkout and managed
+ref unchanged. It uses the same qualified sandbox and resource limits as the
+application. For direct test invocation, supply `AGENT_PROFILE_BOUNDARY_SOURCE`
+and `AGENT_PROFILE_WORLD_SOURCE` from the authenticated setup.
+
+These profiles are useful only when their independent observations cover the
+requested change. A passing narrow profile cannot authorize an unrelated semantic
+change; the operator must provide a matching mandatory contract or leave that
+candidate unvalidated. Documentation edits can use the relevant profile as a
+regression check, but prose correctness still requires independent review.

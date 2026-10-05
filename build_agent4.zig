@@ -453,6 +453,10 @@ pub fn build(b: *std.Build) void {
     mobile_repository_check.dependOn(&mobile_repository_objects.step);
     const mobile_repository_zig = b.step("check-mobile-repository-zig", "Qualify the bounded native Zig repository check profile");
     const mobile_repository_zig_test = nodeCommand(b);
+    mobile_repository_zig_test.step.dependOn(&source_guard.step);
+    if (source) |root| mobile_repository_zig_test.addDirectoryArg2(root, .{ .prefix = "AGENT_PROFILE_BOUNDARY_SOURCE=", .make_absolute = true }) else mobile_repository_zig_test.step.dependOn(&b.addFail("provide -Dboundary-source for repository profile qualification").step);
+    mobile_repository_zig_test.addDirectoryArg2(world_source, .{ .prefix = "AGENT_PROFILE_WORLD_SOURCE=", .make_absolute = true });
+    if (runtime == null) mobile_repository_zig_test.step.dependOn(&b.addFail("provide -Dworld-runtime to authenticate World profile source").step);
     mobile_repository_zig_test.has_side_effects = true;
     mobile_repository_zig.dependOn(&mobile_repository_zig_test.step);
     const repository_runner = b.step("repository-check-runner", "Install the macOS Zig check resource launcher and loader restriction");
@@ -686,6 +690,7 @@ pub fn build(b: *std.Build) void {
         }
         addBoundary(b, runtime_guard, source, target, optimize);
         runtime_guard.has_side_effects = true;
+        mobile_repository_zig_test.step.dependOn(&runtime_guard.step);
         _ = runtime_guard.captureStdOut(.{});
         const mobile_repository_run = nodeCommand(b);
         mobile_repository_run.addArgs(&.{ "node", "test/agent4/mobile_repository_continuation.mjs" });

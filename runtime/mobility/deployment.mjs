@@ -11,6 +11,7 @@ import { WorldAdmission } from './admission.mjs';
 import { CustodyJournal } from './journal.mjs';
 import { Custodian } from './custodian.mjs';
 import { modelBinding } from './model.mjs';
+import { repositoryApprovalBinding } from './repository_approval.mjs';
 import { repositoryPublicationBinding } from './repository_publication.mjs';
 import { openRepositorySnapshotStore } from '../repository_snapshot.mjs';
 import { BrowserSessions } from './sessions.mjs';
@@ -45,6 +46,11 @@ export async function openDeployment(configPath, { create = false } = {}) {
     if (adapter.kind === 'openai-responses-replay') {
       const leaf = modelBinding(binding, adapter, config.hostId), handle = leaf.handle;
       leaf.handle = context => { counts.calls++; return handle(context); };
+      return leaf;
+    }
+    if (['repository-approval-issuer', 'repository-approval-human'].includes(adapter.kind)) {
+      const leaf = repositoryApprovalBinding(binding, adapter), method = leaf.answer ? 'answer' : 'handle', original = leaf[method];
+      leaf[method] = context => { counts.calls++; return original(context); };
       return leaf;
     }
     if (adapter.kind === 'repository-publication') {

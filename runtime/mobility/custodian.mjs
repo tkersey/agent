@@ -271,7 +271,7 @@ export class Custodian {
   pendingQuestion(id, identity) {
     const run = this.authorizeUser(id, identity), occurrence = this.#journal.occurrence(run.current_occurrence_id);
     if (!occurrence?.pending_digest || !['AWAITING', 'SETTLED_REPLY'].includes(occurrence.status) || run.cancel_requested !== null || run.status !== 'ACTIVE') return null;
-    const pending = parse(this.#journal.artifact(run.tenant_ref, occurrence.pending_digest));
+    const pending = parse(this.#journal.artifact(run.tenant_ref, occurrence.pending_digest), { maximum: 2 << 20 });
     requireThat(identity.audiences?.includes(pending.audience), 'UserDenied');
     return { version: version(run), occurrence_id: occurrence.id, request_digest: occurrence.request_digest,
       pending_digest: occurrence.pending_digest, acquired: occurrence.status === 'SETTLED_REPLY', pending };
@@ -282,7 +282,7 @@ export class Custodian {
       const run = this.authorizeUser(id, identity), occurrence = this.#journal.occurrence(run.current_occurrence_id);
       active(run, submission.version, false);
       requireThat(occurrence?.pending_digest && ['AWAITING', 'SETTLED_REPLY'].includes(occurrence.status), 'QuestionNotPending');
-      const pending = parse(this.#journal.artifact(run.tenant_ref, occurrence.pending_digest));
+      const pending = parse(this.#journal.artifact(run.tenant_ref, occurrence.pending_digest), { maximum: 2 << 20 });
       requireThat(identity.audiences?.includes(pending.audience), 'UserDenied');
       requireThat(submission.occurrence_id === occurrence.id && submission.request_digest === occurrence.request_digest && submission.pending_digest === occurrence.pending_digest, 'QuestionMismatch');
       const answer = submission.answer;

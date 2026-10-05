@@ -1,13 +1,13 @@
 # Managed publication boundary
 
-This is the W5 storage and adapter seam, not full application qualification.
-The authored proposal/approval composition and installed application remain
-open in [the acceptance report](mobile-repository-acceptance.md).
+This is the W5 publication composition, not full application qualification.
+The complete investigation application and installed delivery remain open in
+[the acceptance report](mobile-repository-acceptance.md).
 
 Preparation writes immutable candidate and commit objects before human approval.
 The proposal core binds the complete candidate, check records, task/run and
 principal/tenant, authorization and validation policy, target/base, intent and
-fixed commit metadata. The exact raw commit contains the core digest and intent;
+fixed commit metadata and complete ordered before/after content. The exact raw commit contains the core digest and intent;
 the final proposal adds its Git OID and full-byte SHA-256. Verification rebuilds
 these identities and reads stored objects without writing new objects.
 
@@ -37,6 +37,10 @@ existing custody journal; self-consistent proposal hashes are insufficient.
 Only the compiled protected approval construction may expose this operation in
 an admitted production image. The image allowlist is an operator trust decision,
 not a dynamically inferred proof that arbitrary images use approval correctly.
+It also supplies the read-only `agent.repository.publication-current.v1` leaf.
+The commit result uses the approval owner's four-way outcome contract:
+Published, Conflict, NotApplied, or uncertain. An unsettled environmental write
+stays in custody rather than manufacturing an uncertain reply and continuing.
 
 The existing occurrence transaction stores the exact publication intent before
 Git starts. This is the local cancellation/revocation admission ordering point.
@@ -45,6 +49,9 @@ not discard a publication result or authorize rollback. The acquired reply and
 publication receipt are stored together. Receipts include proposal, destination,
 tree, validation references, policy, original admission, disposition and recovery
 provenance. A later current head is distinct from the published commit.
+An already admitted intent or exact commit cannot be admitted again through a
+new occurrence. A definitive nonapplication requires a fresh proposal/intent
+and approval before another publication attempt.
 
 On restart, the custodian invokes only the binding's read-only reconciler for an
 uncertain publication occurrence. It does not call its publication handler again.
@@ -58,10 +65,27 @@ Build and exercise this seam with:
 ```sh
 zig build repository-publication-gate check-repository-publication-gate \
   -Dworld-source=/path/to/world -Dworld-runtime=/path/to/runtime
+zig build check-repository-approval -Dworld-source=/path/to/world \
+  -Dworld-runtime=/path/to/runtime -Dbrowser-tools=/path/to/locked-browser-tools
 ```
 
 The helper installs under `repository-publication/agent-publication-gate`.
 Non-macOS publication is unavailable. The runtime package includes the JavaScript
 adapter; native-helper package acquisition remains part of W6. Tests distinguish
 actual Git exclusion/history, real SQLite ordering, and adapter service doubles.
-None of the doubles establish the application's private-grant witness.
+The separate compiled approval witness uses the real private-grant construction,
+two custodians, actual successor checkpoints, SQLite and Git. Its independent
+content check and human response are deterministic fixtures, not live-model or
+actual-person qualification. It covers stale answers, wrong principals, and
+restart after publication with a lost reply without repeating the protected leaf.
+
+`repository-approval-issuer` binds its fresh nonce to the current occurrence.
+`repository-approval-human` uses the existing deferred-answer journal and session
+authentication; `principalIds` maps admitted principal names to the image's
+ordinary numeric identity. The reply contains the exact retained challenge and
+authenticated principal. It never exposes the private grant. The browser shows
+the destination, exact base/commit/proposal identities, checks, and complete
+before/after source using inert text. Approve requires an explicit selection.
+Chromium and Firefox cover authenticated login and complete proposals exceeding
+64 KiB. Pending question artifacts are bounded at 2 MiB; answer limits remain
+unchanged. Ordinary free-text deferred questions retain their existing behavior.

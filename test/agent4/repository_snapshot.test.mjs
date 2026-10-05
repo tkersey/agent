@@ -150,6 +150,10 @@ test('managed Git configuration corruption is rejected on use and on reopen', as
   await assert.rejects(openRepositorySnapshotStore({ ...f.options, ...f.receipt }), { code: 'RepositoryStorageChanged' });
 });
 
+test('provisioning rejects binary tracked source before it can become a candidate preimage', async t => {
+  await assert.rejects(fixture(t, { extra: source => writeFile(join(source, 'file-00.txt'), Buffer.from([0, 1, 2])) }), { code: 'RepositoryBinary' });
+});
+
 test('publication proposal binds exact nonrecursive commit bytes; read-only revalidation rejects amendments', async t => {
   const f = await fixture(t), snapshot = await f.store.snapshot(f.base);
   const candidate = await f.store.prepare(snapshot, [replacement(f, 'file-00.txt', 'prepared publication\n')]);
@@ -163,6 +167,7 @@ test('publication proposal binds exact nonrecursive commit bytes; read-only reva
   const commit = { author: { name: 'Agent fixture', email: 'fixture@example.invalid' }, committer: { name: 'Agent fixture', email: 'fixture@example.invalid' },
     timestamp: 1791150000, message: 'Prepared repair' };
   const proposal = await f.store.preparePublication({ candidate, binding, validation, commit });
+  assert.deepEqual(proposal.core.diff, [{ path: 'file-00.txt', operation: 'replace', oldContent: f.contents.get('file-00.txt'), newContent: 'prepared publication\n' }]);
   const managed = join(f.options.directory, 'objects.git');
   const bytes = execFileSync('git', ['--git-dir=' + managed, 'cat-file', 'commit', proposal.commitOid]);
   assert.equal(hash(bytes), proposal.commitSha256);
@@ -174,6 +179,8 @@ test('publication proposal binds exact nonrecursive commit bytes; read-only reva
   assert.equal(await f.store.current(), f.base);
   const modified = structuredClone(proposal); modified.core.binding.principal = 'other';
   await assert.rejects(f.store.verifyPublication(modified), { code: 'RepositoryPublicationMismatch' });
+  const hidden = structuredClone(proposal); hidden.core.diff[0].oldContent = 'different source';
+  await assert.rejects(f.store.verifyPublication(hidden), { code: 'RepositoryPublicationMismatch' });
   await assert.rejects(f.store.verifyPublication({ ...proposal, commitSha256: '0'.repeat(64) }), { code: 'RepositoryPublicationMismatch' });
   const failed = { ...check, status: 'Failed' };
   await assert.rejects(f.store.preparePublication({ candidate, binding, validation: [{ ...failed, id: hash(canonical(failed, 2 << 20)) }], commit }), { code: 'RepositoryPublicationValidation' });

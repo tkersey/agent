@@ -25,10 +25,18 @@ async function fixture(t, operation = 'agent.repository.publish.v1') {
     allowed_host_policy_ref: 'fixture', deployment_policy_revision: 'p1', initial_classification: [], initial_host_id: 'W', initial_epoch: '0',
     deployment_limits: { maximum_moves: 2, maximum_image_bytes: 4096, maximum_outcome_bytes: 4096 }, key_id: 'issuer' }, pair.privateKey);
   journal.register(registration, {}); const run = journal.attach(id), occurrence = journal.admitLeaf(id, version(run), []);
-  const body = { core: { binding: { run: id, principal: 'user', tenant: 'tenant', policyRevision: 'p1' },
+  const body = { core: { binding: { run: id, principal: 'user', tenant: 'tenant', policyRevision: 'p1', intent: '6'.repeat(64) },
     destination: { repository: 'repo', generation: 'generation-1', managedRef: 'refs/heads/agent/main' } }, commitOid: '5'.repeat(40) };
   const proposal = { ...body, digest: hash(canonical(body, 2 << 20)) };
   return { get journal() { return journal; }, id, run, occurrence, proposal,
+    second({ intent, commitOid }) {
+      const { signature: _, ...unsigned } = journal.registration(registration), otherId = runId('issuer');
+      journal.register(signRecord('run', { ...unsigned, run_id: otherId }, pair.privateKey), {});
+      const otherRun = journal.attach(otherId), otherOccurrence = journal.admitLeaf(otherId, version(otherRun), []);
+      const other = structuredClone(proposal); other.core.binding.run = otherId; other.core.binding.intent = intent; other.commitOid = commitOid;
+      const { digest: _digest, ...body } = other; other.digest = hash(canonical(body, 2 << 20));
+      return journal.admitPublication(otherId, version(otherRun), otherOccurrence.attempt_id, other, 'p1');
+    },
     restart() { journal.close(); journal = new CustodyJournal(options); }, failAt(point) { failure = point; },
     admit() { return journal.admitPublication(id, version(run), occurrence.attempt_id, proposal, 'p1'); },
     records() { return journal.publicationRecords('tenant', 'repo', 'generation-1', 'refs/heads/agent/main'); } };
@@ -64,4 +72,10 @@ test('stale executor, other operation and altered principal cannot acquire publi
   const other = await fixture(t, 'fixture.read'); assert.throws(() => other.admit(), { code: 'PublicationOccurrenceMismatch' });
   const principal = await fixture(t); principal.proposal.core.binding.principal = 'someone';
   assert.throws(() => principal.admit(), { code: 'PublicationAuthorityMismatch' });
+});
+test('a fresh occurrence cannot reuse another intent or exact commit after admission', async t => {
+  const f = await fixture(t); f.admit();
+  assert.throws(() => f.second({ intent: f.proposal.core.binding.intent, commitOid: '7'.repeat(40) }), { code: 'PublicationIntentReused' });
+  assert.throws(() => f.second({ intent: '8'.repeat(64), commitOid: f.proposal.commitOid }), { code: 'PublicationIntentReused' });
+  assert.equal(f.records().length, 1);
 });

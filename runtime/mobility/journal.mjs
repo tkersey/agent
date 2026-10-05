@@ -369,7 +369,7 @@ export class CustodyJournal {
     this.#recordCapacity(run.tenant_ref);
   }
   deferLeaf(runId, wanted, pending, classification) {
-    const bytes = canonical(pending);
+    const bytes = canonical(pending, 2 << 20);
     identifier(pending.binding_revision); digest(pending.request_digest);
     requireThat(Object.hasOwn(pending, 'question') && typeof pending.result_schema === 'string' && /^[A-Za-z0-9_-]+$/.test(pending.result_schema), 'InvalidPendingQuestion');
     const schema = Buffer.from(pending.result_schema, 'base64url');
@@ -389,7 +389,7 @@ export class CustodyJournal {
       const run = this.run(runId), occurrence = this.#occurrence(run);
       core.active(run, wanted, false); core.current(run, occurrence);
       requireThat(typeof occurrence.pending_digest === 'string', 'QuestionNotPending');
-      const pending = parse(this.artifact(run.tenant_ref, occurrence.pending_digest));
+      const pending = parse(this.artifact(run.tenant_ref, occurrence.pending_digest), { maximum: 2 << 20 });
       requireThat(identity?.principal === run.principal_ref && identity?.tenant === run.tenant_ref && Array.isArray(identity.audiences) && identity.audiences.includes(pending.audience), 'UserDenied');
       requireThat(answer && Object.keys(answer).sort().join(',') === 'choice,text' && pending.alternatives.includes(answer.choice) && typeof answer.text === 'string' && Buffer.byteLength(answer.text) <= pending.maximum_text_bytes, 'InvalidAnswer');
       const next = core.answered(run, occurrence, wanted, binding, hash(canonical(answer)), hash(reply), classification);
@@ -412,6 +412,10 @@ export class CustodyJournal {
       const binding = proposal?.core?.binding;
       requireThat(binding?.run === runId && binding.principal === run.principal_ref && binding.tenant === run.tenant_ref &&
         binding.policyRevision === policyRevision && policyRevision === run.policy_revision, 'PublicationAuthorityMismatch');
+      digest(binding.intent);
+      const destination = proposal.core.destination;
+      requireThat(!this.publicationRecords(run.tenant_ref, destination.repository, destination.generation, destination.managedRef)
+        .some(row => row.intent.proposal.core.binding.intent === binding.intent || row.intent.proposal.commitOid === proposal.commitOid), 'PublicationIntentReused');
       const { digest: proposalDigest, ...body } = proposal;
       requireThat(hash(canonical(body, 2 << 20)) === proposalDigest, 'PublicationProposalMismatch');
       const intent = { format: 'agent.repository.publication-intent/v1', proposal,

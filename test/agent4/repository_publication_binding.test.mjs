@@ -7,6 +7,7 @@ import { canonical } from '../../runtime/mobility/canonical.mjs';
 import { repositoryPublicationBinding, PUBLICATION } from '../../runtime/mobility/repository_publication.mjs';
 
 const schema = { root: 0, types: [{ bounded_text: 2 << 20 }] }, schemaBytes = encodeSchema(schema);
+const deliverySchema = { root: 0, types: [{ sum: [1, 1, 1, 2] }, { bounded_text: 16384 }, { bounded_text: 128 }] };
 const text = value => Buffer.from(canonical(value, 2 << 20)).toString('utf8');
 function fixture() {
   const run = { run_id: 'run', image_digest: 'a'.repeat(64), program_id: 'b'.repeat(64), principal_ref: 'user', tenant_ref: 'tenant',
@@ -36,7 +37,7 @@ function fixture() {
     async reconcilePublication(exact) { state.reconciliations++; return { status: state.reconcileStatus,
       proposal: exact.digest, commit: state.reconcileStatus === 'Published' ? exact.commitOid : null }; },
   };
-  binding = repositoryPublicationBinding({ operation: PUBLICATION, payloadSchema: schemaBytes, resultSchema: schemaBytes },
+  binding = repositoryPublicationBinding({ operation: PUBLICATION, payloadSchema: schemaBytes, resultSchema: encodeSchema(deliverySchema) },
     { store, helper: {}, protectedImages: [{ image: run.image_digest, program: run.program_id }],
       authorizationDigest: '1'.repeat(64), validationPolicyDigest: '2'.repeat(64), requiredProfiles: [{ id: 'zig-check', profileDigest: '3'.repeat(64), runner: '4'.repeat(64) }],
       checkResultSchema: schemaBytes, services: () => ({ journal, policy }) });
@@ -62,7 +63,7 @@ test('self-asserted validation and revocation under the gate cannot reach public
 test('acquired exact validation admits one publication and returns the durable receipt envelope', async () => {
   const f = fixture(), result = await f.binding.handle(f.context());
   assert.equal(f.state.writes, 1); assert.equal(f.state.admissions, 1);
-  assert.equal(decodeValue(schema, result.reply), text(result.publicationReceipt));
+  assert.equal(decodeValue(deliverySchema, result.reply).value, text(result.publicationReceipt));
   assert.equal(result.publicationReceipt.admission.intent_digest, 'intent');
 });
 test('reconciliation reads the saved exact intent after revocation and never dispatches a write', async () => {
@@ -76,7 +77,7 @@ test('reconciliation reads the saved exact intent after revocation and never dis
 });
 test('no-intent recovery returns definitive nonapplication only after the read-only gate observation', async () => {
   const f = fixture(), result = await f.binding.reconcile(f.context());
-  assert.equal(JSON.parse(decodeValue(schema, result.reply)).status, 'NotApplied');
+  assert.equal(JSON.parse(decodeValue(deliverySchema, result.reply).value).status, 'NotApplied');
   assert.equal(result.publicationReceipt, null); assert.equal(f.state.reconciliations, 1); assert.equal(f.state.writes, 0);
   f.state.reconcileStatus = 'Published';
   await assert.rejects(f.binding.reconcile(f.context()), { code: 'PublicationIntentMissing' });

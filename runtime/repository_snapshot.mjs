@@ -1,5 +1,5 @@
-// Immutable managed Git objects. This owner prepares data; it cannot approve,
-// publish, fetch, execute repository code, or choose the application's next step.
+// Immutable managed Git objects and conditional publication under the trusted
+// adapter's admission. This owner cannot approve or choose application steps.
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
@@ -455,7 +455,7 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
     }
     return { snapshot: selected, candidate: candidate?.id ?? null, tree: candidate?.tree ?? selected.tree, files };
   }
-  function publicationCore(candidate, binding, validation, commit) {
+  async function publicationCore(candidate, binding, validation, commit) {
     const fields = (value, names) => value && same(Object.keys(value).sort(), [...names].sort());
     require(fields(binding, ['run', 'task', 'generation', 'principal', 'tenant', 'intent', 'policyRevision', 'authorizationDigest', 'validationPolicyDigest']), 'RepositoryPublicationBinding');
     for (const [name, value] of Object.entries(binding)) require(text(value, 128) && value.length > 0 &&
@@ -476,7 +476,12 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
         record.candidate === candidate.id && record.tree === candidate.tree && same(record.snapshot, candidate.snapshot) &&
         same(record.completedChecks, [record.profile]), 'RepositoryPublicationValidation');
     }
-    return { format: 'agent.repository.proposal-core/v1', candidate, binding, validation,
+    const before = await admitSnapshot(candidate.snapshot), diff = [];
+    for (const edit of candidate.edits) {
+      const row = before.rows.find(row => row[0] === edit.path);
+      diff.push({ path: edit.path, operation: edit.operation, oldContent: row ? utf8.decode(await object.read('blob', row[2])) : null, newContent: edit.content });
+    }
+    return { format: 'agent.repository.proposal-core/v1', candidate, binding, validation, diff,
       destination: { repository, generation, managedRef: metadata.managedRef, expectedBase: candidate.snapshot.base }, commit };
   }
   function publicationCommit(core, coreDigest) {
@@ -489,7 +494,7 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
   async function preparePublication(input) {
     const { candidate, binding, validation, commit } = structuredClone(input);
     await verifyCandidate(candidate);
-    const core = publicationCore(candidate, binding, validation, commit), coreDigest = digest(core);
+    const core = await publicationCore(candidate, binding, validation, commit), coreDigest = digest(core);
     const bytes = publicationCommit(core, coreDigest), commitOid = await object.write('commit', bytes);
     const proposal = { core, coreDigest, commitOid, commitSha256: hash(bytes) };
     return { ...proposal, digest: digest(proposal) };
@@ -499,7 +504,7 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
     require(proposal?.core?.candidate, 'RepositoryPublicationProposal');
     const { candidate, binding, validation, commit } = proposal.core;
     await verifyCandidate(candidate);
-    const core = publicationCore(candidate, binding, validation, commit), coreDigest = digest(core);
+    const core = await publicationCore(candidate, binding, validation, commit), coreDigest = digest(core);
     const bytes = publicationCommit(core, coreDigest), commitOid = objectId(metadata.objectFormat, 'commit', bytes);
     const expected = { core, coreDigest, commitOid, commitSha256: hash(bytes) };
     require(same(proposal, { ...expected, digest: digest(expected) }) &&

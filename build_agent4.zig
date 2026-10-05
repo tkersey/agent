@@ -455,6 +455,10 @@ pub fn build(b: *std.Build) void {
     const publication_gate = b.step("repository-publication-gate", "Install the process-owned managed Git publication gate");
     const publication_check = b.step("check-repository-publication-gate", "Qualify publication exclusion across parent death");
     const publication_test = nodeCommand(b);
+    const repository_approval_check = b.step("check-repository-approval", "Check authenticated protected publication across two custodians and browsers");
+    const repository_approval_test = nodeCommand(b);
+    repository_approval_test.has_side_effects = true;
+    repository_approval_check.dependOn(&repository_approval_test.step);
     publication_test.has_side_effects = true;
     publication_check.dependOn(&publication_test.step);
     if (b.graph.host.result.os.tag == .macos) {
@@ -466,6 +470,7 @@ pub fn build(b: *std.Build) void {
         }) });
         publication_gate.dependOn(&b.addInstallFileWithDir(gate_exe.getEmittedBin(), .prefix, "repository-publication/agent-publication-gate").step);
         publication_test.addFileArg2(gate_exe.getEmittedBin(), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
+        repository_approval_test.addFileArg2(gate_exe.getEmittedBin(), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
         const limit_exe = b.addExecutable(.{ .name = "agent-check-limit", .root_module = b.createModule(.{
             .root_source_file = b.path("runtime/inquiry_process_limit.zig"),
             .target = b.graph.host,
@@ -486,6 +491,12 @@ pub fn build(b: *std.Build) void {
     mobile_repository_zig_test.addArgs(&.{ "node", "--test", "test/agent4/repository_zig_sandbox.test.mjs" });
     publication_test.addArgs(&.{ "node", "--test", "test/agent4/repository_publication_gate.test.mjs", "test/agent4/repository_publication_journal.test.mjs", "test/agent4/repository_publication_binding.test.mjs" });
     const mobile_repository_emitter = g.emitter("mobile-repository-emitter", g.module("test/consumers/mobile_repository/main.zig"));
+    const repository_approval_images = b.step("repository-approval-images", "Emit the shared managed publication approval composition");
+    repository_approval_test.step.dependOn(repository_approval_images);
+    const repository_approval_emitter = g.emitter("repository-approval-emitter", g.module("test/consumers/mobile_repository/publication.zig"));
+    g.emit(repository_approval_images, repository_approval_emitter, &.{"image"}, "repository-approval/program.bpi3");
+    for ([_][]const u8{ "task", "preparation", "result", "proposal", "receipt", "delivery", "human", "human-reply", "identifier", "boolean" }) |name|
+        g.emit(repository_approval_images, repository_approval_emitter, &.{name}, b.fmt("repository-approval/{s}.schema", .{name}));
     g.emit(mobile_repository_images, mobile_repository_emitter, &.{"image"}, "mobile-repository/program.bpi3");
     for ([_][]const u8{ "task", "report", "snapshot-request", "snapshot", "read", "evidence", "question", "answer", "cleanup", "unit" }) |name|
         g.emit(mobile_repository_images, mobile_repository_emitter, &.{name}, b.fmt("mobile-repository/{s}.schema", .{name}));
@@ -670,6 +681,12 @@ pub fn build(b: *std.Build) void {
         mobile_repository_run.step.dependOn(&runtime_guard.step);
         mobile_repository_run.has_side_effects = true;
         mobile_repository_check.dependOn(&mobile_repository_run.step);
+        repository_approval_test.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
+        if (browser_tools_path) |browser_tools| {
+            repository_approval_test.addDirectoryArg2(browser_tools, .{ .prefix = "AGENT_MOBILITY_BROWSER_TOOLS=", .make_absolute = true });
+        } else repository_approval_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
+        repository_approval_test.addArgs(&.{ "node", "--test", "test/agent4/repository_publication_approval.test.mjs" });
+        repository_approval_test.step.dependOn(&runtime_guard.step);
         var previous_economy: ?*std.Build.Step = null;
         for ([_][]const u8{ "manual", "fixed", "ensure", "stationary" }) |mode| {
             const sample = nodeCommand(b);
@@ -1078,6 +1095,7 @@ pub fn build(b: *std.Build) void {
     } else {
         const missing = b.addFail("provide -Dworld-runtime=/absolute/authenticated/world-runtime");
         mobile_repository_check.dependOn(&missing.step);
+        repository_approval_check.dependOn(&missing.step);
         compiled_tools_check.dependOn(&missing.step);
         mobility_continuation.dependOn(&missing.step);
         mobility_native.dependOn(&missing.step);

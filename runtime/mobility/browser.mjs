@@ -8,7 +8,7 @@ import { canonical, parse, requireThat, CONTROL_LIMIT } from './canonical.mjs';
 import { version } from './custody.mjs';
 const opaque = () => randomBytes(32).toString('hex');
 const same = (a, b) => { const x = canonical(a), y = canonical(b); return x.length === y.length && timingSafeEqual(x, y); };
-const json = (res, value, status = 200) => { const bytes = canonical(value); res.writeHead(status, { 'content-type': 'application/json', 'content-length': bytes.length, 'cache-control': 'no-store' }); res.end(bytes); };
+const json = (res, value, status = 200, maximum = CONTROL_LIMIT) => { const bytes = canonical(value, maximum); res.writeHead(status, { 'content-type': 'application/json', 'content-length': bytes.length, 'cache-control': 'no-store' }); res.end(bytes); };
 const binary = (res, bytes, type = 'application/octet-stream') => { res.writeHead(200, { 'content-type': type, 'content-length': bytes.length, 'cache-control': 'no-store' }); res.end(bytes); };
 async function body(req, maximum) {
   requireThat(req.headers['content-encoding'] === undefined, 'EncodingRejected');
@@ -47,7 +47,7 @@ export async function serveBrowser(custodian, { key, cert, authenticate, redeem 
       const identity = await authenticate(req);
       requireThat(identity && typeof identity.sessionId === 'string' && identity.sessionId.length > 0 && identity.sessionId.length <= 256 && Array.isArray(identity.audiences) && identity.audiences.includes(audience), 'UserDenied');
       requireThat(req.url.length <= 1024 && !req.url.includes('?') && !req.url.includes('#'), 'InvalidRoute');
-      if (req.method === 'GET' && req.url === '/') return binary(res, Buffer.from('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Mobile Agent</title><main><h1>Mobile Agent</h1><label>Run <input id="run" autocomplete="off"></label> <button id="connect">Connect</button> <button id="continue">Continue</button> <button id="cancel">Cancel</button><p id="status" role="status">Ready</p><pre id="request"></pre><form id="answer" hidden><h2>Pending question</h2><pre id="question"></pre><label>Response <select id="choice"></select></label><label>Text <textarea id="answer-text"></textarea></label><button>Send response</button></form></main><script type="module" src="/client.mjs"></script>'), 'text/html; charset=utf-8');
+      if (req.method === 'GET' && req.url === '/') return binary(res, Buffer.from('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Mobile Agent</title><main><h1>Mobile Agent</h1><label>Run <input id="run" autocomplete="off"></label> <button id="connect">Connect</button> <button id="continue">Continue</button> <button id="cancel">Cancel</button><p id="status" role="status">Ready</p><pre id="request"></pre><form id="answer" hidden><h2>Pending question</h2><div id="question"></div><label>Response <select id="choice" required></select></label><label>Text <textarea id="answer-text"></textarea></label><button>Send response</button></form></main><script type="module" src="/client.mjs"></script>'), 'text/html; charset=utf-8');
       if (req.method === 'GET' && assets.has(req.url)) return binary(res, assets.get(req.url), 'text/javascript');
       if (req.method === 'GET' && req.url === '/worker.mjs') return binary(res, worker, 'text/javascript');
       if (req.method === 'GET' && req.url === '/kernel.wasm') return binary(res, kernelBytes, 'application/wasm');
@@ -64,7 +64,7 @@ export async function serveBrowser(custodian, { key, cert, authenticate, redeem 
         requireThat(req.headers.origin === origin && typeof req.headers['x-agent-csrf'] === 'string' && same(req.headers['x-agent-csrf'], csrf(identity)), 'CsrfDenied');
       }
       if (req.method === 'GET' && operation === 'status') return json(res, custodian.status(id));
-      if (req.method === 'GET' && operation === 'question') return json(res, custodian.pendingQuestion(id, identity));
+      if (req.method === 'GET' && operation === 'question') return json(res, custodian.pendingQuestion(id, identity), 200, (2 << 20) + 8192);
       if (req.method === 'POST' && operation === 'answer') return json(res, await custodian.answerQuestion(id, identity, parse(await body(req, CONTROL_LIMIT))));
       if (req.method === 'GET' && operation === 'metrics') return json(res, custodian.metrics(id));
       if (req.method === 'POST' && operation === 'cancel') {

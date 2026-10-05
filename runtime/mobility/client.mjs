@@ -72,8 +72,33 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
     pending = await (await executor.api('question', 'GET')).json();
     answerForm.hidden = !pending || pending.acquired;
     if (!pending || pending.acquired) return;
-    document.querySelector('#question').textContent = JSON.stringify(pending.pending.question, null, 2);
+    const question = document.querySelector('#question'), value = pending.pending.question;
+    question.replaceChildren();
+    if (value?.kind === 'repository-publication-approval') {
+      const proposal = JSON.parse(value.challenge[1]), core = proposal.core;
+      if (!Array.isArray(core.diff) || core.diff.length !== core.candidate.edits.length) throw new Error('The complete change is unavailable for review.');
+      const paragraph = text => { const p = document.createElement('p'); p.textContent = text; question.append(p); };
+      paragraph(`Publish to managed branch ${core.destination.managedRef} in ${core.destination.repository}.`);
+      paragraph('This creates a commit in the service-owned repository. Your checkout and upstream repository are not updated.');
+      paragraph(`Base: ${core.destination.expectedBase}\nPrepared commit: ${proposal.commitOid}\nProposal: ${proposal.digest}`);
+      for (const check of core.validation) paragraph(`Check: ${check.profile} — ${check.status}. Profile ${check.profileDigest}; runner ${check.runner}.`);
+      paragraph('Validation covers the listed check contracts. Other behavior has not been established by these checks.');
+      for (const edit of core.diff) {
+        const details = document.createElement('details'), summary = document.createElement('summary');
+        details.open = true; summary.textContent = `${edit.operation}: ${edit.path}`; details.append(summary);
+        for (const [label, content] of [['Before', edit.oldContent], ['After', edit.newContent]]) {
+          const heading = document.createElement('h3'), source = document.createElement('pre');
+          heading.textContent = label; source.textContent = content === null ? '(file absent)' : content;
+          details.append(heading, source);
+        }
+        question.append(details);
+      }
+    } else question.textContent = JSON.stringify(value, null, 2);
     const choices = document.querySelector('#choice'); choices.replaceChildren();
+    if (value?.kind === 'repository-publication-approval') {
+      const placeholder = document.createElement('option'); placeholder.value = ''; placeholder.textContent = 'Choose a response';
+      placeholder.disabled = true; placeholder.selected = true; choices.append(placeholder);
+    }
     for (const value of pending.pending.alternatives) { const option = document.createElement('option'); option.value = value; option.textContent = value; choices.append(option); }
     document.querySelector('#answer-text').maxLength = pending.pending.maximum_text_bytes;
     status.textContent = 'Awaiting your response';

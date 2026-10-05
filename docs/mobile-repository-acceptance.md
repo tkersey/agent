@@ -167,8 +167,23 @@ The gate/check target passed 3/3 build steps and 16 Node tests; the final adapte
 receipt check passed 5/5 tests. Snapshot tests passed 8/8, and inherited custody
 journal/integration checks passed 62/62 build steps. These are W5 seam checks on
 the current working source, not the required end-to-end protected application.
-Authored approval integration, the full proposal UI, installed helper acquisition,
-and full crash/approval witnesses remain open.
+The follow-up shared authored approval composition passes an actual W→U→W
+round trip. The existing private grant survives the return placement, the exact
+managed commit is published, and a fresh custodian recovers a lost reply without
+repeating the check, approval, or protected publication leaf. Stale answers and
+wrong principals never reach publication.
+
+The authenticated deferred approval adapter and exact-change UI pass Chromium
+and Firefox, including complete proposals larger than 64 KiB and inert rendering
+of source containing HTML. Combined publication/approval and inherited custody
+checks passed 91/91 build steps. Final browser/approval and prior free-text
+interaction regressions passed 8/8 tests; final intent-reuse and adapter checks
+passed 12/12. Full snapshot checks passed 8/8 before the additional targeted binary
+provisioning case. These witnesses use deterministic human/check capabilities and
+the production approval, custody, session, browser, store and publication owners.
+They do not establish the full investigation application or actual-person lane.
+Complete application integration, installed helper acquisition, and the remaining
+fault/acceptance matrix are still open.
 
 ## Remaining acceptance
 

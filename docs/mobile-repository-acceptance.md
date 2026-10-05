@@ -258,8 +258,8 @@ Mobility was slower in every tested cell; extra-read and opaque-replay workloads
 transferred fewer bytes. The comparison report retains the raw data and scope.
 Separate browser/restart attribution and UI operation counts remain pending.
 
-Remaining work includes complete operator configuration generation, read-only
-deployment validation, result-export and application-qualification commands,
+Remaining work includes read-only deployment validation and the application-
+qualification command,
 lifetime resource-accounting reconciliation, the complete MR-001–MR-096
 mapping, inherited exact-head regressions, complete fault qualification,
 browser/recovery measurements, and serial review closeout.
@@ -370,5 +370,32 @@ case failed before normalization and completed after it.
 
 These are two local host processes with a deterministic provider and synthetic
 human input, not two machines, live inference or actual-person qualification.
-The test provisions its typed template as an oracle; operator-facing template
-generation remains required so users need not encode those values themselves.
+The test now fills the shipped disabled-inference setup template and calls the
+installed configuration generator. Production code derives the bindings and typed
+inputs; the test no longer hand-builds that protocol/configuration machinery.
+
+## Operator setup and result export
+
+The installed `repository-template` and `configure-repository` commands
+generate both v2 configurations plus initial-task and cleanup bytes using the
+installed image/schema inventory and the managed store's actual scope. The
+operator supplies identities, paths, pinned peers, provider policy and limits.
+No Agent image compilation, manual protocol encoding or signature editing is
+required. Disabled inference emits no model binding and no runnable catalogue
+entry. Existing output directories are refused. Startup still qualifies the
+selected check runner independently of the supplied qualification receipt.
+
+The extracted two-host/browser test passes all three modes from generated
+configuration, with non-null reasoning parameters independently observed at the
+fixture provider. It rejects invalid scope, infeasible check limits and a malformed
+principal before creating output. Template copying is qualified under an archive
+path containing spaces. The source-independent test retains its original exact
+repair, unchanged non-publishing refs, call-count and single-publication assertions.
+
+The installed `export` command returns the exact typed report with run/image/
+program/outcome bindings and any locally retained publication receipt. The same
+installed test exports each completed mode and rejects a different principal.
+Exports do not advance execution or publish. Thirty-seven existing model, provider
+and snapshot regression tests also pass after the parameter/configuration changes.
+See [operator instructions](mobile-repository-operations.md) for the complete
+command sequence and remaining validation/qualification-command limits.

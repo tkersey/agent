@@ -17,7 +17,9 @@ const runtimeFiles = ["runtime/world.mjs", "runtime/world.d.mts", "runtime/value
   "docs/agent4-runtime.md", "docs/migration_from_3.md", "docs/model-invocation-v3.md",
   "docs/consequence-clarification.md", "docs/resumable-inquiry.md", "docs/compiled-text-tool.md", "docs/effect-directed-mobility.md", "docs/mobility-acceptance.md", "docs/mobility-performance.md", "conformance/agent4/mobility-measurements.json", "docs/mobility-deployment.example.json", "LICENSE",
   "docs/mobile-repository-zig-profile.md", "docs/mobile-repository-human.md", "docs/mobile-repository-model.md", "docs/mobile-repository-publication.md",
-  ...["canonical", "protocol", "values", "custody", "admission", "journal", "policy", "custodian", "transport", "model", "repository_publication", "repository_check", "repository_approval", "sessions", "browser", "worker", "client", "task_catalogue", "deployment", "cli"].map(name => `runtime/mobility/${name}.mjs`)];
+  "docs/mobile-repository-setup.example.json",
+  "docs/mobile-repository-operations.md",
+  ...["canonical", "protocol", "values", "custody", "admission", "journal", "policy", "custodian", "transport", "model", "repository_publication", "repository_check", "repository_approval", "repository_setup", "sessions", "browser", "worker", "client", "task_catalogue", "deployment", "cli"].map(name => `runtime/mobility/${name}.mjs`)];
 // Optional test oracles supply prescribed external values and independently
 // assert application behavior. Production execution never imports these files.
 const fixtureTests = ["test/agent4/artifacts.mjs", "test/agent4/document_runtime.mjs", "test/agent4/review_runtime.mjs", "test/agent4/repository_runtime.mjs",

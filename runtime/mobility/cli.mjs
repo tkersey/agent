@@ -2,22 +2,28 @@ import { readRegular } from '../../tools/agent4/dependencies.mjs';
 import { isMain } from '../cli.mjs';
 import { openDeployment, pumpDeployment } from './deployment.mjs';
 import { dirname, resolve } from 'node:path';
-import { realpath } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { realpath, writeFile } from 'node:fs/promises';
 import { parse, closed, requireThat } from './canonical.mjs';
 import { provisionRepository } from '../repository_snapshot.mjs';
 import { createZigRepositorySandbox } from '../repository_zig_sandbox.mjs';
 import { describeRepositoryCheckProfile } from '../repository_checks.mjs';
 import { selectZig } from '../../tools/agent4/toolchain.mjs';
+import { decodeSchema, decodeValue } from '../values.mjs';
+import { configureRepository } from './repository_setup.mjs';
 
 const help = `Usage: node runtime/mobility/cli.mjs COMMAND CONFIG [ARGUMENTS]
   init CONFIG                         explicitly create empty local custody storage
   provision-repository CONFIG         import one approved local commit into a new managed store
   qualify-check CONFIG                qualify a configured runner and print its profile identities
+  configure-repository CONFIG OUTPUT  generate both host configs and typed task inputs in a new directory
+  repository-template OUTPUT          create an operator setup template with inference disabled
   login-issue CONFIG PRINCIPAL TENANT  locally issue a one-use browser login credential
   serve CONFIG                        recover and serve authenticated configured peers
   start CONFIG REGISTRATION IMAGE ARGS start an issuer-authorized run
   tasks CONFIG PRINCIPAL TENANT       list operator-authorized task configurations
   task CONFIG PRINCIPAL TENANT ENTRY MODE GOAL  start a task from the catalogue
+  export CONFIG PRINCIPAL TENANT RUN  export an authorized completed report and publication receipt
   status CONFIG [RUN]                  inspect custody without executing
   metrics CONFIG RUN                   inspect scoped counts, pins and ambiguity
   recover CONFIG                      fence interrupted effects and inspect custody
@@ -30,6 +36,15 @@ Stop the service before using a local custody mutation command. Login issuance i
 export async function main(argv) {
   if (argv.length === 0 || (argv.length === 1 && ['--help', '-h'].includes(argv[0]))) { console.log(help); return; }
   const [command, config, ...args] = argv;
+  if (command === 'repository-template') {
+    requireThat(config && args.length === 0, 'OperatorArguments');
+    await writeFile(config, readRegular(fileURLToPath(new URL('../../docs/mobile-repository-setup.example.json', import.meta.url))), { flag: 'wx', mode: 0o600 });
+    console.log(JSON.stringify({ template: resolve(config), inferenceEnabled: false })); return;
+  }
+  if (command === 'configure-repository') {
+    requireThat(config && args.length === 1, 'OperatorArguments');
+    console.log(JSON.stringify(await configureRepository(config, args[0]))); return;
+  }
   if (['provision-repository', 'qualify-check'].includes(command)) {
     requireThat(config && args.length === 0, 'OperatorArguments');
     const input = parse(readRegular(config, 1 << 20), { maximum: 1 << 20, canonicalOnly: false });
@@ -53,7 +68,7 @@ export async function main(argv) {
     }
     return;
   }
-  const arity = { init: [0], serve: [0], start: [3], tasks: [2], task: [5], status: [0, 1], metrics: [1], recover: [0], retry: [1], receipt: [1], withdraw: [1], cancel: [2], 'login-issue': [2] };
+  const arity = { init: [0], serve: [0], start: [3], tasks: [2], task: [5], export: [3], status: [0, 1], metrics: [1], recover: [0], retry: [1], receipt: [1], withdraw: [1], cancel: [2], 'login-issue': [2] };
   if (!config || !arity[command]?.includes(args.length)) throw new Error(help);
   const host = await openDeployment(config, { create: command === 'init' });
   const print = value => console.log(JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item));
@@ -65,6 +80,19 @@ export async function main(argv) {
       if (!host.catalogue) throw new Error('TaskIntakeUnavailable');
       const identity = { principal: args[0], tenant: args[1] };
       print(command === 'tasks' ? host.catalogue.list(identity) : await host.catalogue.start(identity, { entry: args[2], mode: args[3], goal: args[4] }));
+    }
+    else if (command === 'export') {
+      requireThat(host.catalogue && host.config.browser, 'ResultExportUnavailable');
+      const identity = { principal: args[0], tenant: args[1], audiences: [host.config.browser.audience] };
+      const run = host.custodian.authorizeUser(args[2], identity);
+      host.catalogue.authorizeView(identity, run);
+      const outcome = host.world.decodeOutcome(host.journal.artifact(run.tenant_ref, run.outcome_digest));
+      const delivery = host.custodian.status(run.run_id).delivery ?? null;
+      requireThat(outcome.kind === 'completed' || delivery !== null, 'ResultNotAvailable');
+      const schema = host.catalogue.resultSchema(run.image_digest); requireThat(schema, 'ResultSchemaUnavailable');
+      print({ format: 'agent.repository.export/v1', run_id: run.run_id, principal: run.principal_ref, tenant: run.tenant_ref,
+        image: run.image_digest, program: run.program_id, outcome: run.outcome_digest, classification: run.classification,
+        kind: outcome.kind, report: outcome.kind === 'completed' ? decodeValue(decodeSchema(schema), outcome.value) : null, delivery });
     }
     else if (command === 'status') print(args.length ? host.custodian.status(args[0]) : host.journal.recover().map(({ run }) => host.custodian.status(run.run_id)));
     else if (command === 'metrics') print(host.custodian.metrics(args[0]));

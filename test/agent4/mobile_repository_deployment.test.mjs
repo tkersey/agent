@@ -5,7 +5,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { generateKeyPairSync } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, writeFile, rm, realpath } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm, realpath, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -30,17 +30,17 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   execFileSync('tar', ['-xzf', resolve(process.env.AGENT4_ARCHIVE ?? `${artifactRoot}/agent4-release/${name}.tar.gz`), '-C', area]);
   const root = join(area, name), load = path => import(pathToFileURL(join(root, path)));
   await rm(join(root, 'test'), { recursive: true, force: true });
-  const { encodeValue, decodeSchema } = await load('runtime/values.mjs');
+  const { decodeSchema, decodeValue } = await load('runtime/values.mjs');
   const { hash } = await load('runtime/mobility/protocol.mjs');
-  const { requirement } = await load('runtime/mobility/policy.mjs');
-  const { schemas: mobilitySchemas } = await load('runtime/mobility/values.mjs');
-  const { verifyRuntime } = await load('tools/agent4/dependencies.mjs');
   const { selectZig } = await load('tools/agent4/toolchain.mjs');
   const { openDeployment } = await load('runtime/mobility/deployment.mjs');
   const { PeerClient } = await load('runtime/mobility/transport.mjs');
   const cli = join(root, 'runtime/mobility/cli.mjs');
   const cliEnv = { ...process.env, PATH: '/nonexistent' }; delete cliEnv.NODE_TEST_CONTEXT;
   const command = (...args) => JSON.parse(execFileSync(process.execPath, [cli, ...args], { cwd: root, env: cliEnv, encoding: 'utf8', timeout: 240000, maxBuffer: 4 << 20, stdio: ['ignore', 'pipe', 'pipe'] }));
+  const templatePath = join(area, 'template.json'); command('repository-template', templatePath);
+  const template = JSON.parse(await readFile(templatePath)); assert.equal(template.provider.enabled, false);
+  assert.throws(() => command('repository-template', templatePath));
   const json = async (path, value) => { await writeFile(path, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 }); return path; };
   const source = join(area, 'source'); await mkdir(source); await mkdir(join(source, 'src'));
   const correct = await readFile(new URL('../../src/model_json.zig', import.meta.url), 'utf8'), target = 'src/model_json.zig';
@@ -64,40 +64,15 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   const qualification = command('qualify-check', await json(join(area, 'check.json'), { sandbox, checkProfile }));
   assert.equal(qualification.kind, 'qualified'); assert.equal(qualification.profile.id, checkProfile.id);
   console.log('deployment: installed provisioning and runner qualification passed');
-  const requiredProfiles = [{ id: checkProfile.id, profileDigest: qualification.profile.digest, runner: qualification.runner }];
-  const examples = join(root, 'examples'), schemaPaths = {}, schemas = {};
-  for (const [group, names] of [
-    ['repository-approval', ['preparation', 'proposal', 'delivery', 'check-result', 'human', 'human-reply', 'identifier', 'boolean']],
-    ['mobile-repository', ['session', 'task', 'report', 'snapshot-request', 'snapshot', 'read', 'evidence', 'read-window', 'read-window-result', 'candidate-preparation', 'cleanup', 'unit', 'model-request', 'model-result', 'review', 'review-answer', 'next-task', 'next-task-answer']],
-  ]) for (const name of names) { schemaPaths[name] = join(examples, group, name + '.bin'); schemas[name] = decodeSchema(await readFile(schemaPaths[name])); }
-  const imagePath = join(examples, 'mobile-repository/session.bpi3'), image = await readFile(imagePath);
-  const metadata = (operation, input, output, role) => ({ operation, payloadSchema: schemaPaths[input], resultSchema: schemaPaths[output], role,
-    subject: 'fixture', subjectVersion: operation.startsWith('agent.repository.') && !['interaction', 'approval'].includes(role) ? imported.manifestSha256 : null,
-    scope: operation, audience: ['approval', 'interaction'].includes(role) ? 'human' : null, trustDomain: 'fixture',
-    tenants: ['tenant'], principals: ['user'], classification: ['shared'], allowedStateLabels: ['shared'], cleanup: false });
-  const requirementFor = async metadata => requirement({ ...metadata, payloadSchema: await readFile(metadata.payloadSchema), resultSchema: await readFile(metadata.resultSchema) });
-  const query = metadata('agent.repository.snapshot.v1', 'snapshot-request', 'snapshot', 'read');
-  const human = metadata('agent.interaction.exchange.v1.repository.publish', 'human', 'human-reply', 'approval');
-  const placement = required => [[[required], [[], { tag: 0, value: null }, { tag: 0, value: null }, 8n << 20n]], 'placement', 'shared', [4, 1]];
-  const task = [1n, 0n, 1, 'Bounded change', 'fixture', base, target, placement(await requirementFor(query)), placement(await requirementFor(human)),
-    ['fixture-model', [{ tag: 1, value: 512 }, { tag: 0, value: null }, { tag: 0, value: null }]], 8, 1, 7n];
-  const initialArgs = encodeValue(schemas.session, [task, 1]);
-  const taskPath = join(area, 'initial.bin'); await writeFile(taskPath, initialArgs);
-  const identity = verifyRuntime(resolve(process.env.AGENT_MOBILITY_RUNTIME)), world = await import(pathToFileURL(identity.entrypoint));
-  const kernel = await world.Kernel.create({ bytes: await readFile(identity.kernelPath), expectedSha256: identity.kernelSha256 });
-  kernel.setLimits({ input: 8 << 20, working: 64 << 20, output: 8 << 20 });
-  const prepared = kernel.prepare(image), session = kernel.start(prepared, initialArgs);
-  const first = world.decodeOutcome(kernel.drive(session, { checkpoint: true }));
-  const programId = Buffer.from((await world.decodeRequest(first.request)).programIdentity).toString('hex');
-  kernel.checkpoint(session, { transfer: true }); kernel.releasePrepared(prepared);
-  const protectedImages = [{ image: hash(image), program: programId }], common = { store, protectedImages,
-    authorizationDigest: '1'.repeat(64), validationPolicyDigest: '2'.repeat(64), requiredProfiles, checkResultSchema: schemaPaths['check-result'] };
+  const image = await readFile(join(root, 'examples/mobile-repository/session.bpi3'));
+  const sessionSchema = decodeSchema(await readFile(join(root, 'examples/mobile-repository/session.bin')));
   let modelCalls = 0, providerFailure;
   const beforeDigest = hash(Buffer.from(correct.replace('.bool => 5,', '.bool => 4,')));
   provider = createServer(async (req, res) => {
     try {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
       const request = JSON.parse(Buffer.concat(chunks)), turn = request.input.filter(item => item.type === 'function_call').length; modelCalls++;
+      assert.deepEqual(request.reasoning, { effort: 'medium', summary: 'auto' });
       const actions = [['edit', { operation: 'replace', path: target, old_digest: beforeDigest, content: correct }], ['check', {}], ['finish', { summary: 'Boolean bound repaired and independently checked.' }]];
       assert(turn < actions.length);
       const [name, args] = turn === 0 && !request.tools.some(tool => tool.name === 'edit')
@@ -106,58 +81,51 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
     } catch (error) { providerFailure = error; res.statusCode = 500; res.end('{}'); }
   });
   await new Promise(r => provider.listen(0, '127.0.0.1', r));
-  const binding = (meta, adapter) => ({ ...meta, adapter });
-  const release = { ...metadata('agent.repository.investigation-release.v1', 'cleanup', 'unit', 'read'), cleanup: true };
-  const cleanupPath = join(area, 'cleanup.bin'); await writeFile(cleanupPath, encodeValue(mobilitySchemas.requirements, [await requirementFor(release)]));
-  const publicationHelper = { path: join(root, 'examples/native/agent-publication-gate'), sha256: hash(await readFile(join(root, 'examples/native/agent-publication-gate'))) };
-  const W = [
-    ...[['snapshot', 'snapshot-request', 'snapshot'], ['read', 'read', 'evidence'], ['read-window', 'read-window', 'read-window-result'], ['prepare', 'candidate-preparation', 'proposal']].map(([op, input, output]) =>
-      binding(metadata(`agent.repository.${op}.v1`, input, output, op === 'prepare' ? 'write' : 'read'), { kind: op === 'prepare' ? 'repository-prepare' : 'repository-query', store, classification: ['shared'] })),
-    binding(metadata('agent.repository.check.v1', 'proposal', 'check-result', 'write'), { kind: 'repository-check', store, sandbox, checkProfile,
-      profile: { owner: 'W', repository: 'fixture', generation: '1', manifest: imported.manifestSha256, profileId: checkProfile.id, profileDigest: qualification.profile.digest, runner: qualification.runner,
-        disclosure: { audience: null, labels: ['shared'] }, allowance: { attempts: 1, request_bytes: 4 << 20, concurrent: 1 } } }),
-    binding(metadata('agent.repository.proposal.v1', 'preparation', 'proposal', 'write'), { kind: 'repository-proposal', ...common,
-      commit: { author: { name: 'Fixture', email: 'fixture@example.invalid' }, committer: { name: 'Fixture', email: 'fixture@example.invalid' }, timestamp: 1791150000, message: 'Checked boolean bound' } }),
-    ...[['agent.repository.publication-current.v1', 'boolean', 'read'], ['agent.repository.publish.v1', 'delivery', 'commit']].map(([op, out, role]) => binding(metadata(op, 'proposal', out, role),
-      { kind: 'repository-publication', ...common, helper: publicationHelper })),
-    binding(metadata('agent.model.invoke.v4', 'model-request', 'model-result', 'model'), { kind: 'openai-responses-replay', owner: 'W', mode: 'loopback-fixture',
-      endpoint: `http://127.0.0.1:${provider.address().port}/v1/responses`, credentialEnv: null, model: 'fixture-model', parameters: { maxOutputTokens: 512, temperature: null, reasoning: null }, timeoutMs: 10000,
-      maximumRequestBytes: 2 << 20, maximumResponseBytes: 2 << 20, disclosure: { audience: null, policyRevision: 'p1', labels: ['shared'] }, allowance: { attempts: 3, request_bytes: 16 << 20, output_tokens: 3072, concurrent: 1 } }),
-    binding(release, { kind: 'repository-release' }),
-  ];
-  const U = [binding(metadata('agent.approval.issue.v1.repository.publish', 'proposal', 'identifier', 'approval'), { kind: 'repository-approval-issuer' }),
-    binding(human, { kind: 'repository-approval-human', revision: 'approval-1', principalIds: { user: '7' } }),
-    binding(metadata('agent.repository.review.v1', 'review', 'review-answer', 'interaction'), { kind: 'repository-review-human', revision: 'review-1' }),
-    binding(metadata('agent.repository.next-task.v1', 'next-task', 'next-task-answer', 'interaction'), { kind: 'repository-next-task-human', revision: 'next-1', modes: ['inspect', 'propose', 'publish'] }),
-    binding(release, { kind: 'repository-release' })];
+  const providerProfile = { kind: 'openai-responses-replay', owner: 'W', mode: 'loopback-fixture',
+    endpoint: `http://127.0.0.1:${provider.address().port}/v1/responses`, credentialEnv: null, model: 'fixture-model',
+    parameters: { maxOutputTokens: 512, temperature: null, reasoning: { effort: 'medium', summary: 'auto' } }, timeoutMs: 10000,
+    maximumRequestBytes: 2 << 20, maximumResponseBytes: 2 << 20, disclosure: { audience: null, policyRevision: 'p1', labels: ['shared'] },
+    allowance: { attempts: 3, request_bytes: 16 << 20, output_tokens: 3072, concurrent: 1 } };
   const pairs = Object.fromEntries(['issuer', 'U', 'W'].map(name => [name, generateKeyPairSync('ed25519')]));
   for (const [name, pair] of Object.entries(pairs)) for (const [kind, type] of [['public', 'spki'], ['private', 'pkcs8']])
     await writeFile(join(area, `${name}.${kind}.pem`), pair[kind + 'Key'].export({ type, format: 'pem' }), { mode: 0o600 });
-  const tls = await certificates(area), limits = { maximum_moves: 4, maximum_image_bytes: 8 << 20, maximum_outcome_bytes: 8 << 20 };
-  const configs = {};
-  for (const host of ['U', 'W']) {
-    const cert = host === 'U' ? 'A' : 'B', peer = host === 'U' ? 'W' : 'U';
-    configs[host] = { format: 'agent-mobility-deployment/v2', hostId: host, trustDomain: 'fixture', revision: 'p1', worldRuntime: resolve(process.env.AGENT_MOBILITY_RUNTIME),
-      directory: join(area, host + '-journal'), deploymentGeneration: '1', execution: host === 'U' ? 'browser' : 'node',
-      keys: Object.keys(pairs).map(owner => ({ keyId: owner, owner, status: 'active', publicKey: join(area, `${owner}.public.pem`) })),
-      signer: { keyId: host, privateKey: join(area, `${host}.private.pem`), policyRevision: 'p1' },
-      deployments: [{ imageDigest: hash(image), programId, tenant: 'tenant', principals: ['user'], issuers: ['issuer'], hosts: ['U', 'W'], classification: ['shared'],
-        cleanup: cleanupPath, controlPeers: ['U', 'W'], limits, exportPolicies: { shared: ['U', 'W'] } }],
-      bindings: host === 'U' ? U : W, labelDestinations: { shared: ['U', 'W'] }, revoked: [],
-      peers: [{ hostId: peer, url: 'https://127.0.0.1:1', servername: 'localhost', fingerprint256: tls[peer === 'U' ? 'A' : 'B'].fingerprint256 }],
-      tls: { key: join(area, 'tls', cert + '.key'), cert: join(area, 'tls', cert + '.pem'), ca: join(area, 'tls/ca.pem'), host: '127.0.0.1', port: 0 },
-      catalogue: { issuer: { id: host === 'U' ? 'issuer' : 'W', keyId: host === 'U' ? 'issuer' : 'W', privateKey: join(area, `${host === 'U' ? 'issuer' : 'W'}.private.pem`) }, entries: [] } };
+  const tls = await certificates(area);
+  const hostInput = (host, cert) => ({ hostId: host, keyId: host, publicKey: join(area, `${host}.public.pem`), privateKey: join(area, `${host}.private.pem`),
+    installation: root, worldRuntime: resolve(process.env.AGENT_MOBILITY_RUNTIME), directory: join(area, host + '-journal'), deploymentGeneration: '1',
+    url: 'https://127.0.0.1:1', servername: 'localhost', fingerprint256: tls[cert].fingerprint256,
+    tls: { key: join(area, 'tls', cert + '.key'), cert: join(area, 'tls', cert + '.pem'), ca: join(area, 'tls/ca.pem'), host: '127.0.0.1', port: 0 },
+    ...(host === 'U' ? { browser: { directory: join(area, 'sessions'), audience: 'human', host: '127.0.0.1', port: 0, publicOrigin: null } } : {}) });
+  const setup = { ...template, trustDomain: 'fixture', revision: 'p1', label: 'shared', store,
+    check: join(area, 'check.json'), qualification: await json(join(area, 'qualification.json'), qualification),
+    issuer: { id: 'issuer', keyId: 'issuer', publicKey: join(area, 'issuer.public.pem'), privateKey: join(area, 'issuer.private.pem') },
+    principal: { tenant: 'tenant', principal: 'user', taskPrincipal: '7' }, origin: hostInput('U', 'A'), workspace: hostInput('W', 'B'),
+    task: { path: target, steps: 8, checks: 1, maximumTasks: 1 }, provider: { enabled: true, profile: providerProfile },
+    commit: { author: { name: 'Fixture', email: 'fixture@example.invalid' }, committer: { name: 'Fixture', email: 'fixture@example.invalid' }, timestamp: 1791150000, message: 'Checked boolean bound' } };
+  const setupPath = await json(join(area, 'setup.json'), setup), generated = command('configure-repository', setupPath, join(area, 'configured'));
+  assert.match(generated.programId, /^[a-f0-9]{64}$/); assert.equal(generated.image, hash(image)); assert.equal(generated.tasksEnabled, true);
+  assert.throws(() => command('configure-repository', setupPath, join(area, 'configured')));
+  const generatedTask = decodeValue(sessionSchema, await readFile(join(area, 'configured/initial.bin')));
+  assert.deepEqual(generatedTask[0].slice(4, 7), ['fixture', base, target]); assert.equal(generatedTask[0][2], 1);
+  const disabled = command('configure-repository', await json(join(area, 'disabled.json'), { ...setup, provider: { enabled: false, profile: null } }), join(area, 'disabled'));
+  assert.equal(disabled.tasksEnabled, false);
+  assert.equal(JSON.parse(await readFile(disabled.origin)).catalogue.entries.length, 0);
+  assert.equal(JSON.parse(await readFile(disabled.workspace)).bindings.some(row => row.adapter.kind === 'openai-responses-replay'), false);
+  for (const [name, changed, reason] of [
+    ['scope', { ...setup, task: { ...setup.task, path: 'not-granted.zig' } }, 'RepositorySetupScope'],
+    ['limits', { ...setup, task: { ...setup.task, checks: 17 } }, 'RepositorySetupLimits'],
+    ['principal', { ...setup, principal: { ...setup.principal, taskPrincipal: 7 } }, 'RepositorySetupPrincipal'],
+  ]) {
+    const target = join(area, 'rejected-' + name), config = await json(join(area, name + '.json'), changed);
+    assert.throws(() => command('configure-repository', config, target), error => error.status === 1 && error.stderr.trim() === reason);
+    await assert.rejects(stat(target), { code: 'ENOENT' });
   }
-  configs.U.browser = { directory: join(area, 'sessions'), audience: 'human', host: '127.0.0.1', port: 0, publicOrigin: null };
-  configs.U.catalogue.entries.push({ id: 'repository', title: 'Qualified repository', image: imagePath, programId, taskSchema: schemaPaths.session, reportSchema: schemaPaths.report, initialTask: taskPath,
-    modes: ['inspect', 'propose', 'publish'], principals: [{ tenant: 'tenant', principal: 'user', taskPrincipal: '7' }],
-    scope: { read: [target], write: [target], checks: [checkProfile.id], target: 'refs/heads/agent/result' }, profile: checkProfile.id, presentation: { audience: 'human', labels: ['shared'], revision: 'p1' } });
-  const configU = await json(join(area, 'U.json'), configs.U), configW = join(area, 'W.json');
+  const configU = generated.origin, configW = generated.workspace;
+  const workspaceConfig = JSON.parse(await readFile(configW));
   command('init', configU); assert.equal(command('tasks', configU, 'user', 'tenant')[0].defaultMode, 'propose');
   const runs = ['inspect', 'propose', 'publish'].map(mode => ({ mode,
     run: command('task', configU, 'user', 'tenant', 'repository', mode, 'Investigate and repair the boolean JSON-size bound within the selected mode.') }));
   origin = await openDeployment(configU); const service = await origin.serve();
-  configs.W.peers[0].url = service.url; await json(configW, configs.W); command('init', configW);
+  workspaceConfig.peers[0].url = service.url; await json(configW, workspaceConfig); command('init', configW);
   console.log('deployment: both v2 configurations initialized');
   let stdout = '', stderr = '';
   child = spawn(process.execPath, [cli, 'serve', configW], { cwd: root, env: cliEnv, stdio: ['ignore', 'pipe', 'pipe'] }); childExit = once(child, 'exit');
@@ -188,6 +156,10 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
       await new Promise(r => setTimeout(r, 50));
     }
     assert.equal(origin.custodian.status(run.run_id).custody, 'TERMINAL', stderr + '\n' + await page.locator('#request').textContent());
+    const exported = command('export', configU, 'user', 'tenant', run.run_id);
+    assert.equal(exported.format, 'agent.repository.export/v1'); assert.equal(exported.run_id, run.run_id);
+    assert.equal(exported.kind, 'completed'); assert.equal(exported.report[2], ['inspect', 'propose', 'publish'].indexOf(mode));
+    assert.throws(() => command('export', configU, 'someone-else', 'tenant', run.run_id));
     if (mode !== 'publish') assert.equal(execFileSync(git, ['--git-dir=' + join(directory, 'objects.git'), 'rev-parse', 'refs/heads/agent/result'], { env: gitEnv, encoding: 'utf8' }).trim(), base);
   }
   assert.equal(approvals, 1); assert.equal(modelCalls, 7);

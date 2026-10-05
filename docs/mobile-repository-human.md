@@ -132,10 +132,12 @@ The service never obtains issuer authority from a browser request.
 }
 ```
 
-The operator provisions the typed initial task with its exact repository/base,
-requirements, check/model profile and allowances. Scope descriptions must describe
-those operator grants; enforcement still belongs to the snapshot/check/publication
-owners. The packaged zero-work sample is not an executable authorization grant.
+The installed `configure-repository` command constructs the typed initial task
+from the provisioned repository, installed contracts and explicit operator grants;
+see [operator commands](mobile-repository-operations.md). It derives the scope
+description from the managed store. Enforcement still belongs to the
+snapshot/check/publication owners. The packaged zero-work sample is not an
+executable authorization grant.
 All file paths resolve relative to the configuration file. The session input is
 `{ task, maximum_tasks }`, with one to sixteen tasks. The authored program ignores
 the template's generation, starts at 1, and increments it after each completed

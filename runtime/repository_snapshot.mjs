@@ -591,5 +591,7 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
   }
   await current();
   return Object.freeze({ snapshot, list, read, search, prepare, verifyCandidate, checkInputs, current,
+    describe: () => structuredClone({ repository, generation, base: metadata.base, managedRef: metadata.managedRef,
+      readPaths: metadata.readPaths, writablePaths: metadata.writablePaths, protectedPaths: metadata.protectedPaths, limits: metadata.limits }),
     preparePublication, verifyPublication, publishManaged, reconcilePublication });
 }

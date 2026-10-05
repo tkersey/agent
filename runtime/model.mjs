@@ -442,6 +442,23 @@ export function normalizeOpenAIResponses(body, limits, tools = []) {
   return encodeOutput(items, normalizedOutputDigest);
 }
 
+const reasoningEfforts = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+const reasoningSummaries = ["auto", "concise", "detailed"];
+// Local configuration authoring uses the same parameter vocabulary as decoding.
+export function modelParametersValue(parameters) {
+  const optional = value => value === null ? { tag: 0, value: null } : { tag: 1, value };
+  const choice = (value, values) => {
+    if (value === null) return optional(null);
+    const index = values.indexOf(value); if (index < 0) throw new Error('ModelParameters'); return optional(index);
+  };
+  if (!parameters || Object.keys(parameters).sort().join(',') !== 'maxOutputTokens,reasoning,temperature' ||
+    !(parameters.maxOutputTokens === null || Number.isInteger(parameters.maxOutputTokens) && parameters.maxOutputTokens > 0 && parameters.maxOutputTokens <= 0xffffffff) ||
+    !(parameters.temperature === null || typeof parameters.temperature === 'string')) throw new Error('ModelParameters');
+  const reasoning = parameters.reasoning;
+  if (reasoning !== null && (!reasoning || Object.keys(reasoning).sort().join(',') !== 'effort,summary')) throw new Error('ModelParameters');
+  return [optional(parameters.maxOutputTokens), optional(parameters.temperature), optional(reasoning === null ? null : [choice(reasoning.effort, reasoningEfforts), choice(reasoning.summary, reasoningSummaries)])];
+}
+
 function decodeParameters(bytes, cursor) {
   const maxOutputTokens = decodeOptional(bytes, cursor, () => readU32(bytes, cursor));
   const temperature = decodeOptional(bytes, cursor, () => decodeText(bytes, cursor));
@@ -449,12 +466,12 @@ function decodeParameters(bytes, cursor) {
     effort: decodeOptional(bytes, cursor, () => decodeEnum(
       bytes,
       cursor,
-      ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+      reasoningEfforts,
     )),
     summary: decodeOptional(bytes, cursor, () => decodeEnum(
       bytes,
       cursor,
-      ["auto", "concise", "detailed"],
+      reasoningSummaries,
     )),
   }));
   return Object.freeze({ maxOutputTokens, temperature, reasoning });

@@ -121,5 +121,20 @@ export class HostPolicy {
     }
     requireThat(false, revoked ? 'PrincipalRevoked' : 'LeafBindingDenied');
   }
+  publicationRecovery(run, request) {
+    // Revocation forbids new effects, but cannot erase the result of an already
+    // admitted write. This selector exposes only the read-only reconciler.
+    this.authorizeRun(run, { cleanup: true });
+    requireThat(request.semanticIdentity === 'agent.repository.publish.v1', 'PublicationRecoveryDenied');
+    const payload = decodeValue(decodeSchema(request.payloadSchema), request.payload);
+    const binding = this.#bindings.find(candidate => candidate.publication === true &&
+      candidate.operation === request.semanticIdentity && equal(candidate.payloadSchema, request.payloadSchema) &&
+      equal(candidate.resultSchema, request.resumeSchema) && candidate.tenants.includes(run.tenant_ref) &&
+      candidate.principals.includes(run.principal_ref) && typeof candidate.reconcile === 'function' &&
+      run.classification.every(label => candidate.allowedStateLabels.includes(label)) &&
+      candidate.classification.every(label => this.#exports[label]?.includes(this.#host)));
+    requireThat(binding, 'PublicationRecoveryDenied');
+    return { binding, payload };
+  }
   encodeResult(binding, value) { return encodeValue(decodeSchema(binding.resultSchema), value); }
 }

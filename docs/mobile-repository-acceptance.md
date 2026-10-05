@@ -148,6 +148,28 @@ not repeated, and cancellation fences late replies without refunding attempts.
 Complete authored model/investigation/revision composition and logical work
 allowances are still open.
 
+## Managed publication (W5, partial)
+
+The [publication boundary](mobile-repository-publication.md) prepares exact
+commits, verifies them without object writes, records intent in the existing
+occurrence, and acquires receipts with replies. A native process gate becomes
+Git while retaining its lock; actual stopped-Git/parent-death tests prove that
+recovery cannot race that surviving writer. Saved exact intents explain every
+managed ancestor, including historical publication below a later head.
+
+The publication adapter rechecks policy under the gate and requires exact
+journal-acquired checks with current profile/runner identities. The custodian
+uses a read-only reconciler for uncertain publication; it never redispatches the
+write. Cancellation before admission, late cancellation, intent transaction
+faults, stale requests, missing history and branch rewind have targeted coverage.
+
+The gate/check target passed 3/3 build steps and 16 Node tests; the final adapter
+receipt check passed 5/5 tests. Snapshot tests passed 8/8, and inherited custody
+journal/integration checks passed 62/62 build steps. These are W5 seam checks on
+the current working source, not the required end-to-end protected application.
+Authored approval integration, the full proposal UI, installed helper acquisition,
+and full crash/approval witnesses remain open.
+
 ## Remaining acceptance
 
 W2–W8 remain open: complete repository/check deployment integration;

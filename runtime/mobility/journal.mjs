@@ -399,10 +399,55 @@ export class CustodyJournal {
   markUnknown(runId, attemptId) {
     return this.#transaction('unknown', () => { const run = this.run(runId), next = core.unknown(run, this.#occurrence(run), attemptId); this.#saveOccurrence(next); return next; });
   }
+  // Called only by the admitted repository publication leaf while holding its
+  // process gate. This transaction is the local cancellation ordering point;
+  // it stores the exact intent before that gate holder becomes Git.
+  admitPublication(runId, wanted, attemptId, proposal, policyRevision) {
+    return this.#transaction('publication-intent', () => {
+      const run = this.run(runId), occurrence = this.#occurrence(run);
+      core.active(run, wanted); core.current(run, occurrence);
+      requireThat(run.cancel_requested === null, 'CancellationPending');
+      requireThat(occurrence.operation === 'agent.repository.publish.v1' && occurrence.status === 'DISPATCHING' &&
+        occurrence.attempt_id === attemptId && occurrence.publication_intent_digest === undefined && occurrence.cancel_safe !== true, 'PublicationOccurrenceMismatch');
+      const binding = proposal?.core?.binding;
+      requireThat(binding?.run === runId && binding.principal === run.principal_ref && binding.tenant === run.tenant_ref &&
+        binding.policyRevision === policyRevision && policyRevision === run.policy_revision, 'PublicationAuthorityMismatch');
+      const { digest: proposalDigest, ...body } = proposal;
+      requireThat(hash(canonical(body, 2 << 20)) === proposalDigest, 'PublicationProposalMismatch');
+      const intent = { format: 'agent.repository.publication-intent/v1', proposal,
+        admission: { run_id: runId, occurrence_id: occurrence.id, attempt_id: attemptId, request_digest: run.request_digest,
+          registration_digest: run.registration_digest, source_version: core.version(run), policy_revision: policyRevision } };
+      const bytes = canonical(intent, 2 << 20), value = this.#artifact(run.tenant_ref, bytes);
+      this.#saveOccurrence({ ...occurrence, publication_intent_digest: value });
+      return { ...intent.admission, intent_digest: value };
+    });
+  }
+  acquiredReplies(runId, operation) {
+    const run = this.run(runId); requireThat(run, 'UnknownRun');
+    return this.#all('SELECT body FROM occurrences WHERE run_id=?', runId).map(row => readJson(row.body))
+      .filter(row => row.operation === operation && row.reply_digest)
+      .map(row => this.artifact(run.tenant_ref, row.reply_digest));
+  }
+  publicationRecords(tenant, repository, generation, managedRef) {
+    // Occurrences already have a tenant-wide record quota. Do not create a
+    // second workflow database or infer successful publication from a reflog.
+    const rows = this.#all('SELECT occurrences.body FROM occurrences JOIN runs USING(run_id) WHERE tenant=?', tenant);
+    const result = [];
+    for (const row of rows) {
+      const occurrence = readJson(row.body);
+      if (!occurrence.publication_intent_digest) continue;
+      const intent = parse(this.artifact(tenant, occurrence.publication_intent_digest), { maximum: 2 << 20 });
+      const target = intent.proposal.core.destination;
+      if (target.repository !== repository || target.generation !== generation || target.managedRef !== managedRef) continue;
+      result.push({ intent, intent_digest: occurrence.publication_intent_digest,
+        receipt: occurrence.publication_receipt_digest ? parse(this.artifact(tenant, occurrence.publication_receipt_digest), { maximum: 2 << 20 }) : null });
+    }
+    return result;
+  }
   abandonLeaf(runId, attemptId) {
     return this.#transaction('abandon', () => { const run = this.run(runId), next = core.abandoned(run, this.#occurrence(run), attemptId); this.#saveOccurrence(next); return next; });
   }
-  recordReply(runId, attemptId, reply, classification, reconciliationRef = null, { placementEvidence = null, dispatchVersion = null } = {}) {
+  recordReply(runId, attemptId, reply, classification, reconciliationRef = null, { placementEvidence = null, dispatchVersion = null, publicationReceipt = null } = {}) {
     return this.#transaction('acquire', () => {
       const run = this.run(runId);
       if (dispatchVersion !== null) {
@@ -412,6 +457,16 @@ export class CustodyJournal {
         requireThat(run.cancel_requested === null, 'CancellationPending');
       }
       const next = core.acquired(run, this.#occurrence(run), attemptId, hash(reply), classification, reconciliationRef);
+      if (next.occurrence.publication_intent_digest) {
+        const intent = parse(this.artifact(run.tenant_ref, next.occurrence.publication_intent_digest), { maximum: 2 << 20 });
+        requireThat(publicationReceipt && ['Published', 'NotApplied', 'Conflict'].includes(publicationReceipt.status) &&
+          publicationReceipt.proposal === intent.proposal.digest &&
+          (publicationReceipt.status === 'Published' ? publicationReceipt.commit === intent.proposal.commitOid : publicationReceipt.commit === null) &&
+          hash(canonical(publicationReceipt.admission)) === hash(canonical({ ...intent.admission, intent_digest: next.occurrence.publication_intent_digest })), 'PublicationReceiptMismatch');
+        const receiptBytes = canonical(publicationReceipt, 2 << 20), receiptDigest = hash(receiptBytes);
+        requireThat(next.occurrence.publication_receipt_digest === undefined || next.occurrence.publication_receipt_digest === receiptDigest, 'PublicationReceiptConflict');
+        next.occurrence = { ...next.occurrence, publication_receipt_digest: this.#artifact(run.tenant_ref, receiptBytes) };
+      } else requireThat(publicationReceipt === null, 'PublicationIntentMissing');
       if (placementEvidence !== null) {
         requireThat(next.occurrence.operation === 'agent.mobility.resolve.v1', 'InvalidPlacementEvidence');
         next.run = { ...next.run, placement_evidence: placementEvidence };
@@ -487,6 +542,13 @@ export class CustodyJournal {
         const run = readJson(row.body);
         for (const key of ['image_digest', 'outcome_digest', 'reply_digest', 'registration_digest', 'predecessor_receipt_digest']) retain(run[key]);
         retain(this.#occurrence(run)?.pending_digest);
+      }
+      for (const row of this.#all('SELECT occurrences.body FROM occurrences JOIN runs USING(run_id) WHERE tenant=?', tenant)) {
+        const occurrence = readJson(row.body);
+        // Publication ancestry outlives the originating run. Check results are
+        // authority evidence, including while that run is at another host.
+        retain(occurrence.publication_intent_digest); retain(occurrence.publication_receipt_digest);
+        if (occurrence.operation === 'agent.repository.check.v1') retain(occurrence.reply_digest);
       }
       for (const row of this.#all('SELECT offer, receipt FROM transfers WHERE tenant=?', tenant)) {
         const offer = parse(row.offer); retain(offer.run_registration_digest); retain(offer.predecessor_receipt_digest);

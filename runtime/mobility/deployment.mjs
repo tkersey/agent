@@ -11,6 +11,8 @@ import { WorldAdmission } from './admission.mjs';
 import { CustodyJournal } from './journal.mjs';
 import { Custodian } from './custodian.mjs';
 import { modelBinding } from './model.mjs';
+import { repositoryPublicationBinding } from './repository_publication.mjs';
+import { openRepositorySnapshotStore } from '../repository_snapshot.mjs';
 import { BrowserSessions } from './sessions.mjs';
 import { serveBrowser } from './browser.mjs';
 import { HostPolicy } from './policy.mjs';
@@ -35,6 +37,7 @@ export async function openDeployment(configPath, { create = false } = {}) {
   }));
   requireThat(keys.size === config.keys.length, 'DuplicateKey');
   const statistics = new Map();
+  let publicationServices;
   const bindings = await Promise.all(config.bindings.map(async entry => {
     const { adapter, ...metadata } = entry;
     const binding = { ...metadata, payloadSchema: bytes(metadata.payloadSchema), resultSchema: bytes(metadata.resultSchema) };
@@ -42,6 +45,16 @@ export async function openDeployment(configPath, { create = false } = {}) {
     if (adapter.kind === 'openai-responses-replay') {
       const leaf = modelBinding(binding, adapter, config.hostId), handle = leaf.handle;
       leaf.handle = context => { counts.calls++; return handle(context); };
+      return leaf;
+    }
+    if (adapter.kind === 'repository-publication') {
+      closed(adapter, ['kind', 'store', 'helper', 'protectedImages', 'authorizationDigest', 'validationPolicyDigest', 'requiredProfiles', 'checkResultSchema']);
+      closed(adapter.store, ['directory', 'gitExecutable', 'repository', 'generation', 'manifestSha256']);
+      closed(adapter.helper, ['path', 'sha256']);
+      const store = await openRepositorySnapshotStore({ ...adapter.store, directory: path(adapter.store.directory), gitExecutable: path(adapter.store.gitExecutable) });
+      const leaf = repositoryPublicationBinding(binding, { ...adapter, store, helper: { ...adapter.helper, path: path(adapter.helper.path) },
+        checkResultSchema: bytes(adapter.checkResultSchema), services: () => publicationServices });
+      const handle = leaf.handle; leaf.handle = context => { counts.calls++; return handle(context); };
       return leaf;
     }
     if (adapter.kind === 'fixed-reply') {
@@ -80,6 +93,7 @@ export async function openDeployment(configPath, { create = false } = {}) {
   const policy = new HostPolicy({ ...config, runtimeProfile: identity.kernelSha256, deployments, bindings, revoked: new Set(config.revoked) });
   const journal = new CustodyJournal({ directory: path(config.directory), hostId: config.hostId, deploymentGeneration: config.deploymentGeneration, keys,
     signer: { ...config.signer, privateKey: createPrivateKey(bytes(config.signer.privateKey)) }, admission, create });
+  publicationServices = Object.freeze({ journal, policy });
   const peers = new Map(), clients = [];
   try {
     const tls = { key: bytes(config.tls.key), cert: bytes(config.tls.cert), ca: bytes(config.tls.ca) };

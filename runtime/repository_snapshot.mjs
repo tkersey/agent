@@ -7,6 +7,7 @@ import { lstat, mkdir, mkdtemp, open, realpath, rm, writeFile } from 'node:fs/pr
 import { isAbsolute, join } from 'node:path';
 import { admitDocumentPath } from './document.mjs';
 import { canonical } from './mobility/canonical.mjs';
+import { withPublicationGate } from './repository_publication_gate.mjs';
 
 const utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -22,6 +23,13 @@ const text = (value, maximum) => typeof value === 'string' && value.isWellFormed
 const identity = stat => [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].map(String).join(':');
 const modes = new Map([['40000', 'tree'], ['100644', 'blob'], ['100755', 'blob'], ['120000', 'blob'], ['160000', 'commit']]);
 const defaults = Object.freeze({ entries: 16384, bytes: 128 << 20, blobBytes: 16 << 20, commandMs: 30000 });
+const gitArgs = (root, args) => ['--no-replace-objects',
+  '-c', 'core.hooksPath=/dev/null', '-c', 'core.attributesFile=/dev/null',
+  '-c', 'credential.helper=', '-c', 'protocol.allow=never', '-c', 'gc.auto=0',
+  '-c', 'maintenance.auto=false', ...(root ? [`--git-dir=${root}`] : []), ...args];
+const gitEnv = () => ({ PATH: '/usr/bin:/bin', LC_ALL: 'C', TZ: 'UTC', GIT_CONFIG_NOSYSTEM: '1',
+  GIT_CONFIG_SYSTEM: '/dev/null', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0',
+  GIT_NO_LAZY_FETCH: '1', GIT_NO_REPLACE_OBJECTS: '1', GIT_OPTIONAL_LOCKS: '0' });
 
 function path(value) {
   admitDocumentPath(value);
@@ -102,13 +110,8 @@ async function gitExecutable(filename) {
 async function command(git, root, args, { input = Buffer.alloc(0), maximum = 4 << 20, timeout = 30000, allowMissing = false } = {}) {
   await git.unchanged();
   return new Promise((resolve, reject) => {
-    const child = spawn(git.executable, ['--no-replace-objects',
-      '-c', 'core.hooksPath=/dev/null', '-c', 'core.attributesFile=/dev/null',
-      '-c', 'credential.helper=', '-c', 'protocol.allow=never', '-c', 'gc.auto=0',
-      '-c', 'maintenance.auto=false', ...(root ? [`--git-dir=${root}`] : []), ...args], {
-      env: { PATH: '/usr/bin:/bin', LC_ALL: 'C', TZ: 'UTC', GIT_CONFIG_NOSYSTEM: '1',
-        GIT_CONFIG_SYSTEM: '/dev/null', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0',
-        GIT_NO_LAZY_FETCH: '1', GIT_NO_REPLACE_OBJECTS: '1', GIT_OPTIONAL_LOCKS: '0' },
+    const child = spawn(git.executable, gitArgs(root, args), {
+      env: gitEnv(),
       stdio: ['pipe', 'pipe', 'pipe'], detached: true,
     });
     const chunks = []; let count = 0, stopped = null;
@@ -184,14 +187,15 @@ async function objects(git, root, format, limits) {
     rows.sort((a, b) => Buffer.compare(Buffer.from(a[0]), Buffer.from(b[0])));
     return { entries, rows, names, bytes: budget.bytes };
   }
-  async function saveTree(entries) {
+  async function saveTree(entries, persist = true) {
     const rows = [...entries].sort(([an, a], [bn, b]) => Buffer.compare(Buffer.from(an + (a.children ? '/' : '')), Buffer.from(bn + (b.children ? '/' : ''))));
     const bytes = [];
     for (const [name, entry] of rows) {
-      const id = entry.children ? await saveTree(entry.children) : entry.oid;
+      const id = entry.children ? await saveTree(entry.children, persist) : entry.oid;
       bytes.push(Buffer.from(`${entry.mode} ${name}\0`), Buffer.from(id, 'hex'));
     }
-    return write('tree', Buffer.concat(bytes));
+    const content = Buffer.concat(bytes);
+    return persist ? write('tree', content) : objectId(format, 'tree', content);
   }
   return { read, write, tree, saveTree };
 }
@@ -233,9 +237,16 @@ export async function provisionRepository({ directory, sourceGitDirectory, base,
     require(await output.write('commit', commit) === base, 'RepositoryObjectIntegrity');
     await writeFile(join(destination, 'shallow'), `${base}\n`, { flag: 'wx', mode: 0o600 });
     await command(git, destination, ['update-ref', '--no-deref', managedRef, base, '0'.repeat(base.length)]);
+    const gate = await open(join(directory, 'publication.lock'), 'wx', 0o600);
+    let publicationLock;
+    try {
+      await gate.sync();
+      const stat = await gate.stat({ bigint: true });
+      publicationLock = { dev: String(stat.dev), ino: String(stat.ino) };
+    } finally { await gate.close(); }
     const metadata = { format: 'agent-managed-repository/v1', repository, generation, objectFormat: format, base, managedRef,
       readPaths: reads, writablePaths: writes, protectedPaths: protectedSet, limits, gitSha256: git.sha256,
-      gitConfigSha256: hash(await readRegular(join(destination, 'config'), 65536)) };
+      gitConfigSha256: hash(await readRegular(join(destination, 'config'), 65536)), publicationLock };
     const fd = await open(join(directory, 'repository.json'), 'wx', 0o600);
     try { await fd.writeFile(encoded(metadata)); await fd.sync(); } finally { await fd.close(); }
     return { repository, generation, base, managedRef, manifestSha256: hash(encoded(metadata)) };
@@ -333,7 +344,7 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
     require(end > offset || offset === bytes.length, 'RepositoryReadBounds');
     return { snapshot: selected.manifest, path: name, digest: row[4], content: utf8.decode(bytes.subarray(offset, end)), offset, nextOffset: end, bytes: bytes.length, truncated: offset !== 0 || end !== bytes.length };
   }
-  async function prepare(selected, edits) {
+  async function prepare(selected, edits, persist = true) {
     const view = await admitSnapshot(selected);
     require(Array.isArray(edits) && edits.length > 0 && edits.length <= 4, 'RepositoryEdits');
     require(new Set(edits.map(edit => edit?.path)).size === edits.length, 'RepositoryDuplicateEdit');
@@ -371,9 +382,12 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
           if (parent.get(part).children.size) break;
           parent.delete(part);
         }
-      } else entries.set(leaf, { mode: '100644', oid: await object.write('blob', Buffer.from(edit.content)) });
+      } else {
+        const bytes = Buffer.from(edit.content);
+        entries.set(leaf, { mode: '100644', oid: persist ? await object.write('blob', bytes) : objectId(metadata.objectFormat, 'blob', bytes) });
+      }
     }
-    const tree = await object.saveTree(view.entries), result = await object.tree(tree);
+    const tree = await object.saveTree(view.entries, persist), result = await object.tree(tree);
     const before = new Map(view.rows.map(row => [row[0], row])), after = new Map(result.rows.map(row => [row[0], row]));
     const changed = [...new Set([...before.keys(), ...after.keys()])].filter(name => !same(before.get(name) ?? null, after.get(name) ?? null)).sort();
     require(same(changed, canonicalEdits.map(edit => edit.path).sort()), 'RepositoryTreeDelta');
@@ -415,7 +429,7 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
     require(candidate && Array.isArray(candidate.edits), 'RepositoryCandidate');
     const rebuilt = await prepare(candidate.snapshot, candidate.edits.map(edit => ({
       operation: edit.operation, path: edit.path, oldDigest: edit.oldDigest, oldMode: edit.oldMode, content: edit.content,
-    })));
+    })), false);
     require(same(candidate, rebuilt), 'RepositoryCandidateMismatch');
     return rebuilt;
   }
@@ -441,6 +455,115 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
     }
     return { snapshot: selected, candidate: candidate?.id ?? null, tree: candidate?.tree ?? selected.tree, files };
   }
+  function publicationCore(candidate, binding, validation, commit) {
+    const fields = (value, names) => value && same(Object.keys(value).sort(), [...names].sort());
+    require(fields(binding, ['run', 'task', 'generation', 'principal', 'tenant', 'intent', 'policyRevision', 'authorizationDigest', 'validationPolicyDigest']), 'RepositoryPublicationBinding');
+    for (const [name, value] of Object.entries(binding)) require(text(value, 128) && value.length > 0 &&
+      (name.endsWith('Digest') ? /^[a-f0-9]{64}$/.test(value) : !/[\x00-\x1f\x7f]/u.test(value)), 'RepositoryPublicationBinding');
+    require(/^[a-f0-9]{64}$/.test(binding.intent), 'RepositoryPublicationIntent');
+    require(fields(commit, ['author', 'committer', 'timestamp', 'message']), 'RepositoryCommitMetadata');
+    for (const person of [commit.author, commit.committer]) require(fields(person, ['name', 'email']) &&
+      text(person.name, 128) && person.name.trim() === person.name && person.name.length > 0 &&
+      text(person.email, 254) && /^[^\s<>@]+@[^\s<>@]+$/.test(person.email) &&
+      !/[<>\x00-\x1f\x7f]/u.test(person.name), 'RepositoryCommitMetadata');
+    require(Number.isSafeInteger(commit.timestamp) && commit.timestamp >= 0 && commit.timestamp <= 253402300799 &&
+      text(commit.message, 4096) && commit.message.length > 0 && !commit.message.includes('\0'), 'RepositoryCommitMetadata');
+    require(Array.isArray(validation) && validation.length > 0 && validation.length <= 16 &&
+      new Set(validation.map(row => row.profile)).size === validation.length, 'RepositoryPublicationValidation');
+    for (const record of validation) {
+      const { id, ...body } = record;
+      require(record.format === 'agent.repository.check/v1' && digest(body) === id && record.status === 'Passed' &&
+        record.candidate === candidate.id && record.tree === candidate.tree && same(record.snapshot, candidate.snapshot) &&
+        same(record.completedChecks, [record.profile]), 'RepositoryPublicationValidation');
+    }
+    return { format: 'agent.repository.proposal-core/v1', candidate, binding, validation,
+      destination: { repository, generation, managedRef: metadata.managedRef, expectedBase: candidate.snapshot.base }, commit };
+  }
+  function publicationCommit(core, coreDigest) {
+    const { commit, candidate, binding } = core;
+    const who = person => `${person.name} <${person.email}> ${commit.timestamp} +0000`;
+    return Buffer.from(`tree ${candidate.tree}\nparent ${candidate.snapshot.base}\nauthor ${who(commit.author)}\ncommitter ${who(commit.committer)}\nagent-proposal-core ${coreDigest}\nagent-publication-intent ${binding.intent}\n\n${commit.message}\n`);
+  }
+  // Preparation precedes protected approval. This constructs immutable data;
+  // neither an OID nor a self-consistent digest grants publication authority.
+  async function preparePublication(input) {
+    const { candidate, binding, validation, commit } = structuredClone(input);
+    await verifyCandidate(candidate);
+    const core = publicationCore(candidate, binding, validation, commit), coreDigest = digest(core);
+    const bytes = publicationCommit(core, coreDigest), commitOid = await object.write('commit', bytes);
+    const proposal = { core, coreDigest, commitOid, commitSha256: hash(bytes) };
+    return { ...proposal, digest: digest(proposal) };
+  }
+  async function verifyPublication(input) {
+    const proposal = structuredClone(input);
+    require(proposal?.core?.candidate, 'RepositoryPublicationProposal');
+    const { candidate, binding, validation, commit } = proposal.core;
+    await verifyCandidate(candidate);
+    const core = publicationCore(candidate, binding, validation, commit), coreDigest = digest(core);
+    const bytes = publicationCommit(core, coreDigest), commitOid = objectId(metadata.objectFormat, 'commit', bytes);
+    const expected = { core, coreDigest, commitOid, commitSha256: hash(bytes) };
+    require(same(proposal, { ...expected, digest: digest(expected) }) &&
+      (await object.read('commit', commitOid)).equals(bytes), 'RepositoryPublicationMismatch');
+    return proposal;
+  }
+  // Trusted publisher-only operations. The application receives neither this
+  // store nor a callable commit capability. Its one protected publication leaf
+  // supplies the current-custody admission callback; Git itself owns the gate
+  // after that callback persists the occurrence's exact intent.
+  async function publicationGate(proposal, helper, body) {
+    require(metadata.publicationLock && /^\d+$/.test(metadata.publicationLock.dev) && /^\d+$/.test(metadata.publicationLock.ino), 'RepositoryPublicationUnavailable');
+    await unchanged();
+    return withPublicationGate({ helper, lock: { path: join(directory, 'publication.lock'), ...metadata.publicationLock },
+      command: { path: git.executable, sha256: git.sha256, args: gitArgs(gitRoot, ['update-ref', '--no-deref', '--stdin']),
+        env: gitEnv(), input: Buffer.from(`update ${ref(metadata.managedRef)} ${oid(proposal.commitOid, metadata.objectFormat)} ${oid(proposal.core.candidate.snapshot.base, metadata.objectFormat)}\n`) },
+      timeoutMs: metadata.limits.commandMs }, body);
+  }
+  async function publishManaged(input, helper, admit, history) {
+    const proposal = structuredClone(input);
+    return publicationGate(proposal, helper, async publish => {
+      await verifyPublication(proposal);
+      require(typeof history === 'function', 'RepositoryPublicationHistory');
+      const records = await history();
+      const { head: actual } = await publicationHistory(proposal, records.proposals, records.publishedCommits);
+      if (actual !== proposal.core.destination.expectedBase) return { status: 'Conflict', proposal: proposal.digest, current: actual };
+      // Admission and cancellation serialize in the custody journal. Returning
+      // from admission means the immutable intent is durable before Git starts.
+      const admission = await admit(proposal);
+      await publish();
+      return { status: 'Published', proposal: proposal.digest, commit: proposal.commitOid, current: await current(), admission };
+    });
+  }
+  async function publicationHistory(proposal, knownProposals, publishedCommits) {
+    require(Array.isArray(knownProposals) && knownProposals.length <= 10000 &&
+      Array.isArray(publishedCommits) && publishedCommits.length <= 10000, 'RepositoryPublicationHistory');
+    const known = new Map(knownProposals.map(row => [row.commitOid, structuredClone(row)]));
+    require(known.size === knownProposals.length, 'RepositoryPublicationHistory');
+    const head = await current();
+    let cursor = head, found = false;
+    const seen = new Set();
+    while (cursor !== metadata.base) {
+      require(seen.size < 10000 && !seen.has(cursor), 'RepositoryPublicationHistory'); seen.add(cursor);
+      const entry = known.get(cursor);
+      require(entry, 'RepositoryPublicationHistory');
+      // Each ancestor must be a saved exact intent with one bound parent.
+      await verifyPublication(entry);
+      if (cursor === proposal.commitOid) found = true;
+      cursor = entry.core.destination.expectedBase;
+    }
+    require(publishedCommits.every(commit => seen.has(commit)), 'RepositoryPublicationHistory');
+    return { head, found };
+  }
+  async function reconcilePublication(input, helper, knownProposals, publishedCommits = []) {
+    const proposal = structuredClone(input);
+    require(Array.isArray(knownProposals) && knownProposals.some(row => same(row, proposal)), 'RepositoryPublicationHistory');
+    return publicationGate(proposal, helper, async () => {
+      await verifyPublication(proposal);
+      const { head, found } = await publicationHistory(proposal, knownProposals, publishedCommits);
+      return { status: found ? 'Published' : head === proposal.core.destination.expectedBase ? 'NotApplied' : 'Conflict',
+        proposal: proposal.digest, commit: found ? proposal.commitOid : null, current: head };
+    });
+  }
   await current();
-  return Object.freeze({ snapshot, list, read, search, prepare, verifyCandidate, checkInputs, current });
+  return Object.freeze({ snapshot, list, read, search, prepare, verifyCandidate, checkInputs, current,
+    preparePublication, verifyPublication, publishManaged, reconcilePublication });
 }

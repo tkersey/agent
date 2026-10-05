@@ -106,8 +106,9 @@ export class Custodian {
       let command = this.#command(run);
       if (!command) {
         const occurrence = this.#journal.occurrence(run.current_occurrence_id);
-        if (occurrence?.status !== 'READY') return { kind: 'blocked', status: this.status(id) };
-        const result = await this.#dispatch(run, cached.executor.current());
+        const uncertain = occurrence && ['UNKNOWN', 'DISPATCHING'].includes(occurrence.status);
+        if (occurrence?.status !== 'READY' && !uncertain) return { kind: 'blocked', status: this.status(id) };
+        const result = uncertain ? await this.#reconcilePublication(run, cached.executor.current(), occurrence) : await this.#dispatch(run, cached.executor.current());
         if (!['reply_saved', 'refused'].includes(result.kind)) return result;
         const latest = this.#assigned(id, wanted).run; command = this.#command(latest);
       }
@@ -190,10 +191,22 @@ export class Custodian {
         } catch (error) { this.#retire(id); throw error; }
       }
       const occurrence = this.#journal.occurrence(run.current_occurrence_id);
-      if (occurrence && ['UNKNOWN', 'DISPATCHING'].includes(occurrence.status)) return { kind: this.#operations.has(id) ? 'dispatching' : 'effect_unknown', status: this.status(id) };
+      if (occurrence && ['UNKNOWN', 'DISPATCHING'].includes(occurrence.status)) return this.#reconcilePublication(run, cached.executor.current(), occurrence);
       if (occurrence?.status === 'AWAITING') return { kind: 'awaiting', status: this.status(id) };
       return await this.#dispatch(run, cached.executor.current());
     } finally { this.#busy.delete(id); }
+  }
+  async #reconcilePublication(run, token, occurrence) {
+    const id = run.run_id;
+    if (this.#operations.has(id) || occurrence.operation !== 'agent.repository.publish.v1')
+      return { kind: this.#operations.has(id) ? 'dispatching' : 'effect_unknown', status: this.status(id) };
+    const data = this.#admission.read(token), decoded = this.#world.decodeOutcome(data.outcome);
+    const request = await this.#world.decodeRequest(decoded.request), selected = this.#policy.publicationRecovery(run, request);
+    const result = await selected.binding.reconcile({ payload: selected.payload, request, run, occurrence });
+    this.#world.validateValue(request.resumeSchema, result.reply);
+    this.#journal.recordReply(id, occurrence.attempt_id, result.reply, selected.binding.classification, null,
+      { publicationReceipt: result.publicationReceipt });
+    return { kind: 'reply_saved', status: this.status(id) };
   }
   async #dispatch(run, token) {
       const id = run.run_id;
@@ -240,12 +253,18 @@ export class Custodian {
         return { kind: 'dispatching', status: this.status(id) };
       }
       try {
-        let reply, evidence = null;
+        let reply, evidence = null, publicationReceipt = null;
         if (selected === null) {
           const resolved = await this.#resolve(this.#run(id), request); reply = encodeValue(schemas.resolution, resolved.value); evidence = resolved.evidence;
-        } else reply = await selected.binding.handle({ payload: selected.payload, request, run: this.#run(id), occurrence: admitted });
+        } else {
+          const result = await selected.binding.handle({ payload: selected.payload, request, run: this.#run(id), occurrence: admitted });
+          if (selected.binding.publication === true) {
+            requireThat(request.semanticIdentity === 'agent.repository.publish.v1', 'PublicationOperationMismatch');
+            reply = result.reply; publicationReceipt = result.publicationReceipt;
+          } else reply = result;
+        }
         this.#world.validateValue(request.resumeSchema, reply);
-        this.#journal.recordReply(id, admitted.attempt_id, reply, selected?.binding.classification ?? [], null, { placementEvidence: evidence });
+        this.#journal.recordReply(id, admitted.attempt_id, reply, selected?.binding.classification ?? [], null, { placementEvidence: evidence, publicationReceipt });
         return { kind: 'reply_saved', status: this.status(id) };
       } catch (error) { this.#journal.markUnknown(id, admitted.attempt_id); throw error; }
   }

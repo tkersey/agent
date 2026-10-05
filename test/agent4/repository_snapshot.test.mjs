@@ -149,3 +149,36 @@ test('managed Git configuration corruption is rejected on use and on reopen', as
   await assert.rejects(f.store.snapshot(f.base), { code: 'RepositoryStorageChanged' });
   await assert.rejects(openRepositorySnapshotStore({ ...f.options, ...f.receipt }), { code: 'RepositoryStorageChanged' });
 });
+
+test('publication proposal binds exact nonrecursive commit bytes; read-only revalidation rejects amendments', async t => {
+  const f = await fixture(t), snapshot = await f.store.snapshot(f.base);
+  const candidate = await f.store.prepare(snapshot, [replacement(f, 'file-00.txt', 'prepared publication\n')]);
+  // Synthetic check data exercises object construction only. The actual
+  // publisher must additionally resolve this record from admitted leaf custody.
+  const check = { format: 'agent.repository.check/v1', occurrence: 'check-1', snapshot, candidate: candidate.id,
+    tree: candidate.tree, profile: 'fixture', status: 'Passed', completedChecks: ['fixture'] };
+  const validation = [{ ...check, id: hash(canonical(check, 2 << 20)) }];
+  const binding = { run: 'run-1', task: 'task-1', generation: '1', principal: 'principal-1', tenant: 'tenant-1', intent: 'a'.repeat(64),
+    policyRevision: 'policy-1', authorizationDigest: 'b'.repeat(64), validationPolicyDigest: 'c'.repeat(64) };
+  const commit = { author: { name: 'Agent fixture', email: 'fixture@example.invalid' }, committer: { name: 'Agent fixture', email: 'fixture@example.invalid' },
+    timestamp: 1791150000, message: 'Prepared repair' };
+  const proposal = await f.store.preparePublication({ candidate, binding, validation, commit });
+  const managed = join(f.options.directory, 'objects.git');
+  const bytes = execFileSync('git', ['--git-dir=' + managed, 'cat-file', 'commit', proposal.commitOid]);
+  assert.equal(hash(bytes), proposal.commitSha256);
+  assert.equal(bytes.toString(), `tree ${candidate.tree}\nparent ${f.base}\nauthor Agent fixture <fixture@example.invalid> 1791150000 +0000\ncommitter Agent fixture <fixture@example.invalid> 1791150000 +0000\nagent-proposal-core ${proposal.coreDigest}\nagent-publication-intent ${binding.intent}\n\nPrepared repair\n`);
+  const inventory = () => git(managed, 'count-objects', '-v');
+  const before = inventory();
+  assert.deepEqual(await f.store.verifyPublication(proposal), proposal);
+  assert.equal(inventory(), before, 'revalidation must not write objects');
+  assert.equal(await f.store.current(), f.base);
+  const modified = structuredClone(proposal); modified.core.binding.principal = 'other';
+  await assert.rejects(f.store.verifyPublication(modified), { code: 'RepositoryPublicationMismatch' });
+  await assert.rejects(f.store.verifyPublication({ ...proposal, commitSha256: '0'.repeat(64) }), { code: 'RepositoryPublicationMismatch' });
+  const failed = { ...check, status: 'Failed' };
+  await assert.rejects(f.store.preparePublication({ candidate, binding, validation: [{ ...failed, id: hash(canonical(failed, 2 << 20)) }], commit }), { code: 'RepositoryPublicationValidation' });
+  await assert.rejects(f.store.preparePublication({ candidate, binding, validation, commit: { ...commit, author: { ...commit.author, name: 'Bad\nparent forged' } } }), { code: 'RepositoryCommitMetadata' });
+  const metadata = JSON.parse(await readFile(join(f.options.directory, 'repository.json')));
+  const lock = await lstat(join(f.options.directory, 'publication.lock'), { bigint: true });
+  assert.deepEqual(metadata.publicationLock, { dev: String(lock.dev), ino: String(lock.ino) });
+});

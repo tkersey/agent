@@ -13,6 +13,7 @@ build.zig
 build_agent4.zig
 runtime/inquiry_process_limit.zig
 runtime/inquiry_process_lock.zig
+runtime/repository_publication_gate.zig
 src/admission.zig
 src/agent4.zig
 src/approval.zig

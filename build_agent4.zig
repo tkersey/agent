@@ -447,6 +447,30 @@ pub fn build(b: *std.Build) void {
     mobile_repository_objects.addArgs(&.{ "node", "--test", "test/agent4/repository_snapshot.test.mjs" });
     mobile_repository_objects.has_side_effects = true;
     mobile_repository_check.dependOn(&mobile_repository_objects.step);
+    const mobile_repository_zig = b.step("check-mobile-repository-zig", "Qualify the bounded native Zig repository check profile");
+    const mobile_repository_zig_test = nodeCommand(b);
+    mobile_repository_zig_test.has_side_effects = true;
+    mobile_repository_zig.dependOn(&mobile_repository_zig_test.step);
+    const repository_runner = b.step("repository-check-runner", "Install the macOS Zig check resource launcher and loader restriction");
+    if (b.graph.host.result.os.tag == .macos) {
+        const limit_exe = b.addExecutable(.{ .name = "agent-check-limit", .root_module = b.createModule(.{
+            .root_source_file = b.path("runtime/inquiry_process_limit.zig"),
+            .target = b.graph.host,
+            .optimize = .safe,
+            .link_libc = true,
+        }) });
+        const process_lock = b.addLibrary(.{ .name = "agent-check-lock", .linkage = .dynamic, .root_module = b.createModule(.{
+            .root_source_file = b.path("runtime/inquiry_process_lock.zig"),
+            .target = b.graph.host,
+            .optimize = .safe,
+            .link_libc = true,
+        }) });
+        repository_runner.dependOn(&b.addInstallFileWithDir(limit_exe.getEmittedBin(), .prefix, "repository-check/agent-check-limit").step);
+        repository_runner.dependOn(&b.addInstallFileWithDir(process_lock.getEmittedBin(), .prefix, "repository-check/libagent-check-lock.dylib").step);
+        mobile_repository_zig_test.addFileArg2(limit_exe.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LIMIT=", .make_absolute = true });
+        mobile_repository_zig_test.addFileArg2(process_lock.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LOCK=", .make_absolute = true });
+    }
+    mobile_repository_zig_test.addArgs(&.{ "node", "--test", "test/agent4/repository_zig_sandbox.test.mjs" });
     const mobile_repository_emitter = g.emitter("mobile-repository-emitter", g.module("test/consumers/mobile_repository/main.zig"));
     g.emit(mobile_repository_images, mobile_repository_emitter, &.{"image"}, "mobile-repository/program.bpi3");
     for ([_][]const u8{ "task", "report", "snapshot-request", "snapshot", "read", "evidence", "question", "answer", "cleanup", "unit" }) |name|

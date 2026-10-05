@@ -85,15 +85,33 @@ use archive imported the new adapters and passed the existing repository
 execution witness: five cases, ten isolated test processes, and 99 fresh-kernel
 transfers. The complete mobile application is not yet installed in that archive.
 
-The qualified Zig runner, physical allowance/storage accounting and artifact
-pins, deployment dispatch integration for all repository operations, and
-publication remain open. Per-object/import bounds in this slice do not establish
-complete lifetime storage accounting or the final execution profile.
+The [bounded Zig profile](mobile-repository-zig-profile.md) now passes its native
+qualification on Darwin 27.2.0 arm64. Nine probe cases exercise compiler reads,
+pre-main code, filesystem/network/credential denial, fork/spawn/exec, scratch and
+output exhaustion, memory and thread bounds, timeout, cancellation, and reaping.
+An independently checked repair of Agent's real boolean JSON-size bound fails
+on the incorrect private base and passes on the prepared candidate. Neither the
+managed ref nor the original checkout changes. The qualifier completed 4/4 build
+steps and 21 compiler/check process executions, including the two real-source
+checks; helper compilation is separate. The nine probe outcomes include expected
+failures and limits, not nine successful candidate checks.
+
+The isolated base and candidate checks took 11.934 and 12.455 seconds in one
+recorded cold sample, including private-volume setup/cleanup. This is not a
+mobility comparison or a general latency claim. Records bind exact source,
+candidate, runner/profile/toolchain/contract identities and completed checks.
+A protected startup channel distinguishes isolation setup failure from a check
+that actually ran; the candidate cannot retain that channel.
+
+The full ecosystem profile catalog, physical allowance/storage accounting and
+artifact pins, deployment dispatch integration for all repository operations,
+native-runner package acquisition, and publication remain open. Per-object/import
+bounds do not establish complete lifetime storage accounting.
 
 ## Remaining acceptance
 
-W2–W8 remain open: immutable managed Git snapshots/candidates and isolated Zig
-checks; durable human answers and authenticated UI; real provider integration
+W2–W8 remain open: complete repository/check deployment integration;
+durable human answers and authenticated UI; real provider integration
 and replay/budgets; exact protected publication and reconciliation; complete
 application/package commands; faults/models/mutants, matched measurements and
 the complete MR-001–MR-096 evidence mapping; serial review closeout.

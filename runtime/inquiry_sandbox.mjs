@@ -76,12 +76,13 @@ function profile(executable, dependencies, input, scratch) {
     (allow file-write-data file-write-unlink (subpath ${sbString(scratch)}))`;
 }
 
-function launch(command, args, { cwd, timeoutMs, maximumOutputBytes, signal }) {
+function launch(command, args, { cwd, timeoutMs, maximumOutputBytes, signal, env = { TZ: "UTC" }, readinessNonce }) {
   return new Promise(resolveResult => {
     if (signal?.aborted) return resolveResult({ kind: "cancelled", physicalExecutions: 0 });
-    const child = spawn(command, args, { cwd, env: { TZ: "UTC" }, detached: true,
-      stdio: ["ignore", "pipe", "pipe"], shell: false });
+    const child = spawn(command, args, { cwd, env, detached: true,
+      stdio: ["ignore", "pipe", "pipe", ...(readinessNonce ? ["pipe"] : [])], shell: false });
     const stdout = [], stderr = [];
+    const readiness = []; let readinessBytes = 0;
     let bytes = 0, stopped = null, spawnError = null, launched = false;
     child.once("spawn", () => { launched = true; });
     const terminate = kind => {
@@ -101,6 +102,10 @@ function launch(command, args, { cwd, timeoutMs, maximumOutputBytes, signal }) {
         else chunks.push(data);
       });
     }
+    if (readinessNonce) child.stdio[3].on("data", data => {
+      readinessBytes += data.length;
+      if (readinessBytes <= 128) readiness.push(data);
+    });
     child.once("error", error => { spawnError = error.code ?? "spawn_failed"; });
     child.once("close", (code, childSignal) => {
       clearTimeout(timer);
@@ -108,10 +113,16 @@ function launch(command, args, { cwd, timeoutMs, maximumOutputBytes, signal }) {
       resolveResult({ kind: stopped ?? (spawnError ? "unavailable" : childSignal ? "signal" : "completed"),
         code, signal: childSignal, spawnError, physicalExecutions: Number(launched),
         outputBytes: bytes,
+        ...(readinessNonce ? { ready: readinessBytes === Buffer.byteLength(readinessNonce) &&
+          Buffer.concat(readiness).equals(Buffer.from(readinessNonce)) } : {}),
         stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) });
     });
   });
 }
+
+// Shared implementation primitives for the separately qualified Zig profile.
+// Exporting these does not confer qualification or candidate execution authority.
+export { libraries as sandboxLibraries, sbString as sandboxString, launch as launchSandboxProcess };
 
 // The worker has exited before this bounded, no-follow checkpoint read.
 async function checkpoint(path, nonce) {

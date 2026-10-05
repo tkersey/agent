@@ -419,6 +419,28 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
     require(same(candidate, rebuilt), 'RepositoryCandidateMismatch');
     return rebuilt;
   }
+  // Check inputs come from the same authenticated object view as evidence and
+  // candidate preparation. Never reconstruct them from a mutable checkout or
+  // a truncated read response. The deployment chooses the finite required set.
+  async function checkInputs({ snapshot: selected, candidate = null, requiredPaths }) {
+    const names = paths(requiredPaths, 4096);
+    require(names.length > 0, 'RepositoryScope');
+    const view = candidate ? await object.tree((await verifyCandidate(candidate)).tree) : await admitSnapshot(selected);
+    if (candidate) require(same(candidate.snapshot, selected), 'RepositorySnapshotMismatch');
+    const files = Object.create(null);
+    let bytes = 0;
+    for (const name of names) {
+      admittedPath(name);
+      const row = view.rows.find(row => row[0] === name);
+      require(row && ['100644', '100755'].includes(row[1]), 'RepositoryFileUnavailable');
+      const content = await object.read('blob', row[2]);
+      bytes += content.length;
+      require(bytes <= metadata.limits.bytes, 'RepositoryTreeCapacity');
+      require(!content.includes(0), 'RepositoryBinary'); utf8.decode(content);
+      files[name] = content;
+    }
+    return { snapshot: selected, candidate: candidate?.id ?? null, tree: candidate?.tree ?? selected.tree, files };
+  }
   await current();
-  return Object.freeze({ snapshot, list, read, search, prepare, verifyCandidate, current });
+  return Object.freeze({ snapshot, list, read, search, prepare, verifyCandidate, checkInputs, current });
 }

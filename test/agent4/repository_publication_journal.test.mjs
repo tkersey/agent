@@ -79,3 +79,14 @@ test('a fresh occurrence cannot reuse another intent or exact commit after admis
   assert.throws(() => f.second({ intent: '8'.repeat(64), commitOid: f.proposal.commitOid }), { code: 'PublicationIntentReused' });
   assert.equal(f.records().length, 1);
 });
+
+for (const status of ['PublishedVerified', 'PublishedVerificationFailed', 'PublishedVerificationUnavailable'])
+  test(`${status} evidence survives reply acquisition and journal restart`, async t => {
+    const f = await fixture(t), admission = f.admit();
+    const receipt = { status: 'Published', proposal: f.proposal.digest, commit: f.proposal.commitOid,
+      current: status === 'PublishedVerificationUnavailable' ? null : f.proposal.commitOid,
+      verification: { status }, admission };
+    f.journal.recordReply(f.id, f.occurrence.attempt_id, Buffer.from('reply'), [], null, { publicationReceipt: receipt });
+    f.journal.collectArtifacts('tenant'); f.restart();
+    assert.deepEqual(canonical(f.records()[0].receipt), canonical(receipt));
+  });

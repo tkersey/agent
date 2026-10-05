@@ -109,3 +109,13 @@ metadata are explicit deployment selections. Preparation never updates a ref.
 The runtime loader also exposes `repository-prepare` for bounded staged edits and
 `repository-release` for the journaled disposal of the portable investigation;
 physical check children and scratch remain owned by the check runner.
+
+After Git confirms the managed-ref write, the receipt retains `status: Published`
+and the exact commit even if verification cannot complete. Its `verification.status`
+is `PublishedVerified`, `PublishedVerificationFailed`, or
+`PublishedVerificationUnavailable`. Verification reads the managed ref and checks
+that the exact commit and its tree objects remain readable and intact. A mismatch
+or unavailable read is recorded separately; it never triggers rollback or another
+publication. These checks establish Git object/ref identity, not additional
+behavioral postchecks. Recovery can verify an earlier publication in the admitted
+managed history after a later approved commit has advanced the ref.

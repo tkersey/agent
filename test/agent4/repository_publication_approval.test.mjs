@@ -12,6 +12,7 @@ test('actual private approval grants exactly the prepared managed publication', 
   const f = await fixture(t); assert.equal((await f.run()).kind, 'terminal');
   const result = f.result(); assert.equal(result.tag, 0); assert.equal(result.value.tag, 0);
   const receipt = JSON.parse(result.value.value); assert.equal(receipt.commit, await f.store.current());
+  assert.equal(receipt.verification.status, 'PublishedVerified');
   assert.deepEqual(f.moves, [['W', 'U'], ['U', 'W']]);
   assert.notEqual(receipt.commit, f.base); assert.deepEqual(f.counts, { check: 1, publish: 1, human: 1 });
   assert.equal(f.checkAllowance().used.attempts, 1);

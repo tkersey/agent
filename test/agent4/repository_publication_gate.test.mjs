@@ -155,3 +155,36 @@ if (process.argv[2] === 'gate-parent') {
     await assert.rejects(store.publishManaged(first, f.options.helper, () => assert.fail('rewind cannot reach admission'), history), { code: 'RepositoryPublicationHistory' });
   });
 }
+
+if (process.argv[2] !== 'gate-parent') for (const fault of ['none', 'unavailable', 'mismatch', 'missing-tree']) test(`publication receipt survives post-write verification: ${fault}`, async t => {
+  const f = await fixture(t), directory = join(f.root, 'managed');
+  const options = { directory, sourceGitDirectory: join(f.root, 'repo'), base: f.base,
+    gitExecutable: f.options.command.path, repository: 'fixture', generation: 'fixture-1', managedRef: 'refs/heads/agent/probe',
+    readPaths: ['fix.txt'], writablePaths: ['fix.txt'] };
+  const provisioned = await provisionRepository(options), store = await openRepositorySnapshotStore({ ...options, ...provisioned });
+  const snapshot = await store.snapshot(f.base), candidate = await store.prepare(snapshot,
+    [{ path: 'fix.txt', operation: 'create', oldDigest: null, oldMode: null, content: 'fixed\n' }]);
+  const record = { format: 'agent.repository.check/v1', snapshot, candidate: candidate.id, tree: candidate.tree,
+    profile: 'fixture', status: 'Passed', completedChecks: ['fixture'] };
+  const proposal = await store.preparePublication({ candidate, validation: [{ ...record, id: hash(canonical(record, 2 << 20)) }],
+    binding: { run: 'run-1', task: 'task-1', generation: '1', principal: 'principal-1', tenant: 'tenant-1',
+      intent: '1'.repeat(64), policyRevision: 'policy-1', authorizationDigest: 'a'.repeat(64), validationPolicyDigest: 'b'.repeat(64) },
+    commit: { author: { name: 'Fixture', email: 'fixture@example.invalid' }, committer: { name: 'Fixture', email: 'fixture@example.invalid' }, timestamp: 1791150000, message: 'Fix' } });
+  const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
+  const config = join(directory, 'objects.git/config'), originalConfig = await readFile(config);
+  const mutation = fault === 'unavailable' ? `printf '\\n' >> ${quote(config)}`
+    : fault === 'missing-tree' ? `rm ${quote(join(directory, 'objects.git/objects', candidate.tree.slice(0, 2), candidate.tree.slice(2)))}`
+    : fault === 'mismatch' ? `${quote(f.options.command.path)} --git-dir=${quote(join(directory, 'objects.git'))} update-ref ${quote(options.managedRef)} ${f.base} ${proposal.commitOid}` : ':';
+  // Execute the real writer, then inject a read failure or a changed observation
+  // before its completion reaches the caller. No production fault hook is used.
+  const wrapper = join(f.root, 'post-write-fault.sh');
+  await writeFile(wrapper, `#!/bin/sh\n${quote(helper)} "$@"\nresult=$?\nif [ "$result" -eq 0 ]; then\n${mutation}\nfi\nexit "$result"\n`, { mode: 0o700 });
+  let admissions = 0;
+  const receipt = await store.publishManaged(proposal, { path: wrapper, sha256: hash(await readFile(wrapper)) },
+    () => { admissions++; return { occurrence: 'fixture' }; }, () => ({ proposals: [], publishedCommits: [] }));
+  assert.equal(receipt.status, 'Published'); assert.equal(receipt.commit, proposal.commitOid); assert.equal(admissions, 1);
+  assert.equal(receipt.verification.status, ({ none: 'PublishedVerified', unavailable: 'PublishedVerificationUnavailable', mismatch: 'PublishedVerificationFailed', 'missing-tree': 'PublishedVerificationUnavailable' })[fault]);
+  assert.equal(receipt.current, fault === 'unavailable' ? null : fault === 'mismatch' ? f.base : proposal.commitOid);
+  if (fault === 'unavailable') await writeFile(config, originalConfig);
+  assert.equal(await store.current(), fault === 'mismatch' ? f.base : proposal.commitOid, 'verification performs no corrective write');
+});

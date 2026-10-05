@@ -535,8 +535,28 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
       // from admission means the immutable intent is durable before Git starts.
       const admission = await admit(proposal);
       await publish();
-      return { status: 'Published', proposal: proposal.digest, commit: proposal.commitOid, current: await current(), admission };
+      // A completed Git write remains published even if its later observation
+      // fails. Verification is evidence about that write, never another write.
+      const observed = await publicationVerification(proposal);
+      return { status: 'Published', proposal: proposal.digest, commit: proposal.commitOid, ...observed, admission };
     });
+  }
+  async function publicationVerification(proposal, historicalHead = null) {
+    let head = null;
+    try {
+      head = historicalHead ?? await current();
+      if (historicalHead === null && head !== proposal.commitOid)
+        return { current: head, verification: { status: 'PublishedVerificationFailed', reason: 'ManagedRefMismatch' } };
+      const commit = await object.read('commit', proposal.commitOid);
+      require(hash(commit) === proposal.commitSha256 &&
+        commit.toString('utf8').startsWith(`tree ${proposal.core.candidate.tree}\n`), 'RepositoryPublicationMismatch');
+      await object.tree(proposal.core.candidate.tree);
+      return { current: head, verification: { status: 'PublishedVerified' } };
+    } catch (error) {
+      const failed = ['RepositoryObjectIntegrity', 'RepositoryPublicationMismatch', 'RepositoryTreeInvalid'].includes(error.code);
+      return { current: head, verification: { status: failed ? 'PublishedVerificationFailed' : 'PublishedVerificationUnavailable',
+        reason: /^[A-Za-z0-9_]{1,80}$/.test(error.code ?? '') ? error.code : 'VerificationReadFailed' } };
+    }
   }
   async function publicationHistory(proposal, knownProposals, publishedCommits) {
     require(Array.isArray(knownProposals) && knownProposals.length <= 10000 &&
@@ -565,7 +585,8 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
       await verifyPublication(proposal);
       const { head, found } = await publicationHistory(proposal, knownProposals, publishedCommits);
       return { status: found ? 'Published' : head === proposal.core.destination.expectedBase ? 'NotApplied' : 'Conflict',
-        proposal: proposal.digest, commit: found ? proposal.commitOid : null, current: head };
+        proposal: proposal.digest, commit: found ? proposal.commitOid : null,
+        ...(found ? await publicationVerification(proposal, head) : { current: head }) };
     });
   }
   await current();

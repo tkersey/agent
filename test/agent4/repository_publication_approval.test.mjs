@@ -7,6 +7,7 @@ const { modelBinding } = await import(pathToFileURL(resolve(process.env.AGENT_MO
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -38,6 +39,28 @@ const text = value => Buffer.from(canonical(value, 2 << 20)).toString('utf8');
 const env = { PATH: '/usr/bin:/bin', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null',
   GIT_AUTHOR_NAME: 'Approval fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid',
   GIT_COMMITTER_NAME: 'Approval fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid' };
+// Test-only interpreter comparison at the actual custody execution boundary.
+// The production custodian still owns every request, reply and successor.
+function nativeComparedWorld(world, directory, observed) {
+  return { ...world, Kernel: { async create(options) {
+    const kernel = await world.Kernel.create(options), programs = new Map(), sessions = new Map();
+    return new Proxy(kernel, { get(target, name) {
+      if (name === 'prepare') return image => { const prepared = target.prepare(image); programs.set(prepared, Uint8Array.from(image)); return prepared; };
+      if (name === 'start') return (prepared, args) => { const session = target.start(prepared, args); sessions.set(session, { image: programs.get(prepared), initialArgs: Uint8Array.from(args) }); return session; };
+      if (name === 'restore') return (prepared, state) => { const session = target.restore(prepared, state); sessions.set(session, { image: programs.get(prepared), state: Uint8Array.from(state) }); return session; };
+      if (name === 'drive') return (session, options = {}) => {
+        const prior = sessions.get(session), input = world.encodeInput({ ...prior, ...options });
+        const output = target.drive(session, options), path = join(directory, 'native-comparison.pki3');
+        writeFileSync(path, input);
+        const expected = new Uint8Array(execFileSync(process.env.AGENT_MOBILE_NATIVE, [path], { maxBuffer: 16 << 20 }));
+        assert.deepEqual(output, expected, 'native and WASM agree at the actual repository custody boundary');
+        observed.count++; sessions.set(session, { image: prior.image, state: world.decodeOutcome(output).state });
+        return output;
+      };
+      const value = Reflect.get(target, name, target); return typeof value === 'function' ? value.bind(target) : value;
+    } });
+  } } };
+}
 async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, qualified = false, intake = false, sessionTasks = 0, nextMode = null } = {}) {
   const sessionInput = mobile && Boolean(process.env.AGENT_MOBILE_PACKAGE || intake || sessionTasks);
   const root = await mkdtemp(join(tmpdir(), 'repository-approval-'));
@@ -57,6 +80,8 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
   const snapshot = await store.snapshot(base), candidate = await store.prepare(snapshot, [
     { path: targetPath, operation: mobile ? 'replace' : 'create', oldDigest: mobile ? (await store.read(snapshot, targetPath)).digest : null, oldMode: mobile ? '100644' : null, content }]);
   const identity = verifyRuntime(resolve(process.env.AGENT_MOBILITY_RUNTIME)), world = await import(pathToFileURL(identity.entrypoint));
+  const nativeComparisons = { count: 0 }, executionWorld = process.env.AGENT_MOBILE_NATIVE ? nativeComparedWorld(world, root, nativeComparisons) : world;
+  if (process.env.AGENT_MOBILE_NATIVE) t.after(() => { assert(nativeComparisons.count > 0); t.diagnostic(`native/WASM custody outcomes compared: ${nativeComparisons.count}`); });
   const kernelBytes = await readFile(identity.kernelPath), image = await readFile(`${applicationArtifacts}/${mobile ? 'mobile-repository' : 'repository-approval'}/${sessionInput ? 'session' : 'program'}.bpi3`);
   const names = ['task', 'preparation', 'result', 'check-result', 'proposal', 'receipt', 'delivery', 'human', 'human-reply', 'identifier', 'boolean'];
   const bytes = Object.fromEntries(await Promise.all(names.map(async name => [name, await readFile(`${applicationArtifacts}/repository-approval/${name}.${schemaExtension}`)])));
@@ -182,7 +207,7 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
   }
   const limits = { maximum_moves: sessionTasks ? sessionTasks * 4 : mobile ? reviewFollowup ? 6 : 4 : 2, maximum_image_bytes: 8 << 20, maximum_outcome_bytes: 8 << 20 };
   for (const host of ['W', 'U']) {
-    admissions[host] = new WorldAdmission(world, { kernelBytes, expectedSha256: identity.kernelSha256 });
+    admissions[host] = new WorldAdmission(executionWorld, { kernelBytes, expectedSha256: identity.kernelSha256 });
     policies[host] = new HostPolicy({ hostId: host, trustDomain: 'fixture', runtimeProfile: identity.kernelSha256, revision: 'p1', labelDestinations: { shared: ['W', 'U'] },
       bindings: host === 'W' ? [check, prepare, current, publish, ...additional, ...cleanupBindings] : [issue, human, ...reviewBindings, ...cleanupBindings], deployments: [{ imageDigest: hash(image), programId, tenant: 'tenant', principals: ['user'],
         issuers: ['issuer'], hosts: ['W', 'U'], classification: ['shared'], cleanup: cleanupBindings.map(requirement), controlPeers: ['W', 'U'], limits, exportPolicies: { shared: ['W', 'U'] } }] });

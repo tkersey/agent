@@ -75,7 +75,13 @@ Reproduce this slice using the existing authenticated setup:
 against the native interpreter. All 163 canonical outcomes match WASM byte for
 byte, including cancellation, exhausted budgets, invalid intake, and the real
 repository case. Provider replies remain synthetic; this comparison does not
-qualify live-model behavior or the full edit/check/publication path.
+qualify live-model behavior. The same target additionally compares 264 actual
+custody outcomes across six independent repository scenarios: all three modes,
+lost publication reply, cancellation during review, and a repeated session that
+proposes then publishes. These include edit preparation, check dispatch, exact
+private approval and managed publication. Their existing expected-result,
+unchanged-target, cleanup and cumulative-allowance assertions remain active;
+agreement between interpreters is not their only oracle.
 
 ```sh
 node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-mobile"

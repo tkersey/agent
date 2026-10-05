@@ -931,6 +931,16 @@ pub fn build(b: *std.Build) void {
         repository_native_run.step.dependOn(mobile_repository_images);
         repository_native_run.has_side_effects = true;
         mobile_repository_native.dependOn(&repository_native_run.step);
+        const repository_native_workflow = nodeCommand(b);
+        repository_native_workflow.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
+        repository_native_workflow.addFileArg2(native_exe.getEmittedBin(), .{ .prefix = "AGENT_MOBILE_NATIVE=", .make_absolute = true });
+        repository_native_workflow.addFileArg2(b.graph.path(.install_prefix, "repository-publication/agent-publication-gate"), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
+        repository_native_workflow.addArgs(&.{ "node", "--test", "--test-name-pattern=complete mobile application mode|session propose then publish|cancellation at full-application|lost publication reply", "test/agent4/repository_publication_approval.test.mjs" });
+        repository_native_workflow.step.dependOn(mobile_repository_images);
+        repository_native_workflow.step.dependOn(repository_approval_images);
+        repository_native_workflow.step.dependOn(publication_gate);
+        repository_native_workflow.has_side_effects = true;
+        mobile_repository_native.dependOn(&repository_native_workflow.step);
         const mobility_native_run = nodeCommand(b);
         mobility_native_run.addArgs(&.{ "node", "test/agent4/mobility_continuation.mjs" });
         mobility_native_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });

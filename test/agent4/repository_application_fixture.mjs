@@ -127,9 +127,9 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
     }
     const sandbox = await createZigRepositorySandbox({ toolchain: selectZig([]), ...helpers });
     assert.equal(sandbox.kind, 'qualified', JSON.stringify(sandbox));
-    const source = 'const std = @import("std"); const subject = @import("subject"); pub fn main() void { if (subject.maximumToolArgumentsByteLength(bool) != "false".len) std.c.exit(7); const text = "bound verified\\n"; _ = std.c.write(1, text.ptr, text.len); }';
+    const source = 'const subject = @import("subject"); pub export fn agent_observe(_: u32) u64 { return subject.maximumToolArgumentsByteLength(bool); }';
     realChecks = createRepositoryCheckRunner({ store, sandbox, profiles: [{ id: 'fixture-content', description: 'Independent JSON boolean bound', requiredPaths: [targetPath],
-      modules: [{ name: 'subject', path: targetPath, dependencies: [] }], harness: { source, sha256: hash(source) }, expectedStdout: 'bound verified\n', deterministic: true }] });
+      modules: [{ name: 'subject', path: targetPath, dependencies: [] }], harness: { source, sha256: hash(source) }, expectedStdout: '["5"]\n', deterministic: true }] });
     assert.equal((await realChecks.check({ snapshot, profileId: 'fixture-content', occurrence: 'baseline-control' })).status, 'Failed');
   }
   const profileDigest = realChecks?.profiles[0].digest ?? '3'.repeat(64), runner = realChecks?.runner ?? '4'.repeat(64);

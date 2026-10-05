@@ -45,6 +45,11 @@ test('qualified Zig checks distinguish an actual Agent repair from its incorrect
   assert.equal(runner.qualification.compilerDenial.status, 'Failed');
   assert.equal(runner.qualification.memory.signal, 'SIGKILL');
   assert.equal(runner.qualification.threads.status, 'Passed');
+  const forged = await runner.execute({
+    'main.zig': 'const subject = @import("subject"); pub export fn agent_observe(_: u32) u64 { return subject.bound(); }',
+    'subject.zig': 'extern "c" fn write(c_int, [*]const u8, usize) isize; extern "c" fn _exit(c_int) noreturn; pub fn bound() u64 { return 4; } pub export fn exit(_: c_int) noreturn { const msg = "[\\\"5\\\"]\\n"; _ = write(1, msg.ptr, msg.len); _exit(0); }',
+  }, { roots: [{ name: 'root', path: 'main.zig', dependencies: ['subject'] }, { name: 'subject', path: 'subject.zig', dependencies: [] }], expectedStdout: '["5"]\n' });
+  assert.notEqual(forged.status, 'Passed', 'candidate exit/output cannot replace the host observation');
   const source = join(root, 'source'); await mkdir(source); await mkdir(join(source, 'src'));
   const correct = await readFile(new URL('../../src/model_json.zig', import.meta.url), 'utf8');
   assert(correct.includes('.bool => 5,'));
@@ -53,13 +58,8 @@ test('qualified Zig checks distinguish an actual Agent repair from its incorrect
   // the implementation's counting routine or project tests.
   const incorrect = correct.replace('.bool => 5,', '.bool => 4,');
   await writeFile(join(source, 'src/model_json.zig'), incorrect);
-  const harness = `const std = @import("std");
-const subject = @import("subject");
-pub fn main() void {
-    if (subject.maximumToolArgumentsByteLength(bool) != "false".len) std.c.exit(7);
-    const observation = "false takes five bytes\\n";
-    if (std.c.write(1, observation.ptr, observation.len) != observation.len) std.c.exit(8);
-}`;
+  const harness = `const subject = @import("subject");
+pub export fn agent_observe(_: u32) u64 { return subject.maximumToolArgumentsByteLength(bool); }`;
   await writeFile(join(source, 'harness.zig'), harness);
   git(source, 'init', '--quiet'); git(source, 'add', '.'); git(source, 'commit', '--quiet', '-m', 'isolated incorrect bound');
   const base = git(source, 'rev-parse', 'HEAD');
@@ -74,12 +74,13 @@ pub fn main() void {
     oldDigest: sha(incorrect), oldMode: '100644', content: correct }]);
   const profile = { id: 'agent.model-json-bool-bound.v1', description: 'The maximum encoded boolean size covers false',
     requiredPaths: ['src/model_json.zig'], modules: [{ name: 'subject', path: 'src/model_json.zig', dependencies: [] }],
-    harness: { source: harness, sha256: sha(harness) }, expectedStdout: 'false takes five bytes\n', deterministic: true };
+    harness: { source: harness, sha256: sha(harness) }, expectedStdout: '["5"]\n', deterministic: true };
   const checks = createRepositoryCheckRunner({ store, sandbox: runner, profiles: [profile] });
   profile.harness.source = 'caller mutation must not replace the admitted harness';
   const request = { snapshot, profileId: profile.id, occurrence: 'base-check' };
   const failed = await checks.check(request);
-  assert.equal(failed.status, 'Failed', JSON.stringify(failed)); assert.equal(failed.diagnostics.exitCode, 7);
+  assert.equal(failed.status, 'Failed', JSON.stringify(failed)); assert.equal(failed.diagnostics.exitCode, 0);
+  assert.equal(failed.diagnostics.stdout, '["4"]\n', 'the host rejects the wrong value even when execution succeeds');
   const checkWire = encodeSchema({ root: 0, types: [{ product: [1, 2] }, { enumeration: [0, 1, 2, 3, 4, 5, 6] }, { bounded_text: 2 << 20 }] });
   const candidateWire = { root: 0, types: [{ bounded_text: 2 << 20 }] };
   const binding = repositoryCheckBinding({ operation: 'agent.repository.check.v1', role: 'write', subject: options.repository,
@@ -110,10 +111,10 @@ pub fn main() void {
   await assert.rejects(store.checkInputs({ snapshot, requiredPaths: ['not-granted.zig'] }), { code: 'RepositoryPathDenied' });
   const controller = new AbortController(); controller.abort();
   const cancelled = await runner.execute({ 'main.zig': 'pub fn main() void {}' }, {
-    signal: controller.signal, expectedStdout: 'never' });
+    signal: controller.signal, expectedStdout: '["0"]\n' });
   assert.equal(cancelled.status, 'Cancelled'); assert.equal(cancelled.physicalExecutions, 0);
   if (process.env.AGENT_REPOSITORY_PROOF) await writeFile(process.env.AGENT_REPOSITORY_PROOF, JSON.stringify({
-    profile: runner.contract, qualification: runner.qualification, incorrectBase: failed, repairedCandidate: passed,
+    profile: runner.contract, qualification: runner.qualification, forgedVerdict: forged, incorrectBase: failed, repairedCandidate: passed,
     managedRefUnchanged: true, originalCheckoutUnchanged: true,
   }, null, 2) + '\n');
 });

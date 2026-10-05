@@ -15,12 +15,12 @@ const dyld = '/System/Library/Sandbox/Profiles/dyld-support.sb';
 const fail = reason => { throw new Error(reason); };
 const defaults = Object.freeze({ timeoutMs: 30000, maximumOutputBytes: 262144, scratchBytes: 256 << 20 });
 
-function profile({ files, input, scratch, library }) {
+function profile({ files, input, scratch, library, trustedRuntimeThreads = false }) {
   const parents = new Set(['/']);
   for (const name of [...files, input, scratch, ...(library ? [library] : [])])
     for (let parent = dirname(name); parent !== '/'; parent = dirname(parent)) parents.add(parent);
   return `(version 1)(deny default)(import "dyld-support.sb")
-    ${library ? '' : `(deny syscall-unix (syscall-number SYS_bsdthread_create SYS_workq_open SYS_workq_kernreturn))
+    ${library || trustedRuntimeThreads ? '' : `(deny syscall-unix (syscall-number SYS_bsdthread_create SYS_workq_open SYS_workq_kernreturn))
     (deny syscall-mig (kernel-mig-routine thread_create_from_user thread_create_running_from_user))`}
     (allow sysctl-read)
     (allow file-read-metadata file-test-existence ${[...parents].map(p => `(literal ${q(p)})`).join(' ')})
@@ -93,11 +93,13 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
   for (const [value, low, high] of [[timeoutMs, 100, 120000], [maximumOutputBytes, 1024, 262144],
     [scratchBytes, 64 << 20, 1024 << 20]])
     if (!Number.isSafeInteger(value) || value < low || value > high) throw new TypeError('invalid Zig check limit');
-  let dependencies, pinned, root;
+  let dependencies, nodeDependencies, nodeExecutable, observerBytes, pinned, root;
   try {
     toolchain.assertUnchanged();
     root = await realpath(scratchRoot);
     dependencies = await sandboxLibraries(toolchain.executable);
+    nodeExecutable = await realpath(process.execPath); nodeDependencies = await sandboxLibraries(nodeExecutable);
+    observerBytes = await readFile(new URL('./repository_wasm_observer.mjs', import.meta.url));
     for (const item of [launcher, processLock]) {
       if (item.path.includes(':') || await realpath(item.path) !== item.path ||
           !(await lstat(item.path)).isFile() || hash(await readFile(item.path)) !== item.sha256) fail('helper_identity');
@@ -107,9 +109,10 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
   } catch { return { kind: 'unavailable', reason: 'profile_setup_failed' }; }
   const helperFiles = [launcher.path, processLock.path];
   const compilerFiles = [...new Set([...helperFiles, ...dependencies.flatMap(d => [d.path, d.supplied, d.link])])];
-  const contract = { name: 'agent.repository.zig017.macos-seatbelt.v1', osRelease: release(),
+  const contract = { name: 'agent.repository.zig017.macos-wasm-observation.v2', osRelease: release(),
     toolchain: selectedToolchain, dependencies: dependencies.map(({ path, supplied, link, sha256 }) => ({ path, supplied, link, sha256 })),
     helpers: pinned.map(({ path, sha256 }) => ({ path, sha256 })),
+    observer: { nodeVersion: process.version, executable: nodeExecutable, dependencies: nodeDependencies.map(({ path, sha256 }) => ({ path, sha256 })), scriptSha256: hash(observerBytes), imports: [], abi: 'agent_observe(u32)->u64', maximumObservations: 64, maximumModuleBytes: 16 << 20 },
     implementation: hash(await readFile(import.meta.filename)),
     isolation: hash(await readFile(new URL('./inquiry_sandbox.mjs', import.meta.url))),
     timeoutMs, provisioningCommandMs: 60000, maximumOutputBytes, scratchBytes, compilerJobs: 1, candidateFork: false, subsequentExec: false,
@@ -119,7 +122,7 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
   async function unchanged() {
     toolchain.assertUnchanged();
     if (toolchain.executable !== selectedExecutable || JSON.stringify(toolchain.identity) !== JSON.stringify(selectedToolchain)) fail('toolchain_changed');
-    for (const item of [...pinned, ...dependencies]) {
+    for (const item of [...pinned, ...dependencies, ...nodeDependencies]) {
       if (identity(await lstat(item.path)) !== item.identity) fail('runner_changed');
       if (item.supplied && (await realpath(item.supplied) !== item.path || await realpath(item.link) !== item.path))
         fail('runner_changed');
@@ -141,7 +144,7 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
       { ...result, kind: 'unavailable', reason: 'isolation_not_initialized' } : result;
   }
   async function invoke(files, { roots = [{ name: 'root', path: 'main.zig', dependencies: [] }],
-    test = true, signal, args = [], observe, executionMs, beforeExecute } = {}) {
+    test = true, signal, args = [], observe, executionMs, beforeExecute, observationCount = null } = {}) {
     let disk, executions = 0;
     try {
       await unchanged();
@@ -169,7 +172,7 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
       }
       const output = join(disk.mount, 'check'), binary = join(binaryRoot, 'check');
       const compileArgs = [test ? 'test' : 'build-exe', ...(test ? ['--test-no-exec'] : []), '-j1', '-O', 'safe',
-        '-lc', '--zig-lib-dir', toolchain.identity.library, '--cache-dir', join(disk.mount, 'cache'),
+        ...(observationCount === null ? ['-lc'] : ['-target', 'wasm32-freestanding', '-fno-entry', '-rdynamic', '-fno-lld', '--max-memory=16777216']), '--zig-lib-dir', toolchain.identity.library, '--cache-dir', join(disk.mount, 'cache'),
         '--global-cache-dir', join(disk.mount, 'global'), `-femit-bin=${output}`];
       for (const row of roots) {
         for (const dependency of row.dependencies) compileArgs.push('--dep', dependency);
@@ -182,13 +185,20 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
       executions += compiled.physicalExecutions ?? 0;
       if (verdict(compiled) !== 'Passed') return { status: verdict(compiled), phase: 'compile', ...diagnostics(compiled), physicalExecutions: executions };
       const stat = await lstat(output);
-      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > scratchBytes) fail('invalid_binary');
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > (observationCount === null ? scratchBytes : contract.observer.maximumModuleBytes)) fail('invalid_binary');
       const bytes = await readFile(output);
       await writeFile(binary, bytes, { flag: 'wx', mode: 0o500 });
       beforeExecute?.();
-      const run = await stage(binary, args, profile({ files: [...helperFiles, binary], input, scratch: disk.mount }), disk.mount, signal,
-      executionMs ? Math.min(deadline, performance.now() + executionMs) : deadline,
-      maximumOutputBytes - (compiled.outputBytes ?? 0));
+      let run;
+      if (observationCount === null) run = await stage(binary, args, profile({ files: [...helperFiles, binary], input, scratch: disk.mount }), disk.mount, signal,
+        executionMs ? Math.min(deadline, performance.now() + executionMs) : deadline, maximumOutputBytes - (compiled.outputBytes ?? 0));
+      else {
+        const script = join(binaryRoot, 'observe.mjs'); await writeFile(script, observerBytes, { flag: 'wx', mode: 0o400 });
+        const nodeFiles = [...new Set([...helperFiles, binary, script, ...nodeDependencies.flatMap(d => [d.path, d.supplied, d.link])])];
+        run = await stage(nodeExecutable, ['--openssl-config=/dev/null', '--v8-pool-size=1', '--max-old-space-size=16', '--stack-size=1024', script, binary, String(observationCount)],
+          profile({ files: nodeFiles, input, scratch: disk.mount, trustedRuntimeThreads: true }), disk.mount, signal,
+          executionMs ? Math.min(deadline, performance.now() + executionMs) : deadline, maximumOutputBytes - (compiled.outputBytes ?? 0));
+      }
       executions += run.physicalExecutions ?? 0;
       // Candidate writes are denied to these files; verify before interpreting.
       for (const [name, bytes] of Object.entries(files))
@@ -196,8 +206,10 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
       if (!bytes.equals(await readFile(binary))) fail('binary_changed');
       await unchanged();
       const status = verdict(run);
-      return { status: status === 'Passed' && observe && !observe(run) ? 'InvalidOutput' : status,
+      const mismatch = status === 'Passed' && observe && !observe(run);
+      return { status: mismatch ? (observationCount === null ? 'InvalidOutput' : 'Failed') : status,
         phase: 'execute', ...diagnostics(run),
+        ...(mismatch && observationCount !== null ? { reason: 'observation_mismatch' } : {}),
         outputBytes: (compiled.outputBytes ?? 0) + (run.outputBytes ?? 0),
         compilationStdout: compiled.stdout?.toString('utf8') ?? '',
         stderr: Buffer.concat([compiled.stderr ?? Buffer.alloc(0), run.stderr ?? Buffer.alloc(0)]).toString('utf8'),
@@ -216,6 +228,12 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
   const canary = await mkdtemp(join(root, 'agent-zig-canary-'));
   const secret = join(canary, 'secret'), forbidden = join(canary, 'forbidden');
   let qualification;
+  const observationProbe = await invoke({ 'main.zig': 'pub export fn agent_observe(_: u32) u64 { return 5; }' }, {
+    test: false, observationCount: 1, observe: run => run.stdout.toString() === '["5"]\n' });
+  if (observationProbe.status !== 'Passed') {
+    await rm(canary, { recursive: true, force: true });
+    return { kind: 'unavailable', reason: 'observation_probe', probe: observationProbe };
+  }
   try {
     await writeFile(secret, 'qualification-only sentinel', { mode: 0o600 });
     const source = probeSource(secret, forbidden, contract.candidateMemoryMiB);
@@ -254,16 +272,19 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
     };
     if (timeout.status !== 'TimedOut' || cancel.status !== 'Cancelled' || !reaped(timeout) || !reaped(cancel))
       return { kind: 'unavailable', reason: 'termination_probe', probes: { timeout, cancel } };
-    qualification = { compilerRead, compilerDenial, denials, flood: { ...flood, stdout: '<bounded flood omitted>' }, full, memory, threads, timeout, cancel };
+    qualification = { observation: observationProbe, compilerRead, compilerDenial, denials, flood: { ...flood, stdout: '<bounded flood omitted>' }, full, memory, threads, timeout, cancel };
   } finally { await rm(canary, { recursive: true, force: true }); }
   return Object.freeze({ kind: 'qualified', runner, contract: structuredClone(contract), qualification: structuredClone(qualification),
     async execute(files, { roots, signal, expectedStdout } = {}) {
-      // The deployment's independent harness supplies this observation. A zero
-      // exit alone is deliberately insufficient for a check's acceptance.
-      if (typeof expectedStdout !== 'string' || !expectedStdout.length || Buffer.byteLength(expectedStdout) > maximumOutputBytes)
-        throw new TypeError('independent expected observation required');
+      // Only raw VM observations cross the trust boundary. The candidate cannot
+      // write this channel; the parent alone holds and evaluates expectations.
+      let expected;
+      try { expected = JSON.parse(expectedStdout); } catch { throw new TypeError('canonical observation vector required'); }
+      if (!Array.isArray(expected) || expected.length < 1 || expected.length > 64 ||
+        expected.some(value => typeof value !== 'string' || !/^(0|[1-9][0-9]{0,19})$/.test(value) || BigInt(value) > 0xffffffffffffffffn) ||
+        JSON.stringify(expected) + '\n' !== expectedStdout) throw new TypeError('canonical observation vector required');
       const captured = Object.fromEntries(Object.entries(files).map(([path, bytes]) => [path, Buffer.from(bytes)]));
-      return { runner, ...(await invoke(captured, { roots: roots && structuredClone(roots), signal, test: false,
+      return { runner, ...(await invoke(captured, { roots: roots && structuredClone(roots), signal, test: false, observationCount: expected.length,
         observe: run => run.stdout.equals(Buffer.from(expectedStdout)) })) };
     },
   });

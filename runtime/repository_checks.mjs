@@ -25,11 +25,16 @@ function admitProfile(input) {
   }
   require(keys(p.harness, ['source', 'sha256']) && text(p.harness.source, 32768) &&
     hash(p.harness.source) === p.harness.sha256, 'RepositoryCheckHarness');
-  require(text(p.expectedStdout, 32768) && p.expectedStdout.length > 0, 'RepositoryCheckObservation');
+  require(text(p.expectedStdout, 32768), 'RepositoryCheckObservation');
+  let observations;
+  try { observations = JSON.parse(p.expectedStdout); } catch { require(false, 'RepositoryCheckObservation'); }
+  require(Array.isArray(observations) && observations.length > 0 && observations.length <= 64 &&
+    observations.every(value => typeof value === 'string' && /^(0|[1-9][0-9]{0,19})$/.test(value) && BigInt(value) <= 0xffffffffffffffffn) &&
+    JSON.stringify(observations) + '\n' === p.expectedStdout, 'RepositoryCheckObservation');
   require(Array.isArray(p.modules) && p.modules.length > 0 && p.modules.length <= 15 &&
     new Set(p.modules.map(m => m.name)).size === p.modules.length, 'RepositoryCheckModules');
   for (const module of p.modules) require(keys(module, ['name', 'path', 'dependencies']) &&
-    text(module.name, 96) && /^[a-zA-Z][a-zA-Z0-9_]*$/.test(module.name) && module.name !== 'root' &&
+    text(module.name, 96) && /^[a-zA-Z][a-zA-Z0-9_]*$/.test(module.name) && !['root', 'std', 'builtin'].includes(module.name) &&
     p.requiredPaths.includes(module.path) && Array.isArray(module.dependencies) && module.dependencies.length <= 15 &&
     new Set(module.dependencies).size === module.dependencies.length &&
     module.dependencies.every(name => p.modules.some(m => m.name === name)), 'RepositoryCheckModules');

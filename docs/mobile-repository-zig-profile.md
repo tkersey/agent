@@ -2,7 +2,7 @@
 
 The mobile repository work adds a macOS specialization of the existing inquiry
 isolation owner. It admits finite, deployment-owned Zig module graphs and an
-independent executable harness. It does not execute a repository's `build.zig`.
+independent host-observed check harness. It does not execute a repository's `build.zig`.
 Its current application witness repairs a deliberately incorrect boolean JSON
 size bound in an isolated copy of Agent's real `src/model_json.zig`.
 
@@ -36,7 +36,7 @@ scratch image. A trusted launcher applies fatal active/inactive memory limits to
 the final compiler or check process. A pinned dyld initializer installs the
 filesystem/network profile before candidate initializers or `main`. Subsequent
 exec and fork are denied: an exec must not discard the memory limit. The candidate
-also cannot create pthread, Mach, or workqueue threads. The trusted compiler runs
+also cannot create pthread, Mach, or workqueue threads in the native qualification probes. The trusted compiler runs
 with `-j1`; subprocess-dependent compilation is outside this profile.
 
 | Resource | Current binding |
@@ -44,7 +44,8 @@ with `-j1`; subprocess-dependent compilation is outside this profile.
 | Compiler | Exact Zig 0.17.0 executable, library inventory, non-system dylib closure |
 | Compiler memory | 1,024 MiB fatal footprint limit |
 | Candidate memory | 64 MiB fatal footprint limit |
-| Candidate processes / threads | One / one |
+| Check execution | One pinned Node subprocess; candidate Wasm imports forbidden |
+| Wasm linear memory / module | 16 MiB / 16 MiB |
 | Compilation and execution | One shared 30-second deadline by default; positive bounded configuration |
 | CPU | Hard per-process limit derived from that deadline |
 | Scratch | 256 MiB fixed-size image by default; never a shared cache |
@@ -72,6 +73,38 @@ not guessed message numbers. Actual local probes decide admission; these source
 references alone do not qualify another OS build. Tests exposed ineffective
 `ulimit` memory settings, loss of a limit through exec, and a non-enforcing spawn
 thread-limit attribute; none is accepted as the corresponding boundary.
+
+## Check-result ownership
+
+The earlier native harness could be fooled by a candidate-defined `exit`
+function: a failing assertion called that function, which printed the expected
+success marker and exited zero. That route is retired. Repository checks now
+compile the admitted module graph to Wasm and execute a fixed observation ABI
+in a pinned, resource-limited Node subprocess. The candidate module has no
+imports or output channel. The trusted observer returns actual values; only
+the parent compares them with the expected results.
+
+A profile's immutable harness exports:
+
+```zig
+const subject = @import("subject");
+pub export fn agent_observe(index: u32) u64 {
+    _ = index;
+    return subject.maximumToolArgumentsByteLength(bool);
+}
+```
+
+`expectedStdout` is the canonical JSON observation vector, for example `["5"]`
+followed by one newline. The host calls indices zero through vector length minus
+one, up to 64 observations. A returned 4 fails against expected 5, even when the
+observer process exits normally. Expectations are not sent to the candidate.
+
+The compiler uses Zig's built-in Wasm linker. The observer retains the existing
+64 MiB fatal process limit; its managed heap is capped at 16 MiB. Trusted VM
+threads are permitted, but candidate code has no thread/process interfaces.
+This profile checks declared portable library behavior, not native-only ABI or
+operating-system behavior. Unsupported checks remain unvalidated. Wasm is a
+repository-check artifact here, not a new Agent continuation format.
 
 ## Evidence and current scope
 

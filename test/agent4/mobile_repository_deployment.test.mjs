@@ -37,7 +37,12 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   const { PeerClient } = await load('runtime/mobility/transport.mjs');
   const cli = join(root, 'runtime/mobility/cli.mjs');
   const cliEnv = { ...process.env, PATH: '/nonexistent' }; delete cliEnv.NODE_TEST_CONTEXT;
-  const command = (...args) => JSON.parse(execFileSync(process.execPath, [cli, ...args], { cwd: root, env: cliEnv, encoding: 'utf8', timeout: 240000, maxBuffer: 4 << 20, stdio: ['ignore', 'pipe', 'pipe'] }));
+  const operatorCommands = [], uiOperations = [];
+  const command = (...args) => {
+    const row = { command: args[0], status: 'failed' }; operatorCommands.push(row);
+    const result = JSON.parse(execFileSync(process.execPath, [cli, ...args], { cwd: root, env: cliEnv, encoding: 'utf8', timeout: 240000, maxBuffer: 4 << 20, stdio: ['ignore', 'pipe', 'pipe'] }));
+    row.status = 'passed'; return result;
+  };
   const templatePath = join(area, 'template.json'); command('repository-template', templatePath);
   const template = JSON.parse(await readFile(templatePath)); assert.equal(template.provider.enabled, false);
   assert.throws(() => command('repository-template', templatePath));
@@ -154,17 +159,23 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   await page.goto(service.browser_url + '/login'); await page.locator('#credential').fill(login.credential); await page.locator('#login button').click(); await page.waitForURL(service.browser_url + '/');
   let approvals = 0, clarifications = 0;
   for (const { mode, run } of runs) {
+    const actions = { mode, runFieldFills: 1, connect: 1, continue: 0, unchangedStateContinue: 0, choices: 0, answerFieldFills: 0, submits: 0 }; uiOperations.push(actions);
     await page.locator('#run').fill(run.run_id); await page.locator('#connect').click(); await page.locator('#status').filter({ hasText: 'Connected' }).waitFor();
     for (let attempt = 0; attempt < 800 && origin.custodian.status(run.run_id).custody !== 'TERMINAL'; attempt++) {
       if (providerFailure) throw providerFailure;
       if (await page.locator('#answer').isVisible()) {
         const choices = await page.locator('#choice option').evaluateAll(options => options.map(option => option.value));
+        actions.choices++;
         if (choices.includes('approve')) { assert.equal(mode, 'publish'); assert.match(await page.locator('#question').textContent(), /Passed/); await page.locator('#choice').selectOption('approve'); approvals++; }
-        else if (choices.includes('respond')) { assert.match(await page.locator('#question').textContent(), /Confirm the bounded scope/); await page.locator('#answer-text').fill('Proceed within the granted scope.'); await page.locator('#choice').selectOption('respond'); clarifications++; }
+        else if (choices.includes('respond')) { assert.match(await page.locator('#question').textContent(), /Confirm the bounded scope/); await page.locator('#answer-text').fill('Proceed within the granted scope.'); await page.locator('#choice').selectOption('respond'); clarifications++; actions.answerFieldFills++; }
         else if (choices.includes('finish')) await page.locator('#choice').selectOption('finish');
         else { assert(choices.includes('stop')); await page.locator('#choice').selectOption('stop'); }
-        await page.locator('#answer button').click();
-      } else await page.locator('#continue').click();
+        await page.locator('#answer button').click(); actions.submits++;
+      } else {
+        const before = JSON.stringify(origin.custodian.status(run.run_id)); actions.continue++; await page.locator('#continue').click();
+        await page.waitForFunction(() => !document.querySelector('#continue').disabled);
+        if (before === JSON.stringify(origin.custodian.status(run.run_id))) actions.unchangedStateContinue++;
+      }
       await page.waitForFunction(() => !document.querySelector('#continue').disabled);
       await new Promise(r => setTimeout(r, 50));
     }
@@ -183,4 +194,10 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   child.kill('SIGTERM'); const [code, signal] = await childExit; assert.equal(code, 0, stderr); assert.equal(signal, null);
   const stats = JSON.parse(stdout.trim().split('\n').at(-1)).statistics;
   assert.equal(stats['agent.repository.check.v1'].calls, 2); assert.equal(stats['agent.repository.publish.v1'].calls, 1);
+  if (process.env.AGENT_REPOSITORY_OPERATOR_PROOF) await writeFile(process.env.AGENT_REPOSITORY_OPERATOR_PROOF, JSON.stringify({
+    format: 'mobile-repository-operator-actions/v1', sourceHead: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+    testSha256: hash(await readFile(import.meta.filename)), clientSha256: hash(await readFile(join(root, 'runtime/mobility/client.mjs'))), browser: browser.version(),
+    method: 'Actual automated UI control activations/field fills for CLI-started tasks, including 50ms polling Continues. Unchanged-state clicks compare local custodian status before/after, not a causal or minimum-user-action count. All setup and negative-test CLI invocations are retained separately. No human-dwell or latency claim.',
+    login: { credentialFieldFills: 1, submits: 1 }, uiOperations, operatorCommands, workspaceCalls: stats,
+  }, null, 2) + '\n');
 });

@@ -117,9 +117,9 @@ Quantiles use nearest rank; thirty samples do not give a precise tail guarantee.
 The raw process-resource counters cover each whole child process, including
 setup and any warmup, and must not be attributed solely to the timed task.
 
-Browser-verification and restart attribution, actual UI operation counts, and
-final acceptance reconciliation remain open. This is a scoped mechanics result,
-not full reference, deployment or live qualification.
+Supplemental browser/recovery attribution and observed UI operation counts are
+reported below. Final acceptance reconciliation remains open. This is scoped mechanics
+evidence, not full reference, deployment or live qualification.
 
 ## Supplemental browser and recovery attribution
 
@@ -154,3 +154,73 @@ driver, including its 50 ms Continue polling and qualification-only negative CLI
 checks. They do not measure human dwell or establish a minimum number of required
 human gestures. An unchanged-state Continue is a before/after observation, not a
 claim that another click caused progress.
+
+## Supplemental results at 3bc8d12
+
+All 256 attempts passed: 240 measured observations and 16 retained warmups.
+Each reported cell has thirty observations; browser engines and recovery modes
+were paired and alternated. Collection ran on the same Apple M2 Pro / Darwin
+27.2.0 / Node 26.10.0 host, with Chromium 153.0.8010.12 and Firefox 155.0.
+The image and World kernel hashes match the primary comparison above. The
+source and publication-helper hashes remained unchanged during collection.
+
+| Checkpoint bytes | Browser | Total p50 ms | p95 ms | Maximum ms |
+|---:|---|---:|---:|---:|
+| 16,250 | Chromium | 37.3 | 38.4 | 39.0 |
+| 16,250 | Firefox | 39.0 | 41.0 | 249.0 |
+| 65,404 | Chromium | 40.8 | 42.1 | 42.2 |
+| 65,404 | Firefox | 45.0 | 50.0 | 50.0 |
+
+These totals comprise fresh-Worker restore, parked-request reproduction and
+retirement, under the scope above. Paired Firefox-minus-Chromium medians were
++1.7 ms and +4.2 ms. The 249 ms Firefox observation remains in the data; its cause
+was not isolated. Firefox's coarser clock produced zero-duration subphase readings,
+which do not establish zero cost. Host verification medians were 17.4 ms and
+18.8 ms (p95 32.1 ms and 34.0 ms). Host and browser timing boundaries differ, so
+subtracting them would not isolate browser overhead.
+
+| Publication reconciliation and authored return | p50 ms | p95 ms | Maximum ms |
+|---|---:|---:|---:|
+| Retained custodian | 512.5 | 602.1 | 609.2 |
+| Reopened custodian/journal | 555.9 | 601.8 | 667.1 |
+
+The paired reopen-minus-retain median was +40.4 ms (p95 +68.0 ms). The local
+retirement/close/reopen portion itself had a 0.77 ms median; the full difference
+also includes fresh resident restoration and ordinary reconciliation/return
+variance. It must not be presented as SQLite-only overhead or full service-process
+startup. Every recovery sample retained the same published commit and finished
+with three model calls, one check, one publisher invocation and one cleanup.
+
+The [compressed raw attribution report](measurements/mobile-repository-attribution-3bc8d12.json.gz)
+contains every observation, exact input sizes/hashes, source hashes and distributions.
+Its uncompressed SHA-256 is
+`1b1cf3a7668c007a89c8a968de5f1497a5c1195780ec6e0f82914275eb37a627`.
+These measurements add phase evidence; they do not reverse the primary comparison's
+unfavorable latency result or establish a full-browser end-to-end speed advantage.
+
+## Observed operator actions
+
+The [installed-workflow action record](measurements/mobile-repository-operator-actions.json)
+comes from the shipped Chromium UI and generated deployment, with one clarification
+per task. It binds the driver and client source hashes. The login used one credential
+field fill and one submit for all three tasks. Each task used one run-ID fill and
+one Connect activation, followed by these observed controls:
+
+| Mode | Continue activations | Of those, unchanged local status | Answer selections | Text fills | Answer submits |
+|---|---:|---:|---:|---:|---:|
+| inspect | 30 | 16 | 2 | 1 | 2 |
+| propose | 101 | 88 | 2 | 1 | 2 |
+| publish | 122 | 104 | 2 | 1 | 2 |
+
+The decisions were clarification plus review/approval. The driver polled Continue
+at 50 ms intervals while work ran elsewhere, so these totals are not a minimum
+human click count. The current UI requires explicit advancement and progress
+checking; the large polling component is a usability cost, not useful task work.
+CLI-start and export were used rather than the browser's start/download controls.
+
+All 27 CLI invocations are retained separately: 17 successes and 10 expected
+rejections, including setup and negative qualification probes. Those probes and
+the disabled-inference configuration are not required for every normal task.
+The action record asserts ten model calls, two checks and one publication across
+these three tasks. No latency distribution or actual-person dwell is claimed
+from this single operator-script execution.

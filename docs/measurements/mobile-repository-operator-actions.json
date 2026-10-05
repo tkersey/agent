@@ -1,0 +1,192 @@
+{
+  "format": "mobile-repository-operator-actions/v1",
+  "sourceHead": "3bc8d12df0702f73a95f7f78bd26c6491be35b55",
+  "testSha256": "154a4f1be7b41d93dee691a4c399b15123737c1f8b9a11858b4856846d056fa9",
+  "clientSha256": "8dd659c3005b4fbb8d62c9326a0227a0fd3f89caf67dd9191f40fed54de5286a",
+  "browser": "153.0.8010.12",
+  "method": "Actual automated UI control activations/field fills for CLI-started tasks, including 50ms polling Continues. Unchanged-state clicks compare local custodian status before/after, not a causal or minimum-user-action count. All setup and negative-test CLI invocations are retained separately. No human-dwell or latency claim.",
+  "login": {
+    "credentialFieldFills": 1,
+    "submits": 1
+  },
+  "uiOperations": [
+    {
+      "mode": "inspect",
+      "runFieldFills": 1,
+      "connect": 1,
+      "continue": 30,
+      "unchangedStateContinue": 16,
+      "choices": 2,
+      "answerFieldFills": 1,
+      "submits": 2
+    },
+    {
+      "mode": "propose",
+      "runFieldFills": 1,
+      "connect": 1,
+      "continue": 101,
+      "unchangedStateContinue": 88,
+      "choices": 2,
+      "answerFieldFills": 1,
+      "submits": 2
+    },
+    {
+      "mode": "publish",
+      "runFieldFills": 1,
+      "connect": 1,
+      "continue": 122,
+      "unchangedStateContinue": 104,
+      "choices": 2,
+      "answerFieldFills": 1,
+      "submits": 2
+    }
+  ],
+  "operatorCommands": [
+    {
+      "command": "repository-template",
+      "status": "passed"
+    },
+    {
+      "command": "repository-template",
+      "status": "failed"
+    },
+    {
+      "command": "provision-repository",
+      "status": "passed"
+    },
+    {
+      "command": "provision-repository",
+      "status": "failed"
+    },
+    {
+      "command": "qualify-check",
+      "status": "passed"
+    },
+    {
+      "command": "configure-repository",
+      "status": "passed"
+    },
+    {
+      "command": "configure-repository",
+      "status": "failed"
+    },
+    {
+      "command": "configure-repository",
+      "status": "passed"
+    },
+    {
+      "command": "configure-repository",
+      "status": "failed"
+    },
+    {
+      "command": "configure-repository",
+      "status": "failed"
+    },
+    {
+      "command": "configure-repository",
+      "status": "failed"
+    },
+    {
+      "command": "validate",
+      "status": "passed"
+    },
+    {
+      "command": "validate",
+      "status": "failed"
+    },
+    {
+      "command": "init",
+      "status": "passed"
+    },
+    {
+      "command": "tasks",
+      "status": "passed"
+    },
+    {
+      "command": "task",
+      "status": "passed"
+    },
+    {
+      "command": "task",
+      "status": "passed"
+    },
+    {
+      "command": "task",
+      "status": "passed"
+    },
+    {
+      "command": "init",
+      "status": "passed"
+    },
+    {
+      "command": "validate",
+      "status": "passed"
+    },
+    {
+      "command": "login-issue",
+      "status": "passed"
+    },
+    {
+      "command": "export",
+      "status": "passed"
+    },
+    {
+      "command": "export",
+      "status": "failed"
+    },
+    {
+      "command": "export",
+      "status": "passed"
+    },
+    {
+      "command": "export",
+      "status": "failed"
+    },
+    {
+      "command": "export",
+      "status": "passed"
+    },
+    {
+      "command": "export",
+      "status": "failed"
+    }
+  ],
+  "workspaceCalls": {
+    "agent.repository.snapshot.v1": {
+      "calls": 3
+    },
+    "agent.repository.read.v1": {
+      "calls": 3
+    },
+    "agent.repository.list.v1": {
+      "calls": 0
+    },
+    "agent.repository.search.v1": {
+      "calls": 0
+    },
+    "agent.repository.read-window.v1": {
+      "calls": 0
+    },
+    "agent.repository.prepare.v1": {
+      "calls": 2
+    },
+    "agent.repository.check.v1": {
+      "calls": 2
+    },
+    "agent.repository.proposal.v1": {
+      "calls": 2
+    },
+    "agent.repository.publication-current.v1": {
+      "calls": 1
+    },
+    "agent.repository.publish.v1": {
+      "calls": 1
+    },
+    "agent.model.invoke.v4": {
+      "calls": 10
+    },
+    "agent.repository.investigation-release.v1": {
+      "calls": 0
+    }
+  }
+}

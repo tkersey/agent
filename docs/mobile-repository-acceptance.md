@@ -256,12 +256,13 @@ checks, and proxy payload-substitution rejection. Thirty matched pairs in each
 of nine cells completed with all 576 attempts retained (including warmups).
 Mobility was slower in every tested cell; extra-read and opaque-replay workloads
 transferred fewer bytes. The comparison report retains the raw data and scope.
-Separate browser/restart attribution and UI operation counts remain pending.
+Supplemental browser/recovery attribution and observed UI operation counts are
+now reported separately, with exact timing boundaries and all raw observations.
 
 Remaining work includes the application-qualification command,
 lifetime resource-accounting reconciliation, the complete MR-001–MR-096
 mapping, inherited exact-head regressions, complete fault qualification,
-browser/recovery measurements, and serial review closeout.
+final measurement reconciliation, and serial review closeout.
 
 Live-provider, actual-person, and two-machine qualifications are not run and
 require separately authorized inputs. No core changes, live model calls,
@@ -424,3 +425,19 @@ explicitly grants six moves and four model attempts per run for this extra work;
 the production setup default remains four moves. Six Chromium/Firefox UI cases
 pass, retaining both generic and repository-question restart/rendering coverage
 and the unknown-effect pause regression.
+
+## Browser/recovery attribution and operator counts
+
+The supplemental attribution target passed all 256 attempts (240 measured and
+16 warmup), with thirty paired observations per browser/recovery cell. Fresh
+production Workers reproduce the exact transferred parked outcome; all recovery
+samples reconcile one publication without another check, model call or write.
+The report retains the browser outlier, timer-resolution limits, source/helper
+hashes and raw observations. Custodian/journal reopen is explicitly not a whole
+service-process restart measurement.
+
+The installed three-mode qualification also records actual UI controls and every
+CLI invocation, including negative probes. It still passes its unchanged exact
+repair, authority, reference preservation and operation-count assertions. Polling
+Continues are reported as observed driver work, not a minimum human-action claim.
+See the [comparison report](mobile-repository-comparison.md) and its raw records.

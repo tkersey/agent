@@ -1190,6 +1190,7 @@ pub fn build(b: *std.Build) void {
         mobile_repository_mutants.dependOn(&missing.step);
         mobile_repository_comparison.dependOn(&missing.step);
         mobile_repository_measure.dependOn(&missing.step);
+        mobile_repository_attribution.dependOn(&missing.step);
         repository_approval_check.dependOn(&missing.step);
         compiled_tools_check.dependOn(&missing.step);
         mobility_continuation.dependOn(&missing.step);

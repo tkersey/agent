@@ -52,6 +52,7 @@ export function createRepositoryCheckRunner({ store, sandbox, profiles }) {
     executableSha256: selectedToolchain.executableIdentity.sha256,
     libraryInventorySha256: selectedToolchain.libraryInventorySha256 };
   return Object.freeze({
+    runner,
     profiles: Object.freeze([...admitted.values()].map(({ profile, digest }) => Object.freeze({ id: profile.id, digest,
       description: profile.description, deterministic: profile.deterministic }))),
     async check({ snapshot, candidate = null, profileId, occurrence, signal }) {

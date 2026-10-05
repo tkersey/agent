@@ -1,9 +1,10 @@
 // Environmental publication leaf. Approval remains inside the admitted image;
 // this adapter verifies its current request and commits its exact proposal.
-import { decodeSchema, decodeValue, encodeValue } from '../values.mjs';
+import { decodeSchema, encodeValue } from '../values.mjs';
 import { canonical, parse, requireThat } from './canonical.mjs';
 import { hash } from './protocol.mjs';
 import { version } from './custody.mjs';
+import { checkResultSchema as admitCheckSchema, acquiredCheck } from './repository_check.mjs';
 
 export const PUBLICATION = 'agent.repository.publish.v1';
 const same = (a, b) => hash(canonical(a, 2 << 20)) === hash(canonical(b, 2 << 20));
@@ -22,7 +23,7 @@ export function repositoryPublicationBinding(metadata, { store, helper, protecte
   requireThat(Number.isSafeInteger(payloadSchema.types[payloadSchema.root]?.bounded_text) &&
     (readOnly ? resultSchema.types[resultSchema.root] === 'boolean' :
       variants?.length === 4 && variants.every(type => Number.isSafeInteger(resultSchema.types[type]?.bounded_text))), 'PublicationSchema');
-  const checkSchema = decodeSchema(checkResultSchema);
+  const checkSchema = admitCheckSchema(checkResultSchema);
   const images = structuredClone(protectedImages), profiles = structuredClone(requiredProfiles);
   const decode = payload => parse(Buffer.from(payload), { maximum: 2 << 20 });
   const matches = run => images.some(row => row.image === run.image_digest && row.program === run.program_id);
@@ -62,8 +63,7 @@ export function repositoryPublicationBinding(metadata, { store, helper, protecte
         const selected = policy.dispatch(current, request);
         requireThat(selected.binding === binding && same(decode(selected.payload), exact), 'PublicationAuthorityMismatch');
         requireThat(exact.core.binding.policyRevision === policy.revision, 'PublicationAuthorityMismatch');
-        const acquired = journal.acquiredReplies(run.run_id, 'agent.repository.check.v1').map(bytes =>
-          parse(Buffer.from(decodeValue(checkSchema, bytes)), { maximum: 2 << 20 }));
+        const acquired = journal.acquiredReplies(run.run_id, 'agent.repository.check.v1').map(bytes => acquiredCheck(checkSchema, bytes));
         requireThat(exact.core.validation.length === profiles.length && profiles.every(profile =>
           exact.core.validation.some(record => record.profile === profile.id && record.profileDigest === profile.profileDigest &&
             record.runner === profile.runner && acquired.some(saved => same(saved, record)))), 'PublicationValidationMissing');

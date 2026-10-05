@@ -13,6 +13,10 @@ import { Custodian } from './custodian.mjs';
 import { modelBinding } from './model.mjs';
 import { repositoryApprovalBinding } from './repository_approval.mjs';
 import { repositoryPublicationBinding } from './repository_publication.mjs';
+import { repositoryCheckBinding } from './repository_check.mjs';
+import { createRepositoryCheckRunner } from '../repository_checks.mjs';
+import { createZigRepositorySandbox } from '../repository_zig_sandbox.mjs';
+import { selectZig } from '../../tools/agent4/toolchain.mjs';
 import { openRepositorySnapshotStore } from '../repository_snapshot.mjs';
 import { createManagedRepositoryEnvironment } from '../repository.mjs';
 import { BrowserSessions } from './sessions.mjs';
@@ -81,6 +85,23 @@ export async function openDeployment(configPath, { create = false } = {}) {
       const store = await openRepositorySnapshotStore({ ...adapter.store, directory: path(adapter.store.directory), gitExecutable: path(adapter.store.gitExecutable) });
       const leaf = repositoryPublicationBinding(binding, { ...adapter, store, helper: { ...adapter.helper, path: path(adapter.helper.path) },
         checkResultSchema: bytes(adapter.checkResultSchema), services: () => publicationServices });
+      const handle = leaf.handle; leaf.handle = context => { counts.calls++; return handle(context); };
+      return leaf;
+    }
+    if (adapter.kind === 'repository-check') {
+      closed(adapter, ['kind', 'store', 'profile', 'checkProfile', 'sandbox']);
+      closed(adapter.store, ['directory', 'gitExecutable', 'repository', 'generation', 'manifestSha256']);
+      closed(adapter.sandbox, ['zigExecutable', 'libraryDirectory', 'launcher', 'processLock', 'scratchRoot', 'timeoutMs', 'maximumOutputBytes', 'scratchBytes']);
+      for (const helper of [adapter.sandbox.launcher, adapter.sandbox.processLock]) closed(helper, ['path', 'sha256']);
+      requireThat(adapter.profile.repository === adapter.store.repository && adapter.profile.generation === adapter.store.generation &&
+        adapter.profile.manifest === adapter.store.manifestSha256, 'RepositoryCheckBinding');
+      const store = await openRepositorySnapshotStore({ ...adapter.store, directory: path(adapter.store.directory), gitExecutable: path(adapter.store.gitExecutable) });
+      const toolchain = selectZig(['--zig-exe', path(adapter.sandbox.zigExecutable), '--zig-lib', path(adapter.sandbox.libraryDirectory)], { inherited: null, inheritedLibrary: null });
+      const sandbox = await createZigRepositorySandbox({ ...adapter.sandbox, toolchain, scratchRoot: path(adapter.sandbox.scratchRoot),
+        launcher: { ...adapter.sandbox.launcher, path: path(adapter.sandbox.launcher.path) },
+        processLock: { ...adapter.sandbox.processLock, path: path(adapter.sandbox.processLock.path) } });
+      const runner = createRepositoryCheckRunner({ store, sandbox, profiles: [adapter.checkProfile] });
+      const leaf = repositoryCheckBinding(binding, { runner, profile: adapter.profile, hostId: config.hostId });
       const handle = leaf.handle; leaf.handle = context => { counts.calls++; return handle(context); };
       return leaf;
     }

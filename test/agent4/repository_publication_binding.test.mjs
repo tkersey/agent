@@ -7,6 +7,7 @@ import { canonical } from '../../runtime/mobility/canonical.mjs';
 import { repositoryPublicationBinding, PUBLICATION } from '../../runtime/mobility/repository_publication.mjs';
 
 const schema = { root: 0, types: [{ bounded_text: 2 << 20 }] }, schemaBytes = encodeSchema(schema);
+const checkSchema = { root: 0, types: [{ product: [1, 2] }, { enumeration: [0, 1, 2, 3, 4, 5, 6] }, { bounded_text: 2 << 20 }] };
 const deliverySchema = { root: 0, types: [{ sum: [1, 1, 1, 2] }, { bounded_text: 16384 }, { bounded_text: 128 }] };
 const text = value => Buffer.from(canonical(value, 2 << 20)).toString('utf8');
 function fixture() {
@@ -21,7 +22,7 @@ function fixture() {
   const state = { writes: 0, admissions: 0, reconciliations: 0, checks: [validation], records: [], revoked: false, gateRevokes: false, reconcileStatus: 'NotApplied' };
   let binding;
   const journal = { run: () => run, publicationRecords: () => state.records,
-    acquiredReplies: () => state.checks.map(row => encodeValue(schema, text(row))),
+    acquiredReplies: () => state.checks.map(row => encodeValue(checkSchema, [0, text(row)])),
     admitPublication() { state.admissions++; return { ...admission, intent_digest: 'intent' }; } };
   const policy = { revision: 'policy', dispatch(_run, request) {
     if (state.revoked) throw Object.assign(Error('revoked'), { code: 'PrincipalRevoked' });
@@ -40,7 +41,7 @@ function fixture() {
   binding = repositoryPublicationBinding({ operation: PUBLICATION, payloadSchema: schemaBytes, resultSchema: encodeSchema(deliverySchema) },
     { store, helper: {}, protectedImages: [{ image: run.image_digest, program: run.program_id }],
       authorizationDigest: '1'.repeat(64), validationPolicyDigest: '2'.repeat(64), requiredProfiles: [{ id: 'zig-check', profileDigest: '3'.repeat(64), runner: '4'.repeat(64) }],
-      checkResultSchema: schemaBytes, services: () => ({ journal, policy }) });
+      checkResultSchema: encodeSchema(checkSchema), services: () => ({ journal, policy }) });
   const context = () => ({ payload: text(proposal), request: { payload: encodeValue(schema, text(proposal)) }, run, occurrence });
   return { binding, run, proposal, occurrence, admission, state, context };
 }
@@ -81,4 +82,10 @@ test('no-intent recovery returns definitive nonapplication only after the read-o
   assert.equal(result.publicationReceipt, null); assert.equal(f.state.reconciliations, 1); assert.equal(f.state.writes, 0);
   f.state.reconcileStatus = 'Published';
   await assert.rejects(f.binding.reconcile(f.context()), { code: 'PublicationIntentMissing' });
+});
+
+test('acquired status and record disagreement cannot admit publication', async () => {
+  const f = fixture(); f.state.checks[0].status = 'Failed';
+  await assert.rejects(f.binding.handle(f.context()), { code: 'PublicationCheckStatus' });
+  assert.equal(f.state.writes, 0); assert.equal(f.state.admissions, 0);
 });

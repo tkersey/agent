@@ -194,6 +194,22 @@ They do not establish the full investigation application or actual-person lane.
 Complete application integration, installed helper acquisition, and the remaining
 fault/acceptance matrix are still open.
 
+## Typed check dispatch
+
+The check leaf now returns an enum status with its canonical record. The authored
+approval composition preserves every non-passing status and stops before proposal
+preparation. The deployed `repository-check` binding fixes one finite profile and
+qualified runner and charges the existing durable W allowance before dispatch.
+The publisher requires typed/canonical status agreement in acquired evidence.
+
+The actual sandboxed Zig repair test passes through this binding while retaining
+the independent failing-base and unchanged-ref/checkout assertions. All twelve
+compiled approval scenarios pass, including both browsers, six non-passing
+statuses, and a retained check charge after publication recovery. Nine adapter
+tests and three extracted deployment/CLI regression tests pass. The extracted
+tests cover package import closure and existing deployment behavior; they do not
+yet exercise the new check configuration through the extracted loader.
+
 ## Remaining acceptance
 
 W2–W8 remain open: complete repository/check deployment integration;

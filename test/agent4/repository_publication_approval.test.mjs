@@ -7,11 +7,13 @@ import { generateKeyPairSync } from 'node:crypto';
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { artifactRoot } from './artifacts.mjs';
 import { verifyRuntime } from '../../tools/agent4/dependencies.mjs';
 import { encodeValue, decodeValue, decodeSchema } from '../../runtime/values.mjs';
 import { provisionRepository, openRepositorySnapshotStore } from '../../runtime/repository_snapshot.mjs';
+import { repositoryCheckBinding } from '../../runtime/mobility/repository_check.mjs';
 import { repositoryApprovalBinding } from '../../runtime/mobility/repository_approval.mjs';
 import { repositoryPublicationBinding, PUBLICATION } from '../../runtime/mobility/repository_publication.mjs';
 import { WorldAdmission } from '../../runtime/mobility/admission.mjs';
@@ -27,7 +29,7 @@ const text = value => Buffer.from(canonical(value, 2 << 20)).toString('utf8');
 const env = { PATH: '/usr/bin:/bin', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null',
   GIT_AUTHOR_NAME: 'Approval fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid',
   GIT_COMMITTER_NAME: 'Approval fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid' };
-async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n' } = {}) {
+async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed' } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'repository-approval-'));
   const git = await realpath(execFileSync('/bin/sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim());
   const source = join(root, 'source.git');
@@ -42,7 +44,7 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
     { path: 'fix.txt', operation: 'create', oldDigest: null, oldMode: null, content }]);
   const identity = verifyRuntime(resolve(process.env.AGENT_MOBILITY_RUNTIME)), world = await import(pathToFileURL(identity.entrypoint));
   const kernelBytes = await readFile(identity.kernelPath), image = await readFile(`${artifactRoot}/agent4/repository-approval/program.bpi3`);
-  const names = ['task', 'preparation', 'result', 'proposal', 'receipt', 'delivery', 'human', 'human-reply', 'identifier', 'boolean'];
+  const names = ['task', 'preparation', 'result', 'check-result', 'proposal', 'receipt', 'delivery', 'human', 'human-reply', 'identifier', 'boolean'];
   const bytes = Object.fromEntries(await Promise.all(names.map(async name => [name, await readFile(`${artifactRoot}/agent4/repository-approval/${name}.schema`)])));
   const schemas = Object.fromEntries(names.map(name => [name, decodeSchema(bytes[name])]));
   const metadata = (operation, input, output, role) => ({ operation, payloadSchema: bytes[input], resultSchema: bytes[output], role,
@@ -68,7 +70,7 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
   const profileDigest = '3'.repeat(64), runner = '4'.repeat(64);
   const configuration = { store, helper: { path: process.env.AGENT_PUBLICATION_GATE, sha256: hash(await readFile(process.env.AGENT_PUBLICATION_GATE)) },
     protectedImages: [{ image: hash(image), program: programId }], authorizationDigest: '1'.repeat(64), validationPolicyDigest: '2'.repeat(64),
-    requiredProfiles: [{ id: 'fixture-content', profileDigest, runner }], checkResultSchema: bytes.proposal,
+    requiredProfiles: [{ id: 'fixture-content', profileDigest, runner }], checkResultSchema: bytes['check-result'],
     services: () => ({ journal: journals.W, policy: policies.W }) };
   const publish = repositoryPublicationBinding(publishMetadata, configuration), original = publish.handle;
   publish.handle = async context => {
@@ -79,12 +81,18 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
   const current = repositoryPublicationBinding(metadata('agent.repository.publication-current.v1', 'proposal', 'boolean', 'read'), configuration);
   const fixed = (operation, input, output, role, handle) => ({ ...metadata(operation, input, output, role), authorize: () => true,
     handle: async context => encodeValue(schemas[output], await handle(context)) });
-  const check = fixed('agent.repository.check.v1', 'proposal', 'proposal', 'write', async ({ payload, occurrence }) => {
-    counts.check++; const exact = JSON.parse(payload), inputs = await store.checkInputs({ snapshot: exact.snapshot, candidate: exact, requiredPaths: ['fix.txt'] });
-    assert.deepEqual(inputs.files['fix.txt'], Buffer.from(content));
-    const record = { format: 'agent.repository.check/v1', occurrence: occurrence.id, snapshot: exact.snapshot, candidate: exact.id, tree: exact.tree,
-      profile: 'fixture-content', profileDigest, runner, status: 'Passed', completedChecks: ['fixture-content'] };
-    return text({ ...record, id: hash(canonical(record, 2 << 20)) });
+  const check = repositoryCheckBinding({ ...metadata('agent.repository.check.v1', 'proposal', 'check-result', 'write'),
+    subjectVersion: provisioned.manifestSha256 }, { hostId: 'W',
+    profile: { owner: 'W', repository: options.repository, generation: options.generation, manifest: provisioned.manifestSha256,
+      profileId: 'fixture-content', profileDigest, runner, disclosure: { audience: null, labels: ['shared'] },
+      allowance: { attempts: 1, request_bytes: 2 << 20, concurrent: 1 } },
+    runner: { runner, profiles: [{ id: 'fixture-content', digest: profileDigest }], async check({ candidate: exact, occurrence }) {
+      counts.check++; const inputs = await store.checkInputs({ snapshot: exact.snapshot, candidate: exact, requiredPaths: ['fix.txt'] });
+      assert.deepEqual(inputs.files['fix.txt'], Buffer.from(content));
+      const record = { format: 'agent.repository.check/v1', occurrence, snapshot: exact.snapshot, candidate: exact.id, tree: exact.tree,
+        profile: 'fixture-content', profileDigest, runner, status: checkStatus, completedChecks: checkStatus === 'Passed' ? ['fixture-content'] : [] };
+      return { ...record, id: hash(canonical(record, 2 << 20)) };
+    } },
   });
   const prepare = fixed('agent.repository.proposal.v1', 'preparation', 'proposal', 'write', async ({ payload, run, occurrence }) => text(await store.preparePublication({
     candidate: JSON.parse(payload[0]), validation: [JSON.parse(payload[1])],
@@ -120,7 +128,7 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
     deliver: envelope => hosts[destination].receiveOffer(sourceHost, envelope), withdraw: envelope => hosts[destination].withdraw(sourceHost, envelope),
     control: (...args) => hosts[destination].control(sourceHost, ...args),
   });
-  t.after(async () => { for (const host of ['W', 'U']) { hosts[host].retireAll(); journals[host].close(); } await rm(root, { recursive: true, force: true }); });
+  t.after(async () => { for (const host of ['W', 'U']) { await hosts[host].stopOperations(); hosts[host].retireAll(); journals[host].close(); } await rm(root, { recursive: true, force: true }); });
   const id = runId('issuer'), registration = signRecord('run', { format: 'agent-mobility-run/v1', run_id: id, issuer_id: 'issuer', principal_ref: 'user', tenant_ref: 'tenant',
     image_digest: hash(image), program_id: programId, trusted_runtime_profile: identity.kernelSha256, allowed_host_policy_ref: 'fixture', deployment_policy_revision: 'p1',
     initial_classification: ['shared'], initial_host_id: 'W', initial_epoch: '0', deployment_limits: limits, key_id: 'issuer' }, pairs.issuer.privateKey);
@@ -128,8 +136,11 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
   const moves = [];
   return { id, counts, store, base, moves, get journal() { return journals[activeHost]; },
     async run() {
-      for (let n = 0; n < 5; n++) {
+      let transitions = 0;
+      for (let n = 0; n < 1000; n++) {
         const result = await hosts[activeHost].run(id);
+        if (result.kind === 'dispatching') { await delay(10); continue; }
+        assert(++transitions <= 5, 'bounded approval transitions');
         if (result.kind === 'awaiting') {
           const identity = { principal: 'user', tenant: 'tenant', audiences: ['human'] };
           const pending = hosts[activeHost].pendingQuestion(id, identity);
@@ -147,8 +158,10 @@ async function fixture(t, { staleAnswer = false, wrongPrincipal = false, lostRep
       assert.fail('bounded approval did not complete');
     },
     restart() { hosts[activeHost].retireAll(); journals[activeHost].close(); open(activeHost, false); },
-    result() { const journal = journals[activeHost], run = journal.run(id), outcome = world.decodeOutcome(journal.artifact('tenant', run.outcome_digest));
-      assert.equal(outcome.kind, 'completed'); return decodeValue(schemas.result, outcome.value); } };
+    outcome() { const journal = journals[activeHost], run = journal.run(id), outcome = world.decodeOutcome(journal.artifact('tenant', run.outcome_digest));
+      assert.equal(outcome.kind, 'completed'); return decodeValue(schemas.result, outcome.value); },
+    checkAllowance() { return journals.W.allowance(id, 'check'); },
+    result() { const outcome = this.outcome(); assert.equal(outcome.tag, 0); return outcome.value; } };
 
 }
 test('actual private approval grants exactly the prepared managed publication', async t => {
@@ -157,6 +170,7 @@ test('actual private approval grants exactly the prepared managed publication', 
   const receipt = JSON.parse(result.value.value); assert.equal(receipt.commit, await f.store.current());
   assert.deepEqual(f.moves, [['W', 'U'], ['U', 'W']]);
   assert.notEqual(receipt.commit, f.base); assert.deepEqual(f.counts, { check: 1, publish: 1, human: 1 });
+  assert.equal(f.checkAllowance().used.attempts, 1);
 });
 for (const option of ['staleAnswer', 'wrongPrincipal']) test(`actual approval rejects ${option} without reaching publisher`, async t => {
   const f = await fixture(t, { [option]: true }); assert.equal((await f.run()).kind, 'terminal');
@@ -172,6 +186,7 @@ test('lost publication reply resumes its actual checkpoint and recovers without 
   const result = f.result(), receipt = JSON.parse(result.value.value);
   assert.equal(result.tag, 0); assert.equal(result.value.tag, 0); assert.equal(receipt.commit, commit); assert.equal(receipt.recovered, true);
   assert.deepEqual(f.counts, { check: 1, publish: 1, human: 1 });
+  assert.equal(f.checkAllowance().used.attempts, 1);
 });
 
 if (process.env.AGENT_MOBILITY_BROWSER_TOOLS) {
@@ -203,3 +218,12 @@ if (process.env.AGENT_MOBILITY_BROWSER_TOOLS) {
     assert.deepEqual(f.moves, [['W', 'U'], ['U', 'W']]); assert.deepEqual(f.counts, { check: 1, publish: 1, human: 1 });
   });
 }
+
+for (const [index, status] of ['Failed', 'Unavailable', 'TimedOut', 'Cancelled', 'InvalidOutput', 'Incomplete'].entries()) test(`authored ${status} check stops before proposal or approval`, async t => {
+  const f = await fixture(t, { checkStatus: status });
+  assert.equal((await f.run()).kind, 'terminal');
+  const outcome = f.outcome(); assert.equal(outcome.tag, 1); assert.equal(outcome.value[0], index + 1);
+  assert.equal(JSON.parse(outcome.value[1]).status, status);
+  assert.equal(await f.store.current(), f.base); assert.deepEqual(f.moves, []);
+  assert.deepEqual(f.counts, { check: 1, publish: 0, human: 0 });
+});

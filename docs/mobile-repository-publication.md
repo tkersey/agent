@@ -34,6 +34,11 @@ authorization/validation identities, required profile and runner digests, and
 the repository-check result schema. It rechecks current policy while holding
 the gate. Validation must exactly match results acquired by the current run's
 existing custody journal; self-consistent proposal hashes are insufficient.
+The check contract is `{ status, record }`: an enum distinguishes all seven
+runner outcomes while the canonical record retains the exact validation binding.
+The authored composition returns a check failure before preparing a proposal or
+asking for approval unless the status is Passed. Publication rejects disagreement
+between that typed status and the acquired canonical record.
 Only the compiled protected approval construction may expose this operation in
 an admitted production image. The image allowlist is an operator trust decision,
 not a dynamically inferred proof that arbitrary images use approval correctly.

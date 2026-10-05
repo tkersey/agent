@@ -489,13 +489,13 @@ pub fn build(b: *std.Build) void {
         mobile_repository_zig_test.addFileArg2(process_lock.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LOCK=", .make_absolute = true });
     }
     mobile_repository_zig_test.addArgs(&.{ "node", "--test", "test/agent4/repository_zig_sandbox.test.mjs" });
-    publication_test.addArgs(&.{ "node", "--test", "test/agent4/repository_publication_gate.test.mjs", "test/agent4/repository_publication_journal.test.mjs", "test/agent4/repository_publication_binding.test.mjs" });
+    publication_test.addArgs(&.{ "node", "--test", "test/agent4/repository_publication_gate.test.mjs", "test/agent4/repository_publication_journal.test.mjs", "test/agent4/repository_publication_binding.test.mjs", "test/agent4/repository_check_binding.test.mjs" });
     const mobile_repository_emitter = g.emitter("mobile-repository-emitter", g.module("test/consumers/mobile_repository/main.zig"));
     const repository_approval_images = b.step("repository-approval-images", "Emit the shared managed publication approval composition");
     repository_approval_test.step.dependOn(repository_approval_images);
     const repository_approval_emitter = g.emitter("repository-approval-emitter", g.module("test/consumers/mobile_repository/publication.zig"));
     g.emit(repository_approval_images, repository_approval_emitter, &.{"image"}, "repository-approval/program.bpi3");
-    for ([_][]const u8{ "task", "preparation", "result", "proposal", "receipt", "delivery", "human", "human-reply", "identifier", "boolean" }) |name|
+    for ([_][]const u8{ "task", "preparation", "result", "check-result", "proposal", "receipt", "delivery", "human", "human-reply", "identifier", "boolean" }) |name|
         g.emit(repository_approval_images, repository_approval_emitter, &.{name}, b.fmt("repository-approval/{s}.schema", .{name}));
     g.emit(mobile_repository_images, mobile_repository_emitter, &.{"image"}, "mobile-repository/program.bpi3");
     for ([_][]const u8{ "task", "report", "snapshot-request", "snapshot", "read", "evidence", "list", "listing", "search", "search-result", "read-window", "read-window-result", "question", "answer", "cleanup", "unit" }) |name|

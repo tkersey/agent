@@ -8,6 +8,9 @@ import { tmpdir } from 'node:os';
 import { selectZig } from '../../tools/agent4/toolchain.mjs';
 import { createZigRepositorySandbox } from '../../runtime/repository_zig_sandbox.mjs';
 import { provisionRepository, openRepositorySnapshotStore } from '../../runtime/repository_snapshot.mjs';
+import { encodeSchema, encodeValue } from '../../runtime/values.mjs';
+import { canonical } from '../../runtime/mobility/canonical.mjs';
+import { repositoryCheckBinding, checkResultSchema, acquiredCheck } from '../../runtime/mobility/repository_check.mjs';
 import { createRepositoryCheckRunner } from '../../runtime/repository_checks.mjs';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -77,7 +80,19 @@ pub fn main() void {
   const request = { snapshot, profileId: profile.id, occurrence: 'base-check' };
   const failed = await checks.check(request);
   assert.equal(failed.status, 'Failed', JSON.stringify(failed)); assert.equal(failed.diagnostics.exitCode, 7);
-  const passed = await checks.check({ ...request, candidate, occurrence: 'candidate-check' });
+  const checkWire = encodeSchema({ root: 0, types: [{ product: [1, 2] }, { enumeration: [0, 1, 2, 3, 4, 5, 6] }, { bounded_text: 2 << 20 }] });
+  const candidateWire = { root: 0, types: [{ bounded_text: 2 << 20 }] };
+  const binding = repositoryCheckBinding({ operation: 'agent.repository.check.v1', role: 'write', subject: options.repository,
+    subjectVersion: receipt.manifestSha256, audience: 'check', payloadSchema: encodeSchema(candidateWire), resultSchema: checkWire }, {
+    hostId: 'W', runner: checks, profile: { owner: 'W', repository: options.repository, generation: options.generation,
+      manifest: receipt.manifestSha256, profileId: profile.id, profileDigest: checks.profiles[0].digest, runner: checks.runner,
+      disclosure: { audience: 'check', labels: ['source'] }, allowance: { attempts: 2, request_bytes: 4 << 20, concurrent: 1 } },
+  });
+  const payload = Buffer.from(canonical(candidate, 2 << 20)).toString('utf8');
+  const context = { payload, request: { payload: encodeValue(candidateWire, payload) }, run: { classification: ['source'] },
+    occurrence: { id: 'candidate-check' }, signal: new AbortController().signal };
+  assert.equal(binding.charge(context).kind, 'check');
+  const passed = acquiredCheck(checkResultSchema(checkWire), await binding.handle(context));
   assert.equal(passed.status, 'Passed', JSON.stringify(passed));
   assert.equal(passed.physicalExecutions, 2);
   assert.notEqual(passed.binarySha256, failed.binarySha256);

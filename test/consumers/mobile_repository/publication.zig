@@ -9,7 +9,10 @@ pub const Proposal = Text(2 * 1024 * 1024);
 pub const Receipt = Text(16384);
 pub const Reason = Text(128);
 pub const Delivery = union(enum) { published: Receipt, conflict: Receipt, not_applied: Receipt, uncertain: Reason };
+pub const CheckStatus = enum { Passed, Failed, Unavailable, TimedOut, Cancelled, InvalidOutput, Incomplete };
+pub const CheckResult = struct { status: CheckStatus, record: Proposal };
 pub const Result = union(enum) { delivered: Delivery, declined: Reason, invalid, denied };
+pub const Outcome = union(enum) { approval: Result, check_failed: CheckResult };
 pub const Task = struct { principal: u64, candidate: Proposal, human: agent.mobility.EnsureInput, placement: agent.mobility.EnsureInput };
 pub const Preparation = struct { candidate: Proposal, validation: Proposal };
 pub const Challenge = struct { occurrence: Text(128), proposal: Proposal };
@@ -57,20 +60,20 @@ pub fn define(c: agent.Context, principal: Id, placement_input: Id) !agent.appro
 const Application = struct {
     pub fn emit(c: agent.Context) !boundary.source.Module {
         const b = c.builder;
-        const entry = try b.declare(&.{try c.schema(Task)}, try c.schema(Result), &.{}, &.{});
+        const entry = try b.declare(&.{try c.schema(Task)}, try c.schema(Outcome), &.{}, &.{});
         const task = try b.reference(b.parameter(entry, 0));
         const principal = try b.primitive(try c.schema(u64), .field, &.{task}, 0);
         const candidate = try b.primitive(try c.schema(Proposal), .field, &.{task}, 1);
         const human = try b.primitive(try c.schema(agent.mobility.EnsureInput), .field, &.{task}, 2);
         const placement = try b.primitive(try c.schema(agent.mobility.EnsureInput), .field, &.{task}, 3);
-        const check = try c.external("agent.repository.check.v1", try c.schema(Proposal), try c.schema(Proposal), .write);
+        const check = try c.external("agent.repository.check.v1", try c.schema(Proposal), try c.schema(CheckResult), .write);
         const prepare = try c.external("agent.repository.proposal.v1", try c.schema(Preparation), try c.schema(Proposal), .write);
         const gate = try define(c, principal, placement);
         const row = try (boundary.source.Row{ .effects = gate.effects }).unionWith(b.allocator(), .{ .effects = &.{ check, prepare } });
         b.functions.items[@intCast(entry)].effects = row.effects;
-        const validation = try b.variable(try c.schema(Proposal));
+        const validation = try b.variable(try c.schema(CheckResult));
         const proposal = try b.variable(try c.schema(Proposal));
-        const input = try b.primitive(try c.schema(Preparation), .product, &.{ candidate, try b.reference(validation) }, 0);
+        const input = try b.primitive(try c.schema(Preparation), .product, &.{ candidate, try b.primitive(try c.schema(Proposal), .field, &.{try b.reference(validation)}, 1) }, 0);
         const checked = try b.term(.{ .perform = .{ .effect = check, .payload = candidate } });
         const prepared = try b.term(.{ .perform = .{ .effect = prepare, .payload = input } });
         // These sites authorize bounded scratch preparation, never publication.
@@ -87,16 +90,24 @@ const Application = struct {
                 .{ .variable = failed, .body = try b.pure(try b.primitive(try c.schema(Result), .variant, &.{try b.constant(void, {})}, 3)) },
             },
         } }));
-        try b.define(entry, try b.bind(validation, checked, try b.bind(proposal, prepared, at_human)));
+        const approved = try b.variable(try c.schema(Result));
+        const delivered = try b.bind(approved, at_human, try b.pure(try b.primitive(try c.schema(Outcome), .variant, &.{try b.reference(approved)}, 0)));
+        const status = try b.primitive(try c.schema(CheckStatus), .field, &.{try b.reference(validation)}, 0);
+        const passed = try b.primitive(try c.schema(bool), .equal, &.{ try b.primitive(try c.schema(u32), .enum_tag, &.{status}, 0), try c.literal(u32, 0) }, 0);
+        try b.define(entry, try b.bind(validation, checked, try b.term(.{ .conditional = .{
+            .condition = passed,
+            .when_true = try b.bind(proposal, prepared, delivered),
+            .when_false = try b.pure(try b.primitive(try c.schema(Outcome), .variant, &.{try b.reference(validation)}, 1)),
+        } })));
         return b.module(entry, try b.scalar(void));
     }
 };
-pub const System = agent.system(.{ .InitialArgs = Task, .Result = Result, .Failure = void, .application = Application });
+pub const System = agent.system(.{ .InitialArgs = Task, .Result = Outcome, .Failure = void, .application = Application });
 pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();
     const mode = args.next() orelse "image";
-    inline for (.{ .{ "task", Task }, .{ "preparation", Preparation }, .{ "result", Result }, .{ "proposal", Proposal }, .{ "receipt", Receipt }, .{ "delivery", Delivery }, .{ "human", HumanInput }, .{ "human-reply", HumanReply }, .{ "identifier", Text(128) }, .{ "boolean", bool } }) |item| {
+    inline for (.{ .{ "task", Task }, .{ "preparation", Preparation }, .{ "result", Outcome }, .{ "check-result", CheckResult }, .{ "proposal", Proposal }, .{ "receipt", Receipt }, .{ "delivery", Delivery }, .{ "human", HumanInput }, .{ "human-reply", HumanReply }, .{ "identifier", Text(128) }, .{ "boolean", bool } }) |item| {
         if (std.mem.eql(u8, mode, item[0])) {
             var b = boundary.source.Builder.init(init.gpa);
             defer b.deinit();

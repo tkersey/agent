@@ -88,9 +88,26 @@ For a local machine-readable qualification report, set `AGENT_REPOSITORY_PROOF`
 to an explicit output file when running the check target. That report is local
 qualification evidence, not a publication authorization or completion certificate.
 
-This slice does not yet supply the full Boundary/World/Agent profile catalog,
-production deployment loader, durable check dispatch, publisher, or complete
-mobile UI. The use archive includes the JavaScript adapters; automatic acquisition
+The deployment loader accepts `repository-check`. Its `store` identifies the
+existing managed repository; `checkProfile` is one admitted finite harness;
+`sandbox` selects the absolute `zigExecutable`, `libraryDirectory`, pinned
+`launcher` and `processLock`, `scratchRoot`, and execution bounds. The binding's
+`profile` fixes the owner, repository, generation, manifest, profile and runner
+digests, disclosure audience/labels, and attempt/byte/concurrency allowance.
+The loader qualifies the selected sandbox before exposing the capability. It
+does not compile helpers or substitute another compiler/profile.
+
+Each dispatch charges the existing W-owned custody allowance before execution.
+The check reply contains a typed status and the complete canonical record.
+Passed, Failed, Unavailable, TimedOut, Cancelled, InvalidOutput and Incomplete
+remain distinct. The authored approval composition stops on every non-passing
+status; the publisher also checks agreement between the typed status and the
+acquired record. The reference approval test uses this same binding and verifies
+its retained charge after restart. The real Zig qualifier sends the repaired
+candidate through it, independently requiring the incorrect base to fail.
+
+This slice does not yet supply the full Boundary/World/Agent profile catalog or
+complete mobile application. The use archive includes the JavaScript adapters; automatic acquisition
 and inventory binding of the native runner in the complete application package
 remain part of the package work. A single JSON-bound repair does not certify
 arbitrary edits elsewhere in Agent.

@@ -4,6 +4,8 @@ import { decodeNatural, encodeNatural } from "./values.mjs";
 
 const PROTOCOL = "agent.model.protocol.openai-responses-v2";
 export const MODEL_EFFECT = "agent.model.invoke.v3";
+export const REPLAY_MODEL_EFFECT = "agent.model.invoke.v4";
+export const MAXIMUM_REPLAY_BYTES = 2 * 1024 * 1024;
 const OPENAI_RESPONSES_ENDPOINT = "https://api.openai.com/v1/responses";
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "[::1]", "localhost"]);
 
@@ -39,63 +41,38 @@ const argumentDecodeFailures = Object.freeze({
 });
 
 export async function performModelInvocation(payload, options) {
-  assert(options !== null && typeof options === "object", "model transport options are required");
-  for (const key of Object.keys(options)) {
-    assert(["endpoint", "apiKey", "signal"].includes(key), `unknown model transport option: ${key}`);
-  }
   const invocation = decodeModelInvocation(payload);
-  if (invocation.protocol !== PROTOCOL) {
-    return encodeUnsupported("unsupported_protocol");
-  }
+  const response = await invokeProvider(invocation, options);
+  return response.failure ?? normalizeOpenAIResponses(response.body, invocation.normalizationLimits, invocation.tools);
+}
+
+// One bounded transport for both wire contracts. It never executes proposals,
+// retries a request, or retains provider session state.
+async function invokeProvider(invocation, options, input = null) {
+  assert(options !== null && typeof options === "object", "model transport options are required");
+  for (const key of Object.keys(options)) assert(["endpoint", "apiKey", "signal"].includes(key), `unknown model transport option: ${key}`);
+  if (invocation.protocol !== PROTOCOL) return { failure: encodeUnsupported("unsupported_protocol") };
   let requestBody;
-  try {
-    requestBody = encodeOpenAIResponsesRequest(invocation);
-  } catch {
-    return encodeUnsupported("unsupported_parameter");
-  }
-  const endpoint = admitModelEndpoint(
-    options.endpoint,
-    options.apiKey !== undefined,
-  );
+  try { requestBody = encodeOpenAIResponsesRequest(invocation, input); }
+  catch { return { failure: encodeUnsupported("unsupported_parameter") }; }
+  const endpoint = admitModelEndpoint(options.endpoint, options.apiKey !== undefined);
   const headers = { "content-type": "application/json" };
   if (options.apiKey !== undefined) headers.authorization = `Bearer ${options.apiKey}`;
   const signal = options.signal;
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      body: requestBody,
-      redirect: "error",
-      signal,
-    });
+    const response = await fetch(endpoint, { method: "POST", headers, body: requestBody, redirect: "error", signal });
     if (response.status < 200 || response.status >= 300) {
-      await response.body?.cancel();
-      return encodeProviderFailure("http_status", response.status);
+      await response.body?.cancel(); return { failure: encodeProviderFailure("http_status", response.status) };
     }
     const declaredLength = response.headers.get("content-length");
-    if (declaredLength !== null &&
-        Number(declaredLength) > invocation.maximumProviderResponseBytes) {
-      await response.body?.cancel();
-      return encodeTransportFailure("response_too_large");
+    if (declaredLength !== null && Number(declaredLength) > invocation.maximumProviderResponseBytes) {
+      await response.body?.cancel(); return { failure: encodeTransportFailure("response_too_large") };
     }
-    const body = await readBoundedBody(
-      response,
-      invocation.maximumProviderResponseBytes,
-    );
-    if (body === null) return encodeTransportFailure("response_too_large");
-    return normalizeOpenAIResponses(
-      body,
-      invocation.normalizationLimits,
-      invocation.tools,
-    );
+    const body = await readBoundedBody(response, invocation.maximumProviderResponseBytes);
+    return body === null ? { failure: encodeTransportFailure("response_too_large") } : { body };
   } catch (error) {
-    if (signal?.aborted || error?.name === "AbortError" || error?.name === "TimeoutError") {
-      return encodeTransportFailure("interrupted");
-    }
-    if (error?.cause?.code === "EACCES" || error?.cause?.code === "EPERM") {
-      return encodeTransportFailure("denied");
-    }
-    return encodeTransportFailure("unavailable");
+    return { failure: encodeTransportFailure(signal?.aborted || ["AbortError", "TimeoutError"].includes(error?.name) ? "interrupted"
+      : ["EACCES", "EPERM"].includes(error?.cause?.code) ? "denied" : "unavailable") };
   }
 }
 
@@ -118,7 +95,11 @@ export function admitModelEndpoint(endpointText, credentialed) {
 
 export function decodeModelInvocation(input) {
   const bytes = Buffer.from(input);
-  const cursor = { value: 0 };
+  const cursor = { value: 0 }, invocation = decodeInvocation(bytes, cursor);
+  assert.equal(cursor.value, bytes.byteLength, "ModelInvocation has trailing bytes");
+  return invocation;
+}
+function decodeInvocation(bytes, cursor) {
   const protocol = decodeText(bytes, cursor);
   const model = decodeText(bytes, cursor);
   const parameters = decodeParameters(bytes, cursor);
@@ -169,7 +150,6 @@ export function decodeModelInvocation(input) {
     maximumResultTextBytes: readU32(bytes, cursor),
   });
   const maximumProviderResponseBytes = readU32(bytes, cursor);
-  assert.equal(cursor.value, bytes.byteLength, "ModelInvocation has trailing bytes");
   validateToolMetadata(tools);
   assert(selection.minimumCalls <= selection.maximumCalls);
   assert(selection.maximumCalls <= normalizationLimits.maximumOutputItems);
@@ -185,6 +165,89 @@ export function decodeModelInvocation(input) {
     normalizationLimits,
     maximumProviderResponseBytes,
   });
+}
+
+export function decodeReplayModelInvocation(input) {
+  const bytes = Buffer.from(input), cursor = { value: 0 };
+  const invocation = decodeInvocation(bytes, cursor), replay = decodeBytes(bytes, cursor);
+  assert(replay.length <= MAXIMUM_REPLAY_BYTES, 'ReplayCapacity');
+  const results = decodeVector(bytes, cursor, () => ({ callId: decodeText(bytes, cursor), output: decodeText(bytes, cursor) }));
+  assert.equal(cursor.value, bytes.length, 'ReplayInvocation has trailing bytes');
+  assert(results.length <= invocation.normalizationLimits.maximumOutputItems, 'ReplayCapacity');
+  assert.equal(invocation.responsePolicy.store, false, 'ReplayRequiresStateless');
+  const history = replay.length === 0 ? [] : parseJsonStrict(fatalUtf8(replay));
+  const pending = replayCalls(history);
+  for (const result of results) {
+    requireTextLimit(result.callId, invocation.normalizationLimits.maximumCallIdBytes);
+    requireTextLimit(result.output, invocation.normalizationLimits.maximumResultTextBytes);
+    assert(pending.delete(result.callId), 'ReplayCallPairMismatch');
+    history.push({ type: 'function_call_output', call_id: result.callId, output: result.output });
+  }
+  assert.equal(pending.size, 0, 'ReplayMissingCallResult');
+  history.push(...invocation.messages.map(message => ({ role: message.role, content: message.content })));
+  assert(Buffer.byteLength(JSON.stringify(history)) <= MAXIMUM_REPLAY_BYTES, 'ReplayCapacity');
+  return Object.freeze({ invocation, input: history });
+}
+
+// Validate the supported replay grammar and call/result pairing without
+// interpreting encrypted_content. Whole supported items, including phase and
+// opaque continuation fields, survive; summaries are not a replay substitute.
+function replayCalls(items) {
+  assert(Array.isArray(items) && items.length <= 8192, 'ReplayCapacity');
+  let nodes = 0;
+  const plain = (value, depth = 0) => {
+    assert(++nodes <= 65536 && depth <= 32, 'ReplayCapacity');
+    if (typeof value === 'string') assert(value.isWellFormed(), 'ReplayUnicode');
+    else if (typeof value === 'number') assert(Number.isSafeInteger(value), 'ReplayInteger');
+    else if (value !== null && typeof value === 'object') for (const child of Object.values(value)) plain(child, depth + 1);
+  };
+  plain(items);
+  const calls = new Set(), pending = new Set();
+  for (const item of items) {
+    assert(item && typeof item === 'object' && !Array.isArray(item), 'ReplayItem');
+    if (item.type === 'function_call') {
+      assert(item.status === 'completed' && typeof item.call_id === 'string' && item.call_id.length > 0 && typeof item.name === 'string' && typeof item.arguments === 'string', 'ReplayItem');
+      assert(!calls.has(item.call_id), 'ReplayDuplicateCall'); calls.add(item.call_id); pending.add(item.call_id);
+    } else if (item.type === 'function_call_output') {
+      assert(typeof item.output === 'string' && pending.delete(item.call_id), 'ReplayCallPairMismatch');
+    } else if (item.type === 'reasoning') {
+      assert((item.status === undefined || item.status === 'completed') && typeof item.encrypted_content === 'string' && item.encrypted_content.length > 0 && Array.isArray(item.summary), 'ReplayReasoningUnavailable');
+    } else if (item.type === 'message') {
+      assert(item.role === 'assistant' && item.status === 'completed' && Array.isArray(item.content) && item.content.every(part => ['output_text', 'refusal'].includes(part?.type)), 'ReplayItem');
+    } else {
+      assert(item.type === undefined && ['system', 'developer', 'user', 'assistant'].includes(item.role) && typeof item.content === 'string', 'ReplayItem');
+    }
+  }
+  return pending;
+}
+
+export async function performReplayModelInvocation(payload, options) {
+  const request = decodeReplayModelInvocation(payload), { invocation } = request;
+  const response = await invokeProvider(invocation, options, request.input);
+  if (response.failure) return encodeReplayResult(response.failure, Buffer.alloc(0), 1, null);
+  const result = normalizeOpenAIResponses(response.body, invocation.normalizationLimits, invocation.tools);
+  // A rejected normalization never silently claims a replayable continuation.
+  if (![0, 1].includes(result[0])) return encodeReplayResult(result, Buffer.alloc(0), 1, null);
+  let replay, usage = null;
+  try {
+    const body = parseJsonStrict(fatalUtf8(response.body));
+    const history = [...request.input, ...body.output]; replayCalls(history);
+    replay = Buffer.from(JSON.stringify(history));
+    if (replay.length > MAXIMUM_REPLAY_BYTES) return encodeReplayResult(result, Buffer.alloc(0), 2, null);
+    const supplied = body.usage;
+    if (supplied !== undefined && supplied !== null) {
+      const cached = supplied.input_tokens_details?.cached_tokens ?? null;
+      assert([supplied.input_tokens, supplied.output_tokens].every(value => Number.isSafeInteger(value) && value >= 0), 'InvalidUsage');
+      assert(cached === null || (Number.isSafeInteger(cached) && cached >= 0 && cached <= supplied.input_tokens), 'InvalidUsage');
+      usage = { input: supplied.input_tokens, output: supplied.output_tokens, cached };
+    }
+  } catch { return encodeReplayResult(result, Buffer.alloc(0), 1, null); }
+  return encodeReplayResult(result, replay, 0, usage);
+}
+function encodeReplayResult(result, replay, status, usage) {
+  const counts = usage === null ? [varuint(0)] : [varuint(1), encodeIntegerWidth(BigInt(usage.input), 64), encodeIntegerWidth(BigInt(usage.output), 64),
+    ...(usage.cached === null ? [varuint(0)] : [varuint(1), encodeIntegerWidth(BigInt(usage.cached), 64)])];
+  return Buffer.concat([result, encodeBytes(replay), u32(status), ...counts]);
 }
 
 function validateToolMetadata(tools) {
@@ -241,7 +304,7 @@ function validateToolMetadata(tools) {
   }
 }
 
-export function encodeOpenAIResponsesRequest(invocation) {
+export function encodeOpenAIResponsesRequest(invocation, replayInput = null) {
   assert(!invocation.responsePolicy.stream && !invocation.responsePolicy.background,
     "the normalized model adapter requires nonstreaming foreground responses");
   const fields = [];
@@ -249,7 +312,7 @@ export function encodeOpenAIResponsesRequest(invocation) {
     `${JSON.stringify(name)}:${JSON.stringify(value)}`,
   );
   field("model", invocation.model);
-  field("input", invocation.messages.map((message) => ({
+  field("input", replayInput ?? invocation.messages.map((message) => ({
     role: message.role,
     content: message.content,
   })));

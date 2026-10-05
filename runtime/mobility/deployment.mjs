@@ -10,6 +10,7 @@ import { fileBinding } from '../text_file.mjs';
 import { WorldAdmission } from './admission.mjs';
 import { CustodyJournal } from './journal.mjs';
 import { Custodian } from './custodian.mjs';
+import { modelBinding } from './model.mjs';
 import { BrowserSessions } from './sessions.mjs';
 import { serveBrowser } from './browser.mjs';
 import { HostPolicy } from './policy.mjs';
@@ -38,6 +39,11 @@ export async function openDeployment(configPath, { create = false } = {}) {
     const { adapter, ...metadata } = entry;
     const binding = { ...metadata, payloadSchema: bytes(metadata.payloadSchema), resultSchema: bytes(metadata.resultSchema) };
     const counts = { calls: 0 }; statistics.set(binding.operation, counts);
+    if (adapter.kind === 'openai-responses-replay') {
+      const leaf = modelBinding(binding, adapter, config.hostId), handle = leaf.handle;
+      leaf.handle = context => { counts.calls++; return handle(context); };
+      return leaf;
+    }
     if (adapter.kind === 'fixed-reply') {
       closed(adapter, ['kind', 'payloadDigest', 'reply']);
       const reply = bytes(adapter.reply); decodeValue(decodeSchema(binding.resultSchema), reply);
@@ -101,7 +107,7 @@ export async function openDeployment(configPath, { create = false } = {}) {
           return { ...service, browser_url: browserService?.url ?? null };
         } catch (error) { await service.close(); service = null; throw error; }
       },
-      async close() { if (browserService) await browserService.close(); sessions?.close(); if (service) await service.close(); clients.forEach(client => client.close()); custodian.retireAll(); journal.close(); },
+      async close() { if (browserService) await browserService.close(); sessions?.close(); if (service) await service.close(); clients.forEach(client => client.close()); await custodian.stopOperations(); custodian.retireAll(); journal.close(); },
     };
   } catch (error) { clients.forEach(client => client.close()); journal.close(); throw error; }
 }

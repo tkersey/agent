@@ -167,3 +167,36 @@ for (const cancel of [false, true]) test(`pending question restores without a li
   assert.equal(f.result('A').kind, cancel ? 'cancelled' : 'completed');
   assert.equal(f.counters.A.task, 0);
 });
+
+for (const cancel of [false, true]) test(`background leaf releases the run lock, preserves charge and fences late completion; cancel=${cancel}`, async t => {
+  const f = await hostFixture(t, { localData: true }), binding = f.bindings.A.find(value => value.operation.endsWith('.task.v1'));
+  let release; const held = new Promise(resolve => { release = resolve; });
+  binding.background = true; binding.cancelSafe = true;
+  binding.charge = () => ({ owner: 'A', kind: 'model', grant: 'c'.repeat(64), limit: { attempts: 2, request_bytes: 100, output_tokens: 20, concurrent: 2 }, amount: { request_bytes: 40, output_tokens: 8 } });
+  binding.handle = async ({ signal }) => { signal.addEventListener('abort', release, { once: true }); await held; return encodeValue(f.schemas.task, f.taskValue); };
+  assert.equal((await f.hosts.A.step(f.id)).kind, 'dispatching');
+  assert.equal(f.journals.A.allowance(f.id, 'model').used.attempts, 1);
+  assert.equal((await f.hosts.A.step(f.id)).kind, 'dispatching');
+  // A fresh executor may observe this same occurrence while I/O is pending.
+  await f.hosts.A.executorAssignment(f.id);
+  if (cancel) await f.hosts.A.cancelRun(f.id, 'stop'); else { release(); await f.hosts.A.stopOperations(); }
+  assert.equal(f.journals.A.occurrence(f.journals.A.run(f.id).current_occurrence_id).status, cancel ? 'ABANDONED' : 'SETTLED_REPLY');
+  assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal');
+  assert.equal(f.result('A').kind, cancel ? 'cancelled' : 'completed');
+  assert.equal(f.journals.A.allowance(f.id, 'model').used.attempts, 1);
+});
+
+for (const cancelSafe of [false, true]) test(`unknown background work is not retried after restart; abandon permission=${cancelSafe}`, async t => {
+  const f = await hostFixture(t, { localData: true }), binding = f.bindings.A.find(value => value.operation.endsWith('.task.v1'));
+  let calls = 0;
+  binding.background = true; binding.cancelSafe = cancelSafe;
+  binding.charge = () => ({ owner: 'A', kind: 'model', grant: 'e'.repeat(64), limit: { attempts: 2, request_bytes: 100, output_tokens: 20, concurrent: 1 }, amount: { request_bytes: 40, output_tokens: 8 } });
+  binding.handle = async () => { calls++; throw new Error('simulated lost response'); };
+  await f.hosts.A.step(f.id); await f.hosts.A.stopOperations();
+  f.restart('A');
+  for (let i = 0; i < 3; i++) assert.equal((await f.hosts.A.run(f.id)).kind, 'effect_unknown');
+  assert.equal(calls, 1); assert.equal(f.journals.A.allowance(f.id, 'model').used.attempts, 1);
+  await f.hosts.A.cancelRun(f.id, 'stop');
+  assert.equal((await f.hosts.A.run(f.id)).kind, cancelSafe ? 'terminal' : 'effect_unknown');
+  assert.equal(calls, 1); assert.equal(f.journals.A.allowance(f.id, 'model').used.attempts, 1);
+});

@@ -524,3 +524,51 @@ test(`deferred transaction crash at ${point}`, async t => {
   f.fault(null); f.close(f.a); const reopened = f.open('A'), saved = reopened.occurrence(run.current_occurrence_id);
   assert.equal(saved.status, point.startsWith('defer') ? (point.endsWith('before_commit') ? 'READY' : 'AWAITING') : (point.endsWith('before_commit') ? 'AWAITING' : 'SETTLED_REPLY'));
 });
+
+for (const crash of ['dispatch.before_commit', 'dispatch.after_commit']) test(`work allowance and dispatch are atomic across ${crash}`, async t => {
+  const f = await fixture(t, initial), run = f.a.attach(f.id);
+  const charge = { owner: 'A', kind: 'model', grant: 'a'.repeat(64), limit: { attempts: 2, request_bytes: 100, output_tokens: 20, concurrent: 2 }, amount: { request_bytes: 40, output_tokens: 8 } };
+  f.fault(crash); assert.throws(() => f.a.admitLeaf(f.id, version(run), [], { charge }), /injected/);
+  f.fault(null); f.close(f.a); const restored = f.open('A');
+  const allowance = restored.allowance(f.id, 'model');
+  if (crash.endsWith('before_commit')) {
+    assert.equal(allowance, null); assert.equal(restored.occurrence(run.current_occurrence_id).status, 'READY');
+  } else {
+    assert.deepEqual({ ...allowance.used }, { attempts: 1, request_bytes: 40, output_tokens: 8 });
+    const pending = restored.occurrence(run.current_occurrence_id);
+    assert.throws(() => restored.admitLeaf(f.id, version(restored.run(f.id)), [], { charge }), { code: 'UnsettledOccurrence' });
+    restored.markUnknown(f.id, pending.attempt_id);
+    assert.equal(restored.allowance(f.id, 'model').used.attempts, 1);
+  }
+});
+
+test('durable allowance cannot reset, switch owner, widen grant or overspend on a successor occurrence', async t => {
+  const f = await fixture(t, initial), run = f.a.attach(f.id);
+  const charge = { owner: 'A', kind: 'model', grant: 'b'.repeat(64), limit: { attempts: 1, request_bytes: 100, output_tokens: 20, concurrent: 2 }, amount: { request_bytes: 40, output_tokens: 8 } };
+  assert.throws(() => f.a.admitLeaf(f.id, version(run), [], { charge: { ...charge, owner: 'B' } }), { code: 'SpendOwnerMismatch' });
+  assert.equal(f.a.allowance(f.id, 'model'), null);
+  const pending = f.a.admitLeaf(f.id, version(run), [], { charge });
+  f.a.recordReply(f.id, pending.attempt_id, taskReply, []);
+  f.a.publishOutcome(f.id, version(run), { kind: 'reply', reply_digest: hash(taskReply) }, nextResolve);
+  f.close(f.a); const restored = f.open('A'), current = restored.attach(f.id);
+  assert.throws(() => restored.admitLeaf(f.id, version(current), [], { charge: { ...charge, limit: { ...charge.limit, attempts: 2 } } }), { code: 'WorkAllowanceChanged' });
+  assert.throws(() => restored.admitLeaf(f.id, version(current), [], { charge }), { code: 'WorkAllowanceExhausted' });
+  assert.equal(restored.occurrence(current.current_occurrence_id).status, 'READY');
+  assert.equal(restored.allowance(f.id, 'model').used.attempts, 1);
+});
+
+test('unknown work retains its concurrency slot until an explicitly cancellable occurrence is abandoned', async t => {
+  const f = await fixture(t, initial), first = f.a.attach(f.id);
+  const charge = { owner: 'A', kind: 'model', grant: 'd'.repeat(64), limit: { attempts: 2, request_bytes: 100, output_tokens: 20, concurrent: 1 }, amount: { request_bytes: 40, output_tokens: 8 } };
+  const pending = f.a.admitLeaf(f.id, version(first), [], { charge, cancelSafe: true });
+  f.a.markUnknown(f.id, pending.attempt_id);
+  const { signature: _, ...base } = parse(f.registration), secondId = runId('issuer');
+  f.a.register(signRecord('run', { ...base, run_id: secondId }, f.pairs.issuer.privateKey), initial);
+  const second = f.a.attach(secondId);
+  assert.throws(() => f.a.admitLeaf(secondId, version(second), [], { charge }), { code: 'WorkConcurrency' });
+  assert.equal(f.a.allowance(secondId, 'model'), null);
+  assert.throws(() => f.a.abandonLeaf(f.id, pending.attempt_id), { code: 'CannotAbandonOccurrence' });
+  f.a.requestCancel(f.id, 'abandon remote answer'); f.a.abandonLeaf(f.id, pending.attempt_id);
+  assert.equal(f.a.allowance(f.id, 'model').used.attempts, 1);
+  assert.equal(f.a.admitLeaf(secondId, version(second), [], { charge }).status, 'DISPATCHING');
+});

@@ -95,12 +95,12 @@ export function decideSource(run, occurrence, offer, decision, decisionDigest, r
   return { run: { ...run, status: 'ACTIVE', attached: false, executor_incarnation: increment(run.executor_incarnation), transfer_id: null, reply_digest: refusalDigest },
     occurrence: { ...occurrence, status: 'SETTLED_REPLY', reply_digest: refusalDigest, reconciliation_ref: decisionDigest } };
 }
-export function dispatch(run, occurrence, wanted, attemptId, classification, { cleanup = false } = {}) {
+export function dispatch(run, occurrence, wanted, attemptId, classification, { cleanup = false, cancelSafe = false } = {}) {
   active(run, wanted); current(run, occurrence);
   requireThat(occurrence.status === 'READY' && occurrence.operation !== RELOCATE, 'UnsettledOccurrence');
   requireThat(run.cancel_requested === null || cleanup, 'CancellationPending');
   digest(attemptId);
-  return { run: { ...run, classification: join(run.classification, classification) }, occurrence: { ...occurrence, status: 'DISPATCHING', attempt_id: attemptId } };
+  return { run: { ...run, classification: join(run.classification, classification) }, occurrence: { ...occurrence, status: 'DISPATCHING', attempt_id: attemptId, ...(cancelSafe ? { cancel_safe: true } : {}) } };
 }
 // Known waiting is registered directly from READY: no external action or live
 // promise lies between the dispatch claim and its durable question.
@@ -127,6 +127,11 @@ export function unknown(run, occurrence, attemptId) {
   requireThat(['DISPATCHING', 'UNKNOWN'].includes(occurrence.status) && occurrence.attempt_id === attemptId, 'AttemptMismatch');
   return { ...occurrence, status: 'UNKNOWN' };
 }
+export function abandoned(run, occurrence, attemptId) {
+  requireThat(run.status === 'ACTIVE', 'CustodyFrozen'); current(run, occurrence);
+  requireThat(run.cancel_requested !== null && occurrence.cancel_safe === true && occurrence.attempt_id === attemptId && ['DISPATCHING', 'UNKNOWN'].includes(occurrence.status), 'CannotAbandonOccurrence');
+  return { ...occurrence, status: 'ABANDONED' };
+}
 export function acquired(run, occurrence, attemptId, replyDigest, classification, reconciliationRef = null) {
   requireThat(run.status === 'ACTIVE', 'CustodyFrozen'); current(run, occurrence); digest(replyDigest);
   requireThat(occurrence.attempt_id === attemptId, 'AttemptMismatch');
@@ -145,7 +150,7 @@ export function publish(run, occurrence, wanted, control, outcome, nextOccurrenc
       requireThat(!(occurrence.operation === RELOCATE && run.cancel_requested !== null && !run.cancel_applied), 'CancellationPending');
     }
     else requireThat(control.kind === 'cancel' && control.reason === run.cancel_requested && run.cancel_requested !== null &&
-      (['READY', 'AWAITING'].includes(occurrence.status) || (occurrence.status === 'SETTLED_REPLY' && occurrence.operation === RELOCATE)), 'UnsettledOccurrence');
+      (['READY', 'AWAITING', 'ABANDONED'].includes(occurrence.status) || (occurrence.status === 'SETTLED_REPLY' && occurrence.operation === RELOCATE)), 'UnsettledOccurrence');
   } else requireThat(['none', 'resume_yield', 'cancel'].includes(control.kind) && (control.kind !== 'cancel' || (run.cancel_requested !== null && control.reason === run.cancel_requested)), 'InvalidControl');
   if (control.kind === 'cancel') requireThat(!run.cancel_applied, 'CancellationAlreadyApplied');
   if (outcome.kind === 'requested') requireThat(nextOccurrenceId !== run.current_occurrence_id, 'OccurrenceReuse');

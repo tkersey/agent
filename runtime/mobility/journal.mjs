@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, lstatSync, openSync, closeSync, constants } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createPublicKey } from 'node:crypto';
-import { canonical, parse, requireThat, identifier, digest, counter, labels } from './canonical.mjs';
+import { canonical, parse, requireThat, identifier, digest, counter, labels, closed } from './canonical.mjs';
 import { hash, opaqueId, verifyRecord, signRecord, validate, matchesDecision } from './protocol.mjs';
 import { encodeArrival, encodeRefusal, schemas, observationValue } from './values.mjs';
 import { encodeValue, decodeSchema, encodeSchema } from '../values.mjs';
@@ -59,6 +59,7 @@ export class CustodyJournal {
       const metadata = readJson(this.#get('SELECT body FROM metadata WHERE id=1')?.body);
       requireThat(metadata?.format === 'agent-mobility-journal/v1' && metadata.host_id === hostId && metadata.deployment_generation === deploymentGeneration, 'QuarantinedStorageGeneration');
       this.#db.exec('CREATE TABLE IF NOT EXISTS staging (id TEXT PRIMARY KEY, tenant TEXT NOT NULL, offer BLOB NOT NULL, registration BLOB NOT NULL, predecessor BLOB, observation BLOB NOT NULL, requirements BLOB NOT NULL, constraints BLOB NOT NULL, image_digest TEXT, outcome_digest TEXT) STRICT');
+      this.#db.exec('CREATE TABLE IF NOT EXISTS allowances (run_id TEXT NOT NULL REFERENCES runs(run_id), kind TEXT NOT NULL, tenant TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(run_id,kind)) STRICT');
       requireThat(this.#get('PRAGMA quick_check').quick_check === 'ok', 'CorruptCustodyStorage');
     } catch (error) { this.#db.close(); throw error; }
   }
@@ -145,7 +146,7 @@ export class CustodyJournal {
   // Check the transaction's actual records, including replacements, before
   // commit. A rejection rolls back every row and artifact in the operation.
   #recordCapacity(tenant) {
-    const count = this.#get('SELECT (SELECT count(*) FROM runs WHERE tenant=?) + (SELECT count(*) FROM transfers WHERE tenant=?) + (SELECT count(*) FROM occurrences JOIN runs USING(run_id) WHERE tenant=?) + (SELECT count(*) FROM staging WHERE tenant=?) AS n', tenant, tenant, tenant, tenant).n;
+    const count = this.#get('SELECT (SELECT count(*) FROM runs WHERE tenant=?) + (SELECT count(*) FROM transfers WHERE tenant=?) + (SELECT count(*) FROM occurrences JOIN runs USING(run_id) WHERE tenant=?) + (SELECT count(*) FROM staging WHERE tenant=?) + (SELECT count(*) FROM allowances WHERE tenant=?) AS n', tenant, tenant, tenant, tenant, tenant).n;
     requireThat(count <= this.#recordLimit, 'TenantRecordCapacity');
   }
   register(registrationBytes, admitted, policy = null) {
@@ -334,6 +335,7 @@ export class CustodyJournal {
   admitLeaf(runId, wanted, classification, options = {}) {
     try { return this.#transaction('dispatch', () => {
       const run = this.run(runId), next = core.dispatch(run, this.#occurrence(run), wanted, opaqueId(), classification, options);
+      if (options.charge) { this.#charge(run, options.charge); next.occurrence.work_kind = options.charge.kind; }
       this.#save(next.run); this.#saveOccurrence(next.occurrence); return next.occurrence;
     }); } catch (error) {
       // Diagnostics cannot mutate custody or replace the rejected operation.
@@ -342,6 +344,29 @@ export class CustodyJournal {
       }
       throw error;
     }
+  }
+  allowance(runId, kind) { return readJson(this.#get('SELECT body FROM allowances WHERE run_id=? AND kind=?', runId, kind)?.body); }
+  #charge(run, charge) {
+    closed(charge, ['owner', 'kind', 'grant', 'limit', 'amount']);
+    requireThat(charge.owner === this.#host && ['model', 'check'].includes(charge.kind), 'SpendOwnerMismatch'); digest(charge.grant);
+    closed(charge.limit, ['attempts', 'request_bytes', 'output_tokens', 'concurrent']); closed(charge.amount, ['request_bytes', 'output_tokens']);
+    requireThat(Number.isSafeInteger(charge.limit.attempts) && charge.limit.attempts > 0 && charge.limit.attempts <= (charge.kind === 'model' ? 32 : 16), 'WorkAllowance');
+    for (const field of ['request_bytes', 'output_tokens']) for (const row of [charge.limit, charge.amount])
+      requireThat(Number.isSafeInteger(row[field]) && row[field] >= 0, 'WorkAllowance');
+    requireThat(Number.isSafeInteger(charge.limit.concurrent) && charge.limit.concurrent > 0 && charge.limit.concurrent <= 8, 'WorkConcurrency');
+    const pending = this.#all('SELECT occurrences.body FROM occurrences JOIN runs USING(run_id) WHERE tenant=?', run.tenant_ref)
+      .map(row => readJson(row.body)).filter(row => row.work_kind === charge.kind && ['DISPATCHING', 'UNKNOWN'].includes(row.status)).length;
+    requireThat(pending < charge.limit.concurrent, 'WorkConcurrency');
+    const binding = { registration_digest: run.registration_digest, owner: charge.owner, kind: charge.kind, grant: charge.grant, limit: charge.limit };
+    const grantDigest = hash(canonical(binding)), previous = this.allowance(run.run_id, charge.kind);
+    requireThat(previous === null || previous.grant_digest === grantDigest, 'WorkAllowanceChanged');
+    const used = previous?.used ?? { attempts: 0, request_bytes: 0, output_tokens: 0 };
+    const next = Object.fromEntries(Object.entries({ attempts: 1, ...charge.amount }).map(([field, count]) => {
+      const value = used[field] + count; requireThat(value <= charge.limit[field], 'WorkAllowanceExhausted'); return [field, value];
+    }));
+    this.#run('INSERT INTO allowances VALUES (?,?,?,?) ON CONFLICT(run_id,kind) DO UPDATE SET body=excluded.body', run.run_id, charge.kind, run.tenant_ref,
+      json({ ...binding, grant_digest: grantDigest, used: next }));
+    this.#recordCapacity(run.tenant_ref);
   }
   deferLeaf(runId, wanted, pending, classification) {
     const bytes = canonical(pending);
@@ -374,9 +399,19 @@ export class CustodyJournal {
   markUnknown(runId, attemptId) {
     return this.#transaction('unknown', () => { const run = this.run(runId), next = core.unknown(run, this.#occurrence(run), attemptId); this.#saveOccurrence(next); return next; });
   }
-  recordReply(runId, attemptId, reply, classification, reconciliationRef = null, { placementEvidence = null } = {}) {
+  abandonLeaf(runId, attemptId) {
+    return this.#transaction('abandon', () => { const run = this.run(runId), next = core.abandoned(run, this.#occurrence(run), attemptId); this.#saveOccurrence(next); return next; });
+  }
+  recordReply(runId, attemptId, reply, classification, reconciliationRef = null, { placementEvidence = null, dispatchVersion = null } = {}) {
     return this.#transaction('acquire', () => {
-      const run = this.run(runId), next = core.acquired(run, this.#occurrence(run), attemptId, hash(reply), classification, reconciliationRef);
+      const run = this.run(runId);
+      if (dispatchVersion !== null) {
+        // Executor attachment can change while the same occurrence is in flight.
+        // Semantic progress, custody change, or cancellation cannot.
+        requireThat(['run_id', 'custody_epoch', 'execution_revision', 'outcome_digest'].every(field => run[field] === dispatchVersion[field]), 'StaleDispatch');
+        requireThat(run.cancel_requested === null, 'CancellationPending');
+      }
+      const next = core.acquired(run, this.#occurrence(run), attemptId, hash(reply), classification, reconciliationRef);
       if (placementEvidence !== null) {
         requireThat(next.occurrence.operation === 'agent.mobility.resolve.v1', 'InvalidPlacementEvidence');
         next.run = { ...next.run, placement_evidence: placementEvidence };
@@ -433,7 +468,7 @@ export class CustodyJournal {
       const reason = readJson(row.body).refusal_reason;
       if (reason !== undefined) refused[reason] = (refused[reason] ?? 0) + 1;
     }
-    return { run_id: runId, host_id: this.#host, local_move_attempts: run.local_move_attempts, ...this.custodyKnowledge(run), refusals_by_reason: refused, stale_dispatch_rejections_since_open: this.#staleDispatch.get(runId) ?? 0 };
+    return { run_id: runId, host_id: this.#host, local_move_attempts: run.local_move_attempts, allowances: Object.fromEntries(['model', 'check'].map(kind => [kind, this.allowance(runId, kind)])), ...this.custodyKnowledge(run), refusals_by_reason: refused, stale_dispatch_rejections_since_open: this.#staleDispatch.get(runId) ?? 0 };
   }
   custodyKnowledge(run) {
     const pending = run.status === 'OFFERED', id = run.transfer_id ?? run.last_transfer_id, transfer = id ? this.transfer(id) : null;

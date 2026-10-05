@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createServer } from "node:http";
+import { spawn } from "node:child_process";
+import { modelBinding } from "../../runtime/mobility/model.mjs";
 
 import {
   MODEL_EFFECT,
+  REPLAY_MODEL_EFFECT,
+  MAXIMUM_REPLAY_BYTES,
+  decodeReplayModelInvocation,
+  performReplayModelInvocation,
   admitModelEndpoint,
   decodeModelInvocation,
   encodeOpenAIResponsesRequest,
@@ -570,13 +577,14 @@ function noToolInvocationBytes() {
   return encodeInvocationFixture({ tools: [] });
 }
 
-function encodeInvocationFixture({tools, temperature = null,
+function encodeInvocationFixture({tools, temperature = null, maxOutputTokens = null,
   selection = { minimumCalls: tools.length > 0 ? 1 : 0, maximumCalls: 1 },
   responsePolicy = { store: false, stream: false, background: false }}) {
   return Buffer.concat([
     text("agent.model.protocol.openai-responses-v2"), text("fixture-model"),
-    temperature === null ? Buffer.from([0, 0, 0])
-      : Buffer.concat([Buffer.from([0, 1]), text(temperature), Buffer.from([0])]),
+    maxOutputTokens === null ? Buffer.from([0]) : Buffer.concat([Buffer.from([1]), u32(maxOutputTokens)]),
+    temperature === null ? Buffer.from([0, 0])
+      : Buffer.concat([Buffer.from([1]), text(temperature), Buffer.from([0])]),
     variable(1), u32(2), text("decide"), variable(tools.length),
     ...tools.flatMap((tool) => [
       u32(tool.actionOrdinal), u32(tool.actionTag), text(tool.name), text(tool.description),
@@ -693,4 +701,122 @@ test("caller abort reasons retain interruption classification during fetch and b
       endpoint: "http://127.0.0.1:1/v1/responses", signal: new AbortController().signal,
     }), Buffer.from([2, 0, 0, 0, 0]));
   } finally { globalThis.fetch = originalFetch; }
+});
+
+function replayInvocation(history = [], results = [], legacy = invocationBytes()) {
+  return Buffer.concat([legacy, bytes(Buffer.from(JSON.stringify(history))), variable(results.length), ...results.flatMap(row => [text(row.callId), text(row.output)])]);
+}
+function replayTail(reply, legacyLength) {
+  const cursor = { value: legacyLength }, history = readBytes(reply, cursor), status = readU32(reply, cursor);
+  const present = readVariable(reply, cursor); let usage = null;
+  if (present) {
+    const input = reply.readBigUInt64LE(cursor.value); cursor.value += 8;
+    const output = reply.readBigUInt64LE(cursor.value); cursor.value += 8;
+    const cachedPresent = readVariable(reply, cursor);
+    const cached = cachedPresent ? reply.readBigUInt64LE(cursor.value) : null; if (cachedPresent) cursor.value += 8;
+    usage = { input, output, cached };
+  }
+  assert.equal(cursor.value, reply.length); return { history: history.length ? JSON.parse(history) : null, status, usage };
+}
+
+test('stateless envelope preserves complete items, assistant phase, opaque reasoning and call pairing across a fresh provider', async () => {
+  assert.equal(REPLAY_MODEL_EFFECT, 'agent.model.invoke.v4');
+  const response = { status: 'completed', error: null, output: [
+    { type: 'reasoning', id: 'r1', summary: [], encrypted_content: 'opaque-synthetic-continuation' },
+    { type: 'message', id: 'm1', status: 'completed', role: 'assistant', phase: 'commentary', content: [{ type: 'output_text', text: 'Inspecting.', annotations: [] }] },
+    { type: 'function_call', id: 'f1', status: 'completed', call_id: 'call-one', name: 'choose', arguments: '{"value":42}' },
+  ], usage: { input_tokens: 91, output_tokens: 23, input_tokens_details: { cached_tokens: 11 } } };
+  const body = Buffer.from(JSON.stringify(response)), legacy = normalizeOpenAIResponses(body, limits, decodeModelInvocation(invocationBytes()).tools);
+  const serve = async handler => {
+    const server = createServer(async (req, res) => { const chunks = []; for await (const chunk of req) chunks.push(chunk); handler(JSON.parse(Buffer.concat(chunks))); res.end(body); });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    return { endpoint: `http://127.0.0.1:${server.address().port}/v1/responses`, close: () => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }) };
+  };
+  const children = [];
+  const freshInvocation = (payload, endpoint) => new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['--input-type=module', '-e',
+      'const chunks=[]; for await (const chunk of process.stdin) chunks.push(chunk); const {performReplayModelInvocation}=await import(process.argv[2]); process.stdout.write(await performReplayModelInvocation(Buffer.concat(chunks), {endpoint:process.argv[1]}));',
+      endpoint, new URL('../../runtime/model.mjs', import.meta.url).href], { env: { PATH: '/nonexistent' }, stdio: ['pipe', 'pipe', 'pipe'] });
+    children.push(child.pid); const output = [], errors = [];
+    child.stdout.on('data', chunk => output.push(chunk)); child.stderr.on('data', chunk => errors.push(chunk));
+    child.on('error', reject); child.on('close', code => code === 0 ? resolve(Buffer.concat(output)) : reject(new Error(Buffer.concat(errors).toString())));
+    child.stdin.end(payload);
+  });
+  let firstRequest;
+  const first = await serve(value => { firstRequest = value; });
+  let reply;
+  try { reply = await freshInvocation(replayInvocation(), first.endpoint); } finally { await first.close(); }
+  assert.deepEqual(reply.subarray(0, legacy.length), legacy);
+  const saved = replayTail(reply, legacy.length);
+  assert.equal(saved.status, 0); assert.deepEqual(saved.usage, { input: 91n, output: 23n, cached: 11n });
+  assert.deepEqual(saved.history, [...firstRequest.input, ...response.output]);
+  let secondRequest;
+  const second = await serve(value => { secondRequest = value; });
+  try { await freshInvocation(replayInvocation(saved.history, [{ callId: 'call-one', output: '42 checked independently' }]), second.endpoint); }
+  finally { await second.close(); }
+  assert.equal(children.length, 2); assert.notEqual(children[0], children[1]);
+  for (const pid of children) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+  assert.equal(secondRequest.store, false); assert.equal(secondRequest.previous_response_id, undefined); assert.equal(secondRequest.conversation, undefined);
+  assert.deepEqual(secondRequest.input, [...saved.history, { type: 'function_call_output', call_id: 'call-one', output: '42 checked independently' }, { role: 'user', content: 'decide' }]);
+});
+
+test('replay admission rejects lost reasoning, missing/duplicate/mismatched results and unsupported items before I/O', async () => {
+  const call = { type: 'function_call', status: 'completed', call_id: 'one', name: 'choose', arguments: '{"value":1}' };
+  const good = { callId: 'one', output: 'done' };
+  for (const [history, results] of [
+    [[call], []], [[call], [{ ...good, callId: 'other' }]], [[call], [good, good]], [[call, call], [good]],
+    [[{ type: 'reasoning', summary: [] }], []], [[{ type: 'item_reference', id: 'stored' }], []],
+    [[{ type: 'function_call_output', call_id: 'missing', output: 'forged' }], []],
+    [[{ role: 'user', content: 'x', unsafe_id: 9007199254740992 }], []],
+  ]) await assert.rejects(performReplayModelInvocation(replayInvocation(history, results), { endpoint: 'http://127.0.0.1:1/v1/responses' }));
+  assert.throws(() => decodeReplayModelInvocation(replayInvocation([], [], invocationBytes(undefined, 0, null, undefined, { store: true, stream: false, background: false }))), /ReplayRequiresStateless/);
+  assert.throws(() => decodeReplayModelInvocation(replayInvocation([{ role: 'user', content: 'x'.repeat(MAXIMUM_REPLAY_BYTES) }])) , /ReplayCapacity/);
+});
+
+test('lost opaque reasoning and replay exhaustion remain explicit even with a valid normalized answer', async () => {
+  const original = globalThis.fetch;
+  try {
+    const call = { type: 'function_call', status: 'completed', call_id: 'one', name: 'choose', arguments: '{"value":7}' };
+    for (const opaque of [false, true]) {
+      const response = { status: 'completed', error: null, output: [{ type: 'reasoning', summary: [], ...(opaque ? { encrypted_content: 'x'.repeat(200) } : {}) }, call] };
+      const body = Buffer.from(JSON.stringify(response)), legacy = normalizeOpenAIResponses(body, limits, decodeModelInvocation(invocationBytes()).tools);
+      globalThis.fetch = async () => new Response(body);
+      const history = opaque ? [{ role: 'user', content: 'x'.repeat(MAXIMUM_REPLAY_BYTES - 150) }] : [];
+      const reply = await performReplayModelInvocation(replayInvocation(history), { endpoint: 'http://127.0.0.1:1/v1/responses' });
+      assert.deepEqual(reply.subarray(0, legacy.length), legacy);
+      const tail = replayTail(reply, legacy.length); assert.equal(tail.status, opaque ? 2 : 1); assert.equal(tail.history, null);
+    }
+  } finally { globalThis.fetch = original; }
+});
+
+test('deployment model profile binds actual replay payload, disclosure, owner and positive budgets before provider I/O', async () => {
+  const profile = { kind: 'openai-responses-replay', owner: 'W', mode: 'loopback-fixture', endpoint: 'http://127.0.0.1:1/v1/responses', credentialEnv: null,
+    model: 'fixture-model', parameters: { maxOutputTokens: 128, temperature: null, reasoning: null }, timeoutMs: 1000,
+    maximumRequestBytes: 100000, maximumResponseBytes: 32768, disclosure: { audience: 'fixture-provider', policyRevision: 'p1', labels: ['shared'] },
+    allowance: { attempts: 2, request_bytes: 200000, output_tokens: 256, concurrent: 2 } };
+  const metadata = { operation: REPLAY_MODEL_EFFECT, audience: 'fixture-provider' };
+  const binding = modelBinding(metadata, profile, 'W');
+  profile.allowance.attempts = 32;
+  const payload = replayInvocation([], [], encodeInvocationFixture({ tools: [], maxOutputTokens: 128 }));
+  const request = { payload }, run = { classification: ['shared'] };
+  const charge = binding.charge({ request, run });
+  assert.equal(charge.limit.attempts, 2); assert.equal(charge.amount.output_tokens, 128);
+  assert.equal(charge.amount.request_bytes, encodeOpenAIResponsesRequest(decodeReplayModelInvocation(payload).invocation, decodeReplayModelInvocation(payload).input).length);
+  assert.throws(() => binding.charge({ request, run: { classification: ['secret'] } }), /LeafDisclosureDenied/);
+  assert.throws(() => binding.charge({ request: { payload: replayInvocation() }, run }), /ModelProfileMismatch/);
+  assert.throws(() => modelBinding(metadata, { ...profile, owner: 'other' }, 'W'), /ModelProfile/);
+  assert.throws(() => modelBinding(metadata, { ...profile, credentialEnv: 'SECRET_KEY' }, 'W'), /ModelEndpoint/);
+  assert.throws(() => modelBinding(metadata, { ...profile, mode: 'openai-live', credentialEnv: 'SECRET_KEY' }, 'W'), /credentialed model endpoint/);
+  const fetch = globalThis.fetch; let sent = 0;
+  try {
+    globalThis.fetch = async (_url, options) => { sent++; assert.equal(options.headers.authorization, undefined); return new Response(JSON.stringify({ status: 'completed', error: null, output: [] })); };
+    assert.equal((await binding.handle({ request, run, signal: new AbortController().signal }))[0], 0);
+    assert.equal(sent, 1);
+    globalThis.fetch = async () => { sent++; throw new Error('lost response'); };
+    await assert.rejects(binding.handle({ request, run, signal: new AbortController().signal }), { code: 'ModelDeliveryUnknown' });
+    assert.equal(sent, 2, 'ambiguous transport has exactly one physical attempt');
+    globalThis.fetch = async () => { sent++; return new Response('failed', { status: 503 }); };
+    await assert.rejects(binding.handle({ request, run, signal: new AbortController().signal }), { code: 'ModelDeliveryUnknown' });
+    assert.equal(sent, 3);
+  } finally { globalThis.fetch = fetch; }
 });

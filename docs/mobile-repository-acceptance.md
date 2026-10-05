@@ -126,6 +126,28 @@ check passed 94/94 build steps. Final deferred-record guards passed 87 journal,
 model and bridge tests. These remain synthetic human tests; they do not establish the full application's
 proposal/approval UI or actual-person qualification.
 
+## Provider replay and work allowance (W4, partial)
+
+The [provider leaf and allowance owner](mobile-repository-model.md) support an
+explicit OpenAI Responses deployment profile without introducing a tool loop.
+The additive v4 wire retains complete supported replay items, paired tool results,
+opaque reasoning and optional usage. Existing v3 callers remain compatible.
+The protected responder retains its offered set and rejects incomplete replay.
+Two fresh Node adapter processes reconstruct the next request from ordinary data.
+
+Authoring validation passed 337/337 steps and 117 Zig tests; the final native
+responder check passed 10/10 steps and 65 Zig tests. Provider/journal/bridge and
+extracted-deployment checks passed 121 Node tests; the final fresh-process model
+lane passed 25 tests. These establish the provider/owner seams, not the complete
+Mobile Repository investigation loop or live-model usefulness.
+
+Durable attempt, request-byte and output-token allowances are charged with the
+dispatch transaction, bound to W and the signed run registration, and preserved
+across restart. Background model I/O releases the run lock; unknown calls are
+not repeated, and cancellation fences late replies without refunding attempts.
+Complete authored model/investigation/revision composition and logical work
+allowances are still open.
+
 ## Remaining acceptance
 
 W2–W8 remain open: complete repository/check deployment integration;

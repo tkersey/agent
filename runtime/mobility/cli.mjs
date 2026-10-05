@@ -11,6 +11,7 @@ import { describeRepositoryCheckProfile } from '../repository_checks.mjs';
 import { selectZig } from '../../tools/agent4/toolchain.mjs';
 import { decodeSchema, decodeValue } from '../values.mjs';
 import { configureRepository } from './repository_setup.mjs';
+import { qualifyApplication } from './qualification.mjs';
 
 const help = `Usage: node runtime/mobility/cli.mjs COMMAND CONFIG [ARGUMENTS]
   init CONFIG                         explicitly create empty local custody storage
@@ -19,6 +20,7 @@ const help = `Usage: node runtime/mobility/cli.mjs COMMAND CONFIG [ARGUMENTS]
   qualify-check CONFIG                qualify a configured runner and print its profile identities
   configure-repository CONFIG OUTPUT  generate both host configs and typed task inputs in a new directory
   repository-template OUTPUT          create an operator setup template with inference disabled
+  qualify-application CONFIG OUTPUT [--deployed|--live]  run selected qualification lanes and retain evidence
   login-issue CONFIG PRINCIPAL TENANT  locally issue a one-use browser login credential
   serve CONFIG                        recover and serve authenticated configured peers
   start CONFIG REGISTRATION IMAGE ARGS start an issuer-authorized run
@@ -37,6 +39,12 @@ Stop the service before using a local custody mutation command. Login issuance i
 export async function main(argv) {
   if (argv.length === 0 || (argv.length === 1 && ['--help', '-h'].includes(argv[0]))) { console.log(help); return; }
   const [command, config, ...args] = argv;
+  if (command === 'qualify-application') {
+    requireThat(config && args.length >= 1 && args.length <= 2 && (!args[1] || ['--deployed', '--live'].includes(args[1])), 'OperatorArguments');
+    const report = await qualifyApplication(config, args[0], { deployed: args[1] === '--deployed', live: args[1] === '--live' });
+    console.log(JSON.stringify({ complete: report.complete, report: resolve(args[0], 'report.json') }));
+    if (!report.complete) process.exitCode = 1; return;
+  }
   if (command === 'validate') {
     requireThat(config && args.length <= 17 && args.filter(arg => arg === '--peers').length <= 1 && args.every(arg => !arg.startsWith('--') || arg === '--peers'), 'OperatorArguments');
     try { console.log(JSON.stringify(await validateDeployment(config, { peerConfigs: args.filter(arg => arg !== '--peers'), contactPeers: args.includes('--peers') }))); }

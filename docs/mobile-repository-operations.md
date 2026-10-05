@@ -120,5 +120,68 @@ resources and uses these commands for all three modes over two local TLS hosts
 and the real Chromium UI. It also checks disabled inference, invalid scope/limits,
 refusal to overwrite output/storage, and rejection of another principal's export.
 This is deterministic qualification, not authorization for live inference or
-actual two-machine operation. The application-qualification command is still
-tracked as remaining work in the acceptance report.
+actual two-machine operation. Application qualification is available through the command below; external
+qualification remains subject to its explicit inputs and opt-ins.
+
+## Application qualification
+
+```sh
+node runtime/mobility/cli.mjs qualify-application qualification.json evidence-directory
+```
+
+The [qualification example](mobile-repository-qualification.example.json) defaults
+to the offline lane. Local `offline`, `browser`, and `package` lanes run the
+existing fixed repository verifier targets, sequentially, against an explicitly
+selected source checkout and Zig distribution. They retain command outcomes and
+bounded logs with hashes; source changes during a lane invalidate qualification.
+The output directory must be new. Local engineering lanes deliberately require
+the approved source checkout; deployed execution has no authoring fallback.
+
+For an external lane, set `source` to `null` and select exactly one of `deployed`
+or `live`. Add an `external` object with `origin` (initialized origin config),
+`peers` (expected peer config paths), `principal`, `tenant`, and `cases`.
+Each case fixes `id`, catalogue `entry`, exact `base`, `mode`, `goal`, and an
+independent `expected` object before execution:
+
+```json
+{
+  "id": "approved-inspection",
+  "entry": "repository",
+  "base": "REPLACE_WITH_APPROVED_BASE_COMMIT",
+  "mode": "inspect",
+  "goal": "Inspect the approved repository scope.",
+  "expected": { "kind": "completed", "proposalTree": null, "published": false }
+}
+```
+
+A repair's expected tree must be independently fixed; a publishing case also
+requires `published: true`. The matcher checks the typed publication branch and
+its exact proposal/commit/tree correspondence, not a success claim in model text.
+Expected failures remain recorded as actual failed/cancelled outcomes even when
+they satisfy the predeclared contract. Passing selected cases is not a general
+model-success rate or completion of the entire acceptance matrix.
+
+```sh
+node runtime/mobility/cli.mjs qualify-application deployed.json evidence-directory --deployed
+node runtime/mobility/cli.mjs qualify-application live.json evidence-directory --live
+```
+
+Opt-ins are checked before opening hosts or creating output. `deployed` requires
+deterministic loopback provider profiles; `live` requires an explicitly configured
+live profile. Missing opt-ins do not trigger a fallback. A failed selected local
+lane prevents a subsequent external lane from starting.
+
+Use a dedicated, initialized origin with no prior runs, stop its ordinary local
+service, and start the configured workspace peer separately. The qualifier runs
+the normal origin service, preflights the peer and registers corpus cases through
+the catalogue. It prints each run ID and browser address. Use an operator-issued
+login and the shipped browser UI; the qualifier never supplies answers or approval.
+All cases, including those not started, remain in `report.json`.
+
+`maximumSeconds` bounds each local verifier and each external wait. A wait deadline
+reports `incomplete` and the durable run ID; it does not cancel, reset or roll back
+the run. Use the existing serve/status/cancel commands to handle that run afterward.
+The report includes origin metrics. Workspace physical attempt/usage records must
+also be retained using the workspace's `metrics` command for a complete live or
+two-machine evidence record. No external/live/person qualification is implied by
+local verifier success or by the presence of this command.

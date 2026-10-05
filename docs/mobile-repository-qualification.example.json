@@ -1,0 +1,17 @@
+{
+  "format": "agent.repository.qualification/v1",
+  "lanes": ["offline"],
+  "maximumSeconds": 1800,
+  "source": {
+    "directory": "/REPLACE/WITH/APPROVED/AGENT_SOURCE",
+    "commit": "REPLACE_WITH_EXACT_GIT_COMMIT",
+    "zigExecutable": "/REPLACE/WITH/ZIG_017_EXECUTABLE",
+    "libraryDirectory": "/REPLACE/WITH/ZIG_017_LIBRARY",
+    "boundarySource": "/REPLACE/WITH/AUTHENTICATED_BOUNDARY_SOURCE",
+    "worldSource": "/REPLACE/WITH/AUTHENTICATED_WORLD_SOURCE",
+    "worldRuntime": "/REPLACE/WITH/AUTHENTICATED_WORLD_RUNTIME",
+    "browserTools": "/REPLACE/WITH/QUALIFIED_BROWSER_TOOLS",
+    "prefix": "/REPLACE/WITH/QUALIFICATION_BUILD_OUTPUT"
+  },
+  "external": null
+}

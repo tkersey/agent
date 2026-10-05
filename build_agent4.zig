@@ -449,7 +449,7 @@ pub fn build(b: *std.Build) void {
     const mobile_repository_measure = b.step("measure-mobile-repository", "Collect thirty paired application measurements per declared cell");
     const mobile_repository_attribution = b.step("measure-mobile-repository-attribution", "Measure browser verification and publication recovery separately");
     const mobile_repository_objects = nodeCommand(b);
-    mobile_repository_objects.addArgs(&.{ "node", "--test", "test/agent4/repository_snapshot.test.mjs" });
+    mobile_repository_objects.addArgs(&.{ "node", "--test", "test/agent4/repository_snapshot.test.mjs", "test/agent4/mobile_repository_qualification.test.mjs" });
     mobile_repository_objects.has_side_effects = true;
     mobile_repository_check.dependOn(&mobile_repository_objects.step);
     const mobile_repository_zig = b.step("check-mobile-repository-zig", "Qualify the bounded native Zig repository check profile");

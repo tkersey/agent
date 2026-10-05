@@ -134,9 +134,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   const missingPath = await json(join(area, 'configured/missing-human.json'), missingHuman);
   assert.throws(() => command('validate', missingPath), error => error.status === 1 && JSON.parse(error.stdout).reason === 'RepositoryCapabilityMissing' && JSON.parse(error.stdout).operation === 'agent.repository.human.v1');
   command('init', configU); assert.equal(command('tasks', configU, 'user', 'tenant')[0].defaultMode, 'propose');
-  const runs = ['inspect', 'propose', 'publish'].map(mode => ({ mode,
-    run: command('task', configU, 'user', 'tenant', 'repository', mode, 'Investigate and repair the boolean JSON-size bound within the selected mode.') }));
-  origin = await openDeployment(configU); const service = await origin.serve();
+  origin = await openDeployment(configU); let service = await origin.serve();
   workspaceConfig.peers[0].url = service.url; await json(configW, workspaceConfig); command('init', configW);
   console.log('deployment: both v2 configurations initialized');
   let stdout = '', stderr = '';
@@ -149,6 +147,24 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   });
   origin.peers.get('W').close(); origin.peers.set('W', new PeerClient({ url: ready.listening, servername: 'localhost', fingerprint256: tls.B.fingerprint256, ca: tls.ca, key: tls.A.key, cert: tls.A.cert }));
   const connectedConfig = JSON.parse(await readFile(configU)); connectedConfig.peers[0].url = ready.listening; await json(configU, connectedConfig);
+  // The deployed qualifier owns the ordinary origin service. No browser drives
+  // this probe, so its wait deadline must retain an unexecuted, uncancelled run.
+  connectedConfig.tls.port = Number(new URL(service.url).port);
+  await origin.close(); origin = null; await json(configU, connectedConfig);
+  const qualificationCase = id => ({ id, entry: 'repository', base, mode: 'inspect', goal: 'Inspect the approved snapshot.', expected: { kind: 'completed', proposalTree: null, published: false } });
+  const applicationQualification = await json(join(area, 'application-qualification.json'), { format: 'agent.repository.qualification/v1', lanes: ['deployed'], source: null,
+    maximumSeconds: 1, external: { origin: configU, peers: [configW], principal: 'user', tenant: 'tenant', cases: [qualificationCase('waiting-person'), qualificationCase('not-started')] } });
+  const qualificationOutput = join(area, 'application-qualification');
+  assert.throws(() => command('qualify-application', applicationQualification, qualificationOutput, '--deployed'), error => error.status === 1);
+  const qualified = JSON.parse(await readFile(join(qualificationOutput, 'report.json')));
+  assert.equal(qualified.complete, false); assert.equal(qualified.lanes[0].cases[0].status, 'incomplete');
+  assert.equal(qualified.lanes[0].cases[1].status, 'not-run');
+  const waiting = command('status', configU, qualified.lanes[0].cases[0].run_id);
+  assert.equal(waiting.custody, 'ACTIVE'); assert.equal(waiting.cancellation_pending, false); assert.equal(modelCalls, 0);
+  command('cancel', configU, waiting.run_id, 'qualification fixture cleanup');
+  const runs = ['inspect', 'propose', 'publish'].map(mode => ({ mode,
+    run: command('task', configU, 'user', 'tenant', 'repository', mode, 'Investigate and repair the boolean JSON-size bound within the selected mode.') }));
+  origin = await openDeployment(configU); service = await origin.serve();
   const runsBeforeValidation = origin.journal.recover().map(({ run }) => run.run_id);
   const connectedValidation = command('validate', configU, configW, '--peers');
   assert(connectedValidation.capabilityCoverage.some(row => row.host === 'W' && row.verified === 'authenticated-preflight'));

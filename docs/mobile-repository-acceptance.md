@@ -259,7 +259,7 @@ transferred fewer bytes. The comparison report retains the raw data and scope.
 Supplemental browser/recovery attribution and observed UI operation counts are
 now reported separately, with exact timing boundaries and all raw observations.
 
-Remaining work includes the application-qualification command,
+Remaining work includes qualification evidence reconciliation,
 lifetime resource-accounting reconciliation, the complete MR-001–MR-096
 mapping, inherited exact-head regressions, complete fault qualification,
 final measurement reconciliation, and serial review closeout.
@@ -441,3 +441,26 @@ CLI invocation, including negative probes. It still passes its unchanged exact
 repair, authority, reference preservation and operation-count assertions. Polling
 Continues are reported as observed driver work, not a minimum human-action claim.
 See the [comparison report](mobile-repository-comparison.md) and its raw records.
+
+## Application qualification command
+
+The installed `qualify-application` command selects fixed offline, browser and
+package verifiers or an explicitly opted-in deployed/live corpus. It records source
+and toolchain identities, verifier outcomes and bounded logs; failures and unrun
+lanes/cases remain visible. Expected base, mode, tree and publication disposition
+are fixed before case execution. The matcher rejects unrelated receipts and
+publication claims embedded in declined text.
+
+The real offline lane completed its application, publication and mutation verifiers.
+Five admission/matcher tests pass, including missing opt-ins before host/output
+access and a live-provider profile rejected from the deployed fixture lane. The
+extracted deployment test exercises a real qualifier-created run with no person:
+its wait deadline returns incomplete, leaves the run active and uncancelled, and
+marks the following case not run. The regular three-mode browser workflow then
+still passes against the same workspace.
+
+No live model, actual person or two-machine corpus was executed. A complete external
+evidence packet also requires workspace metrics/usage and the operator’s independent
+judgment; origin metrics and structural contract matches do not establish a model
+success rate or discharge every acceptance row. See the operator documentation
+for fresh-origin, service, opt-in and wait-deadline behavior.

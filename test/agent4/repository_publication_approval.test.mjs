@@ -209,3 +209,37 @@ for (const revisionScenario of ['eight', 'nine', 'repeat', 'amend']) test(`candi
   assert.equal(f.cleanupCalls, 1);
   if (revisionScenario === 'amend') assert.deepEqual(f.moves, [['U', 'W'], ['W', 'U'], ['U', 'W']], 'amendment after origin restart must not replenish candidate revisions');
 });
+
+for (const scenario of [
+  { name: 'two full-size files fit', files: 2, bytes: 32768 },
+  { name: 'four smaller files fit', files: 4, bytes: 8192 },
+  { name: 'oversized review is refused', files: 4, bytes: 32768, failed: true },
+  { name: 'publication reserves its receipt', files: 2, bytes: 32768, mode: 2 },
+  { name: 'oversized publication never asks for approval', files: 4, bytes: 32768, mode: 2, failed: true },
+  { name: 'candidate capacity precedes physical check', files: 3, bytes: 32768, escaped: true, failed: true },
+  { name: 'provider replay has its separate allowance', files: 2, bytes: 8192, replayBytes: 150000 },
+  { name: 'retained question survives restart', files: 2, bytes: 32768, question: true },
+]) test(`retained text budget: ${scenario.name}`, async t => {
+  const f = await fixture(t, { mobile: true, mode: scenario.mode ?? 1, sessionTasks: 1, textScenario: scenario,
+    ...(scenario.question ? { reviewFollowup: 'question', restartReview: true } : {}) });
+  assert.equal((await f.run()).kind, 'terminal');
+  assert.equal(f.outcomeKind(), scenario.failed ? 'failed' : 'completed');
+  assert.equal(f.counts.check, scenario.escaped ? 0 : 1);
+  assert.equal(f.modelCalls, scenario.files + (scenario.escaped ? 1 : 2) + (scenario.question ? 2 : 0));
+  assert.equal(f.cleanupCalls, 1);
+  const published = !scenario.failed && scenario.mode === 2;
+  assert.equal(f.counts.publish, published ? 1 : 0);
+  if (scenario.failed) {
+    assert.equal(f.failure(), 3, 'typed capacity_exceeded, not a failed independent check');
+    assert.equal(f.counts.human, 0);
+    assert.equal(await f.store.current(), f.base);
+  } else {
+    const proposal = JSON.parse(f.outcome()[5]);
+    assert.equal(proposal.core.diff.length, scenario.files);
+    assert.equal(await f.store.current(), published ? proposal.commitOid : f.base);
+  }
+  if (scenario.replayBytes) {
+    assert(f.maximumReplayBytes > 512 * 1024, 'replay must actually exceed the working-text allowance');
+    assert(f.maximumReplayBytes <= 2 * 1024 * 1024);
+  }
+});

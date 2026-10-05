@@ -5,6 +5,7 @@ const boundary = @import("boundary");
 const a = boundary.authoring;
 const t = @import("types.zig");
 const p = @import("publication.zig");
+const text_budget = @import("budget.zig");
 const Emit = @import("emit.zig").Emit;
 const V = *const a.Value;
 pub const Definition = struct { function: *const a.Function, effects: []const *const a.Operation };
@@ -22,17 +23,25 @@ pub fn define(e: Emit, resolve: *const a.Operation, relocate: *const a.Operation
     const prepare = try e.external("agent.repository.proposal.v1", p.Preparation, p.Proposal, .write);
     const review = try e.external("agent.repository.review.v1", t.ReviewInput, t.ReviewAnswer, .interaction);
     const initial_effects = &.{ prepare, review, resolve, relocate };
-    const f = try c.function("review repository candidate", &.{ .{ .name = "task", .schema = try e.schema(t.Task) }, .{ .name = "finding", .schema = try e.schema(t.Finding) } }, try e.schema(t.ReviewReply), initial_effects);
+    const f = try c.function("review repository candidate", &.{ .{ .name = "task", .schema = try e.schema(t.Task) }, .{ .name = "review", .schema = try e.schema(t.ReviewDemand) } }, try e.schema(t.ReviewReply), initial_effects);
     const b = try c.body(f);
     const task = try b.parameter("task");
-    const finding = try b.parameter("finding");
+    const demand = try b.parameter("review");
+    const finding = try b.field(demand, "finding");
     const candidate = try b.field(finding, "candidate");
     const changed = try b.branch();
     const unchanged = try b.branch();
     const input = try changed.product(try e.schema(p.Preparation), &.{ .{ .name = "candidate", .value = candidate }, .{ .name = "validation", .value = try changed.field(finding, "validation") }, .{ .name = "task_id", .value = try changed.field(task, "task_id") }, .{ .name = "generation", .value = try changed.field(task, "generation") } });
     const prepared = try ctx.builder.term(.{ .perform = .{ .effect = try a.interop.operationId(c, prepare), .payload = try a.interop.valueId(changed, input) } });
     try ctx.registry.protectSite(try a.interop.functionId(c, f), prepared, try a.interop.operationId(c, prepare));
-    const proposal = try b.conditional(try b.less(try b.constant(u64, 0), try b.blobLength(candidate)), try changed.ret(try a.interop.term(changed, prepared, try e.schema(p.Proposal))), try unchanged.ret(try e.literal(unchanged, p.Proposal, .{ .bytes = "" })));
+    const materialized = try b.conditional(try b.less(try b.constant(u64, 0), try b.blobLength(candidate)), try changed.ret(try a.interop.term(changed, prepared, try e.schema(p.Proposal))), try unchanged.ret(try e.literal(unchanged, p.Proposal, .{ .bytes = "" })));
+    const publish_mode = try b.equal(try b.enumTag(try b.field(task, "mode")), try b.constant(u32, 2));
+    const allowed = try b.select(publish_mode, try b.less(try b.constant(u64, 0), try b.blobLength(materialized)), try b.constant(bool, false));
+    // Reserve the complete typed reply before asking or publishing. Capacity
+    // failure must not occur after a successful write merely to fit its receipt.
+    const reserve = try b.select(allowed, try b.constant(u64, p.Receipt.max_length.?), try b.constant(u64, t.Answer.max_length.?));
+    const held = try text_budget.add(e, b, try b.field(demand, "retained_text_bytes"), try b.blobLength(materialized));
+    const proposal = try text_budget.admit(e, b, p.Proposal, materialized, try text_budget.add(e, b, held, reserve));
     const home = try b.variantPayload(try e.place(b, try b.field(task, "human"), try b.field(finding, "remaining_moves")), "Ready", failure);
     const moves = try b.field(home, "remaining_moves");
     const publish = try b.branch();
@@ -86,8 +95,6 @@ pub fn define(e: Emit, resolve: *const a.Operation, relocate: *const a.Operation
         answers[i] = try branch.ret(try reply(e, body, if (i < 2) try done(e, body, proposal, try body.variant(try e.schema(t.Publication), "none", try body.constant(void, {}))) else try body.variant(try e.schema(t.ReviewAction), name, branch.payload()), moves));
     }
     const summary = try present.match(answer, &answers);
-    const publish_mode = try b.equal(try b.enumTag(try b.field(task, "mode")), try b.constant(u32, 2));
-    const allowed = try b.select(publish_mode, try b.less(try b.constant(u64, 0), try b.blobLength(proposal)), try b.constant(bool, false));
     try c.define(f, try b.ret(try b.conditional(allowed, try publish.ret(result), try present.ret(summary))));
     return .{ .function = f, .effects = effects };
 }

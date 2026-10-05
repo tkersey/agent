@@ -654,3 +654,34 @@ reservation and early helper-identity check; those corrections have the focused
 object/gate proof above. Final exact-head aggregate/package qualification and
 serial review closure remain pending. The existing performance reports retain
 their explicitly frozen subjects; they are not new timing claims for this writer.
+
+## Retained working-text bound
+
+Four admitted 32 KiB replacements could previously reach review while their
+retained edits, candidate record and complete proposal exceeded the specified
+512 KiB working-text allowance. Per-field limits did not enforce the combined
+bound. The authored program now derives one account from its held values and
+checks new candidate, prompt, query and review material before the next effect.
+Consumed tool results are released after a complete replay response; only the
+designated provider replay uses its separate allowance. Human-answer and receipt
+capacity is reserved before interaction or publication.
+
+The account covers logical working values, rather than counting encoding copies
+as new source data. World image/outcome/working-memory and journal limits remain
+independent. Public task, model, human and report schemas are unchanged; the
+additional review-account value is internal to the owned inquiry.
+
+Eight regressions pass on the new image. The previous image passes the five valid
+cases and fails the three capacity cases. The checks preserve two full-size files,
+four smaller files, exact managed publication, replay above 512 KiB but below its
+own cap, and a retained question across restart. Excess candidate text is refused
+before physical checking; excess review/publication text is refused before human
+approval. Each refusal performs cleanup and leaves the managed ref unchanged.
+
+The affected authoring, application, comparison, native and package qualification
+passes 448 build steps, including 50 application/catalogue tests, 163 continuation
+comparisons and 702 native/WASM comparisons across fourteen custody scenarios.
+The broader 559-step aggregate passed before this application-only correction;
+its unchanged runtime/dependency evidence is retained with that source scope.
+Final measurement applicability, acceptance reconciliation and serial review
+closeout remain open. Generated round records are not versioned.

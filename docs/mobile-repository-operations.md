@@ -89,6 +89,17 @@ an operator can explicitly select up to sixteen (for example, six for a
 clarification followed by publication). Model/check allowances remain separate
 and cumulative; generation never silently enlarges the supplied model allowance.
 
+Each task also has a 512 KiB working-text allowance. Context, staged edits,
+candidate/check records, tool-result text and the full proposal share that budget;
+rendered prompts and new query text are admitted before dispatch. Provider replay
+has its separate 2 MiB bound. A candidate can meet the individual file/path limits
+and still exceed the combined budget. Capacity failure returns the typed
+`capacity_exceeded` outcome. The program reserves space for bounded human answers
+and publication receipts before requesting them.
+
+This is logical working-data accounting. Checkpoint encoding and its copies remain
+subject to the existing World and journal limits.
+
 After login, the browser offers the authorized repository and defaults to
 `propose`. Alternatively, with the local service stopped, list/start a task through
 trusted CLI intake; the catalogue encodes the task and signs the registration:

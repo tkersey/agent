@@ -61,28 +61,36 @@ function nativeComparedWorld(world, directory, observed) {
     } });
   } } };
 }
-export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, qualified = false, intake = false, sessionTasks = 0, nextMode = null, comparison = null, deterministicBase = false, revisionScenario = null } = {}) {
+export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, qualified = false, intake = false, sessionTasks = 0, nextMode = null, comparison = null, deterministicBase = false, revisionScenario = null, textScenario = null } = {}) {
   if (revisionScenario) assert(mobile && mode === 1 && !qualified && !comparison && ['eight', 'nine', 'repeat', 'amend'].includes(revisionScenario));
+  if (textScenario) assert(mobile && [1, 2].includes(mode) && !qualified && !comparison && !revisionScenario && [0, 1].includes(sessionTasks) && !engine &&
+    Number.isInteger(textScenario.files) && textScenario.files >= 1 && textScenario.files <= 4 && Number.isInteger(textScenario.bytes) && textScenario.bytes > 0 && textScenario.bytes <= 32768);
   const sessionInput = mobile && Boolean(process.env.AGENT_MOBILE_PACKAGE || intake || sessionTasks || comparison);
   if (comparison) assert(mobile && mode === 1 && !qualified && !engine && !reviewFollowup && !sessionTasks, "comparison uses the same single-task propose workload");
   const stationary = comparison?.topology === "stationary", spendingHost = stationary ? "U" : "W";
   const revision = comparison ? `measure-${comparison.topology}-v1` : "p1";
-  const workload = comparison?.workload ?? { repositoryBytes: 0, extraReads: 0, replayPaddingBytes: 0 };
+  const workload = comparison?.workload ?? { repositoryBytes: 0, extraReads: 0, replayPaddingBytes: textScenario?.replayBytes ?? 0 };
   const gitEnvironment = comparison || deterministicBase ? { ...env, GIT_AUTHOR_DATE: "1791150000 +0000", GIT_COMMITTER_DATE: "1791150000 +0000" } : env;
   const root = await mkdtemp(join(tmpdir(), 'repository-approval-'));
   const git = await realpath(execFileSync('/bin/sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim());
   const targetPath = qualified ? 'subject.zig' : 'fix.txt';
+  const textPaths = textScenario ? [targetPath, 'second.txt', 'third.txt', 'fourth.txt'].slice(0, textScenario.files) : [targetPath];
+  const originalText = index => String.fromCharCode(65 + index).repeat(textScenario.bytes);
+  const replacementText = index => String.fromCharCode((textScenario.escaped ? 1 : 97) + index).repeat(textScenario.bytes);
+  if (textScenario) content = replacementText(0);
   if (qualified) content = await readFile(new URL('../../src/model_json.zig', import.meta.url), 'utf8');
-  const before = qualified ? content.replace('.bool => 5,', '.bool => 4,') : 'before\n';
+  const before = qualified ? content.replace('.bool => 5,', '.bool => 4,') : textScenario ? originalText(0) : 'before\n';
   const source = join(root, 'source.git');
   const command = (...args) => execFileSync(git, ['--git-dir=' + source, ...args], { env: gitEnvironment, encoding: 'utf8' }).trim();
   command('init', '--bare', '--quiet', '--template=');
   const extraTree = comparison ? `100644 blob ${execFileSync(git, ['--git-dir=' + source, 'hash-object', '-w', '--stdin'], { env, encoding: 'utf8', input: 'x'.repeat(workload.repositoryBytes) }).trim()}\tcontext.txt\n` : '';
-  const tree = mobile ? execFileSync(git, ['--git-dir=' + source, 'mktree'], { env, encoding: 'utf8', input: extraTree + `100644 blob ${execFileSync(git, ['--git-dir=' + source, 'hash-object', '-w', '--stdin'], { env, encoding: 'utf8', input: before }).trim()}\t${targetPath}\n` }).trim() : command('mktree');
+  const tree = mobile ? execFileSync(git, ['--git-dir=' + source, 'mktree'], { env, encoding: 'utf8', input: textScenario
+    ? textPaths.map((path, index) => `100644 blob ${execFileSync(git, ['--git-dir=' + source, 'hash-object', '-w', '--stdin'], { env, encoding: 'utf8', input: originalText(index) }).trim()}\t${path}\n`).join('')
+    : extraTree + `100644 blob ${execFileSync(git, ['--git-dir=' + source, 'hash-object', '-w', '--stdin'], { env, encoding: 'utf8', input: before }).trim()}\t${targetPath}\n` }).trim() : command('mktree');
   const base = command('commit-tree', tree, '-m', 'base');
   command('update-ref', 'refs/heads/fixture', base);
   const options = { directory: join(root, 'managed'), sourceGitDirectory: source, base, gitExecutable: git,
-    repository: 'fixture', generation: 'generation', managedRef: 'refs/heads/agent/result', readPaths: comparison ? ['context.txt', targetPath] : [targetPath], writablePaths: [targetPath] };
+    repository: 'fixture', generation: 'generation', managedRef: 'refs/heads/agent/result', readPaths: textScenario ? textPaths : comparison ? ['context.txt', targetPath] : [targetPath], writablePaths: textPaths };
   const provisioned = await provisionRepository(options), store = await openRepositorySnapshotStore({ writeHelper: await repositoryWriteHelper(), ...options, ...provisioned });
   const snapshot = await store.snapshot(base), candidate = await store.prepare(snapshot, [
     { path: targetPath, operation: mobile ? 'replace' : 'create', oldDigest: mobile ? (await store.read(snapshot, targetPath)).digest : null, oldMode: mobile ? '100644' : null, content }]);
@@ -155,8 +163,11 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
       allowance: { attempts: revisionScenario ? 16 : sessionTasks || (reviewFollowup === 'amend' ? 2 : 1), request_bytes: 4 << 20, concurrent: 1 } },
     runner: { runner, profiles: [{ id: 'fixture-content', digest: profileDigest }], async check({ candidate: exact, occurrence }) {
       counts.check++; if (realChecks) return realChecks.check({ snapshot: exact.snapshot, candidate: exact, occurrence, profileId: 'fixture-content' });
-      const inputs = await store.checkInputs({ snapshot: exact.snapshot, candidate: exact, requiredPaths: [targetPath] });
-      assert.deepEqual(inputs.files[targetPath], Buffer.from(revisionScenario ? content + `revision-${revisionScenario === 'repeat' ? 1 : counts.check}\n` : reviewFollowup === 'amend' && counts.check > 1 ? content + 'revised\n' : content));
+      const inputs = await store.checkInputs({ snapshot: exact.snapshot, candidate: exact, requiredPaths: textPaths });
+      if (textScenario) {
+        assert.equal(exact.edits.length, textPaths.length);
+        for (const [index, path] of textPaths.entries()) assert.deepEqual(inputs.files[path], Buffer.from(replacementText(index)));
+      } else assert.deepEqual(inputs.files[targetPath], Buffer.from(revisionScenario ? content + `revision-${revisionScenario === 'repeat' ? 1 : counts.check}\n` : reviewFollowup === 'amend' && counts.check > 1 ? content + 'revised\n' : content));
       const record = { format: 'agent.repository.check/v1', occurrence, snapshot: exact.snapshot, candidate: exact.id, tree: exact.tree,
         profile: 'fixture-content', profileDigest, runner, status: checkStatus, completedChecks: checkStatus === 'Passed' ? ['fixture-content'] : [] };
       return { ...record, id: hash(canonical(record, 2 << 20)) };
@@ -181,7 +192,7 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
     const review = repositoryReviewBinding({ ...metadata('agent.repository.review.v1', 'review', 'review-answer', 'interaction'), audience: 'human' }, { kind: 'repository-review-human', revision: 'review-1' });
     const answer = review.answer; review.answer = context => { counts.human++; return answer(context); }; reviewBindings.push(review);
   }
-  let modelTurn = 0, modelCalls = 0, cleanupCalls = 0, reviewAnswers = 0, reviewRestarted = false, provider;
+  let modelTurn = 0, modelCalls = 0, cleanupCalls = 0, reviewAnswers = 0, reviewRestarted = false, maximumReplayBytes = 0, provider;
   if (mobile) {
     const leaf = await createManagedRepositoryEnvironment({ writeHelper: await repositoryWriteHelper(), ...options, ...provisioned, resourceOwner: 'W', classification: ['shared'] });
     additional.push(fixed('agent.repository.snapshot.v1', 'snapshot-request', 'snapshot', 'read', ({ payload }) => leaf.snapshot(payload)),
@@ -195,7 +206,7 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
       const request = JSON.parse(Buffer.concat(chunks)), turn = modelTurn++; modelCalls++;
       const calls = request.input.filter(item => item.type === 'function_call');
       assert.equal(calls.length, turn, 'the provider can resume entirely from supplied replay');
-      if (reviewFollowup === 'question' && turn >= 3) { assert(!request.tools.some(tool => ['edit', 'check'].includes(tool.name))); }
+      if (reviewFollowup === 'question' && turn >= (textScenario ? textPaths.length + 2 : 3)) { assert(!request.tools.some(tool => ['edit', 'check'].includes(tool.name))); }
       const actionTurn = turn - workload.extraReads, followup = actionTurn >= 3;
       let action = turn < workload.extraReads ? ['read', { path: targetPath, offset: 0 }] : followup ? (reviewFollowup === 'question' ? (actionTurn === 3 ? [misuse ? 'edit' : 'read', misuse ? { operation: 'replace', path: targetPath, old_digest: candidate.edits[0].oldDigest, content: 'forbidden\n' } : { path: targetPath, offset: 0 }] : ['finish', { summary: 'Read-only question answered; candidate unchanged.' }]) : (actionTurn === 3 ? ['edit', { operation: 'replace', path: targetPath, old_digest: candidate.edits[0].oldDigest, content: content + 'revised\n' }] : actionTurn === 4 ? ['check', {}] : ['finish', { summary: 'Amended candidate independently checked.' }])) : mode === 0 ? ['finish', { summary: 'Inspected; no changes.' }] : actionTurn === 0 ? ['edit', { operation: 'replace', path: targetPath, old_digest: candidate.edits[0].oldDigest, content }] : actionTurn === 1 ? ['check', {}] : ['finish', { summary: 'Candidate independently checked.' }];
       if (revisionScenario) {
@@ -206,6 +217,11 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
           turn < revisions * 2 ? (turn % 2 === 0 ? edit(turn / 2 + 1) : ['check', {}]) :
           revisionScenario === 'amend' && turn === 17 ? edit(9) : revisionScenario === 'amend' && turn === 18 ? ['check', {}] : finish;
       }
+      if (textScenario) action = turn < textPaths.length
+        ? ['edit', { operation: 'replace', path: textPaths[turn], old_digest: hash(Buffer.from(originalText(turn))), content: replacementText(turn) }]
+        : turn === textPaths.length ? ['check', {}]
+        : reviewFollowup === 'question' && turn === textPaths.length + 2 ? ['read', { path: targetPath, offset: 0 }]
+        : ['finish', { summary: 'All admitted files independently checked.' }];
       res.end(JSON.stringify({ status: 'completed', error: null, output: [
         { type: 'reasoning', id: `reason-${turn}`, summary: [], encrypted_content: `opaque-${turn}` + 'x'.repeat(workload.replayPaddingBytes) },
         { type: 'function_call', id: `function-${turn}`, status: 'completed', call_id: `call-${turn}`, name: action[0], arguments: JSON.stringify(action[1]) },
@@ -213,12 +229,21 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
     });
     await new Promise(resolve => provider.listen(0, '127.0.0.1', resolve));
     t.after(async () => { provider.closeAllConnections(); await new Promise(resolve => provider.close(resolve)); });
-    additional.push(modelBinding(metadata('agent.model.invoke.v4', 'model-request', 'model-result', 'model'), {
+    const selectedModel = modelBinding(metadata('agent.model.invoke.v4', 'model-request', 'model-result', 'model'), {
       kind: 'openai-responses-replay', owner: 'W', mode: 'loopback-fixture', endpoint: `http://127.0.0.1:${provider.address().port}/v1/responses`,
       credentialEnv: null, model: 'fixture-model', parameters: { maxOutputTokens: 512, temperature: null, reasoning: null }, timeoutMs: 10000,
       maximumRequestBytes: 2 << 20, maximumResponseBytes: 2 << 20, disclosure: { audience: null, policyRevision: revision, labels: ['shared'] },
-      allowance: { attempts: revisionScenario ? 32 : comparison ? 3 + workload.extraReads : sessionTasks ? sessionTasks * 3 : reviewFollowup === 'amend' ? 6 : reviewFollowup ? 5 : 3, request_bytes: 16 << 20, output_tokens: revisionScenario ? 16384 : 3072, concurrent: 1 },
-    }, 'W'));
+      allowance: { attempts: revisionScenario || textScenario ? 32 : comparison ? 3 + workload.extraReads : sessionTasks ? sessionTasks * 3 : reviewFollowup === 'amend' ? 6 : reviewFollowup ? 5 : 3, request_bytes: 16 << 20, output_tokens: revisionScenario || textScenario ? 16384 : 3072, concurrent: 1 },
+    }, 'W');
+    if (textScenario) {
+      const handle = selectedModel.handle;
+      selectedModel.handle = async context => {
+        const reply = await handle(context);
+        maximumReplayBytes = Math.max(maximumReplayBytes, decodeValue(schemas['model-result'], reply)[1].length);
+        return reply;
+      };
+    }
+    additional.push(selectedModel);
   }
   const workspaceBindings = [check, prepare, current, publish, ...additional];
   for (const binding of workspaceBindings) comparison?.leaf?.(binding);
@@ -318,7 +343,7 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
       const value = parse(registration); delete value.signature; value.run_id = id;
       comparison.begin?.();
       await hosts.U.registerRun(signRecord('run', value, pairs.issuer.privateKey), image, encodeValue(schemas.session, [expectedTask, 1])); comparison.registered?.();
-    }, get modelCalls() { return modelCalls; }, get cleanupCalls() { return cleanupCalls; }, get journal() { return journals[activeHost]; },
+    }, get modelCalls() { return modelCalls; }, get cleanupCalls() { return cleanupCalls; }, get maximumReplayBytes() { return maximumReplayBytes; }, get journal() { return journals[activeHost]; },
     async run() {
       let transitions = 0;
       for (let n = 0; n < 1000; n++) {
@@ -376,6 +401,8 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
     },
     restart() { hosts[activeHost].retireAll(); journals[activeHost].close(); open(activeHost, false); },
     outcomeKind() { const journal = journals[activeHost], run = journal.run(id); return world.decodeOutcome(journal.artifact('tenant', run.outcome_digest)).kind; },
+    failure() { const journal = journals[activeHost], run = journal.run(id), outcome = world.decodeOutcome(journal.artifact('tenant', run.outcome_digest));
+      assert.equal(outcome.kind, 'failed'); return decodeValue({ root: 0, types: [{ enumeration: [0, 1, 2, 3, 4] }] }, outcome.value); },
     outcome() { const journal = journals[activeHost], run = journal.run(id), outcome = world.decodeOutcome(journal.artifact('tenant', run.outcome_digest));
       assert.equal(outcome.kind, 'completed'); return decodeValue(schemas.result, outcome.value); },
     status(host = activeHost) { return hosts[host].status(id); },

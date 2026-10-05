@@ -155,7 +155,12 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
       const decision = await (await executor.api('retry')).json();
       status.textContent = decision.kind === 'accepted' ? 'Continuing at another host. Reconnect when it returns.' : decision.kind === 'refused' ? 'Move declined. Continue here.' : 'Waiting for a custody decision. The run remains paused.';
     } else if (result.status?.custody === 'TERMINAL') { await executor.retire(); status.textContent = 'Finished'; }
-    else { status.textContent = result.kind === 'blocked' ? 'Waiting for a response' : 'Ready'; await showQuestion(); }
+    else {
+      status.textContent = result.kind === 'effect_unknown' ? 'Effect result unknown. The run remains paused.'
+        : result.kind === 'dispatching' ? 'Working'
+        : ['blocked', 'awaiting'].includes(result.kind) ? 'Waiting for a response' : 'Ready';
+      await showQuestion();
+    }
   });
   document.querySelector('#cancel').onclick = action(async () => {
     if (!executor) throw new Error('Enter a run and connect first.');

@@ -54,3 +54,33 @@ for (const [name, engine] of [['chromium', chromium], ['firefox', firefox]]) tes
   assert.equal(f.counters.A.task, 0); assert.equal(f.counters.A.present, 1);
   assert.equal(await page.evaluate(() => document.cookie), '');
 });
+
+for (const [name, engine] of [['chromium', chromium], ['firefox', firefox]]) test(`${name}: unknown effect remains visibly paused without repeating it`, async t => {
+  const f = await hostFixture(t, { localData: true }), tls = await certificates(f.area);
+  let attempts = 0;
+  f.bindings.A.find(value => value.operation.endsWith('.task.v1')).handle = () => {
+    attempts++; throw new Error('FixtureReplyLost');
+  };
+  const sessions = new BrowserSessions({ directory: join(f.area, 'sessions'), create: true, authorize: () => true });
+  const issued = sessions.issue({ principal: 'user', tenant: 'tenant', audience: 'human-A' });
+  const origin = await serveBrowser(f.hosts.A, { ...tls.A, audience: 'human-A', runtimePath: resolve(process.env.AGENT_MOBILITY_RUNTIME),
+    kernelBytes: await readFile(join(process.env.AGENT_MOBILITY_RUNTIME, 'world-kernel.wasm')),
+    authenticate: req => sessions.authenticate(req), redeem: (credential, audience) => sessions.redeem(credential, audience) });
+  const browser = await engine.launch({ headless: true });
+  t.after(async () => { await browser.close(); await origin.close(); sessions.close(); });
+  const context = await browser.newContext({ ignoreHTTPSErrors: true }), page = await context.newPage();
+  await page.goto(origin.url + '/login');
+  await page.locator('#credential').fill(issued.credential); await page.locator('#login button').click();
+  await page.waitForURL(origin.url + '/');
+  await page.locator('#run').fill(f.id); await page.locator('#connect').click();
+  await page.locator('#status').filter({ hasText: 'Connected' }).waitFor();
+  await page.locator('#continue').click();
+  await page.waitForFunction(() => !document.querySelector('#continue').disabled);
+  assert.equal(attempts, 1);
+  for (let retry = 0; retry < 2; retry++) {
+    await page.locator('#continue').click();
+    await page.waitForFunction(() => !document.querySelector('#continue').disabled);
+    assert.equal(await page.locator('#status').textContent(), 'Effect result unknown. The run remains paused.');
+    assert.equal(attempts, 1);
+  }
+});

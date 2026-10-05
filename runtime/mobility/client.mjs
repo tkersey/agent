@@ -99,6 +99,10 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
         }
         question.append(details);
       }
+    } else if (value?.kind === 'repository-clarification') {
+      for (const text of [value.goal, value.question, `Source: ${value.evidence[1]}${value.evidence[4] ? ' (excerpt)' : ''}`, value.evidence[3]]) {
+        const p = document.createElement('pre'); p.textContent = text; question.append(p);
+      }
     } else question.textContent = ['repository-review', 'repository-next-task'].includes(value?.kind) ? value.summary : JSON.stringify(value, null, 2);
     if (value?.kind === 'repository-next-task') {
       const explanation = document.createElement('p');

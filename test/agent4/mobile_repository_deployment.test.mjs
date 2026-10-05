@@ -74,9 +74,10 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
       const request = JSON.parse(Buffer.concat(chunks)), turn = request.input.filter(item => item.type === 'function_call').length; modelCalls++;
       assert.deepEqual(request.reasoning, { effort: 'medium', summary: 'auto' });
       const actions = [['edit', { operation: 'replace', path: target, old_digest: beforeDigest, content: correct }], ['check', {}], ['finish', { summary: 'Boolean bound repaired and independently checked.' }]];
-      assert(turn < actions.length);
-      const [name, args] = turn === 0 && !request.tools.some(tool => tool.name === 'edit')
-        ? ['finish', { summary: 'Inspected the incorrect boolean bound; inspect mode makes no change.' }] : actions[turn];
+      assert(turn <= actions.length);
+      const [name, args] = turn === 0 ? ['ask', { question: 'Confirm the bounded scope before continuing.' }]
+        : !request.tools.some(tool => tool.name === 'edit') && turn === 1
+          ? ['finish', { summary: 'Inspected the incorrect boolean bound; inspect mode makes no change.' }] : actions[turn - 1];
       res.end(JSON.stringify({ status: 'completed', error: null, output: [{ type: 'function_call', id: `function-${turn}`, status: 'completed', call_id: `call-${turn}`, name, arguments: JSON.stringify(args) }] }));
     } catch (error) { providerFailure = error; res.statusCode = 500; res.end('{}'); }
   });
@@ -85,7 +86,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
     endpoint: `http://127.0.0.1:${provider.address().port}/v1/responses`, credentialEnv: null, model: 'fixture-model',
     parameters: { maxOutputTokens: 512, temperature: null, reasoning: { effort: 'medium', summary: 'auto' } }, timeoutMs: 10000,
     maximumRequestBytes: 2 << 20, maximumResponseBytes: 2 << 20, disclosure: { audience: null, policyRevision: 'p1', labels: ['shared'] },
-    allowance: { attempts: 3, request_bytes: 16 << 20, output_tokens: 3072, concurrent: 1 } };
+    allowance: { attempts: 4, request_bytes: 16 << 20, output_tokens: 3072, concurrent: 1 } };
   const pairs = Object.fromEntries(['issuer', 'U', 'W'].map(name => [name, generateKeyPairSync('ed25519')]));
   for (const [name, pair] of Object.entries(pairs)) for (const [kind, type] of [['public', 'spki'], ['private', 'pkcs8']])
     await writeFile(join(area, `${name}.${kind}.pem`), pair[kind + 'Key'].export({ type, format: 'pem' }), { mode: 0o600 });
@@ -99,7 +100,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
     check: join(area, 'check.json'), qualification: await json(join(area, 'qualification.json'), qualification),
     issuer: { id: 'issuer', keyId: 'issuer', publicKey: join(area, 'issuer.public.pem'), privateKey: join(area, 'issuer.private.pem') },
     principal: { tenant: 'tenant', principal: 'user', taskPrincipal: '7' }, origin: hostInput('U', 'A'), workspace: hostInput('W', 'B'),
-    task: { path: target, steps: 8, checks: 1, maximumTasks: 1 }, provider: { enabled: true, profile: providerProfile },
+    task: { path: target, steps: 8, checks: 1, maximumTasks: 1, moves: 6 }, provider: { enabled: true, profile: providerProfile },
     commit: { author: { name: 'Fixture', email: 'fixture@example.invalid' }, committer: { name: 'Fixture', email: 'fixture@example.invalid' }, timestamp: 1791150000, message: 'Checked boolean bound' } };
   const setupPath = await json(join(area, 'setup.json'), setup), generated = command('configure-repository', setupPath, join(area, 'configured'));
   assert.match(generated.programId, /^[a-f0-9]{64}$/); assert.equal(generated.image, hash(image)); assert.equal(generated.tasksEnabled, true);
@@ -121,6 +122,12 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   }
   const configU = generated.origin, configW = generated.workspace;
   const workspaceConfig = JSON.parse(await readFile(configW));
+  const localValidation = command('validate', configU);
+  assert.equal(localValidation.storage, 'not-opened'); assert.equal(localValidation.peerContact, false);
+  for (const path of [setup.origin.directory, setup.origin.browser.directory, setup.workspace.directory]) await assert.rejects(stat(path), { code: 'ENOENT' });
+  const missingHuman = JSON.parse(await readFile(configU)); missingHuman.bindings = missingHuman.bindings.filter(row => row.operation !== 'agent.repository.human.v1');
+  const missingPath = await json(join(area, 'configured/missing-human.json'), missingHuman);
+  assert.throws(() => command('validate', missingPath), error => error.status === 1 && JSON.parse(error.stdout).reason === 'RepositoryCapabilityMissing' && JSON.parse(error.stdout).operation === 'agent.repository.human.v1');
   command('init', configU); assert.equal(command('tasks', configU, 'user', 'tenant')[0].defaultMode, 'propose');
   const runs = ['inspect', 'propose', 'publish'].map(mode => ({ mode,
     run: command('task', configU, 'user', 'tenant', 'repository', mode, 'Investigate and repair the boolean JSON-size bound within the selected mode.') }));
@@ -136,11 +143,16 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
     child.stdout.on('data', bytes => { stdout += bytes; for (const line of stdout.split('\n')) { try { const value = JSON.parse(line); if (value.listening) { clearTimeout(timer); resolve(value); } } catch {} } });
   });
   origin.peers.get('W').close(); origin.peers.set('W', new PeerClient({ url: ready.listening, servername: 'localhost', fingerprint256: tls.B.fingerprint256, ca: tls.ca, key: tls.A.key, cert: tls.A.cert }));
+  const connectedConfig = JSON.parse(await readFile(configU)); connectedConfig.peers[0].url = ready.listening; await json(configU, connectedConfig);
+  const runsBeforeValidation = origin.journal.recover().map(({ run }) => run.run_id);
+  const connectedValidation = command('validate', configU, configW, '--peers');
+  assert(connectedValidation.capabilityCoverage.some(row => row.host === 'W' && row.verified === 'authenticated-preflight'));
+  assert.deepEqual(origin.journal.recover().map(({ run }) => run.run_id), runsBeforeValidation); assert.equal(modelCalls, 0);
   const { chromium } = await import(pathToFileURL(join(resolve(process.env.AGENT_MOBILITY_BROWSER_TOOLS), 'node_modules/playwright-core/index.mjs')));
   browser = await chromium.launch({ headless: true }); const page = await (await browser.newContext({ ignoreHTTPSErrors: true })).newPage();
   const login = command('login-issue', configU, 'user', 'tenant');
   await page.goto(service.browser_url + '/login'); await page.locator('#credential').fill(login.credential); await page.locator('#login button').click(); await page.waitForURL(service.browser_url + '/');
-  let approvals = 0;
+  let approvals = 0, clarifications = 0;
   for (const { mode, run } of runs) {
     await page.locator('#run').fill(run.run_id); await page.locator('#connect').click(); await page.locator('#status').filter({ hasText: 'Connected' }).waitFor();
     for (let attempt = 0; attempt < 800 && origin.custodian.status(run.run_id).custody !== 'TERMINAL'; attempt++) {
@@ -148,6 +160,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
       if (await page.locator('#answer').isVisible()) {
         const choices = await page.locator('#choice option').evaluateAll(options => options.map(option => option.value));
         if (choices.includes('approve')) { assert.equal(mode, 'publish'); assert.match(await page.locator('#question').textContent(), /Passed/); await page.locator('#choice').selectOption('approve'); approvals++; }
+        else if (choices.includes('respond')) { assert.match(await page.locator('#question').textContent(), /Confirm the bounded scope/); await page.locator('#answer-text').fill('Proceed within the granted scope.'); await page.locator('#choice').selectOption('respond'); clarifications++; }
         else if (choices.includes('finish')) await page.locator('#choice').selectOption('finish');
         else { assert(choices.includes('stop')); await page.locator('#choice').selectOption('stop'); }
         await page.locator('#answer button').click();
@@ -162,7 +175,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
     assert.throws(() => command('export', configU, 'someone-else', 'tenant', run.run_id));
     if (mode !== 'publish') assert.equal(execFileSync(git, ['--git-dir=' + join(directory, 'objects.git'), 'rev-parse', 'refs/heads/agent/result'], { env: gitEnv, encoding: 'utf8' }).trim(), base);
   }
-  assert.equal(approvals, 1); assert.equal(modelCalls, 7);
+  assert.equal(approvals, 1); assert.equal(clarifications, 3); assert.equal(modelCalls, 10);
   assert.equal(sourceGit('rev-parse', 'HEAD'), base); assert.equal(sourceGit('status', '--porcelain'), '');
   const managed = (...args) => execFileSync(git, ['--git-dir=' + join(directory, 'objects.git'), ...args], { env: gitEnv, encoding: 'utf8' }).trim();
   const commit = managed('rev-parse', 'refs/heads/agent/result'); assert.notEqual(commit, base);

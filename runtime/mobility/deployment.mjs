@@ -3,16 +3,17 @@
 import { createPrivateKey, createPublicKey } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { realpath } from 'node:fs/promises';
+import { createSecureContext } from 'node:tls';
 import { pathToFileURL } from 'node:url';
 import { verifyRuntime, readRegular } from '../../tools/agent4/dependencies.mjs';
 import { decodeSchema, decodeValue, encodeValue } from '../values.mjs';
 import { bindSubject, subjectSchema, READ, CLOSE } from '../text_inspection.mjs';
 import { fileBinding } from '../text_file.mjs';
-import { WorldAdmission } from './admission.mjs';
+import { WorldAdmission, canonicalRequirements } from './admission.mjs';
 import { CustodyJournal } from './journal.mjs';
 import { Custodian } from './custodian.mjs';
 import { modelBinding } from './model.mjs';
-import { repositoryApprovalBinding, repositoryReviewBinding, repositoryNextTaskBinding } from './repository_approval.mjs';
+import { repositoryApprovalBinding, repositoryReviewBinding, repositoryNextTaskBinding, repositoryClarificationBinding } from './repository_approval.mjs';
 import { repositoryPublicationBinding, repositoryProposalBinding } from './repository_publication.mjs';
 import { repositoryCheckBinding } from './repository_check.mjs';
 import { createRepositoryCheckRunner } from '../repository_checks.mjs';
@@ -23,16 +24,18 @@ import { createManagedRepositoryEnvironment } from '../repository.mjs';
 import { taskCatalogue } from './task_catalogue.mjs';
 import { BrowserSessions } from './sessions.mjs';
 import { serveBrowser } from './browser.mjs';
-import { HostPolicy } from './policy.mjs';
+import { HostPolicy, requirement } from './policy.mjs';
 import { PeerClient, servePeers } from './transport.mjs';
-import { parse, requireThat, closed } from './canonical.mjs';
-import { hash } from './protocol.mjs';
+import { parse, requireThat, closed, identifier } from './canonical.mjs';
+import { hash, runId, signRecord, validate as validateRecord } from './protocol.mjs';
 import { schemas } from './values.mjs';
 
-export async function openDeployment(configPath, { create = false } = {}) {
-  const root = dirname(resolve(configPath)), config = parse(readRegular(configPath, 1 << 20), { maximum: 1 << 20, canonicalOnly: false });
+async function prepareDeployment(configPath) {
+  const root = dirname(resolve(configPath)), configBytes = readRegular(configPath, 1 << 20);
+  const config = parse(configBytes, { maximum: 1 << 20, canonicalOnly: false });
   closed(config, ['format', 'hostId', 'trustDomain', 'revision', 'worldRuntime', 'directory', 'deploymentGeneration', 'keys', 'signer', 'deployments', 'bindings', 'labelDestinations', 'revoked', 'peers', 'tls', 'execution', ...(Object.hasOwn(config, 'browser') ? ['browser'] : []), ...(config.format === 'agent-mobility-deployment/v2' ? ['catalogue'] : [])]);
   requireThat(['agent-mobility-deployment/v1', 'agent-mobility-deployment/v2'].includes(config.format) && ['node', 'browser'].includes(config.execution), 'DeploymentConfiguration');
+  requireThat(['keys', 'deployments', 'bindings', 'revoked', 'peers'].every(name => Array.isArray(config[name])) && config.revoked.every(value => typeof value === 'string'), 'DeploymentConfiguration');
   const path = value => { requireThat(typeof value === 'string' && value.length > 0, 'DeploymentPath'); return resolve(root, value); };
   const bytes = value => readRegular(path(value));
   // Authenticate the complete installed runtime before importing any of it.
@@ -41,9 +44,35 @@ export async function openDeployment(configPath, { create = false } = {}) {
   const kernelBytes = bytes(identity.kernelPath);
   const keys = new Map(config.keys.map(entry => {
     closed(entry, ['keyId', 'owner', 'status', 'publicKey']);
-    return [entry.keyId, { owner: entry.owner, status: entry.status, publicKey: createPublicKey(bytes(entry.publicKey)) }];
+    identifier(entry.keyId); identifier(entry.owner);
+    const publicKey = createPublicKey(bytes(entry.publicKey));
+    requireThat(['active', 'retired'].includes(entry.status) && publicKey.asymmetricKeyType === 'ed25519', 'UntrustedKey');
+    return [entry.keyId, { owner: entry.owner, status: entry.status, publicKey }];
   }));
   requireThat(keys.size === config.keys.length, 'DuplicateKey');
+  closed(config.signer, ['keyId', 'privateKey', 'policyRevision']);
+  const signer = { ...config.signer, privateKey: createPrivateKey(bytes(config.signer.privateKey)) }, ownKey = keys.get(signer.keyId);
+  requireThat(ownKey?.status === 'active' && ownKey.owner === config.hostId && signer.privateKey.asymmetricKeyType === 'ed25519' &&
+    ownKey.publicKey.equals(createPublicKey(signer.privateKey)) && signer.policyRevision === config.revision, 'DeploymentSigner');
+  closed(config.tls, ['key', 'cert', 'ca', 'host', 'port']);
+  const tls = { key: bytes(config.tls.key), cert: bytes(config.tls.cert), ca: bytes(config.tls.ca) };
+  createSecureContext({ ...tls, minVersion: 'TLSv1.3' });
+  const endpoint = value => typeof value.host === 'string' && value.host.length > 0 && Number.isInteger(value.port) && value.port >= 0 && value.port <= 65535;
+  requireThat(endpoint(config.tls), 'DeploymentListener');
+  requireThat(new Set(config.peers.map(peer => peer.hostId)).size === config.peers.length, 'DuplicatePeer');
+  for (const peer of config.peers) {
+    closed(peer, ['hostId', 'url', 'servername', 'fingerprint256', ...(Object.hasOwn(peer, 'timeout') ? ['timeout'] : [])]);
+    identifier(peer.hostId); identifier(peer.servername, 256);
+    const client = new PeerClient({ ...peer, ...tls }); client.close();
+  }
+  if (config.browser) {
+    closed(config.browser, ['directory', 'audience', 'host', 'port', 'publicOrigin']);
+    requireThat(config.execution === 'browser' && endpoint(config.browser) && typeof config.browser.audience === 'string' && config.browser.audience.length > 0, 'BrowserExecutionRequired');
+    if (config.browser.publicOrigin !== null) {
+      const origin = new URL(config.browser.publicOrigin);
+      requireThat(origin.protocol === 'https:' && origin.origin === config.browser.publicOrigin, 'OriginDenied');
+    }
+  }
   const statistics = new Map();
   let publicationServices;
   const bindings = await Promise.all(config.bindings.map(async entry => {
@@ -76,8 +105,8 @@ export async function openDeployment(configPath, { create = false } = {}) {
       leaf.handle = context => { counts.calls++; return handle(context); };
       return leaf;
     }
-    if (['repository-review-human', 'repository-next-task-human'].includes(adapter.kind)) {
-      const leaf = (adapter.kind === 'repository-next-task-human' ? repositoryNextTaskBinding : repositoryReviewBinding)(binding, adapter), answer = leaf.answer;
+    if (['repository-review-human', 'repository-next-task-human', 'repository-clarification-human'].includes(adapter.kind)) {
+      const leaf = (adapter.kind === 'repository-next-task-human' ? repositoryNextTaskBinding : adapter.kind === 'repository-clarification-human' ? repositoryClarificationBinding : repositoryReviewBinding)(binding, adapter), answer = leaf.answer;
       leaf.answer = context => { counts.calls++; return answer(context); };
       return leaf;
     }
@@ -168,12 +197,129 @@ export async function openDeployment(configPath, { create = false } = {}) {
   const deployments = config.deployments.map(entry => ({ ...entry, cleanup: decodeValue(schemas.requirements, bytes(entry.cleanup)) }));
   const admission = new WorldAdmission(world, { kernelBytes, expectedSha256: identity.kernelSha256 });
   const policy = new HostPolicy({ ...config, runtimeProfile: identity.kernelSha256, deployments, bindings, revoked: new Set(config.revoked) });
+  return { config, configDigest: hash(configBytes), path, bytes, identity, world, runtimePath, kernelBytes, keys, signer, tls, bindings, deployments, admission, policy, statistics,
+    activatePublications: services => { publicationServices = services; } };
+}
+
+// Configuration validation shares preparation with startup, but never opens a
+// journal, creates a browser session, dispatches a leaf or starts a service.
+export async function validateDeployment(configPath, { peerConfigs = [], contactPeers = false } = {}) {
+  const prepared = await prepareDeployment(configPath);
+  const { config, bytes, keys, identity, admission, policy, bindings, tls } = prepared;
+  for (const entry of prepared.deployments) for (const principal of entry.principals) for (const issuer of entry.issuers) {
+    const key = [...keys].find(([, key]) => key.owner === issuer); requireThat(key, 'UntrustedKey');
+    validateRecord('run', { format: 'agent-mobility-run/v1', run_id: runId(issuer), issuer_id: issuer, principal_ref: principal, tenant_ref: entry.tenant,
+      image_digest: entry.imageDigest, program_id: entry.programId, trusted_runtime_profile: identity.kernelSha256, allowed_host_policy_ref: config.trustDomain,
+      deployment_policy_revision: config.revision, initial_classification: entry.classification, initial_host_id: config.hostId, initial_epoch: '0', deployment_limits: entry.limits, key_id: key[0] }, false);
+  }
+  const declarations = new Map([[config.hostId, config]]);
+  for (const filename of peerConfigs) {
+    const peer = parse(readRegular(filename, 1 << 20), { maximum: 1 << 20, canonicalOnly: false });
+    requireThat(!declarations.has(peer.hostId) && config.peers.some(row => row.hostId === peer.hostId), 'ValidationPeerConfiguration');
+    declarations.set(peer.hostId, peer);
+  }
+  // These are the installed repository application's external contracts. The
+  // schema bytes and image are checked against the existing package inventory.
+  const contracts = [
+    ['origin', 'agent.repository.human.v1', 'question', 'answer', 'interaction', 'always'],
+    ['origin', 'agent.repository.review.v1', 'review', 'review-answer', 'interaction', 'review'],
+    ['origin', 'agent.repository.next-task.v1', 'next-task', 'next-task-answer', 'interaction', 'session'],
+    ['origin', 'agent.approval.issue.v1.repository.publish', 'proposal', 'identifier', 'approval', 'publish'],
+    ['origin', 'agent.interaction.exchange.v1.repository.publish', 'human', 'human-reply', 'approval', 'publish'],
+    ['workspace', 'agent.repository.snapshot.v1', 'snapshot-request', 'snapshot', 'read', 'always'],
+    ['workspace', 'agent.repository.read.v1', 'read', 'evidence', 'read', 'always'],
+    ['workspace', 'agent.repository.list.v1', 'list', 'listing', 'read', 'always'],
+    ['workspace', 'agent.repository.search.v1', 'search', 'search-result', 'read', 'always'],
+    ['workspace', 'agent.repository.read-window.v1', 'read-window', 'read-window-result', 'read', 'always'],
+    ['workspace', 'agent.model.invoke.v4', 'model-request', 'model-result', 'model', 'always'],
+    ['workspace', 'agent.repository.prepare.v1', 'candidate-preparation', 'proposal', 'write', 'change'],
+    ['workspace', 'agent.repository.check.v1', 'proposal', 'check-result', 'write', 'change'],
+    ['workspace', 'agent.repository.proposal.v1', 'preparation', 'proposal', 'write', 'change'],
+    ['workspace', 'agent.repository.publication-current.v1', 'proposal', 'boolean', 'read', 'publish'],
+    ['workspace', 'agent.repository.publish.v1', 'proposal', 'delivery', 'commit', 'publish'],
+  ];
+  const reports = [];
+  if (config.format === 'agent-mobility-deployment/v2') {
+    taskCatalogue(config.catalogue, { bytes, keys, custodian: null, config, runtimeProfile: identity.kernelSha256 });
+    requireThat(!contactPeers || config.catalogue.entries.length === 0 || peerConfigs.length > 0, 'ValidationPeerConfiguration');
+    const examples = resolve(import.meta.dirname, '../../examples');
+    let inventory;
+    const artifact = name => {
+      inventory ??= JSON.parse(readRegular(resolve(examples, 'inventory.json')));
+      const row = inventory.files.find(row => row.path === name), value = readRegular(resolve(examples, name));
+      requireThat(row && row.sha256 === hash(value), 'ValidationArtifactMismatch'); return value;
+    };
+    const approvalSchemas = new Set(['preparation', 'proposal', 'delivery', 'check-result', 'human', 'human-reply', 'identifier', 'boolean']);
+    const schema = name => artifact(`${approvalSchemas.has(name) ? 'repository-approval' : 'mobile-repository'}/${name}.bin`);
+    for (const entry of config.catalogue.entries) {
+      const image = bytes(entry.image), initial = bytes(entry.initialTask);
+      requireThat(hash(image) === hash(artifact('mobile-repository/session.bpi3')) &&
+        hash(bytes(entry.taskSchema)) === hash(schema('session')) && hash(bytes(entry.reportSchema)) === hash(schema('report')), 'ValidationArtifactMismatch');
+      const session = decodeValue(decodeSchema(bytes(entry.taskSchema)), initial), task = session[0];
+      const executor = await admission.start(image, initial, entry.programId);
+      try { requireThat(admission.read(executor.current()).metadata.kind === 'requested', 'ValidationTaskRejected'); }
+      finally { executor.retire(); }
+      for (const principal of entry.principals) {
+        const deployment = config.deployments.find(row => row.imageDigest === hash(image) && row.programId === entry.programId && row.tenant === principal.tenant && row.principals.includes(principal.principal));
+        requireThat(deployment, 'CatalogueDeployment');
+        const issuer = config.catalogue.issuer;
+        const registration = { format: 'agent-mobility-run/v1', run_id: runId(issuer.id), issuer_id: issuer.id, principal_ref: principal.principal, tenant_ref: principal.tenant,
+          image_digest: hash(image), program_id: entry.programId, trusted_runtime_profile: identity.kernelSha256, allowed_host_policy_ref: config.trustDomain,
+          deployment_policy_revision: config.revision, initial_classification: deployment.classification, initial_host_id: config.hostId, initial_epoch: '0', deployment_limits: deployment.limits, key_id: issuer.keyId };
+        validateRecord('run', registration, false); policy.authorizeRun(registration); policy.checkCleanup(registration);
+        policy.preflight(registration, task[8][0][0], task[8][0][1], deployment.classification);
+        const selected = contracts.filter(([, , , , , condition]) => condition === 'always' || condition === 'publish' && entry.modes.includes('publish') ||
+          condition === 'change' && entry.modes.some(mode => mode !== 'inspect') || condition === 'review' && entry.modes.some(mode => mode !== 'publish') || condition === 'session' && session[1] > 1);
+        const requests = new Map();
+        let workspaceHost = null;
+        for (const [side, operation, input, output, role] of selected) {
+          const candidates = side === 'origin' ? [config] : [...declarations.values()].filter(peer => peer.hostId !== config.hostId);
+          const found = candidates.flatMap(peer => peer.bindings.filter(row => row.operation === operation && row.role === role && row.subject === task[4] &&
+            row.tenants.includes(principal.tenant) && row.principals.includes(principal.principal)).map(row => ({ peer, row })));
+          if (found.length === 0 && side === 'workspace' && peerConfigs.length === 0 && !contactPeers) continue;
+          if (found.length !== 1) throw Object.assign(new Error('RepositoryCapabilityMissing'), { code: 'RepositoryCapabilityMissing', operation });
+          const { peer, row } = found[0], wanted = requirement({ ...row, payloadSchema: schema(input), resultSchema: schema(output) });
+          if (operation === 'agent.interaction.exchange.v1.repository.publish') requireThat(row.adapter.principalIds?.[principal.principal] === principal.taskPrincipal, 'ValidationPrincipalBinding');
+          if (side === 'workspace') {
+            workspaceHost ??= peer.hostId;
+            requireThat(peer.hostId === workspaceHost, 'WorkspaceCapabilitiesNotColocated');
+            policy.mayExport({ ...registration, classification: deployment.classification }, peer.hostId, task[7][2]);
+          }
+          if (peer.hostId === config.hostId) requireThat(policy.bindingForRequirement(registration, wanted) !== null, 'RepositoryCapabilityContract');
+          const list = requests.get(peer.hostId) ?? []; list.push(wanted); requests.set(peer.hostId, list);
+        }
+        for (const [host, requirements] of requests) {
+          if (host === config.hostId) { reports.push({ entry: entry.id, host, capabilities: requirements.length, verified: 'local' }); continue; }
+          if (!contactPeers) { reports.push({ entry: entry.id, host, capabilities: requirements.length, verified: 'declaration-only' }); continue; }
+          const peer = config.peers.find(row => row.hostId === host); requireThat(peer, 'ValidationPeerConfiguration');
+          const client = new PeerClient({ ...peer, ...tls });
+          try {
+            for (const wanted of [task[7][0][0], requirements]) {
+              const encoded = canonicalRequirements(wanted);
+              const observed = await client.preflight({ registration: signRecord('run', registration, createPrivateKey(bytes(issuer.privateKey))),
+                requirements: encoded, constraints: encodeValue(schemas.constraints, task[7][0][1]), classification: deployment.classification });
+              requireThat(observed.observation.host_id === host && observed.observation.runtime_profile === identity.kernelSha256 &&
+                observed.observation.requirements_digest === hash(encoded) && observed.observation.policy_revision === declarations.get(host).revision, 'ValidationPeerMismatch');
+            }
+            reports.push({ entry: entry.id, host, capabilities: requirements.length, verified: 'authenticated-preflight' });
+          } finally { client.close(); }
+        }
+      }
+    }
+  }
+  const contacted = reports.some(row => row.verified === 'authenticated-preflight');
+  return { format: 'agent-mobility-deployment-validation/v1', valid: true, scope: 'local-configuration', host_id: config.hostId, config: prepared.configDigest, runtime: identity.kernelSha256,
+    localBindings: bindings.length, applicationEntries: config.catalogue?.entries.length ?? 0, storage: 'not-opened', leafDispatches: 0, peerContact: contacted,
+    capabilityCoverage: reports, remoteAvailability: contacted ? 'preflight-only; rechecked on dispatch' : 'not-contacted' };
+}
+
+export async function openDeployment(configPath, { create = false } = {}) {
+  const { config, path, bytes, identity, world, runtimePath, kernelBytes, keys, signer, tls, admission, policy, statistics, deployments, activatePublications } = await prepareDeployment(configPath);
   const journal = new CustodyJournal({ directory: path(config.directory), hostId: config.hostId, deploymentGeneration: config.deploymentGeneration, keys,
-    signer: { ...config.signer, privateKey: createPrivateKey(bytes(config.signer.privateKey)) }, admission, create });
-  publicationServices = Object.freeze({ journal, policy });
+    signer, admission, create });
+  activatePublications(Object.freeze({ journal, policy }));
   const peers = new Map(), clients = [];
   try {
-    const tls = { key: bytes(config.tls.key), cert: bytes(config.tls.cert), ca: bytes(config.tls.ca) };
     for (const entry of config.peers) {
       requireThat(!peers.has(entry.hostId), 'DuplicatePeer');
       const client = new PeerClient({ ...entry, ...tls }); clients.push(client); peers.set(entry.hostId, client);
@@ -182,8 +328,6 @@ export async function openDeployment(configPath, { create = false } = {}) {
     const catalogue = config.format === 'agent-mobility-deployment/v2' ? taskCatalogue(config.catalogue, { bytes, keys, custodian, config, runtimeProfile: identity.kernelSha256 }) : null;
     let service = null, browserService = null, sessions = null;
     if (config.browser) {
-      closed(config.browser, ['directory', 'audience', 'host', 'port', 'publicOrigin']);
-      requireThat(config.execution === 'browser', 'BrowserExecutionRequired');
       sessions = new BrowserSessions({ directory: path(config.browser.directory), create,
         authorize: identity => identity.audiences[0] === config.browser.audience && !config.revoked.includes(`${identity.tenant}/${identity.principal}`) &&
           deployments.some(entry => entry.tenant === identity.tenant && entry.principals.includes(identity.principal)) });

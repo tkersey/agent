@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { request } from 'node:https';
 import { pumpDeployment } from '../../runtime/mobility/deployment.mjs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 import { packageFixture } from './mobility_package_fixture.mjs';
 
 test('a repeatedly failing run does not starve execution, transfer retry or cancellation', async () => {
@@ -56,4 +57,17 @@ test('installed operator CLI issues a login for the configured reference browser
   });
   assert.equal(response.status, 200); assert.match(response.cookies[0], /Secure; HttpOnly; SameSite=Strict/);
   assert.equal(f.archiveContents.includes(Buffer.from(issued.credential)), false);
+});
+
+test('installed validation neither initializes storage nor accepts a mismatched signer', async t => {
+  const f = await packageFixture(t, { browserAuth: true });
+  const config = JSON.parse(await readFile(f.configA, 'utf8'));
+  config.directory = join(f.area, 'validation-only-custody'); config.browser.directory = join(f.area, 'validation-only-sessions');
+  const filename = join(f.area, 'validate.json'); await writeFile(filename, JSON.stringify(config));
+  const validate = () => execFileSync(process.execPath, [f.cli, 'validate', filename], { cwd: f.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  const result = JSON.parse(validate()); assert.equal(result.valid, true); assert.equal(result.storage, 'not-opened'); assert.equal(result.peerContact, false);
+  for (const path of [config.directory, config.browser.directory]) await assert.rejects(stat(path), { code: 'ENOENT' });
+  config.signer.privateKey = config.signer.privateKey.replace('A.private.pem', 'B.private.pem'); await writeFile(filename, JSON.stringify(config));
+  assert.throws(validate, error => error.status === 1 && JSON.parse(error.stdout).reason === 'DeploymentSigner');
+  for (const path of [config.directory, config.browser.directory]) await assert.rejects(stat(path), { code: 'ENOENT' });
 });

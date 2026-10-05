@@ -29,7 +29,7 @@
     "url": "https://workspace.example:9443", "servername": "workspace.example", "fingerprint256": "REPLACE_WORKSPACE_TLS_FINGERPRINT",
     "tls": { "host": "0.0.0.0", "port": 9443, "key": "tls/W.key", "cert": "tls/W.pem", "ca": "tls/ca.pem" }
   },
-  "task": { "path": "src/model_json.zig", "steps": 8, "checks": 1, "maximumTasks": 1 },
+  "task": { "path": "src/model_json.zig", "steps": 8, "checks": 1, "maximumTasks": 1, "moves": 4 },
   "provider": { "enabled": false, "profile": null },
   "commit": {
     "author": { "name": "REPLACE_AUTHOR", "email": "author@example.invalid" },

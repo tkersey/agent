@@ -46,6 +46,8 @@ only to its own private signing key and the issuer's public key.
 Initialize each host's storage explicitly, then use the existing service command:
 
 ```sh
+node runtime/mobility/cli.mjs validate configured/origin.json
+node runtime/mobility/cli.mjs validate configured/workspace.json
 node runtime/mobility/cli.mjs init configured/origin.json
 node runtime/mobility/cli.mjs init configured/workspace.json
 node runtime/mobility/cli.mjs serve configured/workspace.json
@@ -58,6 +60,34 @@ configured audience and public origin. Issue a one-use reference login locally:
 ```sh
 node runtime/mobility/cli.mjs login-issue configured/origin.json PRINCIPAL TENANT
 ```
+
+`validate` reuses startup preparation but never opens a custody journal or session
+store. It checks configuration, runtime and installed contracts, signer/key/TLS
+bindings, declared limits and local catalogue capabilities. Configured repository
+checks repeat their existing runner qualification in temporary scratch; no run,
+repository publication or provider call occurs. Its report explicitly scopes
+local validation and does not claim remote availability.
+
+After the peers are serving, opt in to their existing authenticated preflight:
+
+```sh
+node runtime/mobility/cli.mjs validate configured/origin.json configured/workspace.json --peers
+```
+
+The peer configuration supplies expected capability metadata; validation does
+not open its remote files or require its private keys locally. It checks the
+actual placement requirements and full selected workspace contract against the
+running peer. The probe registration is signed but never registered or executed.
+Preflight is an observation, not a promise about future availability; normal
+dispatch, disclosure, budgets and current authority remain independently checked.
+
+Clarification is an ordinary authenticated question, separate from approval.
+Generated origins include its text-answer binding. A question preserves the
+unfinished investigation while it visits the person and returns to the workspace.
+Each extra round trip uses two moves. `task.moves` defaults to four for compatibility;
+an operator can explicitly select up to sixteen (for example, six for a
+clarification followed by publication). Model/check allowances remain separate
+and cumulative; generation never silently enlarges the supplied model allowance.
 
 After login, the browser offers the authorized repository and defaults to
 `propose`. Alternatively, with the local service stopped, list/start a task through
@@ -90,5 +120,5 @@ resources and uses these commands for all three modes over two local TLS hosts
 and the real Chromium UI. It also checks disabled inference, invalid scope/limits,
 refusal to overwrite output/storage, and rejection of another principal's export.
 This is deterministic qualification, not authorization for live inference or
-actual two-machine operation. Read-only deployment validation and the application
-qualification command are still tracked as remaining work in the acceptance report.
+actual two-machine operation. The application-qualification command is still
+tracked as remaining work in the acceptance report.

@@ -11,11 +11,14 @@ import { certificates } from './mobility_tls_fixture.mjs';
 assert.ok(process.env.AGENT_MOBILITY_BROWSER_TOOLS, 'AGENT_MOBILITY_BROWSER_TOOLS required');
 const { chromium, firefox } = await import(pathToFileURL(join(resolve(process.env.AGENT_MOBILITY_BROWSER_TOOLS), 'node_modules/playwright-core/index.mjs')));
 
-for (const [name, engine] of [['chromium', chromium], ['firefox', firefox]]) test(`${name}: reference login and deferred answer survive origin restart`, async t => {
+for (const [name, engine] of [['chromium', chromium], ['firefox', firefox]]) for (const presentation of ['generic', 'repository-clarification']) test(`${name}: ${presentation} login and deferred answer survive origin restart`, async t => {
   const f = await hostFixture(t, { localData: true }), tls = await certificates(f.area);
   const binding = f.bindings.A.find(value => value.operation.endsWith('.task.v1'));
   binding.deferredRevision = 'fixture-human-v1';
-  binding.defer = () => ({ audience: 'human-A', question: { title: 'Inspect the admitted repository?', source: '<img src=x onerror="window.injected=true">', generation: '1' }, alternatives: ['respond'], maximum_text_bytes: 256 });
+  binding.defer = () => ({ audience: 'human-A', question: presentation === 'generic'
+    ? { title: 'Inspect the admitted repository?', source: '<img src=x onerror="window.injected=true">', generation: '1' }
+    : { kind: 'repository-clarification', goal: 'Inspect the admitted repository.', question: 'Which part should be inspected?', evidence: ['manifest', 'story.txt', 'digest', '<img src=x onerror="window.injected=true">', true] },
+    alternatives: ['respond'], maximum_text_bytes: 256 });
   binding.answer = ({ answer }) => { assert.equal(answer.text, 'Inspect this exact snapshot.'); return encodeValue(f.schemas.task, f.taskValue); };
   const sessions = new BrowserSessions({ directory: join(f.area, 'sessions'), create: true,
     authorize: value => value.principal === 'user' && value.tenant === 'tenant' && value.audiences[0] === 'human-A' });

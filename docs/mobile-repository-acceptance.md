@@ -258,8 +258,7 @@ Mobility was slower in every tested cell; extra-read and opaque-replay workloads
 transferred fewer bytes. The comparison report retains the raw data and scope.
 Separate browser/restart attribution and UI operation counts remain pending.
 
-Remaining work includes read-only deployment validation and the application-
-qualification command,
+Remaining work includes the application-qualification command,
 lifetime resource-accounting reconciliation, the complete MR-001–MR-096
 mapping, inherited exact-head regressions, complete fault qualification,
 browser/recovery measurements, and serial review closeout.
@@ -399,3 +398,29 @@ Exports do not advance execution or publish. Thirty-seven existing model, provid
 and snapshot regression tests also pass after the parameter/configuration changes.
 See [operator instructions](mobile-repository-operations.md) for the complete
 command sequence and remaining validation/qualification-command limits.
+
+## Read-only validation and clarification
+
+`validate` shares startup preparation but stops before opening journals or
+session stores. It checks configuration/runtime/contracts, key and TLS bindings,
+limits and local catalogue requirements. With peer declarations and explicit
+`--peers`, it verifies actual placement and workspace capabilities through the
+existing authenticated, canonical preflight protocol. Peer private files are not
+opened locally. The report distinguishes local evidence, declarations and live
+preflight; it does not promise future availability or execute provider/tool work.
+Configured native checks use their existing temporary qualification scratch.
+
+The installed test proves validation works before custody/session directories
+exist, rejects a mismatched signer and rejects an omitted clarification binding.
+Authenticated peer validation leaves the registered run set unchanged and makes
+no provider call. Four installed deployment/CLI regressions pass.
+
+Generated configurations now include the previously missing
+`agent.repository.human.v1` binding. The shipped UI displays the question and
+source excerpt as text, and the answer resumes the retained investigation. All
+three installed modes complete a real clarification round trip: ten model calls,
+three answers, two checks and one separately approved publication. The fixture
+explicitly grants six moves and four model attempts per run for this extra work;
+the production setup default remains four moves. Six Chromium/Firefox UI cases
+pass, retaining both generic and repository-question restart/rendering coverage
+and the unknown-effect pause regression.

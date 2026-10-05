@@ -32,16 +32,17 @@ export async function configureRepository(filename, destination) {
   const image = await asset(imageRelative), schemaPaths = {}, schemas = {};
   for (const [group, names] of [
     ['repository-approval', ['preparation', 'proposal', 'delivery', 'check-result', 'human', 'human-reply', 'identifier', 'boolean']],
-    ['mobile-repository', ['session', 'task', 'report', 'snapshot-request', 'snapshot', 'read', 'evidence', 'list', 'listing', 'search', 'search-result', 'read-window', 'read-window-result', 'candidate-preparation', 'cleanup', 'unit', 'model-request', 'model-result', 'review', 'review-answer', 'next-task', 'next-task-answer']],
+    ['mobile-repository', ['session', 'task', 'report', 'snapshot-request', 'snapshot', 'read', 'evidence', 'list', 'listing', 'search', 'search-result', 'read-window', 'read-window-result', 'candidate-preparation', 'cleanup', 'unit', 'model-request', 'model-result', 'question', 'answer', 'review', 'review-answer', 'next-task', 'next-task-answer']],
   ]) for (const name of names) { const relative = `${group}/${name}.bin`; schemaPaths[name] = relative; schemas[name] = decodeSchema(await asset(relative)); }
   closed(input.store, ['directory', 'gitExecutable', 'repository', 'generation', 'manifestSha256']);
   const storeConfig = { ...input.store, directory: path(input.store.directory), gitExecutable: path(input.store.gitExecutable) };
   const store = await openRepositorySnapshotStore(storeConfig), scope = store.describe();
-  closed(input.task, ['path', 'steps', 'checks', 'maximumTasks']);
+  closed(input.task, ['path', 'steps', 'checks', 'maximumTasks', ...(Object.hasOwn(input.task, 'moves') ? ['moves'] : [])]);
+  const moves = input.task.moves ?? 4;
   requireThat(scope.readPaths.includes(input.task.path), 'RepositorySetupScope');
   requireThat(Number.isInteger(input.task.maximumTasks) && input.task.maximumTasks >= 1 && input.task.maximumTasks <= 16 &&
     ['steps', 'checks'].every(name => Number.isInteger(input.task[name]) && input.task[name] >= 1 && input.task[name] <= 64) &&
-    input.task.maximumTasks * input.task.checks <= 16, 'RepositorySetupLimits');
+    input.task.maximumTasks * input.task.checks <= 16 && Number.isInteger(moves) && moves >= 1 && moves <= 16, 'RepositorySetupLimits');
   const check = parse(readRegular(path(input.check), 1 << 20), { maximum: 1 << 20, canonicalOnly: false });
   closed(check, ['sandbox', 'checkProfile']);
   const profile = describeRepositoryCheckProfile(check.checkProfile);
@@ -74,7 +75,7 @@ export async function configureRepository(filename, destination) {
     trustDomain: input.trustDomain, tenants: [input.principal.tenant], principals: [input.principal.principal], classification: [input.label], allowedStateLabels: [input.label], cleanup: false });
   const required = row => requirement({ ...row, payloadSchema: assets.get(row.payloadSchema), resultSchema: assets.get(row.resultSchema) });
   if (provider) modelBinding(meta('agent.model.invoke.v4', 'model-request', 'model-result', 'model'), provider, input.workspace.hostId);
-  const place = row => [[[required(row)], [[], { tag: 0, value: null }, { tag: 0, value: null }, 8n << 20n]], 'repository', input.label, [4, 1]];
+  const place = row => [[[required(row)], [[], { tag: 0, value: null }, { tag: 0, value: null }, 8n << 20n]], 'repository', input.label, [moves, 1]];
   const human = meta('agent.interaction.exchange.v1.repository.publish', 'human', 'human-reply', 'approval');
   const parameters = provider?.parameters ?? { maxOutputTokens: 512, temperature: null, reasoning: null };
   const task = [1n, 0n, 1, 'Select a goal when starting.', scope.repository, scope.base, input.task.path,
@@ -108,6 +109,7 @@ export async function configureRepository(filename, destination) {
     ...(provider ? [binding(meta('agent.model.invoke.v4', 'model-request', 'model-result', 'model'), provider)] : []), binding(release, { kind: 'repository-release' }),
   ];
   const originBindings = [binding(meta('agent.approval.issue.v1.repository.publish', 'proposal', 'identifier', 'approval'), { kind: 'repository-approval-issuer' }),
+    binding(meta('agent.repository.human.v1', 'question', 'answer', 'interaction'), { kind: 'repository-clarification-human', revision: input.revision }),
     binding(human, { kind: 'repository-approval-human', revision: input.revision, principalIds: { [input.principal.principal]: input.principal.taskPrincipal } }),
     binding(meta('agent.repository.review.v1', 'review', 'review-answer', 'interaction'), { kind: 'repository-review-human', revision: input.revision }),
     binding(meta('agent.repository.next-task.v1', 'next-task', 'next-task-answer', 'interaction'), { kind: 'repository-next-task-human', revision: input.revision, modes: ['inspect', 'propose', 'publish'] }), binding(release, { kind: 'repository-release' })];
@@ -121,7 +123,7 @@ export async function configureRepository(filename, destination) {
       keys: [input.issuer, ...hosts.map(host => ({ ...host, id: host.hostId }))].map(owner => ({ keyId: owner.keyId, owner: owner.id, status: 'active', publicKey: path(owner.publicKey) })),
       signer: { keyId: host.keyId, privateKey: path(host.privateKey), policyRevision: input.revision },
       deployments: [{ imageDigest: hash(image), programId, tenant: input.principal.tenant, principals: [input.principal.principal], issuers: [input.issuer.id], hosts: hosts.map(h => h.hostId), classification: [input.label],
-        cleanup: 'cleanup.bin', controlPeers: hosts.map(h => h.hostId), limits: { maximum_moves: input.task.maximumTasks * 4, maximum_image_bytes: 8 << 20, maximum_outcome_bytes: 8 << 20 }, exportPolicies: { [input.label]: hosts.map(h => h.hostId) } }],
+        cleanup: 'cleanup.bin', controlPeers: hosts.map(h => h.hostId), limits: { maximum_moves: input.task.maximumTasks * moves, maximum_image_bytes: 8 << 20, maximum_outcome_bytes: 8 << 20 }, exportPolicies: { [input.label]: hosts.map(h => h.hostId) } }],
       bindings, labelDestinations: { [input.label]: hosts.map(h => h.hostId) }, revoked: [],
       peers: [{ hostId: other.hostId, url: other.url, servername: other.servername, fingerprint256: other.fingerprint256 }],
       tls: { ...host.tls, key: path(host.tls.key), cert: path(host.tls.cert), ca: path(host.tls.ca) },

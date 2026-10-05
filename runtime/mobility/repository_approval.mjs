@@ -48,6 +48,18 @@ export function repositoryReviewBinding(metadata, adapter) {
   };
 }
 
+export function repositoryClarificationBinding(metadata, adapter) {
+  closed(adapter, ['kind', 'revision']);
+  const input = decodeSchema(metadata.payloadSchema), result = decodeSchema(metadata.resultSchema);
+  requireThat(adapter.kind === 'repository-clarification-human' && metadata.operation === 'agent.repository.human.v1' &&
+    metadata.role === 'interaction' && typeof metadata.audience === 'string' && typeof adapter.revision === 'string' && adapter.revision.length > 0 &&
+    input.types[input.root]?.product?.length === 6 && result.types[result.root]?.bounded_text === 4096, 'AdapterContract');
+  return { ...metadata, deferredRevision: adapter.revision, authorize: () => true,
+    defer: ({ payload }) => ({ audience: metadata.audience, alternatives: ['respond'], maximum_text_bytes: 4096,
+      question: { kind: 'repository-clarification', task_id: String(payload[0]), generation: String(payload[1]), goal: payload[2], evidence: payload[3], question: payload[4] } }),
+    answer: ({ answer }) => encodeValue(result, answer.text) };
+}
+
 // Only an authenticated person's goal/mode enters the next authored iteration.
 // Identity, repository, scope, generation and allowances cannot be supplied here.
 export function repositoryNextTaskBinding(metadata, adapter) {

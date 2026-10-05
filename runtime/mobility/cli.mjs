@@ -1,6 +1,6 @@
 import { readRegular } from '../../tools/agent4/dependencies.mjs';
 import { isMain } from '../cli.mjs';
-import { openDeployment, pumpDeployment } from './deployment.mjs';
+import { openDeployment, pumpDeployment, validateDeployment } from './deployment.mjs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { realpath, writeFile } from 'node:fs/promises';
@@ -14,6 +14,7 @@ import { configureRepository } from './repository_setup.mjs';
 
 const help = `Usage: node runtime/mobility/cli.mjs COMMAND CONFIG [ARGUMENTS]
   init CONFIG                         explicitly create empty local custody storage
+  validate CONFIG [PEER_CONFIG ...] [--peers]  validate locally; opt in to authenticated read-only peer preflight
   provision-repository CONFIG         import one approved local commit into a new managed store
   qualify-check CONFIG                qualify a configured runner and print its profile identities
   configure-repository CONFIG OUTPUT  generate both host configs and typed task inputs in a new directory
@@ -36,6 +37,12 @@ Stop the service before using a local custody mutation command. Login issuance i
 export async function main(argv) {
   if (argv.length === 0 || (argv.length === 1 && ['--help', '-h'].includes(argv[0]))) { console.log(help); return; }
   const [command, config, ...args] = argv;
+  if (command === 'validate') {
+    requireThat(config && args.length <= 17 && args.filter(arg => arg === '--peers').length <= 1 && args.every(arg => !arg.startsWith('--') || arg === '--peers'), 'OperatorArguments');
+    try { console.log(JSON.stringify(await validateDeployment(config, { peerConfigs: args.filter(arg => arg !== '--peers'), contactPeers: args.includes('--peers') }))); }
+    catch (error) { console.log(JSON.stringify({ valid: false, reason: error.code ?? 'DeploymentValidationFailed', ...(error.operation ? { operation: error.operation } : {}) })); process.exitCode = 1; }
+    return;
+  }
   if (command === 'repository-template') {
     requireThat(config && args.length === 0, 'OperatorArguments');
     await writeFile(config, readRegular(fileURLToPath(new URL('../../docs/mobile-repository-setup.example.json', import.meta.url))), { flag: 'wx', mode: 0o600 });

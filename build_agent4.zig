@@ -444,6 +444,7 @@ pub fn build(b: *std.Build) void {
     const mobile_repository_images = b.step("mobile-repository-images", "Emit the mobile repository application and ordinary contracts");
     const mobile_repository_check = b.step("check-mobile-repository", "Check the authored mobile repository application");
     const mobile_repository_native = b.step("check-mobile-repository-native", "Compare native and WASM repository application continuations");
+    const mobile_repository_mutants = b.step("check-mobile-repository-mutants", "Detect explicit repository and custody mutants in isolated source copies");
     const mobile_repository_objects = nodeCommand(b);
     mobile_repository_objects.addArgs(&.{ "node", "--test", "test/agent4/repository_snapshot.test.mjs" });
     mobile_repository_objects.has_side_effects = true;
@@ -692,6 +693,17 @@ pub fn build(b: *std.Build) void {
         mobile_repository_run.step.dependOn(&runtime_guard.step);
         mobile_repository_run.has_side_effects = true;
         mobile_repository_check.dependOn(&mobile_repository_run.step);
+        const repository_mutants_run = nodeCommand(b);
+        repository_mutants_run.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
+        repository_mutants_run.addFileArg2(b.graph.path(.install_prefix, "repository-publication/agent-publication-gate"), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
+        repository_mutants_run.addArgs(&.{ "node", "test/agent4/mobile_repository_mutants.mjs" });
+        repository_mutants_run.step.dependOn(mobile_repository_images);
+        repository_mutants_run.step.dependOn(repository_approval_images);
+        repository_mutants_run.step.dependOn(mobility_images);
+        repository_mutants_run.step.dependOn(publication_gate);
+        repository_mutants_run.step.dependOn(&runtime_guard.step);
+        repository_mutants_run.has_side_effects = true;
+        mobile_repository_mutants.dependOn(&repository_mutants_run.step);
         repository_approval_test.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
         if (browser_tools_path) |browser_tools| {
             repository_approval_test.addDirectoryArg2(browser_tools, .{ .prefix = "AGENT_MOBILITY_BROWSER_TOOLS=", .make_absolute = true });
@@ -1135,6 +1147,7 @@ pub fn build(b: *std.Build) void {
         const missing = b.addFail("provide -Dworld-runtime=/absolute/authenticated/world-runtime");
         mobile_repository_check.dependOn(&missing.step);
         mobile_repository_native.dependOn(&missing.step);
+        mobile_repository_mutants.dependOn(&missing.step);
         repository_approval_check.dependOn(&missing.step);
         compiled_tools_check.dependOn(&missing.step);
         mobility_continuation.dependOn(&missing.step);

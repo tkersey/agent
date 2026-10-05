@@ -126,11 +126,22 @@ if (process.argv[2] === 'gate-parent') {
     await assert.rejects(store.publishManaged(first, f.options.helper, () => { throw Object.assign(Error('cancelled'), { code: 'CancellationPending' }); }, history), { code: 'CancellationPending' });
     assert.equal(await store.current(), f.base);
     const admitted = { policyRevision: 'policy-1', occurrence: 'fixture-only' };
+    const racing = await proposal(f.base, 'competing writer\n', null, 4);
+    // Fault injection: an out-of-contract writer changes the ref after the
+    // read-only check. Git's own old-value CAS must still refuse replacement.
+    const moveRef = (next, old) => execFileSync(f.options.command.path, ['--git-dir=' + join(options.directory, 'objects.git'), 'update-ref', options.managedRef, next, old]);
+    await assert.rejects(store.publishManaged(first, f.options.helper, () => { moveRef(racing.commitOid, f.base); return admitted; }, history));
+    assert.equal(await store.current(), racing.commitOid);
+    moveRef(f.base, racing.commitOid); // Reset only this isolated fault fixture.
     const published = await store.publishManaged(first, f.options.helper, () => admitted, history);
     records.proposals.push(first); records.publishedCommits.push(first.commitOid);
     assert.equal(published.status, 'Published'); assert.deepEqual(published.admission, admitted);
     assert.equal(published.commit, first.commitOid);
     assert.equal((await store.reconcilePublication(first, f.options.helper, [first], [first.commitOid])).status, 'Published');
+    const sameTree = await proposal(f.base, 'first\n', null, 3);
+    assert.equal(sameTree.core.candidate.tree, first.core.candidate.tree); assert.notEqual(sameTree.commitOid, first.commitOid);
+    const otherOccurrence = await store.reconcilePublication(sameTree, f.options.helper, [first, sameTree], [first.commitOid]);
+    assert.equal(otherOccurrence.status, 'Conflict'); assert.equal(otherOccurrence.commit, null, 'a matching tree does not publish another occurrence');
     const stale = await store.publishManaged(first, f.options.helper, () => assert.fail('stale proposal cannot reach admission'), history);
     assert.equal(stale.status, 'Conflict');
     const second = await proposal(first.commitOid, 'second\n', 'first\n', 2);

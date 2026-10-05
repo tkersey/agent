@@ -249,7 +249,7 @@ yet exercise the new check configuration through the extracted loader.
 
 Remaining work includes complete deployment-loader/check-profile examples,
 lifetime resource-accounting reconciliation, the complete MR-001–MR-096
-mapping, inherited exact-head regressions, fault/model/mutant qualification,
+mapping, inherited exact-head regressions, complete fault qualification,
 matched measurements, and serial review closeout. The new prepare/proposal/review/
 release deployment configurations still need their complete extracted-loader test.
 
@@ -284,3 +284,33 @@ next-task prompt. The propose-then-publish witness performs two independent
 checks and publishes once with fresh exact approval at generation 2. Reusing an
 old answer cannot change the next task. Native/WASM comparison additionally
 covers two completed tasks, early stop and rejected session bounds.
+
+## Mutation and bounded-model qualification
+
+`check-mobile-repository-mutants` copies tracked source to an isolated temporary
+directory, verifies each clean selected oracle, changes one production owner,
+runs the same oracle and restores that owner. All twelve explicit mutants are
+detected by nine clean baseline oracles. Syntax/import errors, missing artifacts,
+timeouts and unrelated runner failures do not count as detection. Output records
+the original/mutant source hashes and the deciding counterexample. Mutations are
+not applied to the working tree or shipped runtime.
+
+| Mutant | Deciding oracle |
+|---|---|
+| Transport timeout becomes refusal | Source remains offered, with no takeover or cleanup. |
+| Restore rebuilds initial arguments | Restored parked outcome must equal the saved continuation. |
+| Stale question binding accepted | Current waiting occurrence rejects the old occurrence ID. |
+| Acquired answer replaced | A different answer/reply cannot replace the settled pair. |
+| Proposal checked only by summary | Principal, exact diff and commit mutations reject. |
+| Git old-ref precondition removed | A ref change after validation cannot be overwritten. |
+| Lost publication acknowledgment triggers dispatch | Recovery completes without repeating the protected leaf. |
+| Matching tree counts as another publication | A different intent with the same tree remains unpublished. |
+| Opaque reasoning removed from replay | A fresh provider receives the complete replay items. |
+| Whole-state classification ignored | Private retained state cannot begin return/export. |
+| Spent allowance reset | Restart cannot admit another attempt beyond the grant. |
+| Incomplete check counted as passing | Even a populated check list cannot override Incomplete status. |
+
+The production-adjacent custody model also passes 128 deterministic seeds with
+192 generated steps per seed, at most four prefix hops/epochs, and explicit
+answer/cancellation orderings. These are bounded witnesses, not exhaustive
+coverage of every mutation, interleaving, storage failure or power-loss event.

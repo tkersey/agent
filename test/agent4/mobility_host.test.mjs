@@ -169,6 +169,14 @@ test('uncertain external delivery remains blocked across restart and is not auto
   assert.deepEqual(f.file.counts().reads, [0n]); assert.equal(f.counters.bytes.A, 0);
 });
 
+test('a transport timeout never becomes custody refusal or source takeover', async t => {
+  const f = await hostFixture(t), offered = await f.hosts.A.run(f.id);
+  f.peerMaps.A.get('B').status = async () => { throw Object.assign(Error('timed out'), { code: 'Timeout' }); };
+  assert.equal((await f.hosts.A.retryTransfer(offered.transfer_id)).kind, 'unknown');
+  assert.equal(f.hosts.A.status(f.id).custody, 'OFFERED');
+  assert.equal(f.journals.B.run(f.id), null); assert.equal(f.counters.A.cleanup, 0);
+});
+
 test('cancel accepted incoming relocation skips arrival and runs only current-owner cleanup', async t => {
   const f = await hostFixture(t);
   const out = await f.hosts.A.run(f.id); await f.hosts.A.retryTransfer(out.transfer_id);

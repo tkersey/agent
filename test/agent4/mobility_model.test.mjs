@@ -181,6 +181,7 @@ test('deferred answer/cancellation order preserves the winner across detach, res
     state.run = core.attach(state.run);
     state = core.awaiting(state.run, state.occurrence, core.version(state.run), digest('attempt'), digest('question'), []);
     const binding = { occurrence_id: state.occurrence.id, request_digest: state.occurrence.request_digest, pending_digest: state.occurrence.pending_digest };
+    assert.throws(() => core.answered(state.run, state.occurrence, core.version(state.run), { ...binding, occurrence_id: digest('retired-question') }, digest('yes'), digest('reply'), []), { code: 'QuestionMismatch' });
     let acquired = 0;
     for (const action of ordering) {
       state = structuredClone(state);
@@ -188,7 +189,10 @@ test('deferred answer/cancellation order preserves the winner across detach, res
       else {
         const invoke = () => core.answered(state.run, state.occurrence, core.version(state.run), binding, digest('yes'), digest('reply'), []);
         if (state.run.cancel_requested) assert.throws(invoke, { code: 'CancellationPending' });
-        else { state = invoke(); acquired++; state = invoke(); }
+        else {
+          state = invoke(); acquired++; state = invoke();
+          assert.throws(() => core.answered(state.run, state.occurrence, core.version(state.run), binding, digest('replacement-answer'), digest('replacement-reply'), []), { code: 'ReplyConflict' });
+        }
       }
     }
     assert.equal(acquired, ordering[0] === 'answer' ? 1 : 0);

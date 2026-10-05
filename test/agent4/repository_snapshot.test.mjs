@@ -214,8 +214,10 @@ test('publication proposal binds exact nonrecursive commit bytes; read-only reva
   const hidden = structuredClone(proposal); hidden.core.diff[0].oldContent = 'different source';
   await assert.rejects(f.store.verifyPublication(hidden), { code: 'RepositoryPublicationMismatch' });
   await assert.rejects(f.store.verifyPublication({ ...proposal, commitSha256: '0'.repeat(64) }), { code: 'RepositoryPublicationMismatch' });
-  const failed = { ...check, status: 'Failed' };
-  await assert.rejects(f.store.preparePublication({ candidate, binding, validation: [{ ...failed, id: hash(canonical(failed, 2 << 20)) }], commit }), { code: 'RepositoryPublicationValidation' });
+  for (const status of ['Failed', 'Incomplete']) {
+    const failed = { ...check, status };
+    await assert.rejects(f.store.preparePublication({ candidate, binding, validation: [{ ...failed, id: hash(canonical(failed, 2 << 20)) }], commit }), { code: 'RepositoryPublicationValidation' });
+  }
   await assert.rejects(f.store.preparePublication({ candidate, binding, validation, commit: { ...commit, author: { ...commit.author, name: 'Bad\nparent forged' } } }), { code: 'RepositoryCommitMetadata' });
   const metadata = JSON.parse(await readFile(join(f.options.directory, 'repository.json')));
   const lock = await lstat(join(f.options.directory, 'publication.lock'), { bigint: true });

@@ -927,6 +927,10 @@ pub fn build(b: *std.Build) void {
             mobility_durable_browser.dependOn(&missing_browser.step);
         }
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
+        runtime_work.dependOn(mobile_repository_check);
+        runtime_work.dependOn(publication_check);
+        runtime_work.dependOn(mobile_repository_mutants);
+        runtime_work.dependOn(mobility_model);
         runtime_work.dependOn(parser_intent);
         runtime_work.dependOn(parser_circular);
         runtime_work.dependOn(parser_repeated);

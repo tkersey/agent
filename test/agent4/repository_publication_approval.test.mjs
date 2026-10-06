@@ -5,8 +5,8 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { certificates } from './mobility_tls_fixture.mjs';
 import { repositoryFixture as fixture } from './repository_application_fixture.mjs';
-const { BrowserSessions } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/sessions.mjs')));
-const { serveBrowser } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/browser.mjs')));
+import { BrowserSessions } from '../../runtime/mobility/sessions.mjs';
+import { serveBrowser } from '../../runtime/mobility/browser.mjs';
 
 test('actual private approval grants exactly the prepared managed publication', async t => {
   const f = await fixture(t); assert.equal((await f.run()).kind, 'terminal');

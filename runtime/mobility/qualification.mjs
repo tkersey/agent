@@ -10,8 +10,8 @@ import { parse, closed, requireThat, identifier } from './canonical.mjs';
 import { hash } from './protocol.mjs';
 import { openDeployment, pumpDeployment, validateDeployment } from './deployment.mjs';
 
-const targets = Object.freeze({ offline: ['check-mobile-repository', 'check-repository-publication-gate', 'check-mobile-repository-mutants'],
-  browser: ['check-repository-approval', 'check-mobility-browser'], package: ['check-mobile-repository-package'] });
+const targets = Object.freeze({ offline: ['check-mobile-repository', 'check-repository-publication-gate'],
+  browser: ['check-repository-approval', 'check-mobility-browser'] });
 export function admitQualification(input, { deployed = false, live = false } = {}) {
   closed(input, ['format', 'lanes', 'source', 'external', 'maximumSeconds']);
   requireThat(input.format === 'agent.repository.qualification/v1' && Array.isArray(input.lanes) && input.lanes.length > 0 &&

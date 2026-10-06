@@ -199,3 +199,36 @@ test('repository binding selection skips foreign owners and preserves recovery o
   assert.equal(both.recovery(b.run, request, admittedId).binding, proposals[0]);
   assert.equal(proposals[0].cancelSafe, true);
 });
+
+// Preserve the cheap adapter regression from the retired native sandbox journey.
+// This checks admission/results only; it does not qualify OS isolation or Zig.
+test('missing required check input fails before execution; incomplete results cannot certify a repair', async () => {
+  const { createHash } = await import('node:crypto');
+  const { createRepositoryCheckRunner } = await import('../../runtime/repository_checks.mjs');
+  const hash = value => createHash('sha256').update(value).digest('hex');
+  const contract = { toolchain: { version: 'fixture', executableIdentity: { sha256: 'a'.repeat(64) }, libraryInventorySha256: 'b'.repeat(64) } };
+  let source = null, calls = 0, status = 'Incomplete';
+  const sandbox = { kind: 'qualified', contract, runner: hash(JSON.stringify(contract)), async execute() {
+    calls++; return { runner: sandbox.runner, status, physicalExecutions: 1 };
+  } };
+  const harness = 'pub export fn agent_observe(_: u32) u64 { return 5; }';
+  const runner = createRepositoryCheckRunner({
+    store: { async checkInputs() { return { files: { 'subject.zig': source }, tree: 'c'.repeat(40) }; } }, sandbox,
+    profiles: [{ id: 'bound', description: 'protected observation', requiredPaths: ['subject.zig'],
+      modules: [{ name: 'subject', path: 'subject.zig', dependencies: [] }],
+      harness: { source: harness, sha256: hash(harness) }, expectedStdout: '["5"]\n', deterministic: true }],
+  });
+  const request = { snapshot: { base: 'd'.repeat(40) }, candidate: { id: 'candidate' }, profileId: 'bound', occurrence: 'check' };
+  const missing = await runner.check(request);
+  assert.equal(calls, 0); assert.equal(missing.status, 'Failed'); assert.equal(missing.physicalExecutions, 0);
+  assert.equal(missing.diagnostics.reason, 'RequiredInputMissing');
+  assert.deepEqual(JSON.parse(missing.diagnostics.stderr), { missing: ['subject.zig'], omitted: 0 });
+  assert.equal(missing.candidate, 'candidate'); assert.equal(missing.reusable, false); assert.deepEqual(missing.completedChecks, []);
+  source = 'pub fn bound() u64 { return 5; }';
+  const incomplete = await runner.check(request);
+  assert.equal(calls, 1); assert.equal(incomplete.status, 'Incomplete'); assert.equal(incomplete.reusable, false);
+  assert.deepEqual(incomplete.completedChecks, []); assert.notEqual(incomplete.inputDigest, missing.inputDigest);
+  status = 'Passed'; const passed = await runner.check(request);
+  assert.equal(calls, 2); assert.equal(passed.reusable, true); assert.deepEqual(passed.completedChecks, ['bound']);
+  await assert.rejects(runner.check({ ...request, profileId: 'model-supplied-command' }), { code: 'RepositoryCheckProfileDenied' });
+});

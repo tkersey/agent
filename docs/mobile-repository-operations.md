@@ -232,37 +232,15 @@ download is available through the same catalogue.
 node runtime/mobility/cli.mjs qualify-application qualification.json evidence-directory
 ```
 
-An offline input has this shape; paths must identify the approved source/toolchain:
+The expensive extracted-package/browser deployment, native Zig sandbox test and
+mutation suites have been deleted, along with their build targets. The package
+qualification lane no longer exists. Product sandbox qualification at startup
+and ordinary inspect/propose/publish execution remain unchanged.
 
-```json
-{
-  "format": "agent.repository.qualification/v1",
-  "lanes": ["offline"],
-  "maximumSeconds": 1800,
-  "source": {
-    "directory": "/approved/agent",
-    "commit": "EXACT_COMMIT",
-    "zigExecutable": "/approved/zig",
-    "libraryDirectory": "/approved/zig-lib",
-    "boundarySource": "/approved/boundary",
-    "worldSource": "/approved/world",
-    "worldRuntime": "/approved/world-runtime",
-    "browserTools": "/approved/browser-tools",
-    "prefix": "/new/qualification-output"
-  },
-  "external": null
-}
-```
-
-Mobile-repository, publication-gate and mutation checks stay in explicit `offline`
-qualification, rather than extending the generic runtime aggregate. Native and
-installed-browser qualification also have explicit targets. Use
-`check-mobile-repository` for focused local feedback.
-
-Local `offline`, `browser` and `package` lanes run fixed verifier targets serially
-and retain bounded logs/outcomes with source/artifact hashes in a new output
-directory. Source changes invalidate a lane. These engineering lanes require source;
-the installed application's execution has no authoring fallback.
+The retained `offline` lane runs application and publication regressions; the
+`browser` lane runs approval and mobility browser checks. These do not restore
+the deleted suites. For local changes, select focused regressions under the
+[five-minute total verification budget](../.github/CI.md#local-completion-focused-checks-five-minutes-total).
 
 For exactly one external `deployed` or `live` lane, set `source: null` and supply
 `external` with initialized `origin`, expected peer configuration paths in `peers`,

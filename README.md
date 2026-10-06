@@ -134,6 +134,10 @@ The locked source-installation profile is POSIX, qualified on Darwin arm64 and
 Linux x86_64; Windows setup is not qualified. See [runtime status](docs/agent4-runtime.md)
 and the [Zig 0.17 execution and cost evidence](https://github.com/tkersey/boundary/blob/a39014232db44c6780a3a2d953dacea111168aec/docs/zig-0.17-upgrade.md).
 
+For ordinary changes, use [focused local verification](.github/CI.md#local-completion-focused-checks-five-minutes-total)
+with a five-minute total budget. The full example and integration commands below
+are deliberate qualification options, not local completion requirements.
+
 ### Compile and check the examples
 
 ```sh

@@ -75,13 +75,13 @@ is not complete merely because one witness or a local check passes.
 | Checked compiled participants | `src/participant.zig`, normal `agent.compile`, `test/agent4/participant.zig`: model-helper binding, imported authority, incoming-owner and allocation-failure negatives |
 | Source-free reuse and consumer swap | `tools/agent4/link_parser.zig`, `parser_source_free.mjs`, `parser_comparison.mjs`: source-denied linking/execution and identical producer bytes with two consumers |
 | Owned composition and lifetime | Boundary `generator.pipeline`, Agent `composed_owners.mjs`, parser cleanup paths: nested composition, local disposal with a surviving sibling, distinct whole-session cancellation |
-| Recursive assessment without delivery authority | `deliberation.selectSequential`, `recursive_selection.mjs`, `parser_selection.mjs`, `parser_disposition_negative.mjs`: actual nested experiments and rejection of imported completion authority |
+| Recursive assessment without delivery authority | `deliberation.selectSequential`, `recursive_selection.mjs`, `parser_disposition_negative.mjs`: actual nested experiments and rejection of imported completion authority |
 | Independent parser acceptance | `runtime/parser_oracle.mjs`, qualified executor, parser executor/evaluation tests: two independently written valid candidates, separate invalid candidates, chunk/error/prefix/closed-protocol and retained-state checks |
-| Model proposals and actual repair | `parser_construction.mjs` and parser comparison: a partial transition precedes the complete candidate, a real counterexample reaches the producer, and the revised exact source is evaluated |
+| Model proposals and actual repair | `parser_construction.mjs`: a partial transition precedes the complete candidate, a real counterexample reaches the producer, and the revised exact source is evaluated |
 | Exact delivery and context binding | `parser_delivery.mjs`, parser tool/protocol tests: reacquired target, exact approval, conditional fixture replacement, stale/forged reports, denial and uncertain delivery |
-| Fresh portable execution | Shared recursive peer/Worker harness and parser construction/delivery/selection scenarios: native, Node/WASM, Wasmtime and Chromium consume actual destination State bytes |
+| Fresh portable execution | Shared recursive peer/Worker harness and parser construction/delivery scenarios: native, Node/WASM, Wasmtime and Chromium consume actual destination State bytes |
 | Progress and honest stopping | `parser_circular.mjs`, zero/one-round and unavailable/malformed cases: explicit unresolved results, no invented evidence, cancellation and reclaimed ownership |
-| Comparison and live readiness | `parser_comparison.mjs`, `runtime/parser_cli.mjs`, reserved-input evaluation: capable ReAct baseline, complete-candidate ablation, opt-in authorized provider path; paid/live quality remains unmeasured |
+| Live readiness | `runtime/parser_cli.mjs`, reserved-input evaluation: opt-in authorized provider path; paid/live quality remains unmeasured |
 
 Pure and task-valued hyperfunctions share the ordinary compiler and World
 interpreter. The owned sequential exchange operator is a narrower derived
@@ -924,17 +924,6 @@ model executions remain fresh even for equal prompts and provider IDs. The
 existing default Program and its CLI still use one construction; CLI selection
 configuration and a fair strategy comparison remain unfinished.
 
-`zig build check-parser-selection -Dworld-runtime=RUNTIME -Dworld-source=SOURCE`
-uses real qualified candidate execution and fresh Node/WASM State recovery. Its
-scripted proposals are test-only implementations, never imported into the
-production proposer or its prompt. One fragment needs repair after a failed
-probe; the other passes its probe but still needs a complete candidate and full
-acceptance. The test requires different resulting feedback, zero target reads or
-writes during both assessments, one final approval/write for the selected code,
-and no delivery when an assessment reply is unavailable. The unavailable reply
-case is explicitly a protocol injection after real execution, not a claim that
-the evaluator actually became unavailable.
-
 The two selection Programs are included as `parser-selection-first` and
 `parser-selection-last` in the source-independent archive, with zero-work default
 arguments. A configured run gives each alternative the supplied per-construction
@@ -943,132 +932,15 @@ outside rollback. No live inference is enabled by emitting or packaging them.
 The default CLI does not silently double its allowance or select this mode.
 Both selection images are 22,777 bytes; the default image remains 21,573 bytes.
 
-Executed results: both policies passed with four synthetic model contributions,
-four real checks, 1,078 isolated candidate executions plus two qualification
-executions, 34 fresh Node/WASM transfers, one target read, one approval, and one
-fixture write. First/last selected the respective independently written accepted
-source. The injected unavailable result completed unresolved after 23 transfers,
-with zero target reads, approvals, or writes. The source-independent archive
-passed all three documented-command tests, including zero-work invocation of
-both selection variants. This slice did not rerun the four-engine matrix for the
-new selection Programs or measure their timing/retention; preceding parser
-transfer results do not establish those new combinations.
-
 ### Selection portability and CLI entry
-
-`test/agent4/parser_selection.mjs` accepts optional native-fixture, Wasmtime-peer
-and browser-tools paths after its runtime and policy arguments. At every boundary
-it compares the actual generic-kernel outcomes and rotates which destination's
-returned bytes continue the computation. Browser calls use newly created Workers;
-no participant control is reconstructed by the host.
 
 The packaged CLI now exposes `--selection single|first|last`, with `single` as its
 unchanged default. It chooses the corresponding hash-checked inventory image.
 Existing model/check counters remain shared across both assessments and outside
 World rollback. Selection does not grant approval or fixture write authority to
-the CLI. The loopback tests exercise exhausted allowance and a complete two-candidate
-run using the real provider adapter and qualified candidate tools, without credentials
-or paid inference.
-
-The `last` selection policy passed the four-engine path: 34 actual State
-transfers across Chromium 153.0.8010.12 Workers, Node/WASM, native World and
-independent Wasmtime, with 35 Workers destroyed. It retained both recursive
-assessments through real tools, then performed one target read, one approval and
-one fixture write. The 22,777-byte Program and generic kernel were unchanged.
-The first-policy and unavailable-result cases retain their prior Node/WASM
-evidence; this representative matrix does not imply a Cartesian host/case sweep.
-The extracted CLI suite passed all three tests with no skips: existing provider/
-EOF behavior, shared one-call exhaustion without a second provider request, and
-a complete `--selection last` run with four total model calls, four checks and
-1,078 isolated candidate executions. It returned the second accepted source as
-an artifact without approval/write authority. No paid provider calls ran.
-
-### Parser strategy comparison inputs
-
-This comparison uses the frozen incremental-parser fixture, its real qualified
-executor and independent authoritative evaluator, the same typed model adapter,
-and the same shared approval/delivery constructions. All executions use the
-locked generic World kernel and fresh recovery at each quantum/effect boundary.
-No paid inference is authorized or run.
-
-Compare the existing `agent.react` loop with consumer-directed recursive
-construction and a complete-candidate-only ablation of recursive construction.
-ReAct retains its current candidate, counterexample/experiment and applicable
-reference observation; it may propose experiments, revise after rejection and
-resume actual saved State. It is not a transcript-restart baseline. The ablation
-keeps the same producer/consumer objects and changes the offered construction
-protocol to require complete candidates. No runtime speedup is inferred from a
-change in model/tool work.
-
-Before running: use equal three-call and corresponding experiment allowances,
-the same reference, required input language and acceptance contract. The scripted
-cases are (1) a valid initial source and (2) an invalid source, an additional
-experiment, and a valid revision. The offered partial/complete contribution kind
-is the declared strategy difference; candidate source, experiment input and
-provider adapter are held fixed. Scripted behavior proves control/effect work,
-not live model reasoning quality or a general win. Keep all attempted cases and
-false completion claims in the denominator.
-
-Record actual accepted artifacts, model calls/context bytes, checks/physical
-executions, reference requests/reuse, approval/write counts, Program bytes, peak
-checkpoint bytes and transfer count. A successful run must return the exact
-validated source. Failures, unavailable checks and allowance exhaustion must
-remain non-success. These are finite deterministic observations; no latency
-claim, universal memory bound or calibrated model-cost inference is made.
-
-The full required comparison also needs broader failure, base-change and intent
-cases, held-out/live readiness, and resource attribution. Do not promote the
-recursive strategy based only on the initial cases below.
-
-Initial matched observations (Zig 0.16.0, Node 26.9.0, locked World kernel;
-quantum 97, full checkpoint/fresh restore after every nonterminal outcome):
-
-| Case | Strategy | Model calls | Context bytes | Candidate processes | Max checkpoint bytes | Transfers |
-|---|---|---:|---:|---:|---:|---:|
-| Valid initial source | ReAct | 1 | 4594 | 538 | 25954 | 16 |
-| Valid initial source | Recursive fragment | 2 | 10460 | 539 | 37310 | 22 |
-| Valid initial source | Complete-only ablation | 1 | 4594 | 538 | 25989 | 17 |
-| Repair + experiment | ReAct | 3 | 16763 | 543 | 32394 | 27 |
-| Repair + experiment | Recursive fragment | 3 | 16868 | 540 | 40582 | 29 |
-| Repair + experiment | Complete-only ablation | 3 | 16763 | 543 | 41913 | 30 |
-
-Every row delivered the exact accepted fixture source after one target read and
-one approval; each fetched its reference once and retained it across fresh
-resumptions. Each run also paid two executor qualification processes, excluded
-from the candidate-process column. Context is supplied message UTF-8 bytes, not
-provider tokens. Checkpoint maxima are observations at the declared boundaries,
-not universal memory bounds or physical process RSS. No timing claim is made.
-
-The recursive fragment path loses on the easy case: one extra model call,
-5,866 extra context bytes (+127.7%) and 11,356 extra checkpoint bytes (+43.8%)
-versus ReAct. On repair it saves three candidate processes, but adds 105 context
-bytes (+0.6%) and 8,188 checkpoint bytes (+25.3%). Its image is 21,573 bytes versus
-ReAct's 19,096 (+2,477, 13.0%); the complete-only image is 21,544 bytes. These are
-new strategy/representation costs, not inherited foundation costs or a regression
-claim about unchanged foundation applications. Keep recursive construction opt-in;
-these cases do not justify a general quality or cost superiority claim.
-
-The additional unresolved-model and stale-reference cases preserve failure
-outcomes: neither can produce an accepted artifact or target write. These are
-explicit scripted/protocol cases, not a live model success-rate estimate. The
-broader live/held-out study and remaining task variants are still unmeasured.
-
-Across this fixed four-case set, each strategy produced two accepted artifacts
-and two expected unresolved outcomes, with zero false completion claims. ReAct
-and the ablation used five total model calls per two accepted artifacts (2.5);
-recursive fragment construction used six (3.0). Candidate processes were 1,081,
-1,081 and 1,079 respectively, plus eight qualification processes per strategy.
-These intentionally weighted fixture totals are not population success rates or
-live cost-per-task estimates. All twelve runs used actual fresh State recovery;
-no native/browser/Wasmtime claim is made here for the new ReAct Program.
-
-Authoring checks passed 300 build steps and 130 tests. Package emission passed
-187 steps. Two focused extracted CLI tests passed, including zero-work baseline
-modes and a one-model-call ReAct candidate accepted by the real evaluator through
-the credential-free provider adapter. The prior selection-specific CLI test was
-not repeated; the comparison did not change its Program. Normal dependency
-bindings remain Boundary `5a8aa24bb179bc8defaa896ea776605261ed6539` and World
-`5c3dea1c0443f026b2451581de77ec2e51085e57`.
+the CLI. The expensive loopback completion/selection journeys and parser strategy/selection
+campaigns have been deleted. CLI configuration and diagnostic/prompt regressions,
+small recursive-selection tests and source-free consumer checks remain.
 
 ### Immutable evaluation identity and reserved input partition
 

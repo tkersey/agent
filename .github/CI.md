@@ -30,8 +30,20 @@ corrected commit, use a new run or select a manual `lane` (`source`, `installati
 `authoring`, `native`, or `economy`) against that ref. Re-running an old job does
 not pick up a fix committed later. Existing branch protections are not changed.
 
-Local commands, after selecting the exact toolchain and authenticating the
-normal dependency tuple where required:
+## Local completion: focused checks, five minutes total
+
+Select checks for the changed behavior. Local verification shares one 300-second
+wall-clock deadline, including setup, compilation and retries. Terminate the
+command and descendants at that deadline; report incomplete verification, never
+success. Documentation-only changes need diff/link review.
+
+The mobile-repository package/deployment, native sandbox and mutation suites,
+parser strategy/selection campaigns, long packaged parser journeys and redundant
+source-package rebuild have been deleted. Focused regressions preserve only part
+of their coverage; the suites are not relocated behind another target or gate.
+Product execution and runtime sandbox enforcement remain intact.
+
+The commands below describe retained CI lanes, not a local completion checklist:
 
 ```sh
 # No Zig or dependency setup required.

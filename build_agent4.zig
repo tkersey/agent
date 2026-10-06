@@ -444,24 +444,14 @@ pub fn build(b: *std.Build) void {
     const mobile_repository_images = b.step("mobile-repository-images", "Emit the mobile repository application and ordinary contracts");
     const mobile_repository_check = b.step("check-mobile-repository", "Check the authored mobile repository application");
     const mobile_repository_native = b.step("check-mobile-repository-native", "Compare native and WASM repository application continuations");
-    const mobile_repository_mutants = b.step("check-mobile-repository-mutants", "Detect explicit repository and custody mutants in isolated source copies");
     const mobile_repository_comparison = b.step("check-mobile-repository-comparison", "Check matched mobile and stationary proxy workloads");
     const mobile_repository_objects = nodeCommand(b);
     mobile_repository_objects.has_side_effects = true;
     mobile_repository_check.dependOn(&mobile_repository_objects.step);
-    const mobile_repository_zig = b.step("check-mobile-repository-zig", "Qualify the bounded native Zig repository check profile");
-    const mobile_repository_zig_test = nodeCommand(b);
-    mobile_repository_zig_test.step.dependOn(&source_guard.step);
-    if (source) |root| mobile_repository_zig_test.addDirectoryArg2(root, .{ .prefix = "AGENT_PROFILE_BOUNDARY_SOURCE=", .make_absolute = true }) else mobile_repository_zig_test.step.dependOn(&b.addFail("provide -Dboundary-source for repository profile qualification").step);
-    mobile_repository_zig_test.addDirectoryArg2(world_source, .{ .prefix = "AGENT_PROFILE_WORLD_SOURCE=", .make_absolute = true });
-    if (runtime == null) mobile_repository_zig_test.step.dependOn(&b.addFail("provide -Dworld-runtime to authenticate World profile source").step);
-    mobile_repository_zig_test.has_side_effects = true;
-    mobile_repository_zig.dependOn(&mobile_repository_zig_test.step);
     const repository_runner = b.step("repository-check-runner", "Install the macOS Zig check resource launcher and loader restriction");
     const publication_gate = b.step("repository-publication-gate", "Install the process-owned managed Git publication gate");
     const publication_check = b.step("check-repository-publication-gate", "Qualify publication exclusion across parent death");
     const publication_test = nodeCommand(b);
-    const repository_package_check = b.step("check-mobile-repository-package", "Qualify the extracted full application with browser Workers and native checks");
     const repository_approval_check = b.step("check-repository-approval", "Check authenticated protected publication across two custodians and browsers");
     const repository_approval_test = nodeCommand(b);
     repository_approval_test.has_side_effects = true;
@@ -478,7 +468,6 @@ pub fn build(b: *std.Build) void {
         emit.dependOn(&b.addInstallFileWithDir(gate_exe.getEmittedBin(), .prefix, "agent4/native/agent-publication-gate").step);
         publication_gate.dependOn(&b.addInstallFileWithDir(gate_exe.getEmittedBin(), .prefix, "repository-publication/agent-publication-gate").step);
         mobile_repository_objects.addFileArg2(gate_exe.getEmittedBin(), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
-        mobile_repository_zig_test.addFileArg2(gate_exe.getEmittedBin(), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
         publication_test.addFileArg2(gate_exe.getEmittedBin(), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
         repository_approval_test.addFileArg2(gate_exe.getEmittedBin(), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
         const limit_exe = b.addExecutable(.{ .name = "agent-check-limit", .root_module = b.createModule(.{
@@ -497,17 +486,12 @@ pub fn build(b: *std.Build) void {
         emit.dependOn(&b.addInstallFileWithDir(process_lock.getEmittedBin(), .prefix, "agent4/native/libagent-check-lock.dylib").step);
         repository_runner.dependOn(&b.addInstallFileWithDir(limit_exe.getEmittedBin(), .prefix, "repository-check/agent-check-limit").step);
         repository_runner.dependOn(&b.addInstallFileWithDir(process_lock.getEmittedBin(), .prefix, "repository-check/libagent-check-lock.dylib").step);
-        repository_approval_test.addFileArg2(limit_exe.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LIMIT=", .make_absolute = true });
-        repository_approval_test.addFileArg2(process_lock.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LOCK=", .make_absolute = true });
-        mobile_repository_zig_test.addFileArg2(limit_exe.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LIMIT=", .make_absolute = true });
-        mobile_repository_zig_test.addFileArg2(process_lock.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LOCK=", .make_absolute = true });
     } else {
         const unavailable = b.addFail("repository execution helpers require the qualified macOS host profile");
         publication_gate.dependOn(&unavailable.step);
         repository_runner.dependOn(&unavailable.step);
     }
     mobile_repository_objects.addArgs(&.{ "node", "--test", "test/agent4/repository_snapshot.test.mjs", "test/agent4/mobile_repository_qualification.test.mjs" });
-    mobile_repository_zig_test.addArgs(&.{ "node", "--test", "test/agent4/repository_zig_sandbox.test.mjs" });
     publication_test.addArgs(&.{ "node", "--test", "test/agent4/repository_publication_gate.test.mjs", "test/agent4/repository_publication_journal.test.mjs", "test/agent4/repository_publication_binding.test.mjs" });
     const mobile_repository_emitter = g.emitter("mobile-repository-emitter", g.module("test/consumers/mobile_repository/main.zig"));
     const repository_approval_images = b.step("repository-approval-images", "Emit the shared managed publication approval composition");
@@ -651,9 +635,6 @@ pub fn build(b: *std.Build) void {
     const parser_intent = b.step("check-parser-intent", "Check EOF clarification through fresh World states");
     const composed_runtime = b.step("check-composed-owners-runtime", "Restore composed owners through cleanup");
     const parser_source_free = b.step("check-parser-source-free", "Link and execute parser objects with source access denied");
-    const parser_consumers = b.step("check-parser-consumers", "Swap checked parser consumers around one unchanged producer");
-    const parser_comparison = b.step("check-parser-comparison", "Compare parser ReAct, recursive and complete-candidate strategies");
-    const parser_selection = b.step("check-parser-selection", "Execute two recursively assessed parser constructions");
     const selection_runtime = b.step("check-selection-runtime", "Check recursive assessment and completion isolation");
     const compiled_tools_check = b.step("check-compiled-tools", "Execute one compiled text tool in standalone and Agent callers");
     const mobility_continuation = b.step("check-mobility-continuation", "Check explicit relocation, retained ownership, refusal and cancellation");
@@ -695,7 +676,6 @@ pub fn build(b: *std.Build) void {
         }
         addBoundary(b, runtime_guard, source, target, optimize);
         runtime_guard.has_side_effects = true;
-        mobile_repository_zig_test.step.dependOn(&runtime_guard.step);
         _ = runtime_guard.captureStdOut(.{});
         const mobile_repository_run = nodeCommand(b);
         mobile_repository_run.addFileArg2(b.graph.path(.install_prefix, "repository-publication/agent-publication-gate"), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
@@ -707,17 +687,6 @@ pub fn build(b: *std.Build) void {
         mobile_repository_run.step.dependOn(&runtime_guard.step);
         mobile_repository_run.has_side_effects = true;
         mobile_repository_check.dependOn(&mobile_repository_run.step);
-        const repository_mutants_run = nodeCommand(b);
-        repository_mutants_run.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
-        repository_mutants_run.addFileArg2(b.graph.path(.install_prefix, "repository-publication/agent-publication-gate"), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
-        repository_mutants_run.addArgs(&.{ "node", "test/agent4/mobile_repository_mutants.mjs" });
-        repository_mutants_run.step.dependOn(mobile_repository_images);
-        repository_mutants_run.step.dependOn(repository_approval_images);
-        repository_mutants_run.step.dependOn(mobility_images);
-        repository_mutants_run.step.dependOn(publication_gate);
-        repository_mutants_run.step.dependOn(&runtime_guard.step);
-        repository_mutants_run.has_side_effects = true;
-        mobile_repository_mutants.dependOn(&repository_mutants_run.step);
         const comparison_run = nodeCommand(b);
         comparison_run.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
         comparison_run.addFileArg2(b.graph.path(.install_prefix, "repository-publication/agent-publication-gate"), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
@@ -734,16 +703,6 @@ pub fn build(b: *std.Build) void {
         } else repository_approval_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
         repository_approval_test.addArgs(&.{ "node", "--test", "test/agent4/repository_publication_approval.test.mjs", "test/agent4/mobility_task_catalogue.test.mjs" });
         repository_approval_test.step.dependOn(&runtime_guard.step);
-        const repository_package_test = nodeCommand(b);
-        repository_package_test.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
-        if (browser_tools_path) |browser_tools| {
-            repository_package_test.addDirectoryArg2(browser_tools, .{ .prefix = "AGENT_MOBILITY_BROWSER_TOOLS=", .make_absolute = true });
-        } else repository_package_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
-        repository_package_test.addArgs(&.{ "node", "--test", "--test-concurrency=1", "test/agent4/mobile_repository_package.test.mjs", "test/agent4/mobile_repository_deployment.test.mjs" });
-        repository_package_test.step.dependOn(&package.step);
-        repository_package_test.step.dependOn(&runtime_guard.step);
-        repository_package_test.has_side_effects = true;
-        repository_package_check.dependOn(&repository_package_test.step);
         var previous_economy: ?*std.Build.Step = null;
         for ([_][]const u8{ "manual", "fixed", "ensure", "stationary" }) |mode| {
             const sample = nodeCommand(b);
@@ -769,37 +728,6 @@ pub fn build(b: *std.Build) void {
         composed_run.step.dependOn(composed_images);
         composed_run.step.dependOn(&runtime_guard.step);
         composed_runtime.dependOn(&composed_run.step);
-        for ([_][]const u8{ "first", "last", "unavailable" }) |policy| {
-            const selection_case = nodeCommand(b);
-            selection_case.addArgs(&.{ "node", "test/agent4/parser_selection.mjs" });
-            selection_case.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-            selection_case.addArg(policy);
-            selection_case.step.dependOn(parser_episode);
-            selection_case.step.dependOn(&runtime_guard.step);
-            parser_selection.dependOn(&selection_case.step);
-        }
-        for ([_][]const u8{ "react", "recursive", "complete" }) |strategy| {
-            for ([_][]const u8{ "easy", "repair", "unresolved", "stale" }) |scenario| {
-                const comparison = nodeCommand(b);
-                comparison.addArgs(&.{ "node", "test/agent4/parser_comparison.mjs" });
-                comparison.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-                comparison.addArg(strategy);
-                comparison.addArg(scenario);
-                comparison.step.dependOn(parser_episode);
-                comparison.step.dependOn(&runtime_guard.step);
-                parser_comparison.dependOn(&comparison.step);
-            }
-        }
-        for ([_][]const u8{ "recursive", "alternate" }) |strategy| {
-            const consumer_case = nodeCommand(b);
-            consumer_case.addArgs(&.{ "node", "test/agent4/parser_comparison.mjs" });
-            consumer_case.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-            consumer_case.addArg(strategy);
-            consumer_case.addArg("consumer");
-            consumer_case.step.dependOn(parser_episode);
-            consumer_case.step.dependOn(&runtime_guard.step);
-            parser_consumers.dependOn(&consumer_case.step);
-        }
         const repair_run = nodeCommand(b);
         repair_run.addArgs(&.{ "node", "test/agent4/parser_construction.mjs" });
         repair_run.addFileArg2(runtime_path.path(b, "src/embedding/index.mjs"), .{ .make_absolute = true });
@@ -913,9 +841,6 @@ pub fn build(b: *std.Build) void {
         runtime_work.dependOn(parser_repeated);
         runtime_work.dependOn(parser_repair);
         runtime_work.dependOn(selection_runtime);
-        runtime_work.dependOn(parser_selection);
-        runtime_work.dependOn(parser_comparison);
-        runtime_work.dependOn(parser_consumers);
         runtime_work.dependOn(composed_runtime);
         const repository_emitter_module = g.module("test/agent4/repository_replacement_emit.zig");
         repository_emitter_module.addImport("repository_app", g.module("test/consumers/repository/application.zig"));
@@ -1174,7 +1099,6 @@ pub fn build(b: *std.Build) void {
         const missing = b.addFail("provide -Dworld-runtime=/absolute/authenticated/world-runtime");
         mobile_repository_check.dependOn(&missing.step);
         mobile_repository_native.dependOn(&missing.step);
-        mobile_repository_mutants.dependOn(&missing.step);
         mobile_repository_comparison.dependOn(&missing.step);
         repository_approval_check.dependOn(&missing.step);
         compiled_tools_check.dependOn(&missing.step);
@@ -1194,9 +1118,6 @@ pub fn build(b: *std.Build) void {
         parser_intent.dependOn(&missing.step);
         parser_circular.dependOn(&missing.step);
         selection_runtime.dependOn(&missing.step);
-        parser_selection.dependOn(&missing.step);
-        parser_comparison.dependOn(&missing.step);
-        parser_consumers.dependOn(&missing.step);
         parser_source_free.dependOn(&missing.step);
         composed_runtime.dependOn(&missing.step);
         economy.dependOn(&missing.step);

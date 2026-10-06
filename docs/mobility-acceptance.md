@@ -103,8 +103,8 @@ passed. This original aggregate is recorded as failed, not relabeled green.
 
 All seven mobility `node:test` build steps now clear that inherited context,
 following the existing repository pattern. On the corrected candidate, the exact
-`consumer_build.test.mjs` manifest-selected source-package test passed with zero
-skips; `NODE_TEST_CONTEXT=child-v8 zig build check-mobility` also passed. The five
+now-deleted manifest-selected source-package rebuild passed with zero
+skips (historical evidence); `NODE_TEST_CONTEXT=child-v8 zig build check-mobility` also passed. The five
 downstream checks blocked by the earlier failure then passed in their original
 order: dialogue, multi, document, consequence clarification (38 cases), and
 independent Node/Wasmtime/native agreement (11 canonical records plus negatives).

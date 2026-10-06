@@ -2,8 +2,8 @@ import { repositoryWriteHelper } from './repository_storage_fixture.mjs';
 // Actual compiled approval, World custody, SQLite and managed Git. The human
 // and independent content check are deterministic reference capabilities.
 import { createServer } from 'node:http';
-const { createManagedRepositoryEnvironment } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/repository.mjs')));
-const { modelBinding } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/model.mjs')));
+const { createManagedRepositoryEnvironment } = await import(pathToFileURL(resolve(new URL('../..', import.meta.url).pathname, 'runtime/repository.mjs')));
+const { modelBinding } = await import(pathToFileURL(resolve(new URL('../..', import.meta.url).pathname, 'runtime/mobility/model.mjs')));
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
@@ -14,24 +14,20 @@ import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { artifactRoot } from './artifacts.mjs';
-const { verifyRuntime } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'tools/agent4/dependencies.mjs')));
-const { encodeValue, decodeValue, decodeSchema } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/values.mjs')));
-const { provisionRepository, openRepositorySnapshotStore } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/repository_snapshot.mjs')));
-const { repositoryCheckBinding } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/repository_check.mjs')));
-const { repositoryApprovalBinding, repositoryReviewBinding, repositoryNextTaskBinding } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/repository_approval.mjs')));
-const { repositoryPublicationBinding, repositoryProposalBinding, PUBLICATION } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/repository_publication.mjs')));
-const { WorldAdmission } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/admission.mjs')));
-const { CustodyJournal } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/journal.mjs')));
-const { BrowserSessions } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/sessions.mjs')));
-const { serveBrowser } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/browser.mjs')));
-import { certificates } from './mobility_tls_fixture.mjs';
-const { Custodian } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/custodian.mjs')));
-const { HostPolicy, requirement } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/policy.mjs')));
-const { hash, canonical, parse, runId, signRecord } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/protocol.mjs')));
+const { verifyRuntime } = await import(pathToFileURL(resolve(new URL('../..', import.meta.url).pathname, 'tools/agent4/dependencies.mjs')));
+const { encodeValue, decodeValue, decodeSchema } = await import(pathToFileURL(resolve(new URL('../..', import.meta.url).pathname, 'runtime/values.mjs')));
+const { provisionRepository, openRepositorySnapshotStore } = await import(pathToFileURL(resolve(new URL('../..', import.meta.url).pathname, 'runtime/repository_snapshot.mjs')));
+const { repositoryCheckBinding } = await import(pathToFileURL(resolve(new URL('../..', import.meta.url).pathname, 'runtime/mobility/repository_check.mjs')));
+const { repositoryApprovalBinding, repositoryReviewBinding, repositoryNextTaskBinding } = await import(pathToFileURL(resolve(new URL('../..', import.meta.url).pathname, 'runtime/mobility/repository_approval.mjs')));
+const { repositoryPublicationBinding, repositoryProposalBinding, PUBLICATION } = await import(pathToFileURL(resolve(new URL('../..', import.meta.url).pathname, 'runtime/mobility/repository_publication.mjs')));
+const { WorldAdmission } = await import(pathToFileURL(resolve(new URL('../..', import.meta.url).pathname, 'runtime/mobility/admission.mjs')));
+const { CustodyJournal } = await import(pathToFileURL(resolve(new URL('../..', import.meta.url).pathname, 'runtime/mobility/journal.mjs')));
+const { Custodian } = await import(pathToFileURL(resolve(new URL('../..', import.meta.url).pathname, 'runtime/mobility/custodian.mjs')));
+const { HostPolicy, requirement } = await import(pathToFileURL(resolve(new URL('../..', import.meta.url).pathname, 'runtime/mobility/policy.mjs')));
+const { hash, canonical, parse, runId, signRecord } = await import(pathToFileURL(resolve(new URL('../..', import.meta.url).pathname, 'runtime/mobility/protocol.mjs')));
 
-const applicationArtifacts = process.env.AGENT_MOBILE_PACKAGE ? join(process.env.AGENT_MOBILE_PACKAGE, 'examples') : join(artifactRoot, 'agent4');
-const schemaExtension = process.env.AGENT_MOBILE_PACKAGE ? 'bin' : 'schema';
-const { taskCatalogue } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/task_catalogue.mjs')));
+const applicationArtifacts = join(artifactRoot, 'agent4');
+const schemaExtension = 'schema';
 const text = value => Buffer.from(canonical(value, 2 << 20)).toString('utf8');
 const env = { PATH: '/usr/bin:/bin', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null',
   GIT_AUTHOR_NAME: 'Approval fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid',
@@ -58,12 +54,12 @@ function nativeComparedWorld(world, directory, observed) {
     } });
   } } };
 }
-export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, lostOrdinaryReply = null, noChange = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, intake = false, sessionTasks = 0, nextMode = null, comparison = null, deterministicBase = false, revisionScenario = null, textScenario = null } = {}) {
+export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, lostOrdinaryReply = null, noChange = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, refuseReturn = false, sessionTasks = 0, nextMode = null, comparison = null, deterministicBase = false, revisionScenario = null, textScenario = null } = {}) {
   if (revisionScenario) assert(mobile && mode === 1 && !comparison && ['eight', 'nine', 'repeat', 'amend'].includes(revisionScenario));
-  if (textScenario) assert(mobile && [1, 2].includes(mode) && !comparison && !revisionScenario && [0, 1].includes(sessionTasks) && !engine &&
+  if (textScenario) assert(mobile && [1, 2].includes(mode) && !comparison && !revisionScenario && [0, 1].includes(sessionTasks) &&
     Number.isInteger(textScenario.files) && textScenario.files >= 1 && textScenario.files <= 4 && Number.isInteger(textScenario.bytes) && textScenario.bytes > 0 && textScenario.bytes <= 32768);
-  const sessionInput = mobile && Boolean(process.env.AGENT_MOBILE_PACKAGE || intake || sessionTasks || comparison);
-  if (comparison) assert(mobile && mode === 1 && !engine && !reviewFollowup && !sessionTasks, "comparison uses the same single-task propose workload");
+  const sessionInput = mobile && Boolean(sessionTasks || comparison);
+  if (comparison) assert(mobile && mode === 1 && !reviewFollowup && !sessionTasks, "comparison uses the same single-task propose workload");
   const stationary = comparison?.topology === "stationary", spendingHost = stationary ? "U" : "W";
   const revision = comparison ? `measure-${comparison.topology}-v1` : "p1";
   const workload = comparison?.workload ?? { repositoryBytes: 0, extraReads: 0, replayPaddingBytes: textScenario?.replayBytes ?? 0 };
@@ -276,57 +272,9 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
   let id = runId('issuer'); const registration = signRecord('run', { format: 'agent-mobility-run/v1', run_id: id, issuer_id: 'issuer', principal_ref: 'user', tenant_ref: 'tenant',
     image_digest: hash(image), program_id: programId, trusted_runtime_profile: identity.kernelSha256, allowed_host_policy_ref: 'fixture', deployment_policy_revision: revision,
     initial_classification: ['shared'], initial_host_id: mobile ? 'U' : 'W', initial_epoch: '0', deployment_limits: limits, key_id: 'issuer' }, pairs.issuer.privateKey);
-  let catalogue = null;
-  if (intake) {
-    assert(mobile && engine);
-    const assets = { image, schema: bytes.session, report: bytes.result, task: encodeValue(schemas.session, [decodeValue(schemas.task, task), sessionTasks || 1]), key: pairs.issuer.privateKey.export({ type: 'pkcs8', format: 'pem' }) };
-    catalogue = taskCatalogue({ issuer: { id: 'issuer', keyId: 'issuer', privateKey: 'key' }, entries: [{ id: 'repository', title: 'Qualified managed repository', image: 'image', programId,
-      taskSchema: 'schema', reportSchema: 'report', initialTask: 'task', modes: ['inspect', 'propose', 'publish'], principals: [{ tenant: 'tenant', principal: 'user', taskPrincipal: '7' }],
-      scope: { read: [targetPath], write: [targetPath], checks: ['fixture-content'], target: 'refs/heads/agent/result' }, profile: 'bounded', presentation: { audience: 'human', labels: ['shared'], revision },
-    }] }, { bytes: name => assets[name], keys, runtimeProfile: identity.kernelSha256, world,
-      config: { hostId: 'U', trustDomain: 'fixture', revision, revoked: [], deployments: [{ imageDigest: hash(image), programId, tenant: 'tenant', principals: ['user'], issuers: ['issuer'], hosts: ['U', 'W'], classification: ['shared'], limits }] },
-      custodian: { async registerRun(record, image, args) { expectedTask = decodeValue(schemas.session, args)[0]; expectedTask[1] = 1n; return hosts.U.registerRun(record, image, args); },
-        status: id => hosts.U.status(id), authorizeUser: (...args) => hosts.U.authorizeUser(...args), outcome: id => hosts.U.outcome(id) } });
-  } else {
-    comparison?.begin?.();
-    if (sessionInput) expectedTask[1] = 1n;
-    await hosts[activeHost].registerRun(registration, image, sessionInput ? encodeValue(schemas.session, [expectedTask, sessionTasks || 1]) : task);
-  }
-  let browserPage;
-  if (engine) {
-    assert(mobile);
-    const tls = await certificates(root), origin = await serveBrowser(hosts.U, { ...tls.A, catalogue, audience: 'human', runtimePath: resolve(process.env.AGENT_MOBILITY_RUNTIME), kernelBytes,
-      authenticate: () => ({ sessionId: 'worker-test', principal: 'user', tenant: 'tenant', audiences: ['human'] }) });
-    const browser = await engine.launch({ headless: true });
-    t.after(async () => { await browser.close(); await origin.close(); });
-    browserPage = await (await browser.newContext({ ignoreHTTPSErrors: true })).newPage();
-    await browserPage.goto(origin.url);
-    if (intake) {
-      await browserPage.locator('#start-task').waitFor({ state: 'visible' });
-      assert.equal(await browserPage.locator('#task-mode').inputValue(), 'propose');
-      await browserPage.locator('#task-mode').selectOption(['inspect', 'propose', 'publish'][mode]);
-      await browserPage.locator('#task-goal').fill('Make the bounded independently checked change.');
-      await browserPage.locator('#start-task button').click();
-      await browserPage.locator('#status').filter({ hasText: 'Task registered' }).waitFor();
-      id = await browserPage.locator('#run').inputValue(); assert.match(id, /^issuer:/);
-    }
-    await browserPage.evaluate(async id => { const { BrowserExecutor } = await import('/client.mjs'); window.executor = await new BrowserExecutor(id).initialize(); }, id);
-  }
-  async function runOriginWorker() {
-    for (let n = 0; n < 1000; n++) {
-      const result = await browserPage.evaluate(async () => {
-        if (!window.executor.worker) await window.executor.attach();
-        const result = await window.executor.advance();
-        if (result.kind === 'offered' || result.status?.custody === 'TERMINAL') await window.executor.retire();
-        return result;
-      });
-      if (result.kind === 'offered') return result;
-      if (result.status?.custody === 'TERMINAL') return { kind: 'terminal', status: result.status };
-      if (result.kind === 'blocked' && result.status?.occurrence === 'AWAITING') return { kind: 'awaiting', status: result.status };
-      await delay(1);
-    }
-    assert.fail('browser Worker transition bound');
-  }
+  comparison?.begin?.();
+  if (sessionInput) expectedTask[1] = 1n;
+  await hosts[activeHost].registerRun(registration, image, sessionInput ? encodeValue(schemas.session, [expectedTask, sessionTasks || 1]) : task);
   const moves = [];
   comparison?.registered?.();
   return { get id() { return id; }, counts, store, base, moves, image, task, initialArgs: sessionInput ? encodeValue(schemas.session, [expectedTask, sessionTasks || 1]) : task, identity, root,
@@ -341,7 +289,7 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
     async run() {
       let transitions = 0;
       for (let n = 0; n < 1000; n++) {
-        const result = browserPage && activeHost === 'U' ? await runOriginWorker() : await hosts[activeHost].run(id);
+        const result = await hosts[activeHost].run(id);
         if (result.kind === 'dispatching') { await delay(10); continue; }
         assert(++transitions <= ((sessionTasks || 1) * (mobile ? reviewFollowup ? 10 : 7 : 5)), 'bounded authored transitions');
         if (result.kind === 'awaiting') {
@@ -350,30 +298,11 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
           comparison?.question?.(pending);
           if (pending.pending.question.kind === 'repository-next-task') {
             assert.equal(cleanupCalls, Number(expectedTask[1]));
-            if (!browserPage) {
               await hosts[activeHost].stopOperations(); hosts[activeHost].retireAll(); journals[activeHost].close(); open(activeHost, false);
               assert.deepEqual(hosts[activeHost].pendingQuestion(id, identity), pending, 'next-task prompt survives origin restart');
-            }
             const { version, occurrence_id, request_digest, pending_digest } = pending;
             const reply = { version, occurrence_id, request_digest, pending_digest, answer: { choice: ['inspect', 'propose', 'publish'][nextMode ?? mode], text: 'Perform the next independently checked task.' } };
-            if (browserPage) {
-              await browserPage.evaluate(() => window.executor.retire());
-              await browserPage.locator('#run').fill(id); await browserPage.locator('#connect').click();
-              await browserPage.locator('#answer').waitFor({ state: 'visible' });
-              assert.match(await browserPage.locator('#question').textContent(), /Task 1 is finished/);
-              if (mode === 2) {
-                const displayed = await browserPage.locator('#question').textContent();
-                assert.match(displayed, /Published commit/); assert(!displayed.includes('This task does not publish'));
-              }
-              const exported = await browserPage.evaluate(async () => (await fetch(document.querySelector('#export-result').href)).json());
-              assert.equal(exported.report[1], '1', 'the completed task report is exportable before the next task');
-              assert.equal(exported.run_id, id);
-              await browserPage.locator('#choice').selectOption('inspect');
-              await browserPage.locator('#answer-text').fill(reply.answer.text); await browserPage.locator('#answer button').click();
-              await browserPage.locator('#status').filter({ hasText: 'Response saved' }).waitFor();
-              await browserPage.reload();
-              await browserPage.evaluate(async id => { const { BrowserExecutor } = await import('/client.mjs'); window.executor = await new BrowserExecutor(id).initialize(); }, id);
-            } else await hosts[activeHost].answerQuestion(id, identity, reply);
+            await hosts[activeHost].answerQuestion(id, identity, reply);
             await assert.rejects(hosts[activeHost].answerQuestion(id, identity, { ...reply, answer: { choice: 'publish', text: 'Reuse old approval.' } }));
             expectedTask[1]++; mode = nextMode ?? mode; expectedTask[2] = mode; modelTurn = 0;
             continue;
@@ -392,20 +321,6 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
           continue;
         }
         if (result.kind !== 'offered') {
-          if (result.kind === 'terminal' && browserPage && intake) {
-            const identity = { principal: 'user', tenant: 'tenant', audiences: ['human'] }, before = hosts.U.status(id);
-            await browserPage.reload(); await browserPage.locator('#run').fill(id); await browserPage.locator('#connect').click();
-            await browserPage.locator('#export-result').waitFor({ state: 'visible' });
-            const exported = await browserPage.evaluate(async () => (await fetch(document.querySelector('#export-result').href)).json());
-            assert.equal(exported.run_id, id); assert.equal(exported.report[1], String(expectedTask[1]));
-            assert.deepEqual(hosts.U.status(id), before, 'reading a terminal result must not attach or advance an executor');
-            await assert.rejects(catalogue.exportResult({ ...identity, principal: 'other' }, id), { code: 'UserDenied' });
-            const other = await catalogue.start(identity, { entry: 'repository', mode: 'inspect', goal: 'Leave this task unfinished.' });
-            await browserPage.locator('#run').fill(other.run_id); await browserPage.locator('#connect').click();
-            await browserPage.locator('#status').filter({ hasText: 'Connected' }).waitFor();
-            assert(await browserPage.locator('#export-result').isHidden());
-            assert.equal(await browserPage.locator('#export-result').getAttribute('href'), null);
-          }
           return result;
         }
         const transfer = journals[activeHost].transfer(result.transfer_id), offer = JSON.parse(Buffer.from(transfer.offer));

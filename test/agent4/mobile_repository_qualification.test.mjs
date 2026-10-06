@@ -16,7 +16,8 @@ for (const lane of ['deployed', 'live']) test(`${lane} opt-in rejects before hos
   assert.equal(admitQualification(configuration(lane), { [lane]: true }).lanes[0], lane);
 });
 test('qualification admits only owned lanes and coherent predeclared acceptance', () => {
-  assert.throws(() => admitQualification({ ...configuration('live'), lanes: ['shell'] }), { code: 'QualificationLanes' });
+  for (const lane of ['shell', 'package'])
+    assert.throws(() => admitQualification({ ...configuration('live'), lanes: [lane] }), { code: 'QualificationLanes' });
   assert.throws(() => admitQualification({ ...configuration('live'), lanes: ['live','deployed'] }, { live: true, deployed: true }), { code: 'QualificationOptInRequired' });
   const wrong = configuration('live'); wrong.external.cases[0].expected.published = true;
   assert.throws(() => admitQualification(wrong, { live: true }), { code: 'QualificationExpectedResult' });
@@ -40,7 +41,3 @@ test('qualification checks independent tree and exact publication result, not te
   assert.equal(assessQualificationResult({ mode: 'publish', expected: { kind: 'failed', proposalTree: null, published: false } }, 'failed', null).publication, false);
   assert.equal(assessQualificationResult({ mode: 'inspect', expected: { kind: 'completed', proposalTree: null, published: false } }, 'completed', null).outcome, false);
 });
-
-// Provider-mode selection is exercised through the installed deployment test:
-// a live binding for an unrelated repository cannot qualify a fixture case,
-// and cannot prevent that same case's deployed/fixture qualification.

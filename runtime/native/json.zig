@@ -58,9 +58,9 @@ pub fn parse(allocator: std.mem.Allocator, bytes: []const u8, limits: Limits) Er
 
 fn memberBounds(value: Value, maximum: usize) Error!void {
     switch (value) {
-        .object => |object| {
-            if (object.count() > maximum) return error.Capacity;
-            for (object.values()) |child| try memberBounds(child, maximum);
+        .object => |map| {
+            if (map.count() > maximum) return error.Capacity;
+            for (map.values()) |child| try memberBounds(child, maximum);
         },
         .array => |array| for (array.items) |child| try memberBounds(child, maximum),
         else => {},

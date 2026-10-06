@@ -103,10 +103,21 @@ pub const Application = struct {
         const arrived = try body.caseOf(outbound, "Ready");
         const refused = try body.caseOf(outbound, "Failed");
         const at_workspace = arrived.body();
-        const snapshot = try at_workspace.perform(snapshot_op, try at_workspace.product(try e.schema(t.SnapshotRequest), &.{
+        const acquired_snapshot = try at_workspace.perform(snapshot_op, try at_workspace.product(try e.schema(t.SnapshotRequest), &.{
             .{ .name = "repository", .value = try at_workspace.field(task, "repository") },
             .{ .name = "base", .value = try at_workspace.field(task, "base") },
         }));
+        // Snapshot metadata can strengthen the whole-state classification. Ask
+        // the existing placement owner before reading source or invoking a model.
+        const return_access = try a.interop.term(at_workspace, try mobility.resolve(ctx, try a.interop.functionId(c, entry), try a.interop.valueId(at_workspace, try at_workspace.field(try at_workspace.field(task, "human"), "placement"))), try e.schema(mobility.Resolution));
+        const here = try at_workspace.caseOf(return_access, "Here");
+        const candidates = try at_workspace.caseOf(return_access, "Candidates");
+        const unavailable = try at_workspace.caseOf(return_access, "Unavailable");
+        const snapshot = try at_workspace.match(return_access, &.{
+            try here.ret(acquired_snapshot),
+            try candidates.ret(acquired_snapshot),
+            try unavailable.fail(try e.schema(t.Snapshot), try e.literal(unavailable.body(), t.Failure, .placement_failed)),
+        });
         const observed = try at_workspace.perform(read_op, try at_workspace.product(try e.schema(t.ReadRequest), &.{
             .{ .name = "snapshot", .value = snapshot },
             .{ .name = "path", .value = try at_workspace.field(task, "initial_path") },

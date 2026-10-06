@@ -35,6 +35,7 @@ const goal = 'Explain the admitted source before proposing a change.';
 const humanAnswer = 'Keep this value; investigate its callers next.';
 
 async function scenario({ local = false, moves = 4, cancelReturn = false, mode = 0, invalid = null, leaf = null, selectedSnapshot = snapshot, selectedEvidence = evidence, sessionTasks = null, stopAfter = null } = {}) {
+  const restricted = selectedSnapshot[7].includes('server-only');
   const program = sessionTasks === null ? image : await readFile(join(imagesPath, 'session.bpi3'));
   let generation = sessionTasks === null ? 19n : 1n, taskTransfers = 0, completedTasks = 0;
   const task = [731n, 19n, mode, goal, selectedSnapshot[0], selectedSnapshot[3], selectedEvidence[1], placement(local ? 'A' : 'B', moves, 'repository'), placement('A', 16, 'human'), ['fixture-model', [{ tag: 1, value: 512 }, { tag: 0, value: null }, { tag: 0, value: null }]], 8, 2, 71n];
@@ -65,9 +66,12 @@ async function scenario({ local = false, moves = 4, cancelReturn = false, mode =
       const out = world.decodeOutcome(bytes);
       if (['completed', 'failed', 'cancelled'].includes(out.kind)) {
         const expectedTasks = sessionTasks === null ? 1 : (stopAfter ?? sessionTasks);
-        assert.equal(cleanups, invalid ? 0 : expectedTasks, 'each owned investigation cleans up exactly once');
+        assert.equal(cleanups, invalid || restricted ? 0 : expectedTasks, 'each owned investigation cleans up exactly once');
         if (invalid) {
           assert.equal(out.kind, 'failed'); assert.deepEqual(trace, [], 'invalid intake performs no effects');
+        } else if (restricted) {
+          assert.equal(out.kind, 'failed'); assert.equal(questions, 0);
+          assert(!trace.some(([, operation]) => ['agent.repository.read.v1', 'agent.repository.read-window.v1', 'agent.model.invoke.v4'].includes(operation)), 'known export denial must precede source reads and model work');
         } else if (cancelReturn) {
           assert.equal(out.kind, 'cancelled'); assert.equal(questions, 0);
         } else if (!local && moves === 1) {
@@ -90,7 +94,9 @@ async function scenario({ local = false, moves = 4, cancelReturn = false, mode =
       trace.push([host, request.semanticIdentity]);
       let reply, encodedReply;
       switch (request.semanticIdentity) {
-        case 'agent.mobility.resolve.v1': reply = resolution(payload, host, identity.kernelSha256); break;
+        case 'agent.mobility.resolve.v1':
+          reply = restricted && host === 'B' && payload[1][1].value === 'A'
+            ? { tag: 2, value: { tag: 2, value: null } } : resolution(payload, host, identity.kernelSha256); break;
         case 'agent.mobility.relocate.v1': {
           if (cancelReturn && transfers === 1 && !cancelled) {
             cancelled = true;
@@ -170,6 +176,7 @@ async function scenario({ local = false, moves = 4, cancelReturn = false, mode =
 }
 const results = [];
 for (const mode of [0, 1, 2]) results.push(await scenario({ mode }));
+results.push(await scenario({ selectedSnapshot: snapshot.map((value, index) => index === 7 ? ['server-only'] : value) }));
 results.push(await scenario({ local: true }), await scenario({ moves: 1 }), await scenario({ cancelReturn: true }));
 for (const invalid of ['generation', 'empty-goal', 'attempts']) results.push(await scenario({ invalid }));
 results.push(await scenario({ sessionTasks: 2 }), await scenario({ sessionTasks: 3, stopAfter: 1 }));

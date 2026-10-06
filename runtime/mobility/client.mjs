@@ -179,10 +179,10 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
       const current = await (await executor.api('status', 'GET')).json();
       if (current.custody === 'OFFERED') {
         const decision = await (await executor.api('retry')).json();
-        status.textContent = decision.kind === 'unknown' ? 'Waiting for a custody decision. The run remains paused.' : decision.kind === 'refused' ? 'Move declined. Continue here.' : 'Continuing at another host. Reconnect when it returns.';
+        status.textContent = decision.kind === 'unknown' ? 'Waiting for a custody decision. The run remains paused.' : decision.kind === 'refused' ? 'Move declined. Continue here.' : 'Handed off to another host; current status is unknown here. Reconnect to check for its return.';
         return;
       }
-      if (current.custody === 'DEPARTED') { status.textContent = 'Continuing at another host. Reconnect when it returns.'; return; }
+      if (current.custody === 'DEPARTED') { status.textContent = 'Handed off to another host; current status is unknown here. Reconnect to check for its return.'; return; }
       if (current.delivery?.presentation === 'pending') { status.textContent = 'Published; presentation pending'; request.textContent = JSON.stringify(current.delivery.receipt, null, 2); }
       if (current.custody === 'TERMINAL') { await showStoredResult(executor); return; }
       await executor.attach(); status.textContent = 'Connected'; await showQuestion(); return;
@@ -191,7 +191,7 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
     if (result.kind === 'offered') {
       await executor.retire();
       const decision = await (await executor.api('retry')).json();
-      status.textContent = decision.kind === 'accepted' ? 'Continuing at another host. Reconnect when it returns.' : decision.kind === 'refused' ? 'Move declined. Continue here.' : 'Waiting for a custody decision. The run remains paused.';
+      status.textContent = decision.kind === 'accepted' ? 'Handed off to another host; current status is unknown here. Reconnect to check for its return.' : decision.kind === 'refused' ? 'Move declined. Continue here.' : 'Waiting for a custody decision. The run remains paused.';
     } else if (result.status?.custody === 'TERMINAL') { await executor.retire(); await showStoredResult(executor); }
     else {
       status.textContent = result.kind === 'effect_unknown' ? 'Effect result unknown. The run remains paused.'

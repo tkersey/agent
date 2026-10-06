@@ -168,6 +168,10 @@ investigation. A review question permits inspection; an amendment discards the o
 candidate/check and requires fresh checking and approval. Reconnect after a service
 restart preserves the pending question; conflicting or stale answers are rejected.
 
+After snapshot metadata arrives, the program checks human-review placement before
+acquiring file evidence or calling the model. Known workspace-only restrictions
+stop there. Later moves still recheck authority; discovery does not reserve access.
+
 A task stages at most four files within its granted scope. Context, edits,
 candidate/check records, tool results and complete proposal share a 512 KiB
 logical working-text allowance; designated provider replay has a separate 2 MiB

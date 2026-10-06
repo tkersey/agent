@@ -4,7 +4,7 @@ const std = @import("std");
 const data = @import("boundary_data");
 const contracts = @import("agent_contracts");
 const json = @import("json.zig");
-pub const schemas = @import("agent_json_schema");
+pub const schemas = contracts.json;
 pub const Error = error{InvalidParams} || std.mem.Allocator.Error;
 
 pub fn fromJson(comptime T: type, a: std.mem.Allocator, value: json.Value) Error!T {

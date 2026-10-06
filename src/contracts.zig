@@ -4,6 +4,8 @@ const std = @import("std");
 const data = @import("boundary_data");
 const p = data.program;
 const wire = data.wire;
+/// Pure JSON projections share this module identity with the ordinary codecs.
+pub const json = @import("model_json.zig");
 
 pub const Error = wire.Error || std.mem.Allocator.Error || error{InvalidValue};
 pub const Descriptor = data.schema.Descriptor;

@@ -2,7 +2,7 @@
 //! Model-visible answers are data. This module grants no operation authority.
 const std = @import("std");
 const contracts = @import("agent_contracts");
-pub const json = @import("model_json.zig");
+pub const json = contracts.json;
 
 pub const FieldKind = enum { text, signed_integer, unsigned_integer, boolean, enumeration };
 pub const DecodeFailure = enum {

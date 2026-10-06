@@ -714,7 +714,6 @@ pub fn build(b: *std.Build) void {
 }
 
 fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize, world: *std.Build.Module, data: *std.Build.Module, contracts: *std.Build.Module, admission: *std.Build.Module) *std.Build.Module {
-    const schemas = b.createModule(.{ .root_source_file = b.path("src/model_json.zig"), .target = target, .optimize = optimize });
     return b.createModule(.{
         .root_source_file = b.path("runtime/native/root.zig"),
         .target = target,
@@ -723,7 +722,6 @@ fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: 
             .{ .name = "world", .module = world },
             .{ .name = "boundary_data", .module = data },
             .{ .name = "agent_contracts", .module = contracts },
-            .{ .name = "agent_json_schema", .module = schemas },
             .{ .name = "_native_dependency_admission", .module = admission },
         },
     });

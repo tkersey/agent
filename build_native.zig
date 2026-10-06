@@ -134,7 +134,6 @@ fn generate(b: *std.Build, modules: Modules, source: Source) Assets {
             .{ .name = "application_types", .module = types },
         },
     });
-    const schema = b.createModule(.{ .root_source_file = modules.root.path(b, "src/model_json.zig"), .target = b.graph.host, .optimize = optimize });
     const emitter = b.addExecutable(.{
         .name = "agent-native-assets",
         .root_module = b.createModule(.{
@@ -146,7 +145,6 @@ fn generate(b: *std.Build, modules: Modules, source: Source) Assets {
                 .{ .name = "application_types", .module = types },
                 .{ .name = "agent", .module = modules.agent },
                 .{ .name = "boundary", .module = modules.boundary },
-                .{ .name = "agent_json_schema", .module = schema },
             },
         }),
     });

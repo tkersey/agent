@@ -16,6 +16,7 @@ import {
   encodeOpenAIResponsesRequest,
   normalizeOpenAIResponses,
   performModelInvocation,
+  modelParametersValue,
 } from "../../runtime/model.mjs";
 
 const limits = Object.freeze({
@@ -798,6 +799,12 @@ test('deployment model profile binds actual replay payload, disclosure, owner an
   const metadata = { operation: REPLAY_MODEL_EFFECT, audience: 'fixture-provider' };
   const binding = modelBinding(metadata, profile, 'W');
   const version = hash(canonical(profile));
+  assert.equal(binding.profileDigest, version);
+  const parameters = modelParametersValue(profile.parameters);
+  assert.equal(binding.matchesModel('fixture-model', parameters, ['shared']), true);
+  assert.equal(binding.matchesModel('another-model', parameters, ['shared']), false);
+  assert.equal(binding.matchesModel('fixture-model', modelParametersValue({ ...profile.parameters, maxOutputTokens: 256 }), ['shared']), false);
+  assert.equal(binding.matchesModel('fixture-model', parameters, ['secret']), false);
   assert.equal(modelBinding({ ...metadata, subjectVersion: version }, profile, 'W').subjectVersion, version);
   const live = { ...profile, mode: 'openai-live', endpoint: 'https://api.openai.com/v1/responses', credentialEnv: 'UNUSED_QUALIFICATION_KEY' };
   assert.throws(() => modelBinding({ ...metadata, subjectVersion: version }, live, 'W'), { code: 'ModelProfileVersion' });

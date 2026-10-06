@@ -24,7 +24,7 @@ import { createManagedRepositoryEnvironment } from '../repository.mjs';
 import { taskCatalogue } from './task_catalogue.mjs';
 import { BrowserSessions } from './sessions.mjs';
 import { serveBrowser } from './browser.mjs';
-import { HostPolicy, requirement } from './policy.mjs';
+import { HostPolicy, requirement, bindingEligible } from './policy.mjs';
 import { PeerClient, servePeers } from './transport.mjs';
 import { parse, requireThat, closed, identifier } from './canonical.mjs';
 import { hash, runId, signRecord, validate as validateRecord } from './protocol.mjs';
@@ -242,7 +242,7 @@ export async function validateDeployment(configPath, { peerConfigs = [], contact
   // schema bytes and image are checked against the existing package inventory.
   const contracts = [
     ['origin', 'agent.repository.human.v1', 'question', 'answer', 'interaction', 'always'],
-    ['origin', 'agent.repository.review.v1', 'review', 'review-answer', 'interaction', 'review'],
+    ['origin', 'agent.repository.review.v1', 'review', 'review-answer', 'interaction', 'always'],
     ['origin', 'agent.repository.next-task.v1', 'next-task', 'next-task-answer', 'interaction', 'session'],
     ['origin', 'agent.approval.issue.v1.repository.publish', 'proposal', 'identifier', 'approval', 'publish'],
     ['origin', 'agent.interaction.exchange.v1.repository.publish', 'human', 'human-reply', 'approval', 'publish'],
@@ -289,7 +289,7 @@ export async function validateDeployment(configPath, { peerConfigs = [], contact
         validateRecord('run', registration, false); policy.authorizeRun(registration); policy.checkCleanup(registration);
         policy.preflight(registration, task[8][0][0], task[8][0][1], deployment.classification);
         const selected = contracts.filter(([, , , , , condition]) => condition === 'always' || condition === 'publish' && entry.modes.includes('publish') ||
-          condition === 'change' && entry.modes.some(mode => mode !== 'inspect') || condition === 'review' && entry.modes.some(mode => mode !== 'publish') || condition === 'session' && session[1] > 1);
+          condition === 'change' && entry.modes.some(mode => mode !== 'inspect') || condition === 'session' && session[1] > 1);
         const requests = new Map();
         let workspaceHost = null;
         for (const [side, operation, input, output, role] of selected) {
@@ -300,7 +300,19 @@ export async function validateDeployment(configPath, { peerConfigs = [], contact
           if (found.length !== 1) throw Object.assign(new Error('RepositoryCapabilityMissing'), { code: 'RepositoryCapabilityMissing', operation });
           const { peer, row } = found[0], wanted = requirement({ ...row, payloadSchema: schema(input), resultSchema: schema(output) });
           if (operation === 'agent.model.invoke.v4') {
-            modelBinding({ ...row, payloadSchema: schema(input), resultSchema: schema(output) }, row.adapter, peer.hostId);
+            const model = binding => modelBinding({ ...binding, payloadSchema: schema(input), resultSchema: schema(output) }, binding.adapter, peer.hostId);
+            const selectedModel = model(row);
+            requireThat(selectedModel.matchesModel(task[9][0], task[9][1], deployment.classification), 'RepositoryModelProfileMismatch');
+            // Availability of the requested profile does not prove dispatch
+            // will select it. Indistinguishable eligible calls must use the
+            // same pinned profile, including mode, endpoint and allowances.
+            for (const other of peer.bindings.filter(binding => binding.operation === operation &&
+              bindingEligible(registration, binding, peer.hostId, peer.labelDestinations))) {
+              requireThat(other.adapter.kind === 'openai-responses-replay', 'RepositoryModelProfileAmbiguous');
+              const candidate = model(other);
+              if (candidate.matchesModel(task[9][0], task[9][1], deployment.classification))
+                requireThat(candidate.profileDigest === selectedModel.profileDigest && other.subjectVersion === row.subjectVersion, 'RepositoryModelProfileAmbiguous');
+            }
             providerProfiles.push({ entry: entry.id, principal: principal.principal, tenant: principal.tenant,
               host: peer.hostId, subject: row.subject, version: row.subjectVersion, model: row.adapter.model,
               mode: row.adapter.mode, parameters: row.adapter.parameters, allowance: row.adapter.allowance });

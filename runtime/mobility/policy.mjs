@@ -18,6 +18,12 @@ function sameRequirement(wanted, binding) {
   if (wanted[7].tag === 0) offered[7] = option(null);
   return equal(canonicalRequirements([wanted]), canonicalRequirements([offered]));
 }
+// Shared metadata eligibility; payload authorization remains binding-owned.
+export function bindingEligible(run, binding, hostId, labelDestinations) {
+  return binding.enabled !== false && binding.tenants.includes(run.tenant_ref) && binding.principals.includes(run.principal_ref) &&
+    (run.classification ?? run.initial_classification).every(label => binding.allowedStateLabels.includes(label)) &&
+    binding.classification.every(label => labelDestinations[label]?.includes(hostId));
+}
 export class HostPolicy {
   #host; #domain; #profile; #revision; #deployments; #bindings; #exports; #revoked;
   constructor({ hostId, trustDomain, runtimeProfile, revision, deployments, bindings, labelDestinations, revoked = new Set() }) {
@@ -72,9 +78,7 @@ export class HostPolicy {
       (!cleanup || binding.cleanup === true) && sameRequirement(wanted, binding)) ?? null;
   }
   #eligible(run, binding) {
-    return binding.enabled !== false && binding.tenants.includes(run.tenant_ref) && binding.principals.includes(run.principal_ref) &&
-      (run.classification ?? run.initial_classification).every(label => binding.allowedStateLabels.includes(label)) &&
-      binding.classification.every(label => this.#exports[label]?.includes(this.#host));
+    return bindingEligible(run, binding, this.#host, this.#exports);
   }
   preflight(registration, requirements, constraints, classification) {
     const run = { ...registration, classification }; this.authorizeRun(run); this.checkCleanup(run);

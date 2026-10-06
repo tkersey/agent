@@ -63,6 +63,16 @@ latency tables and process-resource counters retain their original executed
 subject and are historical observations, not measurements of the latest repairs.
 No new latency or memory improvement is claimed from those corrections.
 
+Binding-selection repairs pass 35 model/binding tests, seven focused application
+cases, 86 host/deployment/qualification tests and 362/362 package steps. Check and
+proposal selection skips other repositories; model selection checks the actual
+model and parameters. Validation rejects conflicting eligible provider profiles
+and requires ordinary review even for publish-only entries. The installed journey
+passes with another model and an identical shared provider preceding the selected
+repository's binding. A publish-mode no-change task completes ordinary human review
+without publishing. Controlled measurements are pending recollection because the
+selection predicates execute inside the measured workload.
+
 The broader aggregate passed 559/559 steps at
 `330916481f46a20ad03c3e5c760d024c6b82e5d7`. Its unchanged generic runtime,
 dependency, isolation, fault and inherited regression evidence retains that scope.

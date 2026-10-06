@@ -58,7 +58,7 @@ function nativeComparedWorld(world, directory, observed) {
     } });
   } } };
 }
-export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, lostOrdinaryReply = null, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, intake = false, sessionTasks = 0, nextMode = null, comparison = null, deterministicBase = false, revisionScenario = null, textScenario = null } = {}) {
+export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, lostOrdinaryReply = null, noChange = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, intake = false, sessionTasks = 0, nextMode = null, comparison = null, deterministicBase = false, revisionScenario = null, textScenario = null } = {}) {
   if (revisionScenario) assert(mobile && mode === 1 && !comparison && ['eight', 'nine', 'repeat', 'amend'].includes(revisionScenario));
   if (textScenario) assert(mobile && [1, 2].includes(mode) && !comparison && !revisionScenario && [0, 1].includes(sessionTasks) && !engine &&
     Number.isInteger(textScenario.files) && textScenario.files >= 1 && textScenario.files <= 4 && Number.isInteger(textScenario.bytes) && textScenario.bytes > 0 && textScenario.bytes <= 32768);
@@ -214,6 +214,7 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
         : turn === textPaths.length ? ['check', {}]
         : reviewFollowup === 'question' && turn === textPaths.length + 2 ? ['read', { path: targetPath, offset: 0 }]
         : ['finish', { summary: 'All admitted files independently checked.' }];
+      if (noChange) action = ['finish', { summary: 'No change is necessary.' }];
       res.end(JSON.stringify({ status: 'completed', error: null, output: [
         { type: 'reasoning', id: `reason-${turn}`, summary: [], encrypted_content: `opaque-${turn}` + 'x'.repeat(workload.replayPaddingBytes) },
         { type: 'function_call', id: `function-${turn}`, status: 'completed', call_id: `call-${turn}`, name: action[0], arguments: JSON.stringify(action[1]) },
@@ -377,7 +378,7 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
             expectedTask[1]++; mode = nextMode ?? mode; expectedTask[2] = mode; modelTurn = 0;
             continue;
           }
-          assert.equal(pending.pending.question.kind, mobile && mode !== 2 ? 'repository-review' : 'repository-publication-approval');
+          assert.equal(pending.pending.question.kind, mobile && (mode !== 2 || noChange) ? 'repository-review' : 'repository-publication-approval');
           if (onQuestion) { await onQuestion({ root, host: hosts[activeHost], id, identity, kernelBytes, pending, content }); continue; }
           if (mobile) assert.equal(cleanupCalls, sessionTasks ? Number(expectedTask[1]) - 1 : 0, 'the original investigator is still retained during review');
           if (restartReview && !reviewRestarted) {

@@ -1,5 +1,5 @@
 // Deployment-only provider leaf. Returns proposals; it cannot execute them.
-import { REPLAY_MODEL_EFFECT, decodeReplayModelInvocation, encodeOpenAIResponsesRequest, performReplayModelInvocation, admitModelEndpoint } from '../model.mjs';
+import { REPLAY_MODEL_EFFECT, decodeReplayModelInvocation, encodeOpenAIResponsesRequest, performReplayModelInvocation, admitModelEndpoint, modelParametersValue } from '../model.mjs';
 import { canonical, closed, identifier, requireThat } from './canonical.mjs';
 import { hash } from './protocol.mjs';
 export function modelBinding(metadata, profile, hostId) {
@@ -25,6 +25,9 @@ export function modelBinding(metadata, profile, hostId) {
   // Legacy unversioned bindings remain usable, but a pinned capability must
   // describe the profile this adapter actually owns, including provider mode.
   requireThat(metadata.subjectVersion == null || metadata.subjectVersion === grant, 'ModelProfileVersion');
+  const parameterDigest = hash(canonical(modelParametersValue(admitted.parameters)));
+  const matchesModel = (model, parameters, labels) => model === admitted.model &&
+    labels.every(label => admitted.disclosure.labels.includes(label)) && hash(canonical(parameters)) === parameterDigest;
   const prepare = ({ request, run }) => {
     requireThat(run.classification.every(label => admitted.disclosure.labels.includes(label)), 'LeafDisclosureDenied');
     const decoded = decodeReplayModelInvocation(request.payload), invocation = decoded.invocation;
@@ -35,8 +38,8 @@ export function modelBinding(metadata, profile, hostId) {
     if (admitted.mode === 'openai-live') requireThat(typeof process.env[admitted.credentialEnv] === 'string' && process.env[admitted.credentialEnv].length > 0, 'ModelCredentialsUnavailable');
     return { requestBytes, outputTokens: invocation.parameters.maxOutputTokens };
   };
-  return { ...metadata, background: true, cancelSafe: true,
-    authorize: (_payload, run) => run.classification.every(label => admitted.disclosure.labels.includes(label)),
+  return { ...metadata, background: true, cancelSafe: true, profileDigest: grant, matchesModel,
+    authorize: (payload, run) => matchesModel(payload[0][1], payload[0][2], run.classification),
     charge(context) {
       const cost = prepare(context);
       return { owner: admitted.owner, kind: 'model', grant, limit: { ...admitted.allowance },

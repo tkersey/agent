@@ -88,6 +88,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
     try {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
       const request = JSON.parse(Buffer.concat(chunks)), turn = request.input.filter(item => item.type === 'function_call').length; modelCalls++;
+      assert.equal(request.model, 'fixture-model');
       assert.equal(req.headers.authorization, undefined); assert.equal(JSON.stringify(request).includes(privateSentinel), false);
       assert.deepEqual(request.reasoning, { effort: 'medium', summary: 'auto' });
       const actions = [['edit', { operation: 'replace', path: target, old_digest: rejectPreparation ? '0'.repeat(64) : beforeDigest, content: correct }], ['check', {}], ['finish', { summary: 'Boolean bound repaired and independently checked.' }]];
@@ -139,12 +140,26 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   }
   const configU = generated.origin, configW = generated.workspace;
   const workspaceConfig = JSON.parse(await readFile(configW));
+  const primaryModel = workspaceConfig.bindings.find(row => row.adapter.kind === 'openai-responses-replay');
+  const otherModel = structuredClone(primaryModel), sharedModel = structuredClone(primaryModel);
+  Object.assign(otherModel, { subject: 'other-repository', scope: 'other-model' });
+  otherModel.adapter.model = 'unused-other-model'; otherModel.subjectVersion = hash(canonical(otherModel.adapter));
+  Object.assign(sharedModel, { subject: 'shared-profile-repository', scope: 'shared-provider' });
+  // Different models must not shadow this task; identical pinned providers
+  // shared by another repository remain valid dispatch choices.
+  workspaceConfig.bindings.unshift(otherModel, sharedModel);
   const localValidation = command('validate', configU);
   assert.equal(localValidation.storage, 'not-opened'); assert.equal(localValidation.peerContact, false);
   for (const path of [setup.origin.directory, setup.origin.browser.directory, setup.workspace.directory]) await assert.rejects(stat(path), { code: 'ENOENT' });
   const missingHuman = JSON.parse(await readFile(configU)); missingHuman.bindings = missingHuman.bindings.filter(row => row.operation !== 'agent.repository.human.v1');
   const missingPath = await json(join(area, 'configured/missing-human.json'), missingHuman);
   assert.throws(() => command('validate', missingPath), error => error.status === 1 && JSON.parse(error.stdout).reason === 'RepositoryCapabilityMissing' && JSON.parse(error.stdout).operation === 'agent.repository.human.v1');
+  const publishOnly = JSON.parse(await readFile(configU)); publishOnly.catalogue.entries[0].modes = ['publish'];
+  const publishOnlyPath = await json(join(area, 'configured/publish-only.json'), publishOnly);
+  assert.equal(command('validate', publishOnlyPath).valid, true);
+  publishOnly.bindings = publishOnly.bindings.filter(row => row.operation !== 'agent.repository.review.v1');
+  await json(publishOnlyPath, publishOnly);
+  assert.throws(() => command('validate', publishOnlyPath), error => error.status === 1 && JSON.parse(error.stdout).reason === 'RepositoryCapabilityMissing' && JSON.parse(error.stdout).operation === 'agent.repository.review.v1');
   command('init', configU); assert.equal(command('tasks', configU, 'user', 'tenant')[0].defaultMode, 'propose');
   origin = await openDeployment(configU); let service = await origin.serve();
   workspaceConfig.peers[0].url = service.url;
@@ -176,7 +191,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   connectedConfig.tls.port = Number(new URL(service.url).port);
   await origin.close(); origin = null; await json(configU, connectedConfig);
   const qualificationCase = id => ({ id, entry: 'repository', base, mode: 'inspect', goal: 'Inspect the approved snapshot.', expected: { kind: 'completed', proposalTree: null, published: false } });
-  const mixedWorkspace = structuredClone(workspaceConfig), unrelatedModel = structuredClone(workspaceConfig.bindings.find(row => row.adapter.kind === 'openai-responses-replay'));
+  const mixedWorkspace = structuredClone(workspaceConfig), unrelatedModel = structuredClone(workspaceConfig.bindings.find(row => row.adapter.kind === 'openai-responses-replay' && row.subject === store.repository));
   Object.assign(unrelatedModel, { subject: 'unrelated-repository', scope: 'unrelated-model', principals: ['unrelated-user'] });
   Object.assign(unrelatedModel.adapter, { mode: 'openai-live', endpoint: 'https://api.openai.com/v1/responses', credentialEnv: 'UNUSED_QUALIFICATION_KEY' });
   unrelatedModel.subjectVersion = hash(canonical(unrelatedModel.adapter));
@@ -185,14 +200,22 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   for (const [scenario, lane, expectedFailure] of [
     ['fixture', 'live', 'QualificationProviderMode'], ['live', 'deployed', 'QualificationProviderMode'],
     ['stale', 'live', 'TransportStatus'], ['unversioned', 'deployed', 'QualificationProviderVersion'],
+    ['shadow', 'deployed', 'RepositoryModelProfileAmbiguous'], ['task-model', 'deployed', 'RepositoryModelProfileMismatch'],
   ]) {
     const declaration = structuredClone(mixedWorkspace);
-    const selected = declaration.bindings.find(row => row.adapter.kind === 'openai-responses-replay');
-    if (scenario === 'live' || scenario === 'stale') {
-      Object.assign(selected.adapter, { mode: 'openai-live', endpoint: 'https://api.openai.com/v1/responses', credentialEnv: 'UNUSED_QUALIFICATION_KEY' });
-      selected.subjectVersion = hash(canonical(selected.adapter));
+    const selected = declaration.bindings.find(row => row.adapter.kind === 'openai-responses-replay' && row.subject === store.repository);
+    const sameProfile = declaration.bindings.filter(row => row.adapter.kind === 'openai-responses-replay' && row.subjectVersion === selected.subjectVersion);
+    for (const binding of sameProfile) {
+      if (scenario === 'live' || scenario === 'stale') Object.assign(binding.adapter, { mode: 'openai-live', endpoint: 'https://api.openai.com/v1/responses', credentialEnv: 'UNUSED_QUALIFICATION_KEY' });
+      if (scenario === 'task-model') binding.adapter.model = 'configured-other-model';
+      binding.subjectVersion = scenario === 'unversioned' ? null : hash(canonical(binding.adapter));
     }
-    if (scenario === 'unversioned') selected.subjectVersion = null;
+    if (scenario === 'shadow') {
+      const shadow = structuredClone(selected);
+      Object.assign(shadow, { subject: 'shadow-repository', scope: 'shadow-provider' });
+      Object.assign(shadow.adapter, { mode: 'openai-live', endpoint: 'https://api.openai.com/v1/responses', credentialEnv: 'UNUSED_QUALIFICATION_KEY' });
+      shadow.subjectVersion = hash(canonical(shadow.adapter)); declaration.bindings.unshift(shadow);
+    }
     const peer = await json(join(area, `configured/wrong-${scenario}-workspace.json`), declaration);
     const input = await json(join(area, `wrong-${scenario}.json`), { format: 'agent.repository.qualification/v1', lanes: [lane], source: null,
       maximumSeconds: 1, external: { origin: configU, peers: [peer], principal: 'user', tenant: 'tenant', cases: [qualificationCase('wrong-provider-mode')] } });

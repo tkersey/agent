@@ -109,6 +109,16 @@ for (const mode of [0, 1, 2]) test(`complete mobile application mode ${mode} use
   } else { assert.deepEqual(report[6], { tag: 0, value: null }); assert.equal(await f.store.current(), f.base); assert.equal(f.counts.publish, 0); assert.equal(f.counts.human, 1); }
 });
 
+test('publish mode with no change returns to ordinary human review without publication', async t => {
+  const f = await fixture(t, { mobile: true, mode: 2, noChange: true });
+  assert.equal((await f.run()).kind, 'terminal'); assert.equal(f.outcomeKind(), 'completed');
+  const report = f.outcome(); assert.equal(report[2], 2); assert.equal(report[5], '');
+  assert.deepEqual(report[6], { tag: 0, value: null });
+  assert.deepEqual(f.counts, { check: 0, publish: 0, human: 1 });
+  assert.equal(f.modelCalls, 1); assert.equal(f.cleanupCalls, 1); assert.equal(await f.store.current(), f.base);
+  assert.deepEqual(f.moves, [['U', 'W'], ['W', 'U']]);
+});
+
 for (const reviewFollowup of ['question', 'amend']) test(`retained mobile review ${reviewFollowup} preserves the original investigator and remaining budgets`, async t => {
   const f = await fixture(t, { mobile: true, reviewFollowup });
   assert.equal((await f.run()).kind, 'terminal');

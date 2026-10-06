@@ -116,9 +116,17 @@ export function repositoryProposalBinding(metadata, { store, protectedImages, au
   const fields = input.types[input.root]?.product;
   requireThat(fields?.length === 4 && fields.slice(0, 2).every(id => input.types[id]?.bounded_text === (2 << 20)) &&
     fields.slice(2).every(id => input.types[id] === 'u64') && output.types[output.root]?.bounded_text === (2 << 20), 'PublicationSchema');
-  const authorize = (payload, run) => images.some(row => row.image === run.image_digest && row.program === run.program_id) &&
+  const recoverable = (payload, run) => images.some(row => row.image === run.image_digest && row.program === run.program_id) &&
     Array.isArray(payload) && payload.length === 4 && BigInt(payload[2]) > 0n && BigInt(payload[3]) > 0n;
-  return { ...metadata, authorize, cancelSafe: true, recoveryMatches: authorize, async handle({ payload, run, occurrence }) {
+  const { repository, generation } = store.describe();
+  const authorize = (payload, run) => {
+    if (!recoverable(payload, run)) return false;
+    const candidate = parse(Buffer.from(payload[0]), { maximum: 2 << 20 });
+    return candidate?.snapshot?.repository === repository && candidate.snapshot.generation === generation;
+  };
+  // Recovery retains the already-admitted owner even for a formerly misrouted
+  // request: proposal preparation cannot publish or leave a running process.
+  return { ...metadata, authorize, cancelSafe: true, recoveryMatches: recoverable, async handle({ payload, run, occurrence }) {
     requireThat(authorize(payload, run), 'PublicationAuthorityMismatch');
     const candidate = parse(Buffer.from(payload[0]), { maximum: 2 << 20 }), record = parse(Buffer.from(payload[1]), { maximum: 2 << 20 });
     const { journal, policy } = services();

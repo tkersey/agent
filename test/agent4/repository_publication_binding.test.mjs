@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { encodeSchema, encodeValue, decodeValue } from '../../runtime/values.mjs';
 import { canonical } from '../../runtime/mobility/canonical.mjs';
 import { repositoryCheckBinding, acquiredCheck, checkResultSchema } from '../../runtime/mobility/repository_check.mjs';
-import { repositoryPublicationBinding, PUBLICATION } from '../../runtime/mobility/repository_publication.mjs';
+import { repositoryPublicationBinding, repositoryProposalBinding, PUBLICATION } from '../../runtime/mobility/repository_publication.mjs';
 import { HostPolicy } from '../../runtime/mobility/policy.mjs';
 
 const schema = { root: 0, types: [{ bounded_text: 2 << 20 }] }, schemaBytes = encodeSchema(schema);
@@ -49,7 +49,7 @@ function fixture(repository = 'repo') {
       authorizationDigest: '1'.repeat(64), validationPolicyDigest: '2'.repeat(64), requiredProfiles: [{ id: 'zig-check', profileDigest: '3'.repeat(64), runner: '4'.repeat(64) }],
       checkResultSchema: encodeSchema(checkSchema), services: () => ({ journal, policy }) });
   const context = () => ({ payload: text(proposal), request: { payload: encodeValue(schema, text(proposal)) }, run, occurrence });
-  return { binding, run, proposal, occurrence, admission, state, context };
+  return { binding, run, proposal, occurrence, admission, state, context, store, journal, policy };
 }
 test('publication leaf requires its exact admitted image, principal and authorization context', () => {
   const f = fixture(); assert.equal(f.binding.authorize(text(f.proposal), f.run), true);
@@ -112,17 +112,17 @@ test('acquired status and record disagreement cannot admit publication', async (
   assert.equal(f.state.writes, 0); assert.equal(f.state.admissions, 0);
 });
 
-function checkFixture() {
-  const profile = { owner: 'W', repository: 'repo', generation: '1', manifest: 'a'.repeat(64), profileId: 'finite-check',
+function checkFixture(repository = 'repo') {
+  const profile = { owner: 'W', repository, generation: '1', manifest: 'a'.repeat(64), profileId: 'finite-check',
     profileDigest: 'b'.repeat(64), runner: 'c'.repeat(64), disclosure: { audience: 'check', labels: ['source'] },
     allowance: { attempts: 2, request_bytes: 4 << 20, concurrent: 1 } };
-  const metadata = { operation: 'agent.repository.check.v1', role: 'write', subject: 'repo', subjectVersion: profile.manifest,
+  const metadata = { operation: 'agent.repository.check.v1', role: 'write', subject: repository, subjectVersion: profile.manifest,
     audience: 'check', payloadSchema: schemaBytes, resultSchema: encodeSchema(checkSchema) };
   const calls = [], state = { status: 'Passed' }, runner = { runner: profile.runner,
     profiles: [{ id: profile.profileId, digest: profile.profileDigest }],
     async check(request) { calls.push(request); return { status: state.status, runner: runner.runner,
       profileDigest: runner.profiles[0].digest, occurrence: request.occurrence }; } };
-  const candidate = { snapshot: { repository: 'repo', generation: '1' }, id: 'candidate' };
+  const candidate = { snapshot: { repository, generation: '1' }, id: 'candidate' };
   const context = { payload: text(candidate), run: { classification: ['source'] }, occurrence: { id: 'occurrence' }, signal: new AbortController().signal };
   context.request = { payload: encodeValue(schema, context.payload) };
   return { profile, metadata, runner, calls, state, context,
@@ -156,10 +156,46 @@ test('wrong owner, runner, subject, disclosure and schema reject before check ex
     { runner: f.runner, profile: f.profile, hostId: 'W' }), { code: 'PublicationCheckSchema' });
   for (const method of ['authorize', 'charge', 'handle']) {
     const context = { ...f.context, run: { classification: ['restricted'] } };
-    if (method === 'authorize') assert.throws(() => f.binding.authorize(context.payload, context.run), { code: 'LeafDisclosureDenied' });
+    if (method === 'authorize') assert.equal(f.binding.authorize(context.payload, context.run), false);
     else if (method === 'charge') assert.throws(() => f.binding.charge(context), { code: 'LeafDisclosureDenied' });
     else await assert.rejects(f.binding.handle(context), { code: 'LeafDisclosureDenied' });
   }
   await assert.rejects(f.binding.handle({ ...f.context, payload: text({ snapshot: { repository: 'other', generation: '1' } }) }), { code: 'RepositoryCheckSubject' });
   assert.equal(f.calls.length, 0);
+});
+
+test('repository binding selection skips foreign owners and preserves recovery of earlier admitted preparation', () => {
+  const a = fixture('A'), b = fixture('B');
+  const policy = (bindings, classification = ['shared']) => new HostPolicy({ hostId: 'W', trustDomain: 'domain', revision: 'policy', runtimeProfile: b.run.trusted_runtime_profile,
+    labelDestinations: { shared: ['W'], source: ['W'] }, bindings, deployments: [{ imageDigest: b.run.image_digest, programId: b.run.program_id,
+      tenant: 'tenant', principals: ['user'], issuers: ['issuer'], hosts: ['W'], classification, cleanup: [] }] });
+  const checks = ['A', 'B'].map(repository => {
+    const f = checkFixture(repository);
+    return { ...f.binding, trustDomain: 'domain', scope: 'check', tenants: ['tenant'], principals: ['user'], classification: ['shared'], allowedStateLabels: ['source'] };
+  });
+  const checkRequest = { semanticIdentity: checks[0].operation, payloadSchema: schemaBytes, resumeSchema: encodeSchema(checkSchema),
+    payload: encodeValue(schema, text({ snapshot: { repository: 'B', generation: '1' } })) };
+  const checkRun = { ...b.run, classification: ['source'] };
+  assert.equal(policy(checks, ['source']).dispatch(checkRun, checkRequest).binding, checks[1]);
+  assert.equal(policy([...checks].reverse(), ['source']).dispatch(checkRun, checkRequest).binding, checks[1]);
+  checkRequest.payload = encodeValue(schema, text({ snapshot: { repository: 'B', generation: 'other' } }));
+  assert.throws(() => policy(checks, ['source']).dispatch(checkRun, checkRequest), { code: 'LeafBindingDenied' });
+
+  const preparation = { root: 0, types: [{ product: [1, 1, 2, 2] }, { bounded_text: 2 << 20 }, 'u64'] };
+  const proposals = [a, b].map(f => repositoryProposalBinding({ ...f.binding, operation: 'agent.repository.proposal.v1', role: 'write',
+    payloadSchema: encodeSchema(preparation), resultSchema: schemaBytes }, { store: f.store,
+    protectedImages: [{ image: f.run.image_digest, program: f.run.program_id }], authorizationDigest: '1'.repeat(64), validationPolicyDigest: '2'.repeat(64),
+    requiredProfiles: [{ id: 'zig-check', profileDigest: '3'.repeat(64), runner: '4'.repeat(64) }], checkResultSchema: encodeSchema(checkSchema),
+    commit: {}, services: () => ({ journal: f.journal, policy: f.policy }) }));
+  const request = { semanticIdentity: proposals[0].operation, payloadSchema: encodeSchema(preparation), resumeSchema: schemaBytes,
+    payload: encodeValue(preparation, [text({ snapshot: { repository: 'B', generation: 'generation' } }), '{}', 1n, 1n]) };
+  const both = policy(proposals);
+  assert.equal(both.dispatch(b.run, request).binding, proposals[1]);
+  assert.equal(policy([...proposals].reverse()).dispatch(b.run, request).binding, proposals[1]);
+  // Old journals can name A even though new admission now routes this to B.
+  const old = policy([proposals[0]]), legacyRequest = { ...request, payload: encodeValue(preparation,
+    [text({ snapshot: { repository: 'A', generation: 'generation' } }), '{}', 1n, 1n]) };
+  const admittedId = old.dispatch(a.run, legacyRequest).bindingId;
+  assert.equal(both.recovery(b.run, request, admittedId).binding, proposals[0]);
+  assert.equal(proposals[0].cancelSafe, true);
 });

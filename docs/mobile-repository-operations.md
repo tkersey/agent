@@ -284,6 +284,10 @@ Generated capabilities pin the admitted provider profile through their version.
 Regenerate older unversioned configurations before external qualification; ordinary
 unversioned model bindings remain usable. Preflight checks the running peer against
 that pin, and a successful lane requires unchanged configuration at postflight.
+Eligible bindings matching the task's model and parameters must agree on the full
+provider profile and version; validation rejects ambiguous selection. Different
+models and principals remain independent. Keep ordinary human review configured
+for publish-only entries too: a task can finish without a change to publish.
 Workspace `metrics` records the charged `allowances.model.grant`, which matches
 the selected provider version when recording actual-provider evidence.
 Use a dedicated

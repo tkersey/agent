@@ -35,22 +35,24 @@ export function repositoryCheckBinding(metadata, { runner, profile, hostId }) {
   const payloadSchema = decodeSchema(metadata.payloadSchema), resultSchema = checkResultSchema(metadata.resultSchema);
   requireThat(payloadSchema.types[payloadSchema.root]?.bounded_text === (2 << 20), 'RepositoryCheckSchema');
   const admitted = structuredClone(profile), grant = hash(canonical(admitted));
-  const authorize = (payload, run) => {
-    requireThat(run.classification.every(label => admitted.disclosure.labels.includes(label)), 'LeafDisclosureDenied');
-    const candidate = parse(Buffer.from(payload), { maximum: 2 << 20 });
-    requireThat(candidate?.snapshot?.repository === admitted.repository && candidate.snapshot.generation === admitted.generation,
-      'RepositoryCheckSubject');
+  const decode = payload => parse(Buffer.from(payload), { maximum: 2 << 20 });
+  const disclosed = run => run.classification.every(label => admitted.disclosure.labels.includes(label));
+  const owns = candidate => candidate?.snapshot?.repository === admitted.repository && candidate.snapshot.generation === admitted.generation;
+  const admit = (payload, run) => {
+    requireThat(disclosed(run), 'LeafDisclosureDenied');
+    const candidate = decode(payload);
+    requireThat(owns(candidate), 'RepositoryCheckSubject');
     return candidate;
   };
   return { ...metadata, background: true, cancelSafe: true,
-    authorize(payload, run) { authorize(payload, run); return true; },
+    authorize: (payload, run) => disclosed(run) && owns(decode(payload)),
     charge({ payload, run, request }) {
-      authorize(payload, run);
+      admit(payload, run);
       return { owner: admitted.owner, kind: 'check', grant,
         limit: { ...admitted.allowance, output_tokens: 0 }, amount: { request_bytes: request.payload.length, output_tokens: 0 } };
     },
     async handle({ payload, run, occurrence, signal }) {
-      const candidate = authorize(payload, run);
+      const candidate = admit(payload, run);
       const record = await runner.check({ snapshot: candidate.snapshot, candidate, profileId: admitted.profileId, occurrence: occurrence.id, signal });
       requireThat(record.runner === admitted.runner && record.profileDigest === admitted.profileDigest &&
         CHECK_STATUSES.includes(record.status), 'RepositoryCheckBinding');

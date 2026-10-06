@@ -18,10 +18,11 @@ export function limits(value) {
 }
 export function validate(kind, record, signed = true) {
   requireThat(Object.hasOwn(formats, kind), 'UnknownMessage');
-  const fields = kind === 'run' ? runFields : kind === 'offer' ? offerFields : [...decisionFields,
+  const carriedPublication = kind === 'offer' && record.format === 'agent-mobility-offer/v2';
+  const fields = kind === 'run' ? runFields : kind === 'offer' ? [...offerFields, ...(carriedPublication ? ['publication_receipt'] : [])] : [...decisionFields,
     record.decision === 'accepted' ? 'accepted_record_digest' : 'reason_code'];
   closed(record, signed ? [...fields, 'signature'] : fields);
-  requireThat(record.format === formats[kind], 'UnknownVersion');
+  requireThat(record.format === formats[kind] || carriedPublication, 'UnknownVersion');
   identifier(record.run_id, 256); requireThat(/^.+:[0-9a-f]{64}$/.test(record.run_id), 'InvalidRunId');
   identifier(record.key_id);
   if (signed) {
@@ -43,6 +44,20 @@ export function validate(kind, record, signed = true) {
     digest(record.outcome_digest);
     if (kind === 'offer') {
       counter(record.execution_revision);
+      if (carriedPublication) {
+        const receipt = record.publication_receipt;
+        canonical(receipt, 16 << 10);
+        requireThat(receipt?.format === 'agent.repository.publication-receipt/v1' && receipt.status === 'Published' &&
+          receipt.admission?.run_id === record.run_id && receipt.admission.registration_digest === record.run_registration_digest,
+          'PublicationReceiptMismatch');
+        digest(receipt.proposal); digest(receipt.admission.intent_digest);
+        requireThat(/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(receipt.commit) &&
+          /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(receipt.tree), 'PublicationReceiptMismatch');
+        const observed = receipt.admission.source_version;
+        requireThat(observed?.run_id === record.run_id && counter(observed.custody_epoch) <= counter(record.source_epoch) &&
+          (observed.custody_epoch !== record.source_epoch || counter(observed.execution_revision) <= counter(record.execution_revision)),
+          'PublicationReceiptMismatch');
+      }
       for (const name of ['run_registration_digest', 'predecessor_receipt_digest', 'image_digest', 'program_id', 'state_digest', 'request_digest', 'requirements_digest', 'destination_observation_digest', 'trusted_runtime_profile']) digest(record[name]);
       identifier(record.placement_intent_id); identifier(record.export_policy_revision);
       labels(record.classification); labels(record.resource_pin_summary, 16);

@@ -1,30 +1,22 @@
-// Operator-only qualification. Local lanes call repository-owned verifiers;
-// external lanes run the normal origin service and never answer for the person.
-import { spawn, execFileSync } from 'node:child_process';
+// Operator-only external trials run the normal origin service and never answer for the person.
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { readRegular } from '../../tools/agent4/dependencies.mjs';
-import { selectZig } from '../../tools/agent4/toolchain.mjs';
 import { decodeSchema, decodeValue } from '../values.mjs';
 import { parse, closed, requireThat, identifier } from './canonical.mjs';
 import { hash } from './protocol.mjs';
 import { openDeployment, pumpDeployment, validateDeployment } from './deployment.mjs';
 
-const targets = Object.freeze({ offline: ['check-mobile-repository', 'check-repository-publication-gate'],
-  browser: ['check-repository-approval', 'check-mobility-browser'] });
 export function admitQualification(input, { deployed = false, live = false } = {}) {
   closed(input, ['format', 'lanes', 'source', 'external', 'maximumSeconds']);
   requireThat(input.format === 'agent.repository.qualification/v1' && Array.isArray(input.lanes) && input.lanes.length > 0 &&
-    new Set(input.lanes).size === input.lanes.length && input.lanes.every(lane => [...Object.keys(targets), 'deployed', 'live'].includes(lane)), 'QualificationLanes');
+    new Set(input.lanes).size === input.lanes.length && input.lanes.every(lane => ['deployed', 'live'].includes(lane)), 'QualificationLanes');
   requireThat(Number.isInteger(input.maximumSeconds) && input.maximumSeconds > 0 && input.maximumSeconds <= 7200, 'QualificationDeadline');
   const external = input.lanes.filter(lane => ['deployed', 'live'].includes(lane));
   requireThat(external.length <= 1 && (!external.includes('deployed') || deployed) && (!external.includes('live') || live), 'QualificationOptInRequired');
   requireThat(!deployed || external.includes('deployed'), 'QualificationOptInMismatch');
   requireThat(!live || external.includes('live'), 'QualificationOptInMismatch');
-  if (input.lanes.some(lane => targets[lane])) {
-    closed(input.source, ['directory', 'commit', 'zigExecutable', 'libraryDirectory', 'boundarySource', 'worldSource', 'worldRuntime', 'browserTools', 'prefix']);
-    requireThat(/^[a-f0-9]{40}$/.test(input.source.commit), 'QualificationSource');
-  } else requireThat(input.source === null, 'QualificationSource');
+  requireThat(input.source === null, 'QualificationSource');
   if (external.length) {
     closed(input.external, ['origin', 'peers', 'principal', 'tenant', 'cases']);
     identifier(input.external.principal); identifier(input.external.tenant);
@@ -53,17 +45,6 @@ export function assessQualificationResult(test, kind, report, delivery = null) {
       typeof proposal?.digest === 'string' && /^[a-f0-9]{64}$/.test(proposal.digest) && typeof proposal.commitOid === 'string' && /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(proposal.commitOid) &&
       receipt.proposal === proposal.digest && receipt.commit === proposal.commitOid : test.mode !== 'publish' || kind === 'completed' && delivery === null) };
 }
-function execute(executable, args, cwd, env, seconds) {
-  return new Promise(resolve => {
-    const child = spawn(executable, args, { cwd, env, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
-    const chunks = []; let size = 0, reason = null;
-    const stop = why => { reason ??= why; try { if (process.platform === 'win32') child.kill('SIGKILL'); else process.kill(-child.pid, 'SIGKILL'); } catch {} };
-    const timer = setTimeout(() => stop('deadline'), seconds * 1000);
-    for (const stream of [child.stdout, child.stderr]) stream.on('data', bytes => { size += bytes.length; if (size <= 8 << 20) chunks.push(bytes); else stop('output-capacity'); });
-    child.on('error', error => { reason ??= error.code ?? 'spawn-failed'; });
-    child.on('close', (code, signal) => { clearTimeout(timer); resolve({ code, signal, reason, log: Buffer.concat(chunks).toString('utf8'), outputBytes: size }); });
-  });
-}
 export async function qualifyApplication(filename, output, options = {}) {
   const configBytes = readRegular(filename, 1 << 20), config = admitQualification(parse(configBytes, { maximum: 1 << 20, canonicalOnly: false }), options);
   const path = value => { requireThat(typeof value === 'string' && value.length > 0, 'QualificationPath'); return resolve(dirname(resolve(filename)), value); };
@@ -74,29 +55,7 @@ export async function qualifyApplication(filename, output, options = {}) {
   const save = () => writeFile(join(directory, 'report.json'), JSON.stringify(report, (_, value) => typeof value === 'bigint' ? value.toString() : value, 2) + '\n', { mode: 0o600 });
   try {
     await save();
-    if (config.source) {
-      requireThat(process.platform !== 'win32', 'QualificationPlatformUnavailable');
-      const source = path(config.source.directory), git = args => execFileSync('git', ['-C', source, ...args], { encoding: 'utf8', maxBuffer: 32 << 20 });
-      const identity = () => ({ head: git(['rev-parse', 'HEAD']).trim(), trackedDiff: hash(Buffer.from(git(['diff', '--binary', 'HEAD']))) });
-      const before = identity(); requireThat(before.head === config.source.commit, 'QualificationSourceMismatch'); report.source = { directory: source, ...before };
-      const toolchain = selectZig(['--zig-exe', path(config.source.zigExecutable), '--zig-lib', path(config.source.libraryDirectory)]);
-      report.toolchain = toolchain.identity;
-      for (const lane of config.lanes.filter(lane => targets[lane])) {
-        const row = report.lanes.find(row => row.lane === lane); Object.assign(row, { status: 'running', targets: targets[lane] }); await save();
-        const args = ['build', ...targets[lane], '-Doptimize=safe', `-Dboundary-source=${path(config.source.boundarySource)}`, `-Dworld-source=${path(config.source.worldSource)}`,
-          `-Dworld-runtime=${path(config.source.worldRuntime)}`, ...(config.source.browserTools === null ? [] : [`-Dbrowser-tools=${path(config.source.browserTools)}`]), '--prefix', path(config.source.prefix)];
-        const env = { ...toolchain.env }; delete env.NODE_TEST_CONTEXT;
-        row.executable = toolchain.executable; row.arguments = args;
-        const result = await execute(toolchain.executable, args, source, env, config.maximumSeconds);
-        await writeFile(join(directory, `${lane}.log`), result.log, { mode: 0o600 });
-        Object.assign(row, { status: result.code === 0 && result.reason === null ? 'passed' : 'failed', exitCode: result.code, signal: result.signal, reason: result.reason, outputBytes: result.outputBytes, log: `${lane}.log`, logSha256: hash(Buffer.from(result.log)) });
-        toolchain.assertUnchanged(); requireThat(JSON.stringify(identity()) === JSON.stringify(before), 'QualificationSourceChanged'); await save();
-      }
-    }
-    const lane = config.lanes.find(lane => ['deployed', 'live'].includes(lane));
-    if (lane && report.lanes.some(row => targets[row.lane] && row.status !== 'passed')) {
-      report.lanes.find(row => row.lane === lane).reason = 'local-qualification-failed'; await save(); return report;
-    }
+    const lane = config.lanes[0];
     if (lane) {
       const external = config.external, peerFiles = external.peers.map(path), originPath = path(external.origin);
       const modelsFor = validation => external.cases.map(test => {

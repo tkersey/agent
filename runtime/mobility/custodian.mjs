@@ -355,6 +355,7 @@ export class Custodian {
   async #outgoingTransfer(transferId) {
     const saved = this.#journal.transfer(transferId); requireThat(saved !== null, 'UnknownTransfer');
     const offer = parse(saved.offer), run = this.#run(offer.run_id);
+    requireThat(hash(canonical(offer.publication_receipt ?? null)) === hash(canonical(this.#journal.latestPublication(offer.run_id))), 'PublicationEvidenceMissing');
     requireThat(offer.source_host_id === this.hostId && run.status === 'OFFERED' && run.transfer_id === transferId, 'TransferNotPending');
     const image = this.#journal.artifact(run.tenant_ref, offer.image_digest), outcome = this.#journal.artifact(run.tenant_ref, offer.outcome_digest);
     const token = await this.#admission.parked(image, outcome), relocation = this.#admission.read(token).relocation;

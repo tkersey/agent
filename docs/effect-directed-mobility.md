@@ -27,9 +27,6 @@ speculation cannot admit them through an allowlist. The existing opaque-tool
 restrictions remain in force. `RelocationReply` has only `Arrived` and `Refused`;
 unknown custody must never resume the source program.
 
-Run `zig build check-mobility-authoring` for the current contract/admission
-checks. These checks are included in `check-agent4`.
-
 The independent consumer in `test/consumers/mobility` now moves at its own typed
 relocation calls, reads a real fixture through the compiled text component,
 returns to a human binding, resumes an owned child, and completes protected
@@ -38,24 +35,9 @@ cleanup. Its caller retains task ID `123` and marker `9001`; the child returns
 an authored fallback without performing the read. Cancellation at relocation
 discharges the suspended child's cleanup without resuming its normal work.
 
-`check-mobility-continuation` checks fresh resident instances and exact parked
-state/request preservation. `check-mobility-browser` exercises the maintained
-durable route in Chromium and Firefox: authenticated browser execution, a
-separate mTLS data process, and a fresh browser executor after the original
-executors retire. It checks exact reads/results, retained children and cleanup.
-
-```sh
-zig build check-mobility-continuation check-mobility-browser \
-  -Dworld-runtime=/absolute/authenticated/world-runtime \
-  -Dworld-source=/absolute/authenticated/world-source \
-  -Dworld-archive=/absolute/authenticated/world-source.tar.gz \
-  -Dbrowser-tools=/absolute/locked-playwright-tools
-```
-
 The earlier non-durable browser scaffold and its synthetic-arrival worker/peer
 were retired in favor of this actual custody route. Continuation-only checks
 still isolate control semantics; they are not custody authorization evidence.
-Matched measurements are documented in the [performance report](mobility-performance.md).
 The durable source-free browser lane and approval variant are described below.
 Functional and regression qualification is recorded in the acceptance matrix;
 serial review closeout remains unfinished.
@@ -64,13 +46,6 @@ The continuation target also executes fifteen independent `ensure` cases in
 World, including `Here`, constraints, affinity, deterministic ties, unknown and
 overflowing costs, malformed candidates, refusal retries, exhaustion and the
 32-candidate bound. The browser consumer uses `ensure` for both legs.
-
-`check-mobility-native` additionally invokes the native public World protocol
-consumer on each exact input for the round-trip, refusal and cancellation cases.
-All 24 canonical outcomes agree byte-for-byte with WASM, including the pending
-request/state at each semantic boundary. The independent final-result, request
-order and cleanup assertions remain in force; native agreement alone is not a
-custody or authority proof. Supply the same runtime/source/archive arguments.
 
 ## Approval across a move
 
@@ -94,17 +69,6 @@ isolated fixture. The approval challenge contains the entire proposal and a fres
 256-bit environmental occurrence ID; it carries no credential. The caller retains
 marker 9001 through epochs 0→1→2→3. The emitted image is 4,229 bytes and is included
 with its schemas and typed fixture inputs in `emit-agent4`.
-
-`check-mobility-approval` runs the protected approval authoring tests plus eight
-durable runtime cases: successful conditional replacement after all three moves;
-stale evidence; stale approval occurrence; a file changed during the final move;
-replay of a consumed approval against another run with identical proposal bytes;
-lost write delivery across restart/cancellation; definitive placement refusal;
-and cancellation while the grant is in transit. Stale source versions and old
-commit occurrences cannot dispatch. An uncertain write remains parked and is not
-repeated. The tests use deterministic synthetic human replies and temporary files,
-not a production human authorization provider. `check-agent4` and `check-native`
-also pass with the optional placement extension.
 
 ## Durable reference host
 
@@ -154,13 +118,6 @@ A self-consistent old backup cannot reveal its own rollback: never restore one
 under a live host identity without external fencing and reconciliation. Sensitive
 deployments additionally require a qualified encrypted storage boundary.
 
-```sh
-zig build check-mobility-protocol check-mobility-journal \
-  -Dworld-runtime=/absolute/authenticated/world-runtime \
-  -Dworld-source=/absolute/authenticated/world-source \
-  -Dworld-archive=/absolute/authenticated/world-source.tar.gz
-```
-
 Six protocol tests cover RFC Unicode ordering/escaping, duplicate keys, malformed
 records, signatures, key ownership/retirement and counters. Seventy-two journal tests
 cover accepted/refused recovery, exact retries, frozen outboxes, injected storage
@@ -174,30 +131,6 @@ power-loss durability, network-filesystem safety, storage-rollback detection, or
 arbitrary hardware failures. See the [Node SQLite API](https://nodejs.org/api/sqlite.html),
 [SQLite synchronization semantics](https://www.sqlite.org/pragma.html#pragma_synchronous),
 and [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785.html) for the underlying interfaces.
-
-`check-mobility-integration` uses the same dependency arguments and currently runs
-fifty-two host cases plus eighteen mTLS transport cases. The host cases complete A→B→A using real
-requirements and signed receipts, restarts both custodians, reconciles a lost old
-acceptance before a return, rejects stale/unbound successor publication, blocks
-uncertain delivery, and preserves cancellation/cleanup under revocation. The
-server-only fixture case denies return before any state bytes or preflight go to
-the browser host—even when the program requests a public export policy. Dispatch
-negatives cover tenant, principal, complete schema, semantic role and subject.
-Another privacy case retains an origin-only marker in the child's cleanup capture
-and rejects export despite a public-looking current placement payload. Successful
-round trips also assert that cleanup receives this captured marker at the new host.
-Additional application cases execute an authorized local `Here` without a move,
-take authored fallback for an unavailable destination, carry an actual file-version
-conflict back to presentation, and leave an unsupported ordinary leaf parked
-without inventing a relocation or reply.
-The network cases use HTTPS with mutually authenticated, explicitly pinned peer
-certificates and independent Ed25519 message keys. They exercise all staging and
-decision endpoints, lost responses after acceptance, withdrawal, exact status
-reconciliation, body/encoding bounds, unknown peers, private export rejection,
-and artifact collection. Image cache hits transfer only the outcome. Endpoints
-come from deployment configuration; the client rejects redirects and arbitrary
-URLs. Both services run locally in this transport lane; the browser lane below
-also exercises a separate data-host process from an extracted package.
 
 `servePeers` exposes preflight, bounded image/outcome staging, decision, status,
 withdrawal and narrowly authorized run-control endpoints. A peer certificate maps
@@ -215,15 +148,6 @@ the request to the owner through authenticated control. Forwarding is bounded
 and a failed delivery remains a durable pending intent. A returning custodian
 retains an earlier unresolved cancellation. Neither forwarding nor cancellation
 reactivates a departed epoch.
-
-`check-mobility-browser` runs Chromium and Firefox against the durable origin
-bridge and actual mTLS peers. The deployer supplies session authentication;
-there is no permissive default. State access checks principal, tenant and audience.
-Mutations check the exact origin/port and session CSRF token. Assignments have
-fresh nonces and exact epoch/revision/incarnation bindings. Old tabs cannot
-publish into later assignments. The Worker receives only approved image/state,
-the pinned kernel identity, and saved control input. The host's resident World
-instance verifies the reported successor before journal publication.
 
 `WorldAdmission` accepts independent input, working-memory and output limits.
 The reference defaults are 8 MiB input/output/artifact bytes and 64 MiB working
@@ -249,17 +173,6 @@ decompressed archive; local/session storage stay empty. These samples supplement
 authority separation and are not a general secret detector. All keys/certificates are temporary test provisioning
 outside the archive. These are local processes using real mTLS, not a measured
 two-machine network deployment.
-
-`zig build check-mobility-model` runs the specification's exact section 25 Python
-model with `uv run --no-project`. It explores 28 states and finds the required
-two-custodian counterexample when timeout takeover is deliberately enabled. This
-small model omits real storage, cryptography, continuation data and multiple
-epochs. The same target also runs a production-adjacent Node property model with
-128 seeds, 192 random steps per seed and three hosts through epoch 4. Required return
-conflicts have explicit prefixes, so random sampling cannot silently omit them.
-Its independent oracles check unique active custody, monotonic epochs/revisions,
-permanent retirement, no uncertain redispatch, classification and stale executors.
-It is bounded property coverage rather than an unbounded proof.
 
 ## Running the reference deployment
 

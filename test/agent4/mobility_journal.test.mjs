@@ -577,3 +577,22 @@ for (const kind of ['model', 'check']) test(`unknown ${kind} retains its concurr
   assert.equal(f.a.allowance(f.id, kind).used.attempts, 1);
   assert.equal(f.a.admitLeaf(secondId, version(second), [], { charge }).status, 'DISPATCHING');
 });
+
+test('signed publication evidence is run-bound and survives admission, collection and restart', async t => {
+  const f = await fixture(t), run = f.a.run(f.id);
+  const publication = { format: 'agent.repository.publication-receipt/v1', status: 'Published', proposal: 'a'.repeat(64),
+    commit: 'b'.repeat(40), tree: 'c'.repeat(40), admission: { run_id: f.id, registration_digest: hash(f.registration),
+      intent_digest: 'd'.repeat(64), source_version: version(run) } };
+  const proposal = f.offer({ ...f.a, run: id => f.a.run(id) }, { format: 'agent-mobility-offer/v2', publication_receipt: publication });
+  const tampered = parse(proposal.bytes); tampered.publication_receipt.commit = 'e'.repeat(40);
+  assert.throws(() => verifyRecord('offer', canonical(tampered), f.keys), { code: 'InvalidSignature' });
+  for (const changed of [
+    { ...publication, admission: { ...publication.admission, run_id: runId('issuer') } },
+    { ...publication, admission: { ...publication.admission, registration_digest: 'f'.repeat(64) } },
+    { ...publication, admission: { ...publication.admission, source_version: { ...version(run), custody_epoch: '1' } } },
+  ]) assert.throws(() => f.offer(f.a, { format: 'agent-mobility-offer/v2', publication_receipt: changed }), { code: 'PublicationReceiptMismatch' });
+  assert.throws(() => f.offer(f.a, { format: 'agent-mobility-offer/v2', publication_receipt: { ...publication, padding: 'x'.repeat(16384) } }), { code: 'ControlCapacity' });
+  f.accept(f.b, proposal); assert.deepEqual(JSON.parse(JSON.stringify(f.b.latestPublication(f.id))), publication);
+  f.b.collectArtifacts('tenant'); f.close(f.b);
+  const reopened = f.open('B'); assert.deepEqual(JSON.parse(JSON.stringify(reopened.latestPublication(f.id))), publication);
+});

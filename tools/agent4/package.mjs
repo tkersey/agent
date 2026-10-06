@@ -15,17 +15,15 @@ const runtimeFiles = ["runtime/world.mjs", "runtime/world.d.mts", "runtime/value
   "runtime/parser_cli.mjs", "runtime/parser_kernel.mjs", "runtime/parser_tools.mjs", "runtime/parser_executor.mjs", "runtime/parser_evaluation.mjs", "runtime/parser_oracle.mjs", "runtime/parser_driver.mjs", "runtime/parser_delivery.mjs", "docs/parser-synthesis.md",
   "fixtures/incremental-parser-v1/batch.mjs", "fixtures/incremental-parser-v1/requirements.md",
   "docs/agent4-runtime.md", "docs/migration_from_3.md", "docs/model-invocation-v3.md",
-  "docs/consequence-clarification.md", "docs/resumable-inquiry.md", "docs/compiled-text-tool.md", "docs/effect-directed-mobility.md", "docs/mobility-acceptance.md", "docs/mobility-performance.md", "conformance/agent4/mobility-measurements.json", "docs/mobility-deployment.example.json", "LICENSE",
+  "docs/consequence-clarification.md", "docs/resumable-inquiry.md", "docs/compiled-text-tool.md", "docs/effect-directed-mobility.md", "docs/mobility-acceptance.md", "docs/mobility-deployment.example.json", "LICENSE",
   "docs/mobile-repository-setup.example.json",
   "docs/mobile-repository-operations.md", "docs/mobile-repository-acceptance.md",
   ...["canonical", "protocol", "values", "custody", "admission", "journal", "policy", "custodian", "transport", "model", "repository_publication", "repository_check", "repository_approval", "repository_setup", "qualification", "sessions", "browser", "worker", "client", "task_catalogue", "deployment", "cli"].map(name => `runtime/mobility/${name}.mjs`)];
 // Optional test oracles supply prescribed external values and independently
 // assert application behavior. Production execution never imports these files.
-const fixtureTests = ["test/agent4/artifacts.mjs", "test/agent4/document_runtime.mjs", "test/agent4/review_runtime.mjs", "test/agent4/repository_runtime.mjs",
-  "fixtures/repository-repair-v1/README.md", "fixtures/repository-repair-v1/package.json",
+const exampleFixtures = ["fixtures/repository-repair-v1/README.md", "fixtures/repository-repair-v1/package.json",
   "fixtures/repository-repair-v1/src/range.mjs", "fixtures/repository-repair-v1/test/range.test.mjs",
-  "test/agent4/inquiry_application_runtime.mjs", "test/agent4/inquiry_cli.test.mjs", "test/consumers/inquiry/contract.txt",
-  "test/consumers/inquiry/fixtures/cases.mjs", "test/consumers/inquiry/fixtures/session.mjs", "test/agent4/text_package_runtime.mjs", "test/agent4/parser_package_runtime.mjs"];
+  "test/consumers/inquiry/contract.txt", "test/consumers/inquiry/fixtures/session.mjs"];
 const roles = new Set(["image", "component", "initial-args", "schema", "contract", "synthetic-fixture", "native-helper"]);
 const compare = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b));
 const json = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
@@ -187,7 +185,7 @@ export function packageArtifacts(argv) {
   const declaredVersion = readRegular(join(ROOT, "build.zig.zon")).toString("utf8").match(/\.version\s*=\s*"([^"]+)"/)?.[1];
   if (declaredVersion !== options.version) fail("archive version differs from Agent's package version");
   const { manifest, files, inputSha256 } = readInventory(imageRoot);
-  const sources = new Map([...runtimeFiles, ...fixtureTests].map(path => [path, readRegular(join(ROOT, path))]));
+  const sources = new Map([...runtimeFiles, ...exampleFixtures].map(path => [path, readRegular(join(ROOT, path))]));
   sources.set("conformance/agent4/dependencies.lock.json", readRegular(lockPath));
   for (const [path, bytes] of sources) files.set(path, bytes);
   files.set("README.md", Buffer.from(`# Agent ${options.version}: resumable interaction examples\n\n` +
@@ -197,7 +195,7 @@ export function packageArtifacts(argv) {
     `See docs/agent4-runtime.md for start, resume, inspect, cancel and raw World usage.\n` +
     `examples/inventory.json is only a file inventory; execution never reads it to select application control.\n` +
     `Synthetic fixture files are explicitly alternative environmental inputs, not recorded program state.\n` +
-    `test/agent4/*.mjs are optional scripted external-input test oracles. They are not production control and are never imported by the runner.\n\n` +
+    `The archive contains product runtime and example inputs, without optional test oracles.\n\n` +
     `Examples: ${manifest.examples.map(example => example.name).join(", ")}.\n`));
   const rows = [...files].sort(([a], [b]) => compare(a, b)).map(([path, bytes]) =>
     ({ path, bytes: bytes.length, sha256: sha256(bytes) }));

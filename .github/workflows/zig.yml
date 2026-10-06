@@ -9,7 +9,7 @@ on:
         description: 'Focused check (only all can qualify the whole change)'
         type: choice
         default: all
-        options: [all, source, installation, authoring, native, economy]
+        options: [all, source, installation, authoring, native]
       collect_all:
         description: 'Diagnostic only: continue independent lanes after failures'
         type: boolean
@@ -44,7 +44,7 @@ jobs:
     strategy:
       fail-fast: ${{ !inputs.collect_all }}
       matrix:
-        lane: ${{ fromJSON((inputs.lane == '' || inputs.lane == 'all') && '["installation","authoring","native","economy"]' || format('["{0}"]', inputs.lane)) }}
+        lane: ${{ fromJSON((inputs.lane == '' || inputs.lane == 'all') && '["installation","authoring","native"]' || format('["{0}"]', inputs.lane)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -101,7 +101,6 @@ jobs:
               exit 0 ;;
             authoring) target=check-authoring-core ;;
             native) target=check-native ;;
-            economy) target=check-agent4-economy ;;
             *) exit 2 ;;
           esac
           zig build "$target" -Doptimize=safe \

@@ -19,7 +19,7 @@ const help = `Usage: node runtime/mobility/cli.mjs COMMAND CONFIG [ARGUMENTS]
   qualify-check CONFIG                qualify a configured runner and print its profile identities
   configure-repository CONFIG OUTPUT  generate both host configs and typed task inputs in a new directory
   repository-template OUTPUT          create an operator setup template with inference disabled
-  qualify-application CONFIG OUTPUT [--deployed|--live]  run selected qualification lanes and retain evidence
+  qualify-application CONFIG OUTPUT [--deployed|--live]  run an authorized external trial and retain evidence
   login-issue CONFIG PRINCIPAL TENANT  locally issue a one-use browser login credential
   serve CONFIG                        recover and serve authenticated configured peers
   start CONFIG REGISTRATION IMAGE ARGS start an issuer-authorized run

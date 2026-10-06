@@ -1,8 +1,8 @@
 # CI feedback and focused qualification
 
 `Zig 0.17 qualification` separates source accounting, external installation,
-authoring contracts, native contracts, and functional economy into visible jobs.
-No native test has been removed by this change.
+authoring contracts, and native/runtime contracts into visible jobs.
+Only tests reached by these routine lanes are retained.
 
 ## Gates and reruns
 
@@ -13,7 +13,7 @@ unknown named imports, escaping source imports and unaccounted embedded inputs
 still reject. The full installation also scans before selecting the compiler or
 creating its work directory. A scan pass is not an installation pass.
 
-After source accounting succeeds, the four independent qualification jobs run.
+After source accounting succeeds, the three independent qualification jobs run.
 Routine runs use matrix fail-fast: a failed job cancels unfinished siblings.
 Manual `collect_all=true` permits independent jobs to continue even after a
 source failure; all failed outcomes remain failures. This is explicit diagnostic
@@ -26,8 +26,7 @@ A manually selected single lane does **not** publish that all-lanes gate. All
 lanes are mandatory on push and pull-request runs. No path filter skips tests.
 
 For the exact same commit, use GitHub's **Re-run job** on the failed lane. For a
-corrected commit, use a new run or select a manual `lane` (`source`, `installation`,
-`authoring`, `native`, or `economy`) against that ref. Re-running an old job does
+corrected commit, use a new run or select a manual `lane` (`source`, `installation`, `authoring`, or `native`) against that ref. Re-running an old job does
 not pick up a fix committed later. Existing branch protections are not changed.
 
 ## Local completion: focused checks, five minutes total
@@ -43,13 +42,20 @@ source-package rebuild have been deleted. Focused regressions preserve only part
 of their coverage; the suites are not relocated behind another target or gate.
 Product execution and runtime sandbox enforcement remain intact.
 
+Runtime custody, publication-binding, journal, configuration and session regressions
+run in the existing authoring/native lanes on every pull request. Optional browser,
+full-application, source-free multi-engine and model-exploration campaigns have
+been deleted. The slow economy lane and its collectors are also removed. Small
+journal tests retain publication receipt transfer, cancellation, restart, signature
+and binding coverage. Product examples and runtime enforcement remain.
+
 The commands below describe retained CI lanes, not a local completion checklist:
 
 ```sh
 # No Zig or dependency setup required.
 node test/agent4/installations.mjs --scan-only
 
-# Only the external package consumer; no native/economy test graph.
+# Only the external package consumer.
 zig build check-authoring-installation -Doptimize=safe
 # The direct driver is even cheaper: no outer build graph compilation.
 node test/agent4/installations.mjs --output /tmp/installation-authoring.json
@@ -59,16 +65,10 @@ zig build check-authoring-core -Doptimize=safe
 
 zig build check-native -Doptimize=safe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
-zig build check-agent4-economy -Doptimize=safe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
 `check-agent4` and `check` still include the external installation and all
-previously retained authoring obligations. Native/economy targets are unchanged
-in meaning. Economy now generates only its shared multi-shot, clarification and
-inquiry inputs plus its probe workloads, instead of depending on every authoring
-image. The full authoring corpus remains under `check-agent4`. The native
-inspector uses the selected executable directory, including custom prefixes.
+previously retained authoring obligations. The native lane also runs the retained custody and deployment regressions.
 Splitting jobs can still repeat some shared compiler work; lower wall-clock time
 or runner-minute savings are not assumed without measuring new runs.
 
@@ -136,11 +136,8 @@ standalone: a source-free linker witness must not accidentally carry its fixture
 producer. These are assurance boundaries, not arbitrary sharding preferences.
 
 No optimization mode changes: the existing `safe` selection applies to both
-shared drivers and retained runtime checks. A cold build of the authoring target
-now requires four test binaries and six fixture/helper binaries, rather than
-thirteen and twenty-four. Counts exclude compiler-negative probes and dependency
-setup. Shared drivers may repeat across separate CI jobs; no cross-job linkage
-or previously passing test result is reused as correctness evidence.
+shared drivers and retained runtime checks. Shared drivers may repeat across CI jobs; no cross-job linkage or previously
+passing test result is reused as correctness evidence.
 
 When changing this grouping, compare discovered named-test multisets and the
 complete emitted-file inventory, including byte hashes, on the same authenticated

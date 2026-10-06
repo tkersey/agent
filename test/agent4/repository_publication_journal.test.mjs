@@ -1,5 +1,5 @@
 // SQLite ordering tests use a trusted admission double. Full image/private-grant
-// admission is exercised separately by the application integration suite.
+// admission is covered by the regularly run native and custody contracts.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -8,15 +8,19 @@ import { join } from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
 import { CustodyJournal } from '../../runtime/mobility/journal.mjs';
 import { hash, runId, signRecord, canonical } from '../../runtime/mobility/protocol.mjs';
-import { version } from '../../runtime/mobility/custody.mjs';
+import { version, RELOCATE } from '../../runtime/mobility/custody.mjs';
+import { encodeValue } from '../../runtime/values.mjs';
+import { schemas, observationValue } from '../../runtime/mobility/values.mjs';
 async function fixture(t, operation = 'agent.repository.publish.v1') {
   const directory = await mkdtemp(join(tmpdir(), 'publication-journal-')), pair = generateKeyPairSync('ed25519');
   const image = Buffer.from('trusted admission fixture image'), outcome = Buffer.from('trusted admission fixture outcome');
   const metadata = { kind: 'requested', image_digest: hash(image), outcome_digest: hash(outcome), program_id: '1'.repeat(64),
     trusted_runtime_profile: '2'.repeat(64), request_digest: '3'.repeat(64), state_digest: '4'.repeat(64), operation };
   const id = runId('issuer'); let failure = null;
-  const options = { directory, hostId: 'W', deploymentGeneration: 'generation-1', keys: new Map([['issuer', { owner: 'issuer', status: 'active', publicKey: pair.publicKey }]]),
-    signer: { keyId: 'issuer', privateKey: pair.privateKey, policyRevision: 'p1' }, admission: { read: () => ({ metadata, image, outcome }) },
+  const hosts = { W: generateKeyPairSync('ed25519'), U: generateKeyPairSync('ed25519') };
+  const keys = new Map([['issuer', { owner: 'issuer', status: 'active', publicKey: pair.publicKey }], ...Object.entries(hosts).map(([owner, key]) => [owner, { owner, status: 'active', publicKey: key.publicKey }])]);
+  const options = { directory, hostId: 'W', deploymentGeneration: 'generation-1', keys,
+    signer: { keyId: 'W', privateKey: hosts.W.privateKey, policyRevision: 'p1' }, admission: { read: token => token.metadata ? token : ({ metadata, image, outcome }) },
     fault: point => { if (point === failure) throw Error(point); } };
   let journal = new CustodyJournal({ ...options, create: true });
   t.after(async () => { journal.close(); await rm(directory, { recursive: true, force: true }); });
@@ -28,7 +32,7 @@ async function fixture(t, operation = 'agent.repository.publish.v1') {
   const body = { core: { binding: { run: id, principal: 'user', tenant: 'tenant', policyRevision: 'p1', intent: '6'.repeat(64) },
     destination: { repository: 'repo', generation: 'generation-1', managedRef: 'refs/heads/agent/main' } }, commitOid: '5'.repeat(40) };
   const proposal = { ...body, digest: hash(canonical(body, 2 << 20)) };
-  return { get journal() { return journal; }, id, run, occurrence, proposal,
+  return { get journal() { return journal; }, id, run, occurrence, proposal, options, registration, image, metadata, hosts,
     second({ intent, commitOid }) {
       const { signature: _, ...unsigned } = journal.registration(registration), otherId = runId('issuer');
       journal.register(signRecord('run', { ...unsigned, run_id: otherId }, pair.privateKey), {});
@@ -90,3 +94,35 @@ for (const status of ['PublishedVerified', 'PublishedVerificationFailed', 'Publi
     f.journal.collectArtifacts('tenant'); f.restart();
     assert.deepEqual(canonical(f.records()[0].receipt), canonical(receipt));
   });
+
+test('publication evidence crosses custody and survives cancellation, collection and restart', async t => {
+  const f = await fixture(t), admission = f.admit(), reply = Buffer.from('published');
+  const publication = { format: 'agent.repository.publication-receipt/v1', status: 'Published',
+    proposal: f.proposal.digest, commit: f.proposal.commitOid, tree: '7'.repeat(40), admission };
+  f.journal.recordReply(f.id, f.occurrence.attempt_id, reply, [], null, { publicationReceipt: publication });
+  const requirements = hash(encodeValue(schemas.requirements, []));
+  const observation = { host_id: 'U', requirements_digest: requirements, binding_digest: '8'.repeat(64),
+    policy_revision: 'p1', runtime_profile: f.metadata.trusted_runtime_profile };
+  const current = f.journal.run(f.id), control = { kind: 'reply', reply_digest: hash(reply) }, outcome = Buffer.from('move to origin');
+  const moving = { image: f.image, outcome, metadata: { ...f.metadata, outcome_digest: hash(outcome),
+    request_digest: '9'.repeat(64), operation: RELOCATE }, predecessor: { outcome_digest: current.outcome_digest, control },
+    relocation: { destination_host_id: 'U', placement_intent_id: 'return', requirements_digest: requirements, remaining_move_budget: 1 } };
+  f.journal.publishOutcome(f.id, version(current), control, moving);
+  const offered = f.journal.beginTransfer(f.id, version(f.journal.run(f.id)), moving,
+    { observationDigest: hash(encodeValue(schemas.observation, observationValue(observation))), exportPolicyRevision: 'p1' });
+  const targetOptions = { ...f.options, directory: join(f.options.directory, 'origin'), hostId: 'U',
+    signer: { keyId: 'U', privateKey: f.hosts.U.privateKey, policyRevision: 'p1' } };
+  let target = new CustodyJournal({ ...targetOptions, create: true }); t.after(() => target.close());
+  const decision = target.accept(offered.offer, f.registration, moving, { policyRevision: 'p1', classification: [],
+    deploymentLimits: current.deployment_limits, observation });
+  f.journal.receiveDecision(offered.offer, decision);
+  target.collectArtifacts('tenant'); target.close(); target = new CustodyJournal(targetOptions);
+  target.requestCancel(f.id, 'stop presentation'); const attached = target.attach(f.id);
+  const cancel = { kind: 'cancel', reason: 'stop presentation' }, cancelled = Buffer.from('cancelled');
+  target.publishOutcome(f.id, version(attached), cancel, { image: f.image, outcome: cancelled,
+    predecessor: { outcome_digest: attached.outcome_digest, control: cancel },
+    metadata: { ...f.metadata, kind: 'cancelled', outcome_digest: hash(cancelled), state_digest: null, request_digest: null, operation: null } });
+  target.collectArtifacts('tenant'); target.close(); target = new CustodyJournal(targetOptions);
+  assert.equal(target.run(f.id).status, 'TERMINAL'); assert.equal(target.run(f.id).outcome_kind, 'cancelled');
+  assert.equal(target.latestPublication(f.id).commit, f.proposal.commitOid);
+});

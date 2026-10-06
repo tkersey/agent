@@ -186,6 +186,7 @@ export class CustodyJournal {
       requireThat(saved === undefined && offer.source_host_id === this.#host, 'TransferAlreadyExists');
       const run = this.run(runId), occurrence = this.#occurrence(run);
       const registration = this.#registration(this.artifact(run.tenant_ref, run.registration_digest));
+      requireThat(equal(canonical(offer.publication_receipt ?? null), canonical(this.latestPublication(runId))), 'PublicationReceiptMismatch');
       this.#lineage(offer, registration, run.custody_epoch === '0' ? null : this.artifact(run.tenant_ref, run.predecessor_receipt_digest));
       requireThat(data.metadata.outcome_digest === run.outcome_digest && data.metadata.image_digest === run.image_digest && data.relocation !== null, 'ArtifactMismatch');
       requireThat(data.image.length === offer.artifact_lengths.image && data.outcome.length === offer.artifact_lengths.outcome, 'ArtifactMismatch');
@@ -204,7 +205,8 @@ export class CustodyJournal {
   beginTransfer(runId, wanted, admitted, { observationDigest, exportPolicyRevision, admissionDeadline = null }) {
     const run = this.run(runId), data = this.#admission.read(admitted);
     requireThat(data.relocation !== null, 'RelocationMismatch');
-    const unsigned = { format: 'agent-mobility-offer/v1', run_id: runId, transfer_id: opaqueId(), source_host_id: this.#host,
+    const publication = this.latestPublication(runId);
+    const unsigned = { ...(publication ? { publication_receipt: publication } : {}), format: publication ? 'agent-mobility-offer/v2' : 'agent-mobility-offer/v1', run_id: runId, transfer_id: opaqueId(), source_host_id: this.#host,
       destination_host_id: data.relocation.destination_host_id, source_epoch: run.custody_epoch, destination_epoch: (counter(run.custody_epoch) + 1n).toString(), execution_revision: run.execution_revision,
       run_registration_digest: run.registration_digest, predecessor_receipt_digest: run.predecessor_receipt_digest, image_digest: run.image_digest, program_id: run.program_id,
       outcome_digest: run.outcome_digest, state_digest: run.state_digest, request_digest: run.request_digest, relocation_occurrence_id: run.current_occurrence_id,
@@ -299,7 +301,18 @@ export class CustodyJournal {
       const acceptedCore = core.acceptedCore(offer, policyRevision, classification, deploymentLimits);
       artifactLimits(acceptedCore.deployment_limits, data.image, data.outcome);
       const receipt = this.#decision(offer, acceptedCore, null), arrival = encodeArrival(offer, hash(receipt), observation);
-      const next = core.accept(this.run(offer.run_id), registration, offer, acceptedCore, hash(receipt), hash(arrival));
+      const existing = this.run(offer.run_id);
+      const previousPublication = existing ? this.latestPublication(offer.run_id) : null;
+      const publication = offer.publication_receipt ?? previousPublication;
+      if (previousPublication && offer.publication_receipt) {
+        const before = previousPublication.admission.source_version, after = publication.admission.source_version;
+        requireThat(counter(after.custody_epoch) > counter(before.custody_epoch) ||
+          (after.custody_epoch === before.custody_epoch && (counter(after.execution_revision) > counter(before.execution_revision) ||
+            (after.execution_revision === before.execution_revision && equal(canonical(publication), canonical(previousPublication))))),
+          'PublicationEvidenceRegression');
+      }
+      const next = core.accept(existing, registration, offer, acceptedCore, hash(receipt), hash(arrival));
+      if (publication) next.run.publication_receipt_digest = this.#artifact(registration.tenant_ref, canonical(publication, 16 << 10));
       this.#remember(offer); this.#remember(registration); this.#remember(parse(receipt));
       this.#artifact(registration.tenant_ref, registrationBytes); this.#artifact(registration.tenant_ref, data.image); this.#artifact(registration.tenant_ref, data.outcome); this.#artifact(registration.tenant_ref, arrival);
       this.#artifact(registration.tenant_ref, receipt);
@@ -434,6 +447,7 @@ export class CustodyJournal {
   }
   latestPublication(runId) {
     const run = this.run(runId); requireThat(run, 'UnknownRun');
+    if (run.publication_receipt_digest) return parse(this.artifact(run.tenant_ref, run.publication_receipt_digest), { maximum: 16 << 10 });
     const rows = this.#all('SELECT body FROM occurrences WHERE run_id=? ORDER BY rowid DESC', runId);
     for (const row of rows) {
       const occurrence = readJson(row.body);
@@ -481,6 +495,7 @@ export class CustodyJournal {
         const receiptBytes = canonical(publicationReceipt, 2 << 20), receiptDigest = hash(receiptBytes);
         requireThat(next.occurrence.publication_receipt_digest === undefined || next.occurrence.publication_receipt_digest === receiptDigest, 'PublicationReceiptConflict');
         next.occurrence = { ...next.occurrence, publication_receipt_digest: this.#artifact(run.tenant_ref, receiptBytes) };
+        if (publicationReceipt.status === 'Published') next.run = { ...next.run, publication_receipt_digest: next.occurrence.publication_receipt_digest };
       } else requireThat(publicationReceipt === null, 'PublicationIntentMissing');
       if (placementEvidence !== null) {
         requireThat(next.occurrence.operation === 'agent.mobility.resolve.v1', 'InvalidPlacementEvidence');
@@ -555,7 +570,7 @@ export class CustodyJournal {
       const retain = value => { if (value !== null && value !== undefined) retained.add(value); };
       for (const row of this.#all('SELECT body FROM runs WHERE tenant=?', tenant)) {
         const run = readJson(row.body);
-        for (const key of ['image_digest', 'outcome_digest', 'reply_digest', 'registration_digest', 'predecessor_receipt_digest']) retain(run[key]);
+        for (const key of ['image_digest', 'outcome_digest', 'reply_digest', 'registration_digest', 'predecessor_receipt_digest', 'publication_receipt_digest']) retain(run[key]);
         retain(this.#occurrence(run)?.pending_digest);
       }
       for (const row of this.#all('SELECT occurrences.body FROM occurrences JOIN runs USING(run_id) WHERE tenant=?', tenant)) {

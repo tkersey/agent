@@ -36,8 +36,6 @@ export async function packageFixture(t, { dataExecution = 'node', imageMode = 'e
   const receipt = packageArtifacts(['--images-dir', input, '--output-dir', output, '--version', version, '--world-runtime', resolve(process.env.AGENT_MOBILITY_RUNTIME)]);
   execFileSync('tar', ['-xzf', join(output, receipt.archive.name), '-C', extracted]);
   const root = join(extracted, receipt.archive.name.slice(0, -7));
-  // Optional conformance oracles are absent during actual execution.
-  await rm(join(root, 'test'), { recursive: true, force: true });
   for (const row of receipt.files) assert.ok(!/\.(zig|wasm)$/.test(row.path), `unexpected authoring/kernel input: ${row.path}`);
   assert.ok(!(await readdir(root)).includes('src'));
   const examples = join(root, 'examples'), secrets = join(f.area, 'secrets'); await mkdir(secrets, { mode: 0o700 });

@@ -16,7 +16,7 @@ for (const lane of ['deployed', 'live']) test(`${lane} opt-in rejects before hos
   assert.equal(admitQualification(configuration(lane), { [lane]: true }).lanes[0], lane);
 });
 test('qualification admits only owned lanes and coherent predeclared acceptance', () => {
-  for (const lane of ['shell', 'package'])
+  for (const lane of ['shell', 'offline', 'browser', 'package'])
     assert.throws(() => admitQualification({ ...configuration('live'), lanes: [lane] }), { code: 'QualificationLanes' });
   assert.throws(() => admitQualification({ ...configuration('live'), lanes: ['live','deployed'] }, { live: true, deployed: true }), { code: 'QualificationOptInRequired' });
   const wrong = configuration('live'); wrong.external.cases[0].expected.published = true;

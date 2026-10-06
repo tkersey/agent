@@ -137,15 +137,6 @@ constant space for arbitrary numbers or sizes of candidates.
 
 ## Exercise and validate
 
-```sh
-zig build check-agent4 -Doptimize=ReleaseSafe
-node tools/agent4/setup.mjs
-zig build check-agent4-integration -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
-zig build check-agent4-economy -Doptimize=ReleaseSafe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
-```
-
 `zig build emit-agent4 -Doptimize=ReleaseSafe` emits
 `zig-out/agent4/document/consequence.bpi2` and `consequence.args` without World.
 The independent document package emits these too. Use archives include the

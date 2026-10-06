@@ -287,26 +287,8 @@ release claim, and verify published downloads before claiming publication.
 
 ## Optional scripted application tests from the extracted archive
 
-`test/agent4/document_runtime.mjs` and `test/agent4/review_runtime.mjs` are
-**test oracles**, supplied separately from the production runtime. They submit
-prescribed synthetic model/human replies, assert independently expected request
-orders and results, and check actual document I/O. Their queues describe test
-inputs; they do not implement the application's continuation or branching.
-Neither the runner nor the public World API imports them, and removing the
-entire `test/` directory does not change execution.
-
 For an inventory with document and review images in the following directories,
 run from the extracted archive:
-
-```sh
-mkdir -p .agent4/out
-node test/agent4/document_runtime.mjs \
-  /absolute/path/to/world-runtime examples/document/document.bpi3
-
-AGENT4_WORLD_RUNTIME=/absolute/path/to/world-runtime \
-AGENT4_REVIEW_IMAGES="$PWD/examples/review" \
-  node --test test/agent4/review_runtime.mjs
-```
 
 The review directory must contain the emitted mode images and matching `.args`
 files. A smaller probe archive need not contain the full applications; running

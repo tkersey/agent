@@ -62,25 +62,6 @@ leave it resumable. Two human confirmations have Program-owned occurrence values
 an earlier inner answer, rebound to the current outer request, reissues the current
 question instead of being accepted.
 
-`check-compiled-tools` covers real file reads, changed files, missing operation or
-subject bindings, schema/version mismatches, a wrong Program/checkpoint pair,
-stale outer replies, stale inner human replies, scoped tool interruption, retained
-side work, global cancellation and suspending disposal cleanup.
-
-`check-compiled-tool-browser` runs the same Agent image in Chromium and Firefox:
-the first Worker reaches a chunk read, exports and terminates; a separate Node
-process restores it, reads a real fixture file, exports its actual successor and
-exits; a fresh Worker finishes using the matching in-memory subject, performs
-cleanup and resumes the retained side task. Model/human replies are synthetic
-leaf results. The host does not reconstruct the fold or replay completed reads.
-
-```sh
-zig build check-compiled-tools check-compiled-tool-browser \
-  -Dworld-runtime=/absolute/authenticated/world-runtime \
-  -Dworld-source=/absolute/authenticated/world-source \
-  -Dbrowser-tools=/absolute/world/test/current/browser-tools
-```
-
 The browser tooling is the existing locked Playwright setup. This witness does
 not complete the separate three-component composition requirement, general local
 imported-borrow contracts, performance acceptance, or legacy retirement.

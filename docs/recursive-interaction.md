@@ -68,21 +68,6 @@ setup never substitutes an unchecked participant or a different kernel.
 Current review/acceptance status belongs to the linked draft PRs. The milestone
 is not complete merely because one witness or a local check passes.
 
-| Required behavior | Owning implementation and deciding evidence |
-| --- | --- |
-| Pure non-strict general construction | Boundary `library.hyper`; constant/divergent-peer, aggregate, fault, adaptive ana, and 96 generated-construction comparisons against the independent closure oracle |
-| Effectful reciprocal demands | Boundary `hyper.demand`; parser `step` and `referenceParticipant` retain the real waiting callers and route only residual leaves to the host |
-| Checked compiled participants | `src/participant.zig`, normal `agent.compile`, `test/agent4/participant.zig`: model-helper binding, imported authority, incoming-owner and allocation-failure negatives |
-| Source-free reuse and consumer swap | `tools/agent4/link_parser.zig`, `parser_source_free.mjs`, `parser_comparison.mjs`: source-denied linking/execution and identical producer bytes with two consumers |
-| Owned composition and lifetime | Boundary `generator.pipeline`, Agent `composed_owners.mjs`, parser cleanup paths: nested composition, local disposal with a surviving sibling, distinct whole-session cancellation |
-| Recursive assessment without delivery authority | `deliberation.selectSequential`, `recursive_selection.mjs`, `parser_disposition_negative.mjs`: actual nested experiments and rejection of imported completion authority |
-| Independent parser acceptance | `runtime/parser_oracle.mjs`, qualified executor, parser executor/evaluation tests: two independently written valid candidates, separate invalid candidates, chunk/error/prefix/closed-protocol and retained-state checks |
-| Model proposals and actual repair | `parser_construction.mjs`: a partial transition precedes the complete candidate, a real counterexample reaches the producer, and the revised exact source is evaluated |
-| Exact delivery and context binding | `parser_delivery.mjs`, parser tool/protocol tests: reacquired target, exact approval, conditional fixture replacement, stale/forged reports, denial and uncertain delivery |
-| Fresh portable execution | Shared recursive peer/Worker harness and parser construction/delivery scenarios: native, Node/WASM, Wasmtime and Chromium consume actual destination State bytes |
-| Progress and honest stopping | `parser_circular.mjs`, zero/one-round and unavailable/malformed cases: explicit unresolved results, no invented evidence, cancellation and reclaimed ownership |
-| Live readiness | `runtime/parser_cli.mjs`, reserved-input evaluation: opt-in authorized provider path; paid/live quality remains unmeasured |
-
 Pure and task-valued hyperfunctions share the ordinary compiler and World
 interpreter. The owned sequential exchange operator is a narrower derived
 pipeline; it does not replace general hyperfunction invocation or inherit all
@@ -93,29 +78,12 @@ inputs. Their historical remaining-work notes are not the current acceptance
 inventory. The final audit uses the owning code/tests and the current tuple,
 with reused observations explicitly distinguished from fresh executions.
 
-## Development evidence by slice
-
 ### Executed first production slice
 
 `test/agent4/participant.zig` independently emits a producer object with a typed
 model-helper import. A separate process reads only its BMO1 bytes and links it to
 `responders.defineModel`, through normal `agent.compile`, with ordinary
 `model_invocation.Profile` request, result and interpretation schemas.
-
-```
-zig build check-participants participant-images --summary all
-node test/agent4/participant.mjs WORLD_ENTRY KERNEL zig-out/agent4/participant
-```
-
-`WORLD_ENTRY` is the baseline World's `src/embedding/index.mjs`; `KERNEL` is its
-`zig-out/world-kernel.wasm`, built by `zig build build-kernel
--Doptimize=ReleaseSafe`. On Zig 0.16.0 and the unchanged baseline kernel SHA-256
-`7a27d64295431c960046439353a158e378f14d4686fac47b61b1406cf1753663`, the 1,790-byte
-Program issues one actual `agent.model.invoke.v3` request. The test transfers
-World's actual State bytes into a fresh WASM instance, supplies a request-bound
-synthetic provider response, and receives the expected admitted contribution 42.
-The source handle is invalidated and its working memory released. There is no
-paid inference, host continuation, or transcript reconstruction.
 
 Focused negatives reject direct protected model emission, missing assessment
 allowance, write-capable helper substitution and incompatible helper results.
@@ -195,13 +163,6 @@ that cancelled fixture execution; arbitrary external cancellation is not claimed
 
 Run the emitted images with:
 
-```
-node test/agent4/recursive_participant.mjs WORLD_ENTRY KERNEL \
-  zig-out/agent4/recursive single
-node test/agent4/recursive_participant.mjs WORLD_ENTRY KERNEL \
-  zig-out/agent4/recursive double WASMTIME_PEER NATIVE_TOOL BROWSER_TOOLS chromium
-```
-
 Repeat the last command with `firefox`. `WASMTIME_PEER` is the unchanged World's
 `test/current/peer.mjs`; `BROWSER_TOOLS` is its locked
 `test/current/browser-tools` directory. The native tool is built with World's
@@ -263,25 +224,7 @@ Executed on the qualified macOS profile:
 | Module-global state | 1 before rejection | Reject | Fresh-context and closed-state violation |
 | Retain completed history | 536/536 | Reject | 13,600-byte retained history exceeds the 2,048-byte fixture limit |
 
-The retention cases feed 500 bounded complete records and an 8,192-byte unfinished
-field. Growing unfinished data is legitimate; accumulated completed history is
-not. The two accepted implementations are independently written test strings in
-`test/consumers/incremental-parser/candidates.mjs`. Production validators, task
-evidence and prompts do not import them. No candidate was executed outside the
-qualified facility. The check used 1,650 physical candidate executions and two
-isolation qualification executions.
-
 Executed commands:
-
-- `node --test test/agent4/parser_oracle.test.mjs`: four tests pass.
-- `node test/agent4/parser_executor.test.mjs`: all seven expected dispositions pass.
-- `node test/agent4/parser_protocol.test.mjs`: forged verdict/import rejection,
-  real timeout and pre-cancelled zero-execution checks pass.
-- `node test/agent4/inquiry_executor.test.mjs`: existing Inquiry executor regression
-  passes (183 physical executions plus two qualification executions).
-- `zig build check --summary all`: 204 steps / 122 Zig tests pass, plus the new
-  pure Node oracle checks. `zig build check-parser-executor` reproduces the two
-  isolated parser test scripts; the scripts above were executed directly.
 
 This supplies independent real-tool acceptance for the emerging application.
 Model-directed fragment construction, version-bound observations, intent handling,
@@ -323,15 +266,6 @@ unavailable replies and partial-candidate assessment claims take the authored
 failure path. This helper is not itself a trusted validation token or approval
 construction; the full consumer and delivery path remain required.
 
-`zig build check-parser-tools` builds the normal Agent integration and emits its
-portable request/reply schemas. `node test/agent4/parser_tools.test.mjs` passed
-reference/probe round-trips, partial acceptance rejection, actual reject-all
-assessment, wrong-subject rejection, capacity handling and malformed output cases
-(three candidate executions, two qualification executions). The seven World reply
-binding cases in `test/agent4/parser_tools_world.mjs WORLD_ENTRY KERNEL` passed
-with one real candidate probe. No model-driven parser controller, target write,
-or live inference is claimed by this protocol slice.
-
 ## Model-facing construction proposals
 
 `parser_synthesis.proposals` now uses the existing checked model responder for
@@ -357,13 +291,6 @@ candidate through the qualified executor. No provider network call or paid
 inference occurred. The updated 501-byte execution-binding Program passed nine
 fresh-recovery cases, including a model-proposed experiment and rejection of an
 assessment substituted for its result. Existing parser-tool tests also pass.
-
-Reproduce with `zig build parser-proposal-images check-parser-tools`, then
-`node test/agent4/parser_proposals.mjs WORLD_ENTRY KERNEL` and
-`node test/agent4/parser_tools_world.mjs WORLD_ENTRY KERNEL`. This verifies the
-proposal/execution interfaces; it does not claim that the complete recursive
-synthesis controller, repair episode, approval/delivery or live provider command
-has been implemented. Those remain the next application work.
 
 ## First consumer-directed parser construction episode
 
@@ -397,15 +324,6 @@ browser Workers. The environmental trace is reference → model → candidate pr
 the model request is observed only after reference completion. The probe executes
 one candidate process under the qualified facility (plus two qualification
 processes). No provider network call or paid inference ran.
-
-`zig build check` passes 258 steps / 123 tests. Reproduce the application with
-`zig build parser-construction-images`, then
-`node test/agent4/parser_construction.mjs WORLD_ENTRY KERNEL`. Optional arguments
-`WASMTIME_PEER NATIVE_TOOL BROWSER_TOOLS ENGINE` exercise the existing full engine
-harness. This remains the first construction episode: candidate revision,
-completion and authoritative full acceptance, retained idle ownership and local
-cleanup in this application, assessment policy replacement, exact approval and
-conditional delivery are still required. It does not yet complete parser synthesis.
 
 ## Revision and complete-candidate acceptance
 
@@ -441,15 +359,6 @@ A forged passed-but-incomplete acceptance result is rejected as unresolved.
 `zig build check` passes 258 steps / 123 tests. Existing qualified evaluator
 implementation and check inputs are unchanged.
 
-Run `parser_construction.mjs WORLD_ENTRY KERNEL` for the two-round repair. Its
-optional existing engine arguments exercise the same cross-engine harness.
-The final optional scenario argument accepts `zero`, `one`, or `incomplete` for
-the bounded-stop and forged-report witnesses. The returned report remains ordinary
-evidence, not approval or delivery authority. Live target revalidation, approval,
-conditional fixture application, intent handling, isolated assessment/completion
-control, local disposal/cleanup variants and the remaining comparisons/reviews
-are still required before milestone completion.
-
 ## Private completion acceptance boundary
 
 Exploratory components now receive `agent.parser.probe.v1`, whose adapter refuses
@@ -476,12 +385,6 @@ fragment, rejects a complete parser with wrong error offsets, then validates the
 third version. It performs one reference observation, three model requests and
 569 candidate executions (plus two qualification executions); no paid inference.
 The current Program is 11,354 bytes. `zig build check` passes 261 steps / 123 tests.
-
-The `forged` and `full-repair` scenarios in `parser_construction.mjs` reproduce the
-new negatives and re-entry case. Firefox verification of this newest boundary is
-not rerun here; its earlier repair/transfer evidence is scoped to the earlier
-Program. Live-target evidence, approval and conditional fixture replacement remain
-the next authority-bearing implementation steps.
 
 ## Live target, exact approval and conditional application
 
@@ -515,15 +418,6 @@ runs 539 candidate processes plus two qualification executions. Provider and
 principal responses are explicitly synthetic fixture responses; no paid inference
 or real-user-data mutation occurs.
 
-`zig build check` passes 269 steps / 123 tests. Reproduce the standalone gate with
-`zig build parser-delivery-images` and
-`node test/agent4/parser_delivery.mjs WORLD_ENTRY KERNEL`. The integrated driver
-accepts `apply` as its final scenario argument; `repair` returns the reviewable
-artifact after live read. Firefox has not been rerun for this newest delivery
-Program. General owned-channel composition, intent ambiguity, generic
-assessment selection, broader proof/failure sweeps, strategy/runtime comparisons,
-opt-in live configuration and serial reviews remain unfinished.
-
 ## Retained endpoints around parser work
 
 Agent now authenticates Boundary `cd457113d2450f35880fe4a0d8e8f78637bd19e0`
@@ -554,11 +448,6 @@ and Firefox Worker agree across eight transfers and nine destroyed Workers. The
 pending request can be observed again after cancellation; this is not counted as a
 second release execution. Both cases use one real candidate process and two
 executor qualification processes; model and lifetime leaves remain synthetic.
-
-Reproduce with `zig build parser-construction-images`, then
-`node test/agent4/parser_construction.mjs WORLD_ENTRY KERNEL WASMTIME_PEER NATIVE_TOOL BROWSER_TOOLS chromium retained-one`
-or the same command with `firefox retained-cancel`. Empty peer/tool arguments select
-Node-only execution. The ordinary `link` application has no retained fixture owners.
 
 This establishes retained owned endpoints around the real nested application and
 local disposal returning to an active owner. The local-abandonment construction below extends it to the suspended parser chain.
@@ -645,16 +534,6 @@ Reproduce setup with `node tools/agent4/setup.mjs --work-dir .agent4-recursive-i
 The same command with `--verify-only --offline` authenticates the completed setup
 without building or downloading. Its returned World source/runtime paths are the
 normal `-Dworld-source` and `-Dworld-runtime` inputs for the integration target.
-
-The first combined `check check-agent4-integration` run reached 326/330 steps and
-passed 187 Zig tests, but correctly failed its source-package test because a Node
-test-runner context leaked into nested Node invocations. Direct Node test commands
-in the build now remove only `NODE_TEST_CONTEXT`. The assertion that nested tests
-must actually execute was retained. The failed integration lane was rerun through
-`tools/agent4/check.mjs integration`: all 86 Node tests pass, followed by the dialogue,
-multi-shot, document, 38 clarification cases and independent embedding commands.
-All six commands returned zero; dependency snapshots before and after agree. This
-is a corrected-lane result, not a claim that the original failed aggregate passed.
 
 The parser's local-abandonment witness also ran freshly against the setup-produced
 runtime package: real reference observation, suspended participant cleanup, local
@@ -745,14 +624,6 @@ processes plus two qualification processes, no approval or target write. The sam
 three-response flow passes through the packaged command and actual provider adapter
 using a credential-free local HTTP fixture. No paid inference or live quality study.
 
-Validation: check plus emit-agent4 passes 275 steps / 123 tests; parser CLI tests pass.
-Reproduce with `parser_construction.mjs` scenarios `experiment`, `experiment-invalid`,
-`experiment-stale`, `experiment-assessment`, `experiment-before`,
-`experiment-unchanged`, and `experiment-repair`. Round naming was clarified without
-changing the tested Program bytes. Constraint/intent routing, generic selection,
-complete regression-history/revalidation, broader composition/proof/economic work
-and serial reviews remain open. No global completion claim is made.
-
 ## Explicit EOF intent before construction
 
 `agent.parser_intent` reuses the consequence-sensitive classifier and resolver for
@@ -786,12 +657,6 @@ passed Chromium. The final packaged CLI uses the local provider adapter, asks fo
 emit-EOF choice, performs three model responses and three checks, and produces the
 correct alternate artifact; unsure and closed stdin make no model call. Paid calls
 were not run. Clarification is separate from final approval/delivery.
-
-`zig build check check-parser-intent` passes 275 steps / 123 Zig tests under the
-normal authenticated runtime. `check-parser-eof-executor` owns the real alternate
-executor test. Packaged CLI tests pass. Broader constraint routing, generic selection,
-owned channel composition, complete observation history/revalidation, matched strategy
-and runtime economics, and serial reviews remain open.
 
 ## Sequential consumer-supplied selection
 
@@ -830,13 +695,6 @@ published. The normal numerical Program is 1,564 bytes. Native, Node, Wasmtime a
 Chromium agree using actual destination states; 74 Workers are destroyed across the
 cases. This is a finite mechanism witness, not an optimality or live-quality claim.
 
-`check-selection` includes construction/allocation-failure and invalid-schema/capacity
-checks. `check-selection-runtime` runs the numerical flow against an authenticated
-World. The aggregate with this runtime lane passes 289 steps / 125 tests. Existing
-parser behavior is unchanged; integrating this generic selection API into its
-consumer-supplied assessment strategy remains open, as do the other stated
-composition, regression-history, economic and serial-review requirements.
-
 ### Agent adoption of composed exchange owners
 
 Agent now authenticates Boundary `5a8aa24bb179bc8defaa896ea776605261ed6539`
@@ -853,15 +711,6 @@ it rejects consuming that successor twice and rejects write authority reachable
 through retained cleanup during assessment even when the effect is explicitly
 listed. The otherwise identical non-assessment write case admits, so rejection
 is not an unsupported-shape shortcut.
-
-`zig build check-composed-owners-runtime -Dworld-runtime=RUNTIME -Dworld-source=SOURCE`
-executes the 994-byte image on the authenticated generic kernel. Thirteen fresh
-Node/WASM restores include both cleanup suspensions; owners release once in order
-`2, 1`, and terminal working live memory is zero. This focused adoption test does
-not add a separately compiled Agent pipeline or establish general owned
-hyperfunction composition. Boundary's earlier three-part, sibling, cancellation,
-and cross-engine pipeline results remain separate evidence. Parser selection
-integration and final serial reviews remain unfinished.
 
 ### Separate parser assessment from completion
 
@@ -984,10 +833,6 @@ archive bytes, API files and normal build binding are refreshed together.
 The standard setup and offline verification passed; rebuilt World kernel bytes
 remain `df7fe1ae0ed0de7b2976c98b1534d1d55f4c341b7148837ce32f42ed8d011084`.
 
-The full normal `check-agent4-integration` run uses this authenticated tuple with
-two build jobs. Its result is tracked separately from the setup and focused
-witnesses; neither setup success nor prior sliced checks establish full integration.
-
 The remaining-acceptance audit distinguishes required work from optional research.
 The valid parser-specific alternate-consumer witness remains unproved by the
 current normal/forged consumer objects; numerical/general consumer swaps and
@@ -1034,14 +879,6 @@ first attempt to nest the candidate sandbox under source denial was unavailable
 (`sandbox_apply: Operation not permitted`); no unsandboxed candidate fallback was
 used. The adopted split reuses the existing external-tool/native-invocation seam.
 
-`zig build check-parser-source-free -Dworld-runtime=RUNTIME -Dworld-source=SOURCE`
-passed 197 steps. Both source-denied executions performed the actual reciprocal
-partial-construction episode: default one probe/five fresh native transfers;
-alternate two probes/seven transfers. They return partial reports, not accepted
-artifacts. The complete acceptance/delivery runs are separate evidence. The
-source-denied path does not measure native working-live memory; no zero-memory
-claim is inferred from process exit.
-
 The alternate consumer's full path also passed native/Node/Wasmtime/Chromium
 execution through 25 actual destination-State transfers and 26 fresh Workers.
 It completed two model contributions, three checks, 540 candidate processes and
@@ -1055,18 +892,6 @@ unproved parser-consumer-swap audit item with executed evidence. It does not sta
 or complete the serial-review inventory, nor replace the final requirement audit.
 
 ### Unsupported circular-demand discriminator
-
-A checked `consumer-circular` object deliberately asks its producer back without
-supplying reference evidence. It links through the normal participant path.
-`check-parser-circular` executes eight quanta of 97 instructions, transferring the
-actual State between fresh embeddings each time. Every outcome is Progress;
-there are zero model/tool requests and no invented answer or constraint. The
-embedding's explicit work allowance then yields an unresolved report with a
-6,676-byte saved State. A separate cancellation drive completes cancellation and
-releases working ownership. This finite observation is not a divergence/deadlock
-proof or a semantic fuel limit in Boundary. The cyclic test Program is 20,853 bytes.
-The focused build/check passed 48 steps. Production inventory images/components
-were read back against their existing hashes; all 29 remained unchanged.
 
 The normal dependency tuple at that stage was Boundary
 `a3676bef943e2fcea2a2452988b08a2a357e131c` and World
@@ -1096,18 +921,6 @@ added without weakening acceptance; the failing integration group requires
 recovery before acceptance. No paid inference ran.
 
 ### Repeated completed executions and diagnostic recovery
-
-`check-parser-repeated` reuses one resident kernel and one prepared retained-parser
-Program for four completed executions, each returning an explicit unresolved
-result after a real reference observation and one synthetic model contribution.
-Only the task occurrence changes. The same provider ID is reused deliberately.
-Each later task rejects the preceding reference and model reply without changing
-its checkpoint. Cleanup and unrelated retained work still run in the prescribed
-order. Maximum checkpoint size is 8,804 bytes on every run; live working memory
-returns to the prepared baseline of 578,356 bytes after each Session closes.
-Releasing the prepared Program returns working memory to zero. These four runs
-are a bounded ownership/retention observation, not a universal leak proof or four
-accepted parser artifacts. The focused target and package emission passed 199 steps.
 
 The packaged integration recovery exposed a second unresolved selection result.
 It had completed four model calls, four checks and 1,078 candidate executions, but
@@ -1198,14 +1011,6 @@ write. These runs consume the chosen destination's actual State bytes. They do
 not establish the still-pending full integration/strategy matrix or review closeout.
 
 ## Current v2 integration and comparison results
-
-At production head `33a2f2ad8807a59d91325d66d13bbde2426ddb59`, the complete normal
-`check-agent4-integration -j2` target passed 300/300 steps and 64/64 Zig tests.
-Its packaged Node group passed 91/91 tests with no skips, and all six integration
-commands exited zero. The report binds lock digest
-`727dfc07c6317ac3f934850c7c0b643905cf88caf9c8f3b754f1b5aa38556245`.
-Authoring/repeated-task/package proof separately passed 315 steps/130 tests.
-No previous failed or stopped aggregate is relabeled as passing.
 
 The twelve matched strategy cases again produced six accepted artifacts and six
 expected unresolved/stale stops, with zero false completion claims. Successful

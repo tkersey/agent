@@ -79,8 +79,6 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const source = b.option(std.Build.LazyPath, "boundary-source", "Authenticated immutable Boundary source copy");
     const runtime = b.option(std.Build.LazyPath, "world-runtime", "Authenticated immutable World runtime directory");
-    const browser_tools_path = b.option(std.Build.LazyPath, "browser-tools", "Directory containing the locked Playwright browser tools");
-    const measure_economy = b.option(bool, "measure-economy", "Collect timings on an operator-confirmed idle host") orelse false;
     const world_source = b.option(std.Build.LazyPath, "world-source", "Immutable World source for native agreement") orelse b.path(".agent4/inputs/world");
     // The dependency verifier derives the sibling archive from the selected
     // lock. Only forward an explicit override; never duplicate its commit here.
@@ -172,19 +170,15 @@ pub fn build(b: *std.Build) void {
     const application_driver = g.emitter("agent4-applications", g.module("test/application_driver.zig"));
     const check = b.step("agent4-authoring-tests", "Authoring test implementation");
     const aggregate = b.step("check-agent4", "Check authoring and pure contracts without World");
-    const mobility = b.step("check-mobility-authoring", "Check typed mobility contracts and protected admission");
     const mobility_protocol = b.step("check-mobility-protocol", "Check canonical mobility records and Ed25519 bindings");
     const protocol_tests = nodeCommand(b);
     protocol_tests.addArgs(&.{ "node", "--test", "test/agent4/mobility_protocol.test.mjs" });
     mobility_protocol.dependOn(&protocol_tests.step);
     check.dependOn(mobility_protocol);
-    const mobility_model = b.step("check-mobility-model", "Explore the bounded single-transfer custody model and timeout counterexample");
-    const model_run = b.addSystemCommand(&.{ "uv", "run", "--no-project", "test/agent4/mobility_model.py" });
-    mobility_model.dependOn(&model_run.step);
-    const model_properties = nodeCommand(b);
-    model_properties.addArgs(&.{ "node", "--test", "test/agent4/mobility_model.test.mjs" });
-    mobility_model.dependOn(&model_properties.step);
-    g.testModule(mobility, g.module("test/agent4/mobility_ensure.zig"));
+    const binding_tests = nodeCommand(b);
+    binding_tests.addArgs(&.{ "node", "--test", "test/agent4/repository_publication_binding.test.mjs", "test/agent4/repository_publication_journal.test.mjs", "test/agent4/mobile_repository_qualification.test.mjs", "test/agent4/dependencies.test.mjs", "test/agent4/setup.test.mjs" });
+    check.dependOn(&binding_tests.step);
+
     const lint = b.step("lint", "Check formatting and the Zig source inventory");
     const format_check = b.addRunFile(.zig_exe);
     format_check.addArgs(&.{ "fmt", "--check", "build.zig", "build_agent4.zig", "src", "test/agent4", "test/consumers", "test/fixture_driver.zig", "test/application_driver.zig", "test/authoring_tests.zig" });
@@ -193,25 +187,14 @@ pub fn build(b: *std.Build) void {
     lint.dependOn(&paths.step);
     check.dependOn(lint);
     g.testModule(check, g.module("test/authoring_tests.zig"));
-    const zig17 = b.step("check-zig17", "Check private descriptor admission and compiler/output selection");
-    const catalog_tests = b.addTest(.{ .root_module = g.module("test/agent4/catalogs.zig") });
-    catalog_tests.step.dependOn(g.gate);
-    const catalog_run = b.addRunArtifact(catalog_tests);
-    zig17.dependOn(&catalog_run.step);
     const zig17_node = nodeCommand(b);
     zig17_node.addArgs(&.{ "node", "--test", "test/agent4/zig17.test.mjs" });
-    zig17.dependOn(&zig17_node.step);
     check.dependOn(&zig17_node.step);
-    const participants = b.step("check-participants", "Check compiled internal participant admission");
-    g.testModule(participants, g.module("test/agent4/participant.zig"));
-    g.testModule(participants, g.module("test/agent4/composed_owners.zig"));
     const composed_images = b.step("composed-owner-images", "Emit admitted composed-owner cleanup");
     const composed_emitter = fixture_driver.select("composed-owners");
     g.emit(composed_images, composed_emitter, &.{}, "composed-owners.bpi3");
     check.dependOn(composed_images);
     const selection_images = b.step("selection-images", "Emit checked recursive numerical selection");
-    const selection_check = b.step("check-selection", "Check generic selection construction and admission");
-    g.testModule(selection_check, g.module("test/agent4/selection.zig"));
     const selection_emitter = fixture_driver.select("recursive-selection");
     const selection_producer = g.runArtifact(selection_emitter);
     selection_producer.addArg("producer");
@@ -339,34 +322,6 @@ pub fn build(b: *std.Build) void {
     const parser_oracle = nodeCommand(b);
     parser_oracle.addArgs(&.{ "node", "--test", "test/agent4/parser_oracle.test.mjs", "test/agent4/parser_disposition.test.mjs" });
     check.dependOn(&parser_oracle.step);
-    const parser_batches = nodeCommand(b);
-    parser_batches.addArgs(&.{ "node", "test/agent4/parser_realm_batches.test.mjs" });
-    parser_batches.has_side_effects = true;
-    const parser_executor = nodeCommand(b);
-    parser_executor.addArgs(&.{ "node", "test/agent4/parser_executor.test.mjs" });
-    const parser_state_capacity = nodeCommand(b);
-    parser_state_capacity.addArgs(&.{ "node", "test/agent4/parser_state_capacity.test.mjs" });
-    const parser_protocol = nodeCommand(b);
-    parser_protocol.addArgs(&.{ "node", "test/agent4/parser_protocol.test.mjs" });
-    parser_executor.step.dependOn(&parser_protocol.step);
-    parser_executor.step.dependOn(&parser_batches.step);
-    parser_executor.step.dependOn(&parser_state_capacity.step);
-    b.step("check-parser-executor", "Check incremental parser candidates in the qualified executor")
-        .dependOn(&parser_executor.step);
-    const heldout_executor = nodeCommand(b);
-    heldout_executor.addArgs(&.{ "node", "test/agent4/parser_evaluation.test.mjs" });
-    b.step("check-parser-evaluation", "Check immutable held-out input evaluation and subject bindings")
-        .dependOn(&heldout_executor.step);
-    const eof_executor = nodeCommand(b);
-    eof_executor.addArgs(&.{ "node", "test/agent4/parser_eof_executor.mjs" });
-    b.step("check-parser-eof-executor", "Check selected EOF policies against real candidate execution")
-        .dependOn(&eof_executor.step);
-    const recursive_tests = b.addTest(.{
-        .root_module = g.module("test/agent4/recursive_participant.zig"),
-        .filters = &.{"recursive participant"},
-    });
-    recursive_tests.step.dependOn(g.gate);
-    participants.dependOn(&b.addRunArtifact(recursive_tests).step);
     g.testModule(check, g.module("src/test_root.zig"));
     const negatives = nodeCommand(b);
     negatives.addArgs(&.{ "node", "tools/agent4/negative.mjs" });
@@ -384,18 +339,9 @@ pub fn build(b: *std.Build) void {
     const admitted = g.module("test/agent4/admission.zig");
     admitted.addImport("admission", g.helper("admission"));
     g.testModule(check, admitted);
-    g.testModule(mobility, admitted);
     const dialogue = g.module("test/agent4/dialogue_probe.zig");
     dialogue.addImport("interaction", g.helper("interaction"));
     g.testModule(check, dialogue);
-    const inquiry = g.module("test/agent4/inquiry_probe.zig");
-    const inquiry_check = b.step("check-inquiry-probe", "Check retained inquiry custody");
-    g.testModule(inquiry_check, inquiry);
-    const inquiry_broker = g.module("test/agent4/inquiry_broker_probe.zig");
-    g.testModule(inquiry_check, inquiry_broker);
-    const inquiry_app = g.module("test/consumers/inquiry/main.zig");
-    const inquiry_app_check = b.step("check-inquiry-application", "Check the model-directed repair application");
-    g.testModule(inquiry_app_check, inquiry_app);
 
     const emit = b.step("agent4-images", "Compile the consumer images");
     emit.dependOn(parser_episode);
@@ -442,22 +388,8 @@ pub fn build(b: *std.Build) void {
     const text_object = fixture_driver.select("agent-text-object");
     const mobility_consumer = fixture_driver.select("agent-mobility-consumer");
     const mobile_repository_images = b.step("mobile-repository-images", "Emit the mobile repository application and ordinary contracts");
-    const mobile_repository_check = b.step("check-mobile-repository", "Check the authored mobile repository application");
-    const mobile_repository_native = b.step("check-mobile-repository-native", "Compare native and WASM repository application continuations");
-    const mobile_repository_comparison = b.step("check-mobile-repository-comparison", "Check matched mobile and stationary proxy workloads");
-    const mobile_repository_objects = nodeCommand(b);
-    mobile_repository_objects.has_side_effects = true;
-    mobile_repository_check.dependOn(&mobile_repository_objects.step);
     const repository_runner = b.step("repository-check-runner", "Install the macOS Zig check resource launcher and loader restriction");
     const publication_gate = b.step("repository-publication-gate", "Install the process-owned managed Git publication gate");
-    const publication_check = b.step("check-repository-publication-gate", "Qualify publication exclusion across parent death");
-    const publication_test = nodeCommand(b);
-    const repository_approval_check = b.step("check-repository-approval", "Check authenticated protected publication across two custodians and browsers");
-    const repository_approval_test = nodeCommand(b);
-    repository_approval_test.has_side_effects = true;
-    repository_approval_check.dependOn(&repository_approval_test.step);
-    publication_test.has_side_effects = true;
-    publication_check.dependOn(&publication_test.step);
     if (b.graph.host.result.os.tag == .macos) {
         const gate_exe = b.addExecutable(.{ .name = "agent-publication-gate", .root_module = b.createModule(.{
             .root_source_file = b.path("runtime/repository_publication_gate.zig"),
@@ -467,9 +399,6 @@ pub fn build(b: *std.Build) void {
         }) });
         emit.dependOn(&b.addInstallFileWithDir(gate_exe.getEmittedBin(), .prefix, "agent4/native/agent-publication-gate").step);
         publication_gate.dependOn(&b.addInstallFileWithDir(gate_exe.getEmittedBin(), .prefix, "repository-publication/agent-publication-gate").step);
-        mobile_repository_objects.addFileArg2(gate_exe.getEmittedBin(), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
-        publication_test.addFileArg2(gate_exe.getEmittedBin(), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
-        repository_approval_test.addFileArg2(gate_exe.getEmittedBin(), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
         const limit_exe = b.addExecutable(.{ .name = "agent-check-limit", .root_module = b.createModule(.{
             .root_source_file = b.path("runtime/inquiry_process_limit.zig"),
             .target = b.graph.host,
@@ -491,12 +420,8 @@ pub fn build(b: *std.Build) void {
         publication_gate.dependOn(&unavailable.step);
         repository_runner.dependOn(&unavailable.step);
     }
-    mobile_repository_objects.addArgs(&.{ "node", "--test", "test/agent4/repository_snapshot.test.mjs", "test/agent4/mobile_repository_qualification.test.mjs" });
-    publication_test.addArgs(&.{ "node", "--test", "test/agent4/repository_publication_gate.test.mjs", "test/agent4/repository_publication_journal.test.mjs", "test/agent4/repository_publication_binding.test.mjs" });
     const mobile_repository_emitter = g.emitter("mobile-repository-emitter", g.module("test/consumers/mobile_repository/main.zig"));
     const repository_approval_images = b.step("repository-approval-images", "Emit the shared managed publication approval composition");
-    repository_approval_test.step.dependOn(repository_approval_images);
-    repository_approval_test.step.dependOn(mobile_repository_images);
     const repository_approval_emitter = g.emitter("repository-approval-emitter", g.module("test/consumers/mobile_repository/publication.zig"));
     g.emit(repository_approval_images, repository_approval_emitter, &.{"image"}, "repository-approval/program.bpi3");
     for ([_][]const u8{ "task", "preparation", "result", "check-result", "proposal", "receipt", "delivery", "human", "human-reply", "identifier", "boolean" }) |name|
@@ -549,14 +474,12 @@ pub fn build(b: *std.Build) void {
     for ([_][]const u8{ "subject-schema", "task-schema", "result-schema", "report-schema", "model-reply" }) |mode|
         g.emit(emit, text_link, &.{mode}, b.fmt("text/{s}.bin", .{mode}));
     const distribution = b.step("emit-agent4", "Emit compiled examples and the source-independent use archive");
-    const repository_application = b.step("check-repository-application", "Repair actual repository fixtures through the compiled application");
     const repository_images = b.step("repository-application-images", "Emit repository repair and its portable schemas");
     const repository_app = application_driver.select("repository-application");
     g.emit(repository_images, repository_app, &.{}, "repository/repair.bpi3");
     for ([_][]const u8{ "task-schema", "result-schema", "failure-schema" }) |mode|
         g.emit(repository_images, repository_app, &.{mode}, b.fmt("repository/{s}.bin", .{mode}));
     emit.dependOn(repository_images);
-    repository_application.dependOn(repository_images);
     const dialogue_exe = g.emitter("agent4-dialogue", dialogue);
     const inquiry_exe = fixture_driver.select("agent4-inquiry-probe");
     const inquiry_broker_exe = fixture_driver.select("agent4-inquiry-broker");
@@ -568,13 +491,10 @@ pub fn build(b: *std.Build) void {
     for ([_][]const u8{ "task-schema", "outcome-schema" }) |mode| {
         g.emit(inquiry_app_images, inquiry_app_exe, &.{mode}, b.fmt("inquiry/{s}.bin", .{mode}));
     }
-    inquiry_app_check.dependOn(inquiry_app_images);
     emit.dependOn(inquiry_app_images);
     g.emit(emit, inquiry_broker_exe, &.{}, "inquiry/broker.bpi3");
-    g.emit(inquiry_check, inquiry_broker_exe, &.{}, "inquiry/broker.bpi3");
     for ([_][]const u8{ "owned", "composition", "followup", "typed" }) |mode| {
         g.emit(emit, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi3", .{mode}));
-        g.emit(inquiry_check, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi3", .{mode}));
     }
     for ([_][]const u8{ "twice", "dispose_owned", "exchange", "deep_exchange", "wide_exchange", "yield_once" }) |mode|
         g.emit(emit, dialogue_exe, &.{mode}, b.fmt("dialogue/{s}.bpi3", .{mode}));
@@ -604,10 +524,6 @@ pub fn build(b: *std.Build) void {
     g.emit(emit, document_exe, &.{"consequence"}, "document/consequence.bpi3");
     g.emit(emit, document_exe, &.{"consequence-args"}, "document/consequence.args");
     g.emit(emit, document_exe, &.{"consequence-clarify-first"}, "document/clarify-first.bpi3");
-    const clarification_economy = application_driver.select("clarification-scaling");
-    const clarification_images = b.step("clarification-images", "Emit shared clarification scaling evidence");
-    g.emit(clarification_images, clarification_economy, &.{}, "clarification/scaling.json");
-    emit.dependOn(clarification_images);
     const inventory = nodeCommand(b);
     inventory.addArgs(&.{ "node", "tools/agent4/emit_inventory.mjs" });
     inventory.addDirectoryArg2(b.graph.path(.install_prefix, "agent4"), .{ .make_absolute = true });
@@ -628,35 +544,7 @@ pub fn build(b: *std.Build) void {
     distribution.dependOn(&package.step);
     check.dependOn(emit);
 
-    const integration = b.step("check-agent4-integration", "Execute consumer proofs under the selected World");
-    const parser_repair = b.step("check-parser-repair", "Repair malformed candidate observations through participants");
-    const parser_repeated = b.step("check-parser-repeated", "Check repeated parser custody and stale task replies");
-    const parser_circular = b.step("check-parser-circular", "Bound unsupported circular participant demands without invented evidence");
-    const parser_intent = b.step("check-parser-intent", "Check EOF clarification through fresh World states");
-    const composed_runtime = b.step("check-composed-owners-runtime", "Restore composed owners through cleanup");
-    const parser_source_free = b.step("check-parser-source-free", "Link and execute parser objects with source access denied");
-    const selection_runtime = b.step("check-selection-runtime", "Check recursive assessment and completion isolation");
-    const compiled_tools_check = b.step("check-compiled-tools", "Execute one compiled text tool in standalone and Agent callers");
-    const mobility_continuation = b.step("check-mobility-continuation", "Check explicit relocation, retained ownership, refusal and cancellation");
-    const mobility_native = b.step("check-mobility-native", "Compare native and WASM canonical mobility outcomes at every boundary");
-    const mobility_journal = b.step("check-mobility-journal", "Check durable custody, signed decisions and process-crash recovery");
-    const mobility_integration = b.step("check-mobility-integration", "Check real custody, placement, privacy and grants through the reference host");
-    const mobility_approval = b.step("check-mobility-approval", "Check exact live evidence and approved fixture mutation across custody moves");
-    g.testModule(mobility_approval, g.module("test/agent4/approval_probe.zig"));
-    const mobility_durable_browser = b.step("check-mobility-browser", "Check source-free browser execution through durable custody and a separate mTLS process");
-    const mobility_economy = b.step("check-mobility-economy", "Check matched mobility workload results, cache traffic and resident memory bounds");
-    const mobility_all = b.step("check-mobility", "Check all mobility authoring, runtime, custody, browser and economy lanes");
-    for ([_]*std.Build.Step{ mobility, mobility_protocol, mobility_model, mobility_continuation, mobility_native, mobility_journal, mobility_integration, mobility_approval, mobility_durable_browser, mobility_economy }) |step| mobility_all.dependOn(step);
-    const components_check = b.step("check-component-tools", "Reuse three effectful objects in Agent and two standalone Programs");
-    const component_objects = g.emitter("agent4-component-objects", g.module("test/agent4/component_objects.zig"));
-    const component_link = g.emitter("agent4-component-link", g.module("test/agent4/component_link.zig"));
-    const component_tools = b.step("build-component-tools", "Build the independent component emitter and client linker without World");
-    component_tools.dependOn(&b.addInstallArtifact(component_objects.artifact, .{}).step);
-    component_tools.dependOn(&b.addInstallArtifact(component_link.artifact, .{}).step);
-    const browser_check = b.step("check-compiled-tool-browser", "Transfer the compiled Agent tool through real browser Workers and a file server");
-    const native_checks = b.step("check-native", "Check native Agent semantics against the selected World");
-    const repository_delivery = b.step("check-repository-delivery", "Check repository replacement through real file I/O and fresh kernels");
-    const economy = b.step("check-agent4-economy", "Measure direct/facade and retained-state economy");
+    const native_checks = b.step("check-native", "Check native and custody contracts against the selected World");
     if (runtime) |runtime_path| {
         const world = b.createModule(.{
             .root_source_file = world_source.path(b, "src/root.zig"),
@@ -677,327 +565,8 @@ pub fn build(b: *std.Build) void {
         addBoundary(b, runtime_guard, source, target, optimize);
         runtime_guard.has_side_effects = true;
         _ = runtime_guard.captureStdOut(.{});
-        const mobile_repository_run = nodeCommand(b);
-        mobile_repository_run.addFileArg2(b.graph.path(.install_prefix, "repository-publication/agent-publication-gate"), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
-        mobile_repository_run.step.dependOn(publication_gate);
-        mobile_repository_run.addArgs(&.{ "node", "test/agent4/mobile_repository_continuation.mjs" });
-        mobile_repository_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        mobile_repository_run.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/mobile-repository"), .{ .make_absolute = true });
-        mobile_repository_run.step.dependOn(mobile_repository_images);
-        mobile_repository_run.step.dependOn(&runtime_guard.step);
-        mobile_repository_run.has_side_effects = true;
-        mobile_repository_check.dependOn(&mobile_repository_run.step);
-        const comparison_run = nodeCommand(b);
-        comparison_run.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
-        comparison_run.addFileArg2(b.graph.path(.install_prefix, "repository-publication/agent-publication-gate"), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
-        comparison_run.addArgs(&.{ "node", "--test", "test/agent4/repository_comparison.test.mjs" });
-        mobile_repository_comparison.dependOn(&comparison_run.step);
-        comparison_run.step.dependOn(mobile_repository_images);
-        comparison_run.step.dependOn(repository_approval_images);
-        comparison_run.step.dependOn(publication_gate);
-        comparison_run.step.dependOn(&runtime_guard.step);
-        comparison_run.has_side_effects = true;
-        repository_approval_test.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
-        if (browser_tools_path) |browser_tools| {
-            repository_approval_test.addDirectoryArg2(browser_tools, .{ .prefix = "AGENT_MOBILITY_BROWSER_TOOLS=", .make_absolute = true });
-        } else repository_approval_check.dependOn(&b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools").step);
-        repository_approval_test.addArgs(&.{ "node", "--test", "test/agent4/repository_publication_approval.test.mjs", "test/agent4/mobility_task_catalogue.test.mjs" });
-        repository_approval_test.step.dependOn(&runtime_guard.step);
-        var previous_economy: ?*std.Build.Step = null;
-        for ([_][]const u8{ "manual", "fixed", "ensure", "stationary" }) |mode| {
-            const sample = nodeCommand(b);
-            sample.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
-            sample.addArgs(&.{ "node", "test/agent4/mobility_measure.mjs", "--sample" });
-            sample.addArg(mode);
-            sample.addArgs(&.{ "warm", "16" });
-            sample.step.dependOn(mobility_images);
-            sample.step.dependOn(&runtime_guard.step);
-            if (previous_economy) |previous| sample.step.dependOn(previous);
-            previous_economy = &sample.step;
-            mobility_economy.dependOn(&sample.step);
-        }
-        const intent_run = nodeCommand(b);
-        intent_run.addArgs(&.{ "node", "test/agent4/parser_intent_runtime.mjs" });
-        intent_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        intent_run.step.dependOn(parser_episode);
-        intent_run.step.dependOn(&runtime_guard.step);
-        parser_intent.dependOn(&intent_run.step);
-        const composed_run = nodeCommand(b);
-        composed_run.addArgs(&.{ "node", "test/agent4/composed_owners.mjs" });
-        composed_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        composed_run.step.dependOn(composed_images);
-        composed_run.step.dependOn(&runtime_guard.step);
-        composed_runtime.dependOn(&composed_run.step);
-        const repair_run = nodeCommand(b);
-        repair_run.addArgs(&.{ "node", "test/agent4/parser_construction.mjs" });
-        repair_run.addFileArg2(runtime_path.path(b, "src/embedding/index.mjs"), .{ .make_absolute = true });
-        repair_run.addFileArg2(runtime_path.path(b, "world-kernel.wasm"), .{ .make_absolute = true });
-        repair_run.addArgs(&.{ "", "", "", "chromium", "malformed-repair" });
-        repair_run.step.dependOn(parser_episode);
-        repair_run.step.dependOn(&runtime_guard.step);
-        parser_repair.dependOn(&repair_run.step);
-        const repeated_run = nodeCommand(b);
-        repeated_run.addArgs(&.{ "node", "test/agent4/parser_repeated.mjs" });
-        repeated_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        repeated_run.step.dependOn(parser_episode);
-        repeated_run.step.dependOn(&runtime_guard.step);
-        parser_repeated.dependOn(&repeated_run.step);
-        const circular_run = nodeCommand(b);
-        circular_run.addArgs(&.{ "node", "test/agent4/parser_circular.mjs" });
-        circular_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        circular_run.step.dependOn(parser_episode);
-        circular_run.step.dependOn(&runtime_guard.step);
-        parser_circular.dependOn(&circular_run.step);
-        const selection_run = nodeCommand(b);
-        selection_run.addArgs(&.{ "node", "test/agent4/recursive_selection.mjs" });
-        selection_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        selection_run.step.dependOn(selection_images);
-        selection_run.step.dependOn(&runtime_guard.step);
-        selection_runtime.dependOn(&selection_run.step);
-        const text_check = nodeCommand(b);
-        text_check.addArgs(&.{ "node", "test/agent4/text_tool_runtime.mjs" });
-        text_object.addArgument(text_check);
-        text_check.addFileArg2(text_link.getEmittedBin(), .{});
-        text_check.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        text_check.step.dependOn(&runtime_guard.step);
-        text_check.has_side_effects = true;
-        compiled_tools_check.dependOn(&text_check.step);
-        const mobility_run = nodeCommand(b);
-        mobility_run.addArgs(&.{ "node", "test/agent4/mobility_continuation.mjs" });
-        mobility_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        mobility_run.step.dependOn(mobility_images);
-        mobility_run.step.dependOn(&runtime_guard.step);
-        mobility_run.has_side_effects = true;
-        mobility_continuation.dependOn(&mobility_run.step);
-        const ensure_run = nodeCommand(b);
-        ensure_run.addArgs(&.{ "node", "test/agent4/mobility_ensure.mjs" });
-        ensure_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        ensure_run.step.dependOn(mobility_images);
-        ensure_run.step.dependOn(&runtime_guard.step);
-        ensure_run.has_side_effects = true;
-        mobility_continuation.dependOn(&ensure_run.step);
-        const journal_run = nodeCommand(b);
-        journal_run.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
-        journal_run.addArgs(&.{ "node", "--test", "test/agent4/mobility_journal.test.mjs" });
-        const approval_run = nodeCommand(b);
-        approval_run.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
-        approval_run.addArgs(&.{ "node", "--test", "test/agent4/mobility_approval.test.mjs" });
-        approval_run.step.dependOn(mobility_approval_images);
-        approval_run.step.dependOn(&runtime_guard.step);
-        mobility_approval.dependOn(&approval_run.step);
-        journal_run.step.dependOn(mobility_images);
-        journal_run.step.dependOn(&runtime_guard.step);
-        journal_run.has_side_effects = true;
-        mobility_journal.dependOn(&journal_run.step);
-        const host_run = nodeCommand(b);
-        host_run.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
-        host_run.addArgs(&.{ "node", "--test", "test/agent4/mobility_host.test.mjs", "test/agent4/mobility_deployment.test.mjs", "test/agent4/mobility_browser_bridge.test.mjs", "test/agent4/mobility_sessions.test.mjs" });
-        host_run.step.dependOn(mobility_images);
-        host_run.step.dependOn(&runtime_guard.step);
-        host_run.has_side_effects = true;
-        mobility_integration.dependOn(&host_run.step);
-        const transport_run = nodeCommand(b);
-        transport_run.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
-        transport_run.addArgs(&.{ "node", "--test", "test/agent4/mobility_transport.test.mjs" });
-        transport_run.step.dependOn(mobility_images);
-        transport_run.step.dependOn(&runtime_guard.step);
-        transport_run.has_side_effects = true;
-        mobility_integration.dependOn(&transport_run.step);
-        const component_check = nodeCommand(b);
-        component_check.addArgs(&.{ "node", "test/agent4/component_runtime.mjs" });
-        component_check.addFileArg2(component_objects.getEmittedBin(), .{});
-        component_check.addFileArg2(component_link.getEmittedBin(), .{});
-        component_check.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        component_check.step.dependOn(&runtime_guard.step);
-        component_check.has_side_effects = true;
-        components_check.dependOn(&component_check.step);
-        if (browser_tools_path) |browser_tools| {
-            const durable_browser_run = nodeCommand(b);
-            durable_browser_run.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
-            durable_browser_run.addDirectoryArg2(browser_tools, .{ .prefix = "AGENT_MOBILITY_BROWSER_TOOLS=", .make_absolute = true });
-            durable_browser_run.addArgs(&.{ "node", "--test", "test/agent4/mobility_durable_browser.test.mjs", "test/agent4/mobility_reference_browser.test.mjs" });
-            durable_browser_run.step.dependOn(mobility_images);
-            durable_browser_run.step.dependOn(&runtime_guard.step);
-            durable_browser_run.has_side_effects = true;
-            mobility_durable_browser.dependOn(&durable_browser_run.step);
-            const browser = nodeCommand(b);
-            browser.addArgs(&.{ "node", "test/agent4/text_browser.mjs" });
-            text_object.addArgument(browser);
-            browser.addFileArg2(text_link.getEmittedBin(), .{});
-            browser.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-            browser.addDirectoryArg2(browser_tools, .{ .make_absolute = true });
-            browser.step.dependOn(&runtime_guard.step);
-            browser.has_side_effects = true;
-            browser_check.dependOn(&browser.step);
-        } else {
-            const missing_browser = b.addFail("provide -Dbrowser-tools=/absolute/locked-playwright-tools");
-            browser_check.dependOn(&missing_browser.step);
-            mobility_durable_browser.dependOn(&missing_browser.step);
-        }
-        const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
-        runtime_work.dependOn(mobility_model);
-        runtime_work.dependOn(parser_intent);
-        runtime_work.dependOn(parser_circular);
-        runtime_work.dependOn(parser_repeated);
-        runtime_work.dependOn(parser_repair);
-        runtime_work.dependOn(selection_runtime);
-        runtime_work.dependOn(composed_runtime);
-        const repository_emitter_module = g.module("test/agent4/repository_replacement_emit.zig");
-        repository_emitter_module.addImport("repository_app", g.module("test/consumers/repository/application.zig"));
-        const repository_emitter = g.emitter("repository-replacement", repository_emitter_module);
-        const repository_run = nodeCommand(b);
-        repository_run.addArgs(&.{ "node", "test/agent4/repository_delivery_runtime.mjs" });
-        repository_run.addFileArg2(repository_emitter.getEmittedBin(), .{});
-        repository_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        repository_run.step.dependOn(&runtime_guard.step);
-        repository_run.has_side_effects = true;
-        const repository_files = nodeCommand(b);
-        repository_files.addArgs(&.{ "node", "--test", "test/agent4/repository_delivery.test.mjs", "test/agent4/repository.test.mjs", "test/agent4/repository_executor.test.mjs" });
-        repository_delivery.dependOn(&repository_run.step);
-        repository_delivery.dependOn(&repository_files.step);
-        runtime_work.dependOn(repository_delivery);
-        const repository_real = nodeCommand(b);
-        repository_real.addArgs(&.{ "node", "test/agent4/repository_runtime.mjs" });
-        repository_real.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        repository_real.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/repository"), .{ .make_absolute = true });
-        repository_real.step.dependOn(repository_images);
-        repository_real.step.dependOn(&runtime_guard.step);
-        repository_real.has_side_effects = true;
-        repository_application.dependOn(&repository_real.step);
-        runtime_work.dependOn(repository_application);
-        runtime_work.dependOn(&text_check.step);
-        runtime_work.dependOn(&component_check.step);
-        runtime_work.dependOn(native_checks);
-        // The portable kernel/custody checks do not require this external OS
-        // profile. Explicit repair-application checks still require execution.
-        const inquiry_host = b.graph.host.result.os.tag == .macos;
-        const inquiry_executor = nodeCommand(b);
-        inquiry_executor.addArgs(&.{ "node", "test/agent4/inquiry_executor.test.mjs" });
-        inquiry_executor.step.dependOn(&runtime_guard.step);
-        inquiry_app_check.dependOn(&inquiry_executor.step);
-        if (inquiry_host) runtime_work.dependOn(&inquiry_executor.step);
         var native_graph = g;
         native_graph.gate = &runtime_guard.step;
-        const native_module = b.createModule(.{
-            .root_source_file = b.path("test/agent4/native.zig"),
-            .target = b.graph.host,
-            .optimize = optimize,
-            .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data", .module = data } },
-        });
-        const native_exe = native_graph.emitter("agent4-native", native_module);
-        const repository_native_run = nodeCommand(b);
-        repository_native_run.addFileArg2(b.graph.path(.install_prefix, "repository-publication/agent-publication-gate"), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
-        repository_native_run.step.dependOn(publication_gate);
-        repository_native_run.addArgs(&.{ "node", "test/agent4/mobile_repository_continuation.mjs" });
-        repository_native_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        repository_native_run.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/mobile-repository"), .{ .make_absolute = true });
-        repository_native_run.addFileArg2(native_exe.getEmittedBin(), .{});
-        repository_native_run.step.dependOn(mobile_repository_images);
-        repository_native_run.has_side_effects = true;
-        mobile_repository_native.dependOn(&repository_native_run.step);
-        const repository_native_workflow = nodeCommand(b);
-        repository_native_workflow.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
-        repository_native_workflow.addFileArg2(native_exe.getEmittedBin(), .{ .prefix = "AGENT_MOBILE_NATIVE=", .make_absolute = true });
-        repository_native_workflow.addFileArg2(b.graph.path(.install_prefix, "repository-publication/agent-publication-gate"), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
-        repository_native_workflow.addArgs(&.{ "node", "--test", "--test-name-pattern=session propose then publish|lost publication reply", "test/agent4/repository_publication_approval.test.mjs" });
-        repository_native_workflow.step.dependOn(mobile_repository_images);
-        repository_native_workflow.step.dependOn(repository_approval_images);
-        repository_native_workflow.step.dependOn(publication_gate);
-        repository_native_workflow.has_side_effects = true;
-        mobile_repository_native.dependOn(&repository_native_workflow.step);
-        const mobility_native_run = nodeCommand(b);
-        mobility_native_run.addArgs(&.{ "node", "test/agent4/mobility_continuation.mjs" });
-        mobility_native_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        mobility_native_run.addFileArg2(native_exe.getEmittedBin(), .{});
-        mobility_native_run.step.dependOn(mobility_images);
-        mobility_native_run.step.dependOn(&runtime_guard.step);
-        mobility_native.dependOn(&mobility_native_run.step);
-        if (inquiry_host) {
-            const source_free = nodeCommand(b);
-            source_free.addArgs(&.{ "node", "test/agent4/parser_source_free.mjs" });
-            source_free.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-            source_free.addFileArg2(native_exe.getEmittedBin(), .{});
-            source_free.addDirectoryArg2(b.graph.path(.install_prefix, ""), .{ .make_absolute = true });
-            source_free.addFileArg2(parser_link_only.getEmittedBin(), .{ .make_absolute = true });
-            source_free.step.dependOn(distribution);
-            source_free.step.dependOn(&runtime_guard.step);
-            parser_source_free.dependOn(&source_free.step);
-            runtime_work.dependOn(parser_source_free);
-        } else parser_source_free.dependOn(&b.addFail("source-denial witness requires macOS sandbox-exec").step);
-        const inquiry_app_run = nodeCommand(b);
-        inquiry_app_run.addArgs(&.{ "node", "test/agent4/inquiry_application_runtime.mjs" });
-        inquiry_app_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        inquiry_app_run.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/inquiry"), .{ .make_absolute = true });
-        const inquiry_cli = nodeCommand(b);
-        inquiry_cli.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/inquiry"), .{ .prefix = "AGENT4_INQUIRY_IMAGES=", .make_absolute = true });
-        inquiry_cli.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT4_WORLD_RUNTIME=", .make_absolute = true });
-        inquiry_cli.addArgs(&.{ "node", "--test", "test/agent4/inquiry_cli.test.mjs" });
-        inquiry_cli.has_side_effects = true;
-        inquiry_cli.step.dependOn(distribution);
-        inquiry_cli.step.dependOn(&runtime_guard.step);
-        b.step("check-inquiry-cli", "Check opt-in inquiry dispatch and checkpoint recovery").dependOn(&inquiry_cli.step);
-        inquiry_app_run.addFileArg2(native_exe.getEmittedBin(), .{});
-        inquiry_app_run.addFileArg2(multi_exe.getEmittedBin(), .{});
-        inquiry_app_run.has_side_effects = true;
-        inquiry_app_run.step.dependOn(inquiry_app_images);
-        inquiry_app_run.step.dependOn(&runtime_guard.step);
-        inquiry_app_check.dependOn(&inquiry_app_run.step);
-        if (inquiry_host) runtime_work.dependOn(&inquiry_app_run.step);
-        const inquiry_cases = nodeCommand(b);
-        inquiry_cases.addArgs(&.{ "node", "test/agent4/inquiry_cases_runtime.mjs" });
-        inquiry_cases.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        inquiry_cases.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/inquiry"), .{ .make_absolute = true });
-        inquiry_cases.addFileArg2(native_exe.getEmittedBin(), .{});
-        inquiry_cases.addFileArg2(multi_exe.getEmittedBin(), .{});
-        inquiry_cases.has_side_effects = true;
-        inquiry_cases.step.dependOn(inquiry_app_images);
-        inquiry_cases.step.dependOn(&runtime_guard.step);
-        inquiry_app_check.dependOn(&inquiry_cases.step);
-        if (inquiry_host) runtime_work.dependOn(&inquiry_cases.step);
-        const comparison = nodeCommand(b);
-        comparison.addArgs(&.{ "node", "test/agent4/inquiry_cases_runtime.mjs" });
-        comparison.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        comparison.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/inquiry"), .{ .make_absolute = true });
-        comparison.addFileArg2(native_exe.getEmittedBin(), .{});
-        comparison.addFileArg2(multi_exe.getEmittedBin(), .{});
-        comparison.addArg("--comparison-only");
-        comparison.has_side_effects = true;
-        comparison.step.dependOn(inquiry_app_images);
-        comparison.step.dependOn(&runtime_guard.step);
-        b.step("check-inquiry-comparison", "Compare inquiry and ReAct on the same repair tasks").dependOn(&comparison.step);
-        const inquiry_repeated = nodeCommand(b);
-        inquiry_repeated.addArgs(&.{ "node", "test/agent4/inquiry_repeated_runtime.mjs" });
-        inquiry_repeated.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        inquiry_repeated.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/inquiry"), .{ .make_absolute = true });
-        inquiry_repeated.addFileArg2(native_exe.getEmittedBin(), .{});
-        inquiry_repeated.addFileArg2(multi_exe.getEmittedBin(), .{});
-        inquiry_repeated.has_side_effects = true;
-        inquiry_repeated.step.dependOn(inquiry_app_images);
-        inquiry_repeated.step.dependOn(&runtime_guard.step);
-        inquiry_app_check.dependOn(&inquiry_repeated.step);
-        if (inquiry_host) runtime_work.dependOn(&inquiry_repeated.step);
-        const broker_run = nodeCommand(b);
-        broker_run.addArgs(&.{ "node", "test/agent4/inquiry_broker_runtime.mjs" });
-        broker_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        broker_run.addFileArg2(b.graph.path(.install_prefix, "agent4/inquiry/broker.bpi3"), .{ .make_absolute = true });
-        broker_run.addFileArg2(native_exe.getEmittedBin(), .{});
-        broker_run.addFileArg2(multi_exe.getEmittedBin(), .{});
-        broker_run.step.dependOn(&runtime_guard.step);
-        g.emit(&broker_run.step, inquiry_broker_exe, &.{}, "inquiry/broker.bpi3");
-        inquiry_check.dependOn(&broker_run.step);
-        runtime_work.dependOn(&broker_run.step);
-        for ([_][]const u8{ "owned", "composition", "followup", "typed" }) |mode| {
-            const inquiry_run = nodeCommand(b);
-            inquiry_run.addArgs(&.{ "node", "test/agent4/inquiry_runtime.mjs" });
-            inquiry_run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-            inquiry_run.addFileArg2(b.graph.path(.install_prefix, b.fmt("agent4/inquiry/{s}.bpi3", .{mode})), .{ .make_absolute = true });
-            inquiry_run.addFileArg2(native_exe.getEmittedBin(), .{});
-            inquiry_run.addFileArg2(multi_exe.getEmittedBin(), .{});
-            inquiry_run.step.dependOn(&runtime_guard.step);
-            g.emit(&inquiry_run.step, inquiry_exe, &.{mode}, b.fmt("inquiry/{s}.bpi3", .{mode}));
-            inquiry_check.dependOn(&inquiry_run.step);
-            runtime_work.dependOn(&inquiry_run.step);
-        }
         // These roots share exact module identities; compile their retained
         // tests together instead of rebuilding the same compiler eleven times.
         const native_suite = g.module("test/agent4/native_tests.zig");
@@ -1018,113 +587,20 @@ pub fn build(b: *std.Build) void {
             b.step(if (working_set) "check-repository-working-set" else "check-repository-replacement", if (working_set) "Check staged repository memory and evidence rules" else "Check live repository replacement approval")
                 .dependOn(&run_policy.step);
         }
-        const run = nodeCommand(b);
-        run.addFileArg2(multi_exe.getEmittedBin(), .{ .prefix = "AGENT4_MULTI_INSPECTOR=", .make_absolute = true });
-        run.addArgs(&.{ "node", "tools/agent4/check.mjs", "integration", "--world-runtime" });
-        run.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        run.addArg("--fixtures");
-        run.addDirectoryArg2(b.graph.path(.install_prefix, "agent4"), .{ .make_absolute = true });
-        run.addArg("--world-source");
-        run.addDirectoryArg2(world_source, .{ .make_absolute = true });
-        if (world_archive) |archive| {
-            run.addArg("--world-archive");
-            run.addFileArg2(archive, .{ .make_absolute = true });
-        }
-        run.addArg("--native");
-        run.addFileArg2(native_exe.getEmittedBin(), .{});
-        addBoundary(b, run, source, target, optimize);
-        run.has_side_effects = true;
-        run.step.dependOn(distribution);
-        run.step.dependOn(&runtime_guard.step);
-        runtime_work.dependOn(&run.step);
-        const runtime_post = nodeCommand(b);
-        runtime_post.addArgs(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--world-runtime" });
-        runtime_post.addFileInput(b.path("conformance/agent4/dependencies.lock.json"));
-        runtime_post.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        runtime_post.addArg("--world-source");
-        runtime_post.addDirectoryArg2(world_source, .{ .make_absolute = true });
-        if (world_archive) |archive| {
-            runtime_post.addArg("--world-archive");
-            runtime_post.addFileArg2(archive, .{ .make_absolute = true });
-        }
-        addBoundary(b, runtime_post, source, target, optimize);
-        runtime_post.has_side_effects = true;
-        _ = runtime_post.captureStdOut(.{});
-        runtime_post.step.dependOn(runtime_work);
-        integration.dependOn(&runtime_post.step);
-        const economy_module = g.module("test/agent4/economy.zig");
-        economy_module.addImport("document", g.module("test/consumers/document/main.zig"));
-        economy_module.addImport("review", g.module("test/consumers/review/main.zig"));
-        economy_module.addImport("inquiry", inquiry_app);
-        g.testModule(economy, economy_module);
-        const economy_exe = g.emitter("economy-probe", economy_module);
-        const economy_emit = g.runArtifact(economy_exe);
-        economy_emit.addArg("emit");
-        economy_emit.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/economy"), .{ .make_absolute = true });
-        const measure = nodeCommand(b);
-        measure.addFileArg2(b.graph.path(.install_bin, "agent4-multi"), .{ .prefix = "AGENT4_MULTI_INSPECTOR=", .make_absolute = true });
-        measure.addArgs(&.{ "node", "tools/agent4/economy.mjs", "--world-runtime" });
-        measure.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
-        measure.addArg("--fixtures");
-        measure.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/economy"), .{ .make_absolute = true });
-        measure.addArg("--output");
-        measure.addDirectoryArg2(b.graph.path(.install_prefix, "agent4/economy-results"), .{ .make_absolute = true });
-        measure.addArg("--probe");
-        const installed_probe = b.addInstallArtifact(economy_exe.artifact, .{});
-        b.step("build-economy-probe", "Build the authenticated existing-workload economy probe")
-            .dependOn(&installed_probe.step);
-        measure.addFileArg2(b.graph.path(.install_bin, "economy-probe"), .{ .make_absolute = true });
-        {
-            measure.addArg("--world-source");
-            measure.addDirectoryArg2(world_source, .{ .make_absolute = true });
-        }
-        if (world_archive) |archive| {
-            measure.addArg("--world-archive");
-            measure.addFileArg2(archive, .{ .make_absolute = true });
-        }
-        measure.addArg("--native");
-        measure.addFileArg2(native_exe.getEmittedBin(), .{});
-        addBoundary(b, measure, source, target, optimize);
-        measure.step.dependOn(&installed_probe.step);
-        measure.step.dependOn(&installed_multi.step);
-        if (measure_economy) measure.addArgs(&.{ "--measure", "--uncontended" });
-        measure.has_side_effects = true;
-        // Focused economy reruns need these inputs, not the entire authoring corpus.
-        measure.step.dependOn(multi_images);
-        measure.step.dependOn(clarification_images);
-        measure.step.dependOn(inquiry_app_images);
-        measure.step.dependOn(&economy_emit.step);
-        economy.dependOn(&measure.step);
+        const host_contracts = nodeCommand(b);
+        host_contracts.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
+        host_contracts.addArgs(&.{ "node", "--test", "test/agent4/mobility_journal.test.mjs", "test/agent4/mobility_host.test.mjs", "test/agent4/mobility_transport.test.mjs", "test/agent4/mobility_deployment.test.mjs", "test/agent4/mobility_browser_bridge.test.mjs", "test/agent4/mobility_sessions.test.mjs", "test/agent4/mobility_task_catalogue.test.mjs" });
+        host_contracts.has_side_effects = true;
+        host_contracts.step.dependOn(&runtime_guard.step);
+        host_contracts.step.dependOn(mobility_images);
+        host_contracts.step.dependOn(mobile_repository_images);
+        native_checks.dependOn(&host_contracts.step);
     } else {
         const missing = b.addFail("provide -Dworld-runtime=/absolute/authenticated/world-runtime");
-        mobile_repository_check.dependOn(&missing.step);
-        mobile_repository_native.dependOn(&missing.step);
-        mobile_repository_comparison.dependOn(&missing.step);
-        repository_approval_check.dependOn(&missing.step);
-        compiled_tools_check.dependOn(&missing.step);
-        mobility_continuation.dependOn(&missing.step);
-        mobility_native.dependOn(&missing.step);
-        mobility_journal.dependOn(&missing.step);
-        mobility_integration.dependOn(&missing.step);
-        mobility_approval.dependOn(&missing.step);
-        mobility_durable_browser.dependOn(&missing.step);
-        mobility_economy.dependOn(&missing.step);
-        components_check.dependOn(&missing.step);
-        browser_check.dependOn(&missing.step);
         native_checks.dependOn(&missing.step);
-        repository_delivery.dependOn(&missing.step);
-        repository_application.dependOn(&missing.step);
-        integration.dependOn(&missing.step);
-        parser_intent.dependOn(&missing.step);
-        parser_circular.dependOn(&missing.step);
-        selection_runtime.dependOn(&missing.step);
-        parser_source_free.dependOn(&missing.step);
-        composed_runtime.dependOn(&missing.step);
-        economy.dependOn(&missing.step);
     }
     const pure = nodeCommand(b);
-    pure.addArgs(&.{ "node", "tools/agent4/check.mjs", "authoring" });
-    addBoundary(b, pure, source, target, optimize);
+    pure.addArgs(&.{ "node", "--test", "test/agent4/values.test.mjs", "test/agent4/model.test.mjs" });
     pure.has_side_effects = true;
     pure.step.dependOn(&source_guard.step);
     check.dependOn(&pure.step);

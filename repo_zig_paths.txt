@@ -1,14 +1,3 @@
-adequacy/router-policy-v1/build.zig
-adequacy/router-policy-v1/reproducer/build.zig
-adequacy/router-policy-v1/reproducer/main.zig
-adequacy/router-policy-v1/src/application.zig
-adequacy/router-policy-v1/src/definition.zig
-adequacy/router-policy-v1/src/emit_decision_contract.zig
-adequacy/router-policy-v1/src/emit_initial_args.zig
-adequacy/router-policy-v1/src/emit_type_measurements.zig
-adequacy/router-policy-v1/src/epistemics.zig
-adequacy/router-policy-v1/src/epistemics_test.zig
-adequacy/router-policy-v1/src/wasm_main.zig
 build.zig
 build_agent4.zig
 runtime/inquiry_process_limit.zig
@@ -55,8 +44,6 @@ src/text_inspection.zig
 src/tools.zig
 src/value_equality.zig
 test/agent4/admission.zig
-test/agent4/admission_build.zig
-test/agent4/approval_build.zig
 test/agent4/approval_equality.zig
 test/agent4/approval_probe.zig
 test/agent4/authoring_tests.zig
@@ -66,14 +53,9 @@ test/agent4/callable_runtime.zig
 test/agent4/catalogs.zig
 test/agent4/clarification.zig
 test/agent4/compiled_tool.zig
-test/agent4/component_link.zig
-test/agent4/component_objects.zig
 test/agent4/composed_owners.zig
 test/agent4/decision_scopes.zig
-test/agent4/dialogue_build.zig
 test/agent4/dialogue_probe.zig
-test/agent4/economy.zig
-test/agent4/economy_build.zig
 test/agent4/inquiry_broker_probe.zig
 test/agent4/inquiry_probe.zig
 test/agent4/mobility_ensure.zig
@@ -84,9 +66,7 @@ test/agent4/model_runtime_callback.zig
 test/agent4/model_unknown_field.zig
 test/agent4/model_unknown_parameter.zig
 test/agent4/model_unsupported_codec.zig
-test/agent4/multi_build.zig
 test/agent4/multi_probe.zig
-test/agent4/native.zig
 test/agent4/native_tests.zig
 test/agent4/observation.zig
 test/agent4/parser_delivery.zig
@@ -97,7 +77,6 @@ test/agent4/prompt_unknown_field.zig
 test/agent4/recursive_participant.zig
 test/agent4/recursive_selection.zig
 test/agent4/repository_replacement.zig
-test/agent4/repository_replacement_emit.zig
 test/agent4/repository_working_set.zig
 test/agent4/selection.zig
 test/agent4/skill_unknown_field.zig

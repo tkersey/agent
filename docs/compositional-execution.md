@@ -233,10 +233,6 @@ bytes larger in BPI3. This lane measures the public guest path, not native worki
 peaks or live-model usefulness. It uses prescribed model/person inputs and no paid
 inference. Remaining World performance gaps are not waived by these gains.
 
-Reproduce with `tools/agent4/benchmark-clarification.mjs`, explicit immutable
-Agent source/runtime/image paths and a fresh output directory per process.
-Temporary predecessor installations and generated measurements are removed.
-
 ## Component build costs
 
 The build lanes were refreshed on Agent a9d1028 / Boundary 6c59436, using the normal
@@ -279,15 +275,6 @@ For an already-built installation256 producer, two alternating process windows
 (three warmups, nine samples per side) give medians 29.45 / 29.38 ms for BPC1 and
 4.46 / 4.42 ms for BPI3. Complete images are 12,102 / 9,551 bytes. This emission
 improvement does not account for native compiler build time.
-
-Reproduce the component lane with `zig build build-component-tools
--Doptimize=ReleaseSafe`, isolated caches and the modes in
-`test/agent4/component_runtime.mjs`. The controlled edit changes
-`Application.increment` to `@as(u64, 1) + @intFromBool(...)`; it does not edit
-components or the emitter. The producer lane uses World's
-`test/v2/build_execution_bench.zig -Dproducer-only=true` and `producer-bench COUNT`.
-These results establish component reuse and the stated build costs, not an
-all-application cold-build improvement.
 
 The September 19 amendment accepts the ten named native latency tradeoffs in
 [World's current results](https://github.com/tkersey/world/blob/feat/compositional-execution/docs/compositional-execution.md#milestone-performance-disposition).
@@ -337,12 +324,6 @@ The unsupported Agent 1–3 DSL fixtures, toy consumers and per-application WASM
 runners are retired. Current authoring admission, portable value, model, scoped
 control and consumer tests retain their supported obligations. Authored budget
 ordering and drop-oldest history have a current fresh-restoration regression.
-
-The existing economy tools and substantive regression fixtures remain available.
-Generated measurements, duplicated qualification receipts and historical experiment
-dumps have been removed. Existing defect records retain historical provenance at
-their recorded Git revisions. The adequacy obstruction and its minimal reproducer
-remain under `adequacy/router-policy-v1/`.
 
 Linked drafts: [Boundary #152](https://github.com/tkersey/boundary/pull/152),
 [World #54](https://github.com/tkersey/world/pull/54),

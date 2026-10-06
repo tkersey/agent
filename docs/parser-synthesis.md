@@ -66,10 +66,6 @@ The current application offers fragment/complete-candidate/experiment/unresolved
 general constraint routing, a held-out
 live comparison and the broader selection/composition obligations remain open.
 
-The optional `test/agent4/parser_package_runtime.mjs` checks zero work and a real
-reference/cleanup transfer using only archive files. Deterministic loopback-provider
-tests establish the transport/control path, not model reasoning quality or live cost.
-
 After the first candidate, `experiment` is also offered. It checks the retained
 candidate under an explicit trace; it cannot request full acceptance or choose a
 new subject/version. A passing probe does not clear a previously observed failure.

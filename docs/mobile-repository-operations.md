@@ -229,18 +229,13 @@ download is available through the same catalogue.
 ## Qualification
 
 ```sh
-node runtime/mobility/cli.mjs qualify-application qualification.json evidence-directory
+node runtime/mobility/cli.mjs qualify-application deployed.json evidence-directory --deployed
 ```
 
-The expensive extracted-package/browser deployment, native Zig sandbox test and
-mutation suites have been deleted, along with their build targets. The package
-qualification lane no longer exists. Product sandbox qualification at startup
-and ordinary inspect/propose/publish execution remain unchanged.
-
-The retained `offline` lane runs application and publication regressions; the
-`browser` lane runs approval and mobility browser checks. These do not restore
-the deleted suites. For local changes, select focused regressions under the
-[five-minute total verification budget](../.github/CI.md#local-completion-focused-checks-five-minutes-total).
+Local offline/browser/package test campaigns and their qualifier lanes have been
+removed. Routine CI owns the retained checks; there is no optional local matrix.
+The external operator-driven trials below remain supported and are deferred until
+PR review is complete.
 
 For exactly one external `deployed` or `live` lane, set `source: null` and supply
 `external` with initialized `origin`, expected peer configuration paths in `peers`,
@@ -278,3 +273,20 @@ normal serve/status/cancel commands afterward; there is no rollback or restart f
 initial inputs. Keep W's physical attempt/usage metrics alongside the origin report.
 Unstarted/failed cases stay visible. Passing fixtures does not establish live-model
 usefulness, actual-person behavior, two-machine qualification or a general success rate.
+
+### Publication evidence during transfer
+
+After publication, custody offers use `agent-mobility-offer/v2` to bind the latest
+publication receipt to the run, registration and source execution version under
+the host signature. The receipt is bounded to 16 KiB and persists at the receiving
+host through cancellation, restart and artifact collection. It reports delivery;
+it grants no authority to publish again. A newer publication replaces the carried
+receipt, while a conflicting or older receipt is rejected.
+
+Transfers without publication continue to use v1. All peers receiving a
+post-publication transfer must support v2; older peers reject it rather than
+silently discard evidence. An already-frozen legacy v1 offer with a local
+publication receipt cannot be sent by the updated host: it remains unresolved
+with `PublicationEvidenceMissing`, retaining its published status. Drain or cancel
+such legacy transfers at the authoritative owner before upgrading a deployment;
+do not rewrite signed pending offers.

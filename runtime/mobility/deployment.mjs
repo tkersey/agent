@@ -299,10 +299,12 @@ export async function validateDeployment(configPath, { peerConfigs = [], contact
           if (found.length === 0 && side === 'workspace' && peerConfigs.length === 0 && !contactPeers) continue;
           if (found.length !== 1) throw Object.assign(new Error('RepositoryCapabilityMissing'), { code: 'RepositoryCapabilityMissing', operation });
           const { peer, row } = found[0], wanted = requirement({ ...row, payloadSchema: schema(input), resultSchema: schema(output) });
-          if (operation === 'agent.model.invoke.v4') providerProfiles.push({ entry: entry.id, principal: principal.principal, tenant: principal.tenant,
-            host: peer.hostId, subject: row.subject, model: row.adapter.model,
-            mode: row.adapter.kind === 'openai-responses-replay' ? row.adapter.mode : null,
-            parameters: row.adapter.parameters, allowance: row.adapter.allowance });
+          if (operation === 'agent.model.invoke.v4') {
+            modelBinding({ ...row, payloadSchema: schema(input), resultSchema: schema(output) }, row.adapter, peer.hostId);
+            providerProfiles.push({ entry: entry.id, principal: principal.principal, tenant: principal.tenant,
+              host: peer.hostId, subject: row.subject, version: row.subjectVersion, model: row.adapter.model,
+              mode: row.adapter.mode, parameters: row.adapter.parameters, allowance: row.adapter.allowance });
+          }
           if (operation === 'agent.interaction.exchange.v1.repository.publish') requireThat(row.adapter.principalIds?.[principal.principal] === principal.taskPrincipal, 'ValidationPrincipalBinding');
           if (side === 'workspace') {
             workspaceHost ??= peer.hostId;

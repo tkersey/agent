@@ -277,6 +277,12 @@ node runtime/mobility/cli.mjs qualify-application live.json evidence-directory -
 Opt-ins are checked before host/output access. Deployed fixtures require loopback
 providers; live requires an explicitly authorized live profile for every selected
 case's principal and repository. Unrelated provider bindings do not qualify a case.
+Generated capabilities pin the admitted provider profile through their version.
+Regenerate older unversioned configurations before external qualification; ordinary
+unversioned model bindings remain usable. Preflight checks the running peer against
+that pin, and a successful lane requires unchanged configuration at postflight.
+Workspace `metrics` records the charged `allowances.model.grant`, which matches
+the selected provider version when recording actual-provider evidence.
 Use a dedicated
 initialized origin without prior runs, stop its ordinary service, and start W
 separately. The qualifier preflights W, serves the origin and registers cases. It

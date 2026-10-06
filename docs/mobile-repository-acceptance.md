@@ -33,20 +33,26 @@ an interrupted check with unknown physical completion remains unresolved. These
 runs retain their actual source subjects in the machine-readable report; later
 application runs replace affected image evidence.
 
-Subsequent deployment and sandbox repairs passed native Zig qualification, both
-extracted-browser journeys, eight deployment/qualification checks and the expanded
-installed journey (176.4 seconds). The latter covers three check bindings sharing
+Subsequent deployment and sandbox repairs passed native Zig qualification and eight
+deployment/qualification checks. Provider-version binding then passed 362/362
+package build steps and 29 model/qualification tests. The expanded installed
+journey (178.4 seconds) and both extracted-browser journeys passed. These cover three check bindings sharing
 one scratch root, per-case provider-mode admission, and a rejected preparation
 cancelled after a real workspace-process restart without another preparation or
 model call. The native repair now uses an admitted path containing a dotted
 directory, space and Unicode; traversal still rejects before physical execution.
+Qualification also rejects stale and unversioned provider declarations before
+starting a task; profile versions are validated by the model adapter and checked
+through the existing authenticated capability preflight.
 The initial new regression assertions needed corrections for child-pipe draining
 and the program's separate edit/check model turns; the failed logs are retained.
 
-These repairs change the loader, qualifier and native sandbox. The compiled images
-and the modules actually executed by the comparison/attribution fixtures are
-unchanged from 4693529. The timing tables retain that executed subject; they are
-not new measurements of deployment startup or native qualification.
+The compiled images and timed fixture callbacks are unchanged from 4693529.
+The added model-profile version check runs during fixture construction, before
+timing begins; the new loader, qualifier and native setup behavior is outside
+these measured workloads. The tables retain their original executed subject,
+not new measurements of setup or native qualification. Process-resource counters
+include setup and retain strictly historical scope.
 
 The broader aggregate passed 559/559 steps at
 `330916481f46a20ad03c3e5c760d024c6b82e5d7`. Its unchanged generic runtime,
@@ -78,7 +84,8 @@ library inventory: `8ed22c5d774cba9be2ad20c24c706ce450e5952b08d0f9d179e1b71811f6
 Local records under `.agent4-mobile/out/agent4/` include the 96-row acceptance JSON,
 `recovery-qualification.log`, `settled-check-after.log`, `restricted-native.log`,
 `restricted-application.log`, `review-repairs-bf3573c.log`,
-`review-repairs-installed-final.log`, `final-3309164.log`, measurements and package
+`review-repairs-installed-final.log`, `provider-version-package.log`,
+`final-3309164.log`, measurements and package
 inventory verification. They bind actual subjects, hashes and limitations. The
 accepted user specification remains a local qualification input at
 `.agent4-mobile/accepted-specification.md`. Raw rounds are not versioned. Current

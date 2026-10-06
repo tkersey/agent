@@ -99,13 +99,15 @@ export async function qualifyApplication(filename, output, options = {}) {
     }
     if (lane) {
       const external = config.external, peerFiles = external.peers.map(path), originPath = path(external.origin);
-      const preflight = await validateDeployment(originPath, { peerConfigs: peerFiles, contactPeers: true });
-      const models = external.cases.map(test => {
-        const selected = preflight.providerProfiles.filter(profile => profile.entry === test.entry && profile.principal === external.principal && profile.tenant === external.tenant);
+      const modelsFor = validation => external.cases.map(test => {
+        const selected = validation.providerProfiles.filter(profile => profile.entry === test.entry && profile.principal === external.principal && profile.tenant === external.tenant);
         requireThat(selected.length === 1, 'QualificationTaskScope');
+        requireThat(typeof selected[0].version === 'string' && /^[a-f0-9]{64}$/.test(selected[0].version), 'QualificationProviderVersion');
         requireThat(selected[0].mode === (lane === 'live' ? 'openai-live' : 'loopback-fixture'), 'QualificationProviderMode');
         return selected[0];
       });
+      modelsFor(await validateDeployment(originPath, { peerConfigs: peerFiles }));
+      const preflight = await validateDeployment(originPath, { peerConfigs: peerFiles, contactPeers: true }), models = modelsFor(preflight);
       const row = report.lanes.find(row => row.lane === lane); Object.assign(row, { status: 'running', cases: external.cases.map(value => ({ ...value, status: 'not-run' })), providerProfiles: models, preflight }); await save();
       const host = await openDeployment(originPath);
       try {
@@ -132,6 +134,10 @@ export async function qualifyApplication(filename, output, options = {}) {
             result.status = Object.values(result.acceptance).every(Boolean) ? 'passed' : 'failed';
           } catch (error) { result.status = 'failed'; result.reason = error.code ?? 'QualificationCaseFailed'; }
           await save();
+        }
+        if (row.cases.every(result => result.status === 'passed')) {
+          row.postflight = await validateDeployment(originPath, { peerConfigs: peerFiles, contactPeers: true });
+          requireThat(row.postflight.config === preflight.config && JSON.stringify(modelsFor(row.postflight)) === JSON.stringify(models), 'QualificationConfigurationChanged');
         }
         row.status = row.cases.every(result => result.status === 'passed') ? 'passed' : row.cases.some(result => result.status === 'failed') ? 'failed' : 'incomplete';
       } finally { await host.close(); }

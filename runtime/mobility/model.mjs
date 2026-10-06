@@ -22,6 +22,9 @@ export function modelBinding(metadata, profile, hostId) {
   else requireThat(typeof profile.credentialEnv === 'string' && /^[A-Z][A-Z0-9_]{0,127}$/.test(profile.credentialEnv), 'ModelCredentials');
   requireThat(!endpoint.username && !endpoint.password && !endpoint.hash && !endpoint.search, 'ModelEndpoint');
   const admitted = structuredClone(profile), grant = hash(canonical(admitted));
+  // Legacy unversioned bindings remain usable, but a pinned capability must
+  // describe the profile this adapter actually owns, including provider mode.
+  requireThat(metadata.subjectVersion == null || metadata.subjectVersion === grant, 'ModelProfileVersion');
   const prepare = ({ request, run }) => {
     requireThat(run.classification.every(label => admitted.disclosure.labels.includes(label)), 'LeafDisclosureDenied');
     const decoded = decodeReplayModelInvocation(request.payload), invocation = decoded.invocation;

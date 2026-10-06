@@ -34,7 +34,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   const root = join(area, name), load = path => import(pathToFileURL(join(root, path)));
   await rm(join(root, 'test'), { recursive: true, force: true });
   const { decodeSchema, decodeValue } = await load('runtime/values.mjs');
-  const { hash } = await load('runtime/mobility/protocol.mjs');
+  const { hash, canonical } = await load('runtime/mobility/protocol.mjs');
   const { selectZig } = await load('tools/agent4/toolchain.mjs');
   const { openDeployment } = await load('runtime/mobility/deployment.mjs');
   const { PeerClient } = await load('runtime/mobility/transport.mjs');
@@ -179,18 +179,26 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   const mixedWorkspace = structuredClone(workspaceConfig), unrelatedModel = structuredClone(workspaceConfig.bindings.find(row => row.adapter.kind === 'openai-responses-replay'));
   Object.assign(unrelatedModel, { subject: 'unrelated-repository', scope: 'unrelated-model', principals: ['unrelated-user'] });
   Object.assign(unrelatedModel.adapter, { mode: 'openai-live', endpoint: 'https://api.openai.com/v1/responses', credentialEnv: 'UNUSED_QUALIFICATION_KEY' });
+  unrelatedModel.subjectVersion = hash(canonical(unrelatedModel.adapter));
   mixedWorkspace.bindings.push(unrelatedModel);
   const mixedPeer = await json(join(area, 'configured/mixed-workspace.json'), mixedWorkspace);
-  for (const lane of ['live', 'deployed']) {
+  for (const [scenario, lane, expectedFailure] of [
+    ['fixture', 'live', 'QualificationProviderMode'], ['live', 'deployed', 'QualificationProviderMode'],
+    ['stale', 'live', 'TransportStatus'], ['unversioned', 'deployed', 'QualificationProviderVersion'],
+  ]) {
     const declaration = structuredClone(mixedWorkspace);
-    if (lane === 'deployed') Object.assign(declaration.bindings.find(row => row.adapter.kind === 'openai-responses-replay').adapter,
-      { mode: 'openai-live', endpoint: 'https://api.openai.com/v1/responses', credentialEnv: 'UNUSED_QUALIFICATION_KEY' });
-    const peer = await json(join(area, `configured/wrong-${lane}-workspace.json`), declaration);
-    const input = await json(join(area, `wrong-${lane}.json`), { format: 'agent.repository.qualification/v1', lanes: [lane], source: null,
+    const selected = declaration.bindings.find(row => row.adapter.kind === 'openai-responses-replay');
+    if (scenario === 'live' || scenario === 'stale') {
+      Object.assign(selected.adapter, { mode: 'openai-live', endpoint: 'https://api.openai.com/v1/responses', credentialEnv: 'UNUSED_QUALIFICATION_KEY' });
+      selected.subjectVersion = hash(canonical(selected.adapter));
+    }
+    if (scenario === 'unversioned') selected.subjectVersion = null;
+    const peer = await json(join(area, `configured/wrong-${scenario}-workspace.json`), declaration);
+    const input = await json(join(area, `wrong-${scenario}.json`), { format: 'agent.repository.qualification/v1', lanes: [lane], source: null,
       maximumSeconds: 1, external: { origin: configU, peers: [peer], principal: 'user', tenant: 'tenant', cases: [qualificationCase('wrong-provider-mode')] } });
-    const output = join(area, `wrong-${lane}`);
+    const output = join(area, `wrong-${scenario}`);
     assert.throws(() => command('qualify-application', input, output, `--${lane}`), error => error.status === 1);
-    assert.equal(JSON.parse(await readFile(join(output, 'report.json'))).failure, 'QualificationProviderMode');
+    assert.equal(JSON.parse(await readFile(join(output, 'report.json'))).failure, expectedFailure);
     assert.deepEqual(command('status', configU), []); assert.equal(modelCalls, 0);
   }
   const applicationQualification = await json(join(area, 'application-qualification.json'), { format: 'agent.repository.qualification/v1', lanes: ['deployed'], source: null,

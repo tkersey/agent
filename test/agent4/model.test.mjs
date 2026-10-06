@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { modelBinding } from "../../runtime/mobility/model.mjs";
+import { hash, canonical } from "../../runtime/mobility/protocol.mjs";
 
 import {
   MODEL_EFFECT,
@@ -796,10 +797,16 @@ test('deployment model profile binds actual replay payload, disclosure, owner an
     allowance: { attempts: 2, request_bytes: 200000, output_tokens: 256, concurrent: 2 } };
   const metadata = { operation: REPLAY_MODEL_EFFECT, audience: 'fixture-provider' };
   const binding = modelBinding(metadata, profile, 'W');
+  const version = hash(canonical(profile));
+  assert.equal(modelBinding({ ...metadata, subjectVersion: version }, profile, 'W').subjectVersion, version);
+  const live = { ...profile, mode: 'openai-live', endpoint: 'https://api.openai.com/v1/responses', credentialEnv: 'UNUSED_QUALIFICATION_KEY' };
+  assert.throws(() => modelBinding({ ...metadata, subjectVersion: version }, live, 'W'), { code: 'ModelProfileVersion' });
+  assert.notEqual(modelBinding({ ...metadata, subjectVersion: hash(canonical(live)) }, live, 'W').subjectVersion, version);
   profile.allowance.attempts = 32;
   const payload = replayInvocation([], [], encodeInvocationFixture({ tools: [], maxOutputTokens: 128 }));
   const request = { payload }, run = { classification: ['shared'] };
   const charge = binding.charge({ request, run });
+  assert.equal(charge.grant, version, 'the advertised profile version identifies the charged profile');
   assert.equal(charge.limit.attempts, 2); assert.equal(charge.amount.output_tokens, 128);
   assert.equal(charge.amount.request_bytes, encodeOpenAIResponsesRequest(decodeReplayModelInvocation(payload).invocation, decodeReplayModelInvocation(payload).input).length);
   assert.throws(() => binding.charge({ request, run: { classification: ['secret'] } }), /LeafDisclosureDenied/);

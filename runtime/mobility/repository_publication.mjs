@@ -25,13 +25,18 @@ export function repositoryPublicationBinding(metadata, { store, helper, protecte
       variants?.length === 4 && variants.every(type => Number.isSafeInteger(resultSchema.types[type]?.bounded_text))), 'PublicationSchema');
   const checkSchema = admitCheckSchema(checkResultSchema);
   const images = structuredClone(protectedImages), profiles = structuredClone(requiredProfiles);
+  const { repository, generation, managedRef } = store.describe();
   const decode = payload => parse(Buffer.from(payload), { maximum: 2 << 20 });
   const matches = run => images.some(row => row.image === run.image_digest && row.program === run.program_id);
-  const authorize = (payload, run) => {
-    if (!matches(run)) return false;
-    const proposal = decode(payload), owner = proposal?.core?.binding;
+  const identify = (payload, run) => {
+    if (!matches(run)) return null;
+    const proposal = decode(payload), owner = proposal?.core?.binding, target = proposal?.core?.destination;
     return owner?.run === run.run_id && owner.principal === run.principal_ref && owner.tenant === run.tenant_ref &&
-      owner.authorizationDigest === authorizationDigest && owner.validationPolicyDigest === validationPolicyDigest;
+      target?.repository === repository && target.generation === generation && target.managedRef === managedRef ? proposal : null;
+  };
+  const authorize = (payload, run) => {
+    const owner = identify(payload, run)?.core.binding;
+    return Boolean(owner && owner.authorizationDigest === authorizationDigest && owner.validationPolicyDigest === validationPolicyDigest);
   };
   if (readOnly) return { ...metadata, authorize, async handle({ payload }) {
     let valid = false;
@@ -55,6 +60,7 @@ export function repositoryPublicationBinding(metadata, { store, helper, protecte
     destination: proposal.core.destination, tree: proposal.core.candidate.tree,
     validation: proposal.core.validation.map(record => record.id), policyRevision: proposal.core.binding.policyRevision, recovered });
   const binding = { ...metadata, publication: true, background: false, cancelSafe: false, authorize,
+    recoveryMatches: (payload, run) => identify(payload, run) !== null,
     async handle({ payload, request, run, occurrence }) {
       const proposal = decode(payload), { journal, policy } = services();
       const receipt = await store.publishManaged(proposal, helper, exact => {
@@ -72,7 +78,7 @@ export function repositoryPublicationBinding(metadata, { store, helper, protecte
       return envelope(describe(proposal, { ...receipt, commit: receipt.commit ?? null }, false), receipt.admission !== undefined);
     },
     async reconcile({ payload, run, occurrence }) {
-      requireThat(matches(run), 'PublicationAuthorityMismatch');
+      requireThat(identify(payload, run) !== null, 'PublicationAuthorityMismatch');
       const proposal = decode(payload), { journal } = services(), rows = records(journal, proposal);
       if (!occurrence.publication_intent_digest) {
         const saved = history(rows);

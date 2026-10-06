@@ -6,7 +6,7 @@ import { closed, requireThat, identifier, labels } from './canonical.mjs';
 import { hash, runId, signRecord } from './protocol.mjs';
 
 const modes = ['inspect', 'propose', 'publish'];
-export function taskCatalogue(configuration, { bytes, keys, custodian, config, runtimeProfile }) {
+export function taskCatalogue(configuration, { bytes, keys, custodian, config, runtimeProfile, world }) {
   closed(configuration, ['issuer', 'entries']);
   closed(configuration.issuer, ['id', 'keyId', 'privateKey']);
   const issuer = configuration.issuer, privateKey = createPrivateKey(bytes(issuer.privateKey)), trusted = keys.get(issuer.keyId);
@@ -38,9 +38,26 @@ export function taskCatalogue(configuration, { bytes, keys, custodian, config, r
     entries.set(entry.id, { reportSchema, entry: structuredClone(entry), image, schema, initial, maximumTasks: session[1], grants });
   }
   const admitted = (item, identity) => item.grants.find(g => g.tenant === identity.tenant && g.principal === identity.principal && !config.revoked.includes(`${g.tenant}/${g.principal}`));
+  const authorizeView = (identity, run) => {
+    requireThat([...entries.values()].some(item => hash(item.image) === run.image_digest && admitted(item, identity) && identity.audiences?.includes(item.entry.presentation.audience) && run.classification.every(label => item.entry.presentation.labels.includes(label))), 'PresentationDenied');
+  };
   return Object.freeze({
-    authorizeView(identity, run) {
-      requireThat([...entries.values()].some(item => hash(item.image) === run.image_digest && admitted(item, identity) && identity.audiences?.includes(item.entry.presentation.audience) && run.classification.every(label => item.entry.presentation.labels.includes(label))), 'PresentationDenied');
+    authorizeView,
+    async exportResult(identity, id) {
+      authorizeView(identity, custodian.authorizeUser(id, identity));
+      const { run, bytes: stored } = custodian.outcome(id), outcome = world.decodeOutcome(stored);
+      const schema = this.resultSchema(run.image_digest); requireThat(schema, 'ResultSchemaUnavailable');
+      let report = outcome.kind === 'completed' ? decodeValue(decodeSchema(schema), outcome.value) : null;
+      if (outcome.kind === 'requested') {
+        const request = await world.decodeRequest(outcome.request);
+        if (request.semanticIdentity === 'agent.repository.next-task.v1') report = decodeValue(decodeSchema(request.payloadSchema), request.payload)[0];
+      }
+      const current = custodian.authorizeUser(id, identity); authorizeView(identity, current);
+      requireThat(current.outcome_digest === run.outcome_digest, 'ResultChanged');
+      // Both installed CLI and browser export the same identity-bound snapshot.
+      return JSON.parse(JSON.stringify({ format: 'agent.repository.export/v1', run_id: id, principal: run.principal_ref, tenant: run.tenant_ref,
+        image: run.image_digest, program: run.program_id, outcome: run.outcome_digest, classification: run.classification,
+        kind: outcome.kind, report, delivery: custodian.status(id).delivery ?? null }, (_, value) => typeof value === 'bigint' ? value.toString() : value));
     },
     resultSchema(imageDigest) {
       const item = [...entries.values()].find(item => hash(item.image) === imageDigest);

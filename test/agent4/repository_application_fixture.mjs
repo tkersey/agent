@@ -272,9 +272,10 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
     catalogue = taskCatalogue({ issuer: { id: 'issuer', keyId: 'issuer', privateKey: 'key' }, entries: [{ id: 'repository', title: 'Qualified managed repository', image: 'image', programId,
       taskSchema: 'schema', reportSchema: 'report', initialTask: 'task', modes: ['inspect', 'propose', 'publish'], principals: [{ tenant: 'tenant', principal: 'user', taskPrincipal: '7' }],
       scope: { read: [targetPath], write: [targetPath], checks: ['fixture-content'], target: 'refs/heads/agent/result' }, profile: 'bounded', presentation: { audience: 'human', labels: ['shared'], revision },
-    }] }, { bytes: name => assets[name], keys, runtimeProfile: identity.kernelSha256,
+    }] }, { bytes: name => assets[name], keys, runtimeProfile: identity.kernelSha256, world,
       config: { hostId: 'U', trustDomain: 'fixture', revision, revoked: [], deployments: [{ imageDigest: hash(image), programId, tenant: 'tenant', principals: ['user'], issuers: ['issuer'], hosts: ['U', 'W'], classification: ['shared'], limits }] },
-      custodian: { async registerRun(record, image, args) { expectedTask = decodeValue(schemas.session, args)[0]; expectedTask[1] = 1n; return hosts.U.registerRun(record, image, args); }, status: id => hosts.U.status(id) } });
+      custodian: { async registerRun(record, image, args) { expectedTask = decodeValue(schemas.session, args)[0]; expectedTask[1] = 1n; return hosts.U.registerRun(record, image, args); },
+        status: id => hosts.U.status(id), authorizeUser: (...args) => hosts.U.authorizeUser(...args), outcome: id => hosts.U.outcome(id) } });
   } else {
     comparison?.begin?.();
     if (sessionInput) expectedTask[1] = 1n;
@@ -349,8 +350,13 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
               await browserPage.locator('#run').fill(id); await browserPage.locator('#connect').click();
               await browserPage.locator('#answer').waitFor({ state: 'visible' });
               assert.match(await browserPage.locator('#question').textContent(), /Task 1 is finished/);
+              if (mode === 2) {
+                const displayed = await browserPage.locator('#question').textContent();
+                assert.match(displayed, /Published commit/); assert(!displayed.includes('This task does not publish'));
+              }
               const exported = await browserPage.evaluate(async () => (await fetch(document.querySelector('#export-result').href)).json());
-              assert.equal(exported.value[1], '1', 'the completed task report is exportable before the next task');
+              assert.equal(exported.report[1], '1', 'the completed task report is exportable before the next task');
+              assert.equal(exported.run_id, id);
               await browserPage.locator('#choice').selectOption('inspect');
               await browserPage.locator('#answer-text').fill(reply.answer.text); await browserPage.locator('#answer button').click();
               await browserPage.locator('#status').filter({ hasText: 'Response saved' }).waitFor();
@@ -374,7 +380,23 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
           await hosts[activeHost].answerQuestion(id, identity, { version, occurrence_id, request_digest, pending_digest, answer: { choice: followup ? reviewFollowup : pending.pending.question.kind === 'repository-review' ? 'finish' : 'approve', text: followup ? 'Explain the relevant source.' : '' } });
           continue;
         }
-        if (result.kind !== 'offered') return result;
+        if (result.kind !== 'offered') {
+          if (result.kind === 'terminal' && browserPage && intake) {
+            const identity = { principal: 'user', tenant: 'tenant', audiences: ['human'] }, before = hosts.U.status(id);
+            await browserPage.reload(); await browserPage.locator('#run').fill(id); await browserPage.locator('#connect').click();
+            await browserPage.locator('#export-result').waitFor({ state: 'visible' });
+            const exported = await browserPage.evaluate(async () => (await fetch(document.querySelector('#export-result').href)).json());
+            assert.equal(exported.run_id, id); assert.equal(exported.report[1], String(expectedTask[1]));
+            assert.deepEqual(hosts.U.status(id), before, 'reading a terminal result must not attach or advance an executor');
+            await assert.rejects(catalogue.exportResult({ ...identity, principal: 'other' }, id), { code: 'UserDenied' });
+            const other = await catalogue.start(identity, { entry: 'repository', mode: 'inspect', goal: 'Leave this task unfinished.' });
+            await browserPage.locator('#run').fill(other.run_id); await browserPage.locator('#connect').click();
+            await browserPage.locator('#status').filter({ hasText: 'Connected' }).waitFor();
+            assert(await browserPage.locator('#export-result').isHidden());
+            assert.equal(await browserPage.locator('#export-result').getAttribute('href'), null);
+          }
+          return result;
+        }
         const transfer = journals[activeHost].transfer(result.transfer_id), offer = JSON.parse(Buffer.from(transfer.offer));
         assert.equal((await hosts[activeHost].retryTransfer(result.transfer_id)).kind, 'accepted');
         moves.push([activeHost, offer.destination_host_id]); activeHost = offer.destination_host_id;

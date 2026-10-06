@@ -9,7 +9,6 @@ import { provisionRepository } from '../repository_snapshot.mjs';
 import { createZigRepositorySandbox } from '../repository_zig_sandbox.mjs';
 import { describeRepositoryCheckProfile } from '../repository_checks.mjs';
 import { selectZig } from '../../tools/agent4/toolchain.mjs';
-import { decodeSchema, decodeValue } from '../values.mjs';
 import { configureRepository } from './repository_setup.mjs';
 import { qualifyApplication } from './qualification.mjs';
 
@@ -99,15 +98,9 @@ export async function main(argv) {
     else if (command === 'export') {
       requireThat(host.catalogue && host.config.browser, 'ResultExportUnavailable');
       const identity = { principal: args[0], tenant: args[1], audiences: [host.config.browser.audience] };
-      const run = host.custodian.authorizeUser(args[2], identity);
-      host.catalogue.authorizeView(identity, run);
-      const outcome = host.world.decodeOutcome(host.journal.artifact(run.tenant_ref, run.outcome_digest));
-      const delivery = host.custodian.status(run.run_id).delivery ?? null;
-      requireThat(outcome.kind === 'completed' || delivery !== null, 'ResultNotAvailable');
-      const schema = host.catalogue.resultSchema(run.image_digest); requireThat(schema, 'ResultSchemaUnavailable');
-      print({ format: 'agent.repository.export/v1', run_id: run.run_id, principal: run.principal_ref, tenant: run.tenant_ref,
-        image: run.image_digest, program: run.program_id, outcome: run.outcome_digest, classification: run.classification,
-        kind: outcome.kind, report: outcome.kind === 'completed' ? decodeValue(decodeSchema(schema), outcome.value) : null, delivery });
+      const result = await host.catalogue.exportResult(identity, args[2]);
+      requireThat(result.report !== null || result.delivery !== null, 'ResultNotAvailable');
+      print(result);
     }
     else if (command === 'status') print(args.length ? host.custodian.status(args[0]) : host.journal.recover().map(({ run }) => host.custodian.status(run.run_id)));
     else if (command === 'metrics') print(host.custodian.metrics(args[0]));

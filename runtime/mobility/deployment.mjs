@@ -98,6 +98,8 @@ async function prepareDeployment(configPath) {
       const result = decodeSchema(binding.resultSchema);
       binding.authorize = payload => Array.isArray(payload) && (method === 'snapshot' ? payload[0] === adapter.store.repository :
         Array.isArray(payload[0]) && payload[0][0] === adapter.store.repository && payload[0][1] === adapter.store.generation);
+      binding.cancelSafe = adapter.kind === 'repository-query';
+      if (binding.cancelSafe) binding.recoveryMatches = binding.authorize;
       binding.handle = async ({ payload }) => { counts.calls++; return encodeValue(result, await leaf[method](payload)); };
       return binding;
     }
@@ -339,7 +341,7 @@ export async function openDeployment(configPath, { create = false, qualifyChecks
       const client = new PeerClient({ ...entry, ...tls }); clients.push(client); peers.set(entry.hostId, client);
     }
     const custodian = new Custodian({ journal, admission, world, policy, peers });
-    const catalogue = config.format === 'agent-mobility-deployment/v2' ? taskCatalogue(config.catalogue, { bytes, keys, custodian, config, runtimeProfile: identity.kernelSha256 }) : null;
+    const catalogue = config.format === 'agent-mobility-deployment/v2' ? taskCatalogue(config.catalogue, { bytes, keys, custodian, config, runtimeProfile: identity.kernelSha256, world }) : null;
     let service = null, browserService = null, sessions = null;
     if (config.browser) {
       sessions = new BrowserSessions({ directory: path(config.browser.directory), create,

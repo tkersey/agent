@@ -557,18 +557,23 @@ test('durable allowance cannot reset, switch owner, widen grant or overspend on 
   assert.equal(restored.allowance(f.id, 'model').used.attempts, 1);
 });
 
-test('unknown work retains its concurrency slot until an explicitly cancellable occurrence is abandoned', async t => {
+for (const kind of ['model', 'check']) test(`unknown ${kind} retains its concurrency slot until safe abandonment`, async t => {
   const f = await fixture(t, initial), first = f.a.attach(f.id);
-  const charge = { owner: 'A', kind: 'model', grant: 'd'.repeat(64), limit: { attempts: 2, request_bytes: 100, output_tokens: 20, concurrent: 1 }, amount: { request_bytes: 40, output_tokens: 8 } };
+  const charge = { owner: 'A', kind, grant: 'd'.repeat(64), limit: { attempts: 2, request_bytes: 100, output_tokens: kind === 'model' ? 20 : 0, concurrent: 1 }, amount: { request_bytes: 40, output_tokens: kind === 'model' ? 8 : 0 } };
   const pending = f.a.admitLeaf(f.id, version(first), [], { charge, cancelSafe: true });
   f.a.markUnknown(f.id, pending.attempt_id);
   const { signature: _, ...base } = parse(f.registration), secondId = runId('issuer');
   f.a.register(signRecord('run', { ...base, run_id: secondId }, f.pairs.issuer.privateKey), initial);
   const second = f.a.attach(secondId);
   assert.throws(() => f.a.admitLeaf(secondId, version(second), [], { charge }), { code: 'WorkConcurrency' });
-  assert.equal(f.a.allowance(secondId, 'model'), null);
+  assert.equal(f.a.allowance(secondId, kind), null);
   assert.throws(() => f.a.abandonLeaf(f.id, pending.attempt_id), { code: 'CannotAbandonOccurrence' });
-  f.a.requestCancel(f.id, 'abandon remote answer'); f.a.abandonLeaf(f.id, pending.attempt_id);
-  assert.equal(f.a.allowance(f.id, 'model').used.attempts, 1);
+  f.a.requestCancel(f.id, 'abandon remote answer');
+  if (kind === 'check') {
+    assert.throws(() => f.a.abandonLeaf(f.id, pending.attempt_id), { code: 'CannotAbandonOccurrence' });
+    assert.throws(() => f.a.admitLeaf(secondId, version(second), [], { charge }), { code: 'WorkConcurrency' });
+  }
+  f.a.abandonLeaf(f.id, pending.attempt_id, { settled: kind === 'check' });
+  assert.equal(f.a.allowance(f.id, kind).used.attempts, 1);
   assert.equal(f.a.admitLeaf(secondId, version(second), [], { charge }).status, 'DISPATCHING');
 });

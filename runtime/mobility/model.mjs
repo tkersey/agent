@@ -13,6 +13,7 @@ export function modelBinding(metadata, profile, hostId) {
   requireThat(positive(profile.parameters.maxOutputTokens, 1000000), 'ModelTokenLimit');
   closed(profile.disclosure, ['audience', 'policyRevision', 'labels']);
   identifier(profile.disclosure.policyRevision);
+  if (profile.disclosure.audience !== null) identifier(profile.disclosure.audience);
   requireThat(profile.disclosure.audience === metadata.audience && Array.isArray(profile.disclosure.labels), 'ModelDisclosure');
   closed(profile.allowance, ['attempts', 'request_bytes', 'output_tokens', 'concurrent']);
   requireThat(positive(profile.allowance.concurrent, 8) && positive(profile.allowance.attempts, 32) && positive(profile.allowance.request_bytes, 128 << 20) && positive(profile.allowance.output_tokens, 32000000), 'WorkAllowance');

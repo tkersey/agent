@@ -168,14 +168,14 @@ for (const cancel of [false, true]) test(`pending question restores without a li
   assert.equal(f.counters.A.task, 0);
 });
 
-for (const cancel of [false, true]) test(`background leaf releases the run lock, preserves charge and fences late completion; cancel=${cancel}`, async t => {
+for (const [kind, cancel] of [['model', false], ['model', true], ['check', true]]) test(`background leaf releases the run lock, preserves charge and fences late completion; ${kind}, cancel=${cancel}`, async t => {
   const f = await hostFixture(t, { localData: true }), binding = f.bindings.A.find(value => value.operation.endsWith('.task.v1'));
   let release; const held = new Promise(resolve => { release = resolve; });
   binding.background = true; binding.cancelSafe = true;
-  binding.charge = () => ({ owner: 'A', kind: 'model', grant: 'c'.repeat(64), limit: { attempts: 2, request_bytes: 100, output_tokens: 20, concurrent: 2 }, amount: { request_bytes: 40, output_tokens: 8 } });
+  binding.charge = () => ({ owner: 'A', kind, grant: 'c'.repeat(64), limit: { attempts: 2, request_bytes: 100, output_tokens: kind === 'model' ? 20 : 0, concurrent: 2 }, amount: { request_bytes: 40, output_tokens: kind === 'model' ? 8 : 0 } });
   binding.handle = async ({ signal }) => { signal.addEventListener('abort', release, { once: true }); await held; return encodeValue(f.schemas.task, f.taskValue); };
   assert.equal((await f.hosts.A.step(f.id)).kind, 'dispatching');
-  assert.equal(f.journals.A.allowance(f.id, 'model').used.attempts, 1);
+  assert.equal(f.journals.A.allowance(f.id, kind).used.attempts, 1);
   assert.equal((await f.hosts.A.step(f.id)).kind, 'dispatching');
   // A fresh executor may observe this same occurrence while I/O is pending.
   await f.hosts.A.executorAssignment(f.id);
@@ -183,22 +183,27 @@ for (const cancel of [false, true]) test(`background leaf releases the run lock,
   assert.equal(f.journals.A.occurrence(f.journals.A.run(f.id).current_occurrence_id).status, cancel ? 'ABANDONED' : 'SETTLED_REPLY');
   assert.equal((await f.hosts.A.run(f.id)).kind, 'terminal');
   assert.equal(f.result('A').kind, cancel ? 'cancelled' : 'completed');
-  assert.equal(f.journals.A.allowance(f.id, 'model').used.attempts, 1);
+  assert.equal(f.journals.A.allowance(f.id, kind).used.attempts, 1);
 });
 
-for (const cancelSafe of [false, true]) test(`unknown background work is not retried after restart; abandon permission=${cancelSafe}`, async t => {
+for (const [kind, cancelSafe] of [['model', false], ['model', true], ['check', true], ['query', false]]) test(`unknown background work is not retried after restart; ${kind}, abandon permission=${cancelSafe}`, async t => {
   const f = await hostFixture(t, { localData: true }), binding = f.bindings.A.find(value => value.operation.endsWith('.task.v1'));
   let calls = 0;
-  binding.background = true; binding.cancelSafe = cancelSafe;
-  binding.charge = () => ({ owner: 'A', kind: 'model', grant: 'e'.repeat(64), limit: { attempts: 2, request_bytes: 100, output_tokens: 20, concurrent: 1 }, amount: { request_bytes: 40, output_tokens: 8 } });
+  binding.background = kind !== 'query'; binding.cancelSafe = cancelSafe;
+  if (kind !== 'query') binding.charge = () => ({ owner: 'A', kind, grant: 'e'.repeat(64), limit: { attempts: 2, request_bytes: 100, output_tokens: kind === 'model' ? 20 : 0, concurrent: 1 }, amount: { request_bytes: 40, output_tokens: kind === 'model' ? 8 : 0 } });
   binding.handle = async () => { calls++; throw new Error('simulated lost response'); };
-  await f.hosts.A.step(f.id); await f.hosts.A.stopOperations();
+  if (kind === 'query') await assert.rejects(f.hosts.A.step(f.id), /simulated lost response/);
+  else await f.hosts.A.step(f.id);
+  await f.hosts.A.stopOperations();
   f.restart('A');
   for (let i = 0; i < 3; i++) assert.equal((await f.hosts.A.run(f.id)).kind, 'effect_unknown');
-  assert.equal(calls, 1); assert.equal(f.journals.A.allowance(f.id, 'model').used.attempts, 1);
-  await f.hosts.A.cancelRun(f.id, 'stop');
-  assert.equal((await f.hosts.A.run(f.id)).kind, cancelSafe ? 'terminal' : 'effect_unknown');
-  assert.equal(calls, 1); assert.equal(f.journals.A.allowance(f.id, 'model').used.attempts, 1);
+  assert.equal(calls, 1); if (kind !== 'query') assert.equal(f.journals.A.allowance(f.id, kind).used.attempts, 1);
+  if (kind === 'query') { binding.cancelSafe = true; binding.recoveryMatches = binding.authorize; }
+  f.journals.A.requestCancel(f.id, 'stop'); // Crash after the durable request, before settlement.
+  f.restart('A');
+  assert.equal((await f.hosts.A.run(f.id)).kind, kind === 'query' || cancelSafe && kind === 'model' ? 'terminal' : 'effect_unknown');
+  assert.equal(calls, 1); if (kind !== 'query') assert.equal(f.journals.A.allowance(f.id, kind).used.attempts, 1);
+  if (kind === 'check') assert.equal(f.hosts.A.status(f.id).cancellation_pending, true);
 });
 
 

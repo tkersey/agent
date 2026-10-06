@@ -6,20 +6,22 @@ import { encodeSchema, encodeValue, decodeValue } from '../../runtime/values.mjs
 import { canonical } from '../../runtime/mobility/canonical.mjs';
 import { repositoryCheckBinding, acquiredCheck, checkResultSchema } from '../../runtime/mobility/repository_check.mjs';
 import { repositoryPublicationBinding, PUBLICATION } from '../../runtime/mobility/repository_publication.mjs';
+import { HostPolicy } from '../../runtime/mobility/policy.mjs';
 
 const schema = { root: 0, types: [{ bounded_text: 2 << 20 }] }, schemaBytes = encodeSchema(schema);
 const checkSchema = { root: 0, types: [{ product: [1, 2] }, { enumeration: [0, 1, 2, 3, 4, 5, 6] }, { bounded_text: 2 << 20 }] };
 const deliverySchema = { root: 0, types: [{ sum: [1, 1, 1, 2] }, { bounded_text: 16384 }, { bounded_text: 128 }] };
 const text = value => Buffer.from(canonical(value, 2 << 20)).toString('utf8');
-function fixture() {
-  const run = { run_id: 'run', image_digest: 'a'.repeat(64), program_id: 'b'.repeat(64), principal_ref: 'user', tenant_ref: 'tenant',
+function fixture(repository = 'repo') {
+  const run = { run_id: 'issuer:' + 'a'.repeat(64), image_digest: 'a'.repeat(64), program_id: 'b'.repeat(64), principal_ref: 'user', tenant_ref: 'tenant',
+    trusted_runtime_profile: '9'.repeat(64), classification: ['shared'],
     request_digest: 'c'.repeat(64), custody_epoch: '1', execution_revision: '2', executor_incarnation: '3', outcome_digest: 'd'.repeat(64) };
   const validation = { profile: 'zig-check', profileDigest: '3'.repeat(64), runner: '4'.repeat(64), id: 'check', status: 'Passed' };
   const proposal = { digest: 'proposal', commitOid: 'e'.repeat(40), core: {
     candidate: { tree: 'f'.repeat(40) },
-    binding: { run: 'run', principal: 'user', tenant: 'tenant', authorizationDigest: '1'.repeat(64), validationPolicyDigest: '2'.repeat(64), policyRevision: 'policy' },
-    destination: { repository: 'repo', generation: 'generation', managedRef: 'refs/heads/agent/result' }, validation: [validation] } };
-  const occurrence = { id: 'occurrence', attempt_id: 'attempt' }, admission = { run_id: 'run', occurrence_id: 'occurrence', attempt_id: 'attempt', request_digest: run.request_digest };
+    binding: { run: run.run_id, principal: 'user', tenant: 'tenant', authorizationDigest: '1'.repeat(64), validationPolicyDigest: '2'.repeat(64), policyRevision: 'policy' },
+    destination: { repository, generation: 'generation', managedRef: 'refs/heads/agent/result' }, validation: [validation] } };
+  const occurrence = { id: 'occurrence', attempt_id: 'attempt' }, admission = { run_id: run.run_id, occurrence_id: 'occurrence', attempt_id: 'attempt', request_digest: run.request_digest };
   const state = { writes: 0, admissions: 0, reconciliations: 0, checks: [validation], records: [], revoked: false, gateRevokes: false, reconcileStatus: 'NotApplied' };
   let binding;
   const journal = { run: () => run, publicationRecords: () => state.records,
@@ -30,6 +32,7 @@ function fixture() {
     return { binding, payload: decodeValue(schema, request.payload) };
   } };
   const store = {
+    describe: () => ({ repository, generation: 'generation', managedRef: 'refs/heads/agent/result' }),
     async publishManaged(exact, _helper, admit, history) {
       assert.deepEqual(await history(), { proposals: [], publishedCommits: [] });
       if (state.gateRevokes) state.revoked = true;
@@ -39,7 +42,9 @@ function fixture() {
     async reconcilePublication(exact) { state.reconciliations++; return { status: state.reconcileStatus,
       proposal: exact.digest, commit: state.reconcileStatus === 'Published' ? exact.commitOid : null }; },
   };
-  binding = repositoryPublicationBinding({ operation: PUBLICATION, payloadSchema: schemaBytes, resultSchema: encodeSchema(deliverySchema) },
+  binding = repositoryPublicationBinding({ operation: PUBLICATION, payloadSchema: schemaBytes, resultSchema: encodeSchema(deliverySchema),
+    role: 'commit', subject: repository, subjectVersion: null, scope: 'publish', audience: null, trustDomain: 'domain',
+    tenants: ['tenant'], principals: ['user'], classification: ['shared'], allowedStateLabels: ['shared'] },
     { store, helper: {}, protectedImages: [{ image: run.image_digest, program: run.program_id }],
       authorizationDigest: '1'.repeat(64), validationPolicyDigest: '2'.repeat(64), requiredProfiles: [{ id: 'zig-check', profileDigest: '3'.repeat(64), runner: '4'.repeat(64) }],
       checkResultSchema: encodeSchema(checkSchema), services: () => ({ journal, policy }) });
@@ -53,6 +58,22 @@ test('publication leaf requires its exact admitted image, principal and authoriz
     const changed = structuredClone(f.proposal); changed.core.binding[name] = 'other';
     assert.equal(f.binding.authorize(text(changed), f.run), false);
   }
+  const other = fixture('other'), retired = fixture(), revoked = new Set();
+  retired.binding.scope = 'retired'; retired.binding.enabled = false;
+  const policy = new HostPolicy({ hostId: 'W', trustDomain: 'domain', revision: 'policy',
+    runtimeProfile: f.run.trusted_runtime_profile, labelDestinations: { shared: ['W'] }, bindings: [other.binding, retired.binding, f.binding], revoked,
+    deployments: [{ imageDigest: f.run.image_digest, programId: f.run.program_id, tenant: 'tenant', principals: ['user'], issuers: ['issuer'], hosts: ['W'], classification: ['shared'], cleanup: [] }] });
+  const request = { semanticIdentity: PUBLICATION, payloadSchema: schemaBytes, resumeSchema: encodeSchema(deliverySchema), payload: encodeValue(schema, text(f.proposal)) };
+  const selected = policy.dispatch(f.run, request);
+  assert.equal(selected.binding, f.binding);
+  revoked.add('tenant/user');
+  f.proposal.core.binding.authorizationDigest = '8'.repeat(64);
+  request.payload = encodeValue(schema, text(f.proposal));
+  assert.throws(() => policy.dispatch(f.run, request), { code: 'PrincipalRevoked' });
+  assert.equal(policy.recovery(f.run, request, selected.bindingId).binding, f.binding, 'retain the actual selected binding across revocation');
+  assert.equal(policy.recovery(f.run, request), null, 'legacy ambiguous ownership must not guess the first match');
+  retired.binding.recoveryMatches = () => false;
+  assert.equal(policy.recovery(f.run, request).binding, f.binding, 'unambiguous legacy ownership remains recoverable');
 });
 test('self-asserted validation and revocation under the gate cannot reach publication admission', async () => {
   const f = fixture(); f.state.checks = [];

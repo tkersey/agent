@@ -72,6 +72,28 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
     finally { buttons.forEach(button => { button.disabled = false; }); }
   };
   const answerForm = document.querySelector('#answer');
+  const download = document.querySelector('#export-result');
+  const showDownload = (source, available) => {
+    if (!download) return;
+    download.hidden = !available;
+    if (available) download.href = source.base + 'result';
+    else download.removeAttribute('href');
+  };
+  const terminalText = (kind, delivery) => delivery?.status === 'published' && kind !== 'completed'
+    ? 'Published; presentation pending' : kind === 'cancelled' ? 'Cancelled' : kind === 'failed' ? 'Failed' : 'Completed';
+  async function showStoredResult(source) {
+    let result;
+    try { result = await (await source.api('result', 'GET')).json(); }
+    catch (error) {
+      if (source !== executor) return;
+      if (error.message !== 'ResultSchemaUnavailable') throw error;
+      showDownload(source, false); status.textContent = source.output ? terminalText(decodeOutcome(source.output).kind) : 'Finished'; return;
+    }
+    if (source !== executor) return;
+    request.textContent = JSON.stringify(result, null, 2);
+    showDownload(source, result.report !== null || result.delivery !== null);
+    status.textContent = terminalText(result.kind, result.delivery);
+  }
   async function showQuestion() {
     if (!answerForm) return;
     pending = await (await executor.api('question', 'GET')).json();
@@ -80,12 +102,21 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
     const question = document.querySelector('#question'), value = pending.pending.question;
     question.replaceChildren();
     if (value?.kind === 'repository-publication-approval' || (['repository-review', 'repository-next-task'].includes(value?.kind) && value.proposal)) {
-      const publishing = value.kind === 'repository-publication-approval';
+      const publishing = value.kind === 'repository-publication-approval', completed = value.kind === 'repository-next-task';
       const proposal = JSON.parse(publishing ? value.challenge[1] : value.proposal), core = proposal.core;
       if (!Array.isArray(core.diff) || core.diff.length !== core.candidate.edits.length) throw new Error('The complete change is unavailable for review.');
       const paragraph = text => { const p = document.createElement('p'); p.textContent = text; question.append(p); };
-      paragraph(`${publishing ? "Publish to" : "Review a proposal for"} managed branch ${core.destination.managedRef} in ${core.destination.repository}.`);
-      paragraph(publishing ? 'Approval publishes this exact commit in the service-owned repository. Your checkout and upstream repository are not updated.' : 'This task does not publish. You can finish, ask a question, or amend the requested task.');
+      paragraph(`${publishing ? "Publish to" : completed ? "Completed proposal for" : "Review a proposal for"} managed branch ${core.destination.managedRef} in ${core.destination.repository}.`);
+      if (completed) {
+        const approval = value.publication?.tag === 1 ? value.publication.value : null;
+        const delivered = approval?.tag === 0 ? approval.value : null;
+        const receipt = delivered && delivered.tag < 3 ? JSON.parse(delivered.value) : null;
+        paragraph(receipt?.status === 'Published' ? `Published commit ${receipt.commit}. ${receipt.verification?.status ?? 'Verification not available'}.`
+          : delivered?.tag === 3 ? 'Publication outcome is uncertain; do not repeat the write.'
+          : receipt ? `Publication result: ${receipt.status}.`
+          : value.publication?.tag === 0 ? 'This completed task did not request publication.'
+          : approval ? 'Publication was not approved.' : 'See the completed task report for the publication outcome.');
+      } else paragraph(publishing ? 'Approval publishes this exact commit in the service-owned repository. Your checkout and upstream repository are not updated.' : 'This task does not publish. You can finish, ask a question, or amend the requested task.');
       paragraph(`Base: ${core.destination.expectedBase}\nPrepared commit: ${proposal.commitOid}\nProposal: ${proposal.digest}`);
       for (const check of core.validation) paragraph(`Check: ${check.profile} — ${check.status}. Profile ${check.profileDigest}; runner ${check.runner}.`);
       paragraph('Validation covers the listed check contracts. Other behavior has not been established by these checks.');
@@ -126,17 +157,20 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
     answerForm.hidden = true; document.querySelector('#answer-text').value = ''; status.textContent = 'Response saved. Continue when ready.';
   });
   document.querySelector('#connect').onclick = action(async () => {
-    if (executor) await executor.retire();
-    executor = await new BrowserExecutor(document.querySelector('#run').value, value => {
+    const previous = executor; executor = null; pending = null;
+    showDownload(null, false); request.textContent = ''; if (answerForm) answerForm.hidden = true;
+    if (previous) await previous.retire();
+    const next = new BrowserExecutor(document.querySelector('#run').value, value => {
+      if (executor !== next) return;
       request.textContent = JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item, 2);
-      const download = document.querySelector('#export-result');
       const report = value.kind === 'completed' ? value.value : value.taskReport;
-      if (download && report !== undefined) {
-        if (download.href.startsWith('blob:')) URL.revokeObjectURL(download.href);
-        const exported = JSON.stringify({ kind: 'completed', value: report }, (_, item) => typeof item === 'bigint' ? item.toString() : item, 2);
-        download.href = URL.createObjectURL(new Blob([exported], { type: 'application/json' })); download.hidden = false;
-      }
-    }).initialize();
+      showDownload(next, report !== undefined);
+    });
+    executor = await next.initialize();
+    const current = await (await executor.api('status', 'GET')).json();
+    if (current.custody === 'TERMINAL') {
+      await showStoredResult(executor); return;
+    }
     await executor.attach(); status.textContent = 'Connected'; await showQuestion();
   });
   document.querySelector('#continue').onclick = action(async () => {
@@ -150,7 +184,7 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
       }
       if (current.custody === 'DEPARTED') { status.textContent = 'Continuing at another host. Reconnect when it returns.'; return; }
       if (current.delivery?.presentation === 'pending') { status.textContent = 'Published; presentation pending'; request.textContent = JSON.stringify(current.delivery.receipt, null, 2); }
-      if (current.custody === 'TERMINAL') { if (!current.delivery) status.textContent = 'Finished'; return; }
+      if (current.custody === 'TERMINAL') { await showStoredResult(executor); return; }
       await executor.attach(); status.textContent = 'Connected'; await showQuestion(); return;
     }
     const result = await executor.advance();
@@ -158,7 +192,7 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
       await executor.retire();
       const decision = await (await executor.api('retry')).json();
       status.textContent = decision.kind === 'accepted' ? 'Continuing at another host. Reconnect when it returns.' : decision.kind === 'refused' ? 'Move declined. Continue here.' : 'Waiting for a custody decision. The run remains paused.';
-    } else if (result.status?.custody === 'TERMINAL') { await executor.retire(); status.textContent = 'Finished'; }
+    } else if (result.status?.custody === 'TERMINAL') { await executor.retire(); await showStoredResult(executor); }
     else {
       status.textContent = result.kind === 'effect_unknown' ? 'Effect result unknown. The run remains paused.'
         : result.kind === 'dispatching' ? 'Working'

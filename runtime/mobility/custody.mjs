@@ -95,12 +95,14 @@ export function decideSource(run, occurrence, offer, decision, decisionDigest, r
   return { run: { ...run, status: 'ACTIVE', attached: false, executor_incarnation: increment(run.executor_incarnation), transfer_id: null, reply_digest: refusalDigest },
     occurrence: { ...occurrence, status: 'SETTLED_REPLY', reply_digest: refusalDigest, reconciliation_ref: decisionDigest } };
 }
-export function dispatch(run, occurrence, wanted, attemptId, classification, { cleanup = false, cancelSafe = false } = {}) {
+export function dispatch(run, occurrence, wanted, attemptId, classification, { cleanup = false, cancelSafe = false, bindingId = null } = {}) {
   active(run, wanted); current(run, occurrence);
   requireThat(occurrence.status === 'READY' && occurrence.operation !== RELOCATE, 'UnsettledOccurrence');
   requireThat(run.cancel_requested === null || cleanup, 'CancellationPending');
   digest(attemptId);
-  return { run: { ...run, classification: join(run.classification, classification) }, occurrence: { ...occurrence, status: 'DISPATCHING', attempt_id: attemptId, ...(cancelSafe ? { cancel_safe: true } : {}) } };
+  if (bindingId !== null) digest(bindingId);
+  return { run: { ...run, classification: join(run.classification, classification) }, occurrence: { ...occurrence, status: 'DISPATCHING', attempt_id: attemptId,
+    ...(bindingId === null ? {} : { binding_id: bindingId }), ...(cancelSafe ? { cancel_safe: true } : {}) } };
 }
 // Known waiting is registered directly from READY: no external action or live
 // promise lies between the dispatch claim and its durable question.
@@ -127,10 +129,16 @@ export function unknown(run, occurrence, attemptId) {
   requireThat(['DISPATCHING', 'UNKNOWN'].includes(occurrence.status) && occurrence.attempt_id === attemptId, 'AttemptMismatch');
   return { ...occurrence, status: 'UNKNOWN' };
 }
-export function abandoned(run, occurrence, attemptId) {
+export function canAbandon(occurrence, { settled = false, cancelSafe = false } = {}) {
+  // A check's charged physical work must have settled; losing a process-local
+  // handle is not a termination witness. This also covers older stored claims.
+  return Boolean(occurrence && occurrence.publication_intent_digest === undefined &&
+    (occurrence.cancel_safe === true || cancelSafe === true) && (occurrence.work_kind !== 'check' || settled === true));
+}
+export function abandoned(run, occurrence, attemptId, settlement = {}) {
   requireThat(run.status === 'ACTIVE', 'CustodyFrozen'); current(run, occurrence);
-  requireThat(run.cancel_requested !== null && occurrence.cancel_safe === true && occurrence.attempt_id === attemptId && ['DISPATCHING', 'UNKNOWN'].includes(occurrence.status), 'CannotAbandonOccurrence');
-  return { ...occurrence, status: 'ABANDONED' };
+  requireThat(run.cancel_requested !== null && canAbandon(occurrence, settlement) && occurrence.attempt_id === attemptId && ['DISPATCHING', 'UNKNOWN'].includes(occurrence.status), 'CannotAbandonOccurrence');
+  return { ...occurrence, cancel_safe: true, status: 'ABANDONED' };
 }
 export function acquired(run, occurrence, attemptId, replyDigest, classification, reconciliationRef = null) {
   requireThat(run.status === 'ACTIVE', 'CustodyFrozen'); current(run, occurrence); digest(replyDigest);

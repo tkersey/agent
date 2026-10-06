@@ -5,7 +5,7 @@ import { canonical, parse, hash } from './protocol.mjs';
 import { requireThat, labels } from './canonical.mjs';
 import { schemas, observationValue, decodeMobilityRequest } from './values.mjs';
 import { canonicalRequirements } from './admission.mjs';
-import { version, active, RELOCATE } from './custody.mjs';
+import { version, active, canAbandon, RELOCATE } from './custody.mjs';
 const RESOLVE = 'agent.mobility.resolve.v1';
 const same = (a, b) => hash(canonical(a)) === hash(canonical(b));
 const option = value => value === null ? { tag: 0, value: null } : { tag: 1, value: BigInt(value) };
@@ -71,6 +71,10 @@ export class Custodian {
   }
   diagnostics() { return structuredClone(this.#diagnostics); }
   metrics(id) { return this.#journal.metrics(id); }
+  outcome(id) {
+    const run = this.#run(id);
+    return { run, bytes: Uint8Array.from(this.#journal.artifact(run.tenant_ref, run.outcome_digest)) };
+  }
   noteStaleDispatch(id) { this.#journal.noteStaleDispatch(id); }
   authorizeUser(id, identity, { cleanup = false, executor = false } = {}) {
     const run = this.#run(id);
@@ -92,8 +96,12 @@ export class Custodian {
     return { run, cached };
   }
   #command(run) {
-    const occurrence = this.#journal.occurrence(run.current_occurrence_id);
-    if (run.cancel_requested !== null && !run.cancel_applied && (!occurrence || ['READY', 'AWAITING', 'ABANDONED'].includes(occurrence.status) || (occurrence.status === 'SETTLED_REPLY' && occurrence.operation === RELOCATE))) return { kind: 'cancel', reason: run.cancel_requested };
+    let occurrence = this.#journal.occurrence(run.current_occurrence_id);
+    if (run.cancel_requested !== null && !run.cancel_applied) {
+      if (!this.#operations.has(run.run_id) && canAbandon(occurrence) && ['DISPATCHING', 'UNKNOWN'].includes(occurrence.status))
+        occurrence = this.#journal.abandonLeaf(run.run_id, occurrence.attempt_id);
+      if (!occurrence || ['READY', 'AWAITING', 'ABANDONED'].includes(occurrence.status) || (occurrence.status === 'SETTLED_REPLY' && occurrence.operation === RELOCATE)) return { kind: 'cancel', reason: run.cancel_requested };
+    }
     if (occurrence?.status === 'SETTLED_REPLY') return { kind: 'reply', value: this.#journal.artifact(run.tenant_ref, occurrence.reply_digest) };
     if (!occurrence && ['progressed', 'yielded'].includes(run.outcome_kind))
       return { kind: run.outcome_kind === 'yielded' ? 'resume_yield' : 'none' };
@@ -108,8 +116,8 @@ export class Custodian {
         const occurrence = this.#journal.occurrence(run.current_occurrence_id);
         const uncertain = occurrence && ['UNKNOWN', 'DISPATCHING'].includes(occurrence.status);
         if (occurrence?.status !== 'READY' && !uncertain) return { kind: 'blocked', status: this.status(id) };
-        const result = uncertain ? await this.#reconcilePublication(run, cached.executor.current(), occurrence) : await this.#dispatch(run, cached.executor.current());
-        if (!['reply_saved', 'refused'].includes(result.kind)) return result;
+        const result = uncertain ? await this.#reconcile(run, cached.executor.current(), occurrence) : await this.#dispatch(run, cached.executor.current());
+        if (!['reply_saved', 'refused', 'cancel_ready'].includes(result.kind)) return result;
         const latest = this.#assigned(id, wanted).run; command = this.#command(latest);
       }
       requireThat(command !== null, 'ControlUnavailable');
@@ -192,17 +200,24 @@ export class Custodian {
         } catch (error) { this.#retire(id); throw error; }
       }
       const occurrence = this.#journal.occurrence(run.current_occurrence_id);
-      if (occurrence && ['UNKNOWN', 'DISPATCHING'].includes(occurrence.status)) return this.#reconcilePublication(run, cached.executor.current(), occurrence);
+      if (occurrence && ['UNKNOWN', 'DISPATCHING'].includes(occurrence.status)) return this.#reconcile(run, cached.executor.current(), occurrence);
       if (occurrence?.status === 'AWAITING') return { kind: 'awaiting', status: this.status(id) };
       return await this.#dispatch(run, cached.executor.current());
     } finally { this.#busy.delete(id); }
   }
-  async #reconcilePublication(run, token, occurrence) {
+  async #reconcile(run, token, occurrence) {
     const id = run.run_id;
-    if (this.#operations.has(id) || occurrence.operation !== 'agent.repository.publish.v1')
+    const publication = occurrence.operation === 'agent.repository.publish.v1';
+    if (this.#operations.has(id) || (!publication && (run.cancel_requested === null || run.cancel_applied || occurrence.work_kind === 'check')))
       return { kind: this.#operations.has(id) ? 'dispatching' : 'effect_unknown', status: this.status(id) };
     const data = this.#admission.read(token), decoded = this.#world.decodeOutcome(data.outcome);
-    const request = await this.#world.decodeRequest(decoded.request), selected = this.#policy.publicationRecovery(run, request);
+    const request = await this.#world.decodeRequest(decoded.request), selected = this.#policy.recovery(run, request, occurrence.binding_id ?? null);
+    if (!publication) {
+      if (!selected?.binding.cancelSafe) return { kind: 'effect_unknown', status: this.status(id) };
+      this.#journal.abandonLeaf(id, occurrence.attempt_id, { cancelSafe: true });
+      return { kind: 'cancel_ready', status: this.status(id) };
+    }
+    requireThat(selected?.binding.publication === true, 'PublicationRecoveryDenied');
     const result = await selected.binding.reconcile({ payload: selected.payload, request, run, occurrence });
     this.#world.validateValue(request.resumeSchema, result.reply);
     this.#journal.recordReply(id, occurrence.attempt_id, result.reply, selected.binding.classification, null,
@@ -227,7 +242,7 @@ export class Custodian {
       const charge = selected?.binding.charge?.({ payload: selected.payload, request, run }) ?? null;
       requireThat(!(charge instanceof Promise), 'AsyncWorkAdmission');
       const admitted = this.#journal.admitLeaf(id, version(run), selected?.binding.classification ?? [], { cleanup: selected?.cleanup ?? false,
-        charge, cancelSafe: selected?.binding.cancelSafe === true });
+        charge, cancelSafe: selected?.binding.cancelSafe === true, bindingId: selected?.bindingId ?? null });
       if (selected?.binding.background === true) {
         requireThat(!this.#operations.has(id), 'ExternalOperationBusy');
         const controller = new AbortController(), operation = { controller, settled: null };
@@ -243,7 +258,7 @@ export class Custodian {
           } finally {
             const current = this.#run(id), pending = this.#journal.occurrence(current.current_occurrence_id);
             if (current.cancel_requested !== null && pending?.attempt_id === admitted.attempt_id && pending.cancel_safe === true && ['DISPATCHING', 'UNKNOWN'].includes(pending.status))
-              this.#journal.abandonLeaf(id, admitted.attempt_id);
+              this.#journal.abandonLeaf(id, admitted.attempt_id, { settled: true });
             this.#operations.delete(id);
           }
         })().catch(error => {
@@ -308,7 +323,7 @@ export class Custodian {
     let result;
     for (let step = 0; step < maximumSteps; step++) {
       result = await this.step(id);
-      if (!['published', 'reply_saved', 'refused', 'cancel_requested'].includes(result.kind)) return result;
+      if (!['published', 'reply_saved', 'refused', 'cancel_requested', 'cancel_ready'].includes(result.kind)) return result;
     }
     return { kind: 'budget', status: this.status(id) };
   }
@@ -413,10 +428,7 @@ export class Custodian {
     run = this.#journal.requestCancel(id, reasonText);
     const operation = this.#operations.get(id);
     if (operation) { operation.controller.abort(); await operation.settled; run = this.#run(id); }
-    else {
-      const occurrence = this.#journal.occurrence(run.current_occurrence_id);
-      if (run.status === 'ACTIVE' && occurrence?.cancel_safe === true && occurrence.status === 'UNKNOWN') this.#journal.abandonLeaf(id, occurrence.attempt_id);
-    }
+    if (run.status === 'ACTIVE') this.#command(run);
     if (run.status === 'OFFERED') {
       const decision = await this.withdrawTransfer(run.transfer_id);
       if (decision.kind === 'unknown') return decision;

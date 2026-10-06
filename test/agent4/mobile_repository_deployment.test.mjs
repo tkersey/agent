@@ -102,7 +102,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   const providerProfile = { kind: 'openai-responses-replay', owner: 'W', mode: 'loopback-fixture',
     endpoint: `http://127.0.0.1:${provider.address().port}/v1/responses`, credentialEnv: null, model: 'fixture-model',
     parameters: { maxOutputTokens: 512, temperature: null, reasoning: { effort: 'medium', summary: 'auto' } }, timeoutMs: 10000,
-    maximumRequestBytes: 2 << 20, maximumResponseBytes: 2 << 20, disclosure: { audience: null, policyRevision: 'p1', labels: ['shared'] },
+    maximumRequestBytes: 2 << 20, maximumResponseBytes: 2 << 20, disclosure: { audience: 'fixture-provider', policyRevision: 'p1', labels: ['shared'] },
     allowance: { attempts: 4, request_bytes: 16 << 20, output_tokens: 3072, concurrent: 1 } };
   const pairs = Object.fromEntries(['issuer', 'U', 'W'].map(name => [name, generateKeyPairSync('ed25519')]));
   for (const [name, pair] of Object.entries(pairs)) for (const [kind, type] of [['public', 'spki'], ['private', 'pkcs8']])

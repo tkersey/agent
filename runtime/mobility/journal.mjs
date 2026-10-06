@@ -459,8 +459,8 @@ export class CustodyJournal {
     }
     return result;
   }
-  abandonLeaf(runId, attemptId) {
-    return this.#transaction('abandon', () => { const run = this.run(runId), next = core.abandoned(run, this.#occurrence(run), attemptId); this.#saveOccurrence(next); return next; });
+  abandonLeaf(runId, attemptId, settlement = {}) {
+    return this.#transaction('abandon', () => { const run = this.run(runId), next = core.abandoned(run, this.#occurrence(run), attemptId, settlement); this.#saveOccurrence(next); return next; });
   }
   recordReply(runId, attemptId, reply, classification, reconciliationRef = null, { placementEvidence = null, dispatchVersion = null, publicationReceipt = null } = {}) {
     return this.#transaction('acquire', () => {

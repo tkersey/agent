@@ -71,7 +71,7 @@ export async function configureRepository(filename, destination) {
   const provider = input.provider.enabled ? input.provider.profile : null;
   const meta = (operation, from, to, role) => ({ operation, payloadSchema: schemaPaths[from], resultSchema: schemaPaths[to], role,
     subject: scope.repository, subjectVersion: operation.startsWith('agent.repository.') && !['approval', 'interaction'].includes(role) ? storeConfig.manifestSha256 : null,
-    scope: operation, audience: ['approval', 'interaction'].includes(role) ? input.origin.browser.audience : null,
+    scope: operation, audience: role === 'model' ? provider?.disclosure?.audience : ['approval', 'interaction'].includes(role) ? input.origin.browser.audience : null,
     trustDomain: input.trustDomain, tenants: [input.principal.tenant], principals: [input.principal.principal], classification: [input.label], allowedStateLabels: [input.label], cleanup: false });
   const required = row => requirement({ ...row, payloadSchema: assets.get(row.payloadSchema), resultSchema: assets.get(row.resultSchema) });
   if (provider) modelBinding(meta('agent.model.invoke.v4', 'model-request', 'model-result', 'model'), provider, input.workspace.hostId);

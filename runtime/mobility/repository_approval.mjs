@@ -72,7 +72,7 @@ export function repositoryNextTaskBinding(metadata, adapter) {
   return { ...metadata, deferredRevision: adapter.revision, authorize: () => true,
     defer: ({ payload }) => ({ audience: metadata.audience, alternatives: ['stop', ...allowed], maximum_text_bytes: 4096,
       question: { kind: 'repository-next-task', task_id: String(payload[0][0]), generation: String(payload[0][1]), next_generation: String(payload[1]),
-        summary: payload[0][4][0]?.[1]?.[2] ?? '', proposal: payload[0][5],
+        summary: payload[0][4][0]?.[1]?.[2] ?? '', proposal: payload[0][5], publication: payload[0][6],
         allocation: { steps: payload[2], checks: payload[3], moves: payload[4] }, memory: 'No model transcript or candidate is reused.' } }),
     answer: ({ answer }) => {
       requireThat(answer.choice === 'stop' || (allowed.includes(answer.choice) && typeof answer.text === 'string' && answer.text.trim().length > 0 && Buffer.byteLength(answer.text) <= 4096), 'InvalidTaskAnswer');

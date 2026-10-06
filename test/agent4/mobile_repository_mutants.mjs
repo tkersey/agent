@@ -62,7 +62,7 @@ const counterexamples = {
   'replace-acquired-answer': ['Missing expected exception', "code: 'ReplyConflict'"],
   'summary-only-proposal': ['Missing expected rejection', "code: 'RepositoryPublicationMismatch'"],
   'remove-ref-precondition': ['Missing expected rejection', 'repository_publication_gate.test.mjs'],
-  'repeat-lost-publication': ["code: 'FixtureLostReply'", '#reconcilePublication'],
+  'repeat-lost-publication': ["code: 'FixtureLostReply'", 'lost publication reply resumes'],
   'matching-tree-is-publication': ["expected: 'Conflict'", "actual: 'Published'"],
   'drop-opaque-replay': ['encrypted_content', 'opaque-synthetic-continuation'],
   'ignore-whole-state-labels': ["expected: 'terminal'", "actual: 'offered'"],

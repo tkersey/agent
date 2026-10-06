@@ -28,6 +28,7 @@ export class HostPolicy {
       labels(binding.allowedStateLabels);
       requireThat(!['agent.mobility.resolve.v1', 'agent.mobility.relocate.v1'].includes(binding.operation), 'ProtectedBinding');
       requireThat(binding.trustDomain === trustDomain && typeof binding.authorize === 'function' && (typeof binding.handle === 'function' || (typeof binding.defer === 'function' && typeof binding.answer === 'function' && typeof binding.deferredRevision === 'string' && binding.deferredRevision.length > 0)), 'InvalidBinding');
+      requireThat(binding.publication !== true || typeof binding.recoveryMatches === 'function', 'InvalidRecoveryBinding');
       for (const bytes of [binding.payloadSchema, binding.resultSchema]) requireThat(equal(encodeSchema(decodeSchema(bytes)), bytes), 'InvalidBindingSchema');
     }
     requireThat(new Set(bindings.map(binding => requirementId(requirement(binding)))).size === bindings.length, 'DuplicateBinding');
@@ -117,24 +118,23 @@ export class HostPolicy {
       // dispatch admission have no asynchronous check-then-act gap.
       const allowed = binding.authorize(payload, run);
       requireThat(!(allowed instanceof Promise), 'AsyncBindingAuthorization');
-      if (allowed) return { binding, payload, cleanup };
+      if (allowed) return { binding, bindingId: requirementId(requirement(binding)), payload, cleanup };
     }
     requireThat(false, revoked ? 'PrincipalRevoked' : 'LeafBindingDenied');
   }
-  publicationRecovery(run, request) {
+  recovery(run, request, bindingId = null) {
     // Revocation forbids new effects, but cannot erase the result of an already
-    // admitted write. This selector exposes only the read-only reconciler.
+    // admitted work. Recovery identifies its owner; it grants no fresh effect.
     this.authorizeRun(run, { cleanup: true });
-    requireThat(request.semanticIdentity === 'agent.repository.publish.v1', 'PublicationRecoveryDenied');
     const payload = decodeValue(decodeSchema(request.payloadSchema), request.payload);
-    const binding = this.#bindings.find(candidate => candidate.publication === true &&
+    const bindings = this.#bindings.filter(candidate => typeof candidate.recoveryMatches === 'function' &&
       candidate.operation === request.semanticIdentity && equal(candidate.payloadSchema, request.payloadSchema) &&
       equal(candidate.resultSchema, request.resumeSchema) && candidate.tenants.includes(run.tenant_ref) &&
-      candidate.principals.includes(run.principal_ref) && typeof candidate.reconcile === 'function' &&
+      candidate.principals.includes(run.principal_ref) && (bindingId === null || requirementId(requirement(candidate)) === bindingId) &&
       run.classification.every(label => candidate.allowedStateLabels.includes(label)) &&
-      candidate.classification.every(label => this.#exports[label]?.includes(this.#host)));
-    requireThat(binding, 'PublicationRecoveryDenied');
-    return { binding, payload };
+      candidate.classification.every(label => this.#exports[label]?.includes(this.#host)) && candidate.recoveryMatches(payload, run));
+    // Older occurrences have no binding ID: recover only an unambiguous owner.
+    return bindings.length === 1 ? { binding: bindings[0], payload } : null;
   }
   encodeResult(binding, value) { return encodeValue(decodeSchema(binding.resultSchema), value); }
 }

@@ -503,6 +503,10 @@ pub fn build(b: *std.Build) void {
         repository_approval_test.addFileArg2(process_lock.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LOCK=", .make_absolute = true });
         mobile_repository_zig_test.addFileArg2(limit_exe.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LIMIT=", .make_absolute = true });
         mobile_repository_zig_test.addFileArg2(process_lock.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LOCK=", .make_absolute = true });
+    } else {
+        const unavailable = b.addFail("repository execution helpers require the qualified macOS host profile");
+        publication_gate.dependOn(&unavailable.step);
+        repository_runner.dependOn(&unavailable.step);
     }
     mobile_repository_objects.addArgs(&.{ "node", "--test", "test/agent4/repository_snapshot.test.mjs", "test/agent4/mobile_repository_qualification.test.mjs" });
     mobile_repository_zig_test.addArgs(&.{ "node", "--test", "test/agent4/repository_zig_sandbox.test.mjs" });

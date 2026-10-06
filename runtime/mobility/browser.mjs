@@ -62,7 +62,7 @@ export async function serveBrowser(custodian, { key, cert, authenticate, redeem 
         requireThat(req.headers.origin === origin && typeof req.headers['x-agent-csrf'] === 'string' && same(req.headers['x-agent-csrf'], csrf(identity)), 'CsrfDenied');
         return json(res, await catalogue.start(identity, parse(await body(req, 32768))));
       }
-      const route = /^\/v1\/browser\/runs\/([^/]+)\/(attach|command|report|image|outcome|reply|status|metrics|retry|cancel|question|answer|result-schema)$/.exec(req.url);
+      const route = /^\/v1\/browser\/runs\/([^/]+)\/(attach|command|report|image|outcome|reply|status|metrics|retry|cancel|question|answer|result-schema|result)$/.exec(req.url);
       requireThat(route !== null, 'UnknownRoute'); const id = decodeURIComponent(route[1]), operation = route[2];
       const run = custodian.authorizeUser(id, identity, { cleanup: ['cancel', 'status', 'metrics'].includes(operation),
         executor: ['attach', 'command', 'report', 'image', 'outcome', 'reply'].includes(operation) });
@@ -72,6 +72,10 @@ export async function serveBrowser(custodian, { key, cert, authenticate, redeem 
       }
       if (req.method === 'GET' && operation === 'result-schema') {
         const schema = catalogue?.resultSchema(run.image_digest); requireThat(schema, 'ResultSchemaUnavailable'); return binary(res, schema);
+      }
+      if (req.method === 'GET' && operation === 'result') {
+        requireThat(catalogue, 'ResultSchemaUnavailable');
+        return json(res, await catalogue.exportResult(identity, id), 200, 8 << 20);
       }
       if (req.method === 'GET' && operation === 'status') return json(res, custodian.status(id));
       if (req.method === 'GET' && operation === 'question') return json(res, custodian.pendingQuestion(id, identity), 200, (2 << 20) + 8192);

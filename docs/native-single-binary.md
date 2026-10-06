@@ -34,6 +34,10 @@ reply successfully. Closing the completed restored resident rejects later use.
 This witness is included once in `check-native`, sharing the existing fixture
 emitter compilation. It is not a production host or application policy loop.
 
+The initial N0 commit also passed the complete existing CI matrix on Linux:
+[run 37518433037](https://github.com/tkersey/agent/actions/runs/37518433037).
+That run predates the build-helper and protocol changes below.
+
 Executed on macOS arm64 with Zig 0.17.0, safe optimization: **9/9 build steps
 passed**, including the native run. A copy ran from an unrelated directory
 containing spaces and Unicode, with `PATH=/nonexistent`. Binary inspection
@@ -44,6 +48,67 @@ Linux execution, persistence, protocol, TLS, or live-provider acceptance.
 The initial build rejected an authored addition without its required overflow
 failure value. The corrected program supplies that value through the existing
 source primitive contract; the expected result and native assertions are unchanged.
+
+## N1 implementation under qualification
+
+`build.zig` now exports `addNativeSystem`. The helper runs
+`tools/native/emit.zig` on the build host, using the application's `agent.system`
+definition. It emits one canonical image plus application schemas, declared
+capabilities and immutable resources. The target imports only the native
+environment, World, Boundary data, ordinary Agent codecs, and the application's
+compiled handlers/types. A separate build-time tool binds compiler/library,
+dependency, target, resource and license metadata without embedding private
+build paths or a circular executable hash.
+
+The reusable application asset value includes its type source. Supplying an
+already emitted application for another target cannot silently ignore a second
+definition or separately substitute a type mapping. Set
+`application = .{ .emitted = first.assets }` on the second target build to share
+the same generation step. Target manifests remain distinct.
+
+The complete example source is in `examples/native-minimal/`: `types.zig`
+declares its client values, `definition.zig` authors the computation and assets,
+and `environment.zig` declares three static typed native handlers. The example
+retains its input over an increment, yields, asks for a label and performs
+authored cleanup before returning. The explicit offline demo supplies a
+deterministic label and reports that it is nondurable.
+
+```sh
+zig build native-example -Doptimize=safe \
+  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
+./zig-out/bin/agent-native-example --help
+./zig-out/bin/agent-native-example describe-build
+./zig-out/bin/agent-native-example demo --offline
+./zig-out/bin/agent-native-example serve --transport stdio --offline
+```
+
+For a downstream build, use the example's own `build.zig` and `build.zig.zon`,
+with the Agent dependency pointing to the admitted package. Supply the same
+authenticated `-Dworld-source` and `-Dworld-runtime` inputs used by Agent setup.
+The helper installs the executable through the caller's normal prefix and
+executable directory. Linux's host-default product target is x86_64 musl;
+macOS's supported product target is arm64. Explicit other product targets reject.
+The native consumer audit still uses its platform's native ABI independently.
+
+The native client mapping is `agent-client-values/1.0`: bounded text is a JSON
+string, bounded bytes use unpadded canonical base64url, 64-bit integers use
+canonical decimal strings, smaller integers use JSON integers, products use
+closed named objects, and sums use `{tag,value}`. Optional values use JSON null.
+Provider v3/v4 JSON schemas retain their existing numeric meaning. Runtime
+admission checks the embedded client and wire schemas against the actual types.
+
+The new framing/parser and static registry have focused negative tests. The
+independent subprocess peer exercises the copied final example executable,
+offline demo, fragmented Unicode/CRLF, coalesced input, malformed/duplicate JSON,
+negotiation, discovery, notification suppression, batch correlation and truncated
+or oversized input. These changes are **not yet qualified** by the N0 CI run.
+
+Durable task execution, real client question/answer delivery, timeouts,
+backpressure and shutdown/recovery are still being implemented. Discovery
+reports task execution/events/message input as disabled and task calls reject
+with `UnsupportedCapability`; accepting a JSON line is not claimed as protocol
+reference qualification. The nondurable demo driver will be wired through the
+same persistent task owner as the CLI and protocol before N1/N2 acceptance.
 
 ## Existing owners and remaining gaps
 
@@ -61,10 +126,10 @@ source primitive contract; the expected result and native assertions are unchang
   admission, attempt charging, acquired replies, deferred questions, unknown
   delivery, and checkpoint successor semantics. The standalone native adapter
   must preserve those semantics without opening a live multi-host database.
-* Remaining native work includes the public build helper, embedded schemas and
-  manifest, exact handler admission, durable task/occurrence owner, authored
-  inbox, bounded stdio protocol and client, native HTTPS and snapshot tools,
-  and the useful fixed-profile authored repository analyst.
+* The build/embedding/discovery slice above is under qualification. Remaining
+  product work includes the durable task/occurrence owner, authored inbox,
+  complete stdio protocol and client, native HTTPS and snapshot tools, and the
+  useful fixed-profile authored repository analyst.
 * Qualification still requires public downstream installation, cancellation and
   crash/restart, real TLS, protocol fault/control cases, native/WASM/native state
   transfer, both final platform artifacts, and separated measurements. Live

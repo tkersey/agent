@@ -165,6 +165,10 @@ pub fn build(b: *std.Build) void {
     b.modules.put(b.allocator, b.dupe("boundary_data"), public_data) catch @panic("out of memory");
     b.modules.put(b.allocator, b.dupe("agent_contracts"), public_contracts) catch @panic("out of memory");
     b.modules.put(b.allocator, b.dupe("agent"), public_agent) catch @panic("out of memory");
+    b.modules.put(b.allocator, b.dupe("agent_host_authoring"), agent) catch @panic("out of memory");
+    b.modules.put(b.allocator, b.dupe("boundary_host_authoring"), boundary) catch @panic("out of memory");
+    b.modules.put(b.allocator, b.dupe("boundary_data_host"), data) catch @panic("out of memory");
+    b.modules.put(b.allocator, b.dupe("agent_contracts_host"), contracts) catch @panic("out of memory");
     const g: Graph = .{ .b = b, .optimize = optimize, .agent = agent, .boundary = boundary, .data = data, .contracts = contracts, .gate = &source_guard.step };
     const fixture_driver = g.emitter("agent4-fixtures", g.module("test/fixture_driver.zig"));
     const application_driver = g.emitter("agent4-applications", g.module("test/application_driver.zig"));
@@ -181,7 +185,7 @@ pub fn build(b: *std.Build) void {
 
     const lint = b.step("lint", "Check formatting and the Zig source inventory");
     const format_check = b.addRunFile(.zig_exe);
-    format_check.addArgs(&.{ "fmt", "--check", "build.zig", "build_agent4.zig", "src", "test/agent4", "test/consumers", "test/fixture_driver.zig", "test/application_driver.zig", "test/authoring_tests.zig" });
+    format_check.addArgs(&.{ "fmt", "--check", "build.zig", "build_agent4.zig", "build_native.zig", "src", "runtime/native", "tools/native", "examples/native-minimal", "test/agent4", "test/consumers", "test/fixture_driver.zig", "test/application_driver.zig", "test/authoring_tests.zig" });
     const paths = b.addSystemCommand(&.{ "sh", "tools/check_zig_paths.sh" });
     lint.dependOn(&format_check.step);
     lint.dependOn(&paths.step);
@@ -546,7 +550,10 @@ pub fn build(b: *std.Build) void {
 
     const native_checks = b.step("check-native", "Check native and custody contracts against the selected World");
     const native_consumer = b.step("check-native-consumer", "Build and execute an embedded public World consumer (N0)");
+    const native_example = b.step("native-example", "Build the minimal embedded native application");
+    const native_host = b.step("check-native-host", "Check the native build, embedded assets and protocol discovery");
     native_checks.dependOn(native_consumer);
+    native_checks.dependOn(native_host);
     if (runtime) |runtime_path| {
         const world = b.createModule(.{
             .root_source_file = world_source.path(b, "src/root.zig"),
@@ -569,6 +576,65 @@ pub fn build(b: *std.Build) void {
         _ = runtime_guard.captureStdOut(.{});
         var native_graph = g;
         native_graph.gate = &runtime_guard.step;
+        const native_admission_files = b.addWriteFiles();
+        native_admission_files.step.dependOn(&runtime_guard.step);
+        const native_admission = b.createModule(.{ .root_source_file = native_admission_files.add("native_dependency_admission.zig", "") });
+        const host_environment = nativeEnvironment(b, b.graph.host, optimize, world, data, contracts, native_admission);
+        // Host-default Linux packaging selects musl. Explicit unsupported target
+        // requests are rejected by the public helper before creating emitters.
+        const default_musl = target.query.isNative() and target.result.os.tag == .linux and target.result.cpu.arch == .x86_64;
+        const native_target = if (default_musl) b.resolveTargetQuery(.{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .musl }) else target;
+        const native_data = if (!default_musl) public_data else b.createModule(.{
+            .root_source_file = public_data.root_source_file,
+            .target = native_target,
+            .optimize = optimize,
+        });
+        const native_contracts = if (!default_musl) public_contracts else b.createModule(.{
+            .root_source_file = b.path("src/contracts.zig"),
+            .target = native_target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "boundary_data", .module = native_data }},
+        });
+        const native_world = if (!default_musl and target.query.isNative()) world else b.createModule(.{
+            .root_source_file = world_source.path(b, "src/root.zig"),
+            .target = native_target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "boundary_data", .module = native_data }},
+        });
+        const public_environment = if (!default_musl and target.query.isNative()) host_environment else nativeEnvironment(b, native_target, optimize, native_world, native_data, native_contracts, native_admission);
+        b.modules.put(b.allocator, b.dupe("agent_native"), public_environment) catch @panic("out of memory");
+        b.modules.put(b.allocator, b.dupe("agent_native_data"), native_data) catch @panic("out of memory");
+        b.modules.put(b.allocator, b.dupe("agent_native_contracts"), native_contracts) catch @panic("out of memory");
+        const product_supported = (native_target.result.os.tag == .macos and native_target.result.cpu.arch == .aarch64) or
+            (native_target.result.os.tag == .linux and native_target.result.cpu.arch == .x86_64 and native_target.result.abi == .musl);
+        if (product_supported) {
+            const product = @import("build_native.zig").addWithModules(b, .{
+                .root = b.path("."),
+                .agent = agent,
+                .boundary = boundary,
+                .data = data,
+                .contracts = contracts,
+                .native = public_environment,
+                .native_data = native_data,
+                .native_contracts = native_contracts,
+            }, .{
+                .name = "agent-native-example",
+                .application = .{ .source = .{
+                    .definition = b.path("examples/native-minimal/definition.zig"),
+                    .types = b.path("examples/native-minimal/types.zig"),
+                } },
+                .environment = b.path("examples/native-minimal/environment.zig"),
+            });
+            native_example.dependOn(&product.install.step);
+            const protocol_peer = nodeCommand(b);
+            protocol_peer.addArgs(&.{ "node", "test/agent4/native_host.mjs" });
+            protocol_peer.addFileArg2(product.executable.getEmittedBin(), .{ .make_absolute = true });
+            native_host.dependOn(&protocol_peer.step);
+        } else {
+            const unsupported = b.addFail("native product supports aarch64-macos and x86_64-linux-musl");
+            native_example.dependOn(&unsupported.step);
+            native_host.dependOn(&unsupported.step);
+        }
         const native_image = g.runArtifact(fixture_driver.select("native-consumer"));
         const consumer_module = b.createModule(.{
             .root_source_file = b.path("test/consumers/native/main.zig"),
@@ -585,6 +651,7 @@ pub fn build(b: *std.Build) void {
         // tests together instead of rebuilding the same compiler eleven times.
         const native_suite = g.module("test/agent4/native_tests.zig");
         native_suite.addImport("world", world);
+        native_suite.addImport("agent_native", host_environment);
         native_suite.addImport("document", g.module("test/consumers/document/consequence.zig"));
         native_graph.testModule(native_checks, native_suite);
         // Repository policy modules have distinct import roots and retain their
@@ -613,6 +680,8 @@ pub fn build(b: *std.Build) void {
         const missing = b.addFail("provide -Dworld-runtime=/absolute/authenticated/world-runtime");
         native_checks.dependOn(&missing.step);
         native_consumer.dependOn(&missing.step);
+        native_example.dependOn(&missing.step);
+        native_host.dependOn(&missing.step);
     }
     const pure = nodeCommand(b);
     pure.addArgs(&.{ "node", "--test", "test/agent4/values.test.mjs", "test/agent4/model.test.mjs" });
@@ -642,6 +711,22 @@ pub fn build(b: *std.Build) void {
     aggregate.dependOn(installation_check);
     b.step("check", "Check Agent 4 authoring").dependOn(aggregate);
     b.default_step = aggregate;
+}
+
+fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize, world: *std.Build.Module, data: *std.Build.Module, contracts: *std.Build.Module, admission: *std.Build.Module) *std.Build.Module {
+    const schemas = b.createModule(.{ .root_source_file = b.path("src/model_json.zig"), .target = target, .optimize = optimize });
+    return b.createModule(.{
+        .root_source_file = b.path("runtime/native/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "world", .module = world },
+            .{ .name = "boundary_data", .module = data },
+            .{ .name = "agent_contracts", .module = contracts },
+            .{ .name = "agent_json_schema", .module = schemas },
+            .{ .name = "_native_dependency_admission", .module = admission },
+        },
+    });
 }
 
 fn addBoundary(b: *std.Build, run: *std.Build.Step.Run, source: ?std.Build.LazyPath, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) void {

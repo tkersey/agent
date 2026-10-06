@@ -1,0 +1,159 @@
+//! Build/environmental API. No target program executes while generating assets.
+const std = @import("std");
+
+pub const Assets = struct {
+    image: std.Build.LazyPath,
+    application: std.Build.LazyPath,
+    types: std.Build.LazyPath,
+};
+pub const Source = struct { definition: std.Build.LazyPath, types: std.Build.LazyPath };
+pub const Options = struct {
+    name: []const u8,
+    environment: std.Build.LazyPath,
+    /// Reuse the complete emitted application for another target. Its type
+    /// mapping travels with its image, so a second source cannot be ignored.
+    application: union(enum) { source: Source, emitted: Assets },
+};
+pub const Product = struct {
+    executable: *std.Build.Step.Compile,
+    install: *std.Build.Step.InstallArtifact,
+    assets: Assets,
+    manifest: std.Build.LazyPath,
+};
+
+/// The dependency must select its admitted World source/runtime with the normal
+/// Agent build options. Pure authoring consumers never need those options.
+pub fn addNativeSystem(b: *std.Build, dependency: *std.Build.Dependency, options: Options) Product {
+    const product = addWithModules(b, .{
+        .root = dependency.path("."),
+        .agent = dependency.module("agent_host_authoring"),
+        .boundary = dependency.module("boundary_host_authoring"),
+        .data = dependency.module("boundary_data_host"),
+        .contracts = dependency.module("agent_contracts_host"),
+        .native = dependency.module("agent_native"),
+        .native_contracts = dependency.module("agent_native_contracts"),
+        .native_data = dependency.module("agent_native_data"),
+    }, options);
+    b.getInstallStep().dependOn(&product.install.step);
+    return product;
+}
+
+// Also used by Agent's own examples so the downstream and repository recipes
+// select the identical builder. Module identities come from one admitted graph.
+pub const Modules = struct {
+    root: std.Build.LazyPath,
+    agent: *std.Build.Module,
+    boundary: *std.Build.Module,
+    data: *std.Build.Module,
+    contracts: *std.Build.Module,
+    native: *std.Build.Module,
+    native_contracts: *std.Build.Module,
+    native_data: *std.Build.Module,
+};
+
+pub fn addWithModules(b: *std.Build, modules: Modules, options: Options) Product {
+    const target = modules.native.resolved_target orelse @panic("native target is required");
+    const supported = (target.result.os.tag == .macos and target.result.cpu.arch == .aarch64) or
+        (target.result.os.tag == .linux and target.result.cpu.arch == .x86_64 and target.result.abi == .musl);
+    if (!supported) @panic("native product supports aarch64-macos and x86_64-linux-musl");
+    const optimize = modules.native.optimize orelse .safe;
+    const assets = switch (options.application) {
+        .source => |source| generate(b, modules, source),
+        .emitted => |assets| assets,
+    };
+
+    const types = b.createModule(.{
+        .root_source_file = assets.types,
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "agent_contracts", .module = modules.native_contracts }},
+    });
+    const environment = b.createModule(.{
+        .root_source_file = options.environment,
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "agent_native", .module = modules.native },
+            .{ .name = "application_types", .module = types },
+            .{ .name = "agent_contracts", .module = modules.native_contracts },
+        },
+    });
+    const manifest = b.addSystemCommand(&.{ "env", "-u", "NODE_TEST_CONTEXT" });
+    manifest.addFileArg2(.zig_exe, .{ .prefix = "AGENT_ZIG_EXE=", .make_absolute = true });
+    manifest.addDirectoryArg2(.zig_lib, .{ .prefix = "ZIG_LIB_DIR=", .make_absolute = true });
+    manifest.addArg("node");
+    manifest.addFileArg2(modules.root.path(b, "tools/agent4/native-manifest.mjs"), .{});
+    manifest.addFileInput(modules.root.path(b, "tools/agent4/toolchain.mjs"));
+    // The selected distribution's license can sit outside its library tree.
+    // Authenticate current compiler/library/license inputs on each build.
+    manifest.has_side_effects = true;
+    manifest.addFileArg2(assets.image, .{});
+    manifest.addFileArg2(assets.application, .{});
+    manifest.addFileArg2(modules.root.path(b, "conformance/agent4/dependencies.lock.json"), .{});
+    manifest.addFileArg2(modules.root.path(b, "LICENSE"), .{});
+    const world = modules.native.import_table.get("world") orelse @panic("missing admitted World module");
+    manifest.addFileArg2(world.root_source_file.?.dirname().dirname().path(b, "LICENSE"), .{});
+    manifest.addFileArg2(modules.native_data.root_source_file.?.dirname().dirname().dirname().path(b, "LICENSE"), .{});
+    manifest.addArgs(&.{ target.result.zigTriple(b.allocator) catch @panic("out of memory"), @tagName(optimize) });
+    const manifest_file = manifest.addOutputFileArg2("native-manifest.json", .{});
+
+    const root = b.createModule(.{
+        .root_source_file = modules.root.path(b, "runtime/native/entry.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "agent_native", .module = modules.native },
+            .{ .name = "environment", .module = environment },
+            .{ .name = "application_types", .module = types },
+            .{ .name = "agent_contracts", .module = modules.native_contracts },
+        },
+    });
+    root.addAnonymousImport("native_image", .{ .root_source_file = assets.image });
+    root.addAnonymousImport("native_application", .{ .root_source_file = assets.application });
+    root.addAnonymousImport("native_manifest", .{ .root_source_file = manifest_file });
+    const executable = b.addExecutable(.{ .name = options.name, .root_module = root });
+    const install = b.addInstallArtifact(executable, .{});
+    return .{ .executable = executable, .install = install, .assets = assets, .manifest = manifest_file };
+}
+
+fn generate(b: *std.Build, modules: Modules, source: Source) Assets {
+    const optimize = modules.agent.optimize orelse .safe;
+    const types = b.createModule(.{
+        .root_source_file = source.types,
+        .target = b.graph.host,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "agent_contracts", .module = modules.contracts }},
+    });
+    const definition = b.createModule(.{
+        .root_source_file = source.definition,
+        .target = b.graph.host,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "agent", .module = modules.agent },
+            .{ .name = "boundary", .module = modules.boundary },
+            .{ .name = "application_types", .module = types },
+        },
+    });
+    const schema = b.createModule(.{ .root_source_file = modules.root.path(b, "src/model_json.zig"), .target = b.graph.host, .optimize = optimize });
+    const emitter = b.addExecutable(.{
+        .name = "agent-native-assets",
+        .root_module = b.createModule(.{
+            .root_source_file = modules.root.path(b, "tools/native/emit.zig"),
+            .target = b.graph.host,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "definition", .module = definition },
+                .{ .name = "application_types", .module = types },
+                .{ .name = "agent", .module = modules.agent },
+                .{ .name = "boundary", .module = modules.boundary },
+                .{ .name = "agent_json_schema", .module = schema },
+            },
+        }),
+    });
+    const run = b.addRunArtifact(emitter);
+    return .{
+        .image = run.addOutputFileArg2("program.bpi3", .{}),
+        .application = run.addOutputFileArg2("application.json", .{}),
+        .types = source.types,
+    };
+}

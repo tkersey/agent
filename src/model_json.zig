@@ -171,6 +171,107 @@ pub fn ToolSchema(comptime T: type) type {
     };
 }
 
+/// Versioned client mapping used by the native environment. Provider schemas
+/// above retain their existing numeric meaning. Full-width client integers are
+/// decimal strings; bytes are base64url; sums have explicit tag/value fields.
+pub fn ClientSchema(comptime T: type) type {
+    return struct {
+        const length = blk: {
+            @setEvalBranchQuota(1_000_000);
+            var writer = CountingWriter{};
+            writeClientSchema(T, &writer);
+            break :blk writer.length;
+        };
+        pub const value = blk: {
+            @setEvalBranchQuota(1_000_000);
+            var writer = FixedWriter(length){};
+            writeClientSchema(T, &writer);
+            break :blk writer.finish();
+        };
+    };
+}
+
+fn writeClientSchema(comptime T: type, writer: anytype) void {
+    if (comptime isText(T)) return writeSchema(T, writer);
+    if (@typeInfo(T) == .@"struct" and @hasDecl(T, "agent_value_kind")) {
+        if (T.agent_value_kind == .bytes) {
+            const maximum = T.max_length orelse @compileError("client bytes must be bounded");
+            writer.raw("{\"type\":\"string\",\"contentEncoding\":\"base64url\",\"maxLength\":");
+            writeUnsigned(writer, std.base64.url_safe_no_pad.Encoder.calcSize(maximum));
+            writer.raw(",\"x-maximum-bytes\":");
+            writeUnsigned(writer, maximum);
+            writer.byte('}');
+            return;
+        }
+        if (T.agent_value_kind == .vector) {
+            writer.raw("{\"type\":\"array\",\"maxItems\":");
+            writeUnsigned(writer, T.max_length);
+            writer.raw(",\"items\":");
+            writeClientSchema(T.Child, writer);
+            writer.byte('}');
+            return;
+        }
+    }
+    switch (@typeInfo(T)) {
+        .void, .bool, .@"enum" => writeSchema(T, writer),
+        .int => |info| {
+            if (info.bits <= 32) return writeSchema(T, writer);
+            if (info.bits != 64) @compileError("unsupported client integer width");
+            writer.raw("{\"type\":\"string\",\"pattern\":\"");
+            writer.raw(if (info.signedness == .signed) "^(0|-?[1-9][0-9]*)$" else "^(0|[1-9][0-9]*)$");
+            writer.raw("\",\"x-integer-minimum\":\"");
+            writer.raw(std.fmt.comptimePrint("{d}", .{std.math.minInt(T)}));
+            writer.raw("\",\"x-integer-maximum\":\"");
+            writer.raw(std.fmt.comptimePrint("{d}", .{std.math.maxInt(T)}));
+            writer.raw("\"}");
+        },
+        .optional => |info| {
+            writer.raw("{\"anyOf\":[{\"type\":\"null\"},");
+            writeClientSchema(info.child, writer);
+            writer.raw("]}");
+        },
+        .array => |info| {
+            writer.raw("{\"type\":\"array\",\"minItems\":");
+            writeUnsigned(writer, info.len);
+            writer.raw(",\"maxItems\":");
+            writeUnsigned(writer, info.len);
+            writer.raw(",\"items\":");
+            writeClientSchema(info.child, writer);
+            writer.byte('}');
+        },
+        .@"struct" => |info| {
+            if (info.is_tuple) @compileError("client tuples need an explicit named mapping");
+            writer.raw("{\"type\":\"object\",\"properties\":{");
+            inline for (info.field_names, info.field_types, 0..) |name, FieldType, i| {
+                if (i != 0) writer.byte(',');
+                writeString(writer, name);
+                writer.byte(':');
+                writeClientSchema(FieldType, writer);
+            }
+            writer.raw("},\"required\":[");
+            inline for (info.field_names, 0..) |name, i| {
+                if (i != 0) writer.byte(',');
+                writeString(writer, name);
+            }
+            writer.raw("],\"additionalProperties\":false}");
+        },
+        .@"union" => |info| {
+            if (info.tag_type == null) @compileError("client union must be tagged");
+            writer.raw("{\"oneOf\":[");
+            inline for (info.field_names, info.field_types, 0..) |name, FieldType, i| {
+                if (i != 0) writer.byte(',');
+                writer.raw("{\"type\":\"object\",\"properties\":{\"tag\":{\"const\":");
+                writeString(writer, name);
+                writer.raw("},\"value\":");
+                writeClientSchema(FieldType, writer);
+                writer.raw("},\"required\":[\"tag\",\"value\"],\"additionalProperties\":false}");
+            }
+            writer.raw("]}");
+        },
+        else => @compileError("client values require a bounded ordinary contract: " ++ @typeName(T)),
+    }
+}
+
 fn maximumValueBytes(comptime T: type) usize {
     if (comptime isText(T)) {
         return 2 + 6 * maximumTextBytes(T);

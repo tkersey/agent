@@ -148,6 +148,32 @@ export class Custodian {
       executor_incarnation: run.executor_incarnation, operation: occurrence?.operation ?? null, occurrence: occurrence?.status ?? null,
       classification: [...run.classification], transfer_id: run.transfer_id, cancellation_pending: run.cancel_requested !== null && run.status !== 'TERMINAL' && !(run.status === 'DEPARTED' && run.cancel_forwarded), cancellation_applied: run.cancel_applied, cancellation_forwarded: run.cancel_forwarded ?? false, local_move_attempts: run.local_move_attempts };
   }
+  #retainControlPublication(run, offer, remote) {
+    requireThat(remote.run_id === run.run_id && remote.host_id === offer.destination_host_id, 'ControlReplyMismatch');
+    if (!remote.publication) return;
+    const { receipt, classification } = remote.publication;
+    labels(classification);
+    const joined = [...new Set([...run.classification, ...classification])].sort();
+    this.#policy.authorizeRun({ ...run, classification: joined });
+    this.#journal.retainPublication(run.run_id, offer.transfer_id, receipt, joined);
+  }
+  async refreshStatus(id, hops = 32) {
+    requireThat(Number.isInteger(hops) && hops > 0 && hops <= 32, 'ControlHopBudget');
+    const run = this.#run(id);
+    if (run.status === 'DEPARTED') {
+      try {
+        this.#policy.authorizeRun(run);
+        const offer = parse(this.#journal.transfer(run.transfer_id).offer), peer = this.#peers.get(offer.destination_host_id);
+        requireThat(peer && hops > 1, 'ControlHopBudget');
+        const remote = await peer.control(this.#registration(run), id, 'status', null, hops - 1);
+        this.#retainControlPublication(run, offer, remote);
+      } catch (error) {
+        return { ...this.status(id), delivery_lookup: { status: 'unavailable',
+          reason: /^[A-Za-z0-9_]{1,80}$/.test(error.code ?? '') ? error.code : 'TransportUnavailable' } };
+      }
+    }
+    return this.status(id);
+  }
   #metadata(run, requirements, constraints) {
     return { registration: this.#registration(run), requirements: canonicalRequirements(requirements), constraints: encodeValue(schemas.constraints, constraints), classification: [...run.classification] };
   }
@@ -422,8 +448,18 @@ export class Custodian {
     requireThat(['status', 'cancel'].includes(action), 'InvalidControl');
     requireThat(Number.isInteger(hops) && hops > 0 && hops <= 32, 'ControlHopBudget');
     const applied = action === 'cancel' ? await this.cancelRun(id, reasonText, hops) : null;
-    const status = this.status(id);
-    return { run_id: id, host_id: this.hostId, custody: status.custody, epoch: status.epoch, transfer_id: status.transfer_id, cancellation_pending: status.cancellation_pending, cancellation: applied?.kind ?? null };
+    const status = await this.refreshStatus(id, hops);
+    let publication = null;
+    if (status.delivery) {
+      try {
+        // Control metadata is not a declassification route. Recheck the
+        // current joined labels after any downstream query has completed.
+        const current = this.#run(id); this.#policy.mayExport(current, peerId);
+        publication = { receipt: status.delivery.receipt, classification: [...current.classification] };
+      } catch { /* Keep bounded custody metadata available when export is denied. */ }
+    }
+    return { run_id: id, host_id: this.hostId, custody: status.custody, epoch: status.epoch, transfer_id: status.transfer_id,
+      cancellation_pending: status.cancellation_pending, cancellation: applied?.kind ?? null, ...(publication ? { publication } : {}) };
   }
   async cancelRun(id, reasonText, hops = 32) {
     requireThat(Number.isInteger(hops) && hops > 0 && hops <= 32, 'ControlHopBudget');
@@ -446,6 +482,7 @@ export class Custodian {
         requireThat(peer && hops > 1, 'ControlHopBudget');
         const remote = await peer.control(this.#registration(run), id, 'cancel', run.cancel_requested, hops - 1);
         requireThat(remote.run_id === id && remote.host_id === offer.destination_host_id && ['cancel_pending', 'unknown', 'cancel_requested', 'cancel_forwarded', 'terminal'].includes(remote.cancellation), 'ControlReplyMismatch');
+        this.#retainControlPublication(run, offer, remote);
         if (['cancel_pending', 'unknown'].includes(remote.cancellation)) return { kind: 'cancel_pending', status: this.status(id) };
         this.#journal.cancellationForwarded(id, run.custody_epoch);
         return { kind: 'cancel_forwarded', status: this.status(id) };

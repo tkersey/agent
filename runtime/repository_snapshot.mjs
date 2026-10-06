@@ -518,7 +518,7 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
   async function publicationCore(candidate, binding, validation, commit) {
     const fields = (value, names) => value && same(Object.keys(value).sort(), [...names].sort());
     require(fields(binding, ['run', 'task', 'generation', 'principal', 'tenant', 'intent', 'policyRevision', 'authorizationDigest', 'validationPolicyDigest']), 'RepositoryPublicationBinding');
-    for (const [name, value] of Object.entries(binding)) require(text(value, 128) && value.length > 0 &&
+    for (const [name, value] of Object.entries(binding)) require(text(value, name === 'run' ? 256 : 128) && value.length > 0 &&
       (name.endsWith('Digest') ? /^[a-f0-9]{64}$/.test(value) : !/[\x00-\x1f\x7f]/u.test(value)), 'RepositoryPublicationBinding');
     require(/^[a-f0-9]{64}$/.test(binding.intent), 'RepositoryPublicationIntent');
     require(fields(commit, ['author', 'committer', 'timestamp', 'message']), 'RepositoryCommitMetadata');
@@ -532,9 +532,10 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
       new Set(validation.map(row => row.profile)).size === validation.length, 'RepositoryPublicationValidation');
     for (const record of validation) {
       const { id, ...body } = record;
-      require(record.format === 'agent.repository.check/v1' && digest(body) === id && record.status === 'Passed' &&
+      require(record.format === 'agent.repository.check/v1' && digest(body) === id &&
+        ['Passed', 'Failed', 'Unavailable', 'TimedOut', 'Cancelled', 'InvalidOutput', 'Incomplete'].includes(record.status) &&
         record.candidate === candidate.id && record.tree === candidate.tree && same(record.snapshot, candidate.snapshot) &&
-        same(record.completedChecks, [record.profile]), 'RepositoryPublicationValidation');
+        same(record.completedChecks, record.status === 'Passed' ? [record.profile] : []), 'RepositoryPublicationValidation');
     }
     const before = await admitSnapshot(candidate.snapshot), diff = [];
     for (const edit of candidate.edits) {
@@ -542,6 +543,7 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
       diff.push({ path: edit.path, operation: edit.operation, oldContent: row ? utf8.decode(await object.read('blob', row[2])) : null, newContent: edit.content });
     }
     return { format: 'agent.repository.proposal-core/v1', candidate, binding, validation, diff,
+      ...(validation.every(record => record.status === 'Passed') ? {} : { validationDisposition: 'unvalidated' }),
       destination: { repository, generation, managedRef: metadata.managedRef, expectedBase: candidate.snapshot.base }, commit };
   }
   function publicationCommit(core, coreDigest) {
@@ -563,6 +565,9 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
     const proposal = structuredClone(input);
     require(proposal?.core?.candidate, 'RepositoryPublicationProposal');
     const { candidate, binding, validation, commit } = proposal.core;
+    // A known check disposition permits presentation of an exact candidate.
+    // Every path to publication still requires independently passed checks.
+    require(Array.isArray(validation) && validation.length > 0 && validation.every(record => record.status === 'Passed'), 'RepositoryPublicationValidation');
     await verifyCandidate(candidate);
     const core = await publicationCore(candidate, binding, validation, commit), coreDigest = digest(core);
     const bytes = publicationCommit(core, coreDigest), commitOid = objectId(metadata.objectFormat, 'commit', bytes);

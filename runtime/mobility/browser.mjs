@@ -77,7 +77,12 @@ export async function serveBrowser(custodian, { key, cert, authenticate, redeem 
         requireThat(catalogue, 'ResultSchemaUnavailable');
         return json(res, await catalogue.exportResult(identity, id), 200, 8 << 20);
       }
-      if (req.method === 'GET' && operation === 'status') return json(res, custodian.status(id));
+      if (req.method === 'GET' && operation === 'status') {
+        const status = await custodian.refreshStatus(id);
+        const current = custodian.authorizeUser(id, identity, { cleanup: true });
+        if (catalogue) catalogue.authorizeView(identity, current);
+        return json(res, status);
+      }
       if (req.method === 'GET' && operation === 'question') return json(res, custodian.pendingQuestion(id, identity), 200, (2 << 20) + 8192);
       if (req.method === 'POST' && operation === 'answer') return json(res, await custodian.answerQuestion(id, identity, parse(await body(req, CONTROL_LIMIT))));
       if (req.method === 'GET' && operation === 'metrics') return json(res, custodian.metrics(id));

@@ -16,6 +16,24 @@ export function limits(value) {
   integer(value.maximum_image_bytes, 256 << 20); integer(value.maximum_outcome_bytes, 256 << 20);
   requireThat(value.maximum_image_bytes > 0 && value.maximum_outcome_bytes > 0, 'InvalidLimits');
 }
+// Publication evidence travels either with custody or over authenticated
+// control. It never grants execution or publication authority.
+export function validatePublicationReceipt(receipt, runId, registrationDigest, upper = null) {
+  canonical(receipt, 16 << 10);
+  requireThat(receipt?.format === 'agent.repository.publication-receipt/v1' && receipt.status === 'Published' &&
+    receipt.admission?.run_id === runId && receipt.admission.registration_digest === registrationDigest,
+    'PublicationReceiptMismatch');
+  digest(receipt.proposal); digest(receipt.admission.intent_digest);
+  requireThat(/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(receipt.commit) &&
+    /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(receipt.tree), 'PublicationReceiptMismatch');
+  const observed = receipt.admission.source_version;
+  requireThat(observed?.run_id === runId, 'PublicationReceiptMismatch');
+  counter(observed.custody_epoch); counter(observed.execution_revision);
+  if (upper) requireThat(counter(observed.custody_epoch) <= counter(upper.custody_epoch) &&
+    (observed.custody_epoch !== upper.custody_epoch || counter(observed.execution_revision) <= counter(upper.execution_revision)),
+    'PublicationReceiptMismatch');
+  return receipt;
+}
 export function validate(kind, record, signed = true) {
   requireThat(Object.hasOwn(formats, kind), 'UnknownMessage');
   const carriedPublication = kind === 'offer' && record.format === 'agent-mobility-offer/v2';
@@ -45,18 +63,8 @@ export function validate(kind, record, signed = true) {
     if (kind === 'offer') {
       counter(record.execution_revision);
       if (carriedPublication) {
-        const receipt = record.publication_receipt;
-        canonical(receipt, 16 << 10);
-        requireThat(receipt?.format === 'agent.repository.publication-receipt/v1' && receipt.status === 'Published' &&
-          receipt.admission?.run_id === record.run_id && receipt.admission.registration_digest === record.run_registration_digest,
-          'PublicationReceiptMismatch');
-        digest(receipt.proposal); digest(receipt.admission.intent_digest);
-        requireThat(/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(receipt.commit) &&
-          /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(receipt.tree), 'PublicationReceiptMismatch');
-        const observed = receipt.admission.source_version;
-        requireThat(observed?.run_id === record.run_id && counter(observed.custody_epoch) <= counter(record.source_epoch) &&
-          (observed.custody_epoch !== record.source_epoch || counter(observed.execution_revision) <= counter(record.execution_revision)),
-          'PublicationReceiptMismatch');
+        validatePublicationReceipt(record.publication_receipt, record.run_id, record.run_registration_digest,
+          { custody_epoch: record.source_epoch, execution_revision: record.execution_revision });
       }
       for (const name of ['run_registration_digest', 'predecessor_receipt_digest', 'image_digest', 'program_id', 'state_digest', 'request_digest', 'requirements_digest', 'destination_observation_digest', 'trusted_runtime_profile']) digest(record[name]);
       identifier(record.placement_intent_id); identifier(record.export_policy_revision);

@@ -578,6 +578,26 @@ for (const kind of ['model', 'check']) test(`unknown ${kind} retains its concurr
   assert.equal(f.a.admitLeaf(secondId, version(second), [], { charge }).status, 'DISPATCHING');
 });
 
+for (const kind of ['model', 'check']) test(`settlement releases only a reaped check slot, preserving unknown ${kind} evidence and spend`, async t => {
+  const f = await fixture(t, initial), first = f.a.attach(f.id);
+  const charge = { owner: 'A', kind, grant: 'd'.repeat(64), limit: { attempts: 2, request_bytes: 100, output_tokens: kind === 'model' ? 20 : 0, concurrent: 1 }, amount: { request_bytes: 40, output_tokens: kind === 'model' ? 8 : 0 } };
+  const pending = f.a.admitLeaf(f.id, version(first), [], { charge, cancelSafe: true });
+  f.a.markUnknown(f.id, pending.attempt_id, { settled: true });
+  const { signature: _, ...base } = parse(f.registration), secondId = runId('issuer');
+  f.a.register(signRecord('run', { ...base, run_id: secondId }, f.pairs.issuer.privateKey), initial);
+  f.close(f.a); const restored = f.open('A'), second = restored.attach(secondId);
+  const saved = restored.occurrence(first.current_occurrence_id);
+  assert.equal(saved.status, 'UNKNOWN');
+  assert.equal(saved.work_settled, kind === 'check' ? true : undefined);
+  assert.equal(restored.run(f.id).cancel_requested, null);
+  assert.deepEqual({ ...restored.allowance(f.id, kind).used }, { attempts: 1, ...charge.amount });
+  if (kind === 'check') assert.equal(restored.admitLeaf(secondId, version(second), [], { charge }).status, 'DISPATCHING');
+  else {
+    assert.throws(() => restored.admitLeaf(secondId, version(second), [], { charge }), { code: 'WorkConcurrency' });
+    assert.equal(restored.allowance(secondId, kind), null);
+  }
+});
+
 test('signed publication evidence is run-bound and survives admission, collection and restart', async t => {
   const f = await fixture(t), run = f.a.run(f.id);
   const publication = { format: 'agent.repository.publication-receipt/v1', status: 'Published', proposal: 'a'.repeat(64),

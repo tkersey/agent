@@ -18,7 +18,7 @@ pub const P = agent.model_invocation.Profile(Action, .{
     .{ .name = "edit", .description = "Stage one exact create/replace/delete against the frozen base. Use its observed SHA256 hex digest, or empty for create. Empty content for delete. Replaces a previously staged edit at this path. At most four paths." },
     .{ .name = "check", .description = "Prepare the exact staged candidate and run the operator-selected independent check. Does not publish." },
     .{ .name = "ask", .description = "Ask the authenticated person for clarification, retaining this investigation." },
-    .{ .name = "finish", .description = "Return an honest summary. A changed candidate must have a passing check. Only the selected publish mode may subsequently request exact human approval." },
+    .{ .name = "finish", .description = "Return an honest summary. A changed candidate requires a known check disposition. Propose mode may return it explicitly unvalidated; publish mode requires a passing check before exact human approval." },
 }, .{
     .model_id_bytes = 128,
     .temperature_bytes = 16,

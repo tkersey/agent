@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
 import { CustodyJournal } from '../../runtime/mobility/journal.mjs';
+import { Custodian } from '../../runtime/mobility/custodian.mjs';
+import { HostPolicy } from '../../runtime/mobility/policy.mjs';
 import { hash, runId, signRecord, canonical } from '../../runtime/mobility/protocol.mjs';
 import { version, RELOCATE } from '../../runtime/mobility/custody.mjs';
 import { encodeValue } from '../../runtime/values.mjs';
@@ -125,4 +127,65 @@ test('publication evidence crosses custody and survives cancellation, collection
   target.collectArtifacts('tenant'); target.close(); target = new CustodyJournal(targetOptions);
   assert.equal(target.run(f.id).status, 'TERMINAL'); assert.equal(target.run(f.id).outcome_kind, 'cancelled');
   assert.equal(target.latestPublication(f.id).commit, f.proposal.commitOid);
+});
+
+test('origin retrieves a later publication without return custody and retains it across restart', async t => {
+  const f = await fixture(t), reply = Buffer.from('initial reply');
+  f.journal.recordReply(f.id, f.occurrence.attempt_id, reply, []);
+  const requirements = hash(encodeValue(schemas.requirements, []));
+  const observation = { host_id: 'U', requirements_digest: requirements, binding_digest: '8'.repeat(64),
+    policy_revision: 'p1', runtime_profile: f.metadata.trusted_runtime_profile };
+  const current = f.journal.run(f.id), control = { kind: 'reply', reply_digest: hash(reply) }, outcome = Buffer.from('outbound move');
+  const moving = { image: f.image, outcome, metadata: { ...f.metadata, outcome_digest: hash(outcome),
+    request_digest: '9'.repeat(64), operation: RELOCATE }, predecessor: { outcome_digest: current.outcome_digest, control },
+    relocation: { destination_host_id: 'U', placement_intent_id: 'outbound', requirements_digest: requirements, remaining_move_budget: 1 } };
+  f.journal.publishOutcome(f.id, version(current), control, moving);
+  const offered = f.journal.beginTransfer(f.id, version(f.journal.run(f.id)), moving,
+    { observationDigest: hash(encodeValue(schemas.observation, observationValue(observation))), exportPolicyRevision: 'p1' });
+  const target = new CustodyJournal({ ...f.options, directory: join(f.options.directory, 'destination'), hostId: 'U',
+    signer: { keyId: 'U', privateKey: f.hosts.U.privateKey, policyRevision: 'p1' }, create: true });
+  t.after(() => target.close());
+  const decision = target.accept(offered.offer, f.registration, moving, { policyRevision: 'p1', classification: [],
+    deploymentLimits: current.deployment_limits, observation });
+  f.journal.receiveDecision(offered.offer, decision);
+  const arrived = target.attach(f.id), arrival = { kind: 'reply', reply_digest: arrived.reply_digest }, publishBytes = Buffer.from('publish request');
+  target.publishOutcome(f.id, version(arrived), arrival, { image: f.image, outcome: publishBytes,
+    metadata: { ...f.metadata, outcome_digest: hash(publishBytes) }, predecessor: { outcome_digest: arrived.outcome_digest, control: arrival } });
+  const ready = target.run(f.id), occurrence = target.admitLeaf(f.id, version(ready), ['source']);
+  const admission = target.admitPublication(f.id, version(target.run(f.id)), occurrence.attempt_id, f.proposal, 'p1');
+  const receipt = { format: 'agent.repository.publication-receipt/v1', status: 'Published',
+    proposal: f.proposal.digest, commit: f.proposal.commitOid, tree: '7'.repeat(40), admission };
+  target.recordReply(f.id, occurrence.attempt_id, Buffer.from('published'), ['source'], null, { publicationReceipt: receipt });
+  const deployment = { imageDigest: f.metadata.image_digest, programId: f.metadata.program_id, tenant: 'tenant',
+    principals: ['user'], issuers: ['issuer'], hosts: ['W', 'U'], classification: [], cleanup: [], controlPeers: ['W', 'U'] };
+  const revoked = new Set();
+  const policy = (hostId, allowed = ['W', 'U']) => new HostPolicy({ hostId, trustDomain: 'fixture', revision: 'p1',
+    runtimeProfile: f.metadata.trusted_runtime_profile, deployments: [deployment], bindings: [], labelDestinations: { source: allowed }, revoked });
+  const remote = new Custodian({ journal: target, policy: policy('U'), admission: {}, world: {} });
+  const peers = new Map([['U', { control: (...args) => remote.control('W', ...args) }]]);
+  let origin = new Custodian({ journal: f.journal, policy: policy('W'), peers, admission: {}, world: {} });
+  const before = version(f.journal.run(f.id)), remoteBefore = version(target.run(f.id));
+  assert.equal(origin.status(f.id).delivery, undefined);
+  const denied = new Custodian({ journal: target, policy: policy('U', ['U']), admission: {}, world: {} });
+  assert.equal((await denied.control('W', f.registration, f.id, 'status')).publication, undefined);
+  revoked.add('tenant/user');
+  assert.equal((await remote.control('W', f.registration, f.id, 'status')).publication, undefined);
+  revoked.clear();
+  const status = await origin.refreshStatus(f.id);
+  assert.equal(status.custody, 'DEPARTED'); assert.equal(status.delivery.presentation, 'pending');
+  assert.deepEqual(canonical(status.delivery.receipt), canonical(receipt));
+  assert.deepEqual(version(f.journal.run(f.id)), before); assert.deepEqual(version(target.run(f.id)), remoteBefore);
+  assert.deepEqual(status.classification, ['source']);
+  const transferId = f.journal.run(f.id).transfer_id;
+  assert.throws(() => f.journal.retainPublication(f.id, transferId, { ...receipt, admission: { ...admission, run_id: runId('issuer') } }, ['source']), { code: 'PublicationReceiptMismatch' });
+  assert.throws(() => f.journal.retainPublication(f.id, transferId, { ...receipt, commit: 'a'.repeat(40) }, ['source']), { code: 'PublicationEvidenceRegression' });
+  assert.equal(f.journal.retainPublication(f.id, 'obsolete-transfer', receipt, ['source']), false);
+  f.journal.requestCancel(f.id, 'stop after publication');
+  f.journal.cancellationForwarded(f.id, f.journal.run(f.id).custody_epoch);
+  f.journal.collectArtifacts('tenant'); f.restart();
+  peers.set('U', { control: async () => { throw Object.assign(Error('offline'), { code: 'Offline' }); } });
+  origin = new Custodian({ journal: f.journal, policy: policy('W'), peers, admission: {}, world: {} });
+  const restored = await origin.refreshStatus(f.id);
+  assert.equal(restored.delivery.receipt.commit, receipt.commit); assert.equal(restored.delivery_lookup.reason, 'Offline');
+  assert.equal(restored.cancellation_forwarded, true); assert.equal(restored.custody, 'DEPARTED');
 });

@@ -102,7 +102,11 @@ export async function main(argv) {
       requireThat(result.report !== null || result.delivery !== null, 'ResultNotAvailable');
       print(result);
     }
-    else if (command === 'status') print(args.length ? host.custodian.status(args[0]) : host.journal.recover().map(({ run }) => host.custodian.status(run.run_id)));
+    else if (command === 'status') {
+      const ids = args.length ? args : host.journal.recover().map(({ run }) => run.run_id), statuses = [];
+      for (const id of ids) statuses.push(await host.custodian.refreshStatus(id));
+      print(args.length ? statuses[0] : statuses);
+    }
     else if (command === 'metrics') print(host.custodian.metrics(args[0]));
     else if (command === 'recover') print(host.custodian.recover());
     else if (command === 'start') { const run = await host.custodian.registerRun(...args.map(path => readRegular(path))); print(host.custodian.status(run.run_id)); }

@@ -199,6 +199,8 @@ reconciliation, never another publication attempt. Unknown results remain paused
 Once the service records that a check stopped, a later cancellation can complete
 after restart even if the reply was lost. A check that may still be running keeps
 its capacity reserved.
+Once a check process is reaped, its slot is available to other tasks even if its
+result remains unknown. Its spent allowance and unresolved result remain recorded.
 Candidate/proposal preparation, publication-current reads and approval-identifier
 issuance can also be cancelled after a lost reply and restart. These operations
 never advance the managed ref; preparation retains only bounded immutable objects.
@@ -211,6 +213,16 @@ is unavailable; the receipt distinguishes `PublishedVerified`,
 return can leave presentation pending without undoing the commit. Postchecks verify
 Git ref/object identity, not additional program behavior. Nothing here changes the
 original checkout, `main`, an upstream branch or a GitHub PR.
+
+Status and export can retrieve the publication receipt through the authenticated
+custody control channel without returning the computation. Disclosure still requires
+the current whole-state labels to permit the destination. Once acquired, the receipt
+survives origin restart and peer unavailability; an unavailable lookup does not mean
+the write was not performed.
+
+In `propose` mode, a candidate with a known nonpassing check result can finish as
+an explicitly unvalidated proposal. Its exact changes and check disposition remain
+available for review and export. It cannot enter the qualified publication path.
 
 With the local custody service stopped, trusted CLI intake can list/start the same
 catalogue tasks. These local identity arguments are not remote authentication:

@@ -81,6 +81,12 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
   };
   const terminalText = (kind, delivery) => delivery?.status === 'published' && kind !== 'completed'
     ? 'Published; presentation pending' : kind === 'cancelled' ? 'Cancelled' : kind === 'failed' ? 'Failed' : 'Completed';
+  function showPublication(source, current) {
+    if (current?.delivery?.status !== 'published') return false;
+    status.textContent = 'Published; presentation pending';
+    request.textContent = JSON.stringify(current.delivery.receipt, null, 2);
+    showDownload(source, true); return true;
+  }
   async function showStoredResult(source) {
     let result;
     try { result = await (await source.api('result', 'GET')).json(); }
@@ -119,6 +125,7 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
       } else paragraph(publishing ? 'Approval publishes this exact commit in the service-owned repository. Your checkout and upstream repository are not updated.' : 'This task does not publish. You can finish, ask a question, or amend the requested task.');
       paragraph(`Base: ${core.destination.expectedBase}\nPrepared commit: ${proposal.commitOid}\nProposal: ${proposal.digest}`);
       for (const check of core.validation) paragraph(`Check: ${check.profile} — ${check.status}. Profile ${check.profileDigest}; runner ${check.runner}.`);
+      if (core.validationDisposition === 'unvalidated') paragraph('Unvalidated proposal. This candidate is not eligible for publication.');
       paragraph('Validation covers the listed check contracts. Other behavior has not been established by these checks.');
       for (const edit of core.diff) {
         const details = document.createElement('details'), summary = document.createElement('summary');
@@ -171,6 +178,11 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
     if (current.custody === 'TERMINAL') {
       await showStoredResult(executor); return;
     }
+    if (['OFFERED', 'DEPARTED'].includes(current.custody)) {
+      if (!showPublication(executor, current)) status.textContent = current.custody === 'OFFERED'
+        ? 'Waiting for a custody decision. Continue to reconcile it.' : 'Handed off to another host. Continue to refresh its status.';
+      return;
+    }
     await executor.attach(); status.textContent = 'Connected'; await showQuestion();
   });
   document.querySelector('#continue').onclick = action(async () => {
@@ -179,11 +191,13 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
       const current = await (await executor.api('status', 'GET')).json();
       if (current.custody === 'OFFERED') {
         const decision = await (await executor.api('retry')).json();
-        status.textContent = decision.kind === 'unknown' ? 'Waiting for a custody decision. The run remains paused.' : decision.kind === 'refused' ? 'Move declined. Continue here.' : 'Handed off to another host; current status is unknown here. Reconnect to check for its return.';
+        if (!showPublication(executor, decision.status)) status.textContent = decision.kind === 'unknown' ? 'Waiting for a custody decision. The run remains paused.' : decision.kind === 'refused' ? 'Move declined. Continue here.' : 'Handed off to another host; current status is unknown here. Reconnect to check for its return.';
         return;
       }
-      if (current.custody === 'DEPARTED') { status.textContent = 'Handed off to another host; current status is unknown here. Reconnect to check for its return.'; return; }
-      if (current.delivery?.presentation === 'pending') { status.textContent = 'Published; presentation pending'; request.textContent = JSON.stringify(current.delivery.receipt, null, 2); }
+      if (current.custody === 'DEPARTED') {
+        if (!showPublication(executor, current)) status.textContent = 'Handed off to another host; current status is unknown here. Continue to refresh its status.';
+        return;
+      }
       if (current.custody === 'TERMINAL') { await showStoredResult(executor); return; }
       await executor.attach(); status.textContent = 'Connected'; await showQuestion(); return;
     }
@@ -191,7 +205,7 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
     if (result.kind === 'offered') {
       await executor.retire();
       const decision = await (await executor.api('retry')).json();
-      status.textContent = decision.kind === 'accepted' ? 'Handed off to another host; current status is unknown here. Reconnect to check for its return.' : decision.kind === 'refused' ? 'Move declined. Continue here.' : 'Waiting for a custody decision. The run remains paused.';
+      if (!showPublication(executor, decision.status)) status.textContent = decision.kind === 'accepted' ? 'Handed off to another host; current status is unknown here. Reconnect to check for its return.' : decision.kind === 'refused' ? 'Move declined. Continue here.' : 'Waiting for a custody decision. The run remains paused.';
     } else if (result.status?.custody === 'TERMINAL') { await executor.retire(); await showStoredResult(executor); }
     else {
       status.textContent = result.kind === 'effect_unknown' ? 'Effect result unknown. The run remains paused.'
@@ -204,7 +218,7 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
     if (!executor) throw new Error('Enter a run and connect first.');
     await executor.retire(); if (answerForm) answerForm.hidden = true; pending = null;
     const result = await (await executor.api('cancel', 'POST', canonical({ reason: 'User cancelled' }))).json();
-    status.textContent = ['cancel_pending', 'unknown'].includes(result.kind) ? 'Cancellation is waiting for the current host or a custody decision.' : 'Cancellation requested';
+    if (!showPublication(executor, result.status)) status.textContent = ['cancel_pending', 'unknown'].includes(result.kind) ? 'Cancellation is waiting for the current host or a custody decision.' : 'Cancellation requested';
   });
   const startForm = document.querySelector('#start-task');
   if (startForm) {

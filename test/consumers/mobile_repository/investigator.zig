@@ -111,7 +111,9 @@ pub fn define(e: Emit, inquiry: agent.inquiry.Inquiry, leaves: Leaves, movement:
     const validation_room = try active.select(existing_candidate, try active.constant(bool, true), revision_room);
     const check_budget = try active.select(validation_room, try active.less(try active.constant(u16, 0), try active.field(state, "remaining_checks")), try active.constant(bool, false));
     const checkable = try active.select(mutable, try active.select(changed, check_budget, try active.constant(bool, false)), try active.constant(bool, false));
-    const finishable = try active.select(changed, try active.field(state, "passed"), try active.constant(bool, true));
+    const propose = try active.equal(try active.enumTag(try active.field(task, "mode")), try active.constant(u32, 1));
+    const disposition_known = try active.select(existing_candidate, try active.less(try active.constant(u64, 0), try active.blobLength(try active.field(state, "validation"))), try active.constant(bool, false));
+    const finishable = try active.select(changed, try active.select(propose, disposition_known, try active.field(state, "passed")), try active.constant(bool, true));
     const offered_values = [_]V{ try active.constant(bool, true), try active.constant(bool, true), try active.constant(bool, true), editable, checkable, try active.constant(bool, true), finishable };
     var offered_ids: [P.declaration_count]boundary.source.Id = undefined;
     for (offered_values, &offered_ids) |v, *id| id.* = try a.interop.valueId(active, v);

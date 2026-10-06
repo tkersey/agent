@@ -45,6 +45,8 @@ export function taskCatalogue(configuration, { bytes, keys, custodian, config, r
     authorizeView,
     async exportResult(identity, id) {
       authorizeView(identity, custodian.authorizeUser(id, identity));
+      await custodian.refreshStatus(id);
+      authorizeView(identity, custodian.authorizeUser(id, identity));
       const { run, bytes: stored } = custodian.outcome(id), outcome = world.decodeOutcome(stored);
       const schema = this.resultSchema(run.image_digest); requireThat(schema, 'ResultSchemaUnavailable');
       let report = outcome.kind === 'completed' ? decodeValue(decodeSchema(schema), outcome.value) : null;

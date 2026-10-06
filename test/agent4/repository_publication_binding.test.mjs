@@ -112,6 +112,28 @@ test('acquired status and record disagreement cannot admit publication', async (
   assert.equal(f.state.writes, 0); assert.equal(f.state.admissions, 0);
 });
 
+for (const [status, tag] of [['Unavailable', 2], ['Failed', 1], ['TimedOut', 3], ['Cancelled', 4], ['InvalidOutput', 5], ['Incomplete', 6]])
+  test(`${status} can prepare an acquired proposal but cannot acquire publication authority`, async () => {
+    const f = fixture(), preparation = { root: 0, types: [{ product: [1, 1, 2, 2] }, { bounded_text: 2 << 20 }, 'u64'] };
+    f.state.checks[0].status = status;
+    f.journal.acquiredReplies = () => f.state.checks.map(record => encodeValue(checkSchema, [tag, text(record)]));
+    const candidate = { snapshot: { repository: 'repo', generation: 'generation' }, id: 'candidate' };
+    let prepared = null;
+    f.store.preparePublication = async input => { prepared = input; return { validationDisposition: 'unvalidated', ...input }; };
+    const binding = repositoryProposalBinding({ ...f.binding, operation: 'agent.repository.proposal.v1', role: 'write',
+      payloadSchema: encodeSchema(preparation), resultSchema: schemaBytes }, { store: f.store,
+      protectedImages: [{ image: f.run.image_digest, program: f.run.program_id }], authorizationDigest: '1'.repeat(64), validationPolicyDigest: '2'.repeat(64),
+      requiredProfiles: [{ id: 'zig-check', profileDigest: '3'.repeat(64), runner: '4'.repeat(64) }], checkResultSchema: encodeSchema(checkSchema),
+      commit: {}, services: () => ({ journal: f.journal, policy: f.policy }) });
+    const result = await binding.handle({ payload: [text(candidate), text(f.state.checks[0]), 1n, 1n], run: f.run, occurrence: f.occurrence });
+    assert.equal(JSON.parse(decodeValue(schema, result)).validationDisposition, 'unvalidated');
+    assert.deepEqual(canonical(prepared.candidate), canonical(candidate)); assert.equal(prepared.validation[0].status, status);
+    await assert.rejects(f.binding.handle(f.context()), { code: 'PublicationValidationMissing' });
+    assert.equal(f.state.admissions, 0); assert.equal(f.state.writes, 0);
+    f.state.checks = [];
+    await assert.rejects(binding.handle({ payload: [text(candidate), text(prepared.validation[0]), 1n, 1n], run: f.run, occurrence: f.occurrence }), { code: 'PublicationValidationMissing' });
+  });
+
 function checkFixture(repository = 'repo') {
   const profile = { owner: 'W', repository, generation: '1', manifest: 'a'.repeat(64), profileId: 'finite-check',
     profileDigest: 'b'.repeat(64), runner: 'c'.repeat(64), disclosure: { audience: 'check', labels: ['source'] },

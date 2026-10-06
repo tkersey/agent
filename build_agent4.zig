@@ -589,7 +589,7 @@ pub fn build(b: *std.Build) void {
         }
         const host_contracts = nodeCommand(b);
         host_contracts.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
-        host_contracts.addArgs(&.{ "node", "--test", "test/agent4/mobility_journal.test.mjs", "test/agent4/mobility_host.test.mjs", "test/agent4/mobility_transport.test.mjs", "test/agent4/mobility_deployment.test.mjs", "test/agent4/mobility_browser_bridge.test.mjs", "test/agent4/mobility_sessions.test.mjs", "test/agent4/mobility_task_catalogue.test.mjs" });
+        host_contracts.addArgs(&.{ "node", "--test", "test/agent4/mobility_journal.test.mjs", "test/agent4/mobility_host.test.mjs", "test/agent4/mobility_transport.test.mjs", "test/agent4/mobility_deployment.test.mjs", "test/agent4/mobility_browser_bridge.test.mjs", "test/agent4/mobility_sessions.test.mjs", "test/agent4/mobility_task_catalogue.test.mjs", "test/agent4/mobile_repository_program.test.mjs" });
         host_contracts.has_side_effects = true;
         host_contracts.step.dependOn(&runtime_guard.step);
         host_contracts.step.dependOn(mobility_images);

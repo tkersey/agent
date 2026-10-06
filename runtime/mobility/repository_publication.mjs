@@ -72,7 +72,7 @@ export function repositoryPublicationBinding(metadata, { store, helper, protecte
         requireThat(exact.core.binding.policyRevision === policy.revision, 'PublicationAuthorityMismatch');
         const acquired = journal.acquiredReplies(run.run_id, 'agent.repository.check.v1').map(bytes => acquiredCheck(checkSchema, bytes));
         requireThat(exact.core.validation.length === profiles.length && profiles.every(profile =>
-          exact.core.validation.some(record => record.profile === profile.id && record.profileDigest === profile.profileDigest &&
+          exact.core.validation.some(record => record.status === 'Passed' && record.profile === profile.id && record.profileDigest === profile.profileDigest &&
             record.runner === profile.runner && acquired.some(saved => same(saved, record)))), 'PublicationValidationMissing');
         return journal.admitPublication(run.run_id, version(current), occurrence.attempt_id, exact, policy.revision);
       }, () => history(records(journal, proposal)));

@@ -5,13 +5,21 @@ import { mkdirSync, lstatSync, openSync, closeSync, constants } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createPublicKey } from 'node:crypto';
 import { canonical, parse, requireThat, identifier, digest, counter, labels, closed } from './canonical.mjs';
-import { hash, opaqueId, verifyRecord, signRecord, validate, matchesDecision } from './protocol.mjs';
+import { hash, opaqueId, verifyRecord, signRecord, validate, validatePublicationReceipt, matchesDecision } from './protocol.mjs';
 import { encodeArrival, encodeRefusal, schemas, observationValue } from './values.mjs';
 import { encodeValue, decodeSchema, encodeSchema } from '../values.mjs';
 import * as core from './custody.mjs';
 const equal = (a, b) => a.length === b.length && a.every((byte, i) => byte === b[i]);
 const json = value => new TextDecoder().decode(canonical(value));
 const readJson = value => value === null || value === undefined ? null : parse(new TextEncoder().encode(value));
+function publicationProgress(previous, publication) {
+  if (!previous) return;
+  const before = previous.admission.source_version, after = publication.admission.source_version;
+  requireThat(counter(after.custody_epoch) > counter(before.custody_epoch) ||
+    (after.custody_epoch === before.custody_epoch && (counter(after.execution_revision) > counter(before.execution_revision) ||
+      (after.execution_revision === before.execution_revision && equal(canonical(publication), canonical(previous))))),
+    'PublicationEvidenceRegression');
+}
 function artifactLimits(limits, image, outcome) {
   requireThat(image.length <= limits.maximum_image_bytes && outcome.length <= limits.maximum_outcome_bytes, 'ArtifactCapacity');
 }
@@ -304,13 +312,8 @@ export class CustodyJournal {
       const existing = this.run(offer.run_id);
       const previousPublication = existing ? this.latestPublication(offer.run_id) : null;
       const publication = offer.publication_receipt ?? previousPublication;
-      if (previousPublication && offer.publication_receipt) {
-        const before = previousPublication.admission.source_version, after = publication.admission.source_version;
-        requireThat(counter(after.custody_epoch) > counter(before.custody_epoch) ||
-          (after.custody_epoch === before.custody_epoch && (counter(after.execution_revision) > counter(before.execution_revision) ||
-            (after.execution_revision === before.execution_revision && equal(canonical(publication), canonical(previousPublication))))),
-          'PublicationEvidenceRegression');
-      }
+      if (offer.publication_receipt) publicationProgress(previousPublication, publication);
+      if (previousPublication) requireThat(existing.classification.every(label => classification.includes(label)), 'ClassificationDowngrade');
       const next = core.accept(existing, registration, offer, acceptedCore, hash(receipt), hash(arrival));
       if (publication) next.run.publication_receipt_digest = this.#artifact(registration.tenant_ref, canonical(publication, 16 << 10));
       this.#remember(offer); this.#remember(registration); this.#remember(parse(receipt));
@@ -368,7 +371,8 @@ export class CustodyJournal {
       requireThat(Number.isSafeInteger(row[field]) && row[field] >= 0, 'WorkAllowance');
     requireThat(Number.isSafeInteger(charge.limit.concurrent) && charge.limit.concurrent > 0 && charge.limit.concurrent <= 8, 'WorkConcurrency');
     const pending = this.#all('SELECT occurrences.body FROM occurrences JOIN runs USING(run_id) WHERE tenant=?', run.tenant_ref)
-      .map(row => readJson(row.body)).filter(row => row.work_kind === charge.kind && ['DISPATCHING', 'UNKNOWN'].includes(row.status)).length;
+      .map(row => readJson(row.body)).filter(row => row.work_kind === charge.kind &&
+        (row.status === 'DISPATCHING' || (row.status === 'UNKNOWN' && !(row.work_kind === 'check' && row.work_settled === true)))).length;
     requireThat(pending < charge.limit.concurrent, 'WorkConcurrency');
     const binding = { registration_digest: run.registration_digest, owner: charge.owner, kind: charge.kind, grant: charge.grant, limit: charge.limit };
     const grantDigest = hash(canonical(binding)), previous = this.allowance(run.run_id, charge.kind);
@@ -456,6 +460,19 @@ export class CustodyJournal {
       if (receipt.status === 'Published') return receipt;
     }
     return null;
+  }
+  retainPublication(runId, transferId, receipt, classification) {
+    return this.#transaction('publication-evidence', () => {
+      const run = this.run(runId); requireThat(run, 'UnknownRun');
+      // A reply to an obsolete control query cannot change current custody.
+      if (run.status !== 'DEPARTED' || run.transfer_id !== transferId) return false;
+      validatePublicationReceipt(receipt, runId, run.registration_digest); labels(classification);
+      requireThat(run.classification.every(label => classification.includes(label)), 'ClassificationDowngrade');
+      publicationProgress(this.latestPublication(runId), receipt);
+      this.#save({ ...run, classification: [...classification],
+        publication_receipt_digest: this.#artifact(run.tenant_ref, canonical(receipt, 16 << 10)) });
+      return true;
+    });
   }
   publicationRecords(tenant, repository, generation, managedRef) {
     // Occurrences already have a tenant-wide record quota. Do not create a

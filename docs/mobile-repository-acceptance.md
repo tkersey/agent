@@ -36,7 +36,7 @@ application runs replace affected image evidence.
 Subsequent deployment and sandbox repairs passed native Zig qualification and eight
 deployment/qualification checks. Provider-version binding then passed 362/362
 package build steps and 29 model/qualification tests. The expanded installed
-journey (178.4 seconds) and both extracted-browser journeys passed. These cover three check bindings sharing
+journey and both extracted-browser journeys passed. These cover three check bindings sharing
 one scratch root, per-case provider-mode admission, and a rejected preparation
 cancelled after a real workspace-process restart without another preparation or
 model call. The native repair now uses an admitted path containing a dotted
@@ -56,12 +56,6 @@ absence diagnostics and zero physical executions; valid repairs still pass the
 native checks. The earlier cancellation assertions failed on the prior code and
 their logs are retained.
 
-The compiled images remain byte-identical to 4693529. The full comparison and
-attribution were recollected at `831470c763d91ac0d2aaa27332f11a01d4f35450`
-after the binding repairs; their runtime/test source hashes and image identities
-match the delivered implementation. Later documentation edits do not change those
-executed inputs. Earlier datasets remain retained under their original subjects.
-
 Binding-selection repairs pass 35 model/binding tests, seven focused application
 cases, 86 host/deployment/qualification tests and 362/362 package steps. Check and
 proposal selection skips other repositories; model selection checks the actual
@@ -69,11 +63,7 @@ model and parameters. Validation rejects conflicting eligible provider profiles
 and requires ordinary review even for publish-only entries. The installed journey
 passes with another model and an identical shared provider preceding the selected
 repository's binding. A publish-mode no-change task completes ordinary human review
-without publishing. The complete measurement build passed 94/94 steps with all
-576 comparison attempts and 256 attribution observations retained and passing.
-Across comparison cells, median elapsed time changed by −0.9% to +1.5% from the
-earlier collection; this is a descriptive cross-run comparison, not causal proof
-of an optimization or a latency guarantee.
+without publishing.
 
 The broader aggregate passed 559/559 steps at
 `330916481f46a20ad03c3e5c760d024c6b82e5d7`. Its unchanged generic runtime,
@@ -83,11 +73,7 @@ skipped on Darwin and is not qualified here.
 
 Qualification remains explicit: this PR's heavy application, publication and
 mutation checks no longer extend the generic developer feedback target. Snapshot
-fixtures retain the pagination boundary and independent safety assertions with
-less setup; observed snapshot checks fell from 97.6 seconds to 32–34 seconds.
-The focused build took 40.2 seconds. Installed deployment qualification fell from
-391 seconds to about 168 seconds after redundant work was removed; these are local
-observations, not latency guarantees. CLI inspection avoids physical sandbox
+fixtures retain the pagination boundary and independent safety assertions. CLI inspection avoids physical sandbox
 qualification, which remains required when serving or executing checks.
 
 | Emitted artifact | Bytes | SHA-256 |
@@ -108,11 +94,10 @@ Local records under `.agent4-mobile/out/agent4/` include the 96-row acceptance J
 `review-repairs-installed-final.log`, `provider-version-package.log`,
 `ordinary-cancellation-before-configured.log`, `ordinary-cancellation-after.log`,
 `required-input-proof.json`, `required-input-native.log`,
-`cancellation-input-comparison.log`, `cancellation-input-package.log`,
+`cancellation-input-package.log`,
 `binding-selection-unit.log`, `binding-selection-host.log`,
 `binding-selection-application.log`, `binding-selection-package.log`,
-`measurement-831470c.log`, `comparison-831470c.json`, `attribution-831470c.json`,
-`final-3309164.log`, measurements and package
+`final-3309164.log` and package
 inventory verification. They bind actual subjects, hashes and limitations. The
 accepted user specification remains a local qualification input at
 `.agent4-mobile/accepted-specification.md`. Raw rounds are not versioned. Current
@@ -133,88 +118,11 @@ from encoding copies and provider replay. Earlier helper-alias, candidate-contro
 verdict, unknown-effect display and publication-verification defects remain covered.
 Later passes do not relabel the original failed subjects.
 
-## Measurements
-
-At 831470c, all 576 comparison attempts passed: 36 warmups and 540 measured samples,
-30 matched pairs per cell. Both profiles use the same image, task, patch, model
-replies, work counts and grants. Stationary invokes actual workspace leaves through
-mutual-TLS binary proxies; mobile uses real custody transfers. The Apple M2 Pro
-single-machine fixture uses synthetic provider and human input.
-
-| Cell | Mobile p50 / p95 ms | Stationary p50 / p95 ms | Paired difference p50 / p95 ms | Protocol bytes, mobile / stationary |
-|---|---:|---:|---:|---:|
-| base / cold / local | 1600.9 / 1663.7 | 1291.3 / 1319.5 | +321.3 / +362.9 | 93136 / 40296 |
-| base / cold / metro | 1814.7 / 1856.1 | 1400.1 / 1437.1 | +415.5 / +455.5 | 93136 / 40296 |
-| base / cold / wide | 2549.2 / 2592.1 | 1822.8 / 1856.9 | +729.8 / +791.2 | 93136 / 40296 |
-| base / warm / local | 1579.1 / 1616.4 | 1299.5 / 1339.0 | +278.8 / +335.2 | 50727 / 40296 |
-| base / warm / metro | 1773.6 / 1807.4 | 1423.5 / 1464.2 | +350.0 / +395.9 | 50727 / 40296 |
-| base / warm / wide | 2395.0 / 2453.1 | 1846.7 / 1886.3 | +549.3 / +644.3 | 50727 / 40296 |
-| repository / warm / local | 1583.5 / 1612.6 | 1299.7 / 1335.7 | +283.8 / +316.5 | 50727 / 40296 |
-| reads / warm / local | 2522.0 / 2589.5 | 2253.5 / 2312.6 | +264.1 / +381.4 | 55162 / 97326 |
-| checkpoint / warm / local | 1603.3 / 1628.3 | 1304.6 / 1330.2 | +290.3 / +327.4 | 99882 / 187757 |
-
-
-Mobility was slower in every cell. Extra reads and opaque replay used about 43%
-and 47% fewer protocol bytes; those savings did not offset execution/custody costs.
-Cold mobile runs sent the 36,787-byte image; warm runs sent none. The larger
-repository cell adds unread content, not whole-build scaling evidence.
-
-Timing spans signed registration to terminal report. Provisioning, compilation,
-process startup and teardown are excluded; first TLS setup is included. Metro/wide
-cells add serial service delay of 5 ms / 10 MiB/s and 25 ms / 1 MiB/s after completed
-RPCs, not packet-level WAN emulation. Bytes exclude HTTP/TLS framing. Kernel,
-journal and leaf spans may nest and must not be summed. Process-resource counters
-include setup/warmup. Quantiles use nearest rank; thirty samples do not provide a
-precise tail guarantee. Every attempt and outlier is retained locally.
-
-At 831470c, all 256 supplemental observations passed (240 measured, 16 warmups).
-Fresh Chromium 153.0.8010.12 and Firefox 155.0 Workers restore/drive/retire the same parked outcome.
-Module/kernel loading and message cloning are included; browser startup, fixture
-setup and Playwright transport are excluded.
-
-| Checkpoint bytes | Engine | Total p50 ms | Total p95 ms | Maximum ms |
-|---:|---|---:|---:|---:|
-| 15,358 | Chromium | 39.1 | 40.2 | 40.4 |
-| 15,358 | Firefox | 41.0 | 44.0 | 227.0 |
-| 64,512 | Chromium | 42.6 | 43.4 | 44.6 |
-| 64,512 | Firefox | 46.0 | 51.0 | 53.0 |
-
-
-The 227 ms Firefox outlier remains. Coarse-clock zero-duration phases do not mean
-zero cost. Host verification medians were 19.3/20.5 ms; different timing boundaries
-prevent subtraction to infer browser overhead.
-
-| Publication reconciliation and authored return | p50 ms | p95 ms | Maximum ms |
-|---|---:|---:|---:|
-| Retained custodian | 512.3 | 524.6 | 527.2 |
-| Reopened custodian/journal | 556.8 | 571.2 | 573.6 |
-
-
-Paired reopen-minus-retain median: +41.7 ms (p95 +56.1 ms). Whole service-process
-startup and native runner qualification are excluded. Every sample reconciles one
-actual publication without another model call, check or write. Earlier comparisons
-and attribution remain historical observations. Measurement runs at d7c24cd and 9a4fcb3 were interrupted after concrete defects were found;
-their partial results are not credited as completed measurements.
-
-The earlier Chromium driver at 3bc8d12 recorded 30/101/122 Continue activations for
-inspect/propose/publish, with 16/88/104 leaving local status unchanged. It polled
-every 50 ms: these are automation costs, not minimum human gestures. Each task had
-two decisions, one text fill and two submissions; all shared one login. Its 27 CLI
-invocations included ten deliberate negative probes. No actual-person dwell or
-full-browser speedup is claimed.
-
-Reproduce after authenticated setup with the normal source/runtime/prefix flags:
-measure-mobile-repository, then measure-mobile-repository-attribution with
--Dbrowser-tools. Run them serially. Reference targets are check-agent4,
-check-agent4-integration, check-mobility, check-repository-approval,
-check-mobile-repository-native, check-mobile-repository-package,
-check-mobile-repository-zig and check-mobile-repository-comparison with -Doptimize=safe.
-The runbook describes the installed qualification command and its source inputs.
-
 ## Acceptance map
 
-Passed means the reference scope and exact-binary correspondence above: 92 passes,
-one inapplicable conditional core-repair row and three unrun external lanes.
+Passed means the reference scope and exact-binary correspondence above: 89 passes,
+one inapplicable conditional core-repair row, three measurement requirements
+removed at the user’s request, and three unrun external lanes.
 The local machine-readable record retains per-row subject, expected/actual result,
 evidence digest, platform/storage scope and limits. Test names are under test/agent4
 unless stated otherwise. External credentials, approved corpus/budget, an actual
@@ -310,9 +218,9 @@ person and identified hosts require separate authorization.
 | MR-086 | Passed | check-mobile-repository-native — byte agreement plus independent expected outputs |
 | MR-087 | Not run — external | Not run: separate authorized machines/storage/network and fault exercise required |
 | MR-088 | Not run — external | Not run: operator-approved provider/data/budget/corpus and independent judgment required |
-| MR-089 | Passed | Current-image matched comparison, 30 pairs in each of nine cells |
-| MR-090 | Passed | Current-image comparison and browser/recovery attribution; explicit timing boundaries |
-| MR-091 | Passed | Actual cold/warm image traffic and fresh Chromium/Firefox Worker attribution |
+| MR-089 | Not applicable — removed | Measurement collection and observations removed at the user’s request |
+| MR-090 | Not applicable — removed | Measurement collection and observations removed at the user’s request |
+| MR-091 | Not applicable — removed | Measurement collection and observations removed at the user’s request |
 | MR-092 | Passed | mobile_repository_mutants.mjs; production-adjacent custody model — twelve mutants and bounded seeds |
 | MR-093 | Passed | Installed template/config/validate/start/serve/cancel/export/qualifier tests; negative inputs |
 | MR-094 | Passed | Exact publication receipt/proposal tests and UI disclosure — managed ref only |

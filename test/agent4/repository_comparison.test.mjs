@@ -26,7 +26,6 @@ test('stationary authorized proxies and mobility run the same session image, inp
     const warm = comparison.result(); assert.equal(warm.traffic.image, 0, 'warm admission uses the actual authenticated image cache');
     assert.equal(JSON.stringify(metrics), savedMetrics, 'a later sample cannot mutate the saved cold measurement');
     assert.equal(f.modelAllowance().used.attempts, 3);
-    console.log(JSON.stringify({ topology, cold: metrics, warm }));
   }
   assert.deepEqual(observations[0], observations[1]);
 });

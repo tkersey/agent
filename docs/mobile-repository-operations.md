@@ -9,7 +9,7 @@ Use an extracted Agent use archive and its authenticated World runtime. The curr
 native check/publication profile is qualified on Darwin arm64. Unsupported hosts
 fail explicitly. Deterministic browser/package checks pass; actual-person,
 two-machine and live-provider qualification have not run. See
-[acceptance and measurements](mobile-repository-acceptance.md).
+[acceptance evidence](mobile-repository-acceptance.md).
 
 ## Configure
 

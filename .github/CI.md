@@ -81,7 +81,7 @@ actual Zig cache reuse separately. A prefix restore can be useful even when the
 Actions exact-key `cache-hit` value is false.
 
 Only nonempty caches containing object bytes, no unsupported entry types, and
-at most **4 GiB** are saved, including after a completed failing check. An
+at most **8 GiB** are saved, including after a completed failing check. An
 oversized cache is **not cleared**: upload is skipped and the previous remote
 entry remains available. Empty/metadata-only caches never replace useful ones.
 Cancellation does not publish an in-progress cache. Cache infrastructure failures

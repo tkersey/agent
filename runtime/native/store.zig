@@ -108,6 +108,17 @@ pub const Store = struct {
         if (bytes.len != ref.bytes or !std.mem.eql(u8, &digest(bytes), &ref.digest)) return error.CorruptState;
         return a.dupe(u8, bytes);
     }
+    /// Private occurrence lookup. Public artifact reads require a separate
+    /// task/audience-bound artifact record, never a bare content digest.
+    pub fn acquiredObject(self: *Store, a: std.mem.Allocator, id: Digest, limit: usize) ![]u8 {
+        var query = try self.database.prepare("SELECT body FROM objects WHERE digest=?", &.{.{ .blob = &id }});
+        defer query.deinit();
+        if (try query.step() != .row) return error.MissingArtifact;
+        const bytes = try query.bytes(0);
+        if (bytes.len > limit) return error.Capacity;
+        if (!std.mem.eql(u8, &digest(bytes), &id)) return error.CorruptState;
+        return a.dupe(u8, bytes);
+    }
 
     /// Idempotency precedes mutable task/question checks. The caller hashes the
     /// admitted typed operation (including method), excluding JSON-RPC id.
@@ -117,6 +128,12 @@ pub const Store = struct {
         if (try query.step() == .done) return null;
         if (!std.mem.eql(u8, try query.bytes(0), &request)) return error.OperationConflict;
         return try a.dupe(u8, try query.bytes(1));
+    }
+    pub fn savedReceipt(self: *Store, a: std.mem.Allocator, id: []const u8) !?[]u8 {
+        var query = try self.database.prepare("SELECT receipt FROM operations WHERE id=?", &.{.{ .text = id }});
+        defer query.deinit();
+        if (try query.step() == .done) return null;
+        return try a.dupe(u8, try query.bytes(0));
     }
     pub fn putReceipt(self: *Store, id: []const u8, request: Digest, bytes: []const u8) !void {
         try self.writing();
@@ -156,6 +173,26 @@ pub const Store = struct {
         defer query.deinit();
         if (try query.step() != .row) return null;
         return try a.dupe(u8, try query.bytes(0));
+    }
+    pub fn taskIds(self: *Store, a: std.mem.Allocator, nonterminal: bool) ![]state.TaskId {
+        var query = try self.database.prepare("SELECT id FROM tasks WHERE (?=0 OR terminal=0) ORDER BY id LIMIT 1025", &.{.{ .integer = @intFromBool(nonterminal) }});
+        defer query.deinit();
+        var ids: std.ArrayList(state.TaskId) = .empty;
+        errdefer ids.deinit(a);
+        while (try query.step() == .row) {
+            const bytes = try query.bytes(0);
+            if (bytes.len != 16) return error.CorruptState;
+            if (ids.items.len == 1024) return error.Capacity;
+            try ids.append(a, bytes[0..16].*);
+        }
+        return ids.toOwnedSlice(a);
+    }
+    pub fn putEvent(self: *Store, event: state.Event) !void {
+        try self.writing();
+        if (event.seq == 0 or event.seq > std.math.maxInt(i64) or event.revision > std.math.maxInt(i64)) return error.Capacity;
+        const body = try contracts.encodeOwned(state.Event, self.allocator, event);
+        defer self.allocator.free(body);
+        try self.database.run("INSERT INTO events VALUES(?,?,?,?)", &.{ .{ .blob = &event.task }, .{ .integer = @intCast(event.seq) }, .{ .integer = @intCast(event.revision) }, .{ .blob = body } });
     }
 };
 

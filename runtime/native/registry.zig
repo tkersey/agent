@@ -75,17 +75,26 @@ pub const Registry = struct {
     }
 
     pub fn admit(self: Registry, request: data.invocation.Request, authority: Authority, image_identity: [32]u8) !Entry {
-        if (authority.revoked or !std.mem.eql(u8, &request.binding.program_identity, &image_identity)) return error.Denied;
+        if (authority.revoked) return error.Denied;
+        const entry = try self.resolve(request, image_identity);
+        const declaration = entry.declaration;
+        if (declaration.inference and !authority.inference) return error.Denied;
+        for (authority.grants) |grant| {
+            if (std.mem.eql(u8, grant.identity, declaration.identity) and std.mem.eql(u8, grant.resource_role, declaration.resource_role)) return entry;
+        }
+        return error.Denied;
+    }
+
+    /// Schema/identity resolution does not authorize fresh I/O. Recovery uses
+    /// this path to consume a saved reply without requiring a new spend grant.
+    pub fn resolve(self: Registry, request: data.invocation.Request, image_identity: [32]u8) !Entry {
+        if (!std.mem.eql(u8, &request.binding.program_identity, &image_identity)) return error.Denied;
         for (self.entries) |entry| {
             const declaration = entry.declaration;
             if (!std.mem.eql(u8, request.binding.semantic_identity, declaration.identity)) continue;
             if (!std.mem.eql(u8, request.binding.payload_schema, entry.payload_schema) or
                 !std.mem.eql(u8, request.binding.resume_schema, entry.resume_schema)) return error.CapabilitySchemaMismatch;
-            if (declaration.inference and !authority.inference) return error.Denied;
-            for (authority.grants) |grant| {
-                if (std.mem.eql(u8, grant.identity, declaration.identity) and std.mem.eql(u8, grant.resource_role, declaration.resource_role)) return entry;
-            }
-            return error.Denied;
+            return entry;
         }
         return error.MissingCapability;
     }

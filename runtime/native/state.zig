@@ -19,6 +19,7 @@ pub const Task = struct {
     failure_schema_id: Name,
     message_schema_id: Name,
     principal: Name,
+    tenant: Name,
     profile_id: Name,
     profile: Reference,
     image: Reference,

@@ -11,6 +11,8 @@ pub const Registry = registry.Registry;
 pub const run = @import("host.zig").run;
 pub const discovery = @import("discovery.zig");
 pub const inbox = @import("inbox.zig");
+pub const tasks = @import("tasks.zig");
+pub const Namespace = @import("namespace.zig").Namespace;
 
 test {
     _ = json;

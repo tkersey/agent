@@ -20,6 +20,7 @@ pub const Profile = struct {
     authority: registry.Authority,
 };
 pub const Admission = struct { receipt: state.Receipt, replayed: bool };
+pub const Status = enum { queued, running, waiting_input, parked, cancelling, blocked, unknown, completed, failed, cancelled };
 pub const Work = struct {
     task: state.TaskId,
     occurrence: state.Digest,
@@ -69,7 +70,10 @@ pub fn Service(comptime Types: type) type {
             _ = try name(profile.id);
             _ = try name(profile.authority.principal);
             if (profile.bytes.len > 256 * 1024 or profile.authority.revoked) return error.Denied;
-            return .{ .allocator = a, .io = io, .namespace = namespace, .assets = assets, .application = application, .handlers = handlers, .profile = profile, .program = try evaluator.Program.open(a, assets.image, 8 * 1024 * 1024) };
+            var self: Self = .{ .allocator = a, .io = io, .namespace = namespace, .assets = assets, .application = application, .handlers = handlers, .profile = profile, .program = try evaluator.Program.open(a, assets.image, 8 * 1024 * 1024) };
+            errdefer self.program.close() catch unreachable;
+            try self.recover(a);
+            return self;
         }
         fn store(self: *Self) *storage.Store {
             return &self.namespace.store;
@@ -99,6 +103,51 @@ pub fn Service(comptime Types: type) type {
                 else => return null,
             };
             return try self.record(state.Question, a, "question", question_id, id);
+        }
+        pub fn status(self: *Self, a: std.mem.Allocator, value: state.Task) !Status {
+            switch (value.outcome_kind) {
+                .completed => return .completed,
+                .failed => return .failed,
+                .cancelled => return .cancelled,
+                else => {},
+            }
+            if (value.current_occurrence) |id| {
+                var saved = try self.record(occurrence.Occurrence, a, "occurrence", id, value.id);
+                defer saved.deinit();
+                if (saved.value.state == .unknown or (saved.value.state == .dispatching and (self.work == null or !same(&self.work.?.occurrence, &id)))) return .unknown;
+                if (saved.value.state == .awaiting and (value.cancellation == null or value.cancellation_applied)) return .waiting_input;
+            }
+            if (value.blocker != null) return .blocked;
+            if (value.cancellation != null) return .cancelling;
+            for (self.runnable.items) |id| if (same(&id, &value.id)) return if (value.schedule == .queued) .queued else .running;
+            return .parked;
+        }
+        fn recover(self: *Self, a: std.mem.Allocator) !void {
+            const ids = try self.store().taskIds(a, true);
+            defer a.free(ids);
+            for (ids) |id| {
+                var decoded = self.task(a, id) catch |err| switch (err) {
+                    error.Denied => continue,
+                    else => return err,
+                };
+                defer decoded.deinit();
+                var value = decoded.value;
+                const current = value.current_occurrence orelse continue;
+                var saved = try self.record(occurrence.Occurrence, a, "occurrence", current, id);
+                defer saved.deinit();
+                if (saved.value.state != .dispatching) continue;
+                const binding: occurrence.Binding = .{ .id = current, .task = id, .request = saved.value.request };
+                const lost = try occurrence.unknown(saved.value, binding, saved.value.state.dispatching.id);
+                const previous = value.revision;
+                value.revision = try std.math.add(u64, previous, 1);
+                value.schedule = .parked;
+                value.blocker = .unavailable_environment;
+                try self.store().begin();
+                defer self.store().rollback();
+                try self.store().putRecord(occurrence.Occurrence, "occurrence", current, id, lost);
+                try self.event(&value, .delivery_unknown, "{}");
+                try self.persist(value, previous, "process.recover-unknown");
+            }
         }
         fn record(self: *Self, comptime T: type, a: std.mem.Allocator, comptime kind: []const u8, id: state.Digest, task_id: state.TaskId) !contracts.Decoded(T) {
             const bytes = (try self.store().recordBytes(a, kind, id, task_id)) orelse return error.CorruptState;
@@ -136,6 +185,15 @@ pub fn Service(comptime Types: type) type {
         fn event(self: *Self, value: *state.Task, kind: state.EventType, bytes: []const u8) !void {
             value.event_high = try std.math.add(u64, value.event_high, 1);
             try self.store().putEvent(.{ .task = value.id, .seq = value.event_high, .revision = value.revision, .kind = kind, .data = .{ .bytes = bytes } });
+        }
+        fn messageEvent(self: *Self, a: std.mem.Allocator, value: *state.Task, kind: state.EventType, item: state.Message) !void {
+            var body = json.object();
+            try json.put(a, &body, "message_id", json.string(try a.dupe(u8, &std.fmt.bytesToHex(item.id, .lower))));
+            try json.put(a, &body, "ordinal", json.string(try std.fmt.allocPrint(a, "{d}", .{item.ordinal})));
+            try json.put(a, &body, "disposition", json.string(@tagName(item.disposition)));
+            const bytes = try json.canonical(a, body);
+            defer a.free(bytes);
+            try self.event(value, kind, bytes);
         }
         fn persist(self: *Self, value: state.Task, previous: u64, transition: []const u8) !void {
             try self.store().putTask(value, previous);
@@ -346,7 +404,7 @@ pub fn Service(comptime Types: type) type {
             defer self.store().rollback();
             const saved: state.Message = .{ .id = identity, .task = task_id, .ordinal = ordinal, .schema_id = try name(Types.message_schema_id), .value = try self.store().putObject(bytes), .disposition = .queued, .occurrence = null };
             try self.store().putRecord(state.Message, "message", identity, task_id, saved);
-            try self.event(&value, .message_queued, "{}");
+            try self.messageEvent(a, &value, .message_queued, saved);
             const admitted = try self.receipt(a, .message, id, request, value, .queued, identity, null);
             try self.persist(value, previous, "task.message");
             return admitted;
@@ -521,7 +579,7 @@ pub fn Service(comptime Types: type) type {
                         saved.value.disposition = .consumed;
                         try self.store().putRecord(state.Message, "message", message_id, value.id, saved.value);
                         value.messages.items = value.messages.items[1..];
-                        try self.event(&value, .message_consumed, "{}");
+                        try self.messageEvent(a, &value, .message_consumed, saved.value);
                     }
                 }
             }
@@ -567,7 +625,7 @@ pub fn Service(comptime Types: type) type {
                     defer saved.deinit();
                     saved.value.disposition = .not_consumed;
                     try self.store().putRecord(state.Message, "message", id, value.id, saved.value);
-                    try self.event(&value, .message_not_consumed, "{}");
+                    try self.messageEvent(a, &value, .message_not_consumed, saved.value);
                 }
                 value.messages.items = &.{};
             }
@@ -750,6 +808,25 @@ pub fn Service(comptime Types: type) type {
             try self.program.close();
             self.runnable.deinit(self.allocator);
             self.* = undefined;
+        }
+
+        pub fn park(self: *Self, a: std.mem.Allocator) !void {
+            if (self.work != null) return error.Busy;
+            for (self.runnable.items) |id| {
+                var decoded = try self.task(a, id);
+                defer decoded.deinit();
+                var value = decoded.value;
+                if (value.terminal()) continue;
+                const previous = value.revision;
+                value.revision = try std.math.add(u64, previous, 1);
+                value.schedule = .parked;
+                try self.store().begin();
+                defer self.store().rollback();
+                try self.event(&value, .parked, "{}");
+                try self.persist(value, previous, "task.park");
+            }
+            self.runnable.clearRetainingCapacity();
+            try self.retire(a);
         }
     };
 }

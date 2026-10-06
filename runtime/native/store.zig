@@ -194,6 +194,26 @@ pub const Store = struct {
         defer self.allocator.free(body);
         try self.database.run("INSERT INTO events VALUES(?,?,?,?)", &.{ .{ .blob = &event.task }, .{ .integer = @intCast(event.seq) }, .{ .integer = @intCast(event.revision) }, .{ .blob = body } });
     }
+    pub fn eventsAfter(self: *Store, a: std.mem.Allocator, task: state.TaskId, after: u64, limit: u32) ![][]u8 {
+        if (after > std.math.maxInt(i64) or limit == 0 or limit > 128) return error.InvalidParams;
+        var query = try self.database.prepare("SELECT body FROM events WHERE task=? AND seq>? ORDER BY seq LIMIT ?", &.{ .{ .blob = &task }, .{ .integer = @intCast(after) }, .{ .integer = limit } });
+        defer query.deinit();
+        var records: std.ArrayList([]u8) = .empty;
+        errdefer {
+            for (records.items) |bytes| a.free(bytes);
+            records.deinit(a);
+        }
+        var total: usize = 0;
+        while (try query.step() == .row) {
+            const bytes = try query.bytes(0);
+            if (total + bytes.len > 384 * 1024) break;
+            const copied = try a.dupe(u8, bytes);
+            errdefer a.free(copied);
+            try records.append(a, copied);
+            total += bytes.len;
+        }
+        return records.toOwnedSlice(a);
+    }
 };
 
 test "objects and immutable admission receipts commit together or disappear together" {

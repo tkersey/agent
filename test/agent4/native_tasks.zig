@@ -133,4 +133,22 @@ test "durable owner replays admissions and acquired work, binds answers, and con
     try std.testing.expectError(error.AnswerConflict, service.respond(frame, "answer-conflict", accepted.receipt.task, question.value.id, question.value.revision, question.value.request_digest, "task-owner.answer.v1", .{ .number_string = "8" }));
     try std.testing.expect((try service.submit(frame, "submit", 20)).replayed);
     try std.testing.expectError(error.OperationConflict, service.requestCancel(frame, "submit", accepted.receipt.task, "cancel"));
+    var client: native.client.Client(T) = .{ .service = &service };
+    var params = native.json.object();
+    try native.json.put(frame, &params, "task_id", native.json.string(try frame.dupe(u8, &std.fmt.bytesToHex(accepted.receipt.task, .lower))));
+    const public_result = try client.call(frame, .@"task.result", params);
+    try std.testing.expect(public_result.object.get("ready").?.bool);
+    try std.testing.expectEqualStrings("completed", public_result.object.get("status").?.string);
+    const events = try client.events(frame, accepted.receipt.task, 0, 128);
+    const history = events.object.get("events").?.array.items;
+    var consumed: usize = 0;
+    var completed_events: usize = 0;
+    for (history) |event| {
+        const kind = event.object.get("type").?.string;
+        if (std.mem.eql(u8, kind, "message_consumed")) consumed += 1;
+        if (std.mem.eql(u8, kind, "completed")) completed_events += 1;
+    }
+    try std.testing.expectEqual(1, consumed);
+    try std.testing.expectEqual(1, completed_events);
+    try std.testing.expectError(error.InvalidParams, client.events(frame, accepted.receipt.task, completed.value.event_high + 1, 128));
 }

@@ -47,7 +47,7 @@ through the existing authenticated capability preflight.
 The initial new regression assertions needed corrections for child-pipe draining
 and the program's separate edit/check model turns; the failed logs are retained.
 
-The latest cancellation and missing-input corrections pass 42 approval/binding
+Cancellation and missing-input corrections passed 42 approval/binding
 tests, native Zig qualification, the matched comparison tests and 362/362 package
 build steps. Lost replies from proposal preparation, publication-current reads and
 approval-identifier issuance can be cancelled after restart without repeating work
@@ -56,12 +56,11 @@ absence diagnostics and zero physical executions; valid repairs still pass the
 native checks. The earlier cancellation assertions failed on the prior code and
 their logs are retained.
 
-The compiled images remain unchanged from 4693529. Snapshot input handling and
-cancellation metadata have since changed; the matched comparison tests recheck
-equivalent inputs, work counts and outcomes on the current implementation. The
-latency tables and process-resource counters retain their original executed
-subject and are historical observations, not measurements of the latest repairs.
-No new latency or memory improvement is claimed from those corrections.
+The compiled images remain byte-identical to 4693529. The full comparison and
+attribution were recollected at `831470c763d91ac0d2aaa27332f11a01d4f35450`
+after the binding repairs; their runtime/test source hashes and image identities
+match the delivered implementation. Later documentation edits do not change those
+executed inputs. Earlier datasets remain retained under their original subjects.
 
 Binding-selection repairs pass 35 model/binding tests, seven focused application
 cases, 86 host/deployment/qualification tests and 362/362 package steps. Check and
@@ -70,8 +69,11 @@ model and parameters. Validation rejects conflicting eligible provider profiles
 and requires ordinary review even for publish-only entries. The installed journey
 passes with another model and an identical shared provider preceding the selected
 repository's binding. A publish-mode no-change task completes ordinary human review
-without publishing. Controlled measurements are pending recollection because the
-selection predicates execute inside the measured workload.
+without publishing. The complete measurement build passed 94/94 steps with all
+576 comparison attempts and 256 attribution observations retained and passing.
+Across comparison cells, median elapsed time changed by −0.9% to +1.5% from the
+earlier collection; this is a descriptive cross-run comparison, not causal proof
+of an optimization or a latency guarantee.
 
 The broader aggregate passed 559/559 steps at
 `330916481f46a20ad03c3e5c760d024c6b82e5d7`. Its unchanged generic runtime,
@@ -107,6 +109,9 @@ Local records under `.agent4-mobile/out/agent4/` include the 96-row acceptance J
 `ordinary-cancellation-before-configured.log`, `ordinary-cancellation-after.log`,
 `required-input-proof.json`, `required-input-native.log`,
 `cancellation-input-comparison.log`, `cancellation-input-package.log`,
+`binding-selection-unit.log`, `binding-selection-host.log`,
+`binding-selection-application.log`, `binding-selection-package.log`,
+`measurement-831470c.log`, `comparison-831470c.json`, `attribution-831470c.json`,
 `final-3309164.log`, measurements and package
 inventory verification. They bind actual subjects, hashes and limitations. The
 accepted user specification remains a local qualification input at
@@ -130,7 +135,7 @@ Later passes do not relabel the original failed subjects.
 
 ## Measurements
 
-At 4693529, all 576 comparison attempts passed: 36 warmups and 540 measured samples,
+At 831470c, all 576 comparison attempts passed: 36 warmups and 540 measured samples,
 30 matched pairs per cell. Both profiles use the same image, task, patch, model
 replies, work counts and grants. Stationary invokes actual workspace leaves through
 mutual-TLS binary proxies; mobile uses real custody transfers. The Apple M2 Pro
@@ -138,15 +143,15 @@ single-machine fixture uses synthetic provider and human input.
 
 | Cell | Mobile p50 / p95 ms | Stationary p50 / p95 ms | Paired difference p50 / p95 ms | Protocol bytes, mobile / stationary |
 |---|---:|---:|---:|---:|
-| base / cold / local | 1606.9 / 1638.9 | 1283.0 / 1318.7 | +319.7 / +357.0 | 93136 / 40296 |
-| base / cold / metro | 1815.3 / 1849.8 | 1403.9 / 1424.7 | +406.3 / +447.9 | 93136 / 40296 |
-| base / cold / wide | 2555.0 / 2599.0 | 1818.2 / 1863.6 | +735.2 / +780.8 | 93136 / 40296 |
-| base / warm / local | 1569.6 / 1610.9 | 1284.4 / 1329.2 | +282.8 / +335.3 | 50727 / 40296 |
-| base / warm / metro | 1774.8 / 1807.2 | 1419.4 / 1448.7 | +352.9 / +452.1 | 50727 / 40296 |
-| base / warm / wide | 2416.2 / 2451.3 | 1833.7 / 1879.3 | +582.0 / +633.0 | 50727 / 40296 |
-| repository / warm / local | 1568.0 / 1604.0 | 1283.3 / 1307.5 | +281.4 / +341.2 | 50727 / 40296 |
-| reads / warm / local | 2520.1 / 2573.1 | 2221.9 / 2291.3 | +294.5 / +404.3 | 55162 / 97326 |
-| checkpoint / warm / local | 1599.6 / 1641.8 | 1300.9 / 1342.3 | +299.2 / +362.9 | 99882 / 187757 |
+| base / cold / local | 1600.9 / 1663.7 | 1291.3 / 1319.5 | +321.3 / +362.9 | 93136 / 40296 |
+| base / cold / metro | 1814.7 / 1856.1 | 1400.1 / 1437.1 | +415.5 / +455.5 | 93136 / 40296 |
+| base / cold / wide | 2549.2 / 2592.1 | 1822.8 / 1856.9 | +729.8 / +791.2 | 93136 / 40296 |
+| base / warm / local | 1579.1 / 1616.4 | 1299.5 / 1339.0 | +278.8 / +335.2 | 50727 / 40296 |
+| base / warm / metro | 1773.6 / 1807.4 | 1423.5 / 1464.2 | +350.0 / +395.9 | 50727 / 40296 |
+| base / warm / wide | 2395.0 / 2453.1 | 1846.7 / 1886.3 | +549.3 / +644.3 | 50727 / 40296 |
+| repository / warm / local | 1583.5 / 1612.6 | 1299.7 / 1335.7 | +283.8 / +316.5 | 50727 / 40296 |
+| reads / warm / local | 2522.0 / 2589.5 | 2253.5 / 2312.6 | +264.1 / +381.4 | 55162 / 97326 |
+| checkpoint / warm / local | 1603.3 / 1628.3 | 1304.6 / 1330.2 | +290.3 / +327.4 | 99882 / 187757 |
 
 
 Mobility was slower in every cell. Extra reads and opaque replay used about 43%
@@ -162,30 +167,30 @@ journal and leaf spans may nest and must not be summed. Process-resource counter
 include setup/warmup. Quantiles use nearest rank; thirty samples do not provide a
 precise tail guarantee. Every attempt and outlier is retained locally.
 
-At 4693529, all 256 supplemental observations passed (240 measured, 16 warmups).
+At 831470c, all 256 supplemental observations passed (240 measured, 16 warmups).
 Fresh Chromium 153.0.8010.12 and Firefox 155.0 Workers restore/drive/retire the same parked outcome.
 Module/kernel loading and message cloning are included; browser startup, fixture
 setup and Playwright transport are excluded.
 
 | Checkpoint bytes | Engine | Total p50 ms | Total p95 ms | Maximum ms |
 |---:|---|---:|---:|---:|
-| 15,358 | Chromium | 39.1 | 40.1 | 40.5 |
-| 15,358 | Firefox | 40.0 | 44.0 | 248.0 |
-| 64,512 | Chromium | 42.6 | 43.5 | 43.8 |
-| 64,512 | Firefox | 46.0 | 50.0 | 53.0 |
+| 15,358 | Chromium | 39.1 | 40.2 | 40.4 |
+| 15,358 | Firefox | 41.0 | 44.0 | 227.0 |
+| 64,512 | Chromium | 42.6 | 43.4 | 44.6 |
+| 64,512 | Firefox | 46.0 | 51.0 | 53.0 |
 
 
-The 248 ms Firefox outlier remains. Coarse-clock zero-duration phases do not mean
-zero cost. Host verification medians were 19.2/20.6 ms; different timing boundaries
+The 227 ms Firefox outlier remains. Coarse-clock zero-duration phases do not mean
+zero cost. Host verification medians were 19.3/20.5 ms; different timing boundaries
 prevent subtraction to infer browser overhead.
 
 | Publication reconciliation and authored return | p50 ms | p95 ms | Maximum ms |
 |---|---:|---:|---:|
-| Retained custodian | 513.6 | 524.5 | 526.6 |
-| Reopened custodian/journal | 555.2 | 567.0 | 569.9 |
+| Retained custodian | 512.3 | 524.6 | 527.2 |
+| Reopened custodian/journal | 556.8 | 571.2 | 573.6 |
 
 
-Paired reopen-minus-retain median: +42.8 ms (p95 +58.2 ms). Whole service-process
+Paired reopen-minus-retain median: +41.7 ms (p95 +56.1 ms). Whole service-process
 startup and native runner qualification are excluded. Every sample reconciles one
 actual publication without another model call, check or write. Earlier comparisons
 and attribution remain historical observations. Measurement runs at d7c24cd and 9a4fcb3 were interrupted after concrete defects were found;

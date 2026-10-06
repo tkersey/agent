@@ -58,14 +58,20 @@ test('qualified Zig checks distinguish an actual Agent repair from its incorrect
     'subject.zig': 'extern "c" fn write(c_int, [*]const u8, usize) isize; extern "c" fn _exit(c_int) noreturn; pub fn bound() u64 { return 4; } pub export fn exit(_: c_int) noreturn { const msg = "[\\\"5\\\"]\\n"; _ = write(1, msg.ptr, msg.len); _exit(0); }',
   }, { roots: [{ name: 'root', path: 'main.zig', dependencies: ['subject'] }, { name: 'subject', path: 'subject.zig', dependencies: [] }], expectedStdout: '["5"]\n' });
   assert.notEqual(forged.status, 'Passed', 'candidate exit/output cannot replace the host observation');
-  const source = join(root, 'source'); await mkdir(source); await mkdir(join(source, 'src'));
+  for (const name of ['../escape.zig', '/escape.zig', 'src//x.zig', 'src/./x.zig', 'src\\x.zig', 'src/\nx.zig']) {
+    const invalid = await runner.execute({ [name]: 'pub export fn agent_observe(_: u32) u64 { return 5; }' }, {
+      roots: [{ name: 'root', path: name, dependencies: [] }], expectedStdout: '["5"]\n' });
+    assert.equal(invalid.status, 'Unavailable', name); assert.equal(invalid.physicalExecutions, 0);
+  }
+  const source = join(root, 'source'), target = 'src/v1.0/my module-é.zig';
+  await mkdir(join(source, 'src/v1.0'), { recursive: true });
   const correct = await readFile(new URL('../../src/model_json.zig', import.meta.url), 'utf8');
   assert(correct.includes('.bool => 5,'));
   // Seed a single real serialization-bound defect in a private copy. The
   // protected expectation follows JSON's spelling of false, independently of
   // the implementation's counting routine or project tests.
   const incorrect = correct.replace('.bool => 5,', '.bool => 4,');
-  await writeFile(join(source, 'src/model_json.zig'), incorrect);
+  await writeFile(join(source, target), incorrect);
   const harness = `const subject = @import("subject");
 pub export fn agent_observe(_: u32) u64 { return subject.maximumToolArgumentsByteLength(bool); }`;
   await writeFile(join(source, 'harness.zig'), harness);
@@ -73,15 +79,15 @@ pub export fn agent_observe(_: u32) u64 { return subject.maximumToolArgumentsByt
   const base = git(source, 'rev-parse', 'HEAD');
   const options = { directory: join(root, 'managed'), sourceGitDirectory: join(source, '.git'), base,
     gitExecutable: await realpath('/usr/bin/git'), repository: 'agent-json-qualification', generation: '1',
-    managedRef: 'refs/heads/agent/result', readPaths: ['src/model_json.zig', 'harness.zig'],
-    writablePaths: ['src/model_json.zig'], protectedPaths: ['harness.zig'] };
+    managedRef: 'refs/heads/agent/result', readPaths: [target, 'harness.zig'],
+    writablePaths: [target], protectedPaths: ['harness.zig'] };
   const receipt = await provisionRepository(options);
   const store = await openRepositorySnapshotStore({ writeHelper: await repositoryWriteHelper(), ...options, ...receipt });
   const snapshot = await store.snapshot(base);
-  const candidate = await store.prepare(snapshot, [{ operation: 'replace', path: 'src/model_json.zig',
+  const candidate = await store.prepare(snapshot, [{ operation: 'replace', path: target,
     oldDigest: sha(incorrect), oldMode: '100644', content: correct }]);
   const profile = { id: 'agent.model-json-bool-bound.v1', description: 'The maximum encoded boolean size covers false',
-    requiredPaths: ['src/model_json.zig'], modules: [{ name: 'subject', path: 'src/model_json.zig', dependencies: [] }],
+    requiredPaths: [target], modules: [{ name: 'subject', path: target, dependencies: [] }],
     harness: { source: harness, sha256: sha(harness) }, expectedStdout: '["5"]\n', deterministic: true };
   const checks = createRepositoryCheckRunner({ store, sandbox: runner, profiles: [profile] });
   profile.harness.source = 'caller mutation must not replace the admitted harness';
@@ -112,7 +118,7 @@ pub export fn agent_observe(_: u32) u64 { return subject.maximumToolArgumentsByt
   assert.equal(passed.reusable, true); assert.equal(failed.reusable, false);
   await assert.rejects(checks.check({ ...request, profileId: 'model-supplied-command' }), { code: 'RepositoryCheckProfileDenied' });
   assert.equal(await store.current(), base);
-  assert.equal(await readFile(join(source, 'src/model_json.zig'), 'utf8'), incorrect);
+  assert.equal(await readFile(join(source, target), 'utf8'), incorrect);
   assert.equal(git(source, 'status', '--porcelain'), '');
   await assert.rejects(store.checkInputs({ snapshot, candidate: { ...candidate, tree: snapshot.tree },
     requiredPaths: options.readPaths }), { code: 'RepositoryCandidateMismatch' });

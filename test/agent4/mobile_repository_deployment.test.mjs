@@ -20,7 +20,7 @@ const gitEnv = { PATH: '/usr/bin:/bin', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLO
 
 test('installed CLI and v2 deployment run all modes through two TLS hosts and a real browser', { timeout: 900000 }, async t => {
   const area = await mkdtemp(join(tmpdir(), 'mobile deployed application '));
-  let child, childExit, origin, browser, provider;
+  let child, childExit, childClosed, origin, browser, provider;
   t.after(async () => {
     if (browser) await browser.close();
     if (child && child.exitCode === null && child.signalCode === null) { child.kill('SIGTERM'); await childExit; }
@@ -82,7 +82,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   console.log('deployment: installed provisioning and runner qualification passed');
   const image = await readFile(join(root, 'examples/mobile-repository/session.bpi3'));
   const sessionSchema = decodeSchema(await readFile(join(root, 'examples/mobile-repository/session.bin')));
-  let modelCalls = 0, providerFailure;
+  let modelCalls = 0, providerFailure, rejectPreparation = false;
   const beforeDigest = hash(Buffer.from(correct.replace('.bool => 5,', '.bool => 4,')));
   provider = createServer(async (req, res) => {
     try {
@@ -90,7 +90,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
       const request = JSON.parse(Buffer.concat(chunks)), turn = request.input.filter(item => item.type === 'function_call').length; modelCalls++;
       assert.equal(req.headers.authorization, undefined); assert.equal(JSON.stringify(request).includes(privateSentinel), false);
       assert.deepEqual(request.reasoning, { effort: 'medium', summary: 'auto' });
-      const actions = [['edit', { operation: 'replace', path: target, old_digest: beforeDigest, content: correct }], ['check', {}], ['finish', { summary: 'Boolean bound repaired and independently checked.' }]];
+      const actions = [['edit', { operation: 'replace', path: target, old_digest: rejectPreparation ? '0'.repeat(64) : beforeDigest, content: correct }], ['check', {}], ['finish', { summary: 'Boolean bound repaired and independently checked.' }]];
       assert(turn <= actions.length);
       const [name, args] = turn === 0 ? ['ask', { question: 'Confirm the bounded scope before continuing.' }]
         : !request.tools.some(tool => tool.name === 'edit') && turn === 1
@@ -155,10 +155,14 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   command('init', configW); assert.deepEqual(command('status', configW), []);
   assert.throws(() => command('serve', configW), error => String(error.stderr).includes('EnvironmentUnavailable'),
     'inspection needs no physical qualification, but serving must qualify before listening');
-  checkSandbox.scratchRoot = scratchRoot; await json(configW, workspaceConfig);
+  checkSandbox.scratchRoot = scratchRoot;
+  // Independently granted bindings may share one qualified execution profile.
+  const checkBinding = workspaceConfig.bindings.find(row => row.adapter.kind === 'repository-check');
+  for (const scope of ['other-check-1', 'other-check-2']) workspaceConfig.bindings.push({ ...structuredClone(checkBinding), scope, principals: [scope] });
+  await json(configW, workspaceConfig);
   console.log('deployment: both v2 configurations initialized');
   let stdout = '', stderr = '';
-  child = spawn(process.execPath, [cli, 'serve', configW], { cwd: root, env: cliEnv, stdio: ['ignore', 'pipe', 'pipe'] }); childExit = once(child, 'exit');
+  child = spawn(process.execPath, [cli, 'serve', configW], { cwd: root, env: cliEnv, stdio: ['ignore', 'pipe', 'pipe'] }); childExit = once(child, 'exit'); childClosed = once(child, 'close');
   const ready = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('workspace startup timeout: ' + stderr)), 240000);
     child.once('exit', code => { clearTimeout(timer); reject(Error(`workspace exited ${code}: ${stderr}`)); });
@@ -172,8 +176,25 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   connectedConfig.tls.port = Number(new URL(service.url).port);
   await origin.close(); origin = null; await json(configU, connectedConfig);
   const qualificationCase = id => ({ id, entry: 'repository', base, mode: 'inspect', goal: 'Inspect the approved snapshot.', expected: { kind: 'completed', proposalTree: null, published: false } });
+  const mixedWorkspace = structuredClone(workspaceConfig), unrelatedModel = structuredClone(workspaceConfig.bindings.find(row => row.adapter.kind === 'openai-responses-replay'));
+  Object.assign(unrelatedModel, { subject: 'unrelated-repository', scope: 'unrelated-model', principals: ['unrelated-user'] });
+  Object.assign(unrelatedModel.adapter, { mode: 'openai-live', endpoint: 'https://api.openai.com/v1/responses', credentialEnv: 'UNUSED_QUALIFICATION_KEY' });
+  mixedWorkspace.bindings.push(unrelatedModel);
+  const mixedPeer = await json(join(area, 'configured/mixed-workspace.json'), mixedWorkspace);
+  for (const lane of ['live', 'deployed']) {
+    const declaration = structuredClone(mixedWorkspace);
+    if (lane === 'deployed') Object.assign(declaration.bindings.find(row => row.adapter.kind === 'openai-responses-replay').adapter,
+      { mode: 'openai-live', endpoint: 'https://api.openai.com/v1/responses', credentialEnv: 'UNUSED_QUALIFICATION_KEY' });
+    const peer = await json(join(area, `configured/wrong-${lane}-workspace.json`), declaration);
+    const input = await json(join(area, `wrong-${lane}.json`), { format: 'agent.repository.qualification/v1', lanes: [lane], source: null,
+      maximumSeconds: 1, external: { origin: configU, peers: [peer], principal: 'user', tenant: 'tenant', cases: [qualificationCase('wrong-provider-mode')] } });
+    const output = join(area, `wrong-${lane}`);
+    assert.throws(() => command('qualify-application', input, output, `--${lane}`), error => error.status === 1);
+    assert.equal(JSON.parse(await readFile(join(output, 'report.json'))).failure, 'QualificationProviderMode');
+    assert.deepEqual(command('status', configU), []); assert.equal(modelCalls, 0);
+  }
   const applicationQualification = await json(join(area, 'application-qualification.json'), { format: 'agent.repository.qualification/v1', lanes: ['deployed'], source: null,
-    maximumSeconds: 1, external: { origin: configU, peers: [configW], principal: 'user', tenant: 'tenant', cases: [qualificationCase('waiting-person'), qualificationCase('not-started')] } });
+    maximumSeconds: 1, external: { origin: configU, peers: [mixedPeer], principal: 'user', tenant: 'tenant', cases: [qualificationCase('waiting-person'), qualificationCase('not-started')] } });
   const qualificationOutput = join(area, 'application-qualification');
   assert.throws(() => command('qualify-application', applicationQualification, qualificationOutput, '--deployed'), error => error.status === 1);
   const qualified = JSON.parse(await readFile(join(qualificationOutput, 'report.json')));
@@ -182,7 +203,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   const waiting = command('status', configU, qualified.lanes[0].cases[0].run_id);
   assert.equal(waiting.custody, 'ACTIVE'); assert.equal(waiting.cancellation_pending, false); assert.equal(modelCalls, 0);
   command('cancel', configU, waiting.run_id, 'qualification fixture cleanup');
-  const runs = ['inspect', 'propose', 'publish'].map(mode => ({ mode,
+  const runs = [...['inspect', 'propose', 'publish'].map(mode => ({ mode })), { mode: 'propose', rejected: true }].map(({ mode, rejected = false }) => ({ mode, rejected,
     run: command('task', configU, 'user', 'tenant', 'repository', mode, 'Investigate and repair the boolean JSON-size bound within the selected mode.') }));
   origin = await openDeployment(configU); service = await origin.serve();
   const runsBeforeValidation = origin.journal.recover().map(({ run }) => run.run_id);
@@ -194,11 +215,32 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   const login = command('login-issue', configU, 'user', 'tenant');
   await page.goto(service.browser_url + '/login'); await page.locator('#credential').fill(login.credential); await page.locator('#login button').click(); await page.waitForURL(service.browser_url + '/');
   let approvals = 0, clarifications = 0;
-  for (const { mode, run } of runs) {
+  for (const { mode, run, rejected } of runs) {
+    rejectPreparation = rejected; const callsBefore = modelCalls;
+    let cancelledAfterRestart = false;
     const actions = { mode, runFieldFills: 1, connect: 1, continue: 0, unchangedStateContinue: 0, choices: 0, answerFieldFills: 0, submits: 0 }; uiOperations.push(actions);
     await page.locator('#run').fill(run.run_id); await page.locator('#connect').click(); await page.locator('#status').filter({ hasText: 'Connected' }).waitFor();
     for (let attempt = 0; attempt < 800 && origin.custodian.status(run.run_id).custody !== 'TERMINAL'; attempt++) {
       if (providerFailure) throw providerFailure;
+      // ask, edit and check are separate model turns; check performs preparation.
+      if (rejected && modelCalls >= callsBefore + 3) {
+        const status = command('status', configW, run.run_id);
+        if (status.operation === 'agent.repository.prepare.v1' && status.occurrence === 'UNKNOWN') {
+          child.kill('SIGTERM'); const [code, signal] = await childExit; assert.equal(code, 0, stderr); assert.equal(signal, null);
+          await childClosed; assert.match(stderr, /RepositoryPreimage/);
+          const restored = await openDeployment(configW, { qualifyChecks: false });
+          try {
+            await restored.custodian.cancelRun(run.run_id, 'rejected preparation');
+            await restored.custodian.run(run.run_id);
+            assert.equal(restored.custodian.status(run.run_id).custody, 'TERMINAL');
+            const saved = restored.custodian.outcome(run.run_id);
+            assert.equal(restored.world.decodeOutcome(saved.bytes).kind, 'cancelled');
+            assert.equal(restored.statistics()['agent.repository.prepare.v1'].calls, 0);
+            assert.equal(restored.statistics()['agent.repository.investigation-release.v1'].calls, 1);
+          } finally { await restored.close(); }
+          cancelledAfterRestart = true; break;
+        }
+      }
       if (await page.locator('#answer').isVisible()) {
         const choices = await page.locator('#choice option').evaluateAll(options => options.map(option => option.value));
         actions.choices++;
@@ -215,6 +257,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
       await page.waitForFunction(() => !document.querySelector('#continue').disabled);
       await new Promise(r => setTimeout(r, 50));
     }
+    if (rejected) { assert.equal(cancelledAfterRestart, true); assert.equal(modelCalls, callsBefore + 3); continue; }
     assert.equal(origin.custodian.status(run.run_id).custody, 'TERMINAL', stderr + '\n' + await page.locator('#request').textContent());
     const exported = command('export', configU, 'user', 'tenant', run.run_id);
     assert.equal(exported.format, 'agent.repository.export/v1'); assert.equal(exported.run_id, run.run_id);
@@ -222,14 +265,15 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
     assert.throws(() => command('export', configU, 'someone-else', 'tenant', run.run_id));
     if (mode !== 'publish') assert.equal(execFileSync(git, ['--git-dir=' + join(directory, 'objects.git'), 'rev-parse', 'refs/heads/agent/result'], { env: gitEnv, encoding: 'utf8' }).trim(), base);
   }
-  assert.equal(approvals, 1); assert.equal(clarifications, 3); assert.equal(modelCalls, 10);
+  assert.equal(approvals, 1); assert.equal(clarifications, 4); assert.equal(modelCalls, 13);
   assert.equal(sourceGit('rev-parse', 'HEAD'), base); assert.equal(sourceGit('status', '--porcelain'), '');
   const managed = (...args) => execFileSync(git, ['--git-dir=' + join(directory, 'objects.git'), ...args], { env: gitEnv, encoding: 'utf8' }).trim();
   const commit = managed('rev-parse', 'refs/heads/agent/result'); assert.notEqual(commit, base);
   assert.equal(managed('show', `${commit}:${target}`), correct.trim());
-  child.kill('SIGTERM'); const [code, signal] = await childExit; assert.equal(code, 0, stderr); assert.equal(signal, null);
+  assert.equal(child.exitCode, 0, stderr);
   const stats = JSON.parse(stdout.trim().split('\n').at(-1)).statistics;
   assert.equal(stats['agent.repository.check.v1'].calls, 2); assert.equal(stats['agent.repository.publish.v1'].calls, 1);
+  assert.equal(stats['agent.repository.prepare.v1'].calls, 3);
   assert.deepEqual((await readdir(area)).filter(name => name.startsWith('agent-zig-')), [], 'qualification, repeated checks and service restart release all completed scratch ownership');
   const needles = [Buffer.from(privateSentinel)];
   for (const key of [...Object.values(pairs).map(pair => pair.privateKey), ...['A','B'].map(host => createPrivateKey(tls[host].key))]) {

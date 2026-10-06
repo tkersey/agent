@@ -99,14 +99,17 @@ export async function qualifyApplication(filename, output, options = {}) {
     }
     if (lane) {
       const external = config.external, peerFiles = external.peers.map(path), originPath = path(external.origin);
-      const peers = peerFiles.map(file => parse(readRegular(file, 1 << 20), { maximum: 1 << 20, canonicalOnly: false }));
-      const models = peers.flatMap(peer => peer.bindings.filter(row => row.adapter.kind === 'openai-responses-replay').map(row => row.adapter));
-      requireThat(models.length > 0 && (lane === 'live' ? models.some(profile => profile.mode === 'openai-live') : models.every(profile => profile.mode === 'loopback-fixture')), 'QualificationProviderMode');
-      const row = report.lanes.find(row => row.lane === lane); Object.assign(row, { status: 'running', cases: external.cases.map(value => ({ ...value, status: 'not-run' })), providerProfiles: models.map(({ model, mode, parameters, allowance }) => ({ model, mode, parameters, allowance })) }); await save();
+      const preflight = await validateDeployment(originPath, { peerConfigs: peerFiles, contactPeers: true });
+      const models = external.cases.map(test => {
+        const selected = preflight.providerProfiles.filter(profile => profile.entry === test.entry && profile.principal === external.principal && profile.tenant === external.tenant);
+        requireThat(selected.length === 1, 'QualificationTaskScope');
+        requireThat(selected[0].mode === (lane === 'live' ? 'openai-live' : 'loopback-fixture'), 'QualificationProviderMode');
+        return selected[0];
+      });
+      const row = report.lanes.find(row => row.lane === lane); Object.assign(row, { status: 'running', cases: external.cases.map(value => ({ ...value, status: 'not-run' })), providerProfiles: models, preflight }); await save();
       const host = await openDeployment(originPath);
       try {
         requireThat(host.config.execution === 'browser' && host.sessions && host.catalogue && host.journal.recover().length === 0, 'QualificationFreshOriginRequired');
-        row.preflight = await validateDeployment(originPath, { peerConfigs: peerFiles, contactPeers: true });
         const service = await host.serve(), identity = { principal: external.principal, tenant: external.tenant, audiences: [host.config.browser.audience] };
         for (const expected of external.cases) {
           const result = row.cases.find(row => row.id === expected.id); result.status = 'running'; await save();

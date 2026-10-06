@@ -146,8 +146,10 @@ node runtime/mobility/cli.mjs serve configured/origin.json
 `validate` checks runtime/contracts, keys/TLS, limits and local catalogue bindings
 without opening custody/session stores or starting a task. Native checks qualify
 when serving or executing them. Storage and inspection commands do not compile
-qualification probes or allocate qualification scratch. Once peers are serving, verify their live
-capabilities through authenticated preflight:
+qualification probes or allocate qualification scratch. Startup shares qualification
+for identical sandbox settings and sequences it within the shared scratch capacity;
+repository grants and check profiles remain separate. Once peers are serving, verify
+their live capabilities through authenticated preflight:
 
 ```sh
 node runtime/mobility/cli.mjs validate configured/origin.json configured/workspace.json --peers
@@ -197,6 +199,8 @@ reconciliation, never another publication attempt. Unknown results remain paused
 Once the service records that a check stopped, a later cancellation can complete
 after restart even if the reply was lost. A check that may still be running keeps
 its capacity reserved.
+Rejected candidate preparation can also be cancelled after restart. Preparation
+retains only bounded immutable objects; it never advances the managed ref.
 
 Confirmed publication remains `Published` even if subsequent verification fails or
 is unavailable; the receipt distinguishes `PublishedVerified`,
@@ -271,9 +275,11 @@ node runtime/mobility/cli.mjs qualify-application live.json evidence-directory -
 ```
 
 Opt-ins are checked before host/output access. Deployed fixtures require loopback
-providers; live requires an explicitly authorized live profile. Use a dedicated
+providers; live requires an explicitly authorized live profile for every selected
+case's principal and repository. Unrelated provider bindings do not qualify a case.
+Use a dedicated
 initialized origin without prior runs, stop its ordinary service, and start W
-separately. The qualifier serves the origin, preflights W and registers cases. It
+separately. The qualifier preflights W, serves the origin and registers cases. It
 prints run IDs/browser addresses but supplies no human answers or approvals.
 
 A wait deadline records `incomplete` and leaves the durable run active. Use the

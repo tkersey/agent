@@ -41,10 +41,6 @@ test('qualification checks independent tree and exact publication result, not te
   assert.equal(assessQualificationResult({ mode: 'inspect', expected: { kind: 'completed', proposalTree: null, published: false } }, 'completed', null).outcome, false);
 });
 
-test('deployed qualification refuses a live provider before opening the origin', async t => {
-  const area = await mkdtemp(join(tmpdir(), 'qualification-mode-')); t.after(() => rm(area, { recursive: true, force: true }));
-  await writeFile(join(area, 'peer.json'), JSON.stringify({ bindings: [{ adapter: { kind: 'openai-responses-replay', mode: 'openai-live' } }] }));
-  const input = configuration('deployed'); input.external.origin = 'must-not-be-opened.json'; input.external.peers = ['peer.json'];
-  const file = join(area, 'config.json'); await writeFile(file, JSON.stringify(input));
-  await assert.rejects(qualifyApplication(file, join(area, 'out'), { deployed: true }), { code: 'QualificationProviderMode' });
-});
+// Provider-mode selection is exercised through the installed deployment test:
+// a live binding for an unrelated repository cannot qualify a fixture case,
+// and cannot prevent that same case's deployed/fixture qualification.

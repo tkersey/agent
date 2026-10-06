@@ -73,12 +73,12 @@ async function prepareDeployment(configPath) {
       requireThat(origin.protocol === 'https:' && origin.origin === config.browser.publicOrigin, 'OriginDenied');
     }
   }
-  const statistics = new Map(), checkActivations = [];
+  const statistics = new Map(), checkActivations = [], checkSandboxes = new Map();
   let publicationServices;
   const bindings = await Promise.all(config.bindings.map(async entry => {
     const { adapter, ...metadata } = entry;
     const binding = { ...metadata, payloadSchema: bytes(metadata.payloadSchema), resultSchema: bytes(metadata.resultSchema) };
-    const counts = { calls: 0 }; statistics.set(binding.operation, counts);
+    const counts = statistics.get(binding.operation) ?? { calls: 0 }; statistics.set(binding.operation, counts);
     if (['repository-query', 'repository-prepare'].includes(adapter.kind)) {
       closed(adapter, ['kind', 'store', 'classification', ...(adapter.kind === 'repository-prepare' ? ['helper'] : [])]);
       if (adapter.kind === 'repository-prepare') closed(adapter.helper, ['path', 'sha256']);
@@ -98,8 +98,9 @@ async function prepareDeployment(configPath) {
       const result = decodeSchema(binding.resultSchema);
       binding.authorize = payload => Array.isArray(payload) && (method === 'snapshot' ? payload[0] === adapter.store.repository :
         Array.isArray(payload[0]) && payload[0][0] === adapter.store.repository && payload[0][1] === adapter.store.generation);
-      binding.cancelSafe = adapter.kind === 'repository-query';
-      if (binding.cancelSafe) binding.recoveryMatches = binding.authorize;
+      // Preparation only retains bounded immutable objects, never a delivery ref.
+      binding.cancelSafe = true;
+      binding.recoveryMatches = binding.authorize;
       binding.handle = async ({ payload }) => { counts.calls++; return encodeValue(result, await leaf[method](payload)); };
       return binding;
     }
@@ -155,9 +156,11 @@ async function prepareDeployment(configPath) {
       // binding, with its independently qualified runner identity, can execute.
       const leaf = repositoryCheckBinding(binding, { runner: { runner: profile.runner,
         profiles: [describeRepositoryCheckProfile(checkProfile)] }, profile, hostId: config.hostId });
+      const sandboxKey = JSON.stringify({ ...sandboxOptions, toolchain: toolchain.identity });
       let activated;
       const activate = () => activated ??= (async () => {
-        const sandbox = await createZigRepositorySandbox(sandboxOptions);
+        if (!checkSandboxes.has(sandboxKey)) checkSandboxes.set(sandboxKey, createZigRepositorySandbox(sandboxOptions));
+        const sandbox = await checkSandboxes.get(sandboxKey);
         const runner = createRepositoryCheckRunner({ store, sandbox, profiles: [checkProfile] });
         return repositoryCheckBinding(binding, { runner, profile, hostId: config.hostId });
       })();
@@ -212,7 +215,9 @@ async function prepareDeployment(configPath) {
   const admission = new WorldAdmission(world, { kernelBytes, expectedSha256: identity.kernelSha256 });
   const policy = new HostPolicy({ ...config, runtimeProfile: identity.kernelSha256, deployments, bindings, revoked: new Set(config.revoked) });
   return { config, configDigest: hash(configBytes), path, bytes, identity, world, runtimePath, kernelBytes, keys, signer, tls, bindings, deployments, admission, policy, statistics,
-    activateChecks: () => Promise.all(checkActivations.map(activate => activate())),
+    // A qualifier holds two of the scratch root's four slots. Qualify once per
+    // immutable configuration and sequence startup within that finite capacity.
+    activateChecks: async () => { for (const activate of checkActivations) await activate(); },
     activatePublications: services => { publicationServices = services; } };
 }
 
@@ -253,7 +258,7 @@ export async function validateDeployment(configPath, { peerConfigs = [], contact
     ['workspace', 'agent.repository.publication-current.v1', 'proposal', 'boolean', 'read', 'publish'],
     ['workspace', 'agent.repository.publish.v1', 'proposal', 'delivery', 'commit', 'publish'],
   ];
-  const reports = [];
+  const reports = [], providerProfiles = [];
   if (config.format === 'agent-mobility-deployment/v2') {
     taskCatalogue(config.catalogue, { bytes, keys, custodian: null, config, runtimeProfile: identity.kernelSha256 });
     requireThat(!contactPeers || config.catalogue.entries.length === 0 || peerConfigs.length > 0, 'ValidationPeerConfiguration');
@@ -294,6 +299,10 @@ export async function validateDeployment(configPath, { peerConfigs = [], contact
           if (found.length === 0 && side === 'workspace' && peerConfigs.length === 0 && !contactPeers) continue;
           if (found.length !== 1) throw Object.assign(new Error('RepositoryCapabilityMissing'), { code: 'RepositoryCapabilityMissing', operation });
           const { peer, row } = found[0], wanted = requirement({ ...row, payloadSchema: schema(input), resultSchema: schema(output) });
+          if (operation === 'agent.model.invoke.v4') providerProfiles.push({ entry: entry.id, principal: principal.principal, tenant: principal.tenant,
+            host: peer.hostId, subject: row.subject, model: row.adapter.model,
+            mode: row.adapter.kind === 'openai-responses-replay' ? row.adapter.mode : null,
+            parameters: row.adapter.parameters, allowance: row.adapter.allowance });
           if (operation === 'agent.interaction.exchange.v1.repository.publish') requireThat(row.adapter.principalIds?.[principal.principal] === principal.taskPrincipal, 'ValidationPrincipalBinding');
           if (side === 'workspace') {
             workspaceHost ??= peer.hostId;
@@ -325,7 +334,7 @@ export async function validateDeployment(configPath, { peerConfigs = [], contact
   const contacted = reports.some(row => row.verified === 'authenticated-preflight');
   return { format: 'agent-mobility-deployment-validation/v1', valid: true, scope: 'local-configuration', host_id: config.hostId, config: prepared.configDigest, runtime: identity.kernelSha256,
     localBindings: bindings.length, applicationEntries: config.catalogue?.entries.length ?? 0, storage: 'not-opened', leafDispatches: 0, peerContact: contacted,
-    capabilityCoverage: reports, remoteAvailability: contacted ? 'preflight-only; rechecked on dispatch' : 'not-contacted' };
+    capabilityCoverage: reports, providerProfiles, remoteAvailability: contacted ? 'preflight-only; rechecked on dispatch' : 'not-contacted' };
 }
 
 export async function openDeployment(configPath, { create = false, qualifyChecks = true } = {}) {

@@ -7,6 +7,7 @@ import { lstat, mkdir, readdir, readFile, realpath, rm, statfs, writeFile } from
 import { dirname, join } from 'node:path';
 import { release } from 'node:os';
 import { sandboxLibraries, sandboxString as q, launchSandboxProcess as launch } from './inquiry_sandbox.mjs';
+import { admitDocumentPath } from './document.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const identity = stat => [stat.dev, stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(':');
@@ -175,7 +176,8 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
       if (!names.length || names.length > 4096) throw new TypeError('input count');
       let total = 0;
       for (const name of names) {
-        if (name.length > 256 || !/^(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_.-]+\.zig$/.test(name) || name.split('/').includes('..'))
+        admitDocumentPath(name);
+        if (Buffer.byteLength(name) > 256 || /[\x00-\x1f\x7f]/u.test(name) || !name.endsWith('.zig'))
           throw new TypeError('input path');
         total += Buffer.byteLength(files[name]);
       }

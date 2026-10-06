@@ -143,11 +143,15 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     var framing = protocol.Framer{ .buffer = frame_buffer };
     var input: [8192]u8 = undefined;
     while (!connection.closing) {
-        const count = try std.Io.File.stdin().readStreaming(init.io, &.{&input});
-        if (count == 0) {
-            framing.eof() catch return 64;
-            return 0;
-        }
+        const count = std.Io.File.stdin().readStreaming(init.io, &.{&input}) catch |err| switch (err) {
+            error.EndOfStream => {
+                framing.eof() catch return 64;
+                return 0;
+            },
+            else => return err,
+        };
+        // A zero-byte short read is not EOF in std.Io.
+        if (count == 0) continue;
         var cursor: usize = 0;
         while (cursor < count and !connection.closing) {
             const read = framing.push(input[cursor..count]) catch return 64;

@@ -51,7 +51,7 @@ pub const Database = opaque {
         errdefer _ = c.sqlite3_shutdown();
         try result(c.sqlite3_initialize());
         if (c.sqlite3_libversion_number() != 3053004) return error.StorageUnavailable;
-        const name = try a.dupeZ(u8, path);
+        const name = try a.dupeSentinel(u8, path, 0);
         defer a.free(name);
         var db: ?*c.sqlite3 = null;
         const flags: c_int = c.SQLITE_OPEN_READWRITE | c.SQLITE_OPEN_FULLMUTEX | (if (create) @as(c_int, c.SQLITE_OPEN_CREATE) else 0);

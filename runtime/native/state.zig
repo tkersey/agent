@@ -36,6 +36,8 @@ pub const Task = struct {
     cancellation_applied: bool,
     blocker: ?Blocker,
     result: ?Reference,
+    client_result: ?Reference,
+    result_artifact: ?Digest,
     event_floor: u64,
     event_high: u64,
     next_message: u64,

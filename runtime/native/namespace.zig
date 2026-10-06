@@ -66,7 +66,7 @@ pub const Namespace = struct {
             if (std.mem.eql(u8, part, "..")) return error.UnsafeStatePath;
             const next = components.next();
             if (!std.mem.eql(u8, part, ".")) {
-                const name = try a.dupeZ(u8, part);
+                const name = try a.dupeSentinel(u8, part, 0);
                 defer a.free(name);
                 var child = c.openat(dir, name.ptr, c.O_RDONLY | c.O_DIRECTORY | c.O_NOFOLLOW | c.O_CLOEXEC);
                 if (child < 0 and next == null and std.c.errno(child) == .NOENT) {

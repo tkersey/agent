@@ -24,4 +24,5 @@ test {
     _ = @import("occurrence.zig");
     _ = @import("store.zig");
     _ = @import("namespace.zig");
+    _ = @import("transport.zig");
 }

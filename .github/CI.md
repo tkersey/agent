@@ -69,9 +69,11 @@ zig build check-native -Doptimize=safe \
 
 The native lane provisions its additional pinned SQLite C/header inputs with
 `node tools/agent4/setup.mjs --native`. Pure authoring and installation do not
-acquire SQLite. Native framing/value/occurrence tests share the existing native
-test root; `check-native-host` selects the final example's independent subprocess
-peer. No existing native or custody check is removed.
+acquire SQLite. Native framing/value/occurrence/storage tests run with the native
+module as an explicit test root: Zig does not collect a named dependency module's
+tests from the authoring test root. The existing shared authoring root exercises
+integration with real authored programs; `check-native-host` selects the final
+example's independent subprocess peer. No existing native or custody check is removed.
 
 `check-agent4` and `check` still include the external installation and all
 previously retained authoring obligations. The native lane also runs the retained custody and deployment regressions.

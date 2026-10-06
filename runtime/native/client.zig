@@ -44,6 +44,7 @@ pub fn Client(comptime Types: type) type {
         service: *tasks.Service(Types),
         subscriptions: [16]?Subscription = @splat(null),
         shutdown: ?Shutdown = null,
+        batch: bool = false,
 
         fn snapshot(self: *Self, a: std.mem.Allocator, id: state.TaskId) !json.Value {
             var decoded = try self.service.task(a, id);
@@ -150,24 +151,15 @@ pub fn Client(comptime Types: type) type {
             var outcome = json.object();
             try json.put(a, &outcome, "type", json.string(@tagName(task.outcome_kind)));
             if (task.outcome_kind == .completed) {
-                if (!std.mem.eql(u8, task.output_schema_id.bytes, Types.output_schema_id)) return error.IncompatibleProfile;
-                var value = try contracts.decodeOwned(Types.Output, a, bytes);
-                defer value.deinit();
-                try json.put(a, &outcome, "schema_id", json.string(Types.output_schema_id));
-                // Copy the projection before the ordinary decoder releases it.
-                const projected = try json.canonical(a, try values.toJson(Types.Output, a, value.value));
-                if (projected.len > 60 * 1024) return error.Capacity;
-                try json.put(a, &outcome, "value", (try json.parse(a, projected, .{})).value);
+                try json.put(a, &outcome, "schema_id", json.string(try a.dupe(u8, task.output_schema_id.bytes)));
+                try self.resultValue(a, &outcome, task);
             } else {
                 var saved = try data.invocation.decode(data.invocation.Outcome, a, bytes);
                 defer saved.deinit();
                 switch (saved.value) {
                     .failed => |failure| {
-                        var value = try contracts.decodeOwned(Types.Failure, a, failure.value);
-                        defer value.deinit();
-                        try json.put(a, &outcome, "schema_id", json.string(Types.failure_schema_id));
-                        const projected = try json.canonical(a, try values.toJson(Types.Failure, a, value.value));
-                        try json.put(a, &outcome, "value", (try json.parse(a, projected, .{})).value);
+                        try json.put(a, &outcome, "schema_id", json.string(try a.dupe(u8, task.failure_schema_id.bytes)));
+                        try self.resultValue(a, &outcome, task);
                         try json.put(a, &outcome, "cleanup_complete", .{ .bool = std.mem.eql(u8, failure.cleanup_failures, &.{0}) });
                     },
                     .cancelled => |cancelled| {
@@ -178,6 +170,81 @@ pub fn Client(comptime Types: type) type {
             }
             try json.put(a, &output, "outcome", outcome);
             return output;
+        }
+        fn resultValue(self: *Self, a: std.mem.Allocator, output: *json.Value, task: state.Task) !void {
+            const ref = task.client_result orelse return error.CorruptState;
+            if (task.result_artifact) |id| {
+                var artifact = json.object();
+                try json.put(a, &artifact, "artifact_id", try hexadecimal(a, id));
+                try json.put(a, &artifact, "sha256", try hexadecimal(a, ref.digest));
+                try json.put(a, &artifact, "bytes", try counter(a, ref.bytes));
+                try json.put(a, &artifact, "media_type", json.string("application/json"));
+                try json.put(a, &artifact, "schema_id", json.string(try a.dupe(u8, if (task.outcome_kind == .completed) task.output_schema_id.bytes else task.failure_schema_id.bytes)));
+                try json.put(a, &artifact, "retention", json.string("state-namespace"));
+                try json.put(a, output, "value_ref", artifact);
+            } else {
+                const bytes = try self.service.namespace.store.object(a, ref, 60 * 1024);
+                defer a.free(bytes);
+                try json.put(a, output, "value", (try json.parse(a, bytes, .{})).value);
+            }
+        }
+
+        fn artifactRead(self: *Self, a: std.mem.Allocator, params: json.Value) !json.Value {
+            const task_id = try identifier(16, try field(params, "task_id"));
+            var task = try self.service.task(a, task_id);
+            defer task.deinit();
+            const id = try identifier(32, try field(params, "artifact_id"));
+            const offset = try json.decimal(u64, try field(params, "offset"));
+            const length = try json.decimal(u32, try field(params, "length"));
+            if (length == 0 or length > 32768) return error.InvalidParams;
+            const encoded = (try self.service.namespace.store.recordBytes(a, "artifact", id, task_id)) orelse return error.ArtifactUnavailable;
+            defer a.free(encoded);
+            var saved = try contracts.decodeOwned(state.Artifact, a, encoded);
+            defer saved.deinit();
+            const artifact = saved.value;
+            if (artifact.task == null or !std.mem.eql(u8, &artifact.task.?, &task_id) or !std.mem.eql(u8, &artifact.id, &id)) return error.CorruptState;
+            if (offset > artifact.value.bytes) return error.InvalidParams;
+            const bytes = try self.service.namespace.store.object(a, artifact.value, 4 * 1024 * 1024);
+            defer a.free(bytes);
+            const end = @min(bytes.len, @as(usize, @intCast(offset)) + length);
+            const chunk = bytes[@intCast(offset)..end];
+            const base64 = try a.alloc(u8, std.base64.url_safe_no_pad.Encoder.calcSize(chunk.len));
+            var output = json.object();
+            try json.put(a, &output, "encoding", json.string("base64url"));
+            try json.put(a, &output, "data", json.string(std.base64.url_safe_no_pad.Encoder.encode(base64, chunk)));
+            try json.put(a, &output, "sha256", try hexadecimal(a, artifact.value.digest));
+            try json.put(a, &output, "total_bytes", try counter(a, artifact.value.bytes));
+            try json.put(a, &output, "next_offset", try counter(a, end));
+            try json.put(a, &output, "eof", .{ .bool = end == bytes.len });
+            return output;
+        }
+
+        /// Called only after the subscribe response has entered the ordered
+        /// writer. There is one cursor for both historical and newly saved data.
+        pub fn notification(self: *Self, a: std.mem.Allocator) !?json.Value {
+            for (&self.subscriptions) |*slot| if (slot.*) |subscription| {
+                const page = self.events(a, subscription.task, subscription.after, 1) catch |err| {
+                    if (err != error.CursorExpired) return err;
+                    var task = try self.service.task(a, subscription.task);
+                    defer task.deinit();
+                    var params = json.object();
+                    try json.put(a, &params, "subscription_id", try hexadecimal(a, subscription.id));
+                    try json.put(a, &params, "task_id", try hexadecimal(a, subscription.task));
+                    try json.put(a, &params, "reason", json.string("CursorExpired"));
+                    try json.put(a, &params, "earliest_available_seq", try counter(a, task.value.event_floor));
+                    try json.put(a, &params, "high_water_seq", try counter(a, task.value.event_high));
+                    slot.* = null;
+                    return try protocol.notification(a, "subscription.closed", params);
+                };
+                const events_value = page.object.get("events").?.array.items;
+                if (events_value.len == 0) continue;
+                var params = json.object();
+                try json.put(a, &params, "subscription_id", try hexadecimal(a, subscription.id));
+                try json.put(a, &params, "event", events_value[0]);
+                slot.*.?.after = try json.decimal(u64, page.object.get("next_after_seq").?);
+                return try protocol.notification(a, "task.event", params);
+            };
+            return null;
         }
 
         pub fn call(self: *Self, a: std.mem.Allocator, method: protocol.Method, params: json.Value) !json.Value {
@@ -197,7 +264,12 @@ pub fn Client(comptime Types: type) type {
                 .@"task.resume" => return self.admission(a, try self.service.resumeTask(a, try operationId(params), try identifier(16, try field(params, "task_id")), try json.decimal(u64, try field(params, "expected_revision")))),
                 .@"task.status" => return self.snapshot(a, try identifier(16, try field(params, "task_id"))),
                 .@"task.result" => return self.taskResult(a, try identifier(16, try field(params, "task_id"))),
-                .@"task.events" => return self.events(a, try identifier(16, try field(params, "task_id")), try json.decimal(u64, try field(params, "after_seq")), if (json.get(params, "limit")) |limit| try json.integer(u32, if (limit == .number_string) limit.number_string else return error.InvalidParams) else 16),
+                .@"task.events" => {
+                    const limit = if (json.get(params, "limit")) |limit| try json.integer(u32, if (limit == .number_string) limit.number_string else return error.InvalidParams) else @as(u32, 16);
+                    if (limit == 0 or limit > 128) return error.InvalidParams;
+                    return self.events(a, try identifier(16, try field(params, "task_id")), try json.decimal(u64, try field(params, "after_seq")), if (self.batch) 1 else limit);
+                },
+                .@"artifact.read" => return self.artifactRead(a, params),
                 .@"task.subscribe" => {
                     const task_id = try identifier(16, try field(params, "task_id"));
                     const after = try json.decimal(u64, try field(params, "after_seq"));

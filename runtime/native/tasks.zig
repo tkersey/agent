@@ -172,10 +172,10 @@ pub fn Service(comptime Types: type) type {
             const Key = struct { principal: state.Name, tenant: state.Name, operation_id: state.Name };
             return std.fmt.bytesToHex(try operation(Key, a, .{ .principal = try name(self.profile.authority.principal), .tenant = try name(self.profile.authority.tenant), .operation_id = try name(id) }), .lower);
         }
-        fn receipt(self: *Self, a: std.mem.Allocator, method: state.Method, id: []const u8, request: state.Digest, task_value: state.Task, disposition: state.Disposition, message: ?state.Digest, question: ?state.Digest) !Admission {
+        fn receipt(self: *Self, a: std.mem.Allocator, method: state.Method, id: []const u8, request: state.Digest, task_value: state.Task, disposition: state.Disposition, message_id: ?state.Digest, question: ?state.Digest) !Admission {
             var identity: state.Digest = undefined;
             try self.io.randomSecure(&identity);
-            const saved: state.Receipt = .{ .id = identity, .client_operation_id = try name(id), .method = method, .request_digest = request, .task = task_value.id, .revision = task_value.revision, .disposition = disposition, .message = message, .question = question };
+            const saved: state.Receipt = .{ .id = identity, .client_operation_id = try name(id), .method = method, .request_digest = request, .task = task_value.id, .revision = task_value.revision, .disposition = disposition, .message = message_id, .question = question };
             const bytes = try contracts.encodeOwned(state.Receipt, a, saved);
             defer a.free(bytes);
             const key = try self.operationKey(a, id);
@@ -301,6 +301,8 @@ pub fn Service(comptime Types: type) type {
                 .cancellation_applied = false,
                 .blocker = null,
                 .result = null,
+                .client_result = null,
+                .result_artifact = null,
                 .event_floor = 1,
                 .event_high = 1,
                 .next_message = 1,
@@ -602,6 +604,7 @@ pub fn Service(comptime Types: type) type {
                     defer checked.deinit();
                     value.outcome_kind = .completed;
                     value.result = try self.store().putObject(bytes);
+                    try self.clientResult(Types.Output, a, &value, Types.output_schema_id, checked.value);
                     try self.event(&value, .completed, "{}");
                 },
                 .failed => |failure| {
@@ -609,6 +612,7 @@ pub fn Service(comptime Types: type) type {
                     defer checked.deinit();
                     value.outcome_kind = .failed;
                     value.result = value.outcome;
+                    try self.clientResult(Types.Failure, a, &value, Types.failure_schema_id, checked.value);
                     try self.event(&value, .failed, "{}");
                 },
                 .cancelled => {
@@ -638,6 +642,19 @@ pub fn Service(comptime Types: type) type {
                 self.runnableRemove(value.id);
             }
             return .progressed;
+        }
+        fn clientResult(self: *Self, comptime T: type, a: std.mem.Allocator, value: *state.Task, schema_id: []const u8, result: T) !void {
+            const bytes = try json.canonical(a, try values.toJson(T, a, result));
+            defer a.free(bytes);
+            if (bytes.len > 4 * 1024 * 1024) return error.Capacity;
+            value.client_result = try self.store().putObject(bytes);
+            if (bytes.len > 60 * 1024) {
+                var id: state.Digest = undefined;
+                try self.io.randomSecure(&id);
+                const artifact: state.Artifact = .{ .id = id, .task = value.id, .value = value.client_result.?, .media_type = .{ .bytes = "application/json" }, .schema_id = try name(schema_id) };
+                try self.store().putRecord(state.Artifact, "artifact", id, value.id, artifact);
+                value.result_artifact = id;
+            }
         }
 
         fn dispatch(self: *Self, a: std.mem.Allocator, initial: state.Task, pending: occurrence.Occurrence) !Step {

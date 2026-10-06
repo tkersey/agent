@@ -25,6 +25,11 @@ pub const Context = struct {
     task_id: []const u8,
     /// Application/environment handles only; no evaluator handle is supplied.
     environment: ?*anyopaque = null,
+    cancellation: ?*const std.atomic.Value(bool) = null,
+
+    pub fn checkCancellation(self: Context) error{Canceled}!void {
+        if (self.cancellation) |flag| if (flag.load(.acquire)) return error.Canceled;
+    }
 };
 pub const Kind = enum { leaf, question, inbox };
 pub const Declaration = struct {

@@ -24,7 +24,9 @@ runtime/native/sqlite.zig
 runtime/native/state.zig
 runtime/native/store.zig
 runtime/native/tasks.zig
+runtime/native/transport.zig
 runtime/native/values.zig
+runtime/native/worker.zig
 runtime/repository_publication_gate.zig
 src/admission.zig
 src/agent4.zig

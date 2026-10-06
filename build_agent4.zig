@@ -664,6 +664,10 @@ pub fn build(b: *std.Build) void {
         native_suite.addImport("agent_native", host_environment);
         native_suite.addImport("document", g.module("test/consumers/document/consequence.zig"));
         native_graph.testModule(native_checks, native_suite);
+        // Zig does not collect test declarations from named dependency modules.
+        // Run the runtime's own root explicitly; the integration root above
+        // independently exercises its public task owner with authored programs.
+        native_graph.testModule(native_checks, host_environment);
         // Repository policy modules have distinct import roots and retain their
         // focused runners rather than changing their nominal type identities.
         for ([_][]const u8{ "repository_working_set", "repository_replacement" }) |name| {

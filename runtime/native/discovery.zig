@@ -88,26 +88,26 @@ pub const Application = struct {
         var methods: std.array_list.Managed(json.Value) = .init(a);
         inline for (info.field_names, 0..) |name, i| {
             if (i >= cursor and i < end) {
-                var method = json.object(a);
-                try json.put(&method, "name", json.string(name));
+                var method = json.object();
+                try json.put(a, &method, "name", json.string(name));
                 const fields = protocol.fields(@field(protocol.Method, name));
                 var required: std.array_list.Managed(json.Value) = .init(a);
                 var optional: std.array_list.Managed(json.Value) = .init(a);
                 for (fields.required) |key| try required.append(json.string(key));
                 for (fields.optional) |key| try optional.append(json.string(key));
-                try json.put(&method, "required_fields", .{ .array = required });
-                try json.put(&method, "optional_fields", .{ .array = optional });
+                try json.put(a, &method, "required_fields", .{ .array = required });
+                try json.put(a, &method, "optional_fields", .{ .array = optional });
                 try methods.append(method);
             }
         }
-        var result = json.object(a);
-        try json.put(&result, "methods", .{ .array = methods });
-        try json.put(&result, "next_cursor", if (end < info.field_names.len) json.string(try std.fmt.allocPrint(a, "{d}", .{end})) else .null);
-        var app = json.object(a);
+        var result = json.object();
+        try json.put(a, &result, "methods", .{ .array = methods });
+        try json.put(a, &result, "next_cursor", if (end < info.field_names.len) json.string(try std.fmt.allocPrint(a, "{d}", .{end})) else .null);
+        var app = json.object();
         for ([_][]const u8{ "application_id", "application_version", "client_mapping", "input", "output", "answer", "message", "capabilities" }) |key|
-            try json.put(&app, key, self.metadata.object.get(key) orelse return error.InvalidAssets);
-        try json.put(&result, "application", app);
-        try json.put(&result, "execution_mode", json.string("offline"));
+            try json.put(a, &app, key, self.metadata.object.get(key) orelse return error.InvalidAssets);
+        try json.put(a, &result, "application", app);
+        try json.put(a, &result, "execution_mode", json.string("offline"));
         return result;
     }
 };

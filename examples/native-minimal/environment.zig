@@ -16,7 +16,7 @@ fn increment(_: native.Context, value: u32) !u32 {
 }
 fn cleanup(_: native.Context, _: void) !void {}
 fn present(ctx: native.Context, question: t.Question) !native.json.Value {
-    var result = native.json.object(ctx.allocator);
-    try native.json.put(&result, "prompt", native.json.string(question.prompt.bytes));
+    var result = native.json.object();
+    try native.json.put(ctx.allocator, &result, "prompt", native.json.string(question.prompt.bytes));
     return result;
 }

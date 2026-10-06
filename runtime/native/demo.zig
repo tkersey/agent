@@ -46,15 +46,15 @@ pub fn run(comptime Types: type, comptime Environment: type, io: std.Io, a: std.
             .completed => |bytes| {
                 var result = try contracts.decodeOwned(Types.Output, a, bytes);
                 defer result.deinit();
-                var report = json.object(a);
-                try json.put(&report, "mode", json.string("offline-demo"));
-                try json.put(&report, "persistence", json.string("none"));
-                try json.put(&report, "effects", try json.number(a, effects));
-                try json.put(&report, "yields", try json.number(a, yields));
+                var report = json.object();
+                try json.put(a, &report, "mode", json.string("offline-demo"));
+                try json.put(a, &report, "persistence", json.string("none"));
+                try json.put(a, &report, "effects", try json.number(a, effects));
+                try json.put(a, &report, "yields", try json.number(a, yields));
                 // Keep returned client values after the decoder's arena dies.
                 const projection = try json.canonical(a, try values.toJson(Types.Output, a, result.value));
                 const retained = try json.parse(a, projection, .{});
-                try json.put(&report, "output", retained.value);
+                try json.put(a, &report, "output", retained.value);
                 try execution.close();
                 try execution.destroy();
                 return report;

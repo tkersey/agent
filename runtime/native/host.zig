@@ -35,35 +35,35 @@ const Connection = struct {
                 var versions_out: std.array_list.Managed(json.Value) = .init(a);
                 try versions_out.append(json.string(protocol.version));
                 const error_value = fault.object.getPtr("error").?;
-                try json.put(error_value.object.getPtr("data").?, "supported_versions", .{ .array = versions_out });
+                try json.put(a, error_value.object.getPtr("data").?, "supported_versions", .{ .array = versions_out });
                 return fault;
             }
             self.initialized = true;
-            var result = json.object(a);
-            try json.put(&result, "protocol_version", json.string(protocol.version));
-            try json.put(&result, "server_instance_id", json.string(self.instance));
-            var info = json.object(a);
-            try json.put(&info, "name", json.string("Agent native host"));
-            try json.put(&info, "version", json.string("1.0.0-dev"));
-            try json.put(&result, "server_info", info);
-            try json.put(&result, "build_manifest_id", json.string(self.application.manifest_id));
+            var result = json.object();
+            try json.put(a, &result, "protocol_version", json.string(protocol.version));
+            try json.put(a, &result, "server_instance_id", json.string(self.instance));
+            var info = json.object();
+            try json.put(a, &info, "name", json.string("Agent native host"));
+            try json.put(a, &info, "version", json.string("1.0.0-dev"));
+            try json.put(a, &result, "server_info", info);
+            try json.put(a, &result, "build_manifest_id", json.string(self.application.manifest_id));
             const limits_bytes = try std.json.Stringify.valueAlloc(a, self.limits, .{});
             const limits = try json.parse(a, limits_bytes, .{});
-            try json.put(&result, "limits", limits.value);
-            var capabilities = json.object(a);
+            try json.put(a, &result, "limits", limits.value);
+            var capabilities = json.object();
             // The durable owner is added separately. Never advertise or accept
             // nondurable task mutations as if they satisfied agent-host/1.0.
-            try json.put(&capabilities, "task_events", .{ .bool = false });
-            try json.put(&capabilities, "message_input", .{ .bool = false });
-            try json.put(&capabilities, "task_execution", .{ .bool = false });
-            try json.put(&result, "capabilities", capabilities);
+            try json.put(a, &capabilities, "task_events", .{ .bool = false });
+            try json.put(a, &capabilities, "message_input", .{ .bool = false });
+            try json.put(a, &capabilities, "task_execution", .{ .bool = false });
+            try json.put(a, &result, "capabilities", capabilities);
             return protocol.response(a, request.id, result);
         }
         if (!self.initialized) return protocol.failure(a, request.id, .ProtocolState, "correct_request");
         switch (request.method) {
             .ping => {
-                var result = json.object(a);
-                try json.put(&result, "server_instance_id", json.string(self.instance));
+                var result = json.object();
+                try json.put(a, &result, "server_instance_id", json.string(self.instance));
                 return protocol.response(a, request.id, result);
             },
             .describe => {

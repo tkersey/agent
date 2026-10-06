@@ -79,7 +79,7 @@ pub fn toJson(comptime T: type, a: std.mem.Allocator, value: T) std.mem.Allocato
         }
     }
     return switch (@typeInfo(T)) {
-        .void => json.object(a),
+        .void => json.object(),
         .bool => .{ .bool = value },
         .int => |info| if (info.bits == 64) json.string(try std.fmt.allocPrint(a, "{d}", .{value})) else try json.number(a, value),
         .@"enum" => json.string(@tagName(value)),
@@ -90,15 +90,15 @@ pub fn toJson(comptime T: type, a: std.mem.Allocator, value: T) std.mem.Allocato
             break :blk .{ .array = array };
         },
         .@"struct" => |info| blk: {
-            var result = json.object(a);
-            inline for (info.field_names, info.field_types) |name, FieldType| try json.put(&result, name, try toJson(FieldType, a, @field(value, name)));
+            var result = json.object();
+            inline for (info.field_names, info.field_types) |name, FieldType| try json.put(a, &result, name, try toJson(FieldType, a, @field(value, name)));
             break :blk result;
         },
         .@"union" => |info| blk: {
-            var result = json.object(a);
-            try json.put(&result, "tag", json.string(@tagName(value)));
+            var result = json.object();
+            try json.put(a, &result, "tag", json.string(@tagName(value)));
             inline for (info.field_names, info.field_types) |name, FieldType| {
-                if (std.mem.eql(u8, @tagName(value), name)) try json.put(&result, "value", try toJson(FieldType, a, @field(value, name)));
+                if (std.mem.eql(u8, @tagName(value), name)) try json.put(a, &result, "value", try toJson(FieldType, a, @field(value, name)));
             }
             break :blk result;
         },
@@ -152,10 +152,10 @@ test "client mapping preserves full-width values and rejects coercion and unknow
     try std.testing.expectEqualSlices(u8, &.{ 0, 255 }, decoded.value.bytes.bytes);
     const result = try toJson(Record, a, decoded.value);
     try std.testing.expectEqualStrings("18446744073709551615", result.object.get("count").?.string);
-    try parsed.value.object.put("count", .{ .number_string = "18446744073709551615" });
+    try parsed.value.object.put(a, "count", .{ .number_string = "18446744073709551615" });
     try std.testing.expectError(error.InvalidParams, fromJson(Record, a, parsed.value));
-    try parsed.value.object.put("count", .{ .string = "1" });
-    try parsed.value.object.put("extra", .null);
+    try parsed.value.object.put(a, "count", .{ .string = "1" });
+    try parsed.value.object.put(a, "extra", .null);
     try std.testing.expectError(error.InvalidParams, fromJson(Record, a, parsed.value));
     var schema = try json.parse(a, &schemas.ClientSchema(Record).value, .{});
     defer schema.deinit();

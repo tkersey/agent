@@ -204,31 +204,31 @@ pub fn batchPreflight(values: []const json.Value, limits: Limits) error{ Invalid
 }
 
 pub fn response(a: std.mem.Allocator, id: json.Value, result: json.Value) !json.Value {
-    var output = json.object(a);
-    try json.put(&output, "jsonrpc", json.string("2.0"));
-    try json.put(&output, "id", id);
-    try json.put(&output, "result", result);
+    var output = json.object();
+    try json.put(a, &output, "jsonrpc", json.string("2.0"));
+    try json.put(a, &output, "id", id);
+    try json.put(a, &output, "result", result);
     return output;
 }
 pub fn failure(a: std.mem.Allocator, id: json.Value, kind: Kind, recovery: []const u8) !json.Value {
-    var details = json.object(a);
-    try json.put(&details, "kind", json.string(@tagName(kind)));
-    try json.put(&details, "recovery", json.string(recovery));
-    var fault = json.object(a);
-    try json.put(&fault, "code", try json.number(a, kind.code()));
-    try json.put(&fault, "message", json.string(@tagName(kind)));
-    try json.put(&fault, "data", details);
-    var output = json.object(a);
-    try json.put(&output, "jsonrpc", json.string("2.0"));
-    try json.put(&output, "id", id);
-    try json.put(&output, "error", fault);
+    var details = json.object();
+    try json.put(a, &details, "kind", json.string(@tagName(kind)));
+    try json.put(a, &details, "recovery", json.string(recovery));
+    var fault = json.object();
+    try json.put(a, &fault, "code", try json.number(a, kind.code()));
+    try json.put(a, &fault, "message", json.string(@tagName(kind)));
+    try json.put(a, &fault, "data", details);
+    var output = json.object();
+    try json.put(a, &output, "jsonrpc", json.string("2.0"));
+    try json.put(a, &output, "id", id);
+    try json.put(a, &output, "error", fault);
     return output;
 }
 pub fn notification(a: std.mem.Allocator, method: []const u8, params: json.Value) !json.Value {
-    var output = json.object(a);
-    try json.put(&output, "jsonrpc", json.string("2.0"));
-    try json.put(&output, "method", json.string(method));
-    try json.put(&output, "params", params);
+    var output = json.object();
+    try json.put(a, &output, "jsonrpc", json.string("2.0"));
+    try json.put(a, &output, "method", json.string(method));
+    try json.put(a, &output, "params", params);
     return output;
 }
 

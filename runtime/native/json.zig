@@ -67,11 +67,11 @@ fn memberBounds(value: Value, maximum: usize) Error!void {
     }
 }
 
-pub fn object(allocator: std.mem.Allocator) Value {
-    return .{ .object = std.json.ObjectMap.init(allocator) };
+pub fn object() Value {
+    return .{ .object = .empty };
 }
-pub fn put(value: *Value, key: []const u8, child: Value) !void {
-    try value.object.put(key, child);
+pub fn put(allocator: std.mem.Allocator, value: *Value, key: []const u8, child: Value) !void {
+    try value.object.put(allocator, key, child);
 }
 pub fn string(value: []const u8) Value {
     return .{ .string = value };

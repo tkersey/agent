@@ -3,6 +3,82 @@
 import { createDocumentEnvironment } from "./document.mjs";
 import { createRepositoryDelivery } from "./repository_delivery.mjs";
 import { runRepositorySnapshot } from "./repository_tests.mjs";
+import { openRepositorySnapshotStore } from "./repository_snapshot.mjs";
+import { canonical } from "./mobility/canonical.mjs";
+export { provisionRepository } from "./repository_snapshot.mjs";
+
+/** Snapshot leaves for the mobile application. Their actual dispatch remains
+ * under the mobility policy/current occurrence; these resource IDs are data. */
+export async function createManagedRepositoryEnvironment(options) {
+  const { resourceOwner, classification, ...storage } = options;
+  if (!text(resourceOwner, 128) || !resourceOwner || !Array.isArray(classification) ||
+      classification.length > 16 || classification.some(label => !text(label, 128) || !label) ||
+      new Set(classification).size !== classification.length) throw new TypeError('invalid repository classification/owner');
+  const labels = [...classification].sort(), store = await openRepositorySnapshotStore(storage);
+  const bytes = hex => Array.from(Buffer.from(hex, 'hex'));
+  const evidence = value => [bytes(value.snapshot), value.path, bytes(value.digest), value.content, value.truncated];
+  function request(input, length) {
+    if (!Array.isArray(input) || input.length !== length) throw new TypeError('repository query request mismatch');
+    return snapshotValue(input[0]);
+  }
+  function cursor(value) {
+    if (!text(value, 2048)) throw new TypeError('repository cursor mismatch');
+    return value === '' ? null : value;
+  }
+  function integer(value) {
+    const number = typeof value === 'bigint' ? Number(value) : value;
+    if (!Number.isSafeInteger(number) || number < 0) throw new TypeError('repository query bounds');
+    return number;
+  }
+  function snapshotValue(value) {
+    if (!Array.isArray(value) || value.length !== 9 || value[0] !== storage.repository || value[1] !== storage.generation ||
+        JSON.stringify(value[7]) !== JSON.stringify(labels) || value[8] !== resourceOwner || ![0, 1].includes(value[2]) ||
+        ![value[5], value[6]].every(digest => Array.isArray(digest) && digest.length === 32 && digest.every(byte => Number.isInteger(byte) && byte >= 0 && byte <= 255)))
+      throw new TypeError('repository snapshot binding mismatch');
+    return { repository: value[0], generation: value[1], objectFormat: value[2] === 0 ? 'sha1' : 'sha256', base: value[3], tree: value[4],
+      manifest: Buffer.from(value[5]).toString('hex'), scopeManifest: Buffer.from(value[6]).toString('hex') };
+  }
+  return Object.freeze({
+    async snapshot(input) {
+      if (!Array.isArray(input) || input.length !== 2 || input[0] !== storage.repository) throw new TypeError('repository snapshot request mismatch');
+      const value = await store.snapshot(input[1]);
+      return [value.repository, value.generation, value.objectFormat === 'sha1' ? 0 : 1, value.base, value.tree,
+        bytes(value.manifest), bytes(value.scopeManifest), [...labels], resourceOwner];
+    },
+    async read(input) {
+      return evidence(await store.read(request(input, 2), input[1]));
+    },
+    async prepare(input) {
+      const selected = request(input, 2);
+      if (!Array.isArray(input[1]) || input[1].length < 1 || input[1].length > 4) throw new TypeError('repository edit bounds');
+      const edits = input[1].map(value => {
+        if (!Array.isArray(value) || value.length !== 4 || ![0, 1, 2].includes(value[0]) ||
+            !text(value[1], 256) || !text(value[2], 64) || !text(value[3], 32768) ||
+            (value[0] === 0 ? value[2] !== '' : !/^[a-f0-9]{64}$/.test(value[2])) ||
+            (value[0] === 2 && value[3] !== '')) throw new TypeError('repository edit contract');
+        return { operation: ['create', 'replace', 'delete'][value[0]], path: value[1],
+          oldDigest: value[0] === 0 ? null : value[2], oldMode: value[0] === 0 ? null : '100644',
+          content: value[0] === 2 ? null : value[3] };
+      });
+      return Buffer.from(canonical(await store.prepare(selected, edits), 2 << 20)).toString('utf8');
+    },
+    async readWindow(input) {
+      const selected = request(input, 4);
+      const value = await store.read(selected, input[1], { offset: integer(input[2]), maximum: integer(input[3]) });
+      return [evidence(value), value.offset, value.nextOffset, value.bytes];
+    },
+    async list(input) {
+      const selected = request(input, 3);
+      const value = await store.list(selected, { prefix: input[1], after: cursor(input[2]) });
+      return [bytes(selected.manifest), value.entries.map(row => [row[0], row[1], row[2], row[3], bytes(row[4])]), value.cursor ?? '', value.total];
+    },
+    async search(input) {
+      const selected = request(input, 4);
+      const value = await store.search(selected, { query: input[1], prefix: input[2], after: cursor(input[3]) });
+      return [bytes(selected.manifest), value.entries.map(hit => [hit.path, bytes(hit.digest), hit.line, hit.excerpt, hit.truncated]), value.cursor ?? '', value.truncated];
+    },
+  });
+}
 
 // Identity of the qualified default range suite, independent of writable input.
 const suiteDigest = "556d27be95a9db73d36bc21f621870327dc64097b42f2c6ad6fc2407ac78e7fd";

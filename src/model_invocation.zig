@@ -6,6 +6,10 @@ const codecs = @import("model_codec.zig");
 const models = @import("model.zig");
 
 pub const semantic_identity = "agent.model.invoke.v3";
+pub const replay_semantic_identity = "agent.model.invoke.v4";
+pub const maximum_replay_bytes: u32 = 2 * 1024 * 1024;
+pub const ReplayStatus = enum { complete, unsupported, capacity };
+pub const Usage = struct { input_tokens: u64, output_tokens: u64, cached_input_tokens: ?u64 };
 pub const protocol_identity = "agent.model.protocol.openai-responses-v2";
 pub const MessageRole = enum { system, developer, user, assistant };
 pub const TruncationPolicy = enum { disabled };
@@ -190,6 +194,22 @@ pub fn Profile(
             unsupported_response: UnsupportedResponse,
         };
 
+        // Additive stateless contract. The v3 request/result wire remains exact.
+        // Opaque provider items are bounded ordinary data, never host closures.
+        pub const ReplayBytes = contracts.Bytes(maximum_replay_bytes);
+        pub const ToolResult = struct { call_id: CallId, output: ResultText };
+        pub const ReplayRequest = struct {
+            invocation: Request,
+            replay: ReplayBytes,
+            results: contracts.Vector(ToolResult, limits.maximum_output_items),
+        };
+        pub const ReplayResult = struct {
+            result: Result,
+            replay: ReplayBytes,
+            replay_status: ReplayStatus,
+            usage: ?Usage,
+        };
+
         pub fn allDeclarations() Tools {
             const items = comptime blk: {
                 var result: [declarations.len]ToolDeclaration = undefined;
@@ -349,6 +369,15 @@ pub fn Profile(
                 .payload = payload,
                 .result = result,
             });
+            return slot.finish(builder, effect);
+        }
+
+        pub fn declareReplay(builder: anytype) !u64 {
+            const payload = try contracts.schema(ReplayRequest, builder);
+            const result = try contracts.schema(ReplayResult, builder);
+            const slot = try builder.specialization(u64, replay_semantic_identity, .{ payload, result });
+            if (slot.cached) |cached| return cached;
+            const effect = try builder.effect(.{ .identity = replay_semantic_identity, .payload = payload, .result = result });
             return slot.finish(builder, effect);
         }
 

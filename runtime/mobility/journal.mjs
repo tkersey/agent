@@ -4,14 +4,22 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, lstatSync, openSync, closeSync, constants } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createPublicKey } from 'node:crypto';
-import { canonical, parse, requireThat, identifier, digest, counter, labels } from './canonical.mjs';
-import { hash, opaqueId, verifyRecord, signRecord, validate, matchesDecision } from './protocol.mjs';
+import { canonical, parse, requireThat, identifier, digest, counter, labels, closed } from './canonical.mjs';
+import { hash, opaqueId, verifyRecord, signRecord, validate, validatePublicationReceipt, matchesDecision } from './protocol.mjs';
 import { encodeArrival, encodeRefusal, schemas, observationValue } from './values.mjs';
-import { encodeValue } from '../values.mjs';
+import { encodeValue, decodeSchema, encodeSchema } from '../values.mjs';
 import * as core from './custody.mjs';
 const equal = (a, b) => a.length === b.length && a.every((byte, i) => byte === b[i]);
 const json = value => new TextDecoder().decode(canonical(value));
 const readJson = value => value === null || value === undefined ? null : parse(new TextEncoder().encode(value));
+function publicationProgress(previous, publication) {
+  if (!previous) return;
+  const before = previous.admission.source_version, after = publication.admission.source_version;
+  requireThat(counter(after.custody_epoch) > counter(before.custody_epoch) ||
+    (after.custody_epoch === before.custody_epoch && (counter(after.execution_revision) > counter(before.execution_revision) ||
+      (after.execution_revision === before.execution_revision && equal(canonical(publication), canonical(previous))))),
+    'PublicationEvidenceRegression');
+}
 function artifactLimits(limits, image, outcome) {
   requireThat(image.length <= limits.maximum_image_bytes && outcome.length <= limits.maximum_outcome_bytes, 'ArtifactCapacity');
 }
@@ -59,6 +67,7 @@ export class CustodyJournal {
       const metadata = readJson(this.#get('SELECT body FROM metadata WHERE id=1')?.body);
       requireThat(metadata?.format === 'agent-mobility-journal/v1' && metadata.host_id === hostId && metadata.deployment_generation === deploymentGeneration, 'QuarantinedStorageGeneration');
       this.#db.exec('CREATE TABLE IF NOT EXISTS staging (id TEXT PRIMARY KEY, tenant TEXT NOT NULL, offer BLOB NOT NULL, registration BLOB NOT NULL, predecessor BLOB, observation BLOB NOT NULL, requirements BLOB NOT NULL, constraints BLOB NOT NULL, image_digest TEXT, outcome_digest TEXT) STRICT');
+      this.#db.exec('CREATE TABLE IF NOT EXISTS allowances (run_id TEXT NOT NULL REFERENCES runs(run_id), kind TEXT NOT NULL, tenant TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(run_id,kind)) STRICT');
       requireThat(this.#get('PRAGMA quick_check').quick_check === 'ok', 'CorruptCustodyStorage');
     } catch (error) { this.#db.close(); throw error; }
   }
@@ -145,7 +154,7 @@ export class CustodyJournal {
   // Check the transaction's actual records, including replacements, before
   // commit. A rejection rolls back every row and artifact in the operation.
   #recordCapacity(tenant) {
-    const count = this.#get('SELECT (SELECT count(*) FROM runs WHERE tenant=?) + (SELECT count(*) FROM transfers WHERE tenant=?) + (SELECT count(*) FROM occurrences JOIN runs USING(run_id) WHERE tenant=?) + (SELECT count(*) FROM staging WHERE tenant=?) AS n', tenant, tenant, tenant, tenant).n;
+    const count = this.#get('SELECT (SELECT count(*) FROM runs WHERE tenant=?) + (SELECT count(*) FROM transfers WHERE tenant=?) + (SELECT count(*) FROM occurrences JOIN runs USING(run_id) WHERE tenant=?) + (SELECT count(*) FROM staging WHERE tenant=?) + (SELECT count(*) FROM allowances WHERE tenant=?) AS n', tenant, tenant, tenant, tenant, tenant).n;
     requireThat(count <= this.#recordLimit, 'TenantRecordCapacity');
   }
   register(registrationBytes, admitted, policy = null) {
@@ -185,6 +194,7 @@ export class CustodyJournal {
       requireThat(saved === undefined && offer.source_host_id === this.#host, 'TransferAlreadyExists');
       const run = this.run(runId), occurrence = this.#occurrence(run);
       const registration = this.#registration(this.artifact(run.tenant_ref, run.registration_digest));
+      requireThat(equal(canonical(offer.publication_receipt ?? null), canonical(this.latestPublication(runId))), 'PublicationReceiptMismatch');
       this.#lineage(offer, registration, run.custody_epoch === '0' ? null : this.artifact(run.tenant_ref, run.predecessor_receipt_digest));
       requireThat(data.metadata.outcome_digest === run.outcome_digest && data.metadata.image_digest === run.image_digest && data.relocation !== null, 'ArtifactMismatch');
       requireThat(data.image.length === offer.artifact_lengths.image && data.outcome.length === offer.artifact_lengths.outcome, 'ArtifactMismatch');
@@ -203,7 +213,8 @@ export class CustodyJournal {
   beginTransfer(runId, wanted, admitted, { observationDigest, exportPolicyRevision, admissionDeadline = null }) {
     const run = this.run(runId), data = this.#admission.read(admitted);
     requireThat(data.relocation !== null, 'RelocationMismatch');
-    const unsigned = { format: 'agent-mobility-offer/v1', run_id: runId, transfer_id: opaqueId(), source_host_id: this.#host,
+    const publication = this.latestPublication(runId);
+    const unsigned = { ...(publication ? { publication_receipt: publication } : {}), format: publication ? 'agent-mobility-offer/v2' : 'agent-mobility-offer/v1', run_id: runId, transfer_id: opaqueId(), source_host_id: this.#host,
       destination_host_id: data.relocation.destination_host_id, source_epoch: run.custody_epoch, destination_epoch: (counter(run.custody_epoch) + 1n).toString(), execution_revision: run.execution_revision,
       run_registration_digest: run.registration_digest, predecessor_receipt_digest: run.predecessor_receipt_digest, image_digest: run.image_digest, program_id: run.program_id,
       outcome_digest: run.outcome_digest, state_digest: run.state_digest, request_digest: run.request_digest, relocation_occurrence_id: run.current_occurrence_id,
@@ -298,7 +309,13 @@ export class CustodyJournal {
       const acceptedCore = core.acceptedCore(offer, policyRevision, classification, deploymentLimits);
       artifactLimits(acceptedCore.deployment_limits, data.image, data.outcome);
       const receipt = this.#decision(offer, acceptedCore, null), arrival = encodeArrival(offer, hash(receipt), observation);
-      const next = core.accept(this.run(offer.run_id), registration, offer, acceptedCore, hash(receipt), hash(arrival));
+      const existing = this.run(offer.run_id);
+      const previousPublication = existing ? this.latestPublication(offer.run_id) : null;
+      const publication = offer.publication_receipt ?? previousPublication;
+      if (offer.publication_receipt) publicationProgress(previousPublication, publication);
+      if (previousPublication) requireThat(existing.classification.every(label => classification.includes(label)), 'ClassificationDowngrade');
+      const next = core.accept(existing, registration, offer, acceptedCore, hash(receipt), hash(arrival));
+      if (publication) next.run.publication_receipt_digest = this.#artifact(registration.tenant_ref, canonical(publication, 16 << 10));
       this.#remember(offer); this.#remember(registration); this.#remember(parse(receipt));
       this.#artifact(registration.tenant_ref, registrationBytes); this.#artifact(registration.tenant_ref, data.image); this.#artifact(registration.tenant_ref, data.outcome); this.#artifact(registration.tenant_ref, arrival);
       this.#artifact(registration.tenant_ref, receipt);
@@ -334,6 +351,7 @@ export class CustodyJournal {
   admitLeaf(runId, wanted, classification, options = {}) {
     try { return this.#transaction('dispatch', () => {
       const run = this.run(runId), next = core.dispatch(run, this.#occurrence(run), wanted, opaqueId(), classification, options);
+      if (options.charge) { this.#charge(run, options.charge); next.occurrence.work_kind = options.charge.kind; }
       this.#save(next.run); this.#saveOccurrence(next.occurrence); return next.occurrence;
     }); } catch (error) {
       // Diagnostics cannot mutate custody or replace the rejected operation.
@@ -343,12 +361,159 @@ export class CustodyJournal {
       throw error;
     }
   }
-  markUnknown(runId, attemptId) {
-    return this.#transaction('unknown', () => { const run = this.run(runId), next = core.unknown(run, this.#occurrence(run), attemptId); this.#saveOccurrence(next); return next; });
+  allowance(runId, kind) { return readJson(this.#get('SELECT body FROM allowances WHERE run_id=? AND kind=?', runId, kind)?.body); }
+  #charge(run, charge) {
+    closed(charge, ['owner', 'kind', 'grant', 'limit', 'amount']);
+    requireThat(charge.owner === this.#host && ['model', 'check'].includes(charge.kind), 'SpendOwnerMismatch'); digest(charge.grant);
+    closed(charge.limit, ['attempts', 'request_bytes', 'output_tokens', 'concurrent']); closed(charge.amount, ['request_bytes', 'output_tokens']);
+    requireThat(Number.isSafeInteger(charge.limit.attempts) && charge.limit.attempts > 0 && charge.limit.attempts <= (charge.kind === 'model' ? 32 : 16), 'WorkAllowance');
+    for (const field of ['request_bytes', 'output_tokens']) for (const row of [charge.limit, charge.amount])
+      requireThat(Number.isSafeInteger(row[field]) && row[field] >= 0, 'WorkAllowance');
+    requireThat(Number.isSafeInteger(charge.limit.concurrent) && charge.limit.concurrent > 0 && charge.limit.concurrent <= 8, 'WorkConcurrency');
+    const pending = this.#all('SELECT occurrences.body FROM occurrences JOIN runs USING(run_id) WHERE tenant=?', run.tenant_ref)
+      .map(row => readJson(row.body)).filter(row => row.work_kind === charge.kind &&
+        (row.status === 'DISPATCHING' || (row.status === 'UNKNOWN' && !(row.work_kind === 'check' && row.work_settled === true)))).length;
+    requireThat(pending < charge.limit.concurrent, 'WorkConcurrency');
+    const binding = { registration_digest: run.registration_digest, owner: charge.owner, kind: charge.kind, grant: charge.grant, limit: charge.limit };
+    const grantDigest = hash(canonical(binding)), previous = this.allowance(run.run_id, charge.kind);
+    requireThat(previous === null || previous.grant_digest === grantDigest, 'WorkAllowanceChanged');
+    const used = previous?.used ?? { attempts: 0, request_bytes: 0, output_tokens: 0 };
+    const next = Object.fromEntries(Object.entries({ attempts: 1, ...charge.amount }).map(([field, count]) => {
+      const value = used[field] + count; requireThat(value <= charge.limit[field], 'WorkAllowanceExhausted'); return [field, value];
+    }));
+    this.#run('INSERT INTO allowances VALUES (?,?,?,?) ON CONFLICT(run_id,kind) DO UPDATE SET body=excluded.body', run.run_id, charge.kind, run.tenant_ref,
+      json({ ...binding, grant_digest: grantDigest, used: next }));
+    this.#recordCapacity(run.tenant_ref);
   }
-  recordReply(runId, attemptId, reply, classification, reconciliationRef = null, { placementEvidence = null } = {}) {
+  deferLeaf(runId, wanted, pending, classification) {
+    const bytes = canonical(pending, 2 << 20);
+    identifier(pending.binding_revision); digest(pending.request_digest);
+    requireThat(Object.hasOwn(pending, 'question') && typeof pending.result_schema === 'string' && /^[A-Za-z0-9_-]+$/.test(pending.result_schema), 'InvalidPendingQuestion');
+    const schema = Buffer.from(pending.result_schema, 'base64url');
+    requireThat(schema.toString('base64url') === pending.result_schema && equal(encodeSchema(decodeSchema(schema)), schema), 'InvalidPendingQuestion');
+    requireThat(pending.format === 'agent-deferred-leaf/v1' && typeof pending.audience === 'string' && pending.audience.length > 0, 'InvalidPendingQuestion');
+    requireThat(Array.isArray(pending.alternatives) && pending.alternatives.length > 0 && pending.alternatives.length <= 16 && new Set(pending.alternatives).size === pending.alternatives.length, 'InvalidPendingQuestion');
+    pending.alternatives.forEach(value => identifier(value));
+    requireThat(Number.isSafeInteger(pending.maximum_text_bytes) && pending.maximum_text_bytes >= 0 && pending.maximum_text_bytes <= 8192, 'InvalidPendingQuestion');
+    return this.#transaction('defer', () => {
+      const run = this.run(runId), next = core.awaiting(run, this.#occurrence(run), wanted, opaqueId(), hash(bytes), classification);
+      requireThat(pending.principal === run.principal_ref && pending.tenant === run.tenant_ref && pending.request_digest === run.request_digest, 'QuestionMismatch');
+      this.#artifact(run.tenant_ref, bytes); this.#save(next.run); this.#saveOccurrence(next.occurrence); return next.occurrence;
+    });
+  }
+  answerDeferred(runId, wanted, binding, identity, answer, reply, classification) {
+    return this.#transaction('answer', () => {
+      const run = this.run(runId), occurrence = this.#occurrence(run);
+      core.active(run, wanted, false); core.current(run, occurrence);
+      requireThat(typeof occurrence.pending_digest === 'string', 'QuestionNotPending');
+      const pending = parse(this.artifact(run.tenant_ref, occurrence.pending_digest), { maximum: 2 << 20 });
+      requireThat(identity?.principal === run.principal_ref && identity?.tenant === run.tenant_ref && Array.isArray(identity.audiences) && identity.audiences.includes(pending.audience), 'UserDenied');
+      requireThat(answer && Object.keys(answer).sort().join(',') === 'choice,text' && pending.alternatives.includes(answer.choice) && typeof answer.text === 'string' && Buffer.byteLength(answer.text) <= pending.maximum_text_bytes, 'InvalidAnswer');
+      const next = core.answered(run, occurrence, wanted, binding, hash(canonical(answer)), hash(reply), classification);
+      this.#artifact(run.tenant_ref, reply); this.#save(next.run); this.#saveOccurrence(next.occurrence); return next.occurrence;
+    });
+  }
+  markUnknown(runId, attemptId, settlement = {}) {
+    return this.#transaction('unknown', () => { const run = this.run(runId), next = core.unknown(run, this.#occurrence(run), attemptId, settlement); this.#saveOccurrence(next); return next; });
+  }
+  // Called only by the admitted repository publication leaf while holding its
+  // process gate. This transaction is the local cancellation ordering point;
+  // it stores the exact intent before that gate holder becomes Git.
+  admitPublication(runId, wanted, attemptId, proposal, policyRevision) {
+    return this.#transaction('publication-intent', () => {
+      const run = this.run(runId), occurrence = this.#occurrence(run);
+      core.active(run, wanted); core.current(run, occurrence);
+      requireThat(run.cancel_requested === null, 'CancellationPending');
+      requireThat(occurrence.operation === 'agent.repository.publish.v1' && occurrence.status === 'DISPATCHING' &&
+        occurrence.attempt_id === attemptId && occurrence.publication_intent_digest === undefined && occurrence.cancel_safe !== true, 'PublicationOccurrenceMismatch');
+      const binding = proposal?.core?.binding;
+      requireThat(binding?.run === runId && binding.principal === run.principal_ref && binding.tenant === run.tenant_ref &&
+        binding.policyRevision === policyRevision && policyRevision === run.policy_revision, 'PublicationAuthorityMismatch');
+      digest(binding.intent);
+      const destination = proposal.core.destination;
+      requireThat(!this.publicationRecords(run.tenant_ref, destination.repository, destination.generation, destination.managedRef)
+        .some(row => row.intent.proposal.core.binding.intent === binding.intent || row.intent.proposal.commitOid === proposal.commitOid), 'PublicationIntentReused');
+      const { digest: proposalDigest, ...body } = proposal;
+      requireThat(hash(canonical(body, 2 << 20)) === proposalDigest, 'PublicationProposalMismatch');
+      const intent = { format: 'agent.repository.publication-intent/v1', proposal,
+        admission: { run_id: runId, occurrence_id: occurrence.id, attempt_id: attemptId, request_digest: run.request_digest,
+          registration_digest: run.registration_digest, source_version: core.version(run), policy_revision: policyRevision } };
+      const bytes = canonical(intent, 2 << 20), value = this.#artifact(run.tenant_ref, bytes);
+      this.#saveOccurrence({ ...occurrence, publication_intent_digest: value });
+      return { ...intent.admission, intent_digest: value };
+    });
+  }
+  acquiredReplies(runId, operation) {
+    const run = this.run(runId); requireThat(run, 'UnknownRun');
+    return this.#all('SELECT body FROM occurrences WHERE run_id=?', runId).map(row => readJson(row.body))
+      .filter(row => row.operation === operation && row.reply_digest)
+      .map(row => this.artifact(run.tenant_ref, row.reply_digest));
+  }
+  latestPublication(runId) {
+    const run = this.run(runId); requireThat(run, 'UnknownRun');
+    if (run.publication_receipt_digest) return parse(this.artifact(run.tenant_ref, run.publication_receipt_digest), { maximum: 16 << 10 });
+    const rows = this.#all('SELECT body FROM occurrences WHERE run_id=? ORDER BY rowid DESC', runId);
+    for (const row of rows) {
+      const occurrence = readJson(row.body);
+      if (!occurrence.publication_receipt_digest) continue;
+      const receipt = parse(this.artifact(run.tenant_ref, occurrence.publication_receipt_digest), { maximum: 2 << 20 });
+      if (receipt.status === 'Published') return receipt;
+    }
+    return null;
+  }
+  retainPublication(runId, transferId, receipt, classification) {
+    return this.#transaction('publication-evidence', () => {
+      const run = this.run(runId); requireThat(run, 'UnknownRun');
+      // A reply to an obsolete control query cannot change current custody.
+      if (run.status !== 'DEPARTED' || run.transfer_id !== transferId) return false;
+      validatePublicationReceipt(receipt, runId, run.registration_digest); labels(classification);
+      requireThat(run.classification.every(label => classification.includes(label)), 'ClassificationDowngrade');
+      publicationProgress(this.latestPublication(runId), receipt);
+      this.#save({ ...run, classification: [...classification],
+        publication_receipt_digest: this.#artifact(run.tenant_ref, canonical(receipt, 16 << 10)) });
+      return true;
+    });
+  }
+  publicationRecords(tenant, repository, generation, managedRef) {
+    // Occurrences already have a tenant-wide record quota. Do not create a
+    // second workflow database or infer successful publication from a reflog.
+    const rows = this.#all('SELECT occurrences.body FROM occurrences JOIN runs USING(run_id) WHERE tenant=?', tenant);
+    const result = [];
+    for (const row of rows) {
+      const occurrence = readJson(row.body);
+      if (!occurrence.publication_intent_digest) continue;
+      const intent = parse(this.artifact(tenant, occurrence.publication_intent_digest), { maximum: 2 << 20 });
+      const target = intent.proposal.core.destination;
+      if (target.repository !== repository || target.generation !== generation || target.managedRef !== managedRef) continue;
+      result.push({ intent, intent_digest: occurrence.publication_intent_digest,
+        receipt: occurrence.publication_receipt_digest ? parse(this.artifact(tenant, occurrence.publication_receipt_digest), { maximum: 2 << 20 }) : null });
+    }
+    return result;
+  }
+  abandonLeaf(runId, attemptId, settlement = {}) {
+    return this.#transaction('abandon', () => { const run = this.run(runId), next = core.abandoned(run, this.#occurrence(run), attemptId, settlement); this.#saveOccurrence(next); return next; });
+  }
+  recordReply(runId, attemptId, reply, classification, reconciliationRef = null, { placementEvidence = null, dispatchVersion = null, publicationReceipt = null } = {}) {
     return this.#transaction('acquire', () => {
-      const run = this.run(runId), next = core.acquired(run, this.#occurrence(run), attemptId, hash(reply), classification, reconciliationRef);
+      const run = this.run(runId);
+      if (dispatchVersion !== null) {
+        // Executor attachment can change while the same occurrence is in flight.
+        // Semantic progress, custody change, or cancellation cannot.
+        requireThat(['run_id', 'custody_epoch', 'execution_revision', 'outcome_digest'].every(field => run[field] === dispatchVersion[field]), 'StaleDispatch');
+        requireThat(run.cancel_requested === null, 'CancellationPending');
+      }
+      const next = core.acquired(run, this.#occurrence(run), attemptId, hash(reply), classification, reconciliationRef);
+      if (next.occurrence.publication_intent_digest) {
+        const intent = parse(this.artifact(run.tenant_ref, next.occurrence.publication_intent_digest), { maximum: 2 << 20 });
+        requireThat(publicationReceipt && ['Published', 'NotApplied', 'Conflict'].includes(publicationReceipt.status) &&
+          publicationReceipt.proposal === intent.proposal.digest &&
+          (publicationReceipt.status === 'Published' ? publicationReceipt.commit === intent.proposal.commitOid : publicationReceipt.commit === null) &&
+          hash(canonical(publicationReceipt.admission)) === hash(canonical({ ...intent.admission, intent_digest: next.occurrence.publication_intent_digest })), 'PublicationReceiptMismatch');
+        const receiptBytes = canonical(publicationReceipt, 2 << 20), receiptDigest = hash(receiptBytes);
+        requireThat(next.occurrence.publication_receipt_digest === undefined || next.occurrence.publication_receipt_digest === receiptDigest, 'PublicationReceiptConflict');
+        next.occurrence = { ...next.occurrence, publication_receipt_digest: this.#artifact(run.tenant_ref, receiptBytes) };
+        if (publicationReceipt.status === 'Published') next.run = { ...next.run, publication_receipt_digest: next.occurrence.publication_receipt_digest };
+      } else requireThat(publicationReceipt === null, 'PublicationIntentMissing');
       if (placementEvidence !== null) {
         requireThat(next.occurrence.operation === 'agent.mobility.resolve.v1', 'InvalidPlacementEvidence');
         next.run = { ...next.run, placement_evidence: placementEvidence };
@@ -405,7 +570,7 @@ export class CustodyJournal {
       const reason = readJson(row.body).refusal_reason;
       if (reason !== undefined) refused[reason] = (refused[reason] ?? 0) + 1;
     }
-    return { run_id: runId, host_id: this.#host, local_move_attempts: run.local_move_attempts, ...this.custodyKnowledge(run), refusals_by_reason: refused, stale_dispatch_rejections_since_open: this.#staleDispatch.get(runId) ?? 0 };
+    return { run_id: runId, host_id: this.#host, local_move_attempts: run.local_move_attempts, allowances: Object.fromEntries(['model', 'check'].map(kind => [kind, this.allowance(runId, kind)])), ...this.custodyKnowledge(run), refusals_by_reason: refused, stale_dispatch_rejections_since_open: this.#staleDispatch.get(runId) ?? 0 };
   }
   custodyKnowledge(run) {
     const pending = run.status === 'OFFERED', id = run.transfer_id ?? run.last_transfer_id, transfer = id ? this.transfer(id) : null;
@@ -422,7 +587,15 @@ export class CustodyJournal {
       const retain = value => { if (value !== null && value !== undefined) retained.add(value); };
       for (const row of this.#all('SELECT body FROM runs WHERE tenant=?', tenant)) {
         const run = readJson(row.body);
-        for (const key of ['image_digest', 'outcome_digest', 'reply_digest', 'registration_digest', 'predecessor_receipt_digest']) retain(run[key]);
+        for (const key of ['image_digest', 'outcome_digest', 'reply_digest', 'registration_digest', 'predecessor_receipt_digest', 'publication_receipt_digest']) retain(run[key]);
+        retain(this.#occurrence(run)?.pending_digest);
+      }
+      for (const row of this.#all('SELECT occurrences.body FROM occurrences JOIN runs USING(run_id) WHERE tenant=?', tenant)) {
+        const occurrence = readJson(row.body);
+        // Publication ancestry outlives the originating run. Check results are
+        // authority evidence, including while that run is at another host.
+        retain(occurrence.publication_intent_digest); retain(occurrence.publication_receipt_digest);
+        if (occurrence.operation === 'agent.repository.check.v1') retain(occurrence.reply_digest);
       }
       for (const row of this.#all('SELECT offer, receipt FROM transfers WHERE tenant=?', tenant)) {
         const offer = parse(row.offer); retain(offer.run_registration_digest); retain(offer.predecessor_receipt_digest);

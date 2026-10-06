@@ -272,16 +272,16 @@ fn checkCatalogs(module: source.Module, registry: *const Registry) Error!void {
         if ((std.mem.eql(u8, effect.identity, "agent.mobility.resolve.v1") or
             std.mem.eql(u8, effect.identity, "agent.mobility.relocate.v1")) and
             (!effect.external or registry.roleOf(id) != .mobility)) return error.EffectRoleMismatch;
-        if (std.mem.eql(u8, effect.identity, "agent.model.invoke.v3") and
+        if ((std.mem.eql(u8, effect.identity, "agent.model.invoke.v3") or std.mem.eql(u8, effect.identity, "agent.model.invoke.v4")) and
             (!effect.external or registry.roleOf(id) != .model)) return error.EffectRoleMismatch;
         for (module.effects[0..id], 0..) |earlier, previous| {
             if (!std.mem.eql(u8, effect.identity, earlier.identity)) continue;
-            // Model v3 is a generic semantic contract: ERQ2's concrete schemas
+            // Model effects are generic semantic contracts: ERQ2's concrete schemas
             // bind its application specialization. Every alias retains .model;
             // a role-changing alias cannot bypass protected admission.
             if (effect.external and earlier.external and
                 registry.roleOf(id) == .model and registry.roleOf(previous) == .model and
-                std.mem.eql(u8, effect.identity, "agent.model.invoke.v3")) continue;
+                (std.mem.eql(u8, effect.identity, "agent.model.invoke.v3") or std.mem.eql(u8, effect.identity, "agent.model.invoke.v4"))) continue;
             return error.DuplicateEffectIdentity;
         }
     }

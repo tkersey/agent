@@ -134,6 +134,10 @@ The locked source-installation profile is POSIX, qualified on Darwin arm64 and
 Linux x86_64; Windows setup is not qualified. See [runtime status](docs/agent4-runtime.md)
 and the [Zig 0.17 execution and cost evidence](https://github.com/tkersey/boundary/blob/a39014232db44c6780a3a2d953dacea111168aec/docs/zig-0.17-upgrade.md).
 
+For ordinary changes, use [focused local verification](.github/CI.md#local-completion-focused-checks-five-minutes-total)
+with a five-minute total budget. Retained tests run in normal CI; optional
+qualification campaigns have been removed.
+
 ### Compile and check the examples
 
 ```sh
@@ -146,37 +150,20 @@ This fetches the exact locked Boundary package and checks authoring, contracts,
 and example compilation **without installing World**. The authoring check also
 works from an extracted source package without Git metadata.
 
-### Execute the integration examples
+### Execute the examples
 
-Acquire the locked World inputs explicitly, then run the integration checks. The
-full integration target exercises the portable consumers and supported host adapters.
-
-Setup downloads the qualified World runtime bundle using authenticated GitHub
-CLI (`gh`) access and `unzip`, then delegates acquisition to World. It requires
-the pinned CI artifact while uncached; cached verified inputs support `--offline`.
-The artifact expiry is recorded in the dependency lock. Setup does not rebuild the kernel.
+Acquire the locked World inputs and emit the product archive:
 
 ```sh
 node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-zig17"
-zig build check-agent4-integration -Doptimize=safe \
+zig build emit-agent4 -Doptimize=safe \
   -Dworld-source="$PWD/.agent4-zig17/inputs/world" \
   -Dworld-runtime="$PWD/.agent4-zig17/out/world-runtime/runtime"
 ```
 
-Use a new work directory when advancing the dependency lock. Setup verifies
-existing inputs against the selected lock and will reject a directory populated
-by an earlier tuple; the old directory remains available for that tuple.
-
-The repair executor's qualified profile is macOS Seatbelt. On other hosts,
-the general integration target keeps the portable World/Agent checks and
-reports inquiry execution as unavailable; this does not validate the repair
-executor. Explicit `check-inquiry-application` and `check-inquiry-comparison`
-execution still require that profile. See [inquiry validation](docs/resumable-inquiry.md).
-
-The optional runner can **start, resume, inspect, cancel, and continue after a yield** saved World
-outcomes using canonical reply bytes, without a UI or provider session. See
-[the runtime guide](docs/agent4-runtime.md) for complete commands, the JavaScript
-embedding API, and direct World execution without the convenience bridge.
+Use the [runtime guide](docs/agent4-runtime.md) to start, inspect, resume or cancel
+an example. Setup authenticates the pinned inputs; the supported repository
+execution profile remains macOS-only and has no unsandboxed fallback.
 
 ### Author your own program
 
@@ -228,7 +215,7 @@ or runtime dependency. Supplied catalogs are checked and available through
 </details>
 
 <details>
-<summary>Packaging, economy checks, and development inputs</summary>
+<summary>Packaging and development inputs</summary>
 
 Creating a use archive is separate from checking authoring. Run this from an
 Agent Git checkout so packaging can record its source provenance:
@@ -241,18 +228,6 @@ The archive contains compiled examples and runtime support; World remains a
 separately supplied, authenticated dependency. No runtime kernel is built per
 application. See [packaging and execution](docs/agent4-runtime.md) for archive
 contents, receipts, and source-independent use.
-
-With World acquired, run the economy checks separately:
-
-```sh
-zig build check-agent4-economy -Doptimize=safe \
-  -Dworld-source="$PWD/.agent4-zig17/inputs/world" \
-  -Dworld-runtime="$PWD/.agent4-zig17/out/world-runtime/runtime"
-```
-
-Without the supported inquiry execution host, economy reports
-`PASS_PORTABLE_ONLY` with `inquiryComparison: UNAVAILABLE` when its portable
-checks pass. It does not report a passing inquiry/ReAct experiment comparison.
 
 Use `--cache-dir` and `--global-cache-dir` inside the isolated Agent checkout when
 working alongside other deliveries. `-Dboundary-source=/absolute/immutable/copy`
@@ -295,6 +270,6 @@ guarantee. See [the architecture](docs/architecture.md) and
 | [Architecture](docs/architecture.md) | Ownership, typed decisions, continuations, scopes, and protected admission |
 | [Runtime and portable archives](docs/agent4-runtime.md) | Running, saving, resuming, inspecting, cancelling, and embedding agents |
 | [Model invocation contract](docs/model-invocation-v3.md) | Model configuration, offered actions, normalization, and response admission |
-| [Acceptance evidence](conformance/agent4/evidence.md) | Executable capability checks, portability, measured economy, and limitations |
+| [Acceptance evidence](conformance/agent4/evidence.md) | Executable capability checks, regular CI coverage and limitations |
 
 [MIT licensed](LICENSE).

@@ -9,6 +9,5 @@ pub fn main(init: std.process.Init) !void {
     if (std.mem.eql(u8, selected, "agent4-inquiry-application")) return @import("consumers/inquiry/main.zig").main(init);
     if (std.mem.eql(u8, selected, "agent4-review")) return @import("consumers/review/main.zig").main(init);
     if (std.mem.eql(u8, selected, "agent4-document")) return @import("consumers/document/main.zig").main(init);
-    if (std.mem.eql(u8, selected, "clarification-scaling")) return @import("agent4/clarification.zig").main(init);
     return error.UnknownFixture;
 }

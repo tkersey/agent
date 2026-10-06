@@ -9,21 +9,22 @@ import { DEFAULT_LOCK, readDependencyLock, readRegular, sha256, verifyRuntime } 
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const runtimeFiles = ["runtime/world.mjs", "runtime/world.d.mts", "runtime/values.mjs", "runtime/runner.mjs", "runtime/cli.mjs",
-  "runtime/model.mjs", "runtime/document.mjs", "runtime/repository_delivery.mjs", "runtime/repository.mjs", "runtime/repository_tests.mjs", "runtime/inquiry.mjs", "runtime/inquiry_sandbox.mjs",
-  "runtime/inquiry_driver.mjs", "runtime/inquiry_wire.mjs", "runtime/inquiry_delivery.mjs", "runtime/inquiry_cli.mjs", "runtime/text_inspection.mjs", "runtime/text_file.mjs", "tools/agent4/dependencies.mjs",
+  ...["boundary.wire-natural.v1", "world.allocation-budget.v1", "agent.model-json-bounds.v1"].map(name => `runtime/repository-profiles/${name}.json`),
+  "runtime/model.mjs", "runtime/document.mjs", "runtime/repository_delivery.mjs", "runtime/repository.mjs", "runtime/repository_snapshot.mjs", "runtime/repository_publication_gate.mjs", "runtime/repository_checks.mjs", "runtime/repository_zig_sandbox.mjs", "runtime/repository_wasm_observer.mjs", "runtime/repository_tests.mjs", "runtime/inquiry.mjs", "runtime/inquiry_sandbox.mjs",
+  "runtime/inquiry_driver.mjs", "runtime/inquiry_wire.mjs", "runtime/inquiry_delivery.mjs", "runtime/inquiry_cli.mjs", "runtime/text_inspection.mjs", "runtime/text_file.mjs", "tools/agent4/dependencies.mjs", "tools/agent4/toolchain.mjs",
   "runtime/parser_cli.mjs", "runtime/parser_kernel.mjs", "runtime/parser_tools.mjs", "runtime/parser_executor.mjs", "runtime/parser_evaluation.mjs", "runtime/parser_oracle.mjs", "runtime/parser_driver.mjs", "runtime/parser_delivery.mjs", "docs/parser-synthesis.md",
   "fixtures/incremental-parser-v1/batch.mjs", "fixtures/incremental-parser-v1/requirements.md",
   "docs/agent4-runtime.md", "docs/migration_from_3.md", "docs/model-invocation-v3.md",
-  "docs/consequence-clarification.md", "docs/resumable-inquiry.md", "docs/compiled-text-tool.md", "docs/effect-directed-mobility.md", "docs/mobility-acceptance.md", "docs/mobility-performance.md", "conformance/agent4/mobility-measurements.json", "docs/mobility-deployment.example.json", "LICENSE",
-  ...["canonical", "protocol", "values", "custody", "admission", "journal", "policy", "custodian", "transport", "browser", "worker", "client", "deployment", "cli"].map(name => `runtime/mobility/${name}.mjs`)];
+  "docs/consequence-clarification.md", "docs/resumable-inquiry.md", "docs/compiled-text-tool.md", "docs/effect-directed-mobility.md", "docs/mobility-acceptance.md", "docs/mobility-deployment.example.json", "LICENSE",
+  "docs/mobile-repository-setup.example.json",
+  "docs/mobile-repository-operations.md", "docs/mobile-repository-acceptance.md",
+  ...["canonical", "protocol", "values", "custody", "admission", "journal", "policy", "custodian", "transport", "model", "repository_publication", "repository_check", "repository_approval", "repository_setup", "qualification", "sessions", "browser", "worker", "client", "task_catalogue", "deployment", "cli"].map(name => `runtime/mobility/${name}.mjs`)];
 // Optional test oracles supply prescribed external values and independently
 // assert application behavior. Production execution never imports these files.
-const fixtureTests = ["test/agent4/artifacts.mjs", "test/agent4/document_runtime.mjs", "test/agent4/review_runtime.mjs", "test/agent4/repository_runtime.mjs",
-  "fixtures/repository-repair-v1/README.md", "fixtures/repository-repair-v1/package.json",
+const exampleFixtures = ["fixtures/repository-repair-v1/README.md", "fixtures/repository-repair-v1/package.json",
   "fixtures/repository-repair-v1/src/range.mjs", "fixtures/repository-repair-v1/test/range.test.mjs",
-  "test/agent4/inquiry_application_runtime.mjs", "test/agent4/inquiry_cli.test.mjs", "test/consumers/inquiry/contract.txt",
-  "test/consumers/inquiry/fixtures/cases.mjs", "test/consumers/inquiry/fixtures/session.mjs", "test/agent4/text_package_runtime.mjs", "test/agent4/parser_package_runtime.mjs"];
-const roles = new Set(["image", "component", "initial-args", "schema", "contract", "synthetic-fixture"]);
+  "test/consumers/inquiry/contract.txt", "test/consumers/inquiry/fixtures/session.mjs"];
+const roles = new Set(["image", "component", "initial-args", "schema", "contract", "synthetic-fixture", "native-helper"]);
 const compare = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b));
 const json = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
 
@@ -83,7 +84,8 @@ function readInventory(directory) {
     if (!safeRelative(record.path) || record.path === "inventory.json" ||
         !roles.has(record.role) || !/^[a-f0-9]{64}$/.test(record.sha256) || records.has(record.path))
       fail("invalid or duplicate inventory file");
-    const extension = record.role === "image" ? /\.bpi3$/ : record.role === "component" ? /\.bmo1$/ : record.role === "schema" ? /\.bin$/ : record.role === "initial-args" ? /\.(bin|args)$/ :
+    if (record.role === "native-helper" && !["native/agent-publication-gate", "native/agent-check-limit", "native/libagent-check-lock.dylib"].includes(record.path)) fail("unknown native helper");
+    const extension = record.role === "native-helper" ? /^[a-zA-Z0-9/.-]+$/ : record.role === "image" ? /\.bpi3$/ : record.role === "component" ? /\.bmo1$/ : record.role === "schema" ? /\.bin$/ : record.role === "initial-args" ? /\.(bin|args)$/ :
       record.role === "contract" ? /\.(md|txt)$/ : /\.(json|bin|txt|md)$/;
     if (!extension.test(record.path)) fail(`unexpected ${record.role} file type: ${record.path}`);
     const path = join(directory, record.path);
@@ -133,7 +135,7 @@ function octal(header, offset, length, value) {
   if (text.length >= length) fail("tar numeric field overflow");
   header.write(text, offset, length - 1, "ascii");
 }
-function tarEntry(path, contents, directory = false) {
+function tarEntry(path, contents, directory = false, executable = false) {
   let name = path, prefix = "";
   if (Buffer.byteLength(name) > 100) {
     const splits = [...path.matchAll(/\//g)].map(match => match.index).reverse();
@@ -144,7 +146,7 @@ function tarEntry(path, contents, directory = false) {
   }
   const header = Buffer.alloc(512);
   header.write(name, 0, 100, "utf8"); header.write(prefix, 345, 155, "utf8");
-  octal(header, 100, 8, directory ? 0o755 : 0o644);
+  octal(header, 100, 8, (directory || executable) ? 0o755 : 0o644);
   octal(header, 108, 8, 0); octal(header, 116, 8, 0);
   octal(header, 124, 12, contents.length); octal(header, 136, 12, 0);
   header.fill(0x20, 148, 156); header.write(directory ? "5" : "0", 156, 1);
@@ -160,7 +162,7 @@ function archiveBytes(name, files) {
     for (let i = 1; i < parts.length; i++) directories.add(`${name}/${parts.slice(0, i).join("/")}`);
   }
   const entries = [...directories].sort(compare).map(path => tarEntry(path, Buffer.alloc(0), true));
-  for (const path of [...files.keys()].sort(compare)) entries.push(tarEntry(`${name}/${path}`, files.get(path)));
+  for (const path of [...files.keys()].sort(compare)) entries.push(tarEntry(`${name}/${path}`, files.get(path), false, ["examples/native/agent-publication-gate", "examples/native/agent-check-limit"].includes(path)));
   // No timestamps, owners, paths, random IDs or gzip filename enter these bytes.
   return gzipSync(Buffer.concat([...entries, Buffer.alloc(1024)]), { level: 9 });
 }
@@ -183,7 +185,7 @@ export function packageArtifacts(argv) {
   const declaredVersion = readRegular(join(ROOT, "build.zig.zon")).toString("utf8").match(/\.version\s*=\s*"([^"]+)"/)?.[1];
   if (declaredVersion !== options.version) fail("archive version differs from Agent's package version");
   const { manifest, files, inputSha256 } = readInventory(imageRoot);
-  const sources = new Map([...runtimeFiles, ...fixtureTests].map(path => [path, readRegular(join(ROOT, path))]));
+  const sources = new Map([...runtimeFiles, ...exampleFixtures].map(path => [path, readRegular(join(ROOT, path))]));
   sources.set("conformance/agent4/dependencies.lock.json", readRegular(lockPath));
   for (const [path, bytes] of sources) files.set(path, bytes);
   files.set("README.md", Buffer.from(`# Agent ${options.version}: resumable interaction examples\n\n` +
@@ -193,7 +195,7 @@ export function packageArtifacts(argv) {
     `See docs/agent4-runtime.md for start, resume, inspect, cancel and raw World usage.\n` +
     `examples/inventory.json is only a file inventory; execution never reads it to select application control.\n` +
     `Synthetic fixture files are explicitly alternative environmental inputs, not recorded program state.\n` +
-    `test/agent4/*.mjs are optional scripted external-input test oracles. They are not production control and are never imported by the runner.\n\n` +
+    `The archive contains product runtime and example inputs, without optional test oracles.\n\n` +
     `Examples: ${manifest.examples.map(example => example.name).join(", ")}.\n`));
   const rows = [...files].sort(([a], [b]) => compare(a, b)).map(([path, bytes]) =>
     ({ path, bytes: bytes.length, sha256: sha256(bytes) }));

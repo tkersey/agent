@@ -18,6 +18,12 @@ function sameRequirement(wanted, binding) {
   if (wanted[7].tag === 0) offered[7] = option(null);
   return equal(canonicalRequirements([wanted]), canonicalRequirements([offered]));
 }
+// Shared metadata eligibility; payload authorization remains binding-owned.
+export function bindingEligible(run, binding, hostId, labelDestinations) {
+  return binding.enabled !== false && binding.tenants.includes(run.tenant_ref) && binding.principals.includes(run.principal_ref) &&
+    (run.classification ?? run.initial_classification).every(label => binding.allowedStateLabels.includes(label)) &&
+    binding.classification.every(label => labelDestinations[label]?.includes(hostId));
+}
 export class HostPolicy {
   #host; #domain; #profile; #revision; #deployments; #bindings; #exports; #revoked;
   constructor({ hostId, trustDomain, runtimeProfile, revision, deployments, bindings, labelDestinations, revoked = new Set() }) {
@@ -27,7 +33,8 @@ export class HostPolicy {
       identifier(binding.operation, 256); identifier(binding.role); identifier(binding.subject); identifier(binding.scope); labels(binding.classification);
       labels(binding.allowedStateLabels);
       requireThat(!['agent.mobility.resolve.v1', 'agent.mobility.relocate.v1'].includes(binding.operation), 'ProtectedBinding');
-      requireThat(binding.trustDomain === trustDomain && typeof binding.authorize === 'function' && typeof binding.handle === 'function', 'InvalidBinding');
+      requireThat(binding.trustDomain === trustDomain && typeof binding.authorize === 'function' && (typeof binding.handle === 'function' || (typeof binding.defer === 'function' && typeof binding.answer === 'function' && typeof binding.deferredRevision === 'string' && binding.deferredRevision.length > 0)), 'InvalidBinding');
+      requireThat(binding.publication !== true || typeof binding.recoveryMatches === 'function', 'InvalidRecoveryBinding');
       for (const bytes of [binding.payloadSchema, binding.resultSchema]) requireThat(equal(encodeSchema(decodeSchema(bytes)), bytes), 'InvalidBindingSchema');
     }
     requireThat(new Set(bindings.map(binding => requirementId(requirement(binding)))).size === bindings.length, 'DuplicateBinding');
@@ -71,9 +78,7 @@ export class HostPolicy {
       (!cleanup || binding.cleanup === true) && sameRequirement(wanted, binding)) ?? null;
   }
   #eligible(run, binding) {
-    return binding.enabled !== false && binding.tenants.includes(run.tenant_ref) && binding.principals.includes(run.principal_ref) &&
-      (run.classification ?? run.initial_classification).every(label => binding.allowedStateLabels.includes(label)) &&
-      binding.classification.every(label => this.#exports[label]?.includes(this.#host));
+    return bindingEligible(run, binding, this.#host, this.#exports);
   }
   preflight(registration, requirements, constraints, classification) {
     const run = { ...registration, classification }; this.authorizeRun(run); this.checkCleanup(run);
@@ -117,9 +122,23 @@ export class HostPolicy {
       // dispatch admission have no asynchronous check-then-act gap.
       const allowed = binding.authorize(payload, run);
       requireThat(!(allowed instanceof Promise), 'AsyncBindingAuthorization');
-      if (allowed) return { binding, payload, cleanup };
+      if (allowed) return { binding, bindingId: requirementId(requirement(binding)), payload, cleanup };
     }
     requireThat(false, revoked ? 'PrincipalRevoked' : 'LeafBindingDenied');
+  }
+  recovery(run, request, bindingId = null) {
+    // Revocation forbids new effects, but cannot erase the result of an already
+    // admitted work. Recovery identifies its owner; it grants no fresh effect.
+    this.authorizeRun(run, { cleanup: true });
+    const payload = decodeValue(decodeSchema(request.payloadSchema), request.payload);
+    const bindings = this.#bindings.filter(candidate => typeof candidate.recoveryMatches === 'function' &&
+      candidate.operation === request.semanticIdentity && equal(candidate.payloadSchema, request.payloadSchema) &&
+      equal(candidate.resultSchema, request.resumeSchema) && candidate.tenants.includes(run.tenant_ref) &&
+      candidate.principals.includes(run.principal_ref) && (bindingId === null || requirementId(requirement(candidate)) === bindingId) &&
+      run.classification.every(label => candidate.allowedStateLabels.includes(label)) &&
+      candidate.classification.every(label => this.#exports[label]?.includes(this.#host)) && candidate.recoveryMatches(payload, run));
+    // Older occurrences have no binding ID: recover only an unambiguous owner.
+    return bindings.length === 1 ? { binding: bindings[0], payload } : null;
   }
   encodeResult(binding, value) { return encodeValue(decodeSchema(binding.resultSchema), value); }
 }

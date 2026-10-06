@@ -226,6 +226,10 @@ function admitPath(path) {
     throw new TypeError("document path must be an unambiguous relative file path");
 }
 
+// Shared lexical floor. Repository object paths add their own Git namespace,
+// Unicode-alias, mode and explicit-grant checks before constructing a snapshot.
+export { admitPath as admitDocumentPath };
+
 function sameFile(a, b) { return a.dev === b.dev && a.ino === b.ino; }
 function digest(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
 function environmental(code) { return Object.assign(new Error(code), { documentCode: code }); }

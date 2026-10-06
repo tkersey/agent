@@ -15,7 +15,7 @@ import { READ, CLOSE } from '../../runtime/text_inspection.mjs';
 import { hostFixture } from './mobility_host_fixture.mjs';
 import { certificates } from './mobility_tls_fixture.mjs';
 
-export async function packageFixture(t, { dataExecution = 'node', imageMode = 'ensure' } = {}) {
+export async function packageFixture(t, { dataExecution = 'node', imageMode = 'ensure', browserAuth = false } = {}) {
   const f = await hostFixture(t, { register: false, cleanup: false, imageMode }), tls = await certificates(f.area);
   f.stop('A'); f.stop('B');
   const input = join(f.area, 'inputs'), output = join(f.area, 'archive'), extracted = join(f.area, 'extracted');
@@ -36,8 +36,6 @@ export async function packageFixture(t, { dataExecution = 'node', imageMode = 'e
   const receipt = packageArtifacts(['--images-dir', input, '--output-dir', output, '--version', version, '--world-runtime', resolve(process.env.AGENT_MOBILITY_RUNTIME)]);
   execFileSync('tar', ['-xzf', join(output, receipt.archive.name), '-C', extracted]);
   const root = join(extracted, receipt.archive.name.slice(0, -7));
-  // Optional conformance oracles are absent during actual execution.
-  await rm(join(root, 'test'), { recursive: true, force: true });
   for (const row of receipt.files) assert.ok(!/\.(zig|wasm)$/.test(row.path), `unexpected authoring/kernel input: ${row.path}`);
   assert.ok(!(await readdir(root)).includes('src'));
   const examples = join(root, 'examples'), secrets = join(f.area, 'secrets'); await mkdir(secrets, { mode: 0o700 });
@@ -71,6 +69,7 @@ export async function packageFixture(t, { dataExecution = 'node', imageMode = 'e
       }),
     };
   }
+  if (browserAuth) configs.A.browser = { directory: join(f.area, 'sessions-A'), audience: 'human-A', host: '127.0.0.1', port: 0, publicOrigin: null };
   const configPaths = Object.fromEntries(['A', 'B'].map(host => [host, join(f.area, `${host}.json`)]));
   const writeConfig = host => writeFile(configPaths[host], JSON.stringify(configs[host], null, 2) + '\n', { mode: 0o600 });
   await writeConfig('A');
@@ -110,7 +109,7 @@ export async function packageFixture(t, { dataExecution = 'node', imageMode = 'e
   const pid = await startB();
   await a.custodian.registerRun(f.registration, await readFile(join(examples, 'mobility.bpi3')), await readFile(join(examples, 'initial.args')));
   return { ...f, hosts: { A: a.custodian }, journals: { A: a.journal }, tls, serveBrowser, deploymentA: a, root, receipt, pid, stopB, startB,
-    archiveContents: gunzipSync(await readFile(join(output, receipt.archive.name))), processLogs: () => ({ stdout: outputText, stderr: errorText }), configB: configPaths.B,
+    archiveContents: gunzipSync(await readFile(join(output, receipt.archive.name))), processLogs: () => ({ stdout: outputText, stderr: errorText }), configB: configPaths.B, configA: configPaths.A, browserUrl: service.browser_url, cli,
     dataStatistics: () => statistics,
     async waitForReturn() {
       for (let i = 0; i < 200; i++) { const run = a.custodian.status(f.id); if (run.custody === 'ACTIVE' && run.epoch === '2') return; await new Promise(resolve => setTimeout(resolve, 50)); }

@@ -95,21 +95,55 @@ export function decideSource(run, occurrence, offer, decision, decisionDigest, r
   return { run: { ...run, status: 'ACTIVE', attached: false, executor_incarnation: increment(run.executor_incarnation), transfer_id: null, reply_digest: refusalDigest },
     occurrence: { ...occurrence, status: 'SETTLED_REPLY', reply_digest: refusalDigest, reconciliation_ref: decisionDigest } };
 }
-export function dispatch(run, occurrence, wanted, attemptId, classification, { cleanup = false } = {}) {
+export function dispatch(run, occurrence, wanted, attemptId, classification, { cleanup = false, cancelSafe = false, bindingId = null } = {}) {
   active(run, wanted); current(run, occurrence);
   requireThat(occurrence.status === 'READY' && occurrence.operation !== RELOCATE, 'UnsettledOccurrence');
   requireThat(run.cancel_requested === null || cleanup, 'CancellationPending');
   digest(attemptId);
-  return { run: { ...run, classification: join(run.classification, classification) }, occurrence: { ...occurrence, status: 'DISPATCHING', attempt_id: attemptId } };
+  if (bindingId !== null) digest(bindingId);
+  return { run: { ...run, classification: join(run.classification, classification) }, occurrence: { ...occurrence, status: 'DISPATCHING', attempt_id: attemptId,
+    ...(bindingId === null ? {} : { binding_id: bindingId }), ...(cancelSafe ? { cancel_safe: true } : {}) } };
 }
-export function unknown(run, occurrence, attemptId) {
+// Known waiting is registered directly from READY: no external action or live
+// promise lies between the dispatch claim and its durable question.
+export function awaiting(run, occurrence, wanted, attemptId, pendingDigest, classification) {
+  const next = dispatch(run, occurrence, wanted, attemptId, classification);
+  digest(pendingDigest);
+  return { run: next.run, occurrence: { ...next.occurrence, status: 'AWAITING', pending_digest: pendingDigest } };
+}
+export function answered(run, occurrence, wanted, binding, answerDigest, replyDigest, classification) {
+  active(run, wanted, false); current(run, occurrence);
+  requireThat(binding.occurrence_id === occurrence.id && binding.request_digest === occurrence.request_digest && binding.pending_digest === occurrence.pending_digest, 'QuestionMismatch');
+  requireThat(run.cancel_requested === null, 'CancellationPending');
+  digest(answerDigest); digest(replyDigest);
+  if (occurrence.status === 'SETTLED_REPLY') {
+    requireThat(occurrence.answer_digest === answerDigest && occurrence.reply_digest === replyDigest, 'ReplyConflict');
+    return { run, occurrence };
+  }
+  requireThat(occurrence.status === 'AWAITING', 'QuestionNotPending');
+  return { run: { ...run, classification: join(run.classification, classification), reply_digest: replyDigest },
+    occurrence: { ...occurrence, status: 'SETTLED_REPLY', answer_digest: answerDigest, reply_digest: replyDigest } };
+}
+export function unknown(run, occurrence, attemptId, { settled = false } = {}) {
   requireThat(run.status === 'ACTIVE', 'CustodyFrozen'); current(run, occurrence);
   requireThat(['DISPATCHING', 'UNKNOWN'].includes(occurrence.status) && occurrence.attempt_id === attemptId, 'AttemptMismatch');
-  return { ...occurrence, status: 'UNKNOWN' };
+  return { ...occurrence, status: 'UNKNOWN', ...(settled === true && occurrence.work_kind === 'check' ? { work_settled: true } : {}) };
+}
+export function canAbandon(occurrence, { settled = false, cancelSafe = false } = {}) {
+  // A check's charged physical work must have settled; losing a process-local
+  // handle is not a termination witness. This also covers older stored claims.
+  return Boolean(occurrence && occurrence.publication_intent_digest === undefined &&
+    (occurrence.cancel_safe === true || cancelSafe === true) && (occurrence.work_kind !== 'check' || occurrence.work_settled === true || settled === true));
+}
+export function abandoned(run, occurrence, attemptId, settlement = {}) {
+  requireThat(run.status === 'ACTIVE', 'CustodyFrozen'); current(run, occurrence);
+  requireThat(run.cancel_requested !== null && canAbandon(occurrence, settlement) && occurrence.attempt_id === attemptId && ['DISPATCHING', 'UNKNOWN'].includes(occurrence.status), 'CannotAbandonOccurrence');
+  return { ...occurrence, cancel_safe: true, status: 'ABANDONED' };
 }
 export function acquired(run, occurrence, attemptId, replyDigest, classification, reconciliationRef = null) {
   requireThat(run.status === 'ACTIVE', 'CustodyFrozen'); current(run, occurrence); digest(replyDigest);
   requireThat(occurrence.attempt_id === attemptId, 'AttemptMismatch');
+  requireThat(occurrence.pending_digest === undefined, 'DeferredReplyRequired');
   if (occurrence.status === 'SETTLED_REPLY') { requireThat(occurrence.reply_digest === replyDigest, 'ReplyConflict'); return { run, occurrence }; }
   requireThat(['DISPATCHING', 'UNKNOWN'].includes(occurrence.status), 'UnsettledOccurrence');
   return { run: { ...run, classification: join(run.classification, classification), reply_digest: replyDigest },
@@ -124,7 +158,7 @@ export function publish(run, occurrence, wanted, control, outcome, nextOccurrenc
       requireThat(!(occurrence.operation === RELOCATE && run.cancel_requested !== null && !run.cancel_applied), 'CancellationPending');
     }
     else requireThat(control.kind === 'cancel' && control.reason === run.cancel_requested && run.cancel_requested !== null &&
-      (occurrence.status === 'READY' || (occurrence.status === 'SETTLED_REPLY' && occurrence.operation === RELOCATE)), 'UnsettledOccurrence');
+      (['READY', 'AWAITING', 'ABANDONED'].includes(occurrence.status) || (occurrence.status === 'SETTLED_REPLY' && occurrence.operation === RELOCATE)), 'UnsettledOccurrence');
   } else requireThat(['none', 'resume_yield', 'cancel'].includes(control.kind) && (control.kind !== 'cancel' || (run.cancel_requested !== null && control.reason === run.cancel_requested)), 'InvalidControl');
   if (control.kind === 'cancel') requireThat(!run.cancel_applied, 'CancellationAlreadyApplied');
   if (outcome.kind === 'requested') requireThat(nextOccurrenceId !== run.current_occurrence_id, 'OccurrenceReuse');

@@ -51,11 +51,6 @@ digest during conditional delivery and preserves conflict and uncertain results.
 It carries no approval or working-set state. Approval does not prevent changes
 made outside that cooperative filesystem boundary.
 
-```sh
-zig build check-repository-delivery -Doptimize=safe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
-```
-
 This check covers seven filesystem cases, seven replacement cases across 18
 fresh-kernel restores, and twenty-one model/action cases, including premature finish,
 denied approval, failed retesting, malformed provider arguments and budget
@@ -70,11 +65,6 @@ the root, readable `paths` and a separate `writablePaths` subset (at most four).
 Reading test files grants no permission to replace them. Listing returns at most 32 entries;
 search returns at most eight 256-byte excerpts with explicit truncation. Missing
 files and unavailable executors do not become failing-baseline observations.
-
-```sh
-zig build check-repository-application -Doptimize=safe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
-```
 
 The application check covers valid repair, failed repair, attempted early exit,
 attempted external write and denied approval: ten real isolated test processes
@@ -100,8 +90,3 @@ now run directly against the current runtime. The old distribution, checkpoint
 metadata, state-census and report-merging wrappers are also removed. Current
 image/State/reply admission, dependency authentication and package checks own
 their successor obligations.
-
-See [runtime setup](agent4-runtime.md), [migration guidance](migration_from_3.md)
-and [current status](compositional-execution.md). No live-model usefulness or repair
-of user repositories is claimed. The [historical adequacy obstruction](../adequacy/router-policy-v1/agent-adequacy-obstruction.md)
-and its exact-release minimal reproducer remain unchanged.

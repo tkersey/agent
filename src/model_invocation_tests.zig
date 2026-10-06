@@ -82,3 +82,33 @@ test "model effect is ordinary and a typed question requires no executable tool"
     defer std.testing.allocator.free(facts.exportable);
     try std.testing.expectEqualStrings("answer", Question.allDeclarations().items[0].name.bytes);
 }
+
+test "stateless replay is an additive bounded ordinary contract with exact legacy prefix" {
+    const result: Fixture.ReplayResult = .{
+        .result = .{ .refusal = .{ .bytes = "no" } },
+        .replay = .{ .bytes = "[]" },
+        .replay_status = .complete,
+        .usage = .{ .input_tokens = 7, .output_tokens = 3, .cached_input_tokens = 2 },
+    };
+    const encoded = try contracts.encodeOwned(Fixture.ReplayResult, std.testing.allocator, result);
+    defer std.testing.allocator.free(encoded);
+    try std.testing.expectEqualSlices(u8, &.{
+        1, 2, 'n', 'o', 2, '[', ']', 0, 0, 0, 0, 1,
+        7, 0, 0,   0,   0, 0,   0,   0, 3, 0, 0, 0,
+        0, 0, 0,   0,   1, 2,   0,   0, 0, 0, 0, 0,
+        0,
+    }, encoded);
+    var restored = try contracts.decodeOwned(Fixture.ReplayResult, std.testing.allocator, encoded);
+    defer restored.deinit();
+    try std.testing.expectEqualStrings("[]", restored.value.replay.bytes);
+    try std.testing.expectEqual(2, restored.value.usage.?.cached_input_tokens.?);
+    var builder = boundary.source.Builder.init(std.testing.allocator);
+    defer builder.deinit();
+    const legacy = try Fixture.declare(&builder);
+    const replay = try Fixture.declareReplay(&builder);
+    try std.testing.expect(legacy != replay);
+    try std.testing.expectEqual(replay, try Fixture.declareReplay(&builder));
+    try std.testing.expectEqualStrings(invocation.replay_semantic_identity, builder.effects.items[@intCast(replay)].identity);
+    try std.testing.expectEqual(try contracts.schema(Fixture.ReplayRequest, &builder), builder.effects.items[@intCast(replay)].payload);
+    try std.testing.expectEqual(invocation.maximum_replay_bytes, Fixture.ReplayBytes.max_length.?);
+}

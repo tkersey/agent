@@ -1,0 +1,20 @@
+{
+  "id": "world.allocation-budget.v1",
+  "description": "Requested-byte allocation limit, failed-allocation accounting, live bytes, free/reuse and observation reset. Does not certify interpreter semantics or OS memory limits.",
+  "requiredPaths": [
+    "src/interpreter_v2/allocation_budget.zig"
+  ],
+  "modules": [
+    {
+      "name": "subject",
+      "path": "src/interpreter_v2/allocation_budget.zig",
+      "dependencies": []
+    }
+  ],
+  "harness": {
+    "source": "const std = @import(\"std\");\nconst subject = @import(\"subject\");\npub export fn agent_observe(index: u32) u64 {\n    var storage: [256]u8 = undefined;\n    var backing = std.heap.FixedBufferAllocator.init(&storage);\n    var budget: subject.Budget = .{ .parent = backing.allocator(), .limit = 64 };\n    const allocator = budget.allocator();\n    const first = allocator.alloc(u8, 32) catch return 999;\n    var rejected: u64 = 0;\n    if (allocator.alloc(u8, 40)) |unexpected| { allocator.free(unexpected); } else |_| { rejected = 1; }\n    const live = budget.live;\n    const required = budget.required;\n    const failed: u64 = @intFromBool(budget.failed);\n    allocator.free(first);\n    const whole = allocator.alloc(u8, 64) catch return 999;\n    const peak = budget.peak;\n    allocator.free(whole);\n    budget.resetObservation();\n    return switch (index) { 0 => rejected, 1 => live, 2 => required, 3 => failed, 4 => peak, 5 => budget.live, 6 => budget.peak, 7 => budget.required, 8 => @intFromBool(budget.failed), else => 999 };\n}\n",
+    "sha256": "587b253afb9f005d4de1872393551fd79316fbabbdbb93e003c3b25adc62d167"
+  },
+  "expectedStdout": "[\"1\",\"32\",\"72\",\"1\",\"64\",\"0\",\"0\",\"0\",\"0\"]\n",
+  "deterministic": true
+}

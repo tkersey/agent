@@ -529,29 +529,6 @@ fn numericRequest(c: agent.Context, values: []const Id) !Id {
     return b.primitive(try c.schema(P.Request), .product, &fields, 0);
 }
 
-// This emitter references only authoring declarations. It requires no World module.
-pub fn main(init: std.process.Init) !void {
-    var buffer: [4096]u8 = undefined;
-    var output = std.Io.File.stdout().writer(init.io, &buffer);
-    try output.interface.writeAll("{\"format\":\"clarification-scaling/v1\",\"rows\":[");
-    var functions: ?usize = null;
-    for ([_]usize{ 1, 2, 3, 8 }, 0..) |count, i| {
-        var fixture = try Composition.init(init.gpa, count);
-        defer fixture.compiled.deinit();
-        if (functions) |expected| if (fixture.source_functions != expected)
-            return error.CopiedProposalCode;
-        functions = fixture.source_functions;
-        const program = fixture.compiled.program;
-        try output.interface.print(
-            "{s}{{\"hypotheses\":{d},\"imageBytes\":{d},\"functions\":{d}," ++
-                "\"blocks\":{d},\"sourceFunctions\":{d},\"sourceTerms\":{d}}}",
-            .{ if (i == 0) "" else ",", count, try boundary.data.program_image.encodedLength(program), program.functions.len, program.blocks.len, fixture.source_functions, fixture.source_terms },
-        );
-    }
-    try output.interface.writeAll("]}\n");
-    try output.interface.flush();
-}
-
 test "equal scores cannot conceal different operative keys" {
     var f = try Fixture.init(.{ .finite = &.{ 1, 2 } }, false);
     defer f.deinit();

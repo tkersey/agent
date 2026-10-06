@@ -468,3 +468,151 @@ for (const operation of ['freeze', 'accept', 'acquire']) for (const when of ['be
     assert.throws(() => recovered.admitLeaf(f.id, version(run), []), { code: 'UnsettledOccurrence' });
   }
 });
+
+for (const first of ['answer', 'cancel']) test(`durable deferred reply: restart, authentication, duplicates and ${first}-first race`, async t => {
+  const f = await fixture(t, initial), id = f.id;
+  const run = f.a.attach(id), pending = { format: 'agent-deferred-leaf/v1', audience: 'review', principal: 'user', tenant: 'tenant',
+    request_digest: run.request_digest, alternatives: ['accept', 'decline'], maximum_text_bytes: 20,
+    question: { text: 'Inspect this exact proposal?', generation: '1' }, result_schema: Buffer.from(initialRequest.resumeSchema).toString('base64url'), binding_revision: 'v1' };
+  const occurrence = f.a.deferLeaf(id, version(run), pending, ['shared']);
+  assert.equal(occurrence.status, 'AWAITING');
+  assert.throws(() => f.a.admitLeaf(id, version(run), []), { code: 'UnsettledOccurrence' });
+  assert.throws(() => f.a.recordReply(id, occurrence.attempt_id, taskReply, []), { code: 'DeferredReplyRequired' });
+  f.close(f.a); const restored = f.open('A');
+  assert.deepEqual(canonical(restored.occurrence(occurrence.id)), canonical(occurrence));
+  restored.collectArtifacts('tenant');
+  assert.deepEqual(canonical(parse(restored.artifact('tenant', occurrence.pending_digest))), canonical(pending));
+  const identity = { principal: 'user', tenant: 'tenant', audiences: ['review'] };
+  const binding = { occurrence_id: occurrence.id, request_digest: occurrence.request_digest, pending_digest: occurrence.pending_digest };
+  const answer = { choice: 'accept', text: '' }, wanted = version(restored.run(id));
+  const acquire = (overrides = {}) => restored.answerDeferred(id, overrides.wanted ?? wanted, overrides.binding ?? binding, overrides.identity ?? identity, overrides.answer ?? answer, overrides.reply ?? taskReply, ['shared']);
+  for (const changed of [{ principal: 'other' }, { tenant: 'other' }, { audiences: ['other'] }])
+    assert.throws(() => acquire({ identity: { ...identity, ...changed } }), { code: 'UserDenied' });
+  for (const key of Object.keys(binding)) assert.throws(() => acquire({ binding: { ...binding, [key]: 'f'.repeat(64) } }), { code: 'QuestionMismatch' });
+  for (const invalid of [{ choice: 'invent', text: '' }, { choice: 'accept', text: 'x'.repeat(21) }, { choice: 'accept', text: '', approved: true }])
+    assert.throws(() => acquire({ answer: invalid }), { code: 'InvalidAnswer' });
+  if (first === 'cancel') {
+    const cancelled = restored.requestCancel(id, 'stop');
+    assert.throws(() => acquire(), { code: 'StaleExecutor' });
+    assert.throws(() => acquire({ wanted: version(cancelled) }), { code: 'CancellationPending' });
+    assert.equal(restored.occurrence(occurrence.id).status, 'AWAITING');
+  } else {
+    const saved = acquire(); assert.equal(saved.status, 'SETTLED_REPLY');
+    assert.deepEqual(canonical(acquire()), canonical(saved));
+    assert.throws(() => acquire({ answer: { choice: 'decline', text: '' } }), { code: 'ReplyConflict' });
+    f.close(restored); const afterAnswer = f.open('A');
+    assert.deepEqual(afterAnswer.artifact('tenant', afterAnswer.run(id).reply_digest), taskReply);
+    const current = afterAnswer.attach(id);
+    assert.throws(() => afterAnswer.answerDeferred(id, wanted, binding, identity, answer, taskReply, []), { code: 'StaleExecutor' });
+    afterAnswer.publishOutcome(id, version(current), { kind: 'reply', reply_digest: hash(taskReply) }, nextResolve);
+    assert.throws(() => afterAnswer.answerDeferred(id, version(afterAnswer.run(id)), binding, identity, answer, taskReply, []), { code: 'QuestionNotPending' });
+  }
+});
+
+for (const point of ['defer.before_commit', 'defer.after_commit', 'answer.before_commit', 'answer.after_commit'])
+test(`deferred transaction crash at ${point}`, async t => {
+  const f = await fixture(t, initial), run = f.a.attach(f.id);
+  const pending = { format: 'agent-deferred-leaf/v1', audience: 'review', principal: 'user', tenant: 'tenant', request_digest: run.request_digest,
+    alternatives: ['accept'], maximum_text_bytes: 0, question: 'Exact question', binding_revision: 'v1', result_schema: Buffer.from(initialRequest.resumeSchema).toString('base64url') };
+  const defer = () => f.a.deferLeaf(f.id, version(run), pending, ['shared']);
+  if (point.startsWith('answer')) defer();
+  const occurrence = f.a.occurrence(run.current_occurrence_id);
+  f.fault(point);
+  assert.throws(() => point.startsWith('defer') ? defer() : f.a.answerDeferred(f.id, version(f.a.run(f.id)), {
+    occurrence_id: occurrence.id, request_digest: occurrence.request_digest, pending_digest: occurrence.pending_digest,
+  }, { principal: 'user', tenant: 'tenant', audiences: ['review'] }, { choice: 'accept', text: '' }, taskReply, ['shared']), /injected/);
+  f.fault(null); f.close(f.a); const reopened = f.open('A'), saved = reopened.occurrence(run.current_occurrence_id);
+  assert.equal(saved.status, point.startsWith('defer') ? (point.endsWith('before_commit') ? 'READY' : 'AWAITING') : (point.endsWith('before_commit') ? 'AWAITING' : 'SETTLED_REPLY'));
+});
+
+for (const crash of ['dispatch.before_commit', 'dispatch.after_commit']) test(`work allowance and dispatch are atomic across ${crash}`, async t => {
+  const f = await fixture(t, initial), run = f.a.attach(f.id);
+  const charge = { owner: 'A', kind: 'model', grant: 'a'.repeat(64), limit: { attempts: 2, request_bytes: 100, output_tokens: 20, concurrent: 2 }, amount: { request_bytes: 40, output_tokens: 8 } };
+  f.fault(crash); assert.throws(() => f.a.admitLeaf(f.id, version(run), [], { charge }), /injected/);
+  f.fault(null); f.close(f.a); const restored = f.open('A');
+  const allowance = restored.allowance(f.id, 'model');
+  if (crash.endsWith('before_commit')) {
+    assert.equal(allowance, null); assert.equal(restored.occurrence(run.current_occurrence_id).status, 'READY');
+  } else {
+    assert.deepEqual({ ...allowance.used }, { attempts: 1, request_bytes: 40, output_tokens: 8 });
+    const pending = restored.occurrence(run.current_occurrence_id);
+    assert.throws(() => restored.admitLeaf(f.id, version(restored.run(f.id)), [], { charge }), { code: 'UnsettledOccurrence' });
+    restored.markUnknown(f.id, pending.attempt_id);
+    assert.equal(restored.allowance(f.id, 'model').used.attempts, 1);
+  }
+});
+
+test('durable allowance cannot reset, switch owner, widen grant or overspend on a successor occurrence', async t => {
+  const f = await fixture(t, initial), run = f.a.attach(f.id);
+  const charge = { owner: 'A', kind: 'model', grant: 'b'.repeat(64), limit: { attempts: 1, request_bytes: 100, output_tokens: 20, concurrent: 2 }, amount: { request_bytes: 40, output_tokens: 8 } };
+  assert.throws(() => f.a.admitLeaf(f.id, version(run), [], { charge: { ...charge, owner: 'B' } }), { code: 'SpendOwnerMismatch' });
+  assert.equal(f.a.allowance(f.id, 'model'), null);
+  const pending = f.a.admitLeaf(f.id, version(run), [], { charge });
+  f.a.recordReply(f.id, pending.attempt_id, taskReply, []);
+  f.a.publishOutcome(f.id, version(run), { kind: 'reply', reply_digest: hash(taskReply) }, nextResolve);
+  f.close(f.a); const restored = f.open('A'), current = restored.attach(f.id);
+  assert.throws(() => restored.admitLeaf(f.id, version(current), [], { charge: { ...charge, limit: { ...charge.limit, attempts: 2 } } }), { code: 'WorkAllowanceChanged' });
+  assert.throws(() => restored.admitLeaf(f.id, version(current), [], { charge }), { code: 'WorkAllowanceExhausted' });
+  assert.equal(restored.occurrence(current.current_occurrence_id).status, 'READY');
+  assert.equal(restored.allowance(f.id, 'model').used.attempts, 1);
+});
+
+for (const kind of ['model', 'check']) test(`unknown ${kind} retains its concurrency slot until safe abandonment`, async t => {
+  const f = await fixture(t, initial), first = f.a.attach(f.id);
+  const charge = { owner: 'A', kind, grant: 'd'.repeat(64), limit: { attempts: 2, request_bytes: 100, output_tokens: kind === 'model' ? 20 : 0, concurrent: 1 }, amount: { request_bytes: 40, output_tokens: kind === 'model' ? 8 : 0 } };
+  const pending = f.a.admitLeaf(f.id, version(first), [], { charge, cancelSafe: true });
+  f.a.markUnknown(f.id, pending.attempt_id);
+  const { signature: _, ...base } = parse(f.registration), secondId = runId('issuer');
+  f.a.register(signRecord('run', { ...base, run_id: secondId }, f.pairs.issuer.privateKey), initial);
+  const second = f.a.attach(secondId);
+  assert.throws(() => f.a.admitLeaf(secondId, version(second), [], { charge }), { code: 'WorkConcurrency' });
+  assert.equal(f.a.allowance(secondId, kind), null);
+  assert.throws(() => f.a.abandonLeaf(f.id, pending.attempt_id), { code: 'CannotAbandonOccurrence' });
+  f.a.requestCancel(f.id, 'abandon remote answer');
+  if (kind === 'check') {
+    assert.throws(() => f.a.abandonLeaf(f.id, pending.attempt_id), { code: 'CannotAbandonOccurrence' });
+    assert.throws(() => f.a.admitLeaf(secondId, version(second), [], { charge }), { code: 'WorkConcurrency' });
+  }
+  f.a.abandonLeaf(f.id, pending.attempt_id, { settled: kind === 'check' });
+  assert.equal(f.a.allowance(f.id, kind).used.attempts, 1);
+  assert.equal(f.a.admitLeaf(secondId, version(second), [], { charge }).status, 'DISPATCHING');
+});
+
+for (const kind of ['model', 'check']) test(`settlement releases only a reaped check slot, preserving unknown ${kind} evidence and spend`, async t => {
+  const f = await fixture(t, initial), first = f.a.attach(f.id);
+  const charge = { owner: 'A', kind, grant: 'd'.repeat(64), limit: { attempts: 2, request_bytes: 100, output_tokens: kind === 'model' ? 20 : 0, concurrent: 1 }, amount: { request_bytes: 40, output_tokens: kind === 'model' ? 8 : 0 } };
+  const pending = f.a.admitLeaf(f.id, version(first), [], { charge, cancelSafe: true });
+  f.a.markUnknown(f.id, pending.attempt_id, { settled: true });
+  const { signature: _, ...base } = parse(f.registration), secondId = runId('issuer');
+  f.a.register(signRecord('run', { ...base, run_id: secondId }, f.pairs.issuer.privateKey), initial);
+  f.close(f.a); const restored = f.open('A'), second = restored.attach(secondId);
+  const saved = restored.occurrence(first.current_occurrence_id);
+  assert.equal(saved.status, 'UNKNOWN');
+  assert.equal(saved.work_settled, kind === 'check' ? true : undefined);
+  assert.equal(restored.run(f.id).cancel_requested, null);
+  assert.deepEqual({ ...restored.allowance(f.id, kind).used }, { attempts: 1, ...charge.amount });
+  if (kind === 'check') assert.equal(restored.admitLeaf(secondId, version(second), [], { charge }).status, 'DISPATCHING');
+  else {
+    assert.throws(() => restored.admitLeaf(secondId, version(second), [], { charge }), { code: 'WorkConcurrency' });
+    assert.equal(restored.allowance(secondId, kind), null);
+  }
+});
+
+test('signed publication evidence is run-bound and survives admission, collection and restart', async t => {
+  const f = await fixture(t), run = f.a.run(f.id);
+  const publication = { format: 'agent.repository.publication-receipt/v1', status: 'Published', proposal: 'a'.repeat(64),
+    commit: 'b'.repeat(40), tree: 'c'.repeat(40), admission: { run_id: f.id, registration_digest: hash(f.registration),
+      intent_digest: 'd'.repeat(64), source_version: version(run) } };
+  const proposal = f.offer({ ...f.a, run: id => f.a.run(id) }, { format: 'agent-mobility-offer/v2', publication_receipt: publication });
+  const tampered = parse(proposal.bytes); tampered.publication_receipt.commit = 'e'.repeat(40);
+  assert.throws(() => verifyRecord('offer', canonical(tampered), f.keys), { code: 'InvalidSignature' });
+  for (const changed of [
+    { ...publication, admission: { ...publication.admission, run_id: runId('issuer') } },
+    { ...publication, admission: { ...publication.admission, registration_digest: 'f'.repeat(64) } },
+    { ...publication, admission: { ...publication.admission, source_version: { ...version(run), custody_epoch: '1' } } },
+  ]) assert.throws(() => f.offer(f.a, { format: 'agent-mobility-offer/v2', publication_receipt: changed }), { code: 'PublicationReceiptMismatch' });
+  assert.throws(() => f.offer(f.a, { format: 'agent-mobility-offer/v2', publication_receipt: { ...publication, padding: 'x'.repeat(16384) } }), { code: 'ControlCapacity' });
+  f.accept(f.b, proposal); assert.deepEqual(JSON.parse(JSON.stringify(f.b.latestPublication(f.id))), publication);
+  f.b.collectArtifacts('tenant'); f.close(f.b);
+  const reopened = f.open('B'); assert.deepEqual(JSON.parse(JSON.stringify(reopened.latestPublication(f.id))), publication);
+});

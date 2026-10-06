@@ -80,21 +80,8 @@ explicit assumption; an envelope cannot prove that a malicious host ran a tool.
 
 Run the focused authoring/ownership checks without World:
 
-```sh
-zig build check-inquiry-probe -Doptimize=safe
-```
-
 Add the unchanged authenticated runtime to execute every saved boundary in
 native World, a fresh Node/WASM instance, and an independent Wasmtime process:
-
-```sh
-zig build check-inquiry-probe -Doptimize=safe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
-```
-
-The test continues using Wasmtime's actual returned bytes. All three engines
-agree byte for byte in `run` mode. The independent expected traces and graph
-assertions live in `test/agent4/inquiry_runtime.mjs`.
 
 These custody and numerical-broker checks are portable and do not depend on the
 repository experiment executor. Executor checks belong to the repair-application
@@ -207,10 +194,6 @@ The evaluator and expectations remain outside the candidate process; missing
 observations, nonzero exit, timeout, cancellation and malformed output cannot
 become successful acceptance.
 
-```sh
-node test/agent4/inquiry_executor.test.mjs
-```
-
 The executed test recorded 19 logical requests, 183 candidate-process launches
 and two separate qualification launches. The integration and focused inquiry
 build steps include this test when a World runtime is selected. These are
@@ -245,11 +228,6 @@ proof binds the complete checked proposal: target, base, candidate bytes and
 check record, runner/contract, principal and attempt. An amendment changing that
 proposal cannot obtain a challenge backed by old validation. The final portable
 receipt retains the base, replacement, executed checks and qualified explanation.
-
-```sh
-zig build check-inquiry-application -Doptimize=safe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
-```
 
 The current positive witness uses a 44,338-byte BPI2 image, reaches a maximum
 48,866-byte pending State, makes 10 model requests and 4 logical experiment
@@ -329,14 +307,6 @@ actual runs supply a qualified runner and explicit operator allowances.
 Optional provider fixtures remain under `test/` and are never imported by the
 production executor.
 
-```sh
-zig build emit-agent4 -Doptimize=safe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
-node --test test/agent4/package_commands.test.mjs
-zig build check-agent4-economy -Doptimize=safe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
-```
-
 The archive test extracts the actual artifact and runs its own inquiry oracle,
 runtime modules and image against unchanged World. It completes the 10-model,
 four-experiment repair and approval-negative cases without authoring sources or
@@ -371,11 +341,6 @@ authority. The baseline receives the inquiry's total model allowance
 Both paired strategies disable optional multi-shot exploration. This compares
 one executable trajectory with retained inquiry under declared fixture choices;
 it does not establish live-model repair quality or an optimal allocation policy.
-
-```sh
-zig build check-inquiry-comparison -Doptimize=safe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
-```
 
 The pairs cover occurrence reset, adapter rebinding, already-correct source and
 an inadequate explanation set. Both repair scripts repeat an eligible probe,
@@ -546,21 +511,10 @@ deterministic paired tests independently measure both provider directions.
 Select held-out cases and varied causes before a later live study. No live-model
 usefulness study or paid inference was performed for this milestone.
 
-`zig build check-inquiry-cli -Doptimize=safe -Dworld-runtime=...` tests
-both strategies against a local synthetic HTTP provider, actual isolated
-candidate execution, saved-state recovery, stale-result rejection, intent,
-exact approval, conditional delivery, resource cancellation and source-scope
-rejection. The normal integration and use-archive tests include this path.
-
 ## Validation and limits
 
 The implemented source has passed the existing authoring, integration, functional
 economy and emission/package gates:
-
-```sh
-zig build check-agent4 check-agent4-integration check-agent4-economy emit-agent4 \
-  -Doptimize=safe -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
-```
 
 The strengthened multi-shot/follow-up fixture also passes the application case
 runner under native, Node/WASM and Wasmtime. Draft PR #31 holds publication and

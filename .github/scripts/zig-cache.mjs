@@ -3,7 +3,7 @@ import { lstatSync, readdirSync, appendFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export function inspectCache(root, limitBytes = 4 * 1024 ** 3) {
+export function inspectCache(root, limitBytes = 8 * 1024 ** 3) {
   if (!Number.isSafeInteger(limitBytes) || limitBytes <= 0) throw new Error('positive cache budget required');
   const groups = Object.create(null), report = { bytes: 0, files: 0, unsupported: 0, groups, limitBytes };
   function visit(path, group) {

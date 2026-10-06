@@ -17,6 +17,13 @@ pub fn ModelObservation(comptime P: type, comptime batch: bool) type {
     };
 }
 
+pub fn ReplayModelObservation(comptime P: type, comptime batch: bool) type {
+    return struct {
+        normalized: P.ReplayResult,
+        interpretation: if (batch) P.BatchInterpretation else P.Interpretation,
+    };
+}
+
 /// Declare a shared `(P.Request, [P.declaration_count]bool) -> Interpretation`
 /// computation. The request is a semantic configuration template: its `tools`
 /// field is intentionally replaced with the closed catalog filtered by offered.
@@ -62,21 +69,29 @@ pub fn defineModelObserved(
     failure: Id,
     comptime batch: bool,
 ) !Id {
+    return defineObserved(P, c, failure, batch, false);
+}
+
+pub fn defineReplayModelObserved(comptime P: type, c: authoring.Context, failure: Id, comptime batch: bool) !Id {
+    return defineObserved(P, c, failure, batch, true);
+}
+
+fn defineObserved(comptime P: type, c: authoring.Context, failure: Id, comptime batch: bool, comptime replay: bool) !Id {
     const b = c.builder;
-    const effect = try P.declare(b);
+    const effect = if (replay) try P.declareReplay(b) else try P.declare(b);
     try c.registry.classify(effect, .model);
     const fault = try b.failureLiteral(failure);
-    const instance = try b.specialization(Id, "agent.model.observed-responder/v3", .{
+    const instance = try b.specialization(Id, if (replay) "agent.model.observed-responder/v4" else "agent.model.observed-responder/v3", .{
         @typeName(P), effect, fault, batch,
     });
     if (instance.cached) |cached| return cached;
     const t = try typed.Context.init(b);
     const handle = try t.function("observed model response", &.{
-        .{ .name = "request", .schema = try typed.interop.schema(t, try c.schema(P.Request)) },
+        .{ .name = "request", .schema = try typed.interop.schema(t, try c.schema(if (replay) P.ReplayRequest else P.Request)) },
         .{ .name = "offered", .schema = try typed.interop.schema(t, try c.schema([P.declaration_count]bool)) },
-    }, try typed.interop.schema(t, try c.schema(ModelObservation(P, batch))), &.{try typed.interop.operation(t, effect)});
+    }, try typed.interop.schema(t, try c.schema(if (replay) ReplayModelObservation(P, batch) else ModelObservation(P, batch))), &.{try typed.interop.operation(t, effect)});
     const function = try typed.interop.functionId(t, handle);
-    const g = Generator(P, batch){ .context = c, .typed_context = t, .handle = handle, .function = function, .fault = fault, .failure = failure };
+    const g = Generator(P, batch, replay){ .context = c, .typed_context = t, .handle = handle, .function = function, .fault = fault, .failure = failure };
     try t.define(handle, try g.emitBody(effect));
     return instance.finish(b, function);
 }
@@ -111,7 +126,7 @@ pub fn invokeModelObserved(
     } });
 }
 
-fn Generator(comptime P: type, comptime batch: bool) type {
+fn Generator(comptime P: type, comptime batch: bool, comptime replay: bool) type {
     return struct {
         context: authoring.Context,
         typed_context: *typed.Context,
@@ -148,13 +163,19 @@ fn Generator(comptime P: type, comptime batch: bool) type {
         }
         fn emitBody(g: G, effect: Id) !*const typed.Computation {
             const root = try g.typed_context.body(g.handle);
-            const template = try root.parameter("request");
+            const envelope = try root.parameter("request");
+            const template = if (replay) try g.field(root, envelope, P.ReplayRequest, "invocation") else envelope;
             const offered = try root.parameter("offered");
             var tools = try g.literal(root, P.Tools, .{ .items = &.{} });
             for (0..P.declaration_count) |index| tools = try g.filter(root, offered, index, tools);
             const selection = try g.field(root, template, P.Request, "selection");
             try g.checkTemplate(root, template, selection);
-            const payload = try g.request(root, template, tools);
+            const invocation = try g.request(root, template, tools);
+            const payload = if (replay) try root.product(try g.schema(P.ReplayRequest), &.{
+                .{ .name = "0", .value = invocation },
+                .{ .name = "1", .value = try g.field(root, envelope, P.ReplayRequest, "replay") },
+                .{ .name = "2", .value = try g.field(root, envelope, P.ReplayRequest, "results") },
+            }) else invocation;
             const b = g.context.builder;
             // Agent's registry binds this exact environmental site to its owner.
             const perform = try b.term(.{ .perform = .{
@@ -162,15 +183,23 @@ fn Generator(comptime P: type, comptime batch: bool) type {
                 .payload = try typed.interop.valueId(root, payload),
             } });
             try g.context.registry.protectSite(g.function, perform, effect);
-            const normalized = try typed.interop.term(root, perform, try g.schema(P.Result));
+            const observation = try typed.interop.term(root, perform, try g.schema(if (replay) P.ReplayResult else P.Result));
+            const normalized = if (replay) try g.field(root, observation, P.ReplayResult, "result") else observation;
             // The protocol interpreter is independently generated/admitted code.
             const admit = try b.term(.{ .call = .{
                 .function = if (batch) try P.interpretAll(b) else try P.interpreter(b),
                 .arguments = &.{ try typed.interop.valueId(root, normalized), try typed.interop.valueId(root, offered), try typed.interop.valueId(root, selection) },
             } });
             const interpreted = try typed.interop.term(root, admit, try g.schema(if (batch) P.BatchInterpretation else P.Interpretation));
-            return root.ret(try root.product(try g.schema(ModelObservation(P, batch)), &.{
-                .{ .name = "0", .value = normalized }, .{ .name = "1", .value = interpreted },
+            const admitted = if (replay) blk: {
+                const good = try root.branch();
+                const lost = try root.branch();
+                const Interpretation = if (batch) P.BatchInterpretation else P.Interpretation;
+                const status = try g.field(root, observation, P.ReplayResult, "replay_status");
+                break :blk try root.conditional(try root.equal(try root.enumTag(status), try root.constant(u32, @backingInt(@import("model_invocation.zig").ReplayStatus.complete))), try good.ret(interpreted), try lost.ret(try g.literal(lost, Interpretation, .{ .rejected = .unsupported })));
+            } else interpreted;
+            return root.ret(try root.product(try g.schema(if (replay) ReplayModelObservation(P, batch) else ModelObservation(P, batch)), &.{
+                .{ .name = "0", .value = observation }, .{ .name = "1", .value = admitted },
             }));
         }
         fn filter(g: G, body: *typed.Body, offered: *const typed.Value, index: usize, previous: *const typed.Value) !*const typed.Value {

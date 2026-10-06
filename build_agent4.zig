@@ -545,6 +545,8 @@ pub fn build(b: *std.Build) void {
     check.dependOn(emit);
 
     const native_checks = b.step("check-native", "Check native and custody contracts against the selected World");
+    const native_consumer = b.step("check-native-consumer", "Build and execute an embedded public World consumer (N0)");
+    native_checks.dependOn(native_consumer);
     if (runtime) |runtime_path| {
         const world = b.createModule(.{
             .root_source_file = world_source.path(b, "src/root.zig"),
@@ -567,6 +569,18 @@ pub fn build(b: *std.Build) void {
         _ = runtime_guard.captureStdOut(.{});
         var native_graph = g;
         native_graph.gate = &runtime_guard.step;
+        const native_image = g.runArtifact(fixture_driver.select("native-consumer"));
+        const consumer_module = b.createModule(.{
+            .root_source_file = b.path("test/consumers/native/main.zig"),
+            .target = b.graph.host,
+            .optimize = optimize,
+            .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data", .module = data } },
+        });
+        consumer_module.addAnonymousImport("image", .{ .root_source_file = native_image.captureStdOut(.{}) });
+        const consumer = b.addExecutable(.{ .name = "agent-native-consumer", .root_module = consumer_module });
+        consumer.step.dependOn(&runtime_guard.step);
+        native_consumer.dependOn(&b.addRunArtifact(consumer).step);
+        native_consumer.dependOn(&b.addInstallArtifact(consumer, .{}).step);
         // These roots share exact module identities; compile their retained
         // tests together instead of rebuilding the same compiler eleven times.
         const native_suite = g.module("test/agent4/native_tests.zig");
@@ -598,6 +612,7 @@ pub fn build(b: *std.Build) void {
     } else {
         const missing = b.addFail("provide -Dworld-runtime=/absolute/authenticated/world-runtime");
         native_checks.dependOn(&missing.step);
+        native_consumer.dependOn(&missing.step);
     }
     const pure = nodeCommand(b);
     pure.addArgs(&.{ "node", "--test", "test/agent4/values.test.mjs", "test/agent4/model.test.mjs" });

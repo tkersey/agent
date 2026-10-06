@@ -125,6 +125,8 @@ test/consumers/mobile_repository/types.zig
 test/consumers/mobility/approval.zig
 test/consumers/mobility/build.zig
 test/consumers/mobility/main.zig
+test/consumers/native/emitter.zig
+test/consumers/native/main.zig
 test/consumers/repository/application.zig
 test/consumers/repository/completion.zig
 test/consumers/repository/main.zig

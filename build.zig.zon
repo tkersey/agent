@@ -30,6 +30,8 @@
         "docs/agent4-runtime.md",
         "docs/migration_from_3.md",
         "docs/model-invocation-v3.md",
+        "docs/native-single-binary.md",
+        "docs/native-single-binary-acceptance.md",
         "docs/consequence-clarification.md",
         "conformance/agent4",
         "test/fixture_driver.zig",

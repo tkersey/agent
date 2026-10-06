@@ -4,6 +4,7 @@ const std = @import("std");
 
 pub fn main(init: std.process.Init) !void {
     const selected = init.environ_map.get("AGENT4_FIXTURE") orelse return error.ExpectedFixture;
+    if (std.mem.eql(u8, selected, "native-consumer")) return @import("consumers/native/emitter.zig").main(init);
     if (std.mem.eql(u8, selected, "composed-owners")) return @import("agent4/composed_owners.zig").main(init);
     if (std.mem.eql(u8, selected, "recursive-selection")) return @import("agent4/recursive_selection.zig").main(init);
     if (std.mem.eql(u8, selected, "parser-delivery")) return @import("agent4/parser_delivery.zig").main(init);

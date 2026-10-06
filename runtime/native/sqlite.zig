@@ -1,0 +1,187 @@
+//! Private storage primitive for the standalone task owner. SQL is authored
+//! here/in the store, never accepted from client or model data.
+const std = @import("std");
+const c = @cImport({
+    @cInclude("sqlite3.h");
+});
+var in_use: std.atomic.Value(bool) = .init(false);
+pub const heap_bytes = @import("native_options").sqlite_heap_bytes;
+pub const Error = error{ StorageUnavailable, CorruptState, Capacity, Constraint, AlreadyOpen, Closed, Busy } || std.mem.Allocator.Error;
+
+fn result(code: c_int) Error!void {
+    return switch (code & 0xff) {
+        c.SQLITE_OK => {},
+        c.SQLITE_NOMEM, c.SQLITE_TOOBIG, c.SQLITE_FULL => error.Capacity,
+        c.SQLITE_CORRUPT, c.SQLITE_NOTADB => error.CorruptState,
+        c.SQLITE_CONSTRAINT => error.Constraint,
+        c.SQLITE_BUSY, c.SQLITE_LOCKED => error.Busy,
+        else => error.StorageUnavailable,
+    };
+}
+
+pub const Param = union(enum) { text: []const u8, blob: []const u8, integer: i64, null };
+
+const Storage = struct {
+    allocator: std.mem.Allocator,
+    heap: []align(@alignOf(u64)) u8,
+    handle: ?*c.sqlite3,
+    peak_bytes: u64 = 0,
+    released: bool = false,
+};
+
+pub const Database = opaque {
+    fn owner(self: *Database) *Storage {
+        return @ptrCast(@alignCast(self));
+    }
+    fn handle(self: *Database) Error!*c.sqlite3 {
+        return self.owner().handle orelse error.Closed;
+    }
+
+    /// One connection and one fixed SQLite heap per native process. The caller
+    /// must acquire the namespace's OS lock before opening its database.
+    pub fn open(a: std.mem.Allocator, path: []const u8, create: bool) Error!*Database {
+        if (std.mem.indexOfScalar(u8, path, 0) != null) return error.StorageUnavailable;
+        if (in_use.cmpxchgStrong(false, true, .acquire, .monotonic) != null) return error.AlreadyOpen;
+        errdefer in_use.store(false, .release);
+        const storage = try a.create(Storage);
+        errdefer a.destroy(storage);
+        const heap = try a.alignedAlloc(u8, .of(u64), heap_bytes);
+        errdefer a.free(heap);
+        // MEMSYS5 is compiled in. No fallback to uncapped system malloc is
+        // permitted if configuration or initialization fails.
+        try result(c.sqlite3_config(c.SQLITE_CONFIG_HEAP, @as(?*anyopaque, @ptrCast(heap.ptr)), @as(c_int, heap_bytes), @as(c_int, 32)));
+        errdefer _ = c.sqlite3_shutdown();
+        try result(c.sqlite3_initialize());
+        if (c.sqlite3_libversion_number() != 3053004) return error.StorageUnavailable;
+        const name = try a.dupeZ(u8, path);
+        defer a.free(name);
+        var db: ?*c.sqlite3 = null;
+        const flags: c_int = c.SQLITE_OPEN_READWRITE | c.SQLITE_OPEN_FULLMUTEX | (if (create) @as(c_int, c.SQLITE_OPEN_CREATE) else 0);
+        const opened = c.sqlite3_open_v2(name.ptr, &db, flags, null);
+        errdefer if (db) |ptr| {
+            _ = c.sqlite3_close(ptr);
+        };
+        try result(opened);
+        const ptr = db orelse return error.StorageUnavailable;
+        _ = c.sqlite3_extended_result_codes(ptr, 1);
+        _ = c.sqlite3_limit(ptr, c.SQLITE_LIMIT_LENGTH, 16 * 1024 * 1024);
+        _ = c.sqlite3_limit(ptr, c.SQLITE_LIMIT_SQL_LENGTH, 64 * 1024);
+        _ = c.sqlite3_limit(ptr, c.SQLITE_LIMIT_COLUMN, 128);
+        _ = c.sqlite3_limit(ptr, c.SQLITE_LIMIT_ATTACHED, 0);
+        _ = c.sqlite3_limit(ptr, c.SQLITE_LIMIT_VARIABLE_NUMBER, 64);
+        storage.* = .{ .allocator = a, .heap = heap, .handle = ptr };
+        return @ptrCast(storage);
+    }
+
+    pub fn close(self: *Database) Error!void {
+        const storage = self.owner();
+        const db = try self.handle();
+        storage.peak_bytes = @intCast(c.sqlite3_memory_highwater(0));
+        // close_v2 would defer destruction while statements remain alive. That
+        // is unsuitable for an explicitly owned static heap, so reject instead.
+        try result(c.sqlite3_close(db));
+        storage.handle = null;
+        try result(c.sqlite3_shutdown());
+        storage.released = true;
+        in_use.store(false, .release);
+    }
+    pub fn destroy(self: *Database) Error!void {
+        const storage = self.owner();
+        if (storage.handle != null or !storage.released) return error.Busy;
+        storage.allocator.free(storage.heap);
+        storage.allocator.destroy(storage);
+    }
+    pub fn changes(self: *Database) Error!u64 {
+        return @intCast(c.sqlite3_changes64(try self.handle()));
+    }
+
+    /// Only static owner SQL enters sqlite3_exec. Values use bound parameters.
+    pub fn exec(self: *Database, comptime sql: [:0]const u8) Error!void {
+        try result(c.sqlite3_exec(try self.handle(), sql.ptr, null, null, null));
+    }
+    pub fn prepare(self: *Database, comptime sql: [:0]const u8, params: []const Param) Error!Statement {
+        if (params.len > 64) return error.Capacity;
+        var statement: ?*c.sqlite3_stmt = null;
+        try result(c.sqlite3_prepare_v3(try self.handle(), sql.ptr, @intCast(sql.len), 0, &statement, null));
+        const stmt = statement orelse return error.StorageUnavailable;
+        errdefer _ = c.sqlite3_finalize(stmt);
+        if (c.sqlite3_bind_parameter_count(stmt) != @as(c_int, @intCast(params.len))) return error.StorageUnavailable;
+        for (params, 1..) |param, i| {
+            const index: c_int = @intCast(i);
+            try result(switch (param) {
+                .text => |bytes| c.sqlite3_bind_text64(stmt, index, if (bytes.len == 0) "" else bytes.ptr, bytes.len, c.SQLITE_STATIC, c.SQLITE_UTF8),
+                .blob => |bytes| if (bytes.len == 0) c.sqlite3_bind_zeroblob64(stmt, index, 0) else c.sqlite3_bind_blob64(stmt, index, bytes.ptr, bytes.len, c.SQLITE_STATIC),
+                .integer => |value| c.sqlite3_bind_int64(stmt, index, value),
+                .null => c.sqlite3_bind_null(stmt, index),
+            });
+        }
+        return .{ .handle = stmt };
+    }
+    pub fn run(self: *Database, comptime sql: [:0]const u8, params: []const Param) Error!void {
+        var statement = try self.prepare(sql, params);
+        defer statement.deinit();
+        if (try statement.step() != .done) return error.StorageUnavailable;
+    }
+};
+
+/// Parameters and returned column slices are borrowed until finalization or the
+/// next step. The Store consumes/copies them synchronously under its owner.
+pub const Statement = struct {
+    handle: *c.sqlite3_stmt,
+    pub fn deinit(self: *Statement) void {
+        _ = c.sqlite3_finalize(self.handle);
+        self.* = undefined;
+    }
+    pub fn step(self: *Statement) Error!enum { row, done } {
+        const code = c.sqlite3_step(self.handle);
+        switch (code) {
+            c.SQLITE_ROW => return .row,
+            c.SQLITE_DONE => return .done,
+            else => {
+                try result(code);
+                return error.StorageUnavailable;
+            },
+        }
+    }
+    pub fn integer(self: Statement, index: c_int) Error!i64 {
+        if (c.sqlite3_column_type(self.handle, index) != c.SQLITE_INTEGER) return error.CorruptState;
+        return c.sqlite3_column_int64(self.handle, index);
+    }
+    pub fn bytes(self: Statement, index: c_int) Error![]const u8 {
+        const kind = c.sqlite3_column_type(self.handle, index);
+        if (kind != c.SQLITE_BLOB and kind != c.SQLITE_TEXT) return error.CorruptState;
+        const length = c.sqlite3_column_bytes(self.handle, index);
+        if (length < 0) return error.CorruptState;
+        if (length == 0) return &.{};
+        const ptr = c.sqlite3_column_blob(self.handle, index) orelse return error.CorruptState;
+        return @as([*]const u8, @ptrCast(ptr))[0..@intCast(length)];
+    }
+    pub fn isNull(self: Statement, index: c_int) bool {
+        return c.sqlite3_column_type(self.handle, index) == c.SQLITE_NULL;
+    }
+};
+
+test "native SQLite uses its bounded heap and rolls back uncommitted records" {
+    const a = std.testing.allocator;
+    const database = try Database.open(a, ":memory:", true);
+    defer database.destroy() catch unreachable;
+    defer database.close() catch unreachable;
+    try std.testing.expectError(error.AlreadyOpen, Database.open(a, ":memory:", true));
+    try database.exec("CREATE TABLE records(id TEXT PRIMARY KEY, body BLOB NOT NULL); BEGIN IMMEDIATE;");
+    try database.run("INSERT INTO records VALUES (?,?)", &.{ .{ .text = "one" }, .{ .blob = &.{ 0, 255, 1 } } });
+    try database.exec("ROLLBACK;");
+    {
+        var query = try database.prepare("SELECT count(*) FROM records", &.{});
+        defer query.deinit();
+        try std.testing.expect(try query.step() == .row);
+        try std.testing.expectEqual(0, try query.integer(0));
+    }
+    try database.exec("BEGIN IMMEDIATE;");
+    try database.run("INSERT INTO records VALUES (?,?)", &.{ .{ .text = "one" }, .{ .blob = &.{ 0, 255, 1 } } });
+    try database.exec("COMMIT;");
+    var query = try database.prepare("SELECT body FROM records WHERE id=?", &.{.{ .text = "one" }});
+    defer query.deinit();
+    try std.testing.expect(try query.step() == .row);
+    try std.testing.expectEqualSlices(u8, &.{ 0, 255, 1 }, try query.bytes(0));
+    try std.testing.expect(c.sqlite3_memory_used() <= heap_bytes);
+}

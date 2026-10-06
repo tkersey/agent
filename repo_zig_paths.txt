@@ -12,10 +12,14 @@ runtime/native/discovery.zig
 runtime/native/driver.zig
 runtime/native/entry.zig
 runtime/native/host.zig
+runtime/native/inbox.zig
 runtime/native/json.zig
+runtime/native/occurrence.zig
 runtime/native/protocol.zig
 runtime/native/registry.zig
 runtime/native/root.zig
+runtime/native/sqlite.zig
+runtime/native/state.zig
 runtime/native/values.zig
 runtime/repository_publication_gate.zig
 src/admission.zig
@@ -30,6 +34,7 @@ src/contracts.zig
 src/conversation.zig
 src/decision.zig
 src/deliberation.zig
+src/inbox.zig
 src/inquiry.zig
 src/inquiry_broker.zig
 src/interaction.zig
@@ -71,6 +76,7 @@ test/agent4/compiled_tool.zig
 test/agent4/composed_owners.zig
 test/agent4/decision_scopes.zig
 test/agent4/dialogue_probe.zig
+test/agent4/inbox.zig
 test/agent4/inquiry_broker_probe.zig
 test/agent4/inquiry_probe.zig
 test/agent4/mobility_ensure.zig

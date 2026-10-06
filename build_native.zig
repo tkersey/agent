@@ -1,5 +1,7 @@
 //! Build/environmental API. No target program executes while generating assets.
 const std = @import("std");
+pub const sqlite_heap_bytes: u32 = 16 * 1024 * 1024;
+pub const sqlite_flags: []const []const u8 = &.{ "-std=c99", "-DSQLITE_THREADSAFE=1", "-DSQLITE_ENABLE_MEMSYS5=1", "-DSQLITE_OMIT_LOAD_EXTENSION=1", "-DSQLITE_DQS=0", "-DSQLITE_DEFAULT_MEMSTATUS=1", "-DSQLITE_DEFAULT_FOREIGN_KEYS=1" };
 
 pub const Assets = struct {
     image: std.Build.LazyPath,
@@ -33,6 +35,7 @@ pub fn addNativeSystem(b: *std.Build, dependency: *std.Build.Dependency, options
         .native = dependency.module("agent_native"),
         .native_contracts = dependency.module("agent_native_contracts"),
         .native_data = dependency.module("agent_native_data"),
+        .sqlite_source = dependency.namedLazyPath("native-sqlite-source"),
     }, options);
     b.getInstallStep().dependOn(&product.install.step);
     return product;
@@ -49,6 +52,7 @@ pub const Modules = struct {
     native: *std.Build.Module,
     native_contracts: *std.Build.Module,
     native_data: *std.Build.Module,
+    sqlite_source: std.Build.LazyPath,
 };
 
 pub fn addWithModules(b: *std.Build, modules: Modules, options: Options) Product {
@@ -84,6 +88,8 @@ pub fn addWithModules(b: *std.Build, modules: Modules, options: Options) Product
     manifest.addArg("node");
     manifest.addFileArg2(modules.root.path(b, "tools/agent4/native-manifest.mjs"), .{});
     manifest.addFileInput(modules.root.path(b, "tools/agent4/toolchain.mjs"));
+    manifest.addFileInput(modules.root.path(b, "tools/agent4/native-dependencies.mjs"));
+    manifest.addFileInput(modules.root.path(b, "conformance/agent4/native-dependencies.lock.json"));
     // The selected distribution's license can sit outside its library tree.
     // Authenticate current compiler/library/license inputs on each build.
     manifest.has_side_effects = true;
@@ -94,6 +100,9 @@ pub fn addWithModules(b: *std.Build, modules: Modules, options: Options) Product
     const world = modules.native.import_table.get("world") orelse @panic("missing admitted World module");
     manifest.addFileArg2(world.root_source_file.?.dirname().dirname().path(b, "LICENSE"), .{});
     manifest.addFileArg2(modules.native_data.root_source_file.?.dirname().dirname().dirname().path(b, "LICENSE"), .{});
+    manifest.addDirectoryArg2(modules.sqlite_source, .{ .make_absolute = true });
+    manifest.addArg(b.fmt("{d}", .{sqlite_heap_bytes}));
+    manifest.addArg(std.json.Stringify.valueAlloc(b.allocator, sqlite_flags, .{}) catch @panic("out of memory"));
     manifest.addArgs(&.{ target.result.zigTriple(b.allocator) catch @panic("out of memory"), @tagName(optimize) });
     const manifest_file = manifest.addOutputFileArg2("native-manifest.json", .{});
 

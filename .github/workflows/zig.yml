@@ -89,7 +89,12 @@ jobs:
         if: matrix.lane != 'installation'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node tools/agent4/setup.mjs --zig-exe "$(command -v zig)"
+        run: |
+          if [ "${{ matrix.lane }}" = native ]; then
+            node tools/agent4/setup.mjs --native --zig-exe "$(command -v zig)"
+          else
+            node tools/agent4/setup.mjs --zig-exe "$(command -v zig)"
+          fi
       - name: Run only the selected check
         env:
           LANE: ${{ matrix.lane }}

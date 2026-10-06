@@ -7,6 +7,16 @@ const wire = data.wire;
 /// Pure JSON projections share this module identity with the ordinary codecs.
 pub const json = @import("model_json.zig");
 
+/// One ordinary inbox result shared by authoring and native environments.
+/// The message identity and value stay bound across saved-reply recovery.
+pub const inbox_semantic_identity = "agent.input.inbox.v1";
+pub fn InboxReply(comptime Message: type) type {
+    return union(enum) {
+        empty: void,
+        message: struct { id: Text(128), value: Message },
+    };
+}
+
 pub const Error = wire.Error || std.mem.Allocator.Error || error{InvalidValue};
 pub const Descriptor = data.schema.Descriptor;
 

@@ -39,7 +39,7 @@ pub const Application = struct {
         defer admitted.deinit();
         const image_identity = admitted.identity();
         try sameField(metadata.value, "program_identity", &std.fmt.bytesToHex(image_identity, .lower));
-        inline for (.{ .{ "input", Types.Input, Types.input_schema_id }, .{ "output", Types.Output, Types.output_schema_id }, .{ "answer", Types.Answer, Types.answer_schema_id }, .{ "message", Types.Message, Types.message_schema_id } }) |item| {
+        inline for (.{ .{ "input", Types.Input, Types.input_schema_id }, .{ "output", Types.Output, Types.output_schema_id }, .{ "failure", Types.Failure, Types.failure_schema_id }, .{ "answer", Types.Answer, Types.answer_schema_id }, .{ "message", Types.Message, Types.message_schema_id } }) |item| {
             const schema = json.get(metadata.value, item[0]) orelse return error.InvalidAssets;
             try sameField(schema, "schema_id", item[2]);
             const bytes = try values.schemaBytes(item[1], storage);
@@ -104,7 +104,7 @@ pub const Application = struct {
         try json.put(a, &result, "methods", .{ .array = methods });
         try json.put(a, &result, "next_cursor", if (end < info.field_names.len) json.string(try std.fmt.allocPrint(a, "{d}", .{end})) else .null);
         var app = json.object();
-        for ([_][]const u8{ "application_id", "application_version", "client_mapping", "input", "output", "answer", "message", "capabilities" }) |key|
+        for ([_][]const u8{ "application_id", "application_version", "client_mapping", "input", "output", "failure", "answer", "message", "capabilities" }) |key|
             try json.put(a, &app, key, self.metadata.object.get(key) orelse return error.InvalidAssets);
         try json.put(a, &result, "application", app);
         try json.put(a, &result, "execution_mode", json.string("offline"));

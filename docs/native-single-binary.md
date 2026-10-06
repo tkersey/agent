@@ -51,6 +51,12 @@ source primitive contract; the expected result and native assertions are unchang
 
 ## N1 implementation under qualification
 
+The build/discovery slice at `c1019e9585c6df152b14f090ba9c2aab688bdb8f` passed
+[the full Linux CI matrix](https://github.com/tkersey/agent/actions/runs/37530534951),
+including the copied executable's offline demo and complete current
+framing/discovery peer, plus 65 native tests. This is still narrower than N1/N2
+acceptance: task execution and durable interaction are not enabled yet.
+
 `build.zig` now exports `addNativeSystem`. The helper runs
 `tools/native/emit.zig` on the build host, using the application's `agent.system`
 definition. It emits one canonical image plus application schemas, declared
@@ -74,6 +80,7 @@ authored cleanup before returning. The explicit offline demo supplies a
 deterministic label and reports that it is nondurable.
 
 ```sh
+node tools/agent4/setup.mjs --native
 zig build native-example -Doptimize=safe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ./zig-out/bin/agent-native-example --help
@@ -84,7 +91,8 @@ zig build native-example -Doptimize=safe \
 
 For a downstream build, use the example's own `build.zig` and `build.zig.zon`,
 with the Agent dependency pointing to the admitted package. Supply the same
-authenticated `-Dworld-source` and `-Dworld-runtime` inputs used by Agent setup.
+authenticated `-Dworld-source`, `-Dworld-runtime`, and `-Dsqlite-source` inputs
+used by Agent setup (`.agent4/inputs/sqlite` is the default native source).
 The helper installs the executable through the caller's normal prefix and
 executable directory. Linux's host-default product target is x86_64 musl;
 macOS's supported product target is arm64. Explicit other product targets reject.
@@ -97,11 +105,12 @@ closed named objects, and sums use `{tag,value}`. Optional values use JSON null.
 Provider v3/v4 JSON schemas retain their existing numeric meaning. Runtime
 admission checks the embedded client and wire schemas against the actual types.
 
-The new framing/parser and static registry have focused negative tests. The
+The framing/parser and static registry have focused negative tests. The
 independent subprocess peer exercises the copied final example executable,
 offline demo, fragmented Unicode/CRLF, coalesced input, malformed/duplicate JSON,
 negotiation, discovery, notification suppression, batch correlation and truncated
-or oversized input. These changes are **not yet qualified** by the N0 CI run.
+or oversized input. The N1 CI run above qualifies that bounded slice; N0 alone
+does not establish these observations.
 
 Durable task execution, real client question/answer delivery, timeouts,
 backpressure and shutdown/recovery are still being implemented. Discovery
@@ -109,6 +118,36 @@ reports task execution/events/message input as disabled and task calls reject
 with `UnsupportedCapability`; accepting a JSON line is not claimed as protocol
 reference qualification. The nondurable demo driver will be wired through the
 same persistent task owner as the CLI and protocol before N1/N2 acceptance.
+
+## N2 storage and input foundations
+
+The optional native dependency lock selects SQLite 3.53.4. Its official archive
+and amalgamation SHA3 digests were checked against
+[SQLite's published download](https://www.sqlite.org/download.html) and
+[release history](https://www.sqlite.org/changes.html). Setup authenticates the
+archive before extracting only the declared C/header files. The native build
+rechecks those files and derives the embedded public-domain notice from the
+authenticated header. `setup --authoring-only` does not acquire this dependency.
+
+SQLite is compiled into the native environment, with extension loading disabled
+and an explicit 16 MiB MEMSYS5 heap. The build and running allocator consume the
+same heap setting; the manifest records the actual C flags and source identity.
+Linux links the selected toolchain's musl libc and embeds its license. The
+database wrapper refuses an uncapped allocation fallback and verifies the linked
+SQLite version. This primitive is not a completed task journal.
+
+The native occurrence adaptation preserves READY → DISPATCHING → acquired/UNKNOWN
+ordering from `runtime/mobility/custody.mjs`. UNKNOWN cannot dispatch or cancel
+itself; a matching late acquired reply may settle it. Answer acquisition binds
+the current question and pending request and serializes against cancellation.
+Retired occurrences retain their acquired reply or cancelled-question facts.
+
+`agent.inbox.Profile(Message).poll(context)` is a reusable ordinary authored
+effect. Its reply is either empty or an identified typed message. Its codecs
+and semantic identity belong to `agent_contracts`, shared with the native
+declaration. An incompatible redeclaration rejects. A single image/public-World
+test covers empty and distinct Unicode-bearing messages with prepared-image reuse.
+Durable queue acquisition/consumption and native/WASM parity remain pending.
 
 ## Existing owners and remaining gaps
 

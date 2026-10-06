@@ -33,8 +33,8 @@ fn schema(comptime T: type, a: std.mem.Allocator, id: []const u8) !Schema {
 
 pub fn main(init: std.process.Init) !void {
     comptime {
-        if (definition.System.InitialArgs != types.Input or definition.System.Result != types.Output)
-            @compileError("native mappings must name the actual authored system's input and output types");
+        if (definition.System.InitialArgs != types.Input or definition.System.Result != types.Output or definition.System.Failure != types.Failure)
+            @compileError("native mappings must name the actual authored system's input, output and failure types");
     }
     var args = init.minimal.args.iterate();
     _ = args.next();
@@ -80,6 +80,7 @@ pub fn main(init: std.process.Init) !void {
         .client_mapping = "agent-client-values/1.0",
         .input = try schema(types.Input, a, types.input_schema_id),
         .output = try schema(types.Output, a, types.output_schema_id),
+        .failure = try schema(types.Failure, a, types.failure_schema_id),
         .answer = try schema(types.Answer, a, types.answer_schema_id),
         .message = try schema(types.Message, a, types.message_schema_id),
         .capabilities = capabilities.items,

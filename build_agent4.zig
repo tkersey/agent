@@ -80,6 +80,7 @@ pub fn build(b: *std.Build) void {
     const source = b.option(std.Build.LazyPath, "boundary-source", "Authenticated immutable Boundary source copy");
     const runtime = b.option(std.Build.LazyPath, "world-runtime", "Authenticated immutable World runtime directory");
     const world_source = b.option(std.Build.LazyPath, "world-source", "Immutable World source for native agreement") orelse b.path(".agent4/inputs/world");
+    const sqlite_source = b.option(std.Build.LazyPath, "sqlite-source", "Authenticated optional native SQLite source") orelse b.path(".agent4/inputs/sqlite");
     // The dependency verifier derives the sibling archive from the selected
     // lock. Only forward an explicit override; never duplicate its commit here.
     const world_archive = b.option(std.Build.LazyPath, "world-archive", "Authenticated immutable World source archive");
@@ -576,10 +577,17 @@ pub fn build(b: *std.Build) void {
         _ = runtime_guard.captureStdOut(.{});
         var native_graph = g;
         native_graph.gate = &runtime_guard.step;
+        const native_guard = nodeCommand(b);
+        native_guard.addArgs(&.{ "node", "tools/agent4/native-dependencies.mjs", "verify" });
+        native_guard.addDirectoryArg2(sqlite_source, .{ .make_absolute = true });
+        native_guard.addFileInput(b.path("conformance/agent4/native-dependencies.lock.json"));
+        native_guard.has_side_effects = true;
+        _ = native_guard.captureStdOut(.{});
+        native_guard.step.dependOn(&runtime_guard.step);
         const native_admission_files = b.addWriteFiles();
-        native_admission_files.step.dependOn(&runtime_guard.step);
+        native_admission_files.step.dependOn(&native_guard.step);
         const native_admission = b.createModule(.{ .root_source_file = native_admission_files.add("native_dependency_admission.zig", "") });
-        const host_environment = nativeEnvironment(b, b.graph.host, optimize, world, data, contracts, native_admission);
+        const host_environment = nativeEnvironment(b, b.graph.host, optimize, world, data, contracts, native_admission, sqlite_source);
         // Host-default Linux packaging selects musl. Explicit unsupported target
         // requests are rejected by the public helper before creating emitters.
         const default_musl = target.query.isNative() and target.result.os.tag == .linux and target.result.cpu.arch == .x86_64;
@@ -601,7 +609,8 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{.{ .name = "boundary_data", .module = native_data }},
         });
-        const public_environment = if (!default_musl and target.query.isNative()) host_environment else nativeEnvironment(b, native_target, optimize, native_world, native_data, native_contracts, native_admission);
+        const public_environment = if (!default_musl and target.query.isNative()) host_environment else nativeEnvironment(b, native_target, optimize, native_world, native_data, native_contracts, native_admission, sqlite_source);
+        b.addNamedLazyPath("native-sqlite-source", sqlite_source);
         b.modules.put(b.allocator, b.dupe("agent_native"), public_environment) catch @panic("out of memory");
         b.modules.put(b.allocator, b.dupe("agent_native_data"), native_data) catch @panic("out of memory");
         b.modules.put(b.allocator, b.dupe("agent_native_contracts"), native_contracts) catch @panic("out of memory");
@@ -617,6 +626,7 @@ pub fn build(b: *std.Build) void {
                 .native = public_environment,
                 .native_data = native_data,
                 .native_contracts = native_contracts,
+                .sqlite_source = sqlite_source,
             }, .{
                 .name = "agent-native-example",
                 .application = .{ .source = .{
@@ -713,11 +723,14 @@ pub fn build(b: *std.Build) void {
     b.default_step = aggregate;
 }
 
-fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize, world: *std.Build.Module, data: *std.Build.Module, contracts: *std.Build.Module, admission: *std.Build.Module) *std.Build.Module {
-    return b.createModule(.{
+fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize, world: *std.Build.Module, data: *std.Build.Module, contracts: *std.Build.Module, admission: *std.Build.Module, sqlite_source: std.Build.LazyPath) *std.Build.Module {
+    const options = b.addOptions();
+    options.addOption(u32, "sqlite_heap_bytes", @import("build_native.zig").sqlite_heap_bytes);
+    const module = b.createModule(.{
         .root_source_file = b.path("runtime/native/root.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
         .imports = &.{
             .{ .name = "world", .module = world },
             .{ .name = "boundary_data", .module = data },
@@ -725,6 +738,13 @@ fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: 
             .{ .name = "_native_dependency_admission", .module = admission },
         },
     });
+    module.addOptions("native_options", options);
+    module.addIncludePath(sqlite_source);
+    module.addCSourceFile(.{
+        .file = sqlite_source.path(b, "sqlite3.c"),
+        .flags = @import("build_native.zig").sqlite_flags,
+    });
+    return module;
 }
 
 fn addBoundary(b: *std.Build, run: *std.Build.Step.Run, source: ?std.Build.LazyPath, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) void {

@@ -10,10 +10,13 @@ pub const Declaration = registry.Declaration;
 pub const Registry = registry.Registry;
 pub const run = @import("host.zig").run;
 pub const discovery = @import("discovery.zig");
+pub const inbox = @import("inbox.zig");
 
 test {
     _ = json;
     _ = values;
     _ = protocol;
     _ = registry;
+    _ = @import("sqlite.zig");
+    _ = @import("occurrence.zig");
 }

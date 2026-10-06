@@ -18,6 +18,7 @@ pub const observation = @import("observation.zig");
 pub const responders = @import("responders.zig");
 pub const decision = @import("decision.zig");
 pub const interaction = @import("interaction.zig");
+pub const inbox = @import("inbox.zig");
 pub const mobility = @import("mobility.zig");
 pub const inquiry = @import("inquiry.zig");
 pub const scopes = @import("scopes.zig");

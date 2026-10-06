@@ -64,6 +64,7 @@ pub fn Service(comptime Types: type) type {
         /// Only this process's explicit admissions/resumes are runnable. Merely
         /// opening a namespace never resumes a persisted task.
         runnable: std.ArrayList(state.TaskId) = .empty,
+        owned: [16]?state.TaskId = @splat(null),
         work: ?Work = null,
 
         pub fn init(a: std.mem.Allocator, io: std.Io, namespace: *Namespace, assets: discovery.Assets, application: *const discovery.Application, handlers: registry.Registry, profile: Profile) !Self {
@@ -204,6 +205,20 @@ pub fn Service(comptime Types: type) type {
             if (self.runnable.items.len == 16) return error.Capacity;
             try self.runnable.append(self.allocator, id);
         }
+        fn claim(self: *Self, id: state.TaskId) void {
+            for (self.owned) |slot| if (slot) |prior| if (same(&prior, &id)) return;
+            for (&self.owned) |*slot| if (slot.* == null) {
+                slot.* = id;
+                return;
+            };
+            unreachable; // Namespace admission bounds all nonterminal tasks to 16.
+        }
+        fn unclaim(self: *Self, id: state.TaskId) void {
+            for (&self.owned) |*slot| if (slot.*) |prior| if (same(&prior, &id)) {
+                slot.* = null;
+                return;
+            };
+        }
         fn runnableRemove(self: *Self, id: state.TaskId) void {
             for (self.runnable.items, 0..) |item, i| if (same(&item, &id)) {
                 _ = self.runnable.orderedRemove(i);
@@ -318,6 +333,7 @@ pub fn Service(comptime Types: type) type {
             const admitted = try self.receipt(a, .submit, id, request, value, .accepted, null, null);
             try self.namespace.commit("task.submit");
             self.runnable.appendAssumeCapacity(task_id);
+            self.claim(task_id);
             return admitted;
         }
 
@@ -338,7 +354,10 @@ pub fn Service(comptime Types: type) type {
             try self.event(&value, .cancellation_requested, "{}");
             const admitted = try self.receipt(a, .cancel, id, request, value, .cancellation_requested, null, null);
             try self.persist(value, previous, "task.cancel");
-            if (!value.terminal()) try self.runnableAdd(task_id);
+            if (!value.terminal()) {
+                try self.runnableAdd(task_id);
+                self.claim(task_id);
+            }
             return admitted;
         }
 
@@ -367,6 +386,7 @@ pub fn Service(comptime Types: type) type {
             const admitted = try self.receipt(a, .@"resume", id, request, value, .resumed, null, null);
             try self.persist(value, expected, "task.resume");
             try self.runnableAdd(task_id);
+            self.claim(task_id);
             return admitted;
         }
 
@@ -468,6 +488,7 @@ pub fn Service(comptime Types: type) type {
             try self.store().putRecord(state.Question, "question", question_id, task_id, question);
             try self.persist(value, previous, "task.respond");
             try self.runnableAdd(task_id);
+            self.claim(task_id);
             return admitted;
         }
 
@@ -496,6 +517,7 @@ pub fn Service(comptime Types: type) type {
             const value = decoded.value;
             if (value.terminal()) {
                 self.runnableRemove(id);
+                self.unclaim(id);
                 return .progressed;
             }
             self.compatible(value) catch return self.blocked(a, value, .incompatible_profile);
@@ -640,6 +662,7 @@ pub fn Service(comptime Types: type) type {
                 try driver.destroy();
                 self.active = null;
                 self.runnableRemove(value.id);
+                self.unclaim(value.id);
             }
             return .progressed;
         }

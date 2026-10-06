@@ -248,7 +248,7 @@ pub fn Client(comptime Types: type) type {
         }
 
         pub fn call(self: *Self, a: std.mem.Allocator, method: protocol.Method, params: json.Value) !json.Value {
-            if (self.shutdown != null and (method == .@"task.submit" or method == .@"task.message" or method == .@"task.resume")) return error.ShuttingDown;
+            if (self.shutdown != null and (method == .@"task.submit" or method == .@"task.message" or method == .@"task.resume" or method == .@"task.respond")) return error.ShuttingDown;
             switch (method) {
                 .@"task.submit" => {
                     if (!std.mem.eql(u8, try json.text(try field(params, "application_id")), Types.application_id) or !std.mem.eql(u8, try json.text(try field(params, "profile_id")), self.service.profile.id)) return error.NotFound;
@@ -275,6 +275,9 @@ pub fn Client(comptime Types: type) type {
                     const after = try json.decimal(u64, try field(params, "after_seq"));
                     var result_value = try self.events(a, task_id, after, 1);
                     _ = result_value.object.swapRemove("events");
+                    _ = result_value.object.swapRemove("next_after_seq");
+                    _ = result_value.object.swapRemove("has_more");
+                    try json.put(a, &result_value, "after_seq", try counter(a, after));
                     for (&self.subscriptions) |*slot| if (slot.* == null) {
                         var id: [16]u8 = undefined;
                         try self.service.io.randomSecure(&id);

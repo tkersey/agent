@@ -118,7 +118,7 @@ pub const Transport = struct {
     /// A complete frame has at most one frame-sized response, including batches.
     /// Keep one frame's space available for control/error publication.
     pub fn canAdmit(self: Transport) bool {
-        return self.count < self.queue.len and self.queued_bytes + self.limits.frame_bytes <= self.limits.outbound_bytes;
+        return self.outstanding < self.limits.in_flight_calls and self.count < self.queue.len and self.queued_bytes + self.limits.frame_bytes <= self.limits.outbound_bytes;
     }
     pub fn preflight(self: Transport, ids: []const Id) !void {
         if (ids.len > self.limits.in_flight_calls or self.outstanding + ids.len > self.limits.in_flight_calls or !self.canAdmit()) return error.Overloaded;

@@ -54,8 +54,12 @@ source primitive contract; the expected result and native assertions are unchang
 The build/discovery slice at `c1019e9585c6df152b14f090ba9c2aab688bdb8f` passed
 [the full Linux CI matrix](https://github.com/tkersey/agent/actions/runs/37530534951),
 including the copied executable's offline demo and complete current
-framing/discovery peer, plus 65 native tests. This is still narrower than N1/N2
-acceptance: task execution and durable interaction are not enabled yet.
+framing/discovery peer, plus 65 native tests. This was narrower than N1/N2
+acceptance and did not include the native dependency module's own unit tests.
+Those now run as a separate root: head `d1922bc` passed its native lane with
+81 tests, including 13 runtime unit tests and the authored task-owner restart,
+question/answer and inbox integration case. Final CLI/protocol integration is
+still under qualification; these earlier results do not qualify it.
 
 `build.zig` now exports `addNativeSystem`. The helper runs
 `tools/native/emit.zig` on the build host, using the application's `agent.system`
@@ -77,7 +81,7 @@ declares its client values, `definition.zig` authors the computation and assets,
 and `environment.zig` declares three static typed native handlers. The example
 retains its input over an increment, yields, asks for a label and performs
 authored cleanup before returning. The explicit offline demo supplies a
-deterministic label and reports that it is nondurable.
+deterministic label through the durable task owner also used by stdio.
 
 ```sh
 node tools/agent4/setup.mjs --native
@@ -85,8 +89,8 @@ zig build native-example -Doptimize=safe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ./zig-out/bin/agent-native-example --help
 ./zig-out/bin/agent-native-example describe-build
-./zig-out/bin/agent-native-example demo --offline
-./zig-out/bin/agent-native-example serve --transport stdio --offline
+./zig-out/bin/agent-native-example demo --offline --state-dir ./demo-state
+./zig-out/bin/agent-native-example serve --transport stdio --offline --state-dir ./agent-state
 ```
 
 For a downstream build, use the example's own `build.zig` and `build.zig.zon`,
@@ -112,12 +116,23 @@ negotiation, discovery, notification suppression, batch correlation and truncate
 or oversized input. The N1 CI run above qualifies that bounded slice; N0 alone
 does not establish these observations.
 
-Durable task execution, real client question/answer delivery, timeouts,
-backpressure and shutdown/recovery are still being implemented. Discovery
-reports task execution/events/message input as disabled and task calls reject
-with `UnsupportedCapability`; accepting a JSON line is not claimed as protocol
-reference qualification. The nondurable demo driver will be wired through the
-same persistent task owner as the CLI and protocol before N1/N2 acceptance.
+Supplying `--state-dir` enables the durable task service. Omitting it in `serve`
+mode provides discovery only and advertises task execution as disabled. The
+minimal application supports exact question/answer delivery; its message-input
+flag is false because it does not poll an inbox. The shared task-owner test uses
+an authored inbox application. The required repository analyst will use that
+same input boundary.
+
+The new stdio loop uses nonblocking pipes, bounded response reservations,
+outstanding-ID tracking, an ordered writer and one environmental I/O worker.
+Incomplete frames have a 30-second deadline; stalled output and shutdown have a
+five-second grace budget. EOF parks and exits. A worker that cannot join by the
+hard deadline is terminated with the process while its durable dispatch remains
+recoverable as unknown. No background worker is allowed to outlive release of
+namespace ownership. The main requested-byte budget is 64 MiB, including a
+separate 16 MiB worker region and SQLite's heap; allocator/OS overhead is not an
+RSS guarantee. These new transport behaviors still need the complete reference
+qualification, including the controlled HTTPS provider cases.
 
 ## N2 storage and input foundations
 

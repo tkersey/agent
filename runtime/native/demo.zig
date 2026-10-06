@@ -1,66 +1,55 @@
-//! Explicitly nondurable, offline execution through the same generic driver and
-//! registry used by the task owner. No authored application phases live here.
+//! Deterministic client scenario through the same durable owner as stdio. The
+//! authored application, not this scenario, chooses effects and control flow.
 const std = @import("std");
 const data = @import("boundary_data");
-const contracts = @import("agent_contracts");
+const tasks = @import("tasks.zig");
+const client_api = @import("client.zig");
 const json = @import("json.zig");
 const values = @import("values.zig");
-const registry = @import("registry.zig");
-const discovery = @import("discovery.zig");
-const Driver = @import("driver.zig").Driver;
 
-pub fn run(comptime Types: type, comptime Environment: type, io: std.Io, a: std.mem.Allocator, assets: discovery.Assets, app: discovery.Application, handlers: registry.Registry) !json.Value {
-    const input = try contracts.encodeOwned(Types.Input, a, Environment.demo_input);
-    const execution = try Driver.open(a, assets.image, .{ .initial_args = input }, 8 * 1024 * 1024);
-    const grants = try a.alloc(registry.Grant, handlers.entries.len);
-    for (handlers.entries, grants) |entry, *grant| grant.* = .{ .identity = entry.declaration.identity, .resource_role = entry.declaration.resource_role, .resource_identity = app.image_identity };
-    const authority: registry.Authority = .{ .grants = grants, .principal = "offline-demo", .tenant = "offline-demo" };
-    var control: data.invocation.Control = .none;
+pub fn run(comptime Types: type, comptime Environment: type, a: std.mem.Allocator, service: *tasks.Service(Types), client: *client_api.Client(Types), operation_id: []const u8) !json.Value {
+    const accepted = try service.submit(a, operation_id, Environment.demo_input);
     var effects: u32 = 0;
     var yields: u32 = 0;
-    // Finite run budget; exhaustion is a failed demo, not successful completion.
     for (0..1024) |_| {
-        const encoded = try execution.drive(a, control, 256);
-        defer a.free(encoded);
-        var outcome = try data.invocation.decode(data.invocation.Outcome, a, encoded);
-        defer outcome.deinit();
-        switch (outcome.value) {
-            .progressed => control = .none,
-            .yielded => {
-                yields += 1;
-                control = .resume_yield;
-            },
-            .requested => |pending| {
-                var request = try data.invocation.decode(data.invocation.Request, a, pending.request);
+        const step = try service.pump(a);
+        switch (step) {
+            .work => |work| {
+                var request = try data.invocation.decode(data.invocation.Request, a, work.request);
                 defer request.deinit();
-                const entry = try handlers.admit(request.value, authority, app.image_identity);
-                const ctx: registry.Context = .{ .allocator = a, .io = io, .authority = &authority, .task_id = "offline-demo" };
-                const acquired = switch (entry.declaration.kind) {
-                    .leaf => try entry.declaration.invoke.?(ctx, request.value.binding.payload),
-                    .question => try contracts.encodeOwned(Types.Answer, a, Environment.demo_answer),
-                    .inbox => return error.UnsupportedCapability,
+                const id = std.fmt.bytesToHex(work.task, .lower);
+                const reply = work.entry.declaration.invoke.?(.{ .allocator = a, .io = service.io, .authority = &service.profile.authority, .task_id = &id }, request.value.binding.payload) catch |err| {
+                    try service.unknown(a, work);
+                    return err;
                 };
-                control = .{ .reply = try data.invocation.encodeOwned(data.invocation.Result, a, .{ .request_identity = request.value.request_identity, .value = acquired }) };
+                try service.acquire(a, work, reply);
                 effects += 1;
             },
-            .completed => |bytes| {
-                var result = try contracts.decodeOwned(Types.Output, a, bytes);
-                defer result.deinit();
-                var report = json.object();
-                try json.put(a, &report, "mode", json.string("offline-demo"));
-                try json.put(a, &report, "persistence", json.string("none"));
-                try json.put(a, &report, "effects", try json.number(a, effects));
-                try json.put(a, &report, "yields", try json.number(a, yields));
-                // Keep returned client values after the decoder's arena dies.
-                const projection = try json.canonical(a, try values.toJson(Types.Output, a, result.value));
-                const retained = try json.parse(a, projection, .{});
-                try json.put(a, &report, "output", retained.value);
-                try execution.close();
-                try execution.destroy();
-                return report;
+            .waiting => {
+                var question = (try service.pendingQuestion(a, accepted.receipt.task)) orelse return error.DemoDidNotComplete;
+                defer question.deinit();
+                const id = try std.fmt.allocPrint(a, "demo-answer-{s}", .{std.fmt.bytesToHex(question.value.id, .lower)});
+                _ = try service.respond(a, id, accepted.receipt.task, question.value.id, question.value.revision, question.value.request_digest, question.value.answer_schema_id.bytes, try values.toJson(Types.Answer, a, Environment.demo_answer));
+                effects += 1;
             },
-            .failed, .cancelled, .needs_capacity => return error.DemoDidNotComplete,
+            .progressed, .idle => {},
         }
+        var current = try service.task(a, accepted.receipt.task);
+        defer current.deinit();
+        if (current.value.outcome_kind == .yielded) yields += 1;
+        if (!current.value.terminal()) continue;
+        if (current.value.outcome_kind != .completed) return error.DemoDidNotComplete;
+        var params = json.object();
+        try json.put(a, &params, "task_id", json.string(try a.dupe(u8, &std.fmt.bytesToHex(accepted.receipt.task, .lower))));
+        const result = try client.call(a, .@"task.result", params);
+        var report = json.object();
+        try json.put(a, &report, "mode", json.string("offline-demo"));
+        try json.put(a, &report, "persistence", json.string("durable"));
+        try json.put(a, &report, "effects", try json.number(a, effects));
+        try json.put(a, &report, "yields", try json.number(a, yields));
+        try json.put(a, &report, "task_id", params.object.get("task_id").?);
+        try json.put(a, &report, "output", result.object.get("outcome").?.object.get("value") orelse return error.DemoCapacity);
+        return report;
     }
     return error.DemoCapacity;
 }

@@ -106,6 +106,16 @@ pub export fn agent_observe(_: u32) u64 { return subject.maximumToolArgumentsByt
   const payload = Buffer.from(canonical(candidate, 2 << 20)).toString('utf8');
   const context = { payload, request: { payload: encodeValue(candidateWire, payload) }, run: { classification: ['source'] },
     occurrence: { id: 'candidate-check' }, signal: new AbortController().signal };
+  const deleted = await store.prepare(snapshot, [{ operation: 'delete', path: target,
+    oldDigest: sha(incorrect), oldMode: '100644', content: null }]);
+  const deletion = acquiredCheck(checkResultSchema(checkWire), await binding.handle({ ...context,
+    payload: Buffer.from(canonical(deleted, 2 << 20)).toString('utf8'), occurrence: { id: 'deleted-input-check' } }));
+  assert.equal(deletion.status, 'Failed'); assert.equal(deletion.physicalExecutions, 0);
+  assert.equal(deletion.diagnostics.phase, 'input'); assert.equal(deletion.diagnostics.reason, 'RequiredInputMissing');
+  assert.deepEqual(JSON.parse(deletion.diagnostics.stderr), { missing: [target], omitted: 0 });
+  assert.equal(deletion.candidate, deleted.id); assert.equal(deletion.tree, deleted.tree);
+  assert.equal(deletion.reusable, false); assert.deepEqual(deletion.completedChecks, []);
+  assert.notEqual(deletion.inputDigest, failed.inputDigest); assert.equal(deletion.binarySha256, null);
   assert.equal(binding.charge(context).kind, 'check');
   const passed = acquiredCheck(checkResultSchema(checkWire), await binding.handle(context));
   assert.equal(passed.status, 'Passed', JSON.stringify(passed));
@@ -159,7 +169,7 @@ pub export fn agent_observe(_: u32) u64 { return subject.maximumToolArgumentsByt
   }
   assert.deepEqual((await readdir(root)).filter(name => name.startsWith('agent-zig-')), [], 'repeated completed native checks release all scratch slots');
   if (process.env.AGENT_REPOSITORY_PROOF) await writeFile(process.env.AGENT_REPOSITORY_PROOF, JSON.stringify({
-    profile: runner.contract, qualification: runner.qualification, forgedVerdict: forged, incorrectBase: failed, repairedCandidate: passed,
+    profile: runner.contract, qualification: runner.qualification, forgedVerdict: forged, incorrectBase: failed, deletedCandidate: deletion, repairedCandidate: passed,
     managedRefUnchanged: true, originalCheckoutUnchanged: true, catalogue,
   }, null, 2) + '\n');
 });

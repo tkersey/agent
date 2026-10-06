@@ -10,6 +10,9 @@ export function repositoryApprovalBinding(metadata, adapter) {
       const proposal = parse(Buffer.from(payload), { maximum: 2 << 20 });
       return proposal.core.binding.run === run.run_id && proposal.core.binding.principal === run.principal_ref && proposal.core.binding.tenant === run.tenant_ref;
     };
+    // Issuing the challenge identifier performs no publication or external work.
+    binding.cancelSafe = true;
+    binding.recoveryMatches = binding.authorize;
     binding.handle = ({ occurrence }) => encodeValue(decodeSchema(binding.resultSchema), occurrence.id);
   } else {
     requireThat(adapter.kind === 'repository-approval-human', 'AdapterContract');

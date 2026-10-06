@@ -199,8 +199,11 @@ reconciliation, never another publication attempt. Unknown results remain paused
 Once the service records that a check stopped, a later cancellation can complete
 after restart even if the reply was lost. A check that may still be running keeps
 its capacity reserved.
-Rejected candidate preparation can also be cancelled after restart. Preparation
-retains only bounded immutable objects; it never advances the managed ref.
+Candidate/proposal preparation, publication-current reads and approval-identifier
+issuance can also be cancelled after a lost reply and restart. These operations
+never advance the managed ref; preparation retains only bounded immutable objects.
+Deleting a required check input produces a failed check with missing-path
+diagnostics and no compiler execution, allowing the investigation to revise it.
 
 Confirmed publication remains `Published` even if subsequent verification fails or
 is unavailable; the receipt distinguishes `PublishedVerified`,

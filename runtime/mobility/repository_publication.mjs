@@ -38,7 +38,8 @@ export function repositoryPublicationBinding(metadata, { store, helper, protecte
     const owner = identify(payload, run)?.core.binding;
     return Boolean(owner && owner.authorizationDigest === authorizationDigest && owner.validationPolicyDigest === validationPolicyDigest);
   };
-  if (readOnly) return { ...metadata, authorize, async handle({ payload }) {
+  if (readOnly) return { ...metadata, authorize, cancelSafe: true,
+    recoveryMatches: (payload, run) => identify(payload, run) !== null, async handle({ payload }) {
     let valid = false;
     try {
       const proposal = await store.verifyPublication(decode(payload));
@@ -117,7 +118,7 @@ export function repositoryProposalBinding(metadata, { store, protectedImages, au
     fields.slice(2).every(id => input.types[id] === 'u64') && output.types[output.root]?.bounded_text === (2 << 20), 'PublicationSchema');
   const authorize = (payload, run) => images.some(row => row.image === run.image_digest && row.program === run.program_id) &&
     Array.isArray(payload) && payload.length === 4 && BigInt(payload[2]) > 0n && BigInt(payload[3]) > 0n;
-  return { ...metadata, authorize, async handle({ payload, run, occurrence }) {
+  return { ...metadata, authorize, cancelSafe: true, recoveryMatches: authorize, async handle({ payload, run, occurrence }) {
     requireThat(authorize(payload, run), 'PublicationAuthorityMismatch');
     const candidate = parse(Buffer.from(payload[0]), { maximum: 2 << 20 }), record = parse(Buffer.from(payload[1]), { maximum: 2 << 20 });
     const { journal, policy } = services();

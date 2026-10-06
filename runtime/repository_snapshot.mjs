@@ -503,7 +503,10 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
     for (const name of names) {
       admittedPath(name);
       const row = view.rows.find(row => row[0] === name);
-      require(row && ['100644', '100755'].includes(row[1]), 'RepositoryFileUnavailable');
+      // Absence in a verified candidate is an input observation (e.g. an
+      // admitted deletion), not an uncertain storage operation.
+      if (!row) { files[name] = null; continue; }
+      require(['100644', '100755'].includes(row[1]), 'RepositoryFileUnavailable');
       const content = await object.read('blob', row[2]);
       bytes += content.length;
       require(bytes <= metadata.limits.bytes, 'RepositoryTreeCapacity');

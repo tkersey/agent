@@ -76,8 +76,11 @@ export function createRepositoryCheckRunner({ store, sandbox, profiles }) {
       const input = await store.checkInputs({ ...subject, requiredPaths: profile.requiredPaths });
       const files = { ...input.files, '__agent_checks__/main.zig': profile.harness.source };
       const roots = [{ name: 'root', path: '__agent_checks__/main.zig', dependencies: profile.modules.map(m => m.name) }, ...profile.modules];
-      const inputDigest = digest(Object.keys(files).sort().map(path => [path, hash(files[path])]));
-      const result = await sandbox.execute(files, { roots, signal, expectedStdout: profile.expectedStdout });
+      const missing = profile.requiredPaths.filter(path => files[path] === null);
+      const inputDigest = digest(Object.keys(files).sort().map(path => [path, files[path] === null ? null : hash(files[path])]));
+      const result = missing.length ? { runner, status: 'Failed', phase: 'input', physicalExecutions: 0,
+        reason: 'RequiredInputMissing', stderr: JSON.stringify({ missing: missing.slice(0, 32), omitted: Math.max(0, missing.length - 32) }) }
+        : await sandbox.execute(files, { roots, signal, expectedStdout: profile.expectedStdout });
       require(result.runner === runner && ['Passed', 'Failed', 'Unavailable', 'TimedOut', 'Cancelled', 'InvalidOutput', 'Incomplete'].includes(result.status), 'RepositoryCheckResult');
       const record = { format: 'agent.repository.check/v1', occurrence, snapshot: subject.snapshot,
         candidate: subject.candidate?.id ?? null, tree: input.tree, profile: profile.id, profileDigest,

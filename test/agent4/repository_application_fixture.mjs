@@ -58,7 +58,7 @@ function nativeComparedWorld(world, directory, observed) {
     } });
   } } };
 }
-export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, intake = false, sessionTasks = 0, nextMode = null, comparison = null, deterministicBase = false, revisionScenario = null, textScenario = null } = {}) {
+export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, lostOrdinaryReply = null, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, intake = false, sessionTasks = 0, nextMode = null, comparison = null, deterministicBase = false, revisionScenario = null, textScenario = null } = {}) {
   if (revisionScenario) assert(mobile && mode === 1 && !comparison && ['eight', 'nine', 'repeat', 'amend'].includes(revisionScenario));
   if (textScenario) assert(mobile && [1, 2].includes(mode) && !comparison && !revisionScenario && [0, 1].includes(sessionTasks) && !engine &&
     Number.isInteger(textScenario.files) && textScenario.files >= 1 && textScenario.files <= 4 && Number.isInteger(textScenario.bytes) && textScenario.bytes > 0 && textScenario.bytes <= 32768);
@@ -160,6 +160,16 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
   });
   const issue = repositoryApprovalBinding(metadata('agent.approval.issue.v1.repository.publish', 'proposal', 'identifier', 'approval'), { kind: 'repository-approval-issuer' });
   const issueHandle = issue.handle; issue.handle = context => { issued.add(context.occurrence.id); return issueHandle(context); };
+  let lostOrdinaryCalls = 0;
+  if (lostOrdinaryReply) {
+    const binding = [prepare, current, issue].find(binding => binding.operation === lostOrdinaryReply);
+    assert(binding, 'fault must target an actual non-publishing application binding');
+    const handle = binding.handle;
+    binding.handle = async context => {
+      lostOrdinaryCalls++; await handle(context);
+      throw Object.assign(Error('lost ordinary reply'), { code: 'FixtureLostOrdinaryReply' });
+    };
+  }
   const synthetic = fixed('agent.interaction.exchange.v1.repository.publish', 'human', 'human-reply', 'approval', ({ payload }) => {
     counts.human++; const challenge = structuredClone(payload[3]); assert(issued.has(challenge[0]));
     if (staleAnswer) challenge[0] = 'stale';
@@ -404,6 +414,8 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
       assert.fail('bounded approval did not complete');
     },
     restart() { hosts[activeHost].retireAll(); journals[activeHost].close(); open(activeHost, false); },
+    cancel(reason) { return hosts[activeHost].cancelRun(id, reason); },
+    get lostOrdinaryCalls() { return lostOrdinaryCalls; },
     outcomeKind() { const journal = journals[activeHost], run = journal.run(id); return world.decodeOutcome(journal.artifact('tenant', run.outcome_digest)).kind; },
     failure() { const journal = journals[activeHost], run = journal.run(id), outcome = world.decodeOutcome(journal.artifact('tenant', run.outcome_digest));
       assert.equal(outcome.kind, 'failed'); return decodeValue({ root: 0, types: [{ enumeration: [0, 1, 2, 3, 4] }] }, outcome.value); },

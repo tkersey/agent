@@ -47,12 +47,21 @@ through the existing authenticated capability preflight.
 The initial new regression assertions needed corrections for child-pipe draining
 and the program's separate edit/check model turns; the failed logs are retained.
 
-The compiled images and timed fixture callbacks are unchanged from 4693529.
-The added model-profile version check runs during fixture construction, before
-timing begins; the new loader, qualifier and native setup behavior is outside
-these measured workloads. The tables retain their original executed subject,
-not new measurements of setup or native qualification. Process-resource counters
-include setup and retain strictly historical scope.
+The latest cancellation and missing-input corrections pass 42 approval/binding
+tests, native Zig qualification, the matched comparison tests and 362/362 package
+build steps. Lost replies from proposal preparation, publication-current reads and
+approval-identifier issuance can be cancelled after restart without repeating work
+or publishing. Deleting a required check input now returns `Failed` with bound
+absence diagnostics and zero physical executions; valid repairs still pass the
+native checks. The earlier cancellation assertions failed on the prior code and
+their logs are retained.
+
+The compiled images remain unchanged from 4693529. Snapshot input handling and
+cancellation metadata have since changed; the matched comparison tests recheck
+equivalent inputs, work counts and outcomes on the current implementation. The
+latency tables and process-resource counters retain their original executed
+subject and are historical observations, not measurements of the latest repairs.
+No new latency or memory improvement is claimed from those corrections.
 
 The broader aggregate passed 559/559 steps at
 `330916481f46a20ad03c3e5c760d024c6b82e5d7`. Its unchanged generic runtime,
@@ -85,6 +94,9 @@ Local records under `.agent4-mobile/out/agent4/` include the 96-row acceptance J
 `recovery-qualification.log`, `settled-check-after.log`, `restricted-native.log`,
 `restricted-application.log`, `review-repairs-bf3573c.log`,
 `review-repairs-installed-final.log`, `provider-version-package.log`,
+`ordinary-cancellation-before-configured.log`, `ordinary-cancellation-after.log`,
+`required-input-proof.json`, `required-input-native.log`,
+`cancellation-input-comparison.log`, `cancellation-input-package.log`,
 `final-3309164.log`, measurements and package
 inventory verification. They bind actual subjects, hashes and limitations. The
 accepted user specification remains a local qualification input at

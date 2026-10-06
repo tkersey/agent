@@ -35,6 +35,21 @@ test('lost publication reply resumes its actual checkpoint and recovers without 
   assert.equal(f.checkAllowance().used.attempts, 1);
 });
 
+for (const operation of ['agent.repository.proposal.v1', 'agent.repository.publication-current.v1', 'agent.approval.issue.v1.repository.publish'])
+  test(`cancellation after restart abandons a lost ${operation} reply without repeating work`, async t => {
+    const f = await fixture(t, { mobile: true, lostOrdinaryReply: operation });
+    await assert.rejects(f.run(), { code: 'FixtureLostOrdinaryReply' });
+    assert.equal(f.status().occurrence, 'UNKNOWN');
+    assert.equal(f.lostOrdinaryCalls, 1);
+    const modelCalls = f.modelCalls, checks = f.counts.check;
+    f.restart();
+    await f.cancel('cancel non-publishing preparation');
+    assert.equal((await f.run()).kind, 'terminal');
+    assert.equal(f.outcomeKind(), 'cancelled'); assert.equal(f.cleanupCalls, 1);
+    assert.equal(f.lostOrdinaryCalls, 1); assert.equal(f.modelCalls, modelCalls); assert.equal(f.counts.check, checks);
+    assert.equal(f.counts.publish, 0); assert.equal(await f.store.current(), f.base);
+  });
+
 if (process.env.AGENT_MOBILITY_BROWSER_TOOLS) {
   const { chromium, firefox } = await import(pathToFileURL(join(resolve(process.env.AGENT_MOBILITY_BROWSER_TOOLS), 'node_modules/playwright-core/index.mjs')));
   for (const [name, engine] of [['chromium', chromium], ['firefox', firefox]]) test(`${name}: authenticated exact-change approval is inert and resumes the protected program`, async t => {

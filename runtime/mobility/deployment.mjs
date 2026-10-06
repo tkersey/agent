@@ -16,7 +16,7 @@ import { modelBinding } from './model.mjs';
 import { repositoryApprovalBinding, repositoryReviewBinding, repositoryNextTaskBinding, repositoryClarificationBinding } from './repository_approval.mjs';
 import { repositoryPublicationBinding, repositoryProposalBinding } from './repository_publication.mjs';
 import { repositoryCheckBinding } from './repository_check.mjs';
-import { createRepositoryCheckRunner } from '../repository_checks.mjs';
+import { createRepositoryCheckRunner, describeRepositoryCheckProfile } from '../repository_checks.mjs';
 import { createZigRepositorySandbox } from '../repository_zig_sandbox.mjs';
 import { selectZig } from '../../tools/agent4/toolchain.mjs';
 import { openRepositorySnapshotStore } from '../repository_snapshot.mjs';
@@ -73,7 +73,7 @@ async function prepareDeployment(configPath) {
       requireThat(origin.protocol === 'https:' && origin.origin === config.browser.publicOrigin, 'OriginDenied');
     }
   }
-  const statistics = new Map();
+  const statistics = new Map(), checkActivations = [];
   let publicationServices;
   const bindings = await Promise.all(config.bindings.map(async entry => {
     const { adapter, ...metadata } = entry;
@@ -145,12 +145,22 @@ async function prepareDeployment(configPath) {
         adapter.profile.manifest === adapter.store.manifestSha256, 'RepositoryCheckBinding');
       const store = await openRepositorySnapshotStore({ ...adapter.store, directory: path(adapter.store.directory), gitExecutable: path(adapter.store.gitExecutable) });
       const toolchain = selectZig(['--zig-exe', path(adapter.sandbox.zigExecutable), '--zig-lib', path(adapter.sandbox.libraryDirectory)], { inherited: null, inheritedLibrary: null });
-      const sandbox = await createZigRepositorySandbox({ ...adapter.sandbox, toolchain, scratchRoot: path(adapter.sandbox.scratchRoot),
+      const sandboxOptions = { ...structuredClone(adapter.sandbox), toolchain, scratchRoot: path(adapter.sandbox.scratchRoot),
         launcher: { ...adapter.sandbox.launcher, path: await realpath(path(adapter.sandbox.launcher.path)) },
-        processLock: { ...adapter.sandbox.processLock, path: await realpath(path(adapter.sandbox.processLock.path)) } });
-      const runner = createRepositoryCheckRunner({ store, sandbox, profiles: [adapter.checkProfile] });
-      const leaf = repositoryCheckBinding(binding, { runner, profile: adapter.profile, hostId: config.hostId });
-      const handle = leaf.handle; leaf.handle = context => { counts.calls++; return handle(context); };
+        processLock: { ...adapter.sandbox.processLock, path: await realpath(path(adapter.sandbox.processLock.path)) } };
+      const profile = structuredClone(adapter.profile), checkProfile = structuredClone(adapter.checkProfile);
+      // Configuration inspection validates declarations. Only the activated
+      // binding, with its independently qualified runner identity, can execute.
+      const leaf = repositoryCheckBinding(binding, { runner: { runner: profile.runner,
+        profiles: [describeRepositoryCheckProfile(checkProfile)] }, profile, hostId: config.hostId });
+      let activated;
+      const activate = () => activated ??= (async () => {
+        const sandbox = await createZigRepositorySandbox(sandboxOptions);
+        const runner = createRepositoryCheckRunner({ store, sandbox, profiles: [checkProfile] });
+        return repositoryCheckBinding(binding, { runner, profile, hostId: config.hostId });
+      })();
+      checkActivations.push(activate);
+      leaf.handle = async context => { counts.calls++; return (await activate()).handle(context); };
       return leaf;
     }
     if (adapter.kind === 'repository-release') {
@@ -200,6 +210,7 @@ async function prepareDeployment(configPath) {
   const admission = new WorldAdmission(world, { kernelBytes, expectedSha256: identity.kernelSha256 });
   const policy = new HostPolicy({ ...config, runtimeProfile: identity.kernelSha256, deployments, bindings, revoked: new Set(config.revoked) });
   return { config, configDigest: hash(configBytes), path, bytes, identity, world, runtimePath, kernelBytes, keys, signer, tls, bindings, deployments, admission, policy, statistics,
+    activateChecks: () => Promise.all(checkActivations.map(activate => activate())),
     activatePublications: services => { publicationServices = services; } };
 }
 
@@ -315,8 +326,9 @@ export async function validateDeployment(configPath, { peerConfigs = [], contact
     capabilityCoverage: reports, remoteAvailability: contacted ? 'preflight-only; rechecked on dispatch' : 'not-contacted' };
 }
 
-export async function openDeployment(configPath, { create = false } = {}) {
-  const { config, path, bytes, identity, world, runtimePath, kernelBytes, keys, signer, tls, admission, policy, statistics, deployments, activatePublications } = await prepareDeployment(configPath);
+export async function openDeployment(configPath, { create = false, qualifyChecks = true } = {}) {
+  const { config, path, bytes, identity, world, runtimePath, kernelBytes, keys, signer, tls, admission, policy, statistics, deployments, activatePublications, activateChecks } = await prepareDeployment(configPath);
+  if (qualifyChecks) await activateChecks();
   const journal = new CustodyJournal({ directory: path(config.directory), hostId: config.hostId, deploymentGeneration: config.deploymentGeneration, keys,
     signer, admission, create });
   activatePublications(Object.freeze({ journal, policy }));
@@ -338,6 +350,7 @@ export async function openDeployment(configPath, { create = false } = {}) {
       statistics: () => Object.fromEntries([...statistics].map(([name, value]) => [name, { calls: value.calls, ...(value.text ? value.text() : {}) }])),
       async serve() {
         requireThat(service === null, 'AlreadyServing');
+        await activateChecks();
         service = await servePeers(custodian, { ...tls, host: config.tls.host, port: config.tls.port, peerCertificates: new Map(config.peers.map(entry => [entry.fingerprint256, entry.hostId])) });
         try {
           if (sessions) browserService = await serveBrowser(custodian, { ...tls, ...config.browser, runtimePath, kernelBytes, catalogue,

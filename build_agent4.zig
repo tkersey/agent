@@ -927,9 +927,6 @@ pub fn build(b: *std.Build) void {
             mobility_durable_browser.dependOn(&missing_browser.step);
         }
         const runtime_work = b.step("agent4-runtime-tests", "Native and embedding test implementation");
-        runtime_work.dependOn(mobile_repository_check);
-        runtime_work.dependOn(publication_check);
-        runtime_work.dependOn(mobile_repository_mutants);
         runtime_work.dependOn(mobility_model);
         runtime_work.dependOn(parser_intent);
         runtime_work.dependOn(parser_circular);
@@ -997,7 +994,7 @@ pub fn build(b: *std.Build) void {
         repository_native_workflow.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
         repository_native_workflow.addFileArg2(native_exe.getEmittedBin(), .{ .prefix = "AGENT_MOBILE_NATIVE=", .make_absolute = true });
         repository_native_workflow.addFileArg2(b.graph.path(.install_prefix, "repository-publication/agent-publication-gate"), .{ .prefix = "AGENT_PUBLICATION_GATE=", .make_absolute = true });
-        repository_native_workflow.addArgs(&.{ "node", "--test", "--test-name-pattern=complete mobile application mode|session propose then publish|cancellation at full-application|lost publication reply|retained text budget:", "test/agent4/repository_publication_approval.test.mjs" });
+        repository_native_workflow.addArgs(&.{ "node", "--test", "--test-name-pattern=session propose then publish|lost publication reply", "test/agent4/repository_publication_approval.test.mjs" });
         repository_native_workflow.step.dependOn(mobile_repository_images);
         repository_native_workflow.step.dependOn(repository_approval_images);
         repository_native_workflow.step.dependOn(publication_gate);

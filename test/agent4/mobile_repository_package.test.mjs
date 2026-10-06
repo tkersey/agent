@@ -7,9 +7,10 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { artifactRoot } from './artifacts.mjs';
 
-test('extracted full repository program executes in both browser Workers and qualified native checks', async t => {
+test('extracted application supports repeated tasks and durable results in both browser Workers', async t => {
   assert(process.env.AGENT_MOBILITY_BROWSER_TOOLS, 'set AGENT_MOBILITY_BROWSER_TOOLS for required Chromium/Firefox qualification');
   const area = await mkdtemp(join(tmpdir(), 'mobile repository package '));
   t.after(() => rm(area, { recursive: true, force: true }));
@@ -29,11 +30,18 @@ test('extracted full repository program executes in both browser Workers and qua
     assert.equal(createHash('sha256').update(profile.harness.source).digest('hex'), profile.harness.sha256);
   }
   await assert.rejects(stat(join(root, 'src'))); await assert.rejects(stat(join(root, 'test')));
-  const env = { ...process.env, AGENT_MOBILE_PACKAGE: root,
-    AGENT_PUBLICATION_GATE: join(root, 'examples/native/agent-publication-gate') };
-  delete env.NODE_TEST_CONTEXT;
-  const output = execFileSync(process.execPath, ['--test', '--test-name-pattern=full repository mode|full Agent source repair|authored return|browser catalogue starts|authored session advances|browser repeated|session propose then publish',
-    resolve(import.meta.dirname, 'repository_publication_approval.test.mjs')], { env, encoding: 'utf8', timeout: 300000, maxBuffer: 4 << 20 });
-  assert.match(output, /tests 13/); assert.match(output, /pass 13/); assert.match(output, /fail 0/);
-  console.log(output);
+  // This test file runs in its own process. Load production modules from the archive.
+  process.env.AGENT_MOBILE_PACKAGE = root;
+  process.env.AGENT_PUBLICATION_GATE = join(root, 'examples/native/agent-publication-gate');
+  const { repositoryFixture } = await import('./repository_application_fixture.mjs');
+  const { chromium, firefox } = await import(pathToFileURL(join(resolve(process.env.AGENT_MOBILITY_BROWSER_TOOLS), 'node_modules/playwright-core/index.mjs')));
+  for (const [name, engine] of [['chromium', chromium], ['firefox', firefox]]) {
+    await t.test(name + ': installed publish, inspect, reconnect and export', async t => {
+      const f = await repositoryFixture(t, { mobile: true, mode: 2, nextMode: 0, sessionTasks: 2, intake: true, engine });
+      assert.equal((await f.run()).kind, 'terminal');
+      assert.equal(f.outcome()[1], 2n); assert.equal(f.outcome()[2], 0);
+      assert.equal(f.cleanupCalls, 2); assert.equal(f.modelAllowance().used.attempts, 4);
+      assert.equal(f.counts.publish, 1); assert.notEqual(await f.store.current(), f.base);
+    });
+  }
 });

@@ -162,6 +162,9 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
     return result.kind === 'completed' && result.ready !== true ?
       { ...result, kind: 'unavailable', reason: 'isolation_not_initialized' } : result;
   }
+  // Only this startup's immutable, owner-authored probe shares compiled bytes.
+  // Every invocation still gets a fresh volume/process; candidate inputs never share it.
+  let probeFiles = null, probeBinary = null;
   async function invoke(files, { roots = [{ name: 'root', path: 'main.zig', dependencies: [] }],
     test = true, signal, args = [], observe, executionMs, beforeExecute, observationCount = null } = {}) {
     let disk, executions = 0;
@@ -198,14 +201,19 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
         compileArgs.push(`-M${row.name}=${join(input, row.path)}`);
       }
       const deadline = performance.now() + timeoutMs;
-      const compiled = await stage(toolchain.executable, compileArgs, profile({
-        files: compilerFiles, input, scratch: disk.mount, library: toolchain.identity.library }),
-      disk.mount, signal, deadline, maximumOutputBytes, true);
-      executions += compiled.physicalExecutions ?? 0;
-      if (verdict(compiled) !== 'Passed') return { status: verdict(compiled), phase: 'compile', ...diagnostics(compiled), physicalExecutions: executions };
-      const stat = await lstat(output);
-      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > (observationCount === null ? scratchBytes : contract.observer.maximumModuleBytes)) fail('invalid_binary');
-      const bytes = await readFile(output);
+      let compiled = { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), outputBytes: 0 };
+      let bytes = files === probeFiles ? probeBinary : null;
+      if (bytes === null) {
+        compiled = await stage(toolchain.executable, compileArgs, profile({
+          files: compilerFiles, input, scratch: disk.mount, library: toolchain.identity.library }),
+        disk.mount, signal, deadline, maximumOutputBytes, true);
+        executions += compiled.physicalExecutions ?? 0;
+        if (verdict(compiled) !== 'Passed') return { status: verdict(compiled), phase: 'compile', ...diagnostics(compiled), physicalExecutions: executions };
+        const stat = await lstat(output);
+        if (!stat.isFile() || stat.isSymbolicLink() || stat.size > (observationCount === null ? scratchBytes : contract.observer.maximumModuleBytes)) fail('invalid_binary');
+        bytes = await readFile(output);
+        if (files === probeFiles) probeBinary = bytes;
+      }
       await writeFile(binary, bytes, { flag: 'wx', mode: 0o500 });
       beforeExecute?.();
       let run;
@@ -255,7 +263,7 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
   }
   try {
     await writeFile(secret, 'qualification-only sentinel', { mode: 0o600 });
-    const source = probeSource(secret, forbidden, contract.candidateMemoryMiB);
+    probeFiles = Object.freeze({ 'main.zig': probeSource(secret, forbidden, contract.candidateMemoryMiB) });
     const assembler = path => `const std = @import("std");\ncomptime { asm (${JSON.stringify(`.section __TEXT,__const\n.incbin ${JSON.stringify(path)}\n`)}); }\npub fn main() void { _ = std.c.write(1, "incbin\\n", 7); }`;
     const compilerRead = await invoke({ 'main.zig': assembler('../input/payload.zig'), 'payload.zig': 'probe bytes\n' },
       { test: false, observe: run => run.stdout.toString() === 'incbin\n' });
@@ -263,25 +271,25 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
     const compilerDenial = await invoke({ 'main.zig': assembler(secret) }, { test: false });
     if (compilerDenial.status !== 'Failed' || compilerDenial.phase !== 'compile')
       return { kind: 'unavailable', reason: 'compiler_denial_probe', probe: compilerDenial };
-    const denials = await invoke({ 'main.zig': source }, { test: false, args: ['denials'],
+    const denials = await invoke(probeFiles, { test: false, args: ['denials'],
       observe: run => run.stdout.toString() === 'qualified\n' });
     if (denials.status !== 'Passed') return { kind: 'unavailable', reason: 'denial_probe', probe: denials };
-    const flood = await invoke({ 'main.zig': source }, { test: false, args: ['flood'] });
+    const flood = await invoke(probeFiles, { test: false, args: ['flood'] });
     if (flood.status !== 'InvalidOutput' || flood.outputBytes <= maximumOutputBytes)
       return { kind: 'unavailable', reason: 'output_probe', probe: flood };
-    const full = await invoke({ 'main.zig': source }, { test: false, args: ['full'],
+    const full = await invoke(probeFiles, { test: false, args: ['full'],
       observe: run => run.stdout.toString() === 'full\n' });
     if (full.status !== 'Passed') return { kind: 'unavailable', reason: 'scratch_probe', probe: full };
-    const memory = await invoke({ 'main.zig': source }, { test: false, args: ['memory'] });
+    const memory = await invoke(probeFiles, { test: false, args: ['memory'] });
     if (memory.status !== 'Incomplete' || memory.signal !== 'SIGKILL' || memory.stdout !== 'allocating\n')
       return { kind: 'unavailable', reason: 'memory_probe', probe: memory };
-    const threads = await invoke({ 'main.zig': source }, { test: false, args: ['threads'],
+    const threads = await invoke(probeFiles, { test: false, args: ['threads'],
       observe: run => run.stdout.toString() === 'thread-limit\n' });
     if (threads.status !== 'Passed') return { kind: 'unavailable', reason: 'thread_probe', probe: threads };
-    const timeout = await invoke({ 'main.zig': source }, { test: false, args: ['loop'], executionMs: 1000 });
+    const timeout = await invoke(probeFiles, { test: false, args: ['loop'], executionMs: 1000 });
     const controller = new AbortController();
     let timer;
-    const cancel = await invoke({ 'main.zig': source }, { test: false, args: ['loop'], signal: controller.signal,
+    const cancel = await invoke(probeFiles, { test: false, args: ['loop'], signal: controller.signal,
       beforeExecute: () => { timer = setTimeout(() => controller.abort(), 1000); } });
     clearTimeout(timer);
     const reaped = result => {
@@ -292,7 +300,7 @@ export async function createZigRepositorySandbox({ toolchain, launcher, processL
     if (timeout.status !== 'TimedOut' || cancel.status !== 'Cancelled' || !reaped(timeout) || !reaped(cancel))
       return { kind: 'unavailable', reason: 'termination_probe', probes: { timeout, cancel } };
     qualification = { observation: observationProbe, compilerRead, compilerDenial, denials, flood: { ...flood, stdout: '<bounded flood omitted>' }, full, memory, threads, timeout, cancel };
-  } finally { await rm(canary, { recursive: true, force: true }); }
+  } finally { probeBinary = null; probeFiles = null; await rm(canary, { recursive: true, force: true }); }
   return Object.freeze({ kind: 'qualified', runner, contract: structuredClone(contract), qualification: structuredClone(qualification),
     async execute(files, { roots, signal, expectedStdout } = {}) {
       // Only raw VM observations cross the trust boundary. The candidate cannot

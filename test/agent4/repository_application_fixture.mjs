@@ -31,10 +31,7 @@ const { hash, canonical, parse, runId, signRecord } = await import(pathToFileURL
 
 const applicationArtifacts = process.env.AGENT_MOBILE_PACKAGE ? join(process.env.AGENT_MOBILE_PACKAGE, 'examples') : join(artifactRoot, 'agent4');
 const schemaExtension = process.env.AGENT_MOBILE_PACKAGE ? 'bin' : 'schema';
-const { createZigRepositorySandbox } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/repository_zig_sandbox.mjs')));
-const { createRepositoryCheckRunner } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/repository_checks.mjs')));
 const { taskCatalogue } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'runtime/mobility/task_catalogue.mjs')));
-const { selectZig } = await import(pathToFileURL(resolve(process.env.AGENT_MOBILE_PACKAGE ?? new URL('../..', import.meta.url).pathname, 'tools/agent4/toolchain.mjs')));
 const text = value => Buffer.from(canonical(value, 2 << 20)).toString('utf8');
 const env = { PATH: '/usr/bin:/bin', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null',
   GIT_AUTHOR_NAME: 'Approval fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid',
@@ -61,25 +58,24 @@ function nativeComparedWorld(world, directory, observed) {
     } });
   } } };
 }
-export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, qualified = false, intake = false, sessionTasks = 0, nextMode = null, comparison = null, deterministicBase = false, revisionScenario = null, textScenario = null } = {}) {
-  if (revisionScenario) assert(mobile && mode === 1 && !qualified && !comparison && ['eight', 'nine', 'repeat', 'amend'].includes(revisionScenario));
-  if (textScenario) assert(mobile && [1, 2].includes(mode) && !qualified && !comparison && !revisionScenario && [0, 1].includes(sessionTasks) && !engine &&
+export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal = false, lostReply = false, onQuestion = null, content = 'independently checked\n', checkStatus = 'Passed', mobile = false, mode = 2, reviewFollowup = null, logicalSteps = 8, misuse = false, restartReview = false, cancelReview = false, engine = null, refuseReturn = false, intake = false, sessionTasks = 0, nextMode = null, comparison = null, deterministicBase = false, revisionScenario = null, textScenario = null } = {}) {
+  if (revisionScenario) assert(mobile && mode === 1 && !comparison && ['eight', 'nine', 'repeat', 'amend'].includes(revisionScenario));
+  if (textScenario) assert(mobile && [1, 2].includes(mode) && !comparison && !revisionScenario && [0, 1].includes(sessionTasks) && !engine &&
     Number.isInteger(textScenario.files) && textScenario.files >= 1 && textScenario.files <= 4 && Number.isInteger(textScenario.bytes) && textScenario.bytes > 0 && textScenario.bytes <= 32768);
   const sessionInput = mobile && Boolean(process.env.AGENT_MOBILE_PACKAGE || intake || sessionTasks || comparison);
-  if (comparison) assert(mobile && mode === 1 && !qualified && !engine && !reviewFollowup && !sessionTasks, "comparison uses the same single-task propose workload");
+  if (comparison) assert(mobile && mode === 1 && !engine && !reviewFollowup && !sessionTasks, "comparison uses the same single-task propose workload");
   const stationary = comparison?.topology === "stationary", spendingHost = stationary ? "U" : "W";
   const revision = comparison ? `measure-${comparison.topology}-v1` : "p1";
   const workload = comparison?.workload ?? { repositoryBytes: 0, extraReads: 0, replayPaddingBytes: textScenario?.replayBytes ?? 0 };
   const gitEnvironment = comparison || deterministicBase ? { ...env, GIT_AUTHOR_DATE: "1791150000 +0000", GIT_COMMITTER_DATE: "1791150000 +0000" } : env;
   const root = await mkdtemp(join(tmpdir(), 'repository-approval-'));
   const git = await realpath(execFileSync('/bin/sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim());
-  const targetPath = qualified ? 'subject.zig' : 'fix.txt';
+  const targetPath = 'fix.txt';
   const textPaths = textScenario ? [targetPath, 'second.txt', 'third.txt', 'fourth.txt'].slice(0, textScenario.files) : [targetPath];
   const originalText = index => String.fromCharCode(65 + index).repeat(textScenario.bytes);
   const replacementText = index => String.fromCharCode((textScenario.escaped ? 1 : 97) + index).repeat(textScenario.bytes);
   if (textScenario) content = replacementText(0);
-  if (qualified) content = await readFile(new URL('../../src/model_json.zig', import.meta.url), 'utf8');
-  const before = qualified ? content.replace('.bool => 5,', '.bool => 4,') : textScenario ? originalText(0) : 'before\n';
+  const before = textScenario ? originalText(0) : 'before\n';
   const source = join(root, 'source.git');
   const command = (...args) => execFileSync(git, ['--git-dir=' + source, ...args], { env: gitEnvironment, encoding: 'utf8' }).trim();
   command('init', '--bare', '--quiet', '--template=');
@@ -128,21 +124,7 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
   const journals = {}, hosts = {}, policies = {}, admissions = {}, peers = { W: new Map(), U: new Map() };
   let activeHost = mobile ? 'U' : 'W';
   const counts = { check: 0, publish: 0, human: 0 }, issued = new Set();
-  let realChecks = null;
-  if (qualified) {
-    const nativeRoot = process.env.AGENT_MOBILE_PACKAGE ? join(process.env.AGENT_MOBILE_PACKAGE, 'examples/native') : join(applicationArtifacts, 'native');
-    const helpers = {};
-    for (const [name, file] of [['launcher', 'agent-check-limit'], ['processLock', 'libagent-check-lock.dylib']]) {
-      const path = await realpath(process.env.AGENT_MOBILE_PACKAGE ? join(nativeRoot, file) : process.env[name === 'launcher' ? 'AGENT_CHECK_LIMIT' : 'AGENT_CHECK_LOCK'] ?? join(nativeRoot, file)); helpers[name] = { path, sha256: hash(await readFile(path)) };
-    }
-    const sandbox = await createZigRepositorySandbox({ toolchain: selectZig([]), ...helpers, scratchRoot: root });
-    assert.equal(sandbox.kind, 'qualified', JSON.stringify(sandbox));
-    const source = 'const subject = @import("subject"); pub export fn agent_observe(_: u32) u64 { return subject.maximumToolArgumentsByteLength(bool); }';
-    realChecks = createRepositoryCheckRunner({ store, sandbox, profiles: [{ id: 'fixture-content', description: 'Independent JSON boolean bound', requiredPaths: [targetPath],
-      modules: [{ name: 'subject', path: targetPath, dependencies: [] }], harness: { source, sha256: hash(source) }, expectedStdout: '["5"]\n', deterministic: true }] });
-    assert.equal((await realChecks.check({ snapshot, profileId: 'fixture-content', occurrence: 'baseline-control' })).status, 'Failed');
-  }
-  const profileDigest = realChecks?.profiles[0].digest ?? '3'.repeat(64), runner = realChecks?.runner ?? '4'.repeat(64);
+  const profileDigest = '3'.repeat(64), runner = '4'.repeat(64);
   const configuration = { store, helper: { path: process.env.AGENT_PUBLICATION_GATE, sha256: hash(await readFile(process.env.AGENT_PUBLICATION_GATE)) },
     protectedImages: [{ image: hash(image), program: programId }], authorizationDigest: '1'.repeat(64), validationPolicyDigest: '2'.repeat(64),
     requiredProfiles: [{ id: 'fixture-content', profileDigest, runner }], checkResultSchema: bytes['check-result'],
@@ -162,7 +144,7 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
       profileId: 'fixture-content', profileDigest, runner, disclosure: { audience: null, labels: ['shared'] },
       allowance: { attempts: revisionScenario ? 16 : sessionTasks || (reviewFollowup === 'amend' ? 2 : 1), request_bytes: 4 << 20, concurrent: 1 } },
     runner: { runner, profiles: [{ id: 'fixture-content', digest: profileDigest }], async check({ candidate: exact, occurrence }) {
-      counts.check++; if (realChecks) return realChecks.check({ snapshot: exact.snapshot, candidate: exact, occurrence, profileId: 'fixture-content' });
+      counts.check++;
       const inputs = await store.checkInputs({ snapshot: exact.snapshot, candidate: exact, requiredPaths: textPaths });
       if (textScenario) {
         assert.equal(exact.edits.length, textPaths.length);

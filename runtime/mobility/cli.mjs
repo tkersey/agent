@@ -85,7 +85,7 @@ export async function main(argv) {
   }
   const arity = { init: [0], serve: [0], start: [3], tasks: [2], task: [5], export: [3], status: [0, 1], metrics: [1], recover: [0], retry: [1], receipt: [1], withdraw: [1], cancel: [2], 'login-issue': [2] };
   if (!config || !arity[command]?.includes(args.length)) throw new Error(help);
-  const host = await openDeployment(config, { create: command === 'init' });
+  const host = await openDeployment(config, { create: command === 'init', qualifyChecks: command === 'serve' });
   const print = value => console.log(JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item));
   let serving = false;
   try {

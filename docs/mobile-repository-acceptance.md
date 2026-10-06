@@ -23,7 +23,12 @@ authoring, application, private approval, comparison, extracted package/browser,
 custody scenarios. The subsequent helper consolidation produces byte-identical
 images. Consolidation revalidation passed 67/67 and 92/92 steps, including 50
 storage/capability checks and 163 continuation plus 512 native/WASM comparisons
-across ten custody scenarios.
+across ten custody scenarios. These counts describe the historical runs, not a
+required test count. The reduced suite checks mode semantics in the application
+suite, installed mode/real-Zig integration in the deployment suite, and repeated
+tasks/reconnect/export once per browser from the archive. Native custody replay
+retains propose-then-publish and lost-publication recovery; continuation checks,
+focused safety tests, mutation checks and measurement workloads remain.
 
 The broader aggregate passed 559/559 steps at
 `330916481f46a20ad03c3e5c760d024c6b82e5d7`. Its unchanged generic runtime,
@@ -175,7 +180,7 @@ person and identified hosts require separate authorization.
 | MR-018 | Passed | repository_publication_approval.test.mjs — retained question/amendment without reinitialization |
 | MR-019 | Passed | inquiry_runtime.mjs — fresh-engine transfers, cleanup(30), surviving model(27), owner counts and final 92 |
 | MR-020 | Passed | mobility_host.test.mjs — resource pin and unsupported cleanup prevent movement |
-| MR-021 | Passed | mobility_durable_browser.test.mjs; full browser modes — terminated old Worker and fresh assignment |
+| MR-021 | Passed | mobility_durable_browser.test.mjs; installed deployment/package journeys — terminated old Worker and fresh assignment |
 | MR-022 | Passed | mobility_durable_browser.test.mjs; mobility_browser_bridge.test.mjs — yielded/cancel controls |
 | MR-023 | Passed | mobile_repository_continuation.mjs; retained review budget tests — bounded repeated ensures |
 | MR-024 | Passed | mobile_repository_deployment.test.mjs — all three modes, non-publishing refs unchanged |

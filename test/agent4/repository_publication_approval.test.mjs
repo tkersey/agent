@@ -139,35 +139,6 @@ test('successful publication remains durable when the authored return is unavail
   f.restart(); assert.equal(f.status().delivery.receipt.commit, commit); assert.equal(f.status().delivery.presentation, 'pending');
   assert.equal((await f.run()).kind, 'terminal'); assert.equal(f.counts.publish, 1);
 });
-if (process.env.AGENT_MOBILITY_BROWSER_TOOLS) {
-  const { chromium, firefox } = await import(pathToFileURL(join(resolve(process.env.AGENT_MOBILITY_BROWSER_TOOLS), 'node_modules/playwright-core/index.mjs')));
-  for (const [name, engine] of [['chromium', chromium], ['firefox', firefox]]) for (const mode of [0, 1, 2]) test(name + ': full repository mode ' + mode + ' executes in real origin Workers across custody moves', async t => {
-    const f = await fixture(t, { mobile: true, mode, engine });
-    assert.equal((await f.run()).kind, 'terminal'); assert.equal(f.outcomeKind(), 'completed');
-    assert.equal(f.outcome()[2], mode); assert.equal(f.cleanupCalls, 1);
-    assert.equal(f.counts.publish, mode === 2 ? 1 : 0);
-    assert.deepEqual(f.moves, mode === 2 ? [['U', 'W'], ['W', 'U'], ['U', 'W'], ['W', 'U']] : [['U', 'W'], ['W', 'U']]);
-  });
-}
-
-if (process.env.AGENT_MOBILITY_BROWSER_TOOLS) test('full Agent source repair uses a real Worker, qualified Zig check and managed publication', async t => {
-  const { chromium } = await import(pathToFileURL(join(resolve(process.env.AGENT_MOBILITY_BROWSER_TOOLS), 'node_modules/playwright-core/index.mjs')));
-  const f = await fixture(t, { mobile: true, engine: chromium, qualified: true });
-  assert.equal((await f.run()).kind, 'terminal'); assert.equal(f.outcomeKind(), 'completed');
-  assert.equal(f.counts.check, 1); assert.equal(f.counts.publish, 1); assert.equal(f.cleanupCalls, 1);
-  const proposal = JSON.parse(f.outcome()[5]); assert.equal(proposal.core.validation[0].status, 'Passed');
-  assert.equal(proposal.core.validation[0].physicalExecutions, 2);
-  assert.equal(proposal.core.candidate.edits[0].path, 'subject.zig');
-  assert.notEqual(await f.store.current(), f.base);
-});
-
-if (process.env.AGENT_MOBILITY_BROWSER_TOOLS) test('browser catalogue starts an authenticated full task without protocol bytes', async t => {
-  const { chromium } = await import(pathToFileURL(join(resolve(process.env.AGENT_MOBILITY_BROWSER_TOOLS), 'node_modules/playwright-core/index.mjs')));
-  const f = await fixture(t, { mobile: true, engine: chromium, intake: true });
-  assert.equal((await f.run()).kind, 'terminal'); assert.equal(f.outcomeKind(), 'completed');
-  assert.equal(f.outcome()[2], 2); assert.equal(f.counts.publish, 1); assert.equal(f.cleanupCalls, 1);
-});
-
 test('authored session advances generations across origin restart with independent tasks and cumulative allowances', async t => {
   const f = await fixture(t, { mobile: true, mode: 0, sessionTasks: 2 });
   assert.equal((await f.run()).kind, 'terminal');
@@ -176,16 +147,6 @@ test('authored session advances generations across origin restart with independe
   assert.equal(f.counts.publish, 0); assert.equal(await f.store.current(), f.base);
   assert.equal(f.moves.length, 4);
 });
-
-if (process.env.AGENT_MOBILITY_BROWSER_TOOLS) {
-  const { chromium, firefox } = await import(pathToFileURL(join(resolve(process.env.AGENT_MOBILITY_BROWSER_TOOLS), 'node_modules/playwright-core/index.mjs')));
-  for (const [name, engine] of [['chromium', chromium], ['firefox', firefox]]) test(name + ': browser repeated tasks use authored generations and export the completed report', async t => {
-    const f = await fixture(t, { mobile: true, mode: 0, sessionTasks: 2, intake: true, engine });
-    assert.equal((await f.run()).kind, 'terminal');
-    assert.equal(f.outcome()[1], 2n); assert.equal(f.cleanupCalls, 2); assert.equal(f.modelAllowance().used.attempts, 2);
-    assert.equal(f.counts.publish, 0);
-  });
-}
 
 test('session propose then publish gets a fresh check and exact approval at generation two', async t => {
   const f = await fixture(t, { mobile: true, mode: 1, nextMode: 2, sessionTasks: 2 });

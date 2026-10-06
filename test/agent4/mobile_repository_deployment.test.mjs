@@ -44,7 +44,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   const commandLogs = [];
   const operatorCommands = [], uiOperations = [];
   const command = (...args) => {
-    const row = { command: args[0], status: 'failed' }; operatorCommands.push(row);
+    const started = performance.now(), row = { command: args[0], status: 'failed' }; operatorCommands.push(row);
     try {
       const output = execFileSync(process.execPath, [cli, ...args], { cwd: root, env: cliEnv, encoding: 'utf8', timeout: 240000, maxBuffer: 4 << 20, stdio: ['ignore', 'pipe', 'pipe'] });
       // One-use login delivery is intentionally secret-bearing operator output,
@@ -52,6 +52,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
       if (args[0] !== 'login-issue') commandLogs.push(output);
       const result = JSON.parse(output); row.status = 'passed'; return result;
     } catch (error) { commandLogs.push(String(error.stdout ?? ''), String(error.stderr ?? '')); throw error; }
+    finally { row.durationMs = Math.round(performance.now() - started); }
   };
   const templatePath = join(area, 'template.json'); command('repository-template', templatePath);
   const template = JSON.parse(await readFile(templatePath)); assert.equal(template.provider.enabled, false);
@@ -146,7 +147,15 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   assert.throws(() => command('validate', missingPath), error => error.status === 1 && JSON.parse(error.stdout).reason === 'RepositoryCapabilityMissing' && JSON.parse(error.stdout).operation === 'agent.repository.human.v1');
   command('init', configU); assert.equal(command('tasks', configU, 'user', 'tenant')[0].defaultMode, 'propose');
   origin = await openDeployment(configU); let service = await origin.serve();
-  workspaceConfig.peers[0].url = service.url; await json(configW, workspaceConfig); command('init', configW);
+  workspaceConfig.peers[0].url = service.url;
+  const checkSandbox = workspaceConfig.bindings.find(row => row.adapter.kind === 'repository-check').adapter.sandbox;
+  const scratchRoot = checkSandbox.scratchRoot;
+  checkSandbox.scratchRoot = join(area, 'not-provisioned'); await json(configW, workspaceConfig);
+  assert.equal(command('validate', configW).valid, true);
+  command('init', configW); assert.deepEqual(command('status', configW), []);
+  assert.throws(() => command('serve', configW), error => String(error.stderr).includes('EnvironmentUnavailable'),
+    'inspection needs no physical qualification, but serving must qualify before listening');
+  checkSandbox.scratchRoot = scratchRoot; await json(configW, workspaceConfig);
   console.log('deployment: both v2 configurations initialized');
   let stdout = '', stderr = '';
   child = spawn(process.execPath, [cli, 'serve', configW], { cwd: root, env: cliEnv, stdio: ['ignore', 'pipe', 'pipe'] }); childExit = once(child, 'exit');
@@ -240,6 +249,7 @@ test('installed CLI and v2 deployment run all modes through two TLS hosts and a 
   assert.deepEqual([persistence.local, persistence.session, persistence.cookie, persistence.caches, persistence.databases], [[], [], '', [], []]);
   artifacts.push(Buffer.from(JSON.stringify(persistence)));
   for (const bytes of artifacts) for (const needle of needles) assert.equal(bytes.includes(needle), false, 'host-only value entered a portable artifact, log or script-visible browser state');
+  t.diagnostic(JSON.stringify({ inspectionMs: operatorCommands.filter(row => ['validate', 'init', 'status'].includes(row.command) && row.status === 'passed').map(({ command, durationMs }) => ({ command, durationMs })) }));
   if (process.env.AGENT_REPOSITORY_OPERATOR_PROOF) await writeFile(process.env.AGENT_REPOSITORY_OPERATOR_PROOF, JSON.stringify({
     format: 'mobile-repository-operator-actions/v1', sourceHead: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
     testSha256: hash(await readFile(import.meta.filename)), clientSha256: hash(await readFile(join(root, 'runtime/mobility/client.mjs'))), browser: browser.version(),

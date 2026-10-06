@@ -144,8 +144,9 @@ node runtime/mobility/cli.mjs serve configured/origin.json
 ```
 
 `validate` checks runtime/contracts, keys/TLS, limits and local catalogue bindings
-without opening custody/session stores or starting a task. Native runner checks
-use temporary qualification scratch. Once peers are serving, verify their live
+without opening custody/session stores or starting a task. Native checks qualify
+when serving or executing them. Storage and inspection commands do not compile
+qualification probes or allocate qualification scratch. Once peers are serving, verify their live
 capabilities through authenticated preflight:
 
 ```sh
@@ -238,6 +239,11 @@ An offline input has this shape; paths must identify the approved source/toolcha
   "external": null
 }
 ```
+
+Mobile-repository, publication-gate and mutation checks stay in explicit `offline`
+qualification, rather than extending the generic runtime aggregate. Native and
+installed-browser qualification also have explicit targets. Use
+`check-mobile-repository` for focused local feedback.
 
 Local `offline`, `browser` and `package` lanes run fixed verifier targets serially
 and retain bounded logs/outcomes with source/artifact hashes in a new output

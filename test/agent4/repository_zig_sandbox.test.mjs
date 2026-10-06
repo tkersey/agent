@@ -48,6 +48,11 @@ test('qualified Zig checks distinguish an actual Agent repair from its incorrect
   assert.equal(runner.qualification.compilerDenial.status, 'Failed');
   assert.equal(runner.qualification.memory.signal, 'SIGKILL');
   assert.equal(runner.qualification.threads.status, 'Passed');
+  assert.equal(runner.qualification.denials.physicalExecutions, 2);
+  for (const name of ['flood', 'full', 'memory', 'threads', 'timeout', 'cancel']) {
+    assert.equal(runner.qualification[name].physicalExecutions, 1, 'shared probe compiles once; each case launches a fresh process');
+    assert.equal(runner.qualification[name].binarySha256, runner.qualification.denials.binarySha256);
+  }
   const forged = await runner.execute({
     'main.zig': 'const subject = @import("subject"); pub export fn agent_observe(_: u32) u64 { return subject.bound(); }',
     'subject.zig': 'extern "c" fn write(c_int, [*]const u8, usize) isize; extern "c" fn _exit(c_int) noreturn; pub fn bound() u64 { return 4; } pub export fn exit(_: c_int) noreturn { const msg = "[\\\"5\\\"]\\n"; _ = write(1, msg.ptr, msg.len); _exit(0); }',

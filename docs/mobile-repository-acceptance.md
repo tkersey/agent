@@ -16,31 +16,42 @@ already merged in Boundary → World → Agent order.
 
 ## Evidence and scope
 
-Application source `4490974298d7d2699dc5ad02415a4ceff0bd755b` (tree
-`d0b49b3ca461a29ca5c2b97253c5df97cf63a503`) passed 448/448 affected build steps:
-authoring, application, private approval, comparison, extracted package/browser,
-163 continuation comparisons and 702 native/WASM comparisons across fourteen
-custody scenarios. The subsequent helper consolidation produces byte-identical
-images. Consolidation revalidation passed 67/67 and 92/92 steps, including 50
-storage/capability checks and 163 continuation plus 512 native/WASM comparisons
-across ten custody scenarios. These counts describe the historical runs, not a
-required test count. The reduced suite checks mode semantics in the application
-suite, installed mode/real-Zig integration in the deployment suite, and repeated
-tasks/reconnect/export once per browser from the archive. Native custody replay
-retains propose-then-publish and lost-publication recovery; continuation checks,
-focused safety tests, mutation checks and measurement workloads remain.
+Application source `4693529d7e67b3f2bb886356fc9873317a6d8937` (tree
+`e1e9e11d5341ece9b249aa28c3febb2cc23e5ba2`) passed 368/368 affected build steps
+for approval, application/browser, extracted package and comparison checks.
+Native validation passed 92/92 steps, including 178 continuation comparisons and
+112 custody comparisons. The restricted-snapshot case now stops after metadata
+and placement resolution, before source reads or model invocation. The checks
+ran against the implementation bytes before commit; final handoff-status wording
+and documentation edits did not change execution. The final archive separately
+verifies all shipped bytes.
+
+The preceding recovery changes passed 404/404 affected build steps and 176
+host/journal/browser-bridge tests. Completed-check teardown then passed 188 core
+and binding tests: observed completion survives a lost reply and restart, while
+an interrupted check with unknown physical completion remains unresolved. These
+runs retain their actual source subjects in the machine-readable report; later
+application runs replace affected image evidence.
 
 The broader aggregate passed 559/559 steps at
 `330916481f46a20ad03c3e5c760d024c6b82e5d7`. Its unchanged generic runtime,
-dependency, isolation, fault, mutation and inherited regression evidence retains
-that scope; affected application evidence is replaced by the 448-step run. The
-559-step aggregate was not rerun on 4490974. The Linux/x64-only dependency watcher
-was skipped on Darwin and is not qualified here.
+dependency, isolation, fault and inherited regression evidence retains that scope.
+It was not rerun wholesale on 4693529. The Linux/x64-only dependency watcher was
+skipped on Darwin and is not qualified here.
+
+Qualification remains explicit: this PR's heavy application, publication and
+mutation checks no longer extend the generic developer feedback target. Snapshot
+fixtures retain the pagination boundary and independent safety assertions with
+less setup; observed snapshot checks fell from 97.6 seconds to 32–34 seconds.
+The focused build took 40.2 seconds. Installed deployment qualification fell from
+391 seconds to about 168 seconds after redundant work was removed; these are local
+observations, not latency guarantees. CLI inspection avoids physical sandbox
+qualification, which remains required when serving or executing checks.
 
 | Emitted artifact | Bytes | SHA-256 |
 |---|---:|---|
-| Task image | 36,201 | `b0ba25bb9035c5e280a6f32ee917ed77ad93c4fc0e8af5fd3c26d038ddeb1595` |
-| Packaged session image | 36,718 | `e6b969e822e230f0c0360614309daf34c0feee1c7ee5ef921f0fa3ea40b055f9` |
+| Task image | 36,270 | `d1f425dbbf88805be2aaf1d62e1b0a250427842a3bcd3cef20709fa99f714c51` |
+| Packaged session image | 36,787 | `f05780a82f2722b1d6a858e3536b49ef1761ab562fc694bbf06dd6e270e7280f` |
 
 The unchanged lock binds Boundary `c49f743382257c7cf5512934ae3a2d0f56d4d4c0`,
 World `35f11b811b03fcaa2d696265ff8d9b9c92c8fc95` and World kernel
@@ -50,7 +61,8 @@ Dependency postflight passed. Local compiler executable SHA-256:
 library inventory: `8ed22c5d774cba9be2ad20c24c706ce450e5952b08d0f9d179e1b71811f60e5a`.
 
 Local records under `.agent4-mobile/out/agent4/` include the 96-row acceptance JSON,
-`text-budget-qualification.log`, `final-3309164.log`, measurements and package
+`recovery-qualification.log`, `settled-check-after.log`, `restricted-native.log`,
+`restricted-application.log`, `final-3309164.log`, measurements and package
 inventory verification. They bind actual subjects, hashes and limitations. The
 accepted user specification remains a local qualification input at
 `.agent4-mobile/accepted-specification.md`. Raw rounds are not versioned. Current
@@ -73,7 +85,7 @@ Later passes do not relabel the original failed subjects.
 
 ## Measurements
 
-At 4490974, all 576 comparison attempts passed: 36 warmups and 540 measured samples,
+At 4693529, all 576 comparison attempts passed: 36 warmups and 540 measured samples,
 30 matched pairs per cell. Both profiles use the same image, task, patch, model
 replies, work counts and grants. Stationary invokes actual workspace leaves through
 mutual-TLS binary proxies; mobile uses real custody transfers. The Apple M2 Pro
@@ -81,20 +93,20 @@ single-machine fixture uses synthetic provider and human input.
 
 | Cell | Mobile p50 / p95 ms | Stationary p50 / p95 ms | Paired difference p50 / p95 ms | Protocol bytes, mobile / stationary |
 |---|---:|---:|---:|---:|
-| base / cold / local | 1626.5 / 1715.9 | 1293.9 / 1425.4 | +324.6 / +400.1 | 91151 / 40296 |
-| base / cold / metro | 1802.5 / 1998.3 | 1387.6 / 1437.3 | +406.1 / +568.7 | 91151 / 40296 |
-| base / cold / wide | 2491.6 / 2592.2 | 1779.0 / 1904.0 | +699.8 / +765.2 | 91151 / 40296 |
-| base / warm / local | 1556.7 / 1629.1 | 1257.0 / 1356.8 | +307.8 / +363.9 | 48811 / 40296 |
-| base / warm / metro | 1717.3 / 1811.6 | 1383.7 / 1457.9 | +337.7 / +426.4 | 48811 / 40296 |
-| base / warm / wide | 2335.6 / 2454.4 | 1828.7 / 1912.0 | +531.7 / +618.0 | 48811 / 40296 |
-| repository / warm / local | 1541.9 / 1641.9 | 1260.1 / 1400.3 | +285.2 / +367.2 | 48811 / 40296 |
-| reads / warm / local | 2494.8 / 2592.1 | 2197.1 / 2292.7 | +272.4 / +421.5 | 53246 / 97326 |
-| checkpoint / warm / local | 1573.6 / 1654.9 | 1282.8 / 1357.4 | +289.1 / +368.4 | 97966 / 187757 |
+| base / cold / local | 1606.9 / 1638.9 | 1283.0 / 1318.7 | +319.7 / +357.0 | 93136 / 40296 |
+| base / cold / metro | 1815.3 / 1849.8 | 1403.9 / 1424.7 | +406.3 / +447.9 | 93136 / 40296 |
+| base / cold / wide | 2555.0 / 2599.0 | 1818.2 / 1863.6 | +735.2 / +780.8 | 93136 / 40296 |
+| base / warm / local | 1569.6 / 1610.9 | 1284.4 / 1329.2 | +282.8 / +335.3 | 50727 / 40296 |
+| base / warm / metro | 1774.8 / 1807.2 | 1419.4 / 1448.7 | +352.9 / +452.1 | 50727 / 40296 |
+| base / warm / wide | 2416.2 / 2451.3 | 1833.7 / 1879.3 | +582.0 / +633.0 | 50727 / 40296 |
+| repository / warm / local | 1568.0 / 1604.0 | 1283.3 / 1307.5 | +281.4 / +341.2 | 50727 / 40296 |
+| reads / warm / local | 2520.1 / 2573.1 | 2221.9 / 2291.3 | +294.5 / +404.3 | 55162 / 97326 |
+| checkpoint / warm / local | 1599.6 / 1641.8 | 1300.9 / 1342.3 | +299.2 / +362.9 | 99882 / 187757 |
 
 
-Mobility was slower in every cell. Extra reads and opaque replay used about 45%
-and 48% fewer protocol bytes; those savings did not offset execution/custody costs.
-Cold mobile runs sent the 36,718-byte image; warm runs sent none. The larger
+Mobility was slower in every cell. Extra reads and opaque replay used about 43%
+and 47% fewer protocol bytes; those savings did not offset execution/custody costs.
+Cold mobile runs sent the 36,787-byte image; warm runs sent none. The larger
 repository cell adds unread content, not whole-build scaling evidence.
 
 Timing spans signed registration to terminal report. Provisioning, compilation,
@@ -105,34 +117,34 @@ journal and leaf spans may nest and must not be summed. Process-resource counter
 include setup/warmup. Quantiles use nearest rank; thirty samples do not provide a
 precise tail guarantee. Every attempt and outlier is retained locally.
 
-All 256 supplemental observations passed (240 measured, 16 warmups). Fresh Chromium
-153.0.8010.12 and Firefox 155.0 Workers restore/drive/retire the same parked outcome.
+At 4693529, all 256 supplemental observations passed (240 measured, 16 warmups).
+Fresh Chromium 153.0.8010.12 and Firefox 155.0 Workers restore/drive/retire the same parked outcome.
 Module/kernel loading and message cloning are included; browser startup, fixture
 setup and Playwright transport are excluded.
 
 | Checkpoint bytes | Engine | Total p50 ms | Total p95 ms | Maximum ms |
 |---:|---|---:|---:|---:|
-| 15,358 | Chromium | 39.2 | 40.0 | 40.3 |
-| 15,358 | Firefox | 41.0 | 43.0 | 248.0 |
-| 64,512 | Chromium | 42.8 | 44.1 | 44.5 |
-| 64,512 | Firefox | 47.0 | 49.0 | 50.0 |
+| 15,358 | Chromium | 39.1 | 40.1 | 40.5 |
+| 15,358 | Firefox | 40.0 | 44.0 | 248.0 |
+| 64,512 | Chromium | 42.6 | 43.5 | 43.8 |
+| 64,512 | Firefox | 46.0 | 50.0 | 53.0 |
 
 
 The 248 ms Firefox outlier remains. Coarse-clock zero-duration phases do not mean
-zero cost. Host verification medians were 19.7/21.4 ms; different timing boundaries
+zero cost. Host verification medians were 19.2/20.6 ms; different timing boundaries
 prevent subtraction to infer browser overhead.
 
 | Publication reconciliation and authored return | p50 ms | p95 ms | Maximum ms |
 |---|---:|---:|---:|
-| Retained custodian | 509.8 | 547.0 | 570.2 |
-| Reopened custodian/journal | 554.6 | 571.1 | 572.0 |
+| Retained custodian | 513.6 | 524.5 | 526.6 |
+| Reopened custodian/journal | 555.2 | 567.0 | 569.9 |
 
 
-Paired reopen-minus-retain median: +42.6 ms (p95 +69.3 ms). Whole service-process
+Paired reopen-minus-retain median: +42.8 ms (p95 +58.2 ms). Whole service-process
 startup and native runner qualification are excluded. Every sample reconciles one
-actual publication without another model call, check or write. Earlier 0d90b80/
-3309164 comparisons and 3bc8d12 attribution remain historical observations, not
-new executions of this subject.
+actual publication without another model call, check or write. Earlier comparisons
+and attribution remain historical observations. Measurement runs at d7c24cd and 9a4fcb3 were interrupted after concrete defects were found;
+their partial results are not credited as completed measurements.
 
 The earlier Chromium driver at 3bc8d12 recorded 30/101/122 Continue activations for
 inspect/propose/publish, with 16/88/104 leaving local status unchanged. It polled
@@ -226,7 +238,7 @@ person and identified hosts require separate authorization.
 | MR-064 | Passed | model.test.mjs; mobile_repository_continuation.mjs; opaque-replay mutant — exact replay data |
 | MR-065 | Passed | mobility_journal.test.mjs; background model tests — durable pre-dispatch allowance |
 | MR-066 | Passed | model.test.mjs — exact credentialed endpoint and disclosure profile restrictions |
-| MR-067 | Passed | mobility_host.test.mjs — whole-state label/export denial before upload |
+| MR-067 | Passed | mobile_repository_continuation.mjs — known return denial before source/model; mobility_host.test.mjs — actual whole-state export enforcement |
 | MR-068 | Passed | mobility_host.test.mjs; whole-state mutant — retained capture/replay label restrictions |
 | MR-069 | Passed | mobility_task_catalogue.test.mjs; model bindings; export command — independent view/egress grants |
 | MR-070 | Passed | installed deployment scans actual keys, ambient sentinel, all journal artifacts/transfers/logs and browser-visible persistence; inherited durable browser scans |

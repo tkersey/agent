@@ -515,12 +515,13 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
     }
     return { snapshot: selected, candidate: candidate?.id ?? null, tree: candidate?.tree ?? selected.tree, files };
   }
-  async function publicationCore(candidate, binding, validation, commit) {
+  async function publicationCore(candidate, binding, validation, commit, summary) {
     const fields = (value, names) => value && same(Object.keys(value).sort(), [...names].sort());
     require(fields(binding, ['run', 'task', 'generation', 'principal', 'tenant', 'intent', 'policyRevision', 'authorizationDigest', 'validationPolicyDigest']), 'RepositoryPublicationBinding');
     for (const [name, value] of Object.entries(binding)) require(text(value, name === 'run' ? 256 : 128) && value.length > 0 &&
       (name.endsWith('Digest') ? /^[a-f0-9]{64}$/.test(value) : !/[\x00-\x1f\x7f]/u.test(value)), 'RepositoryPublicationBinding');
     require(/^[a-f0-9]{64}$/.test(binding.intent), 'RepositoryPublicationIntent');
+    require(summary === undefined || text(summary, 4096), 'RepositoryProposalSummary');
     require(fields(commit, ['author', 'committer', 'timestamp', 'message']), 'RepositoryCommitMetadata');
     for (const person of [commit.author, commit.committer]) require(fields(person, ['name', 'email']) &&
       text(person.name, 128) && person.name.trim() === person.name && person.name.length > 0 &&
@@ -543,6 +544,7 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
       diff.push({ path: edit.path, operation: edit.operation, oldContent: row ? utf8.decode(await object.read('blob', row[2])) : null, newContent: edit.content });
     }
     return { format: 'agent.repository.proposal-core/v1', candidate, binding, validation, diff,
+      ...(summary === undefined ? {} : { summary }),
       ...(validation.every(record => record.status === 'Passed') ? {} : { validationDisposition: 'unvalidated' }),
       destination: { repository, generation, managedRef: metadata.managedRef, expectedBase: candidate.snapshot.base }, commit };
   }
@@ -554,9 +556,9 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
   // Preparation precedes protected approval. This constructs immutable data;
   // neither an OID nor a self-consistent digest grants publication authority.
   async function preparePublication(input) {
-    const { candidate, binding, validation, commit } = structuredClone(input);
+    const { candidate, binding, validation, commit, summary } = structuredClone(input);
     await verifyCandidate(candidate);
-    const core = await publicationCore(candidate, binding, validation, commit), coreDigest = digest(core);
+    const core = await publicationCore(candidate, binding, validation, commit, summary), coreDigest = digest(core);
     const bytes = publicationCommit(core, coreDigest), commitOid = await object.write('commit', bytes);
     const proposal = { core, coreDigest, commitOid, commitSha256: hash(bytes) };
     return { ...proposal, digest: digest(proposal) };
@@ -564,12 +566,12 @@ export async function openRepositorySnapshotStore({ directory, gitExecutable: ex
   async function verifyPublication(input) {
     const proposal = structuredClone(input);
     require(proposal?.core?.candidate, 'RepositoryPublicationProposal');
-    const { candidate, binding, validation, commit } = proposal.core;
+    const { candidate, binding, validation, commit, summary } = proposal.core;
     // A known check disposition permits presentation of an exact candidate.
     // Every path to publication still requires independently passed checks.
     require(Array.isArray(validation) && validation.length > 0 && validation.every(record => record.status === 'Passed'), 'RepositoryPublicationValidation');
     await verifyCandidate(candidate);
-    const core = await publicationCore(candidate, binding, validation, commit), coreDigest = digest(core);
+    const core = await publicationCore(candidate, binding, validation, commit, summary), coreDigest = digest(core);
     const bytes = publicationCommit(core, coreDigest), commitOid = objectId(metadata.objectFormat, 'commit', bytes);
     const expected = { core, coreDigest, commitOid, commitSha256: hash(bytes) };
     require(same(proposal, { ...expected, digest: digest(expected) }) &&

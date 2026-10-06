@@ -128,11 +128,31 @@ for (const [status, tag] of [['Unavailable', 2], ['Failed', 1], ['TimedOut', 3],
     const result = await binding.handle({ payload: [text(candidate), text(f.state.checks[0]), 1n, 1n], run: f.run, occurrence: f.occurrence });
     assert.equal(JSON.parse(decodeValue(schema, result)).validationDisposition, 'unvalidated');
     assert.deepEqual(canonical(prepared.candidate), canonical(candidate)); assert.equal(prepared.validation[0].status, status);
+    assert.equal(Object.hasOwn(prepared, 'summary'), false, 'legacy preparation keeps its existing core shape');
     await assert.rejects(f.binding.handle(f.context()), { code: 'PublicationValidationMissing' });
     assert.equal(f.state.admissions, 0); assert.equal(f.state.writes, 0);
     f.state.checks = [];
     await assert.rejects(binding.handle({ payload: [text(candidate), text(prepared.validation[0]), 1n, 1n], run: f.run, occurrence: f.occurrence }), { code: 'PublicationValidationMissing' });
   });
+
+test('proposal preparation carries the current review answer with the same acquired candidate and checks', async () => {
+  const f = fixture(), preparation = { root: 0, types: [{ product: [1, 1, 2, 2, 3] }, { bounded_text: 2 << 20 }, 'u64', { bounded_text: 4096 }] };
+  const candidate = { snapshot: { repository: 'repo', generation: 'generation' }, id: 'candidate' }, inputs = [];
+  f.store.preparePublication = async input => { inputs.push(input); return input; };
+  const binding = repositoryProposalBinding({ ...f.binding, operation: 'agent.repository.proposal.v1', role: 'write',
+    payloadSchema: encodeSchema(preparation), resultSchema: schemaBytes }, { store: f.store,
+    protectedImages: [{ image: f.run.image_digest, program: f.run.program_id }], authorizationDigest: '1'.repeat(64), validationPolicyDigest: '2'.repeat(64),
+    requiredProfiles: [{ id: 'zig-check', profileDigest: '3'.repeat(64), runner: '4'.repeat(64) }], checkResultSchema: encodeSchema(checkSchema),
+    commit: {}, services: () => ({ journal: f.journal, policy: f.policy }) });
+  for (const [id, summary] of [['first', 'Initial explanation.'], ['second', 'Answer to the review question.']]) {
+    const payload = [text(candidate), text(f.state.checks[0]), 1n, 1n, summary];
+    const result = JSON.parse(decodeValue(schema, await binding.handle({ payload, run: f.run, occurrence: { id } })));
+    assert.equal(result.summary, summary); assert.deepEqual(canonical(result.candidate), canonical(candidate));
+  }
+  assert.deepEqual(canonical(inputs[0].validation), canonical(inputs[1].validation));
+  assert.notEqual(inputs[0].binding.intent, inputs[1].binding.intent);
+  assert.equal(f.state.writes, 0); assert.equal(f.state.admissions, 0);
+});
 
 function checkFixture(repository = 'repo') {
   const profile = { owner: 'W', repository, generation: '1', manifest: 'a'.repeat(64), profileId: 'finite-check',

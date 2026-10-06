@@ -114,10 +114,11 @@ export function repositoryProposalBinding(metadata, { store, protectedImages, au
     [row.profileDigest, row.runner].every(value => /^[a-f0-9]{64}$/.test(value))), 'PublicationProfile');
   const checkSchema = admitCheckSchema(checkResultSchema), input = decodeSchema(metadata.payloadSchema), output = decodeSchema(metadata.resultSchema);
   const fields = input.types[input.root]?.product;
-  requireThat(fields?.length === 4 && fields.slice(0, 2).every(id => input.types[id]?.bounded_text === (2 << 20)) &&
-    fields.slice(2).every(id => input.types[id] === 'u64') && output.types[output.root]?.bounded_text === (2 << 20), 'PublicationSchema');
+  requireThat([4, 5].includes(fields?.length) && fields.slice(0, 2).every(id => input.types[id]?.bounded_text === (2 << 20)) &&
+    fields.slice(2, 4).every(id => input.types[id] === 'u64') && (fields.length === 4 || input.types[fields[4]]?.bounded_text === 4096) &&
+    output.types[output.root]?.bounded_text === (2 << 20), 'PublicationSchema');
   const recoverable = (payload, run) => images.some(row => row.image === run.image_digest && row.program === run.program_id) &&
-    Array.isArray(payload) && payload.length === 4 && BigInt(payload[2]) > 0n && BigInt(payload[3]) > 0n;
+    Array.isArray(payload) && payload.length === fields.length && BigInt(payload[2]) > 0n && BigInt(payload[3]) > 0n;
   const { repository, generation } = store.describe();
   const authorize = (payload, run) => {
     if (!recoverable(payload, run)) return false;
@@ -134,6 +135,7 @@ export function repositoryProposalBinding(metadata, { store, protectedImages, au
     requireThat(profiles.every(profile => record.profile === profile.id && record.profileDigest === profile.profileDigest &&
       record.runner === profile.runner) && acquired.some(saved => same(saved, record)), 'PublicationValidationMissing');
     const proposal = await store.preparePublication({ candidate, validation: [record], commit: selectedCommit,
+      ...(fields.length === 5 ? { summary: payload[4] } : {}),
       binding: { run: run.run_id, task: String(payload[2]), generation: String(payload[3]), principal: run.principal_ref,
         tenant: run.tenant_ref, intent: hash(canonical([run.run_id, occurrence.id])), policyRevision: policy.revision,
         authorizationDigest, validationPolicyDigest } });

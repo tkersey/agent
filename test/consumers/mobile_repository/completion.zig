@@ -30,7 +30,7 @@ pub fn define(e: Emit, resolve: *const a.Operation, relocate: *const a.Operation
     const candidate = try b.field(finding, "candidate");
     const changed = try b.branch();
     const unchanged = try b.branch();
-    const input = try changed.product(try e.schema(p.Preparation), &.{ .{ .name = "candidate", .value = candidate }, .{ .name = "validation", .value = try changed.field(finding, "validation") }, .{ .name = "task_id", .value = try changed.field(task, "task_id") }, .{ .name = "generation", .value = try changed.field(task, "generation") } });
+    const input = try changed.product(try e.schema(p.Preparation), &.{ .{ .name = "candidate", .value = candidate }, .{ .name = "validation", .value = try changed.field(finding, "validation") }, .{ .name = "task_id", .value = try changed.field(task, "task_id") }, .{ .name = "generation", .value = try changed.field(task, "generation") }, .{ .name = "summary", .value = try changed.field(finding, "answer") } });
     const prepared = try ctx.builder.term(.{ .perform = .{ .effect = try a.interop.operationId(c, prepare), .payload = try a.interop.valueId(changed, input) } });
     try ctx.registry.protectSite(try a.interop.functionId(c, f), prepared, try a.interop.operationId(c, prepare));
     const materialized = try b.conditional(try b.less(try b.constant(u64, 0), try b.blobLength(candidate)), try changed.ret(try a.interop.term(changed, prepared, try e.schema(p.Proposal))), try unchanged.ret(try e.literal(unchanged, p.Proposal, .{ .bytes = "" })));

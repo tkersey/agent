@@ -62,6 +62,42 @@ test('browser sessions do not consume historical capacity and CSRF remains sessi
   assert.equal(denied.status, 403); assert.equal(denied.json().error, 'CsrfDenied');
 });
 
+test('control responses retain cancellation and retry access without disclosing protected receipts', async t => {
+  let permitted = false;
+  const catalogue = { authorizeView() {
+    if (!permitted) throw Object.assign(Error('presentation denied'), { code: 'PresentationDenied' });
+  } };
+  const delivery = { status: 'published', presentation: 'pending', receipt: { repository: 'private-repository', commit: 'secret-commit' } };
+  const f = await bridge(t, { localData: false, catalogue });
+  const csrf = (await f.api('/v1/browser/session')).json().csrf, route = op => `/v1/browser/runs/${f.id}/${op}`;
+  await f.hosts.A.run(f.id); assert.equal(f.hosts.A.status(f.id).custody, 'OFFERED');
+  assert.equal((await f.api(route('status'))).json().error, 'PresentationDenied');
+  // Trusted control-result double: acquisition and custody have separate tests.
+  let revokeDuringRetry = false;
+  f.hosts.A.retryTransfer = async () => {
+    if (revokeDuringRetry) permitted = false;
+    return { kind: 'unknown', status: { custody: 'OFFERED', delivery } };
+  };
+  const retry = () => f.api(route('retry'), { method: 'POST', csrf });
+  let response = await retry(); assert.equal(response.status, 200);
+  assert.equal(response.json().kind, 'unknown'); assert.equal(response.json().status.delivery, undefined);
+  assert(!response.bytes.includes(Buffer.from('secret-commit')));
+  permitted = true; response = await retry(); assert.equal(response.json().status.delivery.receipt.commit, 'secret-commit');
+  revokeDuringRetry = true; response = await retry(); assert.equal(response.json().status.delivery, undefined);
+
+  const terminal = await bridge(t, { catalogue });
+  await terminal.hosts.A.run(terminal.id); assert.equal(terminal.hosts.A.status(terminal.id).custody, 'TERMINAL');
+  terminal.journals.A.latestPublication = () => delivery.receipt;
+  const terminalCsrf = (await terminal.api('/v1/browser/session')).json().csrf;
+  const cancel = () => terminal.api(`/v1/browser/runs/${terminal.id}/cancel`, { method: 'POST', csrf: terminalCsrf, body: canonical({ reason: 'stop' }) });
+  response = await cancel(); assert.equal(response.status, 200); assert.equal(response.json().kind, 'terminal');
+  assert.equal(response.json().status.delivery, undefined); assert(!response.bytes.includes(Buffer.from('secret-commit')));
+  permitted = true; response = await cancel(); assert.equal(response.json().status.delivery.receipt.commit, 'secret-commit');
+  const originalCancel = terminal.hosts.A.cancelRun.bind(terminal.hosts.A);
+  terminal.hosts.A.cancelRun = async (...args) => { const result = await originalCancel(...args); permitted = false; return result; };
+  response = await cancel(); assert.equal(response.json().status.delivery, undefined);
+});
+
 test('revoked browser users can complete pending cancellation and terminal assignments release capacity', async t => {
   const f = await bridge(t), csrf = (await f.api('/v1/browser/session')).json().csrf;
   for (let iteration = 0; iteration < 2; iteration++) {

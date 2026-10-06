@@ -113,6 +113,8 @@ if (typeof document !== 'undefined' && document.querySelector('#connect')) {
       if (!Array.isArray(core.diff) || core.diff.length !== core.candidate.edits.length) throw new Error('The complete change is unavailable for review.');
       const paragraph = text => { const p = document.createElement('p'); p.textContent = text; question.append(p); };
       paragraph(`${publishing ? "Publish to" : completed ? "Completed proposal for" : "Review a proposal for"} managed branch ${core.destination.managedRef} in ${core.destination.repository}.`);
+      const explanation = core.summary ?? value.summary;
+      if (typeof explanation === 'string') paragraph(explanation);
       if (completed) {
         const approval = value.publication?.tag === 1 ? value.publication.value : null;
         const delivered = approval?.tag === 0 ? approval.value : null;

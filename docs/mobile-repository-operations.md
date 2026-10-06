@@ -223,6 +223,10 @@ the write was not performed.
 In `propose` mode, a candidate with a known nonpassing check result can finish as
 an explicitly unvalidated proposal. Its exact changes and check disposition remain
 available for review and export. It cannot enter the qualified publication path.
+Review questions retain the candidate and checks. The resulting answer is included
+in the next exact proposal and displayed before the person is asked to decide again.
+Cancellation and transfer retry remain available when presentation permission is
+missing, but their responses omit protected publication receipts.
 
 With the local custody service stopped, trusted CLI intake can list/start the same
 catalogue tasks. These local identity arguments are not remote authentication:

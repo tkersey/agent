@@ -67,6 +67,18 @@ export async function serveBrowser(custodian, { key, cert, authenticate, redeem 
       const run = custodian.authorizeUser(id, identity, { cleanup: ['cancel', 'status', 'metrics'].includes(operation),
         executor: ['attach', 'command', 'report', 'image', 'outcome', 'reply'].includes(operation) });
       if (catalogue && !['cancel', 'metrics', 'retry'].includes(operation)) catalogue.authorizeView(identity, run);
+      const controlResult = value => {
+        if (!catalogue || !value.status?.delivery) return value;
+        try { catalogue.authorizeView(identity, custodian.authorizeUser(id, identity, { cleanup: true })); }
+        catch (error) {
+          if (error.code !== 'PresentationDenied') throw error;
+          // Control remains available without permission to view its evidence.
+          // Evaluate after the operation: cancellation can acquire new labels.
+          const { delivery: _, ...status } = value.status;
+          return { ...value, status };
+        }
+        return value;
+      };
       if (req.method === 'POST') {
         requireThat(req.headers.origin === origin && typeof req.headers['x-agent-csrf'] === 'string' && same(req.headers['x-agent-csrf'], csrf(identity)), 'CsrfDenied');
       }
@@ -84,15 +96,15 @@ export async function serveBrowser(custodian, { key, cert, authenticate, redeem 
         return json(res, status);
       }
       if (req.method === 'GET' && operation === 'question') return json(res, custodian.pendingQuestion(id, identity), 200, (2 << 20) + 8192);
-      if (req.method === 'POST' && operation === 'answer') return json(res, await custodian.answerQuestion(id, identity, parse(await body(req, CONTROL_LIMIT))));
+      if (req.method === 'POST' && operation === 'answer') return json(res, controlResult(await custodian.answerQuestion(id, identity, parse(await body(req, CONTROL_LIMIT)))));
       if (req.method === 'GET' && operation === 'metrics') return json(res, custodian.metrics(id));
       if (req.method === 'POST' && operation === 'cancel') {
         const value = parse(await body(req, CONTROL_LIMIT)); requireThat(Object.keys(value).length === 1 && typeof value.reason === 'string', 'InvalidControl');
-        return json(res, await custodian.cancelRun(id, value.reason));
+        return json(res, controlResult(await custodian.cancelRun(id, value.reason)));
       }
       if (req.method === 'POST' && operation === 'retry') {
         await body(req, 0); requireThat(run.status === 'OFFERED' && run.transfer_id !== null, 'TransferNotPending');
-        return json(res, await custodian.retryTransfer(run.transfer_id));
+        return json(res, controlResult(await custodian.retryTransfer(run.transfer_id)));
       }
       if (req.method === 'POST' && operation === 'attach') {
         await body(req, 0);
@@ -120,7 +132,7 @@ export async function serveBrowser(custodian, { key, cert, authenticate, redeem 
       }
       if (req.method === 'POST' && operation === 'command') {
         await body(req, 0); const result = await custodian.executorCommand(id, assigned.version);
-        if (result.kind !== 'drive') { if (['offered', 'unknown'].includes(result.kind)) assignments.delete(nonce); return json(res, result); }
+        if (result.kind !== 'drive') { if (['offered', 'unknown'].includes(result.kind)) assignments.delete(nonce); return json(res, controlResult(result)); }
         assigned.reply = result.command.kind === 'reply' ? result.command.value : null;
         return json(res, { kind: 'drive', control: result.command.kind, reason: result.command.reason ?? null, version: assigned.version });
       }
@@ -129,7 +141,7 @@ export async function serveBrowser(custodian, { key, cert, authenticate, redeem 
         const result = await custodian.publishExecutor(id, assigned.version, output);
         assigned.version = result.version; assigned.outcome = Uint8Array.from(output); assigned.reply = null;
         if (result.status.custody === 'TERMINAL') assignments.delete(nonce);
-        return json(res, result);
+        return json(res, controlResult(result));
       }
       requireThat(false, 'UnknownRoute');
     } catch (error) {

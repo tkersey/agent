@@ -15,7 +15,7 @@ pub const ReviewReason = union(enum) { decline: Text(4096), question: Text(4096)
 pub const Result = union(enum) { delivered: Delivery, declined: ReviewReason, invalid, denied };
 pub const Outcome = union(enum) { approval: Result, check_failed: CheckResult };
 pub const Task = struct { principal: u64, candidate: Proposal, human: agent.mobility.EnsureInput, placement: agent.mobility.EnsureInput };
-pub const Preparation = struct { candidate: Proposal, validation: Proposal, task_id: u64, generation: u64 };
+pub const Preparation = struct { candidate: Proposal, validation: Proposal, task_id: u64, generation: u64, summary: Text(4096) };
 pub const Challenge = struct { occurrence: Text(128), proposal: Proposal };
 pub const Decision = union(enum) { approve, reject: ReviewReason, amend: Proposal };
 pub const Answer = struct { challenge: Challenge, principal: u64, decision: Decision };
@@ -85,7 +85,7 @@ const Application = struct {
         b.functions.items[@intCast(entry)].effects = row.effects;
         const validation = try b.variable(try c.schema(CheckResult));
         const proposal = try b.variable(try c.schema(Proposal));
-        const input = try b.primitive(try c.schema(Preparation), .product, &.{ candidate, try b.primitive(try c.schema(Proposal), .field, &.{try b.reference(validation)}, 1), try c.literal(u64, 1), try c.literal(u64, 1) }, 0);
+        const input = try b.primitive(try c.schema(Preparation), .product, &.{ candidate, try b.primitive(try c.schema(Proposal), .field, &.{try b.reference(validation)}, 1), try c.literal(u64, 1), try c.literal(u64, 1), try c.literal(Text(4096), .{ .bytes = "Checked candidate ready for exact review." }) }, 0);
         const checked = try b.term(.{ .perform = .{ .effect = check, .payload = candidate } });
         const prepared = try b.term(.{ .perform = .{ .effect = prepare, .payload = input } });
         // These sites authorize bounded scratch preparation, never publication.

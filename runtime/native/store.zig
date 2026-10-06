@@ -28,19 +28,19 @@ pub const Store = struct {
             try database.exec("BEGIN IMMEDIATE;");
             errdefer database.exec("ROLLBACK;") catch {};
             try database.exec(
-                \\CREATE TABLE meta(singleton INTEGER PRIMARY KEY CHECK(singleton=1), format INTEGER NOT NULL CHECK(format=1), namespace BLOB NOT NULL, generation INTEGER NOT NULL, parent BLOB NOT NULL, head BLOB NOT NULL);
+                \\CREATE TABLE meta(singleton INTEGER PRIMARY KEY CHECK(singleton=1), format INTEGER NOT NULL CHECK(format=2), namespace BLOB NOT NULL, generation INTEGER NOT NULL, parent BLOB NOT NULL, head BLOB NOT NULL);
                 \\CREATE TABLE objects(digest BLOB PRIMARY KEY CHECK(length(digest)=32), body BLOB NOT NULL) WITHOUT ROWID;
-                \\CREATE TABLE tasks(id BLOB PRIMARY KEY CHECK(length(id)=16), revision INTEGER NOT NULL, terminal INTEGER NOT NULL CHECK(terminal IN(0,1)), body BLOB NOT NULL) WITHOUT ROWID;
-                \\CREATE TABLE operations(id TEXT PRIMARY KEY, request BLOB NOT NULL CHECK(length(request)=32), receipt BLOB NOT NULL) WITHOUT ROWID;
-                \\CREATE TABLE records(kind TEXT NOT NULL, id BLOB NOT NULL, task BLOB NOT NULL REFERENCES tasks(id), body BLOB NOT NULL, PRIMARY KEY(kind,id)) WITHOUT ROWID;
-                \\CREATE TABLE events(task BLOB NOT NULL REFERENCES tasks(id), seq INTEGER NOT NULL, revision INTEGER NOT NULL, body BLOB NOT NULL, PRIMARY KEY(task,seq)) WITHOUT ROWID;
+                \\CREATE TABLE tasks(id BLOB PRIMARY KEY CHECK(length(id)=16), revision INTEGER NOT NULL, terminal INTEGER NOT NULL CHECK(terminal IN(0,1)), body BLOB NOT NULL REFERENCES objects(digest)) WITHOUT ROWID;
+                \\CREATE TABLE operations(id TEXT PRIMARY KEY, request BLOB NOT NULL CHECK(length(request)=32), receipt BLOB NOT NULL REFERENCES objects(digest)) WITHOUT ROWID;
+                \\CREATE TABLE records(kind TEXT NOT NULL, id BLOB NOT NULL, task BLOB NOT NULL REFERENCES tasks(id), body BLOB NOT NULL REFERENCES objects(digest), PRIMARY KEY(kind,id)) WITHOUT ROWID;
+                \\CREATE TABLE events(task BLOB NOT NULL REFERENCES tasks(id), seq INTEGER NOT NULL, revision INTEGER NOT NULL, body BLOB NOT NULL REFERENCES objects(digest), PRIMARY KEY(task,seq)) WITHOUT ROWID;
             );
-            try database.run("INSERT INTO meta VALUES(1,1,?,0,?,?)", &.{ .{ .blob = &namespace }, .{ .blob = &@as(Digest, @splat(0)) }, .{ .blob = &namespace } });
+            try database.run("INSERT INTO meta VALUES(1,2,?,0,?,?)", &.{ .{ .blob = &namespace }, .{ .blob = &@as(Digest, @splat(0)) }, .{ .blob = &namespace } });
             try database.exec("COMMIT;");
         }
         var query = try database.prepare("SELECT format,namespace,generation,parent,head FROM meta WHERE singleton=1", &.{});
         defer query.deinit();
-        if (try query.step() != .row or try query.integer(0) != 1 or !std.mem.eql(u8, try query.bytes(1), &namespace)) return error.CorruptState;
+        if (try query.step() != .row or try query.integer(0) != 2 or !std.mem.eql(u8, try query.bytes(1), &namespace)) return error.CorruptState;
         const generation = try query.integer(2);
         if (generation < 0) return error.CorruptState;
         const parent = try query.bytes(3);
@@ -119,6 +119,13 @@ pub const Store = struct {
         if (!std.mem.eql(u8, &digest(bytes), &id)) return error.CorruptState;
         return a.dupe(u8, bytes);
     }
+    fn recordObject(self: *Store, a: std.mem.Allocator, reference: []const u8) ![]u8 {
+        if (reference.len != 32) return error.CorruptState;
+        return self.acquiredObject(a, reference[0..32].*, 256 * 1024) catch |err| switch (err) {
+            error.MissingArtifact => error.CorruptState,
+            else => err,
+        };
+    }
 
     /// Idempotency precedes mutable task/question checks. The caller hashes the
     /// admitted typed operation (including method), excluding JSON-RPC id.
@@ -127,18 +134,19 @@ pub const Store = struct {
         defer query.deinit();
         if (try query.step() == .done) return null;
         if (!std.mem.eql(u8, try query.bytes(0), &request)) return error.OperationConflict;
-        return try a.dupe(u8, try query.bytes(1));
+        return try self.recordObject(a, try query.bytes(1));
     }
     pub fn savedReceipt(self: *Store, a: std.mem.Allocator, id: []const u8) !?[]u8 {
         var query = try self.database.prepare("SELECT receipt FROM operations WHERE id=?", &.{.{ .text = id }});
         defer query.deinit();
         if (try query.step() == .done) return null;
-        return try a.dupe(u8, try query.bytes(0));
+        return try self.recordObject(a, try query.bytes(0));
     }
     pub fn putReceipt(self: *Store, id: []const u8, request: Digest, bytes: []const u8) !void {
         try self.writing();
         if (id.len == 0 or id.len > 128 or bytes.len > 64 * 1024) return error.Capacity;
-        try self.database.run("INSERT INTO operations VALUES(?,?,?)", &.{ .{ .text = id }, .{ .blob = &request }, .{ .blob = bytes } });
+        const ref = try self.putObject(bytes);
+        try self.database.run("INSERT INTO operations VALUES(?,?,?)", &.{ .{ .text = id }, .{ .blob = &request }, .{ .blob = &ref.digest } });
     }
 
     pub fn putTask(self: *Store, task: state.Task, previous: ?u64) !void {
@@ -146,33 +154,41 @@ pub const Store = struct {
         if (task.revision > std.math.maxInt(i64)) return error.Capacity;
         const body = try contracts.encodeOwned(state.Task, self.allocator, task);
         defer self.allocator.free(body);
+        const ref = try self.putObject(body);
         if (previous) |revision| {
             if (revision >= std.math.maxInt(i64) or task.revision != revision + 1) return error.StaleRevision;
-            try self.database.run("UPDATE tasks SET revision=?,terminal=?,body=? WHERE id=? AND revision=?", &.{ .{ .integer = @intCast(task.revision) }, .{ .integer = @intFromBool(task.terminal()) }, .{ .blob = body }, .{ .blob = &task.id }, .{ .integer = @intCast(revision) } });
+            try self.database.run("UPDATE tasks SET revision=?,terminal=?,body=? WHERE id=? AND revision=?", &.{ .{ .integer = @intCast(task.revision) }, .{ .integer = @intFromBool(task.terminal()) }, .{ .blob = &ref.digest }, .{ .blob = &task.id }, .{ .integer = @intCast(revision) } });
             if (try self.database.changes() != 1) return error.StaleRevision;
         } else {
             if (task.revision != 1) return error.StaleRevision;
-            try self.database.run("INSERT INTO tasks VALUES(?,?,?,?)", &.{ .{ .blob = &task.id }, .{ .integer = 1 }, .{ .integer = @intFromBool(task.terminal()) }, .{ .blob = body } });
+            try self.database.run("INSERT INTO tasks VALUES(?,?,?,?)", &.{ .{ .blob = &task.id }, .{ .integer = 1 }, .{ .integer = @intFromBool(task.terminal()) }, .{ .blob = &ref.digest } });
         }
     }
     pub fn taskBytes(self: *Store, a: std.mem.Allocator, id: state.TaskId) ![]u8 {
-        var query = try self.database.prepare("SELECT body FROM tasks WHERE id=?", &.{.{ .blob = &id }});
+        var query = try self.database.prepare("SELECT body,revision,terminal FROM tasks WHERE id=?", &.{.{ .blob = &id }});
         defer query.deinit();
         if (try query.step() != .row) return error.UnknownTask;
-        return a.dupe(u8, try query.bytes(0));
+        const bytes = try self.recordObject(a, try query.bytes(0));
+        errdefer a.free(bytes);
+        var decoded = try contracts.decodeOwned(state.Task, a, bytes);
+        defer decoded.deinit();
+        if (!std.mem.eql(u8, &decoded.value.id, &id) or decoded.value.revision != try query.integer(1) or @intFromBool(decoded.value.terminal()) != try query.integer(2)) return error.CorruptState;
+        return bytes;
     }
     pub fn putRecord(self: *Store, comptime T: type, comptime kind: []const u8, id: Digest, task: state.TaskId, value: T) !void {
         try self.writing();
         const body = try contracts.encodeOwned(T, self.allocator, value);
         defer self.allocator.free(body);
-        try self.database.run("INSERT INTO records VALUES(?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET body=excluded.body WHERE records.task=excluded.task", &.{ .{ .text = kind }, .{ .blob = &id }, .{ .blob = &task }, .{ .blob = body } });
+        if (body.len > 256 * 1024) return error.Capacity;
+        const ref = try self.putObject(body);
+        try self.database.run("INSERT INTO records VALUES(?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET body=excluded.body WHERE records.task=excluded.task", &.{ .{ .text = kind }, .{ .blob = &id }, .{ .blob = &task }, .{ .blob = &ref.digest } });
         if (try self.database.changes() != 1) return error.CorruptState;
     }
     pub fn recordBytes(self: *Store, a: std.mem.Allocator, comptime kind: []const u8, id: Digest, task: state.TaskId) !?[]u8 {
         var query = try self.database.prepare("SELECT body FROM records WHERE kind=? AND id=? AND task=?", &.{ .{ .text = kind }, .{ .blob = &id }, .{ .blob = &task } });
         defer query.deinit();
         if (try query.step() != .row) return null;
-        return try a.dupe(u8, try query.bytes(0));
+        return try self.recordObject(a, try query.bytes(0));
     }
     pub fn taskIds(self: *Store, a: std.mem.Allocator, nonterminal: bool) ![]state.TaskId {
         var query = try self.database.prepare("SELECT id FROM tasks WHERE (?=0 OR terminal=0) ORDER BY id LIMIT 1025", &.{.{ .integer = @intFromBool(nonterminal) }});
@@ -192,11 +208,12 @@ pub const Store = struct {
         if (event.seq == 0 or event.seq > std.math.maxInt(i64) or event.revision > std.math.maxInt(i64)) return error.Capacity;
         const body = try contracts.encodeOwned(state.Event, self.allocator, event);
         defer self.allocator.free(body);
-        try self.database.run("INSERT INTO events VALUES(?,?,?,?)", &.{ .{ .blob = &event.task }, .{ .integer = @intCast(event.seq) }, .{ .integer = @intCast(event.revision) }, .{ .blob = body } });
+        const ref = try self.putObject(body);
+        try self.database.run("INSERT INTO events VALUES(?,?,?,?)", &.{ .{ .blob = &event.task }, .{ .integer = @intCast(event.seq) }, .{ .integer = @intCast(event.revision) }, .{ .blob = &ref.digest } });
     }
     pub fn eventsAfter(self: *Store, a: std.mem.Allocator, task: state.TaskId, after: u64, limit: u32) ![][]u8 {
         if (after > std.math.maxInt(i64) or limit == 0 or limit > 128) return error.InvalidParams;
-        var query = try self.database.prepare("SELECT body FROM events WHERE task=? AND seq>? ORDER BY seq LIMIT ?", &.{ .{ .blob = &task }, .{ .integer = @intCast(after) }, .{ .integer = limit } });
+        var query = try self.database.prepare("SELECT e.body,o.body FROM events e LEFT JOIN objects o ON o.digest=e.body WHERE e.task=? AND e.seq>? ORDER BY e.seq LIMIT ?", &.{ .{ .blob = &task }, .{ .integer = @intCast(after) }, .{ .integer = limit } });
         defer query.deinit();
         var records: std.ArrayList([]u8) = .empty;
         errdefer {
@@ -205,7 +222,9 @@ pub const Store = struct {
         }
         var total: usize = 0;
         while (try query.step() == .row) {
-            const bytes = try query.bytes(0);
+            const reference = try query.bytes(0);
+            const bytes = try query.bytes(1);
+            if (reference.len != 32 or !std.mem.eql(u8, &digest(bytes), reference)) return error.CorruptState;
             if (total + bytes.len > 384 * 1024) break;
             const copied = try a.dupe(u8, bytes);
             errdefer a.free(copied);
@@ -243,4 +262,6 @@ test "objects and immutable admission receipts commit together or disappear toge
     const reopened = try Store.init(a, db, false, @splat(7));
     try std.testing.expectEqualDeep(head, reopened.head);
     try std.testing.expectError(error.CorruptState, Store.init(a, db, false, @splat(8)));
+    try db.run("UPDATE objects SET body=? WHERE digest=?", &.{ .{ .blob = "changed receipt" }, .{ .blob = &digest("accepted/task-1") } });
+    try std.testing.expectError(error.CorruptState, store.receipt(a, "request-1", digest("submit/input")));
 }

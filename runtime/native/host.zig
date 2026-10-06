@@ -11,11 +11,13 @@ const transport_api = @import("transport.zig");
 const Worker = @import("worker.zig").Worker;
 const world = @import("world");
 const c = @import("native_c");
+const identity = @import("identity.zig");
 
 fn Connection(comptime Types: type) type {
     return struct {
         application: *const discovery.Application,
         instance: []const u8,
+        artifact_identity: [32]u8,
         initialized: bool = false,
         closing: bool = false,
         limits: protocol.Limits = .{},
@@ -56,6 +58,7 @@ fn Connection(comptime Types: type) type {
                 try json.put(a, &info, "version", json.string("1.0.0-dev"));
                 try json.put(a, &result, "server_info", info);
                 try json.put(a, &result, "build_manifest_id", json.string(self.application.manifest_id));
+                try json.put(a, &result, "native_artifact_sha256", json.string(try a.dupe(u8, &std.fmt.bytesToHex(self.artifact_identity, .lower))));
                 const limits_bytes = try std.json.Stringify.valueAlloc(a, self.limits, .{});
                 const limits = try json.parse(a, limits_bytes, .{});
                 try json.put(a, &result, "limits", limits.value);
@@ -142,7 +145,15 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     }
     if (std.mem.eql(u8, command, "describe-build") or std.mem.eql(u8, command, "licenses")) {
         if (args.next() != null) return 64;
-        try std.Io.File.stdout().writeStreamingAll(init.io, assets.manifest);
+        var arena = std.heap.ArenaAllocator.init(init.gpa);
+        defer arena.deinit();
+        const a = arena.allocator();
+        const artifact = try identity.executable(init.io);
+        var manifest = (try json.parse(a, assets.manifest, .{ .bytes = 256 * 1024 })).value;
+        try json.put(a, &manifest, "artifact_sha256", json.string(try a.dupe(u8, &std.fmt.bytesToHex(artifact.sha256, .lower))));
+        try json.put(a, &manifest, "artifact_bytes", json.string(try std.fmt.allocPrint(a, "{d}", .{artifact.bytes})));
+        try json.put(a, &manifest, "embedded_manifest_sha256", json.string(try discovery.digest(a, assets.manifest)));
+        try std.Io.File.stdout().writeStreamingAll(init.io, try json.canonical(a, manifest));
         try std.Io.File.stdout().writeStreamingAll(init.io, "\n");
         return 0;
     }
@@ -167,9 +178,10 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     defer handlers.deinit();
     var application = try discovery.Application.init(Types, a, assets, handlers);
     defer application.deinit();
-    var identity: [16]u8 = undefined;
-    try init.io.randomSecure(&identity);
-    const instance = std.fmt.bytesToHex(identity, .lower);
+    var instance_identity: [16]u8 = undefined;
+    try init.io.randomSecure(&instance_identity);
+    const instance = std.fmt.bytesToHex(instance_identity, .lower);
+    const artifact_identity = try identity.executable(init.io);
     var namespace: ?Namespace = null;
     defer if (namespace) |*owner| owner.close() catch {};
     if (state_path) |path| namespace = Namespace.open(a, init.io, path) catch |err| return switch (err) {
@@ -183,7 +195,7 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     const grants = try profile_allocator.alloc(registry.Grant, handlers.entries.len);
     for (handlers.entries, grants) |entry, *grant| grant.* = .{ .identity = entry.declaration.identity, .resource_role = entry.declaration.resource_role, .resource_identity = application.image_identity };
     const profile_bytes = try std.json.Stringify.valueAlloc(profile_allocator, .{ .mode = "offline", .application = Types.application_id, .assets = try discovery.digest(profile_allocator, assets.application) }, .{});
-    const profile: tasks.Profile = .{ .id = "offline", .bytes = profile_bytes, .authority = .{ .grants = grants, .principal = try std.fmt.allocPrint(profile_allocator, "uid:{d}", .{c.geteuid()}), .tenant = "local" } };
+    const profile: tasks.Profile = .{ .id = "offline", .runtime_identity = artifact_identity.sha256, .bytes = profile_bytes, .authority = .{ .grants = grants, .principal = try std.fmt.allocPrint(profile_allocator, "uid:{d}", .{c.geteuid()}), .tenant = "local" } };
     var service: ?tasks.Service(Types) = null;
     defer if (service) |*owner| owner.close(a) catch {};
     if (namespace) |*owner| service = try tasks.Service(Types).init(a, init.io, owner, assets, &application, handlers, profile);
@@ -197,7 +209,7 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
         try std.Io.File.stdout().writeStreamingAll(init.io, "\n");
         return 0;
     }
-    var connection: Connection(Types) = .{ .application = &application, .instance = &instance, .client = if (client) |*value| value else null };
+    var connection: Connection(Types) = .{ .application = &application, .instance = &instance, .artifact_identity = artifact_identity.sha256, .client = if (client) |*value| value else null };
     return serve(Types, init.io, a, &connection);
 }
 
@@ -265,7 +277,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
                 if (code == 0) code = 2;
             }
         };
-        if (writable) transport.flush(if (connection.client) |client| !client.service.profile.authority.revoked else true) catch {
+        if (writable) transport.flush(if (connection.client) |client| !client.service.profile.authority.revoked and client.service.profile.authority.disclosure else true) catch {
             writable = false;
             if (shutdown_at == null) shutdown_at = time;
         };

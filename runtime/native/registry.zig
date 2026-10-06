@@ -17,6 +17,7 @@ pub const Authority = struct {
     tenant: []const u8,
     inference: bool = false,
     revoked: bool = false,
+    disclosure: bool = true,
 };
 pub const Context = struct {
     allocator: std.mem.Allocator,

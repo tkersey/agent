@@ -78,6 +78,7 @@ pub const Question = struct {
     pending_digest: Digest,
     answer_schema_id: Name,
     answer_schema_digest: Digest,
+    request: Reference,
     prompt: Reference,
     answer: ?Reference,
     receipt: ?Receipt,

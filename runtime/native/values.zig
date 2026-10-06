@@ -4,6 +4,15 @@ const std = @import("std");
 const data = @import("boundary_data");
 const contracts = @import("agent_contracts");
 const json = @import("json.zig");
+
+test "client JSON integers accept exact equivalent spellings within the declared range" {
+    const a = std.testing.allocator;
+    for ([_][]const u8{ "1", "1.0", "1e0" }) |number|
+        try std.testing.expectEqual(@as(u32, 1), try fromJson(u32, a, .{ .number_string = number }));
+    try std.testing.expectError(error.InvalidParams, fromJson(u32, a, .{ .number_string = "-1" }));
+    try std.testing.expectError(error.InvalidParams, fromJson(u32, a, .{ .number_string = "4294967296" }));
+    try std.testing.expectError(error.InvalidParams, fromJson(u32, a, .{ .number_string = "1.5" }));
+}
 pub const schemas = contracts.json;
 pub const Error = error{InvalidParams} || std.mem.Allocator.Error;
 
@@ -35,7 +44,7 @@ pub fn fromJson(comptime T: type, a: std.mem.Allocator, value: json.Value) Error
     return switch (@typeInfo(T)) {
         .void => if (value == .object and value.object.count() == 0) {} else error.InvalidParams,
         .bool => if (value == .bool) value.bool else error.InvalidParams,
-        .int => |info| if (info.bits == 64) try json.decimal(T, value) else if (value == .number_string) try json.integer(T, value.number_string) else error.InvalidParams,
+        .int => |info| if (info.bits == 64) try json.decimal(T, value) else if (value == .number_string) std.math.cast(T, try json.safeInteger(value.number_string)) orelse error.InvalidParams else error.InvalidParams,
         .@"enum" => std.meta.stringToEnum(T, try json.text(value)) orelse error.InvalidParams,
         .optional => |info| if (value == .null) null else try fromJson(info.child, a, value),
         .array => |info| blk: {

@@ -151,6 +151,29 @@ Linux links the selected toolchain's musl libc and embeds its license. The
 database wrapper refuses an uncapped allocation fallback and verifies the linked
 SQLite version. This primitive is not a completed task journal.
 
+The current namespace format is `agent-native-state/2`. Task, receipt, question,
+message and event indexes reference the same hash-checked immutable object store
+as checkpoints and replies. A changed record body rejects before interpretation;
+foreign keys and task revision checks bind its index. Earlier development state
+formats reject rather than being initialized over.
+
+The namespace requires a private directory owned by the launching OS principal,
+regular single-link files, and root/current-principal-owned ancestors that other
+users cannot replace (sticky system temporary directories are allowed). Symlinks
+are not followed. The reference trust boundary includes the OS administrator and
+the launching principal. The database/head seal detects an older database against
+its published seal and repairs the single committed-but-unsealed crash window;
+it is not a claim to detect restoration of an entire old namespace and seal or
+arbitrary malicious writes by the trusted OS principal. Power-loss qualification
+remains separate from process-crash recovery.
+
+Tasks bind the SHA-256 of the executing native artifact. `describe-build` reports
+that observed hash and byte count separately from `embedded_manifest_sha256`;
+the independent process peer compares them with the copied file. A changed binary
+cannot silently resume an old task. Reading the executing artifact requires the
+platform's executable-file facility (procfs on Linux) and readable executable
+bytes. The manifest remains free of a circular embedded executable digest.
+
 The native occurrence adaptation preserves READY → DISPATCHING → acquired/UNKNOWN
 ordering from `runtime/mobility/custody.mjs`. UNKNOWN cannot dispatch or cancel
 itself; a matching late acquired reply may settle it. Answer acquisition binds
@@ -162,7 +185,9 @@ effect. Its reply is either empty or an identified typed message. Its codecs
 and semantic identity belong to `agent_contracts`, shared with the native
 declaration. An incompatible redeclaration rejects. A single image/public-World
 test covers empty and distinct Unicode-bearing messages with prepared-image reuse.
-Durable queue acquisition/consumption and native/WASM parity remain pending.
+Durable queue acquisition/consumption is implemented and exercised by the
+task-owner fixture. Native/WASM parity and complete reference qualification remain
+pending.
 
 ## Existing owners and remaining gaps
 

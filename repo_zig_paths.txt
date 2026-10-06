@@ -13,6 +13,7 @@ runtime/native/discovery.zig
 runtime/native/driver.zig
 runtime/native/entry.zig
 runtime/native/host.zig
+runtime/native/identity.zig
 runtime/native/inbox.zig
 runtime/native/json.zig
 runtime/native/namespace.zig

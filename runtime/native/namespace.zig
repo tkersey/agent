@@ -6,9 +6,9 @@ const sqlite = @import("sqlite.zig");
 const journal = @import("store.zig");
 const c = @import("native_c");
 
-fn regular(fd: c_int) !c.struct_stat {
-    var stat: c.struct_stat = undefined;
-    if (c.fstat(fd, &stat) != 0) return error.StorageUnavailable;
+fn regular(fd: c_int) !c.struct_agent_native_stat {
+    var stat: c.struct_agent_native_stat = undefined;
+    if (c.agent_native_fstat(fd, &stat) != 0) return error.StorageUnavailable;
     if (stat.st_mode & c.S_IFMT != c.S_IFREG or stat.st_mode & 0o077 != 0 or stat.st_uid != c.geteuid() or stat.st_nlink != 1) return error.UnsafeStatePath;
     return stat;
 }
@@ -22,6 +22,37 @@ fn openFile(dir: c_int, name: [:0]const u8, flags: c_int) !c_int {
     errdefer _ = c.close(fd);
     _ = try regular(fd);
     return fd;
+}
+fn trustedParent(fd: c_int) !void {
+    var stat: c.struct_agent_native_stat = undefined;
+    if (c.agent_native_fstat(fd, &stat) != 0) return error.StorageUnavailable;
+    // SQLite opens a pathname after descriptor-based namespace admission.
+    // An untrusted writer must not be able to replace any admitted ancestor in
+    // that interval. Root and this OS principal are the launch trust boundary;
+    // sticky /tmp is allowed, ordinary shared writable parents are not.
+    if (stat.st_uid != 0 and stat.st_uid != c.geteuid()) return error.UnsafeStatePath;
+    if (stat.st_mode & 0o022 != 0 and stat.st_mode & c.S_ISVTX == 0) return error.UnsafeStatePath;
+}
+fn inspectDirectory(a: std.mem.Allocator, io: std.Io, fd: c_int, validate_files: bool) !bool {
+    const directory: std.Io.Dir = .{ .handle = fd };
+    var iterator = directory.iterate();
+    var count: usize = 0;
+    var has_lock = false;
+    while (try iterator.next(io)) |entry| {
+        var known = false;
+        for ([_][]const u8{ "owner.lock", "identity", "state.sqlite", "state.sqlite-journal", "seal", "seal.next" }) |name| known = known or std.mem.eql(u8, name, entry.name);
+        if (!known) return error.UnsafeStatePath;
+        count += 1;
+        has_lock = has_lock or std.mem.eql(u8, entry.name, "owner.lock");
+        if (validate_files) {
+            const name = try a.dupeSentinel(u8, entry.name, 0);
+            defer a.free(name);
+            const file = try openFile(fd, name, c.O_RDONLY);
+            _ = c.close(file);
+        }
+    }
+    if (count != 0 and !has_lock) return error.CorruptState;
+    return count != 0;
 }
 fn readExact(fd: c_int, out: []u8) !void {
     const stat = try regular(fd);
@@ -63,6 +94,7 @@ pub const Namespace = struct {
         errdefer _ = c.close(dir);
         var component = components.next();
         while (component) |part| {
+            try trustedParent(dir);
             if (std.mem.eql(u8, part, "..")) return error.UnsafeStatePath;
             const next = components.next();
             if (!std.mem.eql(u8, part, ".")) {
@@ -79,12 +111,14 @@ pub const Namespace = struct {
             }
             component = next;
         }
-        var stat: c.struct_stat = undefined;
-        if (c.fstat(dir, &stat) != 0) return error.StorageUnavailable;
+        var stat: c.struct_agent_native_stat = undefined;
+        if (c.agent_native_fstat(dir, &stat) != 0) return error.StorageUnavailable;
         if (stat.st_mode & 0o077 != 0 or stat.st_uid != c.geteuid()) return error.UnsafeStatePath;
+        _ = try inspectDirectory(a, io, dir, false);
         const lock = try openFile(dir, "owner.lock", c.O_RDWR | c.O_CREAT);
         errdefer _ = c.close(lock);
         if (c.flock(lock, c.LOCK_EX | c.LOCK_NB) != 0) return error.Busy;
+        _ = try inspectDirectory(a, io, dir, true);
 
         var fresh = false;
         const identity_file = openFile(dir, "identity", c.O_RDONLY) catch |err| switch (err) {
@@ -239,4 +273,18 @@ test "namespace refuses a database older than its published seal" {
     try owner.close();
     live = false;
     try std.testing.expectError(error.RollbackDetected, Namespace.open(a, io, path));
+}
+
+test "namespace rejects an ancestor another principal could replace" {
+    const a = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    if (c.mkdirat(temporary.dir.handle, "shared", 0o700) != 0) return error.StorageUnavailable;
+    if (c.fchmodat(temporary.dir.handle, "shared", 0o777, 0) != 0) return error.StorageUnavailable;
+    var buffer: [4096]u8 = undefined;
+    const length = try temporary.dir.realPath(io, &buffer);
+    const path = try std.fmt.allocPrint(a, "{s}/shared/state", .{buffer[0..length]});
+    defer a.free(path);
+    try std.testing.expectError(error.UnsafeStatePath, Namespace.open(a, io, path));
 }

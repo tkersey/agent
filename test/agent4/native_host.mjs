@@ -2,7 +2,8 @@
 // claim the later task/recovery/provider conformance obligations are complete.
 import assert from 'node:assert/strict';
 import {spawn, execFileSync} from 'node:child_process';
-import {mkdtempSync, copyFileSync, rmSync} from 'node:fs';
+import {mkdtempSync, copyFileSync, rmSync, readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {once} from 'node:events';
@@ -67,6 +68,8 @@ try {
   assert.equal(manifest.format, 'agent-native-build/v1');
   assert.equal(manifest.protocol, 'agent-host/1.0');
   assert.equal(manifest.compiler.version, '0.17.0');
+  assert.equal(manifest.artifact_sha256, createHash('sha256').update(readFileSync(binary)).digest('hex'));
+  assert.equal(manifest.artifact_bytes, String(readFileSync(binary).length));
   assert(!JSON.stringify(manifest).includes(process.cwd()));
   assert.equal(manifest.dependencies.sqlite.version, '3.53.4');
   assert.deepEqual(manifest.licenses.map(item => item.component).sort(), ['Agent', 'World', 'Boundary', 'Zig standard library', 'SQLite', ...(manifest.target.includes('linux') ? ['musl libc'] : [])].sort());

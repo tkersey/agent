@@ -9,3 +9,15 @@
 #include <stdio.h>
 #include <poll.h>
 #include <signal.h>
+#include <stdint.h>
+
+/* Keep libc's target-specific stat layout on the C side. */
+struct agent_native_stat {
+    uint64_t st_dev;
+    uint64_t st_ino;
+    uint64_t st_uid;
+    uint64_t st_nlink;
+    uint32_t st_mode;
+    int64_t st_size;
+};
+int agent_native_fstat(int fd, struct agent_native_stat *out);

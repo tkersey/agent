@@ -59,7 +59,7 @@ test "durable owner replays admissions and acquired work, binds answers, and con
     defer handlers.deinit();
     var grants: [3]native.registry.Grant = undefined;
     for (&grants, handlers.entries) |*grant, entry| grant.* = .{ .identity = entry.declaration.identity, .resource_role = entry.declaration.resource_role, .resource_identity = application.image_identity };
-    const profile: native.tasks.Profile = .{ .id = "offline", .bytes = "fixed-profile", .authority = .{ .grants = &grants, .principal = "test", .tenant = "test" } };
+    const profile: native.tasks.Profile = .{ .id = "offline", .runtime_identity = @splat(42), .bytes = "fixed-profile", .authority = .{ .grants = &grants, .principal = "test", .tenant = "test" } };
     var temporary = std.testing.tmpDir(.{});
     defer temporary.cleanup();
     var path_buffer: [4096]u8 = undefined;
@@ -103,6 +103,9 @@ test "durable owner replays admissions and acquired work, binds answers, and con
     try std.testing.expect(try service.pump(frame) == .idle);
     var status = try service.task(frame, accepted.receipt.task);
     defer status.deinit();
+    service.profile.runtime_identity = @splat(43);
+    try std.testing.expectError(error.IncompatibleProfile, service.resumeTask(frame, "resume", accepted.receipt.task, status.value.revision));
+    service.profile.runtime_identity = profile.runtime_identity;
     _ = try service.resumeTask(frame, "resume", accepted.receipt.task, status.value.revision);
     for (0..32) |_| {
         const step = try service.pump(frame);
@@ -132,6 +135,9 @@ test "durable owner replays admissions and acquired work, binds answers, and con
     try std.testing.expectEqualSlices(u8, &answered.receipt.id, &replayed_answer.receipt.id);
     try std.testing.expectError(error.AnswerConflict, service.respond(frame, "answer-conflict", accepted.receipt.task, question.value.id, question.value.revision, question.value.request_digest, "task-owner.answer.v1", .{ .number_string = "8" }));
     try std.testing.expect((try service.submit(frame, "submit", 20)).replayed);
+    service.profile.bytes = "changed alias target";
+    try std.testing.expect((try service.submit(frame, "submit", 20)).replayed);
+    service.profile.bytes = profile.bytes;
     try std.testing.expectError(error.OperationConflict, service.requestCancel(frame, "submit", accepted.receipt.task, "cancel"));
     var client: native.client.Client(T) = .{ .service = &service };
     var params = native.json.object();
@@ -151,4 +157,8 @@ test "durable owner replays admissions and acquired work, binds answers, and con
     try std.testing.expectEqual(1, consumed);
     try std.testing.expectEqual(1, completed_events);
     try std.testing.expectError(error.InvalidParams, client.events(frame, accepted.receipt.task, completed.value.event_high + 1, 128));
+    service.profile.authority.disclosure = false;
+    try std.testing.expectError(error.Denied, client.call(frame, .@"task.result", params));
+    try std.testing.expectError(error.Denied, service.submit(frame, "submit", 20));
+    service.profile.authority.disclosure = true;
 }

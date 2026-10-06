@@ -667,7 +667,8 @@ pub fn build(b: *std.Build) void {
         // Zig does not collect test declarations from named dependency modules.
         // Run the runtime's own root explicitly; the integration root above
         // independently exercises its public task owner with authored programs.
-        native_graph.testModule(native_checks, host_environment);
+        const runtime_test_environment = if (native_target.result.cpu.arch == b.graph.host.result.cpu.arch and native_target.result.os.tag == b.graph.host.result.os.tag) public_environment else host_environment;
+        native_graph.testModule(native_checks, runtime_test_environment);
         // Repository policy modules have distinct import roots and retain their
         // focused runners rather than changing their nominal type identities.
         for ([_][]const u8{ "repository_working_set", "repository_replacement" }) |name| {
@@ -757,6 +758,7 @@ fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: 
         .file = sqlite_source.path(b, "sqlite3.c"),
         .flags = @import("build_native.zig").sqlite_flags,
     });
+    module.addCSourceFile(.{ .file = b.path("runtime/native/native_c.c"), .flags = &.{"-std=c99"} });
     return module;
 }
 

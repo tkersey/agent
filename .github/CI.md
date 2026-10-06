@@ -74,6 +74,8 @@ module as an explicit test root: Zig does not collect a named dependency module'
 tests from the authoring test root. The existing shared authoring root exercises
 integration with real authored programs; `check-native-host` selects the final
 example's independent subprocess peer. No existing native or custody check is removed.
+When the product target is runnable on the host, runtime unit tests use that
+product environment too, including Linux musl rather than only the host's glibc ABI.
 
 `check-agent4` and `check` still include the external installation and all
 previously retained authoring obligations. The native lane also runs the retained custody and deployment regressions.

@@ -114,6 +114,7 @@ pub fn Client(comptime Types: type) type {
                 for (records) |bytes| a.free(bytes);
                 a.free(records);
             }
+            if (records.len == 0 and after < task.event_high) return error.CorruptState;
             var items: std.array_list.Managed(json.Value) = .init(a);
             var next = after;
             for (records) |bytes| {

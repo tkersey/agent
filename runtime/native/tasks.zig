@@ -15,6 +15,7 @@ const values = @import("values.zig");
 
 pub const Profile = struct {
     id: []const u8,
+    runtime_identity: state.Digest,
     /// Admitted immutable profile bytes, including concrete resource bindings.
     bytes: []const u8,
     authority: registry.Authority,
@@ -80,7 +81,7 @@ pub fn Service(comptime Types: type) type {
             return &self.namespace.store;
         }
         fn allowed(self: *Self) !void {
-            if (self.profile.authority.revoked) return error.Denied;
+            if (self.profile.authority.revoked or !self.profile.authority.disclosure) return error.Denied;
             if (self.store().fenced) return error.StorageUnavailable;
         }
         pub fn task(self: *Self, a: std.mem.Allocator, id: state.TaskId) !contracts.Decoded(state.Task) {
@@ -228,7 +229,7 @@ pub fn Service(comptime Types: type) type {
         fn compatible(self: *Self, value: state.Task) !void {
             if (!same(value.application_id.bytes, Types.application_id) or
                 !same(&value.profile.digest, &storage.digest(self.profile.bytes)) or !same(&value.image.digest, &storage.digest(self.assets.image)) or
-                !same(&value.runtime_identity, &storage.digest(self.assets.manifest))) return error.IncompatibleProfile;
+                !same(&value.runtime_identity, &self.profile.runtime_identity)) return error.IncompatibleProfile;
         }
         fn retire(self: *Self, a: std.mem.Allocator) !void {
             if (self.active) |active| {
@@ -303,7 +304,7 @@ pub fn Service(comptime Types: type) type {
                 .profile_id = try name(self.profile.id),
                 .profile = try self.store().putObject(self.profile.bytes),
                 .image = try self.store().putObject(self.assets.image),
-                .runtime_identity = storage.digest(self.assets.manifest),
+                .runtime_identity = self.profile.runtime_identity,
                 .input = try self.store().putObject(input_bytes),
                 .checkpoint = try self.store().putObject(checkpoint),
                 .outcome = try self.store().putObject(outcome),
@@ -467,6 +468,11 @@ pub fn Service(comptime Types: type) type {
                 return .{ .receipt = retained, .replayed = true };
             }
             if (question.retired or value.terminal() or (value.cancellation != null and !value.cancellation_applied) or value.current_occurrence == null or !same(&value.current_occurrence.?, &question.occurrence)) return error.StaleInteraction;
+            const original_request = try self.store().object(a, question.request, 4 * 1024 * 1024);
+            defer a.free(original_request);
+            var admitted_request = try data.invocation.decode(data.invocation.Request, a, original_request);
+            defer admitted_request.deinit();
+            _ = try self.handlers.admit(admitted_request.value, self.profile.authority, self.application.image_identity);
             var pending = try self.record(occurrence.Occurrence, a, "occurrence", question.occurrence, task_id);
             defer pending.deinit();
             const bound = try data.invocation.encodeOwned(data.invocation.Result, a, .{ .request_identity = question.request_digest, .value = answer });
@@ -711,7 +717,7 @@ pub fn Service(comptime Types: type) type {
                     const waiting = try occurrence.awaiting(pending, binding, .{ .attempt = attempt, .question = question_id, .pending_digest = request.value.binding.pending_state_digest }, initial.cancellation != null and !initial.cancellation_applied);
                     try self.store().begin();
                     defer self.store().rollback();
-                    const question: state.Question = .{ .id = question_id, .task = value.id, .occurrence = pending.id, .revision = 1, .request_digest = pending.request, .pending_digest = request.value.binding.pending_state_digest, .answer_schema_id = try name(entry.declaration.answer_schema_id.?), .answer_schema_digest = storage.digest(entry.resume_schema), .prompt = try self.store().putObject(prompt), .answer = null, .receipt = null, .retired = false };
+                    const question: state.Question = .{ .id = question_id, .task = value.id, .occurrence = pending.id, .revision = 1, .request_digest = pending.request, .pending_digest = request.value.binding.pending_state_digest, .answer_schema_id = try name(entry.declaration.answer_schema_id.?), .answer_schema_digest = storage.digest(entry.resume_schema), .request = try self.store().putObject(request_bytes), .prompt = try self.store().putObject(prompt), .answer = null, .receipt = null, .retired = false };
                     try self.store().putRecord(state.Question, "question", question_id, value.id, question);
                     try self.store().putRecord(occurrence.Occurrence, "occurrence", pending.id, value.id, waiting);
                     var event_data = json.object();

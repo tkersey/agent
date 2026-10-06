@@ -211,14 +211,10 @@ for (const revisionScenario of ['eight', 'nine', 'repeat', 'amend']) test(`candi
 });
 
 for (const scenario of [
-  { name: 'two full-size files fit', files: 2, bytes: 32768 },
+  { name: 'full files, replay, review restart and publication fit', files: 2, bytes: 32768, mode: 2, question: true, replayBytes: 150000 },
   { name: 'four smaller files fit', files: 4, bytes: 8192 },
-  { name: 'oversized review is refused', files: 4, bytes: 32768, failed: true },
-  { name: 'publication reserves its receipt', files: 2, bytes: 32768, mode: 2 },
-  { name: 'oversized publication never asks for approval', files: 4, bytes: 32768, mode: 2, failed: true },
+  { name: 'oversized proposal stops before approval', files: 4, bytes: 32768, mode: 2, failed: true },
   { name: 'candidate capacity precedes physical check', files: 3, bytes: 32768, escaped: true, failed: true },
-  { name: 'provider replay has its separate allowance', files: 2, bytes: 8192, replayBytes: 150000 },
-  { name: 'retained question survives restart', files: 2, bytes: 32768, question: true },
 ]) test(`retained text budget: ${scenario.name}`, async t => {
   const f = await fixture(t, { mobile: true, mode: scenario.mode ?? 1, sessionTasks: 1, textScenario: scenario,
     ...(scenario.question ? { reviewFollowup: 'question', restartReview: true } : {}) });

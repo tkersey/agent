@@ -4,7 +4,6 @@ const agent = @import("agent");
 const boundary = @import("boundary");
 const a = boundary.authoring;
 const t = @import("types.zig");
-const budget = @import("budget.zig");
 const m = @import("model.zig");
 const P = m.P;
 const Emit = @import("emit.zig").Emit;
@@ -76,7 +75,7 @@ fn request(e: Emit, b: *a.Body, task: V, evidence: V, state: V) !V {
     });
     // Rendered context is additional text; replay and pending tool results are
     // references to their already-accounted carriers.
-    return budget.admit(e, b, P.ReplayRequest, payload, try budget.add(e, b, try budget.working(e, b, task, evidence, state), try budget.textBytes(e, b, P.Messages, messages)));
+    return e.admitText(b, P.ReplayRequest, payload, try e.addTextBytes(b, try e.workingText(b, task, evidence, state), try e.textBytes(b, P.Messages, messages)));
 }
 
 pub fn define(e: Emit, inquiry: agent.inquiry.Inquiry, leaves: Leaves, movement: []const *const a.Operation) !*const a.Function {
@@ -97,7 +96,7 @@ pub fn define(e: Emit, inquiry: agent.inquiry.Inquiry, leaves: Leaves, movement:
     const task = try b.parameter("task");
     const snapshot = try b.parameter("snapshot");
     const evidence = try b.parameter("evidence");
-    const state = try budget.admitState(e, b, task, evidence, try b.parameter("state"));
+    const state = try e.admitWorkingState(b, task, evidence, try b.parameter("state"));
     const capability = try b.parameter("capability");
     const active = try b.branch();
     const spent = try b.branch();
@@ -132,7 +131,7 @@ pub fn define(e: Emit, inquiry: agent.inquiry.Inquiry, leaves: Leaves, movement:
     inline for (@typeInfo(m.Action).@"union".field_names, 0..) |name, i| {
         const branch = try chosen.caseOf(action, name);
         const body = branch.body();
-        const value = if (i < 3) try budget.admit(e, body, @FieldType(m.Action, name), branch.payload(), try budget.add(e, body, try budget.working(e, body, task, evidence, next), try budget.textBytes(e, body, @FieldType(m.Action, name), branch.payload()))) else branch.payload();
+        const value = if (i < 3) try e.admitText(body, @FieldType(m.Action, name), branch.payload(), try e.addTextBytes(body, try e.workingText(body, task, evidence, next), try e.textBytes(body, @FieldType(m.Action, name), branch.payload()))) else branch.payload();
         var successor = next;
         var observation: ?V = null;
         switch (i) {
@@ -145,7 +144,7 @@ pub fn define(e: Emit, inquiry: agent.inquiry.Inquiry, leaves: Leaves, movement:
             },
             4 => {
                 const candidate = try write(e, body, loop, leaves.prepare, try body.product(try e.schema(t.Preparation), &.{ .{ .name = "snapshot", .value = snapshot }, .{ .name = "edits", .value = edits } }), publication.Proposal);
-                const pending = try budget.admitState(e, body, task, evidence, try update(e, body, next, .{ .candidate = candidate, .validation = try e.literal(body, publication.Proposal, .{ .bytes = "" }), .passed = try body.constant(bool, false) }));
+                const pending = try e.admitWorkingState(body, task, evidence, try update(e, body, next, .{ .candidate = candidate, .validation = try e.literal(body, publication.Proposal, .{ .bytes = "" }), .passed = try body.constant(bool, false) }));
                 const checked = try write(e, body, loop, leaves.check, try body.field(pending, "candidate"), publication.CheckResult);
                 const revision_cost = try body.select(existing_candidate, try body.constant(u16, 0), try body.constant(u16, 1));
                 successor = try update(e, body, pending, .{ .validation = try body.field(checked, "record"), .passed = try body.equal(try body.enumTag(try body.field(checked, "status")), try body.constant(u32, 0)), .remaining_checks = try body.checked(.subtract, try body.field(next, "remaining_checks"), try body.constant(u16, 1), .{ .overflow = failure }), .remaining_revisions = try body.checked(.subtract, try body.field(next, "remaining_revisions"), revision_cost, .{ .overflow = failure }) });
@@ -157,8 +156,8 @@ pub fn define(e: Emit, inquiry: agent.inquiry.Inquiry, leaves: Leaves, movement:
                 const demand = try body.product(try e.schema(t.Question), &.{
                     .{ .name = "task_id", .value = try body.field(task, "task_id") }, .{ .name = "generation", .value = try body.field(task, "generation") }, .{ .name = "goal", .value = try body.field(task, "goal") }, .{ .name = "evidence", .value = evidence }, .{ .name = "question", .value = try body.field(value, "question") }, .{ .name = "remaining_moves", .value = try body.field(next, "remaining_moves") },
                 });
-                const requested = try budget.add(e, body, try budget.working(e, body, task, evidence, next), try body.blobLength(try body.field(value, "question")));
-                const admitted = try budget.admit(e, body, t.Question, demand, try budget.add(e, body, requested, try body.constant(u64, t.Answer.max_length.?)));
+                const requested = try e.addTextBytes(body, try e.workingText(body, task, evidence, next), try body.blobLength(try body.field(value, "question")));
+                const admitted = try e.admitText(body, t.Question, demand, try e.addTextBytes(body, requested, try body.constant(u64, t.Answer.max_length.?)));
                 const reply = try body.variantPayload(try body.performLocal(inquiry.dialogue.effect(), capability, try body.variant(try e.schema(t.Demand), "clarification", admitted)), "clarification", failure);
                 const placed = try e.place(body, try body.field(task, "workspace"), try body.field(reply, "remaining_moves"));
                 const ready = try body.variantPayload(placed, "Ready", failure);
@@ -174,9 +173,9 @@ pub fn define(e: Emit, inquiry: agent.inquiry.Inquiry, leaves: Leaves, movement:
             cases[i] = try branch.ret(try body.call(loop, &.{ .{ .name = "task", .value = task }, .{ .name = "snapshot", .value = snapshot }, .{ .name = "evidence", .value = evidence }, .{ .name = "state", .value = successor }, .{ .name = "capability", .value = capability } }));
         } else {
             const draft = try body.product(try e.schema(t.Finding), &.{ .{ .name = "goal", .value = try body.field(task, "goal") }, .{ .name = "evidence", .value = evidence }, .{ .name = "answer", .value = try body.field(value, "summary") }, .{ .name = "candidate", .value = try body.field(next, "candidate") }, .{ .name = "validation", .value = try body.field(next, "validation") }, .{ .name = "remaining_moves", .value = try body.field(next, "remaining_moves") }, .{ .name = "proposal", .value = try e.literal(body, publication.Proposal, .{ .bytes = "" }) }, .{ .name = "publication", .value = try body.variant(try e.schema(t.Publication), "none", try body.constant(void, {})) } });
-            const held = try budget.add(e, body, try budget.working(e, body, task, evidence, next), try body.blobLength(try body.field(value, "summary")));
+            const held = try e.addTextBytes(body, try e.workingText(body, task, evidence, next), try body.blobLength(try body.field(value, "summary")));
             const review_demand = try body.product(try e.schema(t.ReviewDemand), &.{ .{ .name = "finding", .value = draft }, .{ .name = "retained_text_bytes", .value = held } });
-            const admitted = try budget.admit(e, body, t.ReviewDemand, review_demand, held);
+            const admitted = try e.admitText(body, t.ReviewDemand, review_demand, held);
             const reviewed = try body.variantPayload(try body.performLocal(inquiry.dialogue.effect(), capability, try body.variant(try e.schema(t.Demand), "review", admitted)), "review", failure);
             const disposition = try body.field(reviewed, "action");
             var dispositions: [3]*const a.FinishedCase = undefined;

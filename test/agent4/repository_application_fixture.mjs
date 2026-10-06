@@ -260,7 +260,7 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
       assert.equal(policies.U.dispatch(run, context.request).binding, binding);
     });
   }
-  const limits = { maximum_moves: sessionTasks ? sessionTasks * 4 : mobile ? reviewFollowup ? 6 : 4 : 2, maximum_image_bytes: 8 << 20, maximum_outcome_bytes: 8 << 20 };
+  const limits = { maximum_moves: mobile ? (sessionTasks || 1) * workspace[3][0] : 2, maximum_image_bytes: 8 << 20, maximum_outcome_bytes: 8 << 20 };
   for (const host of ['W', 'U']) {
     admissions[host] = new WorldAdmission(executionWorld, { kernelBytes, expectedSha256: identity.kernelSha256 });
     policies[host] = new HostPolicy({ hostId: host, trustDomain: 'fixture', runtimeProfile: identity.kernelSha256, revision, labelDestinations: { shared: ['W', 'U'] },
@@ -349,7 +349,7 @@ export async function repositoryFixture(t, { staleAnswer = false, wrongPrincipal
       for (let n = 0; n < 1000; n++) {
         const result = browserPage && activeHost === 'U' ? await runOriginWorker() : await hosts[activeHost].run(id);
         if (result.kind === 'dispatching') { await delay(10); continue; }
-        assert(++transitions <= (sessionTasks ? sessionTasks * 7 : mobile ? reviewFollowup ? 10 : 7 : 5), 'bounded authored transitions');
+        assert(++transitions <= ((sessionTasks || 1) * (mobile ? reviewFollowup ? 10 : 7 : 5)), 'bounded authored transitions');
         if (result.kind === 'awaiting') {
           const identity = { principal: 'user', tenant: 'tenant', audiences: ['human'] };
           const pending = hosts[activeHost].pendingQuestion(id, identity);

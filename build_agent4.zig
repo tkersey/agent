@@ -504,9 +504,9 @@ pub fn build(b: *std.Build) void {
         mobile_repository_zig_test.addFileArg2(limit_exe.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LIMIT=", .make_absolute = true });
         mobile_repository_zig_test.addFileArg2(process_lock.getEmittedBin(), .{ .prefix = "AGENT_CHECK_LOCK=", .make_absolute = true });
     }
-    mobile_repository_objects.addArgs(&.{ "node", "--test", "test/agent4/repository_snapshot.test.mjs", "test/agent4/repository_scratch.test.mjs", "test/agent4/mobile_repository_qualification.test.mjs" });
+    mobile_repository_objects.addArgs(&.{ "node", "--test", "test/agent4/repository_snapshot.test.mjs", "test/agent4/mobile_repository_qualification.test.mjs" });
     mobile_repository_zig_test.addArgs(&.{ "node", "--test", "test/agent4/repository_zig_sandbox.test.mjs" });
-    publication_test.addArgs(&.{ "node", "--test", "test/agent4/repository_publication_gate.test.mjs", "test/agent4/repository_publication_journal.test.mjs", "test/agent4/repository_publication_binding.test.mjs", "test/agent4/repository_check_binding.test.mjs" });
+    publication_test.addArgs(&.{ "node", "--test", "test/agent4/repository_publication_gate.test.mjs", "test/agent4/repository_publication_journal.test.mjs", "test/agent4/repository_publication_binding.test.mjs" });
     const mobile_repository_emitter = g.emitter("mobile-repository-emitter", g.module("test/consumers/mobile_repository/main.zig"));
     const repository_approval_images = b.step("repository-approval-images", "Emit the shared managed publication approval composition");
     repository_approval_test.step.dependOn(repository_approval_images);

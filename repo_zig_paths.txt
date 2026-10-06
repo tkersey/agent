@@ -134,7 +134,6 @@ test/consumers/inquiry/react.zig
 test/consumers/inquiry/repeated.zig
 test/consumers/inquiry/source.zig
 test/consumers/inquiry/types.zig
-test/consumers/mobile_repository/budget.zig
 test/consumers/mobile_repository/completion.zig
 test/consumers/mobile_repository/emit.zig
 test/consumers/mobile_repository/investigator.zig

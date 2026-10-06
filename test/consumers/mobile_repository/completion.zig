@@ -5,7 +5,6 @@ const boundary = @import("boundary");
 const a = boundary.authoring;
 const t = @import("types.zig");
 const p = @import("publication.zig");
-const text_budget = @import("budget.zig");
 const Emit = @import("emit.zig").Emit;
 const V = *const a.Value;
 pub const Definition = struct { function: *const a.Function, effects: []const *const a.Operation };
@@ -40,8 +39,8 @@ pub fn define(e: Emit, resolve: *const a.Operation, relocate: *const a.Operation
     // Reserve the complete typed reply before asking or publishing. Capacity
     // failure must not occur after a successful write merely to fit its receipt.
     const reserve = try b.select(allowed, try b.constant(u64, p.Receipt.max_length.?), try b.constant(u64, t.Answer.max_length.?));
-    const held = try text_budget.add(e, b, try b.field(demand, "retained_text_bytes"), try b.blobLength(materialized));
-    const proposal = try text_budget.admit(e, b, p.Proposal, materialized, try text_budget.add(e, b, held, reserve));
+    const held = try e.addTextBytes(b, try b.field(demand, "retained_text_bytes"), try b.blobLength(materialized));
+    const proposal = try e.admitText(b, p.Proposal, materialized, try e.addTextBytes(b, held, reserve));
     const home = try b.variantPayload(try e.place(b, try b.field(task, "human"), try b.field(finding, "remaining_moves")), "Ready", failure);
     const moves = try b.field(home, "remaining_moves");
     const publish = try b.branch();

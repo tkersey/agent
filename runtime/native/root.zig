@@ -19,4 +19,6 @@ test {
     _ = registry;
     _ = @import("sqlite.zig");
     _ = @import("occurrence.zig");
+    _ = @import("store.zig");
+    _ = @import("namespace.zig");
 }

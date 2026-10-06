@@ -1,9 +1,7 @@
 //! Private storage primitive for the standalone task owner. SQL is authored
 //! here/in the store, never accepted from client or model data.
 const std = @import("std");
-const c = @cImport({
-    @cInclude("sqlite3.h");
-});
+const c = @import("native_c");
 var in_use: std.atomic.Value(bool) = .init(false);
 pub const heap_bytes = @import("native_options").sqlite_heap_bytes;
 pub const Error = error{ StorageUnavailable, CorruptState, Capacity, Constraint, AlreadyOpen, Closed, Busy } || std.mem.Allocator.Error;

@@ -726,6 +726,14 @@ pub fn build(b: *std.Build) void {
 fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize, world: *std.Build.Module, data: *std.Build.Module, contracts: *std.Build.Module, admission: *std.Build.Module, sqlite_source: std.Build.LazyPath) *std.Build.Module {
     const options = b.addOptions();
     options.addOption(u32, "sqlite_heap_bytes", @import("build_native.zig").sqlite_heap_bytes);
+    // The exact admitted 0.17 compiler still supplies build-time translate-c.
+    // Keep translation bound to that target/compiler tuple; @cImport is gone.
+    const translated = b.addTranslateC(.{
+        .root_source_file = b.path("runtime/native/native_c.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    translated.addIncludePath(sqlite_source);
     const module = b.createModule(.{
         .root_source_file = b.path("runtime/native/root.zig"),
         .target = target,
@@ -736,6 +744,7 @@ fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: 
             .{ .name = "boundary_data", .module = data },
             .{ .name = "agent_contracts", .module = contracts },
             .{ .name = "_native_dependency_admission", .module = admission },
+            .{ .name = "native_c", .module = translated.createModule() },
         },
     });
     module.addOptions("native_options", options);

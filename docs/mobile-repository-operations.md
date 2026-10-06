@@ -190,6 +190,9 @@ under the pinned writer gate; stale/conflicting history is not rebased or retrie
 The durable intent precedes dispatch. Cancellation before admission prevents the
 write; later cancellation preserves its result. Lost replies use read-only
 reconciliation, never another publication attempt. Unknown results remain paused.
+Once the service records that a check stopped, a later cancellation can complete
+after restart even if the reply was lost. A check that may still be running keeps
+its capacity reserved.
 
 Confirmed publication remains `Published` even if subsequent verification fails or
 is unavailable; the receipt distinguishes `PublishedVerified`,

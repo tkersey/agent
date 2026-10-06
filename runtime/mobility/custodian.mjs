@@ -254,7 +254,10 @@ export class Custodian {
             this.#journal.recordReply(id, admitted.attempt_id, reply, selected.binding.classification, null, { dispatchVersion: version(run) });
           } catch {
             const current = this.#run(id), pending = this.#journal.occurrence(current.current_occurrence_id);
-            if (pending?.attempt_id === admitted.attempt_id && pending.status === 'DISPATCHING') this.#journal.markUnknown(id, admitted.attempt_id);
+            // The check adapter has finished reaping even when its reply is lost.
+            // Preserve that fact for a later cancellation, including after restart.
+            if (pending?.attempt_id === admitted.attempt_id && ['DISPATCHING', 'UNKNOWN'].includes(pending.status))
+              this.#journal.markUnknown(id, admitted.attempt_id, { settled: true });
           } finally {
             const current = this.#run(id), pending = this.#journal.occurrence(current.current_occurrence_id);
             if (current.cancel_requested !== null && pending?.attempt_id === admitted.attempt_id && pending.cancel_safe === true && ['DISPATCHING', 'UNKNOWN'].includes(pending.status))

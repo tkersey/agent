@@ -396,8 +396,8 @@ export class CustodyJournal {
       this.#artifact(run.tenant_ref, reply); this.#save(next.run); this.#saveOccurrence(next.occurrence); return next.occurrence;
     });
   }
-  markUnknown(runId, attemptId) {
-    return this.#transaction('unknown', () => { const run = this.run(runId), next = core.unknown(run, this.#occurrence(run), attemptId); this.#saveOccurrence(next); return next; });
+  markUnknown(runId, attemptId, settlement = {}) {
+    return this.#transaction('unknown', () => { const run = this.run(runId), next = core.unknown(run, this.#occurrence(run), attemptId, settlement); this.#saveOccurrence(next); return next; });
   }
   // Called only by the admitted repository publication leaf while holding its
   // process gate. This transaction is the local cancellation ordering point;

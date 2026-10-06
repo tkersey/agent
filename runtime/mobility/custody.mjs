@@ -124,16 +124,16 @@ export function answered(run, occurrence, wanted, binding, answerDigest, replyDi
   return { run: { ...run, classification: join(run.classification, classification), reply_digest: replyDigest },
     occurrence: { ...occurrence, status: 'SETTLED_REPLY', answer_digest: answerDigest, reply_digest: replyDigest } };
 }
-export function unknown(run, occurrence, attemptId) {
+export function unknown(run, occurrence, attemptId, { settled = false } = {}) {
   requireThat(run.status === 'ACTIVE', 'CustodyFrozen'); current(run, occurrence);
   requireThat(['DISPATCHING', 'UNKNOWN'].includes(occurrence.status) && occurrence.attempt_id === attemptId, 'AttemptMismatch');
-  return { ...occurrence, status: 'UNKNOWN' };
+  return { ...occurrence, status: 'UNKNOWN', ...(settled === true && occurrence.work_kind === 'check' ? { work_settled: true } : {}) };
 }
 export function canAbandon(occurrence, { settled = false, cancelSafe = false } = {}) {
   // A check's charged physical work must have settled; losing a process-local
   // handle is not a termination witness. This also covers older stored claims.
   return Boolean(occurrence && occurrence.publication_intent_digest === undefined &&
-    (occurrence.cancel_safe === true || cancelSafe === true) && (occurrence.work_kind !== 'check' || settled === true));
+    (occurrence.cancel_safe === true || cancelSafe === true) && (occurrence.work_kind !== 'check' || occurrence.work_settled === true || settled === true));
 }
 export function abandoned(run, occurrence, attemptId, settlement = {}) {
   requireThat(run.status === 'ACTIVE', 'CustodyFrozen'); current(run, occurrence);

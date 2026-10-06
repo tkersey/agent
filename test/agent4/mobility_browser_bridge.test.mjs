@@ -186,24 +186,31 @@ for (const [kind, cancel] of [['model', false], ['model', true], ['check', true]
   assert.equal(f.journals.A.allowance(f.id, kind).used.attempts, 1);
 });
 
-for (const [kind, cancelSafe] of [['model', false], ['model', true], ['check', true], ['query', false]]) test(`unknown background work is not retried after restart; ${kind}, abandon permission=${cancelSafe}`, async t => {
+for (const [kind, cancelSafe, stillRunning = false] of [['model', false], ['model', true], ['check', true], ['check', true, true], ['query', false]]) test(`unknown background work is not retried after restart; ${kind}, abandon permission=${cancelSafe}, running=${stillRunning}`, async t => {
   const f = await hostFixture(t, { localData: true }), binding = f.bindings.A.find(value => value.operation.endsWith('.task.v1'));
-  let calls = 0;
+  let calls = 0, release; const running = new Promise(resolve => { release = resolve; });
+  const previous = f.hosts.A;
   binding.background = kind !== 'query'; binding.cancelSafe = cancelSafe;
   if (kind !== 'query') binding.charge = () => ({ owner: 'A', kind, grant: 'e'.repeat(64), limit: { attempts: 2, request_bytes: 100, output_tokens: kind === 'model' ? 20 : 0, concurrent: 1 }, amount: { request_bytes: 40, output_tokens: kind === 'model' ? 8 : 0 } });
-  binding.handle = async () => { calls++; throw new Error('simulated lost response'); };
+  binding.handle = async () => { calls++; if (stillRunning) await running; throw new Error('simulated lost response'); };
   if (kind === 'query') await assert.rejects(f.hosts.A.step(f.id), /simulated lost response/);
   else await f.hosts.A.step(f.id);
-  await f.hosts.A.stopOperations();
+  if (!stillRunning) await f.hosts.A.stopOperations();
   f.restart('A');
   for (let i = 0; i < 3; i++) assert.equal((await f.hosts.A.run(f.id)).kind, 'effect_unknown');
   assert.equal(calls, 1); if (kind !== 'query') assert.equal(f.journals.A.allowance(f.id, kind).used.attempts, 1);
   if (kind === 'query') { binding.cancelSafe = true; binding.recoveryMatches = binding.authorize; }
   f.journals.A.requestCancel(f.id, 'stop'); // Crash after the durable request, before settlement.
   f.restart('A');
-  assert.equal((await f.hosts.A.run(f.id)).kind, kind === 'query' || cancelSafe && kind === 'model' ? 'terminal' : 'effect_unknown');
+  const cancellable = kind === 'query' || cancelSafe && !stillRunning;
+  assert.equal((await f.hosts.A.run(f.id)).kind, cancellable ? 'terminal' : 'effect_unknown');
+  if (cancellable) assert.equal(f.result('A').kind, 'cancelled');
   assert.equal(calls, 1); if (kind !== 'query') assert.equal(f.journals.A.allowance(f.id, kind).used.attempts, 1);
-  if (kind === 'check') assert.equal(f.hosts.A.status(f.id).cancellation_pending, true);
+  if (stillRunning) {
+    assert.equal(f.hosts.A.status(f.id).cancellation_pending, true);
+    release(); await previous.stopOperations();
+    assert.equal((await f.hosts.A.run(f.id)).kind, 'effect_unknown', 'a dead owner cannot certify completion into a successor journal');
+  }
 });
 
 

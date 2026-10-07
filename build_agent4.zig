@@ -49,8 +49,7 @@ const Graph = struct {
     fn testModule(g: Graph, step: *std.Build.Step, module_value: *std.Build.Module) void {
         const tests = g.b.addTest(.{
             .root_module = module_value,
-            .use_llvm = if ((g.b.graph.host.result.os.tag == .linux and g.b.graph.host.result.cpu.arch == .x86_64) or
-                (g.b.graph.host.result.os.tag == .macos and g.b.graph.host.result.cpu.arch == .aarch64)) false else null,
+            .use_llvm = if (g.b.graph.host.result.os.tag == .linux and g.b.graph.host.result.cpu.arch == .x86_64) false else null,
         });
         tests.step.dependOn(g.gate);
         step.dependOn(&g.b.addRunArtifact(tests).step);
@@ -746,6 +745,7 @@ pub fn build(b: *std.Build) void {
         // These roots share exact module identities; compile their retained
         // tests together instead of rebuilding the same compiler eleven times.
         const native_suite = native_graph.module("test/agent4/native_tests.zig");
+        native_suite.strip = optimize != .debug;
         native_suite.addImport("world", checked_world);
         native_suite.addImport("agent_native", checked_environment);
         native_suite.addAnonymousImport("native_model_reference", .{ .root_source_file = responses_peer.captureStdOut(.{}) });
@@ -838,6 +838,7 @@ fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: 
         .root_source_file = b.path("runtime/native/hash.zig"),
         .target = target,
         .optimize = optimize,
+        .strip = optimize != .debug,
         .link_libc = true,
     });
     c_module.addIncludePath(sqlite_source);
@@ -849,6 +850,7 @@ fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: 
         .root_source_file = b.path("runtime/native/root.zig"),
         .target = target,
         .optimize = optimize,
+        .strip = optimize != .debug,
         .link_libc = true,
         .imports = &.{
             .{ .name = "world", .module = world },

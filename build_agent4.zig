@@ -718,6 +718,7 @@ pub fn build(b: *std.Build) void {
                 .root_source_file = b.path("test/consumers/native/main.zig"),
                 .target = native_graph.target orelse b.graph.host,
                 .optimize = optimize,
+                .strip = optimize != .debug,
                 .imports = &.{ .{ .name = "world", .module = checked_world }, .{ .name = "boundary_data", .module = native_graph.data }, .{ .name = "agent_native", .module = checked_environment }, .{ .name = "agent_contracts", .module = native_graph.contracts }, .{ .name = "application_types", .module = native_graph.module("examples/native-minimal/types.zig") } },
             });
             consumer_module.addAnonymousImport("image", .{ .root_source_file = product.assets.image });

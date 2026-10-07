@@ -7,6 +7,10 @@ The [acceptance map](native-single-binary-acceptance.md) identifies the source a
 witness for each v1.2 obligation; the [runbook](native-single-binary.md) describes
 building, launching, operating and recovering the applications.
 
+On October 7, 2026, the user retired macOS builds and tests in CI and locally.
+Current qualification runs on Linux CI; macOS observations below remain
+historical evidence for their named subjects, not qualification of later changes.
+
 ## Executed subjects
 
 | Subject | Observation |
@@ -125,11 +129,11 @@ outbound payload, at most 16 outstanding calls/subscriptions/nonterminal tasks,
 bounded World quanta and explicit provider request/response/deadline caps.
 
 Earlier Linux-only observations (including 4m50s at `82bff12`, 4m44s at
-`592483b`, and 3m43s at `d7b7a4d`) do not establish the required dual-platform
+`592483b`, and 3m43s at `d7b7a4d`) do not establish the current complete-workflow
 5m30s target. At `2415f66`, the Linux-only workflow took 5m00s from its
 start to GitHub completion; the earlier 4m49s report omitted its final gate.
 Complete separate platform runs took 6m27s on Linux and 9m19s on macOS.
-The PR workflow now requires both platforms, clean deployment, the downstream
+The PR workflow now requires Linux qualification, clean deployment, the downstream
 recipe and artifact packaging. Its complete measured pass below 5m30s
 remains unproved. Other observed Linux runs took 6m39s–8m31s; cache restore
 success did not always mean compiler object reuse.

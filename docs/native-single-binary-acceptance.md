@@ -1,6 +1,9 @@
 # Native Single-Binary Agentic Systems v1.2 acceptance
 
-All obligations below are from the October 6, 2026 v1.2 specification.
+The obligations below originate in the October 6, 2026 v1.2 specification.
+The user's October 7 instruction retires macOS builds and tests, both in CI and
+locally, including manual workflow selection. Current acceptance runs on Linux
+CI; macOS evidence is historical and does not qualify subsequent changes.
 An earlier receipt with the same ID does not discharge this version.
 This maps the accepted obligations to source constructions and repository-native
 witnesses. Exact executed subjects, measurements, artifacts and remaining limits
@@ -38,7 +41,7 @@ separate and requires explicit model/data/spend authorization.
 | NB-010 | Help, describe-build and offline demo work with no adjacent app resources. | H/P: copied help, build inspection, offline demo and stdio discovery execute under the deployment restrictions. |
 | NB-011 | Launch requires no Node/Python/Zig/npm/WASM engine or hidden child wrapper. | P: Linux namespace trace admits only the copied application; macOS denies other executable launches and non-admitted file reads. |
 | NB-012 | Linux x86_64 final artifact executes in its declared clean base. | P: executed x86_64 musl ELF, no dynamic loader/NEEDED libraries, on the Ubuntu 22.04 qualification host. |
-| NB-013 | macOS arm64 final artifact executes with declared OS linkage/security requirements. | P: executed arm64 Mach-O on macOS 15.7.9; libSystem-only linkage and verified ad-hoc signature. No notarization claim. |
+| NB-013 | macOS arm64 final artifact executes with declared OS linkage/security requirements. | Current macOS CI qualification retired by the October 7 user instruction. Historical P evidence: executed arm64 Mach-O on macOS 15.7.9 with libSystem-only linkage and verified ad-hoc signature; no current-head or notarization claim. |
 | NB-014 | Compile-only additional targets are not labeled executed/qualified. | B/P: the public helper rejects other product target combinations; the report labels only the two actually executed targets. |
 | NB-015 | Artifact manifest names actual dependencies, target, profiles and embedded resource digests. | B/H: independently compared manifest program/assets/schema digests, dependencies, limits, licenses and compiler identity. |
 | NB-016 | Binary identity has no embedded self-hash cycle or false self-authentication claim. | H: Node hashes the copied final executable independently and compares its reported hash and byte count; manifest disclaims authentication. |
@@ -134,7 +137,7 @@ separate and requires explicit model/data/spend authorization.
 | NB-106 | Default events/errors/discovery exclude credentials, opaque reasoning and unauthorized private paths/payloads while preserving useful typed results. | R/H/source: public events omit token/opaque replay bytes; task artifact access stays scoped and public discovery exposes only embedded descriptors. |
 | NB-107 | Error codes/kinds and recovery dispositions distinguish unadmitted work from uncertain acceptance without leaking other tasks or instructing blind provider retry. | H/R/source: typed errors, stable operation IDs, unknown-state handling and shared post-commit-safe recovery guidance distinguish retry from new work. |
 | NB-108 | Complete offline protocol schemas/transcripts and a usable TypeScript subprocess client demonstrate both directions without becoming application runtime dependencies. | H/R/S: offline JSON Schemas, actual bidirectional transcripts in peers and the optional TypeScript subprocess client. |
-| NB-109 | Linux x86_64 and macOS arm64 clean-artifact qualification runs real bidirectional task/question/message/result/cancel exchanges. | P/H/R: both required targets execute isolated task/question/message/result/cancel traffic; final refreshed platform runs identify the exact subject. |
+| NB-109 | Linux x86_64 and macOS arm64 clean-artifact qualification runs real bidirectional task/question/message/result/cancel exchanges. | The October 7 user instruction narrows current CI qualification to Linux. P/H/R retain isolated task/question/message/result/cancel traffic; macOS observations are historical only. |
 | NB-110 | Protocol conformance/fault cases reuse the existing owner, native/provider corpus and shared compilations; no per-method binary or ceremony-only CI expansion. | B/T/H/R: shared native roots/emitters and one repository peer with its distinct fault phase; no per-method binary. |
 | NB-111 | Protocol/control latency and queue memory are measured separately from provider/task duration; responsiveness is demonstrated during a held external call. | R/Q: repeated ping/status samples, held-call cancellation acknowledgment and scoped command RSS; frame/queue payload caps are declared separately. |
 | NB-112 | Required scope remains stdio without an inbound listener; no unsupported MCP/A2A/network-authentication, callback-tool or distributed-custody compatibility claim is made. | B/H/S: the delivered front end is stdio; only outbound provider HTTPS exists. No MCP/A2A/inbound-server/distributed-custody claim. |

@@ -10,11 +10,6 @@ on:
         type: choice
         default: all
         options: [all, source, installation, authoring, native]
-      platform:
-        description: 'Platform for a focused run; all always qualifies both platforms'
-        type: choice
-        default: linux-x86_64
-        options: [linux-x86_64, macos-arm64]
       collect_all:
         description: 'Diagnostic only: continue independent lanes after failures'
         type: boolean
@@ -47,14 +42,14 @@ jobs:
       - name: Check preflight and non-destructive cache admission
         run: node --test test/agent4/installations.test.mjs .github/scripts/zig-cache.test.mjs
   qualify:
-    name: Qualification / ${{ matrix.lane }} / ${{ matrix.platform }}
+    name: Qualification / ${{ matrix.lane }} / linux-x86_64
     needs: source
     if: ${{ !cancelled() && inputs.lane != 'source' && (needs.source.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.collect_all)) }}
     strategy:
       fail-fast: ${{ !inputs.collect_all }}
       matrix:
-        include: ${{ fromJSON((inputs.lane == '' || inputs.lane == 'all') && '[{"lane":"installation","platform":"linux-x86_64","runner":"ubuntu-24.04"},{"lane":"authoring","platform":"linux-x86_64","runner":"ubuntu-24.04"},{"lane":"native","platform":"linux-x86_64","runner":"ubuntu-22.04"},{"lane":"native","platform":"macos-arm64","runner":"macos-15"}]' || format('[{{"lane":"{0}","platform":"{1}","runner":"{2}"}}]', inputs.lane, inputs.platform || 'linux-x86_64', inputs.platform == 'macos-arm64' && 'macos-15' || inputs.lane == 'native' && 'ubuntu-22.04' || 'ubuntu-24.04')) }}
-    runs-on: ${{ matrix.runner }}
+        lane: ${{ fromJSON((inputs.lane == '' || inputs.lane == 'all') && '["installation","authoring","native"]' || format('["{0}"]', inputs.lane)) }}
+    runs-on: ${{ matrix.lane == 'native' && 'ubuntu-22.04' || 'ubuntu-24.04' }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -98,18 +93,14 @@ jobs:
       - name: Install the source-registry dependency
         if: matrix.lane != 'installation'
         run: |
-          if [ "$RUNNER_OS" = Linux ] && [ "${{ matrix.lane }}" = native ]; then
+          if [ "${{ matrix.lane }}" = native ]; then
             sudo apt-get update
             sudo apt-get install --yes ripgrep bubblewrap strace
             # Reject an unavailable namespace boundary before compiling products.
             bwrap --unshare-user --ro-bind / / /usr/bin/true
           elif ! command -v rg >/dev/null; then
-            if [ "$RUNNER_OS" = macOS ]; then
-              brew install ripgrep
-            else
-              sudo apt-get update
-              sudo apt-get install --yes ripgrep
-            fi
+            sudo apt-get update
+            sudo apt-get install --yes ripgrep
           fi
           rg --version
       - name: Restore locked dependency bytes
@@ -140,22 +131,17 @@ jobs:
       - name: Run only the selected check
         env:
           LANE: ${{ matrix.lane }}
-          PLATFORM: ${{ matrix.platform }}
           TMPDIR: ${{ runner.temp }}
         run: |
-          case "$PLATFORM" in
-            linux-x86_64) test "$(uname -s)" = Linux; test "$(uname -m)" = x86_64 ;;
-            macos-arm64) test "$(uname -s)" = Darwin; test "$(uname -m)" = arm64 ;;
-            *) exit 2 ;;
-          esac
+          test "$(uname -s)" = Linux
+          test "$(uname -m)" = x86_64
           case "$LANE" in
             installation)
               # This witness deliberately owns fresh compiler/package caches.
               node test/agent4/installations.mjs --output "$RUNNER_TEMP/installation-authoring.json"
               exit 0 ;;
             authoring) target=check-authoring-core ;;
-            native)
-              if [ "$PLATFORM" = macos-arm64 ]; then target=check-native-product; else target=check-native; fi ;;
+            native) target=check-native ;;
             *) exit 2 ;;
           esac
           trace=()
@@ -170,11 +156,7 @@ jobs:
           TMPDIR: ${{ runner.temp }}
           MEASURE_BUILDS: ${{ inputs.measure_builds }}
         run: |
-          if [ "$RUNNER_OS" = Linux ]; then
-            offline=(unshare --user --map-root-user --net)
-          else
-            offline=(sandbox-exec -p '(version 1)(allow default)(deny network*)')
-          fi
+          offline=(unshare --user --map-root-user --net)
           if [ "$MEASURE_BUILDS" = true ]; then
             # Retain only provisioned package bytes, never compiled objects.
             mkdir "$RUNNER_TEMP/native-measure-global" "$RUNNER_TEMP/native-measure-local"
@@ -260,7 +242,7 @@ jobs:
           key: zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane == 'native' && 'native3' || matrix.lane }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
   # Preserve the old check name as a strict all-lanes gate; a focused run is not full qualification.
   native:
-    name: ${{ (inputs.lane == '' || inputs.lane == 'all') && 'native' || format('Focused result / {0} / {1}', inputs.lane, inputs.platform) }}
+    name: ${{ (inputs.lane == '' || inputs.lane == 'all') && 'native' || format('Focused result / {0} / linux-x86_64', inputs.lane) }}
     needs: [source, qualify]
     if: ${{ always() }}
     runs-on: ubuntu-24.04

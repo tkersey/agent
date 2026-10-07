@@ -201,12 +201,12 @@ program/assets/toolchain to the repository product, and execute its offline
 demo. This exercises the downstream dependency API rather than claiming that
 the repository's internal builder call proves it.
 Clean deployment, the downstream recipe and artifact packaging are mandatory
-on both platforms in every full PR workflow. The five-minute target covers the
+on both platforms in every full PR workflow. The 5m30s target covers the
 complete workflow, including setup, cache transfer and the final aggregate gate.
 It is not satisfied by a Linux-only result. At `2415f66`, the Linux-only workflow
 took 5m00s from start to GitHub completion (4m59s through the final required job);
 the separate complete platform runs took 6m27s on Linux and 9m19s on macOS.
-The new required matrix still needs its own measured pass below five minutes.
+The new required matrix still needs its own measured pass below 5m30s.
 
 Compiler cache selection prefers the exact locked dependencies, then permits
 reuse within the same compiler/OS/architecture/lane. Package allowlist edits no

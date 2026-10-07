@@ -164,7 +164,13 @@ jobs:
             *) exit 2 ;;
           esac
           trace=()
-          if [ "$LANE" = native ]; then trace=(--verbose); fi
+          if [ "$LANE" = native ]; then
+            # The lightweight test roots allow independent peers to overlap
+            # compilation instead of waiting behind the LLVM API/HTTPS probe.
+            native_build_jobs="$(getconf _NPROCESSORS_ONLN)"
+            echo "Native build jobs: $native_build_jobs"
+            trace=("-j$native_build_jobs" --verbose)
+          fi
           zig build "$target" -Doptimize=safe \
             -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime" \
             --prefix "$RUNNER_TEMP/agent-qualification" --prefix-exe-dir executables --summary all "${trace[@]}"

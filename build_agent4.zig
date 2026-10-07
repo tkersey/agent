@@ -850,7 +850,7 @@ fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: 
         .link_libc = true,
     });
     c_module.addIncludePath(sqlite_source);
-    c_module.addCSourceFile(.{ .file = sqlite_source.path(b, "sqlite3.c"), .flags = @import("build_native.zig").sqlite_flags });
+    c_module.addCSourceFile(.{ .file = sqlite_source.path(b, "sqlite3.c"), .flags = @import("build_native.zig").sqliteFlags(optimize) });
     c_module.addCSourceFile(.{ .file = b.path("runtime/native/native_c.c"), .flags = &.{ "-std=c99", "-D_POSIX_C_SOURCE=200809L" } });
     const c_library = b.addLibrary(.{ .name = "agent-native-c", .linkage = .static, .root_module = c_module, .use_llvm = true });
     c_library.step.dependOn(gate);

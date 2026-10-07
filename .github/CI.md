@@ -178,6 +178,13 @@ request classification, so that experiment was reverted without changing the
 deadline or assertion. Both delivered products passed their complete existing
 process witnesses with the selected backend.
 
+Safe builds compile the SQLite amalgamation with `-O1`; the remaining C and Zig
+code retains the selected optimization mode. Zig's safe-mode fortification,
+undefined-behavior traps and stack protection remain enabled. The same flag
+selection supplies compilation and the delivered manifest. This targets the
+52-second root and 44-second downstream SQLite compilations observed in run
+37698237331 (5m59s overall); the new complete-workflow result remains to be measured.
+
 Measured full Linux workflows on GitHub's Ubuntu 24.04 runners:
 
 | Head | Result | Wall time |

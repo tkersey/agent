@@ -36,6 +36,10 @@ output buffer, checks unchanged checkpoint bytes, and then supplies the same
 reply successfully. Closing the completed restored resident rejects later use.
 This witness is included once in `check-native`, sharing the actual minimal
 application image. It is not a production host or application policy loop.
+The increment's v2 reply is optional: overflow returns no value, which the
+authored child converts to application failure with cleanup. Both arithmetic
+boundaries preserve the full admitted `u32` input domain without creating
+unknown environmental delivery.
 
 The initial N0 commit also passed the complete existing CI matrix on Linux:
 [run 37518433037](https://github.com/tkersey/agent/actions/runs/37518433037).
@@ -183,6 +187,12 @@ The CLI never supplies an implicit answer or substitutes a newer question.
 Execution commands return 1 for application failure and 2 for unknown, blocked,
 parked or unfinished cancellation/cleanup, with the actual state in their JSON
 output. Read-only status/result queries return 0 when the query succeeds.
+Serve-mode ownership distinguishes terminal execution from settled cleanup.
+Failed cleanup retains its task ID for the final `server.closed` recovery list
+and exit 2, without scheduling the task again. It occupies one of the host's
+16 ownership slots until that process exits; operations needing a new slot
+reject with `Capacity` before durable acknowledgment when all slots are occupied.
+Reopening exposes those durable results but does not resume terminal work.
 
 `examples/native-minimal/stdio-client.mts` is an optional TypeScript subprocess
 client, executed with Node 26's built-in type stripping in the existing peer

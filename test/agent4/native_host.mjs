@@ -48,7 +48,7 @@ function launch(state = null, lifetime = 15000) {
       if (frames.length) return frames.shift();
       return Promise.race([new Promise(resolve => waiters.push(resolve)), new Promise((_, reject) => { const timeout = setTimeout(() => reject(new Error('native response timeout')), milliseconds); timeout.unref(); })]);
     },
-    async end(code = 0) {
+    async end(code = 0, mode = 'park') {
       child.stdin.end();
       const [actual, signal] = await ended;
       clearTimeout(timer);
@@ -58,7 +58,8 @@ function launch(state = null, lifetime = 15000) {
       if (initialized && (code === 0 || code === 2)) {
         assert.equal(frames.length, 1, JSON.stringify(frames));
         assert.equal(frames[0].method, 'server.closed');
-        assert.equal(frames[0].params.disposition, code === 0 ? 'parked' : 'incomplete');
+        assert.equal(frames[0].params.mode, mode);
+        assert.equal(frames[0].params.disposition, code === 0 ? (mode === 'cancel' ? 'cancelled' : 'parked') : 'incomplete');
       } else assert.deepEqual(frames, []);
     },
     async crash() {
@@ -112,6 +113,13 @@ try {
   const {task_id: demoTask, ...demoOutput} = demo;
   assert.deepEqual(demoOutput, {mode: 'offline-demo', persistence: 'durable', effects: 3, yields: 1, output: {value: 41, answer: 'offline answer'}});
   const cli = (command, state, ...args) => JSON.parse(execFileSync(binary, [command, '--offline', '--state-dir', state, ...args], options));
+  const failedCli = (command, state, ...args) => {
+    const result = spawnSync(binary, [command, '--offline', '--state-dir', state, ...args], options);
+    assert.equal(result.error, undefined);
+    assert.equal(result.signal, null, result.stderr);
+    assert.equal(result.status, 1, result.stderr);
+    return JSON.parse(result.stdout);
+  };
   assert.equal(cli('status', 'demo state').task_id, demoTask);
   assert.deepEqual(cli('result', 'demo state', '--task-id', demoTask).outcome.value, demoOutput.output);
   const cliTask = cli('run', 'human state', '--input-json', '{"value":20}', '--operation-id', 'human-run');
@@ -130,6 +138,21 @@ try {
   assert.deepEqual(humanAnswered.outcome.value, {value: 43, answer: 'human answer'});
   assert.equal(cli('respond', 'human state', ...humanAnswerArgs).revision, humanAnswered.revision);
   assert.throws(() => execFileSync(binary, ['respond', '--offline', '--state-dir', 'human state', ...humanAnswerArgs.slice(0, -1), '{"message":"conflicting answer"}'], options), error => error.status === 64);
+  // The full admitted u32 domain reaches authored completion/failure, never
+  // UNKNOWN delivery for deterministic arithmetic. Cover both additions.
+  const incrementOverflow = failedCli('run', 'increment overflow', '--input-json', '{"value":4294967295}', '--operation-id', 'increment-overflow');
+  assert.equal(incrementOverflow.status, 'failed');
+  assert.equal(incrementOverflow.outcome.type, 'failed');
+  assert.equal(incrementOverflow.outcome.cleanup_complete, true);
+  for (const [value, expected] of [[2147483647, 'completed'], [2147483648, 'failed']]) {
+    const state = `sum boundary ${value}`;
+    const pending = cli('run', state, '--input-json', JSON.stringify({value}), '--operation-id', 'sum-boundary');
+    assert.equal(pending.status, 'waiting_input');
+    const answered = (expected === 'failed' ? failedCli : cli)('respond', state, '--task-id', pending.task_id, '--operation-id', 'sum-answer', '--question-id', pending.question.question_id, '--question-revision', pending.question.question_revision, '--request-digest', pending.question.request_digest, '--answer-json', '{"message":"boundary"}');
+    assert.equal(answered.status, expected);
+    if (expected === 'completed') assert.deepEqual(answered.outcome.value, {value: 4294967295, answer: 'boundary'});
+    else assert.equal(answered.outcome.cleanup_complete, true);
+  }
   const unsafeParent = mkdtempSync(join(directory, 'Agent writable parent '));
   try {
     chmodSync(unsafeParent, 0o777);
@@ -408,7 +431,9 @@ try {
   }
   assert.equal(cancelled.status, 'cancelled');
   assert.equal(cancelled.outcome.cleanup_complete, true);
-  await cancelling.end();
+  cancelling.write(rpc('shutdown-cancel', 'shutdown', {mode: 'cancel'}));
+  assert.equal((await cancelling.next()).result.mode, 'cancel');
+  await cancelling.end(0, 'cancel');
 
   // The receiver discards the submission acknowledgment and loses the process.
   // Recovery may find READY, an acquired reply, a question, or UNKNOWN; none of

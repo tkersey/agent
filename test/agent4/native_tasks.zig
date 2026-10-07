@@ -311,3 +311,117 @@ test "an inbox identity cannot be redeclared with a different message contract" 
     try std.testing.expectEqual(try Inbox.declare(ctx), try Inbox.declare(ctx));
     try std.testing.expectError(error.InvalidInboxContract, agent.inbox.Profile(u64).declare(ctx));
 }
+
+const CleanupTypes = struct {
+    pub const application_id = "cleanup-owner-test";
+    pub const input_schema_id = "cleanup.input.v1";
+    pub const output_schema_id = "cleanup.output.v1";
+    pub const failure_schema_id = "cleanup.failure.v1";
+    pub const message_schema_id = "cleanup.message.v1";
+    pub const Input = bool;
+    pub const Output = void;
+    pub const Failure = void;
+    pub const Message = void;
+};
+const CleanupApplication = struct {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
+        const b = c.builder;
+        const unit = try c.schema(void);
+        const boolean = try c.schema(bool);
+        const entry = try b.declare(&.{boolean}, unit, &.{}, &.{});
+        const body = try b.declare(&.{}, unit, &.{}, &.{});
+        // Stop inside protect before selecting failure versus cancellation.
+        try b.define(body, try b.term(.{ .yield_then = try b.term(.{ .fail = try b.constant(void, {}) }) }));
+        const exit_info = try boundary.library.cleanup.exitInfo(b, unit);
+        const cleanup = try b.declare(&.{exit_info}, unit, &.{}, &.{});
+        try b.define(cleanup, try b.term(.{ .conditional = .{
+            .condition = try b.reference(b.parameter(entry, 0)),
+            .when_true = try b.term(.{ .fail = try b.constant(void, {}) }),
+            .when_false = try b.pure(try b.constant(void, {})),
+        } }));
+        const body_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{}, .result = unit, .effects = &.{} } } });
+        const cleanup_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{exit_info}, .result = unit, .effects = &.{}, .capture_bound = &.{boolean} } } });
+        try b.define(entry, try b.term(.{ .protect = .{ .body = try b.lambda(body, body_type), .cleanup = try b.lambda(cleanup, cleanup_type) } }));
+        return b.module(entry, unit);
+    }
+};
+
+test "terminal cleanup failures retain bounded shutdown ownership without runnable work" {
+    const a = std.testing.allocator;
+    const io = std.testing.io;
+    var compiled = try agent.compile(a, agent.system(.{ .InitialArgs = bool, .Result = void, .Failure = void, .application = CleanupApplication }));
+    defer compiled.deinit();
+    const image = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+    defer a.free(image);
+    _ = try compiled.encode(a, image);
+    const admitted_image = try boundary.data.program_image.Admitted.decode(a, image);
+    defer admitted_image.deinit();
+    const assets: native.discovery.Assets = .{ .image = image, .application = "cleanup-test", .manifest = "cleanup-test" };
+    var application: native.discovery.Application = .{ .arena = .init(a), .metadata = .null, .manifest = .null, .manifest_id = "unit", .image_identity = admitted_image.identity() };
+    defer application.deinit();
+    var handlers = try native.Registry.init(a, &.{});
+    defer handlers.deinit();
+    const profile: native.tasks.Profile = .{ .id = "offline", .runtime_identity = @splat(42), .bytes = "cleanup-profile", .authority = .{ .grants = &.{}, .principal = "test", .tenant = "test" } };
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    var path_buffer: [4096]u8 = undefined;
+    const length = try temporary.dir.realPath(io, &path_buffer);
+    const path = try std.fmt.allocPrint(a, "{s}/state", .{path_buffer[0..length]});
+    defer a.free(path);
+    var namespace = try native.Namespace.open(a, io, path);
+    defer namespace.close() catch unreachable;
+    var service = try native.tasks.Service(CleanupTypes).init(a, io, &namespace, assets, &application, handlers, profile);
+    var service_live = true;
+    defer if (service_live) service.close(a) catch unreachable;
+    var arena = std.heap.ArenaAllocator.init(a);
+    defer arena.deinit();
+    const frame = arena.allocator();
+    var client: native.client.Client(CleanupTypes) = .{ .service = &service };
+    // Successful cleanup releases slots. Both terminal outcomes with failed
+    // cleanup remain owned. Then fill every slot to test admission-before-ack.
+    for (0..18) |index| {
+        const cleanup_fails = index >= 2;
+        const cancel = index % 2 == 0;
+        const operation = try std.fmt.allocPrint(frame, "cleanup-{d}", .{index});
+        const submitted = try service.submit(frame, operation, cleanup_fails);
+        try std.testing.expect(try service.pump(frame) == .progressed);
+        var yielded = try service.task(frame, submitted.receipt.task);
+        defer yielded.deinit();
+        try std.testing.expectEqual(.yielded, yielded.value.outcome_kind);
+        if (cancel) _ = try service.requestCancel(frame, try std.fmt.allocPrint(frame, "cancel-{d}", .{index}), submitted.receipt.task, "test cancellation");
+        try std.testing.expect(try service.pump(frame) == .progressed);
+        var terminal = try service.task(frame, submitted.receipt.task);
+        defer terminal.deinit();
+        const expected: @TypeOf(terminal.value.outcome_kind) = if (cancel) .cancelled else .failed;
+        try std.testing.expectEqual(expected, terminal.value.outcome_kind);
+        try std.testing.expectEqual(!cleanup_fails, try service.taskCleanupComplete(frame, terminal.value));
+        try std.testing.expect(try service.pump(frame) == .idle);
+        try std.testing.expectEqual(cleanup_fails, try service.shutdownIncomplete(frame));
+        var count: usize = 0;
+        for (service.owned) |id| if (id != null) {
+            count += 1;
+        };
+        try std.testing.expectEqual(if (cleanup_fails) index - 1 else 0, count);
+        var params = native.json.object();
+        try native.json.put(frame, &params, "task_id", native.json.string(try frame.dupe(u8, &std.fmt.bytesToHex(submitted.receipt.task, .lower))));
+        const result = try client.call(frame, .@"task.result", params);
+        try std.testing.expect(result.object.get("ready").?.bool);
+        try std.testing.expectEqual(!cleanup_fails, result.object.get("outcome").?.object.get("cleanup_complete").?.bool);
+        try std.testing.expect((try service.submit(frame, operation, cleanup_fails)).replayed);
+    }
+    const generation = namespace.store.head.generation;
+    try std.testing.expectError(error.Capacity, service.submit(frame, "overflow-owned", false));
+    try std.testing.expectEqual(generation, namespace.store.head.generation);
+    try service.park(frame);
+    try std.testing.expect(try service.shutdownIncomplete(frame));
+    // Reopening does not reacquire old work; its durable result stays honest.
+    const retained_id = service.owned[0].?;
+    try service.close(frame);
+    service_live = false;
+    service = try native.tasks.Service(CleanupTypes).init(a, io, &namespace, assets, &application, handlers, profile);
+    service_live = true;
+    var retained = try service.task(frame, retained_id);
+    defer retained.deinit();
+    try std.testing.expect(!try service.taskCleanupComplete(frame, retained.value));
+    try std.testing.expect(try service.pump(frame) == .idle);
+}

@@ -97,9 +97,9 @@ pub fn main(init: std.process.Init) !void {
     defer request.deinit();
     try require(std.mem.eql(u8, request.value.binding.semantic_identity, t.increment_identity));
     try require(std.mem.eql(u8, request.value.binding.payload, &.{ 20, 0, 0, 0 }));
-    try require(std.mem.eql(u8, request.value.binding.payload_schema, request.value.binding.resume_schema));
-    var value: [4]u8 = undefined;
-    std.mem.writeInt(u32, &value, try std.math.add(u32, std.mem.readInt(u32, request.value.binding.payload[0..4], .little), 1), .little);
+    try require(!std.mem.eql(u8, request.value.binding.payload_schema, request.value.binding.resume_schema));
+    // Independent canonical optional encoding: some(21), not bare u32(21).
+    const value = [_]u8{ 1, 21, 0, 0, 0 };
     const reply = try protocol.encodeOwned(protocol.Result, a, .{ .request_identity = request.value.request_identity, .value = &value });
     defer a.free(reply);
     const before = try resident.checkpoint(a);

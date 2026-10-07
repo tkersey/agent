@@ -20,11 +20,19 @@ const Application = struct {
         const input = try c.schema(t.Input);
         const output = try c.schema(t.Output);
         const answer = try c.schema(t.Answer);
-        const increment = try c.external(t.increment_identity, number, number, .read);
+        const increment_result = try c.schema(t.IncrementResult);
+        const increment = try c.external(t.increment_identity, number, increment_result, .read);
         const question = try c.external(t.question_identity, try c.schema(t.Question), answer, .read);
         const cleanup = try c.external(t.cleanup_identity, unit, unit, .read);
         const child = try b.declare(&.{number}, number, &.{increment}, &.{});
-        try b.define(child, try b.term(.{ .perform = .{ .effect = increment, .payload = try b.reference(b.parameter(child, 0)) } }));
+        const acquired = try b.variable(increment_result);
+        const checked_increment = try b.value(.{ .schema = number, .expression = .{ .primitive = .{
+            .opcode = .variant_payload,
+            .operands = &.{try b.reference(acquired)},
+            .immediate = 1,
+            .failures = &.{.{ .kind = .invalid_variant, .value = try b.failureLiteral(try b.constant(void, {})) }},
+        } } });
+        try b.define(child, try b.bind(acquired, try b.term(.{ .perform = .{ .effect = increment, .payload = try b.reference(b.parameter(child, 0)) } }), try b.pure(checked_increment)));
         const entry = try b.declare(&.{input}, output, &.{ increment, question, cleanup }, &.{});
         const body = try b.declare(&.{}, output, &.{ increment, question }, &.{});
         const retained = try b.primitive(number, .field, &.{try b.reference(b.parameter(entry, 0))}, 0);

@@ -178,13 +178,13 @@ pub fn Client(comptime Types: type) type {
                 var saved = try data.invocation.decode(data.invocation.Outcome, a, bytes);
                 defer saved.deinit();
                 switch (saved.value) {
-                    .failed => |failure| {
+                    .failed => {
                         try json.put(a, &outcome, "schema_id", json.string(try a.dupe(u8, task.failure_schema_id.bytes)));
                         try self.resultValue(a, &outcome, task);
-                        try json.put(a, &outcome, "cleanup_complete", .{ .bool = std.mem.eql(u8, failure.cleanup_failures, &.{0}) });
+                        try json.put(a, &outcome, "cleanup_complete", .{ .bool = tasks.cleanupComplete(saved.value) });
                     },
-                    .cancelled => |cancelled| {
-                        try json.put(a, &outcome, "cleanup_complete", .{ .bool = std.mem.eql(u8, cancelled.cleanup_failures, &.{0}) });
+                    .cancelled => {
+                        try json.put(a, &outcome, "cleanup_complete", .{ .bool = tasks.cleanupComplete(saved.value) });
                     },
                     else => return error.CorruptState,
                 }

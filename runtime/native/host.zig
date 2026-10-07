@@ -692,13 +692,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
             if (shutdown_at != null and !parked and slot.future == null and (mode == .park or service.runnable.items.len == 0 or code != 0)) {
                 if (!service.namespace.store.fenced) try service.park(frame);
                 parked = true;
-                for (service.owned) |owned| if (owned) |id| {
-                    var task = try service.task(frame, id);
-                    defer task.deinit();
-                    if (try service.status(frame, task.value) == .unknown or (!task.value.terminal() and task.value.cancellation != null)) {
-                        if (code == 0) code = 2;
-                    }
-                };
+                if (code == 0 and try service.shutdownIncomplete(frame)) code = 2;
             }
         } else if (shutdown_at != null) parked = true;
         if (shutdown_at) |start| {

@@ -14,6 +14,16 @@ const json = @import("json.zig");
 const values = @import("values.zig");
 const archive_api = @import("archive.zig");
 
+/// Terminal execution and settled cleanup are distinct World observations.
+pub fn cleanupComplete(outcome: data.invocation.Outcome) bool {
+    return switch (outcome) {
+        .completed => true,
+        .failed => |failure| std.mem.eql(u8, failure.cleanup_failures, &.{0}),
+        .cancelled => |cancelled| std.mem.eql(u8, cancelled.cleanup_failures, &.{0}),
+        else => false,
+    };
+}
+
 pub const Profile = struct {
     id: []const u8,
     runtime_identity: state.Digest,
@@ -115,6 +125,7 @@ pub fn Service(comptime Types: type) type {
         /// Only this process's explicit admissions/resumes are runnable. Merely
         /// opening a namespace never resumes a persisted task.
         runnable: std.ArrayList(state.TaskId) = .empty,
+        /// Unsettled cleanup retains ownership, but never runnable work.
         owned: [16]?state.TaskId = @splat(null),
         work: ?Work = null,
 
@@ -195,6 +206,25 @@ pub fn Service(comptime Types: type) type {
             if (value.cancellation != null) return .cancelling;
             for (self.runnable.items) |id| if (same(&id, &value.id)) return if (value.schedule == .queued) .queued else .running;
             return .parked;
+        }
+        pub fn taskCleanupComplete(self: *Self, a: std.mem.Allocator, value: state.Task) !bool {
+            if (!value.terminal()) return false;
+            const bytes = try self.store().object(a, value.outcome, 4 * 1024 * 1024);
+            defer a.free(bytes);
+            var outcome = try data.invocation.decode(data.invocation.Outcome, a, bytes);
+            defer outcome.deinit();
+            return cleanupComplete(outcome.value);
+        }
+        pub fn shutdownIncomplete(self: *Self, a: std.mem.Allocator) !bool {
+            for (self.owned) |owned| if (owned) |id| {
+                var decoded = try self.task(a, id);
+                defer decoded.deinit();
+                const value = decoded.value;
+                if (value.terminal()) {
+                    if (!try self.taskCleanupComplete(a, value)) return true;
+                } else if (try self.status(a, value) == .unknown or value.cancellation != null) return true;
+            };
+            return false;
         }
         fn recover(self: *Self, a: std.mem.Allocator) !void {
             const ids = try self.store().taskIds(a, true);
@@ -279,13 +309,20 @@ pub fn Service(comptime Types: type) type {
             if (self.runnable.items.len == 16) return error.Capacity;
             try self.runnable.append(self.allocator, id);
         }
+        fn ensureOwnershipCapacity(self: *Self, id: ?state.TaskId) !void {
+            for (self.owned) |slot| {
+                if (slot == null) return;
+                if (id) |existing| if (same(&slot.?, &existing)) return;
+            }
+            return error.Capacity;
+        }
         fn claim(self: *Self, id: state.TaskId) void {
             for (self.owned) |slot| if (slot) |prior| if (same(&prior, &id)) return;
             for (&self.owned) |*slot| if (slot.* == null) {
                 slot.* = id;
                 return;
             };
-            unreachable; // Namespace admission bounds all nonterminal tasks to 16.
+            unreachable; // Capacity is reserved before durable admission.
         }
         fn unclaim(self: *Self, id: state.TaskId) void {
             for (&self.owned) |*slot| if (slot.*) |prior| if (same(&prior, &id)) {
@@ -352,6 +389,7 @@ pub fn Service(comptime Types: type) type {
             const ids = try self.store().taskIds(a, true);
             defer a.free(ids);
             if (ids.len >= 16) return error.Capacity;
+            try self.ensureOwnershipCapacity(null);
             // Reserve scheduling capacity before making acceptance durable.
             try self.runnable.ensureUnusedCapacity(self.allocator, 1);
             try self.retire(a);
@@ -436,6 +474,7 @@ pub fn Service(comptime Types: type) type {
             defer decoded.deinit();
             var value = decoded.value;
             const previous = value.revision;
+            if (!value.terminal()) try self.ensureOwnershipCapacity(task_id);
             try self.runnable.ensureUnusedCapacity(self.allocator, 1);
             value.revision = try std.math.add(u64, previous, 1);
             if (!value.terminal() and value.cancellation == null) value.cancellation = .{ .bytes = reason };
@@ -461,6 +500,7 @@ pub fn Service(comptime Types: type) type {
             try self.compatible(value);
             if (value.revision != expected) return error.StaleRevision;
             if (value.terminal()) return error.TerminalTask;
+            try self.ensureOwnershipCapacity(task_id);
             var rearmed: ?occurrence.Occurrence = null;
             if (value.current_occurrence) |current| {
                 var saved = try self.record(occurrence.Occurrence, a, "occurrence", current, task_id);
@@ -580,6 +620,7 @@ pub fn Service(comptime Types: type) type {
             defer a.free(bound);
             const binding: occurrence.Binding = .{ .id = pending.value.id, .task = task_id, .request = pending.value.request };
             const acquired = try occurrence.answered(pending.value, binding, question_id, question.pending_digest, storage.digest(answer), storage.digest(bound), false);
+            try self.ensureOwnershipCapacity(task_id);
             try self.runnable.ensureUnusedCapacity(self.allocator, 1);
             const previous = value.revision;
             value.revision = try std.math.add(u64, previous, 1);
@@ -624,7 +665,7 @@ pub fn Service(comptime Types: type) type {
             const value = decoded.value;
             if (value.terminal()) {
                 self.runnableRemove(id);
-                self.unclaim(id);
+                if (try self.taskCleanupComplete(a, value)) self.unclaim(id);
                 return .progressed;
             }
             self.compatible(value) catch return self.blocked(a, value, .incompatible_profile);
@@ -771,7 +812,7 @@ pub fn Service(comptime Types: type) type {
                 try driver.destroy();
                 self.active = null;
                 self.runnableRemove(value.id);
-                self.unclaim(value.id);
+                if (cleanupComplete(outcome.value)) self.unclaim(value.id);
             }
             return .progressed;
         }

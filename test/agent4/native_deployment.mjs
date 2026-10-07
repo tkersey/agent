@@ -23,18 +23,12 @@ export function deployment(source, name) {
     assert.match(format, /ELF 64-bit.*x86-64/);
     const linkage = execFileSync('readelf', ['-lWd', executable], {encoding: 'utf8'});
     assert(!/INTERP|\(NEEDED\)|\(RPATH\)|\(RUNPATH\)/.test(linkage), 'Linux product must have no dynamic loader or shared-library dependency');
-    const args = ['/usr/bin/strace', '--kill-on-exit', '-f', '-qq', '-xx', '-s', '4096', '-e', 'trace=process,file', '-o', '/trace'];
-    // Start the tracer after namespace admission: tracing bwrap itself can
-    // prevent its OS security-profile transition. Mount only the tracer's
-    // declared OS libraries, never a source tree or language runtime.
-    const tracerLibraries = [...new Set(execFileSync('ldd', ['/usr/bin/strace'], {encoding: 'utf8'}).match(/\/[^\s()]+/g) ?? [])];
-    assert(tracerLibraries.length > 0);
-    assert(tracerLibraries.every(path => /^\/(?:usr\/)?lib(?:64)?\//.test(path)));
+    const args = ['/usr/bin/strace', '-f', '-qq', '-xx', '-s', '4096', '-e', 'trace=process,file', '-o'];
     const isolate = ['/usr/bin/bwrap', '--unshare-user', '--die-with-parent', '--unshare-pid', '--new-session', '--uid', '0', '--gid', '0',
-      '--proc', '/proc', '--dev', '/dev', '--ro-bind', executable, executable, '--bind', data, data,
-      ...['/usr/bin/strace', ...tracerLibraries].flatMap(path => ['--ro-bind', path, path])];
-    // The trace file is the only controller file admitted into the namespace.
-    writeFileSync(command, `#!/bin/sh\ntrace=${shell(join(controller, 'trace.'))}$$\n: > "$trace"\nexec ${isolate.map(shell).join(' ')} --bind "$trace" /trace --chdir "$PWD" ${args.map(shell).join(' ')} ${shell(executable)} "$@"\n`, {mode: 0o700});
+      '--proc', '/proc', '--dev', '/dev', '--ro-bind', executable, executable, '--bind', data, data, '--chdir'];
+    // The controller owns tracing and namespace setup. Neither tool is mounted
+    // into the application boundary. bwrap terminates with its tracer parent.
+    writeFileSync(command, `#!/bin/sh\nexec ${args.map(shell).join(' ')} ${shell(join(controller, 'trace.'))}$$ ${isolate.map(shell).join(' ')} "$PWD" ${shell(executable)} "$@"\n`, {mode: 0o700});
   } else if (process.platform === 'darwin') {
     assert.match(format, /Mach-O 64-bit executable arm64/);
     libraries = execFileSync('otool', ['-L', executable], {encoding: 'utf8'}).trim().split('\n').slice(1).map(line => line.trim().split(' (')[0]);
@@ -69,7 +63,7 @@ export function deployment(source, name) {
             const octets = match[1].match(/\\x[0-9a-fA-F]{2}/g) ?? [];
             assert.equal(octets.join(''), match[1], line);
             const path = Buffer.from(octets.map(octet => parseInt(octet.slice(2), 16))).toString('utf8');
-            assert(path === executable, `unexpected deployment executable: ${path}`);
+            assert(path === '/usr/bin/bwrap' || path === executable, `unexpected deployment executable: ${path}`);
             if (path === executable) executions++;
           }
         }

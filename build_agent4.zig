@@ -587,6 +587,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{.{ .name = "boundary_data", .module = data }},
         });
         const runtime_guard = nodeCommand(b);
+        runtime_guard.setCwd(b.path("."));
         runtime_guard.addArgs(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--world-runtime" });
         runtime_guard.addFileInput(b.path("conformance/agent4/dependencies.lock.json"));
         runtime_guard.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
@@ -602,6 +603,7 @@ pub fn build(b: *std.Build) void {
         var native_graph = g;
         native_graph.gate = &runtime_guard.step;
         const native_guard = nodeCommand(b);
+        native_guard.setCwd(b.path("."));
         native_guard.addArgs(&.{ "node", "tools/agent4/native-dependencies.mjs", "verify" });
         native_guard.addDirectoryArg2(sqlite_source, .{ .make_absolute = true });
         native_guard.addFileInput(b.path("conformance/agent4/native-dependencies.lock.json"));

@@ -138,8 +138,16 @@ async function repositoryHttps(binary, directory, controller, invoke) {
     } finally { clearTimeout(heldTimeout); }
     if (providerFailure) throw providerFailure;
     const start = performance.now();
-    await client.call('ping', {}, 2000);
-    const pending = await client.call('task.status', { task_id: id }, 2000);
+    const controlSamples = [];
+    let pending;
+    for (let sample = 0; sample < 3; sample++) {
+      const pingStarted = performance.now();
+      await client.call('ping', {}, 2000);
+      const pingMilliseconds = performance.now() - pingStarted;
+      const statusStarted = performance.now();
+      pending = await client.call('task.status', { task_id: id }, 2000);
+      controlSamples.push({ping_ms: pingMilliseconds, status_ms: performance.now() - statusStarted});
+    }
     const queued = await client.call('task.message', { client_operation_id: 'followup', task_id: id, message: { schema_id: 'repository-agent.message.v1', value: { message: 'Include the exact return value. 雪' } } }, 2000);
     const latency = performance.now() - start;
     assert(latency < 2000, 'control plane blocked behind held provider I/O');
@@ -217,7 +225,7 @@ async function repositoryHttps(binary, directory, controller, invoke) {
     invoke('import-checkpoint', '--state-dir', recoveredState, '--input', completedArchive, '--operation-id', 'import-completed');
     assert.deepEqual(JSON.parse(invoke('result', '--state-dir', recoveredState, '--task-id', id)).outcome.value, report);
     assert.equal(requests.length, 4, 'archive validation and recorded replay cannot acquire inference');
-    return { provider_calls: requests.length, restart_without_retry: true, frozen_snapshot: true, clarification: true, followup: true, control_ms: latency, ...parity };
+    return { provider_calls: requests.length, restart_without_retry: true, frozen_snapshot: true, clarification: true, followup: true, control_ms: latency, held_io_control_samples: controlSamples, ...parity };
   } finally {
     releaseHeld();
     for (const client of clients) { client.child.kill('SIGKILL'); await client.closed; }

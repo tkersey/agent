@@ -19,6 +19,10 @@ on:
         description: 'Diagnostic only: continue independent lanes after failures'
         type: boolean
         default: false
+      measure_builds:
+        description: 'Manual native cold/warm/resource-edit build measurements'
+        type: boolean
+        default: false
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -159,17 +163,31 @@ jobs:
         working-directory: examples/native-minimal
         env:
           TMPDIR: ${{ runner.temp }}
+          MEASURE_BUILDS: ${{ inputs.measure_builds }}
         run: |
           if [ "$RUNNER_OS" = Linux ]; then
             offline=(unshare --user --map-root-user --net)
           else
             offline=(sandbox-exec -p '(version 1)(allow default)(deny network*)')
           fi
-          "${offline[@]}" zig build -Doptimize=safe \
-            -Dworld-source="$GITHUB_WORKSPACE/.agent4/inputs/world" \
-            -Dworld-runtime="$GITHUB_WORKSPACE/.agent4/out/world-runtime/runtime" \
-            -Dsqlite-source="$GITHUB_WORKSPACE/.agent4/inputs/sqlite" \
-            --prefix "$RUNNER_TEMP/Public native ü" --prefix-exe-dir executables --summary all
+          if [ "$MEASURE_BUILDS" = true ]; then
+            # Retain only provisioned package bytes, never compiled objects.
+            mkdir "$RUNNER_TEMP/native-measure-global" "$RUNNER_TEMP/native-measure-local"
+            cp -R "$ZIG_GLOBAL_CACHE_DIR/p" "$RUNNER_TEMP/native-measure-global/p"
+            export ZIG_GLOBAL_CACHE_DIR="$RUNNER_TEMP/native-measure-global"
+            export ZIG_LOCAL_CACHE_DIR="$RUNNER_TEMP/native-measure-local"
+            TIMEFORMAT='native_recipe_cold real=%3R user=%3U sys=%3S'
+          else
+            TIMEFORMAT='native_recipe_provisioned real=%3R user=%3U sys=%3S'
+          fi
+          build_recipe() {
+            "${offline[@]}" zig build -Doptimize=safe \
+              -Dworld-source="$GITHUB_WORKSPACE/.agent4/inputs/world" \
+              -Dworld-runtime="$GITHUB_WORKSPACE/.agent4/out/world-runtime/runtime" \
+              -Dsqlite-source="$GITHUB_WORKSPACE/.agent4/inputs/sqlite" \
+              --prefix "$RUNNER_TEMP/Public native ü" --prefix-exe-dir executables --summary all
+          }
+          time build_recipe
           node --input-type=module - "$RUNNER_TEMP/Public native ü/executables/agent-native-example" "$RUNNER_TEMP/agent-qualification/executables/agent-native-example" <<'JS'
           import assert from 'node:assert/strict';
           import {execFileSync} from 'node:child_process';
@@ -187,6 +205,19 @@ jobs:
             console.log(JSON.stringify({public_native_recipe: true, offline_build: true, target: actual.target, program: actual.program_sha256, artifact: actual.artifact_sha256}));
           } finally { rmSync(directory, {recursive: true, force: true}); }
           JS
+          if [ "$MEASURE_BUILDS" = true ]; then
+            recipe_binary="$RUNNER_TEMP/Public native ü/executables/agent-native-example"
+            recipe_before="$(shasum -a 256 "$recipe_binary")"
+            TIMEFORMAT='native_recipe_warm real=%3R user=%3U sys=%3S'
+            time build_recipe
+            test "$recipe_before" = "$(shasum -a 256 "$recipe_binary")"
+            cp instructions.txt "$RUNNER_TEMP/native-instructions-before"
+            trap 'cp "$RUNNER_TEMP/native-instructions-before" instructions.txt' EXIT
+            printf '\nNative qualification resource edit.\n' >> instructions.txt
+            TIMEFORMAT='native_recipe_resource_edit real=%3R user=%3U sys=%3S'
+            time build_recipe
+            test "$recipe_before" != "$(shasum -a 256 "$recipe_binary")"
+          fi
       - name: Package executed native applications
         if: ${{ matrix.lane == 'native' && github.event_name == 'workflow_dispatch' && needs.source.result == 'success' }}
         run: |

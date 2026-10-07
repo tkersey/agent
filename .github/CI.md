@@ -90,8 +90,8 @@ Both native examples now use the existing shared fixture compiler and the public
 helper's asset writer, removing two standalone compiler invocations.
 On Linux x86_64, build-time emitters and contract-test executables select Zig's
 self-hosted backend while retaining the requested optimization/safety mode.
-Shipped application binaries and the public native API/HTTPS probe keep their
-normal production backend. Their copied-binary witnesses still run in full.
+Linux x86_64 application binaries also use that backend; the public native
+API/HTTPS probe retains LLVM. Copied-binary witnesses still run in full.
 SQLite and the native C shim are compiled once per target ABI into a static
 library, with the same flags and dependency admission, then linked by consumers.
 The optimized standard-library SHA helper shares a private Zig-declared C ABI
@@ -194,6 +194,11 @@ with network access denied and a prefix containing spaces/Unicode, compare its
 program/assets/toolchain to the repository product, and execute its offline
 demo. This exercises the downstream dependency API rather than claiming that
 the repository's internal builder call proves it.
+An explicitly selected manual `measure_builds` run uses a new compiler cache
+containing only provisioned packages, then measures one cold, one identical
+warm and one embedded-resource-edit recipe build. The warm binary must match
+exactly and the edited binary must differ. This bounded campaign does not run
+on PRs or routine manual runs and never changes the packaged reference binaries.
 
 Existing application/parity witnesses also report describe-build time, demo
 wall time and the OS command RSS high-water mark (including isolation helpers,

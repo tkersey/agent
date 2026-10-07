@@ -114,7 +114,8 @@ zig build -Doptimize=safe \
 The helper installs the executable through the caller's normal prefix and
 executable directory. Linux's host-default product target is x86_64 musl;
 macOS's supported product target is arm64. Explicit other product targets reject.
-The native consumer audit still uses its platform's native ABI independently.
+The native consumer audit uses the delivered ABI when that target runs on the
+qualification host, including musl on Linux.
 
 The native client mapping is `agent-client-values/1.0`: bounded text is a JSON
 string, bounded bytes use unpadded canonical base64url, 64-bit integers use

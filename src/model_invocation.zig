@@ -7,6 +7,27 @@ const models = @import("model.zig");
 
 pub const semantic_identity = "agent.model.invoke.v3";
 pub const replay_semantic_identity = "agent.model.invoke.v4";
+pub const reference_semantic_identity = "agent.model.invoke.v5";
+pub const context_semantic_identity = "agent.model.context.responses.v1";
+pub fn isModelIdentity(identity: []const u8) bool {
+    return std.mem.eql(u8, identity, semantic_identity) or
+        std.mem.eql(u8, identity, replay_semantic_identity) or
+        std.mem.eql(u8, identity, reference_semantic_identity);
+}
+/// Immutable environmental data, not an authorization token. The environment
+/// checks every binding and the full closure before rendering another request.
+/// Sequence bounds describe the half-open range of ordered replay items.
+pub const ContextReference = struct {
+    digest: [32]u8,
+    bytes: u64,
+    schema: contracts.Text(128),
+    profile: [32]u8,
+    task: [16]u8,
+    tenant: contracts.Text(128),
+    audience: contracts.Text(128),
+    first: u64,
+    next: u64,
+};
 pub const maximum_replay_bytes: u32 = 2 * 1024 * 1024;
 pub const ReplayStatus = enum { complete, unsupported, capacity };
 pub const Usage = struct { input_tokens: u64, output_tokens: u64, cached_input_tokens: ?u64 };
@@ -210,6 +231,21 @@ pub fn Profile(
             usage: ?Usage,
         };
 
+        // v5 leaves existing inline v4 consumers unchanged. Large captures and
+        // replay stay in the task owner's immutable store instead of PST3.
+        pub const ReferenceRequest = struct {
+            invocation: Request,
+            replay: ?ContextReference,
+            results: contracts.Vector(ToolResult, limits.maximum_output_items),
+            profile: [32]u8,
+        };
+        pub const ReferenceResult = struct {
+            result: Result,
+            replay: ?ContextReference,
+            replay_status: ReplayStatus,
+            usage: ?Usage,
+        };
+
         pub fn allDeclarations() Tools {
             const items = comptime blk: {
                 var result: [declarations.len]ToolDeclaration = undefined;
@@ -378,6 +414,15 @@ pub fn Profile(
             const slot = try builder.specialization(u64, replay_semantic_identity, .{ payload, result });
             if (slot.cached) |cached| return cached;
             const effect = try builder.effect(.{ .identity = replay_semantic_identity, .payload = payload, .result = result });
+            return slot.finish(builder, effect);
+        }
+
+        pub fn declareReference(builder: anytype) !u64 {
+            const payload = try contracts.schema(ReferenceRequest, builder);
+            const result = try contracts.schema(ReferenceResult, builder);
+            const slot = try builder.specialization(u64, reference_semantic_identity, .{ payload, result });
+            if (slot.cached) |cached| return cached;
+            const effect = try builder.effect(.{ .identity = reference_semantic_identity, .payload = payload, .result = result });
             return slot.finish(builder, effect);
         }
 

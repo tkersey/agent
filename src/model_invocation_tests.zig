@@ -112,3 +112,37 @@ test "stateless replay is an additive bounded ordinary contract with exact legac
     try std.testing.expectEqual(try contracts.schema(Fixture.ReplayRequest, &builder), builder.effects.items[@intCast(replay)].payload);
     try std.testing.expectEqual(invocation.maximum_replay_bytes, Fixture.ReplayBytes.max_length.?);
 }
+
+test "reference replay carries bounded bindings without copying provider history" {
+    const reference: invocation.ContextReference = .{
+        .digest = @splat(1),
+        .bytes = 1024 * 1024,
+        .schema = .{ .bytes = invocation.context_semantic_identity },
+        .profile = @splat(2),
+        .task = @splat(3),
+        .tenant = .{ .bytes = "tenant" },
+        .audience = .{ .bytes = "principal" },
+        .first = 0,
+        .next = 37,
+    };
+    const result: Fixture.ReferenceResult = .{
+        .result = .{ .refusal = .{ .bytes = "no" } },
+        .replay = reference,
+        .replay_status = .complete,
+        .usage = null,
+    };
+    const encoded = try contracts.encodeOwned(Fixture.ReferenceResult, std.testing.allocator, result);
+    defer std.testing.allocator.free(encoded);
+    try std.testing.expect(encoded.len < 256);
+    var decoded = try contracts.decodeOwned(Fixture.ReferenceResult, std.testing.allocator, encoded);
+    defer decoded.deinit();
+    try std.testing.expectEqualDeep(reference, decoded.value.replay.?);
+    var builder = boundary.source.Builder.init(std.testing.allocator);
+    defer builder.deinit();
+    const v3 = try Fixture.declare(&builder);
+    const v4 = try Fixture.declareReplay(&builder);
+    const v5 = try Fixture.declareReference(&builder);
+    try std.testing.expect(v3 != v4 and v4 != v5 and v3 != v5);
+    try std.testing.expectEqualStrings(invocation.reference_semantic_identity, builder.effects.items[@intCast(v5)].identity);
+    try std.testing.expectEqual(v5, try Fixture.declareReference(&builder));
+}

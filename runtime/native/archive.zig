@@ -15,6 +15,8 @@ const maximum_object = 16 * 1024 * 1024;
 const maximum_manifest = 1024 * 1024;
 const maximum_schema = 64 * 1024;
 const magic = "AGNX0001";
+const temporary_prefix = ".agent-archive-";
+const temporary_length = temporary_prefix.len + 32;
 pub const Exported = struct { sha256: state.Digest, bytes: u64 };
 const Blob = struct { reference: state.Reference, bytes: []const u8 };
 const SchemaSet = struct { schemas: []const state.ArchiveSchema, blobs: []const Blob };
@@ -69,7 +71,7 @@ const Output = struct {
     directory: c_int,
     fd: c_int,
     name: [:0]u8,
-    temporary: [48:0]u8,
+    temporary: [temporary_length:0]u8,
     hash: std.crypto.hash.sha2.Sha256 = .init(.{}),
     bytes: u64 = 0,
 
@@ -85,10 +87,10 @@ const Output = struct {
         if (source.st_dev == destination.st_dev and source.st_ino == destination.st_ino) return error.UnsafeStatePath;
         var random: [16]u8 = undefined;
         try io.randomSecure(&random);
-        var temporary: [48:0]u8 = undefined;
-        @memcpy(temporary[0..16], ".agent-archive---");
-        @memcpy(temporary[16..48], &std.fmt.bytesToHex(random, .lower));
-        temporary[48] = 0;
+        var temporary: [temporary_length:0]u8 = undefined;
+        @memcpy(temporary[0..temporary_prefix.len], temporary_prefix);
+        @memcpy(temporary[temporary_prefix.len..temporary_length], &std.fmt.bytesToHex(random, .lower));
+        temporary[temporary_length] = 0;
         const fd = c.openat(location.fd, &temporary, c.O_WRONLY | c.O_CREAT | c.O_EXCL | c.O_NOFOLLOW | c.O_CLOEXEC, @as(c_uint, 0o600));
         if (fd < 0) return error.StorageUnavailable;
         return .{ .allocator = a, .directory = location.fd, .fd = fd, .name = location.name, .temporary = temporary };

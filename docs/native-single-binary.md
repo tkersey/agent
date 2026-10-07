@@ -265,7 +265,7 @@ Linux links the selected toolchain's musl libc and embeds its license. The
 database wrapper refuses an uncapped allocation fallback and verifies the linked
 SQLite version. This primitive is not a completed task journal.
 
-The current namespace format is `agent-native-state/4`. Task, receipt, question,
+The current namespace format is `agent-native-state/5`. Task, receipt, question,
 message and event indexes reference the same hash-checked immutable object store
 as checkpoints and replies. A changed record body rejects before interpretation;
 foreign keys and task revision checks bind its index. Earlier development state
@@ -293,6 +293,16 @@ ordering from `runtime/mobility/custody.mjs`. UNKNOWN cannot dispatch or cancel
 itself; a matching late acquired reply may settle it. Answer acquisition binds
 the current question and pending request and serializes against cancellation.
 Retired occurrences retain their acquired reply or cancelled-question facts.
+
+Capturing adapters add a CAPTURED boundary before interpretation. The task owner
+persists the rendered non-secret request before dispatch and exact raw response
+before calling the pure interpreter. Preparation and interpretation receive only
+frozen task bindings and immutable object reads. Interpretation publishes its
+typed reply and replay objects together. Restart can interpret the saved capture
+without invoking the adapter again; a failed interpretation retains those bytes
+and blocks the task. Captures awaiting interpretation are not exportable. This
+owner mechanism is present; the Responses transport and integrated provider
+qualification remain in progress.
 
 `agent.inbox.Profile(Message).poll(context)` is a reusable ordinary authored
 effect. Its reply is either empty or an identified typed message. Its codecs

@@ -317,7 +317,7 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
                 try collector.visit(T, item);
                 if (comptime same(kind, "occurrence")) {
                     switch (item.state) {
-                        .dispatching, .unknown => return error.UnsettledOccurrence,
+                        .dispatching, .unknown, .captured => return error.UnsettledOccurrence,
                         .settled_reply => |acquired| try collector.reply(acquired),
                         .admitted => |admitted| if (admitted == .reply) try collector.reply(admitted.reply),
                         else => {},
@@ -329,7 +329,7 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
                 } else if (comptime same(kind, "attempt")) {
                     if (item.inference) {
                         inference_attempts = try std.math.add(u32, inference_attempts, 1);
-                        inference_bytes = try std.math.add(u64, inference_bytes, item.request.bytes);
+                        inference_bytes = try std.math.add(u64, inference_bytes, if (item.prepared) |body| body.bytes else item.request.bytes);
                     }
                 } else if (comptime same(kind, "capture")) {
                     if (item.disposition == .unknown) return error.UnsettledOccurrence;

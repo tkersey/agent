@@ -5,6 +5,33 @@ const data = @import("boundary_data");
 const contracts = @import("agent_contracts");
 const values = @import("values.zig");
 const json = @import("json.zig");
+const state = @import("state.zig");
+
+/// Pure projection inputs: immutable objects and frozen task bindings, with no
+/// I/O, credentials, evaluator, or mutable store supplied to adapter code.
+pub const ProjectionContext = struct {
+    allocator: std.mem.Allocator,
+    task: state.TaskId,
+    tenant: []const u8,
+    profile: []const u8,
+    objects: struct {
+        owner: *anyopaque,
+        read: *const fn (*anyopaque, std.mem.Allocator, state.Reference, usize) anyerror![]u8,
+    },
+
+    pub fn object(self: ProjectionContext, ref: state.Reference, limit: usize) ![]u8 {
+        return self.objects.read(self.objects.owner, self.allocator, ref, limit);
+    }
+};
+pub const Projection = struct {
+    reply: []const u8,
+    /// Immutable replay artifacts are committed atomically with the reply.
+    objects: []const []const u8 = &.{},
+};
+pub const CaptureAdapter = struct {
+    prepare: *const fn (ProjectionContext, []const u8) anyerror![]u8,
+    interpret: *const fn (ProjectionContext, []const u8, []const u8, []const u8) anyerror!Projection,
+};
 
 pub const Grant = struct {
     identity: []const u8,
@@ -39,6 +66,8 @@ pub const Declaration = struct {
     kind: Kind,
     inference: bool = false,
     background: bool = false,
+    /// invoke receives prepared bytes and returns an uninterpreted capture.
+    capture: ?CaptureAdapter = null,
     payload_schema: *const fn (std.mem.Allocator) anyerror![]u8,
     resume_schema: *const fn (std.mem.Allocator) anyerror![]u8,
     invoke: ?*const fn (Context, []const u8) anyerror![]u8 = null,
@@ -66,6 +95,7 @@ pub const Registry = struct {
             if (declaration.identity.len == 0 or declaration.resource_role.len == 0) return error.InvalidCapability;
             for (declarations[0..i]) |prior| if (std.mem.eql(u8, prior.identity, declaration.identity)) return error.DuplicateCapability;
             if (declaration.kind == .leaf and declaration.invoke == null) return error.InvalidCapability;
+            if (declaration.capture != null and (declaration.kind != .leaf or !declaration.background)) return error.InvalidCapability;
             if (declaration.kind == .question and (declaration.present == null or declaration.answer == null or declaration.answer_schema_id == null)) return error.InvalidCapability;
             entry.* = .{
                 .declaration = declaration,

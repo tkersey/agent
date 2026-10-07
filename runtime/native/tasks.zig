@@ -28,6 +28,7 @@ pub const Work = struct {
     occurrence: state.Digest,
     attempt: state.Digest,
     request: []const u8,
+    prepared: ?[]const u8 = null,
     entry: registry.Entry,
     cleanup: bool,
 };
@@ -549,6 +550,7 @@ pub fn Service(comptime Types: type) type {
                 const pending = item.value;
                 const binding: occurrence.Binding = .{ .id = pending.id, .task = id, .request = pending.request };
                 switch (pending.state) {
+                    .captured => return self.interpretCapture(a, value, pending),
                     .unknown, .dispatching => return self.blocked(a, value, .unavailable_environment),
                     .settled_reply => |acquired| {
                         reply = try self.store().acquiredObject(a, acquired.reply, 4 * 1024 * 1024);
@@ -779,20 +781,24 @@ pub fn Service(comptime Types: type) type {
                     return .progressed;
                 },
                 .leaf => {
-                    // This baseline admits a bounded fixed profile. Provider
-                    // attempt records and captured bytes refine these counters.
+                    const prepared = if (entry.declaration.capture) |adapter| try adapter.prepare(self.projectionContext(a, value), request.value.binding.payload) else null;
+                    defer if (prepared) |body| a.free(body);
+                    if (prepared) |body| if (body.len > 2 * 1024 * 1024) return self.blocked(a, initial, .capacity);
+                    const charged_bytes = if (prepared) |body| body.len else request_bytes.len;
                     if (entry.declaration.inference) {
-                        if (value.inference_attempts >= 16 or value.inference_request_bytes + request_bytes.len > 8 * 1024 * 1024) return self.blocked(a, initial, .capacity);
+                        if (value.inference_attempts >= 16 or value.inference_request_bytes + charged_bytes > 8 * 1024 * 1024) return self.blocked(a, initial, .capacity);
                         value.inference_attempts += 1;
-                        value.inference_request_bytes += request_bytes.len;
+                        value.inference_request_bytes += charged_bytes;
                     }
                     const retained = try self.allocator.dupe(u8, request_bytes);
                     errdefer self.allocator.free(retained);
-                    const work: Work = .{ .task = value.id, .occurrence = pending.id, .attempt = attempt, .request = retained, .entry = entry, .cleanup = value.cancellation_applied };
+                    const retained_prepared = if (prepared) |body| try self.allocator.dupe(u8, body) else null;
+                    errdefer if (retained_prepared) |body| self.allocator.free(body);
+                    const work: Work = .{ .task = value.id, .occurrence = pending.id, .attempt = attempt, .request = retained, .prepared = retained_prepared, .entry = entry, .cleanup = value.cancellation_applied };
                     try self.store().begin();
                     defer self.store().rollback();
                     try self.store().reserve(attempt);
-                    try self.store().createRecord(state.Attempt, "attempt", attempt, value.id, .{ .id = attempt, .task = value.id, .occurrence = pending.id, .request = try self.store().putObject(request_bytes), .profile = value.profile, .capability = try name(entry.declaration.identity), .inference = entry.declaration.inference });
+                    try self.store().createRecord(state.Attempt, "attempt", attempt, value.id, .{ .id = attempt, .task = value.id, .occurrence = pending.id, .request = try self.store().putObject(request_bytes), .profile = value.profile, .capability = try name(entry.declaration.identity), .inference = entry.declaration.inference, .prepared = if (prepared) |body| try self.store().putObject(body) else null });
                     try self.store().putRecord(occurrence.Occurrence, "occurrence", pending.id, value.id, dispatched);
                     try self.persist(value, initial.revision, "effect.dispatch");
                     self.work = work;
@@ -801,18 +807,107 @@ pub fn Service(comptime Types: type) type {
             }
         }
 
+        fn projectionContext(self: *Self, a: std.mem.Allocator, value: state.Task) registry.ProjectionContext {
+            return .{ .allocator = a, .task = value.id, .tenant = value.tenant.bytes, .profile = self.profile.bytes, .objects = .{ .owner = self.store(), .read = struct {
+                fn read(owner: *anyopaque, allocator: std.mem.Allocator, ref: state.Reference, limit: usize) ![]u8 {
+                    const objects: *storage.Store = @ptrCast(@alignCast(owner));
+                    return objects.object(allocator, ref, limit);
+                }
+            }.read } };
+        }
+
+        fn capture(self: *Self, a: std.mem.Allocator, work: Work, raw: []const u8) !void {
+            defer self.releaseWork();
+            errdefer self.store().fenced = true;
+            // The initial native profile keeps captured bytes within its
+            // existing durable acquisition reservation.
+            if (raw.len > 4 * 1024 * 1024 or work.prepared == null) return error.Capacity;
+            var decoded = try self.task(a, work.task);
+            defer decoded.deinit();
+            var value = decoded.value;
+            var saved = try self.record(occurrence.Occurrence, a, "occurrence", work.occurrence, work.task);
+            defer saved.deinit();
+            const next = try occurrence.captured(saved.value, .{ .id = work.occurrence, .task = work.task, .request = saved.value.request }, work.attempt);
+            const previous = value.revision;
+            value.revision = try std.math.add(u64, previous, 1);
+            try self.store().begin();
+            defer self.store().rollback();
+            try self.store().createRecord(state.Capture, "capture", work.attempt, work.task, .{
+                .task = work.task,
+                .occurrence = work.occurrence,
+                .attempt = work.attempt,
+                .request = try self.store().putObject(work.prepared.?),
+                .response = try self.store().putObject(raw),
+                .disposition = .complete,
+            });
+            try self.store().reserveAcquired(work.attempt);
+            try self.store().putRecord(occurrence.Occurrence, "occurrence", work.occurrence, work.task, next);
+            try self.persist(value, previous, "effect.capture");
+        }
+
+        fn interpretCapture(self: *Self, a: std.mem.Allocator, initial: state.Task, pending: occurrence.Occurrence) !Step {
+            const attempt_id = pending.state.captured.id;
+            var attempt = try self.record(state.Attempt, a, "attempt", attempt_id, initial.id);
+            defer attempt.deinit();
+            var raw = try self.record(state.Capture, a, "capture", attempt_id, initial.id);
+            defer raw.deinit();
+            if (raw.value.disposition != .complete or raw.value.response == null or attempt.value.prepared == null or
+                !same(&attempt.value.occurrence, &pending.id) or !same(&raw.value.occurrence, &pending.id) or
+                !same(&attempt.value.profile.digest, &initial.profile.digest) or
+                !std.meta.eql(attempt.value.prepared.?, raw.value.request)) return error.CorruptState;
+            const encoded = try self.store().object(a, attempt.value.request, 4 * 1024 * 1024);
+            defer a.free(encoded);
+            var request = try data.invocation.decode(data.invocation.Request, a, encoded);
+            defer request.deinit();
+            if (!same(&request.value.request_identity, &pending.request)) return error.CorruptState;
+            // Resolve the original schemas without acquiring another I/O grant.
+            const entry = try self.handlers.resolve(request.value, self.application.image_identity);
+            const adapter = entry.declaration.capture orelse return error.IncompatibleProfile;
+            const rendered = try self.store().object(a, raw.value.request, 2 * 1024 * 1024);
+            defer a.free(rendered);
+            const response = try self.store().object(a, raw.value.response.?, 4 * 1024 * 1024);
+            defer a.free(response);
+            var projection_arena = std.heap.ArenaAllocator.init(a);
+            defer projection_arena.deinit();
+            const result = adapter.interpret(self.projectionContext(projection_arena.allocator(), initial), request.value.binding.payload, rendered, response) catch
+                return self.blocked(a, initial, .unavailable_environment);
+            if (result.reply.len > 1024 * 1024 or result.objects.len > 16) return self.blocked(a, initial, .capacity);
+            var total: usize = 0;
+            for (result.objects) |object| {
+                total = std.math.add(usize, total, object.len) catch return self.blocked(a, initial, .capacity);
+                if (total > 2 * 1024 * 1024) return self.blocked(a, initial, .capacity);
+            }
+            var schema = try data.schema.decode(a, entry.resume_schema);
+            defer schema.deinit();
+            data.schema.validateValue(a, schema.descriptor, result.reply) catch return self.blocked(a, initial, .unavailable_environment);
+            const bound = try data.invocation.encodeOwned(data.invocation.Result, a, .{ .request_identity = pending.request, .value = result.reply });
+            defer a.free(bound);
+            const next = try occurrence.acquired(pending, .{ .id = pending.id, .task = initial.id, .request = pending.request }, attempt_id, storage.digest(bound));
+            var value = initial;
+            value.revision = try std.math.add(u64, value.revision, 1);
+            try self.store().begin();
+            defer self.store().rollback();
+            _ = try self.store().putObject(bound);
+            for (result.objects) |object| _ = try self.store().putObject(object);
+            try self.store().putRecord(occurrence.Occurrence, "occurrence", pending.id, initial.id, next);
+            try self.persist(value, initial.revision, "effect.interpret");
+            return .progressed;
+        }
+
         fn currentWork(self: *Self, work: Work) !void {
             const current = self.work orelse return error.StaleOccurrence;
             if (!same(&current.task, &work.task) or !same(&current.occurrence, &work.occurrence) or !same(&current.attempt, &work.attempt)) return error.StaleOccurrence;
         }
         fn releaseWork(self: *Self) void {
             self.allocator.free(self.work.?.request);
+            if (self.work.?.prepared) |body| self.allocator.free(body);
             self.work = null;
         }
         /// A worker has returned and will no longer access this work item.
         /// Acquisition is published before any subsequent World consumption.
         pub fn acquire(self: *Self, a: std.mem.Allocator, work: Work, reply: []const u8) !void {
             try self.currentWork(work);
+            if (work.entry.declaration.capture != null) return self.capture(a, work, reply);
             defer self.releaseWork();
             errdefer self.store().fenced = true;
             if (reply.len > 4 * 1024 * 1024) return error.Capacity;

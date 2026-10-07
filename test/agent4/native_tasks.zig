@@ -38,8 +38,31 @@ fn increment(_: native.Context, input: u32) !u32 {
 fn present(ctx: native.Context, input: u32) !native.json.Value {
     return native.json.number(ctx.allocator, input);
 }
+const CapturingIncrement = struct {
+    fn prepare(ctx: native.registry.ProjectionContext, payload: []const u8) ![]u8 {
+        var value = try agent.contracts.decodeOwned(u32, ctx.allocator, payload);
+        defer value.deinit();
+        return std.fmt.allocPrint(ctx.allocator, "increment:{d}", .{value.value});
+    }
+    fn invoke(ctx: native.Context, bytes: []const u8) ![]u8 {
+        if (!std.mem.eql(u8, bytes, "increment:20")) return error.InvalidPreparedRequest;
+        return ctx.allocator.dupe(u8, "raw-response:21");
+    }
+    fn interpret(ctx: native.registry.ProjectionContext, payload: []const u8, rendered: []const u8, raw: []const u8) !native.registry.Projection {
+        if (!std.mem.eql(u8, rendered, "increment:20") or !std.mem.eql(u8, raw, "raw-response:21")) return error.InvalidCapture;
+        var value = try agent.contracts.decodeOwned(u32, ctx.allocator, payload);
+        defer value.deinit();
+        if (value.value != 20) return error.InvalidCapture;
+        return .{ .reply = try agent.contracts.encodeOwned(u32, ctx.allocator, 21) };
+    }
+};
 
 test "durable owner replays admissions and acquired work, binds answers, and consumes queued input once" {
+    try ownerRecovery(false);
+    try ownerRecovery(true);
+}
+
+fn ownerRecovery(captured: bool) !void {
     const a = std.testing.allocator;
     const io = std.testing.io;
     var compiled = try agent.compile(a, agent.system(.{ .InitialArgs = T.Input, .Result = T.Output, .Failure = T.Failure, .application = Application }));
@@ -51,8 +74,14 @@ test "durable owner replays admissions and acquired work, binds answers, and con
     // Asset/discovery admission is independently tested by the subprocess peer.
     var application: native.discovery.Application = .{ .arena = .init(a), .metadata = .null, .manifest = .null, .manifest_id = "unit", .image_identity = try boundary.data.program_image.identity(a, compiled.program) };
     defer application.deinit();
+    var increment_declaration = native.leaf(u32, u32, .{ .identity = "task-owner.increment.v1", .resource_role = "local" }, increment);
+    if (captured) {
+        increment_declaration.background = true;
+        increment_declaration.capture = .{ .prepare = CapturingIncrement.prepare, .interpret = CapturingIncrement.interpret };
+        increment_declaration.invoke = CapturingIncrement.invoke;
+    }
     var handlers = try native.Registry.init(a, &.{
-        native.leaf(u32, u32, .{ .identity = "task-owner.increment.v1", .resource_role = "local" }, increment),
+        increment_declaration,
         native.question(u32, u32, .{ .identity = "task-owner.question.v1", .resource_role = "user", .answer_schema_id = "task-owner.answer.v1" }, present),
         native.inbox.declaration(u32),
     });
@@ -86,9 +115,13 @@ test "durable owner replays admissions and acquired work, binds answers, and con
         if (step == .work) {
             var request = try protocol.decode(protocol.Request, frame, step.work.request);
             defer request.deinit();
-            const reply = try step.work.entry.declaration.invoke.?(.{ .allocator = frame, .io = io, .authority = &profile.authority, .task_id = "test" }, request.value.binding.payload);
+            const reply = try step.work.entry.declaration.invoke.?(.{ .allocator = frame, .io = io, .authority = &profile.authority, .task_id = "test" }, step.work.prepared orelse request.value.binding.payload);
             calls += 1;
             try service.acquire(frame, step.work, reply);
+            if (captured) {
+                const saved = (try namespace.store.recordBytes(frame, "capture", step.work.attempt, step.work.task)) orelse return error.MissingRawCapture;
+                try std.testing.expect(saved.len != 0);
+            }
             break;
         }
     }

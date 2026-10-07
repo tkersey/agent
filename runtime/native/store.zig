@@ -6,7 +6,7 @@ const sqlite = @import("sqlite.zig");
 const state = @import("state.zig");
 const occurrence = @import("occurrence.zig");
 const Digest = state.Digest;
-pub const format: u32 = 4;
+pub const format: u32 = 5;
 pub const state_bytes = @import("native_options").state_bytes;
 pub const dispatch_reserve = 16 * 1024 * 1024;
 pub const acquired_reserve = 11 * 1024 * 1024;
@@ -45,7 +45,7 @@ pub const Store = struct {
             try database.exec("BEGIN IMMEDIATE;");
             errdefer database.exec("ROLLBACK;") catch {};
             try database.exec(
-                \\CREATE TABLE meta(singleton INTEGER PRIMARY KEY CHECK(singleton=1), format INTEGER NOT NULL CHECK(format=4), namespace BLOB NOT NULL, generation INTEGER NOT NULL, parent BLOB NOT NULL, head BLOB NOT NULL);
+                \\CREATE TABLE meta(singleton INTEGER PRIMARY KEY CHECK(singleton=1), format INTEGER NOT NULL CHECK(format=5), namespace BLOB NOT NULL, generation INTEGER NOT NULL, parent BLOB NOT NULL, head BLOB NOT NULL);
                 \\CREATE TABLE objects(digest BLOB PRIMARY KEY CHECK(length(digest)=32), body BLOB NOT NULL) WITHOUT ROWID;
                 \\CREATE TABLE tasks(id BLOB PRIMARY KEY CHECK(length(id)=16), revision INTEGER NOT NULL, terminal INTEGER NOT NULL CHECK(terminal IN(0,1)), body BLOB NOT NULL REFERENCES objects(digest)) WITHOUT ROWID;
                 \\CREATE TABLE operations(id TEXT PRIMARY KEY, request BLOB NOT NULL CHECK(length(request)=32), receipt BLOB NOT NULL REFERENCES objects(digest), task BLOB NOT NULL CHECK(length(task)=16)) WITHOUT ROWID;

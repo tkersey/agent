@@ -142,6 +142,7 @@ pub const Attempt = struct {
     profile: Reference,
     capability: Name,
     inference: bool,
+    prepared: ?Reference = null,
 };
 pub const Capture = struct {
     task: TaskId,

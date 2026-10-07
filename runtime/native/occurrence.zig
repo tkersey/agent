@@ -19,6 +19,7 @@ pub const State = union(enum) {
     settled_reply: Acquired,
     admitted: Admitted,
     not_sent: Attempt,
+    captured: Attempt,
 };
 pub const Occurrence = struct {
     id: Digest,
@@ -85,7 +86,7 @@ pub fn rearm(value: Occurrence, binding: Binding) Error!Occurrence {
 pub fn acquired(value: Occurrence, binding: Binding, attempt: Digest, reply: Digest) Error!Occurrence {
     try current(value, binding);
     const prior = switch (value.state) {
-        .dispatching, .unknown => |item| item.id,
+        .dispatching, .unknown, .captured => |item| item.id,
         .settled_reply => |saved| {
             if (!equal(saved.attempt, attempt) or saved.answer != null or !equal(saved.reply, reply)) return error.ReplyConflict;
             return value;
@@ -95,6 +96,16 @@ pub fn acquired(value: Occurrence, binding: Binding, attempt: Digest, reply: Dig
     if (!equal(prior, attempt)) return error.StaleOccurrence;
     var next = value;
     next.state = .{ .settled_reply = .{ .attempt = attempt, .reply = reply } };
+    return next;
+}
+
+/// Exact external bytes are durable, but no interpretation is admitted yet.
+/// This state cannot dispatch again or be replaced by cancellation.
+pub fn captured(value: Occurrence, binding: Binding, attempt: Digest) Error!Occurrence {
+    try current(value, binding);
+    if (value.state != .dispatching or !equal(value.state.dispatching.id, attempt)) return error.UnsettledOccurrence;
+    var next = value;
+    next.state = .{ .captured = .{ .id = attempt } };
     return next;
 }
 
@@ -173,4 +184,19 @@ test "positive no-invocation evidence permits cancellation or an explicit rearm,
     try std.testing.expect((try rearm(stopped, binding)).state == .ready);
     try std.testing.expectError(error.UnsettledOccurrence, rearm(try unknown(sent, binding, @splat(4)), binding));
     try std.testing.expectError(error.UnsettledOccurrence, acquired(stopped, binding, @splat(4), @splat(5)));
+}
+
+test "durable raw capture can only advance through interpretation, never redispatch or cancellation" {
+    const binding: Binding = .{ .id = @splat(1), .task = @splat(2), .request = @splat(3) };
+    const initial: Occurrence = .{ .id = binding.id, .task = binding.task, .request = binding.request };
+    const sent = try dispatch(initial, binding, @splat(4), false, false);
+    try std.testing.expectError(error.UnsettledOccurrence, captured(sent, binding, @splat(5)));
+    const raw = try captured(sent, binding, @splat(4));
+    try std.testing.expectError(error.UnsettledOccurrence, dispatch(raw, binding, @splat(5), false, false));
+    try std.testing.expectError(error.UnsettledOccurrence, consumed(raw, binding, .cancel, true));
+    try std.testing.expectError(error.UnsettledOccurrence, unknown(raw, binding, @splat(4)));
+    try std.testing.expectError(error.UnsettledOccurrence, notSent(raw, binding, @splat(4)));
+    try std.testing.expectError(error.StaleOccurrence, acquired(raw, binding, @splat(5), @splat(6)));
+    const reply = try acquired(raw, binding, @splat(4), @splat(6));
+    try std.testing.expect((try consumed(reply, binding, .{ .reply = @splat(6) }, true)).state == .admitted);
 }

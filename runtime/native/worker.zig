@@ -61,7 +61,7 @@ pub const Worker = struct {
         const ctx: registry.Context = .{ .allocator = a, .io = self.io, .authority = &self.authority, .task_id = &id, .environment = self.environment, .cancellation = &self.cancellation };
         try ctx.checkCancellation();
         self.invoked = true;
-        return self.work.entry.declaration.invoke.?(ctx, request.value.binding.payload);
+        return self.work.entry.declaration.invoke.?(ctx, self.work.prepared orelse request.value.binding.payload);
     }
     fn execute(self: *Worker) void {
         defer self.done.store(true, .release);

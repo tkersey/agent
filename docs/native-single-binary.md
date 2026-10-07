@@ -216,14 +216,21 @@ through this client. An RPC response acknowledges that method, not overall task
 completion; use `task.result` and its `ready` field for the latter.
 
 Offline `describe` returns a Draft 2020-12 `protocol_schema` document, or a
-`protocol_schema_ref` when it exceeds the inline budget. Large application
-discovery metadata similarly uses `application.metadata_ref`. Retrieve these
+`protocol_schema_ref` when the complete description exceeds the inline budget.
+Large application discovery metadata similarly uses `application.metadata_ref`. Retrieve these
 immutable public descriptors through `artifact.read` without `task_id`, using
 the reference's `artifact_id`, decimal `offset` and decimal `length` (1–32768).
 Concatenate the base64url-decoded chunks, check their `sha256` and total length,
 then parse JSON. Discovery-only launches expose only these embedded public
 descriptors; task artifacts require their owning `task_id` and current grants.
 Large typed results use `outcome.value_ref` with the same bounded chunk format.
+
+For an enabled task service, `describe.profile` reports the admitted profile's
+`id`, `sha256`, and aggregate `resource_identity`; select that `id` in
+`task.submit`. The resource identity binds the image, frozen profile and ordered
+immutable resource set used by the declared capability roles. Discovery-only
+launches return `profile: null`. Profile contents, credentials and private
+resource payloads are not disclosed.
 
 Each
 method's `params_schema` and `result_schema` identify definitions within that

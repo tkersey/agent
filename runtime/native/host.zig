@@ -34,6 +34,7 @@ fn Connection(comptime Types: type) type {
         closing: bool = false,
         limits: protocol.Limits = .{},
         client: ?*client_api.Client(Types) = null,
+        launch_profile: ?discovery.LaunchProfile = null,
 
         fn call(self: *@This(), a: std.mem.Allocator, request: protocol.Call) !json.Value {
             if (request.method == .initialize) {
@@ -93,7 +94,11 @@ fn Connection(comptime Types: type) type {
                     return protocol.response(a, request.id, result);
                 },
                 .describe => {
-                    const result = self.application.describe(a, request.params) catch |err| return protocol.failure(a, request.id, failureKind(err), failureRecovery(failureKind(err)));
+                    const launch = if (self.client) |client|
+                        if (!client.service.profile.authority.revoked and client.service.profile.authority.disclosure) self.launch_profile else null
+                    else
+                        null;
+                    const result = self.application.describe(a, request.params, launch) catch |err| return protocol.failure(a, request.id, failureKind(err), failureRecovery(failureKind(err)));
                     return protocol.response(a, request.id, result);
                 },
                 .@"artifact.read" => if (self.client == null and json.get(request.params, "task_id") == null) {
@@ -312,6 +317,7 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
         profile.resources = admitted.resources;
         profile.environment = admitted.environment;
         profile.authority.inference = offline or authorize_inference;
+        profile.validate() catch return 64;
         application.execution_mode = if (offline) .offline else .live;
         if (service) |*owner| owner.profile = profile;
     }
@@ -361,7 +367,15 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
         try std.Io.File.stdout().writeStreamingAll(init.io, "\n");
         return 0;
     }
-    var connection: Connection(Types) = .{ .application = &application, .instance = &instance, .artifact_identity = artifact_identity.sha256, .client = if (client) |*value| value else null };
+    var connection: Connection(Types) = .{
+        .application = &application,
+        .instance = &instance,
+        .artifact_identity = artifact_identity.sha256,
+        .client = if (client) |*value| value else null,
+        // Derive once from the finalized immutable launch inputs, using the
+        // same resource identity that issued the capability grants above.
+        .launch_profile = if (client != null) .{ .id = profile.id, .sha256 = @import("store.zig").digest(profile.bytes), .resource_identity = resource_identity } else null,
+    };
     return serve(Types, init.io, a, &connection);
 }
 

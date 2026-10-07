@@ -277,7 +277,8 @@ pub fn document(a: std.mem.Allocator, application: json.Value, limits: protocol.
     for ([_][]const u8{ "input", "output", "failure", "answer", "message" }) |key| try app_properties.append(.{ key, schema_asset });
     const capability = try shape(a, &.{ .{ "identity", try text(a, 1, 128) }, .{ "resource_role", try text(a, 1, 128) }, .{ "payload_sha256", digest }, .{ "resume_sha256", digest } }, &.{});
     try app_properties.append(.{ "capabilities", try array(a, capability, 64) });
-    var description = try shape(a, &.{ .{ "methods", try array(a, method_description, 16) }, .{ "next_cursor", try nullable(a, count) }, .{ "application", try oneOf(a, &.{ try shape(a, app_properties.items, &.{}), app_reference }) }, .{ "execution_mode", try enumeration(a, &.{ "offline", "live" }) }, .{ "protocol_schema", try literal(a, "{\"type\":\"object\"}") }, .{ "protocol_schema_ref", schema_reference } }, &.{ "protocol_schema", "protocol_schema_ref" });
+    const launch_profile = try nullable(a, try shape(a, &.{ .{ "id", try text(a, 1, 128) }, .{ "sha256", digest }, .{ "resource_identity", digest } }, &.{}));
+    var description = try shape(a, &.{ .{ "methods", try array(a, method_description, 16) }, .{ "next_cursor", try nullable(a, count) }, .{ "application", try oneOf(a, &.{ try shape(a, app_properties.items, &.{}), app_reference }) }, .{ "execution_mode", try enumeration(a, &.{ "offline", "live" }) }, .{ "profile", launch_profile }, .{ "protocol_schema", try literal(a, "{\"type\":\"object\"}") }, .{ "protocol_schema_ref", schema_reference } }, &.{ "protocol_schema", "protocol_schema_ref" });
     try json.put(a, &description, "oneOf", try literal(a, "[{\"required\":[\"protocol_schema\"]},{\"required\":[\"protocol_schema_ref\"]}]"));
     try json.put(a, &definitions, "describe.result", description);
     var errors: std.array_list.Managed(json.Value) = .init(a);

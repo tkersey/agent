@@ -138,8 +138,12 @@ async function repositoryHttps(binary, directory, controller, invoke) {
     const investigationStarted = performance.now();
     let client = launch(['--config', configPath]);
     await client.initialize();
-    assert.equal((await client.call('describe')).execution_mode, 'live');
-    const accepted = await client.call('task.submit', { client_operation_id: 'repository-task', application_id: 'repository-agent', profile_id: 'fixed', input: { schema_id: 'repository-agent.input.v1', value: { task: 'Explain the public source behavior.' } } });
+    const description = await client.call('describe');
+    assert.equal(description.execution_mode, 'live');
+    assert.equal(description.profile.id, 'fixed');
+    assert.match(description.profile.resource_identity, /^[a-f0-9]{64}$/);
+    const accepted = await client.call('task.submit', { client_operation_id: 'repository-task', application_id: 'repository-agent', profile_id: description.profile.id, input: { schema_id: 'repository-agent.input.v1', value: { task: 'Explain the public source behavior.' } } });
+    assert.equal(accepted.profile_digest, description.profile.sha256);
     const id = accepted.task_id;
     const subscribed = await client.call('task.subscribe', { task_id: id, after_seq: '0' });
     let heldTimeout;

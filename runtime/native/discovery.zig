@@ -8,6 +8,8 @@ const registry = @import("registry.zig");
 const contracts = @import("agent_contracts");
 
 pub const Assets = struct { image: []const u8, application: []const u8, manifest: []const u8 };
+/// Non-secret identities derived from the currently admitted launch profile.
+pub const LaunchProfile = struct { id: []const u8, sha256: [32]u8, resource_identity: [32]u8 };
 
 pub const Artifact = struct {
     bytes: []const u8,
@@ -168,7 +170,7 @@ pub const Application = struct {
 
     /// This projection is deliberately bounded; larger schema/resource assets
     /// are retained for the authorized artifact service rather than truncated.
-    pub fn describe(self: Application, a: std.mem.Allocator, params: json.Value) !json.Value {
+    pub fn describe(self: Application, a: std.mem.Allocator, params: json.Value, launch: ?LaunchProfile) !json.Value {
         if (json.get(params, "application_id")) |id| {
             const expected = try json.text(self.metadata.object.get("application_id").?);
             if (id != .string or !std.mem.eql(u8, id.string, expected)) return error.NotFound;
@@ -207,6 +209,14 @@ pub const Application = struct {
         try json.put(a, &app, "metadata_ref", try self.schema_artifacts[0].?.reference(a));
         try json.put(a, &result, "application", app);
         try json.put(a, &result, "execution_mode", json.string(@tagName(self.execution_mode)));
+        var profile: json.Value = .null;
+        if (launch) |admitted| {
+            profile = json.object();
+            try json.put(a, &profile, "id", json.string(admitted.id));
+            try json.put(a, &profile, "sha256", json.string(try a.dupe(u8, &std.fmt.bytesToHex(admitted.sha256, .lower))));
+            try json.put(a, &profile, "resource_identity", json.string(try a.dupe(u8, &std.fmt.bytesToHex(admitted.resource_identity, .lower))));
+        }
+        try json.put(a, &result, "profile", profile);
         const protocol_ref = try self.schema_artifacts[1].?.reference(a);
         try json.put(a, &result, "protocol_schema_ref", protocol_ref);
         if (!try fitsDescription(a, result)) return error.Capacity;
@@ -267,7 +277,7 @@ test "oversized discovery stays bounded and its immutable schemas round-trip thr
     try json.put(a, &metadata, "capabilities", .{ .array = .init(a) });
     const artifacts = [2]?Artifact{ try Artifact.freeze(a, metadata, "application"), try Artifact.freeze(a, schema, "protocol") };
     const application: Application = .{ .arena = .init(a), .metadata = metadata, .manifest = .null, .manifest_id = "test", .image_identity = @splat(0), .public_metadata = metadata, .protocol_schema = schema, .schema_artifacts = artifacts };
-    const description = try application.describe(a, json.object());
+    const description = try application.describe(a, json.object(), null);
     try std.testing.expect((try json.canonical(a, description)).len < (protocol.Limits{}).inline_bytes);
     try std.testing.expect(json.get(description, "protocol_schema") == null);
     try std.testing.expect(json.get(description.object.get("application").?, "metadata_ref") != null);
@@ -310,7 +320,7 @@ test "discovery budgets the combined description before composing a full batch" 
         const artifacts = [2]?Artifact{ try Artifact.freeze(a, metadata, "application"), try Artifact.freeze(a, schema, "protocol") };
         for (artifacts) |artifact| try std.testing.expect(artifact.?.bytes.len < (protocol.Limits{}).inline_bytes);
         const application: Application = .{ .arena = .init(a), .metadata = metadata, .manifest = .null, .manifest_id = "test", .image_identity = @splat(0), .public_metadata = metadata, .protocol_schema = schema, .schema_artifacts = artifacts };
-        const description = try application.describe(a, json.object());
+        const description = try application.describe(a, json.object(), .{ .id = "fixed", .sha256 = @splat(2), .resource_identity = @splat(3) });
         try std.testing.expect((try json.canonical(a, description)).len <= (protocol.Limits{}).inline_bytes);
         try std.testing.expectEqual(size == 128, json.get(description, "protocol_schema") != null);
         if (json.get(description, "protocol_schema_ref")) |reference| {

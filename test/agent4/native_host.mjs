@@ -203,6 +203,7 @@ try {
   assert.equal((await peer.next()).id, 'after');
   peer.write(rpc('discovery', 'describe'));
   const description = (await peer.next()).result;
+  assert.equal(description.profile, null); // Discovery-only launch admits no task profile.
   async function publicArtifact(id) {
     const chunks = [];
     let offset = 0;
@@ -476,6 +477,7 @@ try {
   schemaCases.push({definition: 'task.submit.params', value: submission});
   for (const profile_id of ['fixed', 'custom-admitted-profile']) schemaCases.push({definition: 'task.submit.params', value: {...submission, profile_id}});
   for (const profile_id of ['', 'x'.repeat(129)]) schemaCases.push({definition: 'task.submit.params', value: {...submission, profile_id}, accept: false});
+  schemaCases.push({definition: 'describe.result', value: {...description, profile: {id: 'fixed', sha256: '0'.repeat(64), resource_identity: '1'.repeat(64)}}});
   schemaCases.push({definition: 'task.submit.params', value: {...submission, principal: 'forged'}, accept: false});
   schemaCases.push({definition: 'task.submit.params', value: {...submission, input: {...submission.input, value: {value: 4294967296}}}, accept: false});
   schemaCases.push({definition: 'task.submit.params', value: {...submission, client_operation_id: '雪'.repeat(43)}, accept: false});

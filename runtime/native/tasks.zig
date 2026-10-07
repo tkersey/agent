@@ -27,6 +27,12 @@ pub const Profile = struct {
     /// references are retained by the task and therefore included in archives.
     resources: []const []const u8 = &.{},
 
+    pub fn validate(self: Profile) !void {
+        _ = try name(self.id);
+        _ = try name(self.authority.principal);
+        if (self.bytes.len > 256 * 1024 or self.authority.revoked) return error.Denied;
+    }
+
     pub fn resourceIdentity(self: Profile, image: state.Digest) !state.Digest {
         if (self.resources.len > 16) return error.Capacity;
         var refs: [16]state.Reference = undefined;
@@ -113,9 +119,7 @@ pub fn Service(comptime Types: type) type {
         work: ?Work = null,
 
         pub fn init(a: std.mem.Allocator, io: std.Io, namespace: *Namespace, assets: discovery.Assets, application: *const discovery.Application, handlers: registry.Registry, profile: Profile) !Self {
-            _ = try name(profile.id);
-            _ = try name(profile.authority.principal);
-            if (profile.bytes.len > 256 * 1024 or profile.authority.revoked) return error.Denied;
+            try profile.validate();
             var self: Self = .{ .allocator = a, .io = io, .namespace = namespace, .assets = assets, .application = application, .handlers = handlers, .profile = profile, .program = try evaluator.Program.open(a, assets.image, 8 * 1024 * 1024) };
             errdefer self.program.close() catch unreachable;
             try self.recover(a);

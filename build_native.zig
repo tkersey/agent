@@ -160,6 +160,7 @@ fn generate(b: *std.Build, modules: Modules, source: Source) Assets {
     });
     const emitter = b.addExecutable(.{
         .name = "agent-native-assets",
+        .use_llvm = if (b.graph.host.result.os.tag == .linux and b.graph.host.result.cpu.arch == .x86_64) false else null,
         .root_module = b.createModule(.{
             .root_source_file = modules.root.path(b, "tools/native/emit.zig"),
             .target = b.graph.host,

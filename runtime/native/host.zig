@@ -140,7 +140,7 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     const command = args.next() orelse "--help";
     if (std.mem.eql(u8, command, "--help")) {
         if (args.next() != null) return 64;
-        try std.Io.File.stdout().writeStreamingAll(init.io, "Agent native application\n\n--help\ndescribe-build\nlicenses\ndemo --offline --state-dir PATH\nserve --transport stdio --offline [--state-dir PATH]\n\nA state directory enables durable tasks. Without it, serve provides discovery only.\n");
+        try std.Io.File.stdout().writeStreamingAll(init.io, "Agent native application\n\n--help\ndescribe-build\nlicenses\ndemo --offline --state-dir PATH\nserve --transport stdio --offline [--state-dir PATH]\nstatus|result|resume|cancel --offline --state-dir PATH [--task-id ID]\nrun --offline --state-dir PATH --input-json JSON [--operation-id ID]\n\nA state directory enables durable tasks. Without it, serve provides discovery only.\nTask selection is required when more than one applicable task exists.\nResume and cancel accept --operation-id; resume retries also require the original --expected-revision.\n");
         return 0;
     }
     if (std.mem.eql(u8, command, "describe-build") or std.mem.eql(u8, command, "licenses")) {
@@ -158,17 +158,33 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
         return 0;
     }
     const demo = std.mem.eql(u8, command, "demo");
-    if (!demo and !std.mem.eql(u8, command, "serve")) return 64;
+    const serving = std.mem.eql(u8, command, "serve");
+    const human = std.meta.stringToEnum(HumanCommand, command);
+    if (!demo and !serving and human == null) return 64;
     var offline = false;
     var stdio = false;
     var state_path: ?[]const u8 = null;
+    var task_id: ?[]const u8 = null;
+    var input_json: ?[]const u8 = null;
+    var operation_id: ?[]const u8 = null;
+    var expected_revision: ?[]const u8 = null;
     while (args.next()) |arg| {
-        if (std.mem.eql(u8, arg, "--offline") and !offline) offline = true else if (std.mem.eql(u8, arg, "--transport") and !stdio and !demo) {
+        if (std.mem.eql(u8, arg, "--offline") and !offline) offline = true else if (std.mem.eql(u8, arg, "--transport") and !stdio and serving) {
             if (!std.mem.eql(u8, args.next() orelse return 64, "stdio")) return 64;
             stdio = true;
-        } else if (std.mem.eql(u8, arg, "--state-dir") and state_path == null) state_path = args.next() orelse return 64 else return 64;
+        } else if (std.mem.eql(u8, arg, "--state-dir") and state_path == null) {
+            state_path = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--task-id") and human != null and human.? != .run and task_id == null) {
+            task_id = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--input-json") and human == .run and input_json == null) {
+            input_json = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--operation-id") and human != null and human.? != .status and human.? != .result and operation_id == null) {
+            operation_id = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--expected-revision") and human == .@"resume" and expected_revision == null) {
+            expected_revision = args.next() orelse return 64;
+        } else return 64;
     }
-    if (!offline or (!demo and !stdio) or (demo and state_path == null)) return 64;
+    if (!offline or (serving and !stdio) or (!serving and state_path == null) or (human == .run and input_json == null)) return 64;
 
     // Main-thread allocations are reclaimable and bounded. Workers use their
     // own preallocated region, so this accounting never races with worker I/O.
@@ -201,6 +217,7 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     if (namespace) |*owner| service = try tasks.Service(Types).init(a, init.io, owner, assets, &application, handlers, profile);
     var client: ?client_api.Client(Types) = null;
     if (service) |*owner| client = .{ .service = owner };
+    if (human) |selected| return humanCommand(Types, a, &service.?, &client.?, selected, task_id, input_json, operation_id orelse &instance, expected_revision);
     if (demo) {
         var arena = std.heap.ArenaAllocator.init(a);
         defer arena.deinit();
@@ -211,6 +228,104 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     }
     var connection: Connection(Types) = .{ .application = &application, .instance = &instance, .artifact_identity = artifact_identity.sha256, .client = if (client) |*value| value else null };
     return serve(Types, init.io, a, &connection);
+}
+
+const HumanCommand = enum { run, status, result, @"resume", cancel };
+
+/// CLI selection and rendering only. All admissions and execution use the same
+/// client mapping, task owner and isolated I/O slot as the protocol front end.
+fn humanCommand(comptime Types: type, a: std.mem.Allocator, service: *tasks.Service(Types), client: *client_api.Client(Types), command: HumanCommand, selected_id: ?[]const u8, input: ?[]const u8, operation_id: []const u8, expected_revision: ?[]const u8) !u8 {
+    var arena = std.heap.ArenaAllocator.init(a);
+    defer arena.deinit();
+    const frame = arena.allocator();
+    var params = json.object();
+    try json.put(frame, &params, "client_operation_id", json.string(operation_id));
+    var id: [16]u8 = undefined;
+    if (command == .run) {
+        try json.put(frame, &params, "application_id", json.string(Types.application_id));
+        try json.put(frame, &params, "profile_id", json.string(service.profile.id));
+        var typed_input = json.object();
+        try json.put(frame, &typed_input, "schema_id", json.string(Types.input_schema_id));
+        try json.put(frame, &typed_input, "value", (try json.parse(frame, input.?, .{ .bytes = 256 * 1024 })).value);
+        try json.put(frame, &params, "input", typed_input);
+        const accepted = try client.call(frame, .@"task.submit", params);
+        id = try client_api.identifier(16, accepted.object.get("task_id").?);
+    } else {
+        if (selected_id) |text| id = try client_api.identifier(16, json.string(text)) else {
+            const ids = try service.namespace.store.taskIds(frame, command == .@"resume" or command == .cancel);
+            var found = false;
+            for (ids) |candidate| {
+                var task = service.task(frame, candidate) catch |err| switch (err) {
+                    error.Denied => continue,
+                    else => return err,
+                };
+                task.deinit();
+                if (found) return 64;
+                id = candidate;
+                found = true;
+            }
+            if (!found) return 64;
+        }
+        try json.put(frame, &params, "task_id", json.string(try frame.dupe(u8, &std.fmt.bytesToHex(id, .lower))));
+        if (command == .@"resume") {
+            var current = try service.task(frame, id);
+            defer current.deinit();
+            try json.put(frame, &params, "expected_revision", json.string(expected_revision orelse try std.fmt.allocPrint(frame, "{d}", .{current.value.revision})));
+            _ = try client.call(frame, .@"task.resume", params);
+        } else if (command == .cancel) _ = try client.call(frame, .@"task.cancel", params);
+    }
+    if (command == .run or command == .@"resume" or command == .cancel) try driveHuman(Types, a, service, id, operation_id);
+    try json.put(frame, &params, "task_id", json.string(try frame.dupe(u8, &std.fmt.bytesToHex(id, .lower))));
+    const result = try client.call(frame, if (command == .status) .@"task.status" else .@"task.result", params);
+    try std.Io.File.stdout().writeStreamingAll(service.io, try json.canonical(frame, result));
+    try std.Io.File.stdout().writeStreamingAll(service.io, "\n");
+    return 0;
+}
+
+fn driveHuman(comptime Types: type, a: std.mem.Allocator, service: *tasks.Service(Types), id: [16]u8, operation_id: []const u8) !void {
+    interrupts.store(0, .release);
+    if (c.agent_native_signals_begin(interrupt) != 0) return error.IoUnavailable;
+    defer c.agent_native_signals_end();
+    const slot = try Worker.init(a, service.io);
+    defer {
+        if (slot.future != null) std.process.exit(2);
+        slot.deinit(a) catch {};
+    }
+    var shutdown_at: ?i64 = null;
+    while (true) {
+        var arena = std.heap.ArenaAllocator.init(a);
+        defer arena.deinit();
+        const frame = arena.allocator();
+        const signals = interrupts.load(.acquire);
+        const time = std.Io.Clock.awake.now(service.io).toMilliseconds();
+        if (signals > 1 or (shutdown_at != null and time - shutdown_at.? >= 5000)) std.process.exit(2);
+        if (signals != 0 and shutdown_at == null) {
+            shutdown_at = time;
+            const digest = @import("store.zig").digest(operation_id);
+            const operation = try std.fmt.allocPrint(frame, "interrupt-{s}", .{std.fmt.bytesToHex(digest, .lower)});
+            _ = try service.requestCancel(frame, operation, id, "human requested cancellation");
+        }
+        if (slot.future != null) {
+            var task = try service.task(frame, id);
+            defer task.deinit();
+            if (task.value.cancellation != null and !slot.work.cleanup) slot.cancel();
+            if (!slot.finished()) {
+                _ = c.poll(null, 0, 20);
+                continue;
+            }
+            try slot.join();
+            if (slot.reply) |reply| try service.acquire(frame, slot.work, reply) else if (!slot.invoked) try service.notSent(frame, slot.work) else try service.unknown(frame, slot.work);
+            try slot.release();
+        }
+        switch (try service.pump(frame)) {
+            .work => |work| slot.start(work, service.profile.authority, null) catch try service.notSent(frame, work),
+            .progressed => {},
+            .waiting, .idle => {
+                try service.park(frame);
+                return;
+            },
+        }
+    }
 }
 
 var interrupts: std.atomic.Value(u32) = .init(0);

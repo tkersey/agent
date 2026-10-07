@@ -7,6 +7,7 @@ import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {once} from 'node:events';
+import {AgentClient} from '../../examples/native-minimal/stdio-client.mts';
 
 const source = resolve(process.argv[2]);
 const directory = mkdtempSync(join(tmpdir(), 'Agent native ü '));
@@ -78,6 +79,47 @@ try {
   assert.match(demo.task_id, /^[a-f0-9]{32}$/);
   const {task_id: demoTask, ...demoOutput} = demo;
   assert.deepEqual(demoOutput, {mode: 'offline-demo', persistence: 'durable', effects: 3, yields: 1, output: {value: 41, answer: 'offline answer'}});
+  const cli = (command, state, ...args) => JSON.parse(execFileSync(binary, [command, '--offline', '--state-dir', state, ...args], options));
+  assert.equal(cli('status', 'demo state').task_id, demoTask);
+  assert.deepEqual(cli('result', 'demo state', '--task-id', demoTask).outcome.value, demoOutput.output);
+  const cliTask = cli('run', 'human state', '--input-json', '{"value":20}', '--operation-id', 'human-run');
+  assert.equal(cliTask.status, 'waiting_input');
+  assert.equal(cli('run', 'human state', '--input-json', '{"value":20}', '--operation-id', 'human-run').task_id, cliTask.task_id);
+  assert.deepEqual(cli('resume', 'human state', '--task-id', cliTask.task_id, '--operation-id', 'human-resume', '--expected-revision', cliTask.revision).question, cliTask.question);
+  assert.deepEqual(cli('resume', 'human state', '--task-id', cliTask.task_id, '--operation-id', 'human-resume', '--expected-revision', cliTask.revision).question, cliTask.question);
+  const secondCliTask = cli('run', 'human state', '--input-json', '{"value":21}', '--operation-id', 'human-second');
+  assert.notEqual(secondCliTask.task_id, cliTask.task_id);
+  assert.throws(() => execFileSync(binary, ['status', '--offline', '--state-dir', 'human state'], options), error => error.status === 64);
+  const cancelledCli = cli('cancel', 'human state', '--task-id', cliTask.task_id, '--operation-id', 'human-cancel');
+  assert.equal(cancelledCli.status, 'cancelled');
+  assert.equal(cancelledCli.outcome.cleanup_complete, true);
+  const notifications = [];
+  const typescript = new AgentClient(binary, ['--offline', '--state-dir', 'typescript state'], {cwd: directory, env: options.env, onNotification: event => notifications.push(event)});
+  try {
+    await typescript.initialize();
+    const submitted = await typescript.call('task.submit', {client_operation_id: 'typescript-submit', application_id: 'native-minimal', profile_id: 'offline', input: {schema_id: 'native-minimal.input.v1', value: {value: 20}}});
+    const subscribed = await typescript.call('task.subscribe', {task_id: submitted.task_id, after_seq: '0'});
+    let pending;
+    for (let i = 0; i < 100; i++) {
+      pending = await typescript.call('task.status', {task_id: submitted.task_id});
+      if (pending.question) break;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert(pending.question);
+    await typescript.call('task.respond', {client_operation_id: 'typescript-answer', task_id: submitted.task_id, question_id: pending.question.question_id, question_revision: pending.question.question_revision, request_digest: pending.question.request_digest, answer: {schema_id: pending.question.answer_schema_id, value: {message: 'TypeScript answer'}}});
+    let finished;
+    for (let i = 0; i < 100; i++) {
+      finished = await typescript.call('task.result', {task_id: submitted.task_id});
+      if (finished.ready && notifications.some(item => item.params.event?.type === 'completed')) break;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.deepEqual(finished.outcome.value, {value: 41, answer: 'TypeScript answer'});
+    const events = notifications.filter(item => item.method === 'task.event');
+    assert.deepEqual(events.map(item => item.params.event.seq), ['1', '2', '3', '4']);
+    assert(events.every(item => item.params.subscription_id === subscribed.subscription_id));
+  } finally {
+    assert.deepEqual(await typescript.close(), {code: 0, signal: null});
+  }
   const demoReader = launch('demo state');
   await demoReader.initialize();
   demoReader.write(rpc('result', 'task.result', {task_id: demoTask}));
@@ -134,6 +176,7 @@ try {
   const taskPeer = launch('protocol state');
   assert.equal((await taskPeer.initialize()).result.capabilities.task_execution, true);
   assert.throws(() => execFileSync(binary, ['serve', '--transport', 'stdio', '--offline', '--state-dir', 'protocol state'], options), error => error.status === 75);
+  assert.throws(() => execFileSync(binary, ['status', '--offline', '--state-dir', 'protocol state'], options), error => error.status === 75);
   const submission = {client_operation_id: 'submit-once', application_id: 'native-minimal', profile_id: 'offline', input: {schema_id: 'native-minimal.input.v1', value: {value: 20}}};
   taskPeer.write(rpc('submit', 'task.submit', submission));
   const receipt = (await taskPeer.next()).result;

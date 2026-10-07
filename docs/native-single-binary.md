@@ -145,6 +145,47 @@ began permits cancellation or an explicit resume; it does not refund the attempt
 
 ## N2 storage and input foundations
 
+Human commands use the same typed task owner as stdio. `run --offline
+--state-dir PATH --input-json '{"value":20}' --operation-id ID` runs until a
+terminal outcome or a durable question/blocker, then prints the current typed
+result/status. `status`, `result`, `resume` and `cancel` accept `--task-id ID`;
+omitting it requires exactly one visible applicable task (nonterminal for resume
+and cancel). They reject with exit 75 while another process owns the namespace.
+Resume supports `--expected-revision N`; retransmission with the same
+`--operation-id` must preserve that revision and explicit task ID. Without an
+operation ID, a fresh invocation uses a new random ID. Cancellation output
+reports actual cleanup status. Pending questions are currently answered through
+`task.respond`; the CLI never supplies an implicit answer.
+
+`examples/native-minimal/stdio-client.mts` is an optional TypeScript subprocess
+client, executed with Node 26's built-in type stripping in the existing peer
+check. Node is needed only by this example client. It correlates string RPC IDs,
+bounds requests and frames, delivers notifications, and parks by closing stdin.
+It does not retry ambiguous operations automatically. Keep decimal counters as
+strings and retain the original `client_operation_id` and parameters for retries.
+
+```ts
+import {AgentClient} from './examples/native-minimal/stdio-client.mts';
+const client = new AgentClient('/absolute/path/agent-native-example',
+  ['--offline', '--state-dir', './state'], {
+    onNotification: event => { /* persist task.event's last processed seq */ },
+  });
+await client.initialize();
+const accepted = await client.call('task.submit', {
+  client_operation_id: 'my-stable-submission-id',
+  application_id: 'native-minimal', profile_id: 'offline',
+  input: {schema_id: 'native-minimal.input.v1', value: {value: 20}},
+});
+// Query task.status for the durable question. Send task.respond with its exact
+// question_id, question_revision, request_digest and answer schema/value.
+await client.close(); // inspect the returned process exit disposition
+```
+
+The subprocess qualification demonstrates submission, historical/live event
+delivery, exact question response and independently expected typed completion
+through this client. An RPC response acknowledges that method, not overall task
+completion; use `task.result` and its `ready` field for the latter.
+
 The optional native dependency lock selects SQLite 3.53.4. Its official archive
 and amalgamation SHA3 digests were checked against
 [SQLite's published download](https://www.sqlite.org/download.html) and

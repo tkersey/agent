@@ -5,6 +5,7 @@ const json = @import("json.zig");
 const values = @import("values.zig");
 const protocol = @import("protocol.zig");
 const registry = @import("registry.zig");
+const contracts = @import("agent_contracts");
 
 pub const Assets = struct { image: []const u8, application: []const u8, manifest: []const u8 };
 
@@ -51,6 +52,17 @@ pub const Application = struct {
         const capabilities = json.get(metadata.value, "capabilities") orelse return error.InvalidAssets;
         if (capabilities != .array or capabilities.array.items.len != handlers.entries.len) return error.InvalidAssets;
         for (handlers.entries) |entry| {
+            switch (entry.declaration.kind) {
+                .question => {
+                    if (!std.mem.eql(u8, entry.declaration.answer_schema_id.?, Types.answer_schema_id) or
+                        !std.mem.eql(u8, entry.resume_schema, try values.schemaBytes(Types.Answer, storage))) return error.InvalidAssets;
+                },
+                .inbox => {
+                    if (!std.mem.eql(u8, entry.payload_schema, try values.schemaBytes(void, storage)) or
+                        !std.mem.eql(u8, entry.resume_schema, try values.schemaBytes(contracts.InboxReply(Types.Message), storage))) return error.InvalidAssets;
+                },
+                .leaf => {},
+            }
             var matches: usize = 0;
             for (capabilities.array.items) |capability| {
                 const id = json.get(capability, "identity") orelse return error.InvalidAssets;

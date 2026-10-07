@@ -1006,17 +1006,17 @@ pub fn Service(comptime Types: type) type {
                             if (!same(&current.state.awaiting.pending_digest, &q.pending_digest)) return error.InvalidArchive;
                         } else {
                             const answer = q.answer orelse return error.InvalidArchive;
-                            const receipt = q.receipt orelse return error.InvalidArchive;
+                            const answer_receipt = q.receipt orelse return error.InvalidArchive;
                             const binding = current.state.settled_reply.answer.?;
-                            if (!same(&answer.digest, &acquired_answer.?) or !same(&binding.digest, &answer.digest) or !same(&binding.pending_digest, &q.pending_digest) or !same(&receipt.task, &value.id) or receipt.method != .respond or receipt.disposition != .answer_acquired or receipt.question == null or !same(&receipt.question.?, &id)) return error.InvalidArchive;
+                            if (!same(&answer.digest, &acquired_answer.?) or !same(&binding.digest, &answer.digest) or !same(&binding.pending_digest, &q.pending_digest) or !same(&answer_receipt.task, &value.id) or answer_receipt.method != .respond or answer_receipt.disposition != .answer_acquired or answer_receipt.question == null or !same(&answer_receipt.question.?, &id)) return error.InvalidArchive;
                             const answer_bytes = try self.store().object(a, answer, 64 * 1024);
                             defer a.free(answer_bytes);
                             const expected = try answerDigest(a, value.id, id, q.revision, q.request_digest, q.answer_schema_id.bytes, answer_bytes);
-                            if (!same(&expected, &receipt.request_digest)) return error.InvalidArchive;
-                            const key = try self.operationKey(a, receipt.client_operation_id.bytes);
+                            if (!same(&expected, &answer_receipt.request_digest)) return error.InvalidArchive;
+                            const key = try self.operationKey(a, answer_receipt.client_operation_id.bytes);
                             const saved = (try self.store().savedReceipt(a, &key)) orelse return error.InvalidArchive;
                             defer a.free(saved);
-                            const receipt_bytes = try contracts.encodeOwned(state.Receipt, a, receipt);
+                            const receipt_bytes = try contracts.encodeOwned(state.Receipt, a, answer_receipt);
                             defer a.free(receipt_bytes);
                             if (!same(saved, receipt_bytes)) return error.InvalidArchive;
                         }

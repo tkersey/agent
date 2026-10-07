@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {decodeSchema, decodeValue, encodeValue} from '../../runtime/values.mjs';
+import {loadWorldRuntime} from '../../runtime/world.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest();
 const key = reference => Buffer.from(reference[0]).toString('hex');
@@ -97,4 +98,25 @@ export function unknownOccurrence(bytes) {
   value[3] = {tag: 3, value: [value[3].value[0]]}; // unknown attempt
   row[2] = replace(archive, row[2], Buffer.from(encodeValue(archive.schemas.get('occurrence'), value)));
   return encode(archive);
+}
+
+// Both backends start from the actual exported pending checkpoint. The peer
+// encodes the public question schema, never a guessed native memory layout.
+export async function compareContinuation(runtimePath, pendingBytes, completedBytes, answer) {
+  const pending = readArchive(pendingBytes), completed = readArchive(completedBytes);
+  const runtime = await loadWorldRuntime({runtimePath, limits: {input: 4 * 1024 * 1024, working: 16 * 1024 * 1024, output: 4 * 1024 * 1024}});
+  const image = pending.object(pending.task.image);
+  const outcome = runtime.decodeOutcome(pending.object(pending.task.outcome));
+  assert.equal(outcome.kind, 'requested');
+  const {request} = await runtime.inspectPending(outcome);
+  const reply = encodeValue(decodeSchema(request.resumeSchema), [answer]);
+  let result = await runtime.resume(image, pending.object(pending.task.checkpoint), outcome.request, reply);
+  for (let i = 0; ['progressed', 'yielded'].includes(result.kind); i++) {
+    assert(i < 100, 'bounded WASM continuation');
+    result = await runtime.continueExecution(image, result);
+  }
+  assert.equal(result.kind, 'completed');
+  const native = runtime.decodeOutcome(completed.object(completed.task.outcome));
+  assert.equal(native.kind, 'completed');
+  assert.deepEqual(Buffer.from(result.bytes), Buffer.from(native.bytes));
 }

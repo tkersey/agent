@@ -639,6 +639,7 @@ pub fn build(b: *std.Build) void {
             const protocol_peer = nodeCommand(b);
             protocol_peer.addArgs(&.{ "node", "test/agent4/native_host.mjs" });
             protocol_peer.addFileArg2(product.executable.getEmittedBin(), .{ .make_absolute = true });
+            protocol_peer.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
             native_host.dependOn(&protocol_peer.step);
         } else {
             const unsupported = b.addFail("native product supports aarch64-macos and x86_64-linux-musl");

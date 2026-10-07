@@ -9,7 +9,7 @@ import {join, resolve} from 'node:path';
 import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
 import {AgentClient} from '../../examples/native-minimal/stdio-client.mts';
-import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence} from './native_archive.mjs';
+import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence, compareContinuation} from './native_archive.mjs';
 
 const source = resolve(process.argv[2]);
 const directory = mkdtempSync(join(tmpdir(), 'Agent native ü '));
@@ -149,6 +149,8 @@ try {
   assert.equal(cli('import-checkpoint', 'archive target', '--input', 'pending.bundle', '--operation-id', 'import-once').receipt_id, imported.receipt_id);
   const portableAnswer = ['--task-id', imported.task_id, '--question-id', imported.question.question_id, '--question-revision', imported.question.question_revision, '--request-digest', imported.question.request_digest, '--answer-json', '{"message":"portable answer"}', '--operation-id', 'portable-answer'];
   assert.deepEqual(cli('respond', 'archive target', ...portableAnswer).outcome.value, {value: 41, answer: 'portable answer'});
+  cli('export-checkpoint', 'archive target', '--output', 'portable-completed.bundle');
+  await compareContinuation(resolve(process.argv[3]), archiveBytes, readFileSync(join(directory, 'portable-completed.bundle')), 'portable answer');
   assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', 'archive target', '--input', 'pending.bundle', '--operation-id', 'another-import'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'NonEmptyNamespace');
   for (const [name, bytes, expectedReason] of [
     ['missing', missingCheckpoint(archiveBytes), 'MissingArtifact'],

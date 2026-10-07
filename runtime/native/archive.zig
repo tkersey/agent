@@ -86,7 +86,7 @@ const Output = struct {
         var random: [16]u8 = undefined;
         try io.randomSecure(&random);
         var temporary: [48:0]u8 = undefined;
-        @memcpy(temporary[0..16], ".agent-archive--");
+        @memcpy(temporary[0..16], ".agent-archive---");
         @memcpy(temporary[16..48], &std.fmt.bytesToHex(random, .lower));
         temporary[48] = 0;
         const fd = c.openat(location.fd, &temporary, c.O_WRONLY | c.O_CREAT | c.O_EXCL | c.O_NOFOLLOW | c.O_CLOEXEC, @as(c_uint, 0o600));

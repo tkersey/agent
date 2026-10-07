@@ -19,7 +19,7 @@ pub fn digest(bytes: []const u8) Digest {
 
 pub const Head = struct { generation: u64, parent: Digest, digest: Digest };
 pub fn Record(comptime kind: []const u8) type {
-    return switch (comptime std.meta.stringToEnum(state.RecordKind, kind) orelse @compileError("unknown native record kind")) {
+    return switch (@field(state.RecordKind, kind)) {
         .occurrence => occurrence.Occurrence,
         .question => state.Question,
         .message => state.Message,

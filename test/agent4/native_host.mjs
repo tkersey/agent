@@ -1,7 +1,7 @@
 // Independent process peer for the build/discovery boundary. This does not
 // claim the later task/recovery/provider conformance obligations are complete.
 import assert from 'node:assert/strict';
-import {spawn, execFileSync} from 'node:child_process';
+import {spawn, spawnSync, execFileSync} from 'node:child_process';
 import {mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, chmodSync, existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {join, resolve} from 'node:path';
@@ -98,7 +98,16 @@ try {
   assert.equal(manifest.dependencies.sqlite.version, '3.53.4');
   assert.deepEqual(manifest.licenses.map(item => item.component).sort(), ['Agent', 'World', 'Boundary', 'Zig standard library', 'SQLite', ...(manifest.target.includes('linux') ? ['musl libc'] : [])].sort());
   assert(manifest.licenses.some(item => item.component === 'SQLite' && item.text.includes('disclaims copyright')));
-  const demo = JSON.parse(execFileSync(binary, ['demo', '--offline', '--state-dir', 'demo state'], options));
+  const demoStarted = performance.now();
+  const timedDemo = spawnSync('/usr/bin/time', [...(process.platform === 'darwin' ? ['-l'] : ['-f', 'native_demo_maxrss_kib=%M']), binary, 'demo', '--offline', '--state-dir', 'demo state'], options);
+  const demoMilliseconds = performance.now() - demoStarted;
+  assert.equal(timedDemo.error, undefined);
+  assert.equal(timedDemo.signal, null, timedDemo.stderr);
+  assert.equal(timedDemo.status, 0, timedDemo.stderr);
+  const rss = timedDemo.stderr.match(process.platform === 'darwin' ? /(\d+)\s+maximum resident set size/ : /native_demo_maxrss_kib=(\d+)/);
+  assert(rss, timedDemo.stderr);
+  const demoMaxRssBytes = Number(rss[1]) * (process.platform === 'darwin' ? 1 : 1024);
+  const demo = JSON.parse(timedDemo.stdout);
   assert.match(demo.task_id, /^[a-f0-9]{32}$/);
   const {task_id: demoTask, ...demoOutput} = demo;
   assert.deepEqual(demoOutput, {mode: 'offline-demo', persistence: 'durable', effects: 3, yields: 1, output: {value: 41, answer: 'offline answer'}});
@@ -408,7 +417,9 @@ try {
     schemaCases.push({definition: 'artifact.read.params', value: {task_id: demoTask, artifact_id: '0'.repeat(64), offset: '0', length: value}, accept});
   }
   process.stdout.write(execFileSync('uv', ['run', '--no-project', '--no-config', '--python', '3.12', '--with', 'jsonschema==4.23.0', fileURLToPath(new URL('./native_schema.py', import.meta.url))], {input: JSON.stringify({schema: protocolSchema, cases: schemaCases}), encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024}));
-  console.log(JSON.stringify({check: 'native-build-and-discovery', result: 'passed', target: manifest.target, program: manifest.program_sha256, artifact_bytes: manifest.artifact_bytes, describe_ms: describeMilliseconds, scope: 'embedded durable demo, framing, negotiation, discovery, client question, restart, stable admissions, typed result and event replay; provider/platform qualification remains open'}));
+  console.log(JSON.stringify({check: 'native-build-and-discovery', result: 'passed', target: manifest.target, program: manifest.program_sha256, artifact_bytes: manifest.artifact_bytes, describe_ms: describeMilliseconds,
+    demo_ms: demoMilliseconds, demo_command_maxrss_bytes: demoMaxRssBytes, memory_scope: 'OS command high-water report, including deployment controller processes; not simultaneous aggregate RSS',
+    scope: 'embedded durable demo, framing, negotiation, discovery, client question, restart, stable admissions, typed result and event replay; provider/platform qualification remains open'}));
   passed = true;
 } finally {
   isolated.close(passed);

@@ -99,10 +99,15 @@ const Exchange = struct {
             request_id = try self.a.dupe(u8, header.value);
         }
         const status: u16 = @intCast(@backingInt(response.head.status));
+        const expected_length = if (response.head.transfer_encoding == .none) response.head.content_length else null;
         const bytes = response.reader(&.{}).allocRemaining(self.a, .limited(self.config.response_limit)) catch |err| switch (err) {
             error.StreamTooLong => return error.ResponseCapacity,
+            error.ReadFailed => return response.bodyErr() orelse err,
             else => return err,
         };
+        // The standard fixed-length reader propagates transport EOF unchanged;
+        // allocRemaining accepts EOF even when declared body bytes are missing.
+        if (expected_length) |length| if (bytes.len != length) return error.TruncatedResponse;
         return .{ .status = status, .identity_encoding = identity_encoding, .request_id = request_id, .body = bytes };
     }
 };

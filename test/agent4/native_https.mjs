@@ -26,8 +26,8 @@ try {
     calls.push({url: request.url, method: request.method, headers: request.headers, body: Buffer.concat(chunks).toString()});
     response.setHeader('x-request-id', 'fixture-response');
     if (request.url === '/held') return;
-    if (request.url === '/truncated') {
-      response.setHeader('content-length', '100');
+    if (request.url === '/truncated' || request.url === '/truncated-chunked') {
+      if (request.url === '/truncated') response.setHeader('content-length', '100');
       response.write('partial');
       return response.socket.end();
     }
@@ -67,10 +67,10 @@ try {
   assert.equal(await run('/encoded'), 'captured 200 fixture-response\nunsupported');
   assert.equal(await run('/held', {timeout: 100}), 'unknown Timeout\n');
   assert.equal(calls.filter(call => call.url === '/held').length, 1, 'no timeout retry');
-  const truncated = await run('/truncated');
-  assert.match(truncated, /^unknown /, 'truncated response cannot become a complete capture');
-  assert.notEqual(truncated, 'unknown Timeout\n', 'EOF must be detected before the deadline');
-  assert.equal(calls.filter(call => call.url === '/truncated').length, 1);
+  for (const [path, failure] of [['/truncated', 'TruncatedResponse'], ['/truncated-chunked', 'HttpChunkTruncated']]) {
+    assert.equal(await run(path), `unknown ${failure}\n`, 'truncated response cannot become a complete capture or wait for the deadline');
+    assert.equal(calls.filter(call => call.url === path).length, 1, 'no retry after truncated acquisition');
+  }
   const wrong = join(directory, 'wrong.der');
   await writeFile(wrong, new X509Certificate(tls.B.cert).raw);
   const before = calls.length;

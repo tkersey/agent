@@ -98,6 +98,19 @@ For a downstream build, use the example's own `build.zig` and `build.zig.zon`,
 with the Agent dependency pointing to the admitted package. Supply the same
 authenticated `-Dworld-source`, `-Dworld-runtime`, and `-Dsqlite-source` inputs
 used by Agent setup (`.agent4/inputs/sqlite` is the default native source).
+For example, after setup from the repository root:
+
+```sh
+agent_root="$PWD"
+cd examples/native-minimal
+zig build -Doptimize=safe \
+  -Dworld-source="$agent_root/.agent4/inputs/world" \
+  -Dworld-runtime="$agent_root/.agent4/out/world-runtime/runtime" \
+  -Dsqlite-source="$agent_root/.agent4/inputs/sqlite" \
+  --prefix "$agent_root/public-native" --prefix-exe-dir executables
+"$agent_root/public-native/executables/agent-native-example" demo --offline --state-dir ./demo-state
+```
+
 The helper installs the executable through the caller's normal prefix and
 executable directory. Linux's host-default product target is x86_64 musl;
 macOS's supported product target is arm64. Explicit other product targets reject.

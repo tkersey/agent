@@ -185,7 +185,20 @@ admit qualification; the source/authoring/installation lanes remain on 24.04.
 
 Successful manual native runs retain a 14-day CI artifact containing the two
 executables, their observed build manifests, the runbook and optional TypeScript
-client. A tar archive preserves executable permissions. This is build-artifact
+client. Before packaging, they build the example's independent public recipe
+with network access denied and a prefix containing spaces/Unicode, compare its
+program/assets/toolchain to the repository product, and execute its offline
+demo. This exercises the downstream dependency API rather than claiming that
+the repository's internal builder call proves it.
+
+Existing application/parity witnesses also report describe-build time, demo
+wall time and the OS command RSS high-water mark (including isolation helpers,
+not simultaneous aggregate memory). Paired recorded-reply continuation reports
+separate in-process WASM time and native process time; the latter includes
+launch, input reading and preparation. Neither is a production host throughput
+comparison or includes provider time or durable host storage.
+
+A tar archive preserves executable permissions. This is build-artifact
 delivery, not release signing, notarization or a published release.
 
 Before and after each applicable lane, `.github/scripts/zig-cache.mjs` records

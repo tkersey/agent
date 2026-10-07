@@ -86,6 +86,8 @@ and is never a launch dependency of the copied executable.
 Native verification reuses the minimal application's emitted image for the
 public World API probe; the former N0-only emitter is removed. The probe retains
 output-capacity rollback, checkpoint/restore, yield, and terminal-close checks.
+Both native examples now use the existing shared fixture compiler and the public
+helper's asset writer, removing two standalone compiler invocations.
 The durable-owner test compiles its one image once for both direct and captured
 acquisition recovery. It also retains the inbox contract-conflict and message-ID
 checks formerly split into a separate inbox fixture. `native_repository.mjs`
@@ -96,6 +98,10 @@ existing TypeScript client, replacing its repeated minimal-task conversation in
 `native_host.mjs`. Transport fault cases, raw-capture recovery, storage failures,
 protocol faults and native/WASM correspondence retain their existing witnesses;
 the application happy path does not replace those distinct boundaries.
+The object-and-receipt transaction test also retains the former SQLite smoke
+test's binary round-trip, single-connection and heap assertions; the duplicate
+raw SQL transaction fixture is removed. Namespace recovery retains its seal-gap
+and post-recovery publication checks without repeating the receipt fixture.
 
 `check-agent4` and `check` still include the external installation and all
 previously retained authoring obligations. The native lane also runs the retained custody and deployment regressions.

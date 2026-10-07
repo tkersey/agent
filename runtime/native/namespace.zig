@@ -288,20 +288,8 @@ test "namespace excludes a second owner and recovers the SQLite commit to seal g
     defer a.free(bytes);
     try std.testing.expectEqualStrings("acquired before disconnect", bytes);
     try recovered.store.begin();
-    const contracts = @import("agent_contracts");
-    const Receipt = @import("state.zig").Receipt;
-    const receipt_bytes = try contracts.encodeOwned(Receipt, a, .{
-        .id = journal.digest("receipt"),
-        .client_operation_id = .{ .bytes = "op" },
-        .method = .submit,
-        .request_digest = journal.digest("input"),
-        .task = @splat(1),
-        .revision = 1,
-        .disposition = .accepted,
-    });
-    defer a.free(receipt_bytes);
-    try recovered.store.putReceipt("op", journal.digest("input"), receipt_bytes);
-    try recovered.commit("receipt");
+    _ = try recovered.store.putObject("after recovery");
+    try recovered.commit("after-recovery");
     try std.testing.expectEqual(2, recovered.store.head.generation);
 }
 

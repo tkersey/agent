@@ -172,6 +172,16 @@ pub fn build(b: *std.Build) void {
     b.modules.put(b.allocator, b.dupe("agent_contracts_host"), contracts) catch @panic("out of memory");
     const g: Graph = .{ .b = b, .optimize = optimize, .agent = agent, .boundary = boundary, .data = data, .contracts = contracts, .gate = &source_guard.step };
     const fixture_driver = g.emitter("agent4-fixtures", g.module("test/fixture_driver.zig"));
+    // Native examples share the already compiled fixture owner. Downstream
+    // applications use the same asset writer through addNativeSystem.
+    fixture_driver.artifact.root_module.addImport("native_asset_writer", g.module("tools/native/emit.zig"));
+    inline for (.{ .{ "native-minimal", "native_minimal" }, .{ "repository-agent", "repository_agent" } }) |item| {
+        const types = g.module("examples/" ++ item[0] ++ "/types.zig");
+        const definition = g.module("examples/" ++ item[0] ++ "/definition.zig");
+        definition.addImport("application_types", types);
+        fixture_driver.artifact.root_module.addImport(item[1] ++ "_types", types);
+        fixture_driver.artifact.root_module.addImport(item[1] ++ "_definition", definition);
+    }
     const application_driver = g.emitter("agent4-applications", g.module("test/application_driver.zig"));
     const check = b.step("agent4-authoring-tests", "Authoring test implementation");
     const aggregate = b.step("check-agent4", "Check authoring and pure contracts without World");
@@ -645,19 +655,23 @@ pub fn build(b: *std.Build) void {
                 .native_agent = native_agent,
                 .sqlite_source = sqlite_source,
             };
+            const minimal_assets = g.runArtifact(fixture_driver.select("native-minimal-assets"));
             const product = @import("build_native.zig").addWithModules(b, native_modules, .{
                 .name = "agent-native-example",
-                .application = .{ .source = .{
-                    .definition = b.path("examples/native-minimal/definition.zig"),
+                .application = .{ .emitted = .{
+                    .image = minimal_assets.addOutputFileArg2("program.bpi3", .{}),
+                    .application = minimal_assets.addOutputFileArg2("application.json", .{}),
                     .types = b.path("examples/native-minimal/types.zig"),
                 } },
                 .environment = b.path("examples/native-minimal/environment.zig"),
             });
             native_example.dependOn(&product.install.step);
+            const repository_assets = g.runArtifact(fixture_driver.select("repository-agent-assets"));
             const repository_product = @import("build_native.zig").addWithModules(b, native_modules, .{
                 .name = "repository-agent",
-                .application = .{ .source = .{
-                    .definition = b.path("examples/repository-agent/definition.zig"),
+                .application = .{ .emitted = .{
+                    .image = repository_assets.addOutputFileArg2("program.bpi3", .{}),
+                    .application = repository_assets.addOutputFileArg2("application.json", .{}),
                     .types = b.path("examples/repository-agent/types.zig"),
                 } },
                 .environment = b.path("examples/repository-agent/environment.zig"),
@@ -693,8 +707,12 @@ pub fn build(b: *std.Build) void {
             native_host.dependOn(&unsupported.step);
             native_consumer.dependOn(&unsupported.step);
         }
-        const responses_peer = nodeCommand(b);
-        responses_peer.addArgs(&.{ "node", "test/agent4/native_responses.mjs" });
+        // This pure JS projection does not use Zig or the install prefix.
+        // Keep those launch paths out of the generated reference's identity.
+        const responses_peer = b.addSystemCommand(&.{ "env", "-u", "NODE_TEST_CONTEXT", "node" });
+        responses_peer.addFileArg2(b.path("test/agent4/native_responses.mjs"), .{});
+        for ([_][]const u8{ "test/agent4/native-responses-v1.json", "runtime/model.mjs", "runtime/values.mjs" }) |path| responses_peer.addFileInput(b.path(path));
+        responses_peer.has_side_effects = true;
         // These roots share exact module identities; compile their retained
         // tests together instead of rebuilding the same compiler eleven times.
         const native_suite = g.module("test/agent4/native_tests.zig");

@@ -2,8 +2,6 @@
 const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
-const definition = @import("definition");
-const types = @import("application_types");
 const json_schema = agent.contracts.json;
 const Schema = struct { schema_id: []const u8, wire_sha256: []const u8, wire_base64url: []const u8, json: std.json.Value };
 const Capability = struct { identity: []const u8, resource_role: []const u8, payload_sha256: []const u8, resume_sha256: []const u8 };
@@ -32,6 +30,12 @@ fn schema(comptime T: type, a: std.mem.Allocator, id: []const u8) !Schema {
 }
 
 pub fn main(init: std.process.Init) !void {
+    return write(@import("definition"), @import("application_types"), init);
+}
+
+/// The standalone build helper and the shared repository fixture compiler use
+/// this same writer; application selection changes inputs, not asset semantics.
+pub fn write(comptime definition: type, comptime types: type, init: std.process.Init) !void {
     comptime {
         if (definition.System.InitialArgs != types.Input or definition.System.Result != types.Output or definition.System.Failure != types.Failure)
             @compileError("native mappings must name the actual authored system's input, output and failure types");

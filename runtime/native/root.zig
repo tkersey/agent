@@ -28,7 +28,6 @@ test {
     _ = repository;
     _ = registry;
     _ = client;
-    _ = @import("sqlite.zig");
     _ = @import("occurrence.zig");
     _ = @import("store.zig");
     _ = @import("namespace.zig");

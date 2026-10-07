@@ -23,7 +23,6 @@ const Storage = struct {
     allocator: std.mem.Allocator,
     heap: []align(@alignOf(u64)) u8,
     handle: ?*c.sqlite3,
-    peak_bytes: u64 = 0,
     released: bool = false,
 };
 
@@ -74,7 +73,6 @@ pub const Database = opaque {
     pub fn close(self: *Database) Error!void {
         const storage = self.owner();
         const db = try self.handle();
-        storage.peak_bytes = @intCast(c.sqlite3_memory_highwater(0));
         // close_v2 would defer destruction while statements remain alive. That
         // is unsuitable for an explicitly owned static heap, so reject instead.
         try result(c.sqlite3_close(db));
@@ -158,28 +156,3 @@ pub const Statement = struct {
         return c.sqlite3_column_type(self.handle, index) == c.SQLITE_NULL;
     }
 };
-
-test "native SQLite uses its bounded heap and rolls back uncommitted records" {
-    const a = std.testing.allocator;
-    const database = try Database.open(a, ":memory:", true);
-    defer database.destroy() catch unreachable;
-    defer database.close() catch unreachable;
-    try std.testing.expectError(error.AlreadyOpen, Database.open(a, ":memory:", true));
-    try database.exec("CREATE TABLE records(id TEXT PRIMARY KEY, body BLOB NOT NULL); BEGIN IMMEDIATE;");
-    try database.run("INSERT INTO records VALUES (?,?)", &.{ .{ .text = "one" }, .{ .blob = &.{ 0, 255, 1 } } });
-    try database.exec("ROLLBACK;");
-    {
-        var query = try database.prepare("SELECT count(*) FROM records", &.{});
-        defer query.deinit();
-        try std.testing.expect(try query.step() == .row);
-        try std.testing.expectEqual(0, try query.integer(0));
-    }
-    try database.exec("BEGIN IMMEDIATE;");
-    try database.run("INSERT INTO records VALUES (?,?)", &.{ .{ .text = "one" }, .{ .blob = &.{ 0, 255, 1 } } });
-    try database.exec("COMMIT;");
-    var query = try database.prepare("SELECT body FROM records WHERE id=?", &.{.{ .text = "one" }});
-    defer query.deinit();
-    try std.testing.expect(try query.step() == .row);
-    try std.testing.expectEqualSlices(u8, &.{ 0, 255, 1 }, try query.bytes(0));
-    try std.testing.expect(c.sqlite3_memory_used() <= heap_bytes);
-}

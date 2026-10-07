@@ -426,17 +426,18 @@ test "objects and immutable admission receipts commit together or disappear toge
     const db = try sqlite.Database.open(a, ":memory:", true);
     defer db.destroy() catch unreachable;
     defer db.close() catch unreachable;
+    try std.testing.expectError(error.AlreadyOpen, sqlite.Database.open(a, ":memory:", true));
     var store = try Store.init(a, db, true, @splat(7));
     const receipt_bytes = try contracts.encodeOwned(state.Receipt, a, .{ .id = @splat(1), .client_operation_id = .{ .bytes = "request-1" }, .method = .submit, .request_digest = digest("submit/input"), .task = @splat(2), .revision = 1, .disposition = .accepted });
     defer a.free(receipt_bytes);
     try store.begin();
-    const ref = try store.putObject("acquired reply");
+    const ref = try store.putObject("acquired reply\x00\xff\x01");
     try store.putReceipt("request-1", digest("submit/input"), receipt_bytes);
     store.rollback();
     try std.testing.expect((try store.receipt(a, "request-1", digest("submit/input"))) == null);
     try std.testing.expectError(error.MissingArtifact, store.object(a, ref, 1024));
     try store.begin();
-    _ = try store.putObject("acquired reply");
+    _ = try store.putObject("acquired reply\x00\xff\x01");
     try store.putReceipt("request-1", digest("submit/input"), receipt_bytes);
     const head = try store.commit("admit/task-1");
     try std.testing.expectEqual(1, head.generation);
@@ -446,7 +447,7 @@ test "objects and immutable admission receipts commit together or disappear toge
     try std.testing.expectError(error.OperationConflict, store.receipt(a, "request-1", digest("submit/other-input")));
     const bytes = try store.object(a, ref, 1024);
     defer a.free(bytes);
-    try std.testing.expectEqualStrings("acquired reply", bytes);
+    try std.testing.expectEqualStrings("acquired reply\x00\xff\x01", bytes);
     const reopened = try Store.init(a, db, false, @splat(7));
     try std.testing.expectEqualDeep(head, reopened.head);
     try std.testing.expectError(error.CorruptState, Store.init(a, db, false, @splat(8)));
@@ -455,6 +456,7 @@ test "objects and immutable admission receipts commit together or disappear toge
     try db.run("UPDATE operations SET task=? WHERE id='request-1'", &.{.{ .blob = &@as(state.TaskId, @splat(2)) }});
     try db.run("UPDATE objects SET body=? WHERE digest=?", &.{ .{ .blob = "changed receipt" }, .{ .blob = &digest(receipt_bytes) } });
     try std.testing.expectError(error.CorruptState, store.receipt(a, "request-1", digest("submit/input")));
+    try std.testing.expect(@import("native_c").sqlite3_memory_used() <= sqlite.heap_bytes);
 }
 
 test "commits cannot spend another occurrence's reserved storage" {

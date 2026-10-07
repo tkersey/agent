@@ -105,8 +105,12 @@ jobs:
             if [ -f /etc/apt/apt-mirrors.txt ]; then
               sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
             fi
-            sudo apt-get update
-            sudo apt-get install --yes --no-install-recommends "${packages[@]}"
+            # Runner images already include authenticated package indexes.
+            # Refresh only when those indexes cannot install the missing tools.
+            if ! sudo apt-get install --yes --no-install-recommends "${packages[@]}"; then
+              sudo apt-get update
+              sudo apt-get install --yes --no-install-recommends "${packages[@]}"
+            fi
           fi
           if [ "${{ matrix.lane }}" = native ]; then
             # Reject an unavailable namespace boundary before compiling products.

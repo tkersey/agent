@@ -130,7 +130,11 @@ pub fn addWithModules(b: *std.Build, modules: Modules, options: Options) Product
     root.addAnonymousImport("native_image", .{ .root_source_file = assets.image });
     root.addAnonymousImport("native_application", .{ .root_source_file = assets.application });
     root.addAnonymousImport("native_manifest", .{ .root_source_file = manifest_file });
-    const executable = b.addExecutable(.{ .name = options.name, .root_module = root });
+    const executable = b.addExecutable(.{
+        .name = options.name,
+        .root_module = root,
+        .use_llvm = if (target.result.os.tag == .linux and target.result.cpu.arch == .x86_64) false else null,
+    });
     const install = b.addInstallArtifact(executable, .{});
     return .{ .executable = executable, .install = install, .assets = assets, .manifest = manifest_file };
 }

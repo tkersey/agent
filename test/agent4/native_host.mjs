@@ -61,6 +61,13 @@ function launch(state = null, lifetime = 15000) {
         assert.equal(frames[0].params.disposition, code === 0 ? 'parked' : 'incomplete');
       } else assert.deepEqual(frames, []);
     },
+    async crash() {
+      child.kill('SIGKILL');
+      const [code, signal] = await ended;
+      clearTimeout(timer);
+      assert.equal(code, null);
+      assert.equal(signal, 'SIGKILL');
+    },
     async initialize(id = 'init') {
       methodsById.set(id, 'initialize');
       child.stdin.write(JSON.stringify({jsonrpc: '2.0', id, method: 'initialize', params: {protocol_versions: ['agent-host/1.0']}}) + '\n');
@@ -106,6 +113,11 @@ try {
   const cancelledCli = cli('cancel', 'human state', '--task-id', cliTask.task_id, '--operation-id', 'human-cancel');
   assert.equal(cancelledCli.status, 'cancelled');
   assert.equal(cancelledCli.outcome.cleanup_complete, true);
+  const humanAnswerArgs = ['--task-id', secondCliTask.task_id, '--operation-id', 'human-answer', '--question-id', secondCliTask.question.question_id, '--question-revision', secondCliTask.question.question_revision, '--request-digest', secondCliTask.question.request_digest, '--answer-json', '{"message":"human answer"}'];
+  const humanAnswered = cli('respond', 'human state', ...humanAnswerArgs);
+  assert.deepEqual(humanAnswered.outcome.value, {value: 43, answer: 'human answer'});
+  assert.equal(cli('respond', 'human state', ...humanAnswerArgs).revision, humanAnswered.revision);
+  assert.throws(() => execFileSync(binary, ['respond', '--offline', '--state-dir', 'human state', ...humanAnswerArgs.slice(0, -1), '{"message":"conflicting answer"}'], options), error => error.status === 64);
   const notifications = [];
   const typescript = new AgentClient(binary, ['--offline', '--state-dir', 'typescript state'], {cwd: directory, env: options.env, onNotification: event => notifications.push(event)});
   try {
@@ -283,6 +295,69 @@ try {
   assert.equal(cancelled.status, 'cancelled');
   assert.equal(cancelled.outcome.cleanup_complete, true);
   await cancelling.end();
+
+  // The receiver discards the submission acknowledgment and loses the process.
+  // Recovery may find READY, an acquired reply, a question, or UNKNOWN; none of
+  // those states permits retransmission to create another task or auto-resume.
+  const lostAck = launch('lost acknowledgment state');
+  await lostAck.initialize();
+  const lostSubmission = {...submission, client_operation_id: 'lost-acknowledgment'};
+  lostAck.write(rpc('lost-submit', 'task.submit', lostSubmission));
+  const original = (await lostAck.next()).result;
+  await lostAck.crash();
+  const recovered = launch('lost acknowledgment state');
+  await recovered.initialize();
+  recovered.write(rpc('recover-receipt', 'task.submit', lostSubmission));
+  const replayed = (await recovered.next()).result;
+  assert.equal(replayed.task_id, original.task_id);
+  assert.equal(replayed.receipt_id, original.receipt_id);
+  assert.equal(replayed.replayed, true);
+  assert(['parked', 'waiting_input', 'blocked', 'unknown'].includes(replayed.status));
+  await new Promise(resolve => setTimeout(resolve, 50));
+  recovered.write(rpc('recover-status', 'task.status', {task_id: original.task_id}));
+  const unchanged = (await recovered.next()).result;
+  assert.equal(unchanged.revision, replayed.revision);
+  assert.equal(unchanged.status, replayed.status);
+  await recovered.end();
+
+  const stalled = spawn(binary, ['serve', '--transport', 'stdio', '--offline'], {cwd: directory, env: options.env, stdio: ['pipe', 'pipe', 'pipe']});
+  const stallExit = once(stalled, 'exit');
+  const stallClose = once(stalled, 'close');
+  const stallStart = performance.now();
+  const stallKill = setTimeout(() => stalled.kill('SIGKILL'), 12000);
+  stalled.stdin.on('error', error => assert.equal(error.code, 'EPIPE'));
+  stalled.stderr.resume();
+  // No stdout reader: enough bounded discovery replies fill both pipe and queue.
+  stalled.stdin.write(rpc('stall-init', 'initialize', {protocol_versions: ['agent-host/1.0']}));
+  for (let i = 0; i < 256; i++) stalled.stdin.write(rpc(`stall-${i}`, 'describe'));
+  const [stallCode, stallSignal] = await stallExit;
+  const stallElapsed = performance.now() - stallStart;
+  clearTimeout(stallKill);
+  stalled.stdout.resume();
+  stalled.stdin.destroy();
+  await stallClose;
+  assert.equal(stallSignal, null, 'stdout stall did not terminate within the bounded host deadline');
+  assert.equal(stallCode, 2);
+  assert(stallElapsed < 12000);
+
+  // A quiet connection may wait for a person. A partially supplied frame has
+  // a deadline; run both cases together against the advertised 30-second cap.
+  const quiet = launch(null, 40000);
+  const partial = launch(null, 40000);
+  const negotiated = (await quiet.initialize()).result;
+  partial.write('{');
+  await Promise.all([
+    (async () => {
+      await new Promise(resolve => setTimeout(resolve, negotiated.limits.incomplete_frame_ms + 250));
+      quiet.write(rpc('quiet-ping', 'ping'));
+      assert.equal((await quiet.next()).id, 'quiet-ping');
+      await quiet.end();
+    })(),
+    (async () => {
+      assert.equal((await partial.next(negotiated.limits.incomplete_frame_ms + 3000)).error.data.kind, 'InvalidRequest');
+      await partial.end(64);
+    })(),
+  ]);
   for (const value of ['0', '1', '9007199254740993', '18446744073709551615']) schemaCases.push({definition: 'counter', value});
   for (const value of ['00', '-1', '1.0', '18446744073709551616', '99999999999999999999', '1\n', 1]) schemaCases.push({definition: 'counter', value, accept: false});
   schemaCases.push({definition: 'task.submit.params', value: submission});
@@ -291,6 +366,11 @@ try {
   schemaCases.push({definition: 'task.submit.params', value: {...submission, client_operation_id: '雪'.repeat(43)}, accept: false});
   schemaCases.push({definition: 'task.respond.params', value: answer});
   schemaCases.push({definition: 'task.respond.params', value: {...answer, question_revision: 1}, accept: false});
+  const inputEvent = events.events.find(event => event.type === 'input_required');
+  const missingPrompt = structuredClone(inputEvent);
+  delete missingPrompt.data.prompt;
+  schemaCases.push({definition: 'event', value: missingPrompt, accept: false});
+  schemaCases.push({definition: 'event', value: {...inputEvent, data: {...inputEvent.data, unexpected: true}}, accept: false});
   schemaCases.push({definition: 'task.status.params', value: {task_id: `${demoTask}\n`}, accept: false});
   for (const [value, accept] of [['1', true], ['32768', true], ['0', false], ['32769', false]]) {
     schemaCases.push({definition: 'artifact.read.params', value: {task_id: demoTask, artifact_id: '0'.repeat(64), offset: '0', length: value}, accept});

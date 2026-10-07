@@ -204,7 +204,7 @@ pub fn document(a: std.mem.Allocator, application: json.Value, limits: protocol.
     inline for (@typeInfo(state.EventType).@"enum".field_names) |name| {
         const kind = @field(state.EventType, name);
         const payload = switch (kind) {
-            .input_required => try shape(a, &.{ .{ "question_id", digest }, .{ "question_revision", count }, .{ "request_digest", digest }, .{ "answer_schema_id", try text(a, 1, 128) } }, &.{}),
+            .input_required => question,
             .message_queued, .message_consumed, .message_not_consumed => message,
             .blocked => try shape(a, &.{.{ "delivery", try constant(a, "definitely_not_sent") }}, &.{"delivery"}),
             else => empty,

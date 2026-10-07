@@ -154,8 +154,13 @@ and cancel). They reject with exit 75 while another process owns the namespace.
 Resume supports `--expected-revision N`; retransmission with the same
 `--operation-id` must preserve that revision and explicit task ID. Without an
 operation ID, a fresh invocation uses a new random ID. Cancellation output
-reports actual cleanup status. Pending questions are currently answered through
-`task.respond`; the CLI never supplies an implicit answer.
+reports actual cleanup status. Answer with `respond --task-id ID --question-id
+ID --question-revision N --request-digest SHA256 --answer-json JSON`, retaining
+the binding printed by status and the same operation ID when retransmitting.
+The CLI never supplies an implicit answer or substitutes a newer question.
+Execution commands return 1 for application failure and 2 for unknown, blocked,
+parked or unfinished cancellation/cleanup, with the actual state in their JSON
+output. Read-only status/result queries return 0 when the query succeeds.
 
 `examples/native-minimal/stdio-client.mts` is an optional TypeScript subprocess
 client, executed with Node 26's built-in type stripping in the existing peer

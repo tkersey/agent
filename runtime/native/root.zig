@@ -20,6 +20,7 @@ test {
     _ = values;
     _ = protocol;
     _ = registry;
+    _ = client;
     _ = @import("sqlite.zig");
     _ = @import("occurrence.zig");
     _ = @import("store.zig");

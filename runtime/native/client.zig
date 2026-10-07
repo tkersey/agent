@@ -32,7 +32,14 @@ fn operationId(value: json.Value) ![]const u8 {
 fn typed(comptime T: type, a: std.mem.Allocator, object: json.Value, schema_id: []const u8) !T {
     try protocol.closed(object, .{ .required = &.{ "schema_id", "value" } });
     if (!std.mem.eql(u8, try json.text(try field(object, "schema_id")), schema_id)) return error.InvalidParams;
-    return values.fromJson(T, a, try field(object, "value"));
+    const value = try field(object, "value");
+    try inlineValue(a, value);
+    return values.fromJson(T, a, value);
+}
+fn inlineValue(a: std.mem.Allocator, value: json.Value) !void {
+    const encoded = try json.canonical(a, value);
+    defer a.free(encoded);
+    if (encoded.len > (protocol.Limits{}).inline_bytes) return error.Capacity;
 }
 
 pub const Subscription = struct { id: [16]u8, task: state.TaskId, after: u64 };
@@ -261,6 +268,7 @@ pub fn Client(comptime Types: type) type {
                 .@"task.respond" => {
                     const answer = try field(params, "answer");
                     try protocol.closed(answer, .{ .required = &.{ "schema_id", "value" } });
+                    try inlineValue(a, try field(answer, "value"));
                     return self.admission(a, try self.service.respond(a, try operationId(params), try identifier(16, try field(params, "task_id")), try identifier(32, try field(params, "question_id")), try json.decimal(u64, try field(params, "question_revision")), try identifier(32, try field(params, "request_digest")), try json.text(try field(answer, "schema_id")), try field(answer, "value")));
                 },
                 .@"task.cancel" => return self.admission(a, try self.service.requestCancel(a, try operationId(params), try identifier(16, try field(params, "task_id")), if (json.get(params, "reason")) |reason| try json.text(reason) else "client requested cancellation")),
@@ -316,4 +324,14 @@ pub fn Client(comptime Types: type) type {
             }
         }
     };
+}
+
+test "client inline values obey the advertised byte cap before typed admission" {
+    const a = std.testing.allocator;
+    const limit = (protocol.Limits{}).inline_bytes;
+    const buffer = try a.alloc(u8, limit - 1);
+    defer a.free(buffer);
+    @memset(buffer, 'a');
+    try inlineValue(a, json.string(buffer[0 .. limit - 2]));
+    try std.testing.expectError(error.Capacity, inlineValue(a, json.string(buffer)));
 }

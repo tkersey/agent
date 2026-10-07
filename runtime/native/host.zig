@@ -140,7 +140,7 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     const command = args.next() orelse "--help";
     if (std.mem.eql(u8, command, "--help")) {
         if (args.next() != null) return 64;
-        try std.Io.File.stdout().writeStreamingAll(init.io, "Agent native application\n\n--help\ndescribe-build\nlicenses\ndemo --offline --state-dir PATH\nserve --transport stdio --offline [--state-dir PATH]\nstatus|result|resume|cancel --offline --state-dir PATH [--task-id ID]\nrun --offline --state-dir PATH --input-json JSON [--operation-id ID]\n\nA state directory enables durable tasks. Without it, serve provides discovery only.\nTask selection is required when more than one applicable task exists.\nResume and cancel accept --operation-id; resume retries also require the original --expected-revision.\n");
+        try std.Io.File.stdout().writeStreamingAll(init.io, "Agent native application\n\n--help\ndescribe-build\nlicenses\ndemo --offline --state-dir PATH\nserve --transport stdio --offline [--state-dir PATH]\nstatus|result|resume|cancel --offline --state-dir PATH [--task-id ID]\nrun --offline --state-dir PATH --input-json JSON [--operation-id ID]\nrespond --offline --state-dir PATH --task-id ID --question-id ID --question-revision N --request-digest SHA256 --answer-json JSON [--operation-id ID]\n\nA state directory enables durable tasks. Without it, serve provides discovery only.\nTask selection is required when more than one applicable task exists.\nResume and cancel accept --operation-id; resume retries also require the original --expected-revision.\n");
         return 0;
     }
     if (std.mem.eql(u8, command, "describe-build") or std.mem.eql(u8, command, "licenses")) {
@@ -173,6 +173,7 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     var input_json: ?[]const u8 = null;
     var operation_id: ?[]const u8 = null;
     var expected_revision: ?[]const u8 = null;
+    var answer_options: AnswerOptions = .{};
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "--offline") and !offline) offline = true else if (std.mem.eql(u8, arg, "--transport") and !stdio and serving) {
             if (!std.mem.eql(u8, args.next() orelse return 64, "stdio")) return 64;
@@ -187,9 +188,18 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
             operation_id = args.next() orelse return 64;
         } else if (std.mem.eql(u8, arg, "--expected-revision") and human == .@"resume" and expected_revision == null) {
             expected_revision = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--answer-json") and human == .respond and answer_options.value == null) {
+            answer_options.value = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--question-id") and human == .respond and answer_options.id == null) {
+            answer_options.id = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--question-revision") and human == .respond and answer_options.revision == null) {
+            answer_options.revision = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--request-digest") and human == .respond and answer_options.request == null) {
+            answer_options.request = args.next() orelse return 64;
         } else return 64;
     }
     if (!offline or (serving and !stdio) or (!serving and state_path == null) or (human == .run and input_json == null)) return 64;
+    if (human == .respond and (answer_options.value == null or answer_options.id == null or answer_options.revision == null or answer_options.request == null)) return 64;
 
     // Main-thread allocations are reclaimable and bounded. Workers use their
     // own preallocated region, so this accounting never races with worker I/O.
@@ -222,7 +232,22 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     if (namespace) |*owner| service = try tasks.Service(Types).init(a, init.io, owner, assets, &application, handlers, profile);
     var client: ?client_api.Client(Types) = null;
     if (service) |*owner| client = .{ .service = owner };
-    if (human) |selected| return humanCommand(Types, a, &service.?, &client.?, selected, task_id, input_json, operation_id orelse &instance, expected_revision);
+    if (human) |selected| return humanCommand(Types, a, &service.?, &client.?, selected, task_id, input_json, operation_id orelse &instance, expected_revision, answer_options) catch |err| {
+        var arena = std.heap.ArenaAllocator.init(a);
+        defer arena.deinit();
+        const frame = arena.allocator();
+        const kind = failureKind(err);
+        var failure = json.object();
+        try json.put(frame, &failure, "error", json.string(@tagName(kind)));
+        try json.put(frame, &failure, "recovery", json.string(if (kind == .StorageUnavailable) "retry_same_operation_or_inspect" else "correct_request"));
+        try std.Io.File.stdout().writeStreamingAll(init.io, try json.canonical(frame, failure));
+        try std.Io.File.stdout().writeStreamingAll(init.io, "\n");
+        return switch (kind) {
+            .StorageUnavailable, .InternalError => 74,
+            .Overloaded => 75,
+            else => 64,
+        };
+    };
     if (demo) {
         var arena = std.heap.ArenaAllocator.init(a);
         defer arena.deinit();
@@ -235,11 +260,12 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     return serve(Types, init.io, a, &connection);
 }
 
-const HumanCommand = enum { run, status, result, @"resume", cancel };
+const HumanCommand = enum { run, status, result, @"resume", cancel, respond };
+const AnswerOptions = struct { value: ?[]const u8 = null, id: ?[]const u8 = null, revision: ?[]const u8 = null, request: ?[]const u8 = null };
 
 /// CLI selection and rendering only. All admissions and execution use the same
 /// client mapping, task owner and isolated I/O slot as the protocol front end.
-fn humanCommand(comptime Types: type, a: std.mem.Allocator, service: *tasks.Service(Types), client: *client_api.Client(Types), command: HumanCommand, selected_id: ?[]const u8, input: ?[]const u8, operation_id: []const u8, expected_revision: ?[]const u8) !u8 {
+fn humanCommand(comptime Types: type, a: std.mem.Allocator, service: *tasks.Service(Types), client: *client_api.Client(Types), command: HumanCommand, selected_id: ?[]const u8, input: ?[]const u8, operation_id: []const u8, expected_revision: ?[]const u8, answer_options: AnswerOptions) !u8 {
     var arena = std.heap.ArenaAllocator.init(a);
     defer arena.deinit();
     const frame = arena.allocator();
@@ -277,13 +303,28 @@ fn humanCommand(comptime Types: type, a: std.mem.Allocator, service: *tasks.Serv
             defer current.deinit();
             try json.put(frame, &params, "expected_revision", json.string(expected_revision orelse try std.fmt.allocPrint(frame, "{d}", .{current.value.revision})));
             _ = try client.call(frame, .@"task.resume", params);
-        } else if (command == .cancel) _ = try client.call(frame, .@"task.cancel", params);
+        } else if (command == .cancel) _ = try client.call(frame, .@"task.cancel", params) else if (command == .respond) {
+            var answer = json.object();
+            try json.put(frame, &answer, "schema_id", json.string(Types.answer_schema_id));
+            try json.put(frame, &answer, "value", (try json.parse(frame, answer_options.value.?, .{ .bytes = 256 * 1024 })).value);
+            try json.put(frame, &params, "answer", answer);
+            try json.put(frame, &params, "question_id", json.string(answer_options.id.?));
+            try json.put(frame, &params, "question_revision", json.string(answer_options.revision.?));
+            try json.put(frame, &params, "request_digest", json.string(answer_options.request.?));
+            _ = try client.call(frame, .@"task.respond", params);
+        }
     }
-    if (command == .run or command == .@"resume" or command == .cancel) try driveHuman(Types, a, service, id, operation_id);
+    if (command == .run or command == .@"resume" or command == .cancel or command == .respond) try driveHuman(Types, a, service, id, operation_id);
     try json.put(frame, &params, "task_id", json.string(try frame.dupe(u8, &std.fmt.bytesToHex(id, .lower))));
     const result = try client.call(frame, if (command == .status) .@"task.status" else .@"task.result", params);
     try std.Io.File.stdout().writeStreamingAll(service.io, try json.canonical(frame, result));
     try std.Io.File.stdout().writeStreamingAll(service.io, "\n");
+    if (command != .status and command != .result) {
+        const status = result.object.get("status").?.string;
+        if (std.mem.eql(u8, status, "failed")) return 1;
+        for ([_][]const u8{ "unknown", "blocked", "cancelling", "parked" }) |unfinished| if (std.mem.eql(u8, status, unfinished)) return 2;
+        if (result.object.get("outcome")) |outcome| if (json.get(outcome, "cleanup_complete")) |complete| if (!complete.bool) return 2;
+    }
     return 0;
 }
 

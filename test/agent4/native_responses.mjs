@@ -1,5 +1,6 @@
 // The retained JS v3 normalizer runs the same independent corpus where the
-// contracts intersect. v5's whole-batch rejection is explicitly outside v3.
+// contracts intersect. Keep v3's ignored-envelope Unicode behavior and v5's
+// whole-batch rejection explicit; neither is an equality claim.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {normalizeOpenAIResponses} from '../../runtime/model.mjs';
@@ -11,12 +12,20 @@ const tools = [{name: 'choose', actionOrdinal: 0, actionTag: 0, argumentCodec: [
 const tags = ['output', 'refusal', 'transport_failure', 'provider_failure', 'unsupported_response'];
 const reasons = ['unsupported_protocol', 'unsupported_parameter', 'malformed_json', 'invalid_utf8', 'unsupported_status', 'unsupported_output_item', 'mixed_refusal', 'normalization_limit'];
 const items = [];
+const nonintersection = [];
 for (const fixture of corpus.cases) {
-  if (fixture.name === 'invalid whole batch') continue;
   const result = normalizeOpenAIResponses(Buffer.from(fixture.body), limits, tools);
+  if (fixture.name === 'invalid whole batch' || fixture.name === 'invalid Unicode') {
+    // v3 admits multiple calls and ignores this malformed string in an unused
+    // envelope field. Native admission rejects the complete malformed envelope.
+    assert.equal(tags[result[0]], 'output', fixture.name);
+    nonintersection.push(fixture.name);
+    continue;
+  }
   assert.equal(tags[result[0]], fixture.result, fixture.name);
   if (fixture.reason) assert.equal(reasons[result.readUInt32LE(1)], fixture.reason, fixture.name);
   items.push({name: fixture.name, result: result.toString('hex')});
 }
-assert.equal(items.length, corpus.cases.length - 1);
-console.log(JSON.stringify({version: 1, items, explicit_nonintersection: ['whole-batch call policy']}));
+assert.deepEqual(nonintersection, ['invalid Unicode', 'invalid whole batch']);
+assert.equal(items.length, corpus.cases.length - nonintersection.length);
+console.log(JSON.stringify({version: 1, items, explicit_nonintersection: nonintersection}));

@@ -1,7 +1,5 @@
 //! Native semantic checks with one shared World/Agent module graph.
 test {
-    _ = @import("agent_native");
-    _ = @import("inbox.zig");
     _ = @import("native_tasks.zig");
     _ = @import("native_responses.zig");
     _ = @import("bounded_history.zig");

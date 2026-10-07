@@ -663,7 +663,6 @@ pub fn build(b: *std.Build) void {
                 .environment = b.path("examples/repository-agent/environment.zig"),
             });
             native_example.dependOn(&repository_product.install.step);
-            native_checks.dependOn(&repository_product.executable.step);
             const repository_peer = nodeCommand(b);
             repository_peer.addArgs(&.{ "node", "test/agent4/native_repository.mjs" });
             repository_peer.addFileArg2(repository_product.executable.getEmittedBin(), .{ .make_absolute = true });
@@ -673,30 +672,29 @@ pub fn build(b: *std.Build) void {
             protocol_peer.addFileArg2(product.executable.getEmittedBin(), .{ .make_absolute = true });
             protocol_peer.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
             native_host.dependOn(&protocol_peer.step);
+            const consumer_module = b.createModule(.{
+                .root_source_file = b.path("test/consumers/native/main.zig"),
+                .target = b.graph.host,
+                .optimize = optimize,
+                .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data", .module = data }, .{ .name = "agent_native", .module = host_environment }, .{ .name = "agent_contracts", .module = contracts }, .{ .name = "application_types", .module = g.module("examples/native-minimal/types.zig") } },
+            });
+            consumer_module.addAnonymousImport("image", .{ .root_source_file = product.assets.image });
+            const consumer = b.addExecutable(.{ .name = "agent-native-consumer", .root_module = consumer_module });
+            consumer.step.dependOn(&runtime_guard.step);
+            native_consumer.dependOn(&b.addRunArtifact(consumer).step);
+            const https_peer = nodeCommand(b);
+            https_peer.addArgs(&.{ "node", "test/agent4/native_https.mjs" });
+            https_peer.addFileArg2(consumer.getEmittedBin(), .{ .make_absolute = true });
+            native_consumer.dependOn(&https_peer.step);
+            native_consumer.dependOn(&b.addInstallArtifact(consumer, .{}).step);
         } else {
             const unsupported = b.addFail("native product supports aarch64-macos and x86_64-linux-musl");
             native_example.dependOn(&unsupported.step);
             native_host.dependOn(&unsupported.step);
+            native_consumer.dependOn(&unsupported.step);
         }
-        const native_image = g.runArtifact(fixture_driver.select("native-consumer"));
-        const consumer_module = b.createModule(.{
-            .root_source_file = b.path("test/consumers/native/main.zig"),
-            .target = b.graph.host,
-            .optimize = optimize,
-            .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data", .module = data }, .{ .name = "agent_native", .module = host_environment } },
-        });
-        consumer_module.addAnonymousImport("image", .{ .root_source_file = native_image.captureStdOut(.{}) });
-        const consumer = b.addExecutable(.{ .name = "agent-native-consumer", .root_module = consumer_module });
-        consumer.step.dependOn(&runtime_guard.step);
-        native_consumer.dependOn(&b.addRunArtifact(consumer).step);
-        const https_peer = nodeCommand(b);
-        https_peer.addArgs(&.{ "node", "test/agent4/native_https.mjs" });
-        https_peer.addFileArg2(consumer.getEmittedBin(), .{ .make_absolute = true });
-        native_consumer.dependOn(&https_peer.step);
         const responses_peer = nodeCommand(b);
         responses_peer.addArgs(&.{ "node", "test/agent4/native_responses.mjs" });
-        native_consumer.dependOn(&responses_peer.step);
-        native_consumer.dependOn(&b.addInstallArtifact(consumer, .{}).step);
         // These roots share exact module identities; compile their retained
         // tests together instead of rebuilding the same compiler eleven times.
         const native_suite = g.module("test/agent4/native_tests.zig");

@@ -14,10 +14,10 @@ Its unchanged dependency lock selects World
 archives, complete inventories, Git trees, Boundary package, and existing WASM
 runtime bundle. Source identity and WASM artifact identity remain distinct.
 
-The first independent consumer is `test/consumers/native/`. Its host emitter
-uses `agent.system` and `agent.compile`; the deployed executable imports only
-`world` and `boundary_data`, and embeds the resulting BPI3. It uses public
-`Prepared` and `Resident` APIs, with an explicit 4 MiB allocation domain.
+The independent API consumer is `test/consumers/native/`. It now reuses the
+minimal application's emitted BPI3 rather than compiling a second toy program.
+It uses public `Prepared` and `Resident` APIs within an explicit 4 MiB allocation
+domain. The same executable supplies the focused native HTTPS fault probe.
 
 ```sh
 node tools/agent4/setup.mjs
@@ -26,13 +26,14 @@ zig build check-native-consumer -Doptimize=safe \
 ./zig-out/bin/agent-native-consumer
 ```
 
-The independent expected result is `41`: the authored caller retains `20`,
+The independently expected numeric result is `41`: the authored caller retains `20`,
 calls a child that requests a native increment (`21`), yields, and adds the
-retained value after restoration. The consumer also supplies an insufficient
+retained value after restoration, answers the minimal application's question,
+and services its cleanup. The consumer also supplies an insufficient
 output buffer, checks unchanged checkpoint bytes, and then supplies the same
 reply successfully. Closing the completed restored resident rejects later use.
-This witness is included once in `check-native`, sharing the existing fixture
-emitter compilation. It is not a production host or application policy loop.
+This witness is included once in `check-native`, sharing the actual minimal
+application image. It is not a production host or application policy loop.
 
 The initial N0 commit also passed the complete existing CI matrix on Linux:
 [run 37518433037](https://github.com/tkersey/agent/actions/runs/37518433037).

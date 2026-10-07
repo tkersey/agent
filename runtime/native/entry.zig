@@ -9,6 +9,6 @@ pub fn main(init: std.process.Init) void {
         .image = @embedFile("native_image"),
         .application = @embedFile("native_application"),
         .manifest = @embedFile("native_manifest"),
-    }) catch 74;
+    }) catch |err| native.reportFailure(err);
     if (code != 0) std.process.exit(code);
 }

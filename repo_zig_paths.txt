@@ -93,7 +93,6 @@ test/agent4/compiled_tool.zig
 test/agent4/composed_owners.zig
 test/agent4/decision_scopes.zig
 test/agent4/dialogue_probe.zig
-test/agent4/inbox.zig
 test/agent4/inquiry_broker_probe.zig
 test/agent4/inquiry_probe.zig
 test/agent4/mobility_ensure.zig
@@ -165,7 +164,6 @@ test/consumers/mobile_repository/types.zig
 test/consumers/mobility/approval.zig
 test/consumers/mobility/build.zig
 test/consumers/mobility/main.zig
-test/consumers/native/emitter.zig
 test/consumers/native/main.zig
 test/consumers/repository/application.zig
 test/consumers/repository/completion.zig

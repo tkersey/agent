@@ -77,11 +77,25 @@ example's independent subprocess peer. No existing native or custody check is re
 When the product target is runnable on the host, runtime unit tests use that
 product environment too, including Linux musl rather than only the host's glibc ABI.
 
-The same native subprocess peer checks the optional TypeScript client and the
-published protocol schemas. Its independent Draft 2020-12 validator runs through
+The protocol subprocess peer checks the published protocol schemas. Its
+independent Draft 2020-12 validator runs through
 `uv run --no-project --no-config --python 3.12 --with jsonschema==4.23.0`.
 This qualification dependency is not acquired by pure authoring/installation
 and is never a launch dependency of the copied executable.
+
+Native verification reuses the minimal application's emitted image for the
+public World API probe; the former N0-only emitter is removed. The probe retains
+output-capacity rollback, checkpoint/restore, yield, and terminal-close checks.
+The durable-owner test compiles its one image once for both direct and captured
+acquisition recovery. It also retains the inbox contract-conflict and message-ID
+checks formerly split into a separate inbox fixture. `native_repository.mjs`
+is the single repository application witness: an offline launch smoke check and
+one controlled HTTPS investigation with native reads, clarification, queued
+follow-up, forced restart, frozen evidence, and retained budgets. It uses the
+existing TypeScript client, replacing its repeated minimal-task conversation in
+`native_host.mjs`. Transport fault cases, raw-capture recovery, storage failures,
+protocol faults and native/WASM correspondence retain their existing witnesses;
+the application happy path does not replace those distinct boundaries.
 
 `check-agent4` and `check` still include the external installation and all
 previously retained authoring obligations. The native lane also runs the retained custody and deployment regressions.

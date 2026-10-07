@@ -13,6 +13,18 @@ const world = @import("world");
 const c = @import("native_c");
 const identity = @import("identity.zig");
 
+/// One bounded, nonblocking fatal diagnostic. Error names contain no request,
+/// profile, credential, path or provider payload data.
+pub fn reportFailure(err: anyerror) u8 {
+    const flags = c.fcntl(c.STDERR_FILENO, c.F_GETFL);
+    if (flags < 0 or c.fcntl(c.STDERR_FILENO, c.F_SETFL, flags | c.O_NONBLOCK) < 0) return 74;
+    defer _ = c.fcntl(c.STDERR_FILENO, c.F_SETFL, flags);
+    var buffer: [192]u8 = undefined;
+    const message = std.fmt.bufPrint(&buffer, "agent: {s}\n", .{@errorName(err)}) catch return 74;
+    _ = c.write(c.STDERR_FILENO, message.ptr, message.len);
+    return 74;
+}
+
 fn Connection(comptime Types: type) type {
     return struct {
         application: *const discovery.Application,

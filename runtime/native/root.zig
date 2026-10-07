@@ -9,6 +9,7 @@ pub const question = registry.question;
 pub const Declaration = registry.Declaration;
 pub const Registry = registry.Registry;
 pub const run = @import("host.zig").run;
+pub const reportFailure = @import("host.zig").reportFailure;
 pub const discovery = @import("discovery.zig");
 pub const inbox = @import("inbox.zig");
 pub const https = @import("https.zig");

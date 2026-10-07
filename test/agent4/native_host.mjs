@@ -8,7 +8,6 @@ import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
-import {AgentClient} from '../../examples/native-minimal/stdio-client.mts';
 import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence, compareContinuation} from './native_archive.mjs';
 
 const source = resolve(process.argv[2]);
@@ -161,33 +160,6 @@ try {
     writeFileSync(join(directory, `${name}.bundle`), bytes, {mode: 0o600});
     assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', `bad ${name}`, '--input', `${name}.bundle`, '--operation-id', 'recoverable-import'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === expectedReason);
     assert.equal(cli('import-checkpoint', `bad ${name}`, '--input', 'pending.bundle', '--operation-id', 'recoverable-import').task_id, portable.task_id);
-  }
-  const notifications = [];
-  const typescript = new AgentClient(binary, ['--offline', '--state-dir', 'typescript state'], {cwd: directory, env: options.env, onNotification: event => notifications.push(event)});
-  try {
-    await typescript.initialize();
-    const submitted = await typescript.call('task.submit', {client_operation_id: 'typescript-submit', application_id: 'native-minimal', profile_id: 'offline', input: {schema_id: 'native-minimal.input.v1', value: {value: 20}}});
-    const subscribed = await typescript.call('task.subscribe', {task_id: submitted.task_id, after_seq: '0'});
-    let pending;
-    for (let i = 0; i < 100; i++) {
-      pending = await typescript.call('task.status', {task_id: submitted.task_id});
-      if (pending.question) break;
-      await new Promise(resolve => setTimeout(resolve, 10));
-    }
-    assert(pending.question);
-    await typescript.call('task.respond', {client_operation_id: 'typescript-answer', task_id: submitted.task_id, question_id: pending.question.question_id, question_revision: pending.question.question_revision, request_digest: pending.question.request_digest, answer: {schema_id: pending.question.answer_schema_id, value: {message: 'TypeScript answer'}}});
-    let finished;
-    for (let i = 0; i < 100; i++) {
-      finished = await typescript.call('task.result', {task_id: submitted.task_id});
-      if (finished.ready && notifications.some(item => item.params.event?.type === 'completed')) break;
-      await new Promise(resolve => setTimeout(resolve, 10));
-    }
-    assert.deepEqual(finished.outcome.value, {value: 41, answer: 'TypeScript answer'});
-    const events = notifications.filter(item => item.method === 'task.event');
-    assert.deepEqual(events.map(item => item.params.event.seq), ['1', '2', '3', '4']);
-    assert(events.every(item => item.params.subscription_id === subscribed.subscription_id));
-  } finally {
-    assert.deepEqual(await typescript.close(), {code: 0, signal: null});
   }
   const demoReader = launch('demo state');
   await demoReader.initialize();

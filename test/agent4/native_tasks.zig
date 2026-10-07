@@ -58,21 +58,24 @@ const CapturingIncrement = struct {
 };
 
 test "durable owner replays admissions and acquired work, binds answers, and consumes queued input once" {
-    try ownerRecovery(false);
-    try ownerRecovery(true);
-}
-
-fn ownerRecovery(captured: bool) !void {
     const a = std.testing.allocator;
-    const io = std.testing.io;
     var compiled = try agent.compile(a, agent.system(.{ .InitialArgs = T.Input, .Result = T.Output, .Failure = T.Failure, .application = Application }));
     defer compiled.deinit();
     const image = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer a.free(image);
     _ = try compiled.encode(a, image);
+    try ownerRecovery(false, image);
+    try ownerRecovery(true, image);
+}
+
+fn ownerRecovery(captured: bool, image: []const u8) !void {
+    const a = std.testing.allocator;
+    const io = std.testing.io;
     const assets: native.discovery.Assets = .{ .image = image, .application = "owner-unit-test", .manifest = "owner-unit-test" };
+    const admitted_image = try boundary.data.program_image.Admitted.decode(a, image);
+    defer admitted_image.deinit();
     // Asset/discovery admission is independently tested by the subprocess peer.
-    var application: native.discovery.Application = .{ .arena = .init(a), .metadata = .null, .manifest = .null, .manifest_id = "unit", .image_identity = try boundary.data.program_image.identity(a, compiled.program) };
+    var application: native.discovery.Application = .{ .arena = .init(a), .metadata = .null, .manifest = .null, .manifest_id = "unit", .image_identity = admitted_image.identity() };
     defer application.deinit();
     var increment_declaration = native.leaf(u32, u32, .{ .identity = "task-owner.increment.v1", .resource_role = "local" }, increment);
     if (captured) {
@@ -108,7 +111,7 @@ fn ownerRecovery(captured: bool) !void {
     try std.testing.expect(duplicate.replayed);
     try std.testing.expectEqualSlices(u8, &accepted.receipt.task, &duplicate.receipt.task);
     try std.testing.expectError(error.OperationConflict, service.submit(frame, "submit", 21));
-    _ = try service.message(frame, "message", accepted.receipt.task, 9);
+    const queued_message = try service.message(frame, "message", accepted.receipt.task, 9);
     var calls: usize = 0;
     for (0..32) |_| {
         const step = try service.pump(frame);
@@ -170,6 +173,7 @@ fn ownerRecovery(captured: bool) !void {
     try std.testing.expectEqual(7, decoded.value.answer);
     try std.testing.expect(decoded.value.inbox == .message);
     try std.testing.expectEqual(9, decoded.value.inbox.message.value);
+    try std.testing.expectEqualStrings(&std.fmt.bytesToHex(queued_message.receipt.message.?, .lower), decoded.value.inbox.message.id.bytes);
     const replayed_answer = try service.respond(frame, "answer", accepted.receipt.task, question.value.id, question.value.revision, question.value.request_digest, "task-owner.answer.v1", .{ .number_string = "7" });
     try std.testing.expect(replayed_answer.replayed);
     try std.testing.expectEqualSlices(u8, &answered.receipt.id, &replayed_answer.receipt.id);
@@ -221,4 +225,15 @@ fn ownerRecovery(captured: bool) !void {
     var cancelled = try service.task(frame, no_send.receipt.task);
     defer cancelled.deinit();
     try std.testing.expectEqual(.cancelled, cancelled.value.outcome_kind);
+}
+
+test "an inbox identity cannot be redeclared with a different message contract" {
+    const a = std.testing.allocator;
+    var b = boundary.source.Builder.init(a);
+    defer b.deinit();
+    var registry = agent.admission.Registry.init(a);
+    defer registry.deinit();
+    const ctx = agent.Context{ .builder = &b, .registry = &registry };
+    try std.testing.expectEqual(try Inbox.declare(ctx), try Inbox.declare(ctx));
+    try std.testing.expectError(error.InvalidInboxContract, agent.inbox.Profile(u64).declare(ctx));
 }

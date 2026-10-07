@@ -85,7 +85,9 @@ test "native Responses v1 independently specified capture corpus" {
             try std.testing.expectEqualStrings("opaque+/=", replay.value.array.items[1].object.get("encrypted_content").?.string);
             try std.testing.expectEqualStrings("commentary", replay.value.array.items[2].object.get("phase").?.string);
         }
-        if (std.mem.eql(u8, name, "duplicate arguments")) try std.testing.expectEqual(.duplicate_field, result.value.result.output.items.items[0].function_call.decoded_action.invalid);
+        // Two supplied fields exceed this profile's one-field bound before
+        // duplicate-field decoding. The JS bytes independently assert it too.
+        if (std.mem.eql(u8, name, "duplicate arguments")) try std.testing.expectEqual(.capacity, result.value.result.output.items.items[0].function_call.decoded_action.invalid);
         if (std.mem.eql(u8, name, "exact integer call")) {
             try std.testing.expectEqual(@as(u64, 9007199254740993), result.value.result.output.items.items[0].function_call.decoded_action.decoded.choose.value);
             try std.testing.expectEqual(@as(?u64, 0), result.value.usage.?.cached_input_tokens);

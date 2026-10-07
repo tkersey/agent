@@ -7,8 +7,9 @@ import {verifyNativeDependency} from './native-dependencies.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const args = process.argv.slice(2);
-if (args.length !== 13) throw new Error('native-manifest: expected image, application, lock, three licenses, SQLite source/heap/flags, state quota, target, optimize, output');
-const [imagePath, applicationPath, lockPath, agentLicense, worldLicense, boundaryLicense, sqliteSource, sqliteHeap, sqliteFlags, stateBytes, target, optimize, output] = args;
+if (args.length !== 14) throw new Error('native-manifest: expected image, application, lock, three licenses, SQLite source/heap/flags, state quota/format, target, optimize, output');
+const [imagePath, applicationPath, lockPath, agentLicense, worldLicense, boundaryLicense, sqliteSource, sqliteHeap, sqliteFlags, stateBytes, stateFormat, target, optimize, output] = args;
+if (!/^agent-native-state\/[1-9][0-9]*$/.test(stateFormat)) throw new Error('invalid native state format');
 const image = readFileSync(imagePath), applicationBytes = readFileSync(applicationPath);
 const application = JSON.parse(applicationBytes), lock = JSON.parse(readFileSync(lockPath));
 if (application.program_sha256 !== hash(image)) throw new Error('native image binding mismatch');
@@ -29,7 +30,7 @@ const manifest = {
   native_host_contract: 'agent-native-host/1.0',
   protocol: 'agent-host/1.0',
   client_mapping: 'agent-client-values/1.0',
-  state_format: 'agent-native-state/4',
+  state_format: stateFormat,
   state_database_bytes: Number(stateBytes),
   target, optimize,
   program_sha256: hash(image),

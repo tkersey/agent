@@ -22,6 +22,7 @@ runtime/native/namespace.zig
 runtime/native/occurrence.zig
 runtime/native/protocol.zig
 runtime/native/registry.zig
+runtime/native/responses.zig
 runtime/native/root.zig
 runtime/native/schemas.zig
 runtime/native/sqlite.zig
@@ -98,6 +99,7 @@ test/agent4/model_unknown_field.zig
 test/agent4/model_unknown_parameter.zig
 test/agent4/model_unsupported_codec.zig
 test/agent4/multi_probe.zig
+test/agent4/native_responses.zig
 test/agent4/native_tasks.zig
 test/agent4/native_tests.zig
 test/agent4/observation.zig

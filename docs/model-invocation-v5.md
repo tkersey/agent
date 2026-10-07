@@ -27,6 +27,11 @@ grant no read, inference or work-tool authority. The environmental owner must
 check all bindings, current grants, bytes and complete dependency closure before
 using a reference. A digest alone is not a capability.
 
+The shared `ContextArtifact` is an ordinary encoded record containing those
+subject/range bindings, a source-capture reference, an optional parent-context
+reference and bounded JSON replay items. The digest covers the bindings as well
+as the items. The native core checks the context/capture chain before use.
+
 `agent.responders.defineReferenceModelObserved` uses the same checked responder
 generator as v3/v4. It replaces the invocation's tools with the declarations
 selected by the exact request-time offered set, preserves the supplied profile,

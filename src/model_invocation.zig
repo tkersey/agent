@@ -29,6 +29,21 @@ pub const ContextReference = struct {
     next: u64,
 };
 pub const maximum_replay_bytes: u32 = 2 * 1024 * 1024;
+pub const ArtifactReference = struct { digest: [32]u8, bytes: u64 };
+/// Context bindings are inside the hashed artifact too. A caller cannot relabel
+/// another task's bytes merely by changing the fields of an external reference.
+pub const ContextArtifact = struct {
+    schema: contracts.Text(128),
+    profile: [32]u8,
+    task: [16]u8,
+    tenant: contracts.Text(128),
+    audience: contracts.Text(128),
+    first: u64,
+    next: u64,
+    source_capture: ArtifactReference,
+    parent: ?ArtifactReference,
+    items: contracts.Bytes(maximum_replay_bytes),
+};
 pub const ReplayStatus = enum { complete, unsupported, capacity };
 pub const Usage = struct { input_tokens: u64, output_tokens: u64, cached_input_tokens: ?u64 };
 pub const protocol_identity = "agent.model.protocol.openai-responses-v2";
@@ -138,6 +153,9 @@ pub fn Profile(
     };
     return struct {
         const Self = @This();
+        pub const reference_identity = reference_semantic_identity;
+        pub const context_identity = context_semantic_identity;
+        pub const Context = ContextArtifact;
         pub const AnswerType = Answer;
         pub const Interpretation = @import("model_interpretation.zig").Result(Answer);
         pub const BatchInterpretation = @import("model_interpretation.zig").Result([]const Answer);

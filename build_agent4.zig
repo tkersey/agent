@@ -661,12 +661,16 @@ pub fn build(b: *std.Build) void {
         https_peer.addArgs(&.{ "node", "test/agent4/native_https.mjs" });
         https_peer.addFileArg2(consumer.getEmittedBin(), .{ .make_absolute = true });
         native_consumer.dependOn(&https_peer.step);
+        const responses_peer = nodeCommand(b);
+        responses_peer.addArgs(&.{ "node", "test/agent4/native_responses.mjs" });
+        native_consumer.dependOn(&responses_peer.step);
         native_consumer.dependOn(&b.addInstallArtifact(consumer, .{}).step);
         // These roots share exact module identities; compile their retained
         // tests together instead of rebuilding the same compiler eleven times.
         const native_suite = g.module("test/agent4/native_tests.zig");
         native_suite.addImport("world", world);
         native_suite.addImport("agent_native", host_environment);
+        native_suite.addAnonymousImport("native_model_reference", .{ .root_source_file = responses_peer.captureStdOut(.{}) });
         native_suite.addImport("document", g.module("test/consumers/document/consequence.zig"));
         native_graph.testModule(native_checks, native_suite);
         // Zig does not collect test declarations from named dependency modules.

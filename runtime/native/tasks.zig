@@ -29,6 +29,7 @@ pub const Work = struct {
     attempt: state.Digest,
     request: []const u8,
     prepared: ?[]const u8 = null,
+    profile: []const u8 = &.{},
     entry: registry.Entry,
     cleanup: bool,
 };
@@ -781,8 +782,14 @@ pub fn Service(comptime Types: type) type {
                     return .progressed;
                 },
                 .leaf => {
-                    const prepared = if (entry.declaration.capture) |adapter| try adapter.prepare(self.projectionContext(a, value), request.value.binding.payload) else null;
-                    defer if (prepared) |body| a.free(body);
+                    var preparation = std.heap.ArenaAllocator.init(a);
+                    defer preparation.deinit();
+                    const prepared = if (entry.declaration.capture) |adapter| adapter.prepare(self.projectionContext(preparation.allocator(), value), request.value.binding.payload) catch |err|
+                        return self.blocked(a, initial, switch (err) {
+                            error.Capacity, error.OutOfMemory => .capacity,
+                            error.MissingArtifact, error.CorruptObject => .missing_artifact,
+                            else => .incompatible_profile,
+                        }) else null;
                     if (prepared) |body| if (body.len > 2 * 1024 * 1024) return self.blocked(a, initial, .capacity);
                     const charged_bytes = if (prepared) |body| body.len else request_bytes.len;
                     if (entry.declaration.inference) {
@@ -794,7 +801,9 @@ pub fn Service(comptime Types: type) type {
                     errdefer self.allocator.free(retained);
                     const retained_prepared = if (prepared) |body| try self.allocator.dupe(u8, body) else null;
                     errdefer if (retained_prepared) |body| self.allocator.free(body);
-                    const work: Work = .{ .task = value.id, .occurrence = pending.id, .attempt = attempt, .request = retained, .prepared = retained_prepared, .entry = entry, .cleanup = value.cancellation_applied };
+                    const retained_profile = try self.allocator.dupe(u8, self.profile.bytes);
+                    errdefer self.allocator.free(retained_profile);
+                    const work: Work = .{ .task = value.id, .occurrence = pending.id, .attempt = attempt, .request = retained, .prepared = retained_prepared, .profile = retained_profile, .entry = entry, .cleanup = value.cancellation_applied };
                     try self.store().begin();
                     defer self.store().rollback();
                     try self.store().reserve(attempt);
@@ -885,6 +894,9 @@ pub fn Service(comptime Types: type) type {
             const next = try occurrence.acquired(pending, .{ .id = pending.id, .task = initial.id, .request = pending.request }, attempt_id, storage.digest(bound));
             var value = initial;
             value.revision = try std.math.add(u64, value.revision, 1);
+            if (entry.declaration.inference) if (result.output_tokens) |tokens| {
+                value.inference_output_tokens = std.math.add(u64, value.inference_output_tokens, tokens) catch return self.blocked(a, initial, .capacity);
+            };
             try self.store().begin();
             defer self.store().rollback();
             _ = try self.store().putObject(bound);
@@ -901,6 +913,7 @@ pub fn Service(comptime Types: type) type {
         fn releaseWork(self: *Self) void {
             self.allocator.free(self.work.?.request);
             if (self.work.?.prepared) |body| self.allocator.free(body);
+            self.allocator.free(self.work.?.profile);
             self.work = null;
         }
         /// A worker has returned and will no longer access this work item.

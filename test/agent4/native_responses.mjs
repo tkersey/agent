@@ -1,0 +1,22 @@
+// The retained JS v3 normalizer runs the same independent corpus where the
+// contracts intersect. v5's whole-batch rejection is explicitly outside v3.
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {normalizeOpenAIResponses} from '../../runtime/model.mjs';
+
+const corpus = JSON.parse(readFileSync(new URL('./native-responses-v1.json', import.meta.url)));
+assert.equal(corpus.version, 1);
+const limits = {maximumOutputItems: 8, maximumCallIdBytes: 64, maximumNameBytes: 6, maximumArgumentsBytes: 256, maximumArgumentNameBytes: 5, maximumArgumentFields: 1, maximumResultTextBytes: 256};
+const tools = [{name: 'choose', actionOrdinal: 0, actionTag: 0, argumentCodec: [{name: 'value', kind: 'unsigned_integer', bitWidth: 64, maximumBytes: 0, enumNames: [], enumTags: []}]}];
+const tags = ['output', 'refusal', 'transport_failure', 'provider_failure', 'unsupported_response'];
+const reasons = ['unsupported_protocol', 'unsupported_parameter', 'malformed_json', 'invalid_utf8', 'unsupported_status', 'unsupported_output_item', 'mixed_refusal', 'normalization_limit'];
+const items = [];
+for (const fixture of corpus.cases) {
+  if (fixture.name === 'invalid whole batch') continue;
+  const result = normalizeOpenAIResponses(Buffer.from(fixture.body), limits, tools);
+  assert.equal(tags[result[0]], fixture.result, fixture.name);
+  if (fixture.reason) assert.equal(reasons[result.readUInt32LE(1)], fixture.reason, fixture.name);
+  items.push({name: fixture.name, result: result.toString('hex')});
+}
+assert.equal(items.length, corpus.cases.length - 1);
+console.log(JSON.stringify({version: 1, items, explicit_nonintersection: ['whole-batch call policy']}));

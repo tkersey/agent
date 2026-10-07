@@ -44,9 +44,9 @@ const CapturingIncrement = struct {
         defer value.deinit();
         return std.fmt.allocPrint(ctx.allocator, "increment:{d}", .{value.value});
     }
-    fn invoke(ctx: native.Context, bytes: []const u8) ![]u8 {
+    fn invoke(ctx: native.Context, bytes: []const u8) !native.registry.Acquisition {
         if (!std.mem.eql(u8, bytes, "increment:20")) return error.InvalidPreparedRequest;
-        return ctx.allocator.dupe(u8, "raw-response:21");
+        return .{ .captured = try ctx.allocator.dupe(u8, "raw-response:21") };
     }
     fn interpret(ctx: native.registry.ProjectionContext, payload: []const u8, rendered: []const u8, raw: []const u8) !native.registry.Projection {
         if (!std.mem.eql(u8, rendered, "increment:20") or !std.mem.eql(u8, raw, "raw-response:21")) return error.InvalidCapture;
@@ -77,8 +77,8 @@ fn ownerRecovery(captured: bool) !void {
     var increment_declaration = native.leaf(u32, u32, .{ .identity = "task-owner.increment.v1", .resource_role = "local" }, increment);
     if (captured) {
         increment_declaration.background = true;
-        increment_declaration.capture = .{ .prepare = CapturingIncrement.prepare, .interpret = CapturingIncrement.interpret };
-        increment_declaration.invoke = CapturingIncrement.invoke;
+        increment_declaration.capture = .{ .prepare = CapturingIncrement.prepare, .acquire = CapturingIncrement.invoke, .interpret = CapturingIncrement.interpret };
+        increment_declaration.invoke = null;
     }
     var handlers = try native.Registry.init(a, &.{
         increment_declaration,
@@ -115,7 +115,8 @@ fn ownerRecovery(captured: bool) !void {
         if (step == .work) {
             var request = try protocol.decode(protocol.Request, frame, step.work.request);
             defer request.deinit();
-            const reply = try step.work.entry.declaration.invoke.?(.{ .allocator = frame, .io = io, .authority = &profile.authority, .task_id = "test" }, step.work.prepared orelse request.value.binding.payload);
+            const ctx: native.Context = .{ .allocator = frame, .io = io, .authority = &profile.authority, .task_id = "test" };
+            const reply = if (step.work.entry.declaration.capture) |adapter| (try adapter.acquire(ctx, step.work.prepared.?)).captured else try step.work.entry.declaration.invoke.?(ctx, request.value.binding.payload);
             calls += 1;
             try service.acquire(frame, step.work, reply);
             if (captured) {

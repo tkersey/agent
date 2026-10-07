@@ -105,6 +105,7 @@ pub fn addWithModules(b: *std.Build, modules: Modules, options: Options) Product
     manifest.addArg(b.fmt("{d}", .{sqlite_heap_bytes}));
     manifest.addArg(std.json.Stringify.valueAlloc(b.allocator, sqlite_flags, .{}) catch @panic("out of memory"));
     manifest.addArg(b.fmt("{d}", .{state_bytes}));
+    manifest.addArg(b.fmt("agent-native-state/{d}", .{@import("runtime/native/store.zig").format}));
     manifest.addArgs(&.{ target.result.zigTriple(b.allocator) catch @panic("out of memory"), @tagName(optimize) });
     const manifest_file = manifest.addOutputFileArg2("native-manifest.json", .{});
 

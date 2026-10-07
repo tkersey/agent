@@ -6,6 +6,7 @@ const contracts = @import("agent_contracts");
 const values = @import("values.zig");
 const json = @import("json.zig");
 const state = @import("state.zig");
+pub const ObjectReference = state.Reference;
 
 /// Pure projection inputs: immutable objects and frozen task bindings, with no
 /// I/O, credentials, evaluator, or mutable store supplied to adapter code.
@@ -27,10 +28,17 @@ pub const Projection = struct {
     reply: []const u8,
     /// Immutable replay artifacts are committed atomically with the reply.
     objects: []const []const u8 = &.{},
+    output_tokens: ?u64 = null,
 };
 pub const CaptureAdapter = struct {
     prepare: *const fn (ProjectionContext, []const u8) anyerror![]u8,
+    acquire: *const fn (Context, []const u8) anyerror!Acquisition,
     interpret: *const fn (ProjectionContext, []const u8, []const u8, []const u8) anyerror!Projection,
+};
+pub const Acquisition = union(enum) {
+    captured: []const u8,
+    definitely_not_sent: anyerror,
+    unknown: anyerror,
 };
 
 pub const Grant = struct {
@@ -51,6 +59,7 @@ pub const Context = struct {
     io: std.Io,
     authority: *const Authority,
     task_id: []const u8,
+    profile: []const u8 = &.{},
     /// Application/environment handles only; no evaluator handle is supplied.
     environment: ?*anyopaque = null,
     cancellation: ?*const std.atomic.Value(bool) = null,
@@ -66,7 +75,7 @@ pub const Declaration = struct {
     kind: Kind,
     inference: bool = false,
     background: bool = false,
-    /// invoke receives prepared bytes and returns an uninterpreted capture.
+    /// acquire receives prepared bytes and returns an uninterpreted capture.
     capture: ?CaptureAdapter = null,
     payload_schema: *const fn (std.mem.Allocator) anyerror![]u8,
     resume_schema: *const fn (std.mem.Allocator) anyerror![]u8,
@@ -94,8 +103,8 @@ pub const Registry = struct {
         for (declarations, entries, 0..) |declaration, *entry, i| {
             if (declaration.identity.len == 0 or declaration.resource_role.len == 0) return error.InvalidCapability;
             for (declarations[0..i]) |prior| if (std.mem.eql(u8, prior.identity, declaration.identity)) return error.DuplicateCapability;
-            if (declaration.kind == .leaf and declaration.invoke == null) return error.InvalidCapability;
-            if (declaration.capture != null and (declaration.kind != .leaf or !declaration.background)) return error.InvalidCapability;
+            if (declaration.kind == .leaf and declaration.invoke == null and declaration.capture == null) return error.InvalidCapability;
+            if (declaration.capture != null and (declaration.kind != .leaf or !declaration.background or declaration.invoke != null)) return error.InvalidCapability;
             if (declaration.kind == .question and (declaration.present == null or declaration.answer == null or declaration.answer_schema_id == null)) return error.InvalidCapability;
             entry.* = .{
                 .declaration = declaration,

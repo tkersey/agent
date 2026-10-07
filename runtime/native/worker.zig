@@ -58,9 +58,19 @@ pub const Worker = struct {
         var request = try data.invocation.decode(data.invocation.Request, a, self.work.request);
         defer request.deinit();
         const id = std.fmt.bytesToHex(self.work.task, .lower);
-        const ctx: registry.Context = .{ .allocator = a, .io = self.io, .authority = &self.authority, .task_id = &id, .environment = self.environment, .cancellation = &self.cancellation };
+        const ctx: registry.Context = .{ .allocator = a, .io = self.io, .authority = &self.authority, .task_id = &id, .profile = self.work.profile, .environment = self.environment, .cancellation = &self.cancellation };
         try ctx.checkCancellation();
         self.invoked = true;
+        if (self.work.entry.declaration.capture) |adapter| {
+            return switch (try adapter.acquire(ctx, self.work.prepared orelse return error.InvalidPreparedRequest)) {
+                .captured => |bytes| bytes,
+                .definitely_not_sent => |err| blk: {
+                    self.invoked = false;
+                    break :blk err;
+                },
+                .unknown => |err| err,
+            };
+        }
         return self.work.entry.declaration.invoke.?(ctx, self.work.prepared orelse request.value.binding.payload);
     }
     fn execute(self: *Worker) void {

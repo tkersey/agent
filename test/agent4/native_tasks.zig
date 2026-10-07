@@ -161,4 +161,24 @@ test "durable owner replays admissions and acquired work, binds answers, and con
     try std.testing.expectError(error.Denied, client.call(frame, .@"task.result", params));
     try std.testing.expectError(error.Denied, service.submit(frame, "submit", 20));
     service.profile.authority.disclosure = true;
+    const no_send = try service.submit(frame, "no-send", 20);
+    var dispatched: ?native.tasks.Work = null;
+    for (0..32) |_| {
+        const step = try service.pump(frame);
+        if (step == .work) {
+            dispatched = step.work;
+            break;
+        }
+    }
+    try std.testing.expect(dispatched != null);
+    try service.notSent(frame, dispatched.?);
+    _ = try service.requestCancel(frame, "cancel-no-send", no_send.receipt.task, "stop before invocation");
+    for (0..32) |_| {
+        const step = try service.pump(frame);
+        try std.testing.expect(step != .work);
+        if (step == .idle) break;
+    }
+    var cancelled = try service.task(frame, no_send.receipt.task);
+    defer cancelled.deinit();
+    try std.testing.expectEqual(.cancelled, cancelled.value.outcome_kind);
 }

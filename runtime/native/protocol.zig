@@ -21,6 +21,7 @@ pub const Limits = struct {
     queued_message_bytes: usize = 256 * 1024,
     incomplete_frame_ms: u32 = 30_000,
     output_stall_ms: u32 = 5000,
+    state_database_bytes: u64 = @import("native_options").state_bytes,
 };
 
 /// Caller supplies a bounded buffer of frame_bytes - 1. Returned frames borrow

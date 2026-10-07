@@ -21,3 +21,6 @@ struct agent_native_stat {
     int64_t st_size;
 };
 int agent_native_fstat(int fd, struct agent_native_stat *out);
+typedef void (*agent_native_signal_handler)(int);
+int agent_native_signals_begin(agent_native_signal_handler handler);
+void agent_native_signals_end(void);

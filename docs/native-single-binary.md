@@ -134,6 +134,15 @@ separate 16 MiB worker region and SQLite's heap; allocator/OS overhead is not an
 RSS guarantee. These new transport behaviors still need the complete reference
 qualification, including the controlled HTTPS provider cases.
 
+The database has a 256 MiB page ceiling; SQLite's temporary rollback journal is
+additional bounded filesystem space. A dispatched leaf reserves 16 MiB for its
+reply and successor publication, retains 11 MiB after acquisition, and releases
+that reservation only when World consumption commits. Every intervening mutation
+checks the remaining reservations before committing, so queued admissions cannot
+spend another operation's reserved capacity. Unknown delivery retains its
+reservation and immutable attempt record. Positive evidence that invocation never
+began permits cancellation or an explicit resume; it does not refund the attempt.
+
 ## N2 storage and input foundations
 
 The optional native dependency lock selects SQLite 3.53.4. Its official archive
@@ -151,7 +160,7 @@ Linux links the selected toolchain's musl libc and embeds its license. The
 database wrapper refuses an uncapped allocation fallback and verifies the linked
 SQLite version. This primitive is not a completed task journal.
 
-The current namespace format is `agent-native-state/2`. Task, receipt, question,
+The current namespace format is `agent-native-state/3`. Task, receipt, question,
 message and event indexes reference the same hash-checked immutable object store
 as checkpoints and replies. A changed record body rejects before interpretation;
 foreign keys and task revision checks bind its index. Earlier development state

@@ -43,6 +43,8 @@ pub fn Client(comptime Types: type) type {
         const Self = @This();
         service: *tasks.Service(Types),
         subscriptions: [16]?Subscription = @splat(null),
+        subscription_counter: u64 = 0,
+        subscription_nonce: [8]u8 = undefined,
         shutdown: ?Shutdown = null,
         batch: bool = false,
 
@@ -281,7 +283,10 @@ pub fn Client(comptime Types: type) type {
                     try json.put(a, &result_value, "after_seq", try counter(a, after));
                     for (&self.subscriptions) |*slot| if (slot.* == null) {
                         var id: [16]u8 = undefined;
-                        try self.service.io.randomSecure(&id);
+                        if (self.subscription_counter == 0) try self.service.io.randomSecure(&self.subscription_nonce);
+                        self.subscription_counter = try std.math.add(u64, self.subscription_counter, 1);
+                        @memcpy(id[0..8], &self.subscription_nonce);
+                        std.mem.writeInt(u64, id[8..16], self.subscription_counter, .big);
                         slot.* = .{ .id = id, .task = task_id, .after = after };
                         try json.put(a, &result_value, "subscription_id", try hexadecimal(a, id));
                         return result_value;

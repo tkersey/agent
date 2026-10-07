@@ -18,6 +18,7 @@ pub const Worker = struct {
     done: std.atomic.Value(bool) = .init(false),
     joined: std.atomic.Value(bool) = .init(false),
     cancellation: std.atomic.Value(bool) = .init(false),
+    invoked: bool = false,
     reply: ?[]const u8 = null,
     failure: ?anyerror = null,
 
@@ -42,6 +43,7 @@ pub const Worker = struct {
         self.environment = environment;
         self.reply = null;
         self.failure = null;
+        self.invoked = false;
         self.done.store(false, .release);
         self.joined.store(false, .release);
         self.cancellation.store(false, .release);
@@ -58,6 +60,7 @@ pub const Worker = struct {
         const id = std.fmt.bytesToHex(self.work.task, .lower);
         const ctx: registry.Context = .{ .allocator = a, .io = self.io, .authority = &self.authority, .task_id = &id, .environment = self.environment, .cancellation = &self.cancellation };
         try ctx.checkCancellation();
+        self.invoked = true;
         return self.work.entry.declaration.invoke.?(ctx, request.value.binding.payload);
     }
     fn execute(self: *Worker) void {

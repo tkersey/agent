@@ -7,8 +7,8 @@ import {verifyNativeDependency} from './native-dependencies.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const args = process.argv.slice(2);
-if (args.length !== 12) throw new Error('native-manifest: expected image, application, lock, three licenses, SQLite source/heap/flags, target, optimize, output');
-const [imagePath, applicationPath, lockPath, agentLicense, worldLicense, boundaryLicense, sqliteSource, sqliteHeap, sqliteFlags, target, optimize, output] = args;
+if (args.length !== 13) throw new Error('native-manifest: expected image, application, lock, three licenses, SQLite source/heap/flags, state quota, target, optimize, output');
+const [imagePath, applicationPath, lockPath, agentLicense, worldLicense, boundaryLicense, sqliteSource, sqliteHeap, sqliteFlags, stateBytes, target, optimize, output] = args;
 const image = readFileSync(imagePath), applicationBytes = readFileSync(applicationPath);
 const application = JSON.parse(applicationBytes), lock = JSON.parse(readFileSync(lockPath));
 if (application.program_sha256 !== hash(image)) throw new Error('native image binding mismatch');
@@ -17,6 +17,7 @@ const sqlite = verifyNativeDependency(sqliteSource);
 sqlite.heap_bytes = Number(sqliteHeap);
 sqlite.compile_flags = JSON.parse(sqliteFlags);
 if (!Number.isSafeInteger(sqlite.heap_bytes) || sqlite.heap_bytes <= 0 || sqlite.heap_bytes > 16 * 1024 * 1024 || !Array.isArray(sqlite.compile_flags)) throw new Error('invalid native SQLite profile');
+if (!Number.isSafeInteger(Number(stateBytes)) || Number(stateBytes) <= 1024 * 1024 || Number(stateBytes) > 256 * 1024 * 1024 || Number(stateBytes) % 4096 !== 0) throw new Error('invalid native state quota');
 const {executableIdentity, libraryInventorySha256, libraryEntries, libraryBytes, version} = toolchain.identity;
 const zigLicensePath = [resolve(dirname(toolchain.executable), 'LICENSE'), resolve(dirname(toolchain.executable), '../LICENSE'), resolve(toolchain.identity.library, '../LICENSE'), resolve(toolchain.identity.library, '../../LICENSE')]
   .find(path => existsSync(path) && readFileSync(path, 'utf8').includes('Copyright (c) Zig contributors'));
@@ -28,7 +29,8 @@ const manifest = {
   native_host_contract: 'agent-native-host/1.0',
   protocol: 'agent-host/1.0',
   client_mapping: 'agent-client-values/1.0',
-  state_format: 'agent-native-state/2',
+  state_format: 'agent-native-state/3',
+  state_database_bytes: Number(stateBytes),
   target, optimize,
   program_sha256: hash(image),
   program_identity: application.program_identity,

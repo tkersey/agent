@@ -128,6 +128,7 @@ try {
   await truncated.end(64);
   const oversized = launch();
   oversized.write(' '.repeat(1024 * 1024));
+  assert.equal((await oversized.next()).error.data.kind, 'InvalidRequest');
   await oversized.end(64);
 
   const taskPeer = launch('protocol state');

@@ -131,6 +131,15 @@ pub const Artifact = struct {
 };
 
 pub const CaptureDisposition = enum { complete, definitely_not_sent, unknown };
+pub const Attempt = struct {
+    id: Digest,
+    task: TaskId,
+    occurrence: Digest,
+    request: Reference,
+    profile: Reference,
+    capability: Name,
+    inference: bool,
+};
 pub const Capture = struct {
     task: TaskId,
     occurrence: Digest,

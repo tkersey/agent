@@ -731,6 +731,7 @@ pub fn build(b: *std.Build) void {
 fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize, world: *std.Build.Module, data: *std.Build.Module, contracts: *std.Build.Module, admission: *std.Build.Module, sqlite_source: std.Build.LazyPath) *std.Build.Module {
     const options = b.addOptions();
     options.addOption(u32, "sqlite_heap_bytes", @import("build_native.zig").sqlite_heap_bytes);
+    options.addOption(u64, "state_bytes", @import("build_native.zig").state_bytes);
     // The exact admitted 0.17 compiler still supplies build-time translate-c.
     // Keep translation bound to that target/compiler tuple; @cImport is gone.
     const translated = b.addTranslateC(.{
@@ -758,7 +759,7 @@ fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: 
         .file = sqlite_source.path(b, "sqlite3.c"),
         .flags = @import("build_native.zig").sqlite_flags,
     });
-    module.addCSourceFile(.{ .file = b.path("runtime/native/native_c.c"), .flags = &.{"-std=c99"} });
+    module.addCSourceFile(.{ .file = b.path("runtime/native/native_c.c"), .flags = &.{ "-std=c99", "-D_POSIX_C_SOURCE=200809L" } });
     return module;
 }
 

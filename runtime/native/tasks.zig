@@ -28,6 +28,7 @@ pub const Work = struct {
     attempt: state.Digest,
     request: []const u8,
     entry: registry.Entry,
+    cleanup: bool,
 };
 pub const Step = union(enum) { idle, progressed, waiting, work: Work };
 const Active = struct { task: state.TaskId, execution_revision: u64, driver: *evaluator.Driver };
@@ -152,6 +153,7 @@ pub fn Service(comptime Types: type) type {
             }
         }
         fn record(self: *Self, comptime T: type, a: std.mem.Allocator, comptime kind: []const u8, id: state.Digest, task_id: state.TaskId) !contracts.Decoded(T) {
+            if (T != storage.Record(kind)) @compileError("native record type/kind mismatch");
             const bytes = (try self.store().recordBytes(a, kind, id, task_id)) orelse return error.CorruptState;
             defer a.free(bytes);
             return contracts.decodeOwned(T, a, bytes);
@@ -284,7 +286,9 @@ pub fn Service(comptime Types: type) type {
             defer a.free(input_bytes);
             const driver = try evaluator.Driver.start(self.allocator, self.program, .{ .initial_args = input_bytes }, 8 * 1024 * 1024);
             self.active = .{ .task = task_id, .execution_revision = 0, .driver = driver };
-            errdefer self.store().fenced = true;
+            errdefer self.retire(a) catch {
+                self.store().fenced = true;
+            };
             const outcome = try driver.drive(a, .none, 0);
             defer a.free(outcome);
             const checkpoint = try driver.checkpoint(a);
@@ -372,10 +376,12 @@ pub fn Service(comptime Types: type) type {
             try self.compatible(value);
             if (value.revision != expected) return error.StaleRevision;
             if (value.terminal()) return error.TerminalTask;
+            var rearmed: ?occurrence.Occurrence = null;
             if (value.current_occurrence) |current| {
                 var saved = try self.record(occurrence.Occurrence, a, "occurrence", current, task_id);
                 defer saved.deinit();
                 if (saved.value.state == .unknown or saved.value.state == .dispatching) return error.UnsettledOccurrence;
+                if (saved.value.state == .not_sent) rearmed = try occurrence.rearm(saved.value, .{ .id = current, .task = task_id, .request = saved.value.request });
             }
             try self.runnable.ensureUnusedCapacity(self.allocator, 1);
             value.revision = try std.math.add(u64, value.revision, 1);
@@ -383,6 +389,7 @@ pub fn Service(comptime Types: type) type {
             value.blocker = null;
             try self.store().begin();
             defer self.store().rollback();
+            if (rearmed) |pending| try self.store().putRecord(occurrence.Occurrence, "occurrence", pending.id, task_id, pending);
             try self.event(&value, .resumed, "{}");
             const admitted = try self.receipt(a, .@"resume", id, request, value, .resumed, null, null);
             try self.persist(value, expected, "task.resume");
@@ -426,7 +433,7 @@ pub fn Service(comptime Types: type) type {
             try self.store().begin();
             defer self.store().rollback();
             const saved: state.Message = .{ .id = identity, .task = task_id, .ordinal = ordinal, .schema_id = try name(Types.message_schema_id), .value = try self.store().putObject(bytes), .disposition = .queued, .occurrence = null };
-            try self.store().putRecord(state.Message, "message", identity, task_id, saved);
+            try self.store().createRecord(state.Message, "message", identity, task_id, saved);
             try self.messageEvent(a, &value, .message_queued, saved);
             const admitted = try self.receipt(a, .message, id, request, value, .queued, identity, null);
             try self.persist(value, previous, "task.message");
@@ -544,11 +551,11 @@ pub fn Service(comptime Types: type) type {
                         consumed = try occurrence.consumed(pending, binding, .{ .reply = acquired.reply }, value.cancellation != null);
                         control = .{ .reply = reply.? };
                     },
-                    .ready, .awaiting => {
+                    .ready, .awaiting, .not_sent => {
                         if (value.cancellation != null and !value.cancellation_applied) {
                             consumed = try occurrence.consumed(pending, binding, .cancel, true);
                             control = .{ .cancel = .{ .text = value.cancellation.?.bytes } };
-                        } else if (pending.state == .awaiting) {
+                        } else if (pending.state == .awaiting or pending.state == .not_sent) {
                             self.runnableRemove(id);
                             try self.retire(a);
                             return .waiting;
@@ -591,6 +598,7 @@ pub fn Service(comptime Types: type) type {
             value.outcome = try self.store().putObject(encoded);
             if (consumed) |prior| {
                 try self.store().putRecord(occurrence.Occurrence, "occurrence", prior.id, value.id, prior);
+                if (prior.state.admitted == .reply) try self.store().releaseReservation(prior.state.admitted.reply.attempt);
                 const question_id: ?state.Digest = switch (prior.state.admitted) {
                     .reply => |acquired| if (acquired.answer) |answer| answer.question else null,
                     .cancelled => |waiting| if (waiting) |question| question.question else null,
@@ -623,7 +631,7 @@ pub fn Service(comptime Types: type) type {
                     try self.io.randomSecure(&id);
                     const next: occurrence.Occurrence = .{ .id = id, .task = value.id, .request = request.value.request_identity };
                     _ = try self.store().putObject(pending.request);
-                    try self.store().putRecord(occurrence.Occurrence, "occurrence", id, value.id, next);
+                    try self.store().createRecord(occurrence.Occurrence, "occurrence", id, value.id, next);
                     value.current_occurrence = id;
                     value.outcome_kind = .requested;
                 },
@@ -681,7 +689,7 @@ pub fn Service(comptime Types: type) type {
                 var id: state.Digest = undefined;
                 try self.io.randomSecure(&id);
                 const artifact: state.Artifact = .{ .id = id, .task = value.id, .value = value.client_result.?, .media_type = .{ .bytes = "application/json" }, .schema_id = try name(schema_id) };
-                try self.store().putRecord(state.Artifact, "artifact", id, value.id, artifact);
+                try self.store().createRecord(state.Artifact, "artifact", id, value.id, artifact);
                 value.result_artifact = id;
             }
         }
@@ -718,7 +726,7 @@ pub fn Service(comptime Types: type) type {
                     try self.store().begin();
                     defer self.store().rollback();
                     const question: state.Question = .{ .id = question_id, .task = value.id, .occurrence = pending.id, .revision = 1, .request_digest = pending.request, .pending_digest = request.value.binding.pending_state_digest, .answer_schema_id = try name(entry.declaration.answer_schema_id.?), .answer_schema_digest = storage.digest(entry.resume_schema), .request = try self.store().putObject(request_bytes), .prompt = try self.store().putObject(prompt), .answer = null, .receipt = null, .retired = false };
-                    try self.store().putRecord(state.Question, "question", question_id, value.id, question);
+                    try self.store().createRecord(state.Question, "question", question_id, value.id, question);
                     try self.store().putRecord(occurrence.Occurrence, "occurrence", pending.id, value.id, waiting);
                     var event_data = json.object();
                     try json.put(a, &event_data, "question_id", json.string(try a.dupe(u8, &std.fmt.bytesToHex(question_id, .lower))));
@@ -776,9 +784,11 @@ pub fn Service(comptime Types: type) type {
                     }
                     const retained = try self.allocator.dupe(u8, request_bytes);
                     errdefer self.allocator.free(retained);
-                    const work: Work = .{ .task = value.id, .occurrence = pending.id, .attempt = attempt, .request = retained, .entry = entry };
+                    const work: Work = .{ .task = value.id, .occurrence = pending.id, .attempt = attempt, .request = retained, .entry = entry, .cleanup = value.cancellation_applied };
                     try self.store().begin();
                     defer self.store().rollback();
+                    try self.store().reserve(attempt);
+                    try self.store().createRecord(state.Attempt, "attempt", attempt, value.id, .{ .id = attempt, .task = value.id, .occurrence = pending.id, .request = try self.store().putObject(request_bytes), .profile = value.profile, .capability = try name(entry.declaration.identity), .inference = entry.declaration.inference });
                     try self.store().putRecord(occurrence.Occurrence, "occurrence", pending.id, value.id, dispatched);
                     try self.persist(value, initial.revision, "effect.dispatch");
                     self.work = work;
@@ -819,6 +829,7 @@ pub fn Service(comptime Types: type) type {
             try self.store().begin();
             defer self.store().rollback();
             _ = try self.store().putObject(bound);
+            try self.store().reserveAcquired(work.attempt);
             try self.store().putRecord(occurrence.Occurrence, "occurrence", work.occurrence, work.task, acquired);
             try self.persist(value, previous, "effect.acquire");
         }
@@ -844,6 +855,26 @@ pub fn Service(comptime Types: type) type {
             try self.persist(value, previous, "effect.unknown");
             self.runnableRemove(work.task);
             try self.retire(a);
+        }
+
+        pub fn notSent(self: *Self, a: std.mem.Allocator, work: Work) !void {
+            try self.currentWork(work);
+            defer self.releaseWork();
+            var decoded = try self.task(a, work.task);
+            defer decoded.deinit();
+            var value = decoded.value;
+            var saved = try self.record(occurrence.Occurrence, a, "occurrence", work.occurrence, work.task);
+            defer saved.deinit();
+            const next = try occurrence.notSent(saved.value, .{ .id = work.occurrence, .task = work.task, .request = saved.value.request }, work.attempt);
+            const previous = value.revision;
+            value.revision = try std.math.add(u64, previous, 1);
+            value.blocker = if (value.cancellation != null and !value.cancellation_applied) null else .unavailable_environment;
+            try self.store().begin();
+            defer self.store().rollback();
+            try self.store().releaseReservation(work.attempt);
+            try self.store().putRecord(occurrence.Occurrence, "occurrence", work.occurrence, work.task, next);
+            try self.event(&value, .blocked, "{\"delivery\":\"definitely_not_sent\"}");
+            try self.persist(value, previous, "effect.not-sent");
         }
 
         /// Call only after joining any in-flight worker. Closing is physical

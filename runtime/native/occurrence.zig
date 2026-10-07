@@ -18,6 +18,7 @@ pub const State = union(enum) {
     unknown: Attempt,
     settled_reply: Acquired,
     admitted: Admitted,
+    not_sent: Attempt,
 };
 pub const Occurrence = struct {
     id: Digest,
@@ -60,6 +61,24 @@ pub fn unknown(value: Occurrence, binding: Binding, attempt: Digest) Error!Occur
     if (!equal(prior, attempt)) return error.StaleOccurrence;
     var next = value;
     next.state = .{ .unknown = .{ .id = attempt } };
+    return next;
+}
+
+/// Only an I/O owner with positive evidence that invocation never began may
+/// publish this state. A timeout after invocation is UNKNOWN instead.
+pub fn notSent(value: Occurrence, binding: Binding, attempt: Digest) Error!Occurrence {
+    try current(value, binding);
+    if (value.state != .dispatching or !equal(value.state.dispatching.id, attempt)) return error.UnsettledOccurrence;
+    var next = value;
+    next.state = .{ .not_sent = .{ .id = attempt } };
+    return next;
+}
+
+pub fn rearm(value: Occurrence, binding: Binding) Error!Occurrence {
+    try current(value, binding);
+    if (value.state != .not_sent) return error.UnsettledOccurrence;
+    var next = value;
+    next.state = .ready;
     return next;
 }
 
@@ -112,7 +131,7 @@ pub fn consumed(value: Occurrence, binding: Binding, control: Control, cancellat
         },
         .cancel => {
             if (!cancellation_pending) return error.InvalidControl;
-            if (value.state != .ready and value.state != .awaiting) return error.UnsettledOccurrence;
+            if (value.state != .ready and value.state != .awaiting and value.state != .not_sent) return error.UnsettledOccurrence;
             next.state = .{ .admitted = .{ .cancelled = if (value.state == .awaiting) value.state.awaiting else null } };
         },
     }
@@ -143,4 +162,15 @@ test "question acquisition binds the pending occurrence and serializes against c
     try std.testing.expect(result.state == .settled_reply);
     try std.testing.expectError(error.UnsettledOccurrence, consumed(result, binding, .cancel, true));
     try std.testing.expect((try consumed(waiting, binding, .cancel, true)).state == .admitted);
+}
+
+test "positive no-invocation evidence permits cancellation or an explicit rearm, not an unknown retry" {
+    const binding: Binding = .{ .id = @splat(1), .task = @splat(2), .request = @splat(3) };
+    const initial: Occurrence = .{ .id = binding.id, .task = binding.task, .request = binding.request };
+    const sent = try dispatch(initial, binding, @splat(4), false, false);
+    const stopped = try notSent(sent, binding, @splat(4));
+    try std.testing.expect((try consumed(stopped, binding, .cancel, true)).state == .admitted);
+    try std.testing.expect((try rearm(stopped, binding)).state == .ready);
+    try std.testing.expectError(error.UnsettledOccurrence, rearm(try unknown(sent, binding, @splat(4)), binding));
+    try std.testing.expectError(error.UnsettledOccurrence, acquired(stopped, binding, @splat(4), @splat(5)));
 }

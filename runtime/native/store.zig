@@ -4,7 +4,11 @@ const std = @import("std");
 const contracts = @import("agent_contracts");
 const sqlite = @import("sqlite.zig");
 const state = @import("state.zig");
+const occurrence = @import("occurrence.zig");
 const Digest = state.Digest;
+pub const state_bytes = @import("native_options").state_bytes;
+pub const dispatch_reserve = 16 * 1024 * 1024;
+pub const acquired_reserve = 11 * 1024 * 1024;
 
 pub fn digest(bytes: []const u8) Digest {
     var result: Digest = undefined;
@@ -13,6 +17,15 @@ pub fn digest(bytes: []const u8) Digest {
 }
 
 pub const Head = struct { generation: u64, parent: Digest, digest: Digest };
+pub fn Record(comptime kind: []const u8) type {
+    if (std.mem.eql(u8, kind, "occurrence")) return occurrence.Occurrence;
+    if (std.mem.eql(u8, kind, "question")) return state.Question;
+    if (std.mem.eql(u8, kind, "message")) return state.Message;
+    if (std.mem.eql(u8, kind, "artifact")) return state.Artifact;
+    if (std.mem.eql(u8, kind, "capture")) return state.Capture;
+    if (std.mem.eql(u8, kind, "attempt")) return state.Attempt;
+    @compileError("unknown native record kind");
+}
 pub const Store = struct {
     allocator: std.mem.Allocator,
     database: *sqlite.Database,
@@ -24,23 +37,25 @@ pub const Store = struct {
     /// its OS lock and decided whether this is a new or existing database.
     pub fn init(a: std.mem.Allocator, database: *sqlite.Database, create: bool, namespace: Digest) !Store {
         try database.exec("PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA synchronous=FULL; PRAGMA journal_mode=DELETE;");
+        try database.exec(std.fmt.comptimePrint("PRAGMA page_size=4096; PRAGMA max_page_count={d};", .{state_bytes / 4096}));
         if (create) {
             try database.exec("BEGIN IMMEDIATE;");
             errdefer database.exec("ROLLBACK;") catch {};
             try database.exec(
-                \\CREATE TABLE meta(singleton INTEGER PRIMARY KEY CHECK(singleton=1), format INTEGER NOT NULL CHECK(format=2), namespace BLOB NOT NULL, generation INTEGER NOT NULL, parent BLOB NOT NULL, head BLOB NOT NULL);
+                \\CREATE TABLE meta(singleton INTEGER PRIMARY KEY CHECK(singleton=1), format INTEGER NOT NULL CHECK(format=3), namespace BLOB NOT NULL, generation INTEGER NOT NULL, parent BLOB NOT NULL, head BLOB NOT NULL);
                 \\CREATE TABLE objects(digest BLOB PRIMARY KEY CHECK(length(digest)=32), body BLOB NOT NULL) WITHOUT ROWID;
                 \\CREATE TABLE tasks(id BLOB PRIMARY KEY CHECK(length(id)=16), revision INTEGER NOT NULL, terminal INTEGER NOT NULL CHECK(terminal IN(0,1)), body BLOB NOT NULL REFERENCES objects(digest)) WITHOUT ROWID;
                 \\CREATE TABLE operations(id TEXT PRIMARY KEY, request BLOB NOT NULL CHECK(length(request)=32), receipt BLOB NOT NULL REFERENCES objects(digest)) WITHOUT ROWID;
                 \\CREATE TABLE records(kind TEXT NOT NULL, id BLOB NOT NULL, task BLOB NOT NULL REFERENCES tasks(id), body BLOB NOT NULL REFERENCES objects(digest), PRIMARY KEY(kind,id)) WITHOUT ROWID;
                 \\CREATE TABLE events(task BLOB NOT NULL REFERENCES tasks(id), seq INTEGER NOT NULL, revision INTEGER NOT NULL, body BLOB NOT NULL REFERENCES objects(digest), PRIMARY KEY(task,seq)) WITHOUT ROWID;
+                \\CREATE TABLE reservations(attempt BLOB PRIMARY KEY CHECK(length(attempt)=32), bytes INTEGER NOT NULL CHECK(bytes>=0 AND bytes<=16777216)) WITHOUT ROWID;
             );
-            try database.run("INSERT INTO meta VALUES(1,2,?,0,?,?)", &.{ .{ .blob = &namespace }, .{ .blob = &@as(Digest, @splat(0)) }, .{ .blob = &namespace } });
+            try database.run("INSERT INTO meta VALUES(1,3,?,0,?,?)", &.{ .{ .blob = &namespace }, .{ .blob = &@as(Digest, @splat(0)) }, .{ .blob = &namespace } });
             try database.exec("COMMIT;");
         }
         var query = try database.prepare("SELECT format,namespace,generation,parent,head FROM meta WHERE singleton=1", &.{});
         defer query.deinit();
-        if (try query.step() != .row or try query.integer(0) != 2 or !std.mem.eql(u8, try query.bytes(1), &namespace)) return error.CorruptState;
+        if (try query.step() != .row or try query.integer(0) != 3 or !std.mem.eql(u8, try query.bytes(1), &namespace)) return error.CorruptState;
         const generation = try query.integer(2);
         if (generation < 0) return error.CorruptState;
         const parent = try query.bytes(3);
@@ -70,7 +85,7 @@ pub const Store = struct {
     /// checked seal before acknowledging anything or dispatching an effect.
     pub fn commit(self: *Store, transition: []const u8) !Head {
         try self.writing();
-        errdefer self.fenced = true;
+        try self.checkCapacity();
         if (self.head.generation == std.math.maxInt(i64)) return error.Capacity;
         var hash = std.crypto.hash.sha2.Sha256.init(.{});
         hash.update("agent.native.store.v1\x00");
@@ -82,11 +97,49 @@ pub const Store = struct {
         var next: Head = .{ .generation = self.head.generation + 1, .parent = self.head.digest, .digest = undefined };
         hash.final(&next.digest);
         try self.database.run("UPDATE meta SET generation=?,parent=?,head=? WHERE singleton=1 AND generation=? AND head=?", &.{ .{ .integer = @intCast(next.generation) }, .{ .blob = &next.parent }, .{ .blob = &next.digest }, .{ .integer = @intCast(self.head.generation) }, .{ .blob = &self.head.digest } });
-        if (try self.database.changes() != 1) return error.CorruptState;
-        try self.database.exec("COMMIT;");
+        if (try self.database.changes() != 1) {
+            self.fenced = true;
+            return error.CorruptState;
+        }
+        self.database.exec("COMMIT;") catch |err| {
+            self.fenced = true;
+            return err;
+        };
         self.transaction = false;
         self.head = next;
         return next;
+    }
+    fn scalar(self: *Store, comptime sql: [:0]const u8) !u64 {
+        var query = try self.database.prepare(sql, &.{});
+        defer query.deinit();
+        if (try query.step() != .row) return error.CorruptState;
+        const value = try query.integer(0);
+        if (value < 0) return error.CorruptState;
+        return @intCast(value);
+    }
+    fn checkCapacity(self: *Store) !void {
+        const page_size = try self.scalar("PRAGMA page_size");
+        const pages = try self.scalar("PRAGMA page_count");
+        const free = try self.scalar("PRAGMA freelist_count");
+        const reserved = try self.scalar("SELECT coalesce(sum(bytes),0) FROM reservations");
+        if (page_size != 4096 or free > pages) return error.CorruptState;
+        // This check is on the resulting transaction, so another admission
+        // cannot consume space reserved for an already dispatched operation.
+        const used = try std.math.mul(u64, pages - free, page_size);
+        if (used +| reserved > state_bytes - 1024 * 1024) return error.Capacity;
+    }
+    pub fn reserve(self: *Store, attempt: Digest) !void {
+        try self.writing();
+        try self.database.run("INSERT INTO reservations VALUES(?,?)", &.{ .{ .blob = &attempt }, .{ .integer = dispatch_reserve } });
+    }
+    pub fn reserveAcquired(self: *Store, attempt: Digest) !void {
+        try self.writing();
+        try self.database.run("UPDATE reservations SET bytes=? WHERE attempt=?", &.{ .{ .integer = acquired_reserve }, .{ .blob = &attempt } });
+        if (try self.database.changes() != 1) return error.CorruptState;
+    }
+    pub fn releaseReservation(self: *Store, attempt: Digest) !void {
+        try self.writing();
+        try self.database.run("DELETE FROM reservations WHERE attempt=?", &.{.{ .blob = &attempt }});
     }
 
     pub fn putObject(self: *Store, bytes: []const u8) !state.Reference {
@@ -176,13 +229,24 @@ pub const Store = struct {
         return bytes;
     }
     pub fn putRecord(self: *Store, comptime T: type, comptime kind: []const u8, id: Digest, task: state.TaskId, value: T) !void {
+        if (T != Record(kind)) @compileError("native record type/kind mismatch");
+        if (comptime std.mem.eql(u8, kind, "artifact") or std.mem.eql(u8, kind, "attempt")) @compileError("immutable native records are created once");
         try self.writing();
         const body = try contracts.encodeOwned(T, self.allocator, value);
         defer self.allocator.free(body);
         if (body.len > 256 * 1024) return error.Capacity;
         const ref = try self.putObject(body);
-        try self.database.run("INSERT INTO records VALUES(?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET body=excluded.body WHERE records.task=excluded.task", &.{ .{ .text = kind }, .{ .blob = &id }, .{ .blob = &task }, .{ .blob = &ref.digest } });
+        try self.database.run("UPDATE records SET body=? WHERE kind=? AND id=? AND task=?", &.{ .{ .blob = &ref.digest }, .{ .text = kind }, .{ .blob = &id }, .{ .blob = &task } });
         if (try self.database.changes() != 1) return error.CorruptState;
+    }
+    pub fn createRecord(self: *Store, comptime T: type, comptime kind: []const u8, id: Digest, task: state.TaskId, value: T) !void {
+        if (T != Record(kind)) @compileError("native record type/kind mismatch");
+        try self.writing();
+        const body = try contracts.encodeOwned(T, self.allocator, value);
+        defer self.allocator.free(body);
+        if (body.len > 256 * 1024) return error.Capacity;
+        const ref = try self.putObject(body);
+        try self.database.run("INSERT INTO records VALUES(?,?,?,?)", &.{ .{ .text = kind }, .{ .blob = &id }, .{ .blob = &task }, .{ .blob = &ref.digest } });
     }
     pub fn recordBytes(self: *Store, a: std.mem.Allocator, comptime kind: []const u8, id: Digest, task: state.TaskId) !?[]u8 {
         var query = try self.database.prepare("SELECT body FROM records WHERE kind=? AND id=? AND task=?", &.{ .{ .text = kind }, .{ .blob = &id }, .{ .blob = &task } });
@@ -264,4 +328,30 @@ test "objects and immutable admission receipts commit together or disappear toge
     try std.testing.expectError(error.CorruptState, Store.init(a, db, false, @splat(8)));
     try db.run("UPDATE objects SET body=? WHERE digest=?", &.{ .{ .blob = "changed receipt" }, .{ .blob = &digest("accepted/task-1") } });
     try std.testing.expectError(error.CorruptState, store.receipt(a, "request-1", digest("submit/input")));
+}
+
+test "commits cannot spend another occurrence's reserved storage" {
+    const a = std.testing.allocator;
+    const db = try sqlite.Database.open(a, ":memory:", true);
+    defer db.destroy() catch unreachable;
+    defer db.close() catch unreachable;
+    var store = try Store.init(a, db, true, @splat(7));
+    for (0..15) |i| {
+        var attempt: Digest = @splat(0);
+        attempt[0] = @intCast(i);
+        try store.begin();
+        try store.reserve(attempt);
+        _ = try store.commit("reserve");
+    }
+    try store.begin();
+    try store.reserve(@splat(16));
+    try std.testing.expectError(error.Capacity, store.commit("must-not-acknowledge"));
+    store.rollback();
+    try std.testing.expect(!store.fenced);
+    try std.testing.expectEqual(15, store.head.generation);
+    try store.begin();
+    try store.releaseReservation(@splat(0));
+    try store.reserve(@splat(16));
+    _ = try store.commit("replace-released-reservation");
+    try std.testing.expectEqual(16, store.head.generation);
 }

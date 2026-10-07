@@ -237,14 +237,8 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
     var transport = try transport_api.Transport.init(a, io, connection.limits);
     defer transport.deinit();
     interrupts.store(0, .release);
-    const old_pipe = c.signal(c.SIGPIPE, c.SIG_IGN);
-    const old_int = c.signal(c.SIGINT, interrupt);
-    const old_term = c.signal(c.SIGTERM, interrupt);
-    defer {
-        _ = c.signal(c.SIGPIPE, old_pipe);
-        _ = c.signal(c.SIGINT, old_int);
-        _ = c.signal(c.SIGTERM, old_term);
-    }
+    if (c.agent_native_signals_begin(interrupt) != 0) return error.IoUnavailable;
+    defer c.agent_native_signals_end();
     const worker: ?*Worker = if (connection.client != null) try Worker.init(a, io) else null;
     defer if (worker) |slot| {
         // Unexpected failure with live I/O uses process-crash recovery. Never
@@ -272,7 +266,10 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
         if (signals > 1) std.process.exit(2);
         transport.deadlines() catch |err| {
             if (shutdown_at == null) shutdown_at = time;
-            if (err == error.FrameTimeout) code = 64 else {
+            if (err == error.FrameTimeout) {
+                if (code != 64 and writable and transport.canAdmit()) try transport.enqueue(try json.canonical(frame, try protocol.failure(frame, .null, .InvalidRequest, "reconnect")), &.{}, false);
+                code = 64;
+            } else {
                 writable = false;
                 if (code == 0) code = 2;
             }
@@ -288,6 +285,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
                 if (shutdown_at == null) shutdown_at = time;
                 connection.closing = true;
                 code = if (err == error.TruncatedFrame or err == error.FrameTooLarge) 64 else 74;
+                if (err == error.FrameTooLarge and writable) try transport.enqueue(try json.canonical(frame, try protocol.failure(frame, .null, .InvalidRequest, "reconnect")), &.{}, false);
                 break :blk null;
             };
             if (incoming) |bytes| {
@@ -348,10 +346,13 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
             if (slot.future != null) {
                 var task = try service.task(frame, slot.work.task);
                 defer task.deinit();
-                if (shutdown_at != null or task.value.cancellation != null) slot.cancel();
+                const deadline_near = if (shutdown_at) |start| time - start >= connection.limits.output_stall_ms - 100 else false;
+                if ((task.value.cancellation != null and !slot.work.cleanup) or (shutdown_at != null and mode == .park) or deadline_near) slot.cancel();
                 if (slot.finished()) {
                     try slot.join();
-                    if (slot.reply) |reply| try service.acquire(frame, slot.work, reply) else {
+                    if (slot.reply) |reply| try service.acquire(frame, slot.work, reply) else if (!slot.invoked) {
+                        try service.notSent(frame, slot.work);
+                    } else {
                         try service.unknown(frame, slot.work);
                         if (shutdown_at != null) code = 2;
                     }
@@ -367,7 +368,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
                 };
                 switch (step) {
                     .work => |work| slot.start(work, service.profile.authority, null) catch {
-                        try service.unknown(frame, work);
+                        try service.notSent(frame, work);
                     },
                     .progressed, .waiting => progressed = true,
                     .idle => {},

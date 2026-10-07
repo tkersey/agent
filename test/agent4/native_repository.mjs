@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { createHash, X509Certificate } from 'node:crypto';
 import { createServer } from 'node:https';
-import { mkdir, writeFile, readFile, cp } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, rename } from 'node:fs/promises';
 import { once } from 'node:events';
 import { AgentClient } from '../../examples/native-minimal/stdio-client.mts';
 import { certificates } from './mobility_tls_fixture.mjs';
@@ -33,11 +33,13 @@ async function foreignApplication(repository, directory, source) {
     assert.equal(run.status, 0, run.error ?? run.stderr);
     const task = JSON.parse(run.stdout);
     assert.equal(task.status, 'waiting_input');
-    // Copy operational data between the two clean deployment boundaries; neither
-    // application can read the other's executable, source or controller files.
-    const copied = join(directory, 'foreign state');
-    await cp(state, copied, {recursive: true});
-    client = new AgentClient(repository, ['--offline', '--state-dir', copied], {cwd: directory, env: {PATH: '/nonexistent'}});
+    // Move the closed directory on the same filesystem, preserving the namespace's
+    // device/inode identity. Copying it would correctly fail namespace admission
+    // before reaching the application contract tested here. Neither application
+    // can read the other's executable, source or controller files.
+    const reopened = join(directory, 'foreign state');
+    await rename(state, reopened);
+    client = new AgentClient(repository, ['--offline', '--state-dir', reopened], {cwd: directory, env: {PATH: '/nonexistent'}});
     await client.initialize();
     const before = await client.call('task.status', {task_id: task.task_id});
     await assert.rejects(client.call('task.message', {client_operation_id: 'foreign-message', task_id: task.task_id, message: {schema_id: 'repository-agent.message.v1', value: {message: 'Follow up on the other application.'}}}), error => error.data?.kind === 'StateConflict');

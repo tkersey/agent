@@ -111,6 +111,10 @@ existing TypeScript client, replacing its repeated minimal-task conversation in
 `native_host.mjs`. Transport fault cases, raw-capture recovery, storage failures,
 protocol faults and native/WASM correspondence retain their existing witnesses;
 the application happy path does not replace those distinct boundaries.
+That same peer adds one held-call cancellation fault phase: prompt acknowledgment,
+unknown delivery after interruption, restart, durable request replay and refusal
+to resume the unknown occurrence. It adds no executable or second investigation
+fixture; the successful investigation's four calls remain separately asserted.
 The object-and-receipt transaction test also retains the former SQLite smoke
 test's binary round-trip, single-connection and heap assertions; the duplicate
 raw SQL transaction fixture is removed. Namespace recovery retains its seal-gap

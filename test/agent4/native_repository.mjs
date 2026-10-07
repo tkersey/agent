@@ -41,6 +41,9 @@ async function repositoryHttps(binary, directory, controller, invoke) {
   const held = new Promise(resolve => { releaseHeld = resolve; });
   let announceHeld;
   const heldRequest = new Promise(resolve => { announceHeld = resolve; });
+  let announceCancelHeld, releaseCancelHeld;
+  const cancelHeldRequest = new Promise(resolve => { announceCancelHeld = resolve; });
+  const cancelHeld = new Promise(resolve => { releaseCancelHeld = resolve; });
   const server = createServer(tls.A, async (request, response) => {
     try {
       const chunks = [];
@@ -56,6 +59,13 @@ async function repositoryHttps(binary, directory, controller, invoke) {
       assert.equal(body.truncation, 'disabled');
       assert.equal('previous_response_id' in body, false);
       assert.equal('conversation' in body, false);
+      if (index === 4) {
+        assert.equal(body.input.filter(item => item.type === 'function_call_output').length, 0);
+        announceCancelHeld();
+        await cancelHeld;
+        response.destroy();
+        return;
+      }
       const names = ['list', 'read', 'ask', 'report'];
       assert(index < names.length, 'unexpected provider retry or extra model turn');
       assert(body.tools.some(tool => tool.name === names[index]), 'fixture action must be currently offered');
@@ -225,9 +235,42 @@ async function repositoryHttps(binary, directory, controller, invoke) {
     invoke('import-checkpoint', '--state-dir', recoveredState, '--input', completedArchive, '--operation-id', 'import-completed');
     assert.deepEqual(JSON.parse(invoke('result', '--state-dir', recoveredState, '--task-id', id)).outcome.value, report);
     assert.equal(requests.length, 4, 'archive validation and recorded replay cannot acquire inference');
-    return { provider_calls: requests.length, restart_without_retry: true, frozen_snapshot: true, clarification: true, followup: true, control_ms: latency, held_io_control_samples: controlSamples, ...parity };
+    // One distinct fault phase: acknowledge cancellation with provider I/O held,
+    // then preserve its unknown physical delivery across disconnect and retry.
+    client = launch(['--config', configPath]);
+    await client.initialize();
+    const cancellationInput = {client_operation_id: 'cancel-held-submit', application_id: 'repository-agent', profile_id: 'fixed', input: {schema_id: 'repository-agent.input.v1', value: {task: 'This investigation will be cancelled.'}}};
+    const cancellationTask = await client.call('task.submit', cancellationInput);
+    let cancelHeldTimer;
+    try {
+      await Promise.race([cancelHeldRequest, new Promise((_, reject) => { cancelHeldTimer = setTimeout(() => reject(new Error('cancellation provider hold timeout')), 15000); })]);
+    } finally { clearTimeout(cancelHeldTimer); }
+    const cancelStarted = performance.now();
+    const cancellationParams = {client_operation_id: 'cancel-held', task_id: cancellationTask.task_id};
+    const cancellation = await client.call('task.cancel', cancellationParams, 2000);
+    const cancelMilliseconds = performance.now() - cancelStarted;
+    assert.equal(cancellation.disposition, 'cancellation_requested');
+    assert(cancelMilliseconds < 2000, 'cancel acknowledgment must not await the held provider');
+    await until(() => client.call('task.status', {task_id: cancellationTask.task_id}), value => value.status === 'unknown', 'unknown cancelled delivery');
+    assert.deepEqual(await client.close(), {code: 2, signal: null});
+    clients.delete(client);
+    client = launch(['--config', configPath]);
+    await client.initialize();
+    const recoveredUnknown = await client.call('task.status', {task_id: cancellationTask.task_id});
+    assert.equal(recoveredUnknown.status, 'unknown');
+    assert.equal((await client.call('task.submit', cancellationInput)).task_id, cancellationTask.task_id);
+    assert.equal((await client.call('task.cancel', cancellationParams)).receipt_id, cancellation.receipt_id);
+    await assert.rejects(client.call('task.resume', {client_operation_id: 'unsafe-resume', task_id: cancellationTask.task_id, expected_revision: recoveredUnknown.revision}), error => error.data?.kind === 'StateConflict');
+    assert.equal((await client.call('task.result', {task_id: cancellationTask.task_id})).ready, false);
+    // This reader/replayer did not resume or newly claim the old task.
+    assert.deepEqual(await client.close(), {code: 0, signal: null});
+    clients.delete(client);
+    assert.equal(requests.length, 5, 'unknown delivery cannot trigger another provider request');
+    if (providerFailure) throw providerFailure;
+    return { provider_calls: requests.length, investigation_provider_calls: 4, cancellation_unknown_after_restart: true, cancel_ack_ms: cancelMilliseconds, restart_without_retry: true, frozen_snapshot: true, clarification: true, followup: true, control_ms: latency, held_io_control_samples: controlSamples, ...parity };
   } finally {
     releaseHeld();
+    releaseCancelHeld();
     for (const client of clients) { client.child.kill('SIGKILL'); await client.closed; }
     for (const socket of sockets) socket.destroy();
     if (server.listening) await new Promise(resolve => server.close(resolve));

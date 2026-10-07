@@ -76,11 +76,11 @@ the retained v3 normalizer accepts those fixtures; native admission rejects them
 A missing call ID rejects in both versions, with v3's `normalization_limit` and
 v5's `unsupported_output_item` classifications asserted separately.
 The controlled HTTPS peer checks chain, hostname and expiry rejection, response
-size and truncation, deadlines, exact bodies and no retries/redirects. The new
-hostname/expiry/truncation cases await CI qualification. Live inference and
-complete N3/N4 acceptance are not claimed here.
+size and truncation, deadlines, exact bodies and no retries/redirects. These cases
+run in Linux qualification; see the [executed subjects](native-single-binary-qualification.md).
+Live inference requires separate authorization and is not claimed here.
 
-The in-progress `examples/repository-agent` application uses the same build
+The `examples/repository-agent` application uses the same build
 helper. Its authored program limits model calls to 16, work calls (including
 clarifications) to 12, and retained evidence records to eight. Reports select an
 actual acquired evidence record. Native snapshot capture rejects symlinks and
@@ -89,7 +89,8 @@ paginated listings and UTF-8 byte-window reads. Configuration admission and a
 copied-binary offline witness passed Linux CI, together with the controlled HTTPS
 investigation, crash/restart, frozen evidence and recorded-reply native/WASM/native
 continuation (`e4ef34ba458fb7136cadebcaf250bfab5e7d99df`, run `37588057282`).
-Clean deployment qualification and final acceptance remain in progress.
+Later runs include clean deployment; exact current qualification and serial
+review disposition are maintained on [PR #45](https://github.com/tkersey/agent/pull/45).
 
 The projection follows the official
 [conversation-state guide](https://developers.openai.com/api/docs/guides/conversation-state),

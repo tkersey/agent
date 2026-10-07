@@ -19,6 +19,7 @@ historical evidence for their named subjects, not qualification of later changes
 | Same subject | [Linux native/manual](https://github.com/tkersey/agent/actions/runs/37605483683) and [macOS arm64 native/manual](https://github.com/tkersey/agent/actions/runs/37605479994): isolated applications, public downstream recipe with network denied, native API/HTTPS, archive/parity and build campaign passed. |
 | `d7b7a4db6a8c09a521459bdc73968879577730f7` | [Full Linux CI](https://github.com/tkersey/agent/actions/runs/37607986892) passed in **3m43s**, including the added held-provider cancellation/unknown-recovery phase. Cancellation acknowledgment was **6.12 ms**; the four-call investigation remained independently asserted. |
 | `7b345656131d586d493166564212e12767e459ad` | [Complete required Linux CI](https://github.com/tkersey/agent/actions/runs/37671909555) passed in **4m57s**, including setup, cache transfer, all qualification lanes, clean deployment, offline public recipe, packaging and the final gate. The native lane passed 92 tests and 100 protocol-schema cases. |
+| `b08726cf6de8d29353993c1953b6d0fa93a1abdf` | [Complete required Linux CI](https://github.com/tkersey/agent/actions/runs/37685957329) passed in **3m59s**; 147 native build steps, 93 tests, 127 captured protocol-schema cases and all 15 public-recipe steps passed. This includes profile discovery, combined-schema response bounds and numeric pagination/usage repairs. The tested merge tree equals this head's tree. |
 
 The two manual runs retain tar archives for 14 days:
 [Linux x86_64](https://github.com/tkersey/agent/actions/runs/37605483683/artifacts/11475411562)
@@ -28,6 +29,11 @@ manifests, a runbook, repository-example instructions and the optional TypeScrip
 client. Copy only the chosen executable for deployment. These are CI build
 artifacts, not a signed/notarized release. Their recorded subject is `592483b`;
 consult the PR for newer delivery artifacts.
+
+The [Linux archive for `b08726c`](https://github.com/tkersey/agent/actions/runs/37685957329/artifacts/11511306727)
+contains the later executed applications and the same delivery files. Its SHA-256
+is `4f9331d114c58b27dc521408ac2297d241b78b0351329ed6dd658ec447ceb70e`;
+retention is 14 days. It is a CI artifact, not a release.
 
 | Target at `592483b` | Minimal executable | Repository executable | Deployment observation |
 |---|---:|---:|---|
@@ -145,6 +151,16 @@ five-minute hosted-runner SLA. Necessary checks remain selected; the gains do no
 come from lowering safety, extending deadlines or adding runners to disguise
 work. Large Linux files were inspected: the earlier 28.2 MB minimal ELF contained
 no `.debug*` sections; its size must not be attributed to unstripped debug data.
+
+After the protocol repairs, full runs took **5m06s** at `8373df5`, **6m26s** at
+`335ef52`, and **6m00s** at `2d6e715`; all passed correctness checks but missed the
+five-minute target. Reusing the runner's authenticated package indexes reduced
+tool setup from 80s to 9s, with a refresh-and-retry fallback retained. At `b08726c`,
+the lighter native graph used four CPU-bounded build slots: the protocol peer
+started at 21:00:10 UTC, the LLVM probe compiled from 21:00:12 to 21:00:40, and
+the full workflow passed in 3m59s. Native qualification took 101s and the public
+recipe 28s. The overlap is directly observed; runner variation also affects the
+timings, so the entire improvement is not attributed to scheduling alone.
 
 ## Limits and delivery posture
 

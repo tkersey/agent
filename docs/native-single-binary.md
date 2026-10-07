@@ -1,8 +1,11 @@
 # Native single-binary applications
 
-Implementation in progress against **Native Single-Binary Agentic Systems v1.2**
-(October 6, 2026). The required product is `repository-agent`, with a shared
-human CLI and `agent-host/1.0` stdio interface. Its implementation is under qualification.
+Build and operate **Native Single-Binary Agentic Systems v1.2**
+(October 6, 2026). `repository-agent` shares a human CLI and `agent-host/1.0`
+stdio interface. Native core, protocol and provider-backed reference integration
+are implemented; [qualification](native-single-binary-qualification.md) records
+executed subjects, and [PR #45](https://github.com/tkersey/agent/pull/45) maintains
+the current delivery head, Linux evidence and serial review disposition.
 The fixed-profile native application precedes the separate adaptive application.
 
 ## N0: consumer audit
@@ -49,7 +52,7 @@ The initial build rejected an authored addition without its required overflow
 failure value. The corrected program supplies that value through the existing
 source primitive contract; the expected result and native assertions are unchanged.
 
-## N1 implementation under qualification
+## N1 build and discovery
 
 The build/discovery slice at `c1019e9585c6df152b14f090ba9c2aab688bdb8f` passed
 [the full Linux CI matrix](https://github.com/tkersey/agent/actions/runs/37530534951),
@@ -58,8 +61,8 @@ framing/discovery peer, plus 65 native tests. This was narrower than N1/N2
 acceptance and did not include the native dependency module's own unit tests.
 Those now run as a separate root: head `d1922bc` passed its native lane with
 81 tests, including 13 runtime unit tests and the authored task-owner restart,
-question/answer and inbox integration case. Final CLI/protocol integration is
-still under qualification; these earlier results do not qualify it.
+question/answer and inbox integration case. These historical slices do not
+substitute for the later complete-product qualification linked above.
 
 `build.zig` now exports `addNativeSystem`. The helper runs
 `tools/native/emit.zig` on the build host, using the application's `agent.system`
@@ -134,7 +137,7 @@ Supplying `--state-dir` enables the durable task service. Omitting it in `serve`
 mode provides discovery only and advertises task execution as disabled. The
 minimal application supports exact question/answer delivery; its message-input
 flag is false because it does not poll an inbox. The shared task-owner test uses
-an authored inbox application. The required repository analyst will use that
+an authored inbox application. The repository analyst uses that
 same input boundary.
 
 The new stdio loop uses nonblocking pipes, bounded response reservations,
@@ -162,7 +165,7 @@ began permits cancellation or an explicit resume; it does not refund the attempt
 Head `52cdf12` passed the full Linux matrix, including 86 native tests, 83
 independent protocol-schema cases, CLI answer replay, lost-ack process death,
 unread stdout, the partial-frame deadline and a quiet connection surviving that
-deadline. The archive changes below are newer and remain under qualification.
+deadline. Later qualification includes the archive changes described below.
 
 Human commands use the same typed task owner as stdio. `run --offline
 --state-dir PATH --input-json '{"value":20}' --operation-id ID` runs until a
@@ -370,7 +373,8 @@ declaration. An incompatible redeclaration rejects. A single image/public-World
 test covers empty and distinct Unicode-bearing messages with prepared-image reuse.
 Durable queue acquisition/consumption is implemented and exercised by the
 task-owner fixture. The repository application's recorded question/inbox/provider
-continuation has also passed native/WASM/native parity on both required targets.
+continuation has also passed native/WASM/native parity. Current qualification is
+Linux-only; the macOS observations remain bound to their historical subjects.
 
 ## Existing owners and remaining gaps
 
@@ -389,12 +393,12 @@ continuation has also passed native/WASM/native parity on both required targets.
   must preserve those semantics without opening a live multi-host database.
 * The durable task/occurrence owner, authored inbox, stdio protocol/client,
   native HTTPS and snapshot tools, and fixed-profile repository analyst are
-  implemented. Current qualification includes both clean deployment targets,
+  implemented. Current Linux qualification includes clean deployment,
   the public downstream recipe, crash/restart, controlled TLS, protocol faults,
   recorded backend parity and bounded cold/warm/resource-edit measurements.
-* Final acceptance mapping and serial reviews remain open. Large schema/result
-  artifact refinements require a new qualification run. Live inference requires
-  separate explicit authorization and operational inputs.
+* The acceptance map names all 112 obligations. Current proof and serial-review
+  completion are recorded on the PR; this runbook does not certify a later head.
+  Live inference requires separate explicit authorization and operational inputs.
 
 The [acceptance matrix](native-single-binary-acceptance.md) tracks every v1.2
 obligation. Supporting N0 evidence is not a completed product acceptance row.

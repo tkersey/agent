@@ -165,6 +165,12 @@ backend and every existing qualification assertion remain selected. This targets
 the observed 89-second delay before the first build-graph command; its complete
 workflow effect must be measured separately from a cache restore.
 
+The native build-worker count matches the runner's online CPU count, allowing
+the lightweight test roots and protocol peers to overlap independent compilation.
+Missing system tools first use the runner's existing authenticated package indexes;
+installation failure triggers one index refresh and retry, followed by the actual
+namespace preflight. Neither choice removes a qualification obligation.
+
 The Linux products use Zig's self-hosted backend in the selected `safe` mode;
 non-debug products strip debug information. The API/HTTPS probe retains LLVM:
 its self-hosted experiment compiled faster but failed the existing 100 ms held

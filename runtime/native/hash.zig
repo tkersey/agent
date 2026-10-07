@@ -2,26 +2,26 @@
 //! before/after metadata checks remain in identity.zig. This uses the same
 //! standard-library algorithm as the caller's previous inline implementation.
 const std = @import("std");
-const c = @import("native_c");
+const abi = @import("hash_abi.zig");
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 comptime {
-    std.debug.assert(@sizeOf(Sha256) <= c.AGENT_NATIVE_SHA256_BYTES);
-    std.debug.assert(@alignOf(Sha256) <= c.AGENT_NATIVE_SHA256_ALIGNMENT);
+    std.debug.assert(@sizeOf(Sha256) <= @sizeOf(abi.State));
+    std.debug.assert(@alignOf(Sha256) <= @alignOf(abi.State));
 }
 
-fn hasher(storage: *anyopaque) *Sha256 {
+fn hasher(storage: *abi.State) *Sha256 {
     return @ptrCast(@alignCast(storage));
 }
 
-export fn agent_native_sha256_init(storage: *anyopaque) void {
+export fn agent_native_sha256_init(storage: *abi.State) void {
     hasher(storage).* = Sha256.init(.{});
 }
 
-export fn agent_native_sha256_update(storage: *anyopaque, bytes: [*]const u8, length: usize) void {
+export fn agent_native_sha256_update(storage: *abi.State, bytes: [*]const u8, length: usize) void {
     hasher(storage).update(bytes[0..length]);
 }
 
-export fn agent_native_sha256_final(storage: *anyopaque, output: *[32]u8) void {
+export fn agent_native_sha256_final(storage: *abi.State, output: *[32]u8) void {
     hasher(storage).final(output);
 }

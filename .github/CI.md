@@ -94,6 +94,10 @@ Shipped application binaries and the public native API/HTTPS probe keep their
 normal production backend. Their copied-binary witnesses still run in full.
 SQLite and the native C shim are compiled once per target ABI into a static
 library, with the same flags and dependency admission, then linked by consumers.
+The optimized standard-library SHA helper shares a private Zig-declared C ABI
+with its caller. Its static-library build therefore does not depend on the
+separate SQLite/libc header translation; those two build steps can run together.
+The caller's bounded executable reads and metadata checks remain unchanged.
 Locked dependency bytes are cached separately from compiler outputs. Setup still
 authenticates their archives, inventories, package hashes and runtime bindings
 on every run; the installation lane still provisions its own fresh inputs.

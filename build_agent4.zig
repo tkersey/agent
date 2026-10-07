@@ -836,7 +836,6 @@ fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: 
         .target = target,
         .optimize = optimize,
         .link_libc = true,
-        .imports = &.{.{ .name = "native_c", .module = translated_module }},
     });
     c_module.addIncludePath(sqlite_source);
     c_module.addCSourceFile(.{ .file = sqlite_source.path(b, "sqlite3.c"), .flags = @import("build_native.zig").sqlite_flags });

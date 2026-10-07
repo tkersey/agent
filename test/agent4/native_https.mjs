@@ -27,9 +27,10 @@ try {
     response.setHeader('x-request-id', 'fixture-response');
     if (request.url === '/held') return;
     if (request.url === '/truncated' || request.url === '/truncated-chunked') {
-      if (request.url === '/truncated') response.setHeader('content-length', '100');
-      response.write('partial');
-      return response.socket.end();
+      // Write the complete malformed HTTP envelope directly: ending the TLS
+      // socket after ServerResponse.write can discard its queued HTTP header.
+      const framing = request.url === '/truncated' ? 'Content-Length: 100\r\n\r\npartial' : 'Transfer-Encoding: chunked\r\n\r\n7\r\npartial\r\n';
+      return response.socket.end(`HTTP/1.1 200 OK\r\nConnection: close\r\n${framing}`);
     }
     if (request.url === '/large') return response.end('x'.repeat(1025));
     if (request.url === '/encoded') { response.setHeader('content-encoding', 'gzip'); return response.end('unsupported'); }

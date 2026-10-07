@@ -5,6 +5,10 @@ examples/native-minimal/build.zig
 examples/native-minimal/definition.zig
 examples/native-minimal/environment.zig
 examples/native-minimal/types.zig
+examples/repository-agent/definition.zig
+examples/repository-agent/environment.zig
+examples/repository-agent/tools.zig
+examples/repository-agent/types.zig
 runtime/inquiry_process_limit.zig
 runtime/inquiry_process_lock.zig
 runtime/native/archive.zig
@@ -22,6 +26,7 @@ runtime/native/namespace.zig
 runtime/native/occurrence.zig
 runtime/native/protocol.zig
 runtime/native/registry.zig
+runtime/native/repository.zig
 runtime/native/responses.zig
 runtime/native/root.zig
 runtime/native/schemas.zig

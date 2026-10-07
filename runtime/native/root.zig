@@ -13,6 +13,7 @@ pub const discovery = @import("discovery.zig");
 pub const inbox = @import("inbox.zig");
 pub const https = @import("https.zig");
 pub const responses = @import("responses.zig");
+pub const repository = @import("repository.zig");
 pub const tasks = @import("tasks.zig");
 pub const client = @import("client.zig");
 pub const Namespace = @import("namespace.zig").Namespace;
@@ -22,6 +23,7 @@ test {
     _ = values;
     _ = protocol;
     _ = https;
+    _ = repository;
     _ = registry;
     _ = client;
     _ = @import("sqlite.zig");

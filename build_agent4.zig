@@ -603,6 +603,21 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{.{ .name = "boundary_data", .module = native_data }},
         });
+        // Application type files can derive the existing model contract at
+        // comptime. Only used runtime functions are linked; the deployed path
+        // never invokes the authoring compiler or imports a language loader.
+        const native_boundary = if (!default_musl) public_boundary else b.createModule(.{
+            .root_source_file = public_boundary.root_source_file,
+            .target = native_target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "boundary_data", .module = native_data }},
+        });
+        const native_agent = if (!default_musl) public_agent else b.createModule(.{
+            .root_source_file = b.path("src/agent4.zig"),
+            .target = native_target,
+            .optimize = optimize,
+            .imports = &.{ .{ .name = "boundary", .module = native_boundary }, .{ .name = "boundary_data", .module = native_data }, .{ .name = "agent_contracts", .module = native_contracts } },
+        });
         const native_world = if (!default_musl and target.query.isNative()) world else b.createModule(.{
             .root_source_file = world_source.path(b, "src/root.zig"),
             .target = native_target,
@@ -614,10 +629,11 @@ pub fn build(b: *std.Build) void {
         b.modules.put(b.allocator, b.dupe("agent_native"), public_environment) catch @panic("out of memory");
         b.modules.put(b.allocator, b.dupe("agent_native_data"), native_data) catch @panic("out of memory");
         b.modules.put(b.allocator, b.dupe("agent_native_contracts"), native_contracts) catch @panic("out of memory");
+        b.modules.put(b.allocator, b.dupe("agent_native_types"), native_agent) catch @panic("out of memory");
         const product_supported = (native_target.result.os.tag == .macos and native_target.result.cpu.arch == .aarch64) or
             (native_target.result.os.tag == .linux and native_target.result.cpu.arch == .x86_64 and native_target.result.abi == .musl);
         if (product_supported) {
-            const product = @import("build_native.zig").addWithModules(b, .{
+            const native_modules: @import("build_native.zig").Modules = .{
                 .root = b.path("."),
                 .agent = agent,
                 .boundary = boundary,
@@ -626,8 +642,10 @@ pub fn build(b: *std.Build) void {
                 .native = public_environment,
                 .native_data = native_data,
                 .native_contracts = native_contracts,
+                .native_agent = native_agent,
                 .sqlite_source = sqlite_source,
-            }, .{
+            };
+            const product = @import("build_native.zig").addWithModules(b, native_modules, .{
                 .name = "agent-native-example",
                 .application = .{ .source = .{
                     .definition = b.path("examples/native-minimal/definition.zig"),
@@ -636,6 +654,16 @@ pub fn build(b: *std.Build) void {
                 .environment = b.path("examples/native-minimal/environment.zig"),
             });
             native_example.dependOn(&product.install.step);
+            const repository_product = @import("build_native.zig").addWithModules(b, native_modules, .{
+                .name = "repository-agent",
+                .application = .{ .source = .{
+                    .definition = b.path("examples/repository-agent/definition.zig"),
+                    .types = b.path("examples/repository-agent/types.zig"),
+                } },
+                .environment = b.path("examples/repository-agent/environment.zig"),
+            });
+            native_example.dependOn(&repository_product.install.step);
+            native_checks.dependOn(&repository_product.executable.step);
             const protocol_peer = nodeCommand(b);
             protocol_peer.addArgs(&.{ "node", "test/agent4/native_host.mjs" });
             protocol_peer.addFileArg2(product.executable.getEmittedBin(), .{ .make_absolute = true });

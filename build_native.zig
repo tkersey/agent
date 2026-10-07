@@ -37,6 +37,7 @@ pub fn addNativeSystem(b: *std.Build, dependency: *std.Build.Dependency, options
         .contracts = dependency.module("agent_contracts_host"),
         .native = dependency.module("agent_native"),
         .native_contracts = dependency.module("agent_native_contracts"),
+        .native_agent = dependency.module("agent_native_types"),
         .native_data = dependency.module("agent_native_data"),
         .sqlite_source = dependency.namedLazyPath("native-sqlite-source"),
     }, options);
@@ -54,6 +55,7 @@ pub const Modules = struct {
     contracts: *std.Build.Module,
     native: *std.Build.Module,
     native_contracts: *std.Build.Module,
+    native_agent: *std.Build.Module,
     native_data: *std.Build.Module,
     sqlite_source: std.Build.LazyPath,
 };
@@ -73,7 +75,7 @@ pub fn addWithModules(b: *std.Build, modules: Modules, options: Options) Product
         .root_source_file = assets.types,
         .target = target,
         .optimize = optimize,
-        .imports = &.{.{ .name = "agent_contracts", .module = modules.native_contracts }},
+        .imports = &.{ .{ .name = "agent_contracts", .module = modules.native_contracts }, .{ .name = "agent", .module = modules.native_agent } },
     });
     const environment = b.createModule(.{
         .root_source_file = options.environment,
@@ -136,7 +138,7 @@ fn generate(b: *std.Build, modules: Modules, source: Source) Assets {
         .root_source_file = source.types,
         .target = b.graph.host,
         .optimize = optimize,
-        .imports = &.{.{ .name = "agent_contracts", .module = modules.contracts }},
+        .imports = &.{ .{ .name = "agent_contracts", .module = modules.contracts }, .{ .name = "agent", .module = modules.agent } },
     });
     const definition = b.createModule(.{
         .root_source_file = source.definition,

@@ -111,7 +111,10 @@ pub fn addWithModules(b: *std.Build, modules: Modules, options: Options) Product
     manifest.addArg(b.fmt("{d}", .{state_bytes}));
     manifest.addArg(b.fmt("agent-native-state/{d}", .{state_format}));
     manifest.addArgs(&.{ target.result.zigTriple(b.allocator) catch @panic("out of memory"), @tagName(optimize) });
-    const manifest_file = manifest.addOutputFileArg2("native-manifest.json", .{});
+    // Always-run steps do not hash file arguments into their output directory
+    // in Zig 0.17. Distinguish the named products even on the same target so
+    // concurrent manifest writers cannot overwrite one another's output.
+    const manifest_file = manifest.addOutputFileArg2(b.fmt("{s}-manifest.json", .{options.name}), .{});
 
     const root = b.createModule(.{
         .root_source_file = modules.root.path(b, "runtime/native/entry.zig"),

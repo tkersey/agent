@@ -143,6 +143,10 @@ minimal application supports exact question/answer delivery; its message-input
 flag is false because it does not poll an inbox. The shared task-owner test uses
 an authored inbox application. The repository analyst uses that
 same input boundary.
+New messages must match the saved task's application, image and message schema.
+Opening a namespace with another application permits authorized reads but cannot
+acknowledge incompatible input. Queuing a compatible message does not itself
+resume execution or require replacing the task's frozen launch profile.
 
 The new stdio loop uses nonblocking pipes, bounded response reservations,
 outstanding-ID tracking, an ordered writer and one environmental I/O worker.
@@ -186,7 +190,8 @@ the binding printed by status and the same operation ID when retransmitting.
 The CLI never supplies an implicit answer or substitutes a newer question.
 Execution commands return 1 for application failure and 2 for unknown, blocked,
 parked or unfinished cancellation/cleanup, with the actual state in their JSON
-output. Read-only status/result queries return 0 when the query succeeds.
+output. Incomplete cleanup takes precedence when the application also failed.
+Read-only status/result queries return 0 when the query succeeds.
 Serve-mode ownership distinguishes terminal execution from settled cleanup.
 Failed cleanup retains its task ID for the final `server.closed` recovery list
 and exit 2, without scheduling the task again. It occupies one of the host's

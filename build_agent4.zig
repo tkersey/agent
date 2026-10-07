@@ -725,6 +725,7 @@ pub fn build(b: *std.Build) void {
             const consumer = b.addExecutable(.{ .name = "agent-native-consumer", .root_module = consumer_module });
             repository_peer.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
             repository_peer.addFileArg2(consumer.getEmittedBin(), .{ .make_absolute = true });
+            repository_peer.addFileArg2(product.executable.getEmittedBin(), .{ .make_absolute = true });
             consumer.step.dependOn(&runtime_guard.step);
             native_consumer.dependOn(&b.addRunArtifact(consumer).step);
             const https_peer = nodeCommand(b);

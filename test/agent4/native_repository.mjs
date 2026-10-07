@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { createHash, X509Certificate } from 'node:crypto';
 import { createServer } from 'node:https';
-import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, cp } from 'node:fs/promises';
 import { once } from 'node:events';
 import { AgentClient } from '../../examples/native-minimal/stdio-client.mts';
 import { certificates } from './mobility_tls_fixture.mjs';
@@ -22,6 +22,34 @@ async function until(read, predicate, label) {
     await delay(10);
   }
   throw new Error(`${label}: timeout`);
+}
+
+async function foreignApplication(repository, directory, source) {
+  const minimal = deployment(source, 'agent-native-example');
+  let passed = false, client;
+  try {
+    const state = join(minimal.data, 'foreign state');
+    const run = spawnSync(minimal.command, ['run', '--offline', '--state-dir', state, '--input-json', '{"value":20}', '--operation-id', 'foreign-submit'], {cwd: minimal.data, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
+    assert.equal(run.status, 0, run.error ?? run.stderr);
+    const task = JSON.parse(run.stdout);
+    assert.equal(task.status, 'waiting_input');
+    // Copy operational data between the two clean deployment boundaries; neither
+    // application can read the other's executable, source or controller files.
+    const copied = join(directory, 'foreign state');
+    await cp(state, copied, {recursive: true});
+    client = new AgentClient(repository, ['--offline', '--state-dir', copied], {cwd: directory, env: {PATH: '/nonexistent'}});
+    await client.initialize();
+    const before = await client.call('task.status', {task_id: task.task_id});
+    await assert.rejects(client.call('task.message', {client_operation_id: 'foreign-message', task_id: task.task_id, message: {schema_id: 'repository-agent.message.v1', value: {message: 'Follow up on the other application.'}}}), error => error.data?.kind === 'StateConflict');
+    assert.deepEqual(await client.call('task.status', {task_id: task.task_id}), before);
+    assert.equal((await client.call('task.result', {task_id: task.task_id})).ready, false);
+    assert.deepEqual(await client.close(), {code: 0, signal: null});
+    client = null;
+    passed = true;
+  } finally {
+    if (client) { client.child.kill('SIGKILL'); await client.closed; }
+    minimal.close(passed);
+  }
 }
 
 async function repositoryHttps(binary, directory, controller, invoke) {
@@ -285,7 +313,7 @@ async function repositoryHttps(binary, directory, controller, invoke) {
 }
 
 const source = process.argv[2];
-assert(source && process.argv[3] && process.argv[4]);
+assert(source && process.argv[3] && process.argv[4] && process.argv[5]);
 const isolated = deployment(source, 'repository-agent');
 const directory = isolated.data;
 let passed = false;
@@ -299,6 +327,7 @@ try {
   assert.match(invoke('--help'), /serve --transport stdio/);
   const manifest = JSON.parse(invoke('describe-build'));
   assert.match(manifest.target, /^(?:x86_64-linux.*-musl|aarch64-macos.*)$/);
+  await foreignApplication(binary, directory, process.argv[5]);
   const result = JSON.parse(invoke('demo', '--offline', '--state-dir', join(directory, 'state')));
   assert.equal(result.mode, 'offline-demo');
   assert.equal(result.output.disposition, 'report');

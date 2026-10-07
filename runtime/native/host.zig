@@ -468,12 +468,38 @@ fn humanCommand(comptime Types: type, a: std.mem.Allocator, service: *tasks.Serv
     try std.Io.File.stdout().writeStreamingAll(service.io, try json.canonical(frame, result));
     try std.Io.File.stdout().writeStreamingAll(service.io, "\n");
     if (command != .status and command != .result and command != .@"import-checkpoint") {
-        const status = result.object.get("status").?.string;
-        if (std.mem.eql(u8, status, "failed")) return 1;
-        for ([_][]const u8{ "unknown", "blocked", "cancelling", "parked" }) |unfinished| if (std.mem.eql(u8, status, unfinished)) return 2;
-        if (result.object.get("outcome")) |outcome| if (json.get(outcome, "cleanup_complete")) |complete| if (!complete.bool) return 2;
+        return executionExit(result);
     }
     return 0;
+}
+
+fn executionExit(result: json.Value) u8 {
+    // A terminal application failure does not imply settled cleanup.
+    if (result.object.get("outcome")) |outcome| if (json.get(outcome, "cleanup_complete")) |complete| if (!complete.bool) return 2;
+    const status = result.object.get("status").?.string;
+    if (std.mem.eql(u8, status, "failed")) return 1;
+    for ([_][]const u8{ "unknown", "blocked", "cancelling", "parked" }) |unfinished| if (std.mem.eql(u8, status, unfinished)) return 2;
+    return 0;
+}
+
+test "execution exit distinguishes application failure from incomplete cleanup" {
+    const cases = .{
+        .{ "{\"status\":\"failed\",\"outcome\":{\"cleanup_complete\":false}}", 2 },
+        .{ "{\"status\":\"failed\",\"outcome\":{\"cleanup_complete\":true}}", 1 },
+        .{ "{\"status\":\"cancelled\",\"outcome\":{\"cleanup_complete\":false}}", 2 },
+        .{ "{\"status\":\"cancelled\",\"outcome\":{\"cleanup_complete\":true}}", 0 },
+        .{ "{\"status\":\"completed\"}", 0 },
+        .{ "{\"status\":\"waiting_input\"}", 0 },
+        .{ "{\"status\":\"unknown\"}", 2 },
+        .{ "{\"status\":\"blocked\"}", 2 },
+        .{ "{\"status\":\"cancelling\"}", 2 },
+        .{ "{\"status\":\"parked\"}", 2 },
+    };
+    inline for (cases) |case| {
+        var result = try json.parse(std.testing.allocator, case[0], .{});
+        defer result.deinit();
+        try std.testing.expectEqual(@as(u8, case[1]), executionExit(result.value));
+    }
 }
 
 fn driveHuman(comptime Types: type, a: std.mem.Allocator, service: *tasks.Service(Types), id: [16]u8, operation_id: []const u8) !void {

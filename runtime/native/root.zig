@@ -33,4 +33,5 @@ test {
     _ = @import("store.zig");
     _ = @import("namespace.zig");
     _ = @import("transport.zig");
+    _ = @import("host.zig");
 }

@@ -336,9 +336,13 @@ pub fn Service(comptime Types: type) type {
                 return;
             };
         }
-        fn compatible(self: *Self, value: state.Task) !void {
+        fn compatibleApplication(self: *Self, value: state.Task) !void {
             if (!same(value.application_id.bytes, Types.application_id) or
-                !same(&value.profile.digest, &storage.digest(self.profile.bytes)) or !same(&value.image.digest, &storage.digest(self.assets.image)) or
+                !same(&value.image.digest, &storage.digest(self.assets.image))) return error.IncompatibleProfile;
+        }
+        fn compatible(self: *Self, value: state.Task) !void {
+            try self.compatibleApplication(value);
+            if (!same(&value.profile.digest, &storage.digest(self.profile.bytes)) or
                 !same(&value.runtime_identity, &self.profile.runtime_identity)) return error.IncompatibleProfile;
             if (value.resources.items.len != self.profile.resources.len) return error.IncompatibleProfile;
             for (value.resources.items, self.profile.resources) |reference, bytes| {
@@ -531,6 +535,10 @@ pub fn Service(comptime Types: type) type {
             defer decoded.deinit();
             var value = decoded.value;
             if (value.terminal() or value.cancellation != null) return error.TerminalTask;
+            // Input belongs to the saved application's contract, independently
+            // of which launch profile will eventually resume its execution.
+            try self.compatibleApplication(value);
+            if (!same(value.message_schema_id.bytes, Types.message_schema_id)) return error.IncompatibleProfile;
             var supported = false;
             for (self.handlers.entries) |entry| supported = supported or entry.declaration.kind == .inbox;
             if (!supported) return error.UnsupportedCapability;

@@ -16,6 +16,19 @@ const T = struct {
     pub const Failure = void;
     pub const Message = u32;
 };
+fn MessageContract(comptime application: []const u8, comptime message: []const u8) type {
+    return struct {
+        pub const application_id = application;
+        pub const input_schema_id = T.input_schema_id;
+        pub const output_schema_id = T.output_schema_id;
+        pub const failure_schema_id = T.failure_schema_id;
+        pub const message_schema_id = message;
+        pub const Input = T.Input;
+        pub const Output = T.Output;
+        pub const Failure = T.Failure;
+        pub const Message = T.Message;
+    };
+}
 const Application = struct {
     pub fn emit(c: agent.Context) !boundary.source.Module {
         const b = c.builder;
@@ -114,7 +127,11 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     try std.testing.expect(duplicate.replayed);
     try std.testing.expectEqualSlices(u8, &accepted.receipt.task, &duplicate.receipt.task);
     try std.testing.expectError(error.OperationConflict, service.submit(frame, "submit", 21));
+    // Queuing typed input does not execute under the current launch profile.
+    // A compatible application can accept it before restoring the task profile.
+    service.profile.bytes = "another launch profile";
     const queued_message = try service.message(frame, "message", accepted.receipt.task, 9);
+    service.profile.bytes = profile.bytes;
     var calls: usize = 0;
     for (0..32) |_| {
         const step = try service.pump(frame);
@@ -138,6 +155,19 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     service_live = false;
     try namespace.close();
     namespace = try native.Namespace.open(a, io, path);
+    // Both fixtures preserve the exact image and value types. Independently
+    // changing either nominal application or message identity must still reject
+    // new input, while retaining access to the old task and its queued message.
+    inline for (.{ MessageContract("another-application", T.message_schema_id), MessageContract(T.application_id, "another-message-schema") }) |Other| {
+        var other = try native.tasks.Service(Other).init(a, io, &namespace, assets, &application, handlers, profile);
+        defer other.close(frame) catch unreachable;
+        var visible = try other.task(frame, accepted.receipt.task);
+        defer visible.deinit();
+        try std.testing.expectEqual(1, visible.value.messages.items.len);
+        const generation = namespace.store.head.generation;
+        try std.testing.expectError(error.IncompatibleProfile, other.message(frame, "foreign-message", accepted.receipt.task, 10));
+        try std.testing.expectEqual(generation, namespace.store.head.generation);
+    }
     service = try native.tasks.Service(T).init(a, io, &namespace, assets, &application, handlers, profile);
     service_live = true;
     const frozen = try service.frozenInputs(frame, accepted.receipt.task);

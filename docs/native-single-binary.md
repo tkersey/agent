@@ -23,7 +23,6 @@ domain. The same executable supplies the focused native HTTPS fault probe.
 node tools/agent4/setup.mjs
 zig build check-native-consumer -Doptimize=safe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
-./zig-out/bin/agent-native-consumer
 ```
 
 The independently expected numeric result is `41`: the authored caller retains `20`,
@@ -211,7 +210,17 @@ delivery, exact question response and independently expected typed completion
 through this client. An RPC response acknowledges that method, not overall task
 completion; use `task.result` and its `ready` field for the latter.
 
-Offline `describe` returns a Draft 2020-12 `protocol_schema` document. Each
+Offline `describe` returns a Draft 2020-12 `protocol_schema` document, or a
+`protocol_schema_ref` when it exceeds the inline budget. Large application
+discovery metadata similarly uses `application.metadata_ref`. Retrieve these
+immutable public descriptors through `artifact.read` without `task_id`, using
+the reference's `artifact_id`, decimal `offset` and decimal `length` (1–32768).
+Concatenate the base64url-decoded chunks, check their `sha256` and total length,
+then parse JSON. Discovery-only launches expose only these embedded public
+descriptors; task artifacts require their owning `task_id` and current grants.
+Large typed results use `outcome.value_ref` with the same bounded chunk format.
+
+Each
 method's `params_schema` and `result_schema` identify definitions within that
 document; request/response envelopes, protocol errors and server notifications
 have definitions too. References remain local. Its content-derived URN and the
@@ -287,7 +296,7 @@ and an explicit 16 MiB MEMSYS5 heap. The build and running allocator consume the
 same heap setting; the manifest records the actual C flags and source identity.
 Linux links the selected toolchain's musl libc and embeds its license. The
 database wrapper refuses an uncapped allocation fallback and verifies the linked
-SQLite version. This primitive is not a completed task journal.
+SQLite version.
 
 The current namespace format is `agent-native-state/7`. Task, receipt, question,
 message and event indexes reference the same hash-checked immutable object store
@@ -335,35 +344,34 @@ and semantic identity belong to `agent_contracts`, shared with the native
 declaration. An incompatible redeclaration rejects. A single image/public-World
 test covers empty and distinct Unicode-bearing messages with prepared-image reuse.
 Durable queue acquisition/consumption is implemented and exercised by the
-task-owner fixture. Native/WASM parity and complete reference qualification remain
-pending.
+task-owner fixture. The repository application's recorded question/inbox/provider
+continuation has also passed native/WASM/native parity on both required targets.
 
 ## Existing owners and remaining gaps
 
 * World already supplies native `Prepared`, `Resident`, transactional drive,
   checkpoint/restore, and terminal close. N0 demonstrates no generic World
   deficiency. No World or Boundary change is currently needed.
-* `src/model_invocation.zig` and `runtime/model.mjs` already own additive
-  `agent.model.invoke.v4` replay records, alongside unchanged v3. Reuse and
-  qualify that owner; the inline replay representation still needs assessment
-  against v1.2's bounded artifact references, exact provider grammar, and native
-  transport requirements. Do not create another native-only model contract.
+* `src/model_invocation.zig` owns the additive v5 reference contract alongside
+  the existing v3/v4 contracts. Its bounded replay artifacts use the checked
+  responder. The native corpus and compatible JavaScript v3 intersection are
+  qualified independently of a production JavaScript v5 host.
 * `src/responders.zig` already supplies checked replay interpretation against
   the offered actions. Native normalization cannot replace that admission.
 * `runtime/mobility/custodian.mjs`, `journal.mjs`, and their core own dispatch
   admission, attempt charging, acquired replies, deferred questions, unknown
   delivery, and checkpoint successor semantics. The standalone native adapter
   must preserve those semantics without opening a live multi-host database.
-* The build/embedding/discovery slice above is under qualification. Remaining
-  product work includes the durable task/occurrence owner, authored inbox,
-  complete stdio protocol and client, native HTTPS and snapshot tools, and the
-  useful fixed-profile authored repository analyst.
-* Qualification still requires public downstream installation, cancellation and
-  crash/restart, real TLS, protocol fault/control cases, native/WASM/native state
-  transfer, both final platform artifacts, and separated measurements. Live
-  inference requires separate explicit authorization and operational inputs.
+* The durable task/occurrence owner, authored inbox, stdio protocol/client,
+  native HTTPS and snapshot tools, and fixed-profile repository analyst are
+  implemented. Current qualification includes both clean deployment targets,
+  the public downstream recipe, crash/restart, controlled TLS, protocol faults,
+  recorded backend parity and bounded cold/warm/resource-edit measurements.
+* Final acceptance mapping and serial reviews remain open. Large schema/result
+  artifact refinements require a new qualification run. Live inference requires
+  separate explicit authorization and operational inputs.
 
 The [acceptance matrix](native-single-binary-acceptance.md) tracks every v1.2
 obligation. Supporting N0 evidence is not a completed product acceptance row.
-No native-core, protocol, reference, target, or live-qualified product claim is
-made at this stage.
+Run-specific component evidence does not establish full NB-001–NB-112 acceptance
+or live qualification.

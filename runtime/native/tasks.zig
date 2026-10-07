@@ -131,6 +131,10 @@ pub fn Service(comptime Types: type) type {
             if (!same(&decoded.value.id, &id)) return error.CorruptState;
             return decoded;
         }
+        pub fn schemaArtifact(self: *Self, id: state.Digest) !discovery.Artifact {
+            try self.allowed();
+            return self.application.schemaArtifact(id);
+        }
         /// Rebuild adapter state from owned immutable data, never from the
         /// original filesystem paths. This read does not resume or grant work.
         pub fn frozenInputs(self: *Self, a: std.mem.Allocator, id: state.TaskId) !FrozenInputs {

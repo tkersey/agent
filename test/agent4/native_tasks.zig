@@ -11,7 +11,8 @@ const T = struct {
     pub const failure_schema_id = "task-owner.failure.v1";
     pub const message_schema_id = "task-owner.message.v1";
     pub const Input = u32;
-    pub const Output = struct { answer: u32, inbox: Inbox.Reply };
+    pub const Padding = agent.contracts.Bytes(64 * 1024);
+    pub const Output = struct { answer: u32, inbox: Inbox.Reply, padding: Padding };
     pub const Failure = void;
     pub const Message = u32;
 };
@@ -27,7 +28,8 @@ const Application = struct {
         const incremented = try b.variable(number);
         const answer = try b.variable(number);
         const message = try b.variable(try c.schema(Inbox.Reply));
-        const result = try b.primitive(output, .product, &.{ try b.reference(answer), try b.reference(message) }, 0);
+        const padding = try c.literal(T.Padding, .{ .bytes = &@as([64 * 1024]u8, @splat('x')) });
+        const result = try b.primitive(output, .product, &.{ try b.reference(answer), try b.reference(message), padding }, 0);
         try b.define(entry, try b.bind(incremented, try b.term(.{ .perform = .{ .effect = leaf, .payload = try b.reference(b.parameter(entry, 0)) } }), try b.bind(answer, try b.term(.{ .perform = .{ .effect = question, .payload = try b.reference(incremented) } }), try b.bind(message, try Inbox.poll(c), try b.pure(result)))));
         return b.module(entry, try c.schema(void));
     }
@@ -167,7 +169,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     var completed = try service.task(frame, accepted.receipt.task);
     defer completed.deinit();
     try std.testing.expect(completed.value.terminal());
-    const result = try namespace.store.object(frame, completed.value.result.?, 1024);
+    const result = try namespace.store.object(frame, completed.value.result.?, 128 * 1024);
     var decoded = try agent.contracts.decodeOwned(T.Output, frame, result);
     defer decoded.deinit();
     try std.testing.expectEqual(7, decoded.value.answer);
@@ -189,6 +191,27 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     const public_result = try client.call(frame, .@"task.result", params);
     try std.testing.expect(public_result.object.get("ready").?.bool);
     try std.testing.expectEqualStrings("completed", public_result.object.get("status").?.string);
+    const public_outcome = public_result.object.get("outcome").?;
+    try std.testing.expect(public_outcome.object.get("value") == null);
+    const result_reference = public_outcome.object.get("value_ref").?;
+    var read_params = native.json.object();
+    try native.json.put(frame, &read_params, "task_id", params.object.get("task_id").?);
+    try native.json.put(frame, &read_params, "artifact_id", result_reference.object.get("artifact_id").?);
+    try native.json.put(frame, &read_params, "length", native.json.string("32768"));
+    var reconstructed: std.array_list.Managed(u8) = .init(frame);
+    while (true) {
+        try native.json.put(frame, &read_params, "offset", native.json.string(try std.fmt.allocPrint(frame, "{d}", .{reconstructed.items.len})));
+        const chunk = try client.call(frame, .@"artifact.read", read_params);
+        const encoded = chunk.object.get("data").?.string;
+        const decoder = std.base64.url_safe_no_pad.Decoder;
+        const bytes = try frame.alloc(u8, try decoder.calcSizeForSlice(encoded));
+        try decoder.decode(bytes, encoded);
+        try std.testing.expect(bytes.len > 0);
+        try reconstructed.appendSlice(bytes);
+        try std.testing.expect(reconstructed.items.len <= 128 * 1024);
+        if (chunk.object.get("eof").?.bool) break;
+    }
+    try std.testing.expectEqualSlices(u8, try native.json.canonical(frame, try native.values.toJson(T.Output, frame, decoded.value)), reconstructed.items);
     const events = try client.events(frame, accepted.receipt.task, 0, 128);
     const history = events.object.get("events").?.array.items;
     var consumed: usize = 0;
@@ -203,6 +226,9 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     try std.testing.expectError(error.InvalidParams, client.events(frame, accepted.receipt.task, completed.value.event_high + 1, 128));
     service.profile.authority.disclosure = false;
     try std.testing.expectError(error.Denied, client.call(frame, .@"task.result", params));
+    try std.testing.expectError(error.Denied, client.call(frame, .@"artifact.read", read_params));
+    _ = read_params.object.swapRemove("task_id");
+    try std.testing.expectError(error.Denied, client.call(frame, .@"artifact.read", read_params));
     try std.testing.expectError(error.Denied, service.submit(frame, "submit", 20));
     service.profile.authority.disclosure = true;
     const no_send = try service.submit(frame, "no-send", 20);

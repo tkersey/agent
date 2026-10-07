@@ -195,10 +195,37 @@ try {
   assert.equal((await peer.next()).id, 'after');
   peer.write(rpc('discovery', 'describe'));
   const description = (await peer.next()).result;
-  assert.equal(description.application.application_id, 'native-minimal');
-  assert.equal(description.application.input.json.additionalProperties, false);
+  async function publicArtifact(id) {
+    const chunks = [];
+    let offset = 0;
+    for (let count = 0; count < 512; count++) {
+      const call = `schema-${id}-${offset}`;
+      peer.write(rpc(call, 'artifact.read', {artifact_id: id, offset: String(offset), length: '32768'}));
+      const reply = await peer.next();
+      assert.equal(reply.id, call);
+      const chunk = reply.result;
+      assert.equal(chunk.sha256, id);
+      const bytes = Buffer.from(chunk.data, 'base64url');
+      assert.equal(bytes.toString('base64url'), chunk.data);
+      assert(bytes.length <= 32768);
+      chunks.push(bytes); offset += bytes.length;
+      assert.equal(chunk.next_offset, String(offset));
+      if (chunk.eof) {
+        assert.equal(chunk.total_bytes, String(offset));
+        const result = Buffer.concat(chunks);
+        assert.equal(createHash('sha256').update(result).digest('hex'), id);
+        return JSON.parse(result);
+      }
+    }
+    assert.fail('bounded schema artifact');
+  }
+  const applicationDescription = description.application.metadata_ref ? await publicArtifact(description.application.metadata_ref.artifact_id) : description.application;
+  assert.equal(applicationDescription.application_id, 'native-minimal');
+  assert.equal(applicationDescription.input.json.additionalProperties, false);
   assert.equal(description.methods.length, 15);
-  const protocolSchema = description.protocol_schema;
+  const protocolSchema = await publicArtifact(manifest.protocol_schema_sha256);
+  if (description.protocol_schema) assert.deepEqual(protocolSchema, description.protocol_schema);
+  else assert.equal(description.protocol_schema_ref.artifact_id, manifest.protocol_schema_sha256);
   assert.equal(protocolSchema.$schema, 'https://json-schema.org/draft/2020-12/schema');
   assert.match(protocolSchema.$id, /^urn:agent:agent-host:1.0:[a-f0-9]{64}$/);
   const canonical = value => value === null || typeof value !== 'object' ? JSON.stringify(value) : Array.isArray(value) ? `[${value.map(canonical).join(',')}]` : `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
@@ -416,6 +443,21 @@ try {
   for (const [value, accept] of [['1', true], ['32768', true], ['0', false], ['32769', false]]) {
     schemaCases.push({definition: 'artifact.read.params', value: {task_id: demoTask, artifact_id: '0'.repeat(64), offset: '0', length: value}, accept});
   }
+  const reference = {artifact_id: '0'.repeat(64), sha256: '0'.repeat(64), bytes: '65536', media_type: 'application/json', schema_id: result.outcome.schema_id, retention: 'state-namespace'};
+  const largeResult = structuredClone(result);
+  delete largeResult.outcome.value;
+  largeResult.outcome.value_ref = reference;
+  schemaCases.push({definition: 'task.result.result', value: largeResult});
+  schemaCases.push({definition: 'task.result.result', value: {...largeResult, outcome: {...largeResult.outcome, value: result.outcome.value}}, accept: false});
+  const oldArtifactShape = structuredClone(largeResult);
+  delete oldArtifactShape.outcome.value_ref;
+  oldArtifactShape.outcome.artifact = reference;
+  schemaCases.push({definition: 'task.result.result', value: oldArtifactShape, accept: false});
+  const embedded = {...reference, schema_id: 'agent-host.protocol-schema.v1', retention: 'embedded'};
+  const referencedDescription = {...description, application: {application_id: applicationDescription.application_id, application_version: applicationDescription.application_version, client_mapping: applicationDescription.client_mapping, metadata_ref: {...embedded, schema_id: 'agent-native-discovery.application.v1'}}, protocol_schema_ref: embedded};
+  delete referencedDescription.protocol_schema;
+  schemaCases.push({definition: 'describe.result', value: referencedDescription});
+  schemaCases.push({definition: 'describe.result', value: {...referencedDescription, protocol_schema: protocolSchema}, accept: false});
   process.stdout.write(execFileSync('uv', ['run', '--no-project', '--no-config', '--python', '3.12', '--with', 'jsonschema==4.23.0', fileURLToPath(new URL('./native_schema.py', import.meta.url))], {input: JSON.stringify({schema: protocolSchema, cases: schemaCases}), encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024}));
   console.log(JSON.stringify({check: 'native-build-and-discovery', result: 'passed', target: manifest.target, program: manifest.program_sha256, artifact_bytes: manifest.artifact_bytes, describe_ms: describeMilliseconds,
     demo_ms: demoMilliseconds, demo_command_maxrss_bytes: demoMaxRssBytes, memory_scope: 'OS command high-water report, including deployment controller processes; not simultaneous aggregate RSS',

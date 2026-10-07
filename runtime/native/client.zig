@@ -7,6 +7,7 @@ const tasks = @import("tasks.zig");
 const json = @import("json.zig");
 const values = @import("values.zig");
 const protocol = @import("protocol.zig");
+const discovery = @import("discovery.zig");
 
 pub fn identifier(comptime length: usize, value: json.Value) ![length]u8 {
     const text = try json.text(value);
@@ -200,13 +201,14 @@ pub fn Client(comptime Types: type) type {
         }
 
         fn artifactRead(self: *Self, a: std.mem.Allocator, params: json.Value) !json.Value {
-            const task_id = try identifier(16, try field(params, "task_id"));
+            const request = try discovery.artifactRequest(params);
+            const id = request.id;
+            const offset = request.offset;
+            const length = request.length;
+            const task_value = json.get(params, "task_id") orelse return discovery.artifactChunk(a, try self.service.schemaArtifact(id), offset, length);
+            const task_id = try identifier(16, task_value);
             var task = try self.service.task(a, task_id);
             defer task.deinit();
-            const id = try identifier(32, try field(params, "artifact_id"));
-            const offset = try json.decimal(u64, try field(params, "offset"));
-            const length = try json.decimal(u32, try field(params, "length"));
-            if (length == 0 or length > 32768) return error.InvalidParams;
             const encoded = (try self.service.namespace.store.recordBytes(a, "artifact", id, task_id)) orelse return error.ArtifactUnavailable;
             defer a.free(encoded);
             var saved = try contracts.decodeOwned(state.Artifact, a, encoded);
@@ -216,17 +218,7 @@ pub fn Client(comptime Types: type) type {
             if (offset > artifact.value.bytes) return error.InvalidParams;
             const bytes = try self.service.namespace.store.object(a, artifact.value, 4 * 1024 * 1024);
             defer a.free(bytes);
-            const end = @min(bytes.len, @as(usize, @intCast(offset)) + length);
-            const chunk = bytes[@intCast(offset)..end];
-            const base64 = try a.alloc(u8, std.base64.url_safe_no_pad.Encoder.calcSize(chunk.len));
-            var output = json.object();
-            try json.put(a, &output, "encoding", json.string("base64url"));
-            try json.put(a, &output, "data", json.string(std.base64.url_safe_no_pad.Encoder.encode(base64, chunk)));
-            try json.put(a, &output, "sha256", try hexadecimal(a, artifact.value.digest));
-            try json.put(a, &output, "total_bytes", try counter(a, artifact.value.bytes));
-            try json.put(a, &output, "next_offset", try counter(a, end));
-            try json.put(a, &output, "eof", .{ .bool = end == bytes.len });
-            return output;
+            return discovery.artifactChunk(a, .{ .bytes = bytes, .sha256 = artifact.value.digest }, offset, length);
         }
 
         /// Called only after the subscribe response has entered the ordered

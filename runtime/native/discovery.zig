@@ -9,6 +9,68 @@ const contracts = @import("agent_contracts");
 
 pub const Assets = struct { image: []const u8, application: []const u8, manifest: []const u8 };
 
+pub const Artifact = struct {
+    bytes: []const u8,
+    sha256: [32]u8,
+    schema_id: []const u8 = "",
+
+    fn freeze(a: std.mem.Allocator, value: json.Value, schema_id: []const u8) !Artifact {
+        const bytes = try json.canonical(a, value);
+        var sha256: [32]u8 = undefined;
+        std.crypto.hash.sha2.Sha256.hash(bytes, &sha256, .{});
+        return .{ .bytes = bytes, .sha256 = sha256, .schema_id = schema_id };
+    }
+    fn reference(self: Artifact, a: std.mem.Allocator) !json.Value {
+        var result = json.object();
+        const id = try a.dupe(u8, &std.fmt.bytesToHex(self.sha256, .lower));
+        try json.put(a, &result, "artifact_id", json.string(id));
+        try json.put(a, &result, "sha256", json.string(id));
+        try json.put(a, &result, "bytes", json.string(try std.fmt.allocPrint(a, "{d}", .{self.bytes.len})));
+        try json.put(a, &result, "media_type", json.string("application/json"));
+        try json.put(a, &result, "schema_id", json.string(self.schema_id));
+        try json.put(a, &result, "retention", json.string("embedded"));
+        return result;
+    }
+};
+
+pub const ArtifactRequest = struct { id: [32]u8, offset: u64, length: u32 };
+pub fn artifactRequest(params: json.Value) !ArtifactRequest {
+    const id = try json.text(json.get(params, "artifact_id") orelse return error.InvalidParams);
+    if (id.len != 64) return error.InvalidParams;
+    var request: ArtifactRequest = .{
+        .id = undefined,
+        .offset = try json.decimal(u64, json.get(params, "offset") orelse return error.InvalidParams),
+        .length = try json.decimal(u32, json.get(params, "length") orelse return error.InvalidParams),
+    };
+    if (request.length == 0 or request.length > (protocol.Limits{}).artifact_chunk_bytes) return error.InvalidParams;
+    _ = std.fmt.hexToBytes(&request.id, id) catch return error.InvalidParams;
+    return request;
+}
+
+/// Shared bounded wire projection; callers own artifact lookup and authority.
+pub fn artifactChunk(a: std.mem.Allocator, artifact: Artifact, offset: u64, length: u32) !json.Value {
+    if (length == 0 or length > (protocol.Limits{}).artifact_chunk_bytes or offset > artifact.bytes.len) return error.InvalidParams;
+    const start: usize = @intCast(offset);
+    const end = start + @min(length, artifact.bytes.len - start);
+    const chunk = artifact.bytes[start..end];
+    const base64 = try a.alloc(u8, std.base64.url_safe_no_pad.Encoder.calcSize(chunk.len));
+    var result = json.object();
+    try json.put(a, &result, "encoding", json.string("base64url"));
+    try json.put(a, &result, "data", json.string(std.base64.url_safe_no_pad.Encoder.encode(base64, chunk)));
+    try json.put(a, &result, "sha256", json.string(try a.dupe(u8, &std.fmt.bytesToHex(artifact.sha256, .lower))));
+    try json.put(a, &result, "total_bytes", json.string(try std.fmt.allocPrint(a, "{d}", .{artifact.bytes.len})));
+    try json.put(a, &result, "next_offset", json.string(try std.fmt.allocPrint(a, "{d}", .{end})));
+    try json.put(a, &result, "eof", .{ .bool = end == artifact.bytes.len });
+    return result;
+}
+
+fn publicMetadata(a: std.mem.Allocator, metadata: json.Value) !json.Value {
+    var result = json.object();
+    for ([_][]const u8{ "application_id", "application_version", "client_mapping", "input", "output", "failure", "answer", "message", "capabilities" }) |key|
+        try json.put(a, &result, key, metadata.object.get(key) orelse return error.InvalidAssets);
+    return result;
+}
+
 pub fn digest(a: std.mem.Allocator, bytes: []const u8) ![]const u8 {
     var hash: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(bytes, &hash, .{});
@@ -23,6 +85,8 @@ pub const Application = struct {
     image_identity: [32]u8,
     protocol_schema: json.Value = .null,
     protocol_schema_sha256: []const u8 = "",
+    public_metadata: json.Value = .null,
+    schema_artifacts: [2]?Artifact = @splat(null),
     execution_mode: enum { offline, live } = .offline,
 
     pub fn init(comptime Types: type, a: std.mem.Allocator, assets: Assets, handlers: registry.Registry) !Application {
@@ -79,11 +143,27 @@ pub const Application = struct {
             if (matches != 1) return error.CapabilityMetadataMismatch;
         }
         const protocol_schema = try @import("schemas.zig").document(storage, metadata.value, .{});
-        return .{ .arena = arena, .metadata = metadata.value, .manifest = manifest.value, .manifest_id = try digest(storage, assets.manifest), .image_identity = image_identity, .protocol_schema = protocol_schema, .protocol_schema_sha256 = try digest(storage, try json.canonical(storage, protocol_schema)) };
+        const public_metadata = try publicMetadata(storage, metadata.value);
+        const application_artifact = try Artifact.freeze(storage, public_metadata, "agent-native-discovery.application.v1");
+        const protocol_artifact = try Artifact.freeze(storage, protocol_schema, "agent-host.protocol-schema.v1");
+        const manifest_id = try digest(storage, assets.manifest);
+        const protocol_digest = try storage.dupe(u8, &std.fmt.bytesToHex(protocol_artifact.sha256, .lower));
+        return .{ .arena = arena, .metadata = metadata.value, .manifest = manifest.value, .manifest_id = manifest_id, .image_identity = image_identity, .protocol_schema = protocol_schema, .protocol_schema_sha256 = protocol_digest, .public_metadata = public_metadata, .schema_artifacts = .{ application_artifact, protocol_artifact } };
     }
     pub fn deinit(self: *Application) void {
         self.arena.deinit();
         self.* = undefined;
+    }
+
+    pub fn schemaArtifact(self: Application, id: [32]u8) !Artifact {
+        for (self.schema_artifacts) |candidate| if (candidate) |artifact| {
+            if (std.mem.eql(u8, &id, &artifact.sha256)) return artifact;
+        };
+        return error.ArtifactUnavailable;
+    }
+    pub fn readSchemaArtifact(self: Application, a: std.mem.Allocator, params: json.Value) !json.Value {
+        const request = try artifactRequest(params);
+        return artifactChunk(a, try self.schemaArtifact(request.id), request.offset, request.length);
     }
 
     /// This projection is deliberately bounded; larger schema/resource assets
@@ -122,12 +202,17 @@ pub const Application = struct {
         var result = json.object();
         try json.put(a, &result, "methods", .{ .array = methods });
         try json.put(a, &result, "next_cursor", if (end < info.field_names.len) json.string(try std.fmt.allocPrint(a, "{d}", .{end})) else .null);
-        var app = json.object();
-        for ([_][]const u8{ "application_id", "application_version", "client_mapping", "input", "output", "failure", "answer", "message", "capabilities" }) |key|
-            try json.put(a, &app, key, self.metadata.object.get(key) orelse return error.InvalidAssets);
+        var app = self.public_metadata;
+        if (self.schema_artifacts[0].?.bytes.len > (protocol.Limits{}).inline_bytes) {
+            app = json.object();
+            for ([_][]const u8{ "application_id", "application_version", "client_mapping" }) |key| try json.put(a, &app, key, self.public_metadata.object.get(key).?);
+            try json.put(a, &app, "metadata_ref", try self.schema_artifacts[0].?.reference(a));
+        }
         try json.put(a, &result, "application", app);
         try json.put(a, &result, "execution_mode", json.string(@tagName(self.execution_mode)));
-        try json.put(a, &result, "protocol_schema", self.protocol_schema);
+        if (self.schema_artifacts[1].?.bytes.len > (protocol.Limits{}).inline_bytes) {
+            try json.put(a, &result, "protocol_schema_ref", try self.schema_artifacts[1].?.reference(a));
+        } else try json.put(a, &result, "protocol_schema", self.protocol_schema);
         return result;
     }
 };
@@ -146,4 +231,45 @@ pub fn sameField(object: json.Value, name: []const u8, expected: []const u8) !vo
         if (std.mem.eql(u8, name, "resource_role")) return error.CapabilityRoleMismatch;
         return error.InvalidAssets;
     }
+}
+
+test "oversized discovery stays bounded and its immutable schemas round-trip through artifact chunks" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var metadata = json.object();
+    try json.put(a, &metadata, "application_id", json.string("large-schema"));
+    try json.put(a, &metadata, "application_version", json.string("1"));
+    try json.put(a, &metadata, "client_mapping", json.string("agent-client-values/1.0"));
+    const padding = try a.alloc(u8, 70 * 1024);
+    @memset(padding, 'x');
+    var schema = json.object();
+    try json.put(a, &schema, "type", json.string("string"));
+    try json.put(a, &schema, "description", json.string(padding));
+    for ([_][]const u8{ "input", "output", "failure", "answer", "message" }) |key| try json.put(a, &metadata, key, schema);
+    try json.put(a, &metadata, "capabilities", .{ .array = .init(a) });
+    const artifacts = [2]?Artifact{ try Artifact.freeze(a, metadata, "application"), try Artifact.freeze(a, schema, "protocol") };
+    const application: Application = .{ .arena = .init(a), .metadata = metadata, .manifest = .null, .manifest_id = "test", .image_identity = @splat(0), .public_metadata = metadata, .protocol_schema = schema, .schema_artifacts = artifacts };
+    const description = try application.describe(a, json.object());
+    try std.testing.expect((try json.canonical(a, description)).len < (protocol.Limits{}).inline_bytes);
+    try std.testing.expect(json.get(description, "protocol_schema") == null);
+    try std.testing.expect(json.get(description.object.get("application").?, "metadata_ref") != null);
+    for (artifacts) |candidate| {
+        const artifact = try application.schemaArtifact(candidate.?.sha256);
+        var offset: usize = 0;
+        while (offset < artifact.bytes.len) {
+            const chunk = try artifactChunk(a, artifact, offset, 32768);
+            const encoded = chunk.object.get("data").?.string;
+            const decoder = std.base64.url_safe_no_pad.Decoder;
+            const decoded = try a.alloc(u8, try decoder.calcSizeForSlice(encoded));
+            try decoder.decode(decoded, encoded);
+            try std.testing.expectEqualSlices(u8, artifact.bytes[offset..][0..decoded.len], decoded);
+            offset += decoded.len;
+            try std.testing.expectEqual(offset, try json.decimal(usize, chunk.object.get("next_offset").?));
+            try std.testing.expectEqual(offset == artifact.bytes.len, chunk.object.get("eof").?.bool);
+        }
+        try std.testing.expectError(error.InvalidParams, artifactChunk(a, artifact, artifact.bytes.len + 1, 1));
+        try std.testing.expectError(error.InvalidParams, artifactChunk(a, artifact, 0, 32769));
+    }
+    try std.testing.expectError(error.ArtifactUnavailable, application.schemaArtifact(@splat(0)));
 }

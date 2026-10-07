@@ -96,15 +96,20 @@ fn Connection(comptime Types: type) type {
                     const result = self.application.describe(a, request.params) catch |err| return protocol.failure(a, request.id, if (err == error.NotFound) .NotFound else .InvalidParams, "correct_request");
                     return protocol.response(a, request.id, result);
                 },
-                else => {
-                    const client = self.client orelse return protocol.failure(a, request.id, .UnsupportedCapability, "correct_request");
-                    const result = client.call(a, request.method, request.params) catch |err| {
-                        const kind = failureKind(err);
-                        return protocol.failure(a, request.id, kind, if (kind == .StorageUnavailable) "retry_same_operation_or_inspect" else "correct_request");
-                    };
+                .@"artifact.read" => if (self.client == null and json.get(request.params, "task_id") == null) {
+                    // Discovery-only launch authorizes only the same immutable
+                    // public schemas as describe, never task/private artifacts.
+                    const result = self.application.readSchemaArtifact(a, request.params) catch |err| return protocol.failure(a, request.id, failureKind(err), "correct_request");
                     return protocol.response(a, request.id, result);
                 },
+                else => {},
             }
+            const client = self.client orelse return protocol.failure(a, request.id, .UnsupportedCapability, "correct_request");
+            const result = client.call(a, request.method, request.params) catch |err| {
+                const kind = failureKind(err);
+                return protocol.failure(a, request.id, kind, if (kind == .StorageUnavailable) "retry_same_operation_or_inspect" else "correct_request");
+            };
+            return protocol.response(a, request.id, result);
         }
 
         fn member(self: *@This(), a: std.mem.Allocator, value: json.Value, batch: bool) !?json.Value {

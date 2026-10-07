@@ -127,9 +127,10 @@ the cause of all the elapsed build time.
 Compiler setup still caches its compiler download, but its automatic compilation
 cache restore/save is disabled. Explicit Actions restore/save handles `.zig-cache`
 with a versioned namespace per OS, architecture, Zig version, qualification lane
-and dependency-lock hash. It does not cache `.agent4` source/runtime inputs or the
-external consumer's deliberately isolated caches. Authentication still runs;
-a cache hit is not qualification.
+and dependency-lock hash. A separate lock-keyed cache retains dependency source,
+package and runtime bytes; setup authenticates all restored inputs on every run.
+The external consumer's deliberately isolated caches remain fresh. A cache hit
+is not qualification.
 
 Before and after each applicable lane, `.github/scripts/zig-cache.mjs` records
 the restored key, logical file bytes, file count and top-level bucket sizes

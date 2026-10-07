@@ -687,6 +687,9 @@ pub fn build(b: *std.Build) void {
             const repository_peer = nodeCommand(b);
             repository_peer.addArgs(&.{ "node", "test/agent4/native_repository.mjs" });
             repository_peer.addFileArg2(repository_product.executable.getEmittedBin(), .{ .make_absolute = true });
+            repository_peer.addFileArg2(repository_product.assets.image, .{ .make_absolute = true });
+            repository_peer.addFileArg2(repository_product.assets.application, .{ .make_absolute = true });
+            repository_peer.addFileArg2(repository_product.manifest, .{ .make_absolute = true });
             native_checks.dependOn(&repository_peer.step);
             const protocol_peer = nodeCommand(b);
             protocol_peer.addArgs(&.{ "node", "test/agent4/native_host.mjs" });

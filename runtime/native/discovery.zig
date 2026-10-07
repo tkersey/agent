@@ -35,10 +35,10 @@ pub const Application = struct {
         try sameField(metadata.value, "application_id", Types.application_id);
         try sameField(metadata.value, "application_version", Types.application_version);
         try sameField(metadata.value, "client_mapping", "agent-client-values/1.0");
-        try sameField(metadata.value, "program_sha256", try digest(storage, assets.image));
+        sameField(metadata.value, "program_sha256", try digest(storage, assets.image)) catch return error.ApplicationProgramDigestMismatch;
         try sameField(manifest.value, "format", "agent-native-build/v1");
         try sameField(manifest.value, "state_format", std.fmt.comptimePrint("agent-native-state/{d}", .{@import("store.zig").format}));
-        try sameField(manifest.value, "program_sha256", try digest(storage, assets.image));
+        sameField(manifest.value, "program_sha256", try digest(storage, assets.image)) catch return error.ManifestProgramDigestMismatch;
         try sameField(manifest.value, "application_assets_sha256", try digest(storage, assets.application));
         const admitted = try data.program_image.Admitted.decode(storage, assets.image);
         defer admitted.deinit();

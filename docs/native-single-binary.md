@@ -2,7 +2,7 @@
 
 Implementation in progress against **Native Single-Binary Agentic Systems v1.2**
 (October 6, 2026). The required product is `repository-agent`, with a shared
-human CLI and `agent-host/1.0` stdio interface. It is not implemented yet.
+human CLI and `agent-host/1.0` stdio interface. Its implementation is under qualification.
 The fixed-profile native application precedes the separate adaptive application.
 
 ## N0: consumer audit
@@ -265,7 +265,7 @@ Linux links the selected toolchain's musl libc and embeds its license. The
 database wrapper refuses an uncapped allocation fallback and verifies the linked
 SQLite version. This primitive is not a completed task journal.
 
-The current namespace format is `agent-native-state/5`. Task, receipt, question,
+The current namespace format is `agent-native-state/6`. Task, receipt, question,
 message and event indexes reference the same hash-checked immutable object store
 as checkpoints and replies. A changed record body rejects before interpretation;
 foreign keys and task revision checks bind its index. Earlier development state

@@ -73,7 +73,9 @@ incomplete responses. Native tests compare complete normalized bytes against the
 existing JS v3 normalizer for their shared semantics. Whole-batch policy and
 lone-surrogate escapes in ignored envelope fields are explicit nonintersections:
 the retained v3 normalizer accepts those fixtures; native admission rejects them.
-Both outcomes remain asserted. The controlled HTTPS peer separately tests trust, bounds,
+A missing call ID rejects in both versions, with v3's `normalization_limit` and
+v5's `unsupported_output_item` classifications asserted separately.
+The controlled HTTPS peer separately tests trust, bounds,
 deadline, exact bodies and no retries/redirects. CI qualification and integration
 into the repository analyst remain in progress; this document does not claim
 live inference or complete N3/N4 acceptance.
@@ -83,9 +85,9 @@ helper. Its authored program limits model calls to 16, work calls (including
 clarifications) to 12, and retained evidence records to eight. Reports select an
 actual acquired evidence record. Native snapshot capture rejects symlinks and
 nonregular entries, freezes bounded file bytes and digests, and exposes only
-paginated listings and UTF-8 byte-window reads. Configuration admission and the
-integrated executable witness remain unfinished; the application is not yet a
-runnable qualified example.
+paginated listings and UTF-8 byte-window reads. Configuration admission and a
+copied-binary offline witness are now wired, but have not passed CI. The controlled
+HTTPS application witness and final qualification remain unfinished.
 
 The projection follows the official
 [conversation-state guide](https://developers.openai.com/api/docs/guides/conversation-state),

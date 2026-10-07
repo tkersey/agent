@@ -53,7 +53,7 @@ fn only(value: json.Value, keys: []const []const u8) !void {
 fn list(a: std.mem.Allocator) json.Value {
     return .{ .array = .init(a) };
 }
-fn settings(a: std.mem.Allocator, profile: []const u8) !Settings {
+pub fn settings(a: std.mem.Allocator, profile: []const u8) !Settings {
     const parsed = try json.parse(a, profile, .{ .bytes = 256 * 1024 });
     const result = try values.fromJson(Settings, a, try field(parsed.value, "responses"));
     if (result.model.bytes.len == 0 or result.audience.bytes.len == 0 or result.max_output_tokens == 0 or result.max_output_tokens > 32768) return error.InvalidConfiguration;

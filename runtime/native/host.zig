@@ -140,6 +140,9 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     const command = args.next() orelse "--help";
     if (std.mem.eql(u8, command, "--help")) {
         if (args.next() != null) return 64;
+        if (comptime @hasDecl(Environment, "configure")) {
+            try std.Io.File.stdout().writeStreamingAll(init.io, "Configured application commands:\nvalidate --config FILE\nrun --config FILE --task TEXT --state-dir PATH --authorize-inference --credential-file FILE\nserve --transport stdio --config FILE --state-dir PATH [--authorize-inference --credential-file FILE]\nresume --state-dir PATH [--task-id ID] [--config FILE] [--authorize-inference --credential-file FILE]\nUse --profile-task ID with serve to restore that task's frozen profile and snapshot.\nAn explicit --trust-root DER_FILE selects a TLS trust root. Credentials are never discovered.\nOffline mode uses embedded deterministic fixtures and requires --offline.\n\n");
+        }
         try std.Io.File.stdout().writeStreamingAll(init.io, "Agent native application\n\n--help\ndescribe-build\nlicenses\ndemo --offline --state-dir PATH\nserve --transport stdio --offline [--state-dir PATH]\nstatus|result|resume|cancel --offline --state-dir PATH [--task-id ID]\nrun --offline --state-dir PATH --input-json JSON [--operation-id ID]\nrespond --offline --state-dir PATH --task-id ID --question-id ID --question-revision N --request-digest SHA256 --answer-json JSON [--operation-id ID]\nexport-checkpoint --offline --state-dir PATH [--task-id ID] --output FILE\nimport-checkpoint --offline --state-dir NEW_PATH --input FILE [--operation-id ID]\n\nA state directory enables durable tasks. Without it, serve provides discovery only.\nTask selection is required when more than one applicable task exists.\nResume and cancel accept --operation-id; resume retries also require the original --expected-revision.\n");
         return 0;
     }
@@ -164,11 +167,18 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     }
     const demo = std.mem.eql(u8, command, "demo");
     const serving = std.mem.eql(u8, command, "serve");
+    const validating = std.mem.eql(u8, command, "validate");
     const human = std.meta.stringToEnum(HumanCommand, command);
-    if (!demo and !serving and human == null) return 64;
+    if (!demo and !serving and !validating and human == null) return 64;
     var offline = false;
     var stdio = false;
     var state_path: ?[]const u8 = null;
+    var config_path: ?[]const u8 = null;
+    var credential_path: ?[]const u8 = null;
+    var trust_root_path: ?[]const u8 = null;
+    var profile_task: ?[]const u8 = null;
+    var task_text: ?[]const u8 = null;
+    var authorize_inference = false;
     var human_options: HumanOptions = .{};
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "--offline") and !offline) offline = true else if (std.mem.eql(u8, arg, "--transport") and !stdio and serving) {
@@ -176,6 +186,18 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
             stdio = true;
         } else if (std.mem.eql(u8, arg, "--state-dir") and state_path == null) {
             state_path = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--config") and config_path == null) {
+            config_path = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--credential-file") and credential_path == null) {
+            credential_path = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--trust-root") and trust_root_path == null) {
+            trust_root_path = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--profile-task") and serving and profile_task == null) {
+            profile_task = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--authorize-inference") and !authorize_inference) {
+            authorize_inference = true;
+        } else if (std.mem.eql(u8, arg, "--task") and human == .run and task_text == null) {
+            task_text = args.next() orelse return 64;
         } else if (std.mem.eql(u8, arg, "--task-id") and human != null and human.? != .run and human.? != .@"import-checkpoint" and human_options.task_id == null) {
             human_options.task_id = args.next() orelse return 64;
         } else if (std.mem.eql(u8, arg, "--input-json") and human == .run and human_options.input_json == null) {
@@ -198,7 +220,11 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
             human_options.checkpoint_output = args.next() orelse return 64;
         } else return 64;
     }
-    if (!offline or (serving and !stdio) or (!serving and state_path == null) or (human == .run and human_options.input_json == null)) return 64;
+    if ((serving and !stdio) or (!serving and !validating and state_path == null) or (human == .run and human_options.input_json == null and task_text == null)) return 64;
+    if ((demo and !offline) or (validating and state_path != null) or (offline and authorize_inference) or (task_text != null and human_options.input_json != null) or (profile_task != null and state_path == null)) return 64;
+    if (comptime !@hasDecl(Environment, "configure")) {
+        if (!offline or validating or config_path != null or credential_path != null or trust_root_path != null or profile_task != null or authorize_inference) return 64;
+    }
     if (human == .respond and (human_options.answer.value == null or human_options.answer.id == null or human_options.answer.revision == null or human_options.answer.request == null)) return 64;
     if ((human == .@"import-checkpoint" and human_options.checkpoint_input == null) or (human == .@"export-checkpoint" and human_options.checkpoint_output == null)) return 64;
 
@@ -227,10 +253,47 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     const grants = try profile_allocator.alloc(registry.Grant, handlers.entries.len);
     for (handlers.entries, grants) |entry, *grant| grant.* = .{ .identity = entry.declaration.identity, .resource_role = entry.declaration.resource_role, .resource_identity = application.image_identity };
     const profile_bytes = try std.json.Stringify.valueAlloc(profile_allocator, .{ .mode = "offline", .application = Types.application_id, .assets = try discovery.digest(profile_allocator, assets.application) }, .{});
-    const profile: tasks.Profile = .{ .id = "offline", .runtime_identity = artifact_identity.sha256, .bytes = profile_bytes, .authority = .{ .grants = grants, .principal = try std.fmt.allocPrint(profile_allocator, "uid:{d}", .{c.geteuid()}), .tenant = "local" } };
+    var profile: tasks.Profile = .{ .id = "offline", .runtime_identity = artifact_identity.sha256, .bytes = profile_bytes, .authority = .{ .grants = grants, .principal = try std.fmt.allocPrint(profile_allocator, "uid:{d}", .{c.geteuid()}), .tenant = "local" } };
     var service: ?tasks.Service(Types) = null;
     defer if (service) |*owner| owner.close(a) catch {};
     if (namespace) |*owner| service = try tasks.Service(Types).init(a, init.io, owner, assets, &application, handlers, profile);
+    if (comptime @hasDecl(Environment, "configure")) {
+        var frozen: ?tasks.FrozenInputs = null;
+        if (profile_task) |text| {
+            const id = client_api.identifier(16, json.string(text)) catch return 64;
+            frozen = service.?.frozenInputs(profile_allocator, id) catch return 64;
+        } else if (human != null and human.? != .run and human.? != .@"import-checkpoint") {
+            const id = selectTask(Types, profile_allocator, &service.?, human_options.task_id, human == .@"resume" or human == .cancel) catch return 64;
+            frozen = service.?.frozenInputs(profile_allocator, id) catch return 64;
+        }
+        const admitted = Environment.configure(profile_allocator, init.io, .{ .offline = offline, .config_path = config_path, .credential_path = credential_path, .trust_root_path = trust_root_path }, frozen, assets) catch return 64;
+        if (admitted.bytes.len > 256 * 1024) return 64;
+        if (frozen) |saved| {
+            if (!std.mem.eql(u8, saved.profile, admitted.bytes) or !std.mem.eql(u8, saved.profile_id, admitted.id)) return 64;
+        }
+        profile.id = admitted.id;
+        profile.bytes = admitted.bytes;
+        profile.resources = admitted.resources;
+        profile.environment = admitted.environment;
+        profile.authority.inference = offline or authorize_inference;
+        application.execution_mode = if (offline) .offline else .live;
+        if (service) |*owner| owner.profile = profile;
+    }
+    if (task_text) |text| {
+        if (comptime @hasDecl(Environment, "taskInput")) {
+            const input = Environment.taskInput(profile_allocator, text) catch return 64;
+            human_options.input_json = try json.canonical(profile_allocator, try @import("values.zig").toJson(Types.Input, profile_allocator, input));
+        } else return 64;
+    }
+    if (validating) {
+        var result = json.object();
+        try json.put(profile_allocator, &result, "valid", .{ .bool = true });
+        try json.put(profile_allocator, &result, "profile_id", json.string(profile.id));
+        try json.put(profile_allocator, &result, "profile_sha256", json.string(try discovery.digest(profile_allocator, profile.bytes)));
+        try std.Io.File.stdout().writeStreamingAll(init.io, try json.canonical(profile_allocator, result));
+        try std.Io.File.stdout().writeStreamingAll(init.io, "\n");
+        return 0;
+    }
     var client: ?client_api.Client(Types) = null;
     if (service) |*owner| client = .{ .service = owner };
     if (human) |selected| return humanCommand(Types, a, &service.?, &client.?, selected, human_options, &instance) catch |err| {
@@ -275,6 +338,23 @@ const HumanOptions = struct {
     checkpoint_output: ?[]const u8 = null,
 };
 
+fn selectTask(comptime Types: type, a: std.mem.Allocator, service: *tasks.Service(Types), text: ?[]const u8, nonterminal: bool) ![16]u8 {
+    if (text) |value| return client_api.identifier(16, json.string(value));
+    const ids = try service.namespace.store.taskIds(a, nonterminal);
+    defer a.free(ids);
+    var selected: ?[16]u8 = null;
+    for (ids) |candidate| {
+        var task = service.task(a, candidate) catch |err| switch (err) {
+            error.Denied => continue,
+            else => return err,
+        };
+        task.deinit();
+        if (selected != null) return error.AmbiguousTask;
+        selected = candidate;
+    }
+    return selected orelse error.UnknownTask;
+}
+
 /// CLI selection and rendering only. All admissions and execution use the same
 /// client mapping, task owner and isolated I/O slot as the protocol front end.
 fn humanCommand(comptime Types: type, a: std.mem.Allocator, service: *tasks.Service(Types), client: *client_api.Client(Types), command: HumanCommand, options: HumanOptions, fallback_operation_id: []const u8) !u8 {
@@ -299,21 +379,7 @@ fn humanCommand(comptime Types: type, a: std.mem.Allocator, service: *tasks.Serv
         const accepted = try client.call(frame, .@"task.submit", params);
         id = try client_api.identifier(16, accepted.object.get("task_id").?);
     } else {
-        if (options.task_id) |text| id = try client_api.identifier(16, json.string(text)) else {
-            const ids = try service.namespace.store.taskIds(frame, command == .@"resume" or command == .cancel);
-            var found = false;
-            for (ids) |candidate| {
-                var task = service.task(frame, candidate) catch |err| switch (err) {
-                    error.Denied => continue,
-                    else => return err,
-                };
-                task.deinit();
-                if (found) return 64;
-                id = candidate;
-                found = true;
-            }
-            if (!found) return 64;
-        }
+        id = selectTask(Types, frame, service, options.task_id, command == .@"resume" or command == .cancel) catch return 64;
         try json.put(frame, &params, "task_id", json.string(try frame.dupe(u8, &std.fmt.bytesToHex(id, .lower))));
         if (command == .@"export-checkpoint") {
             const exported = try service.exportCheckpoint(frame, id, options.checkpoint_output.?);
@@ -392,7 +458,7 @@ fn driveHuman(comptime Types: type, a: std.mem.Allocator, service: *tasks.Servic
             try slot.release();
         }
         switch (try service.pump(frame)) {
-            .work => |work| slot.start(work, service.profile.authority, null) catch try service.notSent(frame, work),
+            .work => |work| slot.start(work, service.profile.authority, service.profile.environment) catch try service.notSent(frame, work),
             .progressed => {},
             .waiting, .idle => {
                 try service.park(frame);
@@ -556,7 +622,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
                     break :blk tasks.Step.idle;
                 };
                 switch (step) {
-                    .work => |work| slot.start(work, service.profile.authority, null) catch {
+                    .work => |work| slot.start(work, service.profile.authority, service.profile.environment) catch {
                         try service.notSent(frame, work);
                     },
                     .progressed, .waiting => progressed = true,

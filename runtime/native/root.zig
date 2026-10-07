@@ -14,6 +14,7 @@ pub const inbox = @import("inbox.zig");
 pub const https = @import("https.zig");
 pub const responses = @import("responses.zig");
 pub const repository = @import("repository.zig");
+pub const configuration = @import("configuration.zig");
 pub const tasks = @import("tasks.zig");
 pub const client = @import("client.zig");
 pub const Namespace = @import("namespace.zig").Namespace;

@@ -23,6 +23,7 @@ pub const Application = struct {
     image_identity: [32]u8,
     protocol_schema: json.Value = .null,
     protocol_schema_sha256: []const u8 = "",
+    execution_mode: enum { offline, live } = .offline,
 
     pub fn init(comptime Types: type, a: std.mem.Allocator, assets: Assets, handlers: registry.Registry) !Application {
         var arena = std.heap.ArenaAllocator.init(a);
@@ -125,7 +126,7 @@ pub const Application = struct {
         for ([_][]const u8{ "application_id", "application_version", "client_mapping", "input", "output", "failure", "answer", "message", "capabilities" }) |key|
             try json.put(a, &app, key, self.metadata.object.get(key) orelse return error.InvalidAssets);
         try json.put(a, &result, "application", app);
-        try json.put(a, &result, "execution_mode", json.string("offline"));
+        try json.put(a, &result, "execution_mode", json.string(@tagName(self.execution_mode)));
         try json.put(a, &result, "protocol_schema", self.protocol_schema);
         return result;
     }

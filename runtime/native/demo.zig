@@ -1,13 +1,16 @@
 //! Deterministic client scenario through the same durable owner as stdio. The
 //! authored application, not this scenario, chooses effects and control flow.
 const std = @import("std");
-const data = @import("boundary_data");
+const Worker = @import("worker.zig").Worker;
+const c = @import("native_c");
 const tasks = @import("tasks.zig");
 const client_api = @import("client.zig");
 const json = @import("json.zig");
 const values = @import("values.zig");
 
 pub fn run(comptime Types: type, comptime Environment: type, a: std.mem.Allocator, service: *tasks.Service(Types), client: *client_api.Client(Types), operation_id: []const u8) !json.Value {
+    const slot = try Worker.init(a, service.io);
+    defer slot.deinit(a) catch unreachable;
     const accepted = try service.submit(a, operation_id, Environment.demo_input);
     var effects: u32 = 0;
     var yields: u32 = 0;
@@ -15,14 +18,23 @@ pub fn run(comptime Types: type, comptime Environment: type, a: std.mem.Allocato
         const step = try service.pump(a);
         switch (step) {
             .work => |work| {
-                var request = try data.invocation.decode(data.invocation.Request, a, work.request);
-                defer request.deinit();
-                const id = std.fmt.bytesToHex(work.task, .lower);
-                const reply = work.entry.declaration.invoke.?(.{ .allocator = a, .io = service.io, .authority = &service.profile.authority, .task_id = &id }, request.value.binding.payload) catch |err| {
-                    try service.unknown(a, work);
+                slot.start(work, service.profile.authority, service.profile.environment) catch |err| {
+                    try service.notSent(a, work);
                     return err;
                 };
-                try service.acquire(a, work, reply);
+                // Offline demo has no interactive input loop. Use the same
+                // acquisition path as CLI/stdio, including raw captures and
+                // definitely-not-sent versus unknown delivery classification.
+                while (!slot.finished()) _ = c.poll(null, 0, 1);
+                try slot.join();
+                defer slot.release() catch unreachable;
+                if (slot.reply) |reply| {
+                    try service.acquire(a, work, reply);
+                } else {
+                    const err = slot.failure orelse error.DemoDidNotComplete;
+                    if (slot.invoked) try service.unknown(a, work) else try service.notSent(a, work);
+                    return err;
+                }
                 effects += 1;
             },
             .waiting => {

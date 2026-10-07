@@ -88,7 +88,7 @@ fn ownerRecovery(captured: bool) !void {
     defer handlers.deinit();
     var grants: [3]native.registry.Grant = undefined;
     for (&grants, handlers.entries) |*grant, entry| grant.* = .{ .identity = entry.declaration.identity, .resource_role = entry.declaration.resource_role, .resource_identity = application.image_identity };
-    const profile: native.tasks.Profile = .{ .id = "offline", .runtime_identity = @splat(42), .bytes = "fixed-profile", .authority = .{ .grants = &grants, .principal = "test", .tenant = "test" } };
+    const profile: native.tasks.Profile = .{ .id = "offline", .runtime_identity = @splat(42), .bytes = "fixed-profile", .resources = &.{"immutable snapshot bytes"}, .authority = .{ .grants = &grants, .principal = "test", .tenant = "test" } };
     var temporary = std.testing.tmpDir(.{});
     defer temporary.cleanup();
     var path_buffer: [4096]u8 = undefined;
@@ -134,12 +134,18 @@ fn ownerRecovery(captured: bool) !void {
     namespace = try native.Namespace.open(a, io, path);
     service = try native.tasks.Service(T).init(a, io, &namespace, assets, &application, handlers, profile);
     service_live = true;
+    const frozen = try service.frozenInputs(frame, accepted.receipt.task);
+    try std.testing.expectEqualStrings(profile.bytes, frozen.profile);
+    try std.testing.expectEqualStrings(profile.resources[0], frozen.resources[0]);
     try std.testing.expect(try service.pump(frame) == .idle);
     var status = try service.task(frame, accepted.receipt.task);
     defer status.deinit();
     service.profile.runtime_identity = @splat(43);
     try std.testing.expectError(error.IncompatibleProfile, service.resumeTask(frame, "resume", accepted.receipt.task, status.value.revision));
     service.profile.runtime_identity = profile.runtime_identity;
+    service.profile.resources = &.{"changed snapshot bytes"};
+    try std.testing.expectError(error.IncompatibleProfile, service.resumeTask(frame, "resume", accepted.receipt.task, status.value.revision));
+    service.profile.resources = profile.resources;
     _ = try service.resumeTask(frame, "resume", accepted.receipt.task, status.value.revision);
     for (0..32) |_| {
         const step = try service.pump(frame);

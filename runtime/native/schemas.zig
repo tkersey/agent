@@ -266,7 +266,7 @@ pub fn document(a: std.mem.Allocator, application: json.Value, limits: protocol.
     for ([_][]const u8{ "input", "output", "failure", "answer", "message" }) |key| try app_properties.append(.{ key, schema_asset });
     const capability = try shape(a, &.{ .{ "identity", try text(a, 1, 128) }, .{ "resource_role", try text(a, 1, 128) }, .{ "payload_sha256", digest }, .{ "resume_sha256", digest } }, &.{});
     try app_properties.append(.{ "capabilities", try array(a, capability, 64) });
-    try json.put(a, &definitions, "describe.result", try shape(a, &.{ .{ "methods", try array(a, method_description, 16) }, .{ "next_cursor", try nullable(a, count) }, .{ "application", try shape(a, app_properties.items, &.{}) }, .{ "execution_mode", try constant(a, "offline") }, .{ "protocol_schema", try literal(a, "{\"type\":\"object\"}") } }, &.{}));
+    try json.put(a, &definitions, "describe.result", try shape(a, &.{ .{ "methods", try array(a, method_description, 16) }, .{ "next_cursor", try nullable(a, count) }, .{ "application", try shape(a, app_properties.items, &.{}) }, .{ "execution_mode", try enumeration(a, &.{ "offline", "live" }) }, .{ "protocol_schema", try literal(a, "{\"type\":\"object\"}") } }, &.{}));
     var errors: std.array_list.Managed(json.Value) = .init(a);
     inline for (@typeInfo(protocol.Kind).@"enum".field_names) |name| {
         const kind = @field(protocol.Kind, name);

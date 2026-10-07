@@ -24,6 +24,7 @@ pub const Task = struct {
     tenant: Name,
     profile_id: Name,
     profile: Reference,
+    resources: contracts.Vector(Reference, 16) = .{ .items = &.{} },
     image: Reference,
     runtime_identity: Digest,
     input: Reference,

@@ -172,7 +172,8 @@ const Application = struct {
                 successor = try e.update(body, successor, .{ .results = try e.sequence(body, @FieldType(t.State, "results"), &.{result}), .work_calls = try body.checkedAdd(try body.field(next, "work_calls"), try body.constant(u16, 1), try e.failure()) });
                 // The tool result is retained before polling; queued client text
                 // can only become a new user message on the following request.
-                const inbox = try body.perform(inbox_op, try body.constant(void, {}));
+                const raw_inbox = try body.perform(inbox_op, try body.constant(void, {}));
+                const inbox = try a.interop.term(body, try context.builder.pure(try a.interop.valueId(body, raw_inbox)), try e.schema(Inbox.Reply));
                 const empty = try body.caseOf(inbox, "empty");
                 const message = try body.caseOf(inbox, "message");
                 const arrived = message.body();

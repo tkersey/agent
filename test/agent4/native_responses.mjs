@@ -22,10 +22,18 @@ for (const fixture of corpus.cases) {
     nonintersection.push(fixture.name);
     continue;
   }
+  if (fixture.name === 'missing call id') {
+    // v3's requireTextLimit classifies absent text as a normalization limit;
+    // v5 distinguishes a structurally unsupported item. Both reject the call.
+    assert.equal(tags[result[0]], 'unsupported_response', fixture.name);
+    assert.equal(reasons[result.readUInt32LE(1)], 'normalization_limit', fixture.name);
+    nonintersection.push(fixture.name);
+    continue;
+  }
   assert.equal(tags[result[0]], fixture.result, fixture.name);
   if (fixture.reason) assert.equal(reasons[result.readUInt32LE(1)], fixture.reason, fixture.name);
   items.push({name: fixture.name, result: result.toString('hex')});
 }
-assert.deepEqual(nonintersection, ['invalid Unicode', 'invalid whole batch']);
+assert.deepEqual(nonintersection, ['invalid Unicode', 'missing call id', 'invalid whole batch']);
 assert.equal(items.length, corpus.cases.length - nonintersection.length);
 console.log(JSON.stringify({version: 1, items, explicit_nonintersection: nonintersection}));

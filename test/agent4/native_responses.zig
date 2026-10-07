@@ -125,7 +125,7 @@ test "native Responses v1 independently specified capture corpus" {
         }
     }
     const nonintersection = reference.value.object.get("explicit_nonintersection").?.array.items;
-    try std.testing.expectEqual(2, nonintersection.len);
+    try std.testing.expectEqual(3, nonintersection.len);
     try std.testing.expectEqual(cases.len - nonintersection.len, compared);
     var bad = request();
     var tools = [_]P.ToolDeclaration{P.allDeclarations().items[0]};

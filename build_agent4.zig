@@ -186,7 +186,7 @@ pub fn build(b: *std.Build) void {
 
     const lint = b.step("lint", "Check formatting and the Zig source inventory");
     const format_check = b.addRunFile(.zig_exe);
-    format_check.addArgs(&.{ "fmt", "--check", "build.zig", "build_agent4.zig", "build_native.zig", "src", "runtime/native", "tools/native", "examples/native-minimal", "test/agent4", "test/consumers", "test/fixture_driver.zig", "test/application_driver.zig", "test/authoring_tests.zig" });
+    format_check.addArgs(&.{ "fmt", "--check", "build.zig", "build_agent4.zig", "build_native.zig", "src", "runtime/native", "tools/native", "examples/native-minimal", "examples/repository-agent", "test/agent4", "test/consumers", "test/fixture_driver.zig", "test/application_driver.zig", "test/authoring_tests.zig" });
     const paths = b.addSystemCommand(&.{ "sh", "tools/check_zig_paths.sh" });
     lint.dependOn(&format_check.step);
     lint.dependOn(&paths.step);
@@ -664,6 +664,10 @@ pub fn build(b: *std.Build) void {
             });
             native_example.dependOn(&repository_product.install.step);
             native_checks.dependOn(&repository_product.executable.step);
+            const repository_peer = nodeCommand(b);
+            repository_peer.addArgs(&.{ "node", "test/agent4/native_repository.mjs" });
+            repository_peer.addFileArg2(repository_product.executable.getEmittedBin(), .{ .make_absolute = true });
+            native_checks.dependOn(&repository_peer.step);
             const protocol_peer = nodeCommand(b);
             protocol_peer.addArgs(&.{ "node", "test/agent4/native_host.mjs" });
             protocol_peer.addFileArg2(product.executable.getEmittedBin(), .{ .make_absolute = true });

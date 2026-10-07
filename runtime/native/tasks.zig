@@ -20,6 +20,17 @@ pub const Profile = struct {
     /// Admitted immutable profile bytes, including concrete resource bindings.
     bytes: []const u8,
     authority: registry.Authority,
+    /// Launch-owned adapter state, never persisted. Its stable address and
+    /// backing allocations must outlive every joined worker using this profile.
+    environment: ?*anyopaque = null,
+    /// Immutable resource objects admitted with every new task. Their ordinary
+    /// references are retained by the task and therefore included in archives.
+    resources: []const []const u8 = &.{},
+};
+pub const FrozenInputs = struct {
+    profile_id: []const u8,
+    profile: []const u8,
+    resources: []const []const u8,
 };
 pub const Admission = struct { receipt: state.Receipt, replayed: bool };
 pub const Status = state.Status;
@@ -101,6 +112,21 @@ pub fn Service(comptime Types: type) type {
             if (!same(decoded.value.principal.bytes, self.profile.authority.principal) or !same(decoded.value.tenant.bytes, self.profile.authority.tenant)) return error.Denied;
             if (!same(&decoded.value.id, &id)) return error.CorruptState;
             return decoded;
+        }
+        /// Rebuild adapter state from owned immutable data, never from the
+        /// original filesystem paths. This read does not resume or grant work.
+        pub fn frozenInputs(self: *Self, a: std.mem.Allocator, id: state.TaskId) !FrozenInputs {
+            var decoded = try self.task(a, id);
+            defer decoded.deinit();
+            const value = decoded.value;
+            const resources = try a.alloc([]const u8, value.resources.items.len);
+            var total: u64 = 0;
+            for (value.resources.items, resources) |reference, *bytes| {
+                total = std.math.add(u64, total, reference.bytes) catch return error.Capacity;
+                if (total > 16 * 1024 * 1024) return error.Capacity;
+                bytes.* = try self.store().object(a, reference, 16 * 1024 * 1024);
+            }
+            return .{ .profile_id = try a.dupe(u8, value.profile_id.bytes), .profile = try self.store().object(a, value.profile, 256 * 1024), .resources = resources };
         }
         pub fn pendingQuestion(self: *Self, a: std.mem.Allocator, id: state.TaskId) !?contracts.Decoded(state.Question) {
             var value = try self.task(a, id);
@@ -239,6 +265,10 @@ pub fn Service(comptime Types: type) type {
             if (!same(value.application_id.bytes, Types.application_id) or
                 !same(&value.profile.digest, &storage.digest(self.profile.bytes)) or !same(&value.image.digest, &storage.digest(self.assets.image)) or
                 !same(&value.runtime_identity, &self.profile.runtime_identity)) return error.IncompatibleProfile;
+            if (value.resources.items.len != self.profile.resources.len) return error.IncompatibleProfile;
+            for (value.resources.items, self.profile.resources) |reference, bytes| {
+                if (reference.bytes != bytes.len or !same(&reference.digest, &storage.digest(bytes))) return error.IncompatibleProfile;
+            }
         }
         fn retire(self: *Self, a: std.mem.Allocator) !void {
             if (self.active) |active| {
@@ -301,8 +331,17 @@ pub fn Service(comptime Types: type) type {
             const checkpoint = try driver.checkpoint(a);
             defer a.free(checkpoint);
             if (checkpoint.len > 1024 * 1024) return error.Capacity;
+            if (self.profile.resources.len > 16) return error.Capacity;
+            var resource_bytes: u64 = 0;
+            for (self.profile.resources) |bytes| {
+                resource_bytes = std.math.add(u64, resource_bytes, bytes.len) catch return error.Capacity;
+                if (resource_bytes > 16 * 1024 * 1024) return error.Capacity;
+            }
+            const resources = try a.alloc(state.Reference, self.profile.resources.len);
+            defer a.free(resources);
             try self.store().begin();
             defer self.store().rollback();
+            for (self.profile.resources, resources) |bytes, *reference| reference.* = try self.store().putObject(bytes);
             const value: state.Task = .{
                 .id = task_id,
                 .application_id = try name(Types.application_id),
@@ -314,6 +353,7 @@ pub fn Service(comptime Types: type) type {
                 .tenant = try name(self.profile.authority.tenant),
                 .profile_id = try name(self.profile.id),
                 .profile = try self.store().putObject(self.profile.bytes),
+                .resources = .{ .items = resources },
                 .image = try self.store().putObject(self.assets.image),
                 .runtime_identity = self.profile.runtime_identity,
                 .input = try self.store().putObject(input_bytes),

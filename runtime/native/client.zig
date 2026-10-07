@@ -200,6 +200,12 @@ pub fn Client(comptime Types: type) type {
             }
         }
 
+        pub fn cursorRange(self: *Self, a: std.mem.Allocator, params: json.Value) !struct { first: u64, last: u64 } {
+            var task = try self.service.task(a, try identifier(16, try field(params, "task_id")));
+            defer task.deinit();
+            return .{ .first = task.value.event_floor, .last = task.value.event_high };
+        }
+
         fn artifactRead(self: *Self, a: std.mem.Allocator, params: json.Value) !json.Value {
             const request = try discovery.artifactRequest(params);
             const id = request.id;

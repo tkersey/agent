@@ -283,7 +283,8 @@ pub fn document(a: std.mem.Allocator, application: json.Value, limits: protocol.
         const kind = @field(protocol.Kind, name);
         var code = json.object();
         try json.put(a, &code, "const", try json.number(a, kind.code()));
-        const details = try shape(a, &.{ .{ "kind", try constant(a, name) }, .{ "recovery", try enumeration(a, &.{ "correct_request", "reconnect", "retry_same_operation_or_inspect" }) }, .{ "supported_versions", try array(a, try constant(a, protocol.version), 1) } }, &.{"supported_versions"});
+        var details = try shape(a, &.{ .{ "kind", try constant(a, name) }, .{ "recovery", if (kind == .CursorExpired) try constant(a, "read_status_or_result") else try enumeration(a, &.{ "correct_request", "reconnect", "retry_same_operation_or_inspect" }) }, .{ "supported_versions", try array(a, try constant(a, protocol.version), 1) } }, &.{"supported_versions"});
+        if (kind == .CursorExpired) details = try extend(a, details, &.{ .{ "earliest_available_seq", count }, .{ "high_water_seq", count } }, &.{});
         try errors.append(try shape(a, &.{ .{ "code", code }, .{ "message", try constant(a, name) }, .{ "data", details } }, &.{}));
     }
     var fault = json.object();

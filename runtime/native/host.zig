@@ -107,6 +107,14 @@ fn Connection(comptime Types: type) type {
             const client = self.client orelse return protocol.failure(a, request.id, .UnsupportedCapability, "correct_request");
             const result = client.call(a, request.method, request.params) catch |err| {
                 const kind = failureKind(err);
+                if (kind == .CursorExpired) {
+                    const range = client.cursorRange(a, request.params) catch |range_error| return protocol.failure(a, request.id, failureKind(range_error), "correct_request");
+                    var failure = try protocol.failure(a, request.id, kind, "read_status_or_result");
+                    const details = failure.object.getPtr("error").?.object.getPtr("data").?;
+                    try json.put(a, details, "earliest_available_seq", json.string(try std.fmt.allocPrint(a, "{d}", .{range.first})));
+                    try json.put(a, details, "high_water_seq", json.string(try std.fmt.allocPrint(a, "{d}", .{range.last})));
+                    return failure;
+                }
                 return protocol.failure(a, request.id, kind, if (kind == .StorageUnavailable) "retry_same_operation_or_inspect" else "correct_request");
             };
             return protocol.response(a, request.id, result);

@@ -83,6 +83,18 @@ export function missingCheckpoint(bytes) {
   archive.objects.delete(key(archive.task.checkpoint));
   return encode(archive);
 }
+
+export function retainedEventSuffix(bytes, floor) {
+  const archive = readArchive(bytes);
+  assert(floor > archive.task.event_floor && floor <= archive.task.event_high);
+  const removed = archive.manifest[7].filter(row => row[0] < floor);
+  assert(removed.length > 0);
+  archive.manifest[7] = archive.manifest[7].filter(row => row[0] >= floor);
+  for (const row of removed) archive.objects.delete(key(row[2]));
+  archive.taskValue[taskFields.indexOf('event_floor')] = floor;
+  archive.manifest[3] = replace(archive, archive.manifest[3], Buffer.from(encodeValue(archive.schemas.get('task'), archive.taskValue)));
+  return encode(archive);
+}
 export function changedProfile(bytes) {
   const archive = readArchive(bytes);
   const profile = JSON.parse(archive.object(archive.task.profile));

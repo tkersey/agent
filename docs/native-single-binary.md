@@ -230,6 +230,14 @@ schemas. Potentially full-width counters are exact bounded decimal strings.
 wire contract limits UTF-8 bytes. Stateful authorization and revision checks
 still occur in the task owner after value admission.
 
+The reference store retains event history and replay receipts within the
+advertised 256 MiB namespace quota; it rejects capacity exhaustion rather than
+silently evicting replay protection. It does not automatically prune event
+prefixes. An imported archive may retain a later contiguous event suffix.
+`task.events` and `task.subscribe` then reject older cursors with `CursorExpired`,
+`earliest_available_seq`, `high_water_seq`, and `recovery: read_status_or_result`.
+Read `task.status`/`task.result` before choosing a cursor in the retained range.
+
 The native peer validates captured responses/events and independent boundary
 cases with `jsonschema==4.23.0` through `uv run`. This is a qualification-only
 dependency; neither Python nor a schema interpreter is linked into or required

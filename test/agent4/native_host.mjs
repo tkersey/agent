@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 import {join, resolve} from 'node:path';
 import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
-import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence} from './native_archive.mjs';
+import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence, retainedEventSuffix} from './native_archive.mjs';
 import {deployment} from './native_deployment.mjs';
 
 const source = resolve(process.argv[2]);
@@ -329,7 +329,8 @@ try {
   assert.equal((await resumed.next()).error.data.kind, 'InvalidParams');
   await resumed.end();
   cli('export-checkpoint', 'protocol state', '--output', 'completed.bundle');
-  const completedImport = cli('import-checkpoint', 'imported completion', '--input', 'completed.bundle', '--operation-id', 'import-completed');
+  writeFileSync(join(directory, 'retained-completion.bundle'), retainedEventSuffix(readFileSync(join(directory, 'completed.bundle')), 2n), {mode: 0o600});
+  const completedImport = cli('import-checkpoint', 'imported completion', '--input', 'retained-completion.bundle', '--operation-id', 'import-completed');
   assert.equal(completedImport.task_id, receipt.task_id);
   assert.deepEqual(cli('result', 'imported completion').outcome.value, {value: 41, answer: 'client answer'});
   const importedPeer = launch('imported completion');
@@ -338,6 +339,14 @@ try {
   assert.equal((await importedPeer.next()).result.receipt_id, receipt.receipt_id);
   importedPeer.write(rpc('imported-answer-alias', 'task.respond', {...answer, client_operation_id: 'answer-alias'}));
   assert.equal((await importedPeer.next()).result.receipt_id, answerReceipt.receipt_id);
+  for (const method of ['task.events', 'task.subscribe']) {
+    importedPeer.write(rpc(`expired-${method}`, method, {task_id: receipt.task_id, after_seq: '0'}));
+    const expired = await importedPeer.next();
+    assert.deepEqual(expired.error.data, {kind: 'CursorExpired', recovery: 'read_status_or_result', earliest_available_seq: '2', high_water_seq: '5'});
+    const missingRange = structuredClone(expired.error);
+    delete missingRange.data.earliest_available_seq;
+    schemaCases.push({definition: 'error', value: missingRange, accept: false});
+  }
   importedPeer.write(rpc('imported-events', 'task.events', {task_id: receipt.task_id, after_seq: '4'}));
   assert.deepEqual((await importedPeer.next()).result.events.map(event => event.type), ['imported']);
   await importedPeer.end();

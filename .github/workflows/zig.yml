@@ -173,6 +173,9 @@ jobs:
           else
             offline=(sandbox-exec -p '(version 1)(allow default)(deny network*)')
           fi
+          # Local manifests belong to this build root; the global compiler and
+          # package cache remains shared with the repository build.
+          export ZIG_LOCAL_CACHE_DIR="$GITHUB_WORKSPACE/.zig-cache/native-recipe"
           if [ "$MEASURE_BUILDS" = true ]; then
             # Retain only provisioned package bytes, never compiled objects.
             mkdir "$RUNNER_TEMP/native-measure-global" "$RUNNER_TEMP/native-measure-local"

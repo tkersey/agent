@@ -10,6 +10,7 @@ pub const Reference = struct { digest: Digest, bytes: u64 };
 pub const Outcome = enum { progressed, yielded, requested, completed, failed, cancelled };
 pub const Schedule = enum { queued, active, parked };
 pub const Status = enum { queued, running, waiting_input, parked, cancelling, blocked, unknown, completed, failed, cancelled };
+pub const RecordKind = enum { occurrence, question, message, artifact, capture, attempt, origin };
 pub const Blocker = enum { missing_capability, denied, capacity, missing_artifact, incompatible_profile, unavailable_environment };
 
 pub const Task = struct {
@@ -56,8 +57,8 @@ pub const Task = struct {
     }
 };
 
-pub const Method = enum { submit, message, respond, cancel, @"resume" };
-pub const Disposition = enum { accepted, queued, answer_acquired, cancellation_requested, resumed };
+pub const Method = enum { submit, message, respond, cancel, @"resume", import_checkpoint };
+pub const Disposition = enum { accepted, queued, answer_acquired, cancellation_requested, resumed, imported };
 pub const Receipt = struct {
     id: Digest,
     client_operation_id: Name,
@@ -112,6 +113,7 @@ pub const EventType = enum {
     completed,
     failed,
     cancelled,
+    imported,
 };
 pub const Event = struct {
     task: TaskId,
@@ -148,4 +150,33 @@ pub const Capture = struct {
     request: Reference,
     response: ?Reference,
     disposition: CaptureDisposition,
+};
+
+pub const Origin = struct {
+    id: Digest,
+    task: TaskId,
+    build: Reference,
+    native_identity: Digest,
+    source_revision: u64,
+};
+
+/// Environmental archive metadata uses the existing ordinary Agent codec.
+/// Its payload objects retain their canonical image/state/value bytes.
+pub const ArchiveRecord = struct { kind: RecordKind, id: Digest, body: Reference };
+pub const ArchiveEvent = struct { seq: u64, revision: u64, body: Reference };
+pub const ArchiveOperation = struct { key: Name, request: Digest, body: Reference };
+pub const ArchiveReservation = struct { attempt: Digest, bytes: u64 };
+pub const ArchiveSchema = struct { name: Name, definition: Reference };
+pub const Archive = struct {
+    version: u32,
+    classification: enum { private },
+    profile: enum { offline_copy },
+    task: Reference,
+    build: Reference,
+    schemas: contracts.Vector(ArchiveSchema, 16),
+    records: contracts.Vector(ArchiveRecord, 1024),
+    events: contracts.Vector(ArchiveEvent, 2048),
+    operations: contracts.Vector(ArchiveOperation, 2048),
+    reservations: contracts.Vector(ArchiveReservation, 64),
+    objects: contracts.Vector(Reference, 4096),
 };

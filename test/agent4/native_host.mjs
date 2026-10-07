@@ -2,13 +2,14 @@
 // claim the later task/recovery/provider conformance obligations are complete.
 import assert from 'node:assert/strict';
 import {spawn, execFileSync} from 'node:child_process';
-import {mkdtempSync, copyFileSync, rmSync, readFileSync} from 'node:fs';
+import {mkdtempSync, copyFileSync, rmSync, readFileSync, writeFileSync, mkdirSync, chmodSync, existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
 import {AgentClient} from '../../examples/native-minimal/stdio-client.mts';
+import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence} from './native_archive.mjs';
 
 const source = resolve(process.argv[2]);
 const directory = mkdtempSync(join(tmpdir(), 'Agent native ü '));
@@ -118,6 +119,47 @@ try {
   assert.deepEqual(humanAnswered.outcome.value, {value: 43, answer: 'human answer'});
   assert.equal(cli('respond', 'human state', ...humanAnswerArgs).revision, humanAnswered.revision);
   assert.throws(() => execFileSync(binary, ['respond', '--offline', '--state-dir', 'human state', ...humanAnswerArgs.slice(0, -1), '{"message":"conflicting answer"}'], options), error => error.status === 64);
+  const unsafeParent = mkdtempSync(join(tmpdir(), 'Agent writable parent '));
+  try {
+    chmodSync(unsafeParent, 0o777);
+    const unsafeCwd = join(unsafeParent, 'private child');
+    mkdirSync(unsafeCwd, {mode: 0o700});
+    assert.throws(() => execFileSync(binary, ['demo', '--offline', '--state-dir', 'state'], {...options, cwd: unsafeCwd}), error => error.status === 64);
+    assert.equal(existsSync(join(unsafeCwd, 'state')), false);
+  } finally { rmSync(unsafeParent, {recursive: true, force: true}); }
+
+  const portable = cli('run', 'archive pending', '--input-json', '{"value":20}', '--operation-id', 'portable-submission');
+  const exported = cli('export-checkpoint', 'archive pending', '--output', 'pending.bundle');
+  assert.equal(exported.task_id, portable.task_id);
+  const archiveBytes = readFileSync(join(directory, 'pending.bundle'));
+  assert.equal(exported.sha256, createHash('sha256').update(archiveBytes).digest('hex'));
+  assert.equal(exported.bytes, String(archiveBytes.length));
+  const archive = readArchive(archiveBytes);
+  assert.equal(Buffer.from(archive.task.id).toString('hex'), portable.task_id);
+  assert.equal(archive.build.program_sha256, manifest.program_sha256);
+  assert.equal(Buffer.from(archive.task.runtime_identity).toString('hex'), manifest.artifact_sha256);
+  assert.equal(cli('export-checkpoint', 'archive pending', '--output', 'pending-again.bundle').sha256, exported.sha256);
+  assert.throws(() => execFileSync(binary, ['export-checkpoint', '--offline', '--state-dir', 'archive pending', '--output', 'pending.bundle'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'AlreadyExists');
+  assert.throws(() => execFileSync(binary, ['export-checkpoint', '--offline', '--state-dir', 'archive pending', '--output', 'archive pending/forbidden.bundle'], options), error => error.status === 64);
+  assert.equal(cli('status', 'archive pending').revision, portable.revision);
+  const imported = cli('import-checkpoint', 'archive target', '--input', 'pending.bundle', '--operation-id', 'import-once');
+  assert.equal(imported.task_id, portable.task_id);
+  assert.equal(imported.disposition, 'imported');
+  assert.deepEqual(imported.question, portable.question);
+  assert.equal(cli('import-checkpoint', 'archive target', '--input', 'pending.bundle', '--operation-id', 'import-once').receipt_id, imported.receipt_id);
+  const portableAnswer = ['--task-id', imported.task_id, '--question-id', imported.question.question_id, '--question-revision', imported.question.question_revision, '--request-digest', imported.question.request_digest, '--answer-json', '{"message":"portable answer"}', '--operation-id', 'portable-answer'];
+  assert.deepEqual(cli('respond', 'archive target', ...portableAnswer).outcome.value, {value: 41, answer: 'portable answer'});
+  assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', 'archive target', '--input', 'pending.bundle', '--operation-id', 'another-import'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'NonEmptyNamespace');
+  for (const [name, bytes, expectedReason] of [
+    ['missing', missingCheckpoint(archiveBytes), 'MissingArtifact'],
+    ['profile', changedProfile(archiveBytes), 'IncompatibleProfile'],
+    ['unknown', unknownOccurrence(archiveBytes), 'UnsettledOccurrence'],
+    ['truncated', archiveBytes.subarray(0, archiveBytes.length - 1), 'InvalidArchive'],
+  ]) {
+    writeFileSync(join(directory, `${name}.bundle`), bytes, {mode: 0o600});
+    assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', `bad ${name}`, '--input', `${name}.bundle`, '--operation-id', 'recoverable-import'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === expectedReason);
+    assert.equal(cli('import-checkpoint', `bad ${name}`, '--input', 'pending.bundle', '--operation-id', 'recoverable-import').task_id, portable.task_id);
+  }
   const notifications = [];
   const typescript = new AgentClient(binary, ['--offline', '--state-dir', 'typescript state'], {cwd: directory, env: options.env, onNotification: event => notifications.push(event)});
   try {
@@ -252,6 +294,8 @@ try {
   assert.deepEqual(result.outcome.value, {value: 41, answer: 'client answer'});
   resumed.write(rpc('answer-after-completion', 'task.respond', answer));
   assert.equal((await resumed.next()).result.receipt_id, answerReceipt.receipt_id);
+  resumed.write(rpc('answer-alias', 'task.respond', {...answer, client_operation_id: 'answer-alias'}));
+  assert.equal((await resumed.next()).result.receipt_id, answerReceipt.receipt_id);
   resumed.write(rpc('answer-conflict', 'task.respond', {...answer, client_operation_id: 'different-answer', answer: {...answer.answer, value: {message: 'different'}}}));
   assert.equal((await resumed.next()).error.data.kind, 'AnswerConflict');
   resumed.write(rpc('events', 'task.events', {task_id: receipt.task_id, after_seq: '0', limit: 128}));
@@ -273,6 +317,19 @@ try {
   resumed.write(rpc('future-cursor', 'task.events', {task_id: receipt.task_id, after_seq: '99'}));
   assert.equal((await resumed.next()).error.data.kind, 'InvalidParams');
   await resumed.end();
+  cli('export-checkpoint', 'protocol state', '--output', 'completed.bundle');
+  const completedImport = cli('import-checkpoint', 'imported completion', '--input', 'completed.bundle', '--operation-id', 'import-completed');
+  assert.equal(completedImport.task_id, receipt.task_id);
+  assert.deepEqual(cli('result', 'imported completion').outcome.value, {value: 41, answer: 'client answer'});
+  const importedPeer = launch('imported completion');
+  await importedPeer.initialize();
+  importedPeer.write(rpc('imported-submit-replay', 'task.submit', submission));
+  assert.equal((await importedPeer.next()).result.receipt_id, receipt.receipt_id);
+  importedPeer.write(rpc('imported-answer-alias', 'task.respond', {...answer, client_operation_id: 'answer-alias'}));
+  assert.equal((await importedPeer.next()).result.receipt_id, answerReceipt.receipt_id);
+  importedPeer.write(rpc('imported-events', 'task.events', {task_id: receipt.task_id, after_seq: '4'}));
+  assert.deepEqual((await importedPeer.next()).result.events.map(event => event.type), ['imported']);
+  await importedPeer.end();
 
   const cancelling = launch('cancel state');
   await cancelling.initialize();

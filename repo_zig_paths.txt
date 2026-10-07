@@ -7,6 +7,7 @@ examples/native-minimal/environment.zig
 examples/native-minimal/types.zig
 runtime/inquiry_process_limit.zig
 runtime/inquiry_process_lock.zig
+runtime/native/archive.zig
 runtime/native/client.zig
 runtime/native/demo.zig
 runtime/native/discovery.zig

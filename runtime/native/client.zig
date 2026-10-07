@@ -101,7 +101,7 @@ pub fn Client(comptime Types: type) type {
             return result;
         }
 
-        fn admission(self: *Self, a: std.mem.Allocator, admitted: tasks.Admission) !json.Value {
+        pub fn admission(self: *Self, a: std.mem.Allocator, admitted: tasks.Admission) !json.Value {
             var result = try self.snapshot(a, admitted.receipt.task);
             try json.put(a, &result, "receipt_id", try hexadecimal(a, admitted.receipt.id));
             try json.put(a, &result, "receipt_revision", try counter(a, admitted.receipt.revision));

@@ -29,7 +29,7 @@ const manifest = {
   native_host_contract: 'agent-native-host/1.0',
   protocol: 'agent-host/1.0',
   client_mapping: 'agent-client-values/1.0',
-  state_format: 'agent-native-state/3',
+  state_format: 'agent-native-state/4',
   state_database_bytes: Number(stateBytes),
   target, optimize,
   program_sha256: hash(image),

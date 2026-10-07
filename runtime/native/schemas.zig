@@ -207,6 +207,7 @@ pub fn document(a: std.mem.Allocator, application: json.Value, limits: protocol.
             .input_required => question,
             .message_queued, .message_consumed, .message_not_consumed => message,
             .blocked => try shape(a, &.{.{ "delivery", try constant(a, "definitely_not_sent") }}, &.{"delivery"}),
+            .imported => try shape(a, &.{.{ "archive_sha256", digest }}, &.{}),
             else => empty,
         };
         var condition = json.object();

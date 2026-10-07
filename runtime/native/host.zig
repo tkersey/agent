@@ -125,11 +125,11 @@ fn failureKind(err: anyerror) protocol.Kind {
         error.AnswerConflict => .AnswerConflict,
         error.CursorExpired => .CursorExpired,
         error.Capacity, error.OutOfMemory, error.Overloaded => .Overloaded,
-        error.TerminalTask, error.StaleRevision, error.UnsettledOccurrence, error.IncompatibleProfile, error.ShuttingDown => .StateConflict,
+        error.TerminalTask, error.StaleRevision, error.UnsettledOccurrence, error.IncompatibleProfile, error.ShuttingDown, error.NonPortable, error.NonEmptyNamespace, error.AlreadyExists => .StateConflict,
         error.MissingArtifact, error.ArtifactUnavailable => .ArtifactUnavailable,
         error.UnsupportedCapability => .UnsupportedCapability,
         error.StorageUnavailable, error.CorruptState => .StorageUnavailable,
-        error.InvalidParams, error.InvalidValue, error.InvalidJson, error.Overflow, error.InvalidCharacter => .InvalidParams,
+        error.InvalidParams, error.InvalidValue, error.InvalidJson, error.Overflow, error.InvalidCharacter, error.InvalidArchive, error.UnsafeStatePath => .InvalidParams,
         else => .InternalError,
     };
 }
@@ -140,7 +140,7 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     const command = args.next() orelse "--help";
     if (std.mem.eql(u8, command, "--help")) {
         if (args.next() != null) return 64;
-        try std.Io.File.stdout().writeStreamingAll(init.io, "Agent native application\n\n--help\ndescribe-build\nlicenses\ndemo --offline --state-dir PATH\nserve --transport stdio --offline [--state-dir PATH]\nstatus|result|resume|cancel --offline --state-dir PATH [--task-id ID]\nrun --offline --state-dir PATH --input-json JSON [--operation-id ID]\nrespond --offline --state-dir PATH --task-id ID --question-id ID --question-revision N --request-digest SHA256 --answer-json JSON [--operation-id ID]\n\nA state directory enables durable tasks. Without it, serve provides discovery only.\nTask selection is required when more than one applicable task exists.\nResume and cancel accept --operation-id; resume retries also require the original --expected-revision.\n");
+        try std.Io.File.stdout().writeStreamingAll(init.io, "Agent native application\n\n--help\ndescribe-build\nlicenses\ndemo --offline --state-dir PATH\nserve --transport stdio --offline [--state-dir PATH]\nstatus|result|resume|cancel --offline --state-dir PATH [--task-id ID]\nrun --offline --state-dir PATH --input-json JSON [--operation-id ID]\nrespond --offline --state-dir PATH --task-id ID --question-id ID --question-revision N --request-digest SHA256 --answer-json JSON [--operation-id ID]\nexport-checkpoint --offline --state-dir PATH [--task-id ID] --output FILE\nimport-checkpoint --offline --state-dir NEW_PATH --input FILE [--operation-id ID]\n\nA state directory enables durable tasks. Without it, serve provides discovery only.\nTask selection is required when more than one applicable task exists.\nResume and cancel accept --operation-id; resume retries also require the original --expected-revision.\n");
         return 0;
     }
     if (std.mem.eql(u8, command, "describe-build") or std.mem.eql(u8, command, "licenses")) {
@@ -169,37 +169,38 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     var offline = false;
     var stdio = false;
     var state_path: ?[]const u8 = null;
-    var task_id: ?[]const u8 = null;
-    var input_json: ?[]const u8 = null;
-    var operation_id: ?[]const u8 = null;
-    var expected_revision: ?[]const u8 = null;
-    var answer_options: AnswerOptions = .{};
+    var human_options: HumanOptions = .{};
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "--offline") and !offline) offline = true else if (std.mem.eql(u8, arg, "--transport") and !stdio and serving) {
             if (!std.mem.eql(u8, args.next() orelse return 64, "stdio")) return 64;
             stdio = true;
         } else if (std.mem.eql(u8, arg, "--state-dir") and state_path == null) {
             state_path = args.next() orelse return 64;
-        } else if (std.mem.eql(u8, arg, "--task-id") and human != null and human.? != .run and task_id == null) {
-            task_id = args.next() orelse return 64;
-        } else if (std.mem.eql(u8, arg, "--input-json") and human == .run and input_json == null) {
-            input_json = args.next() orelse return 64;
-        } else if (std.mem.eql(u8, arg, "--operation-id") and human != null and human.? != .status and human.? != .result and operation_id == null) {
-            operation_id = args.next() orelse return 64;
-        } else if (std.mem.eql(u8, arg, "--expected-revision") and human == .@"resume" and expected_revision == null) {
-            expected_revision = args.next() orelse return 64;
-        } else if (std.mem.eql(u8, arg, "--answer-json") and human == .respond and answer_options.value == null) {
-            answer_options.value = args.next() orelse return 64;
-        } else if (std.mem.eql(u8, arg, "--question-id") and human == .respond and answer_options.id == null) {
-            answer_options.id = args.next() orelse return 64;
-        } else if (std.mem.eql(u8, arg, "--question-revision") and human == .respond and answer_options.revision == null) {
-            answer_options.revision = args.next() orelse return 64;
-        } else if (std.mem.eql(u8, arg, "--request-digest") and human == .respond and answer_options.request == null) {
-            answer_options.request = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--task-id") and human != null and human.? != .run and human.? != .@"import-checkpoint" and human_options.task_id == null) {
+            human_options.task_id = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--input-json") and human == .run and human_options.input_json == null) {
+            human_options.input_json = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--operation-id") and human != null and human.? != .status and human.? != .result and human.? != .@"export-checkpoint" and human_options.operation_id == null) {
+            human_options.operation_id = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--expected-revision") and human == .@"resume" and human_options.expected_revision == null) {
+            human_options.expected_revision = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--answer-json") and human == .respond and human_options.answer.value == null) {
+            human_options.answer.value = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--question-id") and human == .respond and human_options.answer.id == null) {
+            human_options.answer.id = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--question-revision") and human == .respond and human_options.answer.revision == null) {
+            human_options.answer.revision = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--request-digest") and human == .respond and human_options.answer.request == null) {
+            human_options.answer.request = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--input") and human == .@"import-checkpoint" and human_options.checkpoint_input == null) {
+            human_options.checkpoint_input = args.next() orelse return 64;
+        } else if (std.mem.eql(u8, arg, "--output") and human == .@"export-checkpoint" and human_options.checkpoint_output == null) {
+            human_options.checkpoint_output = args.next() orelse return 64;
         } else return 64;
     }
-    if (!offline or (serving and !stdio) or (!serving and state_path == null) or (human == .run and input_json == null)) return 64;
-    if (human == .respond and (answer_options.value == null or answer_options.id == null or answer_options.revision == null or answer_options.request == null)) return 64;
+    if (!offline or (serving and !stdio) or (!serving and state_path == null) or (human == .run and human_options.input_json == null)) return 64;
+    if (human == .respond and (human_options.answer.value == null or human_options.answer.id == null or human_options.answer.revision == null or human_options.answer.request == null)) return 64;
+    if ((human == .@"import-checkpoint" and human_options.checkpoint_input == null) or (human == .@"export-checkpoint" and human_options.checkpoint_output == null)) return 64;
 
     // Main-thread allocations are reclaimable and bounded. Workers use their
     // own preallocated region, so this accounting never races with worker I/O.
@@ -232,13 +233,14 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     if (namespace) |*owner| service = try tasks.Service(Types).init(a, init.io, owner, assets, &application, handlers, profile);
     var client: ?client_api.Client(Types) = null;
     if (service) |*owner| client = .{ .service = owner };
-    if (human) |selected| return humanCommand(Types, a, &service.?, &client.?, selected, task_id, input_json, operation_id orelse &instance, expected_revision, answer_options) catch |err| {
+    if (human) |selected| return humanCommand(Types, a, &service.?, &client.?, selected, human_options, &instance) catch |err| {
         var arena = std.heap.ArenaAllocator.init(a);
         defer arena.deinit();
         const frame = arena.allocator();
         const kind = failureKind(err);
         var failure = json.object();
         try json.put(frame, &failure, "error", json.string(@tagName(kind)));
+        try json.put(frame, &failure, "reason", json.string(@errorName(err)));
         try json.put(frame, &failure, "recovery", json.string(if (kind == .StorageUnavailable) "retry_same_operation_or_inspect" else "correct_request"));
         try std.Io.File.stdout().writeStreamingAll(init.io, try json.canonical(frame, failure));
         try std.Io.File.stdout().writeStreamingAll(init.io, "\n");
@@ -260,29 +262,44 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     return serve(Types, init.io, a, &connection);
 }
 
-const HumanCommand = enum { run, status, result, @"resume", cancel, respond };
+const HumanCommand = enum { run, status, result, @"resume", cancel, respond, @"export-checkpoint", @"import-checkpoint" };
 const AnswerOptions = struct { value: ?[]const u8 = null, id: ?[]const u8 = null, revision: ?[]const u8 = null, request: ?[]const u8 = null };
+
+const HumanOptions = struct {
+    task_id: ?[]const u8 = null,
+    input_json: ?[]const u8 = null,
+    operation_id: ?[]const u8 = null,
+    expected_revision: ?[]const u8 = null,
+    answer: AnswerOptions = .{},
+    checkpoint_input: ?[]const u8 = null,
+    checkpoint_output: ?[]const u8 = null,
+};
 
 /// CLI selection and rendering only. All admissions and execution use the same
 /// client mapping, task owner and isolated I/O slot as the protocol front end.
-fn humanCommand(comptime Types: type, a: std.mem.Allocator, service: *tasks.Service(Types), client: *client_api.Client(Types), command: HumanCommand, selected_id: ?[]const u8, input: ?[]const u8, operation_id: []const u8, expected_revision: ?[]const u8, answer_options: AnswerOptions) !u8 {
+fn humanCommand(comptime Types: type, a: std.mem.Allocator, service: *tasks.Service(Types), client: *client_api.Client(Types), command: HumanCommand, options: HumanOptions, fallback_operation_id: []const u8) !u8 {
+    const operation_id = options.operation_id orelse fallback_operation_id;
     var arena = std.heap.ArenaAllocator.init(a);
     defer arena.deinit();
     const frame = arena.allocator();
     var params = json.object();
     try json.put(frame, &params, "client_operation_id", json.string(operation_id));
     var id: [16]u8 = undefined;
-    if (command == .run) {
+    var imported: ?tasks.Admission = null;
+    if (command == .@"import-checkpoint") {
+        imported = try service.importCheckpoint(frame, operation_id, options.checkpoint_input.?);
+        id = imported.?.receipt.task;
+    } else if (command == .run) {
         try json.put(frame, &params, "application_id", json.string(Types.application_id));
         try json.put(frame, &params, "profile_id", json.string(service.profile.id));
         var typed_input = json.object();
         try json.put(frame, &typed_input, "schema_id", json.string(Types.input_schema_id));
-        try json.put(frame, &typed_input, "value", (try json.parse(frame, input.?, .{ .bytes = 256 * 1024 })).value);
+        try json.put(frame, &typed_input, "value", (try json.parse(frame, options.input_json.?, .{ .bytes = 256 * 1024 })).value);
         try json.put(frame, &params, "input", typed_input);
         const accepted = try client.call(frame, .@"task.submit", params);
         id = try client_api.identifier(16, accepted.object.get("task_id").?);
     } else {
-        if (selected_id) |text| id = try client_api.identifier(16, json.string(text)) else {
+        if (options.task_id) |text| id = try client_api.identifier(16, json.string(text)) else {
             const ids = try service.namespace.store.taskIds(frame, command == .@"resume" or command == .cancel);
             var found = false;
             for (ids) |candidate| {
@@ -298,28 +315,39 @@ fn humanCommand(comptime Types: type, a: std.mem.Allocator, service: *tasks.Serv
             if (!found) return 64;
         }
         try json.put(frame, &params, "task_id", json.string(try frame.dupe(u8, &std.fmt.bytesToHex(id, .lower))));
+        if (command == .@"export-checkpoint") {
+            const exported = try service.exportCheckpoint(frame, id, options.checkpoint_output.?);
+            var result = json.object();
+            try json.put(frame, &result, "format", json.string("agent-native-checkpoint/1"));
+            try json.put(frame, &result, "task_id", params.object.get("task_id").?);
+            try json.put(frame, &result, "sha256", json.string(try frame.dupe(u8, &std.fmt.bytesToHex(exported.sha256, .lower))));
+            try json.put(frame, &result, "bytes", json.string(try std.fmt.allocPrint(frame, "{d}", .{exported.bytes})));
+            try std.Io.File.stdout().writeStreamingAll(service.io, try json.canonical(frame, result));
+            try std.Io.File.stdout().writeStreamingAll(service.io, "\n");
+            return 0;
+        }
         if (command == .@"resume") {
             var current = try service.task(frame, id);
             defer current.deinit();
-            try json.put(frame, &params, "expected_revision", json.string(expected_revision orelse try std.fmt.allocPrint(frame, "{d}", .{current.value.revision})));
+            try json.put(frame, &params, "expected_revision", json.string(options.expected_revision orelse try std.fmt.allocPrint(frame, "{d}", .{current.value.revision})));
             _ = try client.call(frame, .@"task.resume", params);
         } else if (command == .cancel) _ = try client.call(frame, .@"task.cancel", params) else if (command == .respond) {
             var answer = json.object();
             try json.put(frame, &answer, "schema_id", json.string(Types.answer_schema_id));
-            try json.put(frame, &answer, "value", (try json.parse(frame, answer_options.value.?, .{ .bytes = 256 * 1024 })).value);
+            try json.put(frame, &answer, "value", (try json.parse(frame, options.answer.value.?, .{ .bytes = 256 * 1024 })).value);
             try json.put(frame, &params, "answer", answer);
-            try json.put(frame, &params, "question_id", json.string(answer_options.id.?));
-            try json.put(frame, &params, "question_revision", json.string(answer_options.revision.?));
-            try json.put(frame, &params, "request_digest", json.string(answer_options.request.?));
+            try json.put(frame, &params, "question_id", json.string(options.answer.id.?));
+            try json.put(frame, &params, "question_revision", json.string(options.answer.revision.?));
+            try json.put(frame, &params, "request_digest", json.string(options.answer.request.?));
             _ = try client.call(frame, .@"task.respond", params);
         }
     }
     if (command == .run or command == .@"resume" or command == .cancel or command == .respond) try driveHuman(Types, a, service, id, operation_id);
     try json.put(frame, &params, "task_id", json.string(try frame.dupe(u8, &std.fmt.bytesToHex(id, .lower))));
-    const result = try client.call(frame, if (command == .status) .@"task.status" else .@"task.result", params);
+    const result = if (imported) |admitted| try client.admission(frame, admitted) else try client.call(frame, if (command == .status) .@"task.status" else .@"task.result", params);
     try std.Io.File.stdout().writeStreamingAll(service.io, try json.canonical(frame, result));
     try std.Io.File.stdout().writeStreamingAll(service.io, "\n");
-    if (command != .status and command != .result) {
+    if (command != .status and command != .result and command != .@"import-checkpoint") {
         const status = result.object.get("status").?.string;
         if (std.mem.eql(u8, status, "failed")) return 1;
         for ([_][]const u8{ "unknown", "blocked", "cancelling", "parked" }) |unfinished| if (std.mem.eql(u8, status, unfinished)) return 2;

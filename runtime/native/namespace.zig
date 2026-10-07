@@ -76,6 +76,71 @@ fn writeExact(fd: c_int, bytes: []const u8) !void {
     if (c.fsync(fd) != 0) return error.StorageUnavailable;
 }
 
+// Relative SQLite paths are expanded by its VFS. Check the physical cwd's
+// ancestors too, so a writable parent cannot replace that expanded pathname.
+fn trustedAncestry(start: c_int) !void {
+    var current = c.openat(start, ".", c.O_RDONLY | c.O_DIRECTORY | c.O_CLOEXEC);
+    if (current < 0) return error.StorageUnavailable;
+    defer _ = c.close(current);
+    for (0..4096) |_| {
+        try trustedParent(current);
+        var stat: c.struct_agent_native_stat = undefined;
+        if (c.agent_native_fstat(current, &stat) != 0) return error.StorageUnavailable;
+        const parent = c.openat(current, "..", c.O_RDONLY | c.O_DIRECTORY | c.O_CLOEXEC);
+        if (parent < 0) return error.StorageUnavailable;
+        var parent_stat: c.struct_agent_native_stat = undefined;
+        if (c.agent_native_fstat(parent, &parent_stat) != 0) {
+            _ = c.close(parent);
+            return error.StorageUnavailable;
+        }
+        if (stat.st_dev == parent_stat.st_dev and stat.st_ino == parent_stat.st_ino) {
+            _ = c.close(parent);
+            return;
+        }
+        _ = c.close(current);
+        current = parent;
+    }
+    return error.UnsafeStatePath;
+}
+
+/// Descriptor-based path admission shared by state namespaces and archives.
+/// The caller owns the returned descriptor. Only namespaces create a final dir.
+pub fn openDirectory(a: std.mem.Allocator, path: []const u8, create_final: bool, private_final: bool) !c_int {
+    if (path.len == 0 or path.len > 4096 or std.mem.indexOfScalar(u8, path, 0) != null) return error.UnsafeStatePath;
+    // Walk every component without following symlinks. Only the selected
+    // final directory may be created; no ambient parent tree is modified.
+    var components = std.mem.tokenizeScalar(u8, path, '/');
+    var dir = c.open(if (path[0] == '/') "/" else ".", c.O_RDONLY | c.O_DIRECTORY | c.O_CLOEXEC);
+    if (dir < 0) return error.StorageUnavailable;
+    errdefer _ = c.close(dir);
+    try trustedAncestry(dir);
+    var component = components.next();
+    while (component) |part| {
+        try trustedParent(dir);
+        if (std.mem.eql(u8, part, "..")) return error.UnsafeStatePath;
+        const next = components.next();
+        if (!std.mem.eql(u8, part, ".")) {
+            const name = try a.dupeSentinel(u8, part, 0);
+            defer a.free(name);
+            var child = c.openat(dir, name.ptr, c.O_RDONLY | c.O_DIRECTORY | c.O_NOFOLLOW | c.O_CLOEXEC);
+            if (child < 0 and create_final and next == null and std.c.errno(child) == .NOENT) {
+                if (c.mkdirat(dir, name.ptr, 0o700) != 0) return error.StorageUnavailable;
+                child = c.openat(dir, name.ptr, c.O_RDONLY | c.O_DIRECTORY | c.O_NOFOLLOW | c.O_CLOEXEC);
+            }
+            if (child < 0) return error.UnsafeStatePath;
+            _ = c.close(dir);
+            dir = child;
+        }
+        component = next;
+    }
+    var stat: c.struct_agent_native_stat = undefined;
+    if (c.agent_native_fstat(dir, &stat) != 0) return error.StorageUnavailable;
+    if (private_final) {
+        if (stat.st_mode & 0o077 != 0 or stat.st_uid != c.geteuid()) return error.UnsafeStatePath;
+    } else try trustedParent(dir);
+    return dir;
+}
+
 pub const Namespace = struct {
     allocator: std.mem.Allocator,
     directory: c_int,
@@ -85,35 +150,10 @@ pub const Namespace = struct {
     identity: [32]u8,
 
     pub fn open(a: std.mem.Allocator, io: std.Io, path: []const u8) !Namespace {
-        if (path.len == 0 or path.len > 4096 or std.mem.indexOfScalar(u8, path, 0) != null) return error.UnsafeStatePath;
-        // Walk every component without following symlinks. Only the selected
-        // final directory may be created; no ambient parent tree is modified.
-        var components = std.mem.tokenizeScalar(u8, path, '/');
-        var dir = c.open(if (path[0] == '/') "/" else ".", c.O_RDONLY | c.O_DIRECTORY | c.O_CLOEXEC);
-        if (dir < 0) return error.StorageUnavailable;
+        const dir = try openDirectory(a, path, true, true);
         errdefer _ = c.close(dir);
-        var component = components.next();
-        while (component) |part| {
-            try trustedParent(dir);
-            if (std.mem.eql(u8, part, "..")) return error.UnsafeStatePath;
-            const next = components.next();
-            if (!std.mem.eql(u8, part, ".")) {
-                const name = try a.dupeSentinel(u8, part, 0);
-                defer a.free(name);
-                var child = c.openat(dir, name.ptr, c.O_RDONLY | c.O_DIRECTORY | c.O_NOFOLLOW | c.O_CLOEXEC);
-                if (child < 0 and next == null and std.c.errno(child) == .NOENT) {
-                    if (c.mkdirat(dir, name.ptr, 0o700) != 0) return error.StorageUnavailable;
-                    child = c.openat(dir, name.ptr, c.O_RDONLY | c.O_DIRECTORY | c.O_NOFOLLOW | c.O_CLOEXEC);
-                }
-                if (child < 0) return error.UnsafeStatePath;
-                _ = c.close(dir);
-                dir = child;
-            }
-            component = next;
-        }
         var stat: c.struct_agent_native_stat = undefined;
         if (c.agent_native_fstat(dir, &stat) != 0) return error.StorageUnavailable;
-        if (stat.st_mode & 0o077 != 0 or stat.st_uid != c.geteuid()) return error.UnsafeStatePath;
         _ = try inspectDirectory(a, io, dir, false);
         const lock = try openFile(dir, "owner.lock", c.O_RDWR | c.O_CREAT);
         errdefer _ = c.close(lock);

@@ -12,6 +12,7 @@ const registry = @import("registry.zig");
 const discovery = @import("discovery.zig");
 const json = @import("json.zig");
 const values = @import("values.zig");
+const archive_api = @import("archive.zig");
 
 pub const Profile = struct {
     id: []const u8,
@@ -49,6 +50,10 @@ fn operation(comptime T: type, a: std.mem.Allocator, value: T) !state.Digest {
 fn name(bytes: []const u8) !state.Name {
     if (bytes.len == 0 or bytes.len > 128 or !std.unicode.utf8ValidateSlice(bytes)) return error.InvalidParams;
     return .{ .bytes = bytes };
+}
+fn answerDigest(a: std.mem.Allocator, task_id: state.TaskId, question_id: state.Digest, revision: u64, request_digest: state.Digest, schema_id: []const u8, answer: []const u8) !state.Digest {
+    const Request = struct { method: state.Method, task: state.TaskId, question: state.Digest, revision: u64, request: state.Digest, schema: state.Name, answer: contracts.Bytes(64 * 1024) };
+    return operation(Request, a, .{ .method = .respond, .task = task_id, .question = question_id, .revision = revision, .request = request_digest, .schema = try name(schema_id), .answer = .{ .bytes = answer } });
 }
 
 pub fn Service(comptime Types: type) type {
@@ -457,8 +462,7 @@ pub fn Service(comptime Types: type) type {
                 }
             }
             const answer = answer_bytes orelse return error.IncompatibleProfile;
-            const Request = struct { method: state.Method, task: state.TaskId, question: state.Digest, revision: u64, request: state.Digest, schema: state.Name, answer: contracts.Bytes(64 * 1024) };
-            const request = try operation(Request, a, .{ .method = .respond, .task = task_id, .question = question_id, .revision = revision, .request = request_digest, .schema = try name(schema_id), .answer = .{ .bytes = answer } });
+            const request = try answerDigest(a, task_id, question_id, revision, request_digest, schema_id, answer);
             if (try self.replay(a, id, request)) |prior| return prior;
             if (question.answer) |saved_answer| {
                 if (!same(&saved_answer.digest, &storage.digest(answer))) return error.AnswerConflict;
@@ -875,6 +879,181 @@ pub fn Service(comptime Types: type) type {
             try self.store().putRecord(occurrence.Occurrence, "occurrence", work.occurrence, work.task, next);
             try self.event(&value, .blocked, "{\"delivery\":\"definitely_not_sent\"}");
             try self.persist(value, previous, "effect.not-sent");
+        }
+
+        fn archiveProfile(self: *Self, a: std.mem.Allocator) !void {
+            try self.allowed();
+            if (self.work != null) return error.UnsettledOccurrence;
+            if (self.profile.authority.inference) return error.NonPortable;
+            var profile = try json.parse(a, self.profile.bytes, .{ .bytes = 256 * 1024 });
+            defer profile.deinit();
+            const mode = json.get(profile.value, "mode") orelse return error.NonPortable;
+            if (mode != .string or !same(mode.string, "offline")) return error.NonPortable;
+        }
+
+        pub fn exportCheckpoint(self: *Self, a: std.mem.Allocator, task_id: state.TaskId, path: []const u8) !archive_api.Exported {
+            try self.archiveProfile(a);
+            var value = try self.task(a, task_id);
+            defer value.deinit();
+            try self.compatible(value.value);
+            return archive_api.write(self.allocator, self.io, self.store(), task_id, self.assets.manifest, path, self.namespace.directory);
+        }
+
+        /// A data-copy admission into a fresh namespace, not live custody.
+        /// Existing task IDs/receipts survive; current grants are never loaded
+        /// from the archive and no resident becomes runnable on import.
+        pub fn importCheckpoint(self: *Self, a: std.mem.Allocator, id: []const u8, path: []const u8) !Admission {
+            try self.archiveProfile(a);
+            var reader = try archive_api.Reader.open(self.allocator, path);
+            defer reader.deinit();
+            const Request = struct { method: state.Method, archive: state.Digest };
+            const request = try operation(Request, a, .{ .method = .import_checkpoint, .archive = reader.identity });
+            if (try self.replay(a, id, request)) |prior| return prior;
+            if (self.store().head.generation != 0 or self.active != null or self.runnable.items.len != 0) return error.NonEmptyNamespace;
+            try self.store().begin();
+            defer self.store().rollback();
+            try reader.acquire(self.store());
+            var inspected = try archive_api.inspect(a, self.store(), reader.manifest.value, null);
+            defer inspected.task.deinit();
+            var value = inspected.task.value;
+            if (!same(value.principal.bytes, self.profile.authority.principal) or !same(value.tenant.bytes, self.profile.authority.tenant)) return error.Denied;
+            const original_runtime = value.runtime_identity;
+            value.runtime_identity = self.profile.runtime_identity;
+            value.schedule = .parked;
+            try self.compatible(value);
+            if (!same(value.input_schema_id.bytes, Types.input_schema_id) or !same(value.output_schema_id.bytes, Types.output_schema_id) or !same(value.failure_schema_id.bytes, Types.failure_schema_id) or !same(value.message_schema_id.bytes, Types.message_schema_id)) return error.IncompatibleProfile;
+            const build_bytes = try self.store().object(a, reader.manifest.value.build, 256 * 1024);
+            defer a.free(build_bytes);
+            var build = try json.parse(a, build_bytes, .{ .bytes = 256 * 1024 });
+            defer build.deinit();
+            for ([_][]const u8{ "native_host_contract", "protocol", "client_mapping", "state_format", "program_sha256", "program_identity", "application_assets_sha256", "optimize" }) |field| {
+                const expected = json.get(self.application.manifest, field) orelse return error.InvalidAssets;
+                try discovery.sameField(build.value, field, try json.text(expected));
+            }
+            const dependencies = json.get(build.value, "dependencies") orelse return error.InvalidArchive;
+            const current_dependencies = json.get(self.application.manifest, "dependencies") orelse return error.InvalidAssets;
+            for ([_][]const u8{ "world", "boundary" }) |field| try discovery.sameField(dependencies, field, try json.text(json.get(current_dependencies, field) orelse return error.InvalidAssets));
+            const compiler = json.get(build.value, "compiler") orelse return error.InvalidArchive;
+            const current_compiler = json.get(self.application.manifest, "compiler") orelse return error.InvalidAssets;
+            try discovery.sameField(compiler, "version", try json.text(json.get(current_compiler, "version") orelse return error.InvalidAssets));
+            // Scope remains exact. Opaque operation keys may be aliases of a
+            // historical answer receipt; that receipt intentionally retains
+            // its original client operation ID rather than the alias preimage.
+            try self.store().restoreArchiveIndex(a, reader.manifest.value, value);
+            try self.validateImportedState(a, value, inspected.current);
+            const previous = value.revision;
+            value.revision = try std.math.add(u64, previous, 1);
+            const origin: state.Origin = .{ .id = reader.identity, .task = value.id, .build = reader.manifest.value.build, .native_identity = original_runtime, .source_revision = previous };
+            try self.store().createRecord(state.Origin, "origin", origin.id, value.id, origin);
+            var event_data = json.object();
+            try json.put(a, &event_data, "archive_sha256", json.string(try a.dupe(u8, &std.fmt.bytesToHex(reader.identity, .lower))));
+            try self.event(&value, .imported, try json.canonical(a, event_data));
+            const admitted = try self.receipt(a, .import_checkpoint, id, request, value, .imported, null, null);
+            try self.persist(value, previous, "checkpoint.import");
+            return admitted;
+        }
+
+        fn validateImportedState(self: *Self, a: std.mem.Allocator, value: state.Task, pending: ?occurrence.Occurrence) !void {
+            const driver = try self.resident(a, value);
+            errdefer self.retire(a) catch {
+                self.store().fenced = true;
+            };
+            const observed = try driver.drive(a, .none, 0);
+            defer a.free(observed);
+            const prior = try self.store().object(a, value.outcome, 4 * 1024 * 1024);
+            defer a.free(prior);
+            if (!same(observed, prior)) return error.InvalidArchive;
+            const checkpoint = try driver.checkpoint(a);
+            defer a.free(checkpoint);
+            if (!same(&storage.digest(checkpoint), &value.checkpoint.digest) or checkpoint.len != value.checkpoint.bytes) return error.InvalidArchive;
+            var decoded = try data.invocation.decode(data.invocation.Outcome, a, observed);
+            defer decoded.deinit();
+            if (!same(@tagName(decoded.value), @tagName(value.outcome_kind))) return error.InvalidArchive;
+            switch (decoded.value) {
+                .requested => |requested| {
+                    const current = pending orelse return error.InvalidArchive;
+                    var request = try data.invocation.decode(data.invocation.Request, a, requested.request);
+                    defer request.deinit();
+                    if (!same(&current.request, &request.value.request_identity)) return error.InvalidArchive;
+                    const entry = try self.handlers.resolve(request.value, self.application.image_identity);
+                    var acquired_answer: ?state.Digest = null;
+                    if (current.state == .settled_reply) {
+                        const bytes = try self.store().acquiredObject(a, current.state.settled_reply.reply, 4 * 1024 * 1024);
+                        defer a.free(bytes);
+                        var reply = try data.invocation.decode(data.invocation.Result, a, bytes);
+                        defer reply.deinit();
+                        if (!same(&reply.value.request_identity, &current.request)) return error.InvalidArchive;
+                        var schema = try data.schema.decode(a, entry.resume_schema);
+                        defer schema.deinit();
+                        try data.schema.validateValue(a, schema.descriptor, reply.value.value);
+                        acquired_answer = storage.digest(reply.value.value);
+                    }
+                    const question_id: ?state.Digest = switch (current.state) {
+                        .awaiting => |waiting| waiting.question,
+                        .settled_reply => |reply| if (reply.answer) |answer| answer.question else null,
+                        else => null,
+                    };
+                    if (question_id) |id| {
+                        var question = try self.record(state.Question, a, "question", id, value.id);
+                        defer question.deinit();
+                        const q = question.value;
+                        if (entry.declaration.kind != .question or q.retired or q.revision == 0 or !same(&q.occurrence, &current.id) or !same(&q.request_digest, &current.request) or !same(&q.pending_digest, &request.value.binding.pending_state_digest) or !same(&q.answer_schema_digest, &storage.digest(entry.resume_schema)) or !same(q.answer_schema_id.bytes, entry.declaration.answer_schema_id.?)) return error.InvalidArchive;
+                        const bytes = try self.store().object(a, q.request, 4 * 1024 * 1024);
+                        defer a.free(bytes);
+                        if (!same(bytes, requested.request)) return error.InvalidArchive;
+                        if (current.state == .awaiting) {
+                            if (q.answer != null or q.receipt != null) return error.InvalidArchive;
+                            if (!same(&current.state.awaiting.pending_digest, &q.pending_digest)) return error.InvalidArchive;
+                        } else {
+                            const answer = q.answer orelse return error.InvalidArchive;
+                            const receipt = q.receipt orelse return error.InvalidArchive;
+                            const binding = current.state.settled_reply.answer.?;
+                            if (!same(&answer.digest, &acquired_answer.?) or !same(&binding.digest, &answer.digest) or !same(&binding.pending_digest, &q.pending_digest) or !same(&receipt.task, &value.id) or receipt.method != .respond or receipt.disposition != .answer_acquired or receipt.question == null or !same(&receipt.question.?, &id)) return error.InvalidArchive;
+                            const answer_bytes = try self.store().object(a, answer, 64 * 1024);
+                            defer a.free(answer_bytes);
+                            const expected = try answerDigest(a, value.id, id, q.revision, q.request_digest, q.answer_schema_id.bytes, answer_bytes);
+                            if (!same(&expected, &receipt.request_digest)) return error.InvalidArchive;
+                            const key = try self.operationKey(a, receipt.client_operation_id.bytes);
+                            const saved = (try self.store().savedReceipt(a, &key)) orelse return error.InvalidArchive;
+                            defer a.free(saved);
+                            const receipt_bytes = try contracts.encodeOwned(state.Receipt, a, receipt);
+                            defer a.free(receipt_bytes);
+                            if (!same(saved, receipt_bytes)) return error.InvalidArchive;
+                        }
+                    }
+                },
+                .completed => |bytes| {
+                    if (value.result == null or !same(&value.result.?.digest, &storage.digest(bytes))) return error.InvalidArchive;
+                    try self.validateImportedResult(Types.Output, a, value, bytes);
+                },
+                .failed => |failure| {
+                    if (value.result == null or !same(&value.result.?.digest, &value.outcome.digest)) return error.InvalidArchive;
+                    try self.validateImportedResult(Types.Failure, a, value, failure.value);
+                },
+                .cancelled => {
+                    if (value.result == null or !same(&value.result.?.digest, &value.outcome.digest) or value.client_result != null or value.result_artifact != null) return error.InvalidArchive;
+                },
+                else => {},
+            }
+            if (!value.terminal() and (value.result != null or value.client_result != null or value.result_artifact != null)) return error.InvalidArchive;
+            try self.retire(a);
+        }
+        fn validateImportedResult(self: *Self, comptime T: type, a: std.mem.Allocator, value: state.Task, bytes: []const u8) !void {
+            var decoded = try contracts.decodeOwned(T, a, bytes);
+            defer decoded.deinit();
+            const expected = try json.canonical(a, try values.toJson(T, a, decoded.value));
+            defer a.free(expected);
+            const reference = value.client_result orelse return error.InvalidArchive;
+            const saved = try self.store().object(a, reference, 4 * 1024 * 1024);
+            defer a.free(saved);
+            if (!same(expected, saved)) return error.InvalidArchive;
+            if (value.result_artifact) |id| {
+                var artifact = try self.record(state.Artifact, a, "artifact", id, value.id);
+                defer artifact.deinit();
+                if (!same(&artifact.value.value.digest, &reference.digest) or artifact.value.value.bytes != reference.bytes) return error.InvalidArchive;
+                const schema_id = artifact.value.schema_id orelse return error.InvalidArchive;
+                if (!same(artifact.value.media_type.bytes, "application/json") or !same(schema_id.bytes, if (value.outcome_kind == .completed) value.output_schema_id.bytes else value.failure_schema_id.bytes)) return error.InvalidArchive;
+            } else if (saved.len > (@import("protocol.zig").Limits{}).inline_bytes) return error.InvalidArchive;
         }
 
         /// Call only after joining any in-flight worker. Closing is physical

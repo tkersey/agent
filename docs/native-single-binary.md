@@ -145,6 +145,11 @@ began permits cancellation or an explicit resume; it does not refund the attempt
 
 ## N2 storage and input foundations
 
+Head `52cdf12` passed the full Linux matrix, including 86 native tests, 83
+independent protocol-schema cases, CLI answer replay, lost-ack process death,
+unread stdout, the partial-frame deadline and a quiet connection surviving that
+deadline. The archive changes below are newer and remain under qualification.
+
 Human commands use the same typed task owner as stdio. `run --offline
 --state-dir PATH --input-json '{"value":20}' --operation-id ID` runs until a
 terminal outcome or a durable question/blocker, then prints the current typed
@@ -206,6 +211,45 @@ cases with `jsonschema==4.23.0` through `uv run`. This is a qualification-only
 dependency; neither Python nor a schema interpreter is linked into or required
 by the deployed executable.
 
+### Checkpoint archive profile
+
+`export-checkpoint --offline --state-dir PATH [--task-id ID] --output FILE`
+writes a private `agent-native-checkpoint/1` archive without replacing an
+existing file or retiring the source before publication. The file must be
+outside the state namespace. `import-checkpoint --offline --state-dir NEW_PATH
+--input FILE --operation-id ID` admits it atomically into a fresh namespace.
+The current `offline_copy` profile requires the same principal/tenant, exact
+application/image/frozen profile, ordinary record schemas, World/Boundary
+revisions, compiler version, optimization and native host contract. The native
+artifact identity is explicitly rebound to the importing executable, with its
+source identity retained in an origin record. Current grants are independent;
+neither import nor its retransmission starts work.
+
+Task IDs, question bindings, queued messages, event sequences, operation aliases,
+acquired replies and spent counters travel together. Unknown or dispatching
+occurrences reject export/import. Missing, changed, unreferenced or oversized
+objects reject; a failed import rolls back before admission. Normal resume keeps
+its existing exact native-artifact check. This profile is a controlled data
+copy, not distributed custody, producer authentication or permission to run two
+copies concurrently. Provider/resource archive profiles remain pending N3/N4.
+
+The file starts with a 32-byte little-endian header: `AGNX0001`, u32 manifest
+schema length, u32 manifest length, u32 object count, zero u32 flags, and u64
+object-payload length. It then contains the existing ordinary Agent schema and
+encoded `state.Archive` value, followed by immutable objects in digest order.
+References carry SHA-256 and byte length. The archive includes ordinary schemas
+for task/event/receipt and each record kind, so an independent reader can use the
+existing value codec; canonical BPI3/PST3/PKO3 bytes are unchanged.
+
+Limits are 256 MiB for the whole file, 64 KiB for its manifest schema, 1 MiB for
+its manifest, 4,096 objects of at most 16 MiB each, 1,024 records, and 2,048 events
+and operation bindings each. Existing evaluator, SQLite and 64 MiB host limits
+still apply. Files are private and regular; path components and physical working
+directory ancestry are checked. Publication fsyncs the file, links the complete
+temporary file without replacement, and fsyncs the directory. A process crash
+can leave a private temporary link; hashes establish integrity, not power-loss
+guarantees beyond the selected filesystem's fsync behavior.
+
 The optional native dependency lock selects SQLite 3.53.4. Its official archive
 and amalgamation SHA3 digests were checked against
 [SQLite's published download](https://www.sqlite.org/download.html) and
@@ -221,7 +265,7 @@ Linux links the selected toolchain's musl libc and embeds its license. The
 database wrapper refuses an uncapped allocation fallback and verifies the linked
 SQLite version. This primitive is not a completed task journal.
 
-The current namespace format is `agent-native-state/3`. Task, receipt, question,
+The current namespace format is `agent-native-state/4`. Task, receipt, question,
 message and event indexes reference the same hash-checked immutable object store
 as checkpoints and replies. A changed record body rejects before interpretation;
 foreign keys and task revision checks bind its index. Earlier development state

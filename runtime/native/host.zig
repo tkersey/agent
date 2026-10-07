@@ -153,6 +153,11 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
         try json.put(a, &manifest, "artifact_sha256", json.string(try a.dupe(u8, &std.fmt.bytesToHex(artifact.sha256, .lower))));
         try json.put(a, &manifest, "artifact_bytes", json.string(try std.fmt.allocPrint(a, "{d}", .{artifact.bytes})));
         try json.put(a, &manifest, "embedded_manifest_sha256", json.string(try discovery.digest(a, assets.manifest)));
+        var handlers = try registry.Registry.init(a, &Environment.handlers);
+        defer handlers.deinit();
+        var application = try discovery.Application.init(Types, a, assets, handlers);
+        defer application.deinit();
+        try json.put(a, &manifest, "protocol_schema_sha256", json.string(application.protocol_schema_sha256));
         try std.Io.File.stdout().writeStreamingAll(init.io, try json.canonical(a, manifest));
         try std.Io.File.stdout().writeStreamingAll(init.io, "\n");
         return 0;

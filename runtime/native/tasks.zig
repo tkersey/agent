@@ -21,7 +21,7 @@ pub const Profile = struct {
     authority: registry.Authority,
 };
 pub const Admission = struct { receipt: state.Receipt, replayed: bool };
-pub const Status = enum { queued, running, waiting_input, parked, cancelling, blocked, unknown, completed, failed, cancelled };
+pub const Status = state.Status;
 pub const Work = struct {
     task: state.TaskId,
     occurrence: state.Digest,

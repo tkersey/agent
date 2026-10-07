@@ -186,6 +186,21 @@ delivery, exact question response and independently expected typed completion
 through this client. An RPC response acknowledges that method, not overall task
 completion; use `task.result` and its `ready` field for the latter.
 
+Offline `describe` returns a Draft 2020-12 `protocol_schema` document. Each
+method's `params_schema` and `result_schema` identify definitions within that
+document; request/response envelopes, protocol errors and server notifications
+have definitions too. References remain local. Its content-derived URN and the
+`protocol_schema_sha256` in `describe-build` bind the application-specific
+schemas. Potentially full-width counters are exact bounded decimal strings.
+`x-max-utf8-bytes` supplements JSON Schema's character-count bounds where the
+wire contract limits UTF-8 bytes. Stateful authorization and revision checks
+still occur in the task owner after value admission.
+
+The native peer validates captured responses/events and independent boundary
+cases with `jsonschema==4.23.0` through `uv run`. This is a qualification-only
+dependency; neither Python nor a schema interpreter is linked into or required
+by the deployed executable.
+
 The optional native dependency lock selects SQLite 3.53.4. Its official archive
 and amalgamation SHA3 digests were checked against
 [SQLite's published download](https://www.sqlite.org/download.html) and

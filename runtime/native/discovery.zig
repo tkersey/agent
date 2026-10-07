@@ -21,6 +21,8 @@ pub const Application = struct {
     manifest: json.Value,
     manifest_id: []const u8,
     image_identity: [32]u8,
+    protocol_schema: json.Value = .null,
+    protocol_schema_sha256: []const u8 = "",
 
     pub fn init(comptime Types: type, a: std.mem.Allocator, assets: Assets, handlers: registry.Registry) !Application {
         var arena = std.heap.ArenaAllocator.init(a);
@@ -74,7 +76,8 @@ pub const Application = struct {
             }
             if (matches != 1) return error.InvalidAssets;
         }
-        return .{ .arena = arena, .metadata = metadata.value, .manifest = manifest.value, .manifest_id = try digest(storage, assets.manifest), .image_identity = image_identity };
+        const protocol_schema = try @import("schemas.zig").document(storage, metadata.value, .{});
+        return .{ .arena = arena, .metadata = metadata.value, .manifest = manifest.value, .manifest_id = try digest(storage, assets.manifest), .image_identity = image_identity, .protocol_schema = protocol_schema, .protocol_schema_sha256 = try digest(storage, try json.canonical(storage, protocol_schema)) };
     }
     pub fn deinit(self: *Application) void {
         self.arena.deinit();
@@ -109,6 +112,8 @@ pub const Application = struct {
                 for (fields.optional) |key| try optional.append(json.string(key));
                 try json.put(a, &method, "required_fields", .{ .array = required });
                 try json.put(a, &method, "optional_fields", .{ .array = optional });
+                try json.put(a, &method, "params_schema", json.string("#/$defs/" ++ name ++ ".params"));
+                try json.put(a, &method, "result_schema", json.string("#/$defs/" ++ name ++ ".result"));
                 try methods.append(method);
             }
         }
@@ -120,6 +125,7 @@ pub const Application = struct {
             try json.put(a, &app, key, self.metadata.object.get(key) orelse return error.InvalidAssets);
         try json.put(a, &result, "application", app);
         try json.put(a, &result, "execution_mode", json.string("offline"));
+        try json.put(a, &result, "protocol_schema", self.protocol_schema);
         return result;
     }
 };

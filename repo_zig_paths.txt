@@ -21,6 +21,7 @@ runtime/native/occurrence.zig
 runtime/native/protocol.zig
 runtime/native/registry.zig
 runtime/native/root.zig
+runtime/native/schemas.zig
 runtime/native/sqlite.zig
 runtime/native/state.zig
 runtime/native/store.zig

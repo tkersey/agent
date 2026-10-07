@@ -77,6 +77,12 @@ example's independent subprocess peer. No existing native or custody check is re
 When the product target is runnable on the host, runtime unit tests use that
 product environment too, including Linux musl rather than only the host's glibc ABI.
 
+The same native subprocess peer checks the optional TypeScript client and the
+published protocol schemas. Its independent Draft 2020-12 validator runs through
+`uv run --no-project --no-config --python 3.12 --with jsonschema==4.23.0`.
+This qualification dependency is not acquired by pure authoring/installation
+and is never a launch dependency of the copied executable.
+
 `check-agent4` and `check` still include the external installation and all
 previously retained authoring obligations. The native lane also runs the retained custody and deployment regressions.
 Splitting jobs can still repeat some shared compiler work; lower wall-clock time

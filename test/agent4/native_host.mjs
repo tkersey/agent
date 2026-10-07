@@ -7,6 +7,7 @@ import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {once} from 'node:events';
+import {fileURLToPath} from 'node:url';
 import {AgentClient} from '../../examples/native-minimal/stdio-client.mts';
 
 const source = resolve(process.argv[2]);
@@ -14,6 +15,13 @@ const directory = mkdtempSync(join(tmpdir(), 'Agent native ü '));
 const binary = join(directory, 'agent-native-example');
 copyFileSync(source, binary);
 const options = {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000, maxBuffer: 2 * 1024 * 1024};
+const methodsById = new Map();
+const schemaCases = [];
+function capture(frame) {
+  if (Array.isArray(frame)) { frame.forEach(capture); return; }
+  const definition = frame.error ? 'error' : frame.method ?? (methodsById.has(frame.id) ? `${methodsById.get(frame.id)}.response` : null);
+  if (definition) schemaCases.push({definition, value: frame});
+}
 function launch(state = null, lifetime = 15000) {
   const child = spawn(binary, ['serve', '--transport', 'stdio', '--offline', ...(state ? ['--state-dir', state] : [])], {cwd: directory, env: options.env, stdio: ['pipe', 'pipe', 'pipe']});
   const frames = [], waiters = [];
@@ -21,11 +29,12 @@ function launch(state = null, lifetime = 15000) {
   const ended = once(child, 'close');
   child.stdin.on('error', error => { if (error.code !== 'EPIPE') failure = error; });
   child.stderr.on('data', bytes => { diagnostic += bytes; assert(diagnostic.length < 65536); });
-  child.stdout.on('data', bytes => {
+  child.stdout.setEncoding('utf8').on('data', bytes => {
     output += bytes;
     assert(output.length <= 1024 * 1024);
     for (let newline; (newline = output.indexOf('\n')) >= 0;) {
       const frame = JSON.parse(output.slice(0, newline)); output = output.slice(newline + 1);
+      capture(frame);
       const waiter = waiters.shift();
       if (waiter) waiter(frame); else frames.push(frame);
     }
@@ -53,6 +62,7 @@ function launch(state = null, lifetime = 15000) {
       } else assert.deepEqual(frames, []);
     },
     async initialize(id = 'init') {
+      methodsById.set(id, 'initialize');
       child.stdin.write(JSON.stringify({jsonrpc: '2.0', id, method: 'initialize', params: {protocol_versions: ['agent-host/1.0']}}) + '\n');
       const reply = await this.next();
       assert.equal(reply.id, id);
@@ -62,7 +72,10 @@ function launch(state = null, lifetime = 15000) {
     },
   };
 }
-const rpc = (id, method, params = {}) => JSON.stringify({jsonrpc: '2.0', id, method, params}) + '\n';
+const rpc = (id, method, params = {}) => {
+  methodsById.set(id, method);
+  return JSON.stringify({jsonrpc: '2.0', id, method, params}) + '\n';
+};
 try {
   assert.match(execFileSync(binary, ['--help'], options), /serve --transport stdio/);
   const manifest = JSON.parse(execFileSync(binary, ['describe-build'], options));
@@ -147,6 +160,17 @@ try {
   assert.equal(description.application.application_id, 'native-minimal');
   assert.equal(description.application.input.json.additionalProperties, false);
   assert.equal(description.methods.length, 15);
+  const protocolSchema = description.protocol_schema;
+  assert.equal(protocolSchema.$schema, 'https://json-schema.org/draft/2020-12/schema');
+  assert.match(protocolSchema.$id, /^urn:agent:agent-host:1.0:[a-f0-9]{64}$/);
+  const canonical = value => value === null || typeof value !== 'object' ? JSON.stringify(value) : Array.isArray(value) ? `[${value.map(canonical).join(',')}]` : `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+  assert.equal(createHash('sha256').update(canonical(protocolSchema)).digest('hex'), manifest.protocol_schema_sha256);
+  for (const method of description.methods) {
+    assert.deepEqual(protocolSchema.$defs[`${method.name}.params`].required, method.required_fields);
+    assert.equal(method.params_schema, `#/$defs/${method.name}.params`);
+    assert.equal(method.result_schema, `#/$defs/${method.name}.result`);
+    assert(protocolSchema.$defs[`${method.name}.result`]);
+  }
   peer.write('[{"jsonrpc":"2.0","method":"task.submit","params":{}},{"jsonrpc":"2.0","id":7,"method":"ping","params":{}}]\n');
   const batch = await peer.next();
   assert.equal(batch.length, 1);
@@ -259,6 +283,19 @@ try {
   assert.equal(cancelled.status, 'cancelled');
   assert.equal(cancelled.outcome.cleanup_complete, true);
   await cancelling.end();
+  for (const value of ['0', '1', '9007199254740993', '18446744073709551615']) schemaCases.push({definition: 'counter', value});
+  for (const value of ['00', '-1', '1.0', '18446744073709551616', '99999999999999999999', '1\n', 1]) schemaCases.push({definition: 'counter', value, accept: false});
+  schemaCases.push({definition: 'task.submit.params', value: submission});
+  schemaCases.push({definition: 'task.submit.params', value: {...submission, principal: 'forged'}, accept: false});
+  schemaCases.push({definition: 'task.submit.params', value: {...submission, input: {...submission.input, value: {value: 4294967296}}}, accept: false});
+  schemaCases.push({definition: 'task.submit.params', value: {...submission, client_operation_id: '雪'.repeat(43)}, accept: false});
+  schemaCases.push({definition: 'task.respond.params', value: answer});
+  schemaCases.push({definition: 'task.respond.params', value: {...answer, question_revision: 1}, accept: false});
+  schemaCases.push({definition: 'task.status.params', value: {task_id: `${demoTask}\n`}, accept: false});
+  for (const [value, accept] of [['1', true], ['32768', true], ['0', false], ['32769', false]]) {
+    schemaCases.push({definition: 'artifact.read.params', value: {task_id: demoTask, artifact_id: '0'.repeat(64), offset: '0', length: value}, accept});
+  }
+  process.stdout.write(execFileSync('uv', ['run', '--no-project', '--no-config', '--python', '3.12', '--with', 'jsonschema==4.23.0', fileURLToPath(new URL('./native_schema.py', import.meta.url))], {input: JSON.stringify({schema: protocolSchema, cases: schemaCases}), encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024}));
   console.log(JSON.stringify({check: 'native-build-and-discovery', result: 'passed', target: manifest.target, program: manifest.program_sha256, scope: 'embedded durable demo, framing, negotiation, discovery, client question, restart, stable admissions, typed result and event replay; provider/platform qualification remains open'}));
 } finally {
   rmSync(directory, {recursive: true, force: true});

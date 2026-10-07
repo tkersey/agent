@@ -9,6 +9,7 @@ pub const Reason = contracts.Text(256);
 pub const Reference = struct { digest: Digest, bytes: u64 };
 pub const Outcome = enum { progressed, yielded, requested, completed, failed, cancelled };
 pub const Schedule = enum { queued, active, parked };
+pub const Status = enum { queued, running, waiting_input, parked, cancelling, blocked, unknown, completed, failed, cancelled };
 pub const Blocker = enum { missing_capability, denied, capacity, missing_artifact, incompatible_profile, unavailable_environment };
 
 pub const Task = struct {

@@ -23,7 +23,8 @@ export async function loadWorldRuntime(options) {
   if (!options || typeof options !== "object" || Array.isArray(options))
     throw new TypeError("runtime options are required");
   for (const name of Object.keys(options))
-    if (!["runtimePath", "lockPath", "limits"].includes(name)) throw new Error(`UnknownRuntimeOption: ${name}`);
+    if (!["runtimePath", "lockPath", "limits", "quantum"].includes(name)) throw new Error(`UnknownRuntimeOption: ${name}`);
+  const selectedQuantum = options.quantum ?? null;
   const selectedLimits = options.limits === undefined ? null : { ...options.limits };
   if (selectedLimits && JSON.stringify(Object.keys(selectedLimits).sort()) !== JSON.stringify(["input", "output", "working"]))
     throw new Error("limits must specify input, working and output bytes");
@@ -51,7 +52,7 @@ export async function loadWorldRuntime(options) {
     const canonical = bytes(input, "outcome");
     return Object.freeze({ ...world.decodeOutcome(canonical), bytes: canonical });
   };
-  const invoke = (input) => decodeOutcome(kernel.invoke(world.encodeInput(input)));
+  const invoke = (input) => decodeOutcome(kernel.invoke(world.encodeInput({...input, quantum: selectedQuantum})));
   const start = async (image, initialArgs) => invoke({
     image: bytes(image, "image"), initialArgs: bytes(initialArgs, "initialArgs"),
   });

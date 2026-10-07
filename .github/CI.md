@@ -138,6 +138,31 @@ paths and inherited CI run IDs changed generated-output locations; native run
 `37576438055` reached 8,865,601,430 cache bytes and correctly skipped saving.
 The new namespace leaves that older cache intact and retains the same 8 GiB cap.
 
+The Linux products use Zig's self-hosted backend in the selected `safe` mode;
+non-debug products strip debug information. The API/HTTPS probe retains LLVM:
+its self-hosted experiment compiled faster but failed the existing 100 ms held
+request classification, so that experiment was reverted without changing the
+deadline or assertion. Both delivered products passed their complete existing
+process witnesses with the selected backend.
+
+Measured full Linux workflows on GitHub's Ubuntu 24.04 runners:
+
+| Head | Result | Wall time |
+| --- | --- | --- |
+| `f07e157` initial consolidation | passed | 12m27s |
+| `bfef3f2` fresh compiler-cache namespace | passed | 5m49s |
+| `bfef3f2` restored-cache rerun | passed; still recompiled | 8m31s |
+| `d435e51` self-hosted products | passed | 5m19s |
+| `b121ced` stripped products | passed | 4m41s |
+
+The last run is [37580297873](https://github.com/tkersey/agent/actions/runs/37580297873):
+148 native build steps, 91 native tests, both copied application witnesses,
+controlled HTTPS, authoring and installation passed. Its minimal executable
+was 26,980,021 bytes and `describe-build` took 891 ms; held-I/O repository control
+took 4.15 ms. These are observed runs with runner variability, not a latency SLA
+or proof that restoring a cache alone improves compilation. Later changes need
+their own measurements.
+
 Before and after each applicable lane, `.github/scripts/zig-cache.mjs` records
 the restored key, logical file bytes, file count and top-level bucket sizes
 (`o`, `h`, `z`, temporary/other directories). The build's `--summary all` records
@@ -190,6 +215,13 @@ producer. These are assurance boundaries, not arbitrary sharding preferences.
 No optimization mode changes: the existing `safe` selection applies to both
 shared drivers and retained runtime checks. Shared drivers may repeat across CI jobs; no cross-job linkage or previously
 passing test result is reused as correctness evidence.
+
+Backend parity now belongs to the integrated repository witness. Its actual
+question checkpoint and recorded native replies cross WASM and the existing
+native API probe, comparing every continuation's canonical output and the final
+independently checked report. This replaces the narrower minimal-example WASM
+continuation and its extra terminal export; the minimal CLI and API witnesses
+retain their native leaf, yield, question, cleanup and lifecycle assertions.
 
 When changing this grouping, compare discovered named-test multisets and the
 complete emitted-file inventory, including byte hashes, on the same authenticated

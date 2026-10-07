@@ -152,6 +152,13 @@ pub const Capture = struct {
     request: Reference,
     response: ?Reference,
     disposition: CaptureDisposition,
+    /// Published with occurrence settlement. Archive traversal follows every
+    /// replay object instead of guessing references inside opaque reply bytes.
+    projection: ?struct {
+        reply: Reference,
+        objects: contracts.Vector(Reference, 16),
+        output_tokens: ?u64,
+    } = null,
 };
 
 pub const Origin = struct {

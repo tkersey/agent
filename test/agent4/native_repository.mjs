@@ -6,6 +6,7 @@ import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { once } from 'node:events';
 import { AgentClient } from '../../examples/native-minimal/stdio-client.mts';
 import { certificates } from './mobility_tls_fixture.mjs';
+import { compareContinuation, missingReplayObject } from './native_archive.mjs';
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -24,7 +25,7 @@ async function until(read, predicate, label) {
   throw new Error(`${label}: timeout`);
 }
 
-async function repositoryHttps(binary, directory) {
+async function repositoryHttps(binary, directory, invoke) {
   const root = join(directory, 'controlled repository');
   const state = join(directory, 'https state');
   await mkdir(join(root, 'src'), { recursive: true });
@@ -159,6 +160,10 @@ async function repositoryHttps(binary, directory) {
     assert.equal((await client.closed).signal, 'SIGKILL');
     clients.delete(client);
     await writeFile(join(root, 'src/main.zig'), changed);
+    const pendingArchive = join(directory, 'repository-pending.bundle');
+    const exported = JSON.parse(invoke('export-checkpoint', '--state-dir', state, '--task-id', id, '--output', pendingArchive));
+    assert.equal(exported.task_id, id);
+    const pendingBytes = await readFile(pendingArchive);
     const changedConfig = join(directory, 'changed-profile.json');
     await writeFile(changedConfig, JSON.stringify({ ...config, responses: { ...config.responses, effort: 'high' } }));
     const rejected = spawnSync(binary, ['resume', '--state-dir', state, '--task-id', id, '--config', changedConfig], { cwd: directory, env: { PATH: '/nonexistent' }, encoding: 'utf8', timeout: 5000 });
@@ -191,7 +196,29 @@ async function repositoryHttps(binary, directory) {
     assert(!JSON.stringify(notifications).includes('opaque+/=雪'));
     assert.deepEqual(await client.close(), { code: 0, signal: null });
     clients.delete(client);
-    return { provider_calls: requests.length, restart_without_retry: true, frozen_snapshot: true, clarification: true, followup: true, control_ms: latency };
+    const completedArchive = join(directory, 'repository-completed.bundle');
+    invoke('export-checkpoint', '--state-dir', state, '--task-id', id, '--output', completedArchive);
+    const completedBytes = await readFile(completedArchive);
+    const parity = await compareContinuation(process.argv[3], process.argv[4], join(directory, 'recorded-input.pki3'), pendingBytes, completedBytes);
+    const importedState = join(directory, 'imported pending');
+    const imported = JSON.parse(invoke('import-checkpoint', '--state-dir', importedState, '--input', pendingArchive, '--operation-id', 'import-pending'));
+    assert.equal(imported.task_id, id);
+    assert.deepEqual(imported.question, question);
+    const importedStatus = JSON.parse(invoke('status', '--state-dir', importedState, '--task-id', id));
+    assert.equal(importedStatus.profile_digest, accepted.profile_digest);
+    assert.equal(importedStatus.pending_messages.length, 1);
+    // Minimal checkpoint corruption cannot expose a missing provider replay
+    // object hidden in an encoded reply. Exercise that distinct closure here.
+    const brokenArchive = join(directory, 'missing-replay.bundle');
+    await writeFile(brokenArchive, missingReplayObject(completedBytes), { mode: 0o600 });
+    const recoveredState = join(directory, 'import recovery');
+    const rejectedImport = spawnSync(binary, ['import-checkpoint', '--state-dir', recoveredState, '--input', brokenArchive, '--operation-id', 'import-completed'], { cwd: directory, env: { PATH: '/nonexistent' }, encoding: 'utf8', timeout: 5000 });
+    assert.equal(rejectedImport.status, 64);
+    assert.equal(JSON.parse(rejectedImport.stdout).reason, 'MissingArtifact');
+    invoke('import-checkpoint', '--state-dir', recoveredState, '--input', completedArchive, '--operation-id', 'import-completed');
+    assert.deepEqual(JSON.parse(invoke('result', '--state-dir', recoveredState, '--task-id', id)).outcome.value, report);
+    assert.equal(requests.length, 4, 'archive validation and recorded replay cannot acquire inference');
+    return { provider_calls: requests.length, restart_without_retry: true, frozen_snapshot: true, clarification: true, followup: true, control_ms: latency, ...parity };
   } finally {
     releaseHeld();
     for (const client of clients) { client.child.kill('SIGKILL'); await client.closed; }
@@ -201,7 +228,7 @@ async function repositoryHttps(binary, directory) {
 }
 
 const source = process.argv[2];
-assert(source);
+assert(source && process.argv[3] && process.argv[4]);
 const directory = mkdtempSync(join(tmpdir(), 'repository native 雪 '));
 try {
   const binary = join(directory, 'repository-agent');
@@ -217,7 +244,7 @@ try {
   const result = JSON.parse(invoke('demo', '--offline', '--state-dir', join(directory, 'state')));
   assert.equal(result.mode, 'offline-demo');
   assert.equal(result.output.disposition, 'report');
-  console.log(JSON.stringify({ repository_agent: 'controlled-https', ...await repositoryHttps(binary, directory) }));
+  console.log(JSON.stringify({ repository_agent: 'controlled-https', ...await repositoryHttps(binary, directory, invoke) }));
 } finally {
   rmSync(directory, { recursive: true, force: true });
 }

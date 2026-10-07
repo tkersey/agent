@@ -2,6 +2,9 @@
 // imports native implementation code or treats an archive as execution authority.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import {writeFileSync} from 'node:fs';
+import {pathToFileURL} from 'node:url';
 import {decodeSchema, decodeValue, encodeValue} from '../../runtime/values.mjs';
 import {loadWorldRuntime} from '../../runtime/world.mjs';
 
@@ -100,32 +103,76 @@ export function unknownOccurrence(bytes) {
   return encode(archive);
 }
 
-// Both backends start from the actual exported pending checkpoint. The peer
-// encodes the public question schema, never a guessed native memory layout.
-export async function compareContinuation(runtimePath, pendingBytes, completedBytes, answer) {
+export function missingReplayObject(bytes) {
+  const archive = readArchive(bytes);
+  const row = archive.manifest[6].find(([kind]) => kind === 4); // capture
+  assert(row);
+  const capture = decodeValue(archive.schemas.get('capture'), archive.object(row[2]));
+  assert.equal(capture[6].tag, 1);
+  const [reference] = capture[6].value[1];
+  assert(reference, 'recorded provider reply must retain replay data');
+  archive.objects.delete(key(reference));
+  return encode(archive);
+}
+
+// Resume the actual repository checkpoint using its recorded native replies.
+// World owns both PKI3 encoding and execution; no provider/application policy is
+// reproduced here. The existing native API probe accepts the same envelope.
+export async function compareContinuation(runtimePath, probe, inputPath, pendingBytes, completedBytes) {
   const pending = readArchive(pendingBytes), completed = readArchive(completedBytes);
-  const runtime = await loadWorldRuntime({runtimePath, limits: {input: 4 * 1024 * 1024, working: 16 * 1024 * 1024, output: 4 * 1024 * 1024}});
+  const quantum = 256; // same non-cancellation quantum as the native task owner
+  const runtime = await loadWorldRuntime({runtimePath, quantum, limits: {input: 4 * 1024 * 1024, working: 16 * 1024 * 1024, output: 4 * 1024 * 1024}});
+  const world = await import(pathToFileURL(runtime.identity.entrypoint).href);
   const image = pending.object(pending.task.image);
-  const outcome = runtime.decodeOutcome(pending.object(pending.task.outcome));
-  assert.equal(outcome.kind, 'requested');
-  const {request} = await runtime.inspectPending(outcome);
-  const reply = encodeValue(decodeSchema(request.resumeSchema), [answer]);
-  let result = await runtime.resume(image, pending.object(pending.task.checkpoint), outcome.request, reply);
-  let cleanup = 0;
-  for (let i = 0; ['progressed', 'yielded', 'requested'].includes(result.kind); i++) {
-    assert(i < 100, 'bounded WASM continuation');
-    if (result.kind === 'requested') {
-      const next = await runtime.inspectPending(result);
-      assert.equal(next.request.semanticIdentity, 'agent.example.cleanup.v1');
-      assert.equal(++cleanup, 1, 'one authored cleanup after the answered body');
-      assert.equal(next.request.payload.length, 0, 'cleanup takes unit');
-      const unit = encodeValue(decodeSchema(next.request.resumeSchema), null);
-      result = await runtime.resume(image, result.state, result.request, unit);
-    } else result = await runtime.continueExecution(image, result);
+  assert.deepEqual(image, completed.object(completed.task.image));
+  const replies = new Map();
+  for (const [kind,, reference] of completed.manifest[6]) {
+    if (kind !== 0) continue;
+    const occurrence = decodeValue(completed.schemas.get('occurrence'), completed.object(reference));
+    assert.equal(occurrence[3].tag, 5); // admitted
+    assert.equal(occurrence[3].value.tag, 0); // reply
+    const request = Buffer.from(occurrence[2]).toString('hex');
+    assert(!replies.has(request));
+    replies.set(request, completed.objects.get(Buffer.from(occurrence[3].value.value[1]).toString('hex')));
   }
-  assert.equal(cleanup, 1);
-  assert.equal(result.kind, 'completed');
-  const native = runtime.decodeOutcome(completed.object(completed.task.outcome));
-  assert.equal(native.kind, 'completed');
-  assert.deepEqual(Buffer.from(result.bytes), Buffer.from(native.bytes));
+  // Boundary's public Result is a fixed digest followed by ordinary bytes.
+  const resultSchema = {root: 0, types: [{product: [1, 3]}, {array: {element: 2, length: 32}}, 'u8', 'bytes']};
+  let current = runtime.decodeOutcome(pending.object(pending.task.outcome));
+  let state = pending.object(pending.task.checkpoint), wasmSteps = 0, nativeSteps = 0, requested = 0;
+  const trace = [];
+  while (['progressed', 'yielded', 'requested'].includes(current.kind)) {
+    assert(wasmSteps < 128, 'bounded recorded continuation');
+    let expected, control, bound;
+    if (current.kind === 'requested') {
+      const {request} = await runtime.inspectPending(current);
+      bound = replies.get(Buffer.from(request.requestIdentity).toString('hex'));
+      assert(bound, 'every replayed effect must match an actual native occurrence');
+      assert.equal(bound.subarray(0, 8).toString(), 'ABL_ERS3');
+      assert.equal(bound.readUInt16LE(8), 3);
+      assert.equal(bound.readUInt16LE(10), 0);
+      assert.equal(bound.readBigUInt64LE(12), BigInt(bound.length - 20));
+      const [identity, value] = decodeValue(resultSchema, bound.subarray(20));
+      assert.deepEqual(Buffer.from(identity), Buffer.from(request.requestIdentity));
+      expected = await runtime.resume(image, state, current.request, value);
+      control = 'reply';
+      trace.push(request.semanticIdentity);
+      requested++;
+    } else {
+      expected = await runtime.continueExecution(image, current);
+      control = current.kind === 'yielded' ? 'resume_yield' : 'none';
+    }
+    wasmSteps++;
+    if (wasmSteps === 1) current = expected;
+    else {
+      writeFileSync(inputPath, world.encodeInput({image, state, control, quantum, ...(bound ? {value: bound} : {})}));
+      current = runtime.decodeOutcome(execFileSync(probe, ['invoke', inputPath], {env: {PATH: '/nonexistent'}, timeout: 30000, maxBuffer: 4 * 1024 * 1024}));
+      assert.deepEqual(Buffer.from(current.bytes), Buffer.from(expected.bytes));
+      nativeSteps++;
+    }
+    if (current.state) state = current.state;
+  }
+  assert(nativeSteps > 0 && requested >= 3, 'exercise native/WASM/native question, inbox and provider continuation');
+  assert.equal(current.kind, 'completed');
+  assert.deepEqual(Buffer.from(current.bytes), completed.object(completed.task.outcome));
+  return {wasm_steps: wasmSteps, native_steps: nativeSteps, recorded_effects: trace};
 }

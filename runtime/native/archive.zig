@@ -190,6 +190,24 @@ pub const Reader = struct {
         self.allocator.free(self.prefix);
         _ = c.close(self.fd);
     }
+    /// Preview only declared, digest-checked immutable data. Import still
+    /// reacquires and authenticates the complete archive before publication.
+    pub fn object(self: *Reader, a: std.mem.Allocator, wanted: state.Reference, limit: usize) ![]u8 {
+        if (wanted.bytes > limit) return error.Capacity;
+        var offset: u64 = self.prefix.len;
+        for (self.manifest.value.objects.items) |reference| {
+            if (same(&reference.digest, &wanted.digest)) {
+                if (reference.bytes != wanted.bytes) return error.InvalidArchive;
+                const bytes = try a.alloc(u8, @intCast(reference.bytes));
+                errdefer a.free(bytes);
+                try readAt(self.fd, offset, bytes);
+                if (!same(&storage.digest(bytes), &reference.digest)) return error.InvalidArchive;
+                return bytes;
+            }
+            offset += reference.bytes;
+        }
+        return error.MissingArtifact;
+    }
     pub fn acquire(self: *Reader, store: *storage.Store) !void {
         if (!store.transaction or store.fenced) return error.InvalidState;
         const prefix = try self.allocator.alloc(u8, self.prefix.len);
@@ -332,7 +350,7 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
                         inference_bytes = try std.math.add(u64, inference_bytes, if (item.prepared) |body| body.bytes else item.request.bytes);
                     }
                 } else if (comptime same(kind, "capture")) {
-                    if (item.disposition == .unknown) return error.UnsettledOccurrence;
+                    if (item.disposition != .complete or item.response == null or item.projection == null) return error.UnsettledOccurrence;
                     if (!same(&item.attempt, &row.id) or record(archive, .attempt, item.attempt) == null) return error.CorruptState;
                 } else if (comptime same(kind, "origin")) {
                     if (item.source_revision == 0 or item.source_revision >= value.revision) return error.CorruptState;

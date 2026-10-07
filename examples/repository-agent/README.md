@@ -3,8 +3,9 @@
 This authored application investigates a bounded, immutable repository snapshot.
 Its native handlers only list and read frozen files or acquire model responses;
 World retains action selection, questions, follow-ups, evidence and budgets.
-Current CI has not yet qualified the complete executable. Do not treat the
-commands below as evidence that they have passed.
+The Linux application has compiled and run against an independently controlled
+HTTPS provider. Archive/parity changes are under qualification; final platform
+and live OpenAI qualification remain incomplete.
 
 Build from Agent using the pinned Zig 0.17.0 toolchain and admitted dependencies:
 
@@ -70,6 +71,19 @@ For a restarted stdio server, use `--profile-task TASK_ID` to select the frozen
 profile and snapshot. Keep `--offline` for an offline task. Credentials and current
 inference authorization must be supplied separately for live work; neither is
 restored from task state. A task never changes its profile silently.
+
+After parking the server, a settled task can be copied explicitly:
+
+```sh
+./repository-agent export-checkpoint --state-dir ./repository-state --task-id TASK_ID --output ./task.bundle
+./repository-agent import-checkpoint --state-dir ./imported-state --input ./task.bundle --operation-id import-task
+```
+
+Keep `--offline` on both commands for an offline task. The private archive includes
+the original snapshot and complete admitted provider replay objects. Import
+restores frozen inputs and spent counters into a fresh namespace without making
+a provider call. It grants no permission to run concurrent copies; any later
+live resume needs current credentials and explicit inference authorization.
 
 Use `initialize`, `describe`, `task.submit`, `task.status`, `task.respond`,
 `task.message`, `task.subscribe`, `task.result`, `task.cancel` and explicit

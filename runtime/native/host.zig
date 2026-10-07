@@ -274,7 +274,9 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
         if (profile_task) |text| {
             const id = client_api.identifier(16, json.string(text)) catch return 64;
             frozen = service.?.frozenInputs(profile_allocator, id) catch return 64;
-        } else if (human != null and human.? != .run and human.? != .@"import-checkpoint") {
+        } else if (human == .@"import-checkpoint") {
+            frozen = service.?.frozenArchiveInputs(profile_allocator, human_options.checkpoint_input.?) catch return 64;
+        } else if (human != null and human.? != .run) {
             const id = selectTask(Types, profile_allocator, &service.?, human_options.task_id, human == .@"resume" or human == .cancel) catch return 64;
             frozen = service.?.frozenInputs(profile_allocator, id) catch return 64;
         }

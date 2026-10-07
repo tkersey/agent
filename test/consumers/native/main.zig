@@ -17,6 +17,34 @@ pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();
     if (args.next()) |mode| {
+        if (std.mem.eql(u8, mode, "invoke")) {
+            const path = args.next() orelse return error.InvalidArguments;
+            if (args.next() != null) return error.InvalidArguments;
+            // The parity peer supplies the existing PKI3 envelope, including
+            // recorded replies. No application policy or capability runs here.
+            var budget: world.AllocationBudget = .{ .parent = init.gpa, .limit = 32 * 1024 * 1024 };
+            const allocator = budget.allocator();
+            const bytes = try std.Io.Dir.cwd().readFileAlloc(init.io, path, allocator, .limited(4 * 1024 * 1024));
+            defer allocator.free(bytes);
+            var invocation = try protocol.decode(protocol.Input, allocator, bytes);
+            defer invocation.deinit();
+            var program = try world.Prepared.init(allocator, invocation.value.image);
+            defer program.deinit();
+            var handle = switch (invocation.value.instance) {
+                .initial_args => |value| try world.Resident.start(allocator, &program, value),
+                .state => |value| try world.Resident.restore(allocator, &program, value),
+            };
+            var outcome = try handle.drive(allocator, invocation.value.control, .{ .quantum = invocation.value.quantum, .checkpoint = true });
+            defer outcome.deinit();
+            switch (outcome.record) {
+                .completed, .failed, .cancelled => try handle.close(),
+                else => allocator.free(try handle.takeCheckpoint(allocator)),
+            }
+            const encoded_outcome = try protocol.encodeOwned(protocol.Outcome, allocator, outcome.record);
+            defer allocator.free(encoded_outcome);
+            try std.Io.File.stdout().writeStreamingAll(init.io, encoded_outcome);
+            return;
+        }
         if (!std.mem.eql(u8, mode, "https")) return error.InvalidArguments;
         const endpoint = args.next() orelse return error.InvalidArguments;
         const root_path = args.next() orelse return error.InvalidArguments;

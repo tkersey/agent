@@ -694,7 +694,6 @@ pub fn build(b: *std.Build) void {
             const protocol_peer = nodeCommand(b);
             protocol_peer.addArgs(&.{ "node", "test/agent4/native_host.mjs" });
             protocol_peer.addFileArg2(product.executable.getEmittedBin(), .{ .make_absolute = true });
-            protocol_peer.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
             native_host.dependOn(&protocol_peer.step);
             const consumer_module = b.createModule(.{
                 .root_source_file = b.path("test/consumers/native/main.zig"),
@@ -704,6 +703,8 @@ pub fn build(b: *std.Build) void {
             });
             consumer_module.addAnonymousImport("image", .{ .root_source_file = product.assets.image });
             const consumer = b.addExecutable(.{ .name = "agent-native-consumer", .root_module = consumer_module });
+            repository_peer.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
+            repository_peer.addFileArg2(consumer.getEmittedBin(), .{ .make_absolute = true });
             consumer.step.dependOn(&runtime_guard.step);
             native_consumer.dependOn(&b.addRunArtifact(consumer).step);
             const https_peer = nodeCommand(b);

@@ -32,6 +32,24 @@ pub const FrozenInputs = struct {
     profile: []const u8,
     resources: []const []const u8,
 };
+fn readFrozenInputs(a: std.mem.Allocator, value: state.Task, source: anytype) !FrozenInputs {
+    const resources = try a.alloc([]const u8, value.resources.items.len);
+    var acquired: usize = 0;
+    errdefer {
+        for (resources[0..acquired]) |bytes| a.free(bytes);
+        a.free(resources);
+    }
+    var total: u64 = 0;
+    for (value.resources.items, resources) |reference, *bytes| {
+        total = std.math.add(u64, total, reference.bytes) catch return error.Capacity;
+        if (total > 16 * 1024 * 1024) return error.Capacity;
+        bytes.* = try source.object(a, reference, 16 * 1024 * 1024);
+        acquired += 1;
+    }
+    const profile_id = try a.dupe(u8, value.profile_id.bytes);
+    errdefer a.free(profile_id);
+    return .{ .profile_id = profile_id, .profile = try source.object(a, value.profile, 256 * 1024), .resources = resources };
+}
 pub const Admission = struct { receipt: state.Receipt, replayed: bool };
 pub const Status = state.Status;
 pub const Work = struct {
@@ -118,15 +136,20 @@ pub fn Service(comptime Types: type) type {
         pub fn frozenInputs(self: *Self, a: std.mem.Allocator, id: state.TaskId) !FrozenInputs {
             var decoded = try self.task(a, id);
             defer decoded.deinit();
-            const value = decoded.value;
-            const resources = try a.alloc([]const u8, value.resources.items.len);
-            var total: u64 = 0;
-            for (value.resources.items, resources) |reference, *bytes| {
-                total = std.math.add(u64, total, reference.bytes) catch return error.Capacity;
-                if (total > 16 * 1024 * 1024) return error.Capacity;
-                bytes.* = try self.store().object(a, reference, 16 * 1024 * 1024);
-            }
-            return .{ .profile_id = try a.dupe(u8, value.profile_id.bytes), .profile = try self.store().object(a, value.profile, 256 * 1024), .resources = resources };
+            return readFrozenInputs(a, decoded.value, self.store());
+        }
+        /// Supply only the owned launch data needed to configure an import.
+        /// This preview admits no task, grant, resident or external operation.
+        pub fn frozenArchiveInputs(self: *Self, a: std.mem.Allocator, path: []const u8) !FrozenInputs {
+            try self.allowed();
+            var reader = try archive_api.Reader.open(a, path);
+            defer reader.deinit();
+            const bytes = try reader.object(a, reader.manifest.value.task, 256 * 1024);
+            defer a.free(bytes);
+            var decoded = try contracts.decodeOwned(state.Task, a, bytes);
+            defer decoded.deinit();
+            if (!same(decoded.value.principal.bytes, self.profile.authority.principal) or !same(decoded.value.tenant.bytes, self.profile.authority.tenant)) return error.Denied;
+            return readFrozenInputs(a, decoded.value, &reader);
         }
         pub fn pendingQuestion(self: *Self, a: std.mem.Allocator, id: state.TaskId) !?contracts.Decoded(state.Question) {
             var value = try self.task(a, id);
@@ -900,7 +923,7 @@ pub fn Service(comptime Types: type) type {
             defer attempt.deinit();
             var raw = try self.record(state.Capture, a, "capture", attempt_id, initial.id);
             defer raw.deinit();
-            if (raw.value.disposition != .complete or raw.value.response == null or attempt.value.prepared == null or
+            if (raw.value.disposition != .complete or raw.value.response == null or raw.value.projection != null or attempt.value.prepared == null or
                 !same(&attempt.value.occurrence, &pending.id) or !same(&raw.value.occurrence, &pending.id) or
                 !same(&attempt.value.profile.digest, &initial.profile.digest) or
                 !std.meta.eql(attempt.value.prepared.?, raw.value.request)) return error.CorruptState;
@@ -939,8 +962,13 @@ pub fn Service(comptime Types: type) type {
             };
             try self.store().begin();
             defer self.store().rollback();
-            _ = try self.store().putObject(bound);
-            for (result.objects) |object| _ = try self.store().putObject(object);
+            const reply = try self.store().putObject(bound);
+            const objects = try a.alloc(state.Reference, result.objects.len);
+            defer a.free(objects);
+            for (result.objects, objects) |object, *reference| reference.* = try self.store().putObject(object);
+            var projected = raw.value;
+            projected.projection = .{ .reply = reply, .objects = .{ .items = objects }, .output_tokens = result.output_tokens };
+            try self.store().putRecord(state.Capture, "capture", attempt_id, initial.id, projected);
             try self.store().putRecord(occurrence.Occurrence, "occurrence", pending.id, initial.id, next);
             try self.persist(value, initial.revision, "effect.interpret");
             return .progressed;
@@ -1029,21 +1057,78 @@ pub fn Service(comptime Types: type) type {
             try self.persist(value, previous, "effect.not-sent");
         }
 
-        fn archiveProfile(self: *Self, a: std.mem.Allocator) !void {
+        fn archiveAccess(self: *Self) !void {
             try self.allowed();
             if (self.work != null) return error.UnsettledOccurrence;
-            if (self.profile.authority.inference) return error.NonPortable;
-            var profile = try json.parse(a, self.profile.bytes, .{ .bytes = 256 * 1024 });
-            defer profile.deinit();
-            const mode = json.get(profile.value, "mode") orelse return error.NonPortable;
-            if (mode != .string or !same(mode.string, "offline")) return error.NonPortable;
+        }
+
+        /// A transferable capture must reproduce its committed reply, replay
+        /// objects and usage through the same pure adapter, without acquisition.
+        fn validateCapturedProjections(self: *Self, a: std.mem.Allocator, value: state.Task, records: []const state.ArchiveRecord) !void {
+            var output_tokens: u64 = 0;
+            for (records) |row| {
+                if (row.kind != .capture) continue;
+                var arena = std.heap.ArenaAllocator.init(a);
+                defer arena.deinit();
+                const temporary = arena.allocator();
+                var raw = try self.record(state.Capture, temporary, "capture", row.id, value.id);
+                defer raw.deinit();
+                const capture_value = raw.value;
+                const projection = capture_value.projection orelse return error.UnsettledOccurrence;
+                if (capture_value.disposition != .complete or capture_value.response == null or !same(&capture_value.attempt, &row.id)) return error.CorruptState;
+                var attempt = try self.record(state.Attempt, temporary, "attempt", row.id, value.id);
+                defer attempt.deinit();
+                var saved = try self.record(occurrence.Occurrence, temporary, "occurrence", capture_value.occurrence, value.id);
+                defer saved.deinit();
+                const acquired = switch (saved.value.state) {
+                    .settled_reply => |reply| reply,
+                    .admitted => |admitted| if (admitted == .reply) admitted.reply else return error.CorruptState,
+                    else => return error.UnsettledOccurrence,
+                };
+                if (attempt.value.prepared == null or !same(&attempt.value.occurrence, &capture_value.occurrence) or
+                    !std.meta.eql(attempt.value.profile, value.profile) or !std.meta.eql(attempt.value.prepared.?, capture_value.request) or
+                    !same(&acquired.attempt, &row.id) or !same(&acquired.reply, &projection.reply.digest)) return error.CorruptState;
+                const encoded = try self.store().object(temporary, attempt.value.request, 4 * 1024 * 1024);
+                var request = try data.invocation.decode(data.invocation.Request, temporary, encoded);
+                defer request.deinit();
+                if (!same(&request.value.request_identity, &saved.value.request)) return error.CorruptState;
+                const entry = try self.handlers.resolve(request.value, self.application.image_identity);
+                if (!same(attempt.value.capability.bytes, entry.declaration.identity) or attempt.value.inference != entry.declaration.inference) return error.IncompatibleProfile;
+                const adapter = entry.declaration.capture orelse return error.IncompatibleProfile;
+                const context = self.projectionContext(temporary, value);
+                const rendered = try self.store().object(temporary, capture_value.request, 2 * 1024 * 1024);
+                if (!same(rendered, try adapter.prepare(context, request.value.binding.payload))) return error.CorruptState;
+                const response = try self.store().object(temporary, capture_value.response.?, 4 * 1024 * 1024);
+                const result = try adapter.interpret(context, request.value.binding.payload, rendered, response);
+                if (result.reply.len > 1024 * 1024 or result.objects.len != projection.objects.items.len or result.output_tokens != projection.output_tokens) return error.CorruptState;
+                var total: u64 = 0;
+                for (result.objects, projection.objects.items) |object, reference| {
+                    total = try std.math.add(u64, total, object.len);
+                    if (total > 2 * 1024 * 1024 or object.len != reference.bytes or !same(&storage.digest(object), &reference.digest)) return error.CorruptState;
+                }
+                var schema = try data.schema.decode(temporary, entry.resume_schema);
+                defer schema.deinit();
+                try data.schema.validateValue(temporary, schema.descriptor, result.reply);
+                const bound = try data.invocation.encodeOwned(data.invocation.Result, temporary, .{ .request_identity = saved.value.request, .value = result.reply });
+                if (!same(bound, try self.store().object(temporary, projection.reply, 4 * 1024 * 1024))) return error.CorruptState;
+                if (entry.declaration.inference) if (result.output_tokens) |tokens| {
+                    output_tokens = try std.math.add(u64, output_tokens, tokens);
+                };
+            }
+            if (output_tokens != value.inference_output_tokens) return error.CorruptState;
         }
 
         pub fn exportCheckpoint(self: *Self, a: std.mem.Allocator, task_id: state.TaskId, path: []const u8) !archive_api.Exported {
-            try self.archiveProfile(a);
+            try self.archiveAccess();
             var value = try self.task(a, task_id);
             defer value.deinit();
             try self.compatible(value.value);
+            {
+                var arena = std.heap.ArenaAllocator.init(a);
+                defer arena.deinit();
+                const index = try self.store().archiveIndex(arena.allocator(), task_id, .{ .digest = storage.digest(self.assets.manifest), .bytes = self.assets.manifest.len });
+                try self.validateCapturedProjections(arena.allocator(), value.value, index.records.items);
+            }
             return archive_api.write(self.allocator, self.io, self.store(), task_id, self.assets.manifest, path, self.namespace.directory);
         }
 
@@ -1051,7 +1136,7 @@ pub fn Service(comptime Types: type) type {
         /// Existing task IDs/receipts survive; current grants are never loaded
         /// from the archive and no resident becomes runnable on import.
         pub fn importCheckpoint(self: *Self, a: std.mem.Allocator, id: []const u8, path: []const u8) !Admission {
-            try self.archiveProfile(a);
+            try self.archiveAccess();
             var reader = try archive_api.Reader.open(self.allocator, path);
             defer reader.deinit();
             const Request = struct { method: state.Method, archive: state.Digest };
@@ -1088,6 +1173,7 @@ pub fn Service(comptime Types: type) type {
             // historical answer receipt; that receipt intentionally retains
             // its original client operation ID rather than the alias preimage.
             try self.store().restoreArchiveIndex(a, reader.manifest.value, value);
+            try self.validateCapturedProjections(a, value, reader.manifest.value.records.items);
             try self.validateImportedState(a, value, inspected.current);
             const previous = value.revision;
             value.revision = try std.math.add(u64, previous, 1);

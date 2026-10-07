@@ -232,7 +232,16 @@ occurrences reject export/import. Missing, changed, unreferenced or oversized
 objects reject; a failed import rolls back before admission. Normal resume keeps
 its existing exact native-artifact check. This profile is a controlled data
 copy, not distributed custody, producer authentication or permission to run two
-copies concurrently. Provider/resource archive profiles remain pending N3/N4.
+copies concurrently. `offline_copy` describes this transfer discipline; a settled
+task may retain either an offline or live provider profile. Keep `--offline` only
+for an offline task. Export and import do not require or acquire inference.
+
+Repository snapshots and every interpreted provider capture's reply, replay
+objects and usage travel in that same closure. Export and import reproduce the
+projection from its saved request/response through the pure adapter and compare
+its committed bytes and counters. Uninterpreted captures remain nonportable.
+Import configures adapters from the archive's digest-checked frozen resources,
+without recapturing the original filesystem paths or loading archived grants.
 
 The file starts with a 32-byte little-endian header: `AGNX0001`, u32 manifest
 schema length, u32 manifest length, u32 object count, zero u32 flags, and u64
@@ -266,7 +275,7 @@ Linux links the selected toolchain's musl libc and embeds its license. The
 database wrapper refuses an uncapped allocation fallback and verifies the linked
 SQLite version. This primitive is not a completed task journal.
 
-The current namespace format is `agent-native-state/6`. Task, receipt, question,
+The current namespace format is `agent-native-state/7`. Task, receipt, question,
 message and event indexes reference the same hash-checked immutable object store
 as checkpoints and replies. A changed record body rejects before interpretation;
 foreign keys and task revision checks bind its index. Earlier development state
@@ -299,11 +308,12 @@ Capturing adapters add a CAPTURED boundary before interpretation. The task owner
 persists the rendered non-secret request before dispatch and exact raw response
 before calling the pure interpreter. Preparation and interpretation receive only
 frozen task bindings and immutable object reads. Interpretation publishes its
-typed reply and replay objects together. Restart can interpret the saved capture
+typed reply, replay object references and usage together in the capture record.
+Restart can interpret the saved capture
 without invoking the adapter again; a failed interpretation retains those bytes
 and blocks the task. Captures awaiting interpretation are not exportable. This
-owner mechanism is present; the Responses transport and integrated provider
-qualification remain in progress.
+owner mechanism is shared with the native Responses transport and the integrated
+controlled-HTTPS repository witness. Live provider qualification is separate.
 
 `agent.inbox.Profile(Message).poll(context)` is a reusable ordinary authored
 effect. Its reply is either empty or an identified typed message. Its codecs

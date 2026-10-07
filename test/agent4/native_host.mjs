@@ -2,18 +2,18 @@
 // claim the later task/recovery/provider conformance obligations are complete.
 import assert from 'node:assert/strict';
 import {spawn, execFileSync} from 'node:child_process';
-import {mkdtempSync, copyFileSync, rmSync, readFileSync, writeFileSync, mkdirSync, chmodSync, existsSync} from 'node:fs';
+import {mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, chmodSync, existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
 import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence} from './native_archive.mjs';
+import {deployment} from './native_deployment.mjs';
 
 const source = resolve(process.argv[2]);
-const directory = mkdtempSync(join(tmpdir(), 'Agent native ü '));
-const binary = join(directory, 'agent-native-example');
-copyFileSync(source, binary);
+const isolated = deployment(source, 'agent-native-example');
+const directory = isolated.data;
+const binary = isolated.command;
 const options = {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000, maxBuffer: 2 * 1024 * 1024};
 const methodsById = new Map();
 const schemaCases = [];
@@ -83,6 +83,7 @@ const rpc = (id, method, params = {}) => {
   methodsById.set(id, method);
   return JSON.stringify({jsonrpc: '2.0', id, method, params}) + '\n';
 };
+let passed = false;
 try {
   assert.match(execFileSync(binary, ['--help'], options), /serve --transport stdio/);
   const describeStartedAt = performance.now();
@@ -91,8 +92,8 @@ try {
   assert.equal(manifest.format, 'agent-native-build/v1');
   assert.equal(manifest.protocol, 'agent-host/1.0');
   assert.equal(manifest.compiler.version, '0.17.0');
-  assert.equal(manifest.artifact_sha256, createHash('sha256').update(readFileSync(binary)).digest('hex'));
-  assert.equal(manifest.artifact_bytes, String(readFileSync(binary).length));
+  assert.equal(manifest.artifact_sha256, createHash('sha256').update(readFileSync(isolated.executable)).digest('hex'));
+  assert.equal(manifest.artifact_bytes, String(readFileSync(isolated.executable).length));
   assert(!JSON.stringify(manifest).includes(process.cwd()));
   assert.equal(manifest.dependencies.sqlite.version, '3.53.4');
   assert.deepEqual(manifest.licenses.map(item => item.component).sort(), ['Agent', 'World', 'Boundary', 'Zig standard library', 'SQLite', ...(manifest.target.includes('linux') ? ['musl libc'] : [])].sort());
@@ -120,7 +121,7 @@ try {
   assert.deepEqual(humanAnswered.outcome.value, {value: 43, answer: 'human answer'});
   assert.equal(cli('respond', 'human state', ...humanAnswerArgs).revision, humanAnswered.revision);
   assert.throws(() => execFileSync(binary, ['respond', '--offline', '--state-dir', 'human state', ...humanAnswerArgs.slice(0, -1), '{"message":"conflicting answer"}'], options), error => error.status === 64);
-  const unsafeParent = mkdtempSync(join(tmpdir(), 'Agent writable parent '));
+  const unsafeParent = mkdtempSync(join(directory, 'Agent writable parent '));
   try {
     chmodSync(unsafeParent, 0o777);
     const unsafeCwd = join(unsafeParent, 'private child');
@@ -408,6 +409,7 @@ try {
   }
   process.stdout.write(execFileSync('uv', ['run', '--no-project', '--no-config', '--python', '3.12', '--with', 'jsonschema==4.23.0', fileURLToPath(new URL('./native_schema.py', import.meta.url))], {input: JSON.stringify({schema: protocolSchema, cases: schemaCases}), encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024}));
   console.log(JSON.stringify({check: 'native-build-and-discovery', result: 'passed', target: manifest.target, program: manifest.program_sha256, artifact_bytes: manifest.artifact_bytes, describe_ms: describeMilliseconds, scope: 'embedded durable demo, framing, negotiation, discovery, client question, restart, stable admissions, typed result and event replay; provider/platform qualification remains open'}));
+  passed = true;
 } finally {
-  rmSync(directory, {recursive: true, force: true});
+  isolated.close(passed);
 }

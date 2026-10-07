@@ -91,7 +91,10 @@ jobs:
       - name: Install the source-registry dependency
         if: matrix.lane != 'installation'
         run: |
-          if ! command -v rg >/dev/null; then
+          if [ "$RUNNER_OS" = Linux ] && [ "${{ matrix.lane }}" = native ]; then
+            sudo apt-get update
+            sudo apt-get install --yes ripgrep bubblewrap strace
+          elif ! command -v rg >/dev/null; then
             if [ "$RUNNER_OS" = macOS ]; then
               brew install ripgrep
             else
@@ -142,7 +145,8 @@ jobs:
               node test/agent4/installations.mjs --output "$RUNNER_TEMP/installation-authoring.json"
               exit 0 ;;
             authoring) target=check-authoring-core ;;
-            native) target=check-native ;;
+            native)
+              if [ "$PLATFORM" = macos-arm64 ]; then target=check-native-product; else target=check-native; fi ;;
             *) exit 2 ;;
           esac
           zig build "$target" -Doptimize=safe \

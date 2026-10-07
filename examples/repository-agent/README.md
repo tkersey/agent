@@ -3,9 +3,10 @@
 This authored application investigates a bounded, immutable repository snapshot.
 Its native handlers only list and read frozen files or acquire model responses;
 World retains action selection, questions, follow-ups, evidence and budgets.
-The Linux application has compiled and run against an independently controlled
-HTTPS provider. Archive/parity changes are under qualification; final platform
-and live OpenAI qualification remain incomplete.
+The application has compiled and run on Linux x86_64 and macOS arm64 against an
+independently controlled HTTPS provider, including archive closure and recorded
+native/WASM/native continuation. Clean-host isolation and final distribution
+qualification are in progress; live OpenAI qualification remains incomplete.
 
 Build from Agent using the pinned Zig 0.17.0 toolchain and admitted dependencies:
 

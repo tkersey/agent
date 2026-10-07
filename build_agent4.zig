@@ -571,12 +571,14 @@ pub fn build(b: *std.Build) void {
     check.dependOn(emit);
 
     const native_checks = b.step("check-native", "Check native and custody contracts against the selected World");
+    const native_product = b.step("check-native-product", "Qualify native reference applications on the selected supported platform");
     const native_consumer = b.step("check-native-consumer", "Build and execute an embedded public World consumer (N0)");
     const native_example = b.step("native-example", "Build and install the native reference applications");
     const native_host = b.step("check-native-host", "Check the native build, embedded assets and protocol discovery");
-    native_checks.dependOn(native_consumer);
-    native_checks.dependOn(native_host);
-    native_checks.dependOn(native_example);
+    native_checks.dependOn(native_product);
+    native_product.dependOn(native_consumer);
+    native_product.dependOn(native_host);
+    native_product.dependOn(native_example);
     if (runtime) |runtime_path| {
         const world = b.createModule(.{
             .root_source_file = world_source.path(b, "src/root.zig"),
@@ -705,7 +707,7 @@ pub fn build(b: *std.Build) void {
             const repository_peer = nodeCommand(b);
             repository_peer.addArgs(&.{ "node", "test/agent4/native_repository.mjs" });
             repository_peer.addFileArg2(repository_product.executable.getEmittedBin(), .{ .make_absolute = true });
-            native_checks.dependOn(&repository_peer.step);
+            native_product.dependOn(&repository_peer.step);
             const protocol_peer = nodeCommand(b);
             protocol_peer.addArgs(&.{ "node", "test/agent4/native_host.mjs" });
             protocol_peer.addFileArg2(product.executable.getEmittedBin(), .{ .make_absolute = true });
@@ -745,11 +747,11 @@ pub fn build(b: *std.Build) void {
         native_suite.addImport("agent_native", checked_environment);
         native_suite.addAnonymousImport("native_model_reference", .{ .root_source_file = responses_peer.captureStdOut(.{}) });
         native_suite.addImport("document", native_graph.module("test/consumers/document/consequence.zig"));
-        native_graph.testModule(native_checks, native_suite);
+        native_graph.testModule(native_product, native_suite);
         // Zig does not collect test declarations from named dependency modules.
         // Run the runtime's own root explicitly; the integration root above
         // independently exercises its public task owner with authored programs.
-        native_graph.testModule(native_checks, checked_environment);
+        native_graph.testModule(native_product, checked_environment);
         // Repository policy modules have distinct import roots and retain their
         // focused runners rather than changing their nominal type identities.
         for ([_][]const u8{ "repository_working_set", "repository_replacement" }) |name| {
@@ -763,7 +765,7 @@ pub fn build(b: *std.Build) void {
             });
             tests.step.dependOn(native_graph.gate);
             const run_policy = b.addRunArtifact(tests);
-            native_checks.dependOn(&run_policy.step);
+            native_product.dependOn(&run_policy.step);
             b.step(if (working_set) "check-repository-working-set" else "check-repository-replacement", if (working_set) "Check staged repository memory and evidence rules" else "Check live repository replacement approval")
                 .dependOn(&run_policy.step);
         }

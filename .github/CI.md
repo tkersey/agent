@@ -163,6 +163,29 @@ took 4.15 ms. These are observed runs with runner variability, not a latency SLA
 or proof that restoring a cache alone improves compilation. Later changes need
 their own measurements.
 
+Manual runs can select `platform=macos-arm64` on GitHub's standard `macos-15`
+runner. They check the actual architecture and run `check-native-product`;
+Linux's full `check-native` still includes the existing mobility JavaScript
+regressions. The first broad macOS run passed all 91 native tests and both
+applications, but the pre-existing mobility JavaScript checks failed with TLS
+certificate and digest errors. Those failures are not relabeled as native
+product passes or repaired as part of this platform addition.
+
+Both application peers use one shared deployment controller. Linux checks ELF
+linkage and launches the copied executable inside private user/mount/PID
+namespaces, tracing process/file access. Only that executable and chosen user
+data are mounted. macOS checks Mach-O linkage and code-signature validity, then
+uses an OS file-read/executable allowlist. Controller code, CA signing keys,
+source trees and build caches stay outside the application boundary. These are
+qualification boundaries; the delivered executable does not install a sandbox.
+Linux qualification requires `bubblewrap` and `strace`; no OS security setting
+is disabled to admit it.
+
+Successful manual native runs retain a 14-day CI artifact containing the two
+executables, their observed build manifests, the runbook and optional TypeScript
+client. A tar archive preserves executable permissions. This is build-artifact
+delivery, not release signing, notarization or a published release.
+
 Before and after each applicable lane, `.github/scripts/zig-cache.mjs` records
 the restored key, logical file bytes, file count and top-level bucket sizes
 (`o`, `h`, `z`, temporary/other directories). The build's `--summary all` records

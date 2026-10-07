@@ -7,8 +7,7 @@ import { once } from 'node:events';
 import { AgentClient } from '../../examples/native-minimal/stdio-client.mts';
 import { certificates } from './mobility_tls_fixture.mjs';
 import { compareContinuation, missingReplayObject } from './native_archive.mjs';
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { deployment } from './native_deployment.mjs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -25,14 +24,14 @@ async function until(read, predicate, label) {
   throw new Error(`${label}: timeout`);
 }
 
-async function repositoryHttps(binary, directory, invoke) {
+async function repositoryHttps(binary, directory, controller, invoke) {
   const root = join(directory, 'controlled repository');
   const state = join(directory, 'https state');
   await mkdir(join(root, 'src'), { recursive: true });
   const source = 'pub fn answer() u32 { return 42; }\n';
   const changed = 'pub fn answer() u32 { return 99; }\n';
   await writeFile(join(root, 'src/main.zig'), source);
-  const tls = await certificates(directory);
+  const tls = await certificates(controller);
   const trust = join(directory, 'provider-root.der');
   const credential = join(directory, 'provider-token');
   await writeFile(trust, new X509Certificate(tls.ca).raw);
@@ -199,7 +198,7 @@ async function repositoryHttps(binary, directory, invoke) {
     const completedArchive = join(directory, 'repository-completed.bundle');
     invoke('export-checkpoint', '--state-dir', state, '--task-id', id, '--output', completedArchive);
     const completedBytes = await readFile(completedArchive);
-    const parity = await compareContinuation(process.argv[3], process.argv[4], join(directory, 'recorded-input.pki3'), pendingBytes, completedBytes);
+    const parity = await compareContinuation(process.argv[3], process.argv[4], join(controller, 'recorded-input.pki3'), pendingBytes, completedBytes);
     const importedState = join(directory, 'imported pending');
     const imported = JSON.parse(invoke('import-checkpoint', '--state-dir', importedState, '--input', pendingArchive, '--operation-id', 'import-pending'));
     assert.equal(imported.task_id, id);
@@ -229,10 +228,11 @@ async function repositoryHttps(binary, directory, invoke) {
 
 const source = process.argv[2];
 assert(source && process.argv[3] && process.argv[4]);
-const directory = mkdtempSync(join(tmpdir(), 'repository native 雪 '));
+const isolated = deployment(source, 'repository-agent');
+const directory = isolated.data;
+let passed = false;
 try {
-  const binary = join(directory, 'repository-agent');
-  cpSync(source, binary);
+  const binary = isolated.command;
   const invoke = (...args) => {
     const result = spawnSync(binary, args, { cwd: directory, env: { PATH: '/nonexistent' }, encoding: 'utf8', timeout: 30_000, maxBuffer: 2 * 1024 * 1024 });
     assert.equal(result.status, 0, `${args[0]}: ${result.error ?? result.stderr ?? result.stdout}`);
@@ -244,7 +244,8 @@ try {
   const result = JSON.parse(invoke('demo', '--offline', '--state-dir', join(directory, 'state')));
   assert.equal(result.mode, 'offline-demo');
   assert.equal(result.output.disposition, 'report');
-  console.log(JSON.stringify({ repository_agent: 'controlled-https', ...await repositoryHttps(binary, directory, invoke) }));
+  console.log(JSON.stringify({ repository_agent: 'controlled-https', ...await repositoryHttps(binary, directory, isolated.controller, invoke) }));
+  passed = true;
 } finally {
-  rmSync(directory, { recursive: true, force: true });
+  isolated.close(passed);
 }

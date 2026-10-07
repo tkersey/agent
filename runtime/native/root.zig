@@ -11,6 +11,7 @@ pub const Registry = registry.Registry;
 pub const run = @import("host.zig").run;
 pub const discovery = @import("discovery.zig");
 pub const inbox = @import("inbox.zig");
+pub const https = @import("https.zig");
 pub const tasks = @import("tasks.zig");
 pub const client = @import("client.zig");
 pub const Namespace = @import("namespace.zig").Namespace;
@@ -19,6 +20,7 @@ test {
     _ = json;
     _ = values;
     _ = protocol;
+    _ = https;
     _ = registry;
     _ = client;
     _ = @import("sqlite.zig");

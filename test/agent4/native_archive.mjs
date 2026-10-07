@@ -111,10 +111,19 @@ export async function compareContinuation(runtimePath, pendingBytes, completedBy
   const {request} = await runtime.inspectPending(outcome);
   const reply = encodeValue(decodeSchema(request.resumeSchema), [answer]);
   let result = await runtime.resume(image, pending.object(pending.task.checkpoint), outcome.request, reply);
-  for (let i = 0; ['progressed', 'yielded'].includes(result.kind); i++) {
+  let cleanup = 0;
+  for (let i = 0; ['progressed', 'yielded', 'requested'].includes(result.kind); i++) {
     assert(i < 100, 'bounded WASM continuation');
-    result = await runtime.continueExecution(image, result);
+    if (result.kind === 'requested') {
+      const next = await runtime.inspectPending(result);
+      assert.equal(next.request.semanticIdentity, 'agent.example.cleanup.v1');
+      assert.equal(++cleanup, 1, 'one authored cleanup after the answered body');
+      assert.equal(next.request.payload.length, 0, 'cleanup takes unit');
+      const unit = encodeValue(decodeSchema(next.request.resumeSchema), null);
+      result = await runtime.resume(image, result.state, result.request, unit);
+    } else result = await runtime.continueExecution(image, result);
   }
+  assert.equal(cleanup, 1);
   assert.equal(result.kind, 'completed');
   const native = runtime.decodeOutcome(completed.object(completed.task.outcome));
   assert.equal(native.kind, 'completed');

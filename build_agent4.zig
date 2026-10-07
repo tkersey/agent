@@ -651,12 +651,16 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("test/consumers/native/main.zig"),
             .target = b.graph.host,
             .optimize = optimize,
-            .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data", .module = data } },
+            .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data", .module = data }, .{ .name = "agent_native", .module = host_environment } },
         });
         consumer_module.addAnonymousImport("image", .{ .root_source_file = native_image.captureStdOut(.{}) });
         const consumer = b.addExecutable(.{ .name = "agent-native-consumer", .root_module = consumer_module });
         consumer.step.dependOn(&runtime_guard.step);
         native_consumer.dependOn(&b.addRunArtifact(consumer).step);
+        const https_peer = nodeCommand(b);
+        https_peer.addArgs(&.{ "node", "test/agent4/native_https.mjs" });
+        https_peer.addFileArg2(consumer.getEmittedBin(), .{ .make_absolute = true });
+        native_consumer.dependOn(&https_peer.step);
         native_consumer.dependOn(&b.addInstallArtifact(consumer, .{}).step);
         // These roots share exact module identities; compile their retained
         // tests together instead of rebuilding the same compiler eleven times.

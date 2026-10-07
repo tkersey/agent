@@ -26,6 +26,13 @@ pub const Profile = struct {
     /// Immutable resource objects admitted with every new task. Their ordinary
     /// references are retained by the task and therefore included in archives.
     resources: []const []const u8 = &.{},
+
+    pub fn resourceIdentity(self: Profile, image: state.Digest) !state.Digest {
+        if (self.resources.len > 16) return error.Capacity;
+        var refs: [16]state.Reference = undefined;
+        for (self.resources, refs[0..self.resources.len]) |bytes, *ref| ref.* = .{ .digest = storage.digest(bytes), .bytes = bytes.len };
+        return registry.resourceIdentity(image, storage.digest(self.bytes), refs[0..self.resources.len]);
+    }
 };
 pub const FrozenInputs = struct {
     profile_id: []const u8,
@@ -518,7 +525,17 @@ pub fn Service(comptime Types: type) type {
             var decoded = try self.task(a, task_id);
             defer decoded.deinit();
             var value = decoded.value;
-            var question_decoded = try self.record(state.Question, a, "question", question_id, task_id);
+            // Client-selected identities may be absent without corrupting the
+            // store. Missing references from durable state still use record().
+            const question_bytes = (try self.store().recordBytes(a, "question", question_id, task_id)) orelse {
+                // Missing durable current-question references remain storage
+                // corruption even when discovered during a client lookup.
+                var current = try self.pendingQuestion(a, task_id);
+                if (current) |*question| question.deinit();
+                return error.StaleInteraction;
+            };
+            defer a.free(question_bytes);
+            var question_decoded = try contracts.decodeOwned(state.Question, a, question_bytes);
             defer question_decoded.deinit();
             var question = question_decoded.value;
             if (question.revision != revision or !same(&question.request_digest, &request_digest) or !same(question.answer_schema_id.bytes, schema_id)) return error.StaleInteraction;
@@ -552,7 +569,7 @@ pub fn Service(comptime Types: type) type {
             defer a.free(original_request);
             var admitted_request = try data.invocation.decode(data.invocation.Request, a, original_request);
             defer admitted_request.deinit();
-            _ = try self.handlers.admit(admitted_request.value, self.profile.authority, self.application.image_identity);
+            _ = try self.handlers.admit(admitted_request.value, self.profile.authority, self.application.image_identity, registry.resourceIdentity(self.application.image_identity, value.profile.digest, value.resources.items));
             var pending = try self.record(occurrence.Occurrence, a, "occurrence", question.occurrence, task_id);
             defer pending.deinit();
             const bound = try data.invocation.encodeOwned(data.invocation.Result, a, .{ .request_identity = question.request_digest, .value = answer });
@@ -778,7 +795,7 @@ pub fn Service(comptime Types: type) type {
             var request = try data.invocation.decode(data.invocation.Request, a, request_bytes);
             defer request.deinit();
             if (!same(&request.value.request_identity, &pending.request)) return error.CorruptState;
-            const entry = self.handlers.admit(request.value, self.profile.authority, self.application.image_identity) catch |err|
+            const entry = self.handlers.admit(request.value, self.profile.authority, self.application.image_identity, registry.resourceIdentity(self.application.image_identity, initial.profile.digest, initial.resources.items)) catch |err|
                 return self.blocked(a, initial, if (err == error.Denied) .denied else .missing_capability);
             var attempt: state.Digest = undefined;
             try self.io.randomSecure(&attempt);

@@ -70,7 +70,7 @@ fn argument(comptime T: type, value: json.Value) ArgumentError!T {
         return .{ .bytes = value.string };
     }
     return switch (@typeInfo(T)) {
-        .int => if (value == .number_string) json.integer(T, value.number_string) catch error.IntegerRange else error.WrongType,
+        .int => if (value == .number_string) json.numberInteger(T, value.number_string) catch error.IntegerRange else error.WrongType,
         .bool => if (value == .bool) value.bool else error.WrongType,
         .@"enum" => blk: {
             if (value != .string) return error.WrongType;

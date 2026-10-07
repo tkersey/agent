@@ -127,6 +127,9 @@ pub fn Client(comptime Types: type) type {
             if (records.len == 0 and after < task.event_high) return error.CorruptState;
             var items: std.array_list.Managed(json.Value) = .init(a);
             var next = after;
+            // A page is one bounded result even inside a 16-call batch. Event
+            // data is at most 48 KiB; reserve room for the page/RPC envelopes.
+            var encoded_bytes: usize = 1024;
             for (records) |bytes| {
                 var saved = try contracts.decodeOwned(state.Event, a, bytes);
                 defer saved.deinit();
@@ -138,6 +141,13 @@ pub fn Client(comptime Types: type) type {
                 try json.put(a, &item, "revision", try counter(a, event.revision));
                 try json.put(a, &item, "type", json.string(@tagName(event.kind)));
                 try json.put(a, &item, "data", (try json.parse(a, event.data.bytes, .{})).value);
+                const encoded = try json.canonical(a, item);
+                defer a.free(encoded);
+                if (encoded.len + 1 > (protocol.Limits{}).inline_bytes - encoded_bytes) {
+                    if (items.items.len == 0) return error.CorruptState;
+                    break;
+                }
+                encoded_bytes += encoded.len + 1;
                 try items.append(item);
                 next = event.seq;
             }

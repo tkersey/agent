@@ -139,6 +139,14 @@ try {
     assert.equal(existsSync(join(unsafeCwd, 'state')), false);
   } finally { rmSync(unsafeParent, {recursive: true, force: true}); }
 
+  // All recognized entries use the same nonblocking type-admission helper.
+  const fifoState = join(directory, 'fifo state');
+  mkdirSync(fifoState, {mode: 0o700});
+  writeFileSync(join(fifoState, 'owner.lock'), '', {mode: 0o600});
+  execFileSync('/usr/bin/mkfifo', ['-m', '600', join(fifoState, 'identity')]);
+  assert.throws(() => execFileSync(binary, ['status', '--offline', '--state-dir', fifoState], options), error => error.status === 64 && error.signal === null);
+  rmSync(fifoState, {recursive: true});
+
   const portable = cli('run', 'archive pending', '--input-json', '{"value":20}', '--operation-id', 'portable-submission');
   const exported = cli('export-checkpoint', 'archive pending', '--output', 'pending.bundle');
   assert.equal(exported.task_id, portable.task_id);

@@ -44,8 +44,27 @@ pub const Acquisition = union(enum) {
 pub const Grant = struct {
     identity: []const u8,
     resource_role: []const u8,
+    /// Exact application, frozen profile and ordered immutable resource set.
     resource_identity: [32]u8,
 };
+
+pub fn resourceIdentity(image: [32]u8, profile: [32]u8, resources: []const ObjectReference) [32]u8 {
+    var hash = std.crypto.hash.sha2.Sha256.init(.{});
+    hash.update("agent.native.resources.v1\x00");
+    hash.update(&image);
+    hash.update(&profile);
+    var count: [8]u8 = undefined;
+    std.mem.writeInt(u64, &count, resources.len, .little);
+    hash.update(&count);
+    for (resources) |resource| {
+        hash.update(&resource.digest);
+        std.mem.writeInt(u64, &count, resource.bytes, .little);
+        hash.update(&count);
+    }
+    var result: [32]u8 = undefined;
+    hash.final(&result);
+    return result;
+}
 pub const Authority = struct {
     grants: []const Grant,
     principal: []const u8,
@@ -119,13 +138,14 @@ pub const Registry = struct {
         self.* = undefined;
     }
 
-    pub fn admit(self: Registry, request: data.invocation.Request, authority: Authority, image_identity: [32]u8) !Entry {
+    pub fn admit(self: Registry, request: data.invocation.Request, authority: Authority, image_identity: [32]u8, resource_identity: [32]u8) !Entry {
         if (authority.revoked) return error.Denied;
         const entry = try self.resolve(request, image_identity);
         const declaration = entry.declaration;
         if (declaration.inference and !authority.inference) return error.Denied;
         for (authority.grants) |grant| {
-            if (std.mem.eql(u8, grant.identity, declaration.identity) and std.mem.eql(u8, grant.resource_role, declaration.resource_role)) return entry;
+            if (std.mem.eql(u8, grant.identity, declaration.identity) and std.mem.eql(u8, grant.resource_role, declaration.resource_role) and
+                std.mem.eql(u8, &grant.resource_identity, &resource_identity)) return entry;
         }
         return error.Denied;
     }
@@ -229,15 +249,21 @@ test "capability admission requires the complete schema and current resource gra
     const entry = registry.entries[0];
     const binding: data.invocation.Binding = .{ .program_identity = @splat(1), .pending_state_digest = @splat(2), .effect = 0, .semantic_identity = "increment.v1", .payload_schema = entry.payload_schema, .resume_schema = entry.resume_schema, .payload = &.{ 1, 0, 0, 0 } };
     const request = try data.invocation.request(binding);
-    const authority: Authority = .{ .principal = "test", .tenant = "test", .grants = &.{.{ .identity = "increment.v1", .resource_role = "local", .resource_identity = @splat(3) }} };
-    _ = try registry.admit(request, authority, @splat(1));
+    const resources: []const ObjectReference = &.{.{ .digest = @splat(3), .bytes = 17 }};
+    const resource = resourceIdentity(@splat(1), @splat(2), resources);
+    const authority: Authority = .{ .principal = "test", .tenant = "test", .grants = &.{.{ .identity = "increment.v1", .resource_role = "local", .resource_identity = resource }} };
+    _ = try registry.admit(request, authority, @splat(1), resource);
+    for ([_][32]u8{
+        resourceIdentity(@splat(1), @splat(4), resources),
+        resourceIdentity(@splat(1), @splat(2), &.{.{ .digest = @splat(5), .bytes = 17 }}),
+    }) |other| try std.testing.expectError(error.Denied, registry.admit(request, authority, @splat(1), other));
     var disabled = authority;
     disabled.grants = &.{};
-    try std.testing.expectError(error.Denied, registry.admit(request, disabled, @splat(1)));
+    try std.testing.expectError(error.Denied, registry.admit(request, disabled, @splat(1), resource));
     disabled = authority;
     disabled.revoked = true;
-    try std.testing.expectError(error.Denied, registry.admit(request, disabled, @splat(1)));
+    try std.testing.expectError(error.Denied, registry.admit(request, disabled, @splat(1), resource));
     var wrong = request;
     wrong.binding.resume_schema = &.{};
-    try std.testing.expectError(error.CapabilitySchemaMismatch, registry.admit(wrong, authority, @splat(1)));
+    try std.testing.expectError(error.CapabilitySchemaMismatch, registry.admit(wrong, authority, @splat(1), resource));
 }

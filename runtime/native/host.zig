@@ -285,7 +285,7 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     defer profile_arena.deinit();
     const profile_allocator = profile_arena.allocator();
     const grants = try profile_allocator.alloc(registry.Grant, handlers.entries.len);
-    for (handlers.entries, grants) |entry, *grant| grant.* = .{ .identity = entry.declaration.identity, .resource_role = entry.declaration.resource_role, .resource_identity = application.image_identity };
+    for (handlers.entries, grants) |entry, *grant| grant.* = .{ .identity = entry.declaration.identity, .resource_role = entry.declaration.resource_role, .resource_identity = @splat(0) };
     const profile_bytes = try std.json.Stringify.valueAlloc(profile_allocator, .{ .mode = "offline", .application = Types.application_id, .assets = try discovery.digest(profile_allocator, assets.application) }, .{});
     var profile: tasks.Profile = .{ .id = "offline", .runtime_identity = artifact_identity.sha256, .bytes = profile_bytes, .authority = .{ .grants = grants, .principal = try std.fmt.allocPrint(profile_allocator, "uid:{d}", .{c.geteuid()}), .tenant = "local" } };
     var service: ?tasks.Service(Types) = null;
@@ -315,6 +315,10 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
         application.execution_mode = if (offline) .offline else .live;
         if (service) |*owner| owner.profile = profile;
     }
+    // Grant the finalized launch profile, including restored immutable inputs.
+    // Task admission checks the same digest derived from its durable references.
+    const resource_identity = try profile.resourceIdentity(application.image_identity);
+    for (grants) |*grant| grant.resource_identity = resource_identity;
     if (task_text) |text| {
         if (comptime @hasDecl(Environment, "taskInput")) {
             const input = Environment.taskInput(profile_allocator, text) catch return 64;

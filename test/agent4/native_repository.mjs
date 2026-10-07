@@ -98,7 +98,7 @@ async function repositoryHttps(binary, directory, controller, invoke) {
         assert(followup > answer, 'settled answer must precede queued follow-up');
       }
       const args = [
-        { prefix: '', after: '' },
+        { prefix: 'src/', after: '' },
         { path: 'src/main.zig', start: 0, maximum: 4096 },
         { question: 'Which public behavior should the report explain?' },
         { summary: 'The exported answer function returns 42.', evidence_index: 0 },

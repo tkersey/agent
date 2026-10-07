@@ -13,7 +13,7 @@ fn regular(fd: c_int) !c.struct_agent_native_stat {
     return stat;
 }
 fn openFile(dir: c_int, name: [:0]const u8, flags: c_int) !c_int {
-    const fd = c.openat(dir, name.ptr, flags | c.O_NOFOLLOW | c.O_CLOEXEC, @as(c_uint, 0o600));
+    const fd = c.openat(dir, name.ptr, flags | c.O_NONBLOCK | c.O_NOFOLLOW | c.O_CLOEXEC, @as(c_uint, 0o600));
     if (fd < 0) return switch (std.c.errno(fd)) {
         .NOENT => error.FileNotFound,
         .EXIST => error.AlreadyExists,

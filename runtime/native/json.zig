@@ -104,23 +104,24 @@ pub fn integer(comptime T: type, bytes: []const u8) error{InvalidParams}!T {
     return std.fmt.parseInt(T, bytes, 10) catch error.InvalidParams;
 }
 
-/// Admit an integral JSON number without a floating-point intermediate. The
-/// caller has already checked JSON syntax; equivalent 1, 1.0 and 1e0 IDs have
-/// one numeric identity. Nonintegral or unsafe values cannot become RPC IDs.
-pub fn safeInteger(bytes: []const u8) error{InvalidParams}!i64 {
+/// Decode an already syntax-checked JSON number exactly, including integral
+/// fractional/exponent spellings. Client decimal strings use integer() above.
+pub fn numberInteger(comptime T: type, bytes: []const u8) error{InvalidParams}!T {
+    comptime std.debug.assert(@typeInfo(T).int.bits <= 64);
     if (bytes.len == 0) return error.InvalidParams;
     const negative = bytes[0] == '-';
     const start: usize = @intFromBool(negative);
     const exponent_at = std.mem.indexOfAnyPos(u8, bytes, start, "eE") orelse bytes.len;
+    var nonzero = false;
+    for (bytes[start..exponent_at]) |byte| nonzero = nonzero or (byte != '0' and byte != '.');
+    if (!nonzero) return 0;
+    if (@typeInfo(T).int.signedness == .unsigned and negative) return error.InvalidParams;
     var exponent: i32 = 0;
     if (exponent_at != bytes.len) {
         exponent = std.fmt.parseInt(i32, bytes[exponent_at + 1 ..], 10) catch return error.InvalidParams;
         if (exponent < -1_000_000 or exponent > 1_000_000) return error.InvalidParams;
     }
     const dot = std.mem.indexOfScalarPos(u8, bytes[0..exponent_at], start, '.');
-    var nonzero = false;
-    for (bytes[start..exponent_at]) |byte| nonzero = nonzero or (byte != '0' and byte != '.');
-    if (!nonzero) return 0;
     const fraction: i32 = if (dot) |i| std.math.cast(i32, exponent_at - i - 1) orelse return error.InvalidParams else 0;
     var shift = exponent - fraction;
     var end = exponent_at;
@@ -130,21 +131,32 @@ pub fn safeInteger(bytes: []const u8) error{InvalidParams}!i64 {
         if (end > start and bytes[end - 1] == '.') end -= 1;
     }
     var result: u64 = 0;
+    const maximum: u64 = @as(u64, @intCast(std.math.maxInt(T))) + @intFromBool(negative);
     for (bytes[start..end]) |byte| {
         if (byte == '.') continue;
         if (byte < '0' or byte > '9') return error.InvalidParams;
         result = std.math.mul(u64, result, 10) catch return error.InvalidParams;
         result = std.math.add(u64, result, byte - '0') catch return error.InvalidParams;
-        if (result > 9007199254740991) return error.InvalidParams;
+        if (result > maximum) return error.InvalidParams;
     }
     if (result == 0) return 0;
-    if (shift > 16) return error.InvalidParams;
+    if (shift > 20) return error.InvalidParams;
     while (shift > 0) : (shift -= 1) {
         result = std.math.mul(u64, result, 10) catch return error.InvalidParams;
-        if (result > 9007199254740991) return error.InvalidParams;
+        if (result > maximum) return error.InvalidParams;
     }
-    const signed: i64 = @intCast(result);
-    return if (negative) -signed else signed;
+    if (@typeInfo(T).int.signedness == .signed and negative) {
+        if (result == maximum) return std.math.minInt(T);
+        return -@as(T, @intCast(result));
+    }
+    return @intCast(result);
+}
+
+/// Numeric RPC IDs additionally stay inside the interoperable safe range.
+pub fn safeInteger(bytes: []const u8) error{InvalidParams}!i64 {
+    const value = try numberInteger(i64, bytes);
+    if (value < -9007199254740991 or value > 9007199254740991) return error.InvalidParams;
+    return value;
 }
 
 /// Used only after typed admission, for deterministic manifests and request

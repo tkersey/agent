@@ -13,7 +13,8 @@ unknown named imports, escaping source imports and unaccounted embedded inputs
 still reject. The full installation also scans before selecting the compiler or
 creating its work directory. A scan pass is not an installation pass.
 
-After source accounting succeeds, the three independent qualification jobs run.
+After source accounting succeeds, installation and authoring run on Linux, and
+native product qualification runs on both Linux x86_64 and macOS arm64.
 Routine runs use matrix fail-fast: a failed job cancels unfinished siblings.
 Manual `collect_all=true` permits independent jobs to continue even after a
 source failure; all failed outcomes remain failures. This is explicit diagnostic
@@ -171,8 +172,9 @@ took 4.15 ms. These are observed runs with runner variability, not a latency SLA
 or proof that restoring a cache alone improves compilation. Later changes need
 their own measurements.
 
-Manual runs can select `platform=macos-arm64` on GitHub's standard `macos-15`
-runner. They check the actual architecture and run `check-native-product`;
+PR and main-branch runs require macOS arm64 on GitHub's standard `macos-15`
+runner as well as Linux x86_64. Focused manual runs can select one platform;
+`lane=all` always selects both. macOS checks its actual architecture and runs `check-native-product`;
 Linux's full `check-native` still includes the existing mobility JavaScript
 regressions. The first broad macOS run passed all 91 native tests and both
 applications, but the pre-existing mobility JavaScript checks failed with TLS
@@ -191,13 +193,25 @@ Ubuntu 22.04's default security policy: Ubuntu 24.04 rejected even the untraced
 namespace preflight in run `37593270488`. No OS security setting is disabled to
 admit qualification; the source/authoring/installation lanes remain on 24.04.
 
-Successful manual native runs retain a 14-day CI artifact containing the two
+Successful native jobs retain a 14-day CI artifact containing the two
 executables, their observed build manifests, the runbook and optional TypeScript
 client. Before packaging, they build the example's independent public recipe
 with network access denied and a prefix containing spaces/Unicode, compare its
 program/assets/toolchain to the repository product, and execute its offline
 demo. This exercises the downstream dependency API rather than claiming that
 the repository's internal builder call proves it.
+Clean deployment, the downstream recipe and artifact packaging are mandatory
+on both platforms in every full PR workflow. The five-minute target covers the
+complete workflow, including setup, cache transfer and the final aggregate gate.
+It is not satisfied by a Linux-only result. At `2415f66`, the Linux-only workflow
+took 5m00s from start to GitHub completion (4m59s through the final required job);
+the separate complete platform runs took 6m27s on Linux and 9m19s on macOS.
+The new required matrix still needs its own measured pass below five minutes.
+
+Compiler cache selection prefers the exact locked dependencies, then permits
+reuse within the same compiler/OS/architecture/lane. Package allowlist edits no
+longer discard all compiled objects. Zig still checks compilation inputs and
+every restored dependency still passes the source/runtime authentication steps.
 An explicitly selected manual `measure_builds` run uses a new compiler cache
 containing only provisioned packages, then measures one cold, one identical
 warm and one embedded-resource-edit recipe build. The warm binary must match

@@ -94,6 +94,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     var grants: [3]native.registry.Grant = undefined;
     for (&grants, handlers.entries) |*grant, entry| grant.* = .{ .identity = entry.declaration.identity, .resource_role = entry.declaration.resource_role, .resource_identity = application.image_identity };
     const profile: native.tasks.Profile = .{ .id = "offline", .runtime_identity = @splat(42), .bytes = "fixed-profile", .resources = &.{"immutable snapshot bytes"}, .authority = .{ .grants = &grants, .principal = "test", .tenant = "test" } };
+    for (&grants) |*grant| grant.resource_identity = try profile.resourceIdentity(application.image_identity);
     var temporary = std.testing.tmpDir(.{});
     defer temporary.cleanup();
     var path_buffer: [4096]u8 = undefined;
@@ -159,6 +160,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     }
     var question = (try service.pendingQuestion(frame, accepted.receipt.task)) orelse return error.ExpectedQuestion;
     defer question.deinit();
+    try std.testing.expectError(error.StaleInteraction, service.respond(frame, "unknown-question", accepted.receipt.task, @splat(0), question.value.revision, question.value.request_digest, "task-owner.answer.v1", .{ .number_string = "7" }));
     const answered = try service.respond(frame, "answer", accepted.receipt.task, question.value.id, question.value.revision, question.value.request_digest, "task-owner.answer.v1", .{ .number_string = "7" });
     try std.testing.expect(!answered.replayed);
     for (0..32) |_| {
@@ -251,6 +253,52 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     var cancelled = try service.task(frame, no_send.receipt.task);
     defer cancelled.deinit();
     try std.testing.expectEqual(.cancelled, cancelled.value.outcome_kind);
+
+    if (!captured) {
+        // Exercise the stored-event projection's byte domain without another
+        // application image. Lifecycle production is exercised above; these
+        // schema-shaped historical rows isolate pagination and batch framing.
+        var large_data = found: {
+            for (history) |event| {
+                if (std.mem.eql(u8, event.object.get("type").?.string, "input_required")) break :found event.object.get("data").?;
+            }
+            return error.ExpectedQuestion;
+        };
+        const prompt = try frame.alloc(u8, 32 * 1024 - 2);
+        @memset(prompt, 'q');
+        try native.json.put(frame, &large_data, "prompt", native.json.string(prompt));
+        const event_data = try native.json.canonical(frame, large_data);
+        var paged = completed.value;
+        paged.revision += 1;
+        try namespace.store.begin();
+        defer namespace.store.rollback();
+        for (0..40) |_| {
+            paged.event_high += 1;
+            try namespace.store.putEvent(.{ .task = paged.id, .seq = paged.event_high, .revision = paged.revision, .kind = .input_required, .data = .{ .bytes = event_data } });
+        }
+        try namespace.store.putTask(paged, completed.value.revision);
+        try namespace.commit("pagination-domain");
+        var cursor = completed.value.event_high;
+        var seen: usize = 0;
+        while (cursor < paged.event_high) {
+            var page_arena = std.heap.ArenaAllocator.init(a);
+            defer page_arena.deinit();
+            const pa = page_arena.allocator();
+            const page = try client.events(pa, paged.id, cursor, 128);
+            const next = try native.json.decimal(u64, page.object.get("next_after_seq").?);
+            try std.testing.expect(next > cursor);
+            seen += page.object.get("events").?.array.items.len;
+            var batch: native.json.Value = .{ .array = .init(pa) };
+            var id: [128]u8 = @splat(1); // maximum-length, heavily escaped IDs
+            for (0..16) |index| {
+                id[0] = @intCast(index + 32);
+                try batch.array.append(try native.protocol.response(pa, native.json.string(try pa.dupe(u8, &id)), page));
+            }
+            try std.testing.expect((try native.json.canonical(pa, batch)).len + 1 <= 1024 * 1024);
+            cursor = next;
+        }
+        try std.testing.expectEqual(40, seen);
+    }
 }
 
 test "an inbox identity cannot be redeclared with a different message contract" {

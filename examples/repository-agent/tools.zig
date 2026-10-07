@@ -5,8 +5,9 @@ const native = @import("agent_native");
 const t = @import("application_types");
 
 pub fn list(a: std.mem.Allocator, snapshot: native.repository.Snapshot, request: t.ListRequest) !t.ListObservation {
-    if (request.prefix.bytes.len != 0 and !native.repository.pathAllowed(request.prefix.bytes)) return error.InvalidPath;
-    if (request.after.bytes.len != 0 and !native.repository.pathAllowed(request.after.bytes)) return error.InvalidPath;
+    // These are bounded lexical selectors over admitted snapshot paths, not
+    // filesystem paths. A directory prefix such as "src/" is valid; a prefix
+    // that matches no admitted path simply produces an empty page.
     var entries: std.ArrayList(t.ListEntry) = .empty;
     var truncated = false;
     for (snapshot.files()) |file| {

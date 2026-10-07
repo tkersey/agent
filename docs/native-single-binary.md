@@ -262,6 +262,11 @@ artifact identity is explicitly rebound to the importing executable, with its
 source identity retained in an origin record. Current grants are independent;
 neither import nor its retransmission starts work.
 
+Native grants bind the application image, frozen profile and ordered immutable
+resource references. Both dispatch and answer acquisition compare that binding
+with the task's durable references; a grant for another profile or snapshot
+cannot authorize the task merely because its capability name and role match.
+
 Task IDs, question bindings, queued messages, event sequences, operation aliases,
 acquired replies and spent counters travel together. Unknown or dispatching
 occurrences reject export/import. Missing, changed, unreferenced or oversized

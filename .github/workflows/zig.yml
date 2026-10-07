@@ -152,7 +152,11 @@ jobs:
               node test/agent4/installations.mjs --output "$RUNNER_TEMP/installation-authoring.json"
               exit 0 ;;
             authoring) target=check-authoring-core ;;
-            native) target=check-native ;;
+            native)
+              # Avoid release-optimizing Zig's on-demand build driver.
+              # Explicit -Doptimize=safe still governs the application artifacts.
+              export ZIG_DEBUG_CMD=1
+              target=check-native ;;
             *) exit 2 ;;
           esac
           trace=()
@@ -166,6 +170,7 @@ jobs:
         env:
           TMPDIR: ${{ runner.temp }}
           MEASURE_BUILDS: ${{ inputs.measure_builds }}
+          ZIG_DEBUG_CMD: '1'
         run: |
           offline=(unshare --user --map-root-user --net)
           if [ "$MEASURE_BUILDS" = true ]; then

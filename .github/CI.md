@@ -158,6 +158,13 @@ unchanged. Qualification still runs on every restored cache. A populated-profile
 rerun must establish actual compiler reuse and complete workflow duration;
 changing the key alone is not a performance result.
 
+Native CI sets `ZIG_DEBUG_CMD=1` for Zig's internal on-demand build commands.
+The pinned compiler applies this to its build driver and translation helper,
+not to application compilation. Explicit `-Doptimize=safe`, the probe's LLVM
+backend and every existing qualification assertion remain selected. This targets
+the observed 89-second delay before the first build-graph command; its complete
+workflow effect must be measured separately from a cache restore.
+
 The Linux products use Zig's self-hosted backend in the selected `safe` mode;
 non-debug products strip debug information. The API/HTTPS probe retains LLVM:
 its self-hosted experiment compiled faster but failed the existing 100 ms held

@@ -57,6 +57,8 @@ jobs:
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with:
           version: '0.17.0'
+          # A stable library path lets C compilation reuse authenticated objects.
+          use-tool-cache: true
           # Its post hook clears the entire cache above its cap. Save explicitly below.
           use-cache: false
       - name: Restore this lane's compiler cache
@@ -66,9 +68,9 @@ jobs:
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: .zig-cache
-          key: zig-feedback-v1-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane }}-${{ hashFiles('build.zig.zon', 'conformance/agent4/dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane }}-${{ hashFiles('build.zig.zon', 'conformance/agent4/dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            zig-feedback-v1-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane }}-${{ hashFiles('build.zig.zon', 'conformance/agent4/dependencies.lock.json') }}-
+            zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane }}-${{ hashFiles('build.zig.zon', 'conformance/agent4/dependencies.lock.json') }}-
       - name: Record restored cache contents and matched key
         if: matrix.lane != 'installation'
         continue-on-error: true
@@ -76,7 +78,11 @@ jobs:
           RESTORED_CACHE_KEY: ${{ steps.cache.outputs.cache-matched-key }}
         run: node .github/scripts/zig-cache.mjs .zig-cache restored
       - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
-        if: matrix.lane != 'installation'
+        if: matrix.lane == 'native'
+        with:
+          cache-dependency-glob: |
+            test/agent4/native_host.mjs
+            test/agent4/native_schema.py
       - name: Install the source-registry dependency
         if: matrix.lane != 'installation'
         run: |
@@ -139,7 +145,7 @@ jobs:
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: .zig-cache
-          key: zig-feedback-v1-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane }}-${{ hashFiles('build.zig.zon', 'conformance/agent4/dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane }}-${{ hashFiles('build.zig.zon', 'conformance/agent4/dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
   # Preserve the old check name as a strict all-lanes gate; a focused run is not full qualification.
   native:
     name: ${{ (inputs.lane == '' || inputs.lane == 'all') && 'native' || format('Focused result / {0}', inputs.lane) }}

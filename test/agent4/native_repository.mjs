@@ -6,7 +6,7 @@ import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { once } from 'node:events';
 import { AgentClient } from '../../examples/native-minimal/stdio-client.mts';
 import { certificates } from './mobility_tls_fixture.mjs';
-import { cpSync, mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -208,17 +208,6 @@ try {
   cpSync(source, binary);
   const invoke = (...args) => {
     const result = spawnSync(binary, args, { cwd: directory, env: { PATH: '/nonexistent' }, encoding: 'utf8', timeout: 30_000, maxBuffer: 2 * 1024 * 1024 });
-    if (result.status !== 0 && args[0] === 'describe-build') {
-      // Only public build assets: distinguish stale embedding from runtime admission.
-      const executable = readFileSync(binary);
-      const [image, application, manifest] = process.argv.slice(3, 6).map(path => readFileSync(path));
-      console.error(JSON.stringify({ build_binding: {
-        image_sha256: hash(image), application_program_sha256: JSON.parse(application).program_sha256,
-        manifest_program_sha256: JSON.parse(manifest).program_sha256,
-        embedded_image: executable.includes(image), embedded_application: executable.includes(application),
-        embedded_manifest: executable.includes(manifest),
-      } }));
-    }
     assert.equal(result.status, 0, `${args[0]}: ${result.error ?? result.stderr ?? result.stdout}`);
     return result.stdout;
   };

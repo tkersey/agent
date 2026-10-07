@@ -132,6 +132,12 @@ package and runtime bytes; setup authenticates all restored inputs on every run.
 The external consumer's deliberately isolated caches remain fresh. A cache hit
 is not qualification.
 
+Version 2 uses the action's stable tool-cache installation path and passes
+fixture selection as an explicit command argument. Previously, changing compiler
+paths and inherited CI run IDs changed generated-output locations; native run
+`37576438055` reached 8,865,601,430 cache bytes and correctly skipped saving.
+The new namespace leaves that older cache intact and retains the same 8 GiB cap.
+
 Before and after each applicable lane, `.github/scripts/zig-cache.mjs` records
 the restored key, logical file bytes, file count and top-level bucket sizes
 (`o`, `h`, `z`, temporary/other directories). The build's `--summary all` records

@@ -63,12 +63,15 @@ const Graph = struct {
         return .{ .artifact = executable };
     }
     fn runArtifact(g: Graph, executable: Executable) *std.Build.Step.Run {
-        const run = g.b.addRunArtifact(executable.artifact);
         if (executable.fixture) |name| {
-            run.setEnvironmentVariable("AGENT4_FIXTURE", name);
+            // Hash the selected fixture, not an inherited CI environment whose
+            // run IDs would move identical generated assets on every build.
+            const run = g.b.addSystemCommand(&.{ "env", g.b.fmt("AGENT4_FIXTURE={s}", .{name}) });
+            run.addArtifactArg2(executable.artifact, .{});
             run.step.name = g.b.fmt("run fixture {s}", .{name});
+            return run;
         }
-        return run;
+        return g.b.addRunArtifact(executable.artifact);
     }
     fn emit(g: Graph, step: *std.Build.Step, executable: Executable, args: []const []const u8, name: []const u8) void {
         const run = g.runArtifact(executable);
@@ -687,9 +690,6 @@ pub fn build(b: *std.Build) void {
             const repository_peer = nodeCommand(b);
             repository_peer.addArgs(&.{ "node", "test/agent4/native_repository.mjs" });
             repository_peer.addFileArg2(repository_product.executable.getEmittedBin(), .{ .make_absolute = true });
-            repository_peer.addFileArg2(repository_product.assets.image, .{ .make_absolute = true });
-            repository_peer.addFileArg2(repository_product.assets.application, .{ .make_absolute = true });
-            repository_peer.addFileArg2(repository_product.manifest, .{ .make_absolute = true });
             native_checks.dependOn(&repository_peer.step);
             const protocol_peer = nodeCommand(b);
             protocol_peer.addArgs(&.{ "node", "test/agent4/native_host.mjs" });
@@ -703,11 +703,7 @@ pub fn build(b: *std.Build) void {
                 .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data", .module = data }, .{ .name = "agent_native", .module = host_environment }, .{ .name = "agent_contracts", .module = contracts }, .{ .name = "application_types", .module = g.module("examples/native-minimal/types.zig") } },
             });
             consumer_module.addAnonymousImport("image", .{ .root_source_file = product.assets.image });
-            const consumer = b.addExecutable(.{
-                .name = "agent-native-consumer",
-                .root_module = consumer_module,
-                .use_llvm = if (b.graph.host.result.os.tag == .linux and b.graph.host.result.cpu.arch == .x86_64) false else null,
-            });
+            const consumer = b.addExecutable(.{ .name = "agent-native-consumer", .root_module = consumer_module });
             consumer.step.dependOn(&runtime_guard.step);
             native_consumer.dependOn(&b.addRunArtifact(consumer).step);
             const https_peer = nodeCommand(b);

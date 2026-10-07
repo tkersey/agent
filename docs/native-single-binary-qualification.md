@@ -130,11 +130,11 @@ bounded World quanta and explicit provider request/response/deadline caps.
 
 Earlier Linux-only observations (including 4m50s at `82bff12`, 4m44s at
 `592483b`, and 3m43s at `d7b7a4d`) do not establish the current complete-workflow
-5m30s target. At `2415f66`, the Linux-only workflow took 5m00s from its
+five-minute target. At `2415f66`, the Linux-only workflow took 5m00s from its
 start to GitHub completion; the earlier 4m49s report omitted its final gate.
 Complete separate platform runs took 6m27s on Linux and 9m19s on macOS.
 The PR workflow now requires Linux qualification, clean deployment, the downstream
-recipe and artifact packaging. Its complete measured pass below 5m30s
+recipe and artifact packaging. Its complete measured pass below five minutes
 remains unproved. Other observed Linux runs took 6m39s–8m31s; cache restore
 success did not always mean compiler object reuse.
 The earlier 4m41s result at `b121ced` was also a single observation. There is no

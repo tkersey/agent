@@ -120,6 +120,7 @@ pub fn addWithModules(b: *std.Build, modules: Modules, options: Options) Product
         .root_source_file = modules.root.path(b, "runtime/native/entry.zig"),
         .target = target,
         .optimize = optimize,
+        .strip = optimize != .debug,
         .imports = &.{
             .{ .name = "agent_native", .module = modules.native },
             .{ .name = "environment", .module = environment },

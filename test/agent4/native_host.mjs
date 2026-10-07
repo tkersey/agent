@@ -85,7 +85,9 @@ const rpc = (id, method, params = {}) => {
 };
 try {
   assert.match(execFileSync(binary, ['--help'], options), /serve --transport stdio/);
+  const describeStartedAt = performance.now();
   const manifest = JSON.parse(execFileSync(binary, ['describe-build'], options));
+  const describeMilliseconds = performance.now() - describeStartedAt;
   assert.equal(manifest.format, 'agent-native-build/v1');
   assert.equal(manifest.protocol, 'agent-host/1.0');
   assert.equal(manifest.compiler.version, '0.17.0');
@@ -407,7 +409,7 @@ try {
     schemaCases.push({definition: 'artifact.read.params', value: {task_id: demoTask, artifact_id: '0'.repeat(64), offset: '0', length: value}, accept});
   }
   process.stdout.write(execFileSync('uv', ['run', '--no-project', '--no-config', '--python', '3.12', '--with', 'jsonschema==4.23.0', fileURLToPath(new URL('./native_schema.py', import.meta.url))], {input: JSON.stringify({schema: protocolSchema, cases: schemaCases}), encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024}));
-  console.log(JSON.stringify({check: 'native-build-and-discovery', result: 'passed', target: manifest.target, program: manifest.program_sha256, scope: 'embedded durable demo, framing, negotiation, discovery, client question, restart, stable admissions, typed result and event replay; provider/platform qualification remains open'}));
+  console.log(JSON.stringify({check: 'native-build-and-discovery', result: 'passed', target: manifest.target, program: manifest.program_sha256, artifact_bytes: manifest.artifact_bytes, describe_ms: describeMilliseconds, scope: 'embedded durable demo, framing, negotiation, discovery, client question, restart, stable admissions, typed result and event replay; provider/platform qualification remains open'}));
 } finally {
   rmSync(directory, {recursive: true, force: true});
 }

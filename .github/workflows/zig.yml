@@ -85,6 +85,21 @@ jobs:
             sudo apt-get install --yes ripgrep
           fi
           rg --version
+      - name: Restore locked dependency bytes
+        if: matrix.lane != 'installation'
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            .agent4/inputs/boundary
+            .agent4/inputs/boundary-package
+            .agent4/inputs/boundary-*.tar.gz
+            .agent4/inputs/world
+            .agent4/inputs/world-*.tar.gz
+            .agent4/inputs/sqlite
+            .agent4/out/world-runtime
+          key: agent-locked-inputs-v1-${{ runner.os }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}
+      # Restored bytes are untrusted until setup rechecks every selected digest,
+      # inventory, package and runtime binding. Never skip this on a cache hit.
       - name: Authenticate the locked source and delivered runtime
         if: matrix.lane != 'installation'
         env:

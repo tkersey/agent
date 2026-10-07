@@ -51,19 +51,19 @@ pub const Application = struct {
             try sameField(schema, "wire_sha256", try digest(storage, bytes));
             const client = try json.parse(storage, &values.schemas.ClientSchema(item[1]).value, .{});
             if (!std.mem.eql(u8, try json.canonical(storage, client.value), try json.canonical(storage, json.get(schema, "json") orelse return error.InvalidAssets)))
-                return error.InvalidAssets;
+                return error.ClientJsonSchemaMismatch;
         }
         const capabilities = json.get(metadata.value, "capabilities") orelse return error.InvalidAssets;
-        if (capabilities != .array or capabilities.array.items.len != handlers.entries.len) return error.InvalidAssets;
+        if (capabilities != .array or capabilities.array.items.len != handlers.entries.len) return error.CapabilityCountMismatch;
         for (handlers.entries) |entry| {
             switch (entry.declaration.kind) {
                 .question => {
                     if (!std.mem.eql(u8, entry.declaration.answer_schema_id.?, Types.answer_schema_id) or
-                        !std.mem.eql(u8, entry.resume_schema, try values.schemaBytes(Types.Answer, storage))) return error.InvalidAssets;
+                        !std.mem.eql(u8, entry.resume_schema, try values.schemaBytes(Types.Answer, storage))) return error.QuestionSchemaMismatch;
                 },
                 .inbox => {
                     if (!std.mem.eql(u8, entry.payload_schema, try values.schemaBytes(void, storage)) or
-                        !std.mem.eql(u8, entry.resume_schema, try values.schemaBytes(contracts.InboxReply(Types.Message), storage))) return error.InvalidAssets;
+                        !std.mem.eql(u8, entry.resume_schema, try values.schemaBytes(contracts.InboxReply(Types.Message), storage))) return error.InboxSchemaMismatch;
                 },
                 .leaf => {},
             }
@@ -76,7 +76,7 @@ pub const Application = struct {
                 try sameField(capability, "payload_sha256", try digest(storage, entry.payload_schema));
                 try sameField(capability, "resume_sha256", try digest(storage, entry.resume_schema));
             }
-            if (matches != 1) return error.InvalidAssets;
+            if (matches != 1) return error.CapabilityMetadataMismatch;
         }
         const protocol_schema = try @import("schemas.zig").document(storage, metadata.value, .{});
         return .{ .arena = arena, .metadata = metadata.value, .manifest = manifest.value, .manifest_id = try digest(storage, assets.manifest), .image_identity = image_identity, .protocol_schema = protocol_schema, .protocol_schema_sha256 = try digest(storage, try json.canonical(storage, protocol_schema)) };
@@ -134,5 +134,16 @@ pub const Application = struct {
 
 pub fn sameField(object: json.Value, name: []const u8, expected: []const u8) !void {
     const field = json.get(object, name) orelse return error.InvalidAssets;
-    if (field != .string or !std.mem.eql(u8, field.string, expected)) return error.InvalidAssets;
+    if (field != .string or !std.mem.eql(u8, field.string, expected)) {
+        if (std.mem.eql(u8, name, "program_sha256")) return error.ProgramDigestMismatch;
+        if (std.mem.eql(u8, name, "program_identity")) return error.ProgramIdentityMismatch;
+        if (std.mem.eql(u8, name, "application_assets_sha256")) return error.ApplicationAssetsMismatch;
+        if (std.mem.eql(u8, name, "application_id")) return error.ApplicationIdentityMismatch;
+        if (std.mem.eql(u8, name, "state_format")) return error.StateFormatMismatch;
+        if (std.mem.eql(u8, name, "wire_sha256")) return error.ClientSchemaMismatch;
+        if (std.mem.eql(u8, name, "payload_sha256")) return error.CapabilityPayloadMismatch;
+        if (std.mem.eql(u8, name, "resume_sha256")) return error.CapabilityResumeMismatch;
+        if (std.mem.eql(u8, name, "resource_role")) return error.CapabilityRoleMismatch;
+        return error.InvalidAssets;
+    }
 }

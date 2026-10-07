@@ -94,6 +94,9 @@ Shipped application binaries and the public native API/HTTPS probe keep their
 normal production backend. Their copied-binary witnesses still run in full.
 SQLite and the native C shim are compiled once per target ABI into a static
 library, with the same flags and dependency admission, then linked by consumers.
+Locked dependency bytes are cached separately from compiler outputs. Setup still
+authenticates their archives, inventories, package hashes and runtime bindings
+on every run; the installation lane still provisions its own fresh inputs.
 The durable-owner test compiles its one image once for both direct and captured
 acquisition recovery. It also retains the inbox contract-conflict and message-ID
 checks formerly split into a separate inbox fixture. `native_repository.mjs`

@@ -77,10 +77,12 @@ jobs:
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: .zig-cache
-          key: zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          # The stripped native/debug-test profile must not keep restoring the
+          # full historical cache that can no longer admit newly built objects.
+          key: zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane == 'native' && 'native3' || matrix.lane }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}-
-            zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane }}-
+            zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane == 'native' && 'native3' || matrix.lane }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}-
+            zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane == 'native' && 'native3' || matrix.lane }}-
       - name: Record restored cache contents and matched key
         if: matrix.lane != 'installation'
         continue-on-error: true
@@ -255,7 +257,7 @@ jobs:
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: .zig-cache
-          key: zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane == 'native' && 'native3' || matrix.lane }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
   # Preserve the old check name as a strict all-lanes gate; a focused run is not full qualification.
   native:
     name: ${{ (inputs.lane == '' || inputs.lane == 'all') && 'native' || format('Focused result / {0} / {1}', inputs.lane, inputs.platform) }}

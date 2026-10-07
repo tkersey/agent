@@ -147,6 +147,15 @@ paths and inherited CI run IDs changed generated-output locations; native run
 `37576438055` reached 8,865,601,430 cache bytes and correctly skipped saving.
 The new namespace leaves that older cache intact and retains the same 8 GiB cap.
 
+Native qualification now uses the `native3` cache profile for stripped native
+libraries and debug test roots. Run `37651145371` restored 8,366,409,421 bytes
+from the historical native cache and finished at 8,704,031,083 bytes, above the
+unchanged 8 GiB save cap. Its new objects could not be retained. The new profile
+leaves that remote cache intact; authoring and locked-input cache keys are
+unchanged. Qualification still runs on every restored cache. A populated-profile
+rerun must establish actual compiler reuse and complete workflow duration;
+changing the key alone is not a performance result.
+
 The Linux products use Zig's self-hosted backend in the selected `safe` mode;
 non-debug products strip debug information. The API/HTTPS probe retains LLVM:
 its self-hosted experiment compiled faster but failed the existing 100 ms held

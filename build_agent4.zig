@@ -572,10 +572,11 @@ pub fn build(b: *std.Build) void {
 
     const native_checks = b.step("check-native", "Check native and custody contracts against the selected World");
     const native_consumer = b.step("check-native-consumer", "Build and execute an embedded public World consumer (N0)");
-    const native_example = b.step("native-example", "Build the minimal embedded native application");
+    const native_example = b.step("native-example", "Build and install the native reference applications");
     const native_host = b.step("check-native-host", "Check the native build, embedded assets and protocol discovery");
     native_checks.dependOn(native_consumer);
     native_checks.dependOn(native_host);
+    native_checks.dependOn(native_example);
     if (runtime) |runtime_path| {
         const world = b.createModule(.{
             .root_source_file = world_source.path(b, "src/root.zig"),
@@ -725,7 +726,6 @@ pub fn build(b: *std.Build) void {
             https_peer.addArgs(&.{ "node", "test/agent4/native_https.mjs" });
             https_peer.addFileArg2(consumer.getEmittedBin(), .{ .make_absolute = true });
             native_consumer.dependOn(&https_peer.step);
-            native_consumer.dependOn(&b.addInstallArtifact(consumer, .{}).step);
         } else {
             const unsupported = b.addFail("native product supports aarch64-macos and x86_64-linux-musl");
             native_example.dependOn(&unsupported.step);

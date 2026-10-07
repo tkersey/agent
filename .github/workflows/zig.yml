@@ -10,6 +10,11 @@ on:
         type: choice
         default: all
         options: [all, source, installation, authoring, native]
+      platform:
+        description: 'Executed platform (macOS uses the standard arm64 runner)'
+        type: choice
+        default: linux-x86_64
+        options: [linux-x86_64, macos-arm64]
       collect_all:
         description: 'Diagnostic only: continue independent lanes after failures'
         type: boolean
@@ -45,7 +50,7 @@ jobs:
       fail-fast: ${{ !inputs.collect_all }}
       matrix:
         lane: ${{ fromJSON((inputs.lane == '' || inputs.lane == 'all') && '["installation","authoring","native"]' || format('["{0}"]', inputs.lane)) }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.platform == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -87,8 +92,12 @@ jobs:
         if: matrix.lane != 'installation'
         run: |
           if ! command -v rg >/dev/null; then
-            sudo apt-get update
-            sudo apt-get install --yes ripgrep
+            if [ "$RUNNER_OS" = macOS ]; then
+              brew install ripgrep
+            else
+              sudo apt-get update
+              sudo apt-get install --yes ripgrep
+            fi
           fi
           rg --version
       - name: Restore locked dependency bytes
@@ -119,7 +128,14 @@ jobs:
       - name: Run only the selected check
         env:
           LANE: ${{ matrix.lane }}
+          PLATFORM: ${{ inputs.platform || 'linux-x86_64' }}
+          TMPDIR: ${{ runner.temp }}
         run: |
+          case "$PLATFORM" in
+            linux-x86_64) test "$(uname -s)" = Linux; test "$(uname -m)" = x86_64 ;;
+            macos-arm64) test "$(uname -s)" = Darwin; test "$(uname -m)" = arm64 ;;
+            *) exit 2 ;;
+          esac
           case "$LANE" in
             installation)
               # This witness deliberately owns fresh compiler/package caches.
@@ -132,6 +148,27 @@ jobs:
           zig build "$target" -Doptimize=safe \
             -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime" \
             --prefix "$RUNNER_TEMP/agent-qualification" --prefix-exe-dir executables --summary all
+      - name: Package executed native applications
+        if: ${{ matrix.lane == 'native' && github.event_name == 'workflow_dispatch' && needs.source.result == 'success' }}
+        run: |
+          output="$RUNNER_TEMP/agent-qualification/executables"
+          for application in agent-native-example repository-agent; do
+            "$output/$application" describe-build > "$output/$application.build.json"
+          done
+          cp docs/native-single-binary.md "$output/RUNBOOK.md"
+          cp examples/repository-agent/README.md "$output/REPOSITORY.md"
+          cp examples/native-minimal/stdio-client.mts "$output/stdio-client.mts"
+          tar -czf "$RUNNER_TEMP/native-reference-$RUNNER_OS-$RUNNER_ARCH-$GITHUB_SHA-$GITHUB_RUN_ATTEMPT.tar.gz" \
+            -C "$output" agent-native-example repository-agent \
+            agent-native-example.build.json repository-agent.build.json RUNBOOK.md REPOSITORY.md stdio-client.mts
+      - name: Retain executed native applications
+        if: ${{ matrix.lane == 'native' && github.event_name == 'workflow_dispatch' && needs.source.result == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          path: ${{ runner.temp }}/native-reference-*.tar.gz
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
       - name: Measure cache before deciding whether to upload
         id: cache_size
         if: ${{ !cancelled() && matrix.lane != 'installation' }}
@@ -148,7 +185,7 @@ jobs:
           key: zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane }}-${{ hashFiles('build.zig.zon', 'conformance/agent4/dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
   # Preserve the old check name as a strict all-lanes gate; a focused run is not full qualification.
   native:
-    name: ${{ (inputs.lane == '' || inputs.lane == 'all') && 'native' || format('Focused result / {0}', inputs.lane) }}
+    name: ${{ inputs.platform == 'macos-arm64' && format('macOS result / {0}', inputs.lane) || (inputs.lane == '' || inputs.lane == 'all') && 'native' || format('Focused result / {0}', inputs.lane) }}
     needs: [source, qualify]
     if: ${{ always() }}
     runs-on: ubuntu-24.04

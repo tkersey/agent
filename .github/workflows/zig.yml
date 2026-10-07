@@ -141,23 +141,6 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
           TMPDIR: ${{ runner.temp }}
         run: |
-          if [ "$LANE" = native ]; then
-            node --input-type=module <<'JS'
-          import {readdirSync, readFileSync} from 'node:fs';
-          import {execFileSync} from 'node:child_process';
-          const manifests = [];
-          for (const directory of ['.zig-cache/h', '.zig-cache/native-recipe/h']) {
-            let names;
-            try { names = readdirSync(directory); } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
-            for (const name of names) {
-              const path = `${directory}/${name}`, bytes = readFileSync(path);
-              if (bytes.includes('sqlite3.c')) manifests.push(path);
-            }
-          }
-          console.log(JSON.stringify({restored_c_manifests: manifests}));
-          if (manifests.length) process.stdout.write(execFileSync('zig', ['cache-cat', ...manifests], {encoding: 'utf8', maxBuffer: 64 * 1024 * 1024}));
-          JS
-          fi
           case "$PLATFORM" in
             linux-x86_64) test "$(uname -s)" = Linux; test "$(uname -m)" = x86_64 ;;
             macos-arm64) test "$(uname -s)" = Darwin; test "$(uname -m)" = arm64 ;;

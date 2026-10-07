@@ -157,7 +157,8 @@ jobs:
             *) exit 2 ;;
           esac
           trace=()
-          if [ "$LANE" = native ]; then trace=(--verbose); fi
+          # Leave capacity for compiler work while protocol peers await I/O.
+          if [ "$LANE" = native ]; then trace=(--verbose -j4); fi
           zig build "$target" -Doptimize=safe \
             -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime" \
             --prefix "$RUNNER_TEMP/agent-qualification" --prefix-exe-dir executables --summary all "${trace[@]}"
@@ -188,7 +189,7 @@ jobs:
               -Dworld-source="$GITHUB_WORKSPACE/.agent4/inputs/world" \
               -Dworld-runtime="$GITHUB_WORKSPACE/.agent4/out/world-runtime/runtime" \
               -Dsqlite-source="$GITHUB_WORKSPACE/.agent4/inputs/sqlite" \
-              --prefix "$RUNNER_TEMP/Public native ü" --prefix-exe-dir executables --summary all --verbose
+              --prefix "$RUNNER_TEMP/Public native ü" --prefix-exe-dir executables --summary all --verbose -j4
           }
           time build_recipe
           node --input-type=module - "$RUNNER_TEMP/Public native ü/executables/agent-native-example" "$RUNNER_TEMP/agent-qualification/executables/agent-native-example" <<'JS'

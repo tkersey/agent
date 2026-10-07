@@ -88,6 +88,10 @@ public World API probe; the former N0-only emitter is removed. The probe retains
 output-capacity rollback, checkpoint/restore, yield, and terminal-close checks.
 Both native examples now use the existing shared fixture compiler and the public
 helper's asset writer, removing two standalone compiler invocations.
+On Linux x86_64, build-time emitters and contract-test executables select Zig's
+self-hosted backend while retaining the requested optimization/safety mode.
+Shipped application binaries and the public native API/HTTPS probe keep their
+normal production backend. Their copied-binary witnesses still run in full.
 The durable-owner test compiles its one image once for both direct and captured
 acquisition recovery. It also retains the inbox contract-conflict and message-ID
 checks formerly split into a separate inbox fixture. `native_repository.mjs`

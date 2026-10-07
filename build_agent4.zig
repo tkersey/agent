@@ -46,12 +46,19 @@ const Graph = struct {
         return g.module(g.b.fmt("src/{s}.zig", .{name}));
     }
     fn testModule(g: Graph, step: *std.Build.Step, module_value: *std.Build.Module) void {
-        const tests = g.b.addTest(.{ .root_module = module_value });
+        const tests = g.b.addTest(.{
+            .root_module = module_value,
+            .use_llvm = if (g.b.graph.host.result.os.tag == .linux and g.b.graph.host.result.cpu.arch == .x86_64) false else null,
+        });
         tests.step.dependOn(g.gate);
         step.dependOn(&g.b.addRunArtifact(tests).step);
     }
     fn emitter(g: Graph, name: []const u8, module_value: *std.Build.Module) Executable {
-        const executable = g.b.addExecutable(.{ .name = name, .root_module = module_value });
+        const executable = g.b.addExecutable(.{
+            .name = name,
+            .root_module = module_value,
+            .use_llvm = if (g.b.graph.host.result.os.tag == .linux and g.b.graph.host.result.cpu.arch == .x86_64) false else null,
+        });
         executable.step.dependOn(g.gate);
         return .{ .artifact = executable };
     }
@@ -733,7 +740,10 @@ pub fn build(b: *std.Build) void {
             native.addImport("world", world);
             const working_set = std.mem.eql(u8, name, "repository_working_set");
             native.addImport(if (working_set) "repository" else "repository_replace", g.module(if (working_set) "test/consumers/repository/working_set.zig" else "test/consumers/repository/replacement.zig"));
-            const tests = b.addTest(.{ .root_module = native });
+            const tests = b.addTest(.{
+                .root_module = native,
+                .use_llvm = if (b.graph.host.result.os.tag == .linux and b.graph.host.result.cpu.arch == .x86_64) false else null,
+            });
             tests.step.dependOn(native_graph.gate);
             const run_policy = b.addRunArtifact(tests);
             native_checks.dependOn(&run_policy.step);

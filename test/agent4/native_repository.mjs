@@ -130,7 +130,12 @@ async function repositoryHttps(binary, directory) {
     const accepted = await client.call('task.submit', { client_operation_id: 'repository-task', application_id: 'repository-agent', profile_id: 'fixed', input: { schema_id: 'repository-agent.input.v1', value: { task: 'Explain the public source behavior.' } } });
     const id = accepted.task_id;
     const subscribed = await client.call('task.subscribe', { task_id: id, after_seq: '0' });
-    await Promise.race([heldRequest, delay(15000).then(() => { throw new Error('held provider request timeout'); })]);
+    let heldTimeout;
+    try {
+      await Promise.race([heldRequest, new Promise((_, reject) => {
+        heldTimeout = setTimeout(() => reject(new Error('held provider request timeout')), 15000);
+      })]);
+    } finally { clearTimeout(heldTimeout); }
     if (providerFailure) throw providerFailure;
     const start = performance.now();
     await client.call('ping', {}, 2000);

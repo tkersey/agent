@@ -111,6 +111,14 @@ benchmark. Native/WASM host throughput equivalence and a native speedup are not
 claimed. The build summaries separately record compiler invocations, phase times,
 MaxRSS and actual cache reuse.
 
+Later runs also report program/checkpoint/frozen-resource bytes, launch-to-first
+provider-request and investigation wall time. Each recorded native continuation
+reports fresh preparation, start/restore, prepared drive/checkpoint time, World
+work counters and the outer allocator's peak requested bytes. Those samples enable
+World statistics, exclude allocator backing metadata, and keep their scope
+distinct from RSS and full process time. Investigation time includes the deliberate
+hold, client actions and forced restart; it is not live-provider latency.
+
 Declared limits are separate from measurements: 64 MiB host allocation budget,
 16 MiB SQLite heap, 256 MiB state namespace, 1 MiB protocol frame, 4 MiB retained
 outbound payload, at most 16 outstanding calls/subscriptions/nonterminal tasks,

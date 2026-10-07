@@ -2,7 +2,7 @@
 // imports native implementation code or treats an archive as execution authority.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {execFileSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';
 import {writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 import {decodeSchema, decodeValue, encodeValue} from '../../runtime/values.mjs';
@@ -152,6 +152,7 @@ export async function compareContinuation(runtimePath, probe, inputPath, pending
   let current = runtime.decodeOutcome(pending.object(pending.task.outcome));
   let state = pending.object(pending.task.checkpoint), wasmSteps = 0, nativeSteps = 0, requested = 0;
   let pairedWasmMilliseconds = 0, nativeProcessMilliseconds = 0;
+  const nativeRuntimeSamples = [];
   const trace = [];
   while (['progressed', 'yielded', 'requested'].includes(current.kind)) {
     assert(wasmSteps < 128, 'bounded recorded continuation');
@@ -183,8 +184,13 @@ export async function compareContinuation(runtimePath, probe, inputPath, pending
     else {
       writeFileSync(inputPath, world.encodeInput({image, state, control, quantum, ...(bound ? {value: bound} : {})}));
       const started = performance.now();
-      current = runtime.decodeOutcome(execFileSync(probe, ['invoke', inputPath], {env: {PATH: '/nonexistent'}, timeout: 30000, maxBuffer: 4 * 1024 * 1024}));
+      const result = spawnSync(probe, ['invoke', inputPath], {env: {PATH: '/nonexistent'}, timeout: 30000, maxBuffer: 4 * 1024 * 1024});
+      assert.equal(result.error, undefined);
+      assert.equal(result.status, 0, result.stderr.toString());
+      assert.equal(result.signal, null);
+      current = runtime.decodeOutcome(result.stdout);
       nativeProcessMilliseconds += performance.now() - started;
+      nativeRuntimeSamples.push(JSON.parse(result.stderr.toString()));
       pairedWasmMilliseconds += wasmMilliseconds;
       assert.deepEqual(Buffer.from(current.bytes), Buffer.from(expected.bytes));
       nativeSteps++;
@@ -195,6 +201,7 @@ export async function compareContinuation(runtimePath, probe, inputPath, pending
   assert.equal(current.kind, 'completed');
   assert.deepEqual(Buffer.from(current.bytes), completed.object(completed.task.outcome));
   return {wasm_steps: wasmSteps, native_steps: nativeSteps, recorded_effects: trace,
+    program_bytes: image.length, frozen_resource_bytes: pending.task.resources.reduce((total, reference) => total + Number(reference[1]), 0), checkpoint_bytes: Number(pending.task.checkpoint[1]), native_runtime_samples: nativeRuntimeSamples,
     paired_runtime: {steps: nativeSteps, quantum, wasm_inprocess_ms: pairedWasmMilliseconds, native_process_ms: nativeProcessMilliseconds,
       scope: 'recorded-reply harness; native includes process launch, input read, prepare/restore and output decode; neither includes provider or durable host storage'}};
 }

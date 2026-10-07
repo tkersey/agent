@@ -28,13 +28,21 @@ pub fn main(init: std.process.Init) !void {
             defer allocator.free(bytes);
             var invocation = try protocol.decode(protocol.Input, allocator, bytes);
             defer invocation.deinit();
+            const prepare_start = std.Io.Clock.awake.now(init.io).toNanoseconds();
             var program = try world.Prepared.init(allocator, invocation.value.image);
+            const prepare_ns = std.Io.Clock.awake.now(init.io).toNanoseconds() - prepare_start;
             defer program.deinit();
+            const restore_start = std.Io.Clock.awake.now(init.io).toNanoseconds();
             var handle = switch (invocation.value.instance) {
                 .initial_args => |value| try world.Resident.start(allocator, &program, value),
                 .state => |value| try world.Resident.restore(allocator, &program, value),
             };
+            const restore_ns = std.Io.Clock.awake.now(init.io).toNanoseconds() - restore_start;
+            var statistics: world.Statistics = .{};
+            try handle.setStatistics(&statistics);
+            const drive_start = std.Io.Clock.awake.now(init.io).toNanoseconds();
             var outcome = try handle.drive(allocator, invocation.value.control, .{ .quantum = invocation.value.quantum, .checkpoint = true });
+            const drive_ns = std.Io.Clock.awake.now(init.io).toNanoseconds() - drive_start;
             defer outcome.deinit();
             switch (outcome.record) {
                 .completed, .failed, .cancelled => try handle.close(),
@@ -43,6 +51,11 @@ pub fn main(init: std.process.Init) !void {
             const encoded_outcome = try protocol.encodeOwned(protocol.Outcome, allocator, outcome.record);
             defer allocator.free(encoded_outcome);
             try std.Io.File.stdout().writeStreamingAll(init.io, encoded_outcome);
+            // The outer requested-byte counter is monotonic through teardown;
+            // report it separately from OS RSS and allocator backing metadata.
+            const measurement = try std.fmt.allocPrint(allocator, "{{\"fresh_prepare_ns\":{d},\"restore_ns\":{d},\"prepared_drive_checkpoint_ns\":{d},\"peak_requested_bytes\":{d},\"transitions\":{d},\"dispatches\":{d}}}\n", .{ prepare_ns, restore_ns, drive_ns, budget.peak, statistics.transitions, statistics.dispatches });
+            defer allocator.free(measurement);
+            try std.Io.File.stderr().writeStreamingAll(init.io, measurement);
             return;
         }
         if (!std.mem.eql(u8, mode, "https")) return error.InvalidArguments;

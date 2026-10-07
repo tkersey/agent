@@ -37,7 +37,7 @@ async function repositoryHttps(binary, directory, controller, invoke) {
   await writeFile(trust, new X509Certificate(tls.ca).raw);
   await writeFile(credential, 'qualification-only\n', { mode: 0o600 });
   const requests = [], notifications = [], sockets = new Set(), clients = new Set();
-  let providerFailure, releaseHeld;
+  let providerFailure, releaseHeld, firstProviderAt;
   const held = new Promise(resolve => { releaseHeld = resolve; });
   let announceHeld;
   const heldRequest = new Promise(resolve => { announceHeld = resolve; });
@@ -50,6 +50,7 @@ async function repositoryHttps(binary, directory, controller, invoke) {
       for await (const chunk of request) chunks.push(chunk);
       const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
       const index = requests.length;
+      if (index === 0) firstProviderAt = performance.now();
       requests.push(body);
       assert.equal(request.url, '/v1/responses');
       assert.equal(request.headers.authorization, 'Bearer qualification-only');
@@ -134,6 +135,7 @@ async function repositoryHttps(binary, directory, controller, invoke) {
       clients.add(client);
       return client;
     };
+    const investigationStarted = performance.now();
     let client = launch(['--config', configPath]);
     await client.initialize();
     assert.equal((await client.call('describe')).execution_mode, 'live');
@@ -195,6 +197,7 @@ async function repositoryHttps(binary, directory, controller, invoke) {
     await client.call('task.resume', { client_operation_id: 'resume-once', task_id: id, expected_revision: reopened.revision });
     await client.call('task.respond', { client_operation_id: 'answer-once', task_id: id, question_id: question.question_id, question_revision: question.question_revision, request_digest: question.request_digest, answer: { schema_id: question.answer_schema_id, value: { message: 'Explain the exported function.' } } });
     const result = await until(() => client.call('task.result', { task_id: id }), value => value.ready, 'report');
+    const investigationMilliseconds = performance.now() - investigationStarted;
     if (providerFailure) throw providerFailure;
     assert.equal(requests.length, 4);
     assert.equal(result.outcome.type, 'completed');
@@ -267,7 +270,7 @@ async function repositoryHttps(binary, directory, controller, invoke) {
     clients.delete(client);
     assert.equal(requests.length, 5, 'unknown delivery cannot trigger another provider request');
     if (providerFailure) throw providerFailure;
-    return { provider_calls: requests.length, investigation_provider_calls: 4, cancellation_unknown_after_restart: true, cancel_ack_ms: cancelMilliseconds, restart_without_retry: true, frozen_snapshot: true, clarification: true, followup: true, control_ms: latency, held_io_control_samples: controlSamples, ...parity };
+    return { provider_calls: requests.length, investigation_provider_calls: 4, launch_to_first_provider_ms: firstProviderAt - investigationStarted, investigation_ms: investigationMilliseconds, duration_scope: 'controlled investigation including client actions, deliberate hold and forced restart; not live-provider latency', cancellation_unknown_after_restart: true, cancel_ack_ms: cancelMilliseconds, restart_without_retry: true, frozen_snapshot: true, clarification: true, followup: true, control_ms: latency, held_io_control_samples: controlSamples, ...parity };
   } finally {
     releaseHeld();
     releaseCancelHeld();

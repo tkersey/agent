@@ -28,6 +28,7 @@ test {
     _ = repository;
     _ = registry;
     _ = client;
+    _ = discovery;
     _ = @import("occurrence.zig");
     _ = @import("store.zig");
     _ = @import("namespace.zig");

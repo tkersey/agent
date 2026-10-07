@@ -92,6 +92,8 @@ On Linux x86_64, build-time emitters and contract-test executables select Zig's
 self-hosted backend while retaining the requested optimization/safety mode.
 Shipped application binaries and the public native API/HTTPS probe keep their
 normal production backend. Their copied-binary witnesses still run in full.
+SQLite and the native C shim are compiled once per target ABI into a static
+library, with the same flags and dependency admission, then linked by consumers.
 The durable-owner test compiles its one image once for both direct and captured
 acquisition recovery. It also retains the inbox contract-conflict and message-ID
 checks formerly split into a separate inbox fixture. `native_repository.mjs`

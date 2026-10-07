@@ -604,7 +604,7 @@ pub fn build(b: *std.Build) void {
         const native_admission_files = b.addWriteFiles();
         native_admission_files.step.dependOn(&native_guard.step);
         const native_admission = b.createModule(.{ .root_source_file = native_admission_files.add("native_dependency_admission.zig", "") });
-        const host_environment = nativeEnvironment(b, b.graph.host, optimize, world, data, contracts, native_admission, sqlite_source);
+        const host_environment = nativeEnvironment(b, b.graph.host, optimize, world, data, contracts, native_admission, sqlite_source, &native_guard.step);
         // Host-default Linux packaging selects musl. Explicit unsupported target
         // requests are rejected by the public helper before creating emitters.
         const default_musl = target.query.isNative() and target.result.os.tag == .linux and target.result.cpu.arch == .x86_64;
@@ -641,7 +641,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{.{ .name = "boundary_data", .module = native_data }},
         });
-        const public_environment = if (!default_musl and target.query.isNative()) host_environment else nativeEnvironment(b, native_target, optimize, native_world, native_data, native_contracts, native_admission, sqlite_source);
+        const public_environment = if (!default_musl and target.query.isNative()) host_environment else nativeEnvironment(b, native_target, optimize, native_world, native_data, native_contracts, native_admission, sqlite_source, &native_guard.step);
         b.addNamedLazyPath("native-sqlite-source", sqlite_source);
         b.modules.put(b.allocator, b.dupe("agent_native"), public_environment) catch @panic("out of memory");
         b.modules.put(b.allocator, b.dupe("agent_native_data"), native_data) catch @panic("out of memory");
@@ -795,7 +795,7 @@ pub fn build(b: *std.Build) void {
     b.default_step = aggregate;
 }
 
-fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize, world: *std.Build.Module, data: *std.Build.Module, contracts: *std.Build.Module, admission: *std.Build.Module, sqlite_source: std.Build.LazyPath) *std.Build.Module {
+fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize, world: *std.Build.Module, data: *std.Build.Module, contracts: *std.Build.Module, admission: *std.Build.Module, sqlite_source: std.Build.LazyPath, gate: *std.Build.Step) *std.Build.Module {
     const options = b.addOptions();
     options.addOption(u32, "sqlite_heap_bytes", @import("build_native.zig").sqlite_heap_bytes);
     options.addOption(u64, "state_bytes", @import("build_native.zig").state_bytes);
@@ -808,6 +808,15 @@ fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: 
         .optimize = optimize,
     });
     translated.addIncludePath(sqlite_source);
+    translated.step.dependOn(gate);
+    // C has a stable ABI here. Compile the large SQLite translation unit once
+    // for this target, rather than again inside every executable and test root.
+    const c_module = b.createModule(.{ .target = target, .optimize = optimize, .link_libc = true });
+    c_module.addIncludePath(sqlite_source);
+    c_module.addCSourceFile(.{ .file = sqlite_source.path(b, "sqlite3.c"), .flags = @import("build_native.zig").sqlite_flags });
+    c_module.addCSourceFile(.{ .file = b.path("runtime/native/native_c.c"), .flags = &.{ "-std=c99", "-D_POSIX_C_SOURCE=200809L" } });
+    const c_library = b.addLibrary(.{ .name = "agent-native-c", .linkage = .static, .root_module = c_module });
+    c_library.step.dependOn(gate);
     const module = b.createModule(.{
         .root_source_file = b.path("runtime/native/root.zig"),
         .target = target,
@@ -822,12 +831,7 @@ fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: 
         },
     });
     module.addOptions("native_options", options);
-    module.addIncludePath(sqlite_source);
-    module.addCSourceFile(.{
-        .file = sqlite_source.path(b, "sqlite3.c"),
-        .flags = @import("build_native.zig").sqlite_flags,
-    });
-    module.addCSourceFile(.{ .file = b.path("runtime/native/native_c.c"), .flags = &.{ "-std=c99", "-D_POSIX_C_SOURCE=200809L" } });
+    module.linkLibrary(c_library);
     return module;
 }
 

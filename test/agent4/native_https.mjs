@@ -15,7 +15,9 @@ const binary = resolve(process.argv[2]);
 let server;
 const sockets = new Set(), calls = [];
 try {
-  const tls = await certificates(directory);
+  const tls = await certificates(directory, {invalidServerCertificates: true});
+  assert.equal(new X509Certificate(tls.B.cert).checkIP('127.0.0.1'), undefined);
+  assert(Date.parse(new X509Certificate(tls.C.cert).validTo) < Date.now());
   const root = join(directory, 'root.der');
   await writeFile(root, new X509Certificate(tls.ca).raw);
   server = createServer(tls.A, async (request, response) => {
@@ -24,6 +26,11 @@ try {
     calls.push({url: request.url, method: request.method, headers: request.headers, body: Buffer.concat(chunks).toString()});
     response.setHeader('x-request-id', 'fixture-response');
     if (request.url === '/held') return;
+    if (request.url === '/truncated') {
+      response.setHeader('content-length', '100');
+      response.write('partial');
+      return response.socket.end();
+    }
     if (request.url === '/large') return response.end('x'.repeat(1025));
     if (request.url === '/encoded') { response.setHeader('content-encoding', 'gzip'); return response.end('unsupported'); }
     if (request.url === '/redirect') { response.statusCode = 307; response.setHeader('location', '/forbidden'); return response.end('redirect'); }
@@ -60,6 +67,10 @@ try {
   assert.equal(await run('/encoded'), 'captured 200 fixture-response\nunsupported');
   assert.equal(await run('/held', {timeout: 100}), 'unknown Timeout\n');
   assert.equal(calls.filter(call => call.url === '/held').length, 1, 'no timeout retry');
+  const truncated = await run('/truncated');
+  assert.match(truncated, /^unknown /, 'truncated response cannot become a complete capture');
+  assert.notEqual(truncated, 'unknown Timeout\n', 'EOF must be detected before the deadline');
+  assert.equal(calls.filter(call => call.url === '/truncated').length, 1);
   const wrong = join(directory, 'wrong.der');
   await writeFile(wrong, new X509Certificate(tls.B.cert).raw);
   const before = calls.length;
@@ -67,6 +78,13 @@ try {
   assert.equal(calls.length, before, 'untrusted TLS prevents dispatch');
   assert.equal(await run('/plaintext', {url: endpoint.replace('https:', 'http:')}), 'not-sent InvalidConfiguration\n');
   assert.equal(calls.length, before);
+  for (const [name, certificate] of [['wrong-host', tls.B], ['expired', tls.C]]) {
+    server.setSecureContext(certificate);
+    assert.match(await run(`/${name}`), /^not-sent /);
+    assert.equal(calls.length, before, `${name} TLS prevents dispatch`);
+  }
+  server.setSecureContext(tls.A);
+  assert.match(await run('/restored'), /^captured 200 /, 'valid TLS remains usable after rejection');
   console.log(JSON.stringify({native_https: true, calls: calls.length, redirects: 0, retries: 0, exact_body: true, tls_rejection: true, bounded_response: true, deadline: true}));
 } finally {
   for (const socket of sockets) socket.destroy();

@@ -94,6 +94,8 @@ jobs:
           if [ "$RUNNER_OS" = Linux ] && [ "${{ matrix.lane }}" = native ]; then
             sudo apt-get update
             sudo apt-get install --yes ripgrep bubblewrap strace
+            # Reject an unavailable namespace boundary before compiling products.
+            bwrap --unshare-user --ro-bind / / /usr/bin/true
           elif ! command -v rg >/dev/null; then
             if [ "$RUNNER_OS" = macOS ]; then
               brew install ripgrep

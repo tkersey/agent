@@ -745,6 +745,9 @@ pub fn build(b: *std.Build) void {
         // These roots share exact module identities; compile their retained
         // tests together instead of rebuilding the same compiler eleven times.
         const native_suite = native_graph.module("test/agent4/native_tests.zig");
+        // Keep unit assertions and safety checks without optimizing test code.
+        // The deployed applications and public API/HTTPS probe remain safe.
+        native_suite.optimize = .debug;
         native_suite.strip = optimize != .debug;
         native_suite.addImport("world", checked_world);
         native_suite.addImport("agent_native", checked_environment);
@@ -754,7 +757,10 @@ pub fn build(b: *std.Build) void {
         // Zig does not collect test declarations from named dependency modules.
         // Run the runtime's own root explicitly; the integration root above
         // independently exercises its public task owner with authored programs.
-        native_graph.testModule(native_product, checked_environment);
+        const native_unit_tests = b.allocator.create(std.Build.Module) catch @panic("out of memory");
+        native_unit_tests.init(b, .{ .existing = checked_environment });
+        native_unit_tests.optimize = .debug;
+        native_graph.testModule(native_product, native_unit_tests);
         // Repository policy modules have distinct import roots and retain their
         // focused runners rather than changing their nominal type identities.
         for ([_][]const u8{ "repository_working_set", "repository_replacement" }) |name| {

@@ -70,7 +70,20 @@ fn argument(comptime T: type, value: json.Value) ArgumentError!T {
         return .{ .bytes = value.string };
     }
     return switch (@typeInfo(T)) {
-        .int => if (value == .number_string) json.numberInteger(T, value.number_string) catch error.IntegerRange else error.WrongType,
+        .int => blk: {
+            if (value != .number_string) return error.WrongType;
+            // The shared model contract first classifies an exact i64/u64
+            // JSON integer, then applies the field's narrower range. A
+            // nonintegral/outside-carrier number is a type error, not overflow
+            // of an otherwise admitted integer field.
+            if (value.number_string[0] == '-') {
+                const number = json.numberInteger(i64, value.number_string) catch return error.WrongType;
+                if (number < 0 and @typeInfo(T).int.signedness == .unsigned) return error.WrongType;
+                break :blk std.math.cast(T, number) orelse error.IntegerRange;
+            }
+            const number = json.numberInteger(u64, value.number_string) catch return error.WrongType;
+            break :blk std.math.cast(T, number) orelse error.IntegerRange;
+        },
         .bool => if (value == .bool) value.bool else error.WrongType,
         .@"enum" => blk: {
             if (value != .string) return error.WrongType;

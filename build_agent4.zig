@@ -27,11 +27,12 @@ const Graph = struct {
     data: *std.Build.Module,
     contracts: *std.Build.Module,
     gate: *std.Build.Step,
+    target: ?std.Build.ResolvedTarget = null,
 
     fn module(g: Graph, path: []const u8) *std.Build.Module {
         return g.b.createModule(.{
             .root_source_file = g.b.path(path),
-            .target = g.b.graph.host,
+            .target = g.target orelse g.b.graph.host,
             .optimize = g.optimize,
             .imports = &.{
                 .{ .name = "agent", .module = g.agent },
@@ -645,6 +646,19 @@ pub fn build(b: *std.Build) void {
             .imports = &.{.{ .name = "boundary_data", .module = native_data }},
         });
         const public_environment = if (!default_musl and target.query.isNative()) host_environment else nativeEnvironment(b, native_target, optimize, native_world, native_data, native_contracts, native_admission, sqlite_source, &native_guard.step);
+        // Executed native checks use the delivered ABI when it runs on this
+        // host. This also shares its C library instead of compiling a GNU-only
+        // SQLite copy solely for tests of a musl product.
+        const native_on_host = native_target.result.cpu.arch == b.graph.host.result.cpu.arch and native_target.result.os.tag == b.graph.host.result.os.tag;
+        if (native_on_host) {
+            native_graph.target = native_target;
+            native_graph.agent = native_agent;
+            native_graph.boundary = native_boundary;
+            native_graph.data = native_data;
+            native_graph.contracts = native_contracts;
+        }
+        const checked_world = if (native_on_host) native_world else world;
+        const checked_environment = if (native_on_host) public_environment else host_environment;
         b.addNamedLazyPath("native-sqlite-source", sqlite_source);
         b.modules.put(b.allocator, b.dupe("agent_native"), public_environment) catch @panic("out of memory");
         b.modules.put(b.allocator, b.dupe("agent_native_data"), native_data) catch @panic("out of memory");
@@ -697,9 +711,9 @@ pub fn build(b: *std.Build) void {
             native_host.dependOn(&protocol_peer.step);
             const consumer_module = b.createModule(.{
                 .root_source_file = b.path("test/consumers/native/main.zig"),
-                .target = b.graph.host,
+                .target = native_graph.target orelse b.graph.host,
                 .optimize = optimize,
-                .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data", .module = data }, .{ .name = "agent_native", .module = host_environment }, .{ .name = "agent_contracts", .module = contracts }, .{ .name = "application_types", .module = g.module("examples/native-minimal/types.zig") } },
+                .imports = &.{ .{ .name = "world", .module = checked_world }, .{ .name = "boundary_data", .module = native_graph.data }, .{ .name = "agent_native", .module = checked_environment }, .{ .name = "agent_contracts", .module = native_graph.contracts }, .{ .name = "application_types", .module = native_graph.module("examples/native-minimal/types.zig") } },
             });
             consumer_module.addAnonymousImport("image", .{ .root_source_file = product.assets.image });
             const consumer = b.addExecutable(.{ .name = "agent-native-consumer", .root_module = consumer_module });
@@ -726,17 +740,16 @@ pub fn build(b: *std.Build) void {
         responses_peer.has_side_effects = true;
         // These roots share exact module identities; compile their retained
         // tests together instead of rebuilding the same compiler eleven times.
-        const native_suite = g.module("test/agent4/native_tests.zig");
-        native_suite.addImport("world", world);
-        native_suite.addImport("agent_native", host_environment);
+        const native_suite = native_graph.module("test/agent4/native_tests.zig");
+        native_suite.addImport("world", checked_world);
+        native_suite.addImport("agent_native", checked_environment);
         native_suite.addAnonymousImport("native_model_reference", .{ .root_source_file = responses_peer.captureStdOut(.{}) });
-        native_suite.addImport("document", g.module("test/consumers/document/consequence.zig"));
+        native_suite.addImport("document", native_graph.module("test/consumers/document/consequence.zig"));
         native_graph.testModule(native_checks, native_suite);
         // Zig does not collect test declarations from named dependency modules.
         // Run the runtime's own root explicitly; the integration root above
         // independently exercises its public task owner with authored programs.
-        const runtime_test_environment = if (native_target.result.cpu.arch == b.graph.host.result.cpu.arch and native_target.result.os.tag == b.graph.host.result.os.tag) public_environment else host_environment;
-        native_graph.testModule(native_checks, runtime_test_environment);
+        native_graph.testModule(native_checks, checked_environment);
         // Repository policy modules have distinct import roots and retain their
         // focused runners rather than changing their nominal type identities.
         for ([_][]const u8{ "repository_working_set", "repository_replacement" }) |name| {

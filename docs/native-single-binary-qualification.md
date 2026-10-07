@@ -18,6 +18,7 @@ historical evidence for their named subjects, not qualification of later changes
 | `592483bcca02eef3663afe32fbd178df2294647d` | [Full Linux CI](https://github.com/tkersey/agent/actions/runs/37604386166): source accounting, external installation, authoring and native checks passed in **4m44s**; 92 native tests and 100 protocol-schema cases. |
 | Same subject | [Linux native/manual](https://github.com/tkersey/agent/actions/runs/37605483683) and [macOS arm64 native/manual](https://github.com/tkersey/agent/actions/runs/37605479994): isolated applications, public downstream recipe with network denied, native API/HTTPS, archive/parity and build campaign passed. |
 | `d7b7a4db6a8c09a521459bdc73968879577730f7` | [Full Linux CI](https://github.com/tkersey/agent/actions/runs/37607986892) passed in **3m43s**, including the added held-provider cancellation/unknown-recovery phase. Cancellation acknowledgment was **6.12 ms**; the four-call investigation remained independently asserted. |
+| `7b345656131d586d493166564212e12767e459ad` | [Complete required Linux CI](https://github.com/tkersey/agent/actions/runs/37671909555) passed in **4m57s**, including setup, cache transfer, all qualification lanes, clean deployment, offline public recipe, packaging and the final gate. The native lane passed 92 tests and 100 protocol-schema cases. |
 
 The two manual runs retain tar archives for 14 days:
 [Linux x86_64](https://github.com/tkersey/agent/actions/runs/37605483683/artifacts/11475411562)
@@ -134,9 +135,11 @@ five-minute target. At `2415f66`, the Linux-only workflow took 5m00s from its
 start to GitHub completion; the earlier 4m49s report omitted its final gate.
 Complete separate platform runs took 6m27s on Linux and 9m19s on macOS.
 The PR workflow now requires Linux qualification, clean deployment, the downstream
-recipe and artifact packaging. Its complete measured pass below five minutes
-remains unproved. Other observed Linux runs took 6m39s–8m31s; cache restore
-success did not always mean compiler object reuse.
+recipe and artifact packaging. The complete run at `7b34565` passed in 4m57s.
+The preceding build-driver change passed in 6m02s; selecting the existing Linux
+self-hosted backend for the public asset emitter reduced its compilation to 2s
+and the downstream recipe to 49.182s. Other observed Linux runs took
+6m39s–8m31s; cache restore success did not always mean compiler object reuse.
 The earlier 4m41s result at `b121ced` was also a single observation. There is no
 five-minute hosted-runner SLA. Necessary checks remain selected; the gains do not
 come from lowering safety, extending deadlines or adding runners to disguise

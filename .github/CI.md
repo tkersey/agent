@@ -221,7 +221,15 @@ complete workflow, including setup, cache transfer and the final aggregate gate.
 At `2415f66`, the earlier Linux-only workflow
 took 5m00s from start to GitHub completion (4m59s through the final required job);
 the separate complete platform runs took 6m27s on Linux and 9m19s on macOS.
-The current Linux-only workflow still needs its own measured pass below five minutes.
+At `7b345656131d586d493166564212e12767e459ad`, the complete Linux-only
+[workflow](https://github.com/tkersey/agent/actions/runs/37671909555) passed in
+**4m57s**, from creation through the final gate. All required lanes passed,
+including 92 native tests, 100 protocol-schema cases, clean deployment, the
+offline downstream recipe and packaging. The recipe took 49.182s; its asset
+emitter compiled in 2s using the existing Linux self-hosted backend, compared
+with roughly a minute using LLVM in the preceding 6m02s workflow. The C library
+still compiled in both build roots. These are individual hosted-runner samples,
+not a guarantee that every future run finishes within five minutes.
 
 Compiler cache selection prefers the exact locked dependencies, then permits
 reuse within the same compiler/OS/architecture/lane. Package allowlist edits no

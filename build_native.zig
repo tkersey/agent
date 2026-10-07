@@ -1,5 +1,7 @@
 //! Build/environmental API. No target program executes while generating assets.
 const std = @import("std");
+/// One packaging constant supplies both the namespace reader and manifest.
+pub const state_format: u32 = 5;
 pub const sqlite_heap_bytes: u32 = 16 * 1024 * 1024;
 pub const state_bytes: u64 = 256 * 1024 * 1024;
 pub const sqlite_flags: []const []const u8 = &.{ "-std=c99", "-DSQLITE_THREADSAFE=1", "-DSQLITE_ENABLE_MEMSYS5=1", "-DSQLITE_OMIT_LOAD_EXTENSION=1", "-DSQLITE_DQS=0", "-DSQLITE_DEFAULT_MEMSTATUS=1", "-DSQLITE_DEFAULT_FOREIGN_KEYS=1" };
@@ -105,7 +107,7 @@ pub fn addWithModules(b: *std.Build, modules: Modules, options: Options) Product
     manifest.addArg(b.fmt("{d}", .{sqlite_heap_bytes}));
     manifest.addArg(std.json.Stringify.valueAlloc(b.allocator, sqlite_flags, .{}) catch @panic("out of memory"));
     manifest.addArg(b.fmt("{d}", .{state_bytes}));
-    manifest.addArg(b.fmt("agent-native-state/{d}", .{@import("runtime/native/store.zig").format}));
+    manifest.addArg(b.fmt("agent-native-state/{d}", .{state_format}));
     manifest.addArgs(&.{ target.result.zigTriple(b.allocator) catch @panic("out of memory"), @tagName(optimize) });
     const manifest_file = manifest.addOutputFileArg2("native-manifest.json", .{});
 

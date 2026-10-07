@@ -741,6 +741,7 @@ fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: 
     const options = b.addOptions();
     options.addOption(u32, "sqlite_heap_bytes", @import("build_native.zig").sqlite_heap_bytes);
     options.addOption(u64, "state_bytes", @import("build_native.zig").state_bytes);
+    options.addOption(u32, "state_format", @import("build_native.zig").state_format);
     // The exact admitted 0.17 compiler still supplies build-time translate-c.
     // Keep translation bound to that target/compiler tuple; @cImport is gone.
     const translated = b.addTranslateC(.{

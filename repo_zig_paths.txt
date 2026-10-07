@@ -18,6 +18,7 @@ runtime/native/demo.zig
 runtime/native/discovery.zig
 runtime/native/driver.zig
 runtime/native/entry.zig
+runtime/native/hash.zig
 runtime/native/host.zig
 runtime/native/https.zig
 runtime/native/identity.zig

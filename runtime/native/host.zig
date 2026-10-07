@@ -99,7 +99,7 @@ fn Connection(comptime Types: type) type {
                 .@"artifact.read" => if (self.client == null and json.get(request.params, "task_id") == null) {
                     // Discovery-only launch authorizes only the same immutable
                     // public schemas as describe, never task/private artifacts.
-                    const result = self.application.readSchemaArtifact(a, request.params) catch |err| return protocol.failure(a, request.id, failureKind(err), "correct_request");
+                    const result = self.application.readSchemaArtifact(a, request.params) catch |err| return protocol.failure(a, request.id, failureKind(err), failureRecovery(failureKind(err)));
                     return protocol.response(a, request.id, result);
                 },
                 else => {},
@@ -108,14 +108,14 @@ fn Connection(comptime Types: type) type {
             const result = client.call(a, request.method, request.params) catch |err| {
                 const kind = failureKind(err);
                 if (kind == .CursorExpired) {
-                    const range = client.cursorRange(a, request.params) catch |range_error| return protocol.failure(a, request.id, failureKind(range_error), "correct_request");
+                    const range = client.cursorRange(a, request.params) catch |range_error| return protocol.failure(a, request.id, failureKind(range_error), failureRecovery(failureKind(range_error)));
                     var failure = try protocol.failure(a, request.id, kind, "read_status_or_result");
                     const details = failure.object.getPtr("error").?.object.getPtr("data").?;
                     try json.put(a, details, "earliest_available_seq", json.string(try std.fmt.allocPrint(a, "{d}", .{range.first})));
                     try json.put(a, details, "high_water_seq", json.string(try std.fmt.allocPrint(a, "{d}", .{range.last})));
                     return failure;
                 }
-                return protocol.failure(a, request.id, kind, if (kind == .StorageUnavailable) "retry_same_operation_or_inspect" else "correct_request");
+                return protocol.failure(a, request.id, kind, failureRecovery(kind));
             };
             return protocol.response(a, request.id, result);
         }
@@ -139,6 +139,15 @@ fn Connection(comptime Types: type) type {
             for (value.array.items) |item| if (try self.member(a, item, true)) |result| try results.append(result);
             return if (results.items.len == 0) null else .{ .array = results };
         }
+    };
+}
+
+fn failureRecovery(kind: protocol.Kind) []const u8 {
+    // Projection/encoding can fail after an admission has committed. Capacity
+    // or internal failure is therefore not proof that a new operation is safe.
+    return switch (kind) {
+        .StorageUnavailable, .Overloaded, .InternalError => "retry_same_operation_or_inspect",
+        else => "correct_request",
     };
 }
 
@@ -331,7 +340,7 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
         var failure = json.object();
         try json.put(frame, &failure, "error", json.string(@tagName(kind)));
         try json.put(frame, &failure, "reason", json.string(@errorName(err)));
-        try json.put(frame, &failure, "recovery", json.string(if (kind == .StorageUnavailable) "retry_same_operation_or_inspect" else "correct_request"));
+        try json.put(frame, &failure, "recovery", json.string(failureRecovery(kind)));
         try std.Io.File.stdout().writeStreamingAll(init.io, try json.canonical(frame, failure));
         try std.Io.File.stdout().writeStreamingAll(init.io, "\n");
         return switch (kind) {

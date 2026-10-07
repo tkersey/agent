@@ -187,6 +187,11 @@ check. Node is needed only by this example client. It correlates string RPC IDs,
 bounds requests and frames, delivers notifications, and parks by closing stdin.
 It does not retry ambiguous operations automatically. Keep decimal counters as
 strings and retain the original `client_operation_id` and parameters for retries.
+`Overloaded`, `InternalError` and `StorageUnavailable` do not prove that an
+operation was unadmitted: response projection can fail after durable commit.
+Their `retry_same_operation_or_inspect` guidance means reuse that original
+operation ID and parameters or inspect its task, never invent a new ID to retry
+potential provider work.
 
 ```ts
 import {AgentClient} from './examples/native-minimal/stdio-client.mts';

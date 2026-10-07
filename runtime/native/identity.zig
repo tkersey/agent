@@ -1,6 +1,7 @@
 //! Runtime artifact identity is observed from the executing binary, not inferred
 //! from a WASM digest or from metadata that can survive a native code change.
 const std = @import("std");
+const c = @import("native_c");
 pub const Identity = struct { sha256: [32]u8, bytes: u64 };
 
 pub fn executable(io: std.Io) !Identity {
@@ -8,7 +9,8 @@ pub fn executable(io: std.Io) !Identity {
     defer file.close(io);
     const before = try file.stat(io);
     if (before.kind != .file or before.size == 0 or before.size > 256 * 1024 * 1024) return error.UnsupportedNativeArtifact;
-    var hash = std.crypto.hash.sha2.Sha256.init(.{});
+    var hash: [c.AGENT_NATIVE_SHA256_BYTES]u8 align(c.AGENT_NATIVE_SHA256_ALIGNMENT) = undefined;
+    c.agent_native_sha256_init(&hash);
     var buffer: [64 * 1024]u8 = undefined;
     var length: u64 = 0;
     while (true) {
@@ -19,11 +21,11 @@ pub fn executable(io: std.Io) !Identity {
         if (count == 0) continue;
         length = try std.math.add(u64, length, count);
         if (length > before.size) return error.NativeArtifactChanged;
-        hash.update(buffer[0..count]);
+        c.agent_native_sha256_update(&hash, &buffer, count);
     }
     const after = try file.stat(io);
     if (length != before.size or before.inode != after.inode or before.size != after.size or !std.meta.eql(before.mtime, after.mtime) or !std.meta.eql(before.ctime, after.ctime)) return error.NativeArtifactChanged;
     var result: Identity = .{ .sha256 = undefined, .bytes = length };
-    hash.final(&result.sha256);
+    c.agent_native_sha256_final(&hash, &result.sha256);
     return result;
 }

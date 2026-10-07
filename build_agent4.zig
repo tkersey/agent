@@ -703,7 +703,11 @@ pub fn build(b: *std.Build) void {
                 .imports = &.{ .{ .name = "world", .module = world }, .{ .name = "boundary_data", .module = data }, .{ .name = "agent_native", .module = host_environment }, .{ .name = "agent_contracts", .module = contracts }, .{ .name = "application_types", .module = g.module("examples/native-minimal/types.zig") } },
             });
             consumer_module.addAnonymousImport("image", .{ .root_source_file = product.assets.image });
-            const consumer = b.addExecutable(.{ .name = "agent-native-consumer", .root_module = consumer_module });
+            const consumer = b.addExecutable(.{
+                .name = "agent-native-consumer",
+                .root_module = consumer_module,
+                .use_llvm = if (b.graph.host.result.os.tag == .linux and b.graph.host.result.cpu.arch == .x86_64) false else null,
+            });
             consumer.step.dependOn(&runtime_guard.step);
             native_consumer.dependOn(&b.addRunArtifact(consumer).step);
             const https_peer = nodeCommand(b);

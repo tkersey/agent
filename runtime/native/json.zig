@@ -91,7 +91,7 @@ pub fn text(value: Value) error{InvalidParams}![]const u8 {
 pub fn decimal(comptime T: type, value: Value) error{InvalidParams}!T {
     return integer(T, try text(value));
 }
-pub fn integer(comptime T: type, bytes: []const u8) error{InvalidParams}!T {
+fn integer(comptime T: type, bytes: []const u8) error{InvalidParams}!T {
     if (bytes.len == 0 or bytes.len > 20) return error.InvalidParams;
     var digits = bytes;
     if (bytes[0] == '-') {

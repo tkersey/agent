@@ -244,6 +244,25 @@ try {
     assert.equal(method.result_schema, `#/$defs/${method.name}.result`);
     assert(protocolSchema.$defs[`${method.name}.result`]);
   }
+  for (const lexeme of ['1.0', '1e0', '10e-1']) {
+    const id = `describe-limit-${lexeme}`;
+    peer.write(rpc(id, 'describe', {limit: 0}).replace('"limit":0', `"limit":${lexeme}`));
+    const page = await peer.next();
+    assert.equal(page.id, id);
+    assert.equal(page.result.methods.length, 1);
+    assert.equal(page.result.next_cursor, '1');
+  }
+  peer.write(JSON.stringify(Array.from({length: 16}, (_, i) => {
+    const id = `discovery-batch-${i}`;
+    methodsById.set(id, 'describe');
+    return {jsonrpc: '2.0', id, method: 'describe', params: {}};
+  })) + '\n');
+  const discoveryBatch = await peer.next();
+  assert.equal(discoveryBatch.length, 16);
+  discoveryBatch.forEach((reply, i) => {
+    assert.equal(reply.id, `discovery-batch-${i}`);
+    assert.deepEqual(reply.result, description);
+  });
   peer.write('[{"jsonrpc":"2.0","method":"task.submit","params":{}},{"jsonrpc":"2.0","id":7,"method":"ping","params":{}}]\n');
   const batch = await peer.next();
   assert.equal(batch.length, 1);
@@ -322,6 +341,15 @@ try {
   assert.deepEqual(events.events.map(event => event.type), ['accepted', 'input_required', 'input_accepted', 'completed']);
   assert.deepEqual(events.events.map(event => event.seq), ['1', '2', '3', '4']);
   assert.equal(events.has_more, false);
+  for (const lexeme of ['1.0', '1e0', '10e-1']) {
+    const id = `event-limit-${lexeme}`;
+    resumed.write(rpc(id, 'task.events', {task_id: receipt.task_id, after_seq: '0', limit: 0}).replace('"limit":0', `"limit":${lexeme}`));
+    const page = await resumed.next();
+    assert.equal(page.id, id);
+    assert.deepEqual(page.result.events, events.events.slice(0, 1));
+    assert.equal(page.result.next_after_seq, '1');
+    assert.equal(page.result.has_more, true);
+  }
   resumed.write(rpc('subscribe', 'task.subscribe', {task_id: receipt.task_id, after_seq: '0'}));
   const subscription = (await resumed.next()).result;
   assert.equal(subscription.after_seq, '0');
@@ -446,6 +474,8 @@ try {
   for (const value of ['0', '1', '9007199254740993', '18446744073709551615']) schemaCases.push({definition: 'counter', value});
   for (const value of ['00', '-1', '1.0', '18446744073709551616', '99999999999999999999', '1\n', 1]) schemaCases.push({definition: 'counter', value, accept: false});
   schemaCases.push({definition: 'task.submit.params', value: submission});
+  for (const profile_id of ['fixed', 'custom-admitted-profile']) schemaCases.push({definition: 'task.submit.params', value: {...submission, profile_id}});
+  for (const profile_id of ['', 'x'.repeat(129)]) schemaCases.push({definition: 'task.submit.params', value: {...submission, profile_id}, accept: false});
   schemaCases.push({definition: 'task.submit.params', value: {...submission, principal: 'forged'}, accept: false});
   schemaCases.push({definition: 'task.submit.params', value: {...submission, input: {...submission.input, value: {value: 4294967296}}}, accept: false});
   schemaCases.push({definition: 'task.submit.params', value: {...submission, client_operation_id: '雪'.repeat(43)}, accept: false});

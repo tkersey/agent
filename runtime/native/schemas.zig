@@ -127,7 +127,9 @@ fn parameter(a: std.mem.Allocator, method: protocol.Method, key: []const u8, app
         if (method == .describe) try json.put(a, &result, "default", application.object.get("application_id").?);
         return result;
     }
-    if (std.mem.eql(u8, key, "profile_id")) return constant(a, "offline");
+    // The launch admits the identifier; a static schema cannot select its
+    // configured value. Task submission still checks exact profile membership.
+    if (std.mem.eql(u8, key, "profile_id")) return text(a, 1, 128);
     if (std.mem.eql(u8, key, "client_operation_id")) return text(a, 1, 128);
     if (std.mem.eql(u8, key, "reason")) {
         var result = try text(a, 0, 256);

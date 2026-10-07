@@ -93,7 +93,7 @@ fn Connection(comptime Types: type) type {
                     return protocol.response(a, request.id, result);
                 },
                 .describe => {
-                    const result = self.application.describe(a, request.params) catch |err| return protocol.failure(a, request.id, if (err == error.NotFound) .NotFound else .InvalidParams, "correct_request");
+                    const result = self.application.describe(a, request.params) catch |err| return protocol.failure(a, request.id, failureKind(err), failureRecovery(failureKind(err)));
                     return protocol.response(a, request.id, result);
                 },
                 .@"artifact.read" => if (self.client == null and json.get(request.params, "task_id") == null) {

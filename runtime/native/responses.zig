@@ -393,7 +393,7 @@ pub fn Adapter(comptime P: type) type {
 
 fn count(value: json.Value) !u64 {
     if (value != .number_string) return error.UnsupportedResponse;
-    return json.integer(u64, value.number_string);
+    return json.numberInteger(u64, value.number_string);
 }
 
 /// Closed output-to-input grammar. Only these admitted item fields survive;

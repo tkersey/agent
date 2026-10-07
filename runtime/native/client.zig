@@ -284,7 +284,7 @@ pub fn Client(comptime Types: type) type {
                 .@"task.status" => return self.snapshot(a, try identifier(16, try field(params, "task_id"))),
                 .@"task.result" => return self.taskResult(a, try identifier(16, try field(params, "task_id"))),
                 .@"task.events" => {
-                    const limit = if (json.get(params, "limit")) |limit| try json.integer(u32, if (limit == .number_string) limit.number_string else return error.InvalidParams) else @as(u32, 16);
+                    const limit = if (json.get(params, "limit")) |limit| try json.numberInteger(u32, if (limit == .number_string) limit.number_string else return error.InvalidParams) else @as(u32, 16);
                     if (limit == 0 or limit > 128) return error.InvalidParams;
                     return self.events(a, try identifier(16, try field(params, "task_id")), try json.decimal(u64, try field(params, "after_seq")), if (self.batch) 1 else limit);
                 },

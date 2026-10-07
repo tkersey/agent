@@ -176,7 +176,7 @@ pub const Application = struct {
         const cursor: usize = if (json.get(params, "cursor")) |value| try json.decimal(usize, value) else 0;
         const limit: usize = if (json.get(params, "limit")) |value| blk: {
             if (value != .number_string) return error.InvalidParams;
-            break :blk try json.integer(usize, value.number_string);
+            break :blk try json.numberInteger(usize, value.number_string);
         } else 16;
         if (limit == 0 or limit > 16) return error.InvalidParams;
         const info = @typeInfo(protocol.Method).@"enum";
@@ -202,20 +202,37 @@ pub const Application = struct {
         var result = json.object();
         try json.put(a, &result, "methods", .{ .array = methods });
         try json.put(a, &result, "next_cursor", if (end < info.field_names.len) json.string(try std.fmt.allocPrint(a, "{d}", .{end})) else .null);
-        var app = self.public_metadata;
-        if (self.schema_artifacts[0].?.bytes.len > (protocol.Limits{}).inline_bytes) {
-            app = json.object();
-            for ([_][]const u8{ "application_id", "application_version", "client_mapping" }) |key| try json.put(a, &app, key, self.public_metadata.object.get(key).?);
-            try json.put(a, &app, "metadata_ref", try self.schema_artifacts[0].?.reference(a));
-        }
+        var app = json.object();
+        for ([_][]const u8{ "application_id", "application_version", "client_mapping" }) |key| try json.put(a, &app, key, self.public_metadata.object.get(key).?);
+        try json.put(a, &app, "metadata_ref", try self.schema_artifacts[0].?.reference(a));
         try json.put(a, &result, "application", app);
         try json.put(a, &result, "execution_mode", json.string(@tagName(self.execution_mode)));
-        if (self.schema_artifacts[1].?.bytes.len > (protocol.Limits{}).inline_bytes) {
-            try json.put(a, &result, "protocol_schema_ref", try self.schema_artifacts[1].?.reference(a));
-        } else try json.put(a, &result, "protocol_schema", self.protocol_schema);
+        const protocol_ref = try self.schema_artifacts[1].?.reference(a);
+        try json.put(a, &result, "protocol_schema_ref", protocol_ref);
+        if (!try fitsDescription(a, result)) return error.Capacity;
+        // Inline only when the complete projection fits. Independent per-asset
+        // limits do not compose into a bounded response (or a 16-call batch).
+        if (self.schema_artifacts[0].?.bytes.len <= (protocol.Limits{}).inline_bytes) {
+            try json.put(a, &result, "application", self.public_metadata);
+            if (!try fitsDescription(a, result)) try json.put(a, &result, "application", app);
+        }
+        if (self.schema_artifacts[1].?.bytes.len <= (protocol.Limits{}).inline_bytes) {
+            _ = result.object.swapRemove("protocol_schema_ref");
+            try json.put(a, &result, "protocol_schema", self.protocol_schema);
+            if (!try fitsDescription(a, result)) {
+                _ = result.object.swapRemove("protocol_schema");
+                try json.put(a, &result, "protocol_schema_ref", protocol_ref);
+            }
+        }
         return result;
     }
 };
+
+fn fitsDescription(a: std.mem.Allocator, value: json.Value) !bool {
+    const encoded = try json.canonical(a, value);
+    defer a.free(encoded);
+    return encoded.len <= (protocol.Limits{}).inline_bytes;
+}
 
 pub fn sameField(object: json.Value, name: []const u8, expected: []const u8) !void {
     const field = json.get(object, name) orelse return error.InvalidAssets;
@@ -272,4 +289,41 @@ test "oversized discovery stays bounded and its immutable schemas round-trip thr
         try std.testing.expectError(error.InvalidParams, artifactChunk(a, artifact, 0, 32769));
     }
     try std.testing.expectError(error.ArtifactUnavailable, application.schemaArtifact(@splat(0)));
+}
+
+test "discovery budgets the combined description before composing a full batch" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    for ([_]usize{ 128, 11 * 1024 }) |size| {
+        var metadata = json.object();
+        try json.put(a, &metadata, "application_id", json.string("combined-schema"));
+        try json.put(a, &metadata, "application_version", json.string("1"));
+        try json.put(a, &metadata, "client_mapping", json.string("agent-client-values/1.0"));
+        const padding = try a.alloc(u8, size);
+        @memset(padding, 'x');
+        var schema = json.object();
+        try json.put(a, &schema, "type", json.string("string"));
+        try json.put(a, &schema, "description", json.string(padding));
+        for ([_][]const u8{ "input", "output", "failure", "answer", "message" }) |key| try json.put(a, &metadata, key, schema);
+        try json.put(a, &metadata, "capabilities", .{ .array = .init(a) });
+        const artifacts = [2]?Artifact{ try Artifact.freeze(a, metadata, "application"), try Artifact.freeze(a, schema, "protocol") };
+        for (artifacts) |artifact| try std.testing.expect(artifact.?.bytes.len < (protocol.Limits{}).inline_bytes);
+        const application: Application = .{ .arena = .init(a), .metadata = metadata, .manifest = .null, .manifest_id = "test", .image_identity = @splat(0), .public_metadata = metadata, .protocol_schema = schema, .schema_artifacts = artifacts };
+        const description = try application.describe(a, json.object());
+        try std.testing.expect((try json.canonical(a, description)).len <= (protocol.Limits{}).inline_bytes);
+        try std.testing.expectEqual(size == 128, json.get(description, "protocol_schema") != null);
+        if (json.get(description, "protocol_schema_ref")) |reference| {
+            try std.testing.expectEqualStrings(try digest(a, artifacts[1].?.bytes), reference.object.get("sha256").?.string);
+        }
+        // Escaping a maximal string ID also consumes the shared frame budget.
+        var id: [128]u8 = @splat(1);
+        var replies: std.array_list.Managed(json.Value) = .init(a);
+        for (0..16) |i| {
+            id[0] = @intCast(i + 1);
+            try replies.append(try protocol.response(a, json.string(try a.dupe(u8, &id)), description));
+        }
+        const encoded = try json.canonical(a, .{ .array = replies });
+        try std.testing.expect(encoded.len + 1 <= (protocol.Limits{}).frame_bytes);
+    }
 }

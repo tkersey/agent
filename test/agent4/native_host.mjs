@@ -546,13 +546,50 @@ try {
     const readerClosed = once(broken.child.stdout, 'close');
     broken.child.stdout.destroy();
     await readerClosed;
-    // stdin remains open: only the failed response write can start shutdown.
+    // Keep the existing case where another request races with output closure.
     broken.write(rpc('broken-ping', 'ping', {}));
     const [code, signal] = await stopped;
     assert.equal(broken.child.stdin.writableEnded, false);
     assert.equal(signal, null);
     assert.equal(code, 74);
     await broken.end(74);
+  }
+  for (const state of [null, 'closed output idle', 'closed output waiting']) {
+    const broken = launch(state, 7000);
+    await broken.initialize();
+    let task;
+    if (state === 'closed output waiting') {
+      broken.write(rpc('close-submit', 'task.submit', {...submission, client_operation_id: 'close-submit'}));
+      task = (await broken.next()).result.task_id;
+      let status;
+      for (let i = 0; i < 100; i++) {
+        broken.write(rpc(`close-wait-${i}`, 'task.status', {task_id: task}));
+        status = (await broken.next()).result;
+        if (status.status === 'waiting_input') break;
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.equal(status.status, 'waiting_input');
+    }
+    const stopped = once(broken.child, 'close');
+    const started = performance.now();
+    // The acknowledgment is drained. No subscription, further write or stdin
+    // EOF may be needed to observe the closed output reader.
+    broken.child.stdout.destroy();
+    assert.deepEqual(await stopped, [74, null]);
+    assert(performance.now() - started < 6000, 'bounded broken-output parking');
+    assert.equal(broken.child.stdin.writableEnded, false);
+    await broken.end(74);
+    if (state) {
+      const reopened = launch(state);
+      await reopened.initialize();
+      if (task) {
+        reopened.write(rpc('closed-output-status', 'task.status', {task_id: task}));
+        const saved = (await reopened.next()).result;
+        assert.equal(saved.status, 'waiting_input');
+        assert(saved.question, 'disconnect preserves the pending question');
+      }
+      await reopened.end();
+    }
   }
   const stalled = spawn(binary, ['serve', '--transport', 'stdio', '--offline'], {cwd: directory, env: options.env, stdio: ['pipe', 'pipe', 'pipe']});
   const stallExit = once(stalled, 'exit');

@@ -2,6 +2,7 @@ const std = @import("std");
 const agent = @import("agent");
 const boundary = @import("boundary");
 const native = @import("agent_native");
+const world = @import("world");
 const protocol = boundary.data.invocation;
 const Inbox = agent.inbox.Profile(u32);
 const T = struct {
@@ -559,6 +560,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
         if (chunk.object.get("eof").?.bool) break;
     }
     try std.testing.expectEqualSlices(u8, try native.json.canonical(frame, try native.values.toJson(T.Output, frame, decoded.value)), reconstructed.items);
+    if (!captured) try largeArtifactBatch(&service, accepted.receipt.task);
     const events = try client.events(frame, accepted.receipt.task, 0, 128);
     const history = events.object.get("events").?.array.items;
     var consumed: usize = 0;
@@ -647,6 +649,75 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
         }
         try std.testing.expectEqual(40, seen);
     }
+}
+
+fn largeArtifactBatch(service: *native.tasks.Service(T), task_id: [16]u8) !void {
+    const a = std.testing.allocator;
+    const store = &service.namespace.store;
+    const bytes = try a.alloc(u8, 3 * 1024 * 1024);
+    defer a.free(bytes);
+    @memset(bytes, 'x');
+    bytes[0] = '"';
+    bytes[bytes.len - 1] = '"';
+    const id: [32]u8 = @splat(173);
+    // Seed an ordinary authorized task artifact through the store transaction.
+    // This independent record encoding is consumed by the real artifact reader;
+    // it does not replace the task's authored result or claim another outcome.
+    try store.begin();
+    defer store.rollback();
+    const reference = try store.putObject(bytes);
+    const Artifact = struct {
+        id: [32]u8,
+        task: ?[16]u8,
+        value: @TypeOf(reference),
+        media_type: agent.contracts.Text(128),
+        schema_id: ?agent.contracts.Text(128),
+    };
+    const encoded = try agent.contracts.encodeOwned(Artifact, a, .{ .id = id, .task = task_id, .value = reference, .media_type = .{ .bytes = "application/json" }, .schema_id = .{ .bytes = "artifact-test.json.v1" } });
+    defer a.free(encoded);
+    const record = try store.putObject(encoded);
+    try store.database.run("INSERT INTO records VALUES('artifact',?,?,?)", &.{ .{ .blob = &id }, .{ .blob = &task_id }, .{ .blob = &record.digest } });
+    try service.namespace.commit("test.large-artifact");
+    defer {
+        store.begin() catch unreachable;
+        store.database.run("DELETE FROM records WHERE kind='artifact' AND id=? AND task=?", &.{ .{ .blob = &id }, .{ .blob = &task_id } }) catch unreachable;
+        service.namespace.commit("test.remove-large-artifact") catch unreachable;
+    }
+
+    // The fixture's existing SQLite is outside this allocator. Reserve its
+    // 16MiB plus the production worker's 16MiB inside the same host-sized budget.
+    var budget: world.AllocationBudget = .{ .parent = a, .limit = 64 * 1024 * 1024 };
+    const bounded = budget.allocator();
+    const reservation = try bounded.alloc(u8, 32 * 1024 * 1024);
+    defer bounded.free(reservation);
+    const original_allocator = service.allocator;
+    service.allocator = bounded;
+    defer service.allocator = original_allocator;
+    var arena = std.heap.ArenaAllocator.init(bounded);
+    defer arena.deinit();
+    const frame = arena.allocator();
+    var client: native.client.Client(T) = .{ .service = service, .batch = true };
+    var responses: std.array_list.Managed(native.json.Value) = .init(frame);
+    for (0..16) |i| {
+        var params = native.json.object();
+        try native.json.put(frame, &params, "task_id", native.json.string(try frame.dupe(u8, &std.fmt.bytesToHex(task_id, .lower))));
+        try native.json.put(frame, &params, "artifact_id", native.json.string(try frame.dupe(u8, &std.fmt.bytesToHex(id, .lower))));
+        try native.json.put(frame, &params, "offset", native.json.string(try std.fmt.allocPrint(frame, "{d}", .{i * 32768})));
+        try native.json.put(frame, &params, "length", native.json.string("32768"));
+        const chunk = try client.call(frame, .@"artifact.read", params);
+        var decoded: [32768]u8 = undefined;
+        try std.base64.url_safe_no_pad.Decoder.decode(&decoded, chunk.object.get("data").?.string);
+        try std.testing.expectEqualSlices(u8, bytes[i * 32768 ..][0..32768], &decoded);
+        try std.testing.expectEqualStrings(&std.fmt.bytesToHex(reference.digest, .lower), chunk.object.get("sha256").?.string);
+        try std.testing.expectEqual((i + 1) * 32768, try native.json.decimal(usize, chunk.object.get("next_offset").?));
+        try std.testing.expectEqual(bytes.len, try native.json.decimal(usize, chunk.object.get("total_bytes").?));
+        try std.testing.expect(!chunk.object.get("eof").?.bool);
+        try responses.append(try native.protocol.response(frame, try native.json.number(frame, i), chunk));
+    }
+    const wire = try native.json.canonical(frame, .{ .array = responses });
+    try std.testing.expect(wire.len + 1 <= (native.protocol.Limits{}).frame_bytes);
+    try std.testing.expect(!budget.failed);
+    try std.testing.expect(budget.peak < 48 * 1024 * 1024);
 }
 
 test "an inbox identity cannot be redeclared with a different message contract" {

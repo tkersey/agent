@@ -78,6 +78,14 @@ public schema chunks and independent JSON Schema validation. The shared owner
 fixture reconstructs a large result from authorized chunks and rejects revoked
 artifact access.
 
+The current corpus also closes the output reader with stdin still open and no
+further request, including discovery, idle namespaces, waiting questions and held
+provider I/O. It checks bounded exit, namespace reopening and preserved unknown
+delivery without semantic cancellation or retry. The shared owner fixture reads
+16 exact chunks from a store-admitted 3 MiB task artifact into one response arena,
+using a 64 MiB allocation budget with 32 MiB reserved for SQLite and worker memory.
+This fixture measures the client allocation path, not a new process RSS claim.
+
 The repository investigation performs native list/read, asks a client question,
 queues a Unicode follow-up during held provider I/O, survives SIGKILL/restart,
 uses its frozen snapshot after external mutation and produces an independently

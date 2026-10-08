@@ -764,6 +764,10 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
                 if (!writable or transport.count == 0) return code;
             }
         }
-        try transport.wait(!connection.closing and transport.canAdmit(), if (progressed) 0 else 20);
+        transport.wait(!connection.closing and transport.canAdmit(), if (progressed) 0 else 20) catch {
+            writable = false;
+            code = 74;
+            if (shutdown_at == null) shutdown_at = transport.now();
+        };
     }
 }

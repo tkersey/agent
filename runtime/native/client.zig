@@ -220,8 +220,11 @@ pub fn Client(comptime Types: type) type {
             const artifact = saved.value;
             if (artifact.task == null or !std.mem.eql(u8, &artifact.task.?, &task_id) or !std.mem.eql(u8, &artifact.id, &id)) return error.CorruptState;
             if (offset > artifact.value.bytes) return error.InvalidParams;
-            const bytes = try self.service.namespace.store.object(a, artifact.value, 4 * 1024 * 1024);
-            defer a.free(bytes);
+            // Full-object scratch must not accumulate in the response arena
+            // across batch members. artifactChunk copies its returned bytes.
+            const scratch = self.service.allocator;
+            const bytes = try self.service.namespace.store.object(scratch, artifact.value, 4 * 1024 * 1024);
+            defer scratch.free(bytes);
             return discovery.artifactChunk(a, .{ .bytes = bytes, .sha256 = artifact.value.digest }, offset, length);
         }
 

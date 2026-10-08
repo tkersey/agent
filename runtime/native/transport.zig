@@ -172,10 +172,13 @@ pub const Transport = struct {
     pub fn wait(self: *Transport, read: bool, milliseconds: c_int) !void {
         var fds = [_]c.struct_pollfd{
             .{ .fd = if (read and !self.eof and self.pending == null) 0 else -1, .events = c.POLLIN, .revents = 0 },
-            .{ .fd = if (self.count != 0) 1 else -1, .events = c.POLLOUT, .revents = 0 },
+            // Closure is a connection event even without a pending write.
+            // Request write readiness only for queued output, avoiding idle spin.
+            .{ .fd = 1, .events = if (self.count != 0) c.POLLOUT else 0, .revents = 0 },
         };
         const count = c.poll(&fds, fds.len, milliseconds);
         if (count < 0 and std.c.errno(count) != .INTR) return error.IoUnavailable;
+        if (fds[1].revents & (c.POLLERR | c.POLLHUP | c.POLLNVAL) != 0) return error.OutputClosed;
     }
 };
 

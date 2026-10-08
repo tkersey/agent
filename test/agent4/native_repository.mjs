@@ -211,6 +211,9 @@ async function repositoryHttps(binary, directory, controller, invokeBase) {
   let announceCancelHeld, releaseCancelHeld;
   const cancelHeldRequest = new Promise(resolve => { announceCancelHeld = resolve; });
   const cancelHeld = new Promise(resolve => { releaseCancelHeld = resolve; });
+  let announceDisconnectHeld, releaseDisconnectHeld;
+  const disconnectHeldRequest = new Promise(resolve => { announceDisconnectHeld = resolve; });
+  const disconnectHeld = new Promise(resolve => { releaseDisconnectHeld = resolve; });
   const server = createServer(tls.A, async (request, response) => {
     try {
       const chunks = [];
@@ -227,10 +230,15 @@ async function repositoryHttps(binary, directory, controller, invokeBase) {
       assert.equal(body.truncation, 'disabled');
       assert.equal('previous_response_id' in body, false);
       assert.equal('conversation' in body, false);
-      if (index === 4) {
+      if (index === 4 || index === 5) {
         assert.equal(body.input.filter(item => item.type === 'function_call_output').length, 0);
-        announceCancelHeld();
-        await cancelHeld;
+        if (index === 4) {
+          announceCancelHeld();
+          await cancelHeld;
+        } else {
+          announceDisconnectHeld();
+          await disconnectHeld;
+        }
         response.destroy();
         return;
       }
@@ -500,11 +508,42 @@ async function repositoryHttps(binary, directory, controller, invokeBase) {
     assert.deepEqual(await client.close(), {code: 0, signal: null});
     clients.delete(client);
     assert.equal(requests.length, 5, 'unknown delivery cannot trigger another provider request');
+    client = launch(['--config', configPath]);
+    await client.initialize();
+    const disconnectInput = {...cancellationInput, client_operation_id: 'disconnect-held-submit'};
+    const disconnectTask = await client.call('task.submit', disconnectInput);
+    let disconnectTimer;
+    try {
+      await Promise.race([disconnectHeldRequest, new Promise((_, reject) => { disconnectTimer = setTimeout(() => reject(new Error('disconnect provider hold timeout')), 15000); })]);
+    } finally { clearTimeout(disconnectTimer); }
+    // No subscription or response remains queued; stdin stays open and no
+    // additional request or cancellation supplies a write to detect closure.
+    const disconnected = client;
+    const disconnectStarted = performance.now();
+    const disconnectKill = setTimeout(() => disconnected.child.kill('SIGKILL'), 7000);
+    disconnected.child.stdout.destroy();
+    try { assert.deepEqual(await disconnected.closed, {code: 74, signal: null}); }
+    finally { clearTimeout(disconnectKill); }
+    const disconnectMilliseconds = performance.now() - disconnectStarted;
+    assert(disconnectMilliseconds < 6000, 'held provider is parked within disconnect budget');
+    assert.equal(disconnected.child.stdin.writableEnded, false);
+    clients.delete(disconnected);
+    client = launch(['--config', configPath]);
+    await client.initialize();
+    const disconnectedStatus = await client.call('task.status', {task_id: disconnectTask.task_id});
+    assert.equal(disconnectedStatus.status, 'unknown');
+    assert.equal(disconnectedStatus.cancellation, null, 'disconnect is not semantic cancellation');
+    assert.equal((await client.call('task.submit', disconnectInput)).task_id, disconnectTask.task_id);
+    await assert.rejects(client.call('task.resume', {client_operation_id: 'disconnect-resume', task_id: disconnectTask.task_id, expected_revision: disconnectedStatus.revision}), error => error.data?.kind === 'StateConflict');
+    assert.deepEqual(await client.close(), {code: 0, signal: null});
+    clients.delete(client);
+    assert.equal(requests.length, 6, 'broken output cannot dispatch again or retry unknown delivery');
     if (providerFailure) throw providerFailure;
-    return { large_snapshot: largeSnapshotProof, provider_calls: requests.length, investigation_provider_calls: 4, launch_to_first_provider_ms: firstProviderAt - investigationStarted, investigation_ms: investigationMilliseconds, duration_scope: 'controlled investigation including client actions, deliberate hold and forced restart; not live-provider latency', cancellation_unknown_after_restart: true, cancel_ack_ms: cancelMilliseconds, restart_without_retry: true, frozen_snapshot: true, clarification: true, followup: true, control_ms: latency, held_io_control_samples: controlSamples, ...parity };
+    return { large_snapshot: largeSnapshotProof, provider_calls: requests.length, investigation_provider_calls: 4, launch_to_first_provider_ms: firstProviderAt - investigationStarted, investigation_ms: investigationMilliseconds, duration_scope: 'controlled investigation including client actions, deliberate hold and forced restart; not live-provider latency', cancellation_unknown_after_restart: true, cancel_ack_ms: cancelMilliseconds, broken_output_unknown_after_restart: true, broken_output_ms: disconnectMilliseconds, restart_without_retry: true, frozen_snapshot: true, clarification: true, followup: true, control_ms: latency, held_io_control_samples: controlSamples, ...parity };
   } finally {
     releaseHeld();
     releaseCancelHeld();
+    releaseDisconnectHeld();
     for (const client of clients) { client.child.kill('SIGKILL'); await client.closed; }
     for (const socket of sockets) socket.destroy();
     if (server.listening) await new Promise(resolve => server.close(resolve));

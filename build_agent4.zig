@@ -706,11 +706,11 @@ pub fn build(b: *std.Build) void {
                 .environment = b.path("examples/repository-agent/environment.zig"),
             });
             native_example.dependOn(&repository_product.install.step);
-            const repository_peer = nodeCommand(b);
+            const repository_peer = nativeCheckCommand(b);
             repository_peer.addArgs(&.{ "node", "test/agent4/native_repository.mjs" });
             repository_peer.addFileArg2(repository_product.executable.getEmittedBin(), .{ .make_absolute = true });
             native_product.dependOn(&repository_peer.step);
-            const protocol_peer = nodeCommand(b);
+            const protocol_peer = nativeCheckCommand(b);
             protocol_peer.addArgs(&.{ "node", "test/agent4/native_host.mjs" });
             protocol_peer.addFileArg2(product.executable.getEmittedBin(), .{ .make_absolute = true });
             native_host.dependOn(&protocol_peer.step);
@@ -785,10 +785,9 @@ pub fn build(b: *std.Build) void {
             b.step(if (working_set) "check-repository-working-set" else "check-repository-replacement", if (working_set) "Check staged repository memory and evidence rules" else "Check live repository replacement approval")
                 .dependOn(&run_policy.step);
         }
-        const host_contracts = nodeCommand(b);
+        const host_contracts = nativeCheckCommand(b);
         host_contracts.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
         host_contracts.addArgs(&.{ "node", "--test", "test/agent4/mobility_journal.test.mjs", "test/agent4/mobility_host.test.mjs", "test/agent4/mobility_transport.test.mjs", "test/agent4/mobility_deployment.test.mjs", "test/agent4/mobility_browser_bridge.test.mjs", "test/agent4/mobility_sessions.test.mjs", "test/agent4/mobility_task_catalogue.test.mjs", "test/agent4/mobile_repository_program.test.mjs" });
-        host_contracts.has_side_effects = true;
         host_contracts.step.dependOn(&runtime_guard.step);
         host_contracts.step.dependOn(mobility_images);
         host_contracts.step.dependOn(mobile_repository_images);
@@ -889,6 +888,24 @@ fn addBoundary(b: *std.Build, run: *std.Build.Step.Run, source: ?std.Build.LazyP
 }
 
 // Keep nested Node qualifiers on the build's selected toolchain and prefix.
+fn nativeCheckCommand(b: *std.Build) *std.Build.Step.Run {
+    const run = nodeCommand(b);
+    // Inherited stdio holds Zig's global diagnostic lock for the whole check.
+    // Capture both streams through stderr, preserving logs on success/failure
+    // while independent compilers and peers continue. Positional argv remains
+    // quoted, and exec preserves the checked process's exit/signal disposition.
+    const prefix = [_]std.Build.Step.Run.Arg{
+        .{ .bytes = "sh" },
+        .{ .bytes = "-c" },
+        .{ .bytes = "exec \"$@\" >&2" },
+        .{ .bytes = "native-check" },
+    };
+    run.argv.insertSlice(b.allocator, 0, &prefix) catch @panic("out of memory");
+    run.has_side_effects = true; // Checked stdio must never cache qualification.
+    run.expectExitCode(0);
+    return run;
+}
+
 fn nodeCommand(b: *std.Build) *std.Build.Step.Run {
     // Remove the runner context at launch, without caching the caller's PATH
     // or package/cache environment in the configured graph.

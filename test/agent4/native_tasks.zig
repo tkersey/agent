@@ -173,6 +173,7 @@ fn omitIncrementEvidence(a: std.mem.Allocator, io: std.Io, shape: anytype, sourc
 }
 
 fn checkCaptureImport(a: std.mem.Allocator, frame: std.mem.Allocator, io: std.Io, service: *native.tasks.Service(T), namespace: *native.Namespace, service_live: *bool, namespace_live: *bool, source_path: []const u8, directory: []const u8, task_id: [16]u8, label: []const u8) !void {
+    errdefer std.debug.print("capture archive boundary: {s}\n", .{label});
     const assets = service.assets;
     const application = service.application;
     const handlers = service.handlers;
@@ -196,7 +197,7 @@ fn checkCaptureImport(a: std.mem.Allocator, frame: std.mem.Allocator, io: std.Io
         const admitted = try imported.importCheckpoint(frame, "import", valid);
         var task = try imported.task(frame, admitted.receipt.task);
         defer task.deinit();
-        _ = try imported.resumeTask(frame, "resume", task.value.id, task.value.revision);
+        _ = try imported.resumeTask(frame, "resume-copied-capture", task.value.id, task.value.revision);
         for (0..32) |_| {
             const step = try imported.pump(frame);
             try std.testing.expect(step != .work);

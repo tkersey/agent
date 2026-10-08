@@ -175,8 +175,16 @@ pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration
     var token: []const u8 = if (options.test_provider) "qualification-only" else "";
     if (options.credential_path) |path| token = std.mem.trim(u8, try native.configuration.readFile(a, io, path, 16 * 1024, true), "\r\n");
     const trust_root = if (options.trust_root_path) |path| try native.configuration.readFile(a, io, path, 256 * 1024, false) else null;
+    var snapshot = try native.repository.Snapshot.open(a, resource_bytes);
+    errdefer snapshot.deinit();
+    // Check the admitted bytes, including restored snapshots, rather than a
+    // pathname: hard links and copied/embedded credentials must not become
+    // durable resources or ordinary model-readable source evidence.
+    if (options.credential_path != null and token.len != 0) for (snapshot.files()) |file| {
+        if (std.mem.indexOf(u8, file.contents.bytes, token) != null) return error.UnsafeCredentialFile;
+    };
     const adapter = try a.create(State);
-    adapter.* = .{ .snapshot = try native.repository.Snapshot.open(a, resource_bytes), .profile_identity = digest(profile_bytes), .provider = .{ .token = token, .approved_endpoint = settings.endpoint.bytes, .trust_root = trust_root }, .offline = options.offline };
+    adapter.* = .{ .snapshot = snapshot, .profile_identity = digest(profile_bytes), .provider = .{ .token = token, .approved_endpoint = settings.endpoint.bytes, .trust_root = trust_root }, .offline = options.offline };
     const resources = try a.alloc([]const u8, 1);
     resources[0] = resource_bytes;
     return .{ .id = if (options.offline) "offline" else if (options.test_provider) "controlled-test" else "fixed", .bytes = profile_bytes, .resources = resources, .environment = adapter };

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { createHash, X509Certificate } from 'node:crypto';
 import { createServer } from 'node:https';
-import { mkdir, writeFile, readFile, rename } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, rename, link, unlink } from 'node:fs/promises';
 import { once } from 'node:events';
 import { AgentClient } from '../../examples/native-minimal/stdio-client.mts';
 import { certificates } from './mobility_tls_fixture.mjs';
@@ -221,6 +221,18 @@ async function repositoryHttps(binary, directory, controller, invokeBase) {
       const validation = spawnSync(binary, ['validate', ...args], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
       assert.equal(validation.status, expected, validation.error ?? validation.stderr);
     }
+    const snapshotCredential = join(root, 'credential-source');
+    for (const kind of ['direct', 'hard-link', 'copied', 'embedded']) {
+      if (kind === 'hard-link') await link(credential, snapshotCredential);
+      else await writeFile(snapshotCredential, kind === 'embedded' ? 'token=qualification-only\n' : 'qualification-only\n', {mode: 0o600});
+      try {
+        const validation = spawnSync(binary, ['validate', '--config', referenceConfig, '--credential-file', kind === 'direct' ? snapshotCredential : credential], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
+        assert.equal(validation.status, 64, `${kind}: ${validation.error ?? validation.stderr}`);
+        assert(!`${validation.stdout}${validation.stderr}`.includes('qualification-only'));
+      } finally { await unlink(snapshotCredential); }
+    }
+    const separateCredential = spawnSync(binary, ['validate', '--config', referenceConfig, '--credential-file', credential], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
+    assert.equal(separateCredential.status, 0, separateCredential.error ?? separateCredential.stderr);
     assert.equal(requests.length, 0, 'configuration admission cannot dispatch inference');
     const launch = extra => {
       const client = new AgentClient(binary, ['--state-dir', state, '--authorize-inference', '--test-provider', '--trust-root', trust, ...extra], { cwd: directory, env: { PATH: '/nonexistent' }, onNotification: frame => notifications.push(frame) });

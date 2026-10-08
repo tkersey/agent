@@ -1298,6 +1298,7 @@ pub fn Service(comptime Types: type) type {
         }
 
         fn validateImportedState(self: *Self, a: std.mem.Allocator, value: state.Task, pending: ?occurrence.Occurrence) !void {
+            if (value.cancellation_applied and value.cancellation == null) return error.InvalidArchive;
             const acquired_inbox = try self.validateImportedMessages(a, value, pending);
             defer if (acquired_inbox) |bytes| a.free(bytes);
             const driver = try self.resident(a, value);
@@ -1315,6 +1316,21 @@ pub fn Service(comptime Types: type) type {
             var decoded = try data.invocation.decode(data.invocation.Outcome, a, observed);
             defer decoded.deinit();
             if (!same(@tagName(decoded.value), @tagName(value.outcome_kind))) return error.InvalidArchive;
+            if (value.cancellation_applied) switch (decoded.value) {
+                .cancelled => {},
+                .failed => |failure| if (failure.cancellation == null) return error.InvalidArchive,
+                .completed => return error.InvalidArchive,
+                else => {
+                    // The imported marker claims World already received this
+                    // control. Let World establish that it is a no-op without
+                    // executing authored steps or dispatching any native work.
+                    const repeated = try driver.drive(a, .{ .cancel = .{ .text = value.cancellation.?.bytes } }, 0);
+                    defer a.free(repeated);
+                    const repeated_checkpoint = try driver.checkpoint(a);
+                    defer a.free(repeated_checkpoint);
+                    if (!same(repeated, observed) or !same(repeated_checkpoint, checkpoint)) return error.InvalidArchive;
+                },
+            };
             switch (decoded.value) {
                 .requested => |requested| {
                     const current = pending orelse return error.InvalidArchive;

@@ -308,6 +308,11 @@ copies concurrently. `offline_copy` describes this transfer discipline; a settle
 task may retain either an offline or live provider profile. Keep `--offline` only
 for an offline task. Export and import do not require or acquire inference.
 
+An imported applied-cancellation marker requires cancellation intent and matching
+World state. For unfinished work, reapplying that control at zero steps must leave
+the observation and checkpoint unchanged. Pending intent and authored cancellation
+remain distinct; validation neither runs cleanup nor dispatches native work.
+
 Repository snapshots and every interpreted provider capture's reply, replay
 objects and usage travel in that same closure. Export and import reproduce the
 projection from its saved request/response through the pure adapter and compare

@@ -60,6 +60,10 @@ The credential file contains the bearer token, has private permissions, and is
 read only when explicitly named. Production admission requires exactly
 `https://api.openai.com/v1/responses` before reading credentials. No environment
 credential or proxy lookup occurs.
+Admission rejects snapshot files containing the supplied token, including hard
+links, copied contents and restored snapshots. Keep credential material outside
+the source input; this check covers the explicitly supplied token, not discovery
+of arbitrary secrets.
 Serving without `--authorize-inference` cannot authorize a provider call.
 
 Controlled TLS qualification uses `--test-provider --trust-root ROOT.der` and

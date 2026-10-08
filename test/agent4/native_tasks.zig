@@ -92,21 +92,15 @@ test "durable owner replays admissions and acquired work, binds answers, and con
     };
 }
 
-fn ownerRecovery(captured: bool, image: []const u8) !void {
-    var phase: []const u8 = "owner admission/restart";
-    errdefer std.debug.print("owner recovery phase: {s}\n", .{phase});
-    const a = std.testing.allocator;
-    const io = std.testing.io;
-    const admitted_image = try boundary.data.program_image.Admitted.decode(a, image);
-    defer admitted_image.deinit();
+fn ownerManifest(a: std.mem.Allocator, image: []const u8, identity: [32]u8, application: []const u8) ![]u8 {
     var image_digest: [32]u8 = undefined;
     var assets_digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(image, &image_digest, .{});
-    std.crypto.hash.sha2.Sha256.hash("owner-unit-test", &assets_digest, .{});
+    std.crypto.hash.sha2.Sha256.hash(application, &assets_digest, .{});
     const image_hex = std.fmt.bytesToHex(image_digest, .lower);
-    const identity_hex = std.fmt.bytesToHex(admitted_image.identity(), .lower);
+    const identity_hex = std.fmt.bytesToHex(identity, .lower);
     const assets_hex = std.fmt.bytesToHex(assets_digest, .lower);
-    const manifest = try std.json.Stringify.valueAlloc(a, .{
+    return std.json.Stringify.valueAlloc(a, .{
         .native_host_contract = "unit-native-contract",
         .protocol = "agent-host/1.0",
         .client_mapping = "agent-client-values/1.0",
@@ -118,6 +112,16 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
         .dependencies = .{ .world = "unit-world", .boundary = "unit-boundary" },
         .compiler = .{ .version = "0.17.0" },
     }, .{});
+}
+
+fn ownerRecovery(captured: bool, image: []const u8) !void {
+    var phase: []const u8 = "owner admission/restart";
+    errdefer std.debug.print("owner recovery phase: {s}\n", .{phase});
+    const a = std.testing.allocator;
+    const io = std.testing.io;
+    const admitted_image = try boundary.data.program_image.Admitted.decode(a, image);
+    defer admitted_image.deinit();
+    const manifest = try ownerManifest(a, image, admitted_image.identity(), "owner-unit-test");
     defer a.free(manifest);
     const assets: native.discovery.Assets = .{ .image = image, .application = "owner-unit-test", .manifest = manifest };
     // Asset/discovery admission is independently tested by the subprocess peer.
@@ -459,11 +463,11 @@ const CleanupApplication = struct {
         try b.define(body, try b.term(.{ .yield_then = try b.term(.{ .fail = try b.constant(void, {}) }) }));
         const exit_info = try boundary.library.cleanup.exitInfo(b, unit);
         const cleanup = try b.declare(&.{exit_info}, unit, &.{}, &.{});
-        try b.define(cleanup, try b.term(.{ .conditional = .{
+        try b.define(cleanup, try b.term(.{ .yield_then = try b.term(.{ .conditional = .{
             .condition = try b.reference(b.parameter(entry, 0)),
             .when_true = try b.term(.{ .fail = try b.constant(void, {}) }),
             .when_false = try b.pure(try b.constant(void, {})),
-        } }));
+        } }) }));
         const body_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{}, .result = unit, .effects = &.{} } } });
         const cleanup_type = try b.schema(.{ .internal = .{ .computation = .{ .parameters = &.{exit_info}, .result = unit, .effects = &.{}, .capture_bound = &.{boolean} } } });
         try b.define(entry, try b.term(.{ .protect = .{ .body = try b.lambda(body, body_type), .cleanup = try b.lambda(cleanup, cleanup_type) } }));
@@ -481,9 +485,12 @@ test "terminal cleanup failures retain bounded shutdown ownership without runnab
     _ = try compiled.encode(a, image);
     const admitted_image = try boundary.data.program_image.Admitted.decode(a, image);
     defer admitted_image.deinit();
-    const assets: native.discovery.Assets = .{ .image = image, .application = "cleanup-test", .manifest = "cleanup-test" };
+    const manifest = try ownerManifest(a, image, admitted_image.identity(), "cleanup-test");
+    defer a.free(manifest);
+    const assets: native.discovery.Assets = .{ .image = image, .application = "cleanup-test", .manifest = manifest };
     var application: native.discovery.Application = .{ .arena = .init(a), .metadata = .null, .manifest = .null, .manifest_id = "unit", .image_identity = admitted_image.identity() };
     defer application.deinit();
+    application.manifest = (try native.json.parse(application.arena.allocator(), manifest, .{})).value;
     var handlers = try native.Registry.init(a, &.{});
     defer handlers.deinit();
     const profile: native.tasks.Profile = .{ .id = "offline", .runtime_identity = @splat(42), .bytes = "cleanup-profile", .authority = .{ .grants = &.{}, .principal = "test", .tenant = "test" } };
@@ -494,7 +501,8 @@ test "terminal cleanup failures retain bounded shutdown ownership without runnab
     const path = try std.fmt.allocPrint(a, "{s}/state", .{path_buffer[0..length]});
     defer a.free(path);
     var namespace = try native.Namespace.open(a, io, path);
-    defer namespace.close() catch unreachable;
+    var namespace_live = true;
+    defer if (namespace_live) namespace.close() catch unreachable;
     var service = try native.tasks.Service(CleanupTypes).init(a, io, &namespace, assets, &application, handlers, profile);
     var service_live = true;
     defer if (service_live) service.close(a) catch unreachable;
@@ -514,6 +522,44 @@ test "terminal cleanup failures retain bounded shutdown ownership without runnab
         defer yielded.deinit();
         try std.testing.expectEqual(.yielded, yielded.value.outcome_kind);
         if (cancel) _ = try service.requestCancel(frame, try std.fmt.allocPrint(frame, "cancel-{d}", .{index}), submitted.receipt.task, "test cancellation");
+        try std.testing.expect(try service.pump(frame) == .progressed);
+        var cleaning = try service.task(frame, submitted.receipt.task);
+        defer cleaning.deinit();
+        try std.testing.expectEqual(.yielded, cleaning.value.outcome_kind);
+        try std.testing.expectEqual(cancel, cleaning.value.cancellation_applied);
+        if (index == 0) {
+            // Exercise a real applied-but-unfinished cancellation, not a flag
+            // invented by the archive mutator. One SQLite owner at a time.
+            const archive_path = try std.fmt.allocPrint(frame, "{s}/cleanup.bundle", .{path_buffer[0..length]});
+            _ = try service.exportCheckpoint(frame, submitted.receipt.task, archive_path);
+            try service.close(frame);
+            service_live = false;
+            try namespace.close();
+            namespace_live = false;
+            {
+                const destination = try std.fmt.allocPrint(frame, "{s}/imported-cleanup", .{path_buffer[0..length]});
+                var imported_namespace = try native.Namespace.open(a, io, destination);
+                defer imported_namespace.close() catch unreachable;
+                var imported_service = try native.tasks.Service(CleanupTypes).init(a, io, &imported_namespace, assets, &application, handlers, profile);
+                defer imported_service.close(frame) catch unreachable;
+                const admitted = try imported_service.importCheckpoint(frame, "import-cleanup", archive_path);
+                try std.testing.expectEqualSlices(u8, &submitted.receipt.task, &admitted.receipt.task);
+                var imported_task = try imported_service.task(frame, admitted.receipt.task);
+                defer imported_task.deinit();
+                try std.testing.expect(imported_task.value.cancellation_applied);
+                _ = try imported_service.resumeTask(frame, "resume-cleanup", admitted.receipt.task, imported_task.value.revision);
+                try std.testing.expect(try imported_service.pump(frame) == .progressed);
+                var finished = try imported_service.task(frame, admitted.receipt.task);
+                defer finished.deinit();
+                try std.testing.expectEqual(.cancelled, finished.value.outcome_kind);
+                try std.testing.expect(try imported_service.taskCleanupComplete(frame, finished.value));
+            }
+            namespace = try native.Namespace.open(a, io, path);
+            namespace_live = true;
+            service = try native.tasks.Service(CleanupTypes).init(a, io, &namespace, assets, &application, handlers, profile);
+            service_live = true;
+            _ = try service.resumeTask(frame, "resume-original-cleanup", submitted.receipt.task, cleaning.value.revision);
+        }
         try std.testing.expect(try service.pump(frame) == .progressed);
         var terminal = try service.task(frame, submitted.receipt.task);
         defer terminal.deinit();

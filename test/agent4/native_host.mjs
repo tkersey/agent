@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 import {join, resolve} from 'node:path';
 import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
-import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence, retainedEventSuffix} from './native_archive.mjs';
+import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence, retainedEventSuffix, cancellationState} from './native_archive.mjs';
 import {deployment} from './native_deployment.mjs';
 
 const source = resolve(process.argv[2]);
@@ -196,12 +196,20 @@ try {
     ['missing', missingCheckpoint(archiveBytes), 'MissingArtifact'],
     ['profile', changedProfile(archiveBytes), 'IncompatibleProfile'],
     ['unknown', unknownOccurrence(archiveBytes), 'UnsettledOccurrence'],
+    ['cancel-without-intent', cancellationState(archiveBytes, true), 'InvalidArchive'],
+    ['cancel-not-applied', cancellationState(archiveBytes, true, 'not applied to World'), 'InvalidArchive'],
     ['truncated', archiveBytes.subarray(0, archiveBytes.length - 1), 'InvalidArchive'],
   ]) {
     writeFileSync(join(directory, `${name}.bundle`), bytes, {mode: 0o600});
     assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', `bad ${name}`, '--input', `${name}.bundle`, '--operation-id', 'recoverable-import'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === expectedReason);
     assert.equal(cli('import-checkpoint', `bad ${name}`, '--input', 'pending.bundle', '--operation-id', 'recoverable-import').task_id, portable.task_id);
   }
+  // A pending cancellation is a valid, distinct state: import must not treat
+  // intent alone as already applied or require execution before data copying.
+  writeFileSync(join(directory, 'pending-cancel.bundle'), cancellationState(archiveBytes, false, 'pending cancellation'), {mode: 0o600});
+  const pendingCancel = cli('import-checkpoint', 'pending cancellation', '--input', 'pending-cancel.bundle', '--operation-id', 'import-pending-cancel');
+  assert.equal(pendingCancel.task_id, portable.task_id);
+  assert.equal(cli('resume', 'pending cancellation', '--task-id', portable.task_id).status, 'cancelled');
   const demoReader = launch('demo state');
   await demoReader.initialize();
   demoReader.write(rpc('result', 'task.result', {task_id: demoTask}));
@@ -389,6 +397,9 @@ try {
   assert.equal((await resumed.next()).error.data.kind, 'InvalidParams');
   await resumed.end();
   cli('export-checkpoint', 'protocol state', '--output', 'completed.bundle');
+  writeFileSync(join(directory, 'completed-cancel.bundle'), cancellationState(readFileSync(join(directory, 'completed.bundle')), true, 'not applied to completed task'), {mode: 0o600});
+  assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', 'completed cancellation corruption', '--input', 'completed-cancel.bundle', '--operation-id', 'import-completed'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'InvalidArchive');
+  assert.equal(cli('import-checkpoint', 'completed cancellation corruption', '--input', 'completed.bundle', '--operation-id', 'import-completed').task_id, receipt.task_id);
   writeFileSync(join(directory, 'retained-completion.bundle'), retainedEventSuffix(readFileSync(join(directory, 'completed.bundle')), 2n), {mode: 0o600});
   const completedImport = cli('import-checkpoint', 'imported completion', '--input', 'retained-completion.bundle', '--operation-id', 'import-completed');
   assert.equal(completedImport.task_id, receipt.task_id);
@@ -434,6 +445,10 @@ try {
   cancelling.write(rpc('shutdown-cancel', 'shutdown', {mode: 'cancel'}));
   assert.equal((await cancelling.next()).result.mode, 'cancel');
   await cancelling.end(0, 'cancel');
+  cli('export-checkpoint', 'cancel state', '--task-id', cancelTask, '--output', 'cancelled.bundle');
+  const cancelledImport = cli('import-checkpoint', 'imported cancellation', '--input', 'cancelled.bundle', '--operation-id', 'import-cancelled');
+  assert.equal(cancelledImport.task_id, cancelTask);
+  assert.equal(cli('result', 'imported cancellation', '--task-id', cancelTask).status, 'cancelled');
 
   // The receiver discards the submission acknowledgment and loses the process.
   // Recovery may find READY, an acquired reply, a question, or UNKNOWN; none of

@@ -133,16 +133,7 @@ pub const Application = struct {
                 },
                 .leaf => {},
             }
-            var matches: usize = 0;
-            for (capabilities.array.items) |capability| {
-                const id = json.get(capability, "identity") orelse return error.InvalidAssets;
-                if (id != .string or !std.mem.eql(u8, id.string, entry.declaration.identity)) continue;
-                matches += 1;
-                try sameField(capability, "resource_role", entry.declaration.resource_role);
-                try sameField(capability, "payload_sha256", try digest(storage, entry.payload_schema));
-                try sameField(capability, "resume_sha256", try digest(storage, entry.resume_schema));
-            }
-            if (matches != 1) return error.CapabilityMetadataMismatch;
+            try validateCapability(storage, capabilities.array.items, entry);
         }
         const protocol_schema = try @import("schemas.zig").document(storage, metadata.value, .{});
         const public_metadata = try publicMetadata(storage, metadata.value);
@@ -237,6 +228,21 @@ pub const Application = struct {
         return result;
     }
 };
+
+fn validateCapability(a: std.mem.Allocator, capabilities: []const json.Value, entry: registry.Entry) !void {
+    var matches: usize = 0;
+    for (capabilities) |capability| {
+        const id = json.get(capability, "identity") orelse return error.InvalidAssets;
+        if (id != .string or !std.mem.eql(u8, id.string, entry.declaration.identity)) continue;
+        const role = try json.text(json.get(capability, "resource_role") orelse return error.InvalidAssets);
+        const payload = try json.text(json.get(capability, "payload_sha256") orelse return error.InvalidAssets);
+        const resume_schema = try json.text(json.get(capability, "resume_sha256") orelse return error.InvalidAssets);
+        if (std.mem.eql(u8, role, entry.declaration.resource_role) and
+            std.mem.eql(u8, payload, try digest(a, entry.payload_schema)) and
+            std.mem.eql(u8, resume_schema, try digest(a, entry.resume_schema))) matches += 1;
+    }
+    if (matches != 1) return error.CapabilityMetadataMismatch;
+}
 
 fn fitsDescription(a: std.mem.Allocator, value: json.Value) !bool {
     const encoded = try json.canonical(a, value);
@@ -336,4 +342,30 @@ test "discovery budgets the combined description before composing a full batch" 
         const encoded = try json.canonical(a, .{ .array = replies });
         try std.testing.expect(encoded.len + 1 <= (protocol.Limits{}).frame_bytes);
     }
+}
+
+test "discovery matches the complete schema specialization rather than its family name" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const Handler = struct {
+        fn run(_: registry.Context, value: u32) !u32 {
+            return value;
+        }
+    };
+    var handlers = try registry.Registry.init(a, &.{registry.leaf(u32, u32, .{ .identity = "family", .resource_role = "local" }, Handler.run)});
+    defer handlers.deinit();
+    const entry = handlers.entries[0];
+    const exact = (try json.parse(a, "{\"identity\":\"family\",\"resource_role\":\"local\",\"payload_sha256\":\"\",\"resume_sha256\":\"\"}", .{})).value;
+    var matched = exact;
+    try json.put(a, &matched, "payload_sha256", json.string(try digest(a, entry.payload_schema)));
+    try json.put(a, &matched, "resume_sha256", json.string(try digest(a, entry.resume_schema)));
+    var specialized = (try json.parse(a, try json.canonical(a, matched), .{})).value;
+    try json.put(a, &specialized, "payload_sha256", json.string(try digest(a, try values.schemaBytes(u64, a))));
+    try validateCapability(a, &.{ specialized, matched }, entry);
+    try validateCapability(a, &.{ matched, specialized }, entry);
+    try std.testing.expectError(error.CapabilityMetadataMismatch, validateCapability(a, &.{specialized}, entry));
+    try std.testing.expectError(error.CapabilityMetadataMismatch, validateCapability(a, &.{ matched, matched }, entry));
+    try json.put(a, &matched, "resource_role", json.string("other"));
+    try std.testing.expectError(error.CapabilityMetadataMismatch, validateCapability(a, &.{matched}, entry));
 }

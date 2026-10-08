@@ -374,6 +374,11 @@ pub fn Service(comptime Types: type) type {
             return driver;
         }
 
+        fn submitDigest(a: std.mem.Allocator, profile_digest: state.Digest, input: Types.Input) !state.Digest {
+            const Request = struct { method: state.Method, application: state.Name, profile_digest: state.Digest, input: Types.Input };
+            return operation(Request, a, .{ .method = .submit, .application = try name(Types.application_id), .profile_digest = profile_digest, .input = input });
+        }
+
         pub fn submit(self: *Self, a: std.mem.Allocator, id: []const u8, input: Types.Input) !Admission {
             try self.allowed();
             var profile_digest = storage.digest(self.profile.bytes);
@@ -391,8 +396,7 @@ pub fn Service(comptime Types: type) type {
                     if (same(original.value.profile_id.bytes, self.profile.id)) profile_digest = original.value.profile.digest;
                 }
             }
-            const Request = struct { method: state.Method, application: state.Name, profile_digest: state.Digest, input: Types.Input };
-            const request = try operation(Request, a, .{ .method = .submit, .application = try name(Types.application_id), .profile_digest = profile_digest, .input = input });
+            const request = try submitDigest(a, profile_digest, input);
             if (try self.replay(a, id, request)) |prior| return prior;
             const ids = try self.store().taskIds(a, true);
             defer a.free(ids);
@@ -531,9 +535,13 @@ pub fn Service(comptime Types: type) type {
             return admitted;
         }
 
-        pub fn message(self: *Self, a: std.mem.Allocator, id: []const u8, task_id: state.TaskId, input: Types.Message) !Admission {
+        fn messageDigest(a: std.mem.Allocator, task_id: state.TaskId, input: Types.Message) !state.Digest {
             const Request = struct { method: state.Method, task: state.TaskId, schema: state.Name, value: Types.Message };
-            const request = try operation(Request, a, .{ .method = .message, .task = task_id, .schema = try name(Types.message_schema_id), .value = input });
+            return operation(Request, a, .{ .method = .message, .task = task_id, .schema = try name(Types.message_schema_id), .value = input });
+        }
+
+        pub fn message(self: *Self, a: std.mem.Allocator, id: []const u8, task_id: state.TaskId, input: Types.Message) !Admission {
+            const request = try messageDigest(a, task_id, input);
             if (try self.replay(a, id, request)) |prior| return prior;
             var decoded = try self.task(a, task_id);
             defer decoded.deinit();
@@ -944,7 +952,7 @@ pub fn Service(comptime Types: type) type {
                     const work: Work = .{ .task = value.id, .occurrence = pending.id, .attempt = attempt, .request = retained, .prepared = retained_prepared, .profile = retained_profile, .entry = entry, .cleanup = value.cancellation_applied };
                     try self.store().begin();
                     defer self.store().rollback();
-                    try self.store().reserve(attempt);
+                    if (entry.declaration.capture != null) try self.store().reserveCapture(attempt) else try self.store().reserve(attempt);
                     try self.store().createRecord(state.Attempt, "attempt", attempt, value.id, .{ .id = attempt, .task = value.id, .occurrence = pending.id, .request = try self.store().putObject(request_bytes), .profile = value.profile, .capability = try name(entry.declaration.identity), .inference = entry.declaration.inference, .prepared = if (prepared) |body| try self.store().putObject(body) else null });
                     try self.store().putRecord(occurrence.Occurrence, "occurrence", pending.id, value.id, dispatched);
                     try self.persist(value, initial.revision, "effect.dispatch");
@@ -987,7 +995,7 @@ pub fn Service(comptime Types: type) type {
                 .response = try self.store().putObject(raw),
                 .disposition = .complete,
             });
-            try self.store().reserveAcquired(work.attempt);
+            try self.store().reserveCaptured(work.attempt);
             try self.store().putRecord(occurrence.Occurrence, "occurrence", work.occurrence, work.task, next);
             try self.persist(value, previous, "effect.capture");
         }
@@ -1037,6 +1045,9 @@ pub fn Service(comptime Types: type) type {
             };
             try self.store().begin();
             defer self.store().rollback();
+            // Projection publication spends its own reserved phase; the
+            // successor retains the same budget as a directly acquired reply.
+            try self.store().reserveAcquired(attempt_id);
             const reply = try self.store().putObject(bound);
             const objects = try a.alloc(state.Reference, result.objects.len);
             defer a.free(objects);
@@ -1142,6 +1153,127 @@ pub fn Service(comptime Types: type) type {
             return error.InvalidArchive;
         }
 
+        /// Both directions of the inbox/message relationship are checked. An
+        /// empty reply has no message; a nonempty reply names exactly the saved
+        /// payload and its acquired/consumed boundary.
+        fn validateInboxReply(self: *Self, a: std.mem.Allocator, task_id: state.TaskId, saved: occurrence.Occurrence, bytes: []const u8) !?state.Digest {
+            var decoded = try contracts.decodeOwned(contracts.InboxReply(Types.Message), a, bytes);
+            defer decoded.deinit();
+            if (decoded.value == .empty) return null;
+            const input = decoded.value.message;
+            var id: state.Digest = undefined;
+            if (input.id.bytes.len != 64) return error.InvalidArchive;
+            _ = std.fmt.hexToBytes(&id, input.id.bytes) catch return error.InvalidArchive;
+            var message_value = try self.record(state.Message, a, "message", id, task_id);
+            defer message_value.deinit();
+            const item = message_value.value;
+            const expected: state.MessageDisposition = switch (saved.state) {
+                .settled_reply => .acquired,
+                .admitted => |admitted| if (admitted == .reply) .consumed else return error.InvalidArchive,
+                else => return error.InvalidArchive,
+            };
+            if (item.disposition != expected or item.occurrence == null or !same(&item.occurrence.?, &saved.id)) return error.InvalidArchive;
+            const encoded = try contracts.encodeOwned(Types.Message, a, input.value);
+            defer a.free(encoded);
+            if (item.value.bytes != encoded.len or !same(&item.value.digest, &storage.digest(encoded))) return error.InvalidArchive;
+            return id;
+        }
+
+        /// The operation index preserves original identity even when a repeated
+        /// answer also has aliases. Messages, receipts and inbox history are one
+        /// admitted relationship, not independently trustworthy rows.
+        fn validateArchiveAdmissions(self: *Self, a: std.mem.Allocator, value: state.Task, index: state.Archive) !void {
+            var receipts: std.AutoHashMap(state.Digest, state.Digest) = .init(a);
+            defer receipts.deinit();
+            var submitted = false;
+            for (index.operations.items) |row| {
+                var arena = std.heap.ArenaAllocator.init(a);
+                defer arena.deinit();
+                const temporary = arena.allocator();
+                const bytes = try self.store().object(temporary, row.body, 256 * 1024);
+                var decoded = try contracts.decodeOwned(state.Receipt, temporary, bytes);
+                defer decoded.deinit();
+                const receipt_value = decoded.value;
+                const primary = try self.operationKey(temporary, receipt_value.client_operation_id.bytes);
+                const original = (try self.store().savedReceipt(temporary, &primary)) orelse return error.InvalidArchive;
+                if (!same(bytes, original) or (!same(row.key.bytes, &primary) and receipt_value.method != .respond)) return error.InvalidArchive;
+                const expected: state.Disposition = switch (receipt_value.method) {
+                    .submit => .accepted,
+                    .message => .queued,
+                    .respond => .answer_acquired,
+                    .cancel => .cancellation_requested,
+                    .@"resume" => .resumed,
+                    .import_checkpoint => .imported,
+                };
+                if (receipt_value.disposition != expected or (receipt_value.message != null) != (receipt_value.method == .message) or
+                    (receipt_value.question != null) != (receipt_value.method == .respond)) return error.InvalidArchive;
+                if (receipt_value.method == .submit) {
+                    if (submitted or receipt_value.revision != 1) return error.InvalidArchive;
+                    submitted = true;
+                    const input_bytes = try self.store().object(temporary, value.input, 4 * 1024 * 1024);
+                    var input = try contracts.decodeOwned(Types.Input, temporary, input_bytes);
+                    defer input.deinit();
+                    const expected_digest = try submitDigest(temporary, value.profile.digest, input.value);
+                    if (!same(&expected_digest, &receipt_value.request_digest)) return error.InvalidArchive;
+                }
+                if (receipt_value.method == .message) {
+                    const id = receipt_value.message.?;
+                    const found = try receipts.getOrPut(id);
+                    if (found.found_existing) return error.InvalidArchive;
+                    found.value_ptr.* = receipt_value.request_digest;
+                }
+            }
+            if (!submitted) return error.InvalidArchive;
+            var ordinals: std.AutoHashMap(u64, void) = .init(a);
+            defer ordinals.deinit();
+            var count: u64 = 0;
+            for (index.records.items) |row| {
+                if (row.kind != .message) continue;
+                var arena = std.heap.ArenaAllocator.init(a);
+                defer arena.deinit();
+                const temporary = arena.allocator();
+                var decoded = try self.record(state.Message, temporary, "message", row.id, value.id);
+                defer decoded.deinit();
+                const item = decoded.value;
+                if (!same(item.schema_id.bytes, Types.message_schema_id) or item.ordinal == 0 or item.ordinal >= value.next_message) return error.InvalidArchive;
+                const ordinal = try ordinals.getOrPut(item.ordinal);
+                if (ordinal.found_existing) return error.InvalidArchive;
+                count += 1;
+                const bytes = try self.store().object(temporary, item.value, 256 * 1024);
+                var payload = contracts.decodeOwned(Types.Message, temporary, bytes) catch |err| return if (err == error.OutOfMemory) err else error.InvalidArchive;
+                defer payload.deinit();
+                const receipt_digest = receipts.get(item.id) orelse return error.InvalidArchive;
+                if (!same(&receipt_digest, &try messageDigest(temporary, value.id, payload.value))) return error.InvalidArchive;
+                switch (item.disposition) {
+                    .queued, .not_consumed => {
+                        if (item.occurrence != null or (item.disposition == .not_consumed and !value.terminal())) return error.InvalidArchive;
+                    },
+                    .acquired, .consumed => {
+                        const occurrence_id = item.occurrence orelse return error.InvalidArchive;
+                        try requireArchiveRecord(index.records.items, .occurrence, occurrence_id);
+                        var saved = try self.record(occurrence.Occurrence, temporary, "occurrence", occurrence_id, value.id);
+                        defer saved.deinit();
+                        const acquired = switch (saved.value.state) {
+                            .settled_reply => |reply| reply,
+                            .admitted => |admitted| if (admitted == .reply) admitted.reply else return error.InvalidArchive,
+                            else => return error.InvalidArchive,
+                        };
+                        const request_bytes = try self.store().object(temporary, saved.value.request_object, 4 * 1024 * 1024);
+                        var request = try data.invocation.decode(data.invocation.Request, temporary, request_bytes);
+                        defer request.deinit();
+                        const entry = try self.handlers.resolve(request.value, self.application.image_identity);
+                        if (entry.declaration.kind != .inbox) return error.InvalidArchive;
+                        const bound = try self.store().acquiredObject(temporary, acquired.reply, 4 * 1024 * 1024);
+                        var reply = try data.invocation.decode(data.invocation.Result, temporary, bound);
+                        defer reply.deinit();
+                        const input_id = (try self.validateInboxReply(temporary, value.id, saved.value, reply.value.value)) orelse return error.InvalidArchive;
+                        if (!same(&input_id, &item.id)) return error.InvalidArchive;
+                    },
+                }
+            }
+            if (value.next_message != count + 1 or receipts.count() != count) return error.InvalidArchive;
+        }
+
         /// The retained request determines which acquisition evidence must
         /// exist. Validating only supplied attempts/questions misses omissions.
         fn validateOccurrenceProvenance(self: *Self, a: std.mem.Allocator, value: state.Task, records: []const state.ArchiveRecord) !void {
@@ -1198,6 +1330,7 @@ pub fn Service(comptime Types: type) type {
                     .inbox => {
                         const reply = acquired orelse return error.InvalidArchive;
                         if (reply.answer != null) return error.InvalidArchive;
+                        _ = try self.validateInboxReply(temporary, value.id, saved, reply_value.?);
                     },
                     .question => {
                         const waiting: ?occurrence.Waiting = switch (saved.state) {
@@ -1341,6 +1474,7 @@ pub fn Service(comptime Types: type) type {
                 var arena = std.heap.ArenaAllocator.init(a);
                 defer arena.deinit();
                 const index = try self.store().archiveIndex(arena.allocator(), task_id, .{ .digest = storage.digest(self.assets.manifest), .bytes = self.assets.manifest.len });
+                try self.validateArchiveAdmissions(arena.allocator(), value.value, index);
                 try self.validateOccurrenceProvenance(arena.allocator(), value.value, index.records.items);
                 try self.validateCapturedProjections(arena.allocator(), value.value, index.records.items);
             }
@@ -1384,10 +1518,10 @@ pub fn Service(comptime Types: type) type {
             const compiler = json.get(build.value, "compiler") orelse return error.InvalidArchive;
             const current_compiler = json.get(self.application.manifest, "compiler") orelse return error.InvalidAssets;
             try discovery.sameField(compiler, "version", try json.text(json.get(current_compiler, "version") orelse return error.InvalidAssets));
-            // Scope remains exact. Opaque operation keys may be aliases of a
-            // historical answer receipt; that receipt intentionally retains
-            // its original client operation ID rather than the alias preimage.
+            // Restore only inside the unpublished transaction, then admit the
+            // original operation identities and all related input history.
             try self.store().restoreArchiveIndex(a, reader.manifest.value, value);
+            try self.validateArchiveAdmissions(a, value, reader.manifest.value);
             try self.validateOccurrenceProvenance(a, value, reader.manifest.value.records.items);
             try self.validateCapturedProjections(a, value, reader.manifest.value.records.items);
             try self.validateImportedState(a, value, inspected.current);
@@ -1403,44 +1537,27 @@ pub fn Service(comptime Types: type) type {
             return admitted;
         }
 
-        /// The queue is a pending-input projection, not arbitrary message history.
-        /// Return the exact inbox reply only when its head is already acquired.
-        fn validateImportedMessages(self: *Self, a: std.mem.Allocator, value: state.Task, pending: ?occurrence.Occurrence) !?[]u8 {
-            if (value.next_message == 0 or (value.messages.items.len != 0 and (value.terminal() or !self.acceptsMessages()))) return error.InvalidArchive;
+        /// Ordering and byte bounds belong to the pending projection. Complete
+        /// typed payload/receipt/occurrence coherence is checked for all history
+        /// by validateArchiveAdmissions and validateOccurrenceProvenance.
+        fn validatePendingMessages(self: *Self, a: std.mem.Allocator, value: state.Task) !void {
+            if (value.messages.items.len != 0 and (value.terminal() or !self.acceptsMessages())) return error.InvalidArchive;
             var previous: u64 = 0;
             var bytes: u64 = 0;
-            var acquired: ?[]u8 = null;
-            errdefer if (acquired) |reply| a.free(reply);
             for (value.messages.items, 0..) |id, index| {
                 var decoded = try self.record(state.Message, a, "message", id, value.id);
                 defer decoded.deinit();
-                const saved_message = decoded.value;
-                if (!same(saved_message.schema_id.bytes, value.message_schema_id.bytes) or saved_message.ordinal <= previous or saved_message.ordinal >= value.next_message) return error.InvalidArchive;
-                previous = saved_message.ordinal;
-                bytes = std.math.add(u64, bytes, saved_message.value.bytes) catch return error.InvalidArchive;
-                if (bytes > 256 * 1024) return error.InvalidArchive;
-                const encoded = try self.store().object(a, saved_message.value, 256 * 1024);
-                defer a.free(encoded);
-                var payload = contracts.decodeOwned(Types.Message, a, encoded) catch |err| return if (err == error.OutOfMemory) err else error.InvalidArchive;
-                defer payload.deinit();
-                switch (saved_message.disposition) {
-                    .queued => if (saved_message.occurrence != null) return error.InvalidArchive,
-                    .acquired => {
-                        const current = pending orelse return error.InvalidArchive;
-                        const occurrence_id = saved_message.occurrence orelse return error.InvalidArchive;
-                        if (index != 0 or current.state != .settled_reply or !same(&occurrence_id, &current.id)) return error.InvalidArchive;
-                        acquired = try contracts.encodeOwned(contracts.InboxReply(Types.Message), a, .{ .message = .{ .id = .{ .bytes = &std.fmt.bytesToHex(id, .lower) }, .value = payload.value } });
-                    },
-                    .consumed, .not_consumed => return error.InvalidArchive,
-                }
+                const item = decoded.value;
+                if (item.ordinal <= previous) return error.InvalidArchive;
+                previous = item.ordinal;
+                bytes = std.math.add(u64, bytes, item.value.bytes) catch return error.InvalidArchive;
+                if (bytes > 256 * 1024 or (item.disposition == .acquired and index != 0)) return error.InvalidArchive;
             }
-            return acquired;
         }
 
         fn validateImportedState(self: *Self, a: std.mem.Allocator, value: state.Task, pending: ?occurrence.Occurrence) !void {
             if (value.cancellation_applied and value.cancellation == null) return error.InvalidArchive;
-            const acquired_inbox = try self.validateImportedMessages(a, value, pending);
-            defer if (acquired_inbox) |bytes| a.free(bytes);
+            try self.validatePendingMessages(a, value);
             const driver = try self.resident(a, value);
             errdefer self.retire(a) catch {
                 self.store().fenced = true;
@@ -1478,18 +1595,6 @@ pub fn Service(comptime Types: type) type {
                     defer request.deinit();
                     if (!same(&current.request, &request.value.request_identity)) return error.InvalidArchive;
                     if (requested.request.len != current.request_object.bytes or !same(&storage.digest(requested.request), &current.request_object.digest)) return error.InvalidArchive;
-                    if (current.state == .settled_reply) {
-                        const entry = try self.handlers.resolve(request.value, self.application.image_identity);
-                        if (entry.declaration.kind == .inbox) {
-                            const bytes = try self.store().acquiredObject(a, current.state.settled_reply.reply, 4 * 1024 * 1024);
-                            defer a.free(bytes);
-                            var reply = try data.invocation.decode(data.invocation.Result, a, bytes);
-                            defer reply.deinit();
-                            const expected = acquired_inbox orelse try contracts.encodeOwned(contracts.InboxReply(Types.Message), a, .empty);
-                            defer if (acquired_inbox == null) a.free(expected);
-                            if (!same(reply.value.value, expected)) return error.InvalidArchive;
-                        } else if (acquired_inbox != null) return error.InvalidArchive;
-                    } else if (acquired_inbox != null) return error.InvalidArchive;
                 },
                 .completed => |bytes| {
                     if (value.result == null or !same(&value.result.?.digest, &storage.digest(bytes))) return error.InvalidArchive;

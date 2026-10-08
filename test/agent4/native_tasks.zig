@@ -43,7 +43,7 @@ const Application = struct {
         const message = try b.variable(try c.schema(Inbox.Reply));
         const padding = try c.literal(T.Padding, .{ .bytes = &@as([64 * 1024]u8, @splat('x')) });
         const result = try b.primitive(output, .product, &.{ try b.reference(answer), try b.reference(message), padding }, 0);
-        try b.define(entry, try b.bind(incremented, try b.term(.{ .perform = .{ .effect = leaf, .payload = try b.reference(b.parameter(entry, 0)) } }), try b.bind(answer, try b.term(.{ .perform = .{ .effect = question, .payload = try b.reference(incremented) } }), try b.bind(message, try Inbox.poll(c), try b.pure(result)))));
+        try b.define(entry, try b.bind(incremented, try b.term(.{ .perform = .{ .effect = leaf, .payload = try b.reference(b.parameter(entry, 0)) } }), try b.bind(answer, try b.term(.{ .perform = .{ .effect = question, .payload = try b.reference(incremented) } }), try b.bind(message, try Inbox.poll(c), try b.term(.{ .yield_then = try b.pure(result) })))));
         return b.module(entry, try c.schema(void));
     }
 };
@@ -71,7 +71,11 @@ const CapturingIncrement = struct {
         var value = try agent.contracts.decodeOwned(u32, ctx.allocator, payload);
         defer value.deinit();
         if (value.value != 20) return error.InvalidCapture;
-        return .{ .reply = try agent.contracts.encodeOwned(u32, ctx.allocator, 21) };
+        const replay = try ctx.allocator.alloc(u8, 2 * 1024 * 1024);
+        @memset(replay, 'R');
+        const objects = try ctx.allocator.alloc([]const u8, 1);
+        objects[0] = replay;
+        return .{ .reply = try agent.contracts.encodeOwned(u32, ctx.allocator, 21), .objects = objects };
     }
 };
 
@@ -104,7 +108,7 @@ fn ownerManifest(a: std.mem.Allocator, image: []const u8, identity: [32]u8, appl
         .native_host_contract = "unit-native-contract",
         .protocol = "agent-host/1.0",
         .client_mapping = "agent-client-values/1.0",
-        .state_format = "agent-native-state/8",
+        .state_format = "agent-native-state/9",
         .optimize = "safe",
         .program_sha256 = @as([]const u8, &image_hex),
         .program_identity = @as([]const u8, &identity_hex),
@@ -115,8 +119,8 @@ fn ownerManifest(a: std.mem.Allocator, image: []const u8, identity: [32]u8, appl
 }
 
 // Independently rewrite the ordinary archive envelope. This fixture's captured
-// increment has no replay objects, and its only adapter bytes are these two
-// constants; retained canonical requests/replies stay in the object inventory.
+// increment has one fixed replay object and two fixed adapter byte strings;
+// retained canonical requests/replies stay in the object inventory.
 fn omitIncrementEvidence(a: std.mem.Allocator, io: std.Io, shape: anytype, source: []const u8, destination: []const u8) !void {
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, source, a, .limited(64 * 1024 * 1024));
     const schema_length = std.mem.readInt(u32, bytes[8..12], .little);
@@ -131,6 +135,11 @@ fn omitIncrementEvidence(a: std.mem.Allocator, io: std.Io, shape: anytype, sourc
         std.crypto.hash.sha2.Sha256.hash(raw, &digest, .{});
         try removed.append(a, digest);
     }
+    const replay = try a.alloc(u8, 2 * 1024 * 1024);
+    @memset(replay, 'R');
+    var replay_digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(replay, &replay_digest, .{});
+    try removed.append(a, replay_digest);
     var records: std.ArrayList(@TypeOf(archive.records.items[0])) = .empty;
     var count: usize = 0;
     for (archive.records.items) |row| {
@@ -215,6 +224,63 @@ fn checkCaptureImport(a: std.mem.Allocator, frame: std.mem.Allocator, io: std.Io
     _ = try service.resumeTask(frame, label, task_id, task.value.revision);
 }
 
+// Other admitted operations may consume all unreserved space while this
+// capture waits. Use reservations as pressure rather than allocating a 256-MiB
+// fixture. The pressure survives the real close/reopen below.
+fn reserveRemainingCapacity(namespace: *native.Namespace) !void {
+    const db = namespace.store.database;
+    var query = try db.prepare("SELECT (SELECT page_count FROM pragma_page_count)*4096-(SELECT freelist_count FROM pragma_freelist_count)*4096+coalesce(sum(bytes),0) FROM reservations", &.{});
+    const used: u64 = blk: {
+        defer query.deinit();
+        try std.testing.expect(try query.step() == .row);
+        break :blk @intCast(try query.integer(0));
+    };
+    var remaining = 256 * 1024 * 1024 - 1024 * 1024 - used - 512 * 1024;
+    try namespace.store.begin();
+    defer namespace.store.rollback();
+    var index: u8 = 0;
+    while (remaining != 0) : (index += 1) {
+        var id: [32]u8 = @splat(250);
+        id[0] = index;
+        const bytes = @min(remaining, 16 * 1024 * 1024);
+        try db.run("INSERT INTO reservations VALUES(?,?)", &.{ .{ .blob = &id }, .{ .integer = @intCast(bytes) } });
+        remaining -= bytes;
+    }
+    try namespace.commit("test.intervening-capacity-pressure");
+}
+
+fn rejectRequeuedHistory(a: std.mem.Allocator, service: *native.tasks.Service(T), namespace: *native.Namespace, value: anytype, message_id: [32]u8, directory: []const u8) !void {
+    try std.testing.expectEqual(.yielded, value.outcome_kind);
+    const path = try std.fmt.allocPrint(a, "{s}/consumed-yield.bundle", .{directory});
+    _ = try service.exportCheckpoint(a, value.id, path);
+    // Independent wire record shape; deliberately bypass the producer to model
+    // an internally inconsistent but rehashed archive at a nonterminal boundary.
+    const Message = struct {
+        id: [32]u8,
+        task: [16]u8,
+        ordinal: u64,
+        schema_id: @TypeOf(value.message_schema_id),
+        value: @TypeOf(value.input),
+        disposition: enum { queued, acquired, consumed, not_consumed },
+        occurrence: ?[32]u8,
+    };
+    const bytes = (try namespace.store.recordBytes(a, "message", message_id, value.id)).?;
+    var decoded = try agent.contracts.decodeOwned(Message, a, bytes);
+    defer decoded.deinit();
+    try std.testing.expectEqual(.consumed, decoded.value.disposition);
+    decoded.value.disposition = .queued;
+    decoded.value.occurrence = null;
+    var requeued = value;
+    requeued.messages.items = &.{message_id};
+    try namespace.store.begin();
+    defer namespace.store.rollback();
+    const message = try namespace.store.putObject(try agent.contracts.encodeOwned(Message, a, decoded.value));
+    const task = try namespace.store.putObject(try agent.contracts.encodeOwned(@TypeOf(value), a, requeued));
+    try namespace.store.database.run("UPDATE records SET body=? WHERE kind='message' AND id=?", &.{ .{ .blob = &message.digest }, .{ .blob = &message_id } });
+    try namespace.store.database.run("UPDATE tasks SET body=? WHERE id=?", &.{ .{ .blob = &task.digest }, .{ .blob = &value.id } });
+    try std.testing.expectError(error.InvalidArchive, service.exportCheckpoint(a, value.id, path));
+}
+
 fn ownerRecovery(captured: bool, image: []const u8) !void {
     var phase: []const u8 = "owner admission/restart";
     errdefer std.debug.print("owner recovery phase: {s}\n", .{phase});
@@ -295,6 +361,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
             if (captured) {
                 const saved = (try namespace.store.recordBytes(frame, "capture", step.work.attempt, step.work.task)) orelse return error.MissingRawCapture;
                 try std.testing.expect(saved.len != 0);
+                try reserveRemainingCapacity(&namespace);
             }
             break;
         }
@@ -346,13 +413,21 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
         try std.testing.expect(step != .work);
         if (step == .waiting) break;
     }
-    if (captured) try checkCaptureImport(a, frame, io, &service, &namespace, &service_live, &namespace_live, path, path_buffer[0..length], accepted.receipt.task, "historical-capture");
+    if (captured) {
+        // Projection and its World successor succeeded while pressure remained.
+        // Release only this fixture's unrelated reservations for later cases.
+        try namespace.store.begin();
+        try namespace.store.database.run("DELETE FROM reservations WHERE substr(attempt,2)=?", &.{.{ .blob = &@as([31]u8, @splat(250)) }});
+        try namespace.commit("test.release-capacity-pressure");
+        try checkCaptureImport(a, frame, io, &service, &namespace, &service_live, &namespace_live, path, path_buffer[0..length], accepted.receipt.task, "historical-capture");
+    }
     var question = (try service.pendingQuestion(frame, accepted.receipt.task)) orelse return error.ExpectedQuestion;
     defer question.deinit();
     try std.testing.expectError(error.StaleInteraction, service.respond(frame, "unknown-question", accepted.receipt.task, @splat(0), question.value.revision, question.value.request_digest, "task-owner.answer.v1", .{ .number_string = "7" }));
     const answered = try service.respond(frame, "answer", accepted.receipt.task, question.value.id, question.value.revision, question.value.request_digest, "task-owner.answer.v1", .{ .number_string = "7" });
     try std.testing.expect(!answered.replayed);
     var imported_inbox = false;
+    var checked_consumed_history = false;
     var queue_client: native.client.Client(T) = .{ .service = &service };
     var queue_params = native.json.object();
     try native.json.put(frame, &queue_params, "task_id", native.json.string(try frame.dupe(u8, &std.fmt.bytesToHex(accepted.receipt.task, .lower))));
@@ -413,8 +488,17 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
                 phase = "finish original owner";
             }
         }
+        if (!checked_consumed_history) {
+            var saved = try service.task(frame, accepted.receipt.task);
+            defer saved.deinit();
+            if (saved.value.outcome_kind == .yielded) {
+                try rejectRequeuedHistory(frame, &service, &namespace, saved.value, queued_message.receipt.message.?, path_buffer[0..length]);
+                checked_consumed_history = true;
+            }
+        }
         if (step == .idle) break;
     }
+    try std.testing.expect(checked_consumed_history);
     try std.testing.expect(imported_inbox);
     try std.testing.expectEqual(captured, retried);
     var completed = try service.task(frame, accepted.receipt.task);

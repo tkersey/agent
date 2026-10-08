@@ -200,9 +200,57 @@ export function invalidQueuedMessage(bytes, change) {
     case 'ordinal-zero': message[2] = 0n; break;
     case 'ordinal-future': message[2] = archive.task.next_message; break;
     case 'payload': message[4] = replace(archive, message[4], Buffer.from([255])); break;
+    case 'admission-payload': {
+      const payload = archive.object(message[4]);
+      const changed = Buffer.from(payload);
+      assert(changed.includes(Buffer.from('Include')));
+      changed[changed.indexOf(Buffer.from('Include'))] = 'E'.charCodeAt(0);
+      message[4] = replace(archive, message[4], changed);
+      break;
+    }
     default: throw new Error(`unknown queue mutation: ${change}`);
   }
   row[2] = replace(archive, row[2], Buffer.from(encodeValue(archive.schemas.get('message'), message)));
+  return encode(archive);
+}
+
+export function invalidConsumedMessage(bytes, change) {
+  const archive = readArchive(bytes);
+  const row = archive.manifest[6].find(([kind,, ref]) => kind === 2 && decodeValue(archive.schemas.get('message'), archive.object(ref))[5] === 2);
+  assert(row, 'fixture must retain a consumed message');
+  const message = decodeValue(archive.schemas.get('message'), archive.object(row[2]));
+  assert.equal(message[6].tag, 1);
+  if (change === 'dangling-occurrence') message[6].value = Array(32).fill(253);
+  else if (change === 'requeued') {
+    message[5] = 0;
+    message[6] = {tag: 0, value: null};
+    archive.taskValue[taskFields.indexOf('messages')] = [message[0]];
+    archive.manifest[3] = replace(archive, archive.manifest[3], Buffer.from(encodeValue(archive.schemas.get('task'), archive.taskValue)));
+  } else throw new Error(change);
+  row[2] = replace(archive, row[2], Buffer.from(encodeValue(archive.schemas.get('message'), message)));
+  return encode(archive);
+}
+
+export function changedOperationKey(bytes, change = 'key') {
+  const archive = readArchive(bytes);
+  const row = archive.manifest[8].find(row => decodeValue(archive.schemas.get('receipt'), archive.object(row[2]))[2] === 0);
+  assert(row, 'fixture must retain submission receipt');
+  if (change === 'omitted') {
+    archive.manifest[8] = archive.manifest[8].filter(item => item !== row);
+    archive.objects.delete(key(row[2]));
+  } else row[0] = 'f'.repeat(64);
+  archive.manifest[8].sort((a, b) => a[0].localeCompare(b[0]));
+  return encode(archive);
+}
+export function invalidEventData(bytes, change) {
+  const archive = readArchive(bytes);
+  const row = archive.manifest[7].find(row => decodeValue(archive.schemas.get('event'), archive.object(row[2]))[3] === (change === 'question-counter' ? 1 : 0));
+  assert(row);
+  const value = decodeValue(archive.schemas.get('event'), archive.object(row[2]));
+  const payload = JSON.parse(Buffer.from(value[4]).toString());
+  const replacement = change === 'null' ? null : change === 'extra-field' ? {extra: true} : {...payload, question_revision: 1};
+  value[4] = [...Buffer.from(JSON.stringify(replacement))];
+  row[2] = replace(archive, row[2], Buffer.from(encodeValue(archive.schemas.get('event'), value)));
   return encode(archive);
 }
 

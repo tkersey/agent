@@ -109,6 +109,10 @@ pub const Entry = struct {
     resume_schema: []const u8,
 };
 
+fn sameBinding(entry: Entry, identity: []const u8, payload: []const u8, resume_schema: []const u8) bool {
+    return std.mem.eql(u8, entry.declaration.identity, identity) and std.mem.eql(u8, entry.payload_schema, payload) and std.mem.eql(u8, entry.resume_schema, resume_schema);
+}
+
 pub const Registry = struct {
     arena: std.heap.ArenaAllocator,
     entries: []const Entry,
@@ -121,7 +125,6 @@ pub const Registry = struct {
         const entries = try storage.alloc(Entry, declarations.len);
         for (declarations, entries, 0..) |declaration, *entry, i| {
             if (declaration.identity.len == 0 or declaration.resource_role.len == 0) return error.InvalidCapability;
-            for (declarations[0..i]) |prior| if (std.mem.eql(u8, prior.identity, declaration.identity)) return error.DuplicateCapability;
             if (declaration.kind == .leaf and declaration.invoke == null and declaration.capture == null) return error.InvalidCapability;
             if (declaration.capture != null and (declaration.kind != .leaf or !declaration.background or declaration.invoke != null)) return error.InvalidCapability;
             if (declaration.kind == .question and (declaration.present == null or declaration.answer == null or declaration.answer_schema_id == null)) return error.InvalidCapability;
@@ -130,6 +133,9 @@ pub const Registry = struct {
                 .payload_schema = try declaration.payload_schema(storage),
                 .resume_schema = try declaration.resume_schema(storage),
             };
+            // A request names its exact schemas, but has no independent role
+            // selector. Indistinguishable bindings must never depend on order.
+            for (entries[0..i]) |prior| if (sameBinding(prior, declaration.identity, entry.payload_schema, entry.resume_schema)) return error.DuplicateCapability;
         }
         return .{ .arena = arena, .entries = entries };
     }
@@ -154,14 +160,13 @@ pub const Registry = struct {
     /// this path to consume a saved reply without requiring a new spend grant.
     pub fn resolve(self: Registry, request: data.invocation.Request, image_identity: [32]u8) !Entry {
         if (!std.mem.eql(u8, &request.binding.program_identity, &image_identity)) return error.Denied;
+        var known_identity = false;
         for (self.entries) |entry| {
-            const declaration = entry.declaration;
-            if (!std.mem.eql(u8, request.binding.semantic_identity, declaration.identity)) continue;
-            if (!std.mem.eql(u8, request.binding.payload_schema, entry.payload_schema) or
-                !std.mem.eql(u8, request.binding.resume_schema, entry.resume_schema)) return error.CapabilitySchemaMismatch;
-            return entry;
+            if (!std.mem.eql(u8, request.binding.semantic_identity, entry.declaration.identity)) continue;
+            known_identity = true;
+            if (sameBinding(entry, request.binding.semantic_identity, request.binding.payload_schema, request.binding.resume_schema)) return entry;
         }
-        return error.MissingCapability;
+        return if (known_identity) error.CapabilitySchemaMismatch else error.MissingCapability;
     }
 };
 
@@ -266,4 +271,38 @@ test "capability admission requires the complete schema and current resource gra
     var wrong = request;
     wrong.binding.resume_schema = &.{};
     try std.testing.expectError(error.CapabilitySchemaMismatch, registry.admit(wrong, authority, @splat(1), resource));
+}
+
+test "schema-specialized capability families resolve independently of declaration order" {
+    const a = std.testing.allocator;
+    const Handler = struct {
+        fn small(_: Context, value: u32) !u32 {
+            return value;
+        }
+        fn large(_: Context, value: u64) !u64 {
+            return value;
+        }
+    };
+    const small = leaf(u32, u32, .{ .identity = "model-family", .resource_role = "small" }, Handler.small);
+    const large = leaf(u64, u64, .{ .identity = "model-family", .resource_role = "large" }, Handler.large);
+    try std.testing.expectError(error.DuplicateCapability, Registry.init(a, &.{ small, small }));
+    for ([_][2]Declaration{ .{ small, large }, .{ large, small } }) |declarations| {
+        var registry = try Registry.init(a, &declarations);
+        defer registry.deinit();
+        for (registry.entries) |entry| {
+            const input: [8]u8 = @splat(0);
+            const length: usize = if (std.mem.eql(u8, entry.declaration.resource_role, "small")) 4 else 8;
+            const request = try data.invocation.request(.{ .program_identity = @splat(1), .pending_state_digest = @splat(2), .effect = 0, .semantic_identity = "model-family", .payload_schema = entry.payload_schema, .resume_schema = entry.resume_schema, .payload = input[0..length] });
+            const resolved = try registry.resolve(request, @splat(1));
+            try std.testing.expectEqualStrings(entry.declaration.resource_role, resolved.declaration.resource_role);
+            const authority: Authority = .{ .principal = "test", .tenant = "test", .grants = &.{.{ .identity = "model-family", .resource_role = entry.declaration.resource_role, .resource_identity = @splat(3) }} };
+            _ = try registry.admit(request, authority, @splat(1), @splat(3));
+            var denied = authority;
+            denied.grants = &.{.{ .identity = "model-family", .resource_role = "unrelated", .resource_identity = @splat(3) }};
+            try std.testing.expectError(error.Denied, registry.admit(request, denied, @splat(1), @splat(3)));
+            var wrong = request;
+            wrong.binding.payload_schema = "unknown";
+            try std.testing.expectError(error.CapabilitySchemaMismatch, registry.resolve(wrong, @splat(1)));
+        }
+    }
 }

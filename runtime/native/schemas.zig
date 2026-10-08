@@ -162,6 +162,83 @@ fn parameter(a: std.mem.Allocator, method: protocol.Method, key: []const u8, app
     return error.InvalidProtocolSchema;
 }
 
+// The field contract drives both public JSON Schema and durable admission.
+// A prompt is application presentation JSON, so it deliberately has no shape.
+const EventField = struct {
+    name: []const u8,
+    kind: enum { digest, counter, name, prompt, disposition, delivery },
+    optional: bool = false,
+};
+fn eventFields(kind: state.EventType) []const EventField {
+    return switch (kind) {
+        .input_required => &.{ .{ .name = "question_id", .kind = .digest }, .{ .name = "question_revision", .kind = .counter }, .{ .name = "request_digest", .kind = .digest }, .{ .name = "answer_schema_id", .kind = .name }, .{ .name = "prompt", .kind = .prompt } },
+        .message_queued, .message_consumed, .message_not_consumed => &.{ .{ .name = "message_id", .kind = .digest }, .{ .name = "ordinal", .kind = .counter }, .{ .name = "disposition", .kind = .disposition } },
+        .blocked => &.{.{ .name = "delivery", .kind = .delivery, .optional = true }},
+        .imported => &.{.{ .name = "archive_sha256", .kind = .digest }},
+        .accepted, .input_accepted, .cancellation_requested, .parked, .resumed, .delivery_unknown, .completed, .failed, .cancelled => &.{},
+    };
+}
+fn eventPayload(a: std.mem.Allocator, kind: state.EventType) !json.Value {
+    var fields: std.ArrayList(Property) = .empty;
+    defer fields.deinit(a);
+    var optional: std.ArrayList([]const u8) = .empty;
+    defer optional.deinit(a);
+    for (eventFields(kind)) |field| {
+        const field_schema = switch (field.kind) {
+            .digest => try reference(a, "digest"),
+            .counter => try reference(a, "counter"),
+            .name => try text(a, 1, 128),
+            .prompt => json.object(),
+            .disposition => try enumSchema(state.MessageDisposition, a),
+            .delivery => try constant(a, "definitely_not_sent"),
+        };
+        try fields.append(a, .{ field.name, field_schema });
+        if (field.optional) try optional.append(a, field.name);
+    }
+    return shape(a, fields.items, optional.items);
+}
+pub fn validateEventData(a: std.mem.Allocator, kind: state.EventType, bytes: []const u8) !void {
+    var parsed = try json.parse(a, bytes, .{});
+    defer parsed.deinit();
+    if (parsed.value != .object) return error.InvalidArchive;
+    const fields = eventFields(kind);
+    for (parsed.value.object.keys()) |key| {
+        var found = false;
+        for (fields) |field| if (std.mem.eql(u8, key, field.name)) {
+            found = true;
+            break;
+        };
+        if (!found) return error.InvalidArchive;
+    }
+    for (fields) |field| {
+        const value = parsed.value.object.get(field.name) orelse {
+            if (field.optional) continue;
+            return error.InvalidArchive;
+        };
+        switch (field.kind) {
+            .prompt => {},
+            .counter => {
+                _ = json.decimal(u64, value) catch return error.InvalidArchive;
+            },
+            .digest => {
+                const encoded = json.text(value) catch return error.InvalidArchive;
+                if (encoded.len != 64) return error.InvalidArchive;
+                var digest: [32]u8 = undefined;
+                _ = std.fmt.hexToBytes(&digest, encoded) catch return error.InvalidArchive;
+            },
+            .name => {
+                const name = json.text(value) catch return error.InvalidArchive;
+                if (name.len == 0 or name.len > 128) return error.InvalidArchive;
+            },
+            .disposition => {
+                const name = json.text(value) catch return error.InvalidArchive;
+                _ = std.meta.stringToEnum(state.MessageDisposition, name) orelse return error.InvalidArchive;
+            },
+            .delivery => if (!std.mem.eql(u8, json.text(value) catch return error.InvalidArchive, "definitely_not_sent")) return error.InvalidArchive,
+        }
+    }
+}
+
 pub fn document(a: std.mem.Allocator, application: json.Value, limits: protocol.Limits) !json.Value {
     var definitions = json.object();
     try json.put(a, &definitions, "id128", try literal(a, "{\"type\":\"string\",\"pattern\":\"^[0-9a-fA-F]{32}(?![\\\\s\\\\S])\"}"));
@@ -177,8 +254,8 @@ pub fn document(a: std.mem.Allocator, application: json.Value, limits: protocol.
     // Queries can expose saved tasks from another application or version.
     // Their schema identities are data; mutation parameters below still bind
     // the currently admitted application contract.
-    const question = try shape(a, &.{ .{ "question_id", digest }, .{ "question_revision", count }, .{ "request_digest", digest }, .{ "answer_schema_id", try text(a, 1, 128) }, .{ "prompt", json.object() } }, &.{});
-    const message = try shape(a, &.{ .{ "message_id", digest }, .{ "ordinal", count }, .{ "disposition", try enumSchema(state.MessageDisposition, a) } }, &.{});
+    const question = try eventPayload(a, .input_required);
+    const message = try eventPayload(a, .message_queued);
     const snapshot = try shape(a, &.{
         .{ "task_id", id },                                     .{ "application_id", try text(a, 1, 128) },                        .{ "profile_id", try text(a, 1, 128) },                    .{ "profile_digest", digest },
         .{ "status", try enumSchema(state.Status, a) },         .{ "revision", count },                                            .{ "result_available", boolean },                          .{ "earliest_available_seq", count },
@@ -241,13 +318,7 @@ pub fn document(a: std.mem.Allocator, application: json.Value, limits: protocol.
     var event_cases: std.array_list.Managed(json.Value) = .init(a);
     inline for (@typeInfo(state.EventType).@"enum".field_names) |name| {
         const kind = @field(state.EventType, name);
-        const payload = switch (kind) {
-            .input_required => question,
-            .message_queued, .message_consumed, .message_not_consumed => message,
-            .blocked => try shape(a, &.{.{ "delivery", try constant(a, "definitely_not_sent") }}, &.{"delivery"}),
-            .imported => try shape(a, &.{.{ "archive_sha256", digest }}, &.{}),
-            else => empty,
-        };
+        const payload = try eventPayload(a, kind);
         var condition = json.object();
         var when = json.object();
         var when_properties = json.object();

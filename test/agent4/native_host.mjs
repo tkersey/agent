@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 import {join, resolve} from 'node:path';
 import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
-import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence, retainedEventSuffix, cancellationState, omittedAttempts, omittedQuestion, unboundQuestionReply, acquiredQuestionArchive} from './native_archive.mjs';
+import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence, retainedEventSuffix, cancellationState, omittedAttempts, omittedQuestion, unboundQuestionReply, acquiredQuestionArchive, changedOperationKey, invalidEventData} from './native_archive.mjs';
 import {deployment} from './native_deployment.mjs';
 
 const source = resolve(process.argv[2]);
@@ -411,6 +411,11 @@ try {
     writeFileSync(join(directory, `${name}.bundle`), omittedQuestion(readFileSync(join(directory, 'completed.bundle')), removeOccurrence), {mode: 0o600});
     assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', name, '--input', `${name}.bundle`, '--operation-id', 'import-question'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'InvalidArchive');
     assert.equal(cli('import-checkpoint', name, '--input', 'completed.bundle', '--operation-id', 'import-question').task_id, receipt.task_id);
+  }
+  for (const [name, mutate] of [['operation-key', changedOperationKey], ['omitted-submission', bytes => changedOperationKey(bytes, 'omitted')], ...['null', 'extra-field', 'question-counter'].map(kind => [`event-${kind}`, bytes => invalidEventData(bytes, kind)])]) {
+    writeFileSync(join(directory, `${name}.bundle`), mutate(readFileSync(join(directory, 'completed.bundle'))), {mode: 0o600});
+    assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', name, '--input', `${name}.bundle`, '--operation-id', 'import-consistency'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'InvalidArchive');
+    assert.equal(cli('import-checkpoint', name, '--input', 'completed.bundle', '--operation-id', 'import-consistency').task_id, receipt.task_id);
   }
   writeFileSync(join(directory, 'completed-cancel.bundle'), cancellationState(readFileSync(join(directory, 'completed.bundle')), true, 'not applied to completed task'), {mode: 0o600});
   assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', 'completed cancellation corruption', '--input', 'completed-cancel.bundle', '--operation-id', 'import-completed'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'InvalidArchive');

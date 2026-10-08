@@ -9,6 +9,8 @@ const Digest = state.Digest;
 pub const format: u32 = @import("native_options").state_format;
 pub const state_bytes = @import("native_options").state_bytes;
 pub const dispatch_reserve = 16 * 1024 * 1024;
+pub const capture_dispatch_reserve = 20 * 1024 * 1024;
+pub const captured_reserve = 15 * 1024 * 1024;
 pub const acquired_reserve = 11 * 1024 * 1024;
 
 pub fn digest(bytes: []const u8) Digest {
@@ -51,7 +53,7 @@ pub const Store = struct {
                 \\CREATE INDEX operation_tasks ON operations(task,id);
                 \\CREATE TABLE records(kind TEXT NOT NULL, id BLOB NOT NULL, task BLOB NOT NULL REFERENCES tasks(id), body BLOB NOT NULL REFERENCES objects(digest), PRIMARY KEY(kind,id)) WITHOUT ROWID;
                 \\CREATE TABLE events(task BLOB NOT NULL REFERENCES tasks(id), seq INTEGER NOT NULL, revision INTEGER NOT NULL, body BLOB NOT NULL REFERENCES objects(digest), PRIMARY KEY(task,seq)) WITHOUT ROWID;
-                \\CREATE TABLE reservations(attempt BLOB PRIMARY KEY CHECK(length(attempt)=32), bytes INTEGER NOT NULL CHECK(bytes>=0 AND bytes<=16777216)) WITHOUT ROWID;
+                \\CREATE TABLE reservations(attempt BLOB PRIMARY KEY CHECK(length(attempt)=32), bytes INTEGER NOT NULL CHECK(bytes>=0 AND bytes<=20971520)) WITHOUT ROWID;
             );
             try database.run("INSERT INTO meta VALUES(1,?, ?,0,?,?)", &.{ .{ .integer = format }, .{ .blob = &namespace }, .{ .blob = &@as(Digest, @splat(0)) }, .{ .blob = &namespace } });
             try database.exec("COMMIT;");
@@ -135,9 +137,19 @@ pub const Store = struct {
         try self.writing();
         try self.database.run("INSERT INTO reservations VALUES(?,?)", &.{ .{ .blob = &attempt }, .{ .integer = dispatch_reserve } });
     }
-    pub fn reserveAcquired(self: *Store, attempt: Digest) !void {
+    pub fn reserveCapture(self: *Store, attempt: Digest) !void {
         try self.writing();
-        try self.database.run("UPDATE reservations SET bytes=? WHERE attempt=?", &.{ .{ .integer = acquired_reserve }, .{ .blob = &attempt } });
+        try self.database.run("INSERT INTO reservations VALUES(?,?)", &.{ .{ .blob = &attempt }, .{ .integer = capture_dispatch_reserve } });
+    }
+    pub fn reserveCaptured(self: *Store, attempt: Digest) !void {
+        try self.setReservation(attempt, captured_reserve);
+    }
+    pub fn reserveAcquired(self: *Store, attempt: Digest) !void {
+        try self.setReservation(attempt, acquired_reserve);
+    }
+    fn setReservation(self: *Store, attempt: Digest, bytes: u64) !void {
+        try self.writing();
+        try self.database.run("UPDATE reservations SET bytes=? WHERE attempt=?", &.{ .{ .integer = @intCast(bytes) }, .{ .blob = &attempt } });
         if (try self.database.changes() != 1) return error.CorruptState;
     }
     pub fn releaseReservation(self: *Store, attempt: Digest) !void {
@@ -346,7 +358,7 @@ pub const Store = struct {
                 if (reservations.items.len == 64) return error.Capacity;
                 const attempt = try query.bytes(0);
                 const bytes = try query.integer(1);
-                if (attempt.len != 32 or bytes <= 0 or bytes > dispatch_reserve) return error.CorruptState;
+                if (attempt.len != 32 or bytes <= 0 or bytes > capture_dispatch_reserve) return error.CorruptState;
                 try reservations.append(a, .{ .attempt = attempt[0..32].*, .bytes = @intCast(bytes) });
             }
         }
@@ -385,13 +397,14 @@ pub const Store = struct {
             try self.putReceipt(row.key.bytes, row.request, receipt_bytes);
         }
         for (archive.reservations.items) |row| {
-            if (row.bytes == 0 or row.bytes > dispatch_reserve) return error.CorruptState;
+            if (row.bytes == 0 or row.bytes > capture_dispatch_reserve) return error.CorruptState;
             try self.database.run("INSERT INTO reservations VALUES(?,?)", &.{ .{ .blob = &row.attempt }, .{ .integer = @intCast(row.bytes) } });
         }
     }
     pub fn putEvent(self: *Store, event: state.Event) !void {
         try self.writing();
         if (event.seq == 0 or event.seq > std.math.maxInt(i64) or event.revision > std.math.maxInt(i64)) return error.Capacity;
+        try @import("schemas.zig").validateEventData(self.allocator, event.kind, event.data.bytes);
         const body = try contracts.encodeOwned(state.Event, self.allocator, event);
         defer self.allocator.free(body);
         const ref = try self.putObject(body);

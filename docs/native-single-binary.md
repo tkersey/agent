@@ -166,9 +166,12 @@ RSS guarantee. These new transport behaviors still need the complete reference
 qualification, including the controlled HTTPS provider cases.
 
 The database has a 256 MiB page ceiling; SQLite's temporary rollback journal is
-additional bounded filesystem space. A dispatched leaf reserves 16 MiB for its
-reply and successor publication, retains 11 MiB after acquisition, and releases
-that reservation only when World consumption commits. Every intervening mutation
+additional bounded filesystem space. A directly invoked leaf reserves 16 MiB for
+its reply and successor publication, retaining 11 MiB after acquisition. A capture
+adapter reserves 20 MiB: raw acquisition reduces that to 15 MiB, and pure
+projection publication reduces it to the same 11 MiB successor budget. Each phase
+spends its own reserved space atomically with its durable publication. World
+consumption releases the remainder. Every intervening mutation
 checks the remaining reservations before committing, so queued admissions cannot
 spend another operation's reserved capacity. Unknown delivery retains its
 reservation and immutable attempt record. Positive evidence that invocation never
@@ -357,7 +360,16 @@ Linux links the selected toolchain's musl libc and embeds its license. The
 database wrapper refuses an uncapped allocation fallback and verifies the linked
 SQLite version.
 
-The current namespace format is `agent-native-state/8`. Task, receipt, question,
+The current namespace format is `agent-native-state/9`; its capture reservation
+phases require a new namespace, and older formats are refused without rewriting.
+Archive admission binds every retained message to its original typed admission
+receipt and its exact inbox acquisition/consumption. Original operation keys must
+still resolve to their receipts; historical answer aliases remain valid. Durable
+event payloads use the same closed field contract as the published JSON Schema.
+The registry resolves schema specializations of a shared semantic identity by
+both exact schemas, then enforces the selected resource role.
+
+Task, receipt, question,
 message and event indexes reference the same hash-checked immutable object store
 as checkpoints and replies. A changed record body rejects before interpretation;
 foreign keys and task revision checks bind its index. Every occurrence retains its

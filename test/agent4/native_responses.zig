@@ -72,6 +72,16 @@ test "native emitter binds authored model specializations to exact schemas and r
     try std.testing.expectError(error.UndeclaredNativeCapability, emit.capabilityMetadata(.{ first, first }, a, compiled.program));
 }
 const profile = "{\"responses\":{\"endpoint\":\"https://example.test/v1/responses\",\"audience\":\"openai-fixture\",\"model\":\"fixture-model\",\"effort\":\"medium\",\"max_output_tokens\":4096,\"request_bytes\":16384,\"response_bytes\":4096,\"timeout_ms\":1000}}";
+
+test "Responses cancellation before transport is definitely not sent" {
+    var cancelled = std.atomic.Value(bool).init(true);
+    const authority: native.registry.Authority = .{ .grants = &.{}, .principal = "fixture", .tenant = "fixture", .inference = true };
+    const ctx: native.registry.Context = .{ .allocator = std.testing.allocator, .io = std.testing.io, .authority = &authority, .task_id = "fixture", .profile = profile, .environment = null, .cancellation = &cancelled };
+    const result = try Adapter.acquire(ctx, "{}");
+    try std.testing.expect(result == .definitely_not_sent);
+    try std.testing.expectEqual(error.Canceled, result.definitely_not_sent);
+}
+
 fn digest(bytes: []const u8) [32]u8 {
     var out: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(bytes, &out, .{});

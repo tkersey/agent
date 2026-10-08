@@ -177,7 +177,7 @@ try {
   assert.equal(exported.sha256, createHash('sha256').update(archiveBytes).digest('hex'));
   assert.equal(exported.bytes, String(archiveBytes.length));
   const archive = readArchive(archiveBytes);
-  for (const change of ['completed', 'failed', 'cancelled', ...['question_id', 'question_revision', 'request_digest', 'answer_schema_id', 'prompt'].map(field => `question-${field}`)]) {
+  for (const change of ['completed', 'failed', 'cancelled', ...['accepted', 'input_accepted', 'cancellation_requested', 'resumed', 'imported'].map(kind => `admission-${kind}`), ...['question_id', 'question_revision', 'request_digest', 'answer_schema_id', 'prompt'].map(field => `question-${field}`)]) {
     const name = `false-event-${change}`;
     writeFileSync(join(directory, `${name}.bundle`), falseEventFact(archiveBytes, change), {mode: 0o600});
     assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', name, '--input', `${name}.bundle`, '--operation-id', 'import-fact'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'InvalidArchive');
@@ -199,6 +199,11 @@ try {
   assert.deepEqual(cli('respond', 'archive target', ...portableAnswer).outcome.value, {value: 41, answer: 'portable answer'});
   cli('export-checkpoint', 'archive target', '--output', 'answered-portable.bundle');
   const answeredPortable = readFileSync(join(directory, 'answered-portable.bundle'));
+  for (const change of ['answer-revision', 'import-origin']) {
+    writeFileSync(join(directory, `${change}.bundle`), falseEventFact(answeredPortable, change), {mode: 0o600});
+    assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', change, '--input', `${change}.bundle`, '--operation-id', 'import-answer-fact'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'InvalidArchive');
+    assert.equal(cli('import-checkpoint', change, '--input', 'answered-portable.bundle', '--operation-id', 'import-answer-fact').task_id, portable.task_id);
+  }
   writeFileSync(join(directory, 'acquired-answer.bundle'), acquiredQuestionArchive(archiveBytes, answeredPortable), {mode: 0o600});
   writeFileSync(join(directory, 'unbound-acquired-answer.bundle'), acquiredQuestionArchive(archiveBytes, answeredPortable, true), {mode: 0o600});
   assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', 'acquired answer target', '--input', 'unbound-acquired-answer.bundle', '--operation-id', 'import-answer'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'InvalidArchive');
@@ -471,6 +476,40 @@ try {
   cancelling.write(rpc('shutdown-cancel', 'shutdown', {mode: 'cancel'}));
   assert.equal((await cancelling.next()).result.mode, 'cancel');
   await cancelling.end(0, 'cancel');
+  for (const mode of ['park', 'cancel']) for (const state of [null, `shutdown-${mode}-idle`]) {
+    const shutdown = launch(state, 5000);
+    await shutdown.initialize();
+    const stopped = once(shutdown.child, 'close');
+    const batch = [
+      ['invalid-mode', 'shutdown', {mode: 'invalid'}],
+      ['shutdown-first', 'shutdown', {mode}],
+      ['shutdown-again', 'shutdown', {mode}],
+      ['shutdown-conflict', 'shutdown', {mode: mode === 'park' ? 'cancel' : 'park'}],
+      ['shutdown-submit', 'task.submit', {...submission, client_operation_id: 'after-shutdown'}],
+      ['shutdown-ping', 'ping', {}],
+    ];
+    shutdown.write(JSON.stringify(batch.map(([id, method, params]) => JSON.parse(rpc(id, method, params)))) + '\n');
+    const replies = await shutdown.next();
+    assert.deepEqual(replies.map(reply => reply.id), batch.map(([id]) => id));
+    assert.equal(replies[0].error.data.kind, 'InvalidParams');
+    for (const reply of replies.slice(1, 3)) assert.deepEqual(reply.result, {mode, accepted: true});
+    for (const reply of replies.slice(3, 5)) assert.equal(reply.error.data.kind, 'StateConflict');
+    assert.equal(typeof replies[5].result.server_instance_id, 'string');
+    const [code, signal] = await stopped;
+    assert.equal(shutdown.child.stdin.writableEnded, false, 'shutdown must not depend on stdin EOF');
+    assert.equal(signal, null);
+    assert.equal(code, 0);
+    await shutdown.end(0, mode);
+  }
+  for (const state of [null, 'interrupt-idle']) {
+    const interrupted = launch(state, 5000);
+    await interrupted.initialize();
+    const stopped = once(interrupted.child, 'close');
+    interrupted.child.kill('SIGINT');
+    assert.deepEqual(await stopped, [0, null]);
+    assert.equal(interrupted.child.stdin.writableEnded, false);
+    await interrupted.end(0, 'cancel');
+  }
   cli('export-checkpoint', 'cancel state', '--task-id', cancelTask, '--output', 'cancelled.bundle');
   const cancelledImport = cli('import-checkpoint', 'imported cancellation', '--input', 'cancelled.bundle', '--operation-id', 'import-cancelled');
   assert.equal(cancelledImport.task_id, cancelTask);

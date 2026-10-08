@@ -261,11 +261,25 @@ export function falseEventFact(bytes, change) {
   const archive = readArchive(bytes);
   const question = change.startsWith('question-');
   const message = change.startsWith('message-');
-  const row = archive.manifest[7].find(row => decodeValue(archive.schemas.get('event'), archive.object(row[2]))[3] === (question ? 1 : message ? 3 : 0));
+  const admission = change.startsWith('admission-');
+  const answerRevision = change === 'answer-revision';
+  const imported = change === 'import-origin';
+  const row = archive.manifest[7].find(row => decodeValue(archive.schemas.get('event'), archive.object(row[2]))[3] === (question || admission ? 1 : message ? 3 : answerRevision ? 2 : imported ? 14 : 0));
   assert(row);
   const value = decodeValue(archive.schemas.get('event'), archive.object(row[2]));
-  const payload = JSON.parse(Buffer.from(value[4]).toString());
-  if (question) {
+  let payload = JSON.parse(Buffer.from(value[4]).toString());
+  if (admission) {
+    const kind = change.slice('admission-'.length);
+    value[3] = ({accepted: 0, input_accepted: 2, cancellation_requested: 6, resumed: 8, imported: 14})[kind];
+    assert.notEqual(value[3], undefined);
+    payload = kind === 'imported' ? {archive_sha256: 'f'.repeat(64)} : {};
+  } else if (answerRevision || change === 'message-admission-revision') {
+    const previous = archive.manifest[7][archive.manifest[7].indexOf(row) - 1];
+    assert(previous && previous[1] < row[1]);
+    row[1] = value[2] = previous[1];
+  } else if (imported) {
+    payload.archive_sha256 = 'f'.repeat(64);
+  } else if (question) {
     const field = change.slice('question-'.length);
     payload[field] = ({question_id: 'f'.repeat(64), question_revision: '2', request_digest: 'e'.repeat(64), answer_schema_id: 'false.answer.v1', prompt: {false_prompt: true}})[field];
     assert.notEqual(payload[field], undefined);

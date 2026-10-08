@@ -365,7 +365,7 @@ async function repositoryHttps(binary, directory, controller, invokeBase) {
     assert.equal(importedStatus.profile_digest, accepted.profile_digest);
     assert.equal(importedStatus.pending_messages.length, 1);
     const queueRecovery = join(directory, 'queued import recovery');
-    for (const change of ['omitted', 'omitted-acquired', 'omitted-record', 'acquired-unbound', 'queued-bound', 'acquired-question', 'consumed', 'not-consumed', 'schema', 'ordinal-zero', 'ordinal-future', 'payload', 'admission-payload', 'message-message_id', 'message-ordinal', 'message-disposition', 'message-false-consumption']) {
+    for (const change of ['omitted', 'omitted-acquired', 'omitted-record', 'acquired-unbound', 'queued-bound', 'acquired-question', 'consumed', 'not-consumed', 'schema', 'ordinal-zero', 'ordinal-future', 'payload', 'admission-payload', 'message-message_id', 'message-ordinal', 'message-disposition', 'message-false-consumption', 'message-admission-revision']) {
       const malformed = join(directory, `queued-${change}.bundle`);
       await writeFile(malformed, change.startsWith('message-') ? falseEventFact(pendingBytes, change) : invalidQueuedMessage(pendingBytes, change), {mode: 0o600});
       const rejected = spawnSync(binary, ['import-checkpoint', '--state-dir', queueRecovery, '--input', malformed, '--operation-id', 'import-queued', '--test-provider', '--trust-root', trust], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});

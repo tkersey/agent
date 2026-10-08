@@ -44,7 +44,6 @@ fn inlineValue(a: std.mem.Allocator, value: json.Value) !void {
 }
 
 pub const Subscription = struct { id: [16]u8, task: state.TaskId, after: u64 };
-pub const Shutdown = enum { park, cancel };
 
 pub fn Client(comptime Types: type) type {
     return struct {
@@ -53,7 +52,6 @@ pub fn Client(comptime Types: type) type {
         subscriptions: [16]?Subscription = @splat(null),
         subscription_counter: u64 = 0,
         subscription_nonce: [8]u8 = undefined,
-        shutdown: ?Shutdown = null,
         batch: bool = false,
 
         fn snapshot(self: *Self, a: std.mem.Allocator, id: state.TaskId) !json.Value {
@@ -256,7 +254,6 @@ pub fn Client(comptime Types: type) type {
         }
 
         pub fn call(self: *Self, a: std.mem.Allocator, method: protocol.Method, params: json.Value) !json.Value {
-            if (self.shutdown != null and (method == .@"task.submit" or method == .@"task.message" or method == .@"task.resume" or method == .@"task.respond")) return error.ShuttingDown;
             switch (method) {
                 .@"task.submit" => {
                     if (!std.mem.eql(u8, try json.text(try field(params, "application_id")), Types.application_id) or !std.mem.eql(u8, try json.text(try field(params, "profile_id")), self.service.profile.id)) return error.NotFound;
@@ -308,15 +305,6 @@ pub fn Client(comptime Types: type) type {
                         }
                     };
                     return error.NotFound;
-                },
-                .shutdown => {
-                    const mode = std.meta.stringToEnum(Shutdown, try json.text(try field(params, "mode"))) orelse return error.InvalidParams;
-                    if (self.shutdown != null and self.shutdown.? != mode) return error.ShuttingDown;
-                    self.shutdown = mode;
-                    var result_value = json.object();
-                    try json.put(a, &result_value, "mode", json.string(@tagName(mode)));
-                    try json.put(a, &result_value, "accepted", .{ .bool = true });
-                    return result_value;
                 },
                 else => return error.UnsupportedCapability,
             }

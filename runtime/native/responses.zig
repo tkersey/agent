@@ -226,7 +226,7 @@ pub fn Adapter(comptime P: type) type {
         }
 
         pub fn acquire(ctx: registry.Context, rendered: []const u8) !registry.Acquisition {
-            try ctx.checkCancellation();
+            ctx.checkCancellation() catch |err| return .{ .definitely_not_sent = err };
             const config = settings(ctx.allocator, ctx.profile) catch |err| return .{ .definitely_not_sent = err };
             const environment: *const Environment = @ptrCast(@alignCast(ctx.environment orelse return .{ .definitely_not_sent = error.MissingCredential }));
             if (!equal(config.endpoint.bytes, environment.approved_endpoint) or !ctx.authority.inference) return .{ .definitely_not_sent = error.Denied };

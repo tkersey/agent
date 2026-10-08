@@ -288,14 +288,47 @@ const Collector = struct {
 
 pub const Inspected = struct { task: contracts.Decoded(state.Task), objects: []state.Reference, current: ?occurrence.Occurrence };
 
+const AdmissionFact = struct {
+    method: state.Method,
+    receipt: state.Digest,
+    question: ?state.Digest,
+    message: ?state.Digest,
+};
+const AdmissionFacts = std.AutoHashMap(u64, AdmissionFact);
+
+fn admissionMethod(kind: state.EventType) ?state.Method {
+    return switch (kind) {
+        .accepted => .submit,
+        .input_accepted => .respond,
+        .message_queued => .message,
+        .cancellation_requested => .cancel,
+        .resumed => .@"resume",
+        .imported => .import_checkpoint,
+        .input_required,
+        .message_consumed,
+        .message_not_consumed,
+        .parked,
+        .blocked,
+        .delivery_unknown,
+        .completed,
+        .failed,
+        .cancelled,
+        => null,
+    };
+}
+
 /// Events are retained projections, not an independently authoritative history.
 /// Check facts whose owners survive in the archive; an old question need not be
 /// pending, and an old queued message may since have been consumed or retired.
-fn validateEventFacts(store: *storage.Store, archive: state.Archive, task: state.Task, event: state.Event) !void {
+fn validateEventFacts(store: *storage.Store, archive: state.Archive, task: state.Task, admissions: *const AdmissionFacts, event: state.Event) !void {
     var arena = std.heap.ArenaAllocator.init(store.allocator);
     defer arena.deinit();
     const a = arena.allocator();
     const data = (try json.parse(a, event.data.bytes, .{})).value;
+    const admission = admissions.get(event.revision);
+    if (admissionMethod(event.kind)) |method| {
+        if (admission == null or admission.?.method != method) return error.InvalidArchive;
+    }
     const expected: json.Value = switch (event.kind) {
         .completed, .failed, .cancelled => {
             if (!same(@tagName(event.kind), @tagName(task.outcome_kind))) return error.InvalidArchive;
@@ -310,9 +343,20 @@ fn validateEventFacts(store: *storage.Store, archive: state.Archive, task: state
             const prompt = try store.object(a, question.prompt, 32 * 1024);
             break :blk try state.questionData(a, question, prompt);
         },
+        .input_accepted => {
+            const fact = admission.?;
+            const id = fact.question orelse return error.InvalidArchive;
+            const reference = record(archive, .question, id) orelse return error.InvalidArchive;
+            const bytes = try store.object(a, reference, 256 * 1024);
+            const question = (try contracts.decodeOwned(state.Question, a, bytes)).value;
+            const receipt = question.receipt orelse return error.InvalidArchive;
+            if (question.answer == null or !same(&storage.digest(try contracts.encodeOwned(state.Receipt, a, receipt)), &fact.receipt)) return error.InvalidArchive;
+            return;
+        },
         .message_queued, .message_consumed, .message_not_consumed => blk: {
             var id: state.Digest = undefined;
             _ = std.fmt.hexToBytes(&id, data.object.get("message_id").?.string) catch return error.InvalidArchive;
+            if (event.kind == .message_queued and (admission.?.message == null or !same(&id, &admission.?.message.?))) return error.InvalidArchive;
             const reference = record(archive, .message, id) orelse return error.InvalidArchive;
             const bytes = try store.object(a, reference, 256 * 1024);
             const message = (try contracts.decodeOwned(state.Message, a, bytes)).value;
@@ -325,7 +369,20 @@ fn validateEventFacts(store: *storage.Store, archive: state.Archive, task: state
             if (disposition != .queued and disposition != message.disposition) return error.InvalidArchive;
             break :blk try state.messageData(a, message, disposition);
         },
-        else => return,
+        .imported => {
+            var id: state.Digest = undefined;
+            _ = std.fmt.hexToBytes(&id, data.object.get("archive_sha256").?.string) catch return error.InvalidArchive;
+            const reference = record(archive, .origin, id) orelse return error.InvalidArchive;
+            const bytes = try store.object(a, reference, 256 * 1024);
+            const origin = (try contracts.decodeOwned(state.Origin, a, bytes)).value;
+            if (origin.source_revision != event.revision - 1) return error.InvalidArchive;
+            return;
+        },
+        .accepted, .cancellation_requested, .resumed => return,
+        // These may precede later progress and have no retained receipt or
+        // immutable record of the historical schedule/blocker. Their shape and
+        // journal range remain checked; current state cannot refute old state.
+        .parked, .blocked, .delivery_unknown => return,
     };
     if (!same(try json.canonical(a, data), try json.canonical(a, expected))) return error.InvalidArchive;
 }
@@ -415,6 +472,27 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
         if (record(archive, .message, id) == null) return error.CorruptState;
         for (value.messages.items[0..i]) |prior| if (same(&id, &prior)) return error.CorruptState;
     }
+    var admissions = AdmissionFacts.init(a);
+    defer admissions.deinit();
+    for (archive.operations.items, 0..) |row, i| {
+        for (archive.operations.items[0..i]) |prior| if (same(row.key.bytes, prior.key.bytes)) return error.InvalidArchive;
+        try collector.add(row.body);
+        const bytes = try store.object(store.allocator, row.body, 256 * 1024);
+        defer store.allocator.free(bytes);
+        var decoded = try contracts.decodeOwned(state.Receipt, store.allocator, bytes);
+        defer decoded.deinit();
+        if (!same(&decoded.value.task, &value.id) or !same(&decoded.value.request_digest, &row.request) or decoded.value.revision == 0 or decoded.value.revision > value.revision) return error.CorruptState;
+        const fact: AdmissionFact = .{ .method = decoded.value.method, .receipt = row.body.digest, .question = decoded.value.question, .message = decoded.value.message };
+        const entry = try admissions.getOrPut(decoded.value.revision);
+        if (entry.found_existing and !std.meta.eql(entry.value_ptr.*, fact)) return error.InvalidArchive;
+        entry.value_ptr.* = fact;
+        // An acknowledged follow-up cannot disappear by deleting both its row
+        // and its queue entry while retaining the immutable admission receipt.
+        if (decoded.value.method == .message and decoded.value.message == null) return error.InvalidArchive;
+        if (decoded.value.message) |id| if (record(archive, .message, id) == null) return error.InvalidArchive;
+        if (decoded.value.method == .respond and decoded.value.question == null) return error.InvalidArchive;
+        if (decoded.value.question) |id| if (record(archive, .question, id) == null) return error.InvalidArchive;
+    }
     var next = value.event_floor;
     var revision: u64 = 0;
     for (archive.events.items) |row| {
@@ -426,26 +504,11 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
         defer decoded.deinit();
         if (!same(&decoded.value.task, &value.id) or decoded.value.seq != row.seq or decoded.value.revision != row.revision) return error.CorruptState;
         try @import("schemas.zig").validateEventData(store.allocator, decoded.value.kind, decoded.value.data.bytes);
-        try validateEventFacts(store, archive, value, decoded.value);
+        try validateEventFacts(store, archive, value, &admissions, decoded.value);
         next += 1;
         revision = row.revision;
     }
     if (next - 1 != value.event_high) return error.CorruptState;
-    for (archive.operations.items, 0..) |row, i| {
-        for (archive.operations.items[0..i]) |prior| if (same(row.key.bytes, prior.key.bytes)) return error.InvalidArchive;
-        try collector.add(row.body);
-        const bytes = try store.object(store.allocator, row.body, 256 * 1024);
-        defer store.allocator.free(bytes);
-        var decoded = try contracts.decodeOwned(state.Receipt, store.allocator, bytes);
-        defer decoded.deinit();
-        if (!same(&decoded.value.task, &value.id) or !same(&decoded.value.request_digest, &row.request) or decoded.value.revision == 0 or decoded.value.revision > value.revision) return error.CorruptState;
-        // An acknowledged follow-up cannot disappear by deleting both its row
-        // and its queue entry while retaining the immutable admission receipt.
-        if (decoded.value.method == .message and decoded.value.message == null) return error.InvalidArchive;
-        if (decoded.value.message) |id| if (record(archive, .message, id) == null) return error.InvalidArchive;
-        if (decoded.value.method == .respond and decoded.value.question == null) return error.InvalidArchive;
-        if (decoded.value.question) |id| if (record(archive, .question, id) == null) return error.InvalidArchive;
-    }
     const reserved: ?state.Digest = if (current) |pending| if (pending.state == .settled_reply and record(archive, .attempt, pending.state.settled_reply.attempt) != null) pending.state.settled_reply.attempt else null else null;
     if (archive.reservations.items.len != @intFromBool(reserved != null)) return error.CorruptState;
     if (reserved) |attempt| if (!same(&archive.reservations.items[0].attempt, &attempt) or archive.reservations.items[0].bytes != storage.acquired_reserve) return error.CorruptState;

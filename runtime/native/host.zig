@@ -12,6 +12,7 @@ const Worker = @import("worker.zig").Worker;
 const world = @import("world");
 const c = @import("native_c");
 const identity = @import("identity.zig");
+const Shutdown = enum { park, cancel };
 
 /// One bounded, nonblocking fatal diagnostic. Error names contain no request,
 /// profile, credential, path or provider payload data.
@@ -32,6 +33,7 @@ fn Connection(comptime Types: type) type {
         artifact_identity: [32]u8,
         initialized: bool = false,
         closing: bool = false,
+        shutdown: ?Shutdown = null,
         limits: protocol.Limits = .{},
         client: ?*client_api.Client(Types) = null,
         launch_profile: ?discovery.LaunchProfile = null,
@@ -87,7 +89,19 @@ fn Connection(comptime Types: type) type {
                 return protocol.response(a, request.id, result);
             }
             if (!self.initialized) return protocol.failure(a, request.id, .ProtocolState, "correct_request");
+            if (self.shutdown != null and (request.method == .@"task.submit" or request.method == .@"task.message" or request.method == .@"task.resume" or request.method == .@"task.respond"))
+                return protocol.failure(a, request.id, .StateConflict, failureRecovery(.StateConflict));
             switch (request.method) {
+                .shutdown => {
+                    const text = json.text(request.params.object.get("mode").?) catch return protocol.failure(a, request.id, .InvalidParams, "correct_request");
+                    const mode = std.meta.stringToEnum(Shutdown, text) orelse return protocol.failure(a, request.id, .InvalidParams, "correct_request");
+                    if (self.shutdown != null and self.shutdown.? != mode) return protocol.failure(a, request.id, .StateConflict, failureRecovery(.StateConflict));
+                    self.shutdown = mode;
+                    var result = json.object();
+                    try json.put(a, &result, "mode", json.string(@tagName(mode)));
+                    try json.put(a, &result, "accepted", .{ .bool = true });
+                    return protocol.response(a, request.id, result);
+                },
                 .ping => {
                     var result = json.object();
                     try json.put(a, &result, "server_instance_id", json.string(self.instance));
@@ -600,7 +614,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
         const signals = interrupts.load(.acquire);
         if (signals != 0 and shutdown_at == null) {
             shutdown_at = time;
-            if (connection.client) |client| client.shutdown = .cancel;
+            connection.shutdown = .cancel;
         }
         if (signals > 1) std.process.exit(2);
         transport.deadlines() catch |err| {
@@ -667,15 +681,15 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
                 }
             }
         }
-        if (transport.eof or connection.closing or !writable or (connection.client != null and connection.client.?.shutdown != null)) {
+        if (transport.eof or connection.closing or !writable or connection.shutdown != null) {
             if (shutdown_at == null) shutdown_at = time;
         }
         if (connection.closing and code == 0) code = 64;
+        if (shutdown_at != null and connection.shutdown == null) connection.shutdown = .park;
+        const mode = connection.shutdown orelse .park;
         if (connection.client) |client| {
             const service = client.service;
             const slot = worker.?;
-            if (shutdown_at != null and client.shutdown == null) client.shutdown = .park;
-            const mode = client.shutdown orelse .park;
             if (shutdown_at != null and mode == .cancel and !cancelled_owned) {
                 for (service.owned) |owned| if (owned) |id| {
                     const operation = try std.fmt.allocPrint(frame, "shutdown-{s}-{s}", .{ connection.instance, std.fmt.bytesToHex(id, .lower) });
@@ -737,7 +751,6 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
             if (parked) {
                 if (!closed_notice and writable and connection.initialized and (code == 0 or code == 2)) {
                     var params = json.object();
-                    const mode = if (connection.client) |client| client.shutdown orelse .park else .park;
                     try json.put(frame, &params, "mode", json.string(@tagName(mode)));
                     try json.put(frame, &params, "disposition", json.string(if (code == 2) "incomplete" else if (mode == .cancel) "cancelled" else "parked"));
                     var pending: std.array_list.Managed(json.Value) = .init(frame);

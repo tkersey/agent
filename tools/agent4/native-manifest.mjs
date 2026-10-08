@@ -13,6 +13,7 @@ if (!/^agent-native-state\/[1-9][0-9]*$/.test(stateFormat)) throw new Error('inv
 const image = readFileSync(imagePath), applicationBytes = readFileSync(applicationPath);
 const application = JSON.parse(applicationBytes), lock = JSON.parse(readFileSync(lockPath));
 if (application.program_sha256 !== hash(image)) throw new Error('native image binding mismatch');
+if (!['agent-client-values/1.0', 'agent-client-values/1.1'].includes(application.client_mapping)) throw new Error('invalid native client mapping');
 const toolchain = selectZig([]);
 const sqlite = verifyNativeDependency(sqliteSource);
 sqlite.heap_bytes = Number(sqliteHeap);
@@ -29,7 +30,7 @@ const manifest = {
   application_version: application.application_version,
   native_host_contract: 'agent-native-host/1.0',
   protocol: 'agent-host/1.0',
-  client_mapping: 'agent-client-values/1.0',
+  client_mapping: application.client_mapping,
   state_format: stateFormat,
   state_database_bytes: Number(stateBytes),
   target, optimize,

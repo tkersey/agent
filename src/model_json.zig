@@ -1,4 +1,29 @@
 const std = @import("std");
+
+pub fn taggedOptional(comptime T: type) bool {
+    return @typeInfo(T) == .optional and @typeInfo(@typeInfo(T).optional.child) == .optional;
+}
+
+fn containsTaggedOptional(comptime T: type) bool {
+    if (@typeInfo(T) == .@"struct" and @hasDecl(T, "agent_value_kind")) {
+        return if (T.agent_value_kind == .vector) containsTaggedOptional(T.Child) else false;
+    }
+    return switch (@typeInfo(T)) {
+        .optional => |info| taggedOptional(T) or containsTaggedOptional(info.child),
+        .array => |info| containsTaggedOptional(info.child),
+        .@"struct", .@"union" => |info| blk: {
+            inline for (info.field_types) |Field| if (containsTaggedOptional(Field)) break :blk true;
+            break :blk false;
+        },
+        else => false,
+    };
+}
+
+/// Preserve the existing mapping identity when no client representation changes.
+pub fn clientMapping(comptime types: anytype) []const u8 {
+    inline for (types) |T| if (containsTaggedOptional(T)) return "agent-client-values/1.1";
+    return "agent-client-values/1.0";
+}
 pub fn isText(comptime T: type) bool {
     return @typeInfo(T) == .@"struct" and @hasDecl(T, "agent_value_kind") and
         T.agent_value_kind == .text;
@@ -268,7 +293,9 @@ fn writeClientSchema(comptime T: type, writer: anytype) void {
         },
         .optional => |info| {
             writer.raw("{\"anyOf\":[{\"type\":\"null\"},");
+            if (comptime taggedOptional(T)) writer.raw("{\"type\":\"object\",\"properties\":{\"tag\":{\"const\":\"some\"},\"value\":");
             writeClientSchema(info.child, writer);
+            if (comptime taggedOptional(T)) writer.raw("},\"required\":[\"tag\",\"value\"],\"additionalProperties\":false}");
             writer.raw("]}");
         },
         .array => |info| {

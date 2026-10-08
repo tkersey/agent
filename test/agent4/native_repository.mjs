@@ -44,10 +44,33 @@ function clientIntegerSchemas(probe) {
     cases.push({definition: 'nested', value: {label: '雪', payload: value}, accept});
   }
   cases.push({definition: 'bytes', value: 1, accept: false}, {definition: 'nested', value: {label: '雪'.repeat(6), payload: 'AA'}, accept: false});
+  const some = value => ({tag: 'some', value});
+  const doubles = [null, some(null), some(false), some(true)];
+  const triples = [null, ...doubles.map(some)];
+  for (const [definition, values] of [['optional', [null, false, true]], ['double', doubles], ['triple', triples], ['unit', [null, some(null), some({})]]]) {
+    for (const value of values) cases.push({definition, value, accept: true});
+  }
+  for (const [definition, values] of [
+    ['optional', [some(null), {}, 0]],
+    ['double', [false, true, {}, {tag: 'some'}, {value: null}, {tag: 'none', value: null}, {...some(null), extra: 0}, some(0), some(some(null))]],
+    ['triple', [false, some(false), some(some(0)), some({...some(null), extra: 0})]],
+    ['unit', [some(false), some({extra: 0}), {}]],
+  ]) for (const value of values) cases.push({definition, value, accept: false});
+  for (const left of doubles) for (const right of doubles) cases.push({definition: 'array', value: [left, right], accept: true});
+  for (const value of [[], [null], [null, null, null], [false, null]]) cases.push({definition: 'array', value, accept: false});
+  for (const value of triples) cases.push({definition: 'record', value: {values: doubles.slice(0, 2), choice: {tag: 'value', value}}, accept: true});
+  cases.push({definition: 'record', value: {values: [], choice: {tag: 'empty', value: {}}}, accept: true});
+  for (const value of [
+    {values: [null, null, null], choice: {tag: 'empty', value: {}}},
+    {values: [false], choice: {tag: 'empty', value: {}}},
+    {values: [], choice: {tag: 'value', value: some(false)}},
+    {values: [], choice: {tag: 'empty', value: {}}, extra: 0},
+  ]) cases.push({definition: 'record', value, accept: false});
   const result = spawnSync(probe, ['client-integers', JSON.stringify(cases)], {encoding: 'utf8', timeout: 5000, maxBuffer: 1024 * 1024});
   assert.equal(result.status, 0, result.error ?? result.stderr);
-  const {schema, accepted} = JSON.parse(result.stdout);
+  const {schema, accepted, roundtrips} = JSON.parse(result.stdout);
   assert.deepEqual(accepted, cases.map(item => item.accept), 'native client value admission');
+  assert.deepEqual(roundtrips, cases.map(item => item.accept ? item.value : null), 'client JSON survives ordinary wire roundtrip');
   const validation = spawnSync('uv', ['run', '--no-project', '--no-config', '--python', '3.12', '--with', 'jsonschema==4.23.0', fileURLToPath(new URL('./native_schema.py', import.meta.url))], {input: JSON.stringify({schema, cases}), encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024});
   assert.equal(validation.status, 0, validation.error ?? validation.stderr);
   process.stdout.write(validation.stdout);

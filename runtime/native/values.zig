@@ -46,7 +46,16 @@ pub fn fromJson(comptime T: type, a: std.mem.Allocator, value: json.Value) Error
         .bool => if (value == .bool) value.bool else error.InvalidParams,
         .int => |info| if (info.bits == 64) try json.decimal(T, value) else if (value == .number_string) std.math.cast(T, try json.safeInteger(value.number_string)) orelse error.InvalidParams else error.InvalidParams,
         .@"enum" => std.meta.stringToEnum(T, try json.text(value)) orelse error.InvalidParams,
-        .optional => |info| if (value == .null) null else try fromJson(info.child, a, value),
+        .optional => |info| blk: {
+            if (value == .null) break :blk null;
+            if (comptime schemas.taggedOptional(T)) {
+                if (value != .object or value.object.count() != 2) return error.InvalidParams;
+                const tag = try json.text(value.object.get("tag") orelse return error.InvalidParams);
+                if (!std.mem.eql(u8, tag, "some")) return error.InvalidParams;
+                break :blk @as(T, try fromJson(info.child, a, value.object.get("value") orelse return error.InvalidParams));
+            }
+            break :blk @as(T, try fromJson(info.child, a, value));
+        },
         .array => |info| blk: {
             if (value != .array or value.array.items.len != info.len) return error.InvalidParams;
             var result: T = undefined;
@@ -92,7 +101,17 @@ pub fn toJson(comptime T: type, a: std.mem.Allocator, value: T) std.mem.Allocato
         .bool => .{ .bool = value },
         .int => |info| if (info.bits == 64) json.string(try std.fmt.allocPrint(a, "{d}", .{value})) else try json.number(a, value),
         .@"enum" => json.string(@tagName(value)),
-        .optional => |info| if (value) |child| try toJson(info.child, a, child) else .null,
+        .optional => |info| blk: {
+            const child = value orelse break :blk .null;
+            const projected = try toJson(info.child, a, child);
+            if (comptime schemas.taggedOptional(T)) {
+                var result = json.object();
+                try json.put(a, &result, "tag", json.string("some"));
+                try json.put(a, &result, "value", projected);
+                break :blk result;
+            }
+            break :blk projected;
+        },
         .array => |info| blk: {
             var array: std.array_list.Managed(json.Value) = .init(a);
             for (value) |child| try array.append(try toJson(info.child, a, child));
@@ -169,4 +188,49 @@ test "client mapping preserves full-width values and rejects coercion and unknow
     var schema = try json.parse(a, &schemas.ClientSchema(Record).value, .{});
     defer schema.deinit();
     try std.testing.expectEqualStrings("string", schema.value.object.get("properties").?.object.get("count").?.object.get("type").?.string);
+}
+
+test "nested optional client values preserve every independent wire discriminant" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const Case = struct { wire: []const u8, client: []const u8 };
+    inline for (.{
+        .{ ?bool, [_]Case{
+            .{ .wire = &.{0}, .client = "null" },
+            .{ .wire = &.{ 1, 0 }, .client = "false" },
+            .{ .wire = &.{ 1, 1 }, .client = "true" },
+        } },
+        .{ ??bool, [_]Case{
+            .{ .wire = &.{0}, .client = "null" },
+            .{ .wire = &.{ 1, 0 }, .client = "{\"tag\":\"some\",\"value\":null}" },
+            .{ .wire = &.{ 1, 1, 0 }, .client = "{\"tag\":\"some\",\"value\":false}" },
+            .{ .wire = &.{ 1, 1, 1 }, .client = "{\"tag\":\"some\",\"value\":true}" },
+        } },
+        .{ ???bool, [_]Case{
+            .{ .wire = &.{0}, .client = "null" },
+            .{ .wire = &.{ 1, 0 }, .client = "{\"tag\":\"some\",\"value\":null}" },
+            .{ .wire = &.{ 1, 1, 0 }, .client = "{\"tag\":\"some\",\"value\":{\"tag\":\"some\",\"value\":null}}" },
+            .{ .wire = &.{ 1, 1, 1, 0 }, .client = "{\"tag\":\"some\",\"value\":{\"tag\":\"some\",\"value\":false}}" },
+            .{ .wire = &.{ 1, 1, 1, 1 }, .client = "{\"tag\":\"some\",\"value\":{\"tag\":\"some\",\"value\":true}}" },
+        } },
+        .{ ??void, [_]Case{
+            .{ .wire = &.{0}, .client = "null" },
+            .{ .wire = &.{ 1, 0 }, .client = "{\"tag\":\"some\",\"value\":null}" },
+            .{ .wire = &.{ 1, 1 }, .client = "{\"tag\":\"some\",\"value\":{}}" },
+        } },
+    }) |fixture| {
+        const T = fixture[0];
+        for (fixture[1]) |case| {
+            var decoded = try contracts.decodeOwned(T, a, case.wire);
+            defer decoded.deinit();
+            const projected = try toJson(T, a, decoded.value);
+            try std.testing.expectEqualStrings(case.client, try json.canonical(a, projected));
+            const parsed = try json.parse(a, case.client, .{});
+            try std.testing.expectEqualSlices(u8, case.wire, try encodeClient(T, a, parsed.value));
+        }
+    }
+    try std.testing.expectEqualStrings("agent-client-values/1.0", schemas.clientMapping(.{ ?bool, struct { value: ?u32 }, contracts.Text(16), contracts.Bytes(4) }));
+    inline for (.{ ??bool, ???bool, ??void, [2]??bool, contracts.Vector(??bool, 2), struct { value: ??bool }, union(enum) { absent: void, value: ??bool } }) |T|
+        try std.testing.expectEqualStrings("agent-client-values/1.1", schemas.clientMapping(.{ void, T }));
 }

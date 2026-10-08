@@ -134,7 +134,15 @@ qualification host, including musl on Linux.
 The native client mapping is `agent-client-values/1.0`: bounded text is a JSON
 string, bounded bytes use unpadded canonical base64url, 64-bit integers use
 canonical decimal strings, smaller integers use JSON integers, products use
-closed named objects, and sums use `{tag,value}`. Optional values use JSON null.
+closed named objects, and sums use `{tag,value}`. Ordinary optional values use
+JSON null for absence and the child's representation for presence. Applications
+whose public types contain nested optionals advertise `agent-client-values/1.1`:
+an optional with an optional child uses null for absence and
+`{"tag":"some","value":<child>}` for presence. Thus `??bool` distinguishes null,
+`{"tag":"some","value":null}`, and the two boolean payloads. This rule recurses
+through all containers. Applications without nested optionals retain 1.0.
+Mapping and application-asset identities remain exact import gates; ambiguous
+old nested-optional archives are not automatically migrated.
 Provider v3/v4 JSON schemas retain their existing numeric meaning. Runtime
 admission checks the embedded client and wire schemas against the actual types.
 

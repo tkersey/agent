@@ -26,14 +26,25 @@ pub fn main(init: std.process.Init) !void {
             var input = try native.json.parse(a, encoded, .{});
             defer input.deinit();
             var accepted: std.array_list.Managed(native.json.Value) = .init(a);
+            var roundtrips: std.array_list.Managed(native.json.Value) = .init(a);
             const Nested = struct { label: contracts.Text(16), payload: contracts.Bytes(4) };
+            const OptionalRecord = struct { values: contracts.Vector(??bool, 2), choice: union(enum) { empty: void, value: ???bool } };
+            const client_types = .{ i64, u64, contracts.Text(16), contracts.Bytes(4), Nested, ?bool, ??bool, ???bool, ??void, [2]??bool, OptionalRecord };
+            const client_names = .{ "signed", "unsigned", "text", "bytes", "nested", "optional", "double", "triple", "unit", "array", "record" };
             for (input.value.array.items) |item| {
                 const definition = item.object.get("definition").?.string;
                 const value = item.object.get("value").?;
                 const valid = blk: {
-                    inline for (.{ i64, u64, contracts.Text(16), contracts.Bytes(4), Nested }, .{ "signed", "unsigned", "text", "bytes", "nested" }) |T, name| {
+                    inline for (client_types, client_names) |T, name| {
                         if (std.mem.eql(u8, definition, name)) {
-                            _ = native.values.fromJson(T, a, value) catch break :blk false;
+                            const typed = native.values.fromJson(T, a, value) catch {
+                                try roundtrips.append(.null);
+                                break :blk false;
+                            };
+                            const wire = try contracts.encodeOwned(T, a, typed);
+                            var decoded = try contracts.decodeOwned(T, a, wire);
+                            defer decoded.deinit();
+                            try roundtrips.append(try native.values.toJson(T, a, decoded.value));
                             break :blk true;
                         }
                     }
@@ -43,14 +54,13 @@ pub fn main(init: std.process.Init) !void {
             }
             var schema = (try native.json.parse(a, "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:agent:client-integer-qualification\"}", .{})).value;
             var definitions = native.json.object();
-            try native.json.put(a, &definitions, "unsigned", (try native.json.parse(a, &contracts.json.ClientSchema(u64).value, .{})).value);
-            try native.json.put(a, &definitions, "signed", (try native.json.parse(a, &contracts.json.ClientSchema(i64).value, .{})).value);
-            inline for (.{ contracts.Text(16), contracts.Bytes(4), Nested }, .{ "text", "bytes", "nested" }) |T, name|
+            inline for (client_types, client_names) |T, name|
                 try native.json.put(a, &definitions, name, (try native.json.parse(a, &contracts.json.ClientSchema(T).value, .{})).value);
             try native.json.put(a, &schema, "$defs", definitions);
             var output = native.json.object();
             try native.json.put(a, &output, "schema", schema);
             try native.json.put(a, &output, "accepted", .{ .array = accepted });
+            try native.json.put(a, &output, "roundtrips", .{ .array = roundtrips });
             try std.Io.File.stdout().writeStreamingAll(init.io, try native.json.canonical(a, output));
             return;
         }

@@ -126,15 +126,27 @@ try {
   const cliTask = cli('run', 'human state', '--input-json', '{"value":20}', '--operation-id', 'human-run');
   assert.equal(cliTask.status, 'waiting_input');
   assert.equal(cli('run', 'human state', '--input-json', '{"value":20}', '--operation-id', 'human-run').task_id, cliTask.task_id);
-  assert.deepEqual(cli('resume', 'human state', '--task-id', cliTask.task_id, '--operation-id', 'human-resume', '--expected-revision', cliTask.revision).question, cliTask.question);
-  assert.deepEqual(cli('resume', 'human state', '--task-id', cliTask.task_id, '--operation-id', 'human-resume', '--expected-revision', cliTask.revision).question, cliTask.question);
+  for (const binding of [[], ['--task-id', cliTask.task_id], ['--expected-revision', cliTask.revision]]) {
+    assert.throws(() => execFileSync(binary, ['resume', '--offline', '--state-dir', 'human state', '--operation-id', 'human-resume', ...binding], options), error => error.status === 64);
+    assert.equal(cli('status', 'human state', '--task-id', cliTask.task_id).revision, cliTask.revision);
+  }
+  const humanResumeArgs = ['--task-id', cliTask.task_id, '--operation-id', 'human-resume', '--expected-revision', cliTask.revision];
+  const cliResumed = cli('resume', 'human state', ...humanResumeArgs);
+  assert.deepEqual(cliResumed.question, cliTask.question);
+  const cliResumeReplay = cli('resume', 'human state', ...humanResumeArgs);
+  assert.deepEqual(cliResumeReplay.question, cliTask.question);
+  assert.equal(cliResumeReplay.revision, cliResumed.revision);
+  assert.deepEqual(cli('resume', 'human state').question, cliTask.question);
+  assert.throws(() => execFileSync(binary, ['cancel', '--offline', '--state-dir', 'human state', '--operation-id', 'human-cancel'], options), error => error.status === 64);
   const secondCliTask = cli('run', 'human state', '--input-json', '{"value":21}', '--operation-id', 'human-second');
   assert.notEqual(secondCliTask.task_id, cliTask.task_id);
   assert.throws(() => execFileSync(binary, ['status', '--offline', '--state-dir', 'human state'], options), error => error.status === 64);
   const cancelledCli = cli('cancel', 'human state', '--task-id', cliTask.task_id, '--operation-id', 'human-cancel');
   assert.equal(cancelledCli.status, 'cancelled');
   assert.equal(cancelledCli.outcome.cleanup_complete, true);
+  assert.equal(cli('cancel', 'human state', '--task-id', cliTask.task_id, '--operation-id', 'human-cancel').revision, cancelledCli.revision);
   const humanAnswerArgs = ['--task-id', secondCliTask.task_id, '--operation-id', 'human-answer', '--question-id', secondCliTask.question.question_id, '--question-revision', secondCliTask.question.question_revision, '--request-digest', secondCliTask.question.request_digest, '--answer-json', '{"message":"human answer"}'];
+  assert.throws(() => execFileSync(binary, ['respond', '--offline', '--state-dir', 'human state', ...humanAnswerArgs.slice(2)], options), error => error.status === 64);
   const humanAnswered = cli('respond', 'human state', ...humanAnswerArgs);
   assert.deepEqual(humanAnswered.outcome.value, {value: 43, answer: 'human answer'});
   assert.equal(cli('respond', 'human state', ...humanAnswerArgs).revision, humanAnswered.revision);
@@ -217,8 +229,12 @@ try {
   writeFileSync(join(directory, 'acquired-answer.bundle'), acquiredQuestionArchive(archiveBytes, answeredPortable), {mode: 0o600});
   writeFileSync(join(directory, 'unbound-acquired-answer.bundle'), acquiredQuestionArchive(archiveBytes, answeredPortable, true), {mode: 0o600});
   assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', 'acquired answer target', '--input', 'unbound-acquired-answer.bundle', '--operation-id', 'import-answer'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'InvalidArchive');
-  assert.equal(cli('import-checkpoint', 'acquired answer target', '--input', 'acquired-answer.bundle', '--operation-id', 'import-answer').task_id, portable.task_id);
-  assert.deepEqual(cli('resume', 'acquired answer target', '--operation-id', 'resume-answer').outcome.value, {value: 41, answer: 'portable answer'});
+  const acquiredImport = cli('import-checkpoint', 'acquired answer target', '--input', 'acquired-answer.bundle', '--operation-id', 'import-answer');
+  assert.equal(acquiredImport.task_id, portable.task_id);
+  const acquiredResumeArgs = ['--task-id', acquiredImport.task_id, '--expected-revision', acquiredImport.revision, '--operation-id', 'resume-answer'];
+  const acquiredResult = cli('resume', 'acquired answer target', ...acquiredResumeArgs);
+  assert.deepEqual(acquiredResult.outcome.value, {value: 41, answer: 'portable answer'});
+  assert.deepEqual(cli('resume', 'acquired answer target', ...acquiredResumeArgs), acquiredResult);
   assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', 'archive target', '--input', 'pending.bundle', '--operation-id', 'another-import'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'NonEmptyNamespace');
   for (const [name, bytes, expectedReason] of [
     ['attempts-and-captures', omittedAttempts(archiveBytes), 'InvalidArchive'],

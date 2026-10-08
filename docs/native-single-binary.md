@@ -206,9 +206,11 @@ terminal outcome or a durable question/blocker, then prints the current typed
 result/status. `status`, `result`, `resume` and `cancel` accept `--task-id ID`;
 omitting it requires exactly one visible applicable task (nonterminal for resume
 and cancel). They reject with exit 75 while another process owns the namespace.
-Resume supports `--expected-revision N`; retransmission with the same
-`--operation-id` must preserve that revision and explicit task ID. Without an
-operation ID, a fresh invocation uses a new random ID. Cancellation output
+Resume supports `--expected-revision N`. With `--operation-id`, `resume`,
+`cancel` and `respond` require an explicit `--task-id`; `resume` also requires
+`--expected-revision`. Retransmission must preserve these original parameters.
+Without an operation ID, a fresh invocation uses a new random ID and may select
+the sole applicable task and current revision automatically. Cancellation output
 reports actual cleanup status. Answer with `respond --task-id ID --question-id
 ID --question-revision N --request-digest SHA256 --answer-json JSON`, retaining
 the binding printed by status and the same operation ID when retransmitting.

@@ -723,6 +723,10 @@ pub fn build(b: *std.Build) void {
             });
             consumer_module.addAnonymousImport("image", .{ .root_source_file = product.assets.image });
             const consumer = b.addExecutable(.{ .name = "agent-native-consumer", .root_module = consumer_module });
+            // Release the long protocol peer before the LLVM probe occupies a
+            // compile slot. Its short product build otherwise queues behind
+            // the probe and delays checks that can overlap the remaining work.
+            consumer.step.dependOn(&product.executable.step);
             repository_peer.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
             repository_peer.addFileArg2(consumer.getEmittedBin(), .{ .make_absolute = true });
             repository_peer.addFileArg2(product.executable.getEmittedBin(), .{ .make_absolute = true });

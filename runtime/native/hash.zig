@@ -1,5 +1,5 @@
-//! Private optimized SHA-256 primitive. File ownership, bounded reads and
-//! before/after metadata checks remain in identity.zig. This uses the same
+//! Private optimized SHA-256 primitive. File and object owners retain bounded
+//! reads, metadata checks, content admission and integrity policy. This uses the same
 //! standard-library algorithm as the caller's previous inline implementation.
 const std = @import("std");
 const abi = @import("hash_abi.zig");

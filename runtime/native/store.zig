@@ -5,6 +5,7 @@ const contracts = @import("agent_contracts");
 const sqlite = @import("sqlite.zig");
 const state = @import("state.zig");
 const occurrence = @import("occurrence.zig");
+const hash_abi = @import("hash_abi.zig");
 const Digest = state.Digest;
 pub const format: u32 = @import("native_options").state_format;
 pub const state_bytes = @import("native_options").state_bytes;
@@ -15,9 +16,27 @@ pub const captured_reserve = 15 * 1024 * 1024;
 pub const acquired_reserve = 11 * 1024 * 1024;
 
 pub fn digest(bytes: []const u8) Digest {
+    // Share the optimized standard-library primitive already linked for file
+    // identity. Every byte is still checked; the store owns admission and trust.
+    var hash: hash_abi.State = undefined;
+    hash_abi.agent_native_sha256_init(&hash);
+    hash_abi.agent_native_sha256_update(&hash, bytes.ptr, bytes.len);
     var result: Digest = undefined;
-    std.crypto.hash.sha2.Sha256.hash(bytes, &result, .{});
+    hash_abi.agent_native_sha256_final(&hash, &result);
     return result;
+}
+
+test "object digests retain SHA-256 across padding and large input boundaries" {
+    try std.testing.expectEqualStrings("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", &std.fmt.bytesToHex(digest(""), .lower));
+    try std.testing.expectEqualStrings("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", &std.fmt.bytesToHex(digest("abc"), .lower));
+    const bytes = try std.testing.allocator.alloc(u8, 1024 * 1024);
+    defer std.testing.allocator.free(bytes);
+    for (bytes, 0..) |*byte, i| byte.* = @truncate(i *% 37);
+    for ([_]usize{ 1, 55, 56, 63, 64, 65, 255, 1024, 65535, 65536, 65537, bytes.len }) |length| {
+        var expected: Digest = undefined;
+        std.crypto.hash.sha2.Sha256.hash(bytes[0..length], &expected, .{});
+        try std.testing.expectEqualSlices(u8, &expected, &digest(bytes[0..length]));
+    }
 }
 
 pub const Head = struct { generation: u64, parent: Digest, digest: Digest };

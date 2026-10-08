@@ -11,7 +11,7 @@ fn containsTaggedOptional(comptime T: type) bool {
     return switch (@typeInfo(T)) {
         .optional => |info| taggedOptional(T) or containsTaggedOptional(info.child),
         .array => |info| containsTaggedOptional(info.child),
-        .@"struct", .@"union" => |info| blk: {
+        inline .@"struct", .@"union" => |info| blk: {
             inline for (info.field_types) |Field| if (containsTaggedOptional(Field)) break :blk true;
             break :blk false;
         },

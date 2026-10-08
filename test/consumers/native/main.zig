@@ -26,15 +26,18 @@ pub fn main(init: std.process.Init) !void {
             var input = try native.json.parse(a, encoded, .{});
             defer input.deinit();
             var accepted: std.array_list.Managed(native.json.Value) = .init(a);
+            const Nested = struct { label: contracts.Text(16), payload: contracts.Bytes(4) };
             for (input.value.array.items) |item| {
-                const signed = std.mem.eql(u8, item.object.get("definition").?.string, "signed");
+                const definition = item.object.get("definition").?.string;
                 const value = item.object.get("value").?;
-                const valid = if (signed) blk: {
-                    _ = native.values.fromJson(i64, a, value) catch break :blk false;
-                    break :blk true;
-                } else blk: {
-                    _ = native.values.fromJson(u64, a, value) catch break :blk false;
-                    break :blk true;
+                const valid = blk: {
+                    inline for (.{ i64, u64, contracts.Text(16), contracts.Bytes(4), Nested }, .{ "signed", "unsigned", "text", "bytes", "nested" }) |T, name| {
+                        if (std.mem.eql(u8, definition, name)) {
+                            _ = native.values.fromJson(T, a, value) catch break :blk false;
+                            break :blk true;
+                        }
+                    }
+                    return error.InvalidArguments;
                 };
                 try accepted.append(.{ .bool = valid });
             }
@@ -42,6 +45,8 @@ pub fn main(init: std.process.Init) !void {
             var definitions = native.json.object();
             try native.json.put(a, &definitions, "unsigned", (try native.json.parse(a, &contracts.json.ClientSchema(u64).value, .{})).value);
             try native.json.put(a, &definitions, "signed", (try native.json.parse(a, &contracts.json.ClientSchema(i64).value, .{})).value);
+            inline for (.{ contracts.Text(16), contracts.Bytes(4), Nested }, .{ "text", "bytes", "nested" }) |T, name|
+                try native.json.put(a, &definitions, name, (try native.json.parse(a, &contracts.json.ClientSchema(T).value, .{})).value);
             try native.json.put(a, &schema, "$defs", definitions);
             var output = native.json.object();
             try native.json.put(a, &output, "schema", schema);

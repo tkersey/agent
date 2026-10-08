@@ -669,6 +669,9 @@ try {
   schemaCases.push({definition: 'task.submit.params', value: {...submission, input: {...submission.input, value: {value: 4294967296}}}, accept: false});
   schemaCases.push({definition: 'task.submit.params', value: {...submission, client_operation_id: '雪'.repeat(43)}, accept: false});
   schemaCases.push({definition: 'task.respond.params', value: answer});
+  for (const [message, accept] of [['雪'.repeat(85) + 'a', true], ['雪'.repeat(86), false]]) {
+    schemaCases.push({definition: 'task.respond.params', value: {...answer, answer: {...answer.answer, value: {message}}}, accept});
+  }
   schemaCases.push({definition: 'task.respond.params', value: {...answer, question_revision: 1}, accept: false});
   const inputEvent = events.events.find(event => event.type === 'input_required');
   const missingPrompt = structuredClone(inputEvent);

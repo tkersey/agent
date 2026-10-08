@@ -731,37 +731,50 @@ test "an inbox identity cannot be redeclared with a different message contract" 
     try std.testing.expectError(error.InvalidInboxContract, agent.inbox.Profile(u64).declare(ctx));
 }
 
-const LargeResultTypes = struct {
-    pub const application_id = "large-result-test";
-    pub const input_schema_id = "large-result.input.v1";
-    pub const output_schema_id = "large-result.output.v1";
-    pub const failure_schema_id = "large-result.failure.v1";
-    pub const message_schema_id = "large-result.message.v1";
-    pub const Input = bool;
-    pub const Output = agent.contracts.Bytes(1024 * 1024);
-    pub const Failure = Output;
-    pub const Message = void;
-    pub const payload = @as([900 * 1024]u8, @splat('x'));
-};
-const LargeResultApplication = struct {
-    pub fn emit(c: agent.Context) !boundary.source.Module {
-        const b = c.builder;
-        const bytes = try c.schema(LargeResultTypes.Output);
-        const entry = try b.declare(&.{try c.schema(bool)}, bytes, &.{}, &.{});
-        const payload = try c.literal(LargeResultTypes.Output, .{ .bytes = &LargeResultTypes.payload });
-        try b.define(entry, try b.term(.{ .conditional = .{
-            .condition = try b.reference(b.parameter(entry, 0)),
-            .when_true = try b.term(.{ .fail = payload }),
-            .when_false = try b.pure(payload),
-        } }));
-        return b.module(entry, bytes);
-    }
-};
+fn LargeResultContract(comptime escaped: bool) type {
+    return struct {
+        pub const application_id = "large-result-test";
+        pub const input_schema_id = "large-result.input.v1";
+        pub const output_schema_id = "large-result.output.v1";
+        pub const failure_schema_id = "large-result.failure.v1";
+        pub const message_schema_id = "large-result.message.v1";
+        pub const Input = bool;
+        pub const Output = if (escaped) agent.contracts.Text(1024 * 1024) else agent.contracts.Bytes(1024 * 1024);
+        pub const Failure = Output;
+        pub const Message = void;
+        pub const escaped_text = escaped;
+        pub const payload = @as([900 * 1024]u8, @splat(if (escaped) 0 else 'x'));
+    };
+}
+fn LargeResultProgram(comptime Types: type) type {
+    return struct {
+        pub fn emit(c: agent.Context) !boundary.source.Module {
+            const b = c.builder;
+            const bytes = try c.schema(Types.Output);
+            const entry = try b.declare(&.{try c.schema(bool)}, bytes, &.{}, &.{});
+            const payload = try c.literal(Types.Output, .{ .bytes = &Types.payload });
+            try b.define(entry, try b.term(.{ .conditional = .{
+                .condition = try b.reference(b.parameter(entry, 0)),
+                .when_true = try b.term(.{ .fail = payload }),
+                .when_false = try b.pure(payload),
+            } }));
+            return b.module(entry, bytes);
+        }
+    };
+}
 
 test "large completed and failed result batches retain responses without payload scratch" {
+    try largeResultWitness(LargeResultContract(false));
+}
+
+test "escaped terminal text survives publication reads restart and import within the host budget" {
+    try largeResultWitness(LargeResultContract(true));
+}
+
+fn largeResultWitness(comptime Types: type) !void {
     const harness = std.testing.allocator;
     const io = std.testing.io;
-    var compiled = try agent.compile(harness, agent.system(.{ .InitialArgs = bool, .Result = LargeResultTypes.Output, .Failure = LargeResultTypes.Failure, .application = LargeResultApplication }));
+    var compiled = try agent.compile(harness, agent.system(.{ .InitialArgs = bool, .Result = Types.Output, .Failure = Types.Failure, .application = LargeResultProgram(Types) }));
     defer compiled.deinit();
     const image = try harness.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer harness.free(image);
@@ -770,12 +783,15 @@ test "large completed and failed result batches retain responses without payload
     defer admitted_image.deinit();
     const manifest = try ownerManifest(harness, image, admitted_image.identity(), "large-result-test");
     defer harness.free(manifest);
-    // Independent wire oracle: Bytes is a JSON base64url string.
-    const encoded = try harness.alloc(u8, std.base64.url_safe_no_pad.Encoder.calcSize(LargeResultTypes.payload.len) + 2);
+    // Independent wire oracle: canonical base64url or one six-byte JSON escape per NUL.
+    const encoded = try harness.alloc(u8, (if (Types.escaped_text) Types.payload.len * 6 else std.base64.url_safe_no_pad.Encoder.calcSize(Types.payload.len)) + 2);
     defer harness.free(encoded);
     encoded[0] = '"';
     encoded[encoded.len - 1] = '"';
-    _ = std.base64.url_safe_no_pad.Encoder.encode(encoded[1 .. encoded.len - 1], &LargeResultTypes.payload);
+    if (Types.escaped_text) {
+        for (0..Types.payload.len) |i| @memcpy(encoded[1 + i * 6 ..][0..6], "\\u0000");
+        try std.testing.expect(encoded.len > 4 * 1024 * 1024);
+    } else _ = std.base64.url_safe_no_pad.Encoder.encode(encoded[1 .. encoded.len - 1], &Types.payload);
     var expected_digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(encoded, &expected_digest, .{});
 
@@ -804,9 +820,11 @@ test "large completed and failed result batches retain responses without payload
     const path = try std.fmt.allocPrint(a, "{s}/state", .{path_buffer[0..length]});
     defer a.free(path);
     var namespace = try native.Namespace.open(a, io, path);
-    defer namespace.close() catch unreachable;
-    var service = try native.tasks.Service(LargeResultTypes).init(a, io, &namespace, assets, &application, handlers, profile);
-    defer service.close(a) catch unreachable;
+    var namespace_live = true;
+    defer if (namespace_live) namespace.close() catch unreachable;
+    var service = try native.tasks.Service(Types).init(a, io, &namespace, assets, &application, handlers, profile);
+    var service_live = true;
+    defer if (service_live) service.close(a) catch unreachable;
     var ids: [2][16]u8 = undefined;
     var artifacts: [2][32]u8 = undefined;
     for (&ids, &artifacts, 0..) |*id, *artifact, index| {
@@ -826,13 +844,13 @@ test "large completed and failed result batches retain responses without payload
         const expected: @TypeOf(terminal.value.outcome_kind) = if (index == 0) .completed else .failed;
         try std.testing.expectEqual(expected, terminal.value.outcome_kind);
         try std.testing.expect(terminal.value.checkpoint.bytes <= 1024 * 1024);
-        try std.testing.expect(terminal.value.result.?.bytes >= LargeResultTypes.payload.len);
+        try std.testing.expect(terminal.value.result.?.bytes >= Types.payload.len);
         try std.testing.expectEqual(resource.len, terminal.value.resources.items[0].bytes);
         try std.testing.expectEqualSlices(u8, &expected_digest, &terminal.value.client_result.?.digest);
         try std.testing.expectEqual(encoded.len, terminal.value.client_result.?.bytes);
         artifact.* = terminal.value.result_artifact.?;
     }
-    var client: native.client.Client(LargeResultTypes) = .{ .service = &service, .batch = true };
+    var client: native.client.Client(Types) = .{ .service = &service, .batch = true };
     // Completed-only, failed-only and mixed batches all use the real authored
     // outcomes. The mixed batch also exposes aliases to recycled call storage.
     for (0..3) |batch| {
@@ -858,7 +876,7 @@ test "large completed and failed result batches retain responses without payload
             try std.testing.expectEqualStrings(&std.fmt.bytesToHex(ids[index], .lower), result.object.get("task_id").?.string);
             const outcome = result.object.get("outcome").?;
             try std.testing.expectEqualStrings(if (index == 0) "completed" else "failed", outcome.object.get("type").?.string);
-            try std.testing.expectEqualStrings(if (index == 0) LargeResultTypes.output_schema_id else LargeResultTypes.failure_schema_id, outcome.object.get("schema_id").?.string);
+            try std.testing.expectEqualStrings(if (index == 0) Types.output_schema_id else Types.failure_schema_id, outcome.object.get("schema_id").?.string);
             try std.testing.expect(outcome.object.get("value") == null);
             const reference = outcome.object.get("value_ref").?;
             try std.testing.expectEqualStrings(&std.fmt.bytesToHex(artifacts[index], .lower), reference.object.get("artifact_id").?.string);
@@ -868,8 +886,77 @@ test "large completed and failed result batches retain responses without payload
         }
         try std.testing.expect((try native.json.canonical(frame, .{ .array = responses })).len + 1 <= (native.protocol.Limits{}).frame_bytes);
     }
+    if (Types.escaped_text) {
+        // Reopen the actual persisted terminal tasks before reading/exporting.
+        try service.close(a);
+        service_live = false;
+        try namespace.close();
+        namespace_live = false;
+        namespace = try native.Namespace.open(a, io, path);
+        namespace_live = true;
+        service = try native.tasks.Service(Types).init(a, io, &namespace, assets, &application, handlers, profile);
+        service_live = true;
+        for (ids, artifacts, 0..) |id, artifact, index| {
+            try checkResultChunks(Types, a, &service, id, artifact, encoded, expected_digest);
+            var export_arena = std.heap.ArenaAllocator.init(a);
+            defer export_arena.deinit();
+            const archive_path = try std.fmt.allocPrint(export_arena.allocator(), "{s}/result-{d}.bundle", .{ path_buffer[0..length], index });
+            _ = try service.exportCheckpoint(export_arena.allocator(), id, archive_path);
+        }
+        try service.close(a);
+        service_live = false;
+        try namespace.close();
+        namespace_live = false;
+        for (ids, artifacts, 0..) |id, artifact, index| {
+            var import_arena = std.heap.ArenaAllocator.init(a);
+            defer import_arena.deinit();
+            const scratch = import_arena.allocator();
+            const archive_path = try std.fmt.allocPrint(scratch, "{s}/result-{d}.bundle", .{ path_buffer[0..length], index });
+            const destination = try std.fmt.allocPrint(scratch, "{s}/imported-{d}", .{ path_buffer[0..length], index });
+            var imported_namespace = try native.Namespace.open(a, io, destination);
+            defer imported_namespace.close() catch unreachable;
+            var imported_service = try native.tasks.Service(Types).init(a, io, &imported_namespace, assets, &application, handlers, profile);
+            defer imported_service.close(a) catch unreachable;
+            {
+                var admission = std.heap.ArenaAllocator.init(a);
+                defer admission.deinit();
+                const receipt = try imported_service.importCheckpoint(admission.allocator(), "import-result", archive_path);
+                try std.testing.expectEqualSlices(u8, &id, &receipt.receipt.task);
+            }
+            try checkResultChunks(Types, a, &imported_service, id, artifact, encoded, expected_digest);
+        }
+    }
     try std.testing.expect(!budget.failed);
     try std.testing.expect(budget.peak <= budget.limit);
+}
+
+fn checkResultChunks(comptime Types: type, a: std.mem.Allocator, service: *native.tasks.Service(Types), id: [16]u8, artifact: [32]u8, expected: []const u8, expected_digest: [32]u8) !void {
+    var client: native.client.Client(Types) = .{ .service = service };
+    var offset: usize = 0;
+    while (true) {
+        var arena = std.heap.ArenaAllocator.init(a);
+        defer arena.deinit();
+        const frame = arena.allocator();
+        var params = native.json.object();
+        try native.json.put(frame, &params, "task_id", native.json.string(try frame.dupe(u8, &std.fmt.bytesToHex(id, .lower))));
+        try native.json.put(frame, &params, "artifact_id", native.json.string(try frame.dupe(u8, &std.fmt.bytesToHex(artifact, .lower))));
+        try native.json.put(frame, &params, "offset", native.json.string(try std.fmt.allocPrint(frame, "{d}", .{offset})));
+        try native.json.put(frame, &params, "length", native.json.string("32768"));
+        const response = try client.call(frame, .@"artifact.read", params);
+        const text = response.object.get("data").?.string;
+        const size = try std.base64.url_safe_no_pad.Decoder.calcSizeForSlice(text);
+        var decoded: [32768]u8 = undefined;
+        try std.base64.url_safe_no_pad.Decoder.decode(decoded[0..size], text);
+        try std.testing.expectEqualSlices(u8, expected[offset..][0..size], decoded[0..size]);
+        offset += size;
+        try std.testing.expectEqual(offset, try native.json.decimal(usize, response.object.get("next_offset").?));
+        try std.testing.expectEqual(expected.len, try native.json.decimal(usize, response.object.get("total_bytes").?));
+        try std.testing.expectEqualStrings(&std.fmt.bytesToHex(expected_digest, .lower), response.object.get("sha256").?.string);
+        try std.testing.expect((try native.json.canonical(frame, response)).len + 1 <= (native.protocol.Limits{}).frame_bytes);
+        if (response.object.get("eof").?.bool) break;
+        try std.testing.expect(size != 0);
+    }
+    try std.testing.expectEqual(expected.len, offset);
 }
 
 const CleanupTypes = struct {

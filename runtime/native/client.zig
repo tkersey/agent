@@ -220,9 +220,10 @@ pub fn Client(comptime Types: type) type {
             const artifact = saved.value;
             if (artifact.task == null or !std.mem.eql(u8, &artifact.task.?, &task_id) or !std.mem.eql(u8, &artifact.id, &id)) return error.CorruptState;
             if (offset > artifact.value.bytes) return error.InvalidParams;
-            const bytes = try self.service.namespace.store.object(a, artifact.value, 4 * 1024 * 1024);
+            const bytes = try a.alloc(u8, @intCast(@min(length, artifact.value.bytes - offset)));
             defer a.free(bytes);
-            return discovery.artifactChunk(a, .{ .bytes = bytes, .sha256 = artifact.value.digest }, offset, length);
+            try self.service.namespace.store.objectRange(artifact.value, @intCast(offset), bytes);
+            return discovery.artifactRange(a, artifact.value.digest, artifact.value.bytes, offset, bytes);
         }
 
         /// Called only after the subscribe response has entered the ordered

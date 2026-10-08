@@ -30,10 +30,24 @@ function clientIntegerSchemas(probe) {
     for (const value of values) cases.push({definition, value: String(value), accept: value >= minimum && value <= maximum});
     for (const value of ['', '00', '01', '-0', '-01', '+1', '1.0', '1e0', '1\n', ' 1', '1 ', '１', 1, null]) cases.push({definition, value, accept: false});
   }
+  const textValues = ['', 'x'.repeat(16), 'x'.repeat(17), '雪'.repeat(5), '雪'.repeat(5) + 'a', '雪'.repeat(6), '😀'.repeat(4), '😀'.repeat(4) + 'a', '\u0000'.repeat(16), 1, null];
+  for (const value of textValues) cases.push({definition: 'text', value, accept: typeof value === 'string' && Buffer.byteLength(value, 'utf8') <= 16});
+  // Independent base64url oracle: Buffer's canonical re-encoding plus byte bound.
+  const byteValues = new Set(['', '!', 'A', 'AAA', 'AAAA', 'AAAAA', 'AAAAAA', 'AAAAAAA', 'AA=', 'AA\n', 'AA ', '+A', '/A', '雪']);
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  for (const last of alphabet) { byteValues.add(`A${last}`); byteValues.add(`AA${last}`); byteValues.add(`AAAAA${last}`); }
+  for (let size = 0; size <= 5; size++) byteValues.add(Buffer.alloc(size, 255).toString('base64url'));
+  for (const value of byteValues) {
+    const decoded = Buffer.from(value, 'base64url');
+    const accept = decoded.length <= 4 && decoded.toString('base64url') === value;
+    cases.push({definition: 'bytes', value, accept});
+    cases.push({definition: 'nested', value: {label: '雪', payload: value}, accept});
+  }
+  cases.push({definition: 'bytes', value: 1, accept: false}, {definition: 'nested', value: {label: '雪'.repeat(6), payload: 'AA'}, accept: false});
   const result = spawnSync(probe, ['client-integers', JSON.stringify(cases)], {encoding: 'utf8', timeout: 5000, maxBuffer: 1024 * 1024});
   assert.equal(result.status, 0, result.error ?? result.stderr);
   const {schema, accepted} = JSON.parse(result.stdout);
-  assert.deepEqual(accepted, cases.map(item => item.accept), 'native full-width integer admission');
+  assert.deepEqual(accepted, cases.map(item => item.accept), 'native client value admission');
   const validation = spawnSync('uv', ['run', '--no-project', '--no-config', '--python', '3.12', '--with', 'jsonschema==4.23.0', fileURLToPath(new URL('./native_schema.py', import.meta.url))], {input: JSON.stringify({schema, cases}), encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024});
   assert.equal(validation.status, 0, validation.error ?? validation.stderr);
   process.stdout.write(validation.stdout);

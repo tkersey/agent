@@ -93,6 +93,16 @@ completed, failed and mixed results, checking retained values after scratch reus
 and keeping the full production/retrieval allocation peak. Each client call owns
 its scratch lifetime and copies only returned JSON into the response arena.
 
+The same authored fixture also runs with 900 KiB of NUL text, whose JSON encoding
+is 5,529,602 bytes. It checks completed and failed publication, the same response
+batches, reopening, export/import, and exact artifact reconstruction against an
+independent escape-byte oracle with the complete 64 MiB allocation budget.
+Terminal serialization counts before allocating; artifact and archive transfer
+use bounded buffers while checking every byte against the immutable digest.
+Client-schema cases independently compare native admission with JSON Schema for
+UTF-8 byte limits and canonical base64url, including nested values and all possible
+terminal base64 sextets. These cases run in the existing native qualification.
+
 The process peer also pipelines cancellation after a settled shutdown in both
 modes and checks unchanged task/question state after restart. Stdout stalls are
 I/O exit 74; unknown delivery and incomplete cleanup retain exit 2.

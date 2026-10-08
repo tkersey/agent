@@ -201,6 +201,21 @@ pub fn canonical(allocator: std.mem.Allocator, value: Value) ![]u8 {
     try writeCanonical(allocator, value, &writer.writer);
     return writer.toOwnedSlice();
 }
+
+/// Terminal values can expand sixfold when escaped. Count before allocating so
+/// an arena does not retain every buffer grown while encoding a large result.
+pub fn canonicalBounded(allocator: std.mem.Allocator, value: Value, maximum: usize) ![]u8 {
+    var buffer: [4096]u8 = undefined;
+    var counter = std.Io.Writer.Discarding.init(&buffer);
+    try writeCanonical(allocator, value, &counter.writer);
+    if (counter.fullCount() > maximum) return error.Capacity;
+    const bytes = try allocator.alloc(u8, @intCast(counter.fullCount()));
+    errdefer allocator.free(bytes);
+    var writer = std.Io.Writer.fixed(bytes);
+    try writeCanonical(allocator, value, &writer);
+    std.debug.assert(writer.end == bytes.len);
+    return bytes;
+}
 fn writeCanonical(allocator: std.mem.Allocator, value: Value, writer: *std.Io.Writer) !void {
     switch (value) {
         .object => |map| {
@@ -234,6 +249,10 @@ fn writeCanonical(allocator: std.mem.Allocator, value: Value, writer: *std.Io.Wr
 
 test "strict JSON preserves integers and rejects duplicate keys unicode and resource excess" {
     const a = std.testing.allocator;
+    const escaped = try canonicalBounded(a, string("\x00\x00"), 14);
+    defer a.free(escaped);
+    try std.testing.expectEqualStrings("\"\\u0000\\u0000\"", escaped);
+    try std.testing.expectError(error.Capacity, canonicalBounded(a, string("\x00\x00"), 13));
     var exact = try parse(a, "{\"n\":18446744073709551615,\"s\":\"雪\"}", .{});
     defer exact.deinit();
     try std.testing.expectEqualStrings("18446744073709551615", exact.value.object.get("n").?.number_string);

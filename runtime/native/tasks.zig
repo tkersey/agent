@@ -831,9 +831,8 @@ pub fn Service(comptime Types: type) type {
             return .progressed;
         }
         fn clientResult(self: *Self, comptime T: type, a: std.mem.Allocator, value: *state.Task, schema_id: []const u8, result: T) !void {
-            const bytes = try json.canonical(a, try values.toJson(T, a, result));
-            defer a.free(bytes);
-            if (bytes.len > 4 * 1024 * 1024) return error.Capacity;
+            const bytes = try json.canonicalBounded(self.allocator, try values.toJson(T, a, result), storage.maximum_object_bytes);
+            defer self.allocator.free(bytes);
             value.client_result = try self.store().putObject(bytes);
             if (bytes.len > 60 * 1024) {
                 var id: state.Digest = undefined;
@@ -1607,19 +1606,19 @@ pub fn Service(comptime Types: type) type {
         fn validateImportedResult(self: *Self, comptime T: type, a: std.mem.Allocator, value: state.Task, bytes: []const u8) !void {
             var decoded = try contracts.decodeOwned(T, a, bytes);
             defer decoded.deinit();
-            const expected = try json.canonical(a, try values.toJson(T, a, decoded.value));
-            defer a.free(expected);
+            const expected = try json.canonicalBounded(self.allocator, try values.toJson(T, a, decoded.value), storage.maximum_object_bytes);
+            defer self.allocator.free(expected);
             const reference = value.client_result orelse return error.InvalidArchive;
-            const saved = try self.store().object(a, reference, 4 * 1024 * 1024);
-            defer a.free(saved);
-            if (!same(expected, saved)) return error.InvalidArchive;
+            if (reference.bytes != expected.len or !same(&reference.digest, &storage.digest(expected))) return error.InvalidArchive;
+            // Verify all stored bytes without retaining a second large value.
+            try self.store().objectRange(reference, 0, &.{});
             if (value.result_artifact) |id| {
                 var artifact = try self.record(state.Artifact, a, "artifact", id, value.id);
                 defer artifact.deinit();
                 if (!same(&artifact.value.value.digest, &reference.digest) or artifact.value.value.bytes != reference.bytes) return error.InvalidArchive;
                 const schema_id = artifact.value.schema_id orelse return error.InvalidArchive;
                 if (!same(artifact.value.media_type.bytes, "application/json") or !same(schema_id.bytes, if (value.outcome_kind == .completed) value.output_schema_id.bytes else value.failure_schema_id.bytes)) return error.InvalidArchive;
-            } else if (saved.len > (@import("protocol.zig").Limits{}).inline_bytes) return error.InvalidArchive;
+            } else if (expected.len > (@import("protocol.zig").Limits{}).inline_bytes) return error.InvalidArchive;
         }
 
         /// Call only after joining any in-flight worker. Closing is physical

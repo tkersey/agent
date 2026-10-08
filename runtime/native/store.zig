@@ -178,33 +178,55 @@ pub const Store = struct {
     }
 
     pub fn putObject(self: *Store, bytes: []const u8) !state.Reference {
-        try self.writing();
-        if (bytes.len > maximum_object_bytes) return error.Capacity;
         const ref: state.Reference = .{ .digest = digest(bytes), .bytes = bytes.len };
-        try self.database.run("INSERT OR IGNORE INTO objects VALUES(?,zeroblob(?))", &.{ .{ .blob = &ref.digest }, .{ .integer = @intCast(bytes.len) } });
+        var source = struct {
+            bytes: []const u8,
+            pub fn read(this: *@This(), target: []u8) !void {
+                @memcpy(target, this.bytes[0..target.len]);
+                this.bytes = this.bytes[target.len..];
+            }
+        }{ .bytes = bytes };
+        try self.acquireObject(ref, &source);
+        return ref;
+    }
+
+    /// Acquire an exact-size source inside the caller's unpublished transaction.
+    /// Neither a new object nor a duplicate is trusted until every byte matches
+    /// its digest. A failed acquisition rolls back the entire transaction.
+    pub fn acquireObject(self: *Store, ref: state.Reference, source: anytype) !void {
+        try self.writing();
+        errdefer self.rollback();
+        if (ref.bytes > maximum_object_bytes) return error.Capacity;
+        try self.database.run("INSERT OR IGNORE INTO objects VALUES(?,zeroblob(?))", &.{ .{ .blob = &ref.digest }, .{ .integer = @intCast(ref.bytes) } });
         const inserted = try self.database.changes() == 1;
         const location = try self.objectLocation(ref.digest, maximum_object_bytes);
-        if (location.bytes != bytes.len) return error.CorruptState;
+        if (location.bytes != ref.bytes) return error.CorruptState;
         var blob = try self.database.openBlob("objects", "body", location.row, inserted);
         var closed = false;
         defer if (!closed) blob.close() catch {};
-        if (blob.length() != bytes.len) return error.CorruptState;
+        if (blob.length() != ref.bytes) return error.CorruptState;
+        var hash: hash_abi.State = undefined;
+        hash_abi.agent_native_sha256_init(&hash);
         var buffer: [64 * 1024]u8 = undefined;
+        var prior: [64 * 1024]u8 = undefined;
         var offset: usize = 0;
-        while (offset < bytes.len) {
-            const chunk = bytes[offset..@min(bytes.len, offset + buffer.len)];
+        while (offset < ref.bytes) {
+            const chunk = buffer[0..@min(buffer.len, ref.bytes - offset)];
+            try source.read(chunk);
+            hash_abi.agent_native_sha256_update(&hash, chunk.ptr, chunk.len);
             if (inserted) {
                 try blob.write(chunk, offset);
             } else {
-                // A preexisting hash never authorizes conflicting/corrupt bytes.
-                try blob.read(buffer[0..chunk.len], offset);
-                if (!std.mem.eql(u8, buffer[0..chunk.len], chunk)) return error.CorruptState;
+                try blob.read(prior[0..chunk.len], offset);
+                if (!std.mem.eql(u8, prior[0..chunk.len], chunk)) return error.CorruptState;
             }
             offset += chunk.len;
         }
         closed = true;
         try blob.close();
-        return ref;
+        var observed: Digest = undefined;
+        hash_abi.agent_native_sha256_final(&hash, &observed);
+        if (!std.mem.eql(u8, &observed, &ref.digest)) return error.InvalidObject;
     }
     pub fn object(self: *Store, a: std.mem.Allocator, ref: state.Reference, limit: usize) ![]u8 {
         if (ref.bytes > limit) return error.Capacity;
@@ -212,6 +234,51 @@ pub const Store = struct {
         errdefer a.free(bytes);
         if (bytes.len != ref.bytes) return error.CorruptState;
         return bytes;
+    }
+    /// Check the complete immutable object, retaining only the requested range.
+    /// An empty destination verifies integrity without materializing the object.
+    pub fn objectRange(self: *Store, ref: state.Reference, start: usize, destination: []u8) !void {
+        if (ref.bytes > maximum_object_bytes) return error.Capacity;
+        if (start > ref.bytes or destination.len > ref.bytes - start) return error.InvalidParams;
+        var sink = struct {
+            start: usize,
+            destination: []u8,
+            offset: usize = 0,
+            pub fn write(this: *@This(), chunk: []const u8) !void {
+                const first = @max(this.offset, this.start);
+                const last = @min(this.offset + chunk.len, this.start + this.destination.len);
+                if (first < last) @memcpy(this.destination[first - this.start .. last - this.start], chunk[first - this.offset .. last - this.offset]);
+                this.offset += chunk.len;
+            }
+        }{ .start = start, .destination = destination };
+        try self.writeObject(ref, &sink);
+    }
+
+    /// Sink bytes remain unpublished until this complete integrity check returns.
+    pub fn writeObject(self: *Store, ref: state.Reference, sink: anytype) !void {
+        if (ref.bytes > maximum_object_bytes) return error.Capacity;
+        const location = try self.objectLocation(ref.digest, maximum_object_bytes);
+        if (location.bytes != ref.bytes) return error.CorruptState;
+        var blob = try self.database.openBlob("objects", "body", location.row, false);
+        var closed = false;
+        defer if (!closed) blob.close() catch {};
+        if (blob.length() != ref.bytes) return error.CorruptState;
+        var hash: hash_abi.State = undefined;
+        hash_abi.agent_native_sha256_init(&hash);
+        var buffer: [64 * 1024]u8 = undefined;
+        var offset: usize = 0;
+        while (offset < location.bytes) {
+            const chunk = buffer[0..@min(buffer.len, location.bytes - offset)];
+            try blob.read(chunk, offset);
+            hash_abi.agent_native_sha256_update(&hash, chunk.ptr, chunk.len);
+            try sink.write(chunk);
+            offset += chunk.len;
+        }
+        closed = true;
+        try blob.close();
+        var observed: Digest = undefined;
+        hash_abi.agent_native_sha256_final(&hash, &observed);
+        if (!std.mem.eql(u8, &observed, &ref.digest)) return error.CorruptState;
     }
     /// Private occurrence lookup. Public artifact reads require a separate
     /// task/audience-bound artifact record, never a bare content digest.
@@ -561,6 +628,17 @@ test "file-backed objects cross allocator boundaries without growing the SQLite 
         store.rollback();
         try std.testing.expectError(error.MissingArtifact, store.object(a, rolled_back, maximum_object_bytes));
         bytes[0] ^= 1;
+        const invalid: state.Reference = .{ .digest = digest("expected"), .bytes = 8 };
+        var bad_source = struct {
+            pub fn read(_: *@This(), target: []u8) !void {
+                @memset(target, 0);
+            }
+        }{};
+        try store.begin();
+        try std.testing.expectError(error.InvalidObject, store.acquireObject(invalid, &bad_source));
+        try std.testing.expect(!store.transaction);
+        try std.testing.expectError(error.InvalidState, store.commit("must-not-publish-invalid-object"));
+        try std.testing.expectError(error.MissingArtifact, store.object(a, invalid, maximum_object_bytes));
         try std.testing.expect(@import("native_c").sqlite3_memory_used() <= sqlite.heap_bytes);
     }
     {
@@ -574,6 +652,11 @@ test "file-backed objects cross allocator boundaries without growing the SQLite 
             try std.testing.expectEqualSlices(u8, bytes[0..size], actual);
         }
         const largest = references[references.len - 1];
+        var range: [127]u8 = undefined;
+        try store.objectRange(largest, 65500, &range);
+        try std.testing.expectEqualSlices(u8, bytes[65500..][0..range.len], &range);
+        try store.objectRange(largest, largest.bytes, &.{});
+        try std.testing.expectError(error.InvalidParams, store.objectRange(largest, largest.bytes, &range));
         try std.testing.expectError(error.Capacity, store.object(a, largest, maximum_object_bytes - 1));
         try store.begin();
         const location = try store.objectLocation(largest.digest, maximum_object_bytes);
@@ -581,6 +664,9 @@ test "file-backed objects cross allocator boundaries without growing the SQLite 
         try blob.write(&.{0xff}, maximum_object_bytes - 1);
         try blob.close();
         _ = try store.commit("corrupt-last-byte");
+        // Corruption outside the requested range must still be rejected.
+        try std.testing.expectError(error.CorruptState, store.objectRange(largest, 0, &range));
+        try std.testing.expectError(error.CorruptState, store.objectRange(largest, 0, &.{}));
         try std.testing.expectError(error.CorruptState, store.object(a, largest, maximum_object_bytes));
         try store.begin();
         try std.testing.expectError(error.CorruptState, store.putObject(bytes[0..maximum_object_bytes]));

@@ -101,7 +101,7 @@ const Output = struct {
         _ = c.close(self.directory);
         self.allocator.free(self.name);
     }
-    fn write(self: *Output, bytes: []const u8) !void {
+    pub fn write(self: *Output, bytes: []const u8) !void {
         if (self.bytes + bytes.len > maximum_bytes) return error.Capacity;
         var offset: usize = 0;
         while (offset < bytes.len) {
@@ -216,16 +216,17 @@ pub const Reader = struct {
         if (!same(prefix, self.prefix)) return error.InvalidArchive;
         var hash = std.crypto.hash.sha2.Sha256.init(.{});
         hash.update(prefix);
-        var offset: u64 = prefix.len;
-        for (self.manifest.value.objects.items) |ref| {
-            const bytes = try self.allocator.alloc(u8, @intCast(ref.bytes));
-            defer self.allocator.free(bytes);
-            try readAt(self.fd, offset, bytes);
-            if (!same(&storage.digest(bytes), &ref.digest)) return error.InvalidArchive;
-            _ = try store.putObject(bytes);
-            hash.update(bytes);
-            offset += bytes.len;
-        }
+        var source = struct {
+            fd: c_int,
+            offset: u64,
+            hash: *std.crypto.hash.sha2.Sha256,
+            pub fn read(this: *@This(), bytes: []u8) !void {
+                try readAt(this.fd, this.offset, bytes);
+                this.hash.update(bytes);
+                this.offset += bytes.len;
+            }
+        }{ .fd = self.fd, .offset = prefix.len, .hash = &hash };
+        for (self.manifest.value.objects.items) |ref| store.acquireObject(ref, &source) catch |err| return if (err == error.InvalidObject) error.InvalidArchive else err;
         var identity: state.Digest = undefined;
         hash.final(&identity);
         if (!same(&identity, &self.identity) or try privateFile(self.fd) != self.bytes) return error.InvalidArchive;
@@ -571,9 +572,7 @@ pub fn write(a: std.mem.Allocator, io: std.Io, store: *storage.Store, task: stat
             }
             try output.write(content);
         } else {
-            const bytes = try store.object(a, ref, maximum_object);
-            defer a.free(bytes);
-            try output.write(bytes);
+            try store.writeObject(ref, &output);
         }
     }
     return output.finish();

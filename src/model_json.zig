@@ -216,7 +216,14 @@ fn writePositiveDecimalRange(comptime maximum: u64, writer: anytype) void {
 }
 
 fn writeClientSchema(comptime T: type, writer: anytype) void {
-    if (comptime isText(T)) return writeSchema(T, writer);
+    if (comptime isText(T)) {
+        writer.raw("{\"type\":\"string\",\"maxLength\":");
+        writeUnsigned(writer, maximumTextBytes(T));
+        writer.raw(",\"x-max-utf8-bytes\":");
+        writeUnsigned(writer, maximumTextBytes(T));
+        writer.byte('}');
+        return;
+    }
     if (@typeInfo(T) == .@"struct" and @hasDecl(T, "agent_value_kind")) {
         if (T.agent_value_kind == .bytes) {
             const maximum = T.max_length orelse @compileError("client bytes must be bounded");
@@ -224,6 +231,9 @@ fn writeClientSchema(comptime T: type, writer: anytype) void {
             writeUnsigned(writer, std.base64.url_safe_no_pad.Encoder.calcSize(maximum));
             writer.raw(",\"x-maximum-bytes\":");
             writeUnsigned(writer, maximum);
+            // Complete groups, then only canonical zero-padded terminal bits.
+            // Strict end assertion also rejects a final newline.
+            writer.raw(",\"pattern\":\"^(?:[A-Za-z0-9_-]{4})*(?:[A-Za-z0-9_-][AQgw]|[A-Za-z0-9_-]{2}[AEIMQUYcgkosw048])?(?![\\\\s\\\\S])\"");
             writer.byte('}');
             return;
         }

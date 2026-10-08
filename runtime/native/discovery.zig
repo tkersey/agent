@@ -55,14 +55,21 @@ pub fn artifactChunk(a: std.mem.Allocator, artifact: Artifact, offset: u64, leng
     const start: usize = @intCast(offset);
     const end = start + @min(length, artifact.bytes.len - start);
     const chunk = artifact.bytes[start..end];
+    return artifactRange(a, artifact.sha256, artifact.bytes.len, offset, chunk);
+}
+
+/// Project a range already acquired and integrity-checked by its owning store.
+pub fn artifactRange(a: std.mem.Allocator, sha256: [32]u8, total: u64, offset: u64, chunk: []const u8) !json.Value {
+    if (offset > total or chunk.len > total - offset or chunk.len > (protocol.Limits{}).artifact_chunk_bytes) return error.InvalidParams;
+    const end = offset + chunk.len;
     const base64 = try a.alloc(u8, std.base64.url_safe_no_pad.Encoder.calcSize(chunk.len));
     var result = json.object();
     try json.put(a, &result, "encoding", json.string("base64url"));
     try json.put(a, &result, "data", json.string(std.base64.url_safe_no_pad.Encoder.encode(base64, chunk)));
-    try json.put(a, &result, "sha256", json.string(try a.dupe(u8, &std.fmt.bytesToHex(artifact.sha256, .lower))));
-    try json.put(a, &result, "total_bytes", json.string(try std.fmt.allocPrint(a, "{d}", .{artifact.bytes.len})));
+    try json.put(a, &result, "sha256", json.string(try a.dupe(u8, &std.fmt.bytesToHex(sha256, .lower))));
+    try json.put(a, &result, "total_bytes", json.string(try std.fmt.allocPrint(a, "{d}", .{total})));
     try json.put(a, &result, "next_offset", json.string(try std.fmt.allocPrint(a, "{d}", .{end})));
-    try json.put(a, &result, "eof", .{ .bool = end == artifact.bytes.len });
+    try json.put(a, &result, "eof", .{ .bool = end == total });
     return result;
 }
 

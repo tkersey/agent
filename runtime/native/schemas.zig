@@ -222,11 +222,11 @@ pub fn document(a: std.mem.Allocator, application: json.Value, limits: protocol.
         try json.put(a, &typed_outcome, "properties", typed_value);
         var typed_properties = json.object();
         try json.put(a, &typed_properties, "outcome", typed_outcome);
-        var typed = json.object();
-        try json.put(a, &typed, "properties", typed_properties);
+        var value_constraint = json.object();
+        try json.put(a, &value_constraint, "properties", typed_properties);
         var branch = json.object();
         try json.put(a, &branch, "if", condition);
-        try json.put(a, &branch, "then", typed);
+        try json.put(a, &branch, "then", value_constraint);
         try result_cases.array.append(branch);
     }
     try json.put(a, &task_result, "allOf", result_cases);

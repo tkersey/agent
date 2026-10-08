@@ -1274,20 +1274,20 @@ pub fn Service(comptime Types: type) type {
             for (value.messages.items, 0..) |id, index| {
                 var decoded = try self.record(state.Message, a, "message", id, value.id);
                 defer decoded.deinit();
-                const message = decoded.value;
-                if (!same(message.schema_id.bytes, value.message_schema_id.bytes) or message.ordinal <= previous or message.ordinal >= value.next_message) return error.InvalidArchive;
-                previous = message.ordinal;
-                bytes = std.math.add(u64, bytes, message.value.bytes) catch return error.InvalidArchive;
+                const saved_message = decoded.value;
+                if (!same(saved_message.schema_id.bytes, value.message_schema_id.bytes) or saved_message.ordinal <= previous or saved_message.ordinal >= value.next_message) return error.InvalidArchive;
+                previous = saved_message.ordinal;
+                bytes = std.math.add(u64, bytes, saved_message.value.bytes) catch return error.InvalidArchive;
                 if (bytes > 256 * 1024) return error.InvalidArchive;
-                const encoded = try self.store().object(a, message.value, 256 * 1024);
+                const encoded = try self.store().object(a, saved_message.value, 256 * 1024);
                 defer a.free(encoded);
                 var payload = contracts.decodeOwned(Types.Message, a, encoded) catch |err| return if (err == error.OutOfMemory) err else error.InvalidArchive;
                 defer payload.deinit();
-                switch (message.disposition) {
-                    .queued => if (message.occurrence != null) return error.InvalidArchive,
+                switch (saved_message.disposition) {
+                    .queued => if (saved_message.occurrence != null) return error.InvalidArchive,
                     .acquired => {
                         const current = pending orelse return error.InvalidArchive;
-                        const occurrence_id = message.occurrence orelse return error.InvalidArchive;
+                        const occurrence_id = saved_message.occurrence orelse return error.InvalidArchive;
                         if (index != 0 or current.state != .settled_reply or !same(&occurrence_id, &current.id)) return error.InvalidArchive;
                         acquired = try contracts.encodeOwned(contracts.InboxReply(Types.Message), a, .{ .message = .{ .id = .{ .bytes = &std.fmt.bytesToHex(id, .lower) }, .value = payload.value } });
                     },

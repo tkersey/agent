@@ -99,9 +99,16 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     const identity_hex = std.fmt.bytesToHex(admitted_image.identity(), .lower);
     const assets_hex = std.fmt.bytesToHex(assets_digest, .lower);
     const manifest = try std.json.Stringify.valueAlloc(a, .{
-        .native_host_contract = "unit-native-contract", .protocol = "agent-host/1.0", .client_mapping = "agent-client-values/1.0", .state_format = "agent-native-state/7", .optimize = "safe",
-        .program_sha256 = @as([]const u8, &image_hex), .program_identity = @as([]const u8, &identity_hex), .application_assets_sha256 = @as([]const u8, &assets_hex),
-        .dependencies = .{ .world = "unit-world", .boundary = "unit-boundary" }, .compiler = .{ .version = "0.17.0" },
+        .native_host_contract = "unit-native-contract",
+        .protocol = "agent-host/1.0",
+        .client_mapping = "agent-client-values/1.0",
+        .state_format = "agent-native-state/7",
+        .optimize = "safe",
+        .program_sha256 = @as([]const u8, &image_hex),
+        .program_identity = @as([]const u8, &identity_hex),
+        .application_assets_sha256 = @as([]const u8, &assets_hex),
+        .dependencies = .{ .world = "unit-world", .boundary = "unit-boundary" },
+        .compiler = .{ .version = "0.17.0" },
     }, .{});
     defer a.free(manifest);
     const assets: native.discovery.Assets = .{ .image = image, .application = "owner-unit-test", .manifest = manifest };

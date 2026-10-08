@@ -492,6 +492,9 @@ fn humanCommand(comptime Types: type, a: std.mem.Allocator, service: *tasks.Serv
 }
 
 fn executionExit(result: json.Value) u8 {
+    // Waiting for input can be part of cancellation cleanup. Readiness and
+    // cancellation intent, not the presentation status, determine settlement.
+    if (result.object.get("cancellation")) |intent| if (intent != .null and !result.object.get("ready").?.bool) return 2;
     // A terminal application failure does not imply settled cleanup.
     if (result.object.get("outcome")) |outcome| if (json.get(outcome, "cleanup_complete")) |complete| if (!complete.bool) return 2;
     const status = result.object.get("status").?.string;
@@ -508,6 +511,10 @@ test "execution exit distinguishes application failure from incomplete cleanup" 
         .{ "{\"status\":\"cancelled\",\"outcome\":{\"cleanup_complete\":true}}", 0 },
         .{ "{\"status\":\"completed\"}", 0 },
         .{ "{\"status\":\"waiting_input\"}", 0 },
+        .{ "{\"status\":\"waiting_input\",\"ready\":false,\"cancellation\":null}", 0 },
+        .{ "{\"status\":\"waiting_input\",\"ready\":false,\"cancellation\":\"requested\"}", 2 },
+        .{ "{\"status\":\"waiting_input\",\"ready\":false,\"cancellation\":\"\"}", 2 },
+        .{ "{\"status\":\"cancelled\",\"ready\":true,\"cancellation\":\"requested\",\"outcome\":{\"cleanup_complete\":true}}", 0 },
         .{ "{\"status\":\"unknown\"}", 2 },
         .{ "{\"status\":\"blocked\"}", 2 },
         .{ "{\"status\":\"cancelling\"}", 2 },

@@ -208,6 +208,8 @@ The CLI never supplies an implicit answer or substitutes a newer question.
 Execution commands return 1 for application failure and 2 for unknown, blocked,
 parked or unfinished cancellation/cleanup, with the actual state in their JSON
 output. Incomplete cleanup takes precedence when the application also failed.
+An ordinary unanswered question returns 0; a question during unfinished
+cancellation cleanup returns 2, while retaining its `waiting_input` status.
 Read-only status/result queries return 0 when the query succeeds.
 Serve-mode ownership distinguishes terminal execution from settled cleanup.
 Failed cleanup retains its task ID for the final `server.closed` recovery list

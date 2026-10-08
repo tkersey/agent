@@ -46,7 +46,18 @@ export function deployment(source, name) {
     writeFileSync(profile, `(version 1)\n(allow default)\n(deny process-exec)\n(allow process-exec (literal ${JSON.stringify(executable)}))\n(deny file-read-data)\n(allow file-read-data (literal ${JSON.stringify(executable)}) (subpath ${JSON.stringify(data)}) ${ancestors.join(' ')} (subpath "/System") (subpath "/usr/lib") (subpath "/dev"))\n(deny file-write*)\n(allow file-write* (subpath ${JSON.stringify(data)}) (subpath "/dev"))\n`, {mode: 0o600});
     writeFileSync(command, `#!/bin/sh\nexec /usr/bin/sandbox-exec -f ${shell(profile)} ${shell(executable)} "$@"\n`, {mode: 0o700});
   } else throw new Error('unqualified native deployment platform');
-  return {data, controller, executable, command, close(passed) {
+  return {data, controller, executable, command, signal(child, signal) {
+    if (process.platform !== 'linux') return child.kill(signal);
+    // The launched PID is strace, not the application inside bwrap's new
+    // session. Its private trace identifies the application's host PID.
+    const trace = readFileSync(join(controller, `trace.${child.pid}`), 'utf8');
+    const encoded = [...Buffer.from(executable)].map(byte => `\\x${byte.toString(16).padStart(2, '0')}`).join('');
+    const executions = trace.split('\n').filter(line => line.includes(`execve("${encoded}",`));
+    const pids = [...new Set(executions.map(line => Number(line.match(/^\s*(\d+)\s+/)?.[1])))];
+    assert.equal(pids.length, 1, 'one application process in this launch trace');
+    assert(Number.isSafeInteger(pids[0]) && pids[0] > 1, 'trace must identify the application PID');
+    process.kill(pids[0], signal);
+  }, close(passed) {
     try {
       let executions = 0;
       if (process.platform === 'linux' && passed) {

@@ -505,7 +505,7 @@ try {
     const interrupted = launch(state, 5000);
     await interrupted.initialize();
     const stopped = once(interrupted.child, 'close');
-    interrupted.child.kill('SIGINT');
+    isolated.signal(interrupted.child, 'SIGINT');
     assert.deepEqual(await stopped, [0, null]);
     assert.equal(interrupted.child.stdin.writableEnded, false);
     await interrupted.end(0, 'cancel');

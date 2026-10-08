@@ -6,7 +6,7 @@ import { mkdir, writeFile, readFile, rename, link, unlink } from 'node:fs/promis
 import { once } from 'node:events';
 import { AgentClient } from '../../examples/native-minimal/stdio-client.mts';
 import { certificates } from './mobility_tls_fixture.mjs';
-import { compareContinuation, missingReplayObject, missingCaptures, omittedAttempts, invalidQueuedMessage, invalidConsumedMessage, falseEventFact } from './native_archive.mjs';
+import { compareContinuation, missingReplayObject, missingCaptures, omittedAttempts, invalidQueuedMessage, invalidConsumedMessage, falseEventFact, readArchive } from './native_archive.mjs';
 import { deployment } from './native_deployment.mjs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -119,6 +119,74 @@ async function foreignApplication(repository, directory, source, schemaId) {
   } finally {
     if (client) { client.child.kill('SIGKILL'); await client.closed; }
     minimal.close(passed);
+  }
+}
+
+async function largeSnapshot(binary, directory, config, trust, invoke) {
+  const root = join(directory, 'large snapshot');
+  const state = join(directory, 'large snapshot state');
+  const configPath = join(directory, 'large snapshot.json');
+  await mkdir(root);
+  const contents = Buffer.alloc(256 * 1024, 0x61);
+  const contentDigest = createHash('sha256').update(contents).digest();
+  const natural = value => {
+    const bytes = [];
+    do { const low = value & 127; value >>>= 7; bytes.push(low | (value ? 128 : 0)); } while (value);
+    return Buffer.from(bytes);
+  };
+  const prefix = Buffer.alloc(8); prefix.writeUInt32LE(1);
+  const parts = [prefix, natural(63)];
+  for (let i = 0; i < 63; i++) {
+    const path = `file-${String(i).padStart(2, '0')}.txt`;
+    await writeFile(join(root, path), contents);
+    const name = Buffer.from(path);
+    parts.push(natural(name.length), name, contentDigest, natural(contents.length), contents);
+  }
+  const expected = Buffer.concat(parts);
+  assert(expected.length > 15 * 1024 * 1024 && expected.length < 16 * 1024 * 1024);
+  await writeFile(configPath, JSON.stringify({...config, workspace: 'large-fixture', snapshot_root: root}));
+  let client;
+  const open = async args => {
+    client = new AgentClient(binary, ['--state-dir', state, '--test-provider', '--trust-root', trust, ...args], {cwd: directory, env: {PATH: '/nonexistent'}});
+    await client.initialize();
+    return client;
+  };
+  try {
+    await open(['--config', configPath]);
+    const description = await client.call('describe');
+    const input = {client_operation_id: 'large-submit', application_id: 'repository-agent', profile_id: description.profile.id, input: {schema_id: 'repository-agent.input.v1', value: {task: 'Inspect this frozen repository.'}}};
+    const accepted = await client.call('task.submit', input);
+    let status;
+    for (let i = 0; i < 400; i++) {
+      status = await client.call('task.status', {task_id: accepted.task_id});
+      if (status.status === 'blocked') break;
+      await delay(10);
+    }
+    assert.equal(status.status, 'blocked', 'large task reaches the ordinary inference grant boundary');
+    assert.equal(status.blocker, 'denied');
+    assert.deepEqual(await client.close(), {code: 0, signal: null}); client = null;
+    // Recovery must use the durable snapshot, even after every source is gone.
+    for (let i = 0; i < 63; i++) await unlink(join(root, `file-${String(i).padStart(2, '0')}.txt`));
+    await open(['--profile-task', accepted.task_id]);
+    assert.equal((await client.call('describe')).profile.resource_identity, description.profile.resource_identity);
+    assert.equal((await client.call('task.submit', input)).task_id, accepted.task_id);
+    assert.equal((await client.call('task.status', {task_id: accepted.task_id})).status, 'blocked');
+    assert.deepEqual(await client.close(), {code: 0, signal: null}); client = null;
+    const archivePath = join(directory, 'large snapshot.bundle');
+    invoke('export-checkpoint', '--state-dir', state, '--task-id', accepted.task_id, '--output', archivePath);
+    const archive = readArchive(await readFile(archivePath));
+    assert.equal(archive.task.resources.length, 1);
+    assert.deepEqual(archive.object(archive.task.resources[0]), expected, 'independent expected snapshot wire bytes');
+    const restoredState = join(directory, 'large snapshot imported');
+    const restored = JSON.parse(invoke('import-checkpoint', '--state-dir', restoredState, '--input', archivePath, '--operation-id', 'large-import'));
+    assert.equal(restored.task_id, accepted.task_id);
+    const reexport = join(directory, 'large snapshot reexport.bundle');
+    invoke('export-checkpoint', '--state-dir', restoredState, '--task-id', accepted.task_id, '--output', reexport);
+    const imported = readArchive(await readFile(reexport));
+    assert.deepEqual(imported.object(imported.task.resources[0]), expected);
+    return {bytes: expected.length, files: 63, durable_roundtrip: true};
+  } finally {
+    if (client) { client.child.kill('SIGKILL'); await client.closed; }
   }
 }
 
@@ -258,6 +326,8 @@ async function repositoryHttps(binary, directory, controller, invokeBase) {
     const separateCredential = spawnSync(binary, ['validate', '--config', referenceConfig, '--credential-file', credential], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
     assert.equal(separateCredential.status, 0, separateCredential.error ?? separateCredential.stderr);
     assert.equal(requests.length, 0, 'configuration admission cannot dispatch inference');
+    const largeSnapshotProof = await largeSnapshot(binary, directory, config, trust, invoke);
+    assert.equal(requests.length, 0, 'large snapshot admission and recovery cannot dispatch without a grant');
     const launch = extra => {
       const client = new AgentClient(binary, ['--state-dir', state, '--authorize-inference', '--test-provider', '--trust-root', trust, ...extra], { cwd: directory, env: { PATH: '/nonexistent' }, onNotification: frame => notifications.push(frame) });
       const call = client.call.bind(client);
@@ -431,7 +501,7 @@ async function repositoryHttps(binary, directory, controller, invokeBase) {
     clients.delete(client);
     assert.equal(requests.length, 5, 'unknown delivery cannot trigger another provider request');
     if (providerFailure) throw providerFailure;
-    return { provider_calls: requests.length, investigation_provider_calls: 4, launch_to_first_provider_ms: firstProviderAt - investigationStarted, investigation_ms: investigationMilliseconds, duration_scope: 'controlled investigation including client actions, deliberate hold and forced restart; not live-provider latency', cancellation_unknown_after_restart: true, cancel_ack_ms: cancelMilliseconds, restart_without_retry: true, frozen_snapshot: true, clarification: true, followup: true, control_ms: latency, held_io_control_samples: controlSamples, ...parity };
+    return { large_snapshot: largeSnapshotProof, provider_calls: requests.length, investigation_provider_calls: 4, launch_to_first_provider_ms: firstProviderAt - investigationStarted, investigation_ms: investigationMilliseconds, duration_scope: 'controlled investigation including client actions, deliberate hold and forced restart; not live-provider latency', cancellation_unknown_after_restart: true, cancel_ack_ms: cancelMilliseconds, restart_without_retry: true, frozen_snapshot: true, clarification: true, followup: true, control_ms: latency, held_io_control_samples: controlSamples, ...parity };
   } finally {
     releaseHeld();
     releaseCancelHeld();

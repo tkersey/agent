@@ -11,7 +11,7 @@ const namespace = @import("namespace.zig");
 const c = @import("native_c");
 
 pub const maximum_bytes = storage.state_bytes;
-const maximum_object = 16 * 1024 * 1024;
+const maximum_object = storage.maximum_object_bytes;
 const maximum_manifest = 1024 * 1024;
 const maximum_schema = 64 * 1024;
 const magic = "AGNX0001";

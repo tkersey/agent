@@ -162,7 +162,8 @@ pub fn encodeOwned(comptime T: type, allocator: std.mem.Allocator, value: T) Err
     return bytes;
 }
 
-/// A decoded value owns all of its byte and element slices through this arena.
+/// Owns decoded containers. decodeOwned also owns byte/text slices;
+/// decodeBorrowed keeps those slices in its caller-owned immutable input.
 pub fn Decoded(comptime T: type) type {
     return struct {
         arena: std.heap.ArenaAllocator,
@@ -179,10 +180,20 @@ pub fn decodeOwned(
     allocator: std.mem.Allocator,
     bytes: []const u8,
 ) Error!Decoded(T) {
+    return decode(T, allocator, bytes, false);
+}
+
+/// Uses the same value admission as decodeOwned, borrowing only byte/text
+/// payloads. The immutable input must outlive the decoded value and its views.
+pub fn decodeBorrowed(comptime T: type, allocator: std.mem.Allocator, bytes: []const u8) Error!Decoded(T) {
+    return decode(T, allocator, bytes, true);
+}
+
+fn decode(comptime T: type, allocator: std.mem.Allocator, bytes: []const u8, comptime borrow_bytes: bool) Error!Decoded(T) {
     var arena = std.heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
     var input: wire.Reader = .{ .input = bytes };
-    const value = try read(T, arena.allocator(), &input);
+    const value = try read(T, arena.allocator(), &input, borrow_bytes);
     try input.finish();
     return .{ .arena = arena, .value = value };
 }
@@ -265,16 +276,16 @@ fn minimumSize(comptime T: type) usize {
     };
 }
 
-fn read(comptime T: type, allocator: std.mem.Allocator, input: *wire.Reader) Error!T {
+fn read(comptime T: type, allocator: std.mem.Allocator, input: *wire.Reader, comptime borrow_bytes: bool) Error!T {
     if (comptime wrapped(T)) {
         if (T.agent_value_kind == .vector) {
             const count = try input.count();
             if (count > T.max_length) return error.InvalidValue;
-            return .{ .items = try readElements(T.Child, allocator, input, count) };
+            return .{ .items = try readElements(T.Child, allocator, input, count, borrow_bytes) };
         }
         const bytes = try input.bytes();
         try checkBlob(T, bytes);
-        return .{ .bytes = try allocator.dupe(u8, bytes) };
+        return .{ .bytes = if (borrow_bytes) bytes else try allocator.dupe(u8, bytes) };
     }
     return switch (@typeInfo(T)) {
         .void => {},
@@ -298,31 +309,31 @@ fn read(comptime T: type, allocator: std.mem.Allocator, input: *wire.Reader) Err
         .@"struct" => |info| blk: {
             var result: T = undefined;
             inline for (info.field_names, info.field_types) |field_name, FieldType|
-                @field(result, field_name) = try read(FieldType, allocator, input);
+                @field(result, field_name) = try read(FieldType, allocator, input, borrow_bytes);
             break :blk result;
         },
         .@"union" => |info| blk: {
             if (info.tag_type == null) @compileError("Agent requires tagged unions");
             const tag = try input.natural();
             inline for (info.field_names, info.field_types, 0..) |field_name, FieldType, index| {
-                if (tag == index) break :blk @unionInit(T, field_name, try read(FieldType, allocator, input));
+                if (tag == index) break :blk @unionInit(T, field_name, try read(FieldType, allocator, input, borrow_bytes));
             }
             break :blk error.InvalidValue;
         },
         .optional => |info| switch (try input.natural()) {
             0 => null,
-            1 => try read(info.child, allocator, input),
+            1 => try read(info.child, allocator, input, borrow_bytes),
             else => error.InvalidValue,
         },
         .array => |info| blk: {
             var result: T = undefined;
-            for (&result) |*element| element.* = try read(info.child, allocator, input);
+            for (&result) |*element| element.* = try read(info.child, allocator, input, borrow_bytes);
             break :blk result;
         },
         .pointer => |info| blk: {
             if (info.size != .slice or info.sentinel_ptr != null)
                 @compileError("Agent portable pointers must be unsentinelled slices");
-            break :blk readElements(info.child, allocator, input, try input.count());
+            break :blk readElements(info.child, allocator, input, try input.count(), borrow_bytes);
         },
         else => @compileError("Unsupported Agent portable value type: " ++ @typeName(T)),
     };
@@ -333,6 +344,7 @@ fn readElements(
     allocator: std.mem.Allocator,
     input: *wire.Reader,
     count: usize,
+    comptime borrow_bytes: bool,
 ) Error![]T {
     const minimum = comptime minimumSize(T);
     if (minimum > 0 and count > (input.input.len - input.position) / minimum)
@@ -340,6 +352,6 @@ fn readElements(
     _ = std.math.mul(usize, count, @sizeOf(T)) catch return error.InvalidLength;
     const result = try allocator.alloc(T, count);
     if (comptime minimum == 0) return result;
-    for (result) |*element| element.* = try read(T, allocator, input);
+    for (result) |*element| element.* = try read(T, allocator, input, borrow_bytes);
     return result;
 }

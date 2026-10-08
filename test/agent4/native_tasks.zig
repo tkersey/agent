@@ -108,7 +108,7 @@ fn ownerManifest(a: std.mem.Allocator, image: []const u8, identity: [32]u8, appl
         .native_host_contract = "unit-native-contract",
         .protocol = "agent-host/1.0",
         .client_mapping = "agent-client-values/1.0",
-        .state_format = "agent-native-state/9",
+        .state_format = "agent-native-state/10",
         .optimize = "safe",
         .program_sha256 = @as([]const u8, &image_hex),
         .program_identity = @as([]const u8, &identity_hex),

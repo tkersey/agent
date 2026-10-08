@@ -8,6 +8,7 @@ const occurrence = @import("occurrence.zig");
 const Digest = state.Digest;
 pub const format: u32 = @import("native_options").state_format;
 pub const state_bytes = @import("native_options").state_bytes;
+pub const maximum_object_bytes = sqlite.maximum_blob_bytes;
 pub const dispatch_reserve = 16 * 1024 * 1024;
 pub const capture_dispatch_reserve = 20 * 1024 * 1024;
 pub const captured_reserve = 15 * 1024 * 1024;
@@ -47,7 +48,7 @@ pub const Store = struct {
             try database.exec("BEGIN IMMEDIATE;");
             errdefer database.exec("ROLLBACK;") catch {};
             try database.exec(std.fmt.comptimePrint("CREATE TABLE meta(singleton INTEGER PRIMARY KEY CHECK(singleton=1), format INTEGER NOT NULL CHECK(format={d}), namespace BLOB NOT NULL, generation INTEGER NOT NULL, parent BLOB NOT NULL, head BLOB NOT NULL);", .{format}) ++
-                \\CREATE TABLE objects(digest BLOB PRIMARY KEY CHECK(length(digest)=32), body BLOB NOT NULL) WITHOUT ROWID;
+                \\CREATE TABLE objects(digest BLOB PRIMARY KEY CHECK(length(digest)=32), body BLOB NOT NULL);
                 \\CREATE TABLE tasks(id BLOB PRIMARY KEY CHECK(length(id)=16), revision INTEGER NOT NULL, terminal INTEGER NOT NULL CHECK(terminal IN(0,1)), body BLOB NOT NULL REFERENCES objects(digest)) WITHOUT ROWID;
                 \\CREATE TABLE operations(id TEXT PRIMARY KEY, request BLOB NOT NULL CHECK(length(request)=32), receipt BLOB NOT NULL REFERENCES objects(digest), task BLOB NOT NULL CHECK(length(task)=16)) WITHOUT ROWID;
                 \\CREATE INDEX operation_tasks ON operations(task,id);
@@ -159,33 +160,68 @@ pub const Store = struct {
 
     pub fn putObject(self: *Store, bytes: []const u8) !state.Reference {
         try self.writing();
+        if (bytes.len > maximum_object_bytes) return error.Capacity;
         const ref: state.Reference = .{ .digest = digest(bytes), .bytes = bytes.len };
-        try self.database.run("INSERT OR IGNORE INTO objects VALUES(?,?)", &.{ .{ .blob = &ref.digest }, .{ .blob = bytes } });
-        // A preexisting hash never authorizes accepting conflicting/corrupt bytes.
-        var query = try self.database.prepare("SELECT body FROM objects WHERE digest=?", &.{.{ .blob = &ref.digest }});
-        defer query.deinit();
-        if (try query.step() != .row or !std.mem.eql(u8, try query.bytes(0), bytes)) return error.CorruptState;
+        try self.database.run("INSERT OR IGNORE INTO objects VALUES(?,zeroblob(?))", &.{ .{ .blob = &ref.digest }, .{ .integer = @intCast(bytes.len) } });
+        const inserted = try self.database.changes() == 1;
+        const location = try self.objectLocation(ref.digest, maximum_object_bytes);
+        if (location.bytes != bytes.len) return error.CorruptState;
+        var blob = try self.database.openBlob("objects", "body", location.row, inserted);
+        var closed = false;
+        defer if (!closed) blob.close() catch {};
+        if (blob.length() != bytes.len) return error.CorruptState;
+        var buffer: [64 * 1024]u8 = undefined;
+        var offset: usize = 0;
+        while (offset < bytes.len) {
+            const chunk = bytes[offset..@min(bytes.len, offset + buffer.len)];
+            if (inserted) {
+                try blob.write(chunk, offset);
+            } else {
+                // A preexisting hash never authorizes conflicting/corrupt bytes.
+                try blob.read(buffer[0..chunk.len], offset);
+                if (!std.mem.eql(u8, buffer[0..chunk.len], chunk)) return error.CorruptState;
+            }
+            offset += chunk.len;
+        }
+        closed = true;
+        try blob.close();
         return ref;
     }
     pub fn object(self: *Store, a: std.mem.Allocator, ref: state.Reference, limit: usize) ![]u8 {
         if (ref.bytes > limit) return error.Capacity;
-        var query = try self.database.prepare("SELECT body FROM objects WHERE digest=?", &.{.{ .blob = &ref.digest }});
-        defer query.deinit();
-        if (try query.step() != .row) return error.MissingArtifact;
-        const bytes = try query.bytes(0);
-        if (bytes.len != ref.bytes or !std.mem.eql(u8, &digest(bytes), &ref.digest)) return error.CorruptState;
-        return a.dupe(u8, bytes);
+        const bytes = try self.acquiredObject(a, ref.digest, limit);
+        errdefer a.free(bytes);
+        if (bytes.len != ref.bytes) return error.CorruptState;
+        return bytes;
     }
     /// Private occurrence lookup. Public artifact reads require a separate
     /// task/audience-bound artifact record, never a bare content digest.
     pub fn acquiredObject(self: *Store, a: std.mem.Allocator, id: Digest, limit: usize) ![]u8 {
-        var query = try self.database.prepare("SELECT body FROM objects WHERE digest=?", &.{.{ .blob = &id }});
+        const location = try self.objectLocation(id, @min(limit, maximum_object_bytes));
+        const bytes = try a.alloc(u8, location.bytes);
+        errdefer a.free(bytes);
+        var blob = try self.database.openBlob("objects", "body", location.row, false);
+        var closed = false;
+        defer if (!closed) blob.close() catch {};
+        if (blob.length() != bytes.len) return error.CorruptState;
+        var offset: usize = 0;
+        while (offset < bytes.len) {
+            const chunk = bytes[offset..@min(bytes.len, offset + 64 * 1024)];
+            try blob.read(chunk, offset);
+            offset += chunk.len;
+        }
+        closed = true;
+        try blob.close();
+        if (!std.mem.eql(u8, &digest(bytes), &id)) return error.CorruptState;
+        return bytes;
+    }
+    fn objectLocation(self: *Store, id: Digest, limit: usize) !struct { row: i64, bytes: usize } {
+        var query = try self.database.prepare("SELECT rowid,length(body) FROM objects WHERE digest=?", &.{.{ .blob = &id }});
         defer query.deinit();
         if (try query.step() != .row) return error.MissingArtifact;
-        const bytes = try query.bytes(0);
-        if (bytes.len > limit) return error.Capacity;
-        if (!std.mem.eql(u8, &digest(bytes), &id)) return error.CorruptState;
-        return a.dupe(u8, bytes);
+        const length = try query.integer(1);
+        if (length < 0 or length > limit) return error.Capacity;
+        return .{ .row = try query.integer(0), .bytes = @intCast(length) };
     }
     fn recordObject(self: *Store, a: std.mem.Allocator, reference: []const u8) ![]u8 {
         if (reference.len != 32) return error.CorruptState;
@@ -470,6 +506,68 @@ test "objects and immutable admission receipts commit together or disappear toge
     try db.run("UPDATE objects SET body=? WHERE digest=?", &.{ .{ .blob = "changed receipt" }, .{ .blob = &digest(receipt_bytes) } });
     try std.testing.expectError(error.CorruptState, store.receipt(a, "request-1", digest("submit/input")));
     try std.testing.expect(@import("native_c").sqlite3_memory_used() <= sqlite.heap_bytes);
+}
+
+test "file-backed objects cross allocator boundaries without growing the SQLite heap" {
+    const a = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    var path_buffer: [4096]u8 = undefined;
+    const path_length = try temporary.dir.realPath(io, &path_buffer);
+    const path = try std.fmt.allocPrint(a, "{s}/objects.sqlite", .{path_buffer[0..path_length]});
+    defer a.free(path);
+    const bytes = try a.alloc(u8, maximum_object_bytes + 1);
+    defer a.free(bytes);
+    @memset(bytes, 0x5a);
+    const sizes = [_]usize{ 0, 8 * 1024 * 1024, 8 * 1024 * 1024 + 1, 9 * 1024 * 1024, maximum_object_bytes };
+    var references: [sizes.len]state.Reference = undefined;
+    {
+        const db = try sqlite.Database.open(a, path, true);
+        defer db.destroy() catch unreachable;
+        defer db.close() catch unreachable;
+        var store = try Store.init(a, db, true, @splat(7));
+        for (sizes, &references) |size, *reference| {
+            try store.begin();
+            reference.* = try store.putObject(bytes[0..size]);
+            try std.testing.expectEqualDeep(reference.*, try store.putObject(bytes[0..size]));
+            _ = try store.commit("large-object");
+        }
+        try store.begin();
+        try std.testing.expectError(error.Capacity, store.putObject(bytes));
+        store.rollback();
+        bytes[0] ^= 1;
+        try store.begin();
+        const rolled_back = try store.putObject(bytes[0 .. 9 * 1024 * 1024]);
+        store.rollback();
+        try std.testing.expectError(error.MissingArtifact, store.object(a, rolled_back, maximum_object_bytes));
+        bytes[0] ^= 1;
+        try std.testing.expect(@import("native_c").sqlite3_memory_used() <= sqlite.heap_bytes);
+    }
+    {
+        const db = try sqlite.Database.open(a, path, false);
+        defer db.destroy() catch unreachable;
+        defer db.close() catch unreachable;
+        var store = try Store.init(a, db, false, @splat(7));
+        for (sizes, references) |size, reference| {
+            const actual = try store.object(a, reference, maximum_object_bytes);
+            defer a.free(actual);
+            try std.testing.expectEqualSlices(u8, bytes[0..size], actual);
+        }
+        const largest = references[references.len - 1];
+        try std.testing.expectError(error.Capacity, store.object(a, largest, maximum_object_bytes - 1));
+        try store.begin();
+        const location = try store.objectLocation(largest.digest, maximum_object_bytes);
+        var blob = try db.openBlob("objects", "body", location.row, true);
+        try blob.write(&.{0xff}, maximum_object_bytes - 1);
+        try blob.close();
+        _ = try store.commit("corrupt-last-byte");
+        try std.testing.expectError(error.CorruptState, store.object(a, largest, maximum_object_bytes));
+        try store.begin();
+        try std.testing.expectError(error.CorruptState, store.putObject(bytes[0..maximum_object_bytes]));
+        store.rollback();
+        try std.testing.expect(@import("native_c").sqlite3_memory_used() <= sqlite.heap_bytes);
+    }
 }
 
 test "commits cannot spend another occurrence's reserved storage" {

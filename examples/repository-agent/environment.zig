@@ -140,7 +140,7 @@ pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration
             .timeout_ms = 1000,
         };
         if (configuration) |value| {
-            resource_bytes = try native.repository.capture(a, io, value.snapshot_root.bytes);
+            resource_bytes = try native.repository.captureWithScratch(a, options.scratch_allocator orelse a, io, value.snapshot_root.bytes);
         } else {
             const content = "pub fn main() void {\n    // The offline fixture has no external effects.\n}\n";
             resource_bytes = try contracts.encodeOwned(native.repository.Record, a, .{ .version = 1, .excluded_entries = 0, .files = .{ .items = &.{.{ .path = .{ .bytes = "src/main.zig" }, .sha256 = digest(content), .contents = .{ .bytes = content } }} } });
@@ -175,7 +175,7 @@ pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration
     var token: []const u8 = if (options.test_provider) "qualification-only" else "";
     if (options.credential_path) |path| token = std.mem.trim(u8, try native.configuration.readFile(a, io, path, 16 * 1024, true), "\r\n");
     const trust_root = if (options.trust_root_path) |path| try native.configuration.readFile(a, io, path, 256 * 1024, false) else null;
-    var snapshot = try native.repository.Snapshot.open(a, resource_bytes);
+    var snapshot = try native.repository.Snapshot.openBorrowed(a, resource_bytes);
     errdefer snapshot.deinit();
     // Check the admitted bytes, including restored snapshots, rather than a
     // pathname: hard links and copied/embedded credentials must not become

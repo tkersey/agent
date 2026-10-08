@@ -368,8 +368,13 @@ Linux links the selected toolchain's musl libc and embeds its license. The
 database wrapper refuses an uncapped allocation fallback and verifies the linked
 SQLite version.
 
-The current namespace format is `agent-native-state/9`; its capture reservation
-phases require a new namespace, and older formats are refused without rewriting.
+The current namespace format is `agent-native-state/10`; its rowid object table
+requires a new namespace, and older formats are refused without rewriting.
+Object writes and reads use bounded incremental SQLite blob I/O. The 16 MiB
+logical object limit excludes SQL record metadata, and no full payload allocation
+is required in SQLite's fixed heap. Exact digests and bytes remain unchanged.
+The repository adapter borrows decoded views from its immutable profile resource
+and releases capture scratch buffers before allocating the I/O worker.
 Archive admission binds every retained message to its original typed admission
 receipt and its exact inbox acquisition/consumption. Original operation keys must
 still resolve to their receipts; historical answer aliases remain valid. Durable

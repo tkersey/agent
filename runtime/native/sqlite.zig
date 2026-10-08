@@ -4,6 +4,7 @@ const std = @import("std");
 const c = @import("native_c");
 var in_use: std.atomic.Value(bool) = .init(false);
 pub const heap_bytes = @import("native_options").sqlite_heap_bytes;
+pub const maximum_blob_bytes = 16 * 1024 * 1024;
 pub const Error = error{ StorageUnavailable, CorruptState, Capacity, Constraint, AlreadyOpen, Closed, Busy } || std.mem.Allocator.Error;
 
 fn result(code: c_int) Error!void {
@@ -61,7 +62,9 @@ pub const Database = opaque {
         try result(opened);
         const ptr = db orelse return error.StorageUnavailable;
         _ = c.sqlite3_extended_result_codes(ptr, 1);
-        _ = c.sqlite3_limit(ptr, c.SQLITE_LIMIT_LENGTH, 16 * 1024 * 1024);
+        // The SQL limit includes the record header and its digest column.
+        // Logical object admission has its own exact payload limit.
+        _ = c.sqlite3_limit(ptr, c.SQLITE_LIMIT_LENGTH, maximum_blob_bytes + 64 * 1024);
         _ = c.sqlite3_limit(ptr, c.SQLITE_LIMIT_SQL_LENGTH, 64 * 1024);
         _ = c.sqlite3_limit(ptr, c.SQLITE_LIMIT_COLUMN, 128);
         _ = c.sqlite3_limit(ptr, c.SQLITE_LIMIT_ATTACHED, 0);
@@ -91,6 +94,12 @@ pub const Database = opaque {
         return @intCast(c.sqlite3_changes64(try self.handle()));
     }
 
+    pub fn openBlob(self: *Database, comptime table: [:0]const u8, comptime column: [:0]const u8, row: i64, writable: bool) Error!Blob {
+        var blob: ?*c.sqlite3_blob = null;
+        try result(c.sqlite3_blob_open(try self.handle(), "main", table.ptr, column.ptr, row, @intFromBool(writable), &blob));
+        return .{ .handle = blob orelse return error.StorageUnavailable };
+    }
+
     /// Only static owner SQL enters sqlite3_exec. Values use bound parameters.
     pub fn exec(self: *Database, comptime sql: [:0]const u8) Error!void {
         try result(c.sqlite3_exec(try self.handle(), sql.ptr, null, null, null));
@@ -117,6 +126,29 @@ pub const Database = opaque {
         var statement = try self.prepare(sql, params);
         defer statement.deinit();
         if (try statement.step() != .done) return error.StorageUnavailable;
+    }
+};
+
+/// Incremental I/O keeps the complete payload in the caller's budget rather
+/// than making a second, power-of-two allocation in SQLite's fixed heap.
+pub const Blob = struct {
+    handle: *c.sqlite3_blob,
+
+    pub fn close(self: *Blob) Error!void {
+        const code = c.sqlite3_blob_close(self.handle);
+        self.* = undefined;
+        try result(code);
+    }
+    pub fn length(self: Blob) usize {
+        return @intCast(c.sqlite3_blob_bytes(self.handle));
+    }
+    pub fn read(self: Blob, bytes: []u8, offset: usize) Error!void {
+        if (offset > self.length() or bytes.len > self.length() - offset) return error.CorruptState;
+        if (bytes.len != 0) try result(c.sqlite3_blob_read(self.handle, bytes.ptr, @intCast(bytes.len), @intCast(offset)));
+    }
+    pub fn write(self: Blob, bytes: []const u8, offset: usize) Error!void {
+        if (offset > self.length() or bytes.len > self.length() - offset) return error.CorruptState;
+        if (bytes.len != 0) try result(c.sqlite3_blob_write(self.handle, bytes.ptr, @intCast(bytes.len), @intCast(offset)));
     }
 };
 

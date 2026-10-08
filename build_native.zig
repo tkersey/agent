@@ -1,7 +1,7 @@
 //! Build/environmental API. No target program executes while generating assets.
 const std = @import("std");
 /// One packaging constant supplies both the namespace reader and manifest.
-pub const state_format: u32 = 9;
+pub const state_format: u32 = 10;
 pub const sqlite_heap_bytes: u32 = 16 * 1024 * 1024;
 pub const state_bytes: u64 = 256 * 1024 * 1024;
 pub const sqlite_flags: []const []const u8 = &.{ "-std=c99", "-DSQLITE_THREADSAFE=1", "-DSQLITE_ENABLE_MEMSYS5=1", "-DSQLITE_OMIT_LOAD_EXTENSION=1", "-DSQLITE_DQS=0", "-DSQLITE_DEFAULT_MEMSTATUS=1", "-DSQLITE_DEFAULT_FOREIGN_KEYS=1" };

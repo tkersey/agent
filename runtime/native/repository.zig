@@ -7,7 +7,7 @@ const c = @import("native_c");
 
 pub const maximum_files = 512;
 pub const maximum_file_bytes = 256 * 1024;
-pub const maximum_snapshot_bytes = 16 * 1024 * 1024;
+pub const maximum_snapshot_bytes = storage.maximum_object_bytes;
 pub const File = struct {
     path: contracts.Text(256),
     sha256: [32]u8,
@@ -32,8 +32,15 @@ pub const Snapshot = struct {
     identity: [32]u8,
 
     pub fn open(a: std.mem.Allocator, bytes: []const u8) !Snapshot {
+        return openWithOwnership(a, bytes, false);
+    }
+    /// The profile owns these immutable bytes for the entire adapter lifetime.
+    pub fn openBorrowed(a: std.mem.Allocator, bytes: []const u8) !Snapshot {
+        return openWithOwnership(a, bytes, true);
+    }
+    fn openWithOwnership(a: std.mem.Allocator, bytes: []const u8, comptime borrowed: bool) !Snapshot {
         if (bytes.len > maximum_snapshot_bytes) return error.SnapshotCapacity;
-        var record = try contracts.decodeOwned(Record, a, bytes);
+        var record = if (borrowed) try contracts.decodeBorrowed(Record, a, bytes) else try contracts.decodeOwned(Record, a, bytes);
         errdefer record.deinit();
         if (record.value.version != 1) return error.UnsupportedSnapshot;
         var previous: ?[]const u8 = null;
@@ -71,6 +78,7 @@ pub const Snapshot = struct {
 
 const Collector = struct {
     allocator: std.mem.Allocator,
+    payload_allocator: std.mem.Allocator,
     io: std.Io,
     files: std.ArrayList(File) = .empty,
     bytes: usize = 0,
@@ -111,10 +119,10 @@ const Collector = struct {
                     if (before.size > maximum_file_bytes or before.size > maximum_snapshot_bytes - self.bytes) return error.SnapshotCapacity;
                     var buffer: [4096]u8 = undefined;
                     var reader = file.reader(self.io, &buffer);
-                    const bytes = reader.interface.allocRemaining(self.allocator, .limited(maximum_file_bytes)) catch |err| return switch (err) {
-                        error.StreamTooLong => error.SnapshotCapacity,
-                        else => err,
-                    };
+                    const bytes = try self.payload_allocator.alloc(u8, @intCast(before.size));
+                    errdefer self.payload_allocator.free(bytes);
+                    reader.interface.readSliceAll(bytes) catch |err| return if (err == error.EndOfStream) error.SnapshotChanged else err;
+                    if (reader.interface.takeByte()) |_| return error.SnapshotChanged else |err| if (err != error.EndOfStream) return err;
                     const after = try file.stat(self.io);
                     if (bytes.len != before.size or before.size != after.size or before.inode != after.inode or !std.meta.eql(before.mtime, after.mtime) or !std.meta.eql(before.ctime, after.ctime)) return error.SnapshotChanged;
                     self.bytes += bytes.len;
@@ -129,11 +137,18 @@ const Collector = struct {
 };
 
 pub fn capture(a: std.mem.Allocator, io: std.Io, root: []const u8) ![]u8 {
-    var arena = std.heap.ArenaAllocator.init(a);
+    return captureWithScratch(a, a, io, root);
+}
+
+/// Keep temporary file buffers out of an output arena whose lifetime is the
+/// whole task profile. Both allocators remain charged to the host budget.
+pub fn captureWithScratch(a: std.mem.Allocator, scratch: std.mem.Allocator, io: std.Io, root: []const u8) ![]u8 {
+    var arena = std.heap.ArenaAllocator.init(scratch);
     defer arena.deinit();
     const directory = try std.Io.Dir.cwd().openDir(io, root, .{ .iterate = true, .follow_symlinks = false });
     defer directory.close(io);
-    var collector: Collector = .{ .allocator = arena.allocator(), .io = io };
+    var collector: Collector = .{ .allocator = arena.allocator(), .payload_allocator = scratch, .io = io };
+    defer for (collector.files.items) |file| scratch.free(file.contents.bytes);
     try collector.walk(directory, "", 0);
     std.mem.sort(File, collector.files.items, {}, struct {
         fn less(_: void, left: File, right: File) bool {
@@ -154,12 +169,20 @@ test "snapshot admission binds sorted paths and exact frozen content" {
     defer a.free(bytes);
     var snapshot = try Snapshot.open(a, bytes);
     defer snapshot.deinit();
+    var borrowed = try Snapshot.openBorrowed(a, bytes);
+    defer borrowed.deinit();
+    try std.testing.expectEqualDeep(snapshot.decoded.value, borrowed.decoded.value);
+    const view = borrowed.get("src/main.zig").?.contents.bytes;
+    try std.testing.expect(@intFromPtr(view.ptr) >= @intFromPtr(bytes.ptr));
+    try std.testing.expect(@intFromPtr(view.ptr) + view.len <= @intFromPtr(bytes.ptr) + bytes.len);
     try std.testing.expectEqualStrings(source, snapshot.get("src/main.zig").?.contents.bytes);
     try std.testing.expect(snapshot.get("../src/main.zig") == null);
     files[0].sha256[0] ^= 1;
     const changed = try contracts.encodeOwned(Record, a, .{ .version = 1, .excluded_entries = 0, .files = .{ .items = &files } });
     defer a.free(changed);
     try std.testing.expectError(error.InvalidSnapshot, Snapshot.open(a, changed));
+    try std.testing.expectError(error.InvalidSnapshot, Snapshot.openBorrowed(a, changed));
+    try std.testing.expectError(error.Truncated, Snapshot.openBorrowed(a, bytes[0 .. bytes.len - 1]));
     for ([_][]const u8{ "/absolute", "../escape", "a/../b", "a//b", "a\\b", "./a" }) |path| try std.testing.expect(!pathAllowed(path));
     try std.testing.expect(pathAllowed("src/雪.zig"));
 }

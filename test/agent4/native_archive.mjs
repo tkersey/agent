@@ -92,9 +92,10 @@ export function cancellationState(bytes, applied, reason = null) {
   return encode(archive);
 }
 
+const eventTags = {accepted: 0, input_required: 1, input_accepted: 2, message_queued: 3, message_consumed: 4, message_not_consumed: 5, cancellation_requested: 6, parked: 7, resumed: 8, completed: 11, failed: 12, cancelled: 13, imported: 14};
 export function omittedFactEvent(bytes, kind) {
   const archive = readArchive(bytes);
-  const tags = {accepted: 0, input_accepted: 2, message_queued: 3, cancellation_requested: 6, resumed: 8, completed: 11, failed: 12, cancelled: 13, imported: 14};
+  const tags = eventTags;
   assert.notEqual(tags[kind], undefined);
   let changed = 0;
   for (const row of archive.manifest[7]) {
@@ -106,6 +107,65 @@ export function omittedFactEvent(bytes, kind) {
     changed++;
   }
   assert(changed > 0, `fixture has no ${kind} event`);
+  return encode(archive);
+}
+
+export function misplacedFactEvent(bytes, change) {
+  const archive = readArchive(bytes);
+  const events = archive.manifest[7].map(row => ({row, event: decodeValue(archive.schemas.get('event'), archive.object(row[2]))}));
+  const question = events.find(({event}) => event[3] === 1);
+  const answer = events.find(({event}) => event[3] === 2);
+  const terminal = events.find(({event}) => event[3] === 11);
+  assert(question && answer && terminal);
+  assert(['early-terminal', 'duplicate-terminal', 'duplicate-question', 'late-question'].includes(change));
+  const isQuestion = change.endsWith('question');
+  const anchor = change === 'late-question' ? answer : question;
+  const sequence = anchor.event[1] + 1n;
+  const inserted = [...question.event];
+  inserted[1] = sequence;
+  inserted[2] = anchor.event[2];
+  inserted[3] = isQuestion ? 1 : 11;
+  inserted[4] = isQuestion ? question.event[4] : [...Buffer.from('{}')];
+  if (change === 'early-terminal' || change === 'late-question') {
+    const replaced = change === 'early-terminal' ? terminal : question;
+    replaced.event[3] = 9;
+    replaced.event[4] = [...Buffer.from('{}')];
+  }
+  for (const {row, event} of events) {
+    if (event[1] >= sequence) { event[1]++; row[0]++; }
+    row[2] = replace(archive, row[2], Buffer.from(encodeValue(archive.schemas.get('event'), event)));
+  }
+  archive.manifest[7].push([sequence, inserted[2], replace(archive, null, Buffer.from(encodeValue(archive.schemas.get('event'), inserted)))]);
+  archive.manifest[7].sort((left, right) => left[0] < right[0] ? -1 : 1);
+  archive.taskValue[taskFields.indexOf('event_high')]++;
+  archive.manifest[3] = replace(archive, archive.manifest[3], Buffer.from(encodeValue(archive.schemas.get('task'), archive.taskValue)));
+  return encode(archive);
+}
+
+export function eventSuffixAfter(bytes, kind) {
+  const archive = readArchive(bytes);
+  const row = archive.manifest[7].find(row => decodeValue(archive.schemas.get('event'), archive.object(row[2]))[3] === eventTags[kind]);
+  assert(row);
+  return retainedEventSuffix(bytes, row[0] + 1n);
+}
+
+export function extraPrivateArtifact(bytes, source = 'checkpoint') {
+  const archive = readArchive(bytes);
+  let reference = archive.task[source];
+  if (source === 'capture') {
+    const row = archive.manifest[6].find(([kind]) => kind === 4);
+    assert(row);
+    const capture = decodeValue(archive.schemas.get('capture'), archive.object(row[2]));
+    assert.equal(capture[4].tag, 1);
+    reference = capture[4].value;
+  }
+  assert(reference);
+  archive.object(reference); // the bytes already belong to the private archive
+  const id = [...hash(Buffer.from('unpublished private artifact'))];
+  const artifact = [id, {tag: 1, value: archive.task.id}, reference, 'application/octet-stream', {tag: 0, value: null}];
+  const body = replace(archive, null, Buffer.from(encodeValue(archive.schemas.get('artifact'), artifact)));
+  archive.manifest[6].push([3, id, body]);
+  archive.manifest[6].sort((left, right) => left[0] - right[0] || Buffer.compare(Buffer.from(left[1]), Buffer.from(right[1])));
   return encode(archive);
 }
 

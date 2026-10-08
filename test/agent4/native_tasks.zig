@@ -121,7 +121,8 @@ fn ownerManifest(a: std.mem.Allocator, image: []const u8, identity: [32]u8, appl
 
 // Rehash a well-formed archive while removing one semantic fact. Keep every
 // other object, sequence, revision and operation receipt unchanged.
-fn omitArchiveFact(a: std.mem.Allocator, io: std.Io, shape: anytype, task: anytype, source: []const u8, destination: []const u8, cancellation: bool) !void {
+const ArchiveFactChange = enum { cancellation_omitted, cancellation_reason, terminal_omitted, message_not_consumed };
+fn omitArchiveFact(a: std.mem.Allocator, io: std.Io, shape: anytype, task: anytype, source: []const u8, destination: []const u8, change: ArchiveFactChange) !void {
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, source, a, .limited(16 * 1024 * 1024));
     const schema_length = std.mem.readInt(u32, bytes[8..12], .little);
     const manifest_length = std.mem.readInt(u32, bytes[12..16], .little);
@@ -139,10 +140,10 @@ fn omitArchiveFact(a: std.mem.Allocator, io: std.Io, shape: anytype, task: anyty
     }
     var target: *Reference = undefined;
     var replacement: []const u8 = undefined;
-    if (cancellation) {
+    if (change == .cancellation_omitted or change == .cancellation_reason) {
         try std.testing.expect(!task.terminal() and task.cancellation != null and !task.cancellation_applied);
         var changed = task;
-        changed.cancellation = null;
+        changed.cancellation = if (change == .cancellation_omitted) null else .{ .bytes = "unacknowledged replacement" };
         replacement = try agent.contracts.encodeOwned(@TypeOf(task), a, changed);
         target = &archive.task;
     } else {
@@ -162,8 +163,12 @@ fn omitArchiveFact(a: std.mem.Allocator, io: std.Io, shape: anytype, task: anyty
             for (blobs.items) |blob| {
                 if (!std.mem.eql(u8, &blob.reference.digest, &row.body.digest)) continue;
                 var event = (try agent.contracts.decodeOwned(Event, a, blob.bytes)).value;
-                if (event.kind != .completed and event.kind != .failed and event.kind != .cancelled) break;
-                try std.testing.expectEqualStrings(@tagName(task.outcome_kind), @tagName(event.kind));
+                if (change == .message_not_consumed) {
+                    if (event.kind != .message_not_consumed) break;
+                } else {
+                    if (event.kind != .completed and event.kind != .failed and event.kind != .cancelled) break;
+                    try std.testing.expectEqualStrings(@tagName(task.outcome_kind), @tagName(event.kind));
+                }
                 event.kind = .blocked;
                 event.data.bytes = "{}";
                 replacement = try agent.contracts.encodeOwned(Event, a, event);
@@ -693,6 +698,27 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     try std.testing.expectEqual(.cancelled, cancelled.value.outcome_kind);
     const cancelled_archive = try std.fmt.allocPrint(frame, "{s}/not-consumed.bundle", .{path_buffer[0..length]});
     _ = try service.exportCheckpoint(frame, no_send.receipt.task, cancelled_archive);
+    const omitted_message = try std.fmt.allocPrint(frame, "{s}/not-consumed-omitted.bundle", .{path_buffer[0..length]});
+    const cancelled_shape = try namespace.store.archiveIndex(frame, no_send.receipt.task, .{ .digest = @splat(0), .bytes = 0 });
+    try omitArchiveFact(frame, io, cancelled_shape, cancelled.value, cancelled_archive, omitted_message, .message_not_consumed);
+    try service.close(frame);
+    service_live = false;
+    try namespace.close();
+    namespace_live = false;
+    {
+        const target = try std.fmt.allocPrint(frame, "{s}/not-consumed-import", .{path_buffer[0..length]});
+        var destination = try native.Namespace.open(a, io, target);
+        defer destination.close() catch unreachable;
+        var imported = try native.tasks.Service(T).init(a, io, &destination, assets, &application, handlers, profile);
+        defer imported.close(frame) catch unreachable;
+        try std.testing.expectError(error.InvalidArchive, imported.importCheckpoint(frame, "import-settlement", omitted_message));
+        const admitted = try imported.importCheckpoint(frame, "import-settlement", cancelled_archive);
+        try std.testing.expectEqualSlices(u8, &no_send.receipt.task, &admitted.receipt.task);
+    }
+    namespace = try native.Namespace.open(a, io, path);
+    namespace_live = true;
+    service = try native.tasks.Service(T).init(a, io, &namespace, assets, &application, handlers, profile);
+    service_live = true;
 
     if (!captured) {
         // Exercise the stored-event projection's byte domain without another
@@ -750,12 +776,16 @@ fn largeArtifactBatch(service: *native.tasks.Service(T), task_id: [16]u8) !void 
     bytes[0] = '"';
     bytes[bytes.len - 1] = '"';
     const id: [32]u8 = @splat(173);
-    // Seed an ordinary authorized task artifact through the store transaction.
-    // This independent record encoding is consumed by the real artifact reader;
-    // it does not replace the task's authored result or claim another outcome.
+    // Isolate the reader's allocation domain with an independently encoded
+    // synthetic publication. Real authored large results are qualified below.
+    var task = try service.task(a, task_id);
+    defer task.deinit();
+    const original_task = try store.taskBytes(a, task_id);
+    defer a.free(original_task);
     try store.begin();
     defer store.rollback();
     const reference = try store.putObject(bytes);
+    const original_reference = try store.putObject(original_task);
     const Artifact = struct {
         id: [32]u8,
         task: ?[16]u8,
@@ -771,7 +801,32 @@ fn largeArtifactBatch(service: *native.tasks.Service(T), task_id: [16]u8) !void 
     defer {
         store.begin() catch unreachable;
         store.database.run("DELETE FROM records WHERE kind='artifact' AND id=? AND task=?", &.{ .{ .blob = &id }, .{ .blob = &task_id } }) catch unreachable;
+        store.database.run("UPDATE tasks SET body=? WHERE id=?", &.{ .{ .blob = &original_reference.digest }, .{ .blob = &task_id } }) catch unreachable;
         service.namespace.commit("test.remove-large-artifact") catch unreachable;
+    }
+
+    {
+        var scratch = std.heap.ArenaAllocator.init(a);
+        defer scratch.deinit();
+        const frame = scratch.allocator();
+        var client: native.client.Client(T) = .{ .service = service };
+        var params = native.json.object();
+        try native.json.put(frame, &params, "task_id", native.json.string(try frame.dupe(u8, &std.fmt.bytesToHex(task_id, .lower))));
+        try native.json.put(frame, &params, "artifact_id", native.json.string(try frame.dupe(u8, &std.fmt.bytesToHex(id, .lower))));
+        try native.json.put(frame, &params, "offset", native.json.string("0"));
+        try native.json.put(frame, &params, "length", native.json.string("1"));
+        try std.testing.expectError(error.ArtifactUnavailable, client.call(frame, .@"artifact.read", params));
+        // A record alone is not publication. This fixture explicitly supplies
+        // the task-owned public root, then restores the original after reading.
+        var published = task.value;
+        published.result_artifact = id;
+        published.client_result = reference;
+        const body = try agent.contracts.encodeOwned(@TypeOf(published), frame, published);
+        try store.begin();
+        defer store.rollback();
+        const stored = try store.putObject(body);
+        try store.database.run("UPDATE tasks SET body=? WHERE id=?", &.{ .{ .blob = &stored.digest }, .{ .blob = &task_id } });
+        try service.namespace.commit("test.publish-large-artifact");
     }
 
     // The fixture's existing SQLite is outside this allocator. Reserve its
@@ -1088,6 +1143,7 @@ fn checkCleanupArchiveFact(a: std.mem.Allocator, frame: std.mem.Allocator, io: s
     const application = service.application;
     const handlers = service.handlers;
     const profile = service.profile;
+    if (pending) _ = try service.requestCancel(frame, "later-cancel", id, "different later reason");
     var task = try service.task(frame, id);
     defer task.deinit();
     const label = if (pending) "pending-control" else @tagName(task.value.outcome_kind);
@@ -1095,7 +1151,9 @@ fn checkCleanupArchiveFact(a: std.mem.Allocator, frame: std.mem.Allocator, io: s
     const invalid = try std.fmt.allocPrint(frame, "{s}/{s}-omitted.bundle", .{ directory, label });
     _ = try service.exportCheckpoint(frame, id, valid);
     const shape = try namespace.store.archiveIndex(frame, id, .{ .digest = @splat(0), .bytes = 0 });
-    try omitArchiveFact(frame, io, shape, task.value, valid, invalid, pending);
+    try omitArchiveFact(frame, io, shape, task.value, valid, invalid, if (pending) .cancellation_omitted else .terminal_omitted);
+    const changed_reason = try std.fmt.allocPrint(frame, "{s}/{s}-reason.bundle", .{ directory, label });
+    if (pending) try omitArchiveFact(frame, io, shape, task.value, valid, changed_reason, .cancellation_reason);
     try service.close(frame);
     service_live.* = false;
     try namespace.close();
@@ -1107,6 +1165,7 @@ fn checkCleanupArchiveFact(a: std.mem.Allocator, frame: std.mem.Allocator, io: s
         var imported = try native.tasks.Service(CleanupTypes).init(a, io, &destination, assets, application, handlers, profile);
         defer imported.close(frame) catch unreachable;
         try std.testing.expectError(error.InvalidArchive, imported.importCheckpoint(frame, "import-fact", invalid));
+        if (pending) try std.testing.expectError(error.InvalidArchive, imported.importCheckpoint(frame, "import-fact", changed_reason));
         // The failed admission publishes neither namespace state nor the
         // operation ID; the original copy must succeed in the same namespace.
         const admitted = try imported.importCheckpoint(frame, "import-fact", valid);
@@ -1118,6 +1177,8 @@ fn checkCleanupArchiveFact(a: std.mem.Allocator, frame: std.mem.Allocator, io: s
             try std.testing.expectEqualStrings("test cancellation", restored.value.cancellation.?.bytes);
             const replay = try imported.requestCancel(frame, "cancel-0", id, "test cancellation");
             try std.testing.expect(replay.replayed);
+            const later = try imported.requestCancel(frame, "later-cancel", id, "different later reason");
+            try std.testing.expect(later.replayed);
             _ = try imported.resumeTask(frame, "resume-control", id, restored.value.revision);
             for (0..8) |_| {
                 const step = try imported.pump(frame);

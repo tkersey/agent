@@ -297,6 +297,8 @@ const AdmissionFact = struct {
     event_seen: bool = false,
 };
 const AdmissionFacts = std.AutoHashMap(u64, AdmissionFact);
+const EventPosition = struct { revision: u64, seq: u64 };
+const RecordEvents = std.AutoHashMap(state.Digest, EventPosition);
 
 fn admissionMethod(kind: state.EventType) ?state.Method {
     return switch (kind) {
@@ -322,11 +324,12 @@ fn admissionMethod(kind: state.EventType) ?state.Method {
 /// Events are retained projections, not an independently authoritative history.
 /// Check facts whose owners survive in the archive; an old question need not be
 /// pending, and an old queued message may since have been consumed or retired.
-fn validateEventFacts(store: *storage.Store, archive: state.Archive, task: state.Task, admissions: *const AdmissionFacts, event: state.Event) !void {
+fn validateEventFacts(store: *storage.Store, archive: state.Archive, task: state.Task, admissions: *const AdmissionFacts, event: state.Event) !?state.Digest {
     var arena = std.heap.ArenaAllocator.init(store.allocator);
     defer arena.deinit();
     const a = arena.allocator();
     const data = (try json.parse(a, event.data.bytes, .{})).value;
+    var record_id: ?state.Digest = null;
     const admission = admissions.get(event.revision);
     if (admissionMethod(event.kind)) |method| {
         if (admission == null or admission.?.method != method) return error.InvalidArchive;
@@ -334,7 +337,7 @@ fn validateEventFacts(store: *storage.Store, archive: state.Archive, task: state
     const expected: json.Value = switch (event.kind) {
         .completed, .failed, .cancelled => {
             if (!same(@tagName(event.kind), @tagName(task.outcome_kind))) return error.InvalidArchive;
-            return;
+            return null;
         },
         .input_required => blk: {
             var id: state.Digest = undefined;
@@ -342,6 +345,8 @@ fn validateEventFacts(store: *storage.Store, archive: state.Archive, task: state
             const reference = record(archive, .question, id) orelse return error.InvalidArchive;
             const bytes = try store.object(a, reference, 256 * 1024);
             const question = (try contracts.decodeOwned(state.Question, a, bytes)).value;
+            if (question.receipt) |answer| if (event.revision >= answer.revision) return error.InvalidArchive;
+            record_id = id;
             const prompt = try store.object(a, question.prompt, 32 * 1024);
             break :blk try state.questionData(a, question, prompt);
         },
@@ -353,7 +358,7 @@ fn validateEventFacts(store: *storage.Store, archive: state.Archive, task: state
             const question = (try contracts.decodeOwned(state.Question, a, bytes)).value;
             const receipt = question.receipt orelse return error.InvalidArchive;
             if (question.answer == null or !same(&storage.digest(try contracts.encodeOwned(state.Receipt, a, receipt)), &fact.receipt)) return error.InvalidArchive;
-            return;
+            return null;
         },
         .message_queued, .message_consumed, .message_not_consumed => blk: {
             var id: state.Digest = undefined;
@@ -362,6 +367,7 @@ fn validateEventFacts(store: *storage.Store, archive: state.Archive, task: state
             const reference = record(archive, .message, id) orelse return error.InvalidArchive;
             const bytes = try store.object(a, reference, 256 * 1024);
             const message = (try contracts.decodeOwned(state.Message, a, bytes)).value;
+            record_id = id;
             const disposition: state.MessageDisposition = switch (event.kind) {
                 .message_queued => .queued,
                 .message_consumed => .consumed,
@@ -378,15 +384,16 @@ fn validateEventFacts(store: *storage.Store, archive: state.Archive, task: state
             const bytes = try store.object(a, reference, 256 * 1024);
             const origin = (try contracts.decodeOwned(state.Origin, a, bytes)).value;
             if (origin.source_revision != event.revision - 1) return error.InvalidArchive;
-            return;
+            return null;
         },
-        .accepted, .cancellation_requested, .resumed => return,
+        .accepted, .cancellation_requested, .resumed => return null,
         // These may precede later progress and have no retained receipt or
         // immutable record of the historical schedule/blocker. Their shape and
         // journal range remain checked; current state cannot refute old state.
-        .parked, .blocked, .delivery_unknown => return,
+        .parked, .blocked, .delivery_unknown => return null,
     };
     if (!same(try json.canonical(a, data), try json.canonical(a, expected))) return error.InvalidArchive;
+    return record_id;
 }
 
 /// Every ordinary Reference is traversed structurally. The occurrence owner
@@ -432,6 +439,8 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
                 if (comptime @hasField(T, "id")) if (!same(&item.id, &row.id)) return error.CorruptState;
                 if (comptime same(kind, "artifact")) {
                     if (item.task == null or !same(&item.task.?, &value.id)) return error.CorruptState;
+                    const published = value.result_artifact orelse return error.InvalidArchive;
+                    if (!same(&published, &item.id)) return error.InvalidArchive;
                 } else if (!same(&item.task, &value.id)) return error.CorruptState;
                 try collector.visit(T, item);
                 if (comptime same(kind, "occurrence")) {
@@ -476,6 +485,8 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
     }
     var admissions = AdmissionFacts.init(a);
     defer admissions.deinit();
+    var message_admissions = std.AutoHashMap(state.Digest, u64).init(a);
+    defer message_admissions.deinit();
     var last_nonterminal_revision: u64 = 0;
     for (archive.operations.items, 0..) |row, i| {
         for (archive.operations.items[0..i]) |prior| if (same(row.key.bytes, prior.key.bytes)) return error.InvalidArchive;
@@ -500,13 +511,23 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
         // An acknowledged follow-up cannot disappear by deleting both its row
         // and its queue entry while retaining the immutable admission receipt.
         if (decoded.value.method == .message and decoded.value.message == null) return error.InvalidArchive;
-        if (decoded.value.message) |id| if (record(archive, .message, id) == null) return error.InvalidArchive;
+        if (decoded.value.message) |id| {
+            if (record(archive, .message, id) == null) return error.InvalidArchive;
+            const admitted = try message_admissions.getOrPut(id);
+            if (admitted.found_existing) return error.InvalidArchive;
+            admitted.value_ptr.* = decoded.value.revision;
+        }
         if (decoded.value.method == .respond and decoded.value.question == null) return error.InvalidArchive;
         if (decoded.value.question) |id| if (record(archive, .question, id) == null) return error.InvalidArchive;
     }
     var next = value.event_floor;
     var revision: u64 = 0;
-    var terminal_seen = false;
+    var terminal: ?EventPosition = null;
+    var nonterminal_event = false;
+    var questions = RecordEvents.init(a);
+    defer questions.deinit();
+    var settlements = RecordEvents.init(a);
+    defer settlements.deinit();
     for (archive.events.items) |row| {
         if (row.seq != next or row.revision == 0 or row.revision < revision or row.revision > value.revision) return error.CorruptState;
         try collector.add(row.body);
@@ -516,11 +537,34 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
         defer decoded.deinit();
         if (!same(&decoded.value.task, &value.id) or decoded.value.seq != row.seq or decoded.value.revision != row.revision) return error.CorruptState;
         try @import("schemas.zig").validateEventData(store.allocator, decoded.value.kind, decoded.value.data.bytes);
-        try validateEventFacts(store, archive, value, &admissions, decoded.value);
-        if (admissionMethod(decoded.value.kind) != null) admissions.getPtr(decoded.value.revision).?.event_seen = true;
+        const identity = try validateEventFacts(store, archive, value, &admissions, decoded.value);
+        if (admissionMethod(decoded.value.kind) != null) {
+            const admitted = admissions.getPtr(decoded.value.revision).?;
+            if (admitted.event_seen) return error.InvalidArchive;
+            admitted.event_seen = true;
+        }
+        const position: EventPosition = .{ .revision = row.revision, .seq = row.seq };
+        const records: ?*RecordEvents = switch (decoded.value.kind) {
+            .input_required => &questions,
+            .message_consumed, .message_not_consumed => &settlements,
+            else => null,
+        };
+        if (records) |index| {
+            const entry = try index.getOrPut(identity.?);
+            if (entry.found_existing) return error.InvalidArchive;
+            entry.value_ptr.* = position;
+        }
         switch (decoded.value.kind) {
-            .completed, .failed, .cancelled => terminal_seen = true,
-            else => {},
+            .completed, .failed, .cancelled => {
+                if (terminal != null or row.revision <= last_nonterminal_revision) return error.InvalidArchive;
+                terminal = position;
+            },
+            // These are the only publications that may follow termination.
+            .cancellation_requested, .imported, .message_not_consumed => {},
+            else => {
+                if (terminal != null) return error.InvalidArchive;
+                nonterminal_event = true;
+            },
         }
         next += 1;
         revision = row.revision;
@@ -530,13 +574,51 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
     // known to be retained must be represented. Prefix pruning may cut through
     // a revision, so only later revisions are certain when the floor is >1.
     const first_revision = archive.events.items[0].revision;
+    var omitted: u64 = 0;
     var facts = admissions.iterator();
     while (facts.next()) |fact| {
-        if ((value.event_floor == 1 or fact.key_ptr.* > first_revision) and !fact.value_ptr.event_seen) return error.InvalidArchive;
+        if (!fact.value_ptr.event_seen) {
+            if (fact.key_ptr.* > first_revision) return error.InvalidArchive;
+            omitted += 1;
+        }
     }
     // These admissions require a nonterminal task. Its terminal transition is
     // later, so a suffix retaining that revision must retain the outcome event.
-    if (value.terminal() and (value.event_floor == 1 or last_nonterminal_revision >= first_revision) and !terminal_seen) return error.InvalidArchive;
+    if (value.terminal() and terminal == null) {
+        if (last_nonterminal_revision >= first_revision or nonterminal_event) return error.InvalidArchive;
+        omitted += 1;
+    }
+    // Question creation and message settlement are owned facts too, although
+    // they do not each mint an operation receipt. Preserve their projections
+    // whenever the retained range proves they cannot have been pruned.
+    for (archive.records.items) |row| {
+        if (row.kind == .question) {
+            if (!questions.contains(row.id)) omitted += 1;
+        } else if (row.kind == .message) {
+            const admitted = message_admissions.get(row.id) orelse return error.InvalidArchive;
+            const bytes = try store.object(store.allocator, row.body, 256 * 1024);
+            defer store.allocator.free(bytes);
+            var decoded = try contracts.decodeOwned(state.Message, store.allocator, bytes);
+            defer decoded.deinit();
+            const disposition = decoded.value.disposition;
+            if (disposition == .queued or disposition == .acquired) continue;
+            if (settlements.get(row.id)) |event| {
+                if (event.revision <= admitted) return error.InvalidArchive;
+                if (disposition == .not_consumed) {
+                    if (!value.terminal()) return error.InvalidArchive;
+                    if (terminal) |outcome| {
+                        if (event.revision != outcome.revision or event.seq <= outcome.seq) return error.InvalidArchive;
+                    } else if (value.event_floor == 1 or event.revision != first_revision) return error.InvalidArchive;
+                }
+            } else {
+                if (admitted >= first_revision) return error.InvalidArchive;
+                omitted += 1;
+            }
+        }
+    }
+    // Each fact above has one distinct publication. Even unknown prefix
+    // timing cannot hide more publications than the number of pruned events.
+    if (omitted > value.event_floor - 1) return error.InvalidArchive;
     const reserved: ?state.Digest = if (current) |pending| if (pending.state == .settled_reply and record(archive, .attempt, pending.state.settled_reply.attempt) != null) pending.state.settled_reply.attempt else null else null;
     if (archive.reservations.items.len != @intFromBool(reserved != null)) return error.CorruptState;
     if (reserved) |attempt| if (!same(&archive.reservations.items[0].attempt, &attempt) or archive.reservations.items[0].bytes != storage.acquired_reserve) return error.CorruptState;

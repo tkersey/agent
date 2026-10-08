@@ -602,6 +602,27 @@ fn queueClosed(comptime Types: type, frame: std.mem.Allocator, connection: *Conn
     return true;
 }
 
+/// Task settlement and complete protocol delivery are separate exit obligations.
+fn shutdownDisposition(code: u8, settled: bool, delivery_pending: bool) u8 {
+    if (code != 0 and code != 2) return code;
+    if (delivery_pending) return 74;
+    return if (code == 0 and !settled) 2 else code;
+}
+
+test "shutdown deadline preserves task and delivery failure distinctions" {
+    for ([_]bool{ false, true }) |settled| {
+        try std.testing.expectEqual(74, shutdownDisposition(0, settled, true));
+        try std.testing.expectEqual(74, shutdownDisposition(2, settled, true));
+        try std.testing.expectEqual(2, shutdownDisposition(2, settled, false));
+        for ([_]bool{ false, true }) |pending| {
+            try std.testing.expectEqual(64, shutdownDisposition(64, settled, pending));
+            try std.testing.expectEqual(74, shutdownDisposition(74, settled, pending));
+        }
+    }
+    try std.testing.expectEqual(0, shutdownDisposition(0, true, false));
+    try std.testing.expectEqual(2, shutdownDisposition(0, false, false));
+}
+
 test "orderly close waits through full slot and byte queues without losing acknowledgments" {
     const a = std.testing.allocator;
     const io = std.testing.io;
@@ -672,6 +693,13 @@ test "orderly close waits through full slot and byte queues without losing ackno
             try std.testing.expect(read > 0);
         }
         try transport.flush(true);
+        if (!byte_pressure) {
+            // Successful writes reset the stall clock without completing the
+            // queue. A hard deadline here is still an I/O failure.
+            try std.testing.expect(transport.count > 0 and transport.count < count);
+            try std.testing.expect(transport.output_progress != null);
+            try std.testing.expectEqual(74, shutdownDisposition(0, true, transport.count != 0));
+        }
         try std.testing.expect(try queueClosed(Types, frame, &connection, &transport, .park, 0));
         var received: std.ArrayList(u8) = .empty;
         defer received.deinit(a);
@@ -691,6 +719,7 @@ test "orderly close waits through full slot and byte queues without losing ackno
         try std.testing.expectEqual(0, transport.count);
         try std.testing.expectEqual(0, transport.queued_bytes);
         try std.testing.expectEqual(0, transport.outstanding);
+        try std.testing.expectEqual(0, shutdownDisposition(0, true, transport.count != 0));
         try std.testing.expect(received.items.len > expected.items.len);
         try std.testing.expectEqualSlices(u8, expected.items, received.items[0..expected.items.len]);
         const last = received.items[expected.items.len..];
@@ -866,8 +895,11 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
                 // A joined worker is the only ordinary path to releasing the
                 // lock. At the hard deadline process exit terminates all native
                 // threads together; durable DISPATCHING recovers as UNKNOWN.
-                if (worker) |slot| if (slot.future != null) std.process.exit(if (code == 0) 2 else code);
-                return if (code == 0 and !parked) 2 else code;
+                const worker_live = if (worker) |slot| slot.future != null else false;
+                const notice_pending = parked and writable and connection.initialized and !closed_notice and (code == 0 or code == 2);
+                const disposition = shutdownDisposition(code, parked and !worker_live, transport.count != 0 or notice_pending);
+                if (worker_live) std.process.exit(disposition);
+                return disposition;
             }
             if (parked) {
                 if (!closed_notice and writable and connection.initialized and (code == 0 or code == 2)) {

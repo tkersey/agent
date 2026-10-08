@@ -213,6 +213,8 @@ pub fn Client(comptime Types: type) type {
             const task_id = try identifier(16, task_value);
             var task = try self.service.task(a, task_id);
             defer task.deinit();
+            const published = task.value.result_artifact orelse return error.ArtifactUnavailable;
+            if (!std.mem.eql(u8, &published, &id)) return error.ArtifactUnavailable;
             const encoded = (try self.service.namespace.store.recordBytes(a, "artifact", id, task_id)) orelse return error.ArtifactUnavailable;
             defer a.free(encoded);
             var saved = try contracts.decodeOwned(state.Artifact, a, encoded);

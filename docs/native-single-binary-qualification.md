@@ -112,6 +112,12 @@ notification. Archive regressions erase a real acknowledged pending cancellation
 or replace required events with shape-valid historical events. Valid retries,
 pending-control recovery, post-terminal cancellation and legal event-prefix
 pruning remain explicit preservation cases.
+The deadline cases also distinguish partial writer progress from complete output
+delivery. Archive cases cover event uniqueness and chronology, question/message
+publication completeness within the available pruning prefix, changed pending
+cancellation reasons, and extra artifact records pointing at private objects.
+Later cancellation reasons preserve the first intent; authorized large-result
+reads retain their original chunk, framing and allocation assertions.
 
 The repository investigation performs native list/read, asks a client question,
 queues a Unicode follow-up during held provider I/O, survives SIGKILL/restart,

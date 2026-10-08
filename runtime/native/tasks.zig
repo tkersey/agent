@@ -110,6 +110,11 @@ fn answerDigest(a: std.mem.Allocator, task_id: state.TaskId, question_id: state.
     return operation(Request, a, .{ .method = .respond, .task = task_id, .question = question_id, .revision = revision, .request = request_digest, .schema = try name(schema_id), .answer = .{ .bytes = answer } });
 }
 
+fn cancelDigest(a: std.mem.Allocator, task_id: state.TaskId, reason: state.Reason) !state.Digest {
+    const Request = struct { method: state.Method, task: state.TaskId, reason: state.Reason };
+    return operation(Request, a, .{ .method = .cancel, .task = task_id, .reason = reason });
+}
+
 pub fn Service(comptime Types: type) type {
     return struct {
         const Self = @This();
@@ -476,8 +481,7 @@ pub fn Service(comptime Types: type) type {
 
         pub fn requestCancel(self: *Self, a: std.mem.Allocator, id: []const u8, task_id: state.TaskId, reason: []const u8) !Admission {
             if (reason.len > 256 or !std.unicode.utf8ValidateSlice(reason)) return error.InvalidParams;
-            const Request = struct { method: state.Method, task: state.TaskId, reason: state.Reason };
-            const request = try operation(Request, a, .{ .method = .cancel, .task = task_id, .reason = .{ .bytes = reason } });
+            const request = try cancelDigest(a, task_id, .{ .bytes = reason });
             if (try self.replay(a, id, request)) |prior| return prior;
             var decoded = try self.task(a, task_id);
             defer decoded.deinit();
@@ -1177,6 +1181,7 @@ pub fn Service(comptime Types: type) type {
             var receipts: std.AutoHashMap(state.Digest, state.Digest) = .init(a);
             defer receipts.deinit();
             var submitted = false;
+            var first_cancel: ?struct { revision: u64, request: state.Digest } = null;
             for (index.operations.items) |row| {
                 var arena = std.heap.ArenaAllocator.init(a);
                 defer arena.deinit();
@@ -1185,6 +1190,9 @@ pub fn Service(comptime Types: type) type {
                 var decoded = try contracts.decodeOwned(state.Receipt, temporary, bytes);
                 defer decoded.deinit();
                 const receipt_value = decoded.value;
+                if (receipt_value.method == .cancel and (first_cancel == null or receipt_value.revision < first_cancel.?.revision)) {
+                    first_cancel = .{ .revision = receipt_value.revision, .request = receipt_value.request_digest };
+                }
                 const primary = try self.operationKey(temporary, receipt_value.client_operation_id.bytes);
                 const original = (try self.store().savedReceipt(temporary, &primary)) orelse return error.InvalidArchive;
                 if (!same(bytes, original) or (!same(row.key.bytes, &primary) and receipt_value.method != .respond)) return error.InvalidArchive;
@@ -1215,6 +1223,12 @@ pub fn Service(comptime Types: type) type {
                 }
             }
             if (!submitted) return error.InvalidArchive;
+            if (value.cancellation) |reason| if (first_cancel) |admitted| {
+                // Later cancel operations may acknowledge another reason, but
+                // cannot replace the first durable control already accepted.
+                const expected = try cancelDigest(a, value.id, reason);
+                if (!same(&admitted.request, &expected)) return error.InvalidArchive;
+            };
             var ordinals: std.AutoHashMap(u64, void) = .init(a);
             defer ordinals.deinit();
             var count: u64 = 0;

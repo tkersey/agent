@@ -6,7 +6,7 @@ import { mkdir, writeFile, readFile, rename, link, unlink } from 'node:fs/promis
 import { once } from 'node:events';
 import { AgentClient } from '../../examples/native-minimal/stdio-client.mts';
 import { certificates } from './mobility_tls_fixture.mjs';
-import { compareContinuation, missingReplayObject, missingCaptures, omittedAttempts, invalidQueuedMessage, invalidConsumedMessage, falseEventFact, readArchive } from './native_archive.mjs';
+import { compareContinuation, missingReplayObject, missingCaptures, omittedAttempts, invalidQueuedMessage, invalidConsumedMessage, falseEventFact, omittedFactEvent, extraPrivateArtifact, readArchive } from './native_archive.mjs';
 import { deployment } from './native_deployment.mjs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -469,9 +469,10 @@ async function repositoryHttps(binary, directory, controller, invokeBase) {
     assert.equal(validQueue.pending_messages.length, 1);
     assert.equal(validQueue.pending_messages[0].disposition, 'queued');
     const historyRecovery = join(directory, 'consumed import recovery');
-    for (const change of ['dangling-occurrence', 'requeued', 'message-message_id', 'message-ordinal', 'message-disposition']) {
+    for (const change of ['dangling-occurrence', 'requeued', 'message-message_id', 'message-ordinal', 'message-disposition', 'omitted-consumption', 'private-artifact']) {
       const malformed = join(directory, `consumed-${change}.bundle`);
-      await writeFile(malformed, change.startsWith('message-') ? falseEventFact(completedBytes, change) : invalidConsumedMessage(completedBytes, change), {mode: 0o600});
+      const changed = change === 'omitted-consumption' ? omittedFactEvent(completedBytes, 'message_consumed') : change === 'private-artifact' ? extraPrivateArtifact(completedBytes, 'capture') : change.startsWith('message-') ? falseEventFact(completedBytes, change) : invalidConsumedMessage(completedBytes, change);
+      await writeFile(malformed, changed, {mode: 0o600});
       const rejected = spawnSync(binary, ['import-checkpoint', '--state-dir', historyRecovery, '--input', malformed, '--operation-id', 'import-history', '--test-provider', '--trust-root', trust], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
       assert.equal(rejected.status, 64, rejected.error ?? rejected.stderr);
       assert.equal(JSON.parse(rejected.stdout).reason, 'InvalidArchive', change);

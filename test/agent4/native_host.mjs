@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 import {join, resolve} from 'node:path';
 import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
-import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence, retainedEventSuffix, cancellationState, omittedFactEvent, omittedAttempts, omittedQuestion, unboundQuestionReply, acquiredQuestionArchive, changedOperationKey, invalidEventData, falseEventFact} from './native_archive.mjs';
+import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence, retainedEventSuffix, cancellationState, omittedFactEvent, misplacedFactEvent, eventSuffixAfter, extraPrivateArtifact, omittedAttempts, omittedQuestion, unboundQuestionReply, acquiredQuestionArchive, changedOperationKey, invalidEventData, falseEventFact} from './native_archive.mjs';
 import {deployment} from './native_deployment.mjs';
 
 const source = resolve(process.argv[2]);
@@ -178,6 +178,15 @@ try {
   assert.equal(exported.sha256, createHash('sha256').update(archiveBytes).digest('hex'));
   assert.equal(exported.bytes, String(archiveBytes.length));
   const archive = readArchive(archiveBytes);
+  for (const [name, bytes] of [
+    ['missing-question-full', omittedFactEvent(archiveBytes, 'input_required')],
+    ['missing-question-suffix', omittedFactEvent(retainedEventSuffix(archiveBytes, 2n), 'input_required')],
+    ['private-artifact', extraPrivateArtifact(archiveBytes)],
+  ]) {
+    writeFileSync(join(directory, `${name}.bundle`), bytes, {mode: 0o600});
+    assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', name, '--input', `${name}.bundle`, '--operation-id', 'import-fact'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'InvalidArchive');
+    assert.equal(cli('import-checkpoint', name, '--input', 'pending.bundle', '--operation-id', 'import-fact').task_id, portable.task_id);
+  }
   for (const change of ['completed', 'failed', 'cancelled', ...['accepted', 'input_accepted', 'cancellation_requested', 'resumed', 'imported'].map(kind => `admission-${kind}`), ...['question_id', 'question_revision', 'request_digest', 'answer_schema_id', 'prompt'].map(field => `question-${field}`)]) {
     const name = `false-event-${change}`;
     writeFileSync(join(directory, `${name}.bundle`), falseEventFact(archiveBytes, change), {mode: 0o600});
@@ -420,7 +429,7 @@ try {
   cli('export-checkpoint', 'protocol state', '--output', 'completed.bundle');
   const completeArchiveBytes = readFileSync(join(directory, 'completed.bundle'));
   for (const [scope, bytes, kinds] of [
-    ['full', completeArchiveBytes, ['accepted', 'input_accepted', 'completed']],
+    ['full', completeArchiveBytes, ['accepted', 'input_required', 'input_accepted', 'completed']],
     ['suffix', retainedEventSuffix(completeArchiveBytes, 2n), ['input_accepted', 'completed']],
   ]) for (const kind of kinds) {
     const name = `missing-${scope}-${kind}`;
@@ -428,6 +437,15 @@ try {
     assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', name, '--input', `${name}.bundle`, '--operation-id', 'import-event'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'InvalidArchive');
     assert.equal(cli('import-checkpoint', name, '--input', 'completed.bundle', '--operation-id', 'import-event').task_id, receipt.task_id);
   }
+  for (const change of ['early-terminal', 'duplicate-terminal', 'duplicate-question', 'late-question']) {
+    const name = `misplaced-${change}`;
+    writeFileSync(join(directory, `${name}.bundle`), misplacedFactEvent(completeArchiveBytes, change), {mode: 0o600});
+    assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', name, '--input', `${name}.bundle`, '--operation-id', 'import-event'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'InvalidArchive');
+    assert.equal(cli('import-checkpoint', name, '--input', 'completed.bundle', '--operation-id', 'import-event').task_id, receipt.task_id);
+  }
+  writeFileSync(join(directory, 'pruned-question.bundle'), eventSuffixAfter(completeArchiveBytes, 'input_required'), {mode: 0o600});
+  assert.equal(cli('import-checkpoint', 'pruned question', '--input', 'pruned-question.bundle', '--operation-id', 'import-pruned-question').task_id, receipt.task_id);
+  assert.deepEqual(cli('result', 'pruned question').outcome.value, {value: 41, answer: 'client answer'});
   // A later cancellation receipt does not resurrect a terminal task. Its
   // retained suffix may legitimately begin after the terminal event.
   cli('cancel', 'protocol state', '--task-id', receipt.task_id, '--operation-id', 'after-completion');

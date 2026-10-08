@@ -615,6 +615,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
         };
         if (writable) transport.flush(if (connection.client) |client| !client.service.profile.authority.revoked and client.service.profile.authority.disclosure else true) catch {
             writable = false;
+            code = 74;
             if (shutdown_at == null) shutdown_at = time;
         };
         // During explicit shutdown, bounded reads remain available while work
@@ -693,7 +694,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
                         try service.notSent(frame, slot.work);
                     } else {
                         try service.unknown(frame, slot.work);
-                        if (shutdown_at != null) code = 2;
+                        if (shutdown_at != null and code == 0) code = 2;
                     }
                     try slot.release();
                     progressed = true;

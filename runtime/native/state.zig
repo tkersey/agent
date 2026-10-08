@@ -1,6 +1,8 @@
 //! Ordinary, versioned environmental records. World continuations remain the
 //! existing BPI3/PST3/PKO3 artifacts, never native pointers or application phases.
 const contracts = @import("agent_contracts");
+const std = @import("std");
+const json = @import("json.zig");
 const occurrence = @import("occurrence.zig");
 pub const Digest = occurrence.Digest;
 pub const TaskId = occurrence.TaskId;
@@ -98,6 +100,26 @@ pub const Message = struct {
     disposition: MessageDisposition,
     occurrence: ?Digest,
 };
+
+/// The immutable part of a question's public projection survives retirement.
+/// The caller supplies the retained prompt object, never a current pending slot.
+pub fn questionData(a: std.mem.Allocator, question: Question, prompt: []const u8) !json.Value {
+    var result = json.object();
+    try json.put(a, &result, "question_id", json.string(try a.dupe(u8, &std.fmt.bytesToHex(question.id, .lower))));
+    try json.put(a, &result, "question_revision", json.string(try std.fmt.allocPrint(a, "{d}", .{question.revision})));
+    try json.put(a, &result, "request_digest", json.string(try a.dupe(u8, &std.fmt.bytesToHex(question.request_digest, .lower))));
+    try json.put(a, &result, "answer_schema_id", json.string(try a.dupe(u8, question.answer_schema_id.bytes)));
+    try json.put(a, &result, "prompt", (try json.parse(a, prompt, .{})).value);
+    return result;
+}
+
+pub fn messageData(a: std.mem.Allocator, message: Message, disposition: MessageDisposition) !json.Value {
+    var result = json.object();
+    try json.put(a, &result, "message_id", json.string(try a.dupe(u8, &std.fmt.bytesToHex(message.id, .lower))));
+    try json.put(a, &result, "ordinal", json.string(try std.fmt.allocPrint(a, "{d}", .{message.ordinal})));
+    try json.put(a, &result, "disposition", json.string(@tagName(disposition)));
+    return result;
+}
 
 pub const EventType = enum {
     accepted,

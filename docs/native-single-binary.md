@@ -77,6 +77,14 @@ compiled handlers/types. A separate build-time tool binds compiler/library,
 dependency, target, resource and license metadata without embedding private
 build paths or a circular executable hash.
 
+Each `definition.capabilities` entry names `identity` and `resource_role`.
+When specializations share an identity but use different native roles, include
+both `.Payload = RequestType` and `.Reply = ResultType` on each entry. The emitter
+matches their canonical schemas to the compiled effect; declaration order does
+not select a role. Identity-only entries remain supported where matching entries
+agree on the role, including same-role specializations. Ambiguous, unused or
+missing declarations fail asset generation.
+
 The reusable application asset value includes its type source. Supplying an
 already emitted application for another target cannot silently ignore a second
 definition or separately substitute a type mapping. Set

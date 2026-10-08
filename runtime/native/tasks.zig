@@ -292,10 +292,7 @@ pub fn Service(comptime Types: type) type {
             try self.store().putEvent(.{ .task = value.id, .seq = value.event_high, .revision = value.revision, .kind = kind, .data = .{ .bytes = bytes } });
         }
         fn messageEvent(self: *Self, a: std.mem.Allocator, value: *state.Task, kind: state.EventType, item: state.Message) !void {
-            var body = json.object();
-            try json.put(a, &body, "message_id", json.string(try a.dupe(u8, &std.fmt.bytesToHex(item.id, .lower))));
-            try json.put(a, &body, "ordinal", json.string(try std.fmt.allocPrint(a, "{d}", .{item.ordinal})));
-            try json.put(a, &body, "disposition", json.string(@tagName(item.disposition)));
+            const body = try state.messageData(a, item, item.disposition);
             const bytes = try json.canonical(a, body);
             defer a.free(bytes);
             try self.event(value, kind, bytes);
@@ -881,12 +878,7 @@ pub fn Service(comptime Types: type) type {
                     const question: state.Question = .{ .id = question_id, .task = value.id, .occurrence = pending.id, .revision = 1, .request_digest = pending.request, .pending_digest = request.value.binding.pending_state_digest, .answer_schema_id = try name(entry.declaration.answer_schema_id.?), .answer_schema_digest = storage.digest(entry.resume_schema), .request = try self.store().putObject(request_bytes), .prompt = try self.store().putObject(prompt), .answer = null, .receipt = null, .retired = false };
                     try self.store().createRecord(state.Question, "question", question_id, value.id, question);
                     try self.store().putRecord(occurrence.Occurrence, "occurrence", pending.id, value.id, waiting);
-                    var event_data = json.object();
-                    try json.put(a, &event_data, "question_id", json.string(try a.dupe(u8, &std.fmt.bytesToHex(question_id, .lower))));
-                    try json.put(a, &event_data, "question_revision", json.string("1"));
-                    try json.put(a, &event_data, "request_digest", json.string(try a.dupe(u8, &std.fmt.bytesToHex(pending.request, .lower))));
-                    try json.put(a, &event_data, "answer_schema_id", json.string(question.answer_schema_id.bytes));
-                    try json.put(a, &event_data, "prompt", (try json.parse(a, prompt, .{})).value);
+                    const event_data = try state.questionData(a, question, prompt);
                     const event_bytes = try json.canonical(a, event_data);
                     defer a.free(event_bytes);
                     try self.event(&value, .input_required, event_bytes);

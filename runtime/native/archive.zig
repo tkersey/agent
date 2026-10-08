@@ -288,6 +288,48 @@ const Collector = struct {
 
 pub const Inspected = struct { task: contracts.Decoded(state.Task), objects: []state.Reference, current: ?occurrence.Occurrence };
 
+/// Events are retained projections, not an independently authoritative history.
+/// Check facts whose owners survive in the archive; an old question need not be
+/// pending, and an old queued message may since have been consumed or retired.
+fn validateEventFacts(store: *storage.Store, archive: state.Archive, task: state.Task, event: state.Event) !void {
+    var arena = std.heap.ArenaAllocator.init(store.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const data = (try json.parse(a, event.data.bytes, .{})).value;
+    const expected: json.Value = switch (event.kind) {
+        .completed, .failed, .cancelled => {
+            if (!same(@tagName(event.kind), @tagName(task.outcome_kind))) return error.InvalidArchive;
+            return;
+        },
+        .input_required => blk: {
+            var id: state.Digest = undefined;
+            _ = std.fmt.hexToBytes(&id, data.object.get("question_id").?.string) catch return error.InvalidArchive;
+            const reference = record(archive, .question, id) orelse return error.InvalidArchive;
+            const bytes = try store.object(a, reference, 256 * 1024);
+            const question = (try contracts.decodeOwned(state.Question, a, bytes)).value;
+            const prompt = try store.object(a, question.prompt, 32 * 1024);
+            break :blk try state.questionData(a, question, prompt);
+        },
+        .message_queued, .message_consumed, .message_not_consumed => blk: {
+            var id: state.Digest = undefined;
+            _ = std.fmt.hexToBytes(&id, data.object.get("message_id").?.string) catch return error.InvalidArchive;
+            const reference = record(archive, .message, id) orelse return error.InvalidArchive;
+            const bytes = try store.object(a, reference, 256 * 1024);
+            const message = (try contracts.decodeOwned(state.Message, a, bytes)).value;
+            const disposition: state.MessageDisposition = switch (event.kind) {
+                .message_queued => .queued,
+                .message_consumed => .consumed,
+                .message_not_consumed => .not_consumed,
+                else => unreachable,
+            };
+            if (disposition != .queued and disposition != message.disposition) return error.InvalidArchive;
+            break :blk try state.messageData(a, message, disposition);
+        },
+        else => return,
+    };
+    if (!same(try json.canonical(a, data), try json.canonical(a, expected))) return error.InvalidArchive;
+}
+
 /// Every ordinary Reference is traversed structurally. The occurrence owner
 /// additionally identifies its private acquired-reply digest. Unknown record
 /// kinds cannot disappear through an open-ended serialization fallback.
@@ -384,6 +426,7 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
         defer decoded.deinit();
         if (!same(&decoded.value.task, &value.id) or decoded.value.seq != row.seq or decoded.value.revision != row.revision) return error.CorruptState;
         try @import("schemas.zig").validateEventData(store.allocator, decoded.value.kind, decoded.value.data.bytes);
+        try validateEventFacts(store, archive, value, decoded.value);
         next += 1;
         revision = row.revision;
     }

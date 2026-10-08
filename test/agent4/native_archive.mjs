@@ -254,6 +254,39 @@ export function invalidEventData(bytes, change) {
   return encode(archive);
 }
 
+// Keep the event schema, task/sequence/revision and every object digest valid,
+// but contradict a retained fact. These independently encoded archives exercise
+// admission rather than the producer's projection helper.
+export function falseEventFact(bytes, change) {
+  const archive = readArchive(bytes);
+  const question = change.startsWith('question-');
+  const message = change.startsWith('message-');
+  const row = archive.manifest[7].find(row => decodeValue(archive.schemas.get('event'), archive.object(row[2]))[3] === (question ? 1 : message ? 3 : 0));
+  assert(row);
+  const value = decodeValue(archive.schemas.get('event'), archive.object(row[2]));
+  const payload = JSON.parse(Buffer.from(value[4]).toString());
+  if (question) {
+    const field = change.slice('question-'.length);
+    payload[field] = ({question_id: 'f'.repeat(64), question_revision: '2', request_digest: 'e'.repeat(64), answer_schema_id: 'false.answer.v1', prompt: {false_prompt: true}})[field];
+    assert.notEqual(payload[field], undefined);
+  } else if (message) {
+    const field = change.slice('message-'.length);
+    if (field === 'false-consumption') {
+      value[3] = 4;
+      payload.disposition = 'consumed';
+    } else {
+      payload[field] = ({message_id: 'f'.repeat(64), ordinal: '999', disposition: 'not_consumed'})[field];
+      assert.notEqual(payload[field], undefined);
+    }
+  } else {
+    value[3] = ({completed: 11, failed: 12, cancelled: 13})[change];
+    assert.notEqual(value[3], undefined);
+  }
+  value[4] = [...Buffer.from(JSON.stringify(payload))];
+  row[2] = replace(archive, row[2], Buffer.from(encodeValue(archive.schemas.get('event'), value)));
+  return encode(archive);
+}
+
 // Resume the actual repository checkpoint using its recorded native replies.
 // World owns both PKI3 encoding and execution; no provider/application policy is
 // reproduced here. The existing native API probe accepts the same envelope.

@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 import {join, resolve} from 'node:path';
 import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
-import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence, retainedEventSuffix, cancellationState, omittedAttempts, omittedQuestion, unboundQuestionReply, acquiredQuestionArchive, changedOperationKey, invalidEventData} from './native_archive.mjs';
+import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence, retainedEventSuffix, cancellationState, omittedAttempts, omittedQuestion, unboundQuestionReply, acquiredQuestionArchive, changedOperationKey, invalidEventData, falseEventFact} from './native_archive.mjs';
 import {deployment} from './native_deployment.mjs';
 
 const source = resolve(process.argv[2]);
@@ -177,6 +177,12 @@ try {
   assert.equal(exported.sha256, createHash('sha256').update(archiveBytes).digest('hex'));
   assert.equal(exported.bytes, String(archiveBytes.length));
   const archive = readArchive(archiveBytes);
+  for (const change of ['completed', 'failed', 'cancelled', ...['question_id', 'question_revision', 'request_digest', 'answer_schema_id', 'prompt'].map(field => `question-${field}`)]) {
+    const name = `false-event-${change}`;
+    writeFileSync(join(directory, `${name}.bundle`), falseEventFact(archiveBytes, change), {mode: 0o600});
+    assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', name, '--input', `${name}.bundle`, '--operation-id', 'import-fact'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'InvalidArchive');
+    assert.equal(cli('import-checkpoint', name, '--input', 'pending.bundle', '--operation-id', 'import-fact').task_id, portable.task_id);
+  }
   assert.equal(Buffer.from(archive.task.id).toString('hex'), portable.task_id);
   assert.equal(archive.build.program_sha256, manifest.program_sha256);
   assert.equal(Buffer.from(archive.task.runtime_identity).toString('hex'), manifest.artifact_sha256);
@@ -412,7 +418,7 @@ try {
     assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', name, '--input', `${name}.bundle`, '--operation-id', 'import-question'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'InvalidArchive');
     assert.equal(cli('import-checkpoint', name, '--input', 'completed.bundle', '--operation-id', 'import-question').task_id, receipt.task_id);
   }
-  for (const [name, mutate] of [['operation-key', changedOperationKey], ['omitted-submission', bytes => changedOperationKey(bytes, 'omitted')], ...['null', 'extra-field', 'question-counter'].map(kind => [`event-${kind}`, bytes => invalidEventData(bytes, kind)])]) {
+  for (const [name, mutate] of [['operation-key', changedOperationKey], ['omitted-submission', bytes => changedOperationKey(bytes, 'omitted')], ...['null', 'extra-field', 'question-counter'].map(kind => [`event-${kind}`, bytes => invalidEventData(bytes, kind)]), ...['question_id', 'question_revision', 'request_digest', 'answer_schema_id', 'prompt'].map(field => [`retired-question-${field}`, bytes => falseEventFact(bytes, `question-${field}`)])]) {
     writeFileSync(join(directory, `${name}.bundle`), mutate(readFileSync(join(directory, 'completed.bundle'))), {mode: 0o600});
     assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', name, '--input', `${name}.bundle`, '--operation-id', 'import-consistency'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'InvalidArchive');
     assert.equal(cli('import-checkpoint', name, '--input', 'completed.bundle', '--operation-id', 'import-consistency').task_id, receipt.task_id);
@@ -494,6 +500,21 @@ try {
   assert.equal(unchanged.status, replayed.status);
   await recovered.end();
 
+  for (const state of [null, 'broken output idle']) {
+    const broken = launch(state, 5000);
+    await broken.initialize();
+    const stopped = once(broken.child, 'close');
+    const readerClosed = once(broken.child.stdout, 'close');
+    broken.child.stdout.destroy();
+    await readerClosed;
+    // stdin remains open: only the failed response write can start shutdown.
+    broken.write(rpc('broken-ping', 'ping', {}));
+    const [code, signal] = await stopped;
+    assert.equal(broken.child.stdin.writableEnded, false);
+    assert.equal(signal, null);
+    assert.equal(code, 74);
+    await broken.end(74);
+  }
   const stalled = spawn(binary, ['serve', '--transport', 'stdio', '--offline'], {cwd: directory, env: options.env, stdio: ['pipe', 'pipe', 'pipe']});
   const stallExit = once(stalled, 'exit');
   const stallClose = once(stalled, 'close');

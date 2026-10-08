@@ -6,7 +6,7 @@ import { mkdir, writeFile, readFile, rename, link, unlink } from 'node:fs/promis
 import { once } from 'node:events';
 import { AgentClient } from '../../examples/native-minimal/stdio-client.mts';
 import { certificates } from './mobility_tls_fixture.mjs';
-import { compareContinuation, missingReplayObject, missingCaptures, omittedAttempts, invalidQueuedMessage, invalidConsumedMessage } from './native_archive.mjs';
+import { compareContinuation, missingReplayObject, missingCaptures, omittedAttempts, invalidQueuedMessage, invalidConsumedMessage, falseEventFact } from './native_archive.mjs';
 import { deployment } from './native_deployment.mjs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -365,9 +365,9 @@ async function repositoryHttps(binary, directory, controller, invokeBase) {
     assert.equal(importedStatus.profile_digest, accepted.profile_digest);
     assert.equal(importedStatus.pending_messages.length, 1);
     const queueRecovery = join(directory, 'queued import recovery');
-    for (const change of ['omitted', 'omitted-acquired', 'omitted-record', 'acquired-unbound', 'queued-bound', 'acquired-question', 'consumed', 'not-consumed', 'schema', 'ordinal-zero', 'ordinal-future', 'payload', 'admission-payload']) {
+    for (const change of ['omitted', 'omitted-acquired', 'omitted-record', 'acquired-unbound', 'queued-bound', 'acquired-question', 'consumed', 'not-consumed', 'schema', 'ordinal-zero', 'ordinal-future', 'payload', 'admission-payload', 'message-message_id', 'message-ordinal', 'message-disposition', 'message-false-consumption']) {
       const malformed = join(directory, `queued-${change}.bundle`);
-      await writeFile(malformed, invalidQueuedMessage(pendingBytes, change), {mode: 0o600});
+      await writeFile(malformed, change.startsWith('message-') ? falseEventFact(pendingBytes, change) : invalidQueuedMessage(pendingBytes, change), {mode: 0o600});
       const rejected = spawnSync(binary, ['import-checkpoint', '--state-dir', queueRecovery, '--input', malformed, '--operation-id', 'import-queued', '--test-provider', '--trust-root', trust], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
       assert.equal(rejected.status, 64, rejected.error ?? rejected.stderr);
       assert.equal(JSON.parse(rejected.stdout).reason, 'InvalidArchive', change);
@@ -377,9 +377,9 @@ async function repositoryHttps(binary, directory, controller, invokeBase) {
     assert.equal(validQueue.pending_messages.length, 1);
     assert.equal(validQueue.pending_messages[0].disposition, 'queued');
     const historyRecovery = join(directory, 'consumed import recovery');
-    for (const change of ['dangling-occurrence', 'requeued']) {
+    for (const change of ['dangling-occurrence', 'requeued', 'message-message_id', 'message-ordinal', 'message-disposition']) {
       const malformed = join(directory, `consumed-${change}.bundle`);
-      await writeFile(malformed, invalidConsumedMessage(completedBytes, change), {mode: 0o600});
+      await writeFile(malformed, change.startsWith('message-') ? falseEventFact(completedBytes, change) : invalidConsumedMessage(completedBytes, change), {mode: 0o600});
       const rejected = spawnSync(binary, ['import-checkpoint', '--state-dir', historyRecovery, '--input', malformed, '--operation-id', 'import-history', '--test-provider', '--trust-root', trust], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
       assert.equal(rejected.status, 64, rejected.error ?? rejected.stderr);
       assert.equal(JSON.parse(rejected.stdout).reason, 'InvalidArchive', change);

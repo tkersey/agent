@@ -14,6 +14,63 @@ const P = agent.model_invocation.Profile(union(enum) { choose: struct { value: u
     .provider_response_bytes = 4096,
 });
 const Adapter = native.responses.Adapter(P);
+const Q = agent.model_invocation.Profile(union(enum) { other: struct { flag: bool } }, .{.{ .name = "other", .description = "Choose a flag." }}, P.representation);
+const PairInput = struct { first: P.ReferenceRequest, second: Q.ReferenceRequest };
+const PairApplication = struct {
+    pub fn emit(c: agent.Context) !@import("boundary").source.Module {
+        const b = c.builder;
+        const unit = try c.schema(void);
+        const first = try agent.responders.defineReferenceModelObserved(P, c, try b.constant(void, {}), false);
+        const second = try agent.responders.defineReferenceModelObserved(Q, c, try b.constant(void, {}), false);
+        const entry = try b.declare(&.{try c.schema(PairInput)}, unit, &.{ b.functions.items[first].effects[0], b.functions.items[second].effects[0] }, &.{});
+        const input = try b.reference(b.parameter(entry, 0));
+        const first_result = try b.variable(try c.schema(agent.responders.ReferenceModelObservation(P, false)));
+        const second_result = try b.variable(try c.schema(agent.responders.ReferenceModelObservation(Q, false)));
+        const offered = try c.literal([1]bool, .{true});
+        const call_first = try b.term(.{ .call = .{ .function = first, .arguments = &.{ try b.primitive(try c.schema(P.ReferenceRequest), .field, &.{input}, 0), offered } } });
+        const call_second = try b.term(.{ .call = .{ .function = second, .arguments = &.{ try b.primitive(try c.schema(Q.ReferenceRequest), .field, &.{input}, 1), offered } } });
+        try b.define(entry, try b.bind(first_result, call_first, try b.bind(second_result, call_second, try b.pure(try b.constant(void, {})))));
+        return b.module(entry, unit);
+    }
+};
+
+test "native emitter binds authored model specializations to exact schemas and roles" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const System = agent.system(.{ .InitialArgs = PairInput, .Result = void, .Failure = void, .application = PairApplication });
+    var compiled = try agent.compile(a, System);
+    defer compiled.deinit();
+    const emit = @import("native_asset_writer");
+    const identity = agent.model_invocation.reference_semantic_identity;
+    const first = .{ .identity = identity, .resource_role = "first-provider", .Payload = P.ReferenceRequest, .Reply = P.ReferenceResult };
+    const second = .{ .identity = identity, .resource_role = "second-provider", .Payload = Q.ReferenceRequest, .Reply = Q.ReferenceResult };
+    var first_handler = Adapter.declaration();
+    first_handler.resource_role = first.resource_role;
+    var second_handler = native.responses.Adapter(Q).declaration();
+    second_handler.resource_role = second.resource_role;
+    var handlers = try native.Registry.init(a, &.{ first_handler, second_handler });
+    defer handlers.deinit();
+    inline for (.{ .{ first, second }, .{ second, first } }) |declarations| {
+        const metadata = try emit.capabilityMetadata(declarations, a, compiled.program);
+        try std.testing.expectEqual(2, metadata.len);
+        for (handlers.entries) |entry| {
+            var matches: usize = 0;
+            for (metadata) |item| if (std.mem.eql(u8, item.payload_sha256, &std.fmt.bytesToHex(digest(entry.payload_schema), .lower)) and std.mem.eql(u8, item.resume_sha256, &std.fmt.bytesToHex(digest(entry.resume_schema), .lower))) {
+                try std.testing.expectEqualStrings(entry.declaration.identity, item.identity);
+                try std.testing.expectEqualStrings(entry.declaration.resource_role, item.resource_role);
+                matches += 1;
+            };
+            try std.testing.expectEqual(1, matches);
+        }
+    }
+    const legacy = .{ .identity = identity, .resource_role = "shared-provider" };
+    const shared = try emit.capabilityMetadata(.{ legacy, legacy }, a, compiled.program);
+    try std.testing.expectEqual(2, shared.len);
+    for (shared) |item| try std.testing.expectEqualStrings("shared-provider", item.resource_role);
+    try std.testing.expectError(error.AmbiguousNativeCapability, emit.capabilityMetadata(.{ legacy, .{ .identity = identity, .resource_role = "other-provider" } }, a, compiled.program));
+    try std.testing.expectError(error.UndeclaredNativeCapability, emit.capabilityMetadata(.{ first, first }, a, compiled.program));
+}
 const profile = "{\"responses\":{\"endpoint\":\"https://example.test/v1/responses\",\"audience\":\"openai-fixture\",\"model\":\"fixture-model\",\"effort\":\"medium\",\"max_output_tokens\":4096,\"request_bytes\":16384,\"response_bytes\":4096,\"timeout_ms\":1000}}";
 fn digest(bytes: []const u8) [32]u8 {
     var out: [32]u8 = undefined;

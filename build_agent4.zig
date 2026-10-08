@@ -753,6 +753,7 @@ pub fn build(b: *std.Build) void {
         native_suite.strip = optimize != .debug;
         native_suite.addImport("world", checked_world);
         native_suite.addImport("agent_native", checked_environment);
+        native_suite.addImport("native_asset_writer", native_graph.module("tools/native/emit.zig"));
         native_suite.addAnonymousImport("native_model_reference", .{ .root_source_file = responses_peer.captureStdOut(.{}) });
         native_suite.addImport("document", native_graph.module("test/consumers/document/consequence.zig"));
         native_graph.testModule(native_product, native_suite);

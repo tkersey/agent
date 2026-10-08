@@ -78,26 +78,16 @@ pub fn Client(comptime Types: type) type {
                 defer a.free(bytes);
                 var saved = try contracts.decodeOwned(state.Message, a, bytes);
                 defer saved.deinit();
-                var item = json.object();
-                try json.put(a, &item, "message_id", try hexadecimal(a, message_id));
-                try json.put(a, &item, "ordinal", try counter(a, saved.value.ordinal));
-                try json.put(a, &item, "disposition", json.string(@tagName(saved.value.disposition)));
-                try messages.append(item);
+                try messages.append(try state.messageData(a, saved.value, saved.value.disposition));
             }
             try json.put(a, &result, "pending_messages", .{ .array = messages });
             try json.put(a, &result, "message_history", json.string("task.events"));
             if (try self.service.pendingQuestion(a, id)) |pending| {
                 var question = pending;
                 defer question.deinit();
-                var item = json.object();
-                try json.put(a, &item, "question_id", try hexadecimal(a, question.value.id));
-                try json.put(a, &item, "question_revision", try counter(a, question.value.revision));
-                try json.put(a, &item, "request_digest", try hexadecimal(a, question.value.request_digest));
-                try json.put(a, &item, "answer_schema_id", json.string(try a.dupe(u8, question.value.answer_schema_id.bytes)));
                 const bytes = try self.service.namespace.store.object(a, question.value.prompt, 32 * 1024);
                 defer a.free(bytes);
-                try json.put(a, &item, "prompt", (try json.parse(a, bytes, .{})).value);
-                try json.put(a, &result, "question", item);
+                try json.put(a, &result, "question", try state.questionData(a, question.value, bytes));
             } else try json.put(a, &result, "question", .null);
             return result;
         }

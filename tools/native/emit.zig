@@ -29,6 +29,47 @@ fn schema(comptime T: type, a: std.mem.Allocator, id: []const u8) !Schema {
     };
 }
 
+fn schemaWire(comptime T: type, a: std.mem.Allocator) ![]const u8 {
+    var builder = boundary.source.Builder.init(a);
+    defer builder.deinit();
+    const root = try agent.contracts.schema(T, &builder);
+    return boundary.data.schema.encodeOwned(a, builder.schemas.items, root);
+}
+
+/// Native roles bind the complete semantic contract. Legacy identity-only
+/// declarations remain valid when every matching declaration names the same
+/// role. Specializations with different roles supply both Payload and Reply;
+/// declaration order never selects authority.
+pub fn capabilityMetadata(comptime declarations: anytype, a: std.mem.Allocator, program: boundary.data.activation.Program) ![]Capability {
+    var result: std.ArrayList(Capability) = .empty;
+    var used: [declarations.len]bool = @splat(false);
+    for (program.effects) |effect| {
+        if (!effect.external) continue;
+        const payload = try boundary.data.schema.encodeOwned(a, program.schemas, effect.payload);
+        const reply = try boundary.data.schema.encodeOwned(a, program.schemas, effect.result);
+        var role: ?[]const u8 = null;
+        inline for (declarations, 0..) |declaration, index| {
+            const typed = @hasField(@TypeOf(declaration), "Payload");
+            if (typed != @hasField(@TypeOf(declaration), "Reply")) @compileError("native capability requires both Payload and Reply");
+            if (std.mem.eql(u8, declaration.identity, effect.identity)) {
+                const matches = if (typed)
+                    std.mem.eql(u8, payload, try schemaWire(declaration.Payload, a)) and std.mem.eql(u8, reply, try schemaWire(declaration.Reply, a))
+                else
+                    true;
+                if (matches) {
+                    if (role) |prior| if (!std.mem.eql(u8, prior, declaration.resource_role)) return error.AmbiguousNativeCapability;
+                    role = declaration.resource_role;
+                    used[index] = true;
+                }
+            }
+        }
+        try result.append(a, .{ .identity = effect.identity, .resource_role = role orelse return error.UndeclaredNativeCapability, .payload_sha256 = try digest(a, payload), .resume_sha256 = try digest(a, reply) });
+    }
+    if (result.items.len != declarations.len) return error.UnusedOrDuplicateCapability;
+    for (used) |matched| if (!matched) return error.UnusedOrDuplicateCapability;
+    return result.toOwnedSlice(a);
+}
+
 pub fn main(init: std.process.Init) !void {
     return write(@import("definition"), @import("application_types"), init);
 }
@@ -53,20 +94,7 @@ pub fn write(comptime definition: type, comptime types: type, init: std.process.
     const image = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     _ = try compiled.encode(a, image);
 
-    var capabilities: std.ArrayList(Capability) = .empty;
-    for (compiled.program.effects) |effect| {
-        if (!effect.external) continue;
-        const role: []const u8 = blk: {
-            inline for (definition.capabilities) |capability| {
-                if (std.mem.eql(u8, capability.identity, effect.identity)) break :blk capability.resource_role;
-            }
-            return error.UndeclaredNativeCapability;
-        };
-        const payload = try boundary.data.schema.encodeOwned(a, compiled.program.schemas, effect.payload);
-        const resume_value = try boundary.data.schema.encodeOwned(a, compiled.program.schemas, effect.result);
-        try capabilities.append(a, .{ .identity = effect.identity, .resource_role = role, .payload_sha256 = try digest(a, payload), .resume_sha256 = try digest(a, resume_value) });
-    }
-    if (capabilities.items.len != definition.capabilities.len) return error.UnusedOrDuplicateCapability;
+    const capabilities = try capabilityMetadata(definition.capabilities, a, compiled.program);
     var resources: std.ArrayList(Resource) = .empty;
     var resource_bytes: usize = 0;
     inline for (definition.resources) |resource| {
@@ -87,7 +115,7 @@ pub fn write(comptime definition: type, comptime types: type, init: std.process.
         .failure = try schema(types.Failure, a, types.failure_schema_id),
         .answer = try schema(types.Answer, a, types.answer_schema_id),
         .message = try schema(types.Message, a, types.message_schema_id),
-        .capabilities = capabilities.items,
+        .capabilities = capabilities,
         .resources = resources.items,
     };
     var writer = std.Io.Writer.Allocating.init(a);

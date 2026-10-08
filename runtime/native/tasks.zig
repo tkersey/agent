@@ -1190,9 +1190,9 @@ pub fn Service(comptime Types: type) type {
                         if (!same(&attempt.value.occurrence, &saved.id) or !std.meta.eql(attempt.value.request, saved.request_object)) return error.InvalidArchive;
                         if (acquired != null and entry.declaration.capture != null) {
                             try requireArchiveRecord(records, .capture, attempt_id);
-                            var capture = try self.record(state.Capture, temporary, "capture", attempt_id, value.id);
-                            defer capture.deinit();
-                            if (!same(&capture.value.occurrence, &saved.id)) return error.InvalidArchive;
+                            var raw_capture = try self.record(state.Capture, temporary, "capture", attempt_id, value.id);
+                            defer raw_capture.deinit();
+                            if (!same(&raw_capture.value.occurrence, &saved.id)) return error.InvalidArchive;
                         }
                     },
                     .inbox => {
@@ -1219,18 +1219,18 @@ pub fn Service(comptime Types: type) type {
                             if (q.answer != null or q.receipt != null or !same(&pending.pending_digest, &q.pending_digest)) return error.InvalidArchive;
                         } else {
                             const reference = q.answer orelse return error.InvalidArchive;
-                            const receipt = q.receipt orelse return error.InvalidArchive;
+                            const answer_receipt = q.receipt orelse return error.InvalidArchive;
                             const bound = answer.?;
                             if (!same(&reference.digest, &storage.digest(reply_value.?)) or reference.bytes != reply_value.?.len or
                                 !same(&bound.digest, &reference.digest) or !same(&bound.pending_digest, &q.pending_digest) or
-                                !same(&receipt.task, &value.id) or receipt.method != .respond or receipt.disposition != .answer_acquired or
-                                receipt.question == null or !same(&receipt.question.?, &question_id)) return error.InvalidArchive;
+                                !same(&answer_receipt.task, &value.id) or answer_receipt.method != .respond or answer_receipt.disposition != .answer_acquired or
+                                answer_receipt.question == null or !same(&answer_receipt.question.?, &question_id)) return error.InvalidArchive;
                             const bytes = try self.store().object(temporary, reference, 64 * 1024);
                             const expected = try answerDigest(temporary, value.id, question_id, q.revision, q.request_digest, q.answer_schema_id.bytes, bytes);
-                            if (!same(&expected, &receipt.request_digest)) return error.InvalidArchive;
-                            const key = try self.operationKey(temporary, receipt.client_operation_id.bytes);
+                            if (!same(&expected, &answer_receipt.request_digest)) return error.InvalidArchive;
+                            const key = try self.operationKey(temporary, answer_receipt.client_operation_id.bytes);
                             const receipt_bytes = (try self.store().savedReceipt(temporary, &key)) orelse return error.InvalidArchive;
-                            if (!same(receipt_bytes, try contracts.encodeOwned(state.Receipt, temporary, receipt))) return error.InvalidArchive;
+                            if (!same(receipt_bytes, try contracts.encodeOwned(state.Receipt, temporary, answer_receipt))) return error.InvalidArchive;
                         }
                     },
                 }

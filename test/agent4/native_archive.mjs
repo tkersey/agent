@@ -471,6 +471,20 @@ export function acquiredQuestionArchive(pendingBytes, completedBytes, omitBindin
   const question = decodeValue(archive.schemas.get('question'), archive.object(questionRow[2]));
   question[12] = false;
   questionRow[2] = replace(archive, questionRow[2], Buffer.from(encodeValue(archive.schemas.get('question'), question)));
+  // Reconstruct the acquisition cut, including its public history. The later
+  // completed archive supplies the real answer/receipt, not permission to keep
+  // completion or cleanup facts after rewinding World to its pending request.
+  assert.equal(question[11].tag, 1);
+  const acquiredRevision = question[11].value[5];
+  set('revision', acquiredRevision);
+  archive.manifest[7] = archive.manifest[7].filter(event => event[1] <= acquiredRevision);
+  const lastEvent = archive.manifest[7].at(-1);
+  assert.equal(lastEvent[1], acquiredRevision);
+  assert.equal(decodeValue(archive.schemas.get('event'), archive.object(lastEvent[2]))[3], 2); // input_accepted
+  set('event_high', lastEvent[0]);
+  for (const operation of archive.manifest[8]) assert(decodeValue(archive.schemas.get('receipt'), archive.object(operation[2]))[5] <= acquiredRevision);
+  const before = new Set(pending.manifest[6].map(([kind, id]) => `${kind}:${Buffer.from(id).toString('hex')}`));
+  archive.manifest[6] = archive.manifest[6].filter(([kind, id]) => kind === 6 || before.has(`${kind}:${Buffer.from(id).toString('hex')}`));
   archive.manifest[3] = replace(archive, archive.manifest[3], Buffer.from(encodeValue(archive.schemas.get('task'), archive.taskValue)));
   pruneObjects(archive);
   return encode(archive);

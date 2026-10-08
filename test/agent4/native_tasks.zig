@@ -148,7 +148,8 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     const path = try std.fmt.allocPrint(a, "{s}/state", .{path_buffer[0..length]});
     defer a.free(path);
     var namespace = try native.Namespace.open(a, io, path);
-    defer namespace.close() catch unreachable;
+    var namespace_live = true;
+    defer if (namespace_live) namespace.close() catch unreachable;
     var service = try native.tasks.Service(T).init(a, io, &namespace, assets, &application, handlers, profile);
     var service_live = true;
     defer if (service_live) service.close(a) catch unreachable;
@@ -187,7 +188,9 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     try service.close(frame);
     service_live = false;
     try namespace.close();
+    namespace_live = false;
     namespace = try native.Namespace.open(a, io, path);
+    namespace_live = true;
     // Both fixtures preserve the exact image and value types. Independently
     // changing either nominal application or message identity must still reject
     // new input, while retaining access to the old task and its queued message.
@@ -240,33 +243,49 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
                 const archive_path = try std.fmt.allocPrint(frame, "{s}/acquired-inbox.bundle", .{path_buffer[0..length]});
                 _ = try service.exportCheckpoint(frame, accepted.receipt.task, archive_path);
                 const imported_path = try std.fmt.allocPrint(frame, "{s}/imported-inbox", .{path_buffer[0..length]});
-                phase = "open acquired inbox destination";
-                var imported_namespace = try native.Namespace.open(a, io, imported_path);
-                defer imported_namespace.close() catch unreachable;
-                var imported_service = try native.tasks.Service(T).init(a, io, &imported_namespace, assets, &application, handlers, profile);
-                defer imported_service.close(frame) catch unreachable;
-                phase = "import acquired inbox";
-                const imported = try imported_service.importCheckpoint(frame, "import-acquired", archive_path);
-                var saved = try imported_service.task(frame, imported.receipt.task);
-                defer saved.deinit();
-                phase = "resume acquired inbox";
-                _ = try imported_service.resumeTask(frame, "resume-imported", imported.receipt.task, saved.value.revision);
-                for (0..32) |_| {
-                    const imported_step = try imported_service.pump(frame);
-                    try std.testing.expect(imported_step != .work);
-                    if (imported_step == .idle) break;
+                // The native SQLite heap admits one connection per process.
+                // Park and close the source before opening the copied state.
+                try service.close(frame);
+                service_live = false;
+                try namespace.close();
+                namespace_live = false;
+                {
+                    phase = "open acquired inbox destination";
+                    var imported_namespace = try native.Namespace.open(a, io, imported_path);
+                    defer imported_namespace.close() catch unreachable;
+                    var imported_service = try native.tasks.Service(T).init(a, io, &imported_namespace, assets, &application, handlers, profile);
+                    defer imported_service.close(frame) catch unreachable;
+                    phase = "import acquired inbox";
+                    const imported = try imported_service.importCheckpoint(frame, "import-acquired", archive_path);
+                    var saved = try imported_service.task(frame, imported.receipt.task);
+                    defer saved.deinit();
+                    phase = "resume acquired inbox";
+                    _ = try imported_service.resumeTask(frame, "resume-imported", imported.receipt.task, saved.value.revision);
+                    for (0..32) |_| {
+                        const imported_step = try imported_service.pump(frame);
+                        try std.testing.expect(imported_step != .work);
+                        if (imported_step == .idle) break;
+                    }
+                    var finished = try imported_service.task(frame, imported.receipt.task);
+                    defer finished.deinit();
+                    try std.testing.expect(finished.value.terminal());
+                    const imported_bytes = try imported_namespace.store.object(frame, finished.value.result.?, 128 * 1024);
+                    var imported_output = try agent.contracts.decodeOwned(T.Output, frame, imported_bytes);
+                    defer imported_output.deinit();
+                    phase = "check imported inbox result";
+                    try std.testing.expectEqual(7, imported_output.value.answer);
+                    try std.testing.expect(imported_output.value.inbox == .message);
+                    try std.testing.expectEqual(9, imported_output.value.inbox.message.value);
+                    try std.testing.expectEqualStrings(&std.fmt.bytesToHex(queued_message.receipt.message.?, .lower), imported_output.value.inbox.message.id.bytes);
                 }
-                var finished = try imported_service.task(frame, imported.receipt.task);
-                defer finished.deinit();
-                try std.testing.expect(finished.value.terminal());
-                const imported_bytes = try imported_namespace.store.object(frame, finished.value.result.?, 128 * 1024);
-                var imported_output = try agent.contracts.decodeOwned(T.Output, frame, imported_bytes);
-                defer imported_output.deinit();
-                phase = "check imported inbox result";
-                try std.testing.expectEqual(7, imported_output.value.answer);
-                try std.testing.expect(imported_output.value.inbox == .message);
-                try std.testing.expectEqual(9, imported_output.value.inbox.message.value);
-                try std.testing.expectEqualStrings(&std.fmt.bytesToHex(queued_message.receipt.message.?, .lower), imported_output.value.inbox.message.id.bytes);
+                phase = "reopen original owner";
+                namespace = try native.Namespace.open(a, io, path);
+                namespace_live = true;
+                service = try native.tasks.Service(T).init(a, io, &namespace, assets, &application, handlers, profile);
+                service_live = true;
+                var parked = try service.task(frame, accepted.receipt.task);
+                defer parked.deinit();
+                _ = try service.resumeTask(frame, "resume-after-inbox-export", accepted.receipt.task, parked.value.revision);
                 imported_inbox = true;
                 phase = "finish original owner";
             }

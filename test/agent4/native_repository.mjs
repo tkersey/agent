@@ -355,7 +355,9 @@ async function repositoryHttps(binary, directory, controller, invokeBase) {
     // then preserve its unknown physical delivery across disconnect and retry.
     client = launch(['--config', configPath]);
     await client.initialize();
-    const cancellationInput = {client_operation_id: 'cancel-held-submit', application_id: 'repository-agent', profile_id: 'fixed', input: {schema_id: 'repository-agent.input.v1', value: {task: 'This investigation will be cancelled.'}}};
+    const cancellationProfile = (await client.call('describe')).profile;
+    assert.equal(cancellationProfile.id, 'controlled-test');
+    const cancellationInput = {client_operation_id: 'cancel-held-submit', application_id: 'repository-agent', profile_id: cancellationProfile.id, input: {schema_id: 'repository-agent.input.v1', value: {task: 'This investigation will be cancelled.'}}};
     const cancellationTask = await client.call('task.submit', cancellationInput);
     let cancelHeldTimer;
     try {

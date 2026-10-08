@@ -224,6 +224,11 @@ async function repositoryHttps(binary, directory, controller, invokeBase) {
     assert.equal(requests.length, 0, 'configuration admission cannot dispatch inference');
     const launch = extra => {
       const client = new AgentClient(binary, ['--state-dir', state, '--authorize-inference', '--test-provider', '--trust-root', trust, ...extra], { cwd: directory, env: { PATH: '/nonexistent' }, onNotification: frame => notifications.push(frame) });
+      const call = client.call.bind(client);
+      client.call = async (method, ...args) => {
+        try { return await call(method, ...args); }
+        catch (error) { error.stack = `${method}: ${error.stack}`; throw error; }
+      };
       clients.add(client);
       return client;
     };

@@ -82,11 +82,19 @@ test "durable owner replays admissions and acquired work, binds answers, and con
     const image = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
     defer a.free(image);
     _ = try compiled.encode(a, image);
-    try ownerRecovery(false, image);
-    try ownerRecovery(true, image);
+    ownerRecovery(false, image) catch |err| {
+        std.debug.print("direct owner recovery: {s}\n", .{@errorName(err)});
+        return err;
+    };
+    ownerRecovery(true, image) catch |err| {
+        std.debug.print("captured owner recovery: {s}\n", .{@errorName(err)});
+        return err;
+    };
 }
 
 fn ownerRecovery(captured: bool, image: []const u8) !void {
+    var phase: []const u8 = "owner admission/restart";
+    errdefer std.debug.print("owner recovery phase: {s}\n", .{phase});
     const a = std.testing.allocator;
     const io = std.testing.io;
     const admitted_image = try boundary.data.program_image.Admitted.decode(a, image);
@@ -228,16 +236,20 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
         if (!captured and !imported_inbox) {
             const queue = (try queue_client.call(frame, .@"task.status", queue_params)).object.get("pending_messages").?.array.items;
             if (queue.len != 0 and std.mem.eql(u8, queue[0].object.get("disposition").?.string, "acquired")) {
+                phase = "export acquired inbox";
                 const archive_path = try std.fmt.allocPrint(frame, "{s}/acquired-inbox.bundle", .{path_buffer[0..length]});
                 _ = try service.exportCheckpoint(frame, accepted.receipt.task, archive_path);
                 const imported_path = try std.fmt.allocPrint(frame, "{s}/imported-inbox", .{path_buffer[0..length]});
+                phase = "open acquired inbox destination";
                 var imported_namespace = try native.Namespace.open(a, io, imported_path);
                 defer imported_namespace.close() catch unreachable;
                 var imported_service = try native.tasks.Service(T).init(a, io, &imported_namespace, assets, &application, handlers, profile);
                 defer imported_service.close(frame) catch unreachable;
+                phase = "import acquired inbox";
                 const imported = try imported_service.importCheckpoint(frame, "import-acquired", archive_path);
                 var saved = try imported_service.task(frame, imported.receipt.task);
                 defer saved.deinit();
+                phase = "resume acquired inbox";
                 _ = try imported_service.resumeTask(frame, "resume-imported", imported.receipt.task, saved.value.revision);
                 for (0..32) |_| {
                     const imported_step = try imported_service.pump(frame);
@@ -250,11 +262,13 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
                 const imported_bytes = try imported_namespace.store.object(frame, finished.value.result.?, 128 * 1024);
                 var imported_output = try agent.contracts.decodeOwned(T.Output, frame, imported_bytes);
                 defer imported_output.deinit();
+                phase = "check imported inbox result";
                 try std.testing.expectEqual(7, imported_output.value.answer);
                 try std.testing.expect(imported_output.value.inbox == .message);
                 try std.testing.expectEqual(9, imported_output.value.inbox.message.value);
                 try std.testing.expectEqualStrings(&std.fmt.bytesToHex(queued_message.receipt.message.?, .lower), imported_output.value.inbox.message.id.bytes);
                 imported_inbox = true;
+                phase = "finish original owner";
             }
         }
         if (step == .idle) break;

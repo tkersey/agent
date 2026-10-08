@@ -158,6 +158,20 @@ unchanged. Qualification still runs on every restored cache. A populated-profile
 rerun must establish actual compiler reuse and complete workflow duration;
 changing the key alone is not a performance result.
 
+Native `native4` uploads a separate snapshot capped at 4 GiB. Run `37750804226`
+passed every check but took 5m47s: restoring the old native3 cache took 53 seconds,
+and the final 9,113,765,765-byte cache again exceeded the 8 GiB upload cap.
+New objects could not be retained. The snapshot keeps metadata and the newest
+whole object directories that fit. It hard-links selected files after compilation
+ends; no local object is erased or modified. Missing objects on a later runner
+are ordinary compiler cache misses. The previous remote entries remain intact.
+Restore moves the snapshot into the usual cache location before dependency
+authentication and compilation. This bounds recurring transfer and allows newly
+built objects to be retained without depending on periodic namespace resets.
+The new snapshot's restore, save, compiler reuse and complete-workflow time must
+all be measured; recent modification time is a retention heuristic, not a claim
+that every retained object will be reused. Authoring keeps its existing policy.
+
 Native CI sets `ZIG_DEBUG_CMD=1` for Zig's internal on-demand build commands.
 The pinned compiler applies this to its build driver and translation helper,
 not to application compilation. Explicit `-Doptimize=safe`, the probe's LLVM
@@ -270,13 +284,14 @@ the restored key, logical file bytes, file count and top-level bucket sizes
 actual Zig cache reuse separately. A prefix restore can be useful even when the
 Actions exact-key `cache-hit` value is false.
 
-Only nonempty caches containing object bytes, no unsupported entry types, and
+Only nonempty uploads containing object bytes, no unsupported entry types, and
 at most **8 GiB** are saved, including after a completed failing check. An
 oversized cache is **not cleared**: upload is skipped and the previous remote
-entry remains available. Empty/metadata-only caches never replace useful ones.
+entry remains available. Native uses the separate 4 GiB snapshot described above;
+its working cache may exceed that bound. Empty/metadata-only caches never replace useful ones.
 Cancellation does not publish an in-progress cache. Cache infrastructure failures
-are diagnostic and cannot convert a failing test into a pass. No pruning policy
-or higher size limit is introduced without new content/restore measurements.
+are diagnostic and cannot convert a failing test into a pass. Local build outputs
+are never pruned to make an upload fit.
 
 ## Incident and acceptance
 

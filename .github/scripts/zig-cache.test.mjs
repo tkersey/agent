@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, truncateSync, statSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, truncateSync, statSync, rmSync, utimesSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { inspectCache } from './zig-cache.mjs';
+import { inspectCache, snapshotCache } from './zig-cache.mjs';
 
 test('default budget admits the observed CI cache and preserves oversized files', t => {
   const root = mkdtempSync(join(tmpdir(), 'zig-cache-budget-'));
@@ -34,4 +34,31 @@ test('cache admission retains useful objects and never erases oversized, empty, 
   symlinkSync(join(root, 'o', 'object'), join(root, 'alias'));
   assert.equal(inspectCache(root, 100).save, false);
   assert.equal(readFileSync(join(root, 'o', 'object'), 'utf8'), 'object');
+});
+
+test('bounded upload retains newest whole objects and metadata without changing the source', t => {
+  const work = mkdtempSync(join(tmpdir(), 'zig-cache-snapshot-'));
+  t.after(() => rmSync(work, { recursive: true, force: true }));
+  const root = join(work, 'source'), output = join(work, 'upload');
+  for (const name of ['o/old', 'o/new', 'o/large', 'h']) mkdirSync(join(root, name), { recursive: true });
+  for (const [name, value, time] of [['o/old/a', 'old', 1], ['o/new/a', 'new', 2], ['o/new/b', 'two', 2], ['o/large/a', 'oversized', 3], ['h/manifest', 'h', 1]]) {
+    const path = join(root, name);
+    writeFileSync(path, value); utimesSync(path, time, time);
+  }
+  const before = inspectCache(root);
+  assert.equal(snapshotCache(root, output, 7).bytes, 7);
+  assert.equal(readFileSync(join(output, 'o/new/a'), 'utf8'), 'new');
+  assert.equal(readFileSync(join(output, 'o/new/b'), 'utf8'), 'two');
+  assert.equal(readFileSync(join(output, 'h/manifest'), 'utf8'), 'h');
+  assert.equal(existsSync(join(output, 'o/old')), false);
+  assert.equal(existsSync(join(output, 'o/large')), false);
+  assert.deepEqual(inspectCache(root), before);
+  assert.equal(readFileSync(join(root, 'o/old/a'), 'utf8'), 'old');
+  assert.equal(statSync(join(root, 'o/new/a')).ino, statSync(join(output, 'o/new/a')).ino);
+  assert.throws(() => snapshotCache(root, output, 7), { code: 'EEXIST' });
+  assert.throws(() => snapshotCache(root, join(root, 'nested'), 7), /disjoint/);
+  assert.throws(() => snapshotCache(root, join(work, 'small'), 0), /positive/);
+  symlinkSync(join(root, 'o/new'), join(root, 'alias'));
+  assert.throws(() => snapshotCache(root, join(work, 'aliased'), 7), /unsupported/);
+  assert.equal(existsSync(join(work, 'aliased')), false);
 });

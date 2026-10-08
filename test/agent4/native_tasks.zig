@@ -196,19 +196,6 @@ fn omitArchiveFact(a: std.mem.Allocator, io: std.Io, shape: anytype, task: anyty
             if (found) break;
         }
         try std.testing.expect(found);
-        try std.testing.expect(!page.object.get("has_more").?.bool);
-        var subscribed: native.client.Client(T) = .{ .service = service };
-        subscribed.subscriptions[0] = .{ .id = @splat(9), .task = admitted.receipt.task, .after = 0 };
-        var notified = false;
-        while (try subscribed.notification(a)) |notification| {
-            _ = try native.json.parse(a, try native.json.frame(a, notification), .{});
-            const event = notification.object.get("params").?.object.get("event").?;
-            if (std.mem.eql(u8, event.object.get("type").?.string, "input_required")) {
-                notified = true;
-                try std.testing.expectEqualStrings(try native.json.canonical(a, ref), try native.json.canonical(a, event.object.get("data").?.object.get("prompt_ref").?));
-            }
-        }
-        try std.testing.expect(notified);
     }
     const previous = target.*;
     var digest: [32]u8 = undefined;
@@ -825,6 +812,19 @@ fn questionReferenceWitness(a: std.mem.Allocator, service: *native.tasks.Service
             try std.testing.expectEqualStrings(try native.json.canonical(a, ref), try native.json.canonical(a, data_value.object.get("prompt_ref").?));
         }
         try std.testing.expect(found);
+        try std.testing.expect(!page.object.get("has_more").?.bool);
+        var subscribed: native.client.Client(T) = .{ .service = service };
+        subscribed.subscriptions[0] = .{ .id = @splat(9), .task = admitted.receipt.task, .after = 0 };
+        var notified = false;
+        while (try subscribed.notification(a)) |notification| {
+            _ = try native.json.parse(a, try native.json.frame(a, notification), .{});
+            const event = notification.object.get("params").?.object.get("event").?;
+            if (std.mem.eql(u8, event.object.get("type").?.string, "input_required")) {
+                notified = true;
+                try std.testing.expectEqualStrings(try native.json.canonical(a, ref), try native.json.canonical(a, event.object.get("data").?.object.get("prompt_ref").?));
+            }
+        }
+        try std.testing.expect(notified);
         var replies: native.json.Value = .{ .array = .init(a) };
         for (0..16) |i| try replies.array.append(try native.protocol.response(a, try native.json.number(a, i), if (i % 2 == 0) status else page));
         _ = try native.json.parse(a, try native.json.frame(a, replies), .{});

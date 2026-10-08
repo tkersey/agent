@@ -180,7 +180,7 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     if (std.mem.eql(u8, command, "--help")) {
         if (args.next() != null) return 64;
         if (comptime @hasDecl(Environment, "configure")) {
-            try std.Io.File.stdout().writeStreamingAll(init.io, "Configured application commands:\nvalidate --config FILE\nrun --config FILE --task TEXT --state-dir PATH --authorize-inference --credential-file FILE\nserve --transport stdio --config FILE --state-dir PATH [--authorize-inference --credential-file FILE]\nresume --state-dir PATH [--task-id ID] [--config FILE] [--authorize-inference --credential-file FILE]\nUse --profile-task ID with serve to restore that task's frozen profile and snapshot.\nAn explicit --trust-root DER_FILE selects a TLS trust root. Credentials are never discovered.\nOffline mode uses embedded deterministic fixtures and requires --offline.\n\n");
+            try std.Io.File.stdout().writeStreamingAll(init.io, "Configured application commands:\nvalidate --config FILE\nrun --config FILE --task TEXT --state-dir PATH --authorize-inference --credential-file FILE\nserve --transport stdio --config FILE --state-dir PATH [--authorize-inference --credential-file FILE]\nresume --state-dir PATH [--task-id ID] [--config FILE] [--authorize-inference --credential-file FILE]\nUse --profile-task ID with serve to restore that task's frozen profile and snapshot.\nAn explicit --trust-root DER_FILE selects a TLS trust root. Credentials are never discovered.\n--test-provider selects loopback HTTPS with a built-in non-secret token; it requires --trust-root and rejects --credential-file.\nStatus/result read saved task data without loading execution configuration.\nOffline mode uses embedded deterministic fixtures and requires --offline.\n\n");
         }
         try std.Io.File.stdout().writeStreamingAll(init.io, "Agent native application\n\n--help\ndescribe-build\nlicenses\ndemo --offline --state-dir PATH\nserve --transport stdio --offline [--state-dir PATH]\nstatus|result|resume|cancel --offline --state-dir PATH [--task-id ID]\nrun --offline --state-dir PATH --input-json JSON [--operation-id ID]\nrespond --offline --state-dir PATH --task-id ID --question-id ID --question-revision N --request-digest SHA256 --answer-json JSON [--operation-id ID]\nexport-checkpoint --offline --state-dir PATH [--task-id ID] --output FILE\nimport-checkpoint --offline --state-dir NEW_PATH --input FILE [--operation-id ID]\n\nA state directory enables durable tasks. Without it, serve provides discovery only.\nTask selection is required when more than one applicable task exists.\nResume and cancel accept --operation-id; resume retries also require the original --expected-revision.\n");
         return 0;
@@ -210,6 +210,7 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     const human = std.meta.stringToEnum(HumanCommand, command);
     if (!demo and !serving and !validating and human == null) return 64;
     var offline = false;
+    var test_provider = false;
     var stdio = false;
     var state_path: ?[]const u8 = null;
     var config_path: ?[]const u8 = null;
@@ -220,7 +221,7 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     var authorize_inference = false;
     var human_options: HumanOptions = .{};
     while (args.next()) |arg| {
-        if (std.mem.eql(u8, arg, "--offline") and !offline) offline = true else if (std.mem.eql(u8, arg, "--transport") and !stdio and serving) {
+        if (std.mem.eql(u8, arg, "--offline") and !offline) offline = true else if (std.mem.eql(u8, arg, "--test-provider") and !test_provider) test_provider = true else if (std.mem.eql(u8, arg, "--transport") and !stdio and serving) {
             if (!std.mem.eql(u8, args.next() orelse return 64, "stdio")) return 64;
             stdio = true;
         } else if (std.mem.eql(u8, arg, "--state-dir") and state_path == null) {
@@ -261,8 +262,9 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     }
     if ((serving and !stdio) or (!serving and !validating and state_path == null) or (human == .run and human_options.input_json == null and task_text == null)) return 64;
     if ((demo and !offline) or (validating and state_path != null) or (offline and authorize_inference) or (task_text != null and human_options.input_json != null) or (profile_task != null and state_path == null)) return 64;
+    if (test_provider and (offline or credential_path != null or trust_root_path == null)) return 64;
     if (comptime !@hasDecl(Environment, "configure")) {
-        if (!offline or validating or config_path != null or credential_path != null or trust_root_path != null or profile_task != null or authorize_inference) return 64;
+        if (!offline or validating or config_path != null or credential_path != null or trust_root_path != null or profile_task != null or authorize_inference or test_provider) return 64;
     }
     if (human == .respond and (human_options.answer.value == null or human_options.answer.id == null or human_options.answer.revision == null or human_options.answer.request == null)) return 64;
     if ((human == .@"import-checkpoint" and human_options.checkpoint_input == null) or (human == .@"export-checkpoint" and human_options.checkpoint_output == null)) return 64;
@@ -297,29 +299,31 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
     defer if (service) |*owner| owner.close(a) catch {};
     if (namespace) |*owner| service = try tasks.Service(Types).init(a, init.io, owner, assets, &application, handlers, profile);
     if (comptime @hasDecl(Environment, "configure")) {
-        var frozen: ?tasks.FrozenInputs = null;
-        if (profile_task) |text| {
-            const id = client_api.identifier(16, json.string(text)) catch return 64;
-            frozen = service.?.frozenInputs(profile_allocator, id) catch return 64;
-        } else if (human == .@"import-checkpoint") {
-            frozen = service.?.frozenArchiveInputs(profile_allocator, human_options.checkpoint_input.?) catch return 64;
-        } else if (human != null and human.? != .run) {
-            const id = selectTask(Types, profile_allocator, &service.?, human_options.task_id, human == .@"resume" or human == .cancel) catch return 64;
-            frozen = service.?.frozenInputs(profile_allocator, id) catch return 64;
+        if (human != .status and human != .result) {
+            var frozen: ?tasks.FrozenInputs = null;
+            if (profile_task) |text| {
+                const id = client_api.identifier(16, json.string(text)) catch return 64;
+                frozen = service.?.frozenInputs(profile_allocator, id) catch return 64;
+            } else if (human == .@"import-checkpoint") {
+                frozen = service.?.frozenArchiveInputs(profile_allocator, human_options.checkpoint_input.?) catch return 64;
+            } else if (human != null and human.? != .run) {
+                const id = selectTask(Types, profile_allocator, &service.?, human_options.task_id, human == .@"resume" or human == .cancel) catch return 64;
+                frozen = service.?.frozenInputs(profile_allocator, id) catch return 64;
+            }
+            const admitted = Environment.configure(profile_allocator, init.io, .{ .offline = offline, .test_provider = test_provider, .config_path = config_path, .credential_path = credential_path, .trust_root_path = trust_root_path }, frozen, assets) catch return 64;
+            if (admitted.bytes.len > 256 * 1024) return 64;
+            if (frozen) |saved| {
+                if (!std.mem.eql(u8, saved.profile, admitted.bytes) or !std.mem.eql(u8, saved.profile_id, admitted.id)) return 64;
+            }
+            profile.id = admitted.id;
+            profile.bytes = admitted.bytes;
+            profile.resources = admitted.resources;
+            profile.environment = admitted.environment;
+            profile.authority.inference = offline or authorize_inference;
+            profile.validate() catch return 64;
+            application.execution_mode = if (offline) .offline else .live;
+            if (service) |*owner| owner.profile = profile;
         }
-        const admitted = Environment.configure(profile_allocator, init.io, .{ .offline = offline, .config_path = config_path, .credential_path = credential_path, .trust_root_path = trust_root_path }, frozen, assets) catch return 64;
-        if (admitted.bytes.len > 256 * 1024) return 64;
-        if (frozen) |saved| {
-            if (!std.mem.eql(u8, saved.profile, admitted.bytes) or !std.mem.eql(u8, saved.profile_id, admitted.id)) return 64;
-        }
-        profile.id = admitted.id;
-        profile.bytes = admitted.bytes;
-        profile.resources = admitted.resources;
-        profile.environment = admitted.environment;
-        profile.authority.inference = offline or authorize_inference;
-        profile.validate() catch return 64;
-        application.execution_mode = if (offline) .offline else .live;
-        if (service) |*owner| owner.profile = profile;
     }
     // Grant the finalized launch profile, including restored immutable inputs.
     // Task admission checks the same digest derived from its durable references.

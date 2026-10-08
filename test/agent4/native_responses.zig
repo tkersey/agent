@@ -69,6 +69,18 @@ test "native Responses v1 independently specified capture corpus" {
         try std.testing.expectEqualStrings(case.object.get("result").?.string, @tagName(result.value.result));
         try std.testing.expectEqualStrings(case.object.get("replay").?.string, @tagName(result.value.replay_status));
         if (case.object.get("reason")) |reason| try std.testing.expectEqualStrings(reason.string, @tagName(result.value.result.unsupported_response));
+        if (case.object.get("usage")) |expected| {
+            const available = result.value.usage orelse return error.MissingUsage;
+            try std.testing.expectEqual(try native.json.numberInteger(u64, expected.object.get("input_tokens").?.number_string), available.input_tokens);
+            try std.testing.expectEqual(try native.json.numberInteger(u64, expected.object.get("output_tokens").?.number_string), available.output_tokens);
+            try std.testing.expectEqual(try native.json.numberInteger(u64, expected.object.get("cached_input_tokens").?.number_string), available.cached_input_tokens.?);
+            try std.testing.expectEqual(@as(?u64, available.output_tokens), projection.output_tokens);
+            try std.testing.expect(result.value.replay == null and projection.objects.len == 0);
+        }
+        if (case.object.get("usage_absent") != null) {
+            try std.testing.expect(result.value.usage == null);
+            try std.testing.expect(projection.output_tokens == null);
+        }
         for (references) |expected| if (std.mem.eql(u8, name, expected.object.get("name").?.string)) {
             const encoded = try contracts.encodeOwned(P.Result, a, result.value.result);
             const hex = expected.object.get("result").?.string;

@@ -78,9 +78,9 @@ pub const Context = struct {
     io: std.Io,
     authority: *const Authority,
     task_id: []const u8,
-    profile: []const u8 = &.{},
+    profile: []const u8,
     /// Application/environment handles only; no evaluator handle is supplied.
-    environment: ?*anyopaque = null,
+    environment: ?*anyopaque,
     cancellation: ?*const std.atomic.Value(bool) = null,
 
     pub fn checkCancellation(self: Context) error{Canceled}!void {

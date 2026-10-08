@@ -127,6 +127,33 @@ export function missingReplayObject(bytes) {
   return encode(archive);
 }
 
+export function invalidQueuedMessage(bytes, change) {
+  const archive = readArchive(bytes);
+  assert.equal(archive.task.messages.length, 1);
+  const id = Buffer.from(archive.task.messages[0]).toString('hex');
+  const row = archive.manifest[6].find(([kind, identity]) => kind === 2 && Buffer.from(identity).toString('hex') === id);
+  assert(row);
+  const message = decodeValue(archive.schemas.get('message'), archive.object(row[2]));
+  assert.equal(message.length, 7);
+  assert.equal(message[5], 0); // queued
+  assert.equal(message[6].tag, 0); // unbound
+  assert.equal(archive.task.current_occurrence.tag, 1);
+  switch (change) {
+    case 'acquired-unbound': message[5] = 1; break;
+    case 'queued-bound': message[6] = {tag: 1, value: archive.task.current_occurrence.value}; break;
+    case 'acquired-question': message[5] = 1; message[6] = {tag: 1, value: archive.task.current_occurrence.value}; break;
+    case 'consumed': message[5] = 2; break;
+    case 'not-consumed': message[5] = 3; break;
+    case 'schema': message[3] = 'other.message.v1'; break;
+    case 'ordinal-zero': message[2] = 0n; break;
+    case 'ordinal-future': message[2] = archive.task.next_message; break;
+    case 'payload': message[4] = replace(archive, message[4], Buffer.from([255])); break;
+    default: throw new Error(`unknown queue mutation: ${change}`);
+  }
+  row[2] = replace(archive, row[2], Buffer.from(encodeValue(archive.schemas.get('message'), message)));
+  return encode(archive);
+}
+
 // Resume the actual repository checkpoint using its recorded native replies.
 // World owns both PKI3 encoding and execution; no provider/application policy is
 // reproduced here. The existing native API probe accepts the same envelope.

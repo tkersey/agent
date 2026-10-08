@@ -519,6 +519,9 @@ try {
   }
   const reference = {artifact_id: '0'.repeat(64), sha256: '0'.repeat(64), bytes: '65536', media_type: 'application/json', schema_id: result.outcome.schema_id, retention: 'state-namespace'};
   const largeResult = structuredClone(result);
+  const wrongCurrentValue = structuredClone(result);
+  wrongCurrentValue.outcome.value = {value: 'not an integer', answer: 'bad'};
+  schemaCases.push({definition: 'task.result.result', value: wrongCurrentValue, accept: false});
   delete largeResult.outcome.value;
   largeResult.outcome.value_ref = reference;
   schemaCases.push({definition: 'task.result.result', value: largeResult});

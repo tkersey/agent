@@ -4,6 +4,7 @@ const std = @import("std");
 const c = @import("native_c");
 pub const Options = struct {
     offline: bool,
+    test_provider: bool = false,
     config_path: ?[]const u8 = null,
     credential_path: ?[]const u8 = null,
     trust_root_path: ?[]const u8 = null,

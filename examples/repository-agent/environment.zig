@@ -92,9 +92,25 @@ pub fn taskInput(a: std.mem.Allocator, text: []const u8) !t.Input {
     return .{ .task = .{ .bytes = try a.dupe(u8, text) } };
 }
 
+fn testEndpoint(endpoint: []const u8) bool {
+    // The explicit test profile has a non-secret built-in token and only a
+    // canonical loopback HTTPS Responses URL. It cannot receive credentials.
+    for ([_][]const u8{ "https://127.0.0.1:", "https://[::1]:", "https://localhost:" }) |prefix| {
+        if (!std.mem.startsWith(u8, endpoint, prefix)) continue;
+        const rest = endpoint[prefix.len..];
+        const slash = std.mem.indexOfScalar(u8, rest, '/') orelse return false;
+        if (slash == 0 or !std.mem.eql(u8, rest[slash..], "/v1/responses")) return false;
+        for (rest[0..slash]) |byte| if (byte < '0' or byte > '9') return false;
+        return (std.fmt.parseInt(u16, rest[0..slash], 10) catch return false) != 0;
+    }
+    return false;
+}
+
 /// The host owns this allocation region until all workers have joined. Frozen
 /// inputs come only from the task owner; reopening never reads snapshot_root.
 pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration.Options, frozen: ?native.tasks.FrozenInputs, assets: native.discovery.Assets) !native.configuration.Admitted {
+    if (options.test_provider and (options.offline or options.credential_path != null or options.trust_root_path == null)) return error.InvalidConfiguration;
+    const selected_mode = if (options.offline) "offline" else if (options.test_provider) "controlled-test" else "live";
     var configuration: ?Config = null;
     var configuration_digest: ?[]const u8 = null;
     if (options.config_path) |path| {
@@ -130,7 +146,7 @@ pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration
             resource_bytes = try contracts.encodeOwned(native.repository.Record, a, .{ .version = 1, .excluded_entries = 0, .files = .{ .items = &.{.{ .path = .{ .bytes = "src/main.zig" }, .sha256 = digest(content), .contents = .{ .bytes = content } }} } });
         }
         var profile = native.json.object();
-        try native.json.put(a, &profile, "mode", native.json.string(if (options.offline) "offline" else "live"));
+        try native.json.put(a, &profile, "mode", native.json.string(selected_mode));
         try native.json.put(a, &profile, "application", native.json.string(t.application_id));
         try native.json.put(a, &profile, "assets", native.json.string(try hex(a, assets.application)));
         try native.json.put(a, &profile, "configuration_digest", native.json.string(configuration_digest orelse try hex(a, "repository-agent.offline.v1")));
@@ -141,7 +157,7 @@ pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration
     }
     const profile = (try native.json.parse(a, profile_bytes, .{ .bytes = 256 * 1024 })).value;
     const mode = try native.json.text(native.json.get(profile, "mode") orelse return error.InvalidConfiguration);
-    if (!std.mem.eql(u8, mode, if (options.offline) "offline" else "live")) return error.IncompatibleProfile;
+    if (!std.mem.eql(u8, mode, selected_mode)) return error.IncompatibleProfile;
     if (!std.mem.eql(u8, try native.json.text(native.json.get(profile, "application") orelse return error.InvalidConfiguration), t.application_id) or
         !std.mem.eql(u8, try native.json.text(native.json.get(profile, "assets") orelse return error.InvalidConfiguration), try hex(a, assets.application))) return error.IncompatibleProfile;
     if (configuration_digest) |expected| {
@@ -151,14 +167,19 @@ pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration
     if (reference.bytes != resource_bytes.len or !std.mem.eql(u8, &reference.digest, &digest(resource_bytes))) return error.InvalidSnapshot;
     const settings = try native.responses.settings(a, profile_bytes);
     if (settings.response_bytes > 512 * 1024 or std.meta.stringToEnum(@typeInfo(@FieldType(t.P.ReasoningConfig, "effort")).optional.child, settings.effort.bytes) == null) return error.InvalidConfiguration;
-    var token: []const u8 = "";
+    if (!options.offline) {
+        if (options.test_provider) {
+            if (!testEndpoint(settings.endpoint.bytes)) return error.InvalidConfiguration;
+        } else if (!std.mem.eql(u8, settings.endpoint.bytes, "https://api.openai.com/v1/responses")) return error.InvalidConfiguration;
+    }
+    var token: []const u8 = if (options.test_provider) "qualification-only" else "";
     if (options.credential_path) |path| token = std.mem.trim(u8, try native.configuration.readFile(a, io, path, 16 * 1024, true), "\r\n");
     const trust_root = if (options.trust_root_path) |path| try native.configuration.readFile(a, io, path, 256 * 1024, false) else null;
     const adapter = try a.create(State);
     adapter.* = .{ .snapshot = try native.repository.Snapshot.open(a, resource_bytes), .profile_identity = digest(profile_bytes), .provider = .{ .token = token, .approved_endpoint = settings.endpoint.bytes, .trust_root = trust_root }, .offline = options.offline };
     const resources = try a.alloc([]const u8, 1);
     resources[0] = resource_bytes;
-    return .{ .id = if (options.offline) "offline" else "fixed", .bytes = profile_bytes, .resources = resources, .environment = adapter };
+    return .{ .id = if (options.offline) "offline" else if (options.test_provider) "controlled-test" else "fixed", .bytes = profile_bytes, .resources = resources, .environment = adapter };
 }
 
 /// Explicit deterministic provider fixture. It examines the rendered request,

@@ -174,7 +174,10 @@ pub fn document(a: std.mem.Allocator, application: json.Value, limits: protocol.
     const count = try reference(a, "counter");
     const boolean = try reference(a, "boolean");
     const empty = try shape(a, &.{}, &.{});
-    const question = try shape(a, &.{ .{ "question_id", digest }, .{ "question_revision", count }, .{ "request_digest", digest }, .{ "answer_schema_id", try constant(a, application.object.get("answer").?.object.get("schema_id").?.string) }, .{ "prompt", json.object() } }, &.{});
+    // Queries can expose saved tasks from another application or version.
+    // Their schema identities are data; mutation parameters below still bind
+    // the currently admitted application contract.
+    const question = try shape(a, &.{ .{ "question_id", digest }, .{ "question_revision", count }, .{ "request_digest", digest }, .{ "answer_schema_id", try text(a, 1, 128) }, .{ "prompt", json.object() } }, &.{});
     const message = try shape(a, &.{ .{ "message_id", digest }, .{ "ordinal", count }, .{ "disposition", try enumSchema(state.MessageDisposition, a) } }, &.{});
     const snapshot = try shape(a, &.{
         .{ "task_id", id },                                     .{ "application_id", try text(a, 1, 128) },                        .{ "profile_id", try text(a, 1, 128) },                    .{ "profile_digest", digest },
@@ -188,8 +191,8 @@ pub fn document(a: std.mem.Allocator, application: json.Value, limits: protocol.
     inline for (.{ "output", "failure" }) |name| {
         var outcome = try shape(a, &.{
             .{ "type", try constant(a, if (comptime std.mem.eql(u8, name, "output")) "completed" else "failed") },
-            .{ "schema_id", try constant(a, application.object.get(name).?.object.get("schema_id").?.string) },
-            .{ "value", application.object.get(name).?.object.get("json").? },
+            .{ "schema_id", try text(a, 1, 128) },
+            .{ "value", json.object() },
             .{ "value_ref", artifact },
         }, &.{ "value", "value_ref" });
         if (comptime std.mem.eql(u8, name, "failure")) outcome = try extend(a, outcome, &.{.{ "cleanup_complete", boolean }}, &.{});
@@ -200,7 +203,33 @@ pub fn document(a: std.mem.Allocator, application: json.Value, limits: protocol.
     var outcome_schema = json.object();
     try json.put(a, &outcome_schema, "oneOf", .{ .array = outcomes });
     var task_result = try extend(a, snapshot, &.{ .{ "ready", boolean }, .{ "outcome", outcome_schema } }, &.{"outcome"});
-    try json.put(a, &task_result, "allOf", try literal(a, "[{\"if\":{\"properties\":{\"ready\":{\"const\":true}}},\"then\":{\"required\":[\"outcome\"]},\"else\":{\"not\":{\"required\":[\"outcome\"]}}}]"));
+    var result_cases = try literal(a, "[{\"if\":{\"properties\":{\"ready\":{\"const\":true}}},\"then\":{\"required\":[\"outcome\"]},\"else\":{\"not\":{\"required\":[\"outcome\"]}}}]");
+    inline for (.{ "output", "failure" }) |name| {
+        const contract = application.object.get(name).?;
+        var saved = json.object();
+        try json.put(a, &saved, "type", try constant(a, if (comptime std.mem.eql(u8, name, "output")) "completed" else "failed"));
+        try json.put(a, &saved, "schema_id", try constant(a, contract.object.get("schema_id").?.string));
+        var saved_outcome = json.object();
+        try json.put(a, &saved_outcome, "properties", saved);
+        var properties = json.object();
+        try json.put(a, &properties, "application_id", try constant(a, application.object.get("application_id").?.string));
+        try json.put(a, &properties, "outcome", saved_outcome);
+        var condition = json.object();
+        try json.put(a, &condition, "properties", properties);
+        var typed_value = json.object();
+        try json.put(a, &typed_value, "value", contract.object.get("json").?);
+        var typed_outcome = json.object();
+        try json.put(a, &typed_outcome, "properties", typed_value);
+        var typed_properties = json.object();
+        try json.put(a, &typed_properties, "outcome", typed_outcome);
+        var typed = json.object();
+        try json.put(a, &typed, "properties", typed_properties);
+        var branch = json.object();
+        try json.put(a, &branch, "if", condition);
+        try json.put(a, &branch, "then", typed);
+        try result_cases.array.append(branch);
+    }
+    try json.put(a, &task_result, "allOf", result_cases);
     try json.put(a, &definitions, "task.result.result", task_result);
     inline for (.{ "task.submit", "task.message", "task.respond", "task.cancel", "task.resume" }) |name| {
         var admitted = try extend(a, snapshot, &.{ .{ "receipt_id", digest }, .{ "receipt_revision", count }, .{ "replayed", boolean }, .{ "disposition", try enumSchema(state.Disposition, a) } }, &.{});

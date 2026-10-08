@@ -51,6 +51,9 @@ fn increment(_: native.Context, input: u32) !u32 {
     return input + 1;
 }
 fn present(ctx: native.Context, input: u32) !native.json.Value {
+    try std.testing.expectEqualStrings("fixed-profile", ctx.profile);
+    const configured: *const u32 = @ptrCast(@alignCast(ctx.environment orelse return error.MissingConfiguration));
+    try std.testing.expectEqual(37, configured.*);
     return native.json.number(ctx.allocator, input);
 }
 const CapturingIncrement = struct {
@@ -86,12 +89,26 @@ test "durable owner replays admissions and acquired work, binds answers, and con
 fn ownerRecovery(captured: bool, image: []const u8) !void {
     const a = std.testing.allocator;
     const io = std.testing.io;
-    const assets: native.discovery.Assets = .{ .image = image, .application = "owner-unit-test", .manifest = "owner-unit-test" };
     const admitted_image = try boundary.data.program_image.Admitted.decode(a, image);
     defer admitted_image.deinit();
+    var image_digest: [32]u8 = undefined;
+    var assets_digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(image, &image_digest, .{});
+    std.crypto.hash.sha2.Sha256.hash("owner-unit-test", &assets_digest, .{});
+    const image_hex = std.fmt.bytesToHex(image_digest, .lower);
+    const identity_hex = std.fmt.bytesToHex(admitted_image.identity(), .lower);
+    const assets_hex = std.fmt.bytesToHex(assets_digest, .lower);
+    const manifest = try std.json.Stringify.valueAlloc(a, .{
+        .native_host_contract = "unit-native-contract", .protocol = "agent-host/1.0", .client_mapping = "agent-client-values/1.0", .state_format = "agent-native-state/7", .optimize = "safe",
+        .program_sha256 = @as([]const u8, &image_hex), .program_identity = @as([]const u8, &identity_hex), .application_assets_sha256 = @as([]const u8, &assets_hex),
+        .dependencies = .{ .world = "unit-world", .boundary = "unit-boundary" }, .compiler = .{ .version = "0.17.0" },
+    }, .{});
+    defer a.free(manifest);
+    const assets: native.discovery.Assets = .{ .image = image, .application = "owner-unit-test", .manifest = manifest };
     // Asset/discovery admission is independently tested by the subprocess peer.
     var application: native.discovery.Application = .{ .arena = .init(a), .metadata = .null, .manifest = .null, .manifest_id = "unit", .image_identity = admitted_image.identity() };
     defer application.deinit();
+    application.manifest = (try native.json.parse(application.arena.allocator(), manifest, .{})).value;
     var increment_declaration = native.leaf(u32, u32, .{ .identity = "task-owner.increment.v1", .resource_role = "local" }, increment);
     if (captured) {
         increment_declaration.background = true;
@@ -106,7 +123,8 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     defer handlers.deinit();
     var grants: [3]native.registry.Grant = undefined;
     for (&grants, handlers.entries) |*grant, entry| grant.* = .{ .identity = entry.declaration.identity, .resource_role = entry.declaration.resource_role, .resource_identity = application.image_identity };
-    const profile: native.tasks.Profile = .{ .id = "offline", .runtime_identity = @splat(42), .bytes = "fixed-profile", .resources = &.{"immutable snapshot bytes"}, .authority = .{ .grants = &grants, .principal = "test", .tenant = "test" } };
+    var configured: u32 = 37;
+    const profile: native.tasks.Profile = .{ .id = "offline", .runtime_identity = @splat(42), .bytes = "fixed-profile", .environment = &configured, .resources = &.{"immutable snapshot bytes"}, .authority = .{ .grants = &grants, .principal = "test", .tenant = "test" } };
     for (&grants) |*grant| grant.resource_identity = try profile.resourceIdentity(application.image_identity);
     var temporary = std.testing.tmpDir(.{});
     defer temporary.cleanup();
@@ -138,7 +156,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
         if (step == .work) {
             var request = try protocol.decode(protocol.Request, frame, step.work.request);
             defer request.deinit();
-            const ctx: native.Context = .{ .allocator = frame, .io = io, .authority = &profile.authority, .task_id = "test" };
+            const ctx: native.Context = .{ .allocator = frame, .io = io, .authority = &profile.authority, .task_id = "test", .profile = profile.bytes, .environment = profile.environment };
             const reply = if (step.work.entry.declaration.capture) |adapter| (try adapter.acquire(ctx, step.work.prepared.?)).captured else try step.work.entry.declaration.invoke.?(ctx, request.value.binding.payload);
             calls += 1;
             try service.acquire(frame, step.work, reply);
@@ -193,11 +211,48 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     try std.testing.expectError(error.StaleInteraction, service.respond(frame, "unknown-question", accepted.receipt.task, @splat(0), question.value.revision, question.value.request_digest, "task-owner.answer.v1", .{ .number_string = "7" }));
     const answered = try service.respond(frame, "answer", accepted.receipt.task, question.value.id, question.value.revision, question.value.request_digest, "task-owner.answer.v1", .{ .number_string = "7" });
     try std.testing.expect(!answered.replayed);
+    var imported_inbox = false;
+    var queue_client: native.client.Client(T) = .{ .service = &service };
+    var queue_params = native.json.object();
+    try native.json.put(frame, &queue_params, "task_id", native.json.string(try frame.dupe(u8, &std.fmt.bytesToHex(accepted.receipt.task, .lower))));
     for (0..32) |_| {
         const step = try service.pump(frame);
         try std.testing.expect(step != .work);
+        if (!captured and !imported_inbox) {
+            const queue = (try queue_client.call(frame, .@"task.status", queue_params)).object.get("pending_messages").?.array.items;
+            if (queue.len != 0 and std.mem.eql(u8, queue[0].object.get("disposition").?.string, "acquired")) {
+                const archive_path = try std.fmt.allocPrint(frame, "{s}/acquired-inbox.bundle", .{path_buffer[0..length]});
+                _ = try service.exportCheckpoint(frame, accepted.receipt.task, archive_path);
+                const imported_path = try std.fmt.allocPrint(frame, "{s}/imported-inbox", .{path_buffer[0..length]});
+                var imported_namespace = try native.Namespace.open(a, io, imported_path);
+                defer imported_namespace.close() catch unreachable;
+                var imported_service = try native.tasks.Service(T).init(a, io, &imported_namespace, assets, &application, handlers, profile);
+                defer imported_service.close(frame) catch unreachable;
+                const imported = try imported_service.importCheckpoint(frame, "import-acquired", archive_path);
+                var saved = try imported_service.task(frame, imported.receipt.task);
+                defer saved.deinit();
+                _ = try imported_service.resumeTask(frame, "resume-imported", imported.receipt.task, saved.value.revision);
+                for (0..32) |_| {
+                    const imported_step = try imported_service.pump(frame);
+                    try std.testing.expect(imported_step != .work);
+                    if (imported_step == .idle) break;
+                }
+                var finished = try imported_service.task(frame, imported.receipt.task);
+                defer finished.deinit();
+                try std.testing.expect(finished.value.terminal());
+                const imported_bytes = try imported_namespace.store.object(frame, finished.value.result.?, 128 * 1024);
+                var imported_output = try agent.contracts.decodeOwned(T.Output, frame, imported_bytes);
+                defer imported_output.deinit();
+                try std.testing.expectEqual(7, imported_output.value.answer);
+                try std.testing.expect(imported_output.value.inbox == .message);
+                try std.testing.expectEqual(9, imported_output.value.inbox.message.value);
+                try std.testing.expectEqualStrings(&std.fmt.bytesToHex(queued_message.receipt.message.?, .lower), imported_output.value.inbox.message.id.bytes);
+                imported_inbox = true;
+            }
+        }
         if (step == .idle) break;
     }
+    try std.testing.expect(captured or imported_inbox);
     var completed = try service.task(frame, accepted.receipt.task);
     defer completed.deinit();
     try std.testing.expect(completed.value.terminal());

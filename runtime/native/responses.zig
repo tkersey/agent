@@ -237,11 +237,18 @@ pub fn Adapter(comptime P: type) type {
             };
         }
 
-        fn encode(ctx: registry.ProjectionContext, result: P.ReferenceResult, objects: []const []const u8) !registry.Projection {
-            return .{ .reply = try contracts.encodeOwned(P.ReferenceResult, ctx.allocator, result), .objects = objects, .output_tokens = if (result.usage) |usage| usage.output_tokens else null };
+        const Interpreted = struct {
+            result: P.Result,
+            replay: ?Reference = null,
+            replay_status: @FieldType(P.ReferenceResult, "replay_status") = .unsupported,
+            objects: []const []const u8 = &.{},
+        };
+        fn encode(ctx: registry.ProjectionContext, interpreted: Interpreted, usage: @FieldType(P.ReferenceResult, "usage")) !registry.Projection {
+            const result: P.ReferenceResult = .{ .result = interpreted.result, .replay = interpreted.replay, .replay_status = interpreted.replay_status, .usage = usage };
+            return .{ .reply = try contracts.encodeOwned(P.ReferenceResult, ctx.allocator, result), .objects = interpreted.objects, .output_tokens = if (usage) |available| available.output_tokens else null };
         }
-        fn unsupported(ctx: registry.ProjectionContext, reason: @FieldType(P.Result, "unsupported_response")) !registry.Projection {
-            return encode(ctx, .{ .result = .{ .unsupported_response = reason }, .replay = null, .replay_status = if (reason == .normalization_limit) .capacity else .unsupported, .usage = null }, &.{});
+        fn unsupported(reason: @FieldType(P.Result, "unsupported_response")) Interpreted {
+            return .{ .result = .{ .unsupported_response = reason }, .replay_status = if (reason == .normalization_limit) .capacity else .unsupported };
         }
 
         pub fn interpret(ctx: registry.ProjectionContext, request_bytes: []const u8, rendered: []const u8, captured: []const u8) !registry.Projection {
@@ -252,29 +259,37 @@ pub fn Adapter(comptime P: type) type {
             if (!equal(try prepare(ctx, request_bytes), rendered)) return error.InvalidCapture;
             var raw = try contracts.decodeOwned(Raw, ctx.allocator, captured);
             defer raw.deinit();
-            if (raw.value.status < 200 or raw.value.status >= 300) return encode(ctx, .{ .result = .{ .provider_failure = .{ .kind = .http_status, .http_status = raw.value.status } }, .replay = null, .replay_status = .unsupported, .usage = null }, &.{});
-            if (!raw.value.identity_encoding) return unsupported(ctx, .unsupported_output_item);
-            if (!std.unicode.utf8ValidateSlice(raw.value.body.bytes)) return unsupported(ctx, .invalid_utf8);
-            const response = json.parse(ctx.allocator, raw.value.body.bytes, .{ .bytes = config.response_bytes }) catch |err| return unsupported(ctx, if (err == error.Capacity) .normalization_limit else .malformed_json);
+            if (raw.value.status < 200 or raw.value.status >= 300) return encode(ctx, .{ .result = .{ .provider_failure = .{ .kind = .http_status, .http_status = raw.value.status } } }, null);
+            if (!raw.value.identity_encoding) return encode(ctx, unsupported(.unsupported_output_item), null);
+            if (!std.unicode.utf8ValidateSlice(raw.value.body.bytes)) return encode(ctx, unsupported(.invalid_utf8), null);
+            const response = json.parse(ctx.allocator, raw.value.body.bytes, .{ .bytes = config.response_bytes }) catch |err| return encode(ctx, unsupported(if (err == error.Capacity) .normalization_limit else .malformed_json), null);
             const body = response.value;
-            if (is(body, "status", "failed") or is(body, "status", "incomplete")) return encode(ctx, .{ .result = .{ .provider_failure = .{ .kind = if (is(body, "status", "failed")) .response_failed else .response_incomplete, .http_status = 0 } }, .replay = null, .replay_status = .unsupported, .usage = null }, &.{});
-            if (!is(body, "status", "completed") or (json.get(body, "error") orelse return unsupported(ctx, .unsupported_status)) != .null) return unsupported(ctx, .unsupported_status);
-            const output = field(body, "output") catch return unsupported(ctx, .unsupported_status);
-            if (output != .array) return unsupported(ctx, .unsupported_status);
-            if (output.array.items.len > P.representation.maximum_output_items) return unsupported(ctx, .normalization_limit);
-            const normalized = normalize(ctx.allocator, request.value, output) catch |err| return unsupported(ctx, if (err == error.Capacity) .normalization_limit else if (err == error.MixedRefusal) .mixed_refusal else .unsupported_output_item);
-            var input = try history(ctx, request.value, config);
+            // Returned usage is an observation of the captured response, not a
+            // consequence of accepting its actions or replay. Attach it once.
+            const usage = readUsage(body);
+            const interpreted = try interpretBody(ctx, request.value, config, captured, body, if (usage) |_| true else |_| false);
+            return encode(ctx, interpreted, usage catch null);
+        }
+
+        fn interpretBody(ctx: registry.ProjectionContext, request: P.ReferenceRequest, config: Settings, captured: []const u8, body: json.Value, usage_valid: bool) !Interpreted {
+            if (is(body, "status", "failed") or is(body, "status", "incomplete")) return .{ .result = .{ .provider_failure = .{ .kind = if (is(body, "status", "failed")) .response_failed else .response_incomplete, .http_status = 0 } } };
+            if (!is(body, "status", "completed") or (json.get(body, "error") orelse return unsupported(.unsupported_status)) != .null) return unsupported(.unsupported_status);
+            const output = field(body, "output") catch return unsupported(.unsupported_status);
+            if (output != .array) return unsupported(.unsupported_status);
+            if (output.array.items.len > P.representation.maximum_output_items) return unsupported(.normalization_limit);
+            const normalized = normalize(ctx.allocator, request, output) catch |err| return unsupported(if (err == error.Capacity) .normalization_limit else if (err == error.MixedRefusal) .mixed_refusal else .unsupported_output_item);
+            var input = try history(ctx, request, config);
             for (output.array.items) |item| try input.array.append(try replayItem(ctx.allocator, item));
-            _ = replayCalls(ctx.allocator, input) catch return unsupported(ctx, .unsupported_output_item);
+            _ = replayCalls(ctx.allocator, input) catch return unsupported(.unsupported_output_item);
             const replay = try json.canonical(ctx.allocator, input);
-            if (replay.len > 2 * 1024 * 1024 or input.array.items.len > 8192) return unsupported(ctx, .normalization_limit);
-            const usage = readUsage(body) catch return unsupported(ctx, .unsupported_output_item);
-            const artifact = try contracts.encodeOwned(P.Context, ctx.allocator, .{ .schema = .{ .bytes = P.context_identity }, .profile = request.value.profile, .task = ctx.task, .tenant = .{ .bytes = ctx.tenant }, .audience = config.audience, .first = 0, .next = input.array.items.len, .source_capture = .{ .digest = storage.digest(captured), .bytes = captured.len }, .parent = if (request.value.replay) |prior| .{ .digest = prior.digest, .bytes = prior.bytes } else null, .items = .{ .bytes = replay } });
-            if (artifact.len > 2 * 1024 * 1024) return unsupported(ctx, .normalization_limit);
-            const ref: Reference = .{ .digest = storage.digest(artifact), .bytes = artifact.len, .schema = .{ .bytes = P.context_identity }, .profile = request.value.profile, .task = ctx.task, .tenant = .{ .bytes = ctx.tenant }, .audience = config.audience, .first = 0, .next = input.array.items.len };
+            if (replay.len > 2 * 1024 * 1024 or input.array.items.len > 8192) return unsupported(.normalization_limit);
+            if (!usage_valid) return unsupported(.unsupported_output_item);
+            const artifact = try contracts.encodeOwned(P.Context, ctx.allocator, .{ .schema = .{ .bytes = P.context_identity }, .profile = request.profile, .task = ctx.task, .tenant = .{ .bytes = ctx.tenant }, .audience = config.audience, .first = 0, .next = input.array.items.len, .source_capture = .{ .digest = storage.digest(captured), .bytes = captured.len }, .parent = if (request.replay) |prior| .{ .digest = prior.digest, .bytes = prior.bytes } else null, .items = .{ .bytes = replay } });
+            if (artifact.len > 2 * 1024 * 1024) return unsupported(.normalization_limit);
+            const ref: Reference = .{ .digest = storage.digest(artifact), .bytes = artifact.len, .schema = .{ .bytes = P.context_identity }, .profile = request.profile, .task = ctx.task, .tenant = .{ .bytes = ctx.tenant }, .audience = config.audience, .first = 0, .next = input.array.items.len };
             const objects = try ctx.allocator.alloc([]const u8, 1);
             objects[0] = artifact;
-            return encode(ctx, .{ .result = normalized, .replay = ref, .replay_status = .complete, .usage = usage }, objects);
+            return .{ .result = normalized, .replay = ref, .replay_status = .complete, .objects = objects };
         }
 
         fn decodeAction(a: std.mem.Allocator, name: []const u8, arguments: []const u8) !P.DecodedAnswer {

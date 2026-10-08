@@ -6,10 +6,11 @@ import { mkdir, writeFile, readFile, rename } from 'node:fs/promises';
 import { once } from 'node:events';
 import { AgentClient } from '../../examples/native-minimal/stdio-client.mts';
 import { certificates } from './mobility_tls_fixture.mjs';
-import { compareContinuation, missingReplayObject } from './native_archive.mjs';
+import { compareContinuation, missingReplayObject, invalidQueuedMessage } from './native_archive.mjs';
 import { deployment } from './native_deployment.mjs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -24,7 +25,7 @@ async function until(read, predicate, label) {
   throw new Error(`${label}: timeout`);
 }
 
-async function foreignApplication(repository, directory, source) {
+async function foreignApplication(repository, directory, source, schemaId) {
   const minimal = deployment(source, 'agent-native-example');
   let passed = false, client;
   try {
@@ -33,20 +34,63 @@ async function foreignApplication(repository, directory, source) {
     assert.equal(run.status, 0, run.error ?? run.stderr);
     const task = JSON.parse(run.stdout);
     assert.equal(task.status, 'waiting_input');
+    const completed = spawnSync(minimal.command, ['demo', '--offline', '--state-dir', state], {cwd: minimal.data, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
+    assert.equal(completed.status, 0, completed.error ?? completed.stderr);
+    const done = JSON.parse(completed.stdout);
+    const failed = spawnSync(minimal.command, ['run', '--offline', '--state-dir', state, '--input-json', '{"value":4294967295}', '--operation-id', 'foreign-failure'], {cwd: minimal.data, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
+    assert.equal(failed.status, 1, failed.error ?? failed.stderr);
+    const failure = JSON.parse(failed.stdout);
     // Move the closed directory on the same filesystem, preserving the namespace's
     // device/inode identity. Copying it would correctly fail namespace admission
     // before reaching the application contract tested here. Neither application
     // can read the other's executable, source or controller files.
     const reopened = join(directory, 'foreign state');
     await rename(state, reopened);
+    const cases = [];
+    const saved = [[task.task_id, 'waiting_input'], [done.task_id, 'completed'], [failure.task_id, 'failed']];
+    for (const [id, status] of saved) for (const command of ['status', 'result']) {
+      const query = spawnSync(repository, [command, '--offline', '--state-dir', reopened, '--task-id', id], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
+      assert.equal(query.status, 0, query.error ?? query.stderr);
+      const value = JSON.parse(query.stdout);
+      assert.equal(value.status, status);
+      cases.push({definition: `task.${command}.result`, value});
+    }
     client = new AgentClient(repository, ['--offline', '--state-dir', reopened], {cwd: directory, env: {PATH: '/nonexistent'}});
     await client.initialize();
+    const chunks = [];
+    let offset = 0, schema;
+    for (let page = 0; page < 64; page++) {
+      const chunk = await client.call('artifact.read', {artifact_id: schemaId, offset: String(offset), length: '32768'});
+      assert.equal(chunk.sha256, schemaId);
+      const bytes = Buffer.from(chunk.data, 'base64url');
+      chunks.push(bytes); offset += bytes.length;
+      if (chunk.eof) {
+        const bytes = Buffer.concat(chunks);
+        assert.equal(hash(bytes), schemaId);
+        schema = JSON.parse(bytes);
+        break;
+      }
+    }
+    assert(schema, 'bounded protocol schema');
     const before = await client.call('task.status', {task_id: task.task_id});
     await assert.rejects(client.call('task.message', {client_operation_id: 'foreign-message', task_id: task.task_id, message: {schema_id: 'repository-agent.message.v1', value: {message: 'Follow up on the other application.'}}}), error => error.data?.kind === 'StateConflict');
     assert.deepEqual(await client.call('task.status', {task_id: task.task_id}), before);
     assert.equal((await client.call('task.result', {task_id: task.task_id})).ready, false);
+    for (const [id, status] of saved) {
+      const snapshot = await client.call('task.status', {task_id: id});
+      const result = await client.call('task.result', {task_id: id});
+      assert.equal(snapshot.status, status);
+      assert.equal(result.status, status);
+      if (status === 'completed') assert.deepEqual(result.outcome.value, done.output);
+      if (status === 'failed') assert.deepEqual(result.outcome, failure.outcome);
+      cases.push({definition: 'task.status.result', value: snapshot}, {definition: 'task.result.result', value: result});
+      cases.push({definition: 'task.events.result', value: await client.call('task.events', {task_id: id, after_seq: '0'})});
+    }
     assert.deepEqual(await client.close(), {code: 0, signal: null});
     client = null;
+    const validation = spawnSync('uv', ['run', '--no-project', '--no-config', '--python', '3.12', '--with', 'jsonschema==4.23.0', fileURLToPath(new URL('./native_schema.py', import.meta.url))], {input: JSON.stringify({schema, cases}), encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024});
+    assert.equal(validation.status, 0, validation.error ?? validation.stderr);
+    process.stdout.write(validation.stdout);
     passed = true;
   } finally {
     if (client) { client.child.kill('SIGKILL'); await client.closed; }
@@ -54,7 +98,7 @@ async function foreignApplication(repository, directory, source) {
   }
 }
 
-async function repositoryHttps(binary, directory, controller, invoke) {
+async function repositoryHttps(binary, directory, controller, invokeBase) {
   const root = join(directory, 'controlled repository');
   const state = join(directory, 'https state');
   await mkdir(join(root, 'src'), { recursive: true });
@@ -64,6 +108,7 @@ async function repositoryHttps(binary, directory, controller, invoke) {
   const tls = await certificates(controller);
   const trust = join(directory, 'provider-root.der');
   const credential = join(directory, 'provider-token');
+  const invoke = (...args) => invokeBase(...args, '--test-provider', '--trust-root', trust);
   await writeFile(trust, new X509Certificate(tls.ca).raw);
   await writeFile(credential, 'qualification-only\n', { mode: 0o600 });
   const requests = [], notifications = [], sockets = new Set(), clients = new Set();
@@ -160,8 +205,25 @@ async function repositoryHttps(binary, directory, controller, invoke) {
     };
     const configPath = join(directory, 'approved-profile.json');
     await writeFile(configPath, JSON.stringify(config));
+    const referenceConfig = join(directory, 'reference-profile.json');
+    const externalConfig = join(directory, 'external-profile.json');
+    await writeFile(referenceConfig, JSON.stringify({...config, responses: {...config.responses, endpoint: 'https://api.openai.com/v1/responses'}}));
+    await writeFile(externalConfig, JSON.stringify({...config, responses: {...config.responses, endpoint: 'https://example.test/v1/responses'}}));
+    for (const [args, expected] of [
+      [['--config', referenceConfig, '--credential-file', credential], 0],
+      [['--config', configPath, '--credential-file', credential, '--trust-root', trust], 64],
+      [['--config', externalConfig, '--credential-file', credential], 64],
+      [['--config', externalConfig, '--test-provider', '--trust-root', trust], 64],
+      [['--config', configPath, '--test-provider', '--trust-root', trust, '--credential-file', credential], 64],
+      [['--config', configPath, '--test-provider'], 64],
+      [['--config', configPath, '--test-provider', '--trust-root', trust], 0],
+    ]) {
+      const validation = spawnSync(binary, ['validate', ...args], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
+      assert.equal(validation.status, expected, validation.error ?? validation.stderr);
+    }
+    assert.equal(requests.length, 0, 'configuration admission cannot dispatch inference');
     const launch = extra => {
-      const client = new AgentClient(binary, ['--state-dir', state, '--authorize-inference', '--credential-file', credential, '--trust-root', trust, ...extra], { cwd: directory, env: { PATH: '/nonexistent' }, onNotification: frame => notifications.push(frame) });
+      const client = new AgentClient(binary, ['--state-dir', state, '--authorize-inference', '--test-provider', '--trust-root', trust, ...extra], { cwd: directory, env: { PATH: '/nonexistent' }, onNotification: frame => notifications.push(frame) });
       clients.add(client);
       return client;
     };
@@ -170,7 +232,7 @@ async function repositoryHttps(binary, directory, controller, invoke) {
     await client.initialize();
     const description = await client.call('describe');
     assert.equal(description.execution_mode, 'live');
-    assert.equal(description.profile.id, 'fixed');
+    assert.equal(description.profile.id, 'controlled-test');
     assert.match(description.profile.resource_identity, /^[a-f0-9]{64}$/);
     const accepted = await client.call('task.submit', { client_operation_id: 'repository-task', application_id: 'repository-agent', profile_id: description.profile.id, input: { schema_id: 'repository-agent.input.v1', value: { task: 'Explain the public source behavior.' } } });
     assert.equal(accepted.profile_digest, description.profile.sha256);
@@ -219,7 +281,7 @@ async function repositoryHttps(binary, directory, controller, invoke) {
     const pendingBytes = await readFile(pendingArchive);
     const changedConfig = join(directory, 'changed-profile.json');
     await writeFile(changedConfig, JSON.stringify({ ...config, responses: { ...config.responses, effort: 'high' } }));
-    const rejected = spawnSync(binary, ['resume', '--state-dir', state, '--task-id', id, '--config', changedConfig], { cwd: directory, env: { PATH: '/nonexistent' }, encoding: 'utf8', timeout: 5000 });
+    const rejected = spawnSync(binary, ['resume', '--state-dir', state, '--task-id', id, '--config', changedConfig, '--test-provider', '--trust-root', trust], { cwd: directory, env: { PATH: '/nonexistent' }, encoding: 'utf8', timeout: 5000 });
     assert.equal(rejected.status, 64, 'a resume cannot change the frozen profile');
     assert.equal(requests.length, 3);
     client = launch(['--profile-task', id, '--config', configPath]);
@@ -261,12 +323,24 @@ async function repositoryHttps(binary, directory, controller, invoke) {
     const importedStatus = JSON.parse(invoke('status', '--state-dir', importedState, '--task-id', id));
     assert.equal(importedStatus.profile_digest, accepted.profile_digest);
     assert.equal(importedStatus.pending_messages.length, 1);
+    const queueRecovery = join(directory, 'queued import recovery');
+    for (const change of ['acquired-unbound', 'queued-bound', 'acquired-question', 'consumed', 'not-consumed', 'schema', 'ordinal-zero', 'ordinal-future', 'payload']) {
+      const malformed = join(directory, `queued-${change}.bundle`);
+      await writeFile(malformed, invalidQueuedMessage(pendingBytes, change), {mode: 0o600});
+      const rejected = spawnSync(binary, ['import-checkpoint', '--state-dir', queueRecovery, '--input', malformed, '--operation-id', 'import-queued', '--test-provider', '--trust-root', trust], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
+      assert.equal(rejected.status, 64, rejected.error ?? rejected.stderr);
+      assert.equal(JSON.parse(rejected.stdout).reason, 'InvalidArchive', change);
+    }
+    const validQueue = JSON.parse(invoke('import-checkpoint', '--state-dir', queueRecovery, '--input', pendingArchive, '--operation-id', 'import-queued'));
+    assert.equal(validQueue.task_id, id);
+    assert.equal(validQueue.pending_messages.length, 1);
+    assert.equal(validQueue.pending_messages[0].disposition, 'queued');
     // Minimal checkpoint corruption cannot expose a missing provider replay
     // object hidden in an encoded reply. Exercise that distinct closure here.
     const brokenArchive = join(directory, 'missing-replay.bundle');
     await writeFile(brokenArchive, missingReplayObject(completedBytes), { mode: 0o600 });
     const recoveredState = join(directory, 'import recovery');
-    const rejectedImport = spawnSync(binary, ['import-checkpoint', '--state-dir', recoveredState, '--input', brokenArchive, '--operation-id', 'import-completed'], { cwd: directory, env: { PATH: '/nonexistent' }, encoding: 'utf8', timeout: 5000 });
+    const rejectedImport = spawnSync(binary, ['import-checkpoint', '--state-dir', recoveredState, '--input', brokenArchive, '--operation-id', 'import-completed', '--test-provider', '--trust-root', trust], { cwd: directory, env: { PATH: '/nonexistent' }, encoding: 'utf8', timeout: 5000 });
     assert.equal(rejectedImport.status, 64);
     assert.equal(JSON.parse(rejectedImport.stdout).reason, 'MissingArtifact');
     invoke('import-checkpoint', '--state-dir', recoveredState, '--input', completedArchive, '--operation-id', 'import-completed');
@@ -323,13 +397,13 @@ try {
   const binary = isolated.command;
   const invoke = (...args) => {
     const result = spawnSync(binary, args, { cwd: directory, env: { PATH: '/nonexistent' }, encoding: 'utf8', timeout: 30_000, maxBuffer: 2 * 1024 * 1024 });
-    assert.equal(result.status, 0, `${args[0]}: ${result.error ?? result.stderr ?? result.stdout}`);
+    assert.equal(result.status, 0, `${args[0]}: ${result.error ?? (result.stderr || result.stdout)}`);
     return result.stdout;
   };
   assert.match(invoke('--help'), /serve --transport stdio/);
   const manifest = JSON.parse(invoke('describe-build'));
   assert.match(manifest.target, /^(?:x86_64-linux.*-musl|aarch64-macos.*)$/);
-  await foreignApplication(binary, directory, process.argv[5]);
+  await foreignApplication(binary, directory, process.argv[5], manifest.protocol_schema_sha256);
   const result = JSON.parse(invoke('demo', '--offline', '--state-dir', join(directory, 'state')));
   assert.equal(result.mode, 'offline-demo');
   assert.equal(result.output.disposition, 'report');

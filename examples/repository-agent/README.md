@@ -26,7 +26,7 @@ accepts this directory's `definition.zig`, `types.zig` and `environment.zig`.
 Include `tools.zig` and `instructions.txt` with the application source. The output
 name is `repository-agent`. Build tools and sources are not launch inputs.
 
-For a live or controlled HTTPS profile, explicitly supply a JSON configuration:
+For a live HTTPS profile, explicitly supply a JSON configuration:
 
 ```json
 {
@@ -57,9 +57,18 @@ model. This file does not authorize spending or supply credentials.
 ```
 
 The credential file contains the bearer token, has private permissions, and is
-read only when explicitly named. `--trust-root` accepts an explicit DER trust
-root for a controlled endpoint. No environment credential or proxy lookup occurs.
+read only when explicitly named. Production admission requires exactly
+`https://api.openai.com/v1/responses` before reading credentials. No environment
+credential or proxy lookup occurs.
 Serving without `--authorize-inference` cannot authorize a provider call.
+
+Controlled TLS qualification uses `--test-provider --trust-root ROOT.der` and
+profile ID `controlled-test`. It accepts only HTTPS loopback URLs with an explicit
+port and `/v1/responses` path, uses the built-in non-secret `qualification-only`
+token, and rejects `--credential-file`. It still requires `--authorize-inference`
+to dispatch. This profile remains explicit on resume/import and cannot be
+silently promoted to production by supplying credentials. `--trust-root` selects
+an explicit DER trust root; certificate and hostname checks remain enabled.
 
 At admission, the snapshot and non-secret profile become task-owned immutable
 objects. Snapshots allow up to 512 regular files, 256 KiB per file and 16 MiB in
@@ -74,6 +83,8 @@ For a restarted stdio server, use `--profile-task TASK_ID` to select the frozen
 profile and snapshot. Keep `--offline` for an offline task. Credentials and current
 inference authorization must be supplied separately for live work; neither is
 restored from task state. A task never changes its profile silently.
+Read-only CLI `status` and `result` do not load execution configuration and remain
+available for authorized old or foreign application tasks.
 
 After parking the server, a settled task can be copied explicitly:
 
@@ -91,7 +102,8 @@ live resume needs current credentials and explicit inference authorization.
 Use `initialize`, `describe`, `task.submit`, `task.status`, `task.respond`,
 `task.message`, `task.subscribe`, `task.result`, `task.cancel` and explicit
 `task.resume` through the shared `agent-host/1.0` protocol. Submission uses profile
-ID `offline` or `fixed` and the embedded `repository-agent.input.v1` schema.
+ID returned by `describe` (`offline`, `fixed`, or the explicit `controlled-test`
+profile) and the embedded `repository-agent.input.v1` schema.
 Questions and follow-ups use the embedded answer/message schema, both with a
 bounded `message` string. The generic protocol runbook and TypeScript subprocess
 client are described in `docs/native-single-binary.md`.

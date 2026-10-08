@@ -147,6 +147,12 @@ New messages must match the saved task's application, image and message schema.
 Opening a namespace with another application permits authorized reads but cannot
 acknowledge incompatible input. Queuing a compatible message does not itself
 resume execution or require replacing the task's frozen launch profile.
+CLI `status` and `result` use the namespace's current read authority without
+loading execution configuration or credentials. Read responses retain the saved
+application and schema IDs; discovery validates known current value contracts
+conditionally and permits historical contracts. Mutation parameters remain bound
+to the current application. Question presenters receive the admitted profile and
+environment context, just as leaf handlers do.
 
 The new stdio loop uses nonblocking pipes, bounded response reservations,
 outstanding-ID tracking, an ordered writer and one environmental I/O worker.

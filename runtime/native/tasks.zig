@@ -340,6 +340,10 @@ pub fn Service(comptime Types: type) type {
             if (!same(value.application_id.bytes, Types.application_id) or
                 !same(&value.image.digest, &storage.digest(self.assets.image))) return error.IncompatibleProfile;
         }
+        fn acceptsMessages(self: *Self) bool {
+            for (self.handlers.entries) |entry| if (entry.declaration.kind == .inbox) return true;
+            return false;
+        }
         fn compatible(self: *Self, value: state.Task) !void {
             try self.compatibleApplication(value);
             if (!same(&value.profile.digest, &storage.digest(self.profile.bytes)) or
@@ -539,9 +543,7 @@ pub fn Service(comptime Types: type) type {
             // of which launch profile will eventually resume its execution.
             try self.compatibleApplication(value);
             if (!same(value.message_schema_id.bytes, Types.message_schema_id)) return error.IncompatibleProfile;
-            var supported = false;
-            for (self.handlers.entries) |entry| supported = supported or entry.declaration.kind == .inbox;
-            if (!supported) return error.UnsupportedCapability;
+            if (!self.acceptsMessages()) return error.UnsupportedCapability;
             if (value.messages.items.len >= 16) return error.Capacity;
             const bytes = try contracts.encodeOwned(Types.Message, a, input);
             defer a.free(bytes);
@@ -858,7 +860,7 @@ pub fn Service(comptime Types: type) type {
             value.revision = try std.math.add(u64, value.revision, 1);
             value.schedule = .active;
             const task_name = std.fmt.bytesToHex(value.id, .lower);
-            const ctx: registry.Context = .{ .allocator = a, .io = self.io, .authority = &self.profile.authority, .task_id = &task_name };
+            const ctx: registry.Context = .{ .allocator = a, .io = self.io, .authority = &self.profile.authority, .task_id = &task_name, .profile = self.profile.bytes, .environment = self.profile.environment };
             switch (entry.declaration.kind) {
                 .question => {
                     const prompt = try json.canonical(a, try entry.declaration.present.?(ctx, request.value.binding.payload));
@@ -1261,7 +1263,43 @@ pub fn Service(comptime Types: type) type {
             return admitted;
         }
 
+        /// The queue is a pending-input projection, not arbitrary message history.
+        /// Return the exact inbox reply only when its head is already acquired.
+        fn validateImportedMessages(self: *Self, a: std.mem.Allocator, value: state.Task, pending: ?occurrence.Occurrence) !?[]u8 {
+            if (value.next_message == 0 or (value.messages.items.len != 0 and (value.terminal() or !self.acceptsMessages()))) return error.InvalidArchive;
+            var previous: u64 = 0;
+            var bytes: u64 = 0;
+            var acquired: ?[]u8 = null;
+            errdefer if (acquired) |reply| a.free(reply);
+            for (value.messages.items, 0..) |id, index| {
+                var decoded = try self.record(state.Message, a, "message", id, value.id);
+                defer decoded.deinit();
+                const message = decoded.value;
+                if (!same(message.schema_id.bytes, value.message_schema_id.bytes) or message.ordinal <= previous or message.ordinal >= value.next_message) return error.InvalidArchive;
+                previous = message.ordinal;
+                bytes = std.math.add(u64, bytes, message.value.bytes) catch return error.InvalidArchive;
+                if (bytes > 256 * 1024) return error.InvalidArchive;
+                const encoded = try self.store().object(a, message.value, 256 * 1024);
+                defer a.free(encoded);
+                var payload = contracts.decodeOwned(Types.Message, a, encoded) catch |err| return if (err == error.OutOfMemory) err else error.InvalidArchive;
+                defer payload.deinit();
+                switch (message.disposition) {
+                    .queued => if (message.occurrence != null) return error.InvalidArchive,
+                    .acquired => {
+                        const current = pending orelse return error.InvalidArchive;
+                        const occurrence_id = message.occurrence orelse return error.InvalidArchive;
+                        if (index != 0 or current.state != .settled_reply or !same(&occurrence_id, &current.id)) return error.InvalidArchive;
+                        acquired = try contracts.encodeOwned(contracts.InboxReply(Types.Message), a, .{ .message = .{ .id = .{ .bytes = &std.fmt.bytesToHex(id, .lower) }, .value = payload.value } });
+                    },
+                    .consumed, .not_consumed => return error.InvalidArchive,
+                }
+            }
+            return acquired;
+        }
+
         fn validateImportedState(self: *Self, a: std.mem.Allocator, value: state.Task, pending: ?occurrence.Occurrence) !void {
+            const acquired_inbox = try self.validateImportedMessages(a, value, pending);
+            defer if (acquired_inbox) |bytes| a.free(bytes);
             const driver = try self.resident(a, value);
             errdefer self.retire(a) catch {
                 self.store().fenced = true;
@@ -1294,6 +1332,11 @@ pub fn Service(comptime Types: type) type {
                         var schema = try data.schema.decode(a, entry.resume_schema);
                         defer schema.deinit();
                         try data.schema.validateValue(a, schema.descriptor, reply.value.value);
+                        if (entry.declaration.kind == .inbox) {
+                            const expected = acquired_inbox orelse try contracts.encodeOwned(contracts.InboxReply(Types.Message), a, .empty);
+                            defer if (acquired_inbox == null) a.free(expected);
+                            if (!same(reply.value.value, expected)) return error.InvalidArchive;
+                        } else if (acquired_inbox != null) return error.InvalidArchive;
                         acquired_answer = storage.digest(reply.value.value);
                     }
                     const question_id: ?state.Digest = switch (current.state) {

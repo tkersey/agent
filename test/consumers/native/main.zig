@@ -42,7 +42,9 @@ pub fn main(init: std.process.Init) !void {
                                 break :blk false;
                             };
                             const wire = try contracts.encodeOwned(T, a, typed);
-                            var decoded = try contracts.decodeOwned(T, a, wire);
+                            // JSON text views must outlive this decoded container.
+                            // The immutable wire remains in the outer output arena.
+                            var decoded = try contracts.decodeBorrowed(T, a, wire);
                             defer decoded.deinit();
                             try roundtrips.append(try native.values.toJson(T, a, decoded.value));
                             break :blk true;

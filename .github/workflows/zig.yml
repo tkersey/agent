@@ -85,6 +85,9 @@ jobs:
             test ! -e .zig-cache
             mv .zig-cache-upload .zig-cache
           fi
+          # File snapshots omit empty directories. Zig 0.17's cached configurer
+          # can write here without a compiler cache miss creating it first.
+          mkdir -p .zig-cache/tmp
       - name: Record restored cache contents and matched key
         if: matrix.lane != 'installation'
         continue-on-error: true

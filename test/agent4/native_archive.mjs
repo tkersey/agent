@@ -180,8 +180,15 @@ export function invalidQueuedMessage(bytes, change) {
   switch (change) {
     case 'omitted':
     case 'omitted-acquired':
+    case 'omitted-record':
       archive.taskValue[taskFields.indexOf('messages')] = [];
       archive.manifest[3] = replace(archive, archive.manifest[3], Buffer.from(encodeValue(archive.schemas.get('task'), archive.taskValue)));
+      if (change === 'omitted-record') {
+        archive.manifest[6] = archive.manifest[6].filter(candidate => candidate !== row);
+        archive.objects.delete(key(row[2]));
+        archive.objects.delete(key(message[4]));
+        return encode(archive);
+      }
       if (change === 'omitted-acquired') message[5] = 1;
       break;
     case 'acquired-unbound': message[5] = 1; break;

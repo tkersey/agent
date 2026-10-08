@@ -365,7 +365,7 @@ async function repositoryHttps(binary, directory, controller, invokeBase) {
     assert.equal(importedStatus.profile_digest, accepted.profile_digest);
     assert.equal(importedStatus.pending_messages.length, 1);
     const queueRecovery = join(directory, 'queued import recovery');
-    for (const change of ['omitted', 'omitted-acquired', 'acquired-unbound', 'queued-bound', 'acquired-question', 'consumed', 'not-consumed', 'schema', 'ordinal-zero', 'ordinal-future', 'payload']) {
+    for (const change of ['omitted', 'omitted-acquired', 'omitted-record', 'acquired-unbound', 'queued-bound', 'acquired-question', 'consumed', 'not-consumed', 'schema', 'ordinal-zero', 'ordinal-future', 'payload']) {
       const malformed = join(directory, `queued-${change}.bundle`);
       await writeFile(malformed, invalidQueuedMessage(pendingBytes, change), {mode: 0o600});
       const rejected = spawnSync(binary, ['import-checkpoint', '--state-dir', queueRecovery, '--input', malformed, '--operation-id', 'import-queued', '--test-provider', '--trust-root', trust], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
@@ -455,16 +455,16 @@ try {
   const captureTask = JSON.parse(invoke('run', '--offline', '--state-dir', captureState, '--input-json', '{"task":"Explain the fixture."}', '--operation-id', 'capture-submit'));
   assert.equal(captureTask.status, 'waiting_input');
   const captureArchive = join(directory, 'capture-closure.bundle');
-  invoke('export-checkpoint', '--state-dir', captureState, '--task-id', captureTask.task_id, '--output', captureArchive);
+  invoke('export-checkpoint', '--offline', '--state-dir', captureState, '--task-id', captureTask.task_id, '--output', captureArchive);
   const captureBytes = await readFile(captureArchive);
   for (const change of ['all', 'one', 'prepared-marker']) {
     const malformed = join(directory, `capture-${change}.bundle`);
     const destination = join(directory, `capture-${change}-import`);
     await writeFile(malformed, missingCaptures(captureBytes, change), {mode: 0o600});
-    const rejected = spawnSync(binary, ['import-checkpoint', '--state-dir', destination, '--input', malformed, '--operation-id', 'capture-import'], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
+    const rejected = spawnSync(binary, ['import-checkpoint', '--offline', '--state-dir', destination, '--input', malformed, '--operation-id', 'capture-import'], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
     assert.equal(rejected.status, 64, rejected.error ?? rejected.stderr);
     assert.equal(JSON.parse(rejected.stdout).reason, 'InvalidArchive', change);
-    const restored = JSON.parse(invoke('import-checkpoint', '--state-dir', destination, '--input', captureArchive, '--operation-id', 'capture-import'));
+    const restored = JSON.parse(invoke('import-checkpoint', '--offline', '--state-dir', destination, '--input', captureArchive, '--operation-id', 'capture-import'));
     assert.equal(restored.task_id, captureTask.task_id);
     assert.deepEqual(restored.question, captureTask.question);
   }

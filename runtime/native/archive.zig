@@ -397,6 +397,10 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
         var decoded = try contracts.decodeOwned(state.Receipt, store.allocator, bytes);
         defer decoded.deinit();
         if (!same(&decoded.value.task, &value.id) or !same(&decoded.value.request_digest, &row.request) or decoded.value.revision == 0 or decoded.value.revision > value.revision) return error.CorruptState;
+        // An acknowledged follow-up cannot disappear by deleting both its row
+        // and its queue entry while retaining the immutable admission receipt.
+        if (decoded.value.method == .message and decoded.value.message == null) return error.InvalidArchive;
+        if (decoded.value.message) |id| if (record(archive, .message, id) == null) return error.InvalidArchive;
     }
     const reserved: ?state.Digest = if (current) |pending| if (pending.state == .settled_reply and record(archive, .attempt, pending.state.settled_reply.attempt) != null) pending.state.settled_reply.attempt else null else null;
     if (archive.reservations.items.len != @intFromBool(reserved != null)) return error.CorruptState;

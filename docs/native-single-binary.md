@@ -320,7 +320,8 @@ its committed bytes and counters. Uninterpreted captures remain nonportable.
 Capture completeness is derived from settled physical attempts and their compiled
 handler contracts, including responses with absent usage. Not-sent attempts need
 no capture. The pending-message queue must contain every queued or acquired
-message exactly once and exclude consumed or not-consumed history.
+message exactly once and exclude consumed or not-consumed history. A saved
+follow-up acknowledgment must still resolve to its message record.
 Import configures adapters from the archive's digest-checked frozen resources,
 without recapturing the original filesystem paths or loading archived grants.
 

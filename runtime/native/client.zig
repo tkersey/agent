@@ -220,11 +220,8 @@ pub fn Client(comptime Types: type) type {
             const artifact = saved.value;
             if (artifact.task == null or !std.mem.eql(u8, &artifact.task.?, &task_id) or !std.mem.eql(u8, &artifact.id, &id)) return error.CorruptState;
             if (offset > artifact.value.bytes) return error.InvalidParams;
-            // Full-object scratch must not accumulate in the response arena
-            // across batch members. artifactChunk copies its returned bytes.
-            const scratch = self.service.allocator;
-            const bytes = try self.service.namespace.store.object(scratch, artifact.value, 4 * 1024 * 1024);
-            defer scratch.free(bytes);
+            const bytes = try self.service.namespace.store.object(a, artifact.value, 4 * 1024 * 1024);
+            defer a.free(bytes);
             return discovery.artifactChunk(a, .{ .bytes = bytes, .sha256 = artifact.value.digest }, offset, length);
         }
 
@@ -257,6 +254,15 @@ pub fn Client(comptime Types: type) type {
         }
 
         pub fn call(self: *Self, a: std.mem.Allocator, method: protocol.Method, params: json.Value) !json.Value {
+            // A batch retains responses, not full object/decoder scratch from
+            // earlier members. The service owns the reclaimable host budget;
+            // backing this arena with the response arena would retain it again.
+            var scratch = std.heap.ArenaAllocator.init(self.service.allocator);
+            defer scratch.deinit();
+            return json.copy(a, try self.dispatch(scratch.allocator(), method, params));
+        }
+
+        fn dispatch(self: *Self, a: std.mem.Allocator, method: protocol.Method, params: json.Value) !json.Value {
             switch (method) {
                 .@"task.submit" => {
                     if (!std.mem.eql(u8, try json.text(try field(params, "application_id")), Types.application_id) or !std.mem.eql(u8, try json.text(try field(params, "profile_id")), self.service.profile.id)) return error.NotFound;

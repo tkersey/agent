@@ -245,6 +245,8 @@ the repository's internal builder call proves it.
 Clean deployment, the downstream recipe and artifact packaging are mandatory
 on Linux in every full PR workflow. The five-minute target covers the
 complete workflow, including setup, cache transfer and the final aggregate gate.
+The current native qualification has an explicitly authorized six-minute
+maximum (360 seconds); the five-minute target remains.
 At `2415f66`, the earlier Linux-only workflow
 took 5m00s from start to GitHub completion (4m59s through the final required job);
 the separate complete platform runs took 6m27s on Linux and 9m19s on macOS.

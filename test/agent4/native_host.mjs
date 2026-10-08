@@ -60,6 +60,7 @@ function launch(state = null, lifetime = 15000) {
         assert.equal(frames[0].method, 'server.closed');
         assert.equal(frames[0].params.mode, mode);
         assert.equal(frames[0].params.disposition, code === 0 ? (mode === 'cancel' ? 'cancelled' : 'parked') : 'incomplete');
+        return frames[0];
       } else assert.deepEqual(frames, []);
     },
     async crash() {
@@ -501,6 +502,35 @@ try {
     assert.equal(code, 0);
     await shutdown.end(0, mode);
   }
+  for (const mode of ['park', 'cancel']) {
+    const state = `settled-${mode}`;
+    const created = cli('run', state, '--input-json', '{"value":20}', '--operation-id', 'park-before-shutdown');
+    // Reopening exposes the saved task without taking execution ownership.
+    // Two LF frames, not one batch: shutdown settles before the second frame.
+    const shutdown = launch(state, 5000);
+    await shutdown.initialize();
+    shutdown.write(rpc('before-settlement', 'task.status', {task_id: created.task_id}));
+    const parkedTask = (await shutdown.next()).result;
+    assert.equal(parkedTask.status, 'waiting_input');
+    assert.equal(parkedTask.cancellation, null);
+    const stopped = once(shutdown.child, 'close');
+    shutdown.write(rpc('settled-shutdown', 'shutdown', {mode}) +
+      rpc('late-cancel', 'task.cancel', {task_id: parkedTask.task_id, client_operation_id: 'after-settlement'}));
+    const accepted = await shutdown.next();
+    assert.equal(accepted.id, 'settled-shutdown');
+    assert.deepEqual(accepted.result, {mode, accepted: true});
+    assert.deepEqual(await stopped, [0, null]);
+    assert.equal(shutdown.child.stdin.writableEnded, false, 'settled shutdown does not wait for stdin EOF');
+    // end checks that the only remaining frame is server.closed, so a late
+    // cancellation acknowledgment cannot be hidden behind that notification.
+    const closed = await shutdown.end(0, mode);
+    assert.deepEqual(closed.params.recovery_tasks, []);
+    const recovered = cli('status', state, '--task-id', parkedTask.task_id);
+    assert.equal(recovered.status, 'waiting_input');
+    assert.equal(recovered.cancellation, null);
+    assert.equal(recovered.revision, parkedTask.revision);
+    assert.deepEqual(recovered.question, parkedTask.question);
+  }
   for (const state of [null, 'interrupt-idle']) {
     const interrupted = launch(state, 5000);
     await interrupted.initialize();
@@ -608,7 +638,7 @@ try {
   stalled.stdin.destroy();
   await stallClose;
   assert.equal(stallSignal, null, 'stdout stall did not terminate within the bounded host deadline');
-  assert.equal(stallCode, 2);
+  assert.equal(stallCode, 74);
   assert(stallElapsed < 12000);
 
   // A quiet connection may wait for a person. A partially supplied frame has

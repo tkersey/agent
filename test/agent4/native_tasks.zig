@@ -731,6 +731,147 @@ test "an inbox identity cannot be redeclared with a different message contract" 
     try std.testing.expectError(error.InvalidInboxContract, agent.inbox.Profile(u64).declare(ctx));
 }
 
+const LargeResultTypes = struct {
+    pub const application_id = "large-result-test";
+    pub const input_schema_id = "large-result.input.v1";
+    pub const output_schema_id = "large-result.output.v1";
+    pub const failure_schema_id = "large-result.failure.v1";
+    pub const message_schema_id = "large-result.message.v1";
+    pub const Input = bool;
+    pub const Output = agent.contracts.Bytes(1024 * 1024);
+    pub const Failure = Output;
+    pub const Message = void;
+    pub const payload = @as([900 * 1024]u8, @splat('x'));
+};
+const LargeResultApplication = struct {
+    pub fn emit(c: agent.Context) !boundary.source.Module {
+        const b = c.builder;
+        const bytes = try c.schema(LargeResultTypes.Output);
+        const entry = try b.declare(&.{try c.schema(bool)}, bytes, &.{}, &.{});
+        const payload = try c.literal(LargeResultTypes.Output, .{ .bytes = &LargeResultTypes.payload });
+        try b.define(entry, try b.term(.{ .conditional = .{
+            .condition = try b.reference(b.parameter(entry, 0)),
+            .when_true = try b.term(.{ .fail = payload }),
+            .when_false = try b.pure(payload),
+        } }));
+        return b.module(entry, bytes);
+    }
+};
+
+test "large completed and failed result batches retain responses without payload scratch" {
+    const harness = std.testing.allocator;
+    const io = std.testing.io;
+    var compiled = try agent.compile(harness, agent.system(.{ .InitialArgs = bool, .Result = LargeResultTypes.Output, .Failure = LargeResultTypes.Failure, .application = LargeResultApplication }));
+    defer compiled.deinit();
+    const image = try harness.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+    defer harness.free(image);
+    _ = try compiled.encode(harness, image);
+    const admitted_image = try boundary.data.program_image.Admitted.decode(harness, image);
+    defer admitted_image.deinit();
+    const manifest = try ownerManifest(harness, image, admitted_image.identity(), "large-result-test");
+    defer harness.free(manifest);
+    // Independent wire oracle: Bytes is a JSON base64url string.
+    const encoded = try harness.alloc(u8, std.base64.url_safe_no_pad.Encoder.calcSize(LargeResultTypes.payload.len) + 2);
+    defer harness.free(encoded);
+    encoded[0] = '"';
+    encoded[encoded.len - 1] = '"';
+    _ = std.base64.url_safe_no_pad.Encoder.encode(encoded[1 .. encoded.len - 1], &LargeResultTypes.payload);
+    var expected_digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(encoded, &expected_digest, .{});
+
+    // Authoring/image bytes above model build-time work and embedded read-only
+    // assets. All runtime owners below share the real 64MiB allocation budget.
+    var budget: world.AllocationBudget = .{ .parent = harness, .limit = 64 * 1024 * 1024 };
+    const a = budget.allocator();
+    // SQLite is charged by Namespace.open. Reserve only the absent process
+    // worker and input framer, then actually admit the large resource set.
+    const process_reservation = try a.alloc(u8, 17 * 1024 * 1024);
+    defer a.free(process_reservation);
+    const resource = try a.alloc(u8, 16 * 1024 * 1024);
+    defer a.free(resource);
+    @memset(resource, 'r');
+    const assets: native.discovery.Assets = .{ .image = image, .application = "large-result-test", .manifest = manifest };
+    var application: native.discovery.Application = .{ .arena = .init(a), .metadata = .null, .manifest = .null, .manifest_id = "unit", .image_identity = admitted_image.identity() };
+    defer application.deinit();
+    application.manifest = (try native.json.parse(application.arena.allocator(), manifest, .{})).value;
+    var handlers = try native.Registry.init(a, &.{});
+    defer handlers.deinit();
+    const profile: native.tasks.Profile = .{ .id = "offline", .runtime_identity = @splat(43), .bytes = "large-result-profile", .resources = &.{resource}, .authority = .{ .grants = &.{}, .principal = "test", .tenant = "test" } };
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    var path_buffer: [4096]u8 = undefined;
+    const length = try temporary.dir.realPath(io, &path_buffer);
+    const path = try std.fmt.allocPrint(a, "{s}/state", .{path_buffer[0..length]});
+    defer a.free(path);
+    var namespace = try native.Namespace.open(a, io, path);
+    defer namespace.close() catch unreachable;
+    var service = try native.tasks.Service(LargeResultTypes).init(a, io, &namespace, assets, &application, handlers, profile);
+    defer service.close(a) catch unreachable;
+    var ids: [2][16]u8 = undefined;
+    var artifacts: [2][32]u8 = undefined;
+    for (&ids, &artifacts, 0..) |*id, *artifact, index| {
+        {
+            var admission = std.heap.ArenaAllocator.init(a);
+            defer admission.deinit();
+            const submitted = try service.submit(admission.allocator(), if (index == 0) "complete" else "fail", index != 0);
+            id.* = submitted.receipt.task;
+        }
+        {
+            var advance = std.heap.ArenaAllocator.init(a);
+            defer advance.deinit();
+            try std.testing.expect(try service.pump(advance.allocator()) == .progressed);
+        }
+        var terminal = try service.task(a, id.*);
+        defer terminal.deinit();
+        const expected: @TypeOf(terminal.value.outcome_kind) = if (index == 0) .completed else .failed;
+        try std.testing.expectEqual(expected, terminal.value.outcome_kind);
+        try std.testing.expect(terminal.value.checkpoint.bytes <= 1024 * 1024);
+        try std.testing.expect(terminal.value.result.?.bytes >= LargeResultTypes.payload.len);
+        try std.testing.expectEqual(resource.len, terminal.value.resources.items[0].bytes);
+        try std.testing.expectEqualSlices(u8, &expected_digest, &terminal.value.client_result.?.digest);
+        try std.testing.expectEqual(encoded.len, terminal.value.client_result.?.bytes);
+        artifact.* = terminal.value.result_artifact.?;
+    }
+    var client: native.client.Client(LargeResultTypes) = .{ .service = &service, .batch = true };
+    // Completed-only, failed-only and mixed batches all use the real authored
+    // outcomes. The mixed batch also exposes aliases to recycled call storage.
+    for (0..3) |batch| {
+        var responses_arena = std.heap.ArenaAllocator.init(a);
+        defer responses_arena.deinit();
+        const frame = responses_arena.allocator();
+        const baseline = budget.live;
+        var responses: std.array_list.Managed(native.json.Value) = .init(frame);
+        for (0..16) |i| {
+            const index = if (batch == 2) i % 2 else batch;
+            var params = native.json.object();
+            try native.json.put(frame, &params, "task_id", native.json.string(try frame.dupe(u8, &std.fmt.bytesToHex(ids[index], .lower))));
+            const result = try client.call(frame, .@"task.result", params);
+            try responses.append(try native.protocol.response(frame, try native.json.number(frame, i), result));
+            try std.testing.expect(budget.live - baseline < 512 * 1024);
+        }
+        // Check every retained response after subsequent calls have reclaimed
+        // and reused temporary storage, including both failure and success.
+        for (responses.items, 0..) |response, i| {
+            const index = if (batch == 2) i % 2 else batch;
+            const result = response.object.get("result").?;
+            try std.testing.expect(result.object.get("ready").?.bool);
+            try std.testing.expectEqualStrings(&std.fmt.bytesToHex(ids[index], .lower), result.object.get("task_id").?.string);
+            const outcome = result.object.get("outcome").?;
+            try std.testing.expectEqualStrings(if (index == 0) "completed" else "failed", outcome.object.get("type").?.string);
+            try std.testing.expectEqualStrings(if (index == 0) LargeResultTypes.output_schema_id else LargeResultTypes.failure_schema_id, outcome.object.get("schema_id").?.string);
+            try std.testing.expect(outcome.object.get("value") == null);
+            const reference = outcome.object.get("value_ref").?;
+            try std.testing.expectEqualStrings(&std.fmt.bytesToHex(artifacts[index], .lower), reference.object.get("artifact_id").?.string);
+            try std.testing.expectEqualStrings(&std.fmt.bytesToHex(expected_digest, .lower), reference.object.get("sha256").?.string);
+            try std.testing.expectEqual(encoded.len, try native.json.decimal(usize, reference.object.get("bytes").?));
+            if (index == 1) try std.testing.expect(outcome.object.get("cleanup_complete").?.bool);
+        }
+        try std.testing.expect((try native.json.canonical(frame, .{ .array = responses })).len + 1 <= (native.protocol.Limits{}).frame_bytes);
+    }
+    try std.testing.expect(!budget.failed);
+    try std.testing.expect(budget.peak <= budget.limit);
+}
+
 const CleanupTypes = struct {
     pub const application_id = "cleanup-owner-test";
     pub const input_schema_id = "cleanup.input.v1";

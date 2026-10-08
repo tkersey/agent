@@ -624,7 +624,8 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
                 code = 64;
             } else {
                 writable = false;
-                if (code == 0) code = 2;
+                // A stalled output channel is an I/O failure even with no task.
+                code = 74;
             }
         };
         if (writable) transport.flush(if (connection.client) |client| !client.service.profile.authority.revoked and client.service.profile.authority.disclosure else true) catch {
@@ -633,8 +634,9 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
             if (shutdown_at == null) shutdown_at = time;
         };
         // During explicit shutdown, bounded reads remain available while work
-        // drains. Fatal framing and EOF stop admissions immediately.
-        if (!connection.closing and code == 0 and writable and !transport.eof and transport.canAdmit()) {
+        // drains. Once parked, only queued output drains. Fatal framing and EOF
+        // stop admissions immediately.
+        if (!parked and !connection.closing and code == 0 and writable and !transport.eof and transport.canAdmit()) {
             const incoming = transport.next() catch |err| blk: {
                 if (shutdown_at == null) shutdown_at = time;
                 connection.closing = true;
@@ -764,7 +766,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
                 if (!writable or transport.count == 0) return code;
             }
         }
-        transport.wait(!connection.closing and transport.canAdmit(), if (progressed) 0 else 20) catch {
+        transport.wait(!parked and !connection.closing and transport.canAdmit(), if (progressed) 0 else 20) catch {
             writable = false;
             code = 74;
             if (shutdown_at == null) shutdown_at = transport.now();

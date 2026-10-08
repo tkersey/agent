@@ -76,6 +76,40 @@ pub fn put(allocator: std.mem.Allocator, value: *Value, key: []const u8, child: 
 pub fn string(value: []const u8) Value {
     return .{ .string = value };
 }
+
+/// Retain only a JSON value when its producer's temporary storage is released.
+pub fn copy(allocator: std.mem.Allocator, value: Value) std.mem.Allocator.Error!Value {
+    return switch (value) {
+        .string => |bytes| .{ .string = try allocator.dupe(u8, bytes) },
+        .number_string => |bytes| .{ .number_string = try allocator.dupe(u8, bytes) },
+        .array => |items| blk: {
+            var result: std.array_list.Managed(Value) = .init(allocator);
+            try result.ensureTotalCapacity(items.items.len);
+            for (items.items) |item| result.appendAssumeCapacity(try copy(allocator, item));
+            break :blk .{ .array = result };
+        },
+        .object => |members| blk: {
+            var result = object();
+            for (members.keys(), members.values()) |key, item|
+                try put(allocator, &result, try allocator.dupe(u8, key), try copy(allocator, item));
+            break :blk result;
+        },
+        .null, .bool, .integer, .float => value,
+    };
+}
+
+test "retained JSON survives release and overwrite of producer storage" {
+    var backing: [32 * 1024]u8 = undefined;
+    var producer = std.heap.FixedBufferAllocator.init(&backing);
+    var parsed = try parse(producer.allocator(), "{\"text\":\"owned\",\"array\":[null,true,{\"number\":18446744073709551615}],\"empty\":{}}", .{});
+    var response = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer response.deinit();
+    const retained = try copy(response.allocator(), parsed.value);
+    parsed.deinit();
+    @memset(&backing, 0xa5);
+    try std.testing.expectEqualStrings("{\"array\":[null,true,{\"number\":18446744073709551615}],\"empty\":{},\"text\":\"owned\"}", try canonical(response.allocator(), retained));
+}
+
 pub fn number(allocator: std.mem.Allocator, value: anytype) !Value {
     return .{ .number_string = try std.fmt.allocPrint(allocator, "{d}", .{value}) };
 }

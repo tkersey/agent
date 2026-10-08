@@ -85,6 +85,17 @@ delivery without semantic cancellation or retry. The shared owner fixture reads
 16 exact chunks from a store-admitted 3 MiB task artifact into one response arena,
 using a 64 MiB allocation budget with 32 MiB reserved for SQLite and worker memory.
 This fixture measures the client allocation path, not a new process RSS claim.
+A second fixture produces real 900 KiB completed and failed outcomes below the
+1 MiB checkpoint cap, with an admitted 16 MiB resource set. SQLite, resources,
+service/program and responses share the 64 MiB runtime budget; only the absent
+16 MiB worker and 1 MiB input framer are reserved. Three 16-call batches cover
+completed, failed and mixed results, checking retained values after scratch reuse
+and keeping the full production/retrieval allocation peak. Each client call owns
+its scratch lifetime and copies only returned JSON into the response arena.
+
+The process peer also pipelines cancellation after a settled shutdown in both
+modes and checks unchanged task/question state after restart. Stdout stalls are
+I/O exit 74; unknown delivery and incomplete cleanup retain exit 2.
 
 The repository investigation performs native list/read, asks a client question,
 queues a Unicode follow-up during held provider I/O, survives SIGKILL/restart,

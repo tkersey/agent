@@ -17,6 +17,38 @@ pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();
     if (args.next()) |mode| {
+        if (std.mem.eql(u8, mode, "client-integers")) {
+            const encoded = args.next() orelse return error.InvalidArguments;
+            if (args.next() != null) return error.InvalidArguments;
+            var arena = std.heap.ArenaAllocator.init(init.gpa);
+            defer arena.deinit();
+            const a = arena.allocator();
+            var input = try native.json.parse(a, encoded, .{});
+            defer input.deinit();
+            var accepted: std.array_list.Managed(native.json.Value) = .init(a);
+            for (input.value.array.items) |item| {
+                const signed = std.mem.eql(u8, item.object.get("definition").?.string, "signed");
+                const value = item.object.get("value").?;
+                const valid = if (signed) blk: {
+                    _ = native.values.fromJson(i64, a, value) catch break :blk false;
+                    break :blk true;
+                } else blk: {
+                    _ = native.values.fromJson(u64, a, value) catch break :blk false;
+                    break :blk true;
+                };
+                try accepted.append(.{ .bool = valid });
+            }
+            var schema = (try native.json.parse(a, "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:agent:client-integer-qualification\"}", .{})).value;
+            var definitions = native.json.object();
+            try native.json.put(a, &definitions, "unsigned", (try native.json.parse(a, &contracts.json.ClientSchema(u64).value, .{})).value);
+            try native.json.put(a, &definitions, "signed", (try native.json.parse(a, &contracts.json.ClientSchema(i64).value, .{})).value);
+            try native.json.put(a, &schema, "$defs", definitions);
+            var output = native.json.object();
+            try native.json.put(a, &output, "schema", schema);
+            try native.json.put(a, &output, "accepted", .{ .array = accepted });
+            try std.Io.File.stdout().writeStreamingAll(init.io, try native.json.canonical(a, output));
+            return;
+        }
         if (std.mem.eql(u8, mode, "invoke")) {
             const path = args.next() orelse return error.InvalidArguments;
             if (args.next() != null) return error.InvalidArguments;

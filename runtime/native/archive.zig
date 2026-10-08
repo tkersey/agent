@@ -352,6 +352,15 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
                 } else if (comptime same(kind, "capture")) {
                     if (item.disposition != .complete or item.response == null or item.projection == null) return error.UnsettledOccurrence;
                     if (!same(&item.attempt, &row.id) or record(archive, .attempt, item.attempt) == null) return error.CorruptState;
+                } else if (comptime same(kind, "message")) {
+                    // Pending membership is an equality, not just validation
+                    // of whichever queue entries the archive retained.
+                    var queued = false;
+                    for (value.messages.items) |id| if (same(&id, &item.id)) {
+                        queued = true;
+                        break;
+                    };
+                    if (queued != (item.disposition == .queued or item.disposition == .acquired)) return error.InvalidArchive;
                 } else if (comptime same(kind, "origin")) {
                     if (item.source_revision == 0 or item.source_revision >= value.revision) return error.CorruptState;
                 }

@@ -1141,6 +1141,39 @@ pub fn Service(comptime Types: type) type {
         /// A transferable capture must reproduce its committed reply, replay
         /// objects and usage through the same pure adapter, without acquisition.
         fn validateCapturedProjections(self: *Self, a: std.mem.Allocator, value: state.Task, records: []const state.ArchiveRecord) !void {
+            // Derive obligations from the complete physical-attempt relation,
+            // not from the capture subset supplied by an untrusted archive.
+            // Not-sent/rearmed attempts have no acquired response to capture.
+            for (records) |row| {
+                if (row.kind != .attempt) continue;
+                var arena = std.heap.ArenaAllocator.init(a);
+                defer arena.deinit();
+                const temporary = arena.allocator();
+                var attempt = try self.record(state.Attempt, temporary, "attempt", row.id, value.id);
+                defer attempt.deinit();
+                var saved = try self.record(occurrence.Occurrence, temporary, "occurrence", attempt.value.occurrence, value.id);
+                defer saved.deinit();
+                const encoded = try self.store().object(temporary, attempt.value.request, 4 * 1024 * 1024);
+                var request = try data.invocation.decode(data.invocation.Request, temporary, encoded);
+                defer request.deinit();
+                const entry = try self.handlers.resolve(request.value, self.application.image_identity);
+                if (entry.declaration.kind != .leaf or !same(&request.value.request_identity, &saved.value.request) or
+                    !std.meta.eql(attempt.value.profile, value.profile) or !same(attempt.value.capability.bytes, entry.declaration.identity) or
+                    attempt.value.inference != entry.declaration.inference or (attempt.value.prepared != null) != (entry.declaration.capture != null)) return error.InvalidArchive;
+                const acquired: ?occurrence.Acquired = switch (saved.value.state) {
+                    .settled_reply => |reply| reply,
+                    .admitted => |admitted| if (admitted == .reply) admitted.reply else null,
+                    else => null,
+                };
+                if (entry.declaration.capture != null and acquired != null and same(&acquired.?.attempt, &row.id)) {
+                    var found = false;
+                    for (records) |candidate| if (candidate.kind == .capture and same(&candidate.id, &row.id)) {
+                        found = true;
+                        break;
+                    };
+                    if (!found) return error.InvalidArchive;
+                }
+            }
             var output_tokens: u64 = 0;
             for (records) |row| {
                 if (row.kind != .capture) continue;

@@ -6,7 +6,7 @@ import { mkdir, writeFile, readFile, rename, link, unlink } from 'node:fs/promis
 import { once } from 'node:events';
 import { AgentClient } from '../../examples/native-minimal/stdio-client.mts';
 import { certificates } from './mobility_tls_fixture.mjs';
-import { compareContinuation, missingReplayObject, invalidQueuedMessage } from './native_archive.mjs';
+import { compareContinuation, missingReplayObject, missingCaptures, invalidQueuedMessage } from './native_archive.mjs';
 import { deployment } from './native_deployment.mjs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -14,6 +14,30 @@ import { fileURLToPath } from 'node:url';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+
+function clientIntegerSchemas(probe) {
+  const cases = [];
+  for (const [definition, minimum, maximum] of [['unsigned', 0n, (1n << 64n) - 1n], ['signed', -(1n << 63n), (1n << 63n) - 1n]]) {
+    const values = new Set([minimum - 1n, minimum, minimum + 1n, -1n, 0n, 1n, 9007199254740993n, maximum - 1n, maximum, maximum + 1n]);
+    // Probe every decimal-prefix threshold, independently using BigInt order.
+    for (const bound of [maximum, -minimum]) {
+      const digits = String(bound);
+      for (let i = 1; i <= digits.length; i++) {
+        const prefix = BigInt(digits.slice(0, i)) * 10n ** BigInt(digits.length - i);
+        for (const delta of [-1n, 0n, 1n]) { values.add(prefix + delta); values.add(-prefix + delta); }
+      }
+    }
+    for (const value of values) cases.push({definition, value: String(value), accept: value >= minimum && value <= maximum});
+    for (const value of ['', '00', '01', '-0', '-01', '+1', '1.0', '1e0', '1\n', ' 1', '1 ', '１', 1, null]) cases.push({definition, value, accept: false});
+  }
+  const result = spawnSync(probe, ['client-integers', JSON.stringify(cases)], {encoding: 'utf8', timeout: 5000, maxBuffer: 1024 * 1024});
+  assert.equal(result.status, 0, result.error ?? result.stderr);
+  const {schema, accepted} = JSON.parse(result.stdout);
+  assert.deepEqual(accepted, cases.map(item => item.accept), 'native full-width integer admission');
+  const validation = spawnSync('uv', ['run', '--no-project', '--no-config', '--python', '3.12', '--with', 'jsonschema==4.23.0', fileURLToPath(new URL('./native_schema.py', import.meta.url))], {input: JSON.stringify({schema, cases}), encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024});
+  assert.equal(validation.status, 0, validation.error ?? validation.stderr);
+  process.stdout.write(validation.stdout);
+}
 async function until(read, predicate, label) {
   for (let i = 0; i < 400; i++) {
     const value = await read();
@@ -341,7 +365,7 @@ async function repositoryHttps(binary, directory, controller, invokeBase) {
     assert.equal(importedStatus.profile_digest, accepted.profile_digest);
     assert.equal(importedStatus.pending_messages.length, 1);
     const queueRecovery = join(directory, 'queued import recovery');
-    for (const change of ['acquired-unbound', 'queued-bound', 'acquired-question', 'consumed', 'not-consumed', 'schema', 'ordinal-zero', 'ordinal-future', 'payload']) {
+    for (const change of ['omitted', 'omitted-acquired', 'acquired-unbound', 'queued-bound', 'acquired-question', 'consumed', 'not-consumed', 'schema', 'ordinal-zero', 'ordinal-future', 'payload']) {
       const malformed = join(directory, `queued-${change}.bundle`);
       await writeFile(malformed, invalidQueuedMessage(pendingBytes, change), {mode: 0o600});
       const rejected = spawnSync(binary, ['import-checkpoint', '--state-dir', queueRecovery, '--input', malformed, '--operation-id', 'import-queued', '--test-provider', '--trust-root', trust], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
@@ -422,10 +446,28 @@ try {
   assert.match(invoke('--help'), /serve --transport stdio/);
   const manifest = JSON.parse(invoke('describe-build'));
   assert.match(manifest.target, /^(?:x86_64-linux.*-musl|aarch64-macos.*)$/);
+  clientIntegerSchemas(process.argv[4]);
   await foreignApplication(binary, directory, process.argv[5], manifest.protocol_schema_sha256);
   const result = JSON.parse(invoke('demo', '--offline', '--state-dir', join(directory, 'state')));
   assert.equal(result.mode, 'offline-demo');
   assert.equal(result.output.disposition, 'report');
+  const captureState = join(directory, 'capture closure');
+  const captureTask = JSON.parse(invoke('run', '--offline', '--state-dir', captureState, '--input-json', '{"task":"Explain the fixture."}', '--operation-id', 'capture-submit'));
+  assert.equal(captureTask.status, 'waiting_input');
+  const captureArchive = join(directory, 'capture-closure.bundle');
+  invoke('export-checkpoint', '--state-dir', captureState, '--task-id', captureTask.task_id, '--output', captureArchive);
+  const captureBytes = await readFile(captureArchive);
+  for (const change of ['all', 'one', 'prepared-marker']) {
+    const malformed = join(directory, `capture-${change}.bundle`);
+    const destination = join(directory, `capture-${change}-import`);
+    await writeFile(malformed, missingCaptures(captureBytes, change), {mode: 0o600});
+    const rejected = spawnSync(binary, ['import-checkpoint', '--state-dir', destination, '--input', malformed, '--operation-id', 'capture-import'], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
+    assert.equal(rejected.status, 64, rejected.error ?? rejected.stderr);
+    assert.equal(JSON.parse(rejected.stdout).reason, 'InvalidArchive', change);
+    const restored = JSON.parse(invoke('import-checkpoint', '--state-dir', destination, '--input', captureArchive, '--operation-id', 'capture-import'));
+    assert.equal(restored.task_id, captureTask.task_id);
+    assert.deepEqual(restored.question, captureTask.question);
+  }
   console.log(JSON.stringify({ repository_agent: 'controlled-https', ...await repositoryHttps(binary, directory, isolated.controller, invoke) }));
   passed = true;
 } finally {

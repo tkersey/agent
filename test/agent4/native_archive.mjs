@@ -135,6 +135,37 @@ export function missingReplayObject(bytes) {
   return encode(archive);
 }
 
+export function missingCaptures(bytes, change = 'all') {
+  const archive = readArchive(bytes);
+  assert.equal(archive.task.inference_output_tokens, 0n, 'absent usage must not mask capture completeness');
+  const captures = archive.manifest[6].filter(([kind]) => kind === 4);
+  assert(captures.length > 1);
+  const removed = change === 'all' ? captures : captures.slice(0, 1);
+  for (const row of removed) {
+    const capture = decodeValue(archive.schemas.get('capture'), archive.object(row[2]));
+    assert.equal(capture[4].tag, 1);
+    assert.equal(capture[6].tag, 1);
+    archive.objects.delete(key(row[2]));
+    archive.objects.delete(key(capture[4].value));
+    for (const reference of capture[6].value[1]) archive.objects.delete(key(reference));
+    archive.manifest[6] = archive.manifest[6].filter(candidate => candidate !== row);
+    if (change === 'prepared-marker') {
+      const attempt = archive.manifest[6].find(([kind, id]) => kind === 5 && Buffer.from(id).equals(Buffer.from(row[1])));
+      assert(attempt);
+      const value = decodeValue(archive.schemas.get('attempt'), archive.object(attempt[2]));
+      assert.equal(value[7].tag, 1);
+      // Prepared bytes remain charged in the task counter. Preserve the byte
+      // total so this sibling reaches handler/attempt coherence admission.
+      archive.taskValue[taskFields.indexOf('inference_request_bytes')] += value[3][1] - value[7].value[1];
+      archive.objects.delete(key(value[7].value));
+      value[7] = {tag: 0, value: null};
+      attempt[2] = replace(archive, attempt[2], Buffer.from(encodeValue(archive.schemas.get('attempt'), value)));
+      archive.manifest[3] = replace(archive, archive.manifest[3], Buffer.from(encodeValue(archive.schemas.get('task'), archive.taskValue)));
+    }
+  }
+  return encode(archive);
+}
+
 export function invalidQueuedMessage(bytes, change) {
   const archive = readArchive(bytes);
   assert.equal(archive.task.messages.length, 1);
@@ -147,6 +178,12 @@ export function invalidQueuedMessage(bytes, change) {
   assert.equal(message[6].tag, 0); // unbound
   assert.equal(archive.task.current_occurrence.tag, 1);
   switch (change) {
+    case 'omitted':
+    case 'omitted-acquired':
+      archive.taskValue[taskFields.indexOf('messages')] = [];
+      archive.manifest[3] = replace(archive, archive.manifest[3], Buffer.from(encodeValue(archive.schemas.get('task'), archive.taskValue)));
+      if (change === 'omitted-acquired') message[5] = 1;
+      break;
     case 'acquired-unbound': message[5] = 1; break;
     case 'queued-bound': message[6] = {tag: 1, value: archive.task.current_occurrence.value}; break;
     case 'acquired-question': message[5] = 1; message[6] = {tag: 1, value: archive.task.current_occurrence.value}; break;

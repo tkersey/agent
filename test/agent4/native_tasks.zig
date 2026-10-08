@@ -171,9 +171,20 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     const queued_message = try service.message(frame, "message", accepted.receipt.task, 9);
     service.profile.bytes = profile.bytes;
     var calls: usize = 0;
+    var retried = false;
     for (0..32) |_| {
         const step = try service.pump(frame);
         if (step == .work) {
+            if (captured and !retried) {
+                try service.notSent(frame, step.work);
+                const archive_path = try std.fmt.allocPrint(frame, "{s}/not-sent.bundle", .{path_buffer[0..length]});
+                _ = try service.exportCheckpoint(frame, accepted.receipt.task, archive_path);
+                var stopped = try service.task(frame, accepted.receipt.task);
+                defer stopped.deinit();
+                _ = try service.resumeTask(frame, "retry-not-sent", accepted.receipt.task, stopped.value.revision);
+                retried = true;
+                continue;
+            }
             var request = try protocol.decode(protocol.Request, frame, step.work.request);
             defer request.deinit();
             const ctx: native.Context = .{ .allocator = frame, .io = io, .authority = &profile.authority, .task_id = "test", .profile = profile.bytes, .environment = profile.environment };
@@ -240,7 +251,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     for (0..32) |_| {
         const step = try service.pump(frame);
         try std.testing.expect(step != .work);
-        if (!captured and !imported_inbox) {
+        if (!imported_inbox) {
             const queue = (try queue_client.call(frame, .@"task.status", queue_params)).object.get("pending_messages").?.array.items;
             if (queue.len != 0 and std.mem.eql(u8, queue[0].object.get("disposition").?.string, "acquired")) {
                 phase = "export acquired inbox";
@@ -296,7 +307,8 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
         }
         if (step == .idle) break;
     }
-    try std.testing.expect(captured or imported_inbox);
+    try std.testing.expect(imported_inbox);
+    try std.testing.expectEqual(captured, retried);
     var completed = try service.task(frame, accepted.receipt.task);
     defer completed.deinit();
     try std.testing.expect(completed.value.terminal());
@@ -373,6 +385,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     }
     try std.testing.expect(dispatched != null);
     try service.notSent(frame, dispatched.?);
+    _ = try service.message(frame, "message-before-cancel", no_send.receipt.task, 11);
     _ = try service.requestCancel(frame, "cancel-no-send", no_send.receipt.task, "stop before invocation");
     for (0..32) |_| {
         const step = try service.pump(frame);
@@ -382,6 +395,8 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     var cancelled = try service.task(frame, no_send.receipt.task);
     defer cancelled.deinit();
     try std.testing.expectEqual(.cancelled, cancelled.value.outcome_kind);
+    const cancelled_archive = try std.fmt.allocPrint(frame, "{s}/not-consumed.bundle", .{path_buffer[0..length]});
+    _ = try service.exportCheckpoint(frame, no_send.receipt.task, cancelled_archive);
 
     if (!captured) {
         // Exercise the stored-event projection's byte domain without another

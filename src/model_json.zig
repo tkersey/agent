@@ -191,6 +191,30 @@ pub fn ClientSchema(comptime T: type) type {
     };
 }
 
+// A positive decimal range partitions at the first digit below the maximum.
+// Zero and the sign are supplied by the caller; leading zeros never enter it.
+fn writePositiveDecimalRange(comptime maximum: u64, writer: anytype) void {
+    const digits = std.fmt.comptimePrint("{d}", .{maximum});
+    if (digits.len > 1) {
+        writer.raw("[1-9][0-9]{0,");
+        writeUnsigned(writer, digits.len - 2);
+        writer.raw("}|");
+    }
+    for (digits, 0..) |digit, i| {
+        const lower: u8 = if (i == 0) '1' else '0';
+        if (digit <= lower) continue;
+        writer.raw(digits[0..i]);
+        writer.byte('[');
+        writer.byte(lower);
+        writer.byte('-');
+        writer.byte(digit - 1);
+        writer.raw("][0-9]{");
+        writeUnsigned(writer, digits.len - i - 1);
+        writer.raw("}|");
+    }
+    writer.raw(digits);
+}
+
 fn writeClientSchema(comptime T: type, writer: anytype) void {
     if (comptime isText(T)) return writeSchema(T, writer);
     if (@typeInfo(T) == .@"struct" and @hasDecl(T, "agent_value_kind")) {
@@ -218,7 +242,14 @@ fn writeClientSchema(comptime T: type, writer: anytype) void {
             if (info.bits <= 32) return writeSchema(T, writer);
             if (info.bits != 64) @compileError("unsupported client integer width");
             writer.raw("{\"type\":\"string\",\"pattern\":\"");
-            writer.raw(if (info.signedness == .signed) "^(0|-?[1-9][0-9]*)$" else "^(0|[1-9][0-9]*)$");
+            writer.raw("^(0|");
+            writePositiveDecimalRange(std.math.maxInt(T), writer);
+            if (info.signedness == .signed) {
+                writer.raw("|-(");
+                writePositiveDecimalRange(@as(u64, std.math.maxInt(T)) + 1, writer);
+                writer.byte(')');
+            }
+            writer.raw(")(?![\\\\s\\\\S])");
             writer.raw("\",\"x-integer-minimum\":\"");
             writer.raw(std.fmt.comptimePrint("{d}", .{std.math.minInt(T)}));
             writer.raw("\",\"x-integer-maximum\":\"");

@@ -86,7 +86,7 @@ export function missingCheckpoint(bytes) {
 
 export function cancellationState(bytes, applied, reason = null) {
   const archive = readArchive(bytes);
-  archive.taskValue[taskFields.indexOf('cancellation')] = reason === null ? {tag: 0} : {tag: 1, value: reason};
+  archive.taskValue[taskFields.indexOf('cancellation')] = reason === null ? {tag: 0, value: null} : {tag: 1, value: reason};
   archive.taskValue[taskFields.indexOf('cancellation_applied')] = applied;
   archive.manifest[3] = replace(archive, archive.manifest[3], Buffer.from(encodeValue(archive.schemas.get('task'), archive.taskValue)));
   return encode(archive);

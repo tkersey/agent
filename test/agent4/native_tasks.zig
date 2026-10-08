@@ -272,12 +272,24 @@ fn rejectRequeuedHistory(a: std.mem.Allocator, service: *native.tasks.Service(T)
     decoded.value.occurrence = null;
     var requeued = value;
     requeued.messages.items = &.{message_id};
+    const original_task_bytes = try namespace.store.taskBytes(a, value.id);
     try namespace.store.begin();
     defer namespace.store.rollback();
+    const original_message = try namespace.store.putObject(bytes);
+    const original_task = try namespace.store.putObject(original_task_bytes);
     const message = try namespace.store.putObject(try agent.contracts.encodeOwned(Message, a, decoded.value));
     const task = try namespace.store.putObject(try agent.contracts.encodeOwned(@TypeOf(value), a, requeued));
     try namespace.store.database.run("UPDATE records SET body=? WHERE kind='message' AND id=?", &.{ .{ .blob = &message.digest }, .{ .blob = &message_id } });
     try namespace.store.database.run("UPDATE tasks SET body=? WHERE id=?", &.{ .{ .blob = &task.digest }, .{ .blob = &value.id } });
+    // Export intentionally requires a settled transaction. Commit the synthetic
+    // corruption, then restore the exact original references after the check.
+    try namespace.commit("test.requeued-history");
+    defer {
+        namespace.store.begin() catch unreachable;
+        namespace.store.database.run("UPDATE records SET body=? WHERE kind='message' AND id=?", &.{ .{ .blob = &original_message.digest }, .{ .blob = &message_id } }) catch unreachable;
+        namespace.store.database.run("UPDATE tasks SET body=? WHERE id=?", &.{ .{ .blob = &original_task.digest }, .{ .blob = &value.id } }) catch unreachable;
+        namespace.commit("test.restore-consumed-history") catch unreachable;
+    }
     try std.testing.expectError(error.InvalidArchive, service.exportCheckpoint(a, value.id, path));
 }
 

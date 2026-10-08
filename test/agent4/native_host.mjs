@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 import {join, resolve} from 'node:path';
 import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
-import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence, retainedEventSuffix, cancellationState, omittedAttempts, omittedQuestion, unboundQuestionReply, acquiredQuestionArchive, changedOperationKey, invalidEventData, falseEventFact} from './native_archive.mjs';
+import {readArchive, missingCheckpoint, changedProfile, unknownOccurrence, retainedEventSuffix, cancellationState, omittedFactEvent, omittedAttempts, omittedQuestion, unboundQuestionReply, acquiredQuestionArchive, changedOperationKey, invalidEventData, falseEventFact} from './native_archive.mjs';
 import {deployment} from './native_deployment.mjs';
 
 const source = resolve(process.argv[2]);
@@ -418,6 +418,25 @@ try {
   assert.equal((await resumed.next()).error.data.kind, 'InvalidParams');
   await resumed.end();
   cli('export-checkpoint', 'protocol state', '--output', 'completed.bundle');
+  const completeArchiveBytes = readFileSync(join(directory, 'completed.bundle'));
+  for (const [scope, bytes, kinds] of [
+    ['full', completeArchiveBytes, ['accepted', 'input_accepted', 'completed']],
+    ['suffix', retainedEventSuffix(completeArchiveBytes, 2n), ['input_accepted', 'completed']],
+  ]) for (const kind of kinds) {
+    const name = `missing-${scope}-${kind}`;
+    writeFileSync(join(directory, `${name}.bundle`), omittedFactEvent(bytes, kind), {mode: 0o600});
+    assert.throws(() => execFileSync(binary, ['import-checkpoint', '--offline', '--state-dir', name, '--input', `${name}.bundle`, '--operation-id', 'import-event'], options), error => error.status === 64 && JSON.parse(error.stdout).reason === 'InvalidArchive');
+    assert.equal(cli('import-checkpoint', name, '--input', 'completed.bundle', '--operation-id', 'import-event').task_id, receipt.task_id);
+  }
+  // A later cancellation receipt does not resurrect a terminal task. Its
+  // retained suffix may legitimately begin after the terminal event.
+  cli('cancel', 'protocol state', '--task-id', receipt.task_id, '--operation-id', 'after-completion');
+  cli('export-checkpoint', 'protocol state', '--output', 'after-completion.bundle');
+  const afterCompletion = readFileSync(join(directory, 'after-completion.bundle'));
+  assert.equal(readArchive(afterCompletion).task.cancellation.tag, 0);
+  writeFileSync(join(directory, 'pruned-terminal.bundle'), retainedEventSuffix(afterCompletion, readArchive(completeArchiveBytes).task.event_high + 1n), {mode: 0o600});
+  assert.equal(cli('import-checkpoint', 'pruned terminal', '--input', 'pruned-terminal.bundle', '--operation-id', 'import-pruned').task_id, receipt.task_id);
+  assert.deepEqual(cli('result', 'pruned terminal').outcome.value, {value: 41, answer: 'client answer'});
   for (const removeOccurrence of [false, true]) {
     const name = `omitted-question-${removeOccurrence}`;
     writeFileSync(join(directory, `${name}.bundle`), omittedQuestion(readFileSync(join(directory, 'completed.bundle')), removeOccurrence), {mode: 0o600});

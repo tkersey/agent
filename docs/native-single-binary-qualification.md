@@ -106,6 +106,12 @@ terminal base64 sextets. These cases run in the existing native qualification.
 The process peer also pipelines cancellation after a settled shutdown in both
 modes and checks unchanged task/question state after restart. Stdout stalls are
 I/O exit 74; unknown delivery and incomplete cleanup retain exit 2.
+The native writer regression fills both slot and byte limits, forces EAGAIN,
+then drains the pipe and checks that the acknowledgment precedes one close
+notification. Archive regressions erase a real acknowledged pending cancellation
+or replace required events with shape-valid historical events. Valid retries,
+pending-control recovery, post-terminal cancellation and legal event-prefix
+pruning remain explicit preservation cases.
 
 The repository investigation performs native list/read, asks a client question,
 queues a Unicode follow-up during held provider I/O, survives SIGKILL/restart,

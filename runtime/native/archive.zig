@@ -294,6 +294,7 @@ const AdmissionFact = struct {
     receipt: state.Digest,
     question: ?state.Digest,
     message: ?state.Digest,
+    event_seen: bool = false,
 };
 const AdmissionFacts = std.AutoHashMap(u64, AdmissionFact);
 
@@ -475,6 +476,7 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
     }
     var admissions = AdmissionFacts.init(a);
     defer admissions.deinit();
+    var last_nonterminal_revision: u64 = 0;
     for (archive.operations.items, 0..) |row, i| {
         for (archive.operations.items[0..i]) |prior| if (same(row.key.bytes, prior.key.bytes)) return error.InvalidArchive;
         try collector.add(row.body);
@@ -483,6 +485,14 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
         var decoded = try contracts.decodeOwned(state.Receipt, store.allocator, bytes);
         defer decoded.deinit();
         if (!same(&decoded.value.task, &value.id) or !same(&decoded.value.request_digest, &row.request) or decoded.value.revision == 0 or decoded.value.revision > value.revision) return error.CorruptState;
+        // World cannot attest control which the host acknowledged but has not
+        // applied yet. A nonterminal task must retain that durable intent.
+        // A cancellation requested after termination need not create intent.
+        if (decoded.value.method == .cancel and !value.terminal() and value.cancellation == null) return error.InvalidArchive;
+        switch (decoded.value.method) {
+            .submit, .respond, .message, .@"resume" => last_nonterminal_revision = @max(last_nonterminal_revision, decoded.value.revision),
+            .cancel, .import_checkpoint => {},
+        }
         const fact: AdmissionFact = .{ .method = decoded.value.method, .receipt = row.body.digest, .question = decoded.value.question, .message = decoded.value.message };
         const entry = try admissions.getOrPut(decoded.value.revision);
         if (entry.found_existing and !std.meta.eql(entry.value_ptr.*, fact)) return error.InvalidArchive;
@@ -496,6 +506,7 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
     }
     var next = value.event_floor;
     var revision: u64 = 0;
+    var terminal_seen = false;
     for (archive.events.items) |row| {
         if (row.seq != next or row.revision == 0 or row.revision < revision or row.revision > value.revision) return error.CorruptState;
         try collector.add(row.body);
@@ -506,10 +517,26 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
         if (!same(&decoded.value.task, &value.id) or decoded.value.seq != row.seq or decoded.value.revision != row.revision) return error.CorruptState;
         try @import("schemas.zig").validateEventData(store.allocator, decoded.value.kind, decoded.value.data.bytes);
         try validateEventFacts(store, archive, value, &admissions, decoded.value);
+        if (admissionMethod(decoded.value.kind) != null) admissions.getPtr(decoded.value.revision).?.event_seen = true;
+        switch (decoded.value.kind) {
+            .completed, .failed, .cancelled => terminal_seen = true,
+            else => {},
+        }
         next += 1;
         revision = row.revision;
     }
     if (next - 1 != value.event_high) return error.CorruptState;
+    // Supplied events must agree with their facts, and facts whose events are
+    // known to be retained must be represented. Prefix pruning may cut through
+    // a revision, so only later revisions are certain when the floor is >1.
+    const first_revision = archive.events.items[0].revision;
+    var facts = admissions.iterator();
+    while (facts.next()) |fact| {
+        if ((value.event_floor == 1 or fact.key_ptr.* > first_revision) and !fact.value_ptr.event_seen) return error.InvalidArchive;
+    }
+    // These admissions require a nonterminal task. Its terminal transition is
+    // later, so a suffix retaining that revision must retain the outcome event.
+    if (value.terminal() and (value.event_floor == 1 or last_nonterminal_revision >= first_revision) and !terminal_seen) return error.InvalidArchive;
     const reserved: ?state.Digest = if (current) |pending| if (pending.state == .settled_reply and record(archive, .attempt, pending.state.settled_reply.attempt) != null) pending.state.settled_reply.attempt else null else null;
     if (archive.reservations.items.len != @intFromBool(reserved != null)) return error.CorruptState;
     if (reserved) |attempt| if (!same(&archive.reservations.items[0].attempt, &attempt) or archive.reservations.items[0].bytes != storage.acquired_reserve) return error.CorruptState;

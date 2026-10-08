@@ -586,6 +586,125 @@ fn requestIds(value: json.Value, buffer: *[16]transport_api.Id) []const transpor
     return buffer[0..count];
 }
 
+/// Queue pressure leaves orderly closure pending under the existing drain
+/// deadline. Publish only after the writer can reserve a complete frame.
+fn queueClosed(comptime Types: type, frame: std.mem.Allocator, connection: *Connection(Types), transport: *transport_api.Transport, mode: Shutdown, code: u8) !bool {
+    if (!transport.canAdmit()) return false;
+    var params = json.object();
+    try json.put(frame, &params, "mode", json.string(@tagName(mode)));
+    try json.put(frame, &params, "disposition", json.string(if (code == 2) "incomplete" else if (mode == .cancel) "cancelled" else "parked"));
+    var pending: std.array_list.Managed(json.Value) = .init(frame);
+    if (connection.client) |client| for (client.service.owned) |owned| if (owned) |id| {
+        try pending.append(json.string(try frame.dupe(u8, &std.fmt.bytesToHex(id, .lower))));
+    };
+    try json.put(frame, &params, "recovery_tasks", .{ .array = pending });
+    try transport.enqueue(try json.canonical(frame, try protocol.notification(frame, "server.closed", params)), &.{}, connection.client != null);
+    return true;
+}
+
+test "orderly close waits through full slot and byte queues without losing acknowledgments" {
+    const a = std.testing.allocator;
+    const io = std.testing.io;
+    const Types = struct {};
+    // Use the real nonblocking writer, including EAGAIN and subsequent drain.
+    // Restore stdout before the test runner reports any result.
+    const saved = c.dup(1);
+    try std.testing.expect(saved >= 0);
+    defer _ = c.close(saved);
+    defer _ = c.dup2(saved, 1);
+    var pipes: [2]c_int = undefined;
+    try std.testing.expectEqual(0, c.pipe(&pipes));
+    defer _ = c.close(pipes[0]);
+    defer _ = c.close(pipes[1]);
+    for (pipes) |fd| try std.testing.expect(c.fcntl(fd, c.F_SETFL, c.O_NONBLOCK) >= 0);
+    try std.testing.expectEqual(1, c.dup2(pipes[1], 1));
+    for ([_]bool{ false, true }) |byte_pressure| {
+        var arena = std.heap.ArenaAllocator.init(a);
+        defer arena.deinit();
+        const frame = arena.allocator();
+        var transport = try transport_api.Transport.init(a, io, .{ .frame_bytes = 1024, .outbound_bytes = 4096 });
+        defer transport.deinit();
+        var connection: Connection(Types) = .{ .application = undefined, .instance = "test", .artifact_identity = @splat(0) };
+        var expected: std.ArrayList(u8) = .empty;
+        defer expected.deinit(a);
+        const count: usize = if (byte_pressure) 4 else 64;
+        const ids = [_]transport_api.Id{try transport_api.Id.from(json.string("shutdown"))};
+        for (0..count) |index| {
+            const body = if (index + 1 == count) "{\"id\":\"shutdown\",\"result\":{}}" else "{\"method\":\"task.event\"}";
+            var padded: [1023]u8 = @splat(' ');
+            @memcpy(padded[0..body.len], body);
+            const bytes = if (byte_pressure) &padded else body;
+            try transport.enqueue(bytes, if (index + 1 == count) &ids else &.{}, false);
+            try expected.appendSlice(a, bytes);
+            try expected.append(a, '\n');
+        }
+        var buffer: [4096]u8 = @splat('x');
+        while (true) {
+            const written = c.write(1, &buffer, buffer.len);
+            if (written < 0) {
+                try std.testing.expectEqual(.AGAIN, std.c.errno(written));
+                break;
+            }
+            try std.testing.expect(written > 0);
+        }
+        // A pipe may reject an atomic large write before its last byte fits.
+        while (true) {
+            const written = c.write(1, &buffer, 1);
+            if (written < 0) {
+                try std.testing.expectEqual(.AGAIN, std.c.errno(written));
+                break;
+            }
+            try std.testing.expectEqual(1, written);
+        }
+        try transport.flush(true);
+        try std.testing.expectEqual(count, transport.count);
+        for (0..2) |_| try std.testing.expect(!try queueClosed(Types, frame, &connection, &transport, .park, 0));
+        try std.testing.expectEqual(count, transport.count);
+        try std.testing.expectEqual(expected.items.len, transport.queued_bytes);
+        // The peer resumes within the unchanged deadline. Remove only the
+        // pipe filler, then let Transport itself retire queued frames.
+        while (true) {
+            const read = c.read(pipes[0], &buffer, buffer.len);
+            if (read < 0) {
+                try std.testing.expectEqual(.AGAIN, std.c.errno(read));
+                break;
+            }
+            try std.testing.expect(read > 0);
+        }
+        try transport.flush(true);
+        try std.testing.expect(try queueClosed(Types, frame, &connection, &transport, .park, 0));
+        var received: std.ArrayList(u8) = .empty;
+        defer received.deinit(a);
+        for (0..128) |_| {
+            while (true) {
+                const read = c.read(pipes[0], &buffer, buffer.len);
+                if (read < 0) {
+                    try std.testing.expectEqual(.AGAIN, std.c.errno(read));
+                    break;
+                }
+                try std.testing.expect(read > 0);
+                try received.appendSlice(a, buffer[0..@intCast(read)]);
+            }
+            if (transport.count == 0) break;
+            try transport.flush(true);
+        }
+        try std.testing.expectEqual(0, transport.count);
+        try std.testing.expectEqual(0, transport.queued_bytes);
+        try std.testing.expectEqual(0, transport.outstanding);
+        try std.testing.expect(received.items.len > expected.items.len);
+        try std.testing.expectEqualSlices(u8, expected.items, received.items[0..expected.items.len]);
+        const last = received.items[expected.items.len..];
+        try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, last, "\n"));
+        var notice = try json.parse(a, last, .{});
+        defer notice.deinit();
+        try std.testing.expectEqualStrings("server.closed", notice.value.object.get("method").?.string);
+        const params = notice.value.object.get("params").?;
+        try std.testing.expectEqualStrings("park", params.object.get("mode").?.string);
+        try std.testing.expectEqualStrings("parked", params.object.get("disposition").?.string);
+        try std.testing.expectEqual(0, params.object.get("recovery_tasks").?.array.items.len);
+    }
+}
+
 fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Connection(Types)) !u8 {
     var transport = try transport_api.Transport.init(a, io, connection.limits);
     defer transport.deinit();
@@ -752,16 +871,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
             }
             if (parked) {
                 if (!closed_notice and writable and connection.initialized and (code == 0 or code == 2)) {
-                    var params = json.object();
-                    try json.put(frame, &params, "mode", json.string(@tagName(mode)));
-                    try json.put(frame, &params, "disposition", json.string(if (code == 2) "incomplete" else if (mode == .cancel) "cancelled" else "parked"));
-                    var pending: std.array_list.Managed(json.Value) = .init(frame);
-                    if (connection.client) |client| for (client.service.owned) |owned| if (owned) |id| {
-                        try pending.append(json.string(try frame.dupe(u8, &std.fmt.bytesToHex(id, .lower))));
-                    };
-                    try json.put(frame, &params, "recovery_tasks", .{ .array = pending });
-                    try transport.enqueue(try json.canonical(frame, try protocol.notification(frame, "server.closed", params)), &.{}, connection.client != null);
-                    closed_notice = true;
+                    closed_notice = try queueClosed(Types, frame, connection, &transport, mode, code);
                 }
                 if (!writable or transport.count == 0) return code;
             }

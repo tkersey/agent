@@ -119,6 +119,96 @@ fn ownerManifest(a: std.mem.Allocator, image: []const u8, identity: [32]u8, appl
     }, .{});
 }
 
+// Rehash a well-formed archive while removing one semantic fact. Keep every
+// other object, sequence, revision and operation receipt unchanged.
+fn omitArchiveFact(a: std.mem.Allocator, io: std.Io, shape: anytype, task: anytype, source: []const u8, destination: []const u8, cancellation: bool) !void {
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(io, source, a, .limited(16 * 1024 * 1024));
+    const schema_length = std.mem.readInt(u32, bytes[8..12], .little);
+    const manifest_length = std.mem.readInt(u32, bytes[12..16], .little);
+    const start = 32 + schema_length;
+    const decoded = try agent.contracts.decodeOwned(@TypeOf(shape), a, bytes[start..][0..manifest_length]);
+    var archive = decoded.value;
+    const Reference = @TypeOf(archive.task);
+    const Blob = struct { reference: Reference, bytes: []const u8 };
+    var blobs: std.ArrayList(Blob) = .empty;
+    var offset: usize = start + manifest_length;
+    for (archive.objects.items) |reference| {
+        const length: usize = @intCast(reference.bytes);
+        try blobs.append(a, .{ .reference = reference, .bytes = bytes[offset..][0..length] });
+        offset += length;
+    }
+    var target: *Reference = undefined;
+    var replacement: []const u8 = undefined;
+    if (cancellation) {
+        try std.testing.expect(!task.terminal() and task.cancellation != null and !task.cancellation_applied);
+        var changed = task;
+        changed.cancellation = null;
+        replacement = try agent.contracts.encodeOwned(@TypeOf(task), a, changed);
+        target = &archive.task;
+    } else {
+        // This independent wire shape deliberately replaces a terminal event
+        // with a legal historical kind rather than corrupting its encoding.
+        const Event = struct {
+            task: [16]u8,
+            seq: u64,
+            revision: u64,
+            kind: enum { accepted, input_required, input_accepted, message_queued, message_consumed, message_not_consumed, cancellation_requested, parked, resumed, blocked, delivery_unknown, completed, failed, cancelled, imported },
+            data: agent.contracts.Bytes(48 * 1024),
+        };
+        var found = false;
+        const events = try a.dupe(@TypeOf(archive.events.items[0]), archive.events.items);
+        archive.events.items = events;
+        for (events) |*row| {
+            for (blobs.items) |blob| {
+                if (!std.mem.eql(u8, &blob.reference.digest, &row.body.digest)) continue;
+                var event = (try agent.contracts.decodeOwned(Event, a, blob.bytes)).value;
+                if (event.kind != .completed and event.kind != .failed and event.kind != .cancelled) break;
+                try std.testing.expectEqualStrings(@tagName(task.outcome_kind), @tagName(event.kind));
+                event.kind = .blocked;
+                event.data.bytes = "{}";
+                replacement = try agent.contracts.encodeOwned(Event, a, event);
+                target = &row.body;
+                found = true;
+                break;
+            }
+            if (found) break;
+        }
+        try std.testing.expect(found);
+    }
+    const previous = target.*;
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(replacement, &digest, .{});
+    target.* = .{ .digest = digest, .bytes = replacement.len };
+    var replaced = false;
+    for (blobs.items) |*blob| if (std.mem.eql(u8, &blob.reference.digest, &previous.digest)) {
+        blob.* = .{ .reference = target.*, .bytes = replacement };
+        replaced = true;
+    };
+    try std.testing.expect(replaced);
+    std.mem.sort(Blob, blobs.items, {}, struct {
+        fn less(_: void, left: Blob, right: Blob) bool {
+            return std.mem.order(u8, &left.reference.digest, &right.reference.digest) == .lt;
+        }
+    }.less);
+    const references = try a.alloc(Reference, blobs.items.len);
+    var body: std.ArrayList(u8) = .empty;
+    for (blobs.items, references) |blob, *reference| {
+        reference.* = blob.reference;
+        try body.appendSlice(a, blob.bytes);
+    }
+    archive.objects.items = references;
+    const manifest = try agent.contracts.encodeOwned(@TypeOf(shape), a, archive);
+    var header: [32]u8 = bytes[0..32].*;
+    std.mem.writeInt(u32, header[12..16], @intCast(manifest.len), .little);
+    std.mem.writeInt(u64, header[24..32], body.items.len, .little);
+    var output: std.ArrayList(u8) = .empty;
+    try output.appendSlice(a, &header);
+    try output.appendSlice(a, bytes[32..start]);
+    try output.appendSlice(a, manifest);
+    try output.appendSlice(a, body.items);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = destination, .data = output.items, .flags = .{ .permissions = .fromMode(0o600) } });
+}
+
 // Independently rewrite the ordinary archive envelope. This fixture's captured
 // increment has one fixed replay object and two fixed adapter byte strings;
 // retained canonical requests/replies stay in the object inventory.
@@ -993,6 +1083,72 @@ const CleanupApplication = struct {
     }
 };
 
+fn checkCleanupArchiveFact(a: std.mem.Allocator, frame: std.mem.Allocator, io: std.Io, service: *native.tasks.Service(CleanupTypes), namespace: *native.Namespace, service_live: *bool, namespace_live: *bool, source: []const u8, directory: []const u8, id: [16]u8, pending: bool) !void {
+    const assets = service.assets;
+    const application = service.application;
+    const handlers = service.handlers;
+    const profile = service.profile;
+    var task = try service.task(frame, id);
+    defer task.deinit();
+    const label = if (pending) "pending-control" else @tagName(task.value.outcome_kind);
+    const valid = try std.fmt.allocPrint(frame, "{s}/{s}-valid.bundle", .{ directory, label });
+    const invalid = try std.fmt.allocPrint(frame, "{s}/{s}-omitted.bundle", .{ directory, label });
+    _ = try service.exportCheckpoint(frame, id, valid);
+    const shape = try namespace.store.archiveIndex(frame, id, .{ .digest = @splat(0), .bytes = 0 });
+    try omitArchiveFact(frame, io, shape, task.value, valid, invalid, pending);
+    try service.close(frame);
+    service_live.* = false;
+    try namespace.close();
+    namespace_live.* = false;
+    {
+        const target = try std.fmt.allocPrint(frame, "{s}/{s}-admission", .{ directory, label });
+        var destination = try native.Namespace.open(a, io, target);
+        defer destination.close() catch unreachable;
+        var imported = try native.tasks.Service(CleanupTypes).init(a, io, &destination, assets, application, handlers, profile);
+        defer imported.close(frame) catch unreachable;
+        try std.testing.expectError(error.InvalidArchive, imported.importCheckpoint(frame, "import-fact", invalid));
+        // The failed admission publishes neither namespace state nor the
+        // operation ID; the original copy must succeed in the same namespace.
+        const admitted = try imported.importCheckpoint(frame, "import-fact", valid);
+        try std.testing.expectEqualSlices(u8, &id, &admitted.receipt.task);
+        var restored = try imported.task(frame, id);
+        defer restored.deinit();
+        if (pending) {
+            try std.testing.expect(!restored.value.cancellation_applied);
+            try std.testing.expectEqualStrings("test cancellation", restored.value.cancellation.?.bytes);
+            const replay = try imported.requestCancel(frame, "cancel-0", id, "test cancellation");
+            try std.testing.expect(replay.replayed);
+            _ = try imported.resumeTask(frame, "resume-control", id, restored.value.revision);
+            for (0..8) |_| {
+                const step = try imported.pump(frame);
+                try std.testing.expect(step != .work);
+                if (step == .idle) break;
+            }
+            var terminal = try imported.task(frame, id);
+            defer terminal.deinit();
+            try std.testing.expectEqual(.cancelled, terminal.value.outcome_kind);
+        } else {
+            try std.testing.expectEqual(task.value.outcome_kind, restored.value.outcome_kind);
+            var client: native.client.Client(CleanupTypes) = .{ .service = &imported };
+            const events = try client.events(frame, id, 0, 128);
+            var count: usize = 0;
+            for (events.object.get("events").?.array.items) |event| {
+                if (std.mem.eql(u8, @tagName(task.value.outcome_kind), event.object.get("type").?.string)) count += 1;
+            }
+            try std.testing.expectEqual(1, count);
+        }
+    }
+    namespace.* = try native.Namespace.open(a, io, source);
+    namespace_live.* = true;
+    service.* = try native.tasks.Service(CleanupTypes).init(a, io, namespace, assets, application, handlers, profile);
+    service_live.* = true;
+    if (pending) {
+        var current = try service.task(frame, id);
+        defer current.deinit();
+        _ = try service.resumeTask(frame, "resume-pending-original", id, current.value.revision);
+    }
+}
+
 test "terminal cleanup failures retain bounded shutdown ownership without runnable work" {
     const a = std.testing.allocator;
     const io = std.testing.io;
@@ -1040,6 +1196,7 @@ test "terminal cleanup failures retain bounded shutdown ownership without runnab
         defer yielded.deinit();
         try std.testing.expectEqual(.yielded, yielded.value.outcome_kind);
         if (cancel) _ = try service.requestCancel(frame, try std.fmt.allocPrint(frame, "cancel-{d}", .{index}), submitted.receipt.task, "test cancellation");
+        if (index == 0) try checkCleanupArchiveFact(a, frame, io, &service, &namespace, &service_live, &namespace_live, path, path_buffer[0..length], submitted.receipt.task, true);
         try std.testing.expect(try service.pump(frame) == .progressed);
         var cleaning = try service.task(frame, submitted.receipt.task);
         defer cleaning.deinit();
@@ -1083,6 +1240,17 @@ test "terminal cleanup failures retain bounded shutdown ownership without runnab
         defer terminal.deinit();
         const expected: @TypeOf(terminal.value.outcome_kind) = if (cancel) .cancelled else .failed;
         try std.testing.expectEqual(expected, terminal.value.outcome_kind);
+        if (index < 2) {
+            // Cancellation after a terminal failure is a historical receipt,
+            // not a newly pending control. Preserve that valid null-intent case.
+            if (!cancel) {
+                _ = try service.requestCancel(frame, "cancel-after-terminal", submitted.receipt.task, "too late");
+                var after = try service.task(frame, submitted.receipt.task);
+                defer after.deinit();
+                try std.testing.expect(after.value.cancellation == null);
+            }
+            try checkCleanupArchiveFact(a, frame, io, &service, &namespace, &service_live, &namespace_live, path, path_buffer[0..length], submitted.receipt.task, false);
+        }
         try std.testing.expectEqual(!cleanup_fails, try service.taskCleanupComplete(frame, terminal.value));
         try std.testing.expect(try service.pump(frame) == .idle);
         try std.testing.expectEqual(cleanup_fails, try service.shutdownIncomplete(frame));

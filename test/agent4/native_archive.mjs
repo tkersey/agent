@@ -92,6 +92,23 @@ export function cancellationState(bytes, applied, reason = null) {
   return encode(archive);
 }
 
+export function omittedFactEvent(bytes, kind) {
+  const archive = readArchive(bytes);
+  const tags = {accepted: 0, input_accepted: 2, message_queued: 3, cancellation_requested: 6, resumed: 8, completed: 11, failed: 12, cancelled: 13, imported: 14};
+  assert.notEqual(tags[kind], undefined);
+  let changed = 0;
+  for (const row of archive.manifest[7]) {
+    const event = decodeValue(archive.schemas.get('event'), archive.object(row[2]));
+    if (event[3] !== tags[kind]) continue;
+    event[3] = 9; // shape-valid historical blocked event
+    event[4] = [...Buffer.from('{}')];
+    row[2] = replace(archive, row[2], Buffer.from(encodeValue(archive.schemas.get('event'), event)));
+    changed++;
+  }
+  assert(changed > 0, `fixture has no ${kind} event`);
+  return encode(archive);
+}
+
 export function retainedEventSuffix(bytes, floor) {
   const archive = readArchive(bytes);
   assert(floor > archive.task.event_floor && floor <= archive.task.event_high);

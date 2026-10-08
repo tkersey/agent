@@ -605,7 +605,7 @@ fn queueClosed(comptime Types: type, frame: std.mem.Allocator, connection: *Conn
         try pending.append(json.string(try frame.dupe(u8, &std.fmt.bytesToHex(id, .lower))));
     };
     try json.put(frame, &params, "recovery_tasks", .{ .array = pending });
-    try transport.enqueue(try json.canonical(frame, try protocol.notification(frame, "server.closed", params)), &.{}, connection.client != null);
+    try transport.enqueue(try json.frame(frame, try protocol.notification(frame, "server.closed", params)), &.{}, connection.client != null);
     return true;
 }
 
@@ -775,7 +775,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
         transport.deadlines() catch |err| {
             if (shutdown_at == null) shutdown_at = time;
             if (err == error.FrameTimeout) {
-                if (code != 64 and writable and transport.canAdmit()) try transport.enqueue(try json.canonical(frame, try protocol.failure(frame, .null, .InvalidRequest, "reconnect")), &.{}, false);
+                if (code != 64 and writable and transport.canAdmit()) try transport.enqueue(try json.frame(frame, try protocol.failure(frame, .null, .InvalidRequest, "reconnect")), &.{}, false);
                 code = 64;
             } else {
                 writable = false;
@@ -796,7 +796,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
                 if (shutdown_at == null) shutdown_at = time;
                 connection.closing = true;
                 code = if (err == error.TruncatedFrame or err == error.FrameTooLarge) 64 else 74;
-                if (err == error.FrameTooLarge and writable) try transport.enqueue(try json.canonical(frame, try protocol.failure(frame, .null, .InvalidRequest, "reconnect")), &.{}, false);
+                if (err == error.FrameTooLarge and writable) try transport.enqueue(try json.frame(frame, try protocol.failure(frame, .null, .InvalidRequest, "reconnect")), &.{}, false);
                 break :blk null;
             };
             if (incoming) |bytes| {
@@ -806,7 +806,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
                         code = 64;
                     }
                     const fault = try protocol.failure(frame, .null, if (err == error.DuplicateKey) .InvalidRequest else .ParseError, "correct_request");
-                    if (writable) try transport.enqueue(try json.canonical(frame, fault), &.{}, false);
+                    if (writable) try transport.enqueue(try json.frame(frame, fault), &.{}, false);
                     transport.consumed();
                     progressed = true;
                     break :blk null;
@@ -820,7 +820,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
                                 connection.closing = true;
                                 code = 64;
                                 const fault = try protocol.failure(frame, .null, .InvalidRequest, "reconnect");
-                                if (writable) try transport.enqueue(try json.canonical(frame, fault), &.{}, false);
+                                if (writable) try transport.enqueue(try json.frame(frame, fault), &.{}, false);
                                 transport.consumed();
                             }
                             break :blk false;
@@ -829,7 +829,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
                     };
                     if (admitted) {
                         if (try connection.frame(frame, value.value)) |response| {
-                            const encoded = try json.canonical(frame, response);
+                            const encoded = try json.frame(frame, response);
                             try transport.enqueue(encoded, ids, connection.client != null);
                         }
                         transport.consumed();
@@ -887,7 +887,7 @@ fn serve(comptime Types: type, io: std.Io, a: std.mem.Allocator, connection: *Co
             }
             if (writable and shutdown_at == null and !closed_notice and transport.canAdmit()) {
                 if (try client.notification(frame)) |notification| {
-                    try transport.enqueue(try json.canonical(frame, notification), &.{}, true);
+                    try transport.enqueue(try json.frame(frame, notification), &.{}, true);
                     progressed = true;
                 }
             }

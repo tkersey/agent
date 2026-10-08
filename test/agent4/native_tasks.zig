@@ -55,6 +55,20 @@ fn present(ctx: native.Context, input: u32) !native.json.Value {
     try std.testing.expectEqualStrings("fixed-profile", ctx.profile);
     const configured: *const u32 = @ptrCast(@alignCast(ctx.environment orelse return error.MissingConfiguration));
     try std.testing.expectEqual(37, configured.*);
+    if (input == 42) {
+        var dense: native.json.Value = .{ .array = .init(ctx.allocator) };
+        for (0..10_000) |_| try dense.array.append(.{ .integer = 0 });
+        return dense;
+    }
+    if (input == 43) {
+        var deep: native.json.Value = .null;
+        for (0..32) |_| {
+            var parent: native.json.Value = .{ .array = .init(ctx.allocator) };
+            try parent.array.append(deep);
+            deep = parent;
+        }
+        return deep;
+    }
     return native.json.number(ctx.allocator, input);
 }
 const CapturingIncrement = struct {
@@ -121,7 +135,7 @@ fn ownerManifest(a: std.mem.Allocator, image: []const u8, identity: [32]u8, appl
 
 // Rehash a well-formed archive while removing one semantic fact. Keep every
 // other object, sequence, revision and operation receipt unchanged.
-const ArchiveFactChange = enum { cancellation_omitted, cancellation_reason, terminal_omitted, message_not_consumed };
+const ArchiveFactChange = enum { cancellation_omitted, cancellation_reason, terminal_cancellation_omitted, terminal_cancellation_reason, terminal_omitted, message_not_consumed };
 fn omitArchiveFact(a: std.mem.Allocator, io: std.Io, shape: anytype, task: anytype, source: []const u8, destination: []const u8, change: ArchiveFactChange) !void {
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, source, a, .limited(16 * 1024 * 1024));
     const schema_length = std.mem.readInt(u32, bytes[8..12], .little);
@@ -140,10 +154,13 @@ fn omitArchiveFact(a: std.mem.Allocator, io: std.Io, shape: anytype, task: anyty
     }
     var target: *Reference = undefined;
     var replacement: []const u8 = undefined;
-    if (change == .cancellation_omitted or change == .cancellation_reason) {
-        try std.testing.expect(!task.terminal() and task.cancellation != null and !task.cancellation_applied);
+    if (change == .cancellation_omitted or change == .cancellation_reason or change == .terminal_cancellation_omitted or change == .terminal_cancellation_reason) {
+        const terminal = change == .terminal_cancellation_omitted or change == .terminal_cancellation_reason;
+        try std.testing.expect(task.terminal() == terminal and task.cancellation != null and task.cancellation_applied == terminal);
         var changed = task;
-        changed.cancellation = if (change == .cancellation_omitted) null else .{ .bytes = "unacknowledged replacement" };
+        const omitted = change == .cancellation_omitted or change == .terminal_cancellation_omitted;
+        changed.cancellation = if (omitted) null else .{ .bytes = "unacknowledged replacement" };
+        if (terminal and omitted) changed.cancellation_applied = false;
         replacement = try agent.contracts.encodeOwned(@TypeOf(task), a, changed);
         target = &archive.task;
     } else {
@@ -179,6 +196,19 @@ fn omitArchiveFact(a: std.mem.Allocator, io: std.Io, shape: anytype, task: anyty
             if (found) break;
         }
         try std.testing.expect(found);
+        try std.testing.expect(!page.object.get("has_more").?.bool);
+        var subscribed: native.client.Client(T) = .{ .service = service };
+        subscribed.subscriptions[0] = .{ .id = @splat(9), .task = admitted.receipt.task, .after = 0 };
+        var notified = false;
+        while (try subscribed.notification(a)) |notification| {
+            _ = try native.json.parse(a, try native.json.frame(a, notification), .{});
+            const event = notification.object.get("params").?.object.get("event").?;
+            if (std.mem.eql(u8, event.object.get("type").?.string, "input_required")) {
+                notified = true;
+                try std.testing.expectEqualStrings(try native.json.canonical(a, ref), try native.json.canonical(a, event.object.get("data").?.object.get("prompt_ref").?));
+            }
+        }
+        try std.testing.expect(notified);
     }
     const previous = target.*;
     var digest: [32]u8 = undefined;
@@ -721,6 +751,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     service_live = true;
 
     if (!captured) {
+        try questionReferenceWitness(frame, &service);
         // Exercise the stored-event projection's byte domain without another
         // application image. Lifecycle production is exercised above; these
         // schema-shaped historical rows isolate pagination and batch framing.
@@ -764,6 +795,73 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
             cursor = next;
         }
         try std.testing.expectEqual(40, seen);
+    }
+}
+
+fn questionReferenceWitness(a: std.mem.Allocator, service: *native.tasks.Service(T)) !void {
+    var client: native.client.Client(T) = .{ .service = service, .batch = true };
+    for ([_]u32{ 41, 42 }) |input| {
+        const admitted = try service.submit(a, try std.fmt.allocPrint(a, "question-ref-{d}", .{input}), input);
+        for (0..16) |_| {
+            const step = try service.pump(a);
+            try std.testing.expect(step != .work);
+            if (step == .waiting or step == .idle) break;
+        }
+        var saved = (try service.pendingQuestion(a, admitted.receipt.task)) orelse return error.ExpectedQuestion;
+        defer saved.deinit();
+        var params = native.json.object();
+        try native.json.put(a, &params, "task_id", native.json.string(try a.dupe(u8, &std.fmt.bytesToHex(admitted.receipt.task, .lower))));
+        const status = try client.call(a, .@"task.status", params);
+        const question = status.object.get("question").?;
+        try std.testing.expect(question.object.get("prompt") == null);
+        const ref = question.object.get("prompt_ref").?;
+        const page = try client.events(a, admitted.receipt.task, 0, 128);
+        var found = false;
+        for (page.object.get("events").?.array.items) |event| {
+            if (!std.mem.eql(u8, event.object.get("type").?.string, "input_required")) continue;
+            found = true;
+            const data_value = event.object.get("data").?;
+            try std.testing.expect(data_value.object.get("prompt") == null);
+            try std.testing.expectEqualStrings(try native.json.canonical(a, ref), try native.json.canonical(a, data_value.object.get("prompt_ref").?));
+        }
+        try std.testing.expect(found);
+        var replies: native.json.Value = .{ .array = .init(a) };
+        for (0..16) |i| try replies.array.append(try native.protocol.response(a, try native.json.number(a, i), if (i % 2 == 0) status else page));
+        _ = try native.json.parse(a, try native.json.frame(a, replies), .{});
+        try native.json.put(a, &params, "artifact_id", ref.object.get("artifact_id").?);
+        try native.json.put(a, &params, "question_id", ref.object.get("question_id").?);
+        try native.json.put(a, &params, "offset", native.json.string("0"));
+        try native.json.put(a, &params, "length", native.json.string("32768"));
+        const chunk = try client.call(a, .@"artifact.read", params);
+        const text = chunk.object.get("data").?.string;
+        const decoded = try a.alloc(u8, try std.base64.url_safe_no_pad.Decoder.calcSizeForSlice(text));
+        try std.base64.url_safe_no_pad.Decoder.decode(decoded, text);
+        // Build expected bytes independently of the JSON encoder/projection.
+        const expected = try a.alloc(u8, if (input == 41) 20_001 else 68);
+        if (input == 41) {
+            expected[0] = '[';
+            for (0..10_000) |i| {
+                expected[1 + i * 2] = '0';
+                expected[2 + i * 2] = if (i == 9999) ']' else ',';
+            }
+        } else {
+            @memset(expected[0..32], '[');
+            @memcpy(expected[32..36], "null");
+            @memset(expected[36..], ']');
+        }
+        try std.testing.expectEqualSlices(u8, expected, decoded);
+        try std.testing.expect(chunk.object.get("eof").?.bool);
+        try native.json.put(a, &params, "artifact_id", native.json.string(try a.dupe(u8, &std.fmt.bytesToHex(saved.value.request.digest, .lower))));
+        try std.testing.expectError(error.ArtifactUnavailable, client.call(a, .@"artifact.read", params));
+        try native.json.put(a, &params, "artifact_id", ref.object.get("artifact_id").?);
+        _ = params.object.swapRemove("question_id");
+        try std.testing.expectError(error.ArtifactUnavailable, client.call(a, .@"artifact.read", params));
+        _ = try service.requestCancel(a, try std.fmt.allocPrint(a, "question-ref-cancel-{d}", .{input}), admitted.receipt.task, "finished witness");
+        for (0..16) |_| {
+            const step = try service.pump(a);
+            try std.testing.expect(step != .work);
+            if (step == .idle) break;
+        }
     }
 }
 
@@ -897,7 +995,7 @@ fn LargeResultProgram(comptime Types: type) type {
             const b = c.builder;
             const bytes = try c.schema(Types.Output);
             const entry = try b.declare(&.{try c.schema(bool)}, bytes, &.{}, &.{});
-            const payload = try c.literal(Types.Output, .{ .bytes = &Types.payload });
+            const payload = try c.literal(Types.Output, if (@hasDecl(Types, "dense")) .{ .items = &Types.payload } else .{ .bytes = &Types.payload });
             try b.define(entry, try b.term(.{ .conditional = .{
                 .condition = try b.reference(b.parameter(entry, 0)),
                 .when_true = try b.term(.{ .fail = payload }),
@@ -916,6 +1014,24 @@ test "escaped terminal text survives publication reads restart and import within
     try largeResultWitness(LargeResultContract(true));
 }
 
+test "dense short results use exact references across batches restart and import" {
+    const Dense = struct {
+        pub const application_id = "dense-result-test";
+        pub const input_schema_id = "dense-result.input.v1";
+        pub const output_schema_id = "dense-result.output.v1";
+        pub const failure_schema_id = "dense-result.failure.v1";
+        pub const message_schema_id = "dense-result.message.v1";
+        pub const Input = bool;
+        pub const Output = agent.contracts.Vector(u8, 10_000);
+        pub const Failure = Output;
+        pub const Message = void;
+        pub const escaped_text = false;
+        pub const dense = true;
+        pub const payload = @as([10_000]u8, @splat(0));
+    };
+    try largeResultWitness(Dense);
+}
+
 fn largeResultWitness(comptime Types: type) !void {
     const harness = std.testing.allocator;
     const io = std.testing.io;
@@ -929,11 +1045,19 @@ fn largeResultWitness(comptime Types: type) !void {
     const manifest = try ownerManifest(harness, image, admitted_image.identity(), "large-result-test");
     defer harness.free(manifest);
     // Independent wire oracle: canonical base64url or one six-byte JSON escape per NUL.
-    const encoded = try harness.alloc(u8, (if (Types.escaped_text) Types.payload.len * 6 else std.base64.url_safe_no_pad.Encoder.calcSize(Types.payload.len)) + 2);
+    const dense = @hasDecl(Types, "dense");
+    const encoded = try harness.alloc(u8, if (dense) Types.payload.len * 2 + 1 else (if (Types.escaped_text) Types.payload.len * 6 else std.base64.url_safe_no_pad.Encoder.calcSize(Types.payload.len)) + 2);
     defer harness.free(encoded);
     encoded[0] = '"';
     encoded[encoded.len - 1] = '"';
-    if (Types.escaped_text) {
+    if (dense) {
+        encoded[0] = '[';
+        for (0..Types.payload.len) |i| {
+            encoded[1 + i * 2] = '0';
+            encoded[2 + i * 2] = if (i + 1 == Types.payload.len) ']' else ',';
+        }
+        try std.testing.expect(encoded.len < 60 * 1024);
+    } else if (Types.escaped_text) {
         for (0..Types.payload.len) |i| @memcpy(encoded[1 + i * 6 ..][0..6], "\\u0000");
         try std.testing.expect(encoded.len > 4 * 1024 * 1024);
     } else _ = std.base64.url_safe_no_pad.Encoder.encode(encoded[1 .. encoded.len - 1], &Types.payload);
@@ -993,7 +1117,10 @@ fn largeResultWitness(comptime Types: type) !void {
         try std.testing.expectEqual(resource.len, terminal.value.resources.items[0].bytes);
         try std.testing.expectEqualSlices(u8, &expected_digest, &terminal.value.client_result.?.digest);
         try std.testing.expectEqual(encoded.len, terminal.value.client_result.?.bytes);
-        artifact.* = terminal.value.result_artifact.?;
+        if (dense) {
+            try std.testing.expect(terminal.value.result_artifact == null);
+            artifact.* = terminal.value.client_result.?.digest;
+        } else artifact.* = terminal.value.result_artifact.?;
     }
     var client: native.client.Client(Types) = .{ .service = &service, .batch = true };
     // Completed-only, failed-only and mixed batches all use the real authored
@@ -1030,8 +1157,9 @@ fn largeResultWitness(comptime Types: type) !void {
             if (index == 1) try std.testing.expect(outcome.object.get("cleanup_complete").?.bool);
         }
         try std.testing.expect((try native.json.canonical(frame, .{ .array = responses })).len + 1 <= (native.protocol.Limits{}).frame_bytes);
+        _ = try native.json.parse(frame, try native.json.frame(frame, .{ .array = responses }), .{});
     }
-    if (Types.escaped_text) {
+    if (Types.escaped_text or dense) {
         // Reopen the actual persisted terminal tasks before reading/exporting.
         try service.close(a);
         service_live = false;
@@ -1154,6 +1282,12 @@ fn checkCleanupArchiveFact(a: std.mem.Allocator, frame: std.mem.Allocator, io: s
     try omitArchiveFact(frame, io, shape, task.value, valid, invalid, if (pending) .cancellation_omitted else .terminal_omitted);
     const changed_reason = try std.fmt.allocPrint(frame, "{s}/{s}-reason.bundle", .{ directory, label });
     if (pending) try omitArchiveFact(frame, io, shape, task.value, valid, changed_reason, .cancellation_reason);
+    const erased_terminal = try std.fmt.allocPrint(frame, "{s}/{s}-erased-control.bundle", .{ directory, label });
+    const terminal_control = task.value.terminal() and task.value.cancellation != null;
+    if (terminal_control) {
+        try omitArchiveFact(frame, io, shape, task.value, valid, erased_terminal, .terminal_cancellation_omitted);
+        try omitArchiveFact(frame, io, shape, task.value, valid, changed_reason, .terminal_cancellation_reason);
+    }
     try service.close(frame);
     service_live.* = false;
     try namespace.close();
@@ -1166,6 +1300,10 @@ fn checkCleanupArchiveFact(a: std.mem.Allocator, frame: std.mem.Allocator, io: s
         defer imported.close(frame) catch unreachable;
         try std.testing.expectError(error.InvalidArchive, imported.importCheckpoint(frame, "import-fact", invalid));
         if (pending) try std.testing.expectError(error.InvalidArchive, imported.importCheckpoint(frame, "import-fact", changed_reason));
+        if (terminal_control) {
+            try std.testing.expectError(error.InvalidArchive, imported.importCheckpoint(frame, "import-fact", erased_terminal));
+            try std.testing.expectError(error.InvalidArchive, imported.importCheckpoint(frame, "import-fact", changed_reason));
+        }
         // The failed admission publishes neither namespace state nor the
         // operation ID; the original copy must succeed in the same namespace.
         const admitted = try imported.importCheckpoint(frame, "import-fact", valid);

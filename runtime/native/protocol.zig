@@ -130,7 +130,7 @@ pub fn fields(method: Method) Fields {
         .@"task.unsubscribe" => .{ .required = &.{"subscription_id"} },
         .@"task.cancel" => .{ .required = &.{ "client_operation_id", "task_id" }, .optional = &.{"reason"} },
         .@"task.resume" => .{ .required = &.{ "client_operation_id", "task_id", "expected_revision" } },
-        .@"artifact.read" => .{ .required = &.{ "artifact_id", "offset", "length" }, .optional = &.{"task_id"} },
+        .@"artifact.read" => .{ .required = &.{ "artifact_id", "offset", "length" }, .optional = &.{ "task_id", "question_id" } },
         .shutdown => .{ .required = &.{"mode"} },
     };
 }

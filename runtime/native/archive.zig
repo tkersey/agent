@@ -328,7 +328,7 @@ fn validateEventFacts(store: *storage.Store, archive: state.Archive, task: state
     var arena = std.heap.ArenaAllocator.init(store.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const data = (try json.parse(a, event.data.bytes, .{})).value;
+    const data = (try json.parse(a, event.data.bytes, .{ .bytes = 48 * 1024, .depth = 33 })).value;
     var record_id: ?state.Digest = null;
     const admission = admissions.get(event.revision);
     if (admissionMethod(event.kind)) |method| {

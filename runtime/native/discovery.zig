@@ -102,7 +102,7 @@ pub const Application = struct {
         var arena = std.heap.ArenaAllocator.init(a);
         errdefer arena.deinit();
         const storage = arena.allocator();
-        const metadata = try json.parse(storage, assets.application, .{ .bytes = 16 * 1024 * 1024 });
+        const metadata = try json.parseAsset(storage, assets.application, 16 * 1024 * 1024);
         const manifest = try json.parse(storage, assets.manifest, .{ .bytes = 256 * 1024 });
         try sameField(metadata.value, "format", "agent-native-application/v1");
         try sameField(metadata.value, "application_id", Types.application_id);
@@ -124,7 +124,7 @@ pub const Application = struct {
             try sameField(schema, "schema_id", item[2]);
             const bytes = try values.schemaBytes(item[1], storage);
             try sameField(schema, "wire_sha256", try digest(storage, bytes));
-            const client = try json.parse(storage, &values.schemas.ClientSchema(item[1]).value, .{});
+            const client = try json.parseAsset(storage, &values.schemas.ClientSchema(item[1]).value, 16 * 1024 * 1024);
             if (!std.mem.eql(u8, try json.canonical(storage, client.value), try json.canonical(storage, json.get(schema, "json") orelse return error.InvalidAssets)))
                 return error.ClientJsonSchemaMismatch;
         }
@@ -164,6 +164,7 @@ pub const Application = struct {
         return error.ArtifactUnavailable;
     }
     pub fn readSchemaArtifact(self: Application, a: std.mem.Allocator, params: json.Value) !json.Value {
+        if (json.get(params, "question_id") != null) return error.InvalidParams;
         const request = try artifactRequest(params);
         return artifactChunk(a, try self.schemaArtifact(request.id), request.offset, request.length);
     }
@@ -254,9 +255,7 @@ fn validateCapability(a: std.mem.Allocator, capabilities: []const json.Value, en
 }
 
 fn fitsDescription(a: std.mem.Allocator, value: json.Value) !bool {
-    const encoded = try json.canonical(a, value);
-    defer a.free(encoded);
-    return encoded.len <= (protocol.Limits{}).inline_bytes;
+    return json.fits(a, value, json.projection_limits);
 }
 
 pub fn sameField(object: json.Value, name: []const u8, expected: []const u8) !void {
@@ -350,6 +349,54 @@ test "discovery budgets the combined description before composing a full batch" 
         }
         const encoded = try json.canonical(a, .{ .array = replies });
         try std.testing.expect(encoded.len + 1 <= (protocol.Limits{}).frame_bytes);
+    }
+}
+
+test "nested authored schemas remain available beyond the peer frame depth" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const U1 = union(enum) { value: void };
+    const U2 = union(enum) { value: U1 };
+    const U3 = union(enum) { value: U2 };
+    const U4 = union(enum) { value: U3 };
+    const U5 = union(enum) { value: U4 };
+    const U6 = union(enum) { value: U5 };
+    const U7 = union(enum) { value: U6 };
+    const U8 = union(enum) { value: U7 };
+    inline for (.{ ????????bool, U8 }) |T| {
+        const bytes = &values.schemas.ClientSchema(T).value;
+        const schema = (try json.parseAsset(a, bytes, 16 * 1024 * 1024)).value;
+        var metadata = json.object();
+        try json.put(a, &metadata, "application_id", json.string("deep-schema"));
+        try json.put(a, &metadata, "application_version", json.string("1"));
+        try json.put(a, &metadata, "client_mapping", json.string("agent-client-values/1.1"));
+        for ([_][]const u8{ "input", "output", "failure", "answer", "message" }) |key| {
+            var contract = json.object();
+            try json.put(a, &contract, "schema_id", json.string("deep.v1"));
+            try json.put(a, &contract, "json", schema);
+            try json.put(a, &metadata, key, contract);
+        }
+        try json.put(a, &metadata, "capabilities", .{ .array = .init(a) });
+        const encoded = try json.canonical(a, metadata);
+        try std.testing.expect(encoded.len < 60 * 1024);
+        try std.testing.expectError(error.Capacity, json.parse(a, encoded, .{}));
+        _ = try json.parseAsset(a, encoded, 16 * 1024 * 1024);
+        const protocol_schema = try @import("schemas.zig").document(a, metadata, .{});
+        const artifacts = [2]?Artifact{ try Artifact.freeze(a, metadata, "application"), try Artifact.freeze(a, protocol_schema, "protocol") };
+        const app: Application = .{ .arena = .init(a), .metadata = metadata, .manifest = .null, .manifest_id = "test", .image_identity = @splat(0), .public_metadata = metadata, .protocol_schema = protocol_schema, .schema_artifacts = artifacts };
+        const description = try app.describe(a, json.object(), null);
+        try std.testing.expect(json.get(description.object.get("application").?, "metadata_ref") != null);
+        try std.testing.expect(json.get(description, "protocol_schema_ref") != null);
+        var replies: std.array_list.Managed(json.Value) = .init(a);
+        for (0..16) |i| try replies.append(try protocol.response(a, try json.number(a, i), description));
+        const wire = try json.frame(a, .{ .array = replies });
+        _ = try json.parse(a, wire, .{});
+        const chunk = try artifactChunk(a, try app.schemaArtifact(artifacts[0].?.sha256), 0, 32768);
+        const text = chunk.object.get("data").?.string;
+        const decoded = try a.alloc(u8, try std.base64.url_safe_no_pad.Decoder.calcSizeForSlice(text));
+        try std.base64.url_safe_no_pad.Decoder.decode(decoded, text);
+        try std.testing.expectEqualSlices(u8, encoded[0..decoded.len], decoded);
     }
 }
 

@@ -10,6 +10,76 @@ pub const Limits = struct {
 };
 pub const Error = error{ InvalidJson, DuplicateKey, Capacity } || std.mem.Allocator.Error;
 
+// Sixteen results plus their RPC envelopes fit the unchanged frame profile.
+// Payload reserves also cover snapshot, question, event and notification wrappers.
+pub const projection_limits: Limits = .{ .bytes = 60 * 1024, .depth = 29, .tokens = 3800 };
+pub const payload_limits: Limits = .{ .bytes = 48 * 1024, .depth = 24, .tokens = 2048 };
+
+/// Executable-linked generated assets are not peer frames. Their byte extent
+/// and the host allocator bound admission; schema nesting is not value nesting.
+pub fn parseAsset(a: std.mem.Allocator, bytes: []const u8, maximum: usize) Error!std.json.Parsed(Value) {
+    return parse(a, bytes, .{ .bytes = maximum, .depth = maximum, .tokens = maximum, .members = maximum });
+}
+
+fn countStructure(value: Value, depth: usize, remaining: *usize, limits: Limits) error{Capacity}!void {
+    const container = value == .object or value == .array;
+    if (container and depth >= limits.depth) return error.Capacity;
+    const own: usize = if (value == .object) 2 + value.object.count() else if (container) 2 else 1;
+    if (own > remaining.*) return error.Capacity;
+    remaining.* -= own;
+    switch (value) {
+        .object => |map| {
+            if (map.count() > limits.members) return error.Capacity;
+            for (map.values()) |child| try countStructure(child, depth + 1, remaining, limits);
+        },
+        .array => |items| for (items.items) |child| try countStructure(child, depth + 1, remaining, limits),
+        else => {},
+    }
+}
+
+pub fn fits(a: std.mem.Allocator, value: Value, limits: Limits) !bool {
+    var remaining = limits.tokens;
+    countStructure(value, 0, &remaining, limits) catch return false;
+    var buffer: [4096]u8 = undefined;
+    var counter = std.Io.Writer.Discarding.init(&buffer);
+    try writeCanonical(a, value, &counter.writer);
+    return counter.fullCount() <= limits.bytes;
+}
+
+pub fn frame(a: std.mem.Allocator, value: Value) ![]u8 {
+    if (!try fits(a, value, .{})) return error.Capacity;
+    return canonicalBounded(a, value, (Limits{}).bytes);
+}
+
+test "outgoing structural accounting agrees with independent frame scanning" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var dense: Value = .{ .array = .init(a) };
+    for (0..10_000) |_| try dense.array.append(.{ .integer = 0 });
+    try std.testing.expect(try fits(a, dense, .{}));
+    try std.testing.expect(!try fits(a, dense, payload_limits));
+    var batch: Value = .{ .array = .init(a) };
+    for (0..16) |_| try batch.array.append(dense);
+    const encoded = try canonical(a, batch);
+    try std.testing.expect(encoded.len < (Limits{}).bytes);
+    try std.testing.expectError(error.Capacity, parse(a, encoded, .{}));
+    try std.testing.expectError(error.Capacity, frame(a, batch));
+    var nested: Value = .null;
+    for (0..33) |_| {
+        var parent = object();
+        try put(a, &parent, "x", nested);
+        nested = parent;
+    }
+    try std.testing.expect(!try fits(a, nested, .{}));
+    try std.testing.expectError(error.Capacity, parse(a, try canonical(a, nested), .{}));
+    const limits: Limits = .{ .tokens = 6 };
+    const exact = (try parse(a, "{\"x\":[0]}", limits)).value;
+    try std.testing.expect(try fits(a, exact, limits));
+    try std.testing.expect(!try fits(a, exact, .{ .tokens = 5 }));
+    try std.testing.expectError(error.Capacity, parse(a, "{\"x\":[0]}", .{ .tokens = 5 }));
+}
+
 pub fn parse(allocator: std.mem.Allocator, bytes: []const u8, limits: Limits) Error!std.json.Parsed(Value) {
     if (bytes.len > limits.bytes) return error.Capacity;
     if (!std.unicode.utf8ValidateSlice(bytes)) return error.InvalidJson;

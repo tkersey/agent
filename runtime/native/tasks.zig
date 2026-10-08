@@ -1578,6 +1578,15 @@ pub fn Service(comptime Types: type) type {
             var decoded = try data.invocation.decode(data.invocation.Outcome, a, observed);
             defer decoded.deinit();
             if (!same(@tagName(decoded.value), @tagName(value.outcome_kind))) return error.InvalidArchive;
+            const terminal_cancellation: ?data.invocation.Reason = switch (decoded.value) {
+                .cancelled => |cancelled| cancelled.reason,
+                .failed => |failure| failure.cancellation,
+                else => null,
+            };
+            if (terminal_cancellation) |reason| {
+                const intent = value.cancellation orelse return error.InvalidArchive;
+                if (!value.cancellation_applied or reason != .text or !same(reason.text, intent.bytes)) return error.InvalidArchive;
+            }
             if (value.cancellation_applied) switch (decoded.value) {
                 .cancelled => {},
                 .failed => |failure| if (failure.cancellation == null) return error.InvalidArchive,

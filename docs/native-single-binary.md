@@ -269,6 +269,16 @@ Concatenate the base64url-decoded chunks, check their `sha256` and total length,
 then parse JSON. Discovery-only launches expose only these embedded public
 descriptors; task artifacts require their owning `task_id` and current grants.
 Large typed results use `outcome.value_ref` with the same bounded chunk format.
+The inline budget accounts for JSON depth and tokens as well as bytes, including
+the envelopes of a full 16-call batch. Dense or deeply nested values can therefore
+use references even when their encoded bytes are small. Question snapshots and
+`input_required` events similarly expose exactly one of `prompt` or `prompt_ref`.
+To read a prompt reference, pass its `question_id` and `artifact_id` together with
+the owning `task_id`; this scope exposes only that question's retained public
+prompt, never its private request or answer. Existing inline result objects can
+be referenced directly from their saved public root without rewriting state.
+Embedded schemas have separate admission bounds from client frames; schemas
+that cannot fit discovery are still available intact through artifact chunks.
 
 For an enabled task service, `describe.profile` reports the admitted profile's
 `id`, `sha256`, and aggregate `resource_identity`; select that `id` in

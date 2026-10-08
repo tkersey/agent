@@ -58,7 +58,7 @@ fn shape(a: std.mem.Allocator, properties: []const Property, optional: []const [
     return result;
 }
 fn extend(a: std.mem.Allocator, original: json.Value, properties: []const Property, optional: []const []const u8) !json.Value {
-    var result = try literal(a, try json.canonical(a, original));
+    var result = try json.copy(a, original);
     const fields = result.object.getPtr("properties").?;
     const required = result.object.getPtr("required").?;
     for (properties) |property| {
@@ -195,10 +195,23 @@ fn eventPayload(a: std.mem.Allocator, kind: state.EventType) !json.Value {
         try fields.append(a, .{ field.name, field_schema });
         if (field.optional) try optional.append(a, field.name);
     }
-    return shape(a, fields.items, optional.items);
+    if (kind == .input_required) {
+        try optional.append(a, "prompt");
+        try optional.append(a, "prompt_ref");
+        const ref = try shape(a, &.{
+            .{ "artifact_id", try reference(a, "digest") },                       .{ "sha256", try reference(a, "digest") },
+            .{ "bytes", try reference(a, "counter") },                            .{ "media_type", try constant(a, "application/json") },
+            .{ "schema_id", try constant(a, "agent-native-question-prompt.v1") }, .{ "retention", try constant(a, "state-namespace") },
+            .{ "question_id", try reference(a, "digest") },
+        }, &.{});
+        try fields.append(a, .{ "prompt_ref", ref });
+    }
+    var result = try shape(a, fields.items, optional.items);
+    if (kind == .input_required) try json.put(a, &result, "oneOf", try literal(a, "[{\"required\":[\"prompt\"]},{\"required\":[\"prompt_ref\"]}]"));
+    return result;
 }
 pub fn validateEventData(a: std.mem.Allocator, kind: state.EventType, bytes: []const u8) !void {
-    var parsed = try json.parse(a, bytes, .{});
+    var parsed = try json.parse(a, bytes, .{ .bytes = 48 * 1024, .depth = 33 });
     defer parsed.deinit();
     if (parsed.value != .object) return error.InvalidArchive;
     const fields = eventFields(kind);
@@ -341,7 +354,8 @@ pub fn document(a: std.mem.Allocator, application: json.Value, limits: protocol.
         var properties: std.array_list.Managed(Property) = .init(a);
         for (fields.required) |key| try properties.append(.{ key, try parameter(a, method, key, application, limits) });
         for (fields.optional) |key| try properties.append(.{ key, try parameter(a, method, key, application, limits) });
-        const params = try shape(a, properties.items, fields.optional);
+        var params = try shape(a, properties.items, fields.optional);
+        if (method == .@"artifact.read") try json.put(a, &params, "dependentRequired", try literal(a, "{\"question_id\":[\"task_id\"]}"));
         try json.put(a, &definitions, name ++ ".params", params);
         try json.put(a, &definitions, name ++ ".request", try shape(a, &.{ .{ "jsonrpc", try constant(a, "2.0") }, .{ "id", try reference(a, "rpc_id") }, .{ "method", try constant(a, name) }, .{ "params", params } }, &.{}));
     }

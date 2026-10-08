@@ -720,6 +720,19 @@ try {
     schemaCases.push({definition: 'artifact.read.params', value: {task_id: demoTask, artifact_id: '0'.repeat(64), offset: '0', length: value}, accept});
   }
   const reference = {artifact_id: '0'.repeat(64), sha256: '0'.repeat(64), bytes: '65536', media_type: 'application/json', schema_id: result.outcome.schema_id, retention: 'state-namespace'};
+  const promptReference = {...reference, schema_id: 'agent-native-question-prompt.v1', question_id: question.question_id};
+  const referencedEvent = structuredClone(missingPrompt);
+  referencedEvent.data.prompt_ref = promptReference;
+  schemaCases.push({definition: 'event', value: referencedEvent});
+  schemaCases.push({definition: 'event', value: {...inputEvent, data: {...inputEvent.data, prompt_ref: promptReference}}, accept: false});
+  const missingQuestionScope = structuredClone(referencedEvent);
+  delete missingQuestionScope.data.prompt_ref.question_id;
+  schemaCases.push({definition: 'event', value: missingQuestionScope, accept: false});
+  const questionRead = {task_id: demoTask, question_id: question.question_id, artifact_id: reference.artifact_id, offset: '0', length: '32768'};
+  schemaCases.push({definition: 'artifact.read.params', value: questionRead});
+  const unscopedQuestionRead = {...questionRead};
+  delete unscopedQuestionRead.task_id;
+  schemaCases.push({definition: 'artifact.read.params', value: unscopedQuestionRead, accept: false});
   const largeResult = structuredClone(result);
   const wrongCurrentValue = structuredClone(result);
   wrongCurrentValue.outcome.value = {value: 'not an integer', answer: 'bad'};

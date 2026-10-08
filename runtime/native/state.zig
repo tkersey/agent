@@ -109,7 +109,7 @@ pub fn questionData(a: std.mem.Allocator, question: Question, prompt: []const u8
     try json.put(a, &result, "question_revision", json.string(try std.fmt.allocPrint(a, "{d}", .{question.revision})));
     try json.put(a, &result, "request_digest", json.string(try a.dupe(u8, &std.fmt.bytesToHex(question.request_digest, .lower))));
     try json.put(a, &result, "answer_schema_id", json.string(try a.dupe(u8, question.answer_schema_id.bytes)));
-    try json.put(a, &result, "prompt", (try json.parse(a, prompt, .{})).value);
+    try json.put(a, &result, "prompt", (try json.parse(a, prompt, .{ .bytes = 32 * 1024 })).value);
     return result;
 }
 

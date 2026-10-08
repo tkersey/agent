@@ -22,6 +22,16 @@ fn hexadecimal(a: std.mem.Allocator, bytes: anytype) !json.Value {
 fn counter(a: std.mem.Allocator, value: u64) !json.Value {
     return json.string(try std.fmt.allocPrint(a, "{d}", .{value}));
 }
+fn reference(a: std.mem.Allocator, id: [32]u8, ref: state.Reference, schema_id: []const u8) !json.Value {
+    var artifact = json.object();
+    try json.put(a, &artifact, "artifact_id", try hexadecimal(a, id));
+    try json.put(a, &artifact, "sha256", try hexadecimal(a, ref.digest));
+    try json.put(a, &artifact, "bytes", try counter(a, ref.bytes));
+    try json.put(a, &artifact, "media_type", json.string("application/json"));
+    try json.put(a, &artifact, "schema_id", json.string(try a.dupe(u8, schema_id)));
+    try json.put(a, &artifact, "retention", json.string("state-namespace"));
+    return artifact;
+}
 fn field(value: json.Value, key: []const u8) !json.Value {
     return json.get(value, key) orelse error.InvalidParams;
 }
@@ -85,8 +95,24 @@ pub fn Client(comptime Types: type) type {
                 defer question.deinit();
                 const bytes = try self.service.namespace.store.object(a, question.value.prompt, 32 * 1024);
                 defer a.free(bytes);
-                try json.put(a, &result, "question", try state.questionData(a, question.value, bytes));
+                try json.put(a, &result, "question", try self.projectQuestion(a, id, try state.questionData(a, question.value, bytes)));
             } else try json.put(a, &result, "question", .null);
+            return result;
+        }
+
+        fn projectQuestion(self: *Self, a: std.mem.Allocator, task_id: state.TaskId, value: json.Value) !json.Value {
+            const prompt = json.get(value, "prompt") orelse return error.CorruptState;
+            if (try json.fits(a, prompt, json.payload_limits)) return value;
+            const id = try identifier(32, try field(value, "question_id"));
+            const bytes = (try self.service.namespace.store.recordBytes(a, "question", id, task_id)) orelse return error.CorruptState;
+            defer a.free(bytes);
+            var question = try contracts.decodeOwned(state.Question, a, bytes);
+            defer question.deinit();
+            var ref = try reference(a, question.value.prompt.digest, question.value.prompt, "agent-native-question-prompt.v1");
+            try json.put(a, &ref, "question_id", try hexadecimal(a, id));
+            var result = value;
+            _ = result.object.swapRemove("prompt");
+            try json.put(a, &result, "prompt_ref", ref);
             return result;
         }
 
@@ -128,7 +154,8 @@ pub fn Client(comptime Types: type) type {
                 try json.put(a, &item, "seq", try counter(a, event.seq));
                 try json.put(a, &item, "revision", try counter(a, event.revision));
                 try json.put(a, &item, "type", json.string(@tagName(event.kind)));
-                try json.put(a, &item, "data", (try json.parse(a, event.data.bytes, .{})).value);
+                const data_value = (try json.parse(a, event.data.bytes, .{ .bytes = 48 * 1024, .depth = 33 })).value;
+                try json.put(a, &item, "data", if (event.kind == .input_required) try self.projectQuestion(a, id, data_value) else data_value);
                 const encoded = try json.canonical(a, item);
                 defer a.free(encoded);
                 if (encoded.len + 1 > (protocol.Limits{}).inline_bytes - encoded_bytes) {
@@ -137,6 +164,13 @@ pub fn Client(comptime Types: type) type {
                 }
                 encoded_bytes += encoded.len + 1;
                 try items.append(item);
+                // The page adds one object and a fixed small cursor envelope;
+                // reserve those tokens before accepting the next complete event.
+                if (!try json.fits(a, .{ .array = items }, .{ .bytes = json.projection_limits.bytes - 1024, .depth = json.projection_limits.depth - 1, .tokens = json.projection_limits.tokens - 32 })) {
+                    _ = items.pop();
+                    if (items.items.len == 0) return error.CorruptState;
+                    break;
+                }
                 next = event.seq;
             }
             var result = json.object();
@@ -182,20 +216,16 @@ pub fn Client(comptime Types: type) type {
         }
         fn resultValue(self: *Self, a: std.mem.Allocator, output: *json.Value, task: state.Task) !void {
             const ref = task.client_result orelse return error.CorruptState;
-            if (task.result_artifact) |id| {
-                var artifact = json.object();
-                try json.put(a, &artifact, "artifact_id", try hexadecimal(a, id));
-                try json.put(a, &artifact, "sha256", try hexadecimal(a, ref.digest));
-                try json.put(a, &artifact, "bytes", try counter(a, ref.bytes));
-                try json.put(a, &artifact, "media_type", json.string("application/json"));
-                try json.put(a, &artifact, "schema_id", json.string(try a.dupe(u8, if (task.outcome_kind == .completed) task.output_schema_id.bytes else task.failure_schema_id.bytes)));
-                try json.put(a, &artifact, "retention", json.string("state-namespace"));
-                try json.put(a, output, "value_ref", artifact);
-            } else {
+            if (task.result_artifact == null and ref.bytes <= json.payload_limits.bytes) {
                 const bytes = try self.service.namespace.store.object(a, ref, 60 * 1024);
                 defer a.free(bytes);
-                try json.put(a, output, "value", (try json.parse(a, bytes, .{})).value);
+                const value = (try json.parseAsset(a, bytes, 60 * 1024)).value;
+                if (try json.fits(a, value, json.payload_limits)) {
+                    try json.put(a, output, "value", value);
+                    return;
+                }
             }
+            try json.put(a, output, "value_ref", try reference(a, task.result_artifact orelse ref.digest, ref, if (task.outcome_kind == .completed) task.output_schema_id.bytes else task.failure_schema_id.bytes));
         }
 
         pub fn cursorRange(self: *Self, a: std.mem.Allocator, params: json.Value) !struct { first: u64, last: u64 } {
@@ -209,23 +239,42 @@ pub fn Client(comptime Types: type) type {
             const id = request.id;
             const offset = request.offset;
             const length = request.length;
-            const task_value = json.get(params, "task_id") orelse return discovery.artifactChunk(a, try self.service.schemaArtifact(id), offset, length);
+            const task_value = json.get(params, "task_id") orelse {
+                if (json.get(params, "question_id") != null) return error.InvalidParams;
+                return discovery.artifactChunk(a, try self.service.schemaArtifact(id), offset, length);
+            };
             const task_id = try identifier(16, task_value);
             var task = try self.service.task(a, task_id);
             defer task.deinit();
-            const published = task.value.result_artifact orelse return error.ArtifactUnavailable;
+            if (json.get(params, "question_id")) |question_value| {
+                const question_id = try identifier(32, question_value);
+                const bytes = (try self.service.namespace.store.recordBytes(a, "question", question_id, task_id)) orelse return error.ArtifactUnavailable;
+                defer a.free(bytes);
+                var question = try contracts.decodeOwned(state.Question, a, bytes);
+                defer question.deinit();
+                if (!std.mem.eql(u8, &question.value.task, &task_id) or !std.mem.eql(u8, &question.value.id, &question_id)) return error.CorruptState;
+                if (!std.mem.eql(u8, &question.value.prompt.digest, &id)) return error.ArtifactUnavailable;
+                return self.objectChunk(a, question.value.prompt, offset, length);
+            }
+            const public_result = task.value.client_result orelse return error.ArtifactUnavailable;
+            const published = task.value.result_artifact orelse public_result.digest;
             if (!std.mem.eql(u8, &published, &id)) return error.ArtifactUnavailable;
+            if (task.value.result_artifact == null) return self.objectChunk(a, public_result, offset, length);
             const encoded = (try self.service.namespace.store.recordBytes(a, "artifact", id, task_id)) orelse return error.ArtifactUnavailable;
             defer a.free(encoded);
             var saved = try contracts.decodeOwned(state.Artifact, a, encoded);
             defer saved.deinit();
             const artifact = saved.value;
             if (artifact.task == null or !std.mem.eql(u8, &artifact.task.?, &task_id) or !std.mem.eql(u8, &artifact.id, &id)) return error.CorruptState;
-            if (offset > artifact.value.bytes) return error.InvalidParams;
-            const bytes = try a.alloc(u8, @intCast(@min(length, artifact.value.bytes - offset)));
+            return self.objectChunk(a, artifact.value, offset, length);
+        }
+
+        fn objectChunk(self: *Self, a: std.mem.Allocator, ref: state.Reference, offset: u64, length: u32) !json.Value {
+            if (offset > ref.bytes) return error.InvalidParams;
+            const bytes = try a.alloc(u8, @intCast(@min(length, ref.bytes - offset)));
             defer a.free(bytes);
-            try self.service.namespace.store.objectRange(artifact.value, @intCast(offset), bytes);
-            return discovery.artifactRange(a, artifact.value.digest, artifact.value.bytes, offset, bytes);
+            try self.service.namespace.store.objectRange(ref, @intCast(offset), bytes);
+            return discovery.artifactRange(a, ref.digest, ref.bytes, offset, bytes);
         }
 
         /// Called only after the subscribe response has entered the ordered

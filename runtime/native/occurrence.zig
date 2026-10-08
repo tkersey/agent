@@ -26,6 +26,7 @@ pub const Occurrence = struct {
     task: TaskId,
     request: Digest,
     state: State = .ready,
+    request_object: @import("state.zig").Reference,
 };
 pub const Binding = struct { id: Digest, task: TaskId, request: Digest };
 
@@ -151,7 +152,7 @@ pub fn consumed(value: Occurrence, binding: Binding, control: Control, cancellat
 
 test "unknown delivery cannot become dispatchable or cancelled without an acquired reply" {
     const binding: Binding = .{ .id = @splat(1), .task = @splat(2), .request = @splat(3) };
-    const initial: Occurrence = .{ .id = binding.id, .task = binding.task, .request = binding.request };
+    const initial: Occurrence = .{ .id = binding.id, .task = binding.task, .request = binding.request, .request_object = .{ .digest = @splat(0), .bytes = 0 } };
     const sent = try dispatch(initial, binding, @splat(4), false, false);
     const lost = try unknown(sent, binding, @splat(4));
     try std.testing.expectError(error.UnsettledOccurrence, dispatch(lost, binding, @splat(5), false, false));
@@ -165,7 +166,7 @@ test "unknown delivery cannot become dispatchable or cancelled without an acquir
 
 test "question acquisition binds the pending occurrence and serializes against cancellation" {
     const binding: Binding = .{ .id = @splat(1), .task = @splat(2), .request = @splat(3) };
-    const initial: Occurrence = .{ .id = binding.id, .task = binding.task, .request = binding.request };
+    const initial: Occurrence = .{ .id = binding.id, .task = binding.task, .request = binding.request, .request_object = .{ .digest = @splat(0), .bytes = 0 } };
     const waiting = try awaiting(initial, binding, .{ .attempt = @splat(4), .question = @splat(5), .pending_digest = @splat(6) }, false);
     try std.testing.expectError(error.QuestionMismatch, answered(waiting, binding, @splat(7), @splat(6), @splat(8), @splat(9), false));
     try std.testing.expectError(error.CancellationPending, answered(waiting, binding, @splat(5), @splat(6), @splat(8), @splat(9), true));
@@ -177,7 +178,7 @@ test "question acquisition binds the pending occurrence and serializes against c
 
 test "positive no-invocation evidence permits cancellation or an explicit rearm, not an unknown retry" {
     const binding: Binding = .{ .id = @splat(1), .task = @splat(2), .request = @splat(3) };
-    const initial: Occurrence = .{ .id = binding.id, .task = binding.task, .request = binding.request };
+    const initial: Occurrence = .{ .id = binding.id, .task = binding.task, .request = binding.request, .request_object = .{ .digest = @splat(0), .bytes = 0 } };
     const sent = try dispatch(initial, binding, @splat(4), false, false);
     const stopped = try notSent(sent, binding, @splat(4));
     try std.testing.expect((try consumed(stopped, binding, .cancel, true)).state == .admitted);
@@ -188,7 +189,7 @@ test "positive no-invocation evidence permits cancellation or an explicit rearm,
 
 test "durable raw capture can only advance through interpretation, never redispatch or cancellation" {
     const binding: Binding = .{ .id = @splat(1), .task = @splat(2), .request = @splat(3) };
-    const initial: Occurrence = .{ .id = binding.id, .task = binding.task, .request = binding.request };
+    const initial: Occurrence = .{ .id = binding.id, .task = binding.task, .request = binding.request, .request_object = .{ .digest = @splat(0), .bytes = 0 } };
     const sent = try dispatch(initial, binding, @splat(4), false, false);
     try std.testing.expectError(error.UnsettledOccurrence, captured(sent, binding, @splat(5)));
     const raw = try captured(sent, binding, @splat(4));

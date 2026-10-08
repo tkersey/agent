@@ -357,10 +357,16 @@ Linux links the selected toolchain's musl libc and embeds its license. The
 database wrapper refuses an uncapped allocation fallback and verifies the linked
 SQLite version.
 
-The current namespace format is `agent-native-state/7`. Task, receipt, question,
+The current namespace format is `agent-native-state/8`. Task, receipt, question,
 message and event indexes reference the same hash-checked immutable object store
 as checkpoints and replies. A changed record body rejects before interpretation;
-foreign keys and task revision checks bind its index. Earlier development state
+foreign keys and task revision checks bind its index. Every occurrence retains its
+exact canonical request object. Archive admission resolves retained requests
+against compiled handler schemas and requires the corresponding physical attempt
+and capture, or question, answer and acknowledgment receipt. This applies to
+both current and consumed occurrences; historical answer receipts also require
+their question records. Waiting, not-sent retries, inbox replies and cancellation
+before acquisition retain their distinct requirements. Earlier development state
 formats reject rather than being initialized over.
 
 The namespace requires a private directory owned by the launching OS principal,

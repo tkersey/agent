@@ -775,8 +775,7 @@ pub fn Service(comptime Types: type) type {
                     defer request.deinit();
                     var id: state.Digest = undefined;
                     try self.io.randomSecure(&id);
-                    const next: occurrence.Occurrence = .{ .id = id, .task = value.id, .request = request.value.request_identity };
-                    _ = try self.store().putObject(pending.request);
+                    const next: occurrence.Occurrence = .{ .id = id, .task = value.id, .request = request.value.request_identity, .request_object = try self.store().putObject(pending.request) };
                     try self.store().createRecord(occurrence.Occurrence, "occurrence", id, value.id, next);
                     value.current_occurrence = id;
                     value.outcome_kind = .requested;
@@ -1138,12 +1137,131 @@ pub fn Service(comptime Types: type) type {
             if (self.work != null) return error.UnsettledOccurrence;
         }
 
+        fn requireArchiveRecord(records: []const state.ArchiveRecord, kind: state.RecordKind, id: state.Digest) !void {
+            for (records) |row| if (row.kind == kind and same(&row.id, &id)) return;
+            return error.InvalidArchive;
+        }
+
+        /// The retained request determines which acquisition evidence must
+        /// exist. Validating only supplied attempts/questions misses omissions.
+        fn validateOccurrenceProvenance(self: *Self, a: std.mem.Allocator, value: state.Task, records: []const state.ArchiveRecord) !void {
+            for (records) |row| {
+                if (row.kind != .occurrence) continue;
+                var arena = std.heap.ArenaAllocator.init(a);
+                defer arena.deinit();
+                const temporary = arena.allocator();
+                var decoded = try self.record(occurrence.Occurrence, temporary, "occurrence", row.id, value.id);
+                defer decoded.deinit();
+                const saved = decoded.value;
+                const is_current = if (value.current_occurrence) |id| same(&id, &saved.id) else false;
+                if (is_current == (saved.state == .admitted)) return error.InvalidArchive;
+                const encoded = try self.store().object(temporary, saved.request_object, 4 * 1024 * 1024);
+                var request = try data.invocation.decode(data.invocation.Request, temporary, encoded);
+                defer request.deinit();
+                if (!same(&request.value.request_identity, &saved.request) or !same(&request.value.binding.program_identity, &self.application.image_identity)) return error.InvalidArchive;
+                // Cancellation can retire READY before a handler is available.
+                // Neither that state nor READY claims any acquisition.
+                if (saved.state == .ready or (saved.state == .admitted and saved.state.admitted == .cancelled and saved.state.admitted.cancelled == null)) continue;
+                const entry = try self.handlers.resolve(request.value, self.application.image_identity);
+                const acquired: ?occurrence.Acquired = switch (saved.state) {
+                    .settled_reply => |reply| reply,
+                    .admitted => |admitted| if (admitted == .reply) admitted.reply else null,
+                    .awaiting, .not_sent => null,
+                    else => return error.UnsettledOccurrence,
+                };
+                var reply_value: ?[]const u8 = null;
+                if (acquired) |reply| {
+                    const bytes = try self.store().acquiredObject(temporary, reply.reply, 4 * 1024 * 1024);
+                    const result = try data.invocation.decode(data.invocation.Result, temporary, bytes);
+                    // Keep the decoded backing until this iteration's arena ends.
+                    if (!same(&result.value.request_identity, &saved.request)) return error.InvalidArchive;
+                    var schema = try data.schema.decode(temporary, entry.resume_schema);
+                    defer schema.deinit();
+                    try data.schema.validateValue(temporary, schema.descriptor, result.value.value);
+                    reply_value = result.value.value;
+                }
+                switch (entry.declaration.kind) {
+                    .leaf => {
+                        const attempt_id = if (acquired) |reply| reply.attempt else if (saved.state == .not_sent) saved.state.not_sent.id else return error.InvalidArchive;
+                        if (acquired) |reply| if (reply.answer != null) return error.InvalidArchive;
+                        try requireArchiveRecord(records, .attempt, attempt_id);
+                        var attempt = try self.record(state.Attempt, temporary, "attempt", attempt_id, value.id);
+                        defer attempt.deinit();
+                        if (!same(&attempt.value.occurrence, &saved.id) or !std.meta.eql(attempt.value.request, saved.request_object)) return error.InvalidArchive;
+                        if (acquired != null and entry.declaration.capture != null) {
+                            try requireArchiveRecord(records, .capture, attempt_id);
+                            var capture = try self.record(state.Capture, temporary, "capture", attempt_id, value.id);
+                            defer capture.deinit();
+                            if (!same(&capture.value.occurrence, &saved.id)) return error.InvalidArchive;
+                        }
+                    },
+                    .inbox => {
+                        const reply = acquired orelse return error.InvalidArchive;
+                        if (reply.answer != null) return error.InvalidArchive;
+                    },
+                    .question => {
+                        const waiting: ?occurrence.Waiting = switch (saved.state) {
+                            .awaiting => |pending| pending,
+                            .admitted => |admitted| if (admitted == .cancelled) admitted.cancelled else null,
+                            else => null,
+                        };
+                        const answer: ?occurrence.Answer = if (acquired) |reply| reply.answer orelse return error.InvalidArchive else null;
+                        const question_id = if (waiting) |pending| pending.question else if (answer) |bound| bound.question else return error.InvalidArchive;
+                        try requireArchiveRecord(records, .question, question_id);
+                        var question = try self.record(state.Question, temporary, "question", question_id, value.id);
+                        defer question.deinit();
+                        const q = question.value;
+                        if (q.retired != (saved.state == .admitted) or q.revision == 0 or !same(&q.occurrence, &saved.id) or
+                            !same(&q.request_digest, &saved.request) or !std.meta.eql(q.request, saved.request_object) or
+                            !same(&q.pending_digest, &request.value.binding.pending_state_digest) or
+                            !same(&q.answer_schema_digest, &storage.digest(entry.resume_schema)) or !same(q.answer_schema_id.bytes, entry.declaration.answer_schema_id.?)) return error.InvalidArchive;
+                        if (waiting) |pending| {
+                            if (q.answer != null or q.receipt != null or !same(&pending.pending_digest, &q.pending_digest)) return error.InvalidArchive;
+                        } else {
+                            const reference = q.answer orelse return error.InvalidArchive;
+                            const receipt = q.receipt orelse return error.InvalidArchive;
+                            const bound = answer.?;
+                            if (!same(&reference.digest, &storage.digest(reply_value.?)) or reference.bytes != reply_value.?.len or
+                                !same(&bound.digest, &reference.digest) or !same(&bound.pending_digest, &q.pending_digest) or
+                                !same(&receipt.task, &value.id) or receipt.method != .respond or receipt.disposition != .answer_acquired or
+                                receipt.question == null or !same(&receipt.question.?, &question_id)) return error.InvalidArchive;
+                            const bytes = try self.store().object(temporary, reference, 64 * 1024);
+                            const expected = try answerDigest(temporary, value.id, question_id, q.revision, q.request_digest, q.answer_schema_id.bytes, bytes);
+                            if (!same(&expected, &receipt.request_digest)) return error.InvalidArchive;
+                            const key = try self.operationKey(temporary, receipt.client_operation_id.bytes);
+                            const receipt_bytes = (try self.store().savedReceipt(temporary, &key)) orelse return error.InvalidArchive;
+                            if (!same(receipt_bytes, try contracts.encodeOwned(state.Receipt, temporary, receipt))) return error.InvalidArchive;
+                        }
+                    },
+                }
+            }
+            // A retained question (including one named by an answer receipt)
+            // must also have its occurrence, rather than becoming replay debris.
+            for (records) |row| {
+                if (row.kind != .question) continue;
+                var question = try self.record(state.Question, a, "question", row.id, value.id);
+                defer question.deinit();
+                try requireArchiveRecord(records, .occurrence, question.value.occurrence);
+                var saved = try self.record(occurrence.Occurrence, a, "occurrence", question.value.occurrence, value.id);
+                defer saved.deinit();
+                const question_id: ?state.Digest = switch (saved.value.state) {
+                    .awaiting => |waiting| waiting.question,
+                    .settled_reply => |reply| if (reply.answer) |answer| answer.question else null,
+                    .admitted => |admitted| switch (admitted) {
+                        .reply => |reply| if (reply.answer) |answer| answer.question else null,
+                        .cancelled => |waiting| if (waiting) |pending| pending.question else null,
+                    },
+                    else => null,
+                };
+                if (question_id == null or !same(&question_id.?, &row.id)) return error.InvalidArchive;
+            }
+        }
+
         /// A transferable capture must reproduce its committed reply, replay
         /// objects and usage through the same pure adapter, without acquisition.
         fn validateCapturedProjections(self: *Self, a: std.mem.Allocator, value: state.Task, records: []const state.ArchiveRecord) !void {
-            // Derive obligations from the complete physical-attempt relation,
-            // not from the capture subset supplied by an untrusted archive.
-            // Not-sent/rearmed attempts have no acquired response to capture.
+            // Retained unsuccessful/rearmed attempts also need request/profile
+            // coherence, even though they have no acquired response.
             for (records) |row| {
                 if (row.kind != .attempt) continue;
                 var arena = std.heap.ArenaAllocator.init(a);
@@ -1158,21 +1276,8 @@ pub fn Service(comptime Types: type) type {
                 defer request.deinit();
                 const entry = try self.handlers.resolve(request.value, self.application.image_identity);
                 if (entry.declaration.kind != .leaf or !same(&request.value.request_identity, &saved.value.request) or
-                    !std.meta.eql(attempt.value.profile, value.profile) or !same(attempt.value.capability.bytes, entry.declaration.identity) or
+                    !std.meta.eql(attempt.value.request, saved.value.request_object) or !std.meta.eql(attempt.value.profile, value.profile) or !same(attempt.value.capability.bytes, entry.declaration.identity) or
                     attempt.value.inference != entry.declaration.inference or (attempt.value.prepared != null) != (entry.declaration.capture != null)) return error.InvalidArchive;
-                const acquired: ?occurrence.Acquired = switch (saved.value.state) {
-                    .settled_reply => |reply| reply,
-                    .admitted => |admitted| if (admitted == .reply) admitted.reply else null,
-                    else => null,
-                };
-                if (entry.declaration.capture != null and acquired != null and same(&acquired.?.attempt, &row.id)) {
-                    var found = false;
-                    for (records) |candidate| if (candidate.kind == .capture and same(&candidate.id, &row.id)) {
-                        found = true;
-                        break;
-                    };
-                    if (!found) return error.InvalidArchive;
-                }
             }
             var output_tokens: u64 = 0;
             for (records) |row| {
@@ -1236,6 +1341,7 @@ pub fn Service(comptime Types: type) type {
                 var arena = std.heap.ArenaAllocator.init(a);
                 defer arena.deinit();
                 const index = try self.store().archiveIndex(arena.allocator(), task_id, .{ .digest = storage.digest(self.assets.manifest), .bytes = self.assets.manifest.len });
+                try self.validateOccurrenceProvenance(arena.allocator(), value.value, index.records.items);
                 try self.validateCapturedProjections(arena.allocator(), value.value, index.records.items);
             }
             return archive_api.write(self.allocator, self.io, self.store(), task_id, self.assets.manifest, path, self.namespace.directory);
@@ -1282,6 +1388,7 @@ pub fn Service(comptime Types: type) type {
             // historical answer receipt; that receipt intentionally retains
             // its original client operation ID rather than the alias preimage.
             try self.store().restoreArchiveIndex(a, reader.manifest.value, value);
+            try self.validateOccurrenceProvenance(a, value, reader.manifest.value.records.items);
             try self.validateCapturedProjections(a, value, reader.manifest.value.records.items);
             try self.validateImportedState(a, value, inspected.current);
             const previous = value.revision;
@@ -1370,57 +1477,19 @@ pub fn Service(comptime Types: type) type {
                     var request = try data.invocation.decode(data.invocation.Request, a, requested.request);
                     defer request.deinit();
                     if (!same(&current.request, &request.value.request_identity)) return error.InvalidArchive;
-                    const entry = try self.handlers.resolve(request.value, self.application.image_identity);
-                    var acquired_answer: ?state.Digest = null;
+                    if (requested.request.len != current.request_object.bytes or !same(&storage.digest(requested.request), &current.request_object.digest)) return error.InvalidArchive;
                     if (current.state == .settled_reply) {
-                        const bytes = try self.store().acquiredObject(a, current.state.settled_reply.reply, 4 * 1024 * 1024);
-                        defer a.free(bytes);
-                        var reply = try data.invocation.decode(data.invocation.Result, a, bytes);
-                        defer reply.deinit();
-                        if (!same(&reply.value.request_identity, &current.request)) return error.InvalidArchive;
-                        var schema = try data.schema.decode(a, entry.resume_schema);
-                        defer schema.deinit();
-                        try data.schema.validateValue(a, schema.descriptor, reply.value.value);
+                        const entry = try self.handlers.resolve(request.value, self.application.image_identity);
                         if (entry.declaration.kind == .inbox) {
+                            const bytes = try self.store().acquiredObject(a, current.state.settled_reply.reply, 4 * 1024 * 1024);
+                            defer a.free(bytes);
+                            var reply = try data.invocation.decode(data.invocation.Result, a, bytes);
+                            defer reply.deinit();
                             const expected = acquired_inbox orelse try contracts.encodeOwned(contracts.InboxReply(Types.Message), a, .empty);
                             defer if (acquired_inbox == null) a.free(expected);
                             if (!same(reply.value.value, expected)) return error.InvalidArchive;
                         } else if (acquired_inbox != null) return error.InvalidArchive;
-                        acquired_answer = storage.digest(reply.value.value);
-                    }
-                    const question_id: ?state.Digest = switch (current.state) {
-                        .awaiting => |waiting| waiting.question,
-                        .settled_reply => |reply| if (reply.answer) |answer| answer.question else null,
-                        else => null,
-                    };
-                    if (question_id) |id| {
-                        var question = try self.record(state.Question, a, "question", id, value.id);
-                        defer question.deinit();
-                        const q = question.value;
-                        if (entry.declaration.kind != .question or q.retired or q.revision == 0 or !same(&q.occurrence, &current.id) or !same(&q.request_digest, &current.request) or !same(&q.pending_digest, &request.value.binding.pending_state_digest) or !same(&q.answer_schema_digest, &storage.digest(entry.resume_schema)) or !same(q.answer_schema_id.bytes, entry.declaration.answer_schema_id.?)) return error.InvalidArchive;
-                        const bytes = try self.store().object(a, q.request, 4 * 1024 * 1024);
-                        defer a.free(bytes);
-                        if (!same(bytes, requested.request)) return error.InvalidArchive;
-                        if (current.state == .awaiting) {
-                            if (q.answer != null or q.receipt != null) return error.InvalidArchive;
-                            if (!same(&current.state.awaiting.pending_digest, &q.pending_digest)) return error.InvalidArchive;
-                        } else {
-                            const answer = q.answer orelse return error.InvalidArchive;
-                            const answer_receipt = q.receipt orelse return error.InvalidArchive;
-                            const binding = current.state.settled_reply.answer.?;
-                            if (!same(&answer.digest, &acquired_answer.?) or !same(&binding.digest, &answer.digest) or !same(&binding.pending_digest, &q.pending_digest) or !same(&answer_receipt.task, &value.id) or answer_receipt.method != .respond or answer_receipt.disposition != .answer_acquired or answer_receipt.question == null or !same(&answer_receipt.question.?, &id)) return error.InvalidArchive;
-                            const answer_bytes = try self.store().object(a, answer, 64 * 1024);
-                            defer a.free(answer_bytes);
-                            const expected = try answerDigest(a, value.id, id, q.revision, q.request_digest, q.answer_schema_id.bytes, answer_bytes);
-                            if (!same(&expected, &answer_receipt.request_digest)) return error.InvalidArchive;
-                            const key = try self.operationKey(a, answer_receipt.client_operation_id.bytes);
-                            const saved = (try self.store().savedReceipt(a, &key)) orelse return error.InvalidArchive;
-                            defer a.free(saved);
-                            const receipt_bytes = try contracts.encodeOwned(state.Receipt, a, answer_receipt);
-                            defer a.free(receipt_bytes);
-                            if (!same(saved, receipt_bytes)) return error.InvalidArchive;
-                        }
-                    }
+                    } else if (acquired_inbox != null) return error.InvalidArchive;
                 },
                 .completed => |bytes| {
                     if (value.result == null or !same(&value.result.?.digest, &storage.digest(bytes))) return error.InvalidArchive;

@@ -6,7 +6,7 @@ import { mkdir, writeFile, readFile, rename, link, unlink } from 'node:fs/promis
 import { once } from 'node:events';
 import { AgentClient } from '../../examples/native-minimal/stdio-client.mts';
 import { certificates } from './mobility_tls_fixture.mjs';
-import { compareContinuation, missingReplayObject, missingCaptures, invalidQueuedMessage } from './native_archive.mjs';
+import { compareContinuation, missingReplayObject, missingCaptures, omittedAttempts, invalidQueuedMessage } from './native_archive.mjs';
 import { deployment } from './native_deployment.mjs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -457,10 +457,10 @@ try {
   const captureArchive = join(directory, 'capture-closure.bundle');
   invoke('export-checkpoint', '--offline', '--state-dir', captureState, '--task-id', captureTask.task_id, '--output', captureArchive);
   const captureBytes = await readFile(captureArchive);
-  for (const change of ['all', 'one', 'prepared-marker']) {
+  for (const change of ['all', 'one', 'prepared-marker', 'attempts-and-captures']) {
     const malformed = join(directory, `capture-${change}.bundle`);
     const destination = join(directory, `capture-${change}-import`);
-    await writeFile(malformed, missingCaptures(captureBytes, change), {mode: 0o600});
+    await writeFile(malformed, change === 'attempts-and-captures' ? omittedAttempts(captureBytes) : missingCaptures(captureBytes, change), {mode: 0o600});
     const rejected = spawnSync(binary, ['import-checkpoint', '--offline', '--state-dir', destination, '--input', malformed, '--operation-id', 'capture-import'], {cwd: directory, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 5000});
     assert.equal(rejected.status, 64, rejected.error ?? rejected.stderr);
     assert.equal(JSON.parse(rejected.stdout).reason, 'InvalidArchive', change);

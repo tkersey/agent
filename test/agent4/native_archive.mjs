@@ -284,3 +284,113 @@ export async function compareContinuation(runtimePath, probe, inputPath, pending
     paired_runtime: {steps: nativeSteps, quantum, wasm_inprocess_ms: pairedWasmMilliseconds, native_process_ms: nativeProcessMilliseconds,
       scope: 'recorded-reply harness; native includes process launch, input read, prepare/restore and output decode; neither includes provider or durable host storage'}};
 }
+
+// Rebuild the independently decoded native reference closure after omission.
+// Acquired replies are the one digest-only object edge in these record schemas.
+function pruneObjects(archive) {
+  const retained = new Set();
+  const visit = value => {
+    if (Array.isArray(value)) {
+      if (value.length === 2 && Array.isArray(value[0]) && value[0].length === 32 && typeof value[1] === 'bigint') retained.add(key(value));
+      else value.forEach(visit);
+    } else if (value && typeof value === 'object') Object.values(value).forEach(visit);
+  };
+  visit(archive.manifest.slice(3, 10));
+  visit(archive.taskValue);
+  const kinds = ['occurrence', 'question', 'message', 'artifact', 'capture', 'attempt', 'origin'];
+  for (const [kind,, reference] of archive.manifest[6]) {
+    const value = decodeValue(archive.schemas.get(kinds[kind]), archive.object(reference));
+    visit(value);
+    if (kind === 0) {
+      const state = value[3];
+      const reply = state.tag === 4 ? state.value : state.tag === 5 && state.value.tag === 0 ? state.value.value : null;
+      if (reply) retained.add(Buffer.from(reply[1]).toString('hex'));
+    }
+  }
+  for (const row of archive.manifest[7]) visit(decodeValue(archive.schemas.get('event'), archive.object(row[2])));
+  for (const row of archive.manifest[8]) visit(decodeValue(archive.schemas.get('receipt'), archive.object(row[2])));
+  for (const digest of archive.objects.keys()) if (!retained.has(digest)) archive.objects.delete(digest);
+}
+
+export function omittedAttempts(bytes) {
+  const archive = readArchive(bytes);
+  assert(archive.manifest[6].some(([kind]) => kind === 5));
+  archive.manifest[6] = archive.manifest[6].filter(([kind]) => kind !== 4 && kind !== 5);
+  archive.manifest[9] = [];
+  for (const field of ['inference_attempts', 'inference_request_bytes']) archive.taskValue[taskFields.indexOf(field)] = field === 'inference_attempts' ? 0 : 0n;
+  archive.manifest[3] = replace(archive, archive.manifest[3], Buffer.from(encodeValue(archive.schemas.get('task'), archive.taskValue)));
+  pruneObjects(archive);
+  return encode(archive);
+}
+
+export function omittedQuestion(bytes, removeOccurrence = false) {
+  const archive = readArchive(bytes);
+  const row = archive.manifest[6].find(([kind]) => kind === 1);
+  assert(row);
+  const question = decodeValue(archive.schemas.get('question'), archive.object(row[2]));
+  assert.equal(question[12], true, 'historical question must be retired');
+  const id = Buffer.from(question[2]);
+  archive.manifest[6] = archive.manifest[6].filter(candidate => candidate !== row && !(removeOccurrence && candidate[0] === 0 && Buffer.from(candidate[1]).equals(id)));
+  pruneObjects(archive);
+  return encode(archive);
+}
+
+export function unboundQuestionReply(bytes) {
+  const archive = readArchive(bytes);
+  const row = archive.manifest[6].find(([kind, id]) => kind === 0 && Buffer.from(id).equals(Buffer.from(archive.task.current_occurrence.value)));
+  assert(row);
+  const value = decodeValue(archive.schemas.get('occurrence'), archive.object(row[2]));
+  assert.equal(value[3].tag, 2);
+  const payload = encodeValue({root: 0, types: [{product: [1]}, {bounded_text: 256}]}, ['forged answer']);
+  const body = Buffer.from(encodeValue({root: 0, types: [{product: [1, 3]}, {array: {element: 2, length: 32}}, 'u8', 'bytes']}, [value[2], payload]));
+  const header = Buffer.alloc(20);
+  header.write('ABL_ERS3'); header.writeUInt16LE(3, 8); header.writeBigUInt64LE(BigInt(body.length), 12);
+  const reference = replace(archive, null, Buffer.concat([header, body]));
+  value[3] = {tag: 4, value: [value[3].value[0], reference[0], {tag: 0, value: null}]};
+  row[2] = replace(archive, row[2], Buffer.from(encodeValue(archive.schemas.get('occurrence'), value)));
+  return encode(archive);
+}
+
+// Reconstruct the acquired-answer cut from two actual exports of the same task:
+// preserve the pre-answer World checkpoint and the acknowledged answer records.
+// The valid sibling must import and finish before its omission tests get credit.
+export function acquiredQuestionArchive(pendingBytes, completedBytes, omitBinding = false) {
+  const pending = readArchive(pendingBytes), archive = readArchive(completedBytes);
+  assert.deepEqual(pending.task.id, archive.task.id);
+  const set = (name, value) => { archive.taskValue[taskFields.indexOf(name)] = value; };
+  for (const field of ['checkpoint', 'outcome']) {
+    set(field, pending.task[field]);
+    archive.objects.set(key(pending.task[field]), pending.object(pending.task[field]));
+  }
+  set('outcome_kind', 2); // requested
+  set('current_occurrence', pending.task.current_occurrence);
+  set('execution_revision', pending.task.execution_revision);
+  for (const field of ['result', 'client_result', 'result_artifact']) set(field, {tag: 0, value: null});
+  const row = archive.manifest[6].find(([kind, id]) => kind === 0 && Buffer.from(id).equals(Buffer.from(pending.task.current_occurrence.value)));
+  const occurrence = decodeValue(archive.schemas.get('occurrence'), archive.object(row[2]));
+  assert.equal(occurrence[3].tag, 5);
+  assert.equal(occurrence[3].value.tag, 0);
+  const acquired = occurrence[3].value.value;
+  assert.equal(acquired[2].tag, 1);
+  if (omitBinding) {
+    acquired[2] = {tag: 0, value: null};
+    // Change the typed answer too, while preserving its request-bound envelope.
+    const schema = {root: 0, types: [{product: [1, 3]}, {array: {element: 2, length: 32}}, 'u8', 'bytes']};
+    const original = archive.objects.get(Buffer.from(acquired[1]).toString('hex'));
+    const value = decodeValue(schema, original.subarray(20));
+    value[1] = encodeValue({root: 0, types: [{product: [1]}, {bounded_text: 256}]}, ['different acquired answer']);
+    const body = Buffer.from(encodeValue(schema, value));
+    const header = Buffer.from(original.subarray(0, 20));
+    header.writeBigUInt64LE(BigInt(body.length), 12);
+    acquired[1] = replace(archive, null, Buffer.concat([header, body]))[0];
+  }
+  occurrence[3] = {tag: 4, value: acquired};
+  row[2] = replace(archive, row[2], Buffer.from(encodeValue(archive.schemas.get('occurrence'), occurrence)));
+  const questionRow = archive.manifest[6].find(([kind]) => kind === 1);
+  const question = decodeValue(archive.schemas.get('question'), archive.object(questionRow[2]));
+  question[12] = false;
+  questionRow[2] = replace(archive, questionRow[2], Buffer.from(encodeValue(archive.schemas.get('question'), question)));
+  archive.manifest[3] = replace(archive, archive.manifest[3], Buffer.from(encodeValue(archive.schemas.get('task'), archive.taskValue)));
+  pruneObjects(archive);
+  return encode(archive);
+}

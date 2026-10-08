@@ -401,6 +401,8 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
         // and its queue entry while retaining the immutable admission receipt.
         if (decoded.value.method == .message and decoded.value.message == null) return error.InvalidArchive;
         if (decoded.value.message) |id| if (record(archive, .message, id) == null) return error.InvalidArchive;
+        if (decoded.value.method == .respond and decoded.value.question == null) return error.InvalidArchive;
+        if (decoded.value.question) |id| if (record(archive, .question, id) == null) return error.InvalidArchive;
     }
     const reserved: ?state.Digest = if (current) |pending| if (pending.state == .settled_reply and record(archive, .attempt, pending.state.settled_reply.attempt) != null) pending.state.settled_reply.attempt else null else null;
     if (archive.reservations.items.len != @intFromBool(reserved != null)) return error.CorruptState;

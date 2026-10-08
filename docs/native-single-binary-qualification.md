@@ -52,7 +52,9 @@ Final file hashes for those archives:
 The manifests identify Zig 0.17.0, its executable/library digests, unchanged
 World `35f11b811b03fcaa2d696265ff8d9b9c92c8fc95` and Boundary
 `c49f743382257c7cf5512934ae3a2d0f56d4d4c0`, SQLite 3.53.4, safe optimization,
-the selected target, embedded assets and `agent-native-state/7`. The reference
+the selected target, embedded assets and `agent-native-state/7`. Current source
+uses `agent-native-state/8` to retain request objects with every occurrence;
+those earlier manifests remain historical state-7 evidence. The reference
 TLS runs use an explicit ephemeral DER root; actual live operation may instead
 use the declared OS trust roots. The native file hash is independent of the
 WASM runtime hash and does not authenticate its own executable.

@@ -104,7 +104,7 @@ fn ownerManifest(a: std.mem.Allocator, image: []const u8, identity: [32]u8, appl
         .native_host_contract = "unit-native-contract",
         .protocol = "agent-host/1.0",
         .client_mapping = "agent-client-values/1.0",
-        .state_format = "agent-native-state/7",
+        .state_format = "agent-native-state/8",
         .optimize = "safe",
         .program_sha256 = @as([]const u8, &image_hex),
         .program_identity = @as([]const u8, &identity_hex),
@@ -112,6 +112,106 @@ fn ownerManifest(a: std.mem.Allocator, image: []const u8, identity: [32]u8, appl
         .dependencies = .{ .world = "unit-world", .boundary = "unit-boundary" },
         .compiler = .{ .version = "0.17.0" },
     }, .{});
+}
+
+// Independently rewrite the ordinary archive envelope. This fixture's captured
+// increment has no replay objects, and its only adapter bytes are these two
+// constants; retained canonical requests/replies stay in the object inventory.
+fn omitIncrementEvidence(a: std.mem.Allocator, io: std.Io, shape: anytype, source: []const u8, destination: []const u8) !void {
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(io, source, a, .limited(64 * 1024 * 1024));
+    const schema_length = std.mem.readInt(u32, bytes[8..12], .little);
+    const manifest_length = std.mem.readInt(u32, bytes[12..16], .little);
+    const start = 32 + schema_length;
+    var decoded = try agent.contracts.decodeOwned(@TypeOf(shape), a, bytes[start..][0..manifest_length]);
+    defer decoded.deinit();
+    var archive = decoded.value;
+    var removed: std.ArrayList([32]u8) = .empty;
+    for ([_][]const u8{ "increment:20", "raw-response:21" }) |raw| {
+        var digest: [32]u8 = undefined;
+        std.crypto.hash.sha2.Sha256.hash(raw, &digest, .{});
+        try removed.append(a, digest);
+    }
+    var records: std.ArrayList(@TypeOf(archive.records.items[0])) = .empty;
+    var count: usize = 0;
+    for (archive.records.items) |row| {
+        if (row.kind == .attempt or row.kind == .capture) {
+            try removed.append(a, row.body.digest);
+            count += @intFromBool(row.kind == .capture);
+        } else try records.append(a, row);
+    }
+    try std.testing.expectEqual(1, count);
+    archive.records.items = records.items;
+    archive.reservations.items = &.{};
+    var objects: std.ArrayList(@TypeOf(archive.objects.items[0])) = .empty;
+    var body: std.ArrayList(u8) = .empty;
+    var offset: usize = start + manifest_length;
+    for (archive.objects.items) |reference| {
+        const length: usize = @intCast(reference.bytes);
+        var keep = true;
+        for (removed.items) |digest| if (std.mem.eql(u8, &digest, &reference.digest)) {
+            keep = false;
+            break;
+        };
+        if (keep) {
+            try objects.append(a, reference);
+            try body.appendSlice(a, bytes[offset..][0..length]);
+        }
+        offset += length;
+    }
+    archive.objects.items = objects.items;
+    const manifest = try agent.contracts.encodeOwned(@TypeOf(shape), a, archive);
+    var header: [32]u8 = bytes[0..32].*;
+    std.mem.writeInt(u32, header[12..16], @intCast(manifest.len), .little);
+    std.mem.writeInt(u32, header[16..20], @intCast(objects.items.len), .little);
+    std.mem.writeInt(u64, header[24..32], body.items.len, .little);
+    var output: std.ArrayList(u8) = .empty;
+    try output.appendSlice(a, &header);
+    try output.appendSlice(a, bytes[32..start]);
+    try output.appendSlice(a, manifest);
+    try output.appendSlice(a, body.items);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = destination, .data = output.items, .flags = .{ .permissions = .fromMode(0o600) } });
+}
+
+fn checkCaptureImport(a: std.mem.Allocator, frame: std.mem.Allocator, io: std.Io, service: *native.tasks.Service(T), namespace: *native.Namespace, service_live: *bool, namespace_live: *bool, source_path: []const u8, directory: []const u8, task_id: [16]u8, label: []const u8) !void {
+    const assets = service.assets;
+    const application = service.application;
+    const handlers = service.handlers;
+    const profile = service.profile;
+    const valid = try std.fmt.allocPrint(frame, "{s}/{s}.bundle", .{ directory, label });
+    const invalid = try std.fmt.allocPrint(frame, "{s}/{s}-omitted.bundle", .{ directory, label });
+    const target = try std.fmt.allocPrint(frame, "{s}/{s}-import", .{ directory, label });
+    _ = try service.exportCheckpoint(frame, task_id, valid);
+    const shape = try namespace.store.archiveIndex(frame, task_id, .{ .digest = @splat(0), .bytes = 0 });
+    try omitIncrementEvidence(frame, io, shape, valid, invalid);
+    try service.close(frame);
+    service_live.* = false;
+    try namespace.close();
+    namespace_live.* = false;
+    {
+        var destination = try native.Namespace.open(a, io, target);
+        defer destination.close() catch unreachable;
+        var imported = try native.tasks.Service(T).init(a, io, &destination, assets, application, handlers, profile);
+        defer imported.close(frame) catch unreachable;
+        try std.testing.expectError(error.InvalidArchive, imported.importCheckpoint(frame, "import", invalid));
+        const admitted = try imported.importCheckpoint(frame, "import", valid);
+        var task = try imported.task(frame, admitted.receipt.task);
+        defer task.deinit();
+        _ = try imported.resumeTask(frame, "resume", task.value.id, task.value.revision);
+        for (0..32) |_| {
+            const step = try imported.pump(frame);
+            try std.testing.expect(step != .work);
+            if (step == .waiting or step == .idle) break;
+        }
+        var question = (try imported.pendingQuestion(frame, task_id)) orelse return error.ExpectedQuestion;
+        defer question.deinit();
+    }
+    namespace.* = try native.Namespace.open(a, io, source_path);
+    namespace_live.* = true;
+    service.* = try native.tasks.Service(T).init(a, io, namespace, assets, application, handlers, profile);
+    service_live.* = true;
+    var task = try service.task(frame, task_id);
+    defer task.deinit();
+    _ = try service.resumeTask(frame, label, task_id, task.value.revision);
 }
 
 fn ownerRecovery(captured: bool, image: []const u8) !void {
@@ -234,11 +334,18 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     try std.testing.expectError(error.IncompatibleProfile, service.resumeTask(frame, "resume", accepted.receipt.task, status.value.revision));
     service.profile.resources = profile.resources;
     _ = try service.resumeTask(frame, "resume", accepted.receipt.task, status.value.revision);
+    if (captured) {
+        // Recover/interpret the raw acquisition, then test the settled boundary
+        // before World consumes it, using the non-inference adapter fixture.
+        try std.testing.expect(try service.pump(frame) == .progressed);
+        try checkCaptureImport(a, frame, io, &service, &namespace, &service_live, &namespace_live, path, path_buffer[0..length], accepted.receipt.task, "settled-capture");
+    }
     for (0..32) |_| {
         const step = try service.pump(frame);
         try std.testing.expect(step != .work);
         if (step == .waiting) break;
     }
+    if (captured) try checkCaptureImport(a, frame, io, &service, &namespace, &service_live, &namespace_live, path, path_buffer[0..length], accepted.receipt.task, "historical-capture");
     var question = (try service.pendingQuestion(frame, accepted.receipt.task)) orelse return error.ExpectedQuestion;
     defer question.deinit();
     try std.testing.expectError(error.StaleInteraction, service.respond(frame, "unknown-question", accepted.receipt.task, @splat(0), question.value.revision, question.value.request_digest, "task-owner.answer.v1", .{ .number_string = "7" }));

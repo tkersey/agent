@@ -158,19 +158,23 @@ unchanged. Qualification still runs on every restored cache. A populated-profile
 rerun must establish actual compiler reuse and complete workflow duration;
 changing the key alone is not a performance result.
 
-Native `native4` uploads a separate snapshot capped at 4 GiB. Run `37750804226`
-passed every check but took 5m47s: restoring the old native3 cache took 53 seconds,
-and the final 9,113,765,765-byte cache again exceeded the 8 GiB upload cap.
-New objects could not be retained. The snapshot keeps metadata and the newest
-whole object directories that fit. It hard-links selected files after compilation
-ends; no local object is erased or modified. Missing objects on a later runner
-are ordinary compiler cache misses. The previous remote entries remain intact.
-Restore moves the snapshot into the usual cache location before dependency
-authentication and compilation. This bounds recurring transfer and allows newly
-built objects to be retained without depending on periodic namespace resets.
-The new snapshot's restore, save, compiler reuse and complete-workflow time must
-all be measured; recent modification time is a retention heuristic, not a claim
-that every retained object will be reused. Authoring keeps its existing policy.
+Native `native5` uploads a complete snapshot only when the entire cache fits
+4 GiB. Files are hard-linked into a fresh upload directory after compilation;
+empty directories are preserved and source files are never erased or modified.
+An oversized cache is not partially saved: the previous complete remote entry
+remains available, so new compiler variants may need rebuilding on later runs.
+Restore uses the usual cache path before dependency authentication and compilation.
+
+The earlier `native4` policy retained metadata while dropping older object
+directories. Run `37791898515` restored that bounded partial cache but failed to
+link because `libcompiler_rt.a` was missing. Missing compiler-internal outputs
+are therefore not guaranteed to become ordinary cache misses. Native5 has no
+native4 fallback; old remote entries remain intact. This replaces object-age
+selection with one opaque cache transfer boundary and retains the 4 GiB limit.
+The earlier native3 cache exceeded 8 GiB and took 53 seconds to restore in run
+`37750804226`; increasing that limit or resetting a key alone is not the remedy.
+Compiler reuse and complete-workflow duration still require actual measurement.
+Authoring keeps its existing cache policy.
 
 Native CI sets `ZIG_DEBUG_CMD=1` for Zig's internal on-demand build commands.
 The pinned compiler applies this to its build driver and translation helper,

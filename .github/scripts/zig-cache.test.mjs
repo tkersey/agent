@@ -36,25 +36,30 @@ test('cache admission retains useful objects and never erases oversized, empty, 
   assert.equal(readFileSync(join(root, 'o', 'object'), 'utf8'), 'object');
 });
 
-test('bounded upload retains newest whole objects and metadata without changing the source', t => {
+test('bounded upload preserves a complete cache or declines without changing the source', t => {
   const work = mkdtempSync(join(tmpdir(), 'zig-cache-snapshot-'));
   t.after(() => rmSync(work, { recursive: true, force: true }));
   const root = join(work, 'source'), output = join(work, 'upload');
-  for (const name of ['o/old', 'o/new', 'o/large', 'h']) mkdirSync(join(root, name), { recursive: true });
+  for (const name of ['o/old', 'o/new', 'o/large', 'h', 'tmp']) mkdirSync(join(root, name), { recursive: true });
   for (const [name, value, time] of [['o/old/a', 'old', 1], ['o/new/a', 'new', 2], ['o/new/b', 'two', 2], ['o/large/a', 'oversized', 3], ['h/manifest', 'h', 1]]) {
     const path = join(root, name);
     writeFileSync(path, value); utimesSync(path, time, time);
   }
   const before = inspectCache(root);
-  assert.equal(snapshotCache(root, output, 7).bytes, 7);
-  assert.equal(readFileSync(join(output, 'o/new/a'), 'utf8'), 'new');
-  assert.equal(readFileSync(join(output, 'o/new/b'), 'utf8'), 'two');
-  assert.equal(readFileSync(join(output, 'h/manifest'), 'utf8'), 'h');
-  assert.equal(existsSync(join(output, 'o/old')), false);
-  assert.equal(existsSync(join(output, 'o/large')), false);
+  const declined = join(work, 'too-small');
+  assert.equal(snapshotCache(root, declined, 7).save, false);
+  assert.equal(existsSync(declined), false, 'never publish metadata with omitted objects');
+  assert.deepEqual(inspectCache(root), before);
+  const copied = snapshotCache(root, output, before.bytes);
+  assert.equal(copied.save, true);
+  assert.equal(copied.bytes, before.bytes);
+  for (const name of ['o/old/a', 'o/new/a', 'o/new/b', 'o/large/a', 'h/manifest']) {
+    assert.deepEqual(readFileSync(join(output, name)), readFileSync(join(root, name)));
+    assert.equal(statSync(join(root, name)).ino, statSync(join(output, name)).ino);
+  }
+  assert.equal(statSync(join(output, 'tmp')).isDirectory(), true);
   assert.deepEqual(inspectCache(root), before);
   assert.equal(readFileSync(join(root, 'o/old/a'), 'utf8'), 'old');
-  assert.equal(statSync(join(root, 'o/new/a')).ino, statSync(join(output, 'o/new/a')).ino);
   assert.throws(() => snapshotCache(root, output, 7), { code: 'EEXIST' });
   assert.throws(() => snapshotCache(root, join(root, 'nested'), 7), /disjoint/);
   assert.throws(() => snapshotCache(root, join(work, 'small'), 0), /positive/);

@@ -789,11 +789,20 @@ fn questionReferenceWitness(a: std.mem.Allocator, service: *native.tasks.Service
     var client: native.client.Client(T) = .{ .service = service, .batch = true };
     for ([_]u32{ 41, 42 }) |input| {
         const admitted = try service.submit(a, try std.fmt.allocPrint(a, "question-ref-{d}", .{input}), input);
+        var calls: usize = 0;
         for (0..16) |_| {
             const step = try service.pump(a);
-            try std.testing.expect(step != .work);
+            if (step == .work) {
+                var request = try protocol.decode(protocol.Request, a, step.work.request);
+                defer request.deinit();
+                const ctx: native.Context = .{ .allocator = a, .io = service.io, .authority = &service.profile.authority, .task_id = "test", .profile = service.profile.bytes, .environment = service.profile.environment };
+                const reply = try step.work.entry.declaration.invoke.?(ctx, request.value.binding.payload);
+                try service.acquire(a, step.work, reply);
+                calls += 1;
+            }
             if (step == .waiting or step == .idle) break;
         }
+        try std.testing.expectEqual(1, calls);
         var saved = (try service.pendingQuestion(a, admitted.receipt.task)) orelse return error.ExpectedQuestion;
         defer saved.deinit();
         var params = native.json.object();

@@ -93,6 +93,15 @@ export async function verifyAdaptiveNative({app, applicationPath, worldRuntime})
   const started = performance.now();
   try {
     invoke('validate', '--config', configPath); assert.equal(requests.length, 0);
+    for (const [field, value] of [['id', 'review/guards'], ['version', '1.0.0+local']]) {
+      const invalid = structuredClone(config), path = join(app.data, `invalid-skill-${field}.json`);
+      invalid.skills[0][field] = value;
+      await writeFile(path, JSON.stringify(invalid));
+      const rejected = spawnSync(app.command, ['validate', '--config', path, '--test-provider', '--trust-root', trust],
+        {cwd: app.data, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 10000});
+      assert.equal(rejected.status, 64, `${field}: ${rejected.error ?? rejected.stdout}`);
+      assert.equal(requests.length, 0, 'invalid catalog admission cannot dispatch inference');
+    }
     const credential = join(app.data, 'synthetic-private-credential'), leakedConfig = join(app.data, 'credential-profile.json');
     await writeFile(credential, 'qualification-only\n', {mode: 0o600});
     await writeFile(leakedConfig, JSON.stringify({...config, endpoint: 'https://api.openai.com/v1/responses', workspace: 'qualification-only'}));

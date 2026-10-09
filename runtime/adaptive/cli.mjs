@@ -59,7 +59,7 @@ export async function main(argv) {
   if (['message', 'respond', 'cancel'].includes(command)) assert(options.operationId, 'stable operation ID is required');
   options.create = ['run', 'demo'].includes(command);
   const runner = await AdaptiveRunner.open(options);
-  const interrupt = () => { try { runner.cancel('cli-interrupt', 'Interrupted by operator.'); } catch {} };
+  const interrupt = () => { try { runner.interrupt('Interrupted by operator.'); } catch {} };
   process.on('SIGINT', interrupt); process.on('SIGTERM', interrupt);
   try {
     if (command === 'observations') { print({observations: runner.observations(), metrics: runner.metrics()}); return; }

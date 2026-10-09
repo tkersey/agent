@@ -26,7 +26,9 @@ const contracts = new Map([
 const terminal = kind => ['completed', 'failed', 'cancelled'].includes(kind);
 
 export class AdaptiveRunner {
-  #app; #world; #admission; #journal; #ctx; #executor; #options; #busy = false; #controller = null; #onBoundary;
+  // Cancellation also covers the gap between durable dispatch and acquisition;
+  // a later request must not replace an already-aborted signal.
+  #app; #world; #admission; #journal; #ctx; #executor; #options; #busy = false; #controller = new AbortController(); #onBoundary;
   static async open(options, {fault = () => {}, onBoundary = async () => {}} = {}) {
     assert.equal(process.platform, 'linux', 'adaptive JS execution is Linux-qualified only');
     const lockPath = options.lockPath ?? DEFAULT_LOCK;
@@ -173,9 +175,7 @@ export class AdaptiveRunner {
             const response = this.#ctx.fixture[Number(plan.watermark)]; assert(response, 'offline corpus exhausted');
             acquired = {kind: 'captured', bytes: this.#ctx.codec.encode('CapturedResponse', {status: 200, identity_encoding: true, request_id: null, body: canonical(response)})};
           } else {
-            this.#controller = new AbortController();
-            try { acquired = await model.acquire(this.#ctx, prepared, {...this.#ctx.provider, signal: this.#controller.signal}); }
-            finally { this.#controller = null; }
+            acquired = await model.acquire(this.#ctx, prepared, {...this.#ctx.provider, signal: this.#controller.signal});
           }
           if (acquired.kind === 'unknown') { this.#journal.unknown(occurrence.id, acquired.error); return this.status(); }
           if (acquired.kind === 'definitely_not_sent') { this.#journal.notSent(occurrence.id, acquired.error); return this.status(); }
@@ -199,7 +199,11 @@ export class AdaptiveRunner {
   respond(operationId, questionId, requestDigest, value) {
     return this.#journal.respond(operationId, questionId, requestDigest, this.#ctx.codec.encode('Answer', value));
   }
-  cancel(operationId, reason) { const result = this.#journal.cancel(operationId, reason); this.#controller?.abort(); return result; }
+  cancel(operationId, reason) { const result = this.#journal.cancel(operationId, reason); this.#controller.abort(); return result; }
+  interrupt(reason) {
+    try { return this.#journal.interrupt(reason); }
+    finally { this.#controller.abort(); }
+  }
   status() {
     const task = this.#journal.task(); if (!task) return {kind: 'empty'};
     const occurrence = this.#journal.occurrence();

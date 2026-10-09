@@ -100,7 +100,14 @@ pub fn Admission(comptime P: type) type {
             defer ctx.allocator.free(bytes);
             var decoded = try contracts.decodeOwned(P.AdaptiveCatalog, ctx.allocator, bytes);
             errdefer decoded.deinit();
-            const entries = decoded.value.skills.items;
+            try validateCatalog(frozen, decoded.value);
+            return decoded;
+        }
+
+        /// Shared semantic admission for configuration and captured occurrences.
+        /// Callers separately establish resource integrity and deployment limits.
+        pub fn validateCatalog(frozen: Policy, value: P.AdaptiveCatalog) !void {
+            const entries = value.skills.items;
             var admitted_bytes: u64 = 0;
             for (entries, 0..) |entry, index| {
                 if (!identifier(entry.id.bytes) or !identifier(entry.version.bytes) or entry.instructions.bytes == 0 or entry.instructions.bytes > 32 * 1024) return error.InvalidSkill;
@@ -109,7 +116,6 @@ pub fn Admission(comptime P: type) type {
                 for (entries[0..index]) |earlier| if (equal(entry.id.bytes, earlier.id.bytes)) return error.InvalidSkill;
                 for (entry.tools, frozen.permitted_tools) |enabled, permitted| if (enabled and !permitted) return error.InvalidSkill;
             }
-            return decoded;
         }
 
         pub fn bind(ctx: registry.ProjectionContext, frozen: Policy, request: P.AdaptiveRequest, skills: P.AdaptiveCatalog) !Selected {

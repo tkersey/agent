@@ -3,6 +3,30 @@
   "scope": "Independent shared provider-envelope, replay and optional-usage expectations; controls and acquisition are qualified by the authored application peers.",
   "cases": [
     {
+      "name": "missing-output",
+      "body": "{\"status\":\"completed\",\"error\":null}",
+      "result": "unsupported_response",
+      "failure": "unsupported_status",
+      "replay": "unsupported",
+      "usage": null
+    },
+    {
+      "name": "null-output",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":null}",
+      "result": "unsupported_response",
+      "failure": "unsupported_output_item",
+      "replay": "unsupported",
+      "usage": null
+    },
+    {
+      "name": "scalar-output",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":1}",
+      "result": "unsupported_response",
+      "failure": "unsupported_output_item",
+      "replay": "unsupported",
+      "usage": null
+    },
+    {
       "name": "absent-usage",
       "body": "{\"status\":\"completed\",\"error\":null,\"output\":[]}",
       "result": "output",
@@ -54,7 +78,8 @@
       "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"reasoning\",\"summary\":[]}]}",
       "result": "unsupported_response",
       "replay": "unsupported",
-      "usage": null
+      "usage": null,
+      "failure": "unsupported_output_item"
     },
     {
       "name": "message-phase",
@@ -68,7 +93,8 @@
       "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"additional_tools\",\"role\":\"developer\",\"tools\":[]}]}",
       "result": "unsupported_response",
       "replay": "unsupported",
-      "usage": null
+      "usage": null,
+      "failure": "unsupported_output_item"
     },
     {
       "name": "cache-counter-exceeds-input",
@@ -81,14 +107,16 @@
         "cached_input_tokens": "8",
         "cache_write_tokens": "3",
         "reasoning_tokens": null
-      }
+      },
+      "failure": "unsupported_output_item"
     },
     {
       "name": "numeric-usage-object",
       "body": "{\"status\":\"completed\",\"error\":null,\"output\":[],\"usage\":1}",
       "result": "unsupported_response",
       "replay": "unsupported",
-      "usage": null
+      "usage": null,
+      "failure": "unsupported_output_item"
     },
     {
       "name": "numeric-details-object",
@@ -101,14 +129,16 @@
         "cached_input_tokens": null,
         "cache_write_tokens": null,
         "reasoning_tokens": null
-      }
+      },
+      "failure": "unsupported_output_item"
     },
     {
       "name": "duplicate-output-member",
       "body": "{\"status\":\"completed\",\"error\":null,\"output\":[],\"output\":[]}",
       "result": "unsupported_response",
       "replay": "unsupported",
-      "usage": null
+      "usage": null,
+      "failure": "malformed_json"
     },
     {
       "name": "failed-response",
@@ -121,6 +151,10 @@
         "cached_input_tokens": null,
         "cache_write_tokens": null,
         "reasoning_tokens": null
+      },
+      "failure": {
+        "kind": "response_failed",
+        "http_status": 0
       }
     },
     {
@@ -128,7 +162,8 @@
       "body": "{\"error\":null,\"output\":[]}",
       "result": "unsupported_response",
       "replay": "unsupported",
-      "usage": null
+      "usage": null,
+      "failure": "unsupported_status"
     },
     {
       "name": "diagnostics-are-optional-data",
@@ -149,14 +184,16 @@
       "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"call-0\",\"name\":\"inspect\",\"arguments\":\"{\\\"value\\\":1}\"},{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"call-1\",\"name\":\"inspect\",\"arguments\":\"{\\\"value\\\":1}\"}]}",
       "result": "unsupported_response",
       "replay": "unsupported",
-      "usage": null
+      "usage": null,
+      "failure": "unsupported_output_item"
     },
     {
       "name": "two-refusals-are-mixed",
       "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"refusal\",\"refusal\":\"One.\"},{\"type\":\"refusal\",\"refusal\":\"Two.\"}]}]}",
       "result": "unsupported_response",
       "replay": "unsupported",
-      "usage": null
+      "usage": null,
+      "failure": "mixed_refusal"
     },
     {
       "name": "empty-text-before-one-refusal",

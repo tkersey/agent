@@ -161,6 +161,11 @@ test "adaptive admission binds selected profiles and skill permissions to the fr
     const admitted = try Admission.policy(a, policy_bytes);
     var skills = try Admission.catalog(ctx, admitted);
     defer skills.deinit();
+    try Admission.validateCatalog(admitted, skills.value);
+    var denied = admitted;
+    denied.permitted_tools = .{false};
+    try std.testing.expectError(error.InvalidSkill, Admission.validateCatalog(denied, skills.value));
+    try std.testing.expectError(error.InvalidSkill, Admission.catalog(ctx, denied));
     var materialization = [_]agent.model_invocation.SkillMaterialization{.{
         .resource = resource,
         .skill_id = .{ .bytes = "invariant-review" },

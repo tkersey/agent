@@ -51,6 +51,7 @@ export async function verifyAdaptiveProvider(codec) {
   for (const entry of corpus.cases) {
     const result = capturedBody(Buffer.from(entry.body));
     assert.equal(result.result.tag, entry.result, entry.name); assert.equal(result.replay_status, entry.replay, entry.name);
+    if (entry.failure !== undefined) assert.deepEqual(result.result.value, entry.failure, entry.name);
     assert.deepEqual(result.usage === null ? null : Object.fromEntries(Object.entries(result.usage).map(([key, count]) => [key, count === null ? null : String(count)])), entry.usage, entry.name);
   }
   const aggregate = capture(Array.from({length: 4}, () => ({type: 'message', role: 'assistant', status: 'completed',

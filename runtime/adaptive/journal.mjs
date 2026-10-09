@@ -204,11 +204,15 @@ export class Journal {
     }));
   }
   cancel(operationId, reason) {
-    return this.#transaction('cancel', () => this.#operation(operationId, {reason}, () => {
-      assert(typeof reason === 'string' && reason.isWellFormed() && Buffer.byteLength(reason) <= 256);
-      const task = this.task(); assert(task && !['completed', 'failed', 'cancelled'].includes(task.kind));
-      task.cancel ??= reason; this.#task(task); return {requested: true};
-    }));
+    return this.#transaction('cancel', () => this.#operation(operationId, {reason}, () => this.#cancel(reason)));
+  }
+  // A host signal coalesces in task state; caller IDs and their admission
+  // capacity cannot occupy or prevent this cancellation path.
+  interrupt(reason) { return this.#transaction('interrupt', () => this.#cancel(reason)); }
+  #cancel(reason) {
+    assert(typeof reason === 'string' && reason.isWellFormed() && Buffer.byteLength(reason) <= 256);
+    const task = this.task(); assert(task && !['completed', 'failed', 'cancelled'].includes(task.kind));
+    task.cancel ??= reason; this.#task(task); return {requested: true};
   }
   publish(token) {
     const data = this.#admission.read(token);

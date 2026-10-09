@@ -173,6 +173,7 @@ export function interpret(ctx, requestBytes, preparedBytes, capturedBytes) {
   if (body?.status === 'failed' || body?.status === 'incomplete') return encode({tag: 'provider_failure', value: {
     kind: body.status === 'failed' ? 'response_failed' : 'response_incomplete', http_status: 0}}, observed.value);
   if (body?.status !== 'completed' || body.error !== null) return unsupported('unsupported_status', observed.value);
+  if (!Object.hasOwn(body, 'output')) return unsupported('unsupported_status', observed.value);
   if (!Array.isArray(body.output)) return unsupported('unsupported_output_item', observed.value);
   const normalized = normalizeAdaptiveOutput(ctx.codec, request.invocation, body.output);
   if (normalized.tag === 'unsupported_response' || normalized.tag === 'provider_failure') return encode(normalized, observed.value, null,

@@ -178,15 +178,12 @@ pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration
     const catalog_bytes = resources.items[resources.items.len - 1];
     if (policy.catalog.bytes != catalog_bytes.len or !std.mem.eql(u8, &policy.catalog.digest, &digest(catalog_bytes))) return error.InvalidSkill;
     const catalog = try contracts.decodeOwned(t.P.AdaptiveCatalog, a, catalog_bytes);
+    try Admission.validateCatalog(policy, catalog.value);
     if (catalog.value.skills.items.len > 14) return error.Capacity;
     if (catalog.value.skills.items.len + 2 != resources.items.len) return error.MissingArtifact;
-    var total: usize = 0;
-    for (catalog.value.skills.items, resources.items[1 .. resources.items.len - 1], 0..) |skill, body, index| {
-        if (skill.id.bytes.len == 0 or skill.version.bytes.len == 0 or body.len == 0 or body.len > 32 * 1024 or !std.unicode.utf8ValidateSlice(body) or skill.instructions.bytes != body.len or !std.mem.eql(u8, &skill.instructions.digest, &digest(body))) return error.InvalidSkill;
-        for (catalog.value.skills.items[0..index]) |prior| if (std.mem.eql(u8, skill.id.bytes, prior.id.bytes)) return error.InvalidSkill;
-        total += body.len;
+    for (catalog.value.skills.items, resources.items[1 .. resources.items.len - 1]) |skill, body| {
+        if (!std.unicode.utf8ValidateSlice(body) or skill.instructions.bytes != body.len or !std.mem.eql(u8, &skill.instructions.digest, &digest(body))) return error.InvalidSkill;
     }
-    if (total > 128 * 1024) return error.Capacity;
     const initial_id = try native.json.text(native.json.get(root, "initial_profile") orelse return error.InvalidConfiguration);
     const effort = std.meta.stringToEnum(@FieldType(t.model.AdaptiveSelection, "effective_effort"), try native.json.text(native.json.get(root, "initial_effort") orelse return error.InvalidConfiguration)) orelse return error.InvalidConfiguration;
     var selected: ?t.model.AdaptiveInferenceProfile = null;

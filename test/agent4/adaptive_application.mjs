@@ -6,8 +6,94 @@ import {join} from 'node:path';
 import {pathToFileURL, fileURLToPath} from 'node:url';
 import {execFileSync, spawn} from 'node:child_process';
 import {once} from 'node:events';
+import {createServer} from 'node:https';
+import {X509Certificate} from 'node:crypto';
 import {packageArtifacts} from '../../tools/agent4/package.mjs';
 import {codecs, hash} from '../../runtime/adaptive/codec.mjs';
+import {certificates} from './mobility_tls_fixture.mjs';
+
+async function within(promise, milliseconds, message) {
+  let timer;
+  try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), milliseconds); })]); }
+  finally { clearTimeout(timer); }
+}
+
+async function verifyInterrupts({directory, root, options, template, AdaptiveRunner}) {
+  const tls = await certificates(directory), trust = join(directory, 'interrupt-root.der');
+  writeFileSync(trust, new X509Certificate(tls.ca).raw);
+  let announceHeld, requests = 0, runner;
+  const sockets = new Set();
+  const server = createServer(tls.A, async (request, _response) => {
+    for await (const _bytes of request) {} // Deliberately hold the response.
+    requests++; announceHeld?.();
+  });
+  server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const config = structuredClone(template), configPath = join(directory, 'interrupt.json');
+  config.endpoint = `https://127.0.0.1:${server.address().port}/v1/responses`;
+  for (const profile of config.profiles) { profile.model = 'fixture-interrupt-model'; profile.timeout_ms = 10000; }
+  writeFileSync(configPath, JSON.stringify(config));
+  const configured = stateDir => ({...options, stateDir, offline: false, config: configPath, testTrustRoot: trust, authorizeInference: true});
+  try {
+    for (const signal of ['SIGINT', 'SIGTERM']) {
+      const launch = configured(join(directory, signal));
+      runner = await AdaptiveRunner.open(launch);
+      await runner.start({task: 'Stop the held fixture request on operator interruption.'});
+      runner.message('cli-interrupt', {message: 'This is a valid caller-owned operation identity.'});
+      assert.throws(() => runner.cancel('cli-interrupt', 'Conflicting caller request.'), /operation ID conflict/);
+      assert.equal(runner.status().cancellation_requested, false);
+      await runner.close(); runner = null;
+      const held = new Promise(resolve => { announceHeld = resolve; });
+      const child = spawn(process.execPath, [join(root, 'runtime/adaptive/cli.mjs'), 'resume', '--world-runtime', options.worldRuntime,
+        '--state-dir', launch.stateDir, '--config', configPath, '--test-provider', '--trust-root-file', trust, '--authorize-inference'],
+      {cwd: root, env: {PATH: '/nonexistent'}, stdio: ['ignore', 'pipe', 'pipe']});
+      const exit = once(child, 'exit'); let stdout = '', stderr = '', reaped = false;
+      child.stdout.on('data', bytes => { stdout = (stdout + bytes).slice(-4 * 1024 * 1024); });
+      child.stderr.on('data', bytes => { stderr = (stderr + bytes).slice(-1024 * 1024); });
+      try {
+        await within(Promise.race([held, exit.then(() => { throw new Error(`interrupt child exited before request: ${stderr}`); })]), 15000, 'interrupt request not received');
+        const before = requests;
+        child.kill(signal);
+        assert.deepEqual(await within(exit, 3000, `${signal} did not abort the 10-second request`), [2, null], stderr);
+        reaped = true;
+        const stopped = JSON.parse(stdout);
+        assert.equal(stopped.occurrence, 'unknown'); assert.equal(stopped.model_attempts, 1); assert.equal(stopped.cancellation_requested, true);
+        runner = await AdaptiveRunner.open({...launch, create: false});
+        const resumed = await runner.drive();
+        assert.equal(resumed.occurrence, 'unknown'); assert.equal(resumed.model_attempts, 1); assert.equal(requests, before);
+        await runner.close(); runner = null;
+      } finally { if (!reaped) { child.kill('SIGKILL'); await exit.catch(() => {}); } }
+    }
+    const before = requests;
+    runner = await AdaptiveRunner.open(configured(join(directory, 'interrupt-before-acquire')), {onBoundary: async event => {
+      if (event.operation === 'agent.model.invoke.v6' && event.phase === 'dispatch') runner.interrupt('Stop before acquisition.');
+    }});
+    await runner.start({task: 'Do not send an interrupted dispatch.'});
+    const unsent = await runner.drive();
+    assert.equal(unsent.occurrence, 'not_sent'); assert.equal(unsent.model_attempts, 1); assert.equal(requests, before);
+    assert.equal((await runner.drive()).kind, 'cancelled');
+    await runner.close(); runner = null;
+
+    const held = new Promise(resolve => { announceHeld = resolve; });
+    runner = await AdaptiveRunner.open(configured(join(directory, 'interrupt-storage-failure')), {fault: point => {
+      if (point === 'interrupt.begin') throw new Error('InjectedInterruptPersistenceFailure');
+    }});
+    await runner.start({task: 'Abort even if recording the signal fails.'});
+    const driving = runner.drive();
+    await within(Promise.race([held, driving.then(() => { throw new Error('storage-failure task stopped before request'); })]), 15000, 'storage-failure request not received');
+    assert.throws(() => runner.interrupt('Stop despite storage failure.'), /InjectedInterruptPersistenceFailure/);
+    const interrupted = await within(driving, 3000, 'storage failure prevented transport abort');
+    assert.equal(interrupted.occurrence, 'unknown'); assert.equal(interrupted.cancellation_requested, false);
+    assert.equal(interrupted.model_attempts, 1);
+    await runner.close(); runner = null;
+    assert.equal(requests, before + 1);
+    return {signals: ['SIGINT', 'SIGTERM'], held_requests: requests, pre_acquisition: true, persistence_failure: true};
+  } finally {
+    for (const socket of sockets) socket.destroy();
+    await new Promise(resolve => server.close(resolve));
+    if (runner) await runner.close();
+  }
+}
 
 async function killAt(root, options, phase) {
   const child = spawn(process.execPath, [fileURLToPath(new URL('./adaptive_capture_child.mjs', import.meta.url)), root, JSON.stringify(options), phase],
@@ -109,8 +195,10 @@ export async function verifyAdaptiveApplication({image, application, worldRuntim
     assert.equal(runner.status().occurrence, 'unknown');
     const unchanged = await runner.drive();
     assert.equal(unchanged.occurrence, 'unknown'); assert.equal(unchanged.model_attempts, 1); assert.equal(newBoundaries, 0);
+    await runner.close(); runner = null;
+    const interruptions = await verifyInterrupts({directory, root, options, template, AdaptiveRunner});
     console.log(JSON.stringify({adaptive_js: 'extracted same-image controls, inbox and captured-reply recovery', archive_sha256: receipt.archive.sha256, model_attempts: captures,
-      controls: completed.output.receipts.length, consumed_messages: completed.consumed_messages, metrics, live_provider: false},
+      controls: completed.output.receipts.length, consumed_messages: completed.consumed_messages, interruptions, metrics, live_provider: false},
     (_key, value) => typeof value === 'bigint' ? String(value) : value));
   } finally {
     if (runner) await runner.close(); rmSync(directory, {recursive: true, force: true});

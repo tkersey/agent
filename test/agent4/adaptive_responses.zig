@@ -113,6 +113,14 @@ test "adaptive projection retains audit captures while hard eviction starts expl
     for (corpus.value.object.get("cases").?.array.items) |entry| {
         const result = try capture(ctx, &objects, request, entry.object.get("body").?.string);
         try std.testing.expectEqualStrings(entry.object.get("result").?.string, @tagName(result.result));
+        if (entry.object.get("failure")) |failure| {
+            const actual = switch (result.result) {
+                .unsupported_response => |reason| try native.values.toJson(@TypeOf(reason), a, reason),
+                .provider_failure => |value| try native.values.toJson(@TypeOf(value), a, value),
+                else => return error.ExpectedFailure,
+            };
+            try std.testing.expectEqualStrings(try native.json.canonical(a, failure), try native.json.canonical(a, actual));
+        }
         try std.testing.expectEqualStrings(entry.object.get("replay").?.string, @tagName(result.replay_status));
         const observed = try native.json.canonical(a, try native.values.toJson(@TypeOf(result.usage), a, result.usage));
         const expected = try native.json.canonical(a, entry.object.get("usage").?);

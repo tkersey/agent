@@ -12,6 +12,7 @@ pub const context_semantic_identity = "agent.model.context.responses.v1";
 pub const adaptive_semantic_identity = "agent.model.invoke.v6";
 pub const adaptive_context_semantic_identity = "agent.model.context.responses.adaptive.v1";
 pub const adaptive_policy_semantic_identity = "agent.model.policy.adaptive.v1";
+pub const adaptive_seed_semantic_identity = "agent.model.seed.adaptive.v1";
 pub fn isModelIdentity(identity: []const u8) bool {
     return std.mem.eql(u8, identity, semantic_identity) or
         std.mem.eql(u8, identity, replay_semantic_identity) or
@@ -231,6 +232,7 @@ pub fn Profile(
         pub const adaptive_identity = adaptive_semantic_identity;
         pub const adaptive_context_identity = adaptive_context_semantic_identity;
         pub const adaptive_policy_identity = adaptive_policy_semantic_identity;
+        pub const adaptive_seed_identity = adaptive_seed_semantic_identity;
         pub const AnswerType = Answer;
         pub const Interpretation = @import("model_interpretation.zig").Result(Answer);
         pub const BatchInterpretation = @import("model_interpretation.zig").Result([]const Answer);
@@ -372,6 +374,41 @@ pub fn Profile(
         };
         pub const AdaptiveCatalog = struct {
             skills: contracts.Vector(AdaptiveSkill, 32),
+        };
+        /// An explicit semantic handoff produced from authored task data. The
+        /// application owns completeness of its task/evidence/allowance fields;
+        /// the projection owner verifies these immutable lineage bindings.
+        pub const AdaptiveSeed = struct {
+            schema: contracts.Text(128),
+            policy: [32]u8,
+            task: [16]u8,
+            tenant: contracts.Text(128),
+            audience: contracts.Text(128),
+            selection: AdaptiveSelection,
+            epoch: u64,
+            watermark: u64,
+            eviction_generation: u64,
+            source: AdaptiveContextReference,
+            messages: Messages,
+        };
+        /// Audit closure and rendered input are different sets. items contains
+        /// committed history, never copies of transient suffix injections.
+        /// source_request retains the exact prepared request that did contain
+        /// those injections, including their real ordering and provenance.
+        pub const AdaptiveContext = struct {
+            schema: contracts.Text(128),
+            policy: [32]u8,
+            task: [16]u8,
+            tenant: contracts.Text(128),
+            audience: contracts.Text(128),
+            selection: AdaptiveSelection,
+            top_effort: models.ReasoningEffort,
+            plan: AdaptivePlan,
+            watermark: u64,
+            source_capture: ArtifactReference,
+            source_request: ArtifactReference,
+            response_id: ?contracts.Text(256),
+            items: contracts.Bytes(maximum_replay_bytes),
         };
         pub const AdaptiveResult = struct {
             result: Result,

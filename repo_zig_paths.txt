@@ -11,6 +11,7 @@ examples/repository-agent/tools.zig
 examples/repository-agent/types.zig
 runtime/inquiry_process_limit.zig
 runtime/inquiry_process_lock.zig
+runtime/native/adaptive_context.zig
 runtime/native/adaptive_responses.zig
 runtime/native/archive.zig
 runtime/native/client.zig
@@ -83,6 +84,7 @@ src/test_root.zig
 src/text_inspection.zig
 src/tools.zig
 src/value_equality.zig
+test/agent4/adaptive_responses.zig
 test/agent4/admission.zig
 test/agent4/approval_equality.zig
 test/agent4/approval_probe.zig

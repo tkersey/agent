@@ -423,7 +423,7 @@ fn count(value: json.Value) !u64 {
 
 /// Closed output-to-input grammar. Only these admitted item fields survive;
 /// the response envelope is never appended as input. Opaque bytes stay opaque.
-fn replayItem(a: std.mem.Allocator, item: json.Value) !json.Value {
+pub fn replayItem(a: std.mem.Allocator, item: json.Value) !json.Value {
     _ = a;
     if (is(item, "type", "function_call")) {
         try only(item, &.{ "type", "id", "call_id", "name", "arguments", "status" });

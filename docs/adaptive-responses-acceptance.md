@@ -30,6 +30,11 @@ This file is the current proof inventory, not a substitute for a passing run.
 A row is qualified only by the matching exact-head Linux result and review
 status in the PR. Superseded obligations are not recorded as passed.
 
+The [October 9 live campaign](adaptive-live-validation-2026-10-09.md) separately
+records original-main failures and repaired-artifact successes. Its exact
+subjects, live feature/cache evidence, and macOS limitations do not retroactively
+turn the original merged artifact's unrun live rows below into passes.
+
 ## Subjects and retained evidence
 
 The foundation is Agent `7d86739af1a47ce8ec36905ba5fe578fa3ce4d9d` (PR #45).
@@ -132,8 +137,8 @@ All AR-001–AR-080 identifiers are retained with the amended meanings below.
 | --- | --- |
 | Adaptive program implemented | Reusable authored controls/contracts/responder plus the deciding consumer and emitted BPI3; source and authored/native tests. |
 | Native reference integration qualified | Exact-head retained Linux checks, real controlled I/O/recovery/archives and current review convergence. |
-| Live features qualified | Not run; requires separate current model, data and spend authorization. |
-| Cache measured | Provider cache reuse not measured. Local bytes, marker placement and controlled fixture measurements are reported separately. |
+| Live features qualified | Original merged subject: unqualified. Later authorized campaign: see the exact repaired subject and feature dispositions in the live report. |
+| Cache measured | Later live campaign reports actual cached-input usage separately for Sol/medium, Sol/high and Astra/medium; controlled fixture and local-prefix measurements remain separate evidence. |
 | Single-binary distribution | New distribution work is deferred. The existing embedded reference executable is available and exercised; no new package, shell or release is required. |
 
 The observation report separates byte counts, optional usage, local prefix

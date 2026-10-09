@@ -13,7 +13,10 @@ distribution is deferred; the existing embedded executable remains useful for
 reference execution.
 
 Linux reference qualification uses recorded provider replies and controlled I/O.
-Live API feature acceptance and cache reuse remain unqualified. The
+The [October 9 live report](../../docs/adaptive-live-validation-2026-10-09.md)
+records the merged artifact's failure, subsequent repairs, and successful
+Sol/medium → Sol/high → Astra/medium continuation, skills, restart, and
+provider-reported cache reuse on the identified repaired artifact. The
 [acceptance map](../../docs/adaptive-responses-acceptance.md) binds the current
 obligations to proof surfaces and exact-head PR evidence.
 

@@ -333,7 +333,7 @@ const Program = struct {
         var reason = try e.literal(failed, t.Summary, .{ .bytes = "Control preparation rejected. Configuration and control revision are unchanged; no inference was performed by the control." });
         inline for ([_]t.controls.Rejection{ .capacity, .unknown_profile, .unknown_skill, .unsupported_effort, .invalid_operation }) |kind| {
             const text = "{\"disposition\":\"rejected\",\"reason\":\"" ++ @tagName(kind) ++ "\",\"configuration_changed\":false,\"inference_performed\":false}";
-            reason = try failed.select(try failed.equal(rejected.payload(), try e.literal(failed, t.controls.Rejection, kind)), try e.literal(failed, t.Summary, .{ .bytes = text }), reason);
+            reason = try failed.select(try failed.equal(try failed.enumTag(rejected.payload()), try failed.enumTag(try e.literal(failed, t.controls.Rejection, kind))), try e.literal(failed, t.Summary, .{ .bytes = text }), reason);
         }
         const reply = try failed.product(try e.schema(t.PendingResult), &.{ .{ .name = "call_id", .value = call_id }, .{ .name = "output", .value = try failed.variant(try e.schema(t.ResultValue), "inline_text", reason) } });
         const unchanged = try e.update(failed, state, .{ .results = try e.sequence(failed, @FieldType(t.State, "results"), &.{reply}) });

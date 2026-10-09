@@ -173,6 +173,18 @@ test "adaptive unload capture recovers under its original plan without another a
     }
     try std.testing.expect(witnessed and finished);
     try std.testing.expectEqual(14, model_calls);
+    // Archive validation must release each replay's scratch memory even when
+    // the CLI supplies an arena for the enclosing request.
+    {
+        const execution_limit = budget.limit;
+        budget.limit = 32 * 1024 * 1024;
+        defer budget.limit = execution_limit;
+        var frame_arena = std.heap.ArenaAllocator.init(a);
+        defer frame_arena.deinit();
+        const archive_path = try std.fmt.allocPrint(permanent, "{s}/completed.archive", .{buffer[0..length]});
+        const exported = try service.exportCheckpoint(frame_arena.allocator(), task, archive_path);
+        try std.testing.expect(exported.bytes > 0);
+    }
     std.debug.print("adaptive capture recovery: model_acquisitions={d} state_bytes_peak={d} prepared_bytes_peak={d} projection_and_step_scratch_peak={d} requested_memory_peak={d}\n", .{ model_calls, maximum_state, maximum_prepared, maximum_scratch, budget.peak });
     try service.close(a);
     service_live = false;

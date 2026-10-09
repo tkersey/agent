@@ -1187,7 +1187,7 @@ pub fn Service(comptime Types: type) type {
             var submitted = false;
             var first_cancel: ?struct { revision: u64, request: state.Digest } = null;
             for (index.operations.items) |row| {
-                var arena = std.heap.ArenaAllocator.init(a);
+                var arena = std.heap.ArenaAllocator.init(self.allocator);
                 defer arena.deinit();
                 const temporary = arena.allocator();
                 const bytes = try self.store().object(temporary, row.body, 256 * 1024);
@@ -1238,7 +1238,7 @@ pub fn Service(comptime Types: type) type {
             var count: u64 = 0;
             for (index.records.items) |row| {
                 if (row.kind != .message) continue;
-                var arena = std.heap.ArenaAllocator.init(a);
+                var arena = std.heap.ArenaAllocator.init(self.allocator);
                 defer arena.deinit();
                 const temporary = arena.allocator();
                 var decoded = try self.record(state.Message, temporary, "message", row.id, value.id);
@@ -1288,7 +1288,7 @@ pub fn Service(comptime Types: type) type {
         fn validateOccurrenceProvenance(self: *Self, a: std.mem.Allocator, value: state.Task, records: []const state.ArchiveRecord) !void {
             for (records) |row| {
                 if (row.kind != .occurrence) continue;
-                var arena = std.heap.ArenaAllocator.init(a);
+                var arena = std.heap.ArenaAllocator.init(self.allocator);
                 defer arena.deinit();
                 const temporary = arena.allocator();
                 var decoded = try self.record(occurrence.Occurrence, temporary, "occurrence", row.id, value.id);
@@ -1399,14 +1399,16 @@ pub fn Service(comptime Types: type) type {
             }
         }
 
+        /// Per-record scratch is backed by the service allocator so replay
+        /// releases it even when the enclosing request allocator is an arena.
         /// A transferable capture must reproduce its committed reply, replay
         /// objects and usage through the same pure adapter, without acquisition.
-        fn validateCapturedProjections(self: *Self, a: std.mem.Allocator, value: state.Task, records: []const state.ArchiveRecord) !void {
+        fn validateCapturedProjections(self: *Self, value: state.Task, records: []const state.ArchiveRecord) !void {
             // Retained unsuccessful/rearmed attempts also need request/profile
             // coherence, even though they have no acquired response.
             for (records) |row| {
                 if (row.kind != .attempt) continue;
-                var arena = std.heap.ArenaAllocator.init(a);
+                var arena = std.heap.ArenaAllocator.init(self.allocator);
                 defer arena.deinit();
                 const temporary = arena.allocator();
                 var attempt = try self.record(state.Attempt, temporary, "attempt", row.id, value.id);
@@ -1428,7 +1430,7 @@ pub fn Service(comptime Types: type) type {
             var output_tokens: u64 = 0;
             for (records) |row| {
                 if (row.kind != .capture) continue;
-                var arena = std.heap.ArenaAllocator.init(a);
+                var arena = std.heap.ArenaAllocator.init(self.allocator);
                 defer arena.deinit();
                 const temporary = arena.allocator();
                 var raw = try self.record(state.Capture, temporary, "capture", row.id, value.id);
@@ -1489,7 +1491,7 @@ pub fn Service(comptime Types: type) type {
                 const index = try self.store().archiveIndex(arena.allocator(), task_id, .{ .digest = storage.digest(self.assets.manifest), .bytes = self.assets.manifest.len });
                 try self.validateArchiveAdmissions(arena.allocator(), value.value, index);
                 try self.validateOccurrenceProvenance(arena.allocator(), value.value, index.records.items);
-                try self.validateCapturedProjections(arena.allocator(), value.value, index.records.items);
+                try self.validateCapturedProjections(value.value, index.records.items);
             }
             return archive_api.write(self.allocator, self.io, self.store(), task_id, self.assets.manifest, path, self.namespace.directory);
         }
@@ -1536,7 +1538,7 @@ pub fn Service(comptime Types: type) type {
             try self.store().restoreArchiveIndex(a, reader.manifest.value, value);
             try self.validateArchiveAdmissions(a, value, reader.manifest.value);
             try self.validateOccurrenceProvenance(a, value, reader.manifest.value.records.items);
-            try self.validateCapturedProjections(a, value, reader.manifest.value.records.items);
+            try self.validateCapturedProjections(value, reader.manifest.value.records.items);
             try self.validateImportedState(a, value, inspected.current);
             const previous = value.revision;
             value.revision = try std.math.add(u64, previous, 1);

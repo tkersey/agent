@@ -717,6 +717,7 @@ pub fn build(b: *std.Build) void {
                 .environment = b.path("examples/adaptive-agent/environment.zig"),
             });
             native_example.dependOn(&adaptive_product.install.step);
+            b.step("adaptive-agent", "Build the adaptive repository application").dependOn(&adaptive_product.install.step);
             const adaptive_peer = nativeCheckCommand(b);
             adaptive_peer.addArgs(&.{ "node", "test/agent4/native_adaptive.mjs" });
             adaptive_peer.addFileArg2(adaptive_product.executable.getEmittedBin(), .{ .make_absolute = true });

@@ -42,14 +42,14 @@ pub const P = model.Profile(Action, .{
     .{ .name = "skill_set", .description = "Load, deactivate or physically unload a pinned approved skill. Use an exact version and current control revision." },
     .{ .name = "inspect", .description = "Locate guard-like lines in acquired evidence. This lexical aid requires an active invariant-review skill; it is not a correctness proof." },
 }, .{ .model_id_bytes = 128, .temperature_bytes = 32, .maximum_messages = 4, .message_bytes = 8192, .maximum_output_items = 8, .call_id_bytes = 128, .arguments_json_bytes = 16384, .result_text_bytes = 32768, .provider_response_bytes = 512 * 1024 });
-pub const PolicyView = struct { profiles: controls.Profiles, catalog: P.AdaptiveCatalog, maximum_model_calls: u16, maximum_revision: u64 };
+pub const PolicyView = struct { profiles: controls.Profiles, catalog: controls.Catalog, maximum_model_calls: u16, maximum_revision: u64 };
 pub const Bindings = struct {
     policy: [32]u8,
     snapshot: [32]u8,
     files: u32,
     excluded_entries: u32,
     profiles: controls.Profiles,
-    catalog: P.AdaptiveCatalog,
+    catalog: controls.Catalog,
     initial: controls.State,
     maximum_model_calls: u16,
     maximum_revision: u64,
@@ -109,6 +109,7 @@ pub const ReceiptArtifact = struct { receipt: ControlReceipt, model_text: P.Resu
 pub const Receipts = contracts.Vector(ReceiptReference, 16);
 pub const State = struct {
     task: Summary,
+    pending_model_intent: contracts.Text(256),
     followups: Followups,
     control: controls.State,
     replay: ?model.AdaptiveContextReference,
@@ -132,6 +133,7 @@ pub const Output = struct {
 };
 pub const ControlSubject = struct {
     call_id: P.CallId,
+    reason: contracts.Text(256),
     proposal: controls.Proposal,
 };
 pub const Preparation = struct {

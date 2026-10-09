@@ -47,6 +47,9 @@ const Emit = struct {
     fn literal(e: Emit, b: *a.Body, comptime T: type, value: T) !V {
         return a.interop.adoptValue(b, try e.context.literal(T, value), try e.schema(T));
     }
+    fn named(e: Emit, b: *a.Body, comptime T: type, value: V) !V {
+        return a.interop.term(b, try e.context.builder.pure(try a.interop.valueId(b, value)), try e.schema(T));
+    }
     fn external(e: Emit, identity: []const u8, comptime Input: type, comptime Output: type) !*const a.Operation {
         const op = try e.author.external(identity, try e.schema(Input), try e.schema(Output));
         try e.context.registry.classify(try a.interop.operationId(e.author, op), .read);
@@ -106,6 +109,10 @@ const Ops = struct { bindings: *const a.Operation, prepare: *const a.Operation, 
 const Application = struct {
     pub fn emit(context: agent.Context) !boundary.source.Module {
         const c = try a.Context.init(context.builder);
+        errdefer {
+            const diagnostic = c.lastDiagnostic();
+            std.log.err("adaptive authoring: {s}", .{diagnostic.renderAlloc(context.builder.allocator()) catch "diagnostic unavailable"});
+        }
         const e: Emit = .{ .context = context, .author = c };
         const ops: Ops = .{
             .bindings = try e.external(t.bindings_identity, void, t.Bindings),
@@ -132,6 +139,7 @@ const Application = struct {
         const task = try root.field(try root.parameter("input"), "task");
         const empty = try e.literal(root, t.State, .{
             .task = .{ .bytes = "" },
+            .pending_model_intent = .{ .bytes = "" },
             .followups = .{ .items = &.{} },
             .control = .{ .selection = .{ .profile_id = .{ .bytes = "" }, .profile_digest = @splat(0), .effective_effort = .medium, .control_revision = 0 }, .top_effort = .medium, .epoch = 0, .epoch_reason = .initial, .eviction_generation = 0, .skills = .{ .items = &.{} } },
             .replay = null,
@@ -253,7 +261,7 @@ const Program = struct {
                 const WorkAction = @FieldType(t.WorkRequest, "action");
                 const payload = if (index == 7) try b.product(try e.schema(@FieldType(WorkAction, "inspect")), &.{
                     .{ .name = "evidence_index", .value = try b.field(value, "evidence_index") },
-                    .{ .name = "evidence", .value = try b.variantPayload(try b.sequenceGet(try b.field(state, "evidence"), try b.field(value, "evidence_index")), "some", try e.failure()) },
+                    .{ .name = "evidence", .value = try e.named(b, t.EvidenceReference, try b.variantPayload(try b.sequenceGet(try b.field(state, "evidence"), try b.field(value, "evidence_index")), "some", try e.failure())) },
                 }) else value;
                 const request = try b.product(try e.schema(t.WorkRequest), &.{
                     .{ .name = "context", .value = context },                                                                                                            .{ .name = "call_id", .value = call_id },
@@ -301,7 +309,7 @@ const Program = struct {
         if (!inference) fields[3] = .{ .name = "watermark", .value = try b.field(try b.variantPayload(try b.field(state, "replay"), "some", try e.failure()), "watermark") };
         fields[fields.len - 1] = .{ .name = "maximum_revision", .value = try b.field(bindings, "maximum_revision") };
         const proposal = try e.invoke(b, if (inference) p.inference else p.skill, &.{try b.product(try e.schema(Input), &fields)}, t.controls.Proposal);
-        const subject = try b.product(try e.schema(t.ControlSubject), &.{ .{ .name = "call_id", .value = call_id }, .{ .name = "proposal", .value = proposal } });
+        const subject = try b.product(try e.schema(t.ControlSubject), &.{ .{ .name = "call_id", .value = call_id }, .{ .name = "reason", .value = try b.field(command, "reason") }, .{ .name = "proposal", .value = proposal } });
         const preparation = try b.perform(p.ops.prepare, try b.product(try e.schema(t.Preparation), &.{
             .{ .name = "state", .value = state }, .{ .name = "offered", .value = try p.offers(b, bindings, state) }, .{ .name = "control", .value = try b.variant(try e.schema(?t.ControlSubject), "some", subject) },
         }));
@@ -312,6 +320,7 @@ const Program = struct {
         const receipt = try accepted.variantPayload(try accepted.field(ready.payload(), "receipt"), "some", try e.failure());
         const committed = try e.update(accepted, state, .{
             .control = try accepted.field(proposal, "state"),
+            .pending_model_intent = try accepted.field(command, "reason"),
             .handoff = try accepted.field(try accepted.field(prepared, "plan"), "handoff"),
             .results = try accepted.field(ready.payload(), "results"),
             .receipts = try e.append(accepted, t.Receipts, try accepted.field(state, "receipts"), receipt),

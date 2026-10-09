@@ -24,7 +24,13 @@ pub const SkillSet = struct {
     expected_revision: u64,
     reason: contracts.Text(256),
 };
-pub const ProfileChoice = struct { profile: model.AdaptiveInferenceProfile, digest: [32]u8 };
+pub const InferenceCapability = struct { id: contracts.Text(64), efforts: @FieldType(model.AdaptiveInferenceProfile, "efforts"), effort_update: bool };
+pub const ProfileChoice = struct { profile: InferenceCapability, digest: [32]u8 };
+pub fn profileChoice(profile: model.AdaptiveInferenceProfile, digest: [32]u8) ProfileChoice {
+    return .{ .profile = .{ .id = profile.id, .efforts = profile.efforts, .effort_update = profile.effort_update }, .digest = digest };
+}
+pub const Skill = struct { id: contracts.Text(64), version: contracts.Text(64), instructions: model.ArtifactReference };
+pub const Catalog = struct { skills: contracts.Vector(Skill, 32) };
 pub const Profiles = contracts.Vector(ProfileChoice, 8);
 pub const State = struct {
     selection: model.AdaptiveSelection,
@@ -41,8 +47,8 @@ pub const Proposal = struct {
     rejection: Rejection,
 };
 pub const InferenceInput = struct { state: State, profiles: Profiles, command: InferenceSet, maximum_revision: u64 };
-pub fn SkillInput(comptime P: type) type {
-    return struct { state: State, catalog: P.AdaptiveCatalog, command: SkillSet, watermark: u64, maximum_revision: u64 };
+pub fn SkillInput(comptime _: type) type {
+    return struct { state: State, catalog: Catalog, command: SkillSet, watermark: u64, maximum_revision: u64 };
 }
 
 const Emit = struct {
@@ -125,7 +131,7 @@ pub fn defineInference(c: authoring.Context, failure: Id) !Id {
     const match = try current.branch();
     const next = try current.branch();
     const effort = try e.field(match, command, InferenceSet, "effort");
-    const supported = try supportsEffort(e, match, try e.field(match, profile, model.AdaptiveInferenceProfile, "efforts"), effort);
+    const supported = try supportsEffort(e, match, try e.field(match, profile, InferenceCapability, "efforts"), effort);
     const admitted = try match.branch();
     const unsupported = try match.branch();
     const same_profile = try e.sameText(admitted, try e.field(admitted, selection, model.AdaptiveSelection, "profile_id"), try e.field(admitted, command, InferenceSet, "profile_id"));
@@ -135,7 +141,7 @@ pub fn defineInference(c: authoring.Context, failure: Id) !Id {
     const revision = try e.field(changed, selection, model.AdaptiveSelection, "control_revision");
     const room = try changed.branch();
     const full = try changed.branch();
-    const keeps_epoch = try room.select(same_profile, try e.field(room, profile, model.AdaptiveInferenceProfile, "effort_update"), try room.constant(bool, false));
+    const keeps_epoch = try room.select(same_profile, try e.field(room, profile, InferenceCapability, "effort_update"), try room.constant(bool, false));
     const old_epoch = try e.field(room, state, State, "epoch");
     const epoch = try room.select(keeps_epoch, old_epoch, try e.increment(room, old_epoch));
     const next_selection = try e.replace(room, model.AdaptiveSelection, selection, .{
@@ -155,7 +161,7 @@ pub fn defineInference(c: authoring.Context, failure: Id) !Id {
     const admitted_result = try admitted.conditional(try admitted.select(same_profile, same_effort, try admitted.constant(bool, false)), try unchanged.ret(try e.outcome(unchanged, state, .unchanged, .none)), try changed.ret(changed_result));
     const matched_result = try match.conditional(supported, try admitted.ret(admitted_result), try unsupported.ret(try e.outcome(unsupported, state, .rejected, .unsupported_effort)));
     const next_result = try next.call(lookup, &.{ .{ .name = "input", .value = input }, .{ .name = "index", .value = try e.increment(next, index) } });
-    const found_result = try current.conditional(try e.sameText(current, try e.field(current, profile, model.AdaptiveInferenceProfile, "id"), try e.field(current, command, InferenceSet, "profile_id")), try match.ret(matched_result), try next.ret(next_result));
+    const found_result = try current.conditional(try e.sameText(current, try e.field(current, profile, InferenceCapability, "id"), try e.field(current, command, InferenceSet, "profile_id")), try match.ret(matched_result), try next.ret(next_result));
     try typed.define(lookup, try scan.ret(try scan.match(selected, &.{
         try found.ret(found_result), try missing.ret(try e.outcome(missing.body(), state, .rejected, .unknown_profile)),
     })));
@@ -214,7 +220,7 @@ fn SkillGenerator(comptime P: type) type {
             const e = g.e;
             const t = e.typed;
             const rewrite = try t.function("adaptive skill materialization", &.{
-                .{ .name = "input", .schema = try e.schema(Input) },  .{ .name = "entry", .schema = try e.schema(P.AdaptiveSkill) },
+                .{ .name = "input", .schema = try e.schema(Input) },  .{ .name = "entry", .schema = try e.schema(Skill) },
                 .{ .name = "index", .schema = try t.scalar(u64) },    .{ .name = "items", .schema = try e.schema(Skills) },
                 .{ .name = "found", .schema = try t.scalar(bool) },   .{ .name = "changed", .schema = try t.scalar(bool) },
                 .{ .name = "removed", .schema = try t.scalar(bool) },
@@ -260,9 +266,9 @@ fn SkillGenerator(comptime P: type) type {
             const create = try absent.branch();
             const unknown = try absent.branch();
             const materialization = try create.product(try e.schema(Materialization), &.{
-                .{ .name = "0", .value = try e.field(create, entry, P.AdaptiveSkill, "instructions") },
-                .{ .name = "1", .value = try e.field(create, entry, P.AdaptiveSkill, "id") },
-                .{ .name = "2", .value = try e.field(create, entry, P.AdaptiveSkill, "version") },
+                .{ .name = "0", .value = try e.field(create, entry, Skill, "instructions") },
+                .{ .name = "1", .value = try e.field(create, entry, Skill, "id") },
+                .{ .name = "2", .value = try e.field(create, entry, Skill, "version") },
                 .{ .name = "3", .value = try create.select(try create.equal(residency, try create.constant(u32, 0)), try e.literal(create, model.SkillResidency, .resident), try e.literal(create, model.SkillResidency, .transient)) },
                 .{ .name = "4", .value = try create.constant(bool, true) },
                 .{ .name = "5", .value = try e.field(create, input, Input, "watermark") },
@@ -277,7 +283,7 @@ fn SkillGenerator(comptime P: type) type {
             const offset = try scan.parameter("index");
             const prior = try e.field(scan, request, Input, "state");
             const control = try e.field(scan, request, Input, "command");
-            const candidate = try scan.sequenceGet(try e.field(scan, try e.field(scan, request, Input, "catalog"), P.AdaptiveCatalog, "skills"), offset);
+            const candidate = try scan.sequenceGet(try e.field(scan, try e.field(scan, request, Input, "catalog"), Catalog, "skills"), offset);
             const present = try scan.caseOf(candidate, "some");
             const missing = try scan.caseOf(candidate, "none");
             const present_body = present.body();
@@ -291,8 +297,8 @@ fn SkillGenerator(comptime P: type) type {
                 .{ .name = "found", .value = try version_ok.constant(bool, false) },   .{ .name = "changed", .value = try version_ok.constant(bool, false) },
                 .{ .name = "removed", .value = try version_ok.constant(bool, false) },
             });
-            const version_result = try yes.conditional(try e.sameText(yes, try e.field(yes, present.payload(), P.AdaptiveSkill, "version"), try e.field(yes, control, SkillSet, "version")), try version_ok.ret(rewrite_result), try version_bad.ret(try e.outcome(version_bad, prior, .rejected, .version_mismatch)));
-            const lookup_result = try present_body.conditional(try e.sameText(present_body, try e.field(present_body, present.payload(), P.AdaptiveSkill, "id"), try e.field(present_body, control, SkillSet, "skill_id")), try yes.ret(version_result), try no.ret(try no.call(lookup, &.{ .{ .name = "input", .value = request }, .{ .name = "index", .value = try e.increment(no, offset) } })));
+            const version_result = try yes.conditional(try e.sameText(yes, try e.field(yes, present.payload(), Skill, "version"), try e.field(yes, control, SkillSet, "version")), try version_ok.ret(rewrite_result), try version_bad.ret(try e.outcome(version_bad, prior, .rejected, .version_mismatch)));
+            const lookup_result = try present_body.conditional(try e.sameText(present_body, try e.field(present_body, present.payload(), Skill, "id"), try e.field(present_body, control, SkillSet, "skill_id")), try yes.ret(version_result), try no.ret(try no.call(lookup, &.{ .{ .name = "input", .value = request }, .{ .name = "index", .value = try e.increment(no, offset) } })));
             try t.define(lookup, try scan.ret(try scan.match(candidate, &.{ try present.ret(lookup_result), try missing.ret(try e.outcome(missing.body(), prior, .rejected, .unknown_skill)) })));
             return g.defineEntry(lookup);
         }

@@ -111,6 +111,12 @@ fn controlSource(ctx: native.registry.ProjectionContext, state: t.State, subject
         const call = item.function_call;
         if (found or call.tool_ordinal_claim >= P.declaration_count or !prepared.value.request.offered[call.tool_ordinal_claim] or call.decoded_action != .decoded) return error.InvalidCapture;
         const action = call.decoded_action.decoded;
+        const reason = switch (action) {
+            .inference_set => |value| value.reason,
+            .skill_set => |value| value.reason,
+            else => return error.InvalidCapture,
+        };
+        if (!equal(reason.bytes, subject.reason.bytes)) return error.InvalidCapture;
         const expected = switch (action) {
             .inference_set => |command| command.expected_revision,
             .skill_set => |command| command.expected_revision,
@@ -226,7 +232,7 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
         try verifyEvidence(ctx, input.state.evidence);
         // Keep exact acquired facts; refuse capacity rather than summarize away
         // evidence, a follow-up, an outcome, or an allowance.
-        const Handoff = struct { original_task: t.Summary, followups: t.Followups, evidence: contracts.Vector(t.Evidence, 8), work_outcomes: contracts.Vector(t.WorkOutcome, 12), control: t.controls.State, remaining_model_calls: u16, remaining_work_calls: u16, pending_questions: contracts.Vector(t.Question, 1), completion_criteria: contracts.Text(256) };
+        const Handoff = struct { original_task: t.Summary, followups: t.Followups, evidence: contracts.Vector(t.Evidence, 8), work_outcomes: contracts.Vector(t.WorkOutcome, 12), prior_controls: t.Receipts, current_control: ?t.ControlReceipt, pending_model_hypothesis: contracts.Text(256), control: t.controls.State, remaining_model_calls: u16, remaining_work_calls: u16, pending_questions: contracts.Vector(t.Question, 1), completion_criteria: contracts.Text(256) };
         const evidence = try a.alloc(t.Evidence, input.state.evidence.items.len);
         for (evidence, input.state.evidence.items) |*out, ref| out.* = try work.evidence(ctx, ref);
         const outcomes = try a.alloc(t.WorkOutcome, input.state.outcomes.items.len);
@@ -249,6 +255,9 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
             .followups = input.state.followups,
             .evidence = .{ .items = evidence },
             .work_outcomes = .{ .items = outcomes },
+            .prior_controls = input.state.receipts,
+            .current_control = receipt,
+            .pending_model_hypothesis = if (input.control) |subject| subject.reason else input.state.pending_model_intent,
             .control = control,
             .remaining_model_calls = policy.model_attempts -| input.state.model_calls,
             .remaining_work_calls = 12 -| input.state.work_calls,

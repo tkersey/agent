@@ -41,7 +41,7 @@ test "authored inference control proposes independent effort and model changes w
     var other = profile;
     other.id.bytes = "reporting";
     other.model.bytes = "fixture-model-b";
-    var profiles = [_]controls.ProfileChoice{ .{ .profile = profile, .digest = @splat(2) }, .{ .profile = other, .digest = @splat(3) } };
+    var profiles = [_]controls.ProfileChoice{ controls.profileChoice(profile, @splat(2)), controls.profileChoice(other, @splat(3)) };
     const state: controls.State = .{
         .selection = .{ .profile_id = profile.id, .profile_digest = @splat(2), .effective_effort = .medium, .control_revision = 5 },
         .top_effort = .medium,
@@ -147,11 +147,11 @@ test "authored skill control preserves state on rejection and fences actual evic
         .eviction_generation = 1,
         .skills = .{ .items = &.{} },
     };
-    var catalog: [5]P.AdaptiveSkill = undefined;
+    var catalog: [5]controls.Skill = undefined;
     var loaded: [5]model.SkillMaterialization = undefined;
     for ([_][]const u8{ "orientation", "review", "reporting", "fourth", "fifth" }, 0..) |name, i| {
         const reference: model.ArtifactReference = .{ .digest = @splat(@intCast(i + 1)), .bytes = 100 };
-        catalog[i] = .{ .id = .{ .bytes = name }, .version = .{ .bytes = "1" }, .description = .{ .bytes = "Approved skill." }, .instructions = reference, .tools = .{ false, false } };
+        catalog[i] = .{ .id = .{ .bytes = name }, .version = .{ .bytes = "1" }, .instructions = reference };
         loaded[i] = .{ .resource = reference, .skill_id = .{ .bytes = name }, .version = .{ .bytes = "1" }, .residency = .resident, .active = true, .introduced_at = 1 };
     }
     for (0..12) |scenario| {

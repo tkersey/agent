@@ -7,6 +7,7 @@ import {readFileSync} from 'node:fs';
 import {codecs} from '../../runtime/adaptive/codec.mjs';
 import {parse as parseLossless, canonical as canonicalLossless, integer as losslessInteger} from '../../runtime/adaptive/json.mjs';
 import {verifyAdaptiveProvider} from './adaptive_provider.mjs';
+import {verifyAdaptiveApplication} from './adaptive_application.mjs';
 
 const exactNumber = parseLossless(Buffer.from('{"count":9007199254740993,"zero":0,"nullable":null,"decimal":1.0,"exponent":1e0}'));
 assert.equal(losslessInteger(exactNumber.count), 9007199254740993n);
@@ -21,6 +22,7 @@ assert.throws(() => losslessInteger(parseLossless(Buffer.from('1.5'))));
 
 const codec = codecs(JSON.parse(readFileSync(process.argv[3], 'utf8')));
 await verifyAdaptiveProvider(codec);
+await verifyAdaptiveApplication({application: process.argv[3], image: process.argv[4], worldRuntime: process.argv[5]});
 for (const action of [
   {tag: 'inference_set', value: {profile_id: 'analysis', effort: 'high', expected_revision: 9007199254740993n, reason: 'Inspect 雪 precisely.'}},
   {tag: 'skill_set', value: {operation: 'unload', skill_id: 'invariant-review', version: '1', residency: 'unchanged', expected_revision: 18446744073709551615n, reason: 'Physical eviction.'}},

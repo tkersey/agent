@@ -722,6 +722,8 @@ pub fn build(b: *std.Build) void {
             adaptive_peer.addArgs(&.{ "node", "test/agent4/native_adaptive.mjs" });
             adaptive_peer.addFileArg2(adaptive_product.executable.getEmittedBin(), .{ .make_absolute = true });
             adaptive_peer.addFileArg2(adaptive_application, .{ .make_absolute = true });
+            adaptive_peer.addFileArg2(adaptive_image, .{ .make_absolute = true });
+            adaptive_peer.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
             native_product.dependOn(&adaptive_peer.step);
             const repository_peer = nativeCheckCommand(b);
             repository_peer.addArgs(&.{ "node", "test/agent4/native_repository.mjs" });

@@ -18,6 +18,7 @@ pub const capabilities = .{
 };
 pub const resources = .{
     .{ .id = "adaptive-agent.instructions", .version = "1", .media_type = "text/plain", .bytes = @embedFile("instructions.txt") },
+    .{ .id = "adaptive-agent.offline-responses", .version = "1", .media_type = "application/json", .bytes = @embedFile("offline-responses.json") },
     .{ .id = "repository-orientation", .version = "1", .media_type = "text/markdown", .bytes = @embedFile("skills/orientation.md") },
     .{ .id = "invariant-review", .version = "1", .media_type = "text/markdown", .bytes = @embedFile("skills/invariant-review.md") },
     .{ .id = "technical-reporting", .version = "1", .media_type = "text/markdown", .bytes = @embedFile("skills/technical-reporting.md") },

@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {decodeModelInvocation, normalizeOpenAIResponses, admitModelEndpoint, parseJsonStrict} from '../model.mjs';
 import {request as httpsRequest} from 'node:https';
+import {X509Certificate} from 'node:crypto';
 import {policy, catalog, bind, digest, same, identities} from './admission.mjs';
 import {render, replayItem, pending} from './context.mjs';
 import {parse, canonical, integer} from './json.mjs';
@@ -63,7 +64,7 @@ export async function acquire(ctx, preparedBytes, options) {
     try {
       req = httpsRequest(frozen.endpoint, {
         method: 'POST', agent: false, signal: options.signal,
-        ...(options.testTrustRoot === undefined ? {} : {ca: Buffer.from(options.testTrustRoot)}),
+        ...(options.testTrustRoot === undefined ? {} : {ca: new X509Certificate(options.testTrustRoot).toString()}),
         headers: {authorization: `Bearer ${options.token}`, 'content-type': 'application/json', 'accept-encoding': 'identity',
           'content-length': prepared.body.length},
       }, response => {

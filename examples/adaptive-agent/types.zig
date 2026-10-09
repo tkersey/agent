@@ -147,13 +147,41 @@ pub const Ready = struct {
     results: PendingResults,
 };
 pub const PreparationResult = union(enum) { ready: Ready, rejected: controls.Rejection };
+pub const PreparationProduct = struct { result: PreparationResult, objects: contracts.Vector(contracts.Bytes(128 * 1024), 2) };
+pub const SkillConfig = struct { id: contracts.Text(64), version: contracts.Text(64), description: contracts.Text(256), markdown: contracts.Text(4096), tools: [P.declaration_count]bool };
+pub const Configuration = struct { workspace: contracts.Text(128), snapshot_root: contracts.Text(4096), endpoint: contracts.Text(2048), audience: contracts.Text(128), profiles: @FieldType(P.AdaptivePolicy, "profiles"), initial_profile: contracts.Text(64), initial_effort: @FieldType(model.AdaptiveSelection, "effective_effort"), skills: contracts.Vector(SkillConfig, 32), maximum_model_calls: u16, maximum_control_revision: u16 };
+pub const Handoff = struct {
+    original_task: Summary,
+    followups: Followups,
+    evidence: contracts.Vector(Evidence, 8),
+    work_outcomes: contracts.Vector(WorkOutcome, 12),
+    prior_controls: Receipts,
+    current_control: ?ControlReceipt,
+    pending_model_hypothesis: contracts.Text(256),
+    control: controls.State,
+    remaining_model_calls: u16,
+    remaining_work_calls: u16,
+    pending_questions: contracts.Vector(Question, 1),
+    completion_criteria: contracts.Text(256),
+};
 
 // The JS environment consumes these generated layouts and checks their exact
 // canonical wire schemas. There is no independently maintained codec table.
 pub const support_types = .{
+    .{ .name = "Unit", .T = void },
+    .{ .name = "Message", .T = Message },
+    .{ .name = "Failure", .T = Failure },
+    .{ .name = "Configuration", .T = Configuration },
     .{ .name = "Bindings", .T = Bindings },
     .{ .name = "Preparation", .T = Preparation },
     .{ .name = "PreparationResult", .T = PreparationResult },
+    .{ .name = "PreparationProduct", .T = PreparationProduct },
+    .{ .name = "Handoff", .T = Handoff },
+    .{ .name = "ControlReceipt", .T = ControlReceipt },
+    .{ .name = "ControlState", .T = controls.State },
+    .{ .name = "Snapshot", .T = contracts.RepositorySnapshot },
+    .{ .name = "Listing", .T = Listing },
+    .{ .name = "ReadResult", .T = ReadResult },
     .{ .name = "WorkRequest", .T = WorkRequest },
     .{ .name = "WorkReply", .T = WorkReply },
     .{ .name = "WorkArtifact", .T = WorkArtifact },

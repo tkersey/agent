@@ -50,8 +50,7 @@ fn acquire(ctx: native.Context, bytes: []const u8) !native.registry.Acquisition 
     provider.environment = @ptrCast(@constCast(&frozen.provider));
     return Adapter.acquire(provider, bytes);
 }
-const SkillConfig = struct { id: contracts.Text(64), version: contracts.Text(64), description: contracts.Text(256), markdown: contracts.Text(4096), tools: [t.P.declaration_count]bool };
-const Config = struct { workspace: contracts.Text(128), snapshot_root: contracts.Text(4096), endpoint: contracts.Text(2048), audience: contracts.Text(128), profiles: @FieldType(t.P.AdaptivePolicy, "profiles"), initial_profile: contracts.Text(64), initial_effort: @FieldType(t.model.AdaptiveSelection, "effective_effort"), skills: contracts.Vector(SkillConfig, 32), maximum_model_calls: u16, maximum_control_revision: u16 };
+const Config = t.Configuration;
 fn hex(a: std.mem.Allocator, bytes: []const u8) ![]const u8 {
     return a.dupe(u8, &std.fmt.bytesToHex(digest(bytes), .lower));
 }
@@ -196,36 +195,9 @@ fn offlineAcquire(ctx: native.Context, bytes: []const u8) !native.registry.Acqui
     var prepared = try contracts.decodeOwned(Adapter.Prepared, ctx.allocator, bytes);
     defer prepared.deinit();
     const step = prepared.value.request.plan.watermark;
-    const names = [_][]const u8{ "list", "read", "skill_set", "inspect", "inference_set", "inference_set", "skill_set", "skill_set", "inference_set", "skill_set", "skill_set", "ask", "report" };
-    const arguments = [_][]const u8{
-        "{\"prefix\":\"\",\"after\":\"\"}",
-        "{\"path\":\"src/main.zig\",\"start\":0,\"maximum\":4096}",
-        "{\"operation\":\"load\",\"skill_id\":\"invariant-review\",\"version\":\"1\",\"residency\":\"resident\",\"expected_revision\":0,\"reason\":\"Inspect acquired guards.\"}",
-        "{\"evidence_index\":0}",
-        "{\"profile_id\":\"analysis\",\"effort\":\"high\",\"expected_revision\":1,\"reason\":\"Check reasoning.\"}",
-        "{\"profile_id\":\"deep\",\"effort\":\"high\",\"expected_revision\":2,\"reason\":\"Use the distinct approved model.\"}",
-        "{\"operation\":\"deactivate\",\"skill_id\":\"invariant-review\",\"version\":\"1\",\"residency\":\"unchanged\",\"expected_revision\":3,\"reason\":\"Remove execution permission.\"}",
-        "{\"operation\":\"unload\",\"skill_id\":\"invariant-review\",\"version\":\"1\",\"residency\":\"unchanged\",\"expected_revision\":4,\"reason\":\"Physically evict its instructions and definition.\"}",
-        "{\"profile_id\":\"analysis\",\"effort\":\"medium\",\"expected_revision\":5,\"reason\":\"Return without resurrecting the evicted skill.\"}",
-        "{\"operation\":\"load\",\"skill_id\":\"technical-reporting\",\"version\":\"1\",\"residency\":\"transient\",\"expected_revision\":6,\"reason\":\"Prepare the report.\"}",
-        "{\"operation\":\"unload\",\"skill_id\":\"technical-reporting\",\"version\":\"1\",\"residency\":\"unchanged\",\"expected_revision\":7,\"reason\":\"Finish the bounded use.\"}",
-        "{\"question\":\"Should the report focus on observable behavior?\"}",
-        "{\"summary\":\"The fixture entry point has an empty body and performs no external operations.\",\"evidence_index\":0}",
-    };
-    if (step >= names.len) return .{ .definitely_not_sent = error.InvalidPreparedRequest };
     const a = ctx.allocator;
-    var item = native.json.object();
-    try native.json.put(a, &item, "type", native.json.string("function_call"));
-    try native.json.put(a, &item, "status", native.json.string("completed"));
-    try native.json.put(a, &item, "call_id", native.json.string(try std.fmt.allocPrint(a, "offline-{d}", .{step})));
-    try native.json.put(a, &item, "name", native.json.string(names[@intCast(step)]));
-    try native.json.put(a, &item, "arguments", native.json.string(arguments[@intCast(step)]));
-    var output: std.array_list.Managed(native.json.Value) = .init(a);
-    try output.append(item);
-    var response = native.json.object();
-    try native.json.put(a, &response, "id", native.json.string(try std.fmt.allocPrint(a, "fixture-{d}", .{step})));
-    try native.json.put(a, &response, "status", native.json.string("completed"));
-    try native.json.put(a, &response, "error", .null);
-    try native.json.put(a, &response, "output", .{ .array = output });
+    const fixture = try native.json.parse(a, @embedFile("offline-responses.json"), .{ .bytes = 64 * 1024 });
+    if (fixture.value != .array or step >= fixture.value.array.items.len) return .{ .definitely_not_sent = error.InvalidPreparedRequest };
+    const response = fixture.value.array.items[@intCast(step)];
     return .{ .captured = try contracts.encodeOwned(native.responses.Raw, a, .{ .status = 200, .identity_encoding = true, .request_id = null, .body = .{ .bytes = try native.json.canonical(a, response) } }) };
 }

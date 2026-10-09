@@ -8,8 +8,7 @@ const P = t.P;
 const work = @import("work.zig");
 const A = native.adaptive_responses.Admission(P);
 const Adapter = native.adaptive_responses.Adapter(P);
-const Objects = contracts.Vector(contracts.Bytes(128 * 1024), 2);
-const Product = struct { result: t.PreparationResult, objects: Objects };
+const Product = t.PreparationProduct;
 
 fn equal(left: []const u8, right: []const u8) bool {
     return std.mem.eql(u8, left, right);
@@ -232,7 +231,6 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
         try verifyEvidence(ctx, input.state.evidence);
         // Keep exact acquired facts; refuse capacity rather than summarize away
         // evidence, a follow-up, an outcome, or an allowance.
-        const Handoff = struct { original_task: t.Summary, followups: t.Followups, evidence: contracts.Vector(t.Evidence, 8), work_outcomes: contracts.Vector(t.WorkOutcome, 12), prior_controls: t.Receipts, current_control: ?t.ControlReceipt, pending_model_hypothesis: contracts.Text(256), control: t.controls.State, remaining_model_calls: u16, remaining_work_calls: u16, pending_questions: contracts.Vector(t.Question, 1), completion_criteria: contracts.Text(256) };
         const evidence = try a.alloc(t.Evidence, input.state.evidence.items.len);
         for (evidence, input.state.evidence.items) |*out, ref| out.* = try work.evidence(ctx, ref);
         const outcomes = try a.alloc(t.WorkOutcome, input.state.outcomes.items.len);
@@ -250,7 +248,7 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
                 out.* = opened.items[opened.items.len - 1].value.outcome;
             },
         };
-        const facts = try native.json.canonicalBounded(a, try native.values.toJson(Handoff, a, .{
+        const facts = try native.json.canonicalBounded(a, try native.values.toJson(t.Handoff, a, .{
             .original_task = input.state.task,
             .followups = input.state.followups,
             .evidence = .{ .items = evidence },

@@ -8,16 +8,8 @@ const c = @import("native_c");
 pub const maximum_files = 512;
 pub const maximum_file_bytes = 256 * 1024;
 pub const maximum_snapshot_bytes = storage.maximum_object_bytes;
-pub const File = struct {
-    path: contracts.Text(256),
-    sha256: [32]u8,
-    contents: contracts.Bytes(maximum_file_bytes),
-};
-pub const Record = struct {
-    version: u32,
-    excluded_entries: u32,
-    files: contracts.Vector(File, maximum_files),
-};
+pub const File = contracts.RepositorySnapshotFile;
+pub const Record = contracts.RepositorySnapshot;
 
 pub fn pathAllowed(path: []const u8) bool {
     if (path.len == 0 or path.len > 256 or !std.unicode.utf8ValidateSlice(path)) return false;

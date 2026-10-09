@@ -5315,14 +5315,28 @@
     "adaptive_controlled_peer": "passed",
     "large_handoff_acquired_before_interpreted_restart": "passed",
     "macos_full_product": "failed: two closed-output peers observed SIGKILL instead of exit 74; one isolated host recheck reproduced the failure",
-    "linux_followup_ci": "pending publication"
+    "linux_followup_ci": {
+      "run_id": 37938708580,
+      "head": "0fff24f502b1f515958cd69717d474dd3582abd5",
+      "functional_status": "passed",
+      "native_steps": "155/155",
+      "native_tests": "117/117",
+      "workflow_seconds": 390,
+      "measurement": "workflow creation to last job completion",
+      "native_job_seconds": 370,
+      "native_check_step_seconds": 291,
+      "acceptance_maximum_seconds": 360,
+      "timing_status": "exceeded; unresolved",
+      "attribution": "Not established against different cache regime; CI settings and retained checks unchanged."
+    }
   },
   "limits": [
     "No in-place configuration_update qualification.",
     "No shared Sol/Astra KV-state claim or general cache savings.",
     "No autonomous routing-quality or broad model-efficacy conclusion.",
     "No alternative models/efforts, return-to-Sol live qualification, or ambiguous live acquisition retry.",
-    "MacOS broken-output shutdown behavior remains unresolved outside this live task path."
+    "MacOS broken-output shutdown behavior remains unresolved outside this live task path.",
+    "The first follow-up Linux workflow passed functional checks but exceeded the 360-second acceptance maximum (390 seconds)."
   ],
   "privacy": "Raw requests, provider bodies, encrypted reasoning, credentials, native state and archives remain private and are not committed or uploaded."
 }

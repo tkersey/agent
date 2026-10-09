@@ -201,6 +201,59 @@
       "result": "refusal",
       "replay": "complete",
       "usage": null
+    },
+    {
+      "name": "reasoning-content-empty",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"reasoning\",\"summary\":[],\"encrypted_content\":\"SYNTHETIC-OPAQUE\",\"content\":[]}]}",
+      "result": "output",
+      "replay": "complete",
+      "usage": null
+    },
+    {
+      "name": "reasoning-content-null",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"reasoning\",\"summary\":[],\"encrypted_content\":\"SYNTHETIC-OPAQUE\",\"content\":null}]}",
+      "result": "output",
+      "replay": "complete",
+      "usage": null
+    },
+    {
+      "name": "reasoning-content-text",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"reasoning\",\"summary\":[],\"encrypted_content\":\"SYNTHETIC-OPAQUE\",\"content\":[{\"type\":\"reasoning_text\",\"text\":\"Synthetic private fixture.\"}]}]}",
+      "result": "output",
+      "replay": "complete",
+      "usage": null
+    },
+    {
+      "name": "reasoning-content-scalar",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"reasoning\",\"summary\":[],\"encrypted_content\":\"SYNTHETIC-OPAQUE\",\"content\":\"wrong\"}]}",
+      "result": "unsupported_response",
+      "replay": "unsupported",
+      "usage": null,
+      "failure": "unsupported_output_item"
+    },
+    {
+      "name": "reasoning-content-wrong-type",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"reasoning\",\"summary\":[],\"encrypted_content\":\"SYNTHETIC-OPAQUE\",\"content\":[{\"type\":\"summary_text\",\"text\":\"wrong\"}]}]}",
+      "result": "unsupported_response",
+      "replay": "unsupported",
+      "usage": null,
+      "failure": "unsupported_output_item"
+    },
+    {
+      "name": "reasoning-content-unknown-field",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"reasoning\",\"summary\":[],\"encrypted_content\":\"SYNTHETIC-OPAQUE\",\"content\":[{\"type\":\"reasoning_text\",\"text\":\"fixture\",\"extra\":true}]}]}",
+      "result": "unsupported_response",
+      "replay": "unsupported",
+      "usage": null,
+      "failure": "unsupported_output_item"
+    },
+    {
+      "name": "reasoning-content-missing-text",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"reasoning\",\"summary\":[],\"encrypted_content\":\"SYNTHETIC-OPAQUE\",\"content\":[{\"type\":\"reasoning_text\"}]}]}",
+      "result": "unsupported_response",
+      "replay": "unsupported",
+      "usage": null,
+      "failure": "unsupported_output_item"
     }
   ]
 }

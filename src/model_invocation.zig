@@ -13,6 +13,7 @@ pub const adaptive_semantic_identity = "agent.model.invoke.v6";
 pub const adaptive_context_semantic_identity = "agent.model.context.responses.adaptive.v1";
 pub const adaptive_policy_semantic_identity = "agent.model.policy.adaptive.v1";
 pub const adaptive_seed_semantic_identity = "agent.model.seed.adaptive.v1";
+pub const maximum_adaptive_request_bytes = 256 * 1024;
 pub fn isModelIdentity(identity: []const u8) bool {
     return std.mem.eql(u8, identity, semantic_identity) or
         std.mem.eql(u8, identity, replay_semantic_identity) or
@@ -362,7 +363,7 @@ pub fn Profile(
             offered: [declarations.len]bool,
             results: contracts.Vector(ToolResult, limits.maximum_output_items),
         };
-        pub const AdaptivePrepared = struct { version: u32, request: AdaptiveRequest, body: contracts.Bytes(256 * 1024) };
+        pub const AdaptivePrepared = struct { version: u32, request: AdaptiveRequest, body: contracts.Bytes(maximum_adaptive_request_bytes) };
         pub const AdaptivePolicy = struct {
             schema: contracts.Text(128),
             endpoint: contracts.Text(2048),

@@ -137,7 +137,11 @@ ceilings, not a promise that every maximal field combination fits a request.
 
 Provider requests are at most 256 KiB and responses at most 512 KiB. The
 normalized adaptive reply is at most 16 KiB; its raw capture is retained on
-projection overflow. Handoff fact text is at most 8 KiB. Existing native
+projection overflow. Handoff facts use the selected profile's request capacity,
+and preparation checks the complete rendered request before admitting a control.
+The consumer's message representation shares the transport's 256 KiB ceiling;
+there is no separate 8 KiB handoff ceiling. Seed artifacts still fit their native
+128 KiB object envelope. Existing native
 64 MiB requested allocation, 16 MiB worker and SQLite budgets, and 256 MiB
 namespace limits remain unchanged. Protocol frames, checkpoint size, World
 working memory and namespace quotas remain separate limits.

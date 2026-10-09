@@ -41,7 +41,7 @@ pub const P = model.Profile(Action, .{
     .{ .name = "inference_set", .description = "Select an approved profile and effort for the next inference, using the current control revision." },
     .{ .name = "skill_set", .description = "Load, deactivate or physically unload a pinned approved skill. Use an exact version and current control revision." },
     .{ .name = "inspect", .description = "Locate guard-like lines in acquired evidence. This lexical aid requires an active invariant-review skill; it is not a correctness proof." },
-}, .{ .model_id_bytes = 128, .temperature_bytes = 32, .maximum_messages = 4, .message_bytes = 8192, .maximum_output_items = 8, .call_id_bytes = 128, .arguments_json_bytes = 16384, .result_text_bytes = 32768, .provider_response_bytes = 512 * 1024, .maximum_adaptive_reply_bytes = 16 * 1024 });
+}, .{ .model_id_bytes = 128, .temperature_bytes = 32, .maximum_messages = 4, .message_bytes = model.maximum_adaptive_request_bytes, .maximum_output_items = 8, .call_id_bytes = 128, .arguments_json_bytes = 16384, .result_text_bytes = 32768, .provider_response_bytes = 512 * 1024, .maximum_adaptive_reply_bytes = 16 * 1024 });
 pub const PolicyView = struct { profiles: controls.Profiles, catalog: controls.Catalog, maximum_model_calls: u16, maximum_revision: u64 };
 pub const Bindings = struct {
     policy: [32]u8,

@@ -163,7 +163,7 @@ test "adaptive projection retains audit captures while hard eviction starts expl
     try std.testing.expectEqual(1, loaded_http.object.get("tools").?.array.items.len);
     try std.testing.expectEqual(2, loaded_http.object.get("tool_choice").?.object.get("tools").?.array.items.len);
     try std.testing.expect(std.mem.indexOf(u8, loaded_bytes, skill_body) != null);
-    const second = try capture(ctx, &objects, request, "{\"id\":\"response-2\",\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"reasoning\",\"summary\":[],\"encrypted_content\":\"OPAQUE-WITH-SKILL\"},{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"call-2\",\"name\":\"inspect\",\"arguments\":\"{\\\"value\\\":2}\"}],\"usage\":{\"input_tokens\":100,\"output_tokens\":10,\"input_tokens_details\":{\"cached_tokens\":40,\"cache_write_tokens\":20},\"output_tokens_details\":{\"reasoning_tokens\":5}}}");
+    const second = try capture(ctx, &objects, request, "{\"id\":\"response-2\",\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"reasoning\",\"summary\":[],\"content\":[],\"encrypted_content\":\"OPAQUE-WITH-SKILL\"},{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"call-2\",\"name\":\"inspect\",\"arguments\":\"{\\\"value\\\":2}\"}],\"usage\":{\"input_tokens\":100,\"output_tokens\":10,\"input_tokens_details\":{\"cached_tokens\":40,\"cache_write_tokens\":20},\"output_tokens_details\":{\"reasoning_tokens\":5}}}");
     try std.testing.expectEqual(@as(?u64, 20), second.usage.?.cache_write_tokens);
     request.plan.prior = second.replay;
     request.plan.watermark = second.replay.?.watermark;
@@ -173,6 +173,17 @@ test "adaptive projection retains audit captures while hard eviction starts expl
     request.selection.control_revision = 2;
     const inactive = try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, request));
     try std.testing.expect(std.mem.indexOf(u8, inactive, skill_body) != null);
+    const replayed = (try http(a, inactive)).object.get("input").?.array.items;
+    var retained_reasoning = false;
+    for (replayed) |item| {
+        const kind = native.json.get(item, "type") orelse continue;
+        if (kind == .string and std.mem.eql(u8, kind.string, "reasoning")) {
+            try std.testing.expectEqualStrings("OPAQUE-WITH-SKILL", item.object.get("encrypted_content").?.string);
+            try std.testing.expectEqual(@as(usize, 0), item.object.get("content").?.array.items.len);
+            retained_reasoning = true;
+        }
+    }
+    try std.testing.expect(retained_reasoning);
     try std.testing.expectEqual(1, (try http(a, inactive)).object.get("tool_choice").?.object.get("tools").?.array.items.len);
     // Hard removal without a new epoch and seed is forbidden before dispatch.
     request.plan.skills.items = &.{};

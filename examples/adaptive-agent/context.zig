@@ -261,7 +261,7 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
             .remaining_work_calls = 12 -| input.state.work_calls,
             .pending_questions = .{ .items = &.{} },
             .completion_criteria = .{ .bytes = "Answer the original task and consumed follow-ups using acquired evidence, distinguishing observations from hypotheses and unrun checks." },
-        }), P.MessageText.max_length.?);
+        }), selected.request_bytes);
         seed = try contracts.encodeOwned(P.AdaptiveSeed, a, .{
             .schema = .{ .bytes = P.adaptive_seed_identity },
             .policy = request.policy,

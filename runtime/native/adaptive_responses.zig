@@ -46,7 +46,7 @@ pub fn Admission(comptime P: type) type {
                 if (!identifier(entry.id.bytes) or entry.model.bytes.len == 0 or entry.model.bytes.len > P.representation.model_id_bytes or
                     !identifier(entry.opaque_family.bytes) or entry.efforts.items.len == 0 or
                     entry.max_output_tokens == 0 or entry.max_output_tokens > 32768 or
-                    entry.request_bytes > 256 * 1024 or entry.response_bytes > 512 * 1024 or entry.response_bytes > P.representation.provider_response_bytes or
+                    entry.request_bytes > @FieldType(P.AdaptivePrepared, "body").max_length.? or entry.response_bytes > 512 * 1024 or entry.response_bytes > P.representation.provider_response_bytes or
                     (entry.effort_update and entry.reasoning_mode != .standard)) return error.InvalidConfiguration;
                 for (value.profiles.items[0..index]) |earlier| if (equal(earlier.id.bytes, entry.id.bytes)) return error.InvalidConfiguration;
                 for (entry.efforts.items, 0..) |effort, n| for (entry.efforts.items[0..n]) |earlier| if (effort == earlier) return error.InvalidConfiguration;

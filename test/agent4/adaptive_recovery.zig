@@ -54,7 +54,13 @@ test "adaptive unload capture recovers under its original plan without another a
     var service = try native.tasks.Service(t).init(a, io, &namespace, assets, &application, handlers, profile);
     var service_live = true;
     defer if (service_live) service.close(a) catch unreachable;
-    const task = (try service.submit(permanent, "adaptive-recovery-submit", environment.demo_input)).receipt.task;
+    // Valid admitted task/input text must survive a handoff larger than the
+    // former 8 KiB message ceiling, including captured-before-interpreted recovery.
+    const long_task: [2048]u8 = @splat('T');
+    const long_followup: [2048]u8 = @splat('F');
+    const task = (try service.submit(permanent, "adaptive-recovery-submit", .{ .task = .{ .bytes = &long_task } })).receipt.task;
+    _ = try service.message(permanent, "large-followup-one", task, .{ .message = .{ .bytes = &long_followup } });
+    _ = try service.message(permanent, "large-followup-two", task, .{ .message = .{ .bytes = &long_followup } });
     var model_calls: usize = 0;
     var restarted = false;
     var witnessed = false;
@@ -99,6 +105,16 @@ test "adaptive unload capture recovers under its original plan without another a
                     try std.testing.expectEqual(0, adaptive.value.plan.skills.items.len);
                     try std.testing.expect(!adaptive.value.offered[7] and !adaptive.value.materialized[7]);
                     try std.testing.expectEqual(8, saved.value.inference_attempts);
+                    const seed_bytes = try namespace.store.object(frame, .{ .digest = adaptive.value.plan.handoff.?.digest, .bytes = adaptive.value.plan.handoff.?.bytes }, 128 * 1024);
+                    var seed = try agent.contracts.decodeOwned(t.P.AdaptiveSeed, frame, seed_bytes);
+                    defer seed.deinit();
+                    const facts_text = seed.value.messages.items[2].content.bytes;
+                    try std.testing.expect(facts_text.len > 8192);
+                    const facts = try native.json.parse(frame, facts_text, .{});
+                    try std.testing.expectEqualStrings(&long_task, facts.value.object.get("original_task").?.string);
+                    const followups = facts.value.object.get("followups").?.array.items;
+                    try std.testing.expectEqual(@as(usize, 2), followups.len);
+                    for (followups) |followup| try std.testing.expectEqualStrings(&long_followup, followup.string);
                     witnessed = true;
                 }
             }

@@ -27,11 +27,12 @@ const Graph = struct {
     data: *std.Build.Module,
     contracts: *std.Build.Module,
     gate: *std.Build.Step,
+    target: ?std.Build.ResolvedTarget = null,
 
     fn module(g: Graph, path: []const u8) *std.Build.Module {
         return g.b.createModule(.{
             .root_source_file = g.b.path(path),
-            .target = g.b.graph.host,
+            .target = g.target orelse g.b.graph.host,
             .optimize = g.optimize,
             .imports = &.{
                 .{ .name = "agent", .module = g.agent },
@@ -46,22 +47,32 @@ const Graph = struct {
         return g.module(g.b.fmt("src/{s}.zig", .{name}));
     }
     fn testModule(g: Graph, step: *std.Build.Step, module_value: *std.Build.Module) void {
-        const tests = g.b.addTest(.{ .root_module = module_value });
+        const tests = g.b.addTest(.{
+            .root_module = module_value,
+            .use_llvm = if (g.b.graph.host.result.os.tag == .linux and g.b.graph.host.result.cpu.arch == .x86_64) false else null,
+        });
         tests.step.dependOn(g.gate);
         step.dependOn(&g.b.addRunArtifact(tests).step);
     }
     fn emitter(g: Graph, name: []const u8, module_value: *std.Build.Module) Executable {
-        const executable = g.b.addExecutable(.{ .name = name, .root_module = module_value });
+        const executable = g.b.addExecutable(.{
+            .name = name,
+            .root_module = module_value,
+            .use_llvm = if (g.b.graph.host.result.os.tag == .linux and g.b.graph.host.result.cpu.arch == .x86_64) false else null,
+        });
         executable.step.dependOn(g.gate);
         return .{ .artifact = executable };
     }
     fn runArtifact(g: Graph, executable: Executable) *std.Build.Step.Run {
-        const run = g.b.addRunArtifact(executable.artifact);
         if (executable.fixture) |name| {
-            run.setEnvironmentVariable("AGENT4_FIXTURE", name);
+            // Hash the selected fixture, not an inherited CI environment whose
+            // run IDs would move identical generated assets on every build.
+            const run = g.b.addSystemCommand(&.{ "env", g.b.fmt("AGENT4_FIXTURE={s}", .{name}) });
+            run.addArtifactArg2(executable.artifact, .{});
             run.step.name = g.b.fmt("run fixture {s}", .{name});
+            return run;
         }
-        return run;
+        return g.b.addRunArtifact(executable.artifact);
     }
     fn emit(g: Graph, step: *std.Build.Step, executable: Executable, args: []const []const u8, name: []const u8) void {
         const run = g.runArtifact(executable);
@@ -80,6 +91,7 @@ pub fn build(b: *std.Build) void {
     const source = b.option(std.Build.LazyPath, "boundary-source", "Authenticated immutable Boundary source copy");
     const runtime = b.option(std.Build.LazyPath, "world-runtime", "Authenticated immutable World runtime directory");
     const world_source = b.option(std.Build.LazyPath, "world-source", "Immutable World source for native agreement") orelse b.path(".agent4/inputs/world");
+    const sqlite_source = b.option(std.Build.LazyPath, "sqlite-source", "Authenticated optional native SQLite source") orelse b.path(".agent4/inputs/sqlite");
     // The dependency verifier derives the sibling archive from the selected
     // lock. Only forward an explicit override; never duplicate its commit here.
     const world_archive = b.option(std.Build.LazyPath, "world-archive", "Authenticated immutable World source archive");
@@ -165,8 +177,22 @@ pub fn build(b: *std.Build) void {
     b.modules.put(b.allocator, b.dupe("boundary_data"), public_data) catch @panic("out of memory");
     b.modules.put(b.allocator, b.dupe("agent_contracts"), public_contracts) catch @panic("out of memory");
     b.modules.put(b.allocator, b.dupe("agent"), public_agent) catch @panic("out of memory");
+    b.modules.put(b.allocator, b.dupe("agent_host_authoring"), agent) catch @panic("out of memory");
+    b.modules.put(b.allocator, b.dupe("boundary_host_authoring"), boundary) catch @panic("out of memory");
+    b.modules.put(b.allocator, b.dupe("boundary_data_host"), data) catch @panic("out of memory");
+    b.modules.put(b.allocator, b.dupe("agent_contracts_host"), contracts) catch @panic("out of memory");
     const g: Graph = .{ .b = b, .optimize = optimize, .agent = agent, .boundary = boundary, .data = data, .contracts = contracts, .gate = &source_guard.step };
     const fixture_driver = g.emitter("agent4-fixtures", g.module("test/fixture_driver.zig"));
+    // Native examples share the already compiled fixture owner. Downstream
+    // applications use the same asset writer through addNativeSystem.
+    fixture_driver.artifact.root_module.addImport("native_asset_writer", g.module("tools/native/emit.zig"));
+    inline for (.{ .{ "native-minimal", "native_minimal" }, .{ "repository-agent", "repository_agent" } }) |item| {
+        const types = g.module("examples/" ++ item[0] ++ "/types.zig");
+        const definition = g.module("examples/" ++ item[0] ++ "/definition.zig");
+        definition.addImport("application_types", types);
+        fixture_driver.artifact.root_module.addImport(item[1] ++ "_types", types);
+        fixture_driver.artifact.root_module.addImport(item[1] ++ "_definition", definition);
+    }
     const application_driver = g.emitter("agent4-applications", g.module("test/application_driver.zig"));
     const check = b.step("agent4-authoring-tests", "Authoring test implementation");
     const aggregate = b.step("check-agent4", "Check authoring and pure contracts without World");
@@ -181,7 +207,7 @@ pub fn build(b: *std.Build) void {
 
     const lint = b.step("lint", "Check formatting and the Zig source inventory");
     const format_check = b.addRunFile(.zig_exe);
-    format_check.addArgs(&.{ "fmt", "--check", "build.zig", "build_agent4.zig", "src", "test/agent4", "test/consumers", "test/fixture_driver.zig", "test/application_driver.zig", "test/authoring_tests.zig" });
+    format_check.addArgs(&.{ "fmt", "--check", "build.zig", "build_agent4.zig", "build_native.zig", "src", "runtime/native", "tools/native", "examples/native-minimal", "examples/repository-agent", "test/agent4", "test/consumers", "test/fixture_driver.zig", "test/application_driver.zig", "test/authoring_tests.zig" });
     const paths = b.addSystemCommand(&.{ "sh", "tools/check_zig_paths.sh" });
     lint.dependOn(&format_check.step);
     lint.dependOn(&paths.step);
@@ -545,6 +571,14 @@ pub fn build(b: *std.Build) void {
     check.dependOn(emit);
 
     const native_checks = b.step("check-native", "Check native and custody contracts against the selected World");
+    const native_product = b.step("check-native-product", "Qualify native reference applications on the selected supported platform");
+    const native_consumer = b.step("check-native-consumer", "Build and execute an embedded public World consumer (N0)");
+    const native_example = b.step("native-example", "Build and install the native reference applications");
+    const native_host = b.step("check-native-host", "Check the native build, embedded assets and protocol discovery");
+    native_checks.dependOn(native_product);
+    native_product.dependOn(native_consumer);
+    native_product.dependOn(native_host);
+    native_product.dependOn(native_example);
     if (runtime) |runtime_path| {
         const world = b.createModule(.{
             .root_source_file = world_source.path(b, "src/root.zig"),
@@ -553,6 +587,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{.{ .name = "boundary_data", .module = data }},
         });
         const runtime_guard = nodeCommand(b);
+        runtime_guard.setCwd(b.path("."));
         runtime_guard.addArgs(&.{ "node", "tools/agent4/dependencies.mjs", "verify", "--world-runtime" });
         runtime_guard.addFileInput(b.path("conformance/agent4/dependencies.lock.json"));
         runtime_guard.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
@@ -567,12 +602,172 @@ pub fn build(b: *std.Build) void {
         _ = runtime_guard.captureStdOut(.{});
         var native_graph = g;
         native_graph.gate = &runtime_guard.step;
+        const native_guard = nodeCommand(b);
+        native_guard.setCwd(b.path("."));
+        native_guard.addArgs(&.{ "node", "tools/agent4/native-dependencies.mjs", "verify" });
+        native_guard.addDirectoryArg2(sqlite_source, .{ .make_absolute = true });
+        native_guard.addFileInput(b.path("conformance/agent4/native-dependencies.lock.json"));
+        native_guard.has_side_effects = true;
+        _ = native_guard.captureStdOut(.{});
+        native_guard.step.dependOn(&runtime_guard.step);
+        const native_admission_files = b.addWriteFiles();
+        native_admission_files.step.dependOn(&native_guard.step);
+        const native_admission = b.createModule(.{ .root_source_file = native_admission_files.add("native_dependency_admission.zig", "") });
+        const host_environment = nativeEnvironment(b, b.graph.host, optimize, world, data, contracts, native_admission, sqlite_source, &native_guard.step);
+        // Host-default Linux packaging selects musl. Explicit unsupported target
+        // requests are rejected by the public helper before creating emitters.
+        const default_musl = target.query.isNative() and target.result.os.tag == .linux and target.result.cpu.arch == .x86_64;
+        const native_target = if (default_musl) b.resolveTargetQuery(.{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .musl }) else target;
+        const native_data = if (!default_musl) public_data else b.createModule(.{
+            .root_source_file = public_data.root_source_file,
+            .target = native_target,
+            .optimize = optimize,
+        });
+        const native_contracts = if (!default_musl) public_contracts else b.createModule(.{
+            .root_source_file = b.path("src/contracts.zig"),
+            .target = native_target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "boundary_data", .module = native_data }},
+        });
+        // Application type files can derive the existing model contract at
+        // comptime. Only used runtime functions are linked; the deployed path
+        // never invokes the authoring compiler or imports a language loader.
+        const native_boundary = if (!default_musl) public_boundary else b.createModule(.{
+            .root_source_file = public_boundary.root_source_file,
+            .target = native_target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "boundary_data", .module = native_data }},
+        });
+        const native_agent = if (!default_musl) public_agent else b.createModule(.{
+            .root_source_file = b.path("src/agent4.zig"),
+            .target = native_target,
+            .optimize = optimize,
+            .imports = &.{ .{ .name = "boundary", .module = native_boundary }, .{ .name = "boundary_data", .module = native_data }, .{ .name = "agent_contracts", .module = native_contracts } },
+        });
+        const native_world = if (!default_musl and target.query.isNative()) world else b.createModule(.{
+            .root_source_file = world_source.path(b, "src/root.zig"),
+            .target = native_target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "boundary_data", .module = native_data }},
+        });
+        const public_environment = if (!default_musl and target.query.isNative()) host_environment else nativeEnvironment(b, native_target, optimize, native_world, native_data, native_contracts, native_admission, sqlite_source, &native_guard.step);
+        // Executed native checks use the delivered ABI when it runs on this
+        // host. This also shares its C library instead of compiling a GNU-only
+        // SQLite copy solely for tests of a musl product.
+        const native_on_host = native_target.result.cpu.arch == b.graph.host.result.cpu.arch and native_target.result.os.tag == b.graph.host.result.os.tag;
+        if (native_on_host) {
+            native_graph.target = native_target;
+            native_graph.agent = native_agent;
+            native_graph.boundary = native_boundary;
+            native_graph.data = native_data;
+            native_graph.contracts = native_contracts;
+        }
+        const checked_world = if (native_on_host) native_world else world;
+        const checked_environment = if (native_on_host) public_environment else host_environment;
+        b.addNamedLazyPath("native-sqlite-source", sqlite_source);
+        b.modules.put(b.allocator, b.dupe("agent_native"), public_environment) catch @panic("out of memory");
+        b.modules.put(b.allocator, b.dupe("agent_native_data"), native_data) catch @panic("out of memory");
+        b.modules.put(b.allocator, b.dupe("agent_native_contracts"), native_contracts) catch @panic("out of memory");
+        b.modules.put(b.allocator, b.dupe("agent_native_types"), native_agent) catch @panic("out of memory");
+        const product_supported = (native_target.result.os.tag == .macos and native_target.result.cpu.arch == .aarch64) or
+            (native_target.result.os.tag == .linux and native_target.result.cpu.arch == .x86_64 and native_target.result.abi == .musl);
+        if (product_supported) {
+            const native_modules: @import("build_native.zig").Modules = .{
+                .root = b.path("."),
+                .agent = agent,
+                .boundary = boundary,
+                .data = data,
+                .contracts = contracts,
+                .native = public_environment,
+                .native_data = native_data,
+                .native_contracts = native_contracts,
+                .native_agent = native_agent,
+                .sqlite_source = sqlite_source,
+            };
+            const minimal_assets = g.runArtifact(fixture_driver.select("native-minimal-assets"));
+            const product = @import("build_native.zig").addWithModules(b, native_modules, .{
+                .name = "agent-native-example",
+                .application = .{ .emitted = .{
+                    .image = minimal_assets.addOutputFileArg2("program.bpi3", .{}),
+                    .application = minimal_assets.addOutputFileArg2("application.json", .{}),
+                    .types = b.path("examples/native-minimal/types.zig"),
+                } },
+                .environment = b.path("examples/native-minimal/environment.zig"),
+            });
+            native_example.dependOn(&product.install.step);
+            const repository_assets = g.runArtifact(fixture_driver.select("repository-agent-assets"));
+            const repository_product = @import("build_native.zig").addWithModules(b, native_modules, .{
+                .name = "repository-agent",
+                .application = .{ .emitted = .{
+                    .image = repository_assets.addOutputFileArg2("program.bpi3", .{}),
+                    .application = repository_assets.addOutputFileArg2("application.json", .{}),
+                    .types = b.path("examples/repository-agent/types.zig"),
+                } },
+                .environment = b.path("examples/repository-agent/environment.zig"),
+            });
+            native_example.dependOn(&repository_product.install.step);
+            const repository_peer = nativeCheckCommand(b);
+            repository_peer.addArgs(&.{ "node", "test/agent4/native_repository.mjs" });
+            repository_peer.addFileArg2(repository_product.executable.getEmittedBin(), .{ .make_absolute = true });
+            native_product.dependOn(&repository_peer.step);
+            const protocol_peer = nativeCheckCommand(b);
+            protocol_peer.addArgs(&.{ "node", "test/agent4/native_host.mjs" });
+            protocol_peer.addFileArg2(product.executable.getEmittedBin(), .{ .make_absolute = true });
+            native_host.dependOn(&protocol_peer.step);
+            const consumer_module = b.createModule(.{
+                .root_source_file = b.path("test/consumers/native/main.zig"),
+                .target = native_graph.target orelse b.graph.host,
+                .optimize = optimize,
+                .strip = optimize != .debug,
+                .imports = &.{ .{ .name = "world", .module = checked_world }, .{ .name = "boundary_data", .module = native_graph.data }, .{ .name = "agent_native", .module = checked_environment }, .{ .name = "agent_contracts", .module = native_graph.contracts }, .{ .name = "application_types", .module = native_graph.module("examples/native-minimal/types.zig") } },
+            });
+            consumer_module.addAnonymousImport("image", .{ .root_source_file = product.assets.image });
+            const consumer = b.addExecutable(.{ .name = "agent-native-consumer", .root_module = consumer_module });
+            // Release the long protocol peer before the LLVM probe occupies a
+            // compile slot. Its short product build otherwise queues behind
+            // the probe and delays checks that can overlap the remaining work.
+            consumer.step.dependOn(&product.executable.step);
+            repository_peer.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
+            repository_peer.addFileArg2(consumer.getEmittedBin(), .{ .make_absolute = true });
+            repository_peer.addFileArg2(product.executable.getEmittedBin(), .{ .make_absolute = true });
+            consumer.step.dependOn(&runtime_guard.step);
+            native_consumer.dependOn(&b.addRunArtifact(consumer).step);
+            const https_peer = nodeCommand(b);
+            https_peer.addArgs(&.{ "node", "test/agent4/native_https.mjs" });
+            https_peer.addFileArg2(consumer.getEmittedBin(), .{ .make_absolute = true });
+            native_consumer.dependOn(&https_peer.step);
+        } else {
+            const unsupported = b.addFail("native product supports aarch64-macos and x86_64-linux-musl");
+            native_example.dependOn(&unsupported.step);
+            native_host.dependOn(&unsupported.step);
+            native_consumer.dependOn(&unsupported.step);
+        }
+        // This pure JS projection does not use Zig or the install prefix.
+        // Keep those launch paths out of the generated reference's identity.
+        const responses_peer = b.addSystemCommand(&.{ "env", "-u", "NODE_TEST_CONTEXT", "node" });
+        responses_peer.addFileArg2(b.path("test/agent4/native_responses.mjs"), .{});
+        for ([_][]const u8{ "test/agent4/native-responses-v1.json", "runtime/model.mjs", "runtime/values.mjs" }) |path| responses_peer.addFileInput(b.path(path));
+        responses_peer.has_side_effects = true;
         // These roots share exact module identities; compile their retained
         // tests together instead of rebuilding the same compiler eleven times.
-        const native_suite = g.module("test/agent4/native_tests.zig");
-        native_suite.addImport("world", world);
-        native_suite.addImport("document", g.module("test/consumers/document/consequence.zig"));
-        native_graph.testModule(native_checks, native_suite);
+        const native_suite = native_graph.module("test/agent4/native_tests.zig");
+        // Keep unit assertions and safety checks without optimizing test code.
+        // The deployed applications and public API/HTTPS probe remain safe.
+        native_suite.optimize = .debug;
+        native_suite.strip = optimize != .debug;
+        native_suite.addImport("world", checked_world);
+        native_suite.addImport("agent_native", checked_environment);
+        native_suite.addImport("native_asset_writer", native_graph.module("tools/native/emit.zig"));
+        native_suite.addAnonymousImport("native_model_reference", .{ .root_source_file = responses_peer.captureStdOut(.{}) });
+        native_suite.addImport("document", native_graph.module("test/consumers/document/consequence.zig"));
+        native_graph.testModule(native_product, native_suite);
+        // Zig does not collect test declarations from named dependency modules.
+        // Run the runtime's own root explicitly; the integration root above
+        // independently exercises its public task owner with authored programs.
+        const native_unit_tests = b.allocator.create(std.Build.Module) catch @panic("out of memory");
+        native_unit_tests.init(b, .{ .existing = checked_environment });
+        native_unit_tests.optimize = .debug;
+        native_graph.testModule(native_product, native_unit_tests);
         // Repository policy modules have distinct import roots and retain their
         // focused runners rather than changing their nominal type identities.
         for ([_][]const u8{ "repository_working_set", "repository_replacement" }) |name| {
@@ -580,17 +775,19 @@ pub fn build(b: *std.Build) void {
             native.addImport("world", world);
             const working_set = std.mem.eql(u8, name, "repository_working_set");
             native.addImport(if (working_set) "repository" else "repository_replace", g.module(if (working_set) "test/consumers/repository/working_set.zig" else "test/consumers/repository/replacement.zig"));
-            const tests = b.addTest(.{ .root_module = native });
+            const tests = b.addTest(.{
+                .root_module = native,
+                .use_llvm = if (b.graph.host.result.os.tag == .linux and b.graph.host.result.cpu.arch == .x86_64) false else null,
+            });
             tests.step.dependOn(native_graph.gate);
             const run_policy = b.addRunArtifact(tests);
-            native_checks.dependOn(&run_policy.step);
+            native_product.dependOn(&run_policy.step);
             b.step(if (working_set) "check-repository-working-set" else "check-repository-replacement", if (working_set) "Check staged repository memory and evidence rules" else "Check live repository replacement approval")
                 .dependOn(&run_policy.step);
         }
-        const host_contracts = nodeCommand(b);
+        const host_contracts = nativeCheckCommand(b);
         host_contracts.addDirectoryArg2(runtime_path, .{ .prefix = "AGENT_MOBILITY_RUNTIME=", .make_absolute = true });
         host_contracts.addArgs(&.{ "node", "--test", "test/agent4/mobility_journal.test.mjs", "test/agent4/mobility_host.test.mjs", "test/agent4/mobility_transport.test.mjs", "test/agent4/mobility_deployment.test.mjs", "test/agent4/mobility_browser_bridge.test.mjs", "test/agent4/mobility_sessions.test.mjs", "test/agent4/mobility_task_catalogue.test.mjs", "test/agent4/mobile_repository_program.test.mjs" });
-        host_contracts.has_side_effects = true;
         host_contracts.step.dependOn(&runtime_guard.step);
         host_contracts.step.dependOn(mobility_images);
         host_contracts.step.dependOn(mobile_repository_images);
@@ -598,6 +795,9 @@ pub fn build(b: *std.Build) void {
     } else {
         const missing = b.addFail("provide -Dworld-runtime=/absolute/authenticated/world-runtime");
         native_checks.dependOn(&missing.step);
+        native_consumer.dependOn(&missing.step);
+        native_example.dependOn(&missing.step);
+        native_host.dependOn(&missing.step);
     }
     const pure = nodeCommand(b);
     pure.addArgs(&.{ "node", "--test", "test/agent4/values.test.mjs", "test/agent4/model.test.mjs" });
@@ -629,6 +829,54 @@ pub fn build(b: *std.Build) void {
     b.default_step = aggregate;
 }
 
+fn nativeEnvironment(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize, world: *std.Build.Module, data: *std.Build.Module, contracts: *std.Build.Module, admission: *std.Build.Module, sqlite_source: std.Build.LazyPath, gate: *std.Build.Step) *std.Build.Module {
+    const options = b.addOptions();
+    options.addOption(u32, "sqlite_heap_bytes", @import("build_native.zig").sqlite_heap_bytes);
+    options.addOption(u64, "state_bytes", @import("build_native.zig").state_bytes);
+    options.addOption(u32, "state_format", @import("build_native.zig").state_format);
+    // The exact admitted 0.17 compiler still supplies build-time translate-c.
+    // Keep translation bound to that target/compiler tuple; @cImport is gone.
+    const translated = b.addTranslateC(.{
+        .root_source_file = b.path("runtime/native/native_c.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    translated.addIncludePath(sqlite_source);
+    translated.step.dependOn(gate);
+    // C has a stable ABI here. Compile the large SQLite translation unit once
+    // for this target, rather than again inside every executable and test root.
+    const translated_module = translated.createModule();
+    const c_module = b.createModule(.{
+        .root_source_file = b.path("runtime/native/hash.zig"),
+        .target = target,
+        .optimize = optimize,
+        .strip = optimize != .debug,
+        .link_libc = true,
+    });
+    c_module.addIncludePath(sqlite_source);
+    c_module.addCSourceFile(.{ .file = sqlite_source.path(b, "sqlite3.c"), .flags = @import("build_native.zig").sqliteFlags(optimize) });
+    c_module.addCSourceFile(.{ .file = b.path("runtime/native/native_c.c"), .flags = &.{ "-std=c99", "-D_POSIX_C_SOURCE=200809L" } });
+    const c_library = b.addLibrary(.{ .name = "agent-native-c", .linkage = .static, .root_module = c_module, .use_llvm = true });
+    c_library.step.dependOn(gate);
+    const module = b.createModule(.{
+        .root_source_file = b.path("runtime/native/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .strip = optimize != .debug,
+        .link_libc = true,
+        .imports = &.{
+            .{ .name = "world", .module = world },
+            .{ .name = "boundary_data", .module = data },
+            .{ .name = "agent_contracts", .module = contracts },
+            .{ .name = "_native_dependency_admission", .module = admission },
+            .{ .name = "native_c", .module = translated_module },
+        },
+    });
+    module.addOptions("native_options", options);
+    module.linkLibrary(c_library);
+    return module;
+}
+
 fn addBoundary(b: *std.Build, run: *std.Build.Step.Run, source: ?std.Build.LazyPath, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) void {
     if (source) |path| {
         run.addArg("--boundary-source");
@@ -640,6 +888,24 @@ fn addBoundary(b: *std.Build, run: *std.Build.Step.Run, source: ?std.Build.LazyP
 }
 
 // Keep nested Node qualifiers on the build's selected toolchain and prefix.
+fn nativeCheckCommand(b: *std.Build) *std.Build.Step.Run {
+    const run = nodeCommand(b);
+    // Inherited stdio holds Zig's global diagnostic lock for the whole check.
+    // Capture both streams through stderr, preserving logs on success/failure
+    // while independent compilers and peers continue. Positional argv remains
+    // quoted, and exec preserves the checked process's exit/signal disposition.
+    const prefix = [_]std.Build.Step.Run.Arg{
+        .{ .bytes = "sh" },
+        .{ .bytes = "-c" },
+        .{ .bytes = "exec \"$@\" >&2" },
+        .{ .bytes = "native-check" },
+    };
+    run.argv.insertSlice(b.allocator, 0, &prefix) catch @panic("out of memory");
+    run.has_side_effects = true; // Checked stdio must never cache qualification.
+    run.expectExitCode(0);
+    return run;
+}
+
 fn nodeCommand(b: *std.Build) *std.Build.Step.Run {
     // Remove the runner context at launch, without caching the caller's PATH
     // or package/cache environment in the configured graph.

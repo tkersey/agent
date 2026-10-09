@@ -712,3 +712,65 @@ test "replay model identity cannot bypass the protected responder" {
         try std.testing.expectError(if (role == .model) error.ProtectedEffectBypass else error.EffectRoleMismatch, agent.admission.verify(allocator, b.module(entry, try b.scalar(void)), &registry));
     }
 }
+
+test "reference responder preserves frozen bindings and the exact request-time offer" {
+    var b = source.Builder.init(allocator);
+    defer b.deinit();
+    var registry = agent.admission.Registry.init(b.allocator());
+    defer registry.deinit();
+    const c: agent.Context = .{ .builder = &b, .registry = &registry };
+    const entry = try agent.responders.defineReferenceModelObserved(P, c, try b.constant(void, {}), false);
+    const module = b.module(entry, try b.scalar(void));
+    try agent.admission.verify(allocator, module, &registry);
+    var compiled = try boundary.program.compile(allocator, module);
+    defer compiled.deinit();
+    const ReferenceInput = struct { request: P.ReferenceRequest, offered: [2]bool };
+    const input: ReferenceInput = .{ .request = .{ .invocation = template(&.{}, single), .replay = null, .results = .{ .items = &.{} }, .profile = @splat(9) }, .offered = .{ true, false } };
+    const args = try contracts.encodeOwned(ReferenceInput, allocator, input);
+    defer allocator.free(args);
+    const image = try allocator.alloc(u8, try data.program_image.encodedLength(compiled.program));
+    defer allocator.free(image);
+    _ = try data.program_image.encode(allocator, compiled.program, image);
+    var parked = try world.invocation.invoke(allocator, .{ .image = image, .instance = .{ .initial_args = args } });
+    defer parked.deinit();
+    try std.testing.expect(parked.record == .requested);
+    var request = try data.invocation.decode(data.invocation.Request, allocator, parked.record.requested.request);
+    defer request.deinit();
+    try std.testing.expectEqualStrings(model.reference_semantic_identity, request.value.binding.semantic_identity);
+    var payload = try contracts.decodeOwned(P.ReferenceRequest, allocator, request.value.binding.payload);
+    defer payload.deinit();
+    try std.testing.expectEqualSlices(u8, &input.request.profile, &payload.value.profile);
+    try std.testing.expectEqual(1, payload.value.invocation.tools.items.len);
+    try std.testing.expectEqualStrings("choose", payload.value.invocation.tools.items[0].name.bytes);
+    const reference: model.ContextReference = .{ .digest = @splat(1), .bytes = 1234, .schema = .{ .bytes = model.context_semantic_identity }, .profile = @splat(9), .task = @splat(2), .tenant = .{ .bytes = "local" }, .audience = .{ .bytes = "owner" }, .first = 0, .next = 2 };
+    inline for (.{ .complete, .unsupported, .capacity }) |status| {
+        const reply: P.ReferenceResult = .{ .result = result(&.{call(.choose, 42)}), .replay = reference, .replay_status = status, .usage = null };
+        var finished = try resumeResult(P.ReferenceResult, compiled.program, parked, reply);
+        defer finished.deinit();
+        var observed = try contracts.decodeOwned(agent.responders.ReferenceModelObservation(P, false), allocator, finished.record.completed);
+        defer observed.deinit();
+        try std.testing.expectEqualDeep(reference, observed.value.normalized.replay.?);
+        if (status == .complete) try std.testing.expectEqual(42, observed.value.interpretation.accepted.choose.value) else try std.testing.expectEqual(.unsupported, observed.value.interpretation.rejected);
+    }
+    const unoffered: P.ReferenceResult = .{ .result = result(&.{call(.other, 73)}), .replay = reference, .replay_status = .complete, .usage = null };
+    var refused = try resumeResult(P.ReferenceResult, compiled.program, parked, unoffered);
+    defer refused.deinit();
+    var observation = try contracts.decodeOwned(agent.responders.ReferenceModelObservation(P, false), allocator, refused.record.completed);
+    defer observation.deinit();
+    try std.testing.expectEqual(.unoffered, observation.value.interpretation.rejected);
+}
+
+test "reference model identity cannot bypass the protected responder" {
+    inline for (.{ @as(?agent.admission.Role, null), @as(?agent.admission.Role, .read), @as(?agent.admission.Role, .model) }) |role| {
+        var b = source.Builder.init(allocator);
+        defer b.deinit();
+        var registry = agent.admission.Registry.init(b.allocator());
+        defer registry.deinit();
+        const c: agent.Context = .{ .builder = &b, .registry = &registry };
+        const effect = try P.declareReference(&b);
+        if (role) |classification| try registry.classify(effect, classification);
+        const entry = try b.declare(&.{try c.schema(P.ReferenceRequest)}, try c.schema(P.ReferenceResult), &.{effect}, &.{});
+        try b.define(entry, try b.term(.{ .perform = .{ .effect = effect, .payload = try b.reference(b.parameter(entry, 0)) } }));
+        try std.testing.expectError(if (role == .model) error.ProtectedEffectBypass else error.EffectRoleMismatch, agent.admission.verify(allocator, b.module(entry, try b.scalar(void)), &registry));
+    }
+}

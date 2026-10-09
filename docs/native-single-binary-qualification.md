@@ -1,0 +1,228 @@
+# Native reference qualification
+
+This records executed reference subjects, rather than a claim that every later
+commit inherits their result. The exact delivery head, current checks and serial
+review disposition are maintained on [PR #45](https://github.com/tkersey/agent/pull/45).
+The [acceptance map](native-single-binary-acceptance.md) identifies the source and
+witness for each v1.2 obligation; the [runbook](native-single-binary.md) describes
+building, launching, operating and recovering the applications.
+
+On October 7, 2026, the user retired macOS builds and tests in CI and locally.
+Current qualification runs on Linux CI; macOS observations below remain
+historical evidence for their named subjects, not qualification of later changes.
+
+## Executed subjects
+
+| Subject | Observation |
+|---|---|
+| `592483bcca02eef3663afe32fbd178df2294647d` | [Full Linux CI](https://github.com/tkersey/agent/actions/runs/37604386166): source accounting, external installation, authoring and native checks passed in **4m44s**; 92 native tests and 100 protocol-schema cases. |
+| Same subject | [Linux native/manual](https://github.com/tkersey/agent/actions/runs/37605483683) and [macOS arm64 native/manual](https://github.com/tkersey/agent/actions/runs/37605479994): isolated applications, public downstream recipe with network denied, native API/HTTPS, archive/parity and build campaign passed. |
+| `d7b7a4db6a8c09a521459bdc73968879577730f7` | [Full Linux CI](https://github.com/tkersey/agent/actions/runs/37607986892) passed in **3m43s**, including the added held-provider cancellation/unknown-recovery phase. Cancellation acknowledgment was **6.12 ms**; the four-call investigation remained independently asserted. |
+| `7b345656131d586d493166564212e12767e459ad` | [Complete required Linux CI](https://github.com/tkersey/agent/actions/runs/37671909555) passed in **4m57s**, including setup, cache transfer, all qualification lanes, clean deployment, offline public recipe, packaging and the final gate. The native lane passed 92 tests and 100 protocol-schema cases. |
+| `b08726cf6de8d29353993c1953b6d0fa93a1abdf` | [Complete required Linux CI](https://github.com/tkersey/agent/actions/runs/37685957329) passed in **3m59s**; 147 native build steps, 93 tests, 127 captured protocol-schema cases and all 15 public-recipe steps passed. This includes profile discovery, combined-schema response bounds and numeric pagination/usage repairs. The tested merge tree equals this head's tree. |
+
+The two manual runs retain tar archives for 14 days:
+[Linux x86_64](https://github.com/tkersey/agent/actions/runs/37605483683/artifacts/11475411562)
+and [macOS arm64](https://github.com/tkersey/agent/actions/runs/37605479994/artifacts/11475710697).
+Each contains `repository-agent`, the minimal example, their observed build
+manifests, a runbook, repository-example instructions and the optional TypeScript
+client. Copy only the chosen executable for deployment. These are CI build
+artifacts, not a signed/notarized release. Their recorded subject is `592483b`;
+consult the PR for newer delivery artifacts.
+
+The [Linux archive for `b08726c`](https://github.com/tkersey/agent/actions/runs/37685957329/artifacts/11511306727)
+contains the later executed applications and the same delivery files. Its SHA-256
+is `4f9331d114c58b27dc521408ac2297d241b78b0351329ed6dd658ec447ceb70e`;
+retention is 14 days. It is a CI artifact, not a release.
+
+| Target at `592483b` | Minimal executable | Repository executable | Deployment observation |
+|---|---:|---:|---|
+| `x86_64-linux.5.10...7.2-musl` | 28,385,866 bytes | 41,784,949 bytes | Ubuntu 22.04 runner; static ELF, no dynamic loader/NEEDED libraries; private user/mount/PID namespaces and 67 traced application launches. |
+| `aarch64-macos.15.7.9...15.7.9-none` | 3,530,984 bytes | 4,236,944 bytes | Native macOS 15.7.9 arm64 runner; only `/usr/lib/libSystem.B.dylib`; verified ad-hoc signature; OS file-read/executable restrictions. |
+
+Final file hashes for those archives:
+
+| Artifact | SHA-256 |
+|---|---|
+| Linux minimal | `776354f5de19e4061be0a1eeff4b3a63b3bfbc472aead5542b487453917f423a` |
+| Linux repository | `19f416a144a68de6afffd81f480cd7f795d04c9e026fd81c4849b9317688342d` |
+| macOS minimal | `ad1be12506ca572701b584f05435be994d01b8050e9a571cb2c8380063091a9e` |
+| macOS repository | `0bd3fecc5a7fce6501fc4ecdb22af8702eda44e28f3e4b8bf9321a056c24f8f9` |
+
+The manifests identify Zig 0.17.0, its executable/library digests, unchanged
+World `35f11b811b03fcaa2d696265ff8d9b9c92c8fc95` and Boundary
+`c49f743382257c7cf5512934ae3a2d0f56d4d4c0`, SQLite 3.53.4, safe optimization,
+the selected target, embedded assets and `agent-native-state/7`. Current source
+uses `agent-native-state/10` with incremental object I/O, retained occurrence
+requests and phased capture reservations;
+those earlier manifests remain historical state-7 evidence. The reference
+TLS runs use an explicit ephemeral DER root; actual live operation may instead
+use the declared OS trust roots. The native file hash is independent of the
+WASM runtime hash and does not authenticate its own executable.
+
+## What the runs exercise
+
+Both copied applications execute without access to a source checkout, build
+cache, Node/Python/Zig/npm, loose image/schema files or a WASM engine. Controllers
+and fixture TLS servers remain outside that boundary. Linux process traces reject
+unexpected executable launches; macOS prevents them through its allowlist.
+Ubuntu 24.04 rejected even untraced namespace admission, so Linux deployment uses
+22.04 with its default security policy. No OS security setting was weakened.
+
+The native public-API consumer covers child/retained continuation, yield, bound
+reply, output-capacity rollback, checkpoint restore and close. The process peer
+covers actual CLI/stdio negotiation, typed admission, durable questions, lost
+acknowledgments, stable retries, cancellation, event replay/subscriptions,
+ownership exclusion, bounded partial/output stalls, archives, expired cursors,
+public schema chunks and independent JSON Schema validation. The shared owner
+fixture reconstructs a large result from authorized chunks and rejects revoked
+artifact access.
+
+The current corpus also closes the output reader with stdin still open and no
+further request, including discovery, idle namespaces, waiting questions and held
+provider I/O. It checks bounded exit, namespace reopening and preserved unknown
+delivery without semantic cancellation or retry. The shared owner fixture reads
+16 exact chunks from a store-admitted 3 MiB task artifact into one response arena,
+using a 64 MiB allocation budget with 32 MiB reserved for SQLite and worker memory.
+This fixture measures the client allocation path, not a new process RSS claim.
+A second fixture produces real 900 KiB completed and failed outcomes below the
+1 MiB checkpoint cap, with an admitted 16 MiB resource set. SQLite, resources,
+service/program and responses share the 64 MiB runtime budget; only the absent
+16 MiB worker and 1 MiB input framer are reserved. Three 16-call batches cover
+completed, failed and mixed results, checking retained values after scratch reuse
+and keeping the full production/retrieval allocation peak. Each client call owns
+its scratch lifetime and copies only returned JSON into the response arena.
+
+The same authored fixture also runs with 900 KiB of NUL text, whose JSON encoding
+is 5,529,602 bytes. It checks completed and failed publication, the same response
+batches, reopening, export/import, and exact artifact reconstruction against an
+independent escape-byte oracle with the complete 64 MiB allocation budget.
+Terminal serialization counts before allocating; artifact and archive transfer
+use bounded buffers while checking every byte against the immutable digest.
+Client-schema cases independently compare native admission with JSON Schema for
+UTF-8 byte limits and canonical base64url, including nested values and all possible
+terminal base64 sextets. These cases run in the existing native qualification.
+
+The process peer also pipelines cancellation after a settled shutdown in both
+modes and checks unchanged task/question state after restart. Stdout stalls are
+I/O exit 74; unknown delivery and incomplete cleanup retain exit 2.
+The native writer regression fills both slot and byte limits, forces EAGAIN,
+then drains the pipe and checks that the acknowledgment precedes one close
+notification. Archive regressions erase a real acknowledged pending cancellation
+or replace required events with shape-valid historical events. Valid retries,
+pending-control recovery, post-terminal cancellation and legal event-prefix
+pruning remain explicit preservation cases.
+The deadline cases also distinguish partial writer progress from complete output
+delivery. Archive cases cover event uniqueness and chronology, question/message
+publication completeness within the available pruning prefix, changed pending
+cancellation reasons, and extra artifact records pointing at private objects.
+Later cancellation reasons preserve the first intent; authorized large-result
+reads retain their original chunk, framing and allocation assertions.
+
+The repository investigation performs native list/read, asks a client question,
+queues a Unicode follow-up during held provider I/O, survives SIGKILL/restart,
+uses its frozen snapshot after external mutation and produces an independently
+checked report. Its settled archive revalidates provider projections/replay
+objects; omission of a replay object fails and valid retry succeeds. Recorded
+question/inbox/model-v5 replies resume that exact image through three WASM and
+two native steps, with equal canonical outcomes. The later cancellation fault
+phase acknowledges while I/O is held, preserves unknown delivery across restart,
+recovers original receipts and refuses unsafe resume without another request.
+
+The HTTPS peer uses real TLS verification and independently supplied wire bytes:
+trusted success, HTTP failure, refused redirect, wrong chain/host/expiry,
+oversize, fixed-length/chunked truncation, encoding policy, plaintext rejection
+and a 100 ms held-response deadline. Provider acquisition, strict interpretation,
+replay closure and the compatible JS v3 intersection have separate witnesses.
+
+## Measurements
+
+The bounded manual build campaign uses the public minimal recipe and new compiler
+caches containing only provisioned package sources. Network access is denied.
+It performs one cold build, one unchanged build (binary equality required), and
+one embedded-resource edit (binary inequality required), then restores the source.
+It does not run on PRs or modify packaged reference binaries.
+
+| `592483b` sample | Linux x86_64 | macOS arm64 |
+|---|---:|---:|
+| Cold recipe build | 242.594 s | 246.568 s |
+| Identical warm build | 2.474 s | 4.669 s |
+| Resource-edit build | 86.798 s | 110.207 s |
+| Minimal `describe-build` wall time | 198.72 ms | 35.08 ms |
+| Minimal durable offline demo wall time | 370.03 ms | 109.67 ms |
+| Demo command RSS high-water report | 3,670,016 bytes | 40,419,328 bytes |
+| Three held-I/O ping samples | 2.64 / 3.55 / 3.35 ms | 0.64 / 0.70 / 0.31 ms |
+| Three held-I/O status samples | 6.78 / 5.65 / 5.71 ms | 0.38 / 0.93 / 0.37 ms |
+| Paired WASM in-process continuation, two steps total | 18.64 ms | 23.07 ms |
+| Paired native-process continuation, same two steps total | 15.74 ms | 20.97 ms |
+
+These are individual observations, not percentiles. RSS is the OS command
+high-water report, including isolation/controller processes; it is not summed
+simultaneous RSS or allocator payload. Native continuation timing includes
+process launch, input read, preparation/restore and output decode. Neither
+continuation column includes provider time or durable host storage. The provider
+fixture is deliberately held, so its elapsed time is not a network/model latency
+benchmark. Native/WASM host throughput equivalence and a native speedup are not
+claimed. The build summaries separately record compiler invocations, phase times,
+MaxRSS and actual cache reuse.
+
+Later runs also report program/checkpoint/frozen-resource bytes, launch-to-first
+provider-request and investigation wall time. Each recorded native continuation
+reports fresh preparation, start/restore, prepared drive/checkpoint time, World
+work counters and the outer allocator's peak requested bytes. Those samples enable
+World statistics, exclude allocator backing metadata, and keep their scope
+distinct from RSS and full process time. Investigation time includes the deliberate
+hold, client actions and forced restart; it is not live-provider latency.
+
+Declared limits are separate from measurements: 64 MiB host allocation budget,
+16 MiB SQLite heap, 256 MiB state namespace, 1 MiB protocol frame, 4 MiB retained
+outbound payload, at most 16 outstanding calls/subscriptions/nonterminal tasks,
+bounded World quanta and explicit provider request/response/deadline caps.
+
+Earlier Linux-only observations (including 4m50s at `82bff12`, 4m44s at
+`592483b`, and 3m43s at `d7b7a4d`) do not establish the current complete-workflow
+five-minute target. At `2415f66`, the Linux-only workflow took 5m00s from its
+start to GitHub completion; the earlier 4m49s report omitted its final gate.
+Complete separate platform runs took 6m27s on Linux and 9m19s on macOS.
+The PR workflow now requires Linux qualification, clean deployment, the downstream
+recipe and artifact packaging. The complete run at `7b34565` passed in 4m57s.
+The preceding build-driver change passed in 6m02s; selecting the existing Linux
+self-hosted backend for the public asset emitter reduced its compilation to 2s
+and the downstream recipe to 49.182s. Other observed Linux runs took
+6m39s–8m31s; cache restore success did not always mean compiler object reuse.
+The earlier 4m41s result at `b121ced` was also a single observation. There is no
+five-minute hosted-runner SLA. Necessary checks remain selected; the gains do not
+come from lowering safety, extending deadlines or adding runners to disguise
+work. Large Linux files were inspected: the earlier 28.2 MB minimal ELF contained
+no `.debug*` sections; its size must not be attributed to unstripped debug data.
+
+After the protocol repairs, full runs took **5m06s** at `8373df5`, **6m26s** at
+`335ef52`, and **6m00s** at `2d6e715`; all passed correctness checks but missed the
+five-minute target. Reusing the runner's authenticated package indexes reduced
+tool setup from 80s to 9s, with a refresh-and-retry fallback retained. At `b08726c`,
+the lighter native graph used four CPU-bounded build slots: the protocol peer
+started at 21:00:10 UTC, the LLVM probe compiled from 21:00:12 to 21:00:40, and
+the full workflow passed in 3m59s. Native qualification took 101s and the public
+recipe 28s. The overlap is directly observed; runner variation also affects the
+timings, so the entire improvement is not attributed to scheduling alone.
+
+## Limits and delivery posture
+
+Native core, stdio and provider-backed reference integration are implemented.
+The linked runs establish their stated reference/target observations, not live
+provider qualification. No actual model/data/spend approval or credentials were
+supplied for a live call. An operator must provide the approved fixed profile,
+credential file, task/repository inputs, writable state and network access;
+changing an old task's frozen profile is refused. No model switching, skill
+load/unload, remote custody or mobile Git publication is added.
+
+Process-crash recovery is exercised. Whole-volume malicious rollback, arbitrary
+administrator writes and power-loss guarantees beyond the selected filesystem's
+fsync semantics are not claimed. The reference history policy is namespace-bounded
+retention without automatic pruning; valid imported suffixes disclose their floor.
+
+The task's cumulative **300-second local build/test allowance is exhausted**.
+Further compilation/execution qualification, including review follow-up checks,
+must use CI. Source inspection, formatting and artifact inspection are separate.
+Required serial review remains governed by the exact PR head and its current
+evidence; do not infer completed review from this report or an older run.

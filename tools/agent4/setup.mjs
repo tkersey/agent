@@ -8,6 +8,7 @@ import { gunzipSync } from "node:zlib";
 import { isMain } from "../../runtime/cli.mjs";
 import { DEFAULT_LOCK, readDependencyLock, readRegular, sha256, inventory, gitTree,
   verifyBoundary, verifyRuntime, snapshotDependencies } from "./dependencies.mjs";
+import { provisionNativeDependency } from "./native-dependencies.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const MAX_ARCHIVE_BYTES = 128 * 1024 * 1024;
@@ -201,6 +202,7 @@ function runtimeAt(paths, lock, options) {
 }
 
 export async function setup(options = {}) {
+  if (options.native && options.authoringOnly) fail("native and authoring-only profiles are distinct");
   const paths = setupPaths(options), lockPath = resolve(options.lockPath ?? DEFAULT_LOCK);
   const lock = readDependencyLock(lockPath);
   const toolchain = selectZig(options.zig ? ["--zig-exe", options.zig] : []), zig = toolchain.executable;
@@ -220,12 +222,15 @@ export async function setup(options = {}) {
       sourceAt(paths.worldSource, worldBytes, lock.world, paths, options.verifyOnly);
       runtimeAt(paths, lock, selected);
     }
+    const native = options.native ? await provisionNativeDependency(paths, {offline: options.offline, verifyOnly: options.verifyOnly}) : null;
     const observations = snapshotDependencies({ ...paths, boundaryArchive, worldArchive,
       boundaryPackage, boundaryPackageProfile: "archive-extracted",
       authoringOnly: options.authoringOnly, lockPath });
+    if (native) observations.native = native.observation;
     return { status: lock.status, toolchain: toolchain.identity, workDir: paths.workDir, boundaryPackage,
       boundaryPackageProfile: "archive-extracted",
       boundarySource: paths.boundarySource,
+      ...(native ? {nativeSource: native.source} : {}),
       ...(options.authoringOnly ? {} : { worldRuntime: paths.worldRuntime }), observations };
   };
   if (options.verifyOnly) { const result = await perform(); toolchain.assertUnchanged(); return result; }
@@ -240,7 +245,7 @@ function parse(args) {
   const options = {}, seen = new Set();
   const values = new Map([["--work-dir", "workDir"], ["--lock", "lockPath"], ["--zig", "zig"], ["--zig-exe", "zig"]]);
   const toggles = new Map([["--offline", "offline"], ["--verify-only", "verifyOnly"],
-    ["--authoring-only", "authoringOnly"]]);
+    ["--authoring-only", "authoringOnly"], ["--native", "native"]]);
   while (args.length) {
     const arg = args.shift();
     if (seen.has(arg)) fail(`duplicate option: ${arg}`);

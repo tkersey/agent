@@ -13,7 +13,10 @@ unknown named imports, escaping source imports and unaccounted embedded inputs
 still reject. The full installation also scans before selecting the compiler or
 creating its work directory. A scan pass is not an installation pass.
 
-After source accounting succeeds, the three independent qualification jobs run.
+After source accounting succeeds, installation, authoring and native product
+qualification run on Linux x86_64. The workflow has no macOS jobs or manual
+macOS selection. Local macOS builds and tests are also out of scope; validation
+for this work runs on Linux CI.
 Routine runs use matrix fail-fast: a failed job cancels unfinished siblings.
 Manual `collect_all=true` permits independent jobs to continue even after a
 source failure; all failed outcomes remain failures. This is explicit diagnostic
@@ -67,6 +70,59 @@ zig build check-native -Doptimize=safe \
   -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
 ```
 
+The native lane provisions its additional pinned SQLite C/header inputs with
+`node tools/agent4/setup.mjs --native`. Pure authoring and installation do not
+acquire SQLite. Native framing/value/occurrence/storage tests run with the native
+module as an explicit test root: Zig does not collect a named dependency module's
+tests from the authoring test root. The existing shared authoring root exercises
+integration with real authored programs; `check-native-host` selects the final
+example's independent subprocess peer. No existing native or custody check is removed.
+When the product target is runnable on the host, runtime unit tests use that
+product environment too, including Linux musl rather than only the host's glibc ABI.
+
+The protocol subprocess peer checks the published protocol schemas. Its
+independent Draft 2020-12 validator runs through
+`uv run --no-project --no-config --python 3.12 --with jsonschema==4.23.0`.
+This qualification dependency is not acquired by pure authoring/installation
+and is never a launch dependency of the copied executable.
+
+Native verification reuses the minimal application's emitted image for the
+public World API probe; the former N0-only emitter is removed. The probe retains
+output-capacity rollback, checkpoint/restore, yield, and terminal-close checks.
+Both native examples now use the existing shared fixture compiler and the public
+helper's asset writer, removing two standalone compiler invocations.
+On Linux x86_64, build-time emitters and contract-test executables select Zig's
+self-hosted backend while retaining the requested optimization/safety mode.
+Linux x86_64 application binaries also use that backend; the public native
+API/HTTPS probe retains LLVM. Copied-binary witnesses still run in full.
+SQLite and the native C shim are compiled once per target ABI into a static
+library, with the same flags and dependency admission, then linked by consumers.
+The optimized standard-library SHA helper shares a private Zig-declared C ABI
+with its caller. Its static-library build therefore does not depend on the
+separate SQLite/libc header translation; those two build steps can run together.
+The caller's bounded executable reads and metadata checks remain unchanged.
+Locked dependency bytes are cached separately from compiler outputs. Setup still
+authenticates their archives, inventories, package hashes and runtime bindings
+on every run; the installation lane still provisions its own fresh inputs.
+The durable-owner test compiles its one image once for both direct and captured
+acquisition recovery. It also retains the inbox contract-conflict and message-ID
+checks formerly split into a separate inbox fixture. `native_repository.mjs`
+is the single repository application witness: an offline launch smoke check and
+one controlled HTTPS investigation with native reads, clarification, queued
+follow-up, forced restart, frozen evidence, and retained budgets. It uses the
+existing TypeScript client, replacing its repeated minimal-task conversation in
+`native_host.mjs`. Transport fault cases, raw-capture recovery, storage failures,
+protocol faults and native/WASM correspondence retain their existing witnesses;
+the application happy path does not replace those distinct boundaries.
+That same peer adds one held-call cancellation fault phase: prompt acknowledgment,
+unknown delivery after interruption, restart, durable request replay and refusal
+to resume the unknown occurrence. It adds no executable or second investigation
+fixture; the successful investigation's four calls remain separately asserted.
+The object-and-receipt transaction test also retains the former SQLite smoke
+test's binary round-trip, single-connection and heap assertions; the duplicate
+raw SQL transaction fixture is removed. Namespace recovery retains its seal-gap
+and post-recovery publication checks without repeating the receipt fixture.
+
 `check-agent4` and `check` still include the external installation and all
 previously retained authoring obligations. The native lane also runs the retained custody and deployment regressions.
 Splitting jobs can still repeat some shared compiler work; lower wall-clock time
@@ -82,9 +138,151 @@ the cause of all the elapsed build time.
 Compiler setup still caches its compiler download, but its automatic compilation
 cache restore/save is disabled. Explicit Actions restore/save handles `.zig-cache`
 with a versioned namespace per OS, architecture, Zig version, qualification lane
-and dependency-lock hash. It does not cache `.agent4` source/runtime inputs or the
-external consumer's deliberately isolated caches. Authentication still runs;
-a cache hit is not qualification.
+and dependency-lock hash. A separate lock-keyed cache retains dependency source,
+package and runtime bytes; setup authenticates all restored inputs on every run.
+The external consumer's deliberately isolated caches remain fresh. A cache hit
+is not qualification.
+
+Version 2 uses the action's stable tool-cache installation path and passes
+fixture selection as an explicit command argument. Previously, changing compiler
+paths and inherited CI run IDs changed generated-output locations; native run
+`37576438055` reached 8,865,601,430 cache bytes and correctly skipped saving.
+The new namespace leaves that older cache intact and retains the same 8 GiB cap.
+
+Native qualification now uses the `native3` cache profile for stripped native
+libraries and debug test roots. Run `37651145371` restored 8,366,409,421 bytes
+from the historical native cache and finished at 8,704,031,083 bytes, above the
+unchanged 8 GiB save cap. Its new objects could not be retained. The new profile
+leaves that remote cache intact; authoring and locked-input cache keys are
+unchanged. Qualification still runs on every restored cache. A populated-profile
+rerun must establish actual compiler reuse and complete workflow duration;
+changing the key alone is not a performance result.
+
+Native `native5` uploads a complete snapshot only when the entire cache fits
+4 GiB. Files are hard-linked into a fresh upload directory after compilation;
+empty directories are preserved and source files are never erased or modified.
+An oversized cache is not partially saved: the previous complete remote entry
+remains available, so new compiler variants may need rebuilding on later runs.
+Restore uses the usual cache path before dependency authentication and compilation.
+
+The earlier `native4` policy retained metadata while dropping older object
+directories. Run `37791898515` restored that bounded partial cache but failed to
+link because `libcompiler_rt.a` was missing. Missing compiler-internal outputs
+are therefore not guaranteed to become ordinary cache misses. Native5 has no
+native4 fallback; old remote entries remain intact. This replaces object-age
+selection with one opaque cache transfer boundary and retains the 4 GiB limit.
+The earlier native3 cache exceeded 8 GiB and took 53 seconds to restore in run
+`37750804226`; increasing that limit or resetting a key alone is not the remedy.
+Compiler reuse and complete-workflow duration still require actual measurement.
+Authoring keeps its existing cache policy.
+
+Native CI sets `ZIG_DEBUG_CMD=1` for Zig's internal on-demand build commands.
+The pinned compiler applies this to its build driver and translation helper,
+not to application compilation. Explicit `-Doptimize=safe`, the probe's LLVM
+backend and every existing qualification assertion remain selected. This targets
+the observed 89-second delay before the first build-graph command; its complete
+workflow effect must be measured separately from a cache restore.
+
+The native build-worker count matches the runner's online CPU count, allowing
+the lightweight test roots and protocol peers to overlap independent compilation.
+Missing system tools first use the runner's existing authenticated package indexes;
+installation failure triggers one index refresh and retry, followed by the actual
+namespace preflight. Neither choice removes a qualification obligation.
+
+The Linux products use Zig's self-hosted backend in the selected `safe` mode;
+non-debug products strip debug information. The API/HTTPS probe retains LLVM:
+its self-hosted experiment compiled faster but failed the existing 100 ms held
+request classification, so that experiment was reverted without changing the
+deadline or assertion. Both delivered products passed their complete existing
+process witnesses with the selected backend.
+
+Safe builds compile the SQLite amalgamation with `-O1`; the remaining C and Zig
+code retains the selected optimization mode. Zig's safe-mode fortification,
+undefined-behavior traps and stack protection remain enabled. The same flag
+selection supplies compilation and the delivered manifest. This targets the
+52-second root and 44-second downstream SQLite compilations observed in run
+37698237331 (5m59s overall); the new complete-workflow result remains to be measured.
+
+Measured full Linux workflows on GitHub's Ubuntu 24.04 runners:
+
+| Head | Result | Wall time |
+| --- | --- | --- |
+| `f07e157` initial consolidation | passed | 12m27s |
+| `bfef3f2` fresh compiler-cache namespace | passed | 5m49s |
+| `bfef3f2` restored-cache rerun | passed; still recompiled | 8m31s |
+| `d435e51` self-hosted products | passed | 5m19s |
+| `b121ced` stripped products | passed | 4m41s |
+
+The last run is [37580297873](https://github.com/tkersey/agent/actions/runs/37580297873):
+148 native build steps, 91 native tests, both copied application witnesses,
+controlled HTTPS, authoring and installation passed. Its minimal executable
+was 26,980,021 bytes and `describe-build` took 891 ms; held-I/O repository control
+took 4.15 ms. These are observed runs with runner variability, not a latency SLA
+or proof that restoring a cache alone improves compilation. Later changes need
+their own measurements.
+
+PR, main-branch and manual runs qualify Linux only. Native qualification runs
+the full `check-native`, including the existing mobility JavaScript regressions.
+The user retired macOS builds and tests, both in CI and locally, on October 7,
+2026. Earlier macOS runs remain historical
+evidence for their exact subjects; current changes receive no macOS CI claim.
+
+Both application peers use one shared deployment controller. Linux checks ELF
+linkage and launches the copied executable inside private user/mount/PID
+namespaces, tracing process/file access. Only that executable and chosen user
+data are mounted. macOS checks Mach-O linkage and code-signature validity, then
+uses an OS file-read/executable allowlist. Controller code, CA signing keys,
+source trees and build caches stay outside the application boundary. These are
+qualification boundaries; the delivered executable does not install a sandbox.
+Linux qualification requires `bubblewrap` and `strace`. The native lane uses
+Ubuntu 22.04's default security policy: Ubuntu 24.04 rejected even the untraced
+namespace preflight in run `37593270488`. No OS security setting is disabled to
+admit qualification; the source/authoring/installation lanes remain on 24.04.
+
+Successful native jobs retain a 14-day CI artifact containing the two
+executables, their observed build manifests, the runbook and optional TypeScript
+client. Before packaging, they build the example's independent public recipe
+with network access denied and a prefix containing spaces/Unicode, compare its
+program/assets/toolchain to the repository product, and execute its offline
+demo. This exercises the downstream dependency API rather than claiming that
+the repository's internal builder call proves it.
+Clean deployment, the downstream recipe and artifact packaging are mandatory
+on Linux in every full PR workflow. The five-minute target covers the
+complete workflow, including setup, cache transfer and the final aggregate gate.
+The current native qualification has an explicitly authorized six-minute
+maximum (360 seconds); the five-minute target remains.
+At `2415f66`, the earlier Linux-only workflow
+took 5m00s from start to GitHub completion (4m59s through the final required job);
+the separate complete platform runs took 6m27s on Linux and 9m19s on macOS.
+At `7b345656131d586d493166564212e12767e459ad`, the complete Linux-only
+[workflow](https://github.com/tkersey/agent/actions/runs/37671909555) passed in
+**4m57s**, from creation through the final gate. All required lanes passed,
+including 92 native tests, 100 protocol-schema cases, clean deployment, the
+offline downstream recipe and packaging. The recipe took 49.182s; its asset
+emitter compiled in 2s using the existing Linux self-hosted backend, compared
+with roughly a minute using LLVM in the preceding 6m02s workflow. The C library
+still compiled in both build roots. These are individual hosted-runner samples,
+not a guarantee that every future run finishes within five minutes.
+
+Compiler cache selection prefers the exact locked dependencies, then permits
+reuse within the same compiler/OS/architecture/lane. Package allowlist edits no
+longer discard all compiled objects. Zig still checks compilation inputs and
+every restored dependency still passes the source/runtime authentication steps.
+An explicitly selected manual `measure_builds` run uses a new compiler cache
+containing only provisioned packages, then measures one cold, one identical
+warm and one embedded-resource-edit recipe build. The warm binary must match
+exactly and the edited binary must differ. This bounded campaign does not run
+on PRs or routine manual runs and never changes the packaged reference binaries.
+
+Existing application/parity witnesses also report describe-build time, demo
+wall time and the OS command RSS high-water mark (including isolation helpers,
+not simultaneous aggregate memory). Paired recorded-reply continuation reports
+separate in-process WASM time and native process time; the latter includes
+launch, input reading and preparation. Neither is a production host throughput
+comparison or includes provider time or durable host storage.
+
+A tar archive preserves executable permissions. This is build-artifact
+delivery, not release signing, notarization or a published release.
 
 Before and after each applicable lane, `.github/scripts/zig-cache.mjs` records
 the restored key, logical file bytes, file count and top-level bucket sizes
@@ -92,13 +290,14 @@ the restored key, logical file bytes, file count and top-level bucket sizes
 actual Zig cache reuse separately. A prefix restore can be useful even when the
 Actions exact-key `cache-hit` value is false.
 
-Only nonempty caches containing object bytes, no unsupported entry types, and
+Only nonempty uploads containing object bytes, no unsupported entry types, and
 at most **8 GiB** are saved, including after a completed failing check. An
 oversized cache is **not cleared**: upload is skipped and the previous remote
-entry remains available. Empty/metadata-only caches never replace useful ones.
+entry remains available. Native uses the separate 4 GiB snapshot described above;
+its working cache may exceed that bound. Empty/metadata-only caches never replace useful ones.
 Cancellation does not publish an in-progress cache. Cache infrastructure failures
-are diagnostic and cannot convert a failing test into a pass. No pruning policy
-or higher size limit is introduced without new content/restore measurements.
+are diagnostic and cannot convert a failing test into a pass. Local build outputs
+are never pruned to make an upload fit.
 
 ## Incident and acceptance
 
@@ -138,6 +337,13 @@ producer. These are assurance boundaries, not arbitrary sharding preferences.
 No optimization mode changes: the existing `safe` selection applies to both
 shared drivers and retained runtime checks. Shared drivers may repeat across CI jobs; no cross-job linkage or previously
 passing test result is reused as correctness evidence.
+
+Backend parity now belongs to the integrated repository witness. Its actual
+question checkpoint and recorded native replies cross WASM and the existing
+native API probe, comparing every continuation's canonical output and the final
+independently checked report. This replaces the narrower minimal-example WASM
+continuation and its extra terminal export; the minimal CLI and API witnesses
+retain their native leaf, yield, question, cleanup and lifecycle assertions.
 
 When changing this grouping, compare discovered named-test multisets and the
 complete emitted-file inventory, including byte hashes, on the same authenticated

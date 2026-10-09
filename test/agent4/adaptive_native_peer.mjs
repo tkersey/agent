@@ -242,7 +242,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         assert.equal(call[3], toolNames.indexOf(expectedCall.name));
         const context = decodeValue(schemas.AdaptiveContext, archive.object(reply[1].value[0]));
         assert.equal(context.length, 14); assert.deepEqual(context[2], archive.task.id);
-        assert.equal(context[0], 'agent.model.context.responses.adaptive.v2'); assert.deepEqual(context[1], request[1]);
+        assert.equal(context[0], 'agent.model.context.responses.adaptive.v3'); assert.deepEqual(context[1], request[1]);
         assert.equal(context[3], archive.task.tenant); assert.equal(context[4], frozenProfile.adaptive.audience);
         assert.equal(context[6], request[2][2]);
         assert.deepEqual(context[5], request[2]); assert.deepEqual(context[7], plan); assert.equal(context[8], BigInt(index + 1));

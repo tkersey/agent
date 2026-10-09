@@ -41,7 +41,7 @@ polish is deferred, not a blocker on the reusable API or reference integration.
 | `eviction_generation` | Authored exclusion fence. Every newly selected lineage must respect it. |
 | `AdaptiveContextReference` | Content reference plus schema, policy, inference selection, task, tenant, audience, epoch, watermark, and eviction bindings. |
 
-The additional identities are `agent.model.context.responses.adaptive.v2`,
+The additional identities are `agent.model.context.responses.adaptive.v3`,
 `agent.model.policy.adaptive.v1`, and `agent.model.seed.adaptive.v1`. The v5
 `agent.model.context.responses.v1` reference is not an adaptive reference.
 
@@ -95,8 +95,11 @@ transient deactivation remove owned injected instructions and exclusive tool
 definitions. Projection records each injected body's catalog identity; it never
 identifies an injection by searching for equal text in evidence. Each opaque
 output records the approved skills it could have observed, including dependency
-carried by retained opaque output. Eviction excludes dependent opaque output
-while preserving output from before activation or an inactive interval.
+carried by retained opaque output. Body eviction excludes dependent opaque output while preserving unrelated output,
+including inactive intervals. Definition removal separately excludes opaque output
+that could have observed a removed tool definition. Retained tool additions must
+satisfy the destination profile; cache markers are removed when it disables
+explicit caching.
 
 Model changes preserve compatible visible messages and complete settled
 call/result exchanges. They exclude old opaque reasoning and old-profile
@@ -111,7 +114,7 @@ constructs a second JSON representation of task state for ordinary transitions.
 The generic explicit seed operation remains separately available to an author
 that deliberately supplies a replacement context; the reference does not use it.
 
-Context schema v2 includes per-item projection provenance. Exact application,
+Context schema v3 includes per-item projection provenance. Exact application,
 image, schema and runtime bindings remain recovery gates; old saved tasks are
 not migrated or reinterpreted under a new build.
 

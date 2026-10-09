@@ -229,7 +229,7 @@ pub fn Projection(comptime P: type) type {
         /// an injection. Only opaque output that could have seen an evicted
         /// skill is excluded. A profile switch excludes all old opaque output
         /// and effort updates, without relabeling either for the new profile.
-        fn revise(ctx: registry.ProjectionContext, history: *json.Value, origins: *std.ArrayList(P.ContextOrigin), old: P.AdaptiveContext, request: P.AdaptiveRequest, catalog: P.AdaptiveCatalog) !void {
+        fn revise(ctx: registry.ProjectionContext, history: *json.Value, origins: *std.ArrayList(P.ContextOrigin), old: P.AdaptiveContext, request: P.AdaptiveRequest, catalog: P.AdaptiveCatalog, explicit_cache: bool) !void {
             const a = ctx.allocator;
             const changed_profile = !equal(&old.selection.profile_digest, &request.selection.profile_digest);
             var removed_skills: u32 = 0;
@@ -257,7 +257,9 @@ pub fn Projection(comptime P: type) type {
                         retain = true;
                     };
                 }
-                if (kind(item, "reasoning") and (changed_profile or origin.reasoning_skills & removed_skills != 0)) retain = false;
+                var removed_definition = false;
+                for (origin.reasoning_tools, request.materialized) |seen, defined| removed_definition = removed_definition or (seen and !defined);
+                if (kind(item, "reasoning") and (changed_profile or origin.reasoning_skills & removed_skills != 0 or removed_definition)) retain = false;
                 if (kind(item, "configuration_update") and changed_profile) retain = false;
                 if (kind(item, "additional_tools")) {
                     const original = try field(item, "tools");
@@ -277,7 +279,7 @@ pub fn Projection(comptime P: type) type {
                 // After a necessary edit, old suffix breakpoints describe new
                 // prefixes. Keep eligible markers before the edit and select
                 // one current suffix boundary below instead of rewriting all.
-                if (changed) stripMarker(&item);
+                if (changed or !explicit_cache) stripMarker(&item);
                 try kept.array.append(item);
                 try kept_origins.append(a, origin);
             }
@@ -325,7 +327,7 @@ pub fn Projection(comptime P: type) type {
                 } else {
                     if (request.plan.epoch != try std.math.add(u64, old.plan.epoch, 1) or
                         request.plan.eviction_generation != try std.math.add(u64, old.plan.eviction_generation, @intFromBool(removing))) return error.InvalidContext;
-                    if (same_profile and request.plan.reason == .eviction and request.invocation.parameters.reasoning.?.effort.? != old.top_effort) return error.InvalidContext;
+                    if (same_profile and request.plan.handoff == null and request.plan.reason == .eviction and request.invocation.parameters.reasoning.?.effort.? != old.top_effort) return error.InvalidContext;
                 }
                 history = (try json.parse(a, old.items.bytes, .{ .bytes = 2 * 1024 * 1024 })).value;
                 if (old.origins.items.len != history.array.items.len) return error.InvalidContext;
@@ -353,7 +355,7 @@ pub fn Projection(comptime P: type) type {
                         try fillOrigins(a, &origins, history.array.items.len, request.plan.watermark);
                         new_start = 0;
                     } else {
-                        try revise(ctx, &history, &origins, old, request, catalog);
+                        try revise(ctx, &history, &origins, old, request, catalog, selected.profile.explicit_cache);
                         new_start = 0;
                         while (new_start < origins.items.len and origins.items[new_start].watermark < request.plan.watermark) new_start += 1;
                     }
@@ -381,6 +383,7 @@ pub fn Projection(comptime P: type) type {
             var core = list(a);
             for (frozen.core_tools, P.allDeclarations().items) |enabled, declaration| if (enabled) try core.array.append(try tool(a, declaration));
             for (history.array.items) |item| if (kind(item, "additional_tools")) {
+                if (!selected.profile.additional_tools) return error.IncompatibleProfile;
                 for ((try field(item, "tools")).array.items) |definition| defined[try ordinal(try json.text(try field(definition, "name")))] = true;
             };
             for (request.plan.skills.items) |loaded| {

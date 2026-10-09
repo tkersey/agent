@@ -184,7 +184,7 @@ definitions, and work dispatch binds to that captured call. Queued user messages
 are consumed through the authored inbox only after the current call settles.
 
 The new contracts are `agent.model.invoke.v6` and
-`agent.model.context.responses.adaptive.v2`. Existing v3/v4/v5 consumers and the
+`agent.model.context.responses.adaptive.v3`. Existing v3/v4/v5 consumers and the
 fixed `repository-agent` keep their meanings. Reports expose bounded evidence
 and control receipts; raw provider captures and opaque reasoning are not public
 report artifacts. Absent usage remains unavailable. Explicit cache markers and

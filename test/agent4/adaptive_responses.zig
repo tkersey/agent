@@ -91,11 +91,18 @@ test "adaptive projection preserves history and owns skill and opaque eviction" 
     var other = inference;
     other.id.bytes = "other";
     other.model.bytes = "fixture-model-b";
+    var no_additions = other;
+    no_additions.id.bytes = "without-additions";
+    no_additions.additional_tools = false;
+    var no_cache = other;
+    no_cache.id.bytes = "without-cache";
+    no_cache.explicit_cache = false;
+    no_cache.cache_diagnostics = false;
     const policy: P.AdaptivePolicy = .{
         .schema = .{ .bytes = P.adaptive_policy_identity },
         .endpoint = .{ .bytes = "https://example.test/v1/responses" },
         .audience = .{ .bytes = "fixture" },
-        .profiles = .{ .items = &.{ inference, other } },
+        .profiles = .{ .items = &.{ inference, other, no_additions, no_cache } },
         .catalog = catalog,
         .core_tools = .{ true, false },
         .permitted_tools = .{ true, true },
@@ -216,6 +223,21 @@ test "adaptive projection preserves history and owns skill and opaque eviction" 
     }
     try std.testing.expect(retained_reasoning);
     try std.testing.expectEqual(1, (try http(a, inactive)).object.get("tool_choice").?.object.get("tools").?.array.items.len);
+    // Previously materialized extensions remain subject to destination approval.
+    var restricted = request;
+    restricted.plan.epoch += 1;
+    restricted.plan.reason = .model_change;
+    restricted.invocation.model = no_additions.model;
+    restricted.invocation.parameters.reasoning.?.effort = .medium;
+    restricted.selection = .{ .profile_id = no_additions.id, .profile_digest = try Admission.profileDigest(a, no_additions), .effective_effort = .medium, .control_revision = 3 };
+    try std.testing.expectError(error.IncompatibleProfile, Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, restricted)));
+    restricted.selection.profile_id = no_cache.id;
+    restricted.selection.profile_digest = try Admission.profileDigest(a, no_cache);
+    const uncached = try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, restricted));
+    const uncached_http = try native.json.canonical(a, try http(a, uncached));
+    try std.testing.expect(std.mem.indexOf(u8, uncached_http, "prompt_cache_breakpoint") == null);
+    try std.testing.expect(std.mem.indexOf(u8, uncached_http, "prompt_cache_options") == null);
+    try std.testing.expect(std.mem.indexOf(u8, uncached_http, "additional_tools") != null);
     // Eviction must advance its fence, but does not replace the transcript.
     request.plan.skills.items = &.{};
     request.materialized = .{ true, false };
@@ -248,6 +270,28 @@ test "adaptive projection preserves history and owns skill and opaque eviction" 
             try std.testing.expect(!std.mem.eql(u8, definition.object.get("name").?.string, "inspect"));
         };
     }
+    // Explicit replacement is a different operation from preserved-history
+    // eviction: its fresh seed initializes top-level effort to effective high.
+    const seed: P.AdaptiveSeed = .{
+        .schema = .{ .bytes = P.adaptive_seed_identity },
+        .policy = request.policy,
+        .task = ctx.task,
+        .tenant = .{ .bytes = ctx.tenant },
+        .audience = policy.audience,
+        .selection = request.selection,
+        .epoch = request.plan.epoch,
+        .watermark = request.plan.watermark,
+        .eviction_generation = request.plan.eviction_generation,
+        .source = second.replay.?,
+        .messages = .{ .items = &.{.{ .role = .developer, .content = .{ .bytes = "Explicitly authorized replacement." } }} },
+    };
+    var replacement = request;
+    replacement.plan.handoff = try objects.add(a, try contracts.encodeOwned(P.AdaptiveSeed, a, seed));
+    replacement.invocation.parameters.reasoning.?.effort = .high;
+    const replaced = try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, replacement));
+    const replaced_http = try http(a, replaced);
+    try std.testing.expectEqualStrings("high", replaced_http.object.get("reasoning").?.object.get("effort").?.string);
+    try std.testing.expectEqual(@as(usize, 1), replaced_http.object.get("input").?.array.items.len);
     // Original captures and the original projection remain byte-identical.
     try std.testing.expect(std.mem.indexOf(u8, loaded_bytes, skill_body) != null);
     var graft = request;
@@ -317,4 +361,18 @@ test "adaptive projection preserves history and owns skill and opaque eviction" 
     try std.testing.expect(std.mem.indexOf(u8, reevicted_http, "INACTIVE-OPAQUE") != null);
     try std.testing.expect(std.mem.indexOf(u8, reevicted_http, "FIRST-TRANSIENT-OPAQUE") == null);
     try std.testing.expect(std.mem.indexOf(u8, reevicted_http, "SECOND-TRANSIENT-OPAQUE") == null);
+    // Inactive transient bodies are absent, but their definitions remain.
+    // Unload must now remove opaque output that saw those exclusive definitions.
+    try advance(ctx, &objects, &request, "deactivated-again", "AFTER-DEACTIVATION-OPAQUE");
+    request.plan.skills.items = &.{};
+    request.invocation.tools.items = P.allDeclarations().items[0..1];
+    request.materialized = .{ true, false };
+    request.plan.epoch += 1;
+    request.plan.eviction_generation += 1;
+    request.selection.control_revision += 1;
+    const unloaded = try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, request));
+    const unloaded_http = try native.json.canonical(a, try http(a, unloaded));
+    try std.testing.expect(std.mem.indexOf(u8, unloaded_http, "CLEAN-OPAQUE") != null);
+    try std.testing.expect(std.mem.indexOf(u8, unloaded_http, "INACTIVE-OPAQUE") == null);
+    try std.testing.expect(std.mem.indexOf(u8, unloaded_http, "AFTER-DEACTIVATION-OPAQUE") == null);
 }

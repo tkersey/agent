@@ -361,7 +361,8 @@ pub fn Adapter(comptime P: type) type {
             var projected = try Context.render(ctx, request.value, policy, selected, catalog.value);
             for (output.array.items) |item| {
                 try projected.history.array.append(try responses.replayItem(ctx.allocator, item));
-                try projected.origins.append(ctx.allocator, .{ .watermark = request.value.plan.watermark, .reasoning_skills = if (jsonTextEquals(item, "type", "reasoning")) projected.reasoning_skills else 0 });
+                const reasoning_item = jsonTextEquals(item, "type", "reasoning");
+                try projected.origins.append(ctx.allocator, .{ .watermark = request.value.plan.watermark, .reasoning_skills = if (reasoning_item) projected.reasoning_skills else 0, .reasoning_tools = if (reasoning_item) request.value.materialized else @splat(false) });
             }
             var pending = Context.pending(ctx.allocator, projected.history) catch return unsupported(ctx, .unsupported_output_item, observed.value);
             pending.deinit();

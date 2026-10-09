@@ -94,6 +94,9 @@ entries; this deployment admits 14, leaving two of the native host's 16 frozen
 resource slots for snapshot and catalog. At most four skills may be active.
 Context and continuation limits can reject a
 proposed transition before it is acknowledged.
+The task admits four answers and follow-ups in total. At that limit it stops
+offering questions and polling the inbox; later queued messages remain retained
+and are reported as not consumed when the task finishes.
 
 The adaptive model reply has a 16 KiB aggregate projection ceiling, independent
 of the 512 KiB raw response ceiling. An oversized projection returns a typed

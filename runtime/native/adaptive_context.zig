@@ -30,6 +30,23 @@ fn kind(item: json.Value, expected: []const u8) bool {
 fn list(a: std.mem.Allocator) json.Value {
     return .{ .array = .init(a) };
 }
+fn only(value: json.Value, keys: []const []const u8) !void {
+    if (value != .object) return error.InvalidContext;
+    for (value.object.keys()) |key| {
+        var allowed = false;
+        for (keys) |candidate| allowed = allowed or equal(key, candidate);
+        if (!allowed) return error.InvalidContext;
+    }
+}
+fn inputPart(part: json.Value) !void {
+    try only(part, &.{ "type", "text", "prompt_cache_breakpoint" });
+    if (!kind(part, "input_text")) return error.InvalidContext;
+    _ = try json.text(try field(part, "text"));
+    if (json.get(part, "prompt_cache_breakpoint")) |marker| {
+        try only(marker, &.{"mode"});
+        if (!equal(try json.text(try field(marker, "mode")), "explicit")) return error.InvalidContext;
+    }
+}
 fn read(ctx: registry.ProjectionContext, reference: anytype, limit: usize) ![]u8 {
     if (reference.bytes == 0 or reference.bytes > limit) return error.Capacity;
     const bytes = try ctx.object(.{ .digest = reference.digest, .bytes = reference.bytes }, limit);
@@ -127,19 +144,53 @@ pub fn Projection(comptime P: type) type {
             if (items != .array or items.array.items.len > 8192) return error.Capacity;
             var calls = std.StringHashMap(void).init(a);
             errdefer calls.deinit();
+            var previous_update = false;
             for (items.array.items) |item| {
+                if (item != .object) return error.InvalidContext;
                 if (kind(item, "function_call")) {
                     _ = try responses.replayItem(a, item);
                     const id = try json.text(try field(item, "call_id"));
                     if ((try calls.getOrPut(id)).found_existing) return error.InvalidContext;
                 } else if (kind(item, "function_call_output")) {
-                    _ = try json.text(try field(item, "output"));
+                    try only(item, &.{ "type", "call_id", "output" });
+                    const output = try field(item, "output");
+                    if (output == .array) {
+                        if (output.array.items.len != 1) return error.InvalidContext;
+                        try inputPart(output.array.items[0]);
+                    } else _ = try json.text(output);
                     if (!calls.remove(try json.text(try field(item, "call_id")))) return error.CallPairMismatch;
                 } else if (kind(item, "additional_tools") or kind(item, "configuration_update") or json.get(item, "type") == null) {
                     if (calls.count() != 0) return error.MissingCallResult;
+                    if (kind(item, "additional_tools")) {
+                        try only(item, &.{ "type", "role", "tools" });
+                        if (!equal(try json.text(try field(item, "role")), "developer")) return error.InvalidContext;
+                        const tools = try field(item, "tools");
+                        if (tools != .array or tools.array.items.len == 0 or tools.array.items.len > P.declaration_count) return error.InvalidContext;
+                        for (tools.array.items) |declaration| {
+                            try only(declaration, &.{ "type", "name", "description", "parameters", "strict" });
+                            if (!kind(declaration, "function") or (try field(declaration, "parameters")) != .object or
+                                (try field(declaration, "strict")) != .bool or !(try field(declaration, "strict")).bool) return error.InvalidContext;
+                            _ = try json.text(try field(declaration, "name"));
+                            _ = try json.text(try field(declaration, "description"));
+                        }
+                    } else if (kind(item, "configuration_update")) {
+                        if (previous_update) return error.InvalidContext;
+                        try only(item, &.{ "type", "reasoning" });
+                        const reasoning = try field(item, "reasoning");
+                        try only(reasoning, &.{"effort"});
+                        _ = std.meta.stringToEnum(@FieldType(@FieldType(P.AdaptiveRequest, "selection"), "effective_effort"), try json.text(try field(reasoning, "effort"))) orelse return error.InvalidContext;
+                    } else {
+                        try only(item, &.{ "role", "content" });
+                        const role = try json.text(try field(item, "role"));
+                        if (!equal(role, "system") and !equal(role, "developer") and !equal(role, "user") and !equal(role, "assistant")) return error.InvalidContext;
+                        const content = try field(item, "content");
+                        if (content != .array or content.array.items.len != 1) return error.InvalidContext;
+                        try inputPart(content.array.items[0]);
+                    }
                 } else {
                     _ = try responses.replayItem(a, item);
                 }
+                previous_update = kind(item, "configuration_update");
             }
             return calls;
         }
@@ -150,6 +201,7 @@ pub fn Projection(comptime P: type) type {
             var previous: ?contracts.Decoded(P.AdaptiveContext) = null;
             defer if (previous) |*saved| saved.deinit();
             var same_epoch = false;
+            var new_start: usize = 0;
             if (request.plan.prior) |ref| {
                 previous = try open(ctx, ref, frozen.audience.bytes);
                 // Audit parents remain required even across an eviction. Free
@@ -181,6 +233,7 @@ pub fn Projection(comptime P: type) type {
                         request.invocation.parameters.reasoning.?.effort.? != old.top_effort or
                         !same(request.plan.handoff, old.plan.handoff) or request.plan.reason != old.plan.reason) return error.InvalidContext;
                     history = (try json.parse(a, old.items.bytes, .{ .bytes = 2 * 1024 * 1024 })).value;
+                    new_start = history.array.items.len;
                 } else {
                     if (request.plan.epoch != try std.math.add(u64, old.plan.epoch, 1) or
                         request.plan.eviction_generation != try std.math.add(u64, old.plan.eviction_generation, @intFromBool(removing))) return error.InvalidContext;
@@ -197,11 +250,11 @@ pub fn Projection(comptime P: type) type {
                     // The old exchange must be settled even when represented by
                     // a handoff; a reset cannot discard an outstanding call.
                     var old_history = (try json.parse(a, old.items.bytes, .{ .bytes = 2 * 1024 * 1024 })).value;
-                    try settle(a, &old_history, request);
-                    for (value.messages.items) |item| try history.array.append(try message(a, @tagName(item.role), try a.dupe(u8, item.content.bytes), selected.profile.explicit_cache));
+                    try settle(a, &old_history, request, selected.profile.explicit_cache);
+                    for (value.messages.items, 0..) |item, index| try history.array.append(try message(a, @tagName(item.role), try a.dupe(u8, item.content.bytes), selected.profile.explicit_cache and index == 0));
                 }
             } else if (request.plan.epoch != 0 or request.plan.watermark != 0 or request.plan.eviction_generation != 0 or request.plan.handoff != null or request.plan.reason != .initial) return error.InvalidContext;
-            if (same_epoch or previous == null) try settle(a, &history, request);
+            if (same_epoch or previous == null) try settle(a, &history, request, selected.profile.explicit_cache);
             if (same_epoch and request.selection.effective_effort != previous.?.value.selection.effective_effort) {
                 if (!selected.profile.effort_update) return error.IncompatibleProfile;
                 if (history.array.items.len != 0 and kind(history.array.items[history.array.items.len - 1], "configuration_update")) return error.InvalidContext;
@@ -212,7 +265,7 @@ pub fn Projection(comptime P: type) type {
                 try json.put(a, &update, "reasoning", reasoning);
                 try history.array.append(update);
             } else if (!same_epoch and request.invocation.parameters.reasoning.?.effort.? != request.selection.effective_effort) return error.IncompatibleProfile;
-            for (request.invocation.messages.items) |item| try history.array.append(try message(a, @tagName(item.role), item.content.bytes, selected.profile.explicit_cache));
+            for (request.invocation.messages.items, 0..) |item, index| try history.array.append(try message(a, @tagName(item.role), item.content.bytes, selected.profile.explicit_cache and previous == null and index == 0));
             var defined = frozen.core_tools;
             var core = list(a);
             for (frozen.core_tools, P.allDeclarations().items) |enabled, declaration| if (enabled) try core.array.append(try tool(a, declaration));
@@ -244,9 +297,13 @@ pub fn Projection(comptime P: type) type {
                 }
                 if (loaded.residency == .resident) {
                     const body = try read(ctx, loaded.resource, 32 * 1024);
-                    try history.array.append(try message(a, "developer", body, selected.profile.explicit_cache));
+                    try history.array.append(try message(a, "developer", body, false));
                 }
             }
+            // At most two newly selected writes: the immutable epoch core and
+            // the latest newly appended eligible content. Old markers remain
+            // at their original positions; transient suffixes are added later.
+            if (selected.profile.explicit_cache) try markLatest(a, &history, new_start);
             // Copy only the item vector: elements are immutable region values.
             var input = list(a);
             try input.array.appendSlice(history.array.items);
@@ -258,7 +315,25 @@ pub fn Projection(comptime P: type) type {
             return .{ .history = history, .input = input, .core_tools = core, .prior_response_id = if (same_epoch) if (previous.?.value.response_id) |id| try a.dupe(u8, id.bytes) else null else null, .prior_request = if (previous) |saved| saved.value.source_request else null };
         }
 
-        fn settle(a: std.mem.Allocator, history: *json.Value, request: P.AdaptiveRequest) !void {
+        fn markLatest(a: std.mem.Allocator, history: *json.Value, start: usize) !void {
+            var index = history.array.items.len;
+            while (index > start) {
+                index -= 1;
+                const item = &history.array.items[index];
+                if (item.* != .object) return error.InvalidContext;
+                const key: []const u8 = if (kind(item.*, "function_call_output")) "output" else if (json.get(item.*, "type") == null) "content" else continue;
+                const parts = item.object.getPtr(key) orelse continue;
+                if (parts.* != .array or parts.array.items.len == 0) continue;
+                const part = &parts.array.items[parts.array.items.len - 1];
+                if (!kind(part.*, "input_text")) continue;
+                var marker = json.object();
+                try json.put(a, &marker, "mode", json.string("explicit"));
+                try json.put(a, part, "prompt_cache_breakpoint", marker);
+                return;
+            }
+        }
+
+        fn settle(a: std.mem.Allocator, history: *json.Value, request: P.AdaptiveRequest, explicit_cache: bool) !void {
             var calls = try pending(a, history.*);
             defer calls.deinit();
             for (request.results.items) |result| {
@@ -266,7 +341,15 @@ pub fn Projection(comptime P: type) type {
                 var item = json.object();
                 try json.put(a, &item, "type", json.string("function_call_output"));
                 try json.put(a, &item, "call_id", json.string(result.call_id.bytes));
-                try json.put(a, &item, "output", json.string(result.output.bytes));
+                const output = if (explicit_cache) blk: {
+                    var part = json.object();
+                    try json.put(a, &part, "type", json.string("input_text"));
+                    try json.put(a, &part, "text", json.string(result.output.bytes));
+                    var parts = list(a);
+                    try parts.array.append(part);
+                    break :blk parts;
+                } else json.string(result.output.bytes);
+                try json.put(a, &item, "output", output);
                 try history.array.append(item);
             }
             if (calls.count() != 0) return error.MissingCallResult;

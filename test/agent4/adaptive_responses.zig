@@ -118,6 +118,11 @@ test "adaptive projection retains audit captures while hard eviction starts expl
         const expected = try native.json.canonical(a, entry.object.get("usage").?);
         try std.testing.expectEqualStrings(expected, observed);
     }
+    for ([_][]const u8{
+        "[1]",
+        "[{\"role\":\"developer\",\"content\":[{\"type\":\"input_image\",\"image_url\":\"https://unapproved.invalid\"}]}]",
+        "[{\"type\":\"configuration_update\",\"reasoning\":{\"effort\":\"high\"}},{\"type\":\"configuration_update\",\"reasoning\":{\"effort\":\"medium\"}}]",
+    }) |invalid| try std.testing.expectError(error.InvalidContext, Adapter.Context.pending(a, (try native.json.parse(a, invalid, .{})).value));
     const long_text: [900]u8 = @splat('x');
     const oversized = try std.fmt.allocPrint(a, "{{\"status\":\"completed\",\"error\":null,\"output\":[{{\"type\":\"message\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{{\"type\":\"output_text\",\"text\":\"{s}\",\"annotations\":[]}}]}}],\"usage\":{{\"output_tokens\":9}}}}", .{long_text});
     const limited = try capture(ctx, &objects, request, oversized);

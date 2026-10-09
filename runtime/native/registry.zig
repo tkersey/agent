@@ -93,6 +93,9 @@ pub const Declaration = struct {
     resource_role: []const u8,
     kind: Kind,
     inference: bool = false,
+    /// A frozen application policy may narrow the host's physical-attempt
+    /// ceiling. This is dispatch admission, never capture reinterpretation.
+    inference_attempt_limit: ?*const fn (std.mem.Allocator, []const u8) anyerror!u32 = null,
     background: bool = false,
     /// acquire receives prepared bytes and returns an uninterpreted capture.
     capture: ?CaptureAdapter = null,
@@ -125,6 +128,7 @@ pub const Registry = struct {
         const entries = try storage.alloc(Entry, declarations.len);
         for (declarations, entries, 0..) |declaration, *entry, i| {
             if (declaration.identity.len == 0 or declaration.resource_role.len == 0) return error.InvalidCapability;
+            if (declaration.inference_attempt_limit != null and !declaration.inference) return error.InvalidCapability;
             if (declaration.kind == .leaf and declaration.invoke == null and declaration.capture == null) return error.InvalidCapability;
             if (declaration.capture != null and (declaration.kind != .leaf or !declaration.background or declaration.invoke != null)) return error.InvalidCapability;
             if (declaration.kind == .question and (declaration.present == null or declaration.answer == null or declaration.answer_schema_id == null)) return error.InvalidCapability;

@@ -168,7 +168,7 @@ pub fn Adapter(comptime P: type) type {
         pub const Context = @import("adaptive_context.zig").Projection(P);
         pub const Prepared = P.AdaptivePrepared;
         pub fn declaration() registry.Declaration {
-            return .{ .identity = P.adaptive_identity, .resource_role = "inference", .kind = .leaf, .inference = true, .background = true, .payload_schema = struct {
+            return .{ .identity = P.adaptive_identity, .resource_role = "inference", .kind = .leaf, .inference = true, .inference_attempt_limit = attemptLimit, .background = true, .payload_schema = struct {
                 fn schema(a: std.mem.Allocator) ![]u8 {
                     return values.schemaBytes(P.AdaptiveRequest, a);
                 }
@@ -177,6 +177,10 @@ pub fn Adapter(comptime P: type) type {
                     return values.schemaBytes(P.AdaptiveResult, a);
                 }
             }.schema, .capture = .{ .prepare = prepare, .acquire = acquire, .interpret = interpret } };
+        }
+
+        fn attemptLimit(a: std.mem.Allocator, profile: []const u8) !u32 {
+            return (try A.policy(a, profile)).model_attempts;
         }
 
         pub fn prepare(ctx: registry.ProjectionContext, bytes: []const u8) ![]u8 {

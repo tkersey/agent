@@ -37,14 +37,39 @@ export function replayItem(item) {
 export function pending(items) {
   assert(Array.isArray(items) && items.length <= 8192, 'history capacity');
   const calls = new Set();
+  let previousUpdate = false;
+  const inputPart = part => {
+    only(part, ['type', 'text', 'prompt_cache_breakpoint']); assert.equal(part.type, 'input_text'); text(part.text);
+    if (Object.hasOwn(part, 'prompt_cache_breakpoint')) assert.deepEqual(part.prompt_cache_breakpoint, {mode: 'explicit'});
+  };
   for (const item of items) {
+    assert(item && typeof item === 'object' && !Array.isArray(item));
     if (item?.type === 'function_call') {
       replayItem(item); assert(!calls.has(item.call_id), 'duplicate unsettled call'); calls.add(item.call_id);
     } else if (item?.type === 'function_call_output') {
-      text(item.output); assert(calls.delete(text(item.call_id)), 'unpaired tool result');
+      only(item, ['type', 'call_id', 'output']);
+      if (Array.isArray(item.output)) {
+        assert.equal(item.output.length, 1); inputPart(item.output[0]);
+      } else text(item.output);
+      assert(calls.delete(text(item.call_id)), 'unpaired tool result');
     } else if (['additional_tools', 'configuration_update'].includes(item?.type) || !Object.hasOwn(item, 'type')) {
       assert.equal(calls.size, 0, 'missing call result');
+      if (item.type === 'additional_tools') {
+        only(item, ['type', 'role', 'tools']); assert.equal(item.role, 'developer'); assert(Array.isArray(item.tools) && item.tools.length > 0 && item.tools.length <= 8);
+        for (const declaration of item.tools) {
+          only(declaration, ['type', 'name', 'description', 'parameters', 'strict']); assert.equal(declaration.type, 'function');
+          text(declaration.name); text(declaration.description); assert.equal(declaration.strict, true);
+          assert(declaration.parameters && typeof declaration.parameters === 'object' && [Object.prototype, null].includes(Object.getPrototypeOf(declaration.parameters)));
+        }
+      } else if (item.type === 'configuration_update') {
+        only(item, ['type', 'reasoning']); only(item.reasoning, ['effort']); assert(!previousUpdate);
+        assert(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(item.reasoning.effort));
+      } else {
+        only(item, ['role', 'content']); assert(['system', 'developer', 'user', 'assistant'].includes(item.role));
+        assert(Array.isArray(item.content) && item.content.length === 1); inputPart(item.content[0]);
+      }
     } else replayItem(item);
+    previousUpdate = item.type === 'configuration_update';
   }
   return calls;
 }
@@ -72,17 +97,18 @@ export function open(ctx, reference, audience) {
   return value;
 }
 
-function settle(history, request) {
+function settle(history, request, explicitCache) {
   const calls = pending(history);
   for (const result of request.results) {
     assert(calls.delete(result.call_id), 'unpaired tool result');
-    history.push({type: 'function_call_output', call_id: result.call_id, output: result.output});
+    history.push({type: 'function_call_output', call_id: result.call_id,
+      output: explicitCache ? [{type: 'input_text', text: result.output}] : result.output});
   }
   assert.equal(calls.size, 0, 'missing call result');
 }
 
 export function render(ctx, request, frozen, selected, catalog) {
-  let history = [], previous = null, sameEpoch = false;
+  let history = [], previous = null, sameEpoch = false, newStart = 0;
   if (request.plan.prior !== null) {
     previous = open(ctx, request.plan.prior, frozen.audience);
     let parent = previous.plan.prior, watermark = previous.plan.watermark, depth = 1;
@@ -99,6 +125,7 @@ export function render(ctx, request, frozen, selected, catalog) {
         same(request.selection.profile_digest, previous.selection.profile_digest) && request.invocation.parameters.reasoning.effort === previous.top_effort &&
         equivalent(request.plan.handoff, previous.plan.handoff) && request.plan.reason === previous.plan.reason);
       history = parse(previous.items, 2 * 1024 * 1024);
+      newStart = history.length;
     } else {
       assert(BigInt(request.plan.epoch) === next(previous.plan.epoch) &&
         BigInt(request.plan.eviction_generation) === BigInt(previous.plan.eviction_generation) + BigInt(removing));
@@ -108,17 +135,17 @@ export function render(ctx, request, frozen, selected, catalog) {
         seed.tenant === ctx.tenant && seed.audience === frozen.audience && equivalent(seed.selection, request.selection) &&
         BigInt(seed.epoch) === BigInt(request.plan.epoch) && BigInt(seed.watermark) === BigInt(request.plan.watermark) &&
         BigInt(seed.eviction_generation) === BigInt(request.plan.eviction_generation) && equivalent(seed.source, request.plan.prior) && seed.messages.length);
-      settle(parse(previous.items, 2 * 1024 * 1024), request);
-      history = seed.messages.map(item => message(item.role, item.content, selected.explicit_cache));
+      settle(parse(previous.items, 2 * 1024 * 1024), request, selected.explicit_cache);
+      history = seed.messages.map((item, index) => message(item.role, item.content, selected.explicit_cache && index === 0));
     }
   } else assert(BigInt(request.plan.epoch) === 0n && BigInt(request.plan.watermark) === 0n && BigInt(request.plan.eviction_generation) === 0n &&
     request.plan.handoff === null && request.plan.reason === 'initial', 'covert context reset');
-  if (sameEpoch || previous === null) settle(history, request);
+  if (sameEpoch || previous === null) settle(history, request, selected.explicit_cache);
   if (sameEpoch && request.selection.effective_effort !== previous.selection.effective_effort) {
     assert(selected.effort_update && history.at(-1)?.type !== 'configuration_update');
     history.push({type: 'configuration_update', reasoning: {effort: request.selection.effective_effort}});
   } else if (!sameEpoch) assert.equal(request.invocation.parameters.reasoning.effort, request.selection.effective_effort);
-  history.push(...request.invocation.messages.map(item => message(item.role, item.content, selected.explicit_cache)));
+  history.push(...request.invocation.messages.map((item, index) => message(item.role, item.content, selected.explicit_cache && previous === null && index === 0)));
   const defined = [...frozen.core_tools];
   const coreTools = ctx.tools.filter((_item, index) => frozen.core_tools[index]).map(tool);
   if (sameEpoch) for (const loaded of previous.plan.skills) {
@@ -137,7 +164,13 @@ export function render(ctx, request, frozen, selected, catalog) {
       history.push({type: 'additional_tools', role: 'developer', tools: additions});
     }
     if (loaded.residency === 'resident') history.push(message('developer',
-      new TextDecoder('utf-8', {fatal: true, ignoreBOM: true}).decode(object(ctx, loaded.resource, 32 * 1024)), selected.explicit_cache));
+      new TextDecoder('utf-8', {fatal: true, ignoreBOM: true}).decode(object(ctx, loaded.resource, 32 * 1024)), false));
+  }
+  if (selected.explicit_cache) for (let index = history.length - 1; index >= newStart; index--) {
+    const item = history[index];
+    const parts = item.type === 'function_call_output' ? item.output : !Object.hasOwn(item, 'type') ? item.content : null;
+    if (!Array.isArray(parts) || parts.at(-1)?.type !== 'input_text') continue;
+    parts.at(-1).prompt_cache_breakpoint = {mode: 'explicit'}; break;
   }
   const input = [...history];
   for (const loaded of request.plan.skills) if (loaded.residency === 'transient' && loaded.active) input.push(message('developer',

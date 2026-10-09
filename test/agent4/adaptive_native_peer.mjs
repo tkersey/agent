@@ -17,6 +17,7 @@ import * as model from '../../runtime/adaptive/responses.mjs';
 import * as preparation from '../../runtime/adaptive/preparation.mjs';
 import * as work from '../../runtime/adaptive/work.mjs';
 import {verifyRuntime} from '../../tools/agent4/dependencies.mjs';
+import {measureAdaptive} from './adaptive_measurements.mjs';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(read, predicate) {
@@ -148,6 +149,7 @@ export async function verifyAdaptiveNative({app, applicationPath, worldRuntime})
     const ctx = {...base, task: archive.task.id, tenant: archive.task.tenant, object: ref => archive.object([ref.digest, BigInt(ref.bytes)])};
     const world = await import(pathToFileURL(verifyRuntime(worldRuntime).entrypoint).href);
     let providerProjections = 0, controlProjections = 0, workProjections = 0;
+    const measurementRows = [];
     for (const [kind, id, reference] of archive.manifest[6]) {
       if (kind !== 4) continue;
       const capture = decodeValue(archive.schemas.get('capture'), archive.object(reference));
@@ -155,7 +157,11 @@ export async function verifyAdaptiveNative({app, applicationPath, worldRuntime})
       const attempt = decodeValue(archive.schemas.get('attempt'), archive.object(attemptRow[2]));
       const request = await world.decodeRequest(archive.object(attempt[3])), prepared = archive.object(capture[3]), raw = archive.object(capture[4].value);
       let projected;
-      if (request.semanticIdentity === 'agent.model.invoke.v6') { projected = model.interpret(ctx, request.payload, prepared, raw); providerProjections++; }
+      if (request.semanticIdentity === 'agent.model.invoke.v6') {
+        projected = model.interpret(ctx, request.payload, prepared, raw); providerProjections++;
+        const index = Number(ctx.codec.decode('AdaptivePrepared', prepared).request.plan.watermark);
+        measurementRows.push({prepared, captured: raw, request_ms: requestTimes[index]});
+      }
       else if (request.semanticIdentity === 'agent.adaptive.context.prepare.v1') { projected = preparation.interpret(ctx, request.payload, prepared, raw); controlProjections++; }
       else { projected = work.interpret(ctx, request.payload, prepared, raw, request.semanticIdentity === 'agent.adaptive.snapshot.guards.v1'); workProjections++; }
       assert(Buffer.from(projected.reply).equals(resultValue(archive.object(capture[6].value[0]))), 'JS reproduces the native committed projection');
@@ -169,10 +175,16 @@ export async function verifyAdaptiveNative({app, applicationPath, worldRuntime})
       assert.equal(rejected.status, 64, name);
     }
     assert.equal(requests.length, 13, 'recovery, import and pure projection replay perform no inference');
+    const measurements = measureAdaptive(ctx, measurementRows, {archive_bytes: archiveBytes.length, archive_objects: archive.objects.size,
+      namespace_object_bytes: [...archive.objects.values()].reduce((sum, bytes) => sum + bytes.length, 0),
+      request_time_scope: 'controlled provider request-body acquisition to response send; includes deliberate first-request hold',
+      task_ms: performance.now() - started});
     console.log(JSON.stringify({adaptive_native: 'controlled HTTPS, held inbox, frozen policy, killed question, archive and JS parity',
       model_attempts: requests.length, request_bytes: requests.map(item => item.bytes.length), request_ms: requestTimes,
       held_ping_ms: pingMs, held_status_ms: statusMs, task_ms: performance.now() - started, archive_bytes: archiveBytes.length,
-      provider_projections: providerProjections, context_projections: controlProjections, work_projections: workProjections, live_provider: false}));
+      provider_projections: providerProjections, context_projections: controlProjections, work_projections: workProjections,
+      layout_comparison: measurements.comparison.map(({policy, total_request_bytes, summed_local_visible_prefix_bytes, actual_execution, hard_eviction}) =>
+        ({policy, total_request_bytes, summed_local_visible_prefix_bytes, actual_execution, hard_eviction})), live_provider: false}));
   } finally {
     releaseHeld(); if (client) { client.child.kill('SIGKILL'); await client.closed; }
     for (const socket of sockets) socket.destroy(); await new Promise(resolve => server.close(resolve));

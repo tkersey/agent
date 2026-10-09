@@ -115,7 +115,7 @@ export class Journal {
       const task = {task_id: taskId, image: this.#put(data.image), program: data.metadata.program_id, profile: this.#put(profile),
         resources: resources.map(bytes => this.#put(bytes)), input: this.#put(input), outcome: this.#put(data.outcome), kind: data.metadata.kind,
         revision: 0, sequence: 0, occurrence: null, attempts: 0, maximum_attempts: attempts, output_tokens: '0',
-        missing_output_usage: 0, inbox: [], consumed_messages: [], cancel: null};
+        missing_output_usage: 0, inbox: [], consumed_messages: [], not_consumed_messages: [], cancel: null};
       this.#newOccurrence(task, data); this.#task(task); return task;
     });
   }
@@ -134,14 +134,14 @@ export class Journal {
       const task = this.task(), current = this.occurrence(id);
       assert(task.occurrence === id && current.status === 'prepared' && task.cancel === null);
       if (inference) { assert(task.attempts < task.maximum_attempts, 'model allowance exhausted'); task.attempts++; }
-      current.status = 'dispatching'; current.inference = inference; this.#occurrence(current); this.#task(task); return current;
+      current.status = 'dispatching'; current.inference = inference; current.started_ms = performance.now(); this.#occurrence(current); this.#task(task); return current;
     });
   }
   capture(id, bytes) {
     return this.#transaction('capture', () => {
       const task = this.task(), current = this.occurrence(id);
       assert(task.occurrence === id && current.status === 'dispatching');
-      current.captured = this.#put(bytes, true); current.status = 'captured'; this.#occurrence(current); return current;
+      current.captured = this.#put(bytes, true); current.status = 'captured'; current.acquired_ms = performance.now(); this.#occurrence(current); return current;
     });
   }
   project(id, projection) {
@@ -221,6 +221,9 @@ export class Journal {
       else assert(current === null && ['none', 'resume_yield'].includes(control.kind));
       if (current) { current.status = 'consumed'; this.#occurrence(current); }
       task.outcome = this.#put(data.outcome, true); task.kind = data.metadata.kind; task.revision++;
+      if (['completed', 'failed', 'cancelled'].includes(task.kind)) {
+        task.not_consumed_messages = [...(task.not_consumed_messages ?? []), ...task.inbox]; task.inbox = [];
+      }
       this.#newOccurrence(task, data); this.#task(task); return task;
     });
   }

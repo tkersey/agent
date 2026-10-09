@@ -12,6 +12,7 @@ import {canonical} from './json.mjs';
 import * as model from './responses.mjs';
 import * as preparation from './preparation.mjs';
 import * as work from './work.mjs';
+import {observe} from './observations.mjs';
 
 const contracts = new Map([
   ['agent.adaptive.bindings.v1', ['Unit', 'Bindings', 'snapshot']],
@@ -204,7 +205,7 @@ export class AdaptiveRunner {
     const occurrence = this.#journal.occurrence();
     const result = {task_id: task.task_id, kind: task.kind, revision: task.revision, occurrence: occurrence?.status ?? null,
       model_attempts: task.attempts, observed_output_tokens: task.output_tokens, calls_without_output_usage: task.missing_output_usage,
-      queued_messages: task.inbox.length, consumed_messages: task.consumed_messages.length, cancellation_requested: task.cancel !== null,
+      queued_messages: task.inbox.length, consumed_messages: task.consumed_messages.length, not_consumed_messages: task.not_consumed_messages?.length ?? 0, cancellation_requested: task.cancel !== null,
       storage: this.#journal.metrics(), live_provider: !this.#ctx.offline};
     if (occurrence?.status === 'waiting') result.question = {id: occurrence.id, request_digest: occurrence.request,
       value: this.#ctx.codec.toClient('Question', this.#ctx.codec.decode('Question', this.#journal.object(occurrence.question)))};
@@ -213,5 +214,14 @@ export class AdaptiveRunner {
     return result;
   }
   metrics() { return {...this.#journal.metrics(), world: this.#executor?.usage() ?? null, process_peak_rss_bytes: process.resourceUsage().maxRSS * 1024}; }
+  observations() {
+    let previous = null;
+    return this.#journal.history().filter(row => row.inference && row.captured).map(row => {
+      const prepared = this.#journal.object(row.prepared);
+      const measured = observe(this.#ctx.codec, prepared, this.#journal.object(row.captured), {previous,
+        requestMilliseconds: row.acquired_ms >= row.started_ms ? row.acquired_ms - row.started_ms : null});
+      previous = prepared; return measured;
+    });
+  }
   async close() { assert(!this.#busy); try { this.#executor?.retire(); } finally { await this.#journal.close(); } }
 }

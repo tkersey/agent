@@ -9,7 +9,7 @@ import { DEFAULT_LOCK, readDependencyLock, readRegular, sha256, verifyRuntime } 
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const runtimeFiles = ["runtime/world.mjs", "runtime/world.d.mts", "runtime/values.mjs", "runtime/runner.mjs", "runtime/cli.mjs",
-  ...["codec", "json", "admission", "context", "responses", "snapshot", "work", "preparation", "environment", "journal", "runner", "cli"].map(name => `runtime/adaptive/${name}.mjs`),
+  ...["codec", "json", "admission", "context", "responses", "snapshot", "work", "preparation", "environment", "journal", "runner", "observations", "cli"].map(name => `runtime/adaptive/${name}.mjs`),
   "examples/adaptive-agent/README.md",
   ...["boundary.wire-natural.v1", "world.allocation-budget.v1", "agent.model-json-bounds.v1"].map(name => `runtime/repository-profiles/${name}.json`),
   "runtime/model.mjs", "runtime/document.mjs", "runtime/repository_delivery.mjs", "runtime/repository.mjs", "runtime/repository_snapshot.mjs", "runtime/repository_publication_gate.mjs", "runtime/repository_checks.mjs", "runtime/repository_zig_sandbox.mjs", "runtime/repository_wasm_observer.mjs", "runtime/repository_tests.mjs", "runtime/inquiry.mjs", "runtime/inquiry_sandbox.mjs",

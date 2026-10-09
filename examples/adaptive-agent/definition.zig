@@ -181,8 +181,9 @@ const Program = struct {
         const evidence = try b.field(state, "evidence");
         const readable = try b.select(work, try b.less(try b.sequenceLength(evidence), try b.constant(u64, 8)), try b.constant(bool, false));
         const reportable = try b.less(try b.constant(u64, 0), try b.sequenceLength(evidence));
+        const askable = try b.select(work, try b.less(try b.sequenceLength(try b.field(state, "followups")), try b.constant(u64, 4)), try b.constant(bool, false));
         const controls = try b.select(try b.less(try b.field(try b.field(try b.field(state, "control"), "selection"), "control_revision"), try b.field(bindings, "maximum_revision")), try b.less(try b.sequenceLength(try b.field(state, "receipts")), try b.constant(u64, 16)), try b.constant(bool, false));
-        return p.e.sequence(b, [P.declaration_count]bool, &.{ work, readable, work, reportable, try b.constant(bool, true), controls, controls, try b.select(work, reportable, try b.constant(bool, false)) });
+        return p.e.sequence(b, [P.declaration_count]bool, &.{ work, readable, askable, reportable, try b.constant(bool, true), controls, controls, try b.select(work, reportable, try b.constant(bool, false)) });
     }
     fn stopped(p: Program, b: *a.Body, state: V, reason: []const u8) !V {
         return p.e.finish(b, state, .capacity, try p.e.literal(b, t.Summary, .{ .bytes = reason }), try b.field(state, "evidence"));
@@ -231,18 +232,20 @@ const Program = struct {
     }
     fn resumeTask(p: Program, b: *a.Body, bindings: V, state: V) !V {
         const e = p.e;
-        const raw = try b.perform(p.ops.inbox, try b.constant(void, {}));
-        const inbox = try a.interop.term(b, try e.context.builder.pure(try a.interop.valueId(b, raw)), try e.schema(Inbox.Reply));
-        const empty = try b.caseOf(inbox, "empty");
-        const message = try b.caseOf(inbox, "message");
+        const poll = try b.branch();
+        const full = try b.branch();
+        const raw = try poll.perform(p.ops.inbox, try poll.constant(void, {}));
+        const inbox = try a.interop.term(poll, try e.context.builder.pure(try a.interop.valueId(poll, raw)), try e.schema(Inbox.Reply));
+        const empty = try poll.caseOf(inbox, "empty");
+        const message = try poll.caseOf(inbox, "message");
         const arrived = message.body();
         const text = try arrived.field(try arrived.field(message.payload(), "value"), "message");
         const updated = try e.update(arrived, state, .{
             .followups = try e.append(arrived, t.Followups, try arrived.field(state, "followups"), text),
             .messages = try e.sequence(arrived, P.Messages, &.{try e.message(arrived, .user, try e.widen(arrived, P.MessageText, text))}),
         });
-        const successor = try b.match(inbox, &.{ try empty.ret(state), try message.ret(updated) });
-        return b.call(p.loop, &.{ .{ .name = "bindings", .value = bindings }, .{ .name = "state", .value = successor } });
+        const successor = try poll.match(inbox, &.{ try empty.ret(state), try message.ret(updated) });
+        return b.conditional(try b.less(try b.sequenceLength(try b.field(state, "followups")), try b.constant(u64, 4)), try poll.ret(try poll.call(p.loop, &.{ .{ .name = "bindings", .value = bindings }, .{ .name = "state", .value = successor } })), try full.ret(try full.call(p.loop, &.{ .{ .name = "bindings", .value = bindings }, .{ .name = "state", .value = state } })));
     }
     fn toolResult(p: Program, b: *a.Body, bindings: V, state: V, call_id: V, text: V, outcome: V) !V {
         const e = p.e;

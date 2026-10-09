@@ -3,6 +3,7 @@ import {prepare, interpret, usage, acquire} from '../../runtime/adaptive/respons
 import {digest, identities} from '../../runtime/adaptive/admission.mjs';
 import {parse, canonical} from '../../runtime/adaptive/json.mjs';
 import {readFileSync} from 'node:fs';
+import {pending} from '../../runtime/adaptive/context.mjs';
 
 export async function verifyAdaptiveProvider(codec) {
   const objects = new Map();
@@ -97,4 +98,6 @@ export async function verifyAdaptiveProvider(codec) {
   assert(!usage(parse(Buffer.from('{"usage":1}'))).valid);
   assert(!usage(parse(Buffer.from('{"usage":{"input_tokens_details":1}}'))).valid);
   assert.throws(() => parse(Buffer.from('['.repeat(33) + '0' + ']'.repeat(33))), /depth capacity/);
+  for (const history of [[1], [{role: 'developer', content: [{type: 'input_image', image_url: 'https://unapproved.invalid'}]}],
+    [{type: 'configuration_update', reasoning: {effort: 'high'}}, {type: 'configuration_update', reasoning: {effort: 'medium'}}]]) assert.throws(() => pending(history));
 }

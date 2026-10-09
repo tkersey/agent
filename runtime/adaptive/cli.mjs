@@ -12,6 +12,7 @@ const help = `Usage: node runtime/adaptive/cli.mjs COMMAND [OPTIONS]
   run               start an ordinary task from --input-json in a new state directory
   resume            resume the saved task; never repeat unknown delivery
   status            inspect the saved task without inference
+  observations      inspect bounded capture metrics without prompt text or inference
   message           queue --message-json using a stable --operation-id
   respond           save --answer-json for --question-id and --request-digest
   cancel            request cancellation with --reason and --operation-id
@@ -36,7 +37,7 @@ const print = value => console.log(JSON.stringify(value, (_key, child) => typeof
 export async function main(argv) {
   if (argv.length === 0 || argv.length === 1 && ['--help', '-h'].includes(argv[0])) { console.log(help); return; }
   const [command, ...args] = argv, options = {};
-  assert(['demo', 'validate-config', 'run', 'resume', 'status', 'message', 'respond', 'cancel'].includes(command), 'unknown command');
+  assert(['demo', 'validate-config', 'run', 'resume', 'status', 'observations', 'message', 'respond', 'cancel'].includes(command), 'unknown command');
   for (let i = 0; i < args.length; i++) {
     const key = flags.get(args[i]) ?? argumentNames.get(args[i]); assert(key && !Object.hasOwn(options, key), 'unknown or duplicate option');
     if (flags.has(args[i])) options[key] = true;
@@ -61,6 +62,7 @@ export async function main(argv) {
   const interrupt = () => { try { runner.cancel('cli-interrupt', 'Interrupted by operator.'); } catch {} };
   process.on('SIGINT', interrupt); process.on('SIGTERM', interrupt);
   try {
+    if (command === 'observations') { print({observations: runner.observations(), metrics: runner.metrics()}); return; }
     if (command === 'run' || command === 'demo') {
       const input = command === 'demo' ? {task: 'Explain the fixture entry point using source evidence and exercise the approved adaptive controls.'} : parseJsonStrict(options.input ?? 'null');
       await runner.start(input);

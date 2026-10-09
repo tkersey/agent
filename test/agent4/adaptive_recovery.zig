@@ -58,16 +58,32 @@ test "adaptive unload capture recovers under its original plan without another a
     var model_calls: usize = 0;
     var restarted = false;
     var witnessed = false;
+    var finished = false;
     var maximum_state: u64 = 0;
     var maximum_prepared: usize = 0;
+    var maximum_scratch: usize = 0;
     for (0..512) |_| {
-        var arena = std.heap.ArenaAllocator.init(a);
+        var scratch: world.AllocationBudget = .{ .parent = a, .limit = 64 * 1024 * 1024 };
+        var arena = std.heap.ArenaAllocator.init(scratch.allocator());
         defer arena.deinit();
+        defer maximum_scratch = @max(maximum_scratch, scratch.peak);
         const frame = arena.allocator();
         var saved = try service.task(frame, task);
         defer saved.deinit();
         maximum_state = @max(maximum_state, saved.value.checkpoint.bytes);
-        if (restarted and saved.value.outcome_kind == .requested) {
+        if (saved.value.terminal()) {
+            try std.testing.expect(saved.value.outcome_kind == .completed);
+            const result = try namespace.store.object(frame, saved.value.result.?, 64 * 1024);
+            var output = try agent.contracts.decodeOwned(t.Output, frame, result);
+            defer output.deinit();
+            try std.testing.expect(output.value.disposition == .report);
+            try std.testing.expectEqual(13, output.value.model_calls);
+            try std.testing.expectEqual(8, output.value.receipts.items.len);
+            try std.testing.expectEqual(8, output.value.control.selection.control_revision);
+            finished = true;
+            break;
+        }
+        if (restarted and !witnessed and saved.value.outcome_kind == .requested) {
             const encoded = try namespace.store.object(frame, saved.value.outcome, 1024 * 1024);
             var outcome = try protocol.decode(protocol.Outcome, frame, encoded);
             defer outcome.deinit();
@@ -84,7 +100,6 @@ test "adaptive unload capture recovers under its original plan without another a
                     try std.testing.expect(!adaptive.value.offered[7] and !adaptive.value.materialized[7]);
                     try std.testing.expectEqual(8, saved.value.inference_attempts);
                     witnessed = true;
-                    break;
                 }
             }
         }
@@ -123,8 +138,67 @@ test "adaptive unload capture recovers under its original plan without another a
                 _ = try service.resumeTask(frame, "adaptive-capture-resume", task, current.value.revision);
                 restarted = true;
             }
-        } else if (step == .waiting) return error.UnexpectedQuestion;
+        } else if (step == .waiting) {
+            var question = (try service.pendingQuestion(frame, task)) orelse return error.MissingQuestion;
+            defer question.deinit();
+            _ = try service.respond(frame, "adaptive-recovery-answer", task, question.value.id, question.value.revision, question.value.request_digest, question.value.answer_schema_id.bytes, try native.values.toJson(t.Answer, frame, environment.demo_answer));
+        }
     }
-    try std.testing.expect(witnessed);
-    std.debug.print("adaptive capture recovery: model_acquisitions={d} state_bytes_peak={d} prepared_bytes_peak={d} requested_memory_peak={d}\n", .{ model_calls, maximum_state, maximum_prepared, budget.peak });
+    try std.testing.expect(witnessed and finished);
+    try std.testing.expectEqual(13, model_calls);
+    std.debug.print("adaptive capture recovery: model_acquisitions={d} state_bytes_peak={d} prepared_bytes_peak={d} projection_and_step_scratch_peak={d} requested_memory_peak={d}\n", .{ model_calls, maximum_state, maximum_prepared, maximum_scratch, budget.peak });
+    try service.close(a);
+    service_live = false;
+    try namespace.close();
+    namespace_live = false;
+    try narrowAttemptCeiling(a, io, assets, &application, handlers, configured, buffer[0..length]);
+}
+
+fn narrowAttemptCeiling(parent: std.mem.Allocator, io: std.Io, assets: native.discovery.Assets, application: *native.discovery.Application, handlers: native.Registry, original: native.configuration.Admitted, directory: []const u8) !void {
+    var arena = std.heap.ArenaAllocator.init(parent);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var root = (try native.json.parse(a, original.bytes, .{ .bytes = 256 * 1024 })).value;
+    try native.json.put(a, root.object.getPtr("adaptive").?, "model_attempts", try native.json.number(a, 1));
+    const bytes = try native.json.canonical(a, root);
+    const configured = try environment.configure(a, io, .{ .offline = true, .scratch_allocator = parent }, .{ .profile_id = original.id, .profile = bytes, .resources = original.resources }, assets);
+    var grants: [environment.handlers.len]native.registry.Grant = undefined;
+    const profile: native.tasks.Profile = .{ .id = configured.id, .runtime_identity = @splat(73), .bytes = configured.bytes, .environment = configured.environment, .resources = configured.resources, .authority = .{ .grants = &grants, .principal = "adaptive-unit", .tenant = "local", .inference = true } };
+    for (&grants, handlers.entries) |*grant, entry| grant.* = .{ .identity = entry.declaration.identity, .resource_role = entry.declaration.resource_role, .resource_identity = try profile.resourceIdentity(application.image_identity) };
+    const path = try std.fmt.allocPrint(a, "{s}/attempt-ceiling", .{directory});
+    var namespace = try native.Namespace.open(parent, io, path);
+    defer namespace.close() catch unreachable;
+    var service = try native.tasks.Service(t).init(parent, io, &namespace, assets, application, handlers, profile);
+    defer service.close(parent) catch unreachable;
+    const task = (try service.submit(a, "one-attempt", environment.demo_input)).receipt.task;
+    var unsent = false;
+    for (0..128) |_| {
+        var iteration = std.heap.ArenaAllocator.init(parent);
+        defer iteration.deinit();
+        const frame = iteration.allocator();
+        var saved = try service.task(frame, task);
+        defer saved.deinit();
+        if (unsent and saved.value.blocker == .capacity) {
+            try std.testing.expectEqual(1, saved.value.inference_attempts);
+            return;
+        }
+        const step = try service.pump(frame);
+        if (step != .work) continue;
+        const work = step.work;
+        if (work.entry.declaration.inference) {
+            try std.testing.expect(!unsent);
+            try service.notSent(frame, work);
+            var stopped = try service.task(frame, task);
+            defer stopped.deinit();
+            _ = try service.resumeTask(frame, "retry-with-one-attempt-ceiling", task, stopped.value.revision);
+            unsent = true;
+        } else {
+            var request = try protocol.decode(protocol.Request, frame, work.request);
+            defer request.deinit();
+            const ctx: native.Context = .{ .allocator = frame, .io = io, .authority = &profile.authority, .task_id = "one-attempt", .profile = profile.bytes, .environment = profile.environment };
+            const reply = if (work.entry.declaration.capture) |adapter| (try adapter.acquire(ctx, work.prepared.?)).captured else try work.entry.declaration.invoke.?(ctx, request.value.binding.payload);
+            try service.acquire(frame, work, reply);
+        }
+    }
+    return error.MissingAttemptCeiling;
 }

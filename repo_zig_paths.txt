@@ -43,6 +43,7 @@ runtime/native/transport.zig
 runtime/native/values.zig
 runtime/native/worker.zig
 runtime/repository_publication_gate.zig
+src/adaptive_controls.zig
 src/admission.zig
 src/agent4.zig
 src/approval.zig
@@ -84,6 +85,7 @@ src/test_root.zig
 src/text_inspection.zig
 src/tools.zig
 src/value_equality.zig
+test/agent4/adaptive_controls.zig
 test/agent4/adaptive_responses.zig
 test/agent4/admission.zig
 test/agent4/approval_equality.zig

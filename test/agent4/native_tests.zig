@@ -1,5 +1,6 @@
 //! Native semantic checks with one shared World/Agent module graph.
 test {
+    _ = @import("adaptive_controls.zig");
     _ = @import("adaptive_responses.zig");
     _ = @import("native_tasks.zig");
     _ = @import("native_responses.zig");

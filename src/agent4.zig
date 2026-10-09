@@ -29,6 +29,7 @@ pub const deliberation = @import("deliberation.zig");
 pub const clarification = @import("clarification.zig");
 pub const value_equality = @import("value_equality.zig");
 pub const model_invocation = @import("model_invocation.zig");
+pub const adaptive_controls = @import("adaptive_controls.zig");
 pub const conversation = @import("conversation.zig");
 pub const react = @import("react.zig");
 pub const model = @import("model.zig").model;

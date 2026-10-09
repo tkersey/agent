@@ -302,7 +302,7 @@ fn SkillGenerator(comptime P: type) type {
             const lookup_result = try present_body.conditional(try e.sameText(present_body, try e.field(present_body, present.payload(), P.AdaptiveSkill, "id"), try e.field(present_body, control, SkillSet, "skill_id")),
                 try yes.ret(version_result), try no.ret(try no.call(lookup, &.{ .{ .name = "input", .value = request }, .{ .name = "index", .value = try e.increment(no, offset) } })));
             try t.define(lookup, try scan.ret(try scan.match(candidate, &.{ try present.ret(lookup_result), try missing.ret(try e.outcome(missing.body(), prior, .rejected, .unknown_skill)) })));
-            return g.entry(lookup);
+            return g.defineEntry(lookup);
         }
 
         fn recur(g: G, body: *a.Body, function: *const a.Function, input: V, entry: V, index: V, items: V, found: V, changed: V, removed: V) !V {
@@ -340,7 +340,7 @@ fn SkillGenerator(comptime P: type) type {
             return body.conditional(changed, try update.ret(admitted), try unchanged.ret(try e.outcome(unchanged, state, .unchanged, .none)));
         }
 
-        fn entry(g: G, lookup: *const a.Function) !Id {
+        fn defineEntry(g: G, lookup: *const a.Function) !Id {
             const e = g.e;
             const t = e.typed;
             const entry_function = try t.function("adaptive skill selection", &.{.{ .name = "input", .schema = try e.schema(Input) }}, try e.schema(Proposal), &.{});

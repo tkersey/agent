@@ -35,6 +35,11 @@ records original-main failures and repaired-artifact successes. Its exact
 subjects, live feature/cache evidence, and macOS limitations do not retroactively
 turn the original merged artifact's unrun live rows below into passes.
 
+The [cache-preserving continuation follow-up](adaptive-cache-continuation-2026-10-09.md)
+qualifies the subsequent history-preserving design, including in-place effort
+updates. Historical new-context/handoff descriptions below describe the earlier
+subject and do not replace that follow-up's exact-subject evidence.
+
 ## Subjects and retained evidence
 
 The foundation is Agent `7d86739af1a47ce8ec36905ba5fe578fa3ce4d9d` (PR #45).

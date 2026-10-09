@@ -13,6 +13,8 @@ distribution is deferred; the existing embedded executable remains useful for
 reference execution.
 
 Linux reference qualification uses recorded provider replies and controlled I/O.
+The [cache-preserving continuation report](../../docs/adaptive-cache-continuation-2026-10-09.md)
+qualifies the current history-preserving effort/model/skill transitions.
 The [October 9 live report](../../docs/adaptive-live-validation-2026-10-09.md)
 records the merged artifact's failure, subsequent repairs, and successful
 Sol/medium → Sol/high → Astra/medium continuation, skills, restart, and

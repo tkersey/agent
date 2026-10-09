@@ -105,16 +105,7 @@ test "adaptive unload capture recovers under its original plan without another a
                     try std.testing.expectEqual(0, adaptive.value.plan.skills.items.len);
                     try std.testing.expect(!adaptive.value.offered[7] and !adaptive.value.materialized[7]);
                     try std.testing.expectEqual(8, saved.value.inference_attempts);
-                    const seed_bytes = try namespace.store.object(frame, .{ .digest = adaptive.value.plan.handoff.?.digest, .bytes = adaptive.value.plan.handoff.?.bytes }, 128 * 1024);
-                    var seed = try agent.contracts.decodeOwned(t.P.AdaptiveSeed, frame, seed_bytes);
-                    defer seed.deinit();
-                    const facts_text = seed.value.messages.items[2].content.bytes;
-                    try std.testing.expect(facts_text.len > 8192);
-                    const facts = try native.json.parse(frame, facts_text, .{});
-                    try std.testing.expectEqualStrings(&long_task, facts.value.object.get("original_task").?.string);
-                    const followups = facts.value.object.get("followups").?.array.items;
-                    try std.testing.expectEqual(@as(usize, 2), followups.len);
-                    for (followups) |followup| try std.testing.expectEqualStrings(&long_followup, followup.string);
+                    try std.testing.expect(adaptive.value.plan.handoff == null);
                     witnessed = true;
                 }
             }
@@ -127,6 +118,26 @@ test "adaptive unload capture recovers under its original plan without another a
             const context: native.Context = .{ .allocator = frame, .io = io, .authority = &profile.authority, .task_id = "adaptive-unit", .profile = profile.bytes, .environment = profile.environment };
             const reply = if (work.entry.declaration.capture) |adapter| blk: {
                 maximum_prepared = @max(maximum_prepared, work.prepared.?.len);
+                if (work.entry.declaration.inference and model_calls == 8) {
+                    var prepared = try agent.contracts.decodeOwned(t.P.AdaptivePrepared, frame, work.prepared.?);
+                    defer prepared.deinit();
+                    const rendered = try native.json.parse(frame, prepared.value.body.bytes, .{});
+                    var task_count: usize = 0;
+                    var followup_count: usize = 0;
+                    for (rendered.value.object.get("input").?.array.items) |item| {
+                        const content = native.json.get(item, "content") orelse continue;
+                        if (content != .array) continue;
+                        for (content.array.items) |part| {
+                            const text = native.json.get(part, "text") orelse continue;
+                            if (text != .string) continue;
+                            if (std.mem.eql(u8, text.string, &long_task)) task_count += 1;
+                            if (std.mem.eql(u8, text.string, &long_followup)) followup_count += 1;
+                        }
+                    }
+                    try std.testing.expect(prepared.value.body.bytes.len > 8192);
+                    try std.testing.expectEqual(@as(usize, 1), task_count);
+                    try std.testing.expectEqual(@as(usize, 2), followup_count);
+                }
                 const acquired = try adapter.acquire(context, work.prepared.?);
                 if (acquired != .captured) return error.UnexpectedAcquisitionFailure;
                 break :blk acquired.captured;

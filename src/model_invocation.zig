@@ -10,7 +10,7 @@ pub const replay_semantic_identity = "agent.model.invoke.v4";
 pub const reference_semantic_identity = "agent.model.invoke.v5";
 pub const context_semantic_identity = "agent.model.context.responses.v1";
 pub const adaptive_semantic_identity = "agent.model.invoke.v6";
-pub const adaptive_context_semantic_identity = "agent.model.context.responses.adaptive.v1";
+pub const adaptive_context_semantic_identity = "agent.model.context.responses.adaptive.v2";
 pub const adaptive_policy_semantic_identity = "agent.model.policy.adaptive.v1";
 pub const adaptive_seed_semantic_identity = "agent.model.seed.adaptive.v1";
 pub const maximum_adaptive_request_bytes = 256 * 1024;
@@ -419,7 +419,12 @@ pub fn Profile(
             source_request: ArtifactReference,
             response_id: ?contracts.Text(256),
             items: contracts.Bytes(maximum_replay_bytes),
+            /// Origin is projection-owned, never inferred from provider text.
+            /// It distinguishes injected skill material from identical evidence
+            /// and records which responses could have observed an evicted skill.
+            origins: contracts.Vector(ContextOrigin, 8192),
         };
+        pub const ContextOrigin = struct { watermark: u64, resident_skill: ?u8 = null, reasoning_skills: u32 = 0 };
         pub const AdaptiveResult = struct {
             result: Result,
             replay: ?AdaptiveContextReference,

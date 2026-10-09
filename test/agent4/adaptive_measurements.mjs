@@ -51,7 +51,13 @@ export function measureAdaptive(application, rows, skillBodies, resources = {}) 
     const [epoch, reason, watermark, eviction, , , , skills] = plan;
     const prior = rows[index - 1], sameEpoch = prior && prior.request[3][0] === epoch;
     const selectedMarkers = markers(row.http), priorMarkers = prior ? markers(prior.http) : [];
-    const newlyMarked = sameEpoch ? selectedMarkers.filter(path => !priorMarkers.includes(path)) : selectedMarkers;
+    // A logical epoch no longer replaces history. Existing breakpoints in an
+    // unchanged prefix remain old writes even across model/eviction revisions.
+    const newlyMarked = selectedMarkers.filter(path => {
+      if (!prior || !priorMarkers.includes(path)) return true;
+      const position = Number(path.match(/^input\[(\d+)\]/)[1]);
+      return !canonical(row.http.input.slice(0, position + 1)).equals(canonical(prior.http.input.slice(0, position + 1)));
+    });
     assert(newlyMarked.length <= 2);
     const definitions = invocation[4], offeredDefinitions = definitions.filter(tool => offered[names.indexOf(tool[2])]);
     assert.deepEqual(definitions.map(tool => tool[2]), names.filter((_, n) => materialized[n]));

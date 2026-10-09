@@ -258,6 +258,9 @@ pub fn Adapter(comptime P: type) type {
                 !jsonTextEquals(body.value, "truncation", "disabled") or maximum != .number_string) return .{ .definitely_not_sent = error.InvalidPreparedRequest };
             const maximum_tokens = json.numberInteger(u32, maximum.number_string) catch return .{ .definitely_not_sent = error.InvalidPreparedRequest };
             if (maximum_tokens != selected.transport.max_output_tokens) return .{ .definitely_not_sent = error.InvalidPreparedRequest };
+            const input = json.get(body.value, "input") orelse return .{ .definitely_not_sent = error.InvalidPreparedRequest };
+            const effective = Context.effectiveEffort(input, prepared.value.request.invocation.parameters.reasoning.?.effort.?) catch return .{ .definitely_not_sent = error.InvalidPreparedRequest };
+            if (effective != prepared.value.request.selection.effective_effort) return .{ .definitely_not_sent = error.InvalidPreparedRequest };
             inline for (.{ "parallel_tool_calls", "store", "stream", "background" }) |key| {
                 const flag = json.get(body.value, key) orelse return .{ .definitely_not_sent = error.InvalidPreparedRequest };
                 if (flag != .bool or flag.bool) return .{ .definitely_not_sent = error.InvalidPreparedRequest };
@@ -356,7 +359,10 @@ pub fn Adapter(comptime P: type) type {
             const normalized = responses.Adapter(P).normalize(ctx.allocator, request.value.invocation, output) catch |err| return unsupported(ctx, if (err == error.Capacity) .normalization_limit else if (err == error.MixedRefusal) .mixed_refusal else .unsupported_output_item, observed.value);
             if (!observed.valid) return unsupported(ctx, .unsupported_output_item, observed.value);
             var projected = try Context.render(ctx, request.value, policy, selected, catalog.value);
-            for (output.array.items) |item| try projected.history.array.append(try responses.replayItem(ctx.allocator, item));
+            for (output.array.items) |item| {
+                try projected.history.array.append(try responses.replayItem(ctx.allocator, item));
+                try projected.origins.append(ctx.allocator, .{ .watermark = request.value.plan.watermark, .reasoning_skills = if (jsonTextEquals(item, "type", "reasoning")) projected.reasoning_skills else 0 });
+            }
             var pending = Context.pending(ctx.allocator, projected.history) catch return unsupported(ctx, .unsupported_output_item, observed.value);
             pending.deinit();
             const items = json.canonicalBounded(ctx.allocator, projected.history, 2 * 1024 * 1024) catch return unsupported(ctx, .normalization_limit, observed.value);
@@ -380,6 +386,7 @@ pub fn Adapter(comptime P: type) type {
                 .source_request = .{ .digest = storage.digest(prepared_bytes), .bytes = prepared_bytes.len },
                 .response_id = response_id,
                 .items = .{ .bytes = items },
+                .origins = .{ .items = projected.origins.items },
             });
             if (artifact.len > 2 * 1024 * 1024) return unsupported(ctx, .normalization_limit, observed.value);
             const objects = try ctx.allocator.alloc([]const u8, 1);

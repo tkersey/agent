@@ -25,22 +25,6 @@ fn profile(policy: P.AdaptivePolicy, id: []const u8) !A.Profile {
     for (policy.profiles.items) |entry| if (equal(id, entry.id.bytes)) return entry;
     return error.UnknownInferenceProfile;
 }
-fn verifyEvidence(ctx: native.registry.ProjectionContext, evidence: t.EvidenceList) !void {
-    if (evidence.items.len == 0) return;
-    const parsed = try native.json.parse(ctx.allocator, ctx.profile, .{ .bytes = 256 * 1024 });
-    const reference = try native.values.fromJson(native.registry.ObjectReference, ctx.allocator, native.json.get(parsed.value, "snapshot") orelse return error.InvalidConfiguration);
-    const bytes = try ctx.object(reference, native.repository.maximum_snapshot_bytes);
-    defer ctx.allocator.free(bytes);
-    var snapshot = try native.repository.Snapshot.openBorrowed(ctx.allocator, bytes);
-    defer snapshot.deinit();
-    for (evidence.items) |ref| {
-        const item = try work.evidence(ctx, ref);
-        const file = snapshot.get(item.path.bytes) orelse return error.InvalidEvidence;
-        if (!equal(&item.snapshot, &snapshot.identity) or !equal(item.sha256.bytes, &std.fmt.bytesToHex(file.sha256, .lower)) or
-            item.start > item.end or item.end > file.contents.bytes.len or item.end - item.start > 4096 or item.file_bytes != file.contents.bytes.len or
-            !equal(item.content.bytes, file.contents.bytes[@intCast(item.start)..@intCast(item.end)])) return error.InvalidEvidence;
-    }
-}
 pub fn instructions(a: std.mem.Allocator, policy: P.AdaptivePolicy, catalog: P.AdaptiveCatalog) !P.MessageText {
     // Metadata never includes the instruction bodies or resource filesystem paths.
     const Profile = struct { id: contracts.Text(64), model: contracts.Text(128), efforts: @FieldType(A.Profile, "efforts") };
@@ -67,16 +51,6 @@ pub fn declaration() native.Declaration {
         }
     }.schema, .capture = .{ .prepare = prepare, .acquire = acquire, .interpret = interpret } };
 }
-
-const Overlay = struct {
-    parent: native.registry.ProjectionContext,
-    seed: ?[]const u8,
-    fn read(owner: *anyopaque, a: std.mem.Allocator, ref: native.registry.ObjectReference, limit: usize) ![]u8 {
-        const self: *Overlay = @ptrCast(@alignCast(owner));
-        if (self.seed) |bytes| if (bytes.len == ref.bytes and bytes.len <= limit and equal(&digest(bytes), &ref.digest)) return a.dupe(u8, bytes);
-        return self.parent.object(ref, limit);
-    }
-};
 
 fn receiptText(a: std.mem.Allocator, receipt: t.ControlReceipt, control: t.controls.State) !P.ResultText {
     var value = try native.values.toJson(t.ControlReceipt, a, receipt);
@@ -207,13 +181,13 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
     for (&offered, input.offered, policy.permitted_tools) |*allowed, requested, permitted| allowed.* = allowed.* and requested and permitted;
     var declarations: std.ArrayList(P.ToolDeclaration) = .empty;
     for (materialized, P.allDeclarations().items) |defined, item| if (defined) try declarations.append(a, item);
-    var request: P.AdaptiveRequest = .{
+    const request: P.AdaptiveRequest = .{
         .policy = digest(ctx.profile),
         .selection = control.selection,
         .materialized = materialized,
         .offered = offered,
         .results = results,
-        .plan = .{ .epoch = control.epoch, .reason = control.epoch_reason, .watermark = if (input.state.replay) |ref| ref.watermark else 0, .eviction_generation = control.eviction_generation, .prior = input.state.replay, .handoff = input.state.handoff, .catalog = policy.catalog, .skills = control.skills },
+        .plan = .{ .epoch = control.epoch, .reason = control.epoch_reason, .watermark = if (input.state.replay) |ref| ref.watermark else 0, .eviction_generation = control.eviction_generation, .prior = input.state.replay, .handoff = null, .catalog = policy.catalog, .skills = control.skills },
         .invocation = .{
             .protocol = .{ .bytes = t.model.protocol_identity },
             .model = selected.model,
@@ -226,65 +200,10 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
             .maximum_provider_response_bytes = selected.response_bytes,
         },
     };
-    var seed: ?[]const u8 = null;
-    if (input.state.replay) |prior| if (control.epoch != prior.epoch and (input.control != null or input.state.handoff == null)) {
-        try verifyEvidence(ctx, input.state.evidence);
-        // Keep exact acquired facts; refuse capacity rather than summarize away
-        // evidence, a follow-up, an outcome, or an allowance.
-        const evidence = try a.alloc(t.Evidence, input.state.evidence.items.len);
-        for (evidence, input.state.evidence.items) |*out, ref| out.* = try work.evidence(ctx, ref);
-        const outcomes = try a.alloc(t.WorkOutcome, input.state.outcomes.items.len);
-        // Decoded work objects live in the bounded projection allocator until
-        // this capture evaluation ends; they are never stored in World state.
-        var opened: std.ArrayList(contracts.Decoded(t.WorkArtifact)) = .empty;
-        defer {
-            for (opened.items) |*item| item.deinit();
-            opened.deinit(a);
-        }
-        for (outcomes, input.state.outcomes.items) |*out, item| switch (item) {
-            .answer => |answer| out.* = .{ .ask = answer },
-            .artifact => |ref| {
-                try opened.append(a, try work.open(ctx, ref));
-                out.* = opened.items[opened.items.len - 1].value.outcome;
-            },
-        };
-        const facts = try native.json.canonicalBounded(a, try native.values.toJson(t.Handoff, a, .{
-            .original_task = input.state.task,
-            .followups = input.state.followups,
-            .evidence = .{ .items = evidence },
-            .work_outcomes = .{ .items = outcomes },
-            .prior_controls = input.state.receipts,
-            .current_control = receipt,
-            .pending_model_hypothesis = if (input.control) |subject| subject.reason else input.state.pending_model_intent,
-            .control = control,
-            .remaining_model_calls = policy.model_attempts -| input.state.model_calls,
-            .remaining_work_calls = 12 -| input.state.work_calls,
-            .pending_questions = .{ .items = &.{} },
-            .completion_criteria = .{ .bytes = "Answer the original task and consumed follow-ups using acquired evidence, distinguishing observations from hypotheses and unrun checks." },
-        }), selected.request_bytes);
-        seed = try contracts.encodeOwned(P.AdaptiveSeed, a, .{
-            .schema = .{ .bytes = P.adaptive_seed_identity },
-            .policy = request.policy,
-            .task = ctx.task,
-            .tenant = .{ .bytes = ctx.tenant },
-            .audience = policy.audience,
-            .selection = control.selection,
-            .epoch = control.epoch,
-            .watermark = prior.watermark,
-            .eviction_generation = control.eviction_generation,
-            .source = prior,
-            .messages = .{ .items = &.{ .{ .role = .developer, .content = try instructions(a, policy, catalog.value) }, .{ .role = .user, .content = .{ .bytes = input.state.task.bytes } }, .{ .role = .developer, .content = .{ .bytes = facts } } } },
-        });
-        request.plan.handoff = .{ .digest = digest(seed.?), .bytes = seed.?.len };
-    };
-    var overlay: Overlay = .{ .parent = ctx, .seed = seed };
-    var prepared_context = ctx;
-    prepared_context.objects = .{ .owner = &overlay, .read = Overlay.read };
-    // Decide the actual next request, including handoff and body capacity,
-    // before publishing its receipt. This performs no external inference.
-    _ = try Adapter.prepare(prepared_context, try contracts.encodeOwned(P.AdaptiveRequest, a, request));
+    // Boundary retains the computation and task facts. Continue its immutable
+    // transcript; only the projection owner changes provider-visible material.
+    _ = try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, request));
     var objects: std.ArrayList(contracts.Bytes(128 * 1024)) = .empty;
-    if (seed) |bytes| try objects.append(a, .{ .bytes = bytes });
     var receipt_ref: ?t.ReceiptReference = null;
     var next_results = pending;
     if (receipt) |value| {

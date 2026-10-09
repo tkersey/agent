@@ -215,7 +215,7 @@ test "authored skill control preserves state on rejection and fences actual evic
             try std.testing.expectEqual(.high, proposal.state.selection.effective_effort);
             try std.testing.expectEqual(@as(u64, if (scenario >= 3) 3 else 2), proposal.state.epoch);
             try std.testing.expectEqual(@as(u64, if (scenario >= 3) 2 else 1), proposal.state.eviction_generation);
-            try std.testing.expectEqual(if (scenario >= 3) @as(@TypeOf(state.top_effort), .high) else .medium, proposal.state.top_effort);
+            try std.testing.expectEqual(state.top_effort, proposal.state.top_effort);
             try std.testing.expectEqual(@as(usize, if (scenario == 3) 0 else 1), proposal.state.skills.items.len);
             if (scenario != 3) try std.testing.expectEqual(scenario == 0, proposal.state.skills.items[0].active);
             if (scenario == 0) try std.testing.expectEqual(7, proposal.state.skills.items[0].introduced_at);

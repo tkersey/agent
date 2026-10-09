@@ -47,7 +47,18 @@ fn capture(ctx: native.registry.ProjectionContext, objects: *Objects, request: P
     return decoded.value; // The fixture's arena owns all returned slices.
 }
 
-test "adaptive projection retains audit captures while hard eviction starts explicit clean input" {
+fn advance(ctx: native.registry.ProjectionContext, objects: *Objects, request: *P.AdaptiveRequest, call_id: []const u8, opaque_text: []const u8) !void {
+    const body = try std.fmt.allocPrint(ctx.allocator, "{{\"status\":\"completed\",\"error\":null,\"output\":[{{\"type\":\"reasoning\",\"summary\":[],\"encrypted_content\":\"{s}\"}},{{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"{s}\",\"name\":\"finish\",\"arguments\":\"{{\\\"value\\\":1}}\"}}]}}", .{ opaque_text, call_id });
+    const result = try capture(ctx, objects, request.*, body);
+    try std.testing.expectEqual(.complete, result.replay_status);
+    request.plan.prior = result.replay;
+    request.plan.watermark = result.replay.?.watermark;
+    const settled = try ctx.allocator.alloc(P.ToolResult, 1);
+    settled[0] = .{ .call_id = .{ .bytes = call_id }, .output = .{ .bytes = "Observation retained." } };
+    request.results.items = settled;
+}
+
+test "adaptive projection preserves history and owns skill and opaque eviction" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -67,7 +78,7 @@ test "adaptive projection retains audit captures while hard eviction starts expl
         .reasoning_mode = .standard,
         .reasoning_context = .current_turn,
         .efforts = .{ .items = &.{ .medium, .high } },
-        .effort_update = false,
+        .effort_update = true,
         .explicit_cache = true,
         .additional_tools = true,
         .cache_diagnostics = true,
@@ -77,11 +88,14 @@ test "adaptive projection retains audit captures while hard eviction starts expl
         .response_bytes = 4096,
         .timeout_ms = 1000,
     };
+    var other = inference;
+    other.id.bytes = "other";
+    other.model.bytes = "fixture-model-b";
     const policy: P.AdaptivePolicy = .{
         .schema = .{ .bytes = P.adaptive_policy_identity },
         .endpoint = .{ .bytes = "https://example.test/v1/responses" },
         .audience = .{ .bytes = "fixture" },
-        .profiles = .{ .items = &.{inference} },
+        .profiles = .{ .items = &.{ inference, other } },
         .catalog = catalog,
         .core_tools = .{ true, false },
         .permitted_tools = .{ true, true },
@@ -146,20 +160,37 @@ test "adaptive projection retains audit captures while hard eviction starts expl
     const limited = try capture(ctx, &objects, request, oversized);
     try std.testing.expect(limited.replay_status == .capacity and limited.replay == null);
     try std.testing.expectEqual(@as(?u64, 9), limited.usage.?.output_tokens);
-    const first = try capture(ctx, &objects, request, "{\"id\":\"response-1\",\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"call-1\",\"name\":\"finish\",\"arguments\":\"{\\\"value\\\":1}\"}]}");
+    const initial_http = try http(a, try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, request)));
+    const first = try capture(ctx, &objects, request, "{\"id\":\"response-1\",\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"reasoning\",\"summary\":[],\"encrypted_content\":\"OPAQUE-BEFORE-SKILL\"},{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"call-1\",\"name\":\"finish\",\"arguments\":\"{\\\"value\\\":1}\"}]}");
     try std.testing.expect(first.replay_status == .complete and first.usage == null);
     request.plan.prior = first.replay;
     request.plan.watermark = first.replay.?.watermark;
     request.invocation.messages.items = &.{};
-    request.results.items = &.{.{ .call_id = .{ .bytes = "call-1" }, .output = .{ .bytes = "Continue the investigation." } }};
+    request.results.items = &.{.{ .call_id = .{ .bytes = "call-1" }, .output = .{ .bytes = skill_body } }};
     request.selection.control_revision = 1;
     var loaded = [_]model.SkillMaterialization{.{ .resource = skill, .skill_id = .{ .bytes = "invariant" }, .version = .{ .bytes = "1" }, .residency = .resident, .active = true, .introduced_at = 1 }};
     request.plan.skills.items = &loaded;
     request.materialized = .{ true, true };
     request.offered = .{ true, true };
     request.invocation.tools = P.allDeclarations();
+    request.selection.effective_effort = .high;
     const loaded_bytes = try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, request));
     const loaded_http = try http(a, loaded_bytes);
+    const original_input = initial_http.object.get("input").?.array.items;
+    const continued_input = loaded_http.object.get("input").?.array.items;
+    for (original_input, continued_input[0..original_input.len]) |original, continued| {
+        try std.testing.expectEqualStrings(try native.json.canonical(a, original), try native.json.canonical(a, continued));
+    }
+    var altered = try contracts.decodeOwned(Adapter.Prepared, a, loaded_bytes);
+    defer altered.deinit();
+    altered.value.body.bytes = try std.mem.replaceOwned(u8, a, altered.value.body.bytes, "\"effort\":\"high\"", "\"effort\":\"medium\"");
+    const authority: native.registry.Authority = .{ .grants = &.{}, .principal = "fixture", .tenant = "fixture", .inference = true };
+    const acquisition_context: native.Context = .{ .allocator = a, .io = std.testing.io, .authority = &authority, .task_id = "fixture", .profile = profile_bytes, .environment = null };
+    const denied_update = try Adapter.acquire(acquisition_context, try contracts.encodeOwned(Adapter.Prepared, a, altered.value));
+    try std.testing.expect(denied_update == .definitely_not_sent);
+    try std.testing.expectEqual(error.InvalidPreparedRequest, denied_update.definitely_not_sent);
+    try std.testing.expectEqualStrings("medium", loaded_http.object.get("reasoning").?.object.get("effort").?.string);
+    try std.testing.expect(std.mem.indexOf(u8, loaded_bytes, "configuration_update") != null);
     try std.testing.expectEqual(1, loaded_http.object.get("tools").?.array.items.len);
     try std.testing.expectEqual(2, loaded_http.object.get("tool_choice").?.object.get("tools").?.array.items.len);
     try std.testing.expect(std.mem.indexOf(u8, loaded_bytes, skill_body) != null);
@@ -178,14 +209,14 @@ test "adaptive projection retains audit captures while hard eviction starts expl
     for (replayed) |item| {
         const kind = native.json.get(item, "type") orelse continue;
         if (kind == .string and std.mem.eql(u8, kind.string, "reasoning")) {
-            try std.testing.expectEqualStrings("OPAQUE-WITH-SKILL", item.object.get("encrypted_content").?.string);
+            if (!std.mem.eql(u8, "OPAQUE-WITH-SKILL", item.object.get("encrypted_content").?.string)) continue;
             try std.testing.expectEqual(@as(usize, 0), item.object.get("content").?.array.items.len);
             retained_reasoning = true;
         }
     }
     try std.testing.expect(retained_reasoning);
     try std.testing.expectEqual(1, (try http(a, inactive)).object.get("tool_choice").?.object.get("tools").?.array.items.len);
-    // Hard removal without a new epoch and seed is forbidden before dispatch.
+    // Eviction must advance its fence, but does not replace the transcript.
     request.plan.skills.items = &.{};
     request.materialized = .{ true, false };
     request.invocation.tools.items = P.allDeclarations().items[0..1];
@@ -193,26 +224,30 @@ test "adaptive projection retains audit captures while hard eviction starts expl
     request.plan.epoch = 1;
     request.plan.reason = .eviction;
     request.plan.eviction_generation = 1;
-    const seed: P.AdaptiveSeed = .{
-        .schema = .{ .bytes = P.adaptive_seed_identity },
-        .policy = request.policy,
-        .task = ctx.task,
-        .tenant = .{ .bytes = ctx.tenant },
-        .audience = policy.audience,
-        .selection = request.selection,
-        .epoch = 1,
-        .watermark = request.plan.watermark,
-        .eviction_generation = 1,
-        .source = second.replay.?,
-        .messages = .{ .items = &.{ .{ .role = .developer, .content = .{ .bytes = "Use actual evidence and approved tools." } }, .{ .role = .user, .content = .{ .bytes = "Inspect the snapshot. Verified observation: invariant retained. Remaining calls: 14." } } } },
-    };
-    request.plan.handoff = try objects.add(a, try contracts.encodeOwned(P.AdaptiveSeed, a, seed));
     const evicted = try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, request));
     const evicted_http = try native.json.canonical(a, try http(a, evicted));
-    try std.testing.expect(std.mem.indexOf(u8, evicted_http, skill_body) == null);
+    var retained_evidence = false;
+    for ((try http(a, evicted)).object.get("input").?.array.items) |item| {
+        if (native.json.get(item, "output")) |output| if (output == .array) for (output.array.items) |part| {
+            if (native.json.get(part, "text")) |text| if (text == .string and std.mem.eql(u8, text.string, skill_body)) {
+                retained_evidence = true;
+            };
+        };
+        if (native.json.get(item, "content")) |content| if (content == .array) for (content.array.items) |part| {
+            if (native.json.get(part, "text")) |text| if (text == .string) try std.testing.expect(!std.mem.eql(u8, text.string, skill_body));
+        };
+    }
+    try std.testing.expect(retained_evidence);
     try std.testing.expect(std.mem.indexOf(u8, evicted_http, "OPAQUE-WITH-SKILL") == null);
-    try std.testing.expect(std.mem.indexOf(u8, evicted_http, "\"name\":\"inspect\"") == null);
-    try std.testing.expect(std.mem.indexOf(u8, evicted_http, "Verified observation") != null);
+    try std.testing.expect(std.mem.indexOf(u8, evicted_http, "OPAQUE-BEFORE-SKILL") != null);
+    try std.testing.expect(std.mem.indexOf(u8, evicted_http, "Observed invariant retained.") != null);
+    try std.testing.expect(std.mem.indexOf(u8, evicted_http, "configuration_update") != null);
+    try std.testing.expectEqualStrings("medium", (try http(a, evicted)).object.get("reasoning").?.object.get("effort").?.string);
+    for ((try http(a, evicted)).object.get("input").?.array.items) |item| {
+        if (native.json.get(item, "tools")) |definitions| for (definitions.array.items) |definition| {
+            try std.testing.expect(!std.mem.eql(u8, definition.object.get("name").?.string, "inspect"));
+        };
+    }
     // Original captures and the original projection remain byte-identical.
     try std.testing.expect(std.mem.indexOf(u8, loaded_bytes, skill_body) != null);
     var graft = request;
@@ -225,4 +260,61 @@ test "adaptive projection retains audit captures while hard eviction starts expl
     try std.testing.expectError(error.MissingArtifact, Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, request)));
     objects.denied = null;
     try std.testing.expectEqualSlices(u8, evicted, try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, request)));
+    // A new model receives the original visible transcript and settled calls,
+    // while prior opaque output and prior-profile effort updates stay excluded.
+    const third = try capture(ctx, &objects, request, "{\"id\":\"response-3\",\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"call-3\",\"name\":\"finish\",\"arguments\":\"{\\\"value\\\":3}\"}]}");
+    request.plan.prior = third.replay;
+    request.plan.watermark = third.replay.?.watermark;
+    request.plan.epoch = 2;
+    request.plan.reason = .model_change;
+    request.selection = .{ .profile_id = other.id, .profile_digest = try Admission.profileDigest(a, other), .effective_effort = .medium, .control_revision = 3 };
+    request.invocation.model = other.model;
+    request.invocation.parameters.reasoning.?.effort = .medium;
+    request.results.items = &.{.{ .call_id = .{ .bytes = "call-3" }, .output = .{ .bytes = "Last old-model observation." } }};
+    const switched = try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, request));
+    const switched_http = try native.json.canonical(a, try http(a, switched));
+    try std.testing.expect(request.plan.handoff == null);
+    try std.testing.expect(std.mem.indexOf(u8, switched_http, "OPAQUE-BEFORE-SKILL") == null);
+    try std.testing.expect(std.mem.indexOf(u8, switched_http, "OPAQUE-WITH-SKILL") == null);
+    try std.testing.expect(std.mem.indexOf(u8, switched_http, "configuration_update") == null);
+    try std.testing.expect(std.mem.indexOf(u8, switched_http, "Observed invariant retained.") != null);
+    try std.testing.expect(std.mem.indexOf(u8, switched_http, "Last old-model observation.") != null);
+    const switched_input = (try http(a, switched)).object.get("input").?;
+    var settled = try Adapter.Context.pending(a, switched_input);
+    defer settled.deinit();
+    try std.testing.expectEqual(@as(u32, 0), settled.count());
+    // Reactivation must not erase opaque output produced while the transient
+    // skill was absent. A single introduced-at cutoff cannot distinguish this.
+    try advance(ctx, &objects, &request, "switched", "CLEAN-OPAQUE");
+    loaded[0].residency = .transient;
+    loaded[0].active = true;
+    loaded[0].introduced_at = request.plan.watermark;
+    request.plan.skills.items = &loaded;
+    request.invocation.tools = P.allDeclarations();
+    request.materialized = .{ true, true };
+    request.offered = .{ true, true };
+    request.selection.control_revision += 1;
+    try advance(ctx, &objects, &request, "transient-one", "FIRST-TRANSIENT-OPAQUE");
+    loaded[0].active = false;
+    request.offered = .{ true, false };
+    request.plan.epoch += 1;
+    request.plan.eviction_generation += 1;
+    request.plan.reason = .eviction;
+    request.selection.control_revision += 1;
+    try advance(ctx, &objects, &request, "inactive", "INACTIVE-OPAQUE");
+    loaded[0].active = true;
+    request.offered = .{ true, true };
+    request.selection.control_revision += 1;
+    try advance(ctx, &objects, &request, "transient-two", "SECOND-TRANSIENT-OPAQUE");
+    loaded[0].active = false;
+    request.offered = .{ true, false };
+    request.plan.epoch += 1;
+    request.plan.eviction_generation += 1;
+    request.selection.control_revision += 1;
+    const reevicted = try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, request));
+    const reevicted_http = try native.json.canonical(a, try http(a, reevicted));
+    try std.testing.expect(std.mem.indexOf(u8, reevicted_http, "CLEAN-OPAQUE") != null);
+    try std.testing.expect(std.mem.indexOf(u8, reevicted_http, "INACTIVE-OPAQUE") != null);
+    try std.testing.expect(std.mem.indexOf(u8, reevicted_http, "FIRST-TRANSIENT-OPAQUE") == null);
+    try std.testing.expect(std.mem.indexOf(u8, reevicted_http, "SECOND-TRANSIENT-OPAQUE") == null);
 }

@@ -241,14 +241,16 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         assert(Buffer.from(call[2]).equals(Buffer.from(expectedCall.arguments)), 'argument JSON bytes are preserved exactly');
         assert.equal(call[3], toolNames.indexOf(expectedCall.name));
         const context = decodeValue(schemas.AdaptiveContext, archive.object(reply[1].value[0]));
-        assert.equal(context.length, 13); assert.deepEqual(context[2], archive.task.id);
-        assert.equal(context[0], 'agent.model.context.responses.adaptive.v1'); assert.deepEqual(context[1], request[1]);
+        assert.equal(context.length, 14); assert.deepEqual(context[2], archive.task.id);
+        assert.equal(context[0], 'agent.model.context.responses.adaptive.v2'); assert.deepEqual(context[1], request[1]);
         assert.equal(context[3], archive.task.tenant); assert.equal(context[4], frozenProfile.adaptive.audience);
         assert.equal(context[6], request[2][2]);
         assert.deepEqual(context[5], request[2]); assert.deepEqual(context[7], plan); assert.equal(context[8], BigInt(index + 1));
         assert.deepEqual(context[9], reference(rawBytes)); assert.deepEqual(context[10], reference(prepared));
         assert.deepEqual(context[11], {tag: 1, value: fixture[index].id});
         const transientBodies = plan[7].filter(skill => skill[3] === 1 && skill[4]).map(skill => skillBodies.find(body => body.id === skill[1]).body);
+        assert.equal(context[13].length, JSON.parse(Buffer.from(context[12]).toString('utf8')).length);
+        assert(context[13].every(origin => origin[0] <= plan[2]), 'history origins cannot claim future exposure');
         const committedInput = requests[index].body.input.filter(item => !(item.role === 'developer' && item.content?.length === 1 && transientBodies.includes(item.content[0]?.text)));
         assert.deepEqual(JSON.parse(Buffer.from(context[12]).toString('utf8')), [...committedInput, ...fixture[index].output], 'ordered replay appends original output without retaining transient injection');
         measurementRows.push({request, http: requests[index].body, response: fixture[index], reply,

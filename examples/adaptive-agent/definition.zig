@@ -140,15 +140,12 @@ const Application = struct {
         const task = try root.field(try root.parameter("input"), "task");
         const empty = try e.literal(root, t.State, .{
             .task = .{ .bytes = "" },
-            .pending_model_intent = .{ .bytes = "" },
             .followups = .{ .items = &.{} },
             .control = .{ .selection = .{ .profile_id = .{ .bytes = "" }, .profile_digest = @splat(0), .effective_effort = .medium, .control_revision = 0 }, .top_effort = .medium, .epoch = 0, .epoch_reason = .initial, .eviction_generation = 0, .skills = .{ .items = &.{} } },
             .replay = null,
-            .handoff = null,
             .results = .{ .items = &.{} },
             .messages = .{ .items = &.{} },
             .evidence = .{ .items = &.{} },
-            .outcomes = .{ .items = &.{} },
             .receipts = .{ .items = &.{} },
             .model_calls = 0,
             .work_calls = 0,
@@ -202,7 +199,6 @@ const Program = struct {
         const rejected = try active.caseOf(preparation, "rejected");
         const work = ready.body();
         const request = try work.field(ready.payload(), "request");
-        const handoff = try work.field(try work.field(request, "plan"), "handoff");
         const counted = try e.update(work, state, .{ .model_calls = try work.checkedAdd(try work.field(state, "model_calls"), try work.constant(u16, 1), try e.failure()), .messages = try e.literal(work, P.Messages, .{ .items = &.{} }), .results = try e.literal(work, t.PendingResults, .{ .items = &.{} }) });
         const observation = try e.invoke(work, p.responder, &.{ request, try work.field(request, "offered") }, agent.responders.AdaptiveModelObservation(P, false));
         const normalized = try work.field(observation, "normalized");
@@ -212,7 +208,6 @@ const Program = struct {
         const chosen = accepted.body();
         const next = try e.update(chosen, counted, .{
             .replay = try chosen.field(normalized, "replay"),
-            .handoff = handoff,
             .results = try e.literal(chosen, @FieldType(t.State, "results"), .{ .items = &.{} }),
             .messages = try e.literal(chosen, P.Messages, .{ .items = &.{} }),
         });
@@ -247,13 +242,12 @@ const Program = struct {
         const successor = try poll.match(inbox, &.{ try empty.ret(state), try message.ret(updated) });
         return b.conditional(try b.less(try b.sequenceLength(try b.field(state, "followups")), try b.constant(u64, 4)), try poll.ret(try poll.call(p.loop, &.{ .{ .name = "bindings", .value = bindings }, .{ .name = "state", .value = successor } })), try full.ret(try full.call(p.loop, &.{ .{ .name = "bindings", .value = bindings }, .{ .name = "state", .value = state } })));
     }
-    fn toolResult(p: Program, b: *a.Body, bindings: V, state: V, call_id: V, text: V, outcome: V) !V {
+    fn toolResult(p: Program, b: *a.Body, bindings: V, state: V, call_id: V, text: V) !V {
         const e = p.e;
         const result = try b.product(try e.schema(t.PendingResult), &.{ .{ .name = "call_id", .value = call_id }, .{ .name = "output", .value = text } });
         const successor = try e.update(b, state, .{
             .results = try e.sequence(b, @FieldType(t.State, "results"), &.{result}),
             .work_calls = try b.checkedAdd(try b.field(state, "work_calls"), try b.constant(u16, 1), try e.failure()),
-            .outcomes = try e.append(b, t.Outcomes, try b.field(state, "outcomes"), outcome),
         });
         return p.resumeTask(b, bindings, successor);
     }
@@ -280,14 +274,13 @@ const Program = struct {
                     try some.ret(try e.update(some.body(), state, .{ .evidence = try e.append(some.body(), t.EvidenceList, try some.body().field(state, "evidence"), some.payload()) })),
                     try none.ret(state),
                 });
-                return p.toolResult(b, bindings, updated, call_id, try b.variant(try e.schema(t.ResultValue), "work", reference), try b.variant(try e.schema(t.Outcome), "artifact", reference));
+                return p.toolResult(b, bindings, updated, call_id, try b.variant(try e.schema(t.ResultValue), "work", reference));
             },
             2 => {
                 const question = try b.product(try e.schema(t.Question), &.{.{ .name = "prompt", .value = try b.field(value, "question") }});
                 const answer = try b.perform(p.ops.ask, question);
-                const outcome = try b.variant(try e.schema(t.Outcome), "answer", try b.product(try e.schema(@FieldType(t.WorkOutcome, "ask")), &.{ .{ .name = "question", .value = question }, .{ .name = "answer", .value = answer } }));
                 const successor = try e.update(b, state, .{ .followups = try e.append(b, t.Followups, try b.field(state, "followups"), try b.field(answer, "message")) });
-                return p.toolResult(b, bindings, successor, call_id, try b.variant(try e.schema(t.ResultValue), "inline_text", try b.field(answer, "message")), outcome);
+                return p.toolResult(b, bindings, successor, call_id, try b.variant(try e.schema(t.ResultValue), "inline_text", try b.field(answer, "message")));
             },
             3 => {
                 const selected = try b.sequenceGet(try b.field(state, "evidence"), try b.field(value, "evidence_index"));
@@ -320,12 +313,9 @@ const Program = struct {
         const ready = try b.caseOf(preparation, "ready");
         const rejected = try b.caseOf(preparation, "rejected");
         const accepted = ready.body();
-        const prepared = try accepted.field(ready.payload(), "request");
         const receipt = try accepted.variantPayload(try accepted.field(ready.payload(), "receipt"), "some", try e.failure());
         const committed = try e.update(accepted, state, .{
             .control = try accepted.field(proposal, "state"),
-            .pending_model_intent = try accepted.field(command, "reason"),
-            .handoff = try accepted.field(try accepted.field(prepared, "plan"), "handoff"),
             .results = try accepted.field(ready.payload(), "results"),
             .receipts = try e.append(accepted, t.Receipts, try accepted.field(state, "receipts"), receipt),
         });

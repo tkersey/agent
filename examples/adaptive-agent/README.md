@@ -122,9 +122,10 @@ Configuration has these fields:
 Every profile declares `id`, actual API `model`, `reasoning_mode`,
 `reasoning_context`, `efforts`, `effort_update`, `explicit_cache`,
 `additional_tools`, `cache_diagnostics`, `opaque_family`, `max_output_tokens`,
-`request_bytes`, `response_bytes`, and `timeout_ms`. The application currently
-requires `effort_update: false`: effort changes use the named new-context
-fallback, including changes made immediately after a tool call. Features are
+`request_bytes`, `response_bytes`, and `timeout_ms`. Profiles that admit `effort_update: true` use append-only configuration updates
+after settling the actual control call. Request-level effort stays unchanged;
+the replayed update selects effective effort. A false declaration changes the
+request-level effort without discarding visible history. Features are
 explicit approvals, not inferred from model-name prefixes. Supply actual
 operator-approved models and capabilities; fixture names are not live models.
 
@@ -165,11 +166,14 @@ an explicit unload followed by load. Repeating an already satisfied selection
 is a no-op, while a stale revision rejects.
 
 Resident deactivation retains its body and definitions but removes its offers.
-Unload starts a new context epoch and physically omits that material and opaque
-reasoning from the next request. The handoff retains acquired facts, outcomes,
-follow-ups and allowances; a model's proposed next intent is labeled as a
-hypothesis. Original captures remain immutable audit evidence. Returning to an
-old profile uses current task facts and the current eviction generation.
+Unload advances the eviction revision and physically removes the owned skill
+injection and exclusive definitions. It removes opaque reasoning that could
+have observed that skill, retaining unrelated opaque output and ordinary
+evidence—even when evidence contains identical text. The Boundary computation
+resumes with its existing task state, transcript and evidence references. Model
+changes retain visible messages and settled tool exchanges while excluding old
+opaque reasoning and old-profile effort updates. No task-state handoff bundle is
+constructed. Original captures remain immutable audit evidence.
 
 Work results and control receipts are immutable artifacts. World continuations
 retain references, not duplicated source excerpts or directory pages. The
@@ -178,7 +182,7 @@ definitions, and work dispatch binds to that captured call. Queued user messages
 are consumed through the authored inbox only after the current call settles.
 
 The new contracts are `agent.model.invoke.v6` and
-`agent.model.context.responses.adaptive.v1`. Existing v3/v4/v5 consumers and the
+`agent.model.context.responses.adaptive.v2`. Existing v3/v4/v5 consumers and the
 fixed `repository-agent` keep their meanings. Reports expose bounded evidence
 and control receipts; raw provider captures and opaque reasoning are not public
 report artifacts. Absent usage remains unavailable. Explicit cache markers and

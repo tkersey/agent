@@ -19,7 +19,7 @@ example. Consumers compose them through existing Agent/Boundary authoring;
 World executes the emitted BPI3 and owns its saved continuation.
 
 The program owns task state, inference selection, skill residency, revisions,
-epoch/handoff plans, D/O masks, logical budgets and completion. Native Zig
+projection revisions, D/O masks, logical budgets and completion. Native Zig
 adapters perform deterministic bounded projection, provider I/O and storage at
 explicit effect boundaries. They cannot choose the next action from a transcript,
 substitute a model, mutate a skill, reset an epoch or retry unknown delivery.
@@ -41,7 +41,7 @@ polish is deferred, not a blocker on the reusable API or reference integration.
 | `eviction_generation` | Authored exclusion fence. Every newly selected lineage must respect it. |
 | `AdaptiveContextReference` | Content reference plus schema, policy, inference selection, task, tenant, audience, epoch, watermark, and eviction bindings. |
 
-The additional identities are `agent.model.context.responses.adaptive.v1`,
+The additional identities are `agent.model.context.responses.adaptive.v2`,
 `agent.model.policy.adaptive.v1`, and `agent.model.seed.adaptive.v1`. The v5
 `agent.model.context.responses.v1` reference is not an adaptive reference.
 
@@ -65,11 +65,12 @@ model identity remains protected against raw model-effect authoring bypasses.
 
 An inference profile explicitly declares its model, efforts, reasoning mode and
 context, feature flags, opaque-family label, output-token maximum, byte bounds
-and timeout. No feature is inferred from a model-name prefix. The example
-rejects `effort_update: true`; its effort-only changes use the named
-`effort_change` epoch fallback. The generic projection represents an approved
-configuration update without rewriting the original top-level effort, but that
-immediate tool-continuation API combination is not live-qualified here.
+and timeout. No feature is inferred from a model-name prefix. An admitted `effort_update: true` keeps the original top-level effort and
+appends a configuration update after the actual settled control result. The
+rendered update sequence is folded to validate effective effort again before
+dispatch. With `effort_update: false`, the request-level effort changes, but
+visible history is still retained. A logical epoch revision does not itself
+replace the transcript.
 
 ## Projection and eviction
 
@@ -89,14 +90,30 @@ locations and diagnostic comparison request follow the official
 and [diagnostics guide](https://developers.openai.com/api/docs/guides/prompt-caching/diagnostics).
 These documents do not establish live acceptance or a cache hit.
 
-Resident deactivation removes offers while retaining material. Hard unload,
-transient deactivation, model changes and unsupported in-place effort changes
-use explicit new epochs. A new epoch requires a bound semantic seed and a
-settled old call/result group. It carries exact task facts, evidence, outcomes,
-follow-ups, allowances and control information, with proposed intent labeled
-as a hypothesis. It excludes old opaque reasoning. There is no opaque-family
-compatibility shortcut, decrypted reasoning, or covert `replay = null` reset.
-An oversized handoff rejects instead of summarizing away required facts.
+Resident deactivation removes offers while retaining material. Hard unload and
+transient deactivation remove owned injected instructions and exclusive tool
+definitions. Projection records each injected body's catalog identity; it never
+identifies an injection by searching for equal text in evidence. Each opaque
+output records the approved skills it could have observed, including dependency
+carried by retained opaque output. Eviction excludes dependent opaque output
+while preserving output from before activation or an inactive interval.
+
+Model changes preserve compatible visible messages and complete settled
+call/result exchanges. They exclude old opaque reasoning and old-profile
+configuration updates. Skill eviction preserves current effort updates and the
+original top-level effort. Unchanged input prefixes and their cache breakpoints
+are retained; stale breakpoints in an edited suffix are replaced by the current
+eligible suffix boundary. Shared provider cache across models is not assumed.
+
+The reference program uses Boundary resumptions through World to retain task
+state, evidence references, control state and pending results. It no longer
+constructs a second JSON representation of task state for ordinary transitions.
+The generic explicit seed operation remains separately available to an author
+that deliberately supplies a replacement context; the reference does not use it.
+
+Context schema v2 includes per-item projection provenance. Exact application,
+image, schema and runtime bindings remain recovery gates; old saved tasks are
+not migrated or reinterpreted under a new build.
 
 ## Acquisition and replay
 
@@ -131,17 +148,16 @@ required. Existing v3/v4/fixed-profile v5 consumers retain their contracts.
 The example admits 1–16 charged model attempts, 0–16 control revisions,
 14 approved skills, four active skills, 32 KiB per body, and 128 KiB of skill
 bodies. Snapshot, bodies and catalog together fit the native 16 MiB frozen
-resource ceiling. It retains at most eight evidence references, 12 work outcomes,
+resource ceiling. It retains at most eight evidence references, permits 12 work actions,
 16 control receipts, and four answers/follow-ups combined. These are independent
 ceilings, not a promise that every maximal field combination fits a request.
 
 Provider requests are at most 256 KiB and responses at most 512 KiB. The
 normalized adaptive reply is at most 16 KiB; its raw capture is retained on
-projection overflow. Handoff facts use the selected profile's request capacity,
-and preparation checks the complete rendered request before admitting a control.
-The consumer's message representation shares the transport's 256 KiB ceiling;
-there is no separate 8 KiB handoff ceiling. Seed artifacts still fit their native
-128 KiB object envelope. Existing native
+projection overflow. Preparation checks the complete rendered request before
+admitting a control. The reference has no handoff bundle or handoff-size gate.
+Its message representation shares the transport's 256 KiB ceiling; the generic
+explicit seed operation retains its native 128 KiB object envelope. Existing native
 64 MiB requested allocation, 16 MiB worker and SQLite budgets, and 256 MiB
 namespace limits remain unchanged. Protocol frames, checkpoint size, World
 working memory and namespace quotas remain separate limits.

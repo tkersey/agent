@@ -122,20 +122,20 @@ pub fn write(comptime definition: type, comptime types: type, init: std.process.
     try std.json.Stringify.value(metadata, .{}, &writer.writer);
     if (comptime @hasDecl(types, "support_types")) {
         var value = try std.json.parseFromSliceLeaky(std.json.Value, a, writer.written(), .{ .allocate = .alloc_always });
-        var support: std.json.Value = .{ .object = std.json.ObjectMap.init(a) };
+        var support: std.json.Value = .{ .object = .empty };
         inline for (types.support_types) |entry| {
             const wire = try schemaWire(entry.T, a);
-            var item: std.json.Value = .{ .object = std.json.ObjectMap.init(a) };
-            try item.object.put("wire_sha256", .{ .string = try digest(a, wire) });
-            try item.object.put("wire_base64url", .{ .string = try base64(a, wire) });
-            try item.object.put("shape", try shape(entry.T, a));
-            try support.object.put(entry.name, item);
+            var item: std.json.Value = .{ .object = .empty };
+            try item.object.put(a, "wire_sha256", .{ .string = try digest(a, wire) });
+            try item.object.put(a, "wire_base64url", .{ .string = try base64(a, wire) });
+            try item.object.put(a, "shape", try shape(entry.T, a));
+            try support.object.put(a, entry.name, item);
         }
-        try value.object.put("support", support);
+        try value.object.put(a, "support", support);
         if (comptime @hasDecl(types, "support_values")) {
-            var constants: std.json.Value = .{ .object = std.json.ObjectMap.init(a) };
-            inline for (types.support_values) |entry| try constants.object.put(entry.name, .{ .string = try base64(a, try agent.contracts.encodeOwned(entry.T, a, entry.value)) });
-            try value.object.put("support_values", constants);
+            var constants: std.json.Value = .{ .object = .empty };
+            inline for (types.support_values) |entry| try constants.object.put(a, entry.name, .{ .string = try base64(a, try agent.contracts.encodeOwned(entry.T, a, entry.value)) });
+            try value.object.put(a, "support_values", constants);
         }
         writer.clearRetainingCapacity();
         try std.json.Stringify.value(value, .{}, &writer.writer);
@@ -175,8 +175,8 @@ fn shape(comptime T: type, a: std.mem.Allocator) anyerror!std.json.Value {
     };
 }
 fn tagged(a: std.mem.Allocator, name: []const u8, value: std.json.Value) !std.json.Value {
-    var out: std.json.Value = .{ .object = std.json.ObjectMap.init(a) };
-    try out.object.put(name, value);
+    var out: std.json.Value = .{ .object = .empty };
+    try out.object.put(a, name, value);
     return out;
 }
 fn pair(a: std.mem.Allocator, left: std.json.Value, right: std.json.Value) !std.json.Value {

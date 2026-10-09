@@ -803,12 +803,12 @@ function fatalUtf8(bytes) {
   return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
 }
 
-export function parseJsonStrict(text, reviver) {
+function parseJsonStrict(text) {
   const scanner = new JsonScanner(text);
   scanner.value();
   scanner.whitespace();
   assert.equal(scanner.index, text.length, "JSON has trailing bytes");
-  return JSON.parse(text, reviver);
+  return JSON.parse(text);
 }
 
 class JsonScanner {
@@ -965,7 +965,7 @@ class ArgumentScanner extends JsonScanner {
   }
 }
 
-export function integerFromJsonLexeme(lexeme) {
+function integerFromJsonLexeme(lexeme) {
   const match = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(lexeme);
   if (match === null) return null;
   const negative = match[1] === "-";

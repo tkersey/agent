@@ -1,6 +1,6 @@
 {
   "format": "adaptive-responses-corpus/v1",
-  "scope": "Independent shared provider-envelope, replay and optional-usage expectations; controls and acquisition are qualified by the authored application peers.",
+  "scope": "Independent native provider-envelope, replay and optional-usage expectations; controls and acquisition are qualified by the authored native reference.",
   "cases": [
     {
       "name": "missing-output",

@@ -258,24 +258,20 @@ jobs:
           cp examples/adaptive-agent/skills/*.md "$output/adaptive-example/skills/"
           cp docs/model-invocation-v6.md "$output/MODEL-V6.md"
           cp docs/adaptive-responses-acceptance.md "$output/ADAPTIVE-ACCEPTANCE.md"
+          mkdir -p "$output/adaptive-program"
+          cp "$RUNNER_TEMP/agent-qualification/agent4/adaptive-agent/program.bpi3" "$output/adaptive-program/"
+          cp "$RUNNER_TEMP/agent-qualification/agent4/adaptive-agent/application.json" "$output/adaptive-program/"
+          cp "$RUNNER_TEMP/agent-qualification/adaptive-observations.json" "$output/ADAPTIVE-OBSERVATIONS.json"
           cp examples/native-minimal/stdio-client.mts "$output/stdio-client.mts"
           tar -czf "$RUNNER_TEMP/native-reference-$RUNNER_OS-$RUNNER_ARCH-$GITHUB_SHA-$GITHUB_RUN_ATTEMPT.tar.gz" \
             -C "$output" agent-native-example repository-agent adaptive-agent \
-            agent-native-example.build.json repository-agent.build.json adaptive-agent.build.json RUNBOOK.md REPOSITORY.md ADAPTIVE.md MODEL-V6.md ADAPTIVE-ACCEPTANCE.md adaptive-example stdio-client.mts
+            agent-native-example.build.json repository-agent.build.json adaptive-agent.build.json RUNBOOK.md REPOSITORY.md ADAPTIVE.md MODEL-V6.md ADAPTIVE-ACCEPTANCE.md ADAPTIVE-OBSERVATIONS.json adaptive-program adaptive-example stdio-client.mts
       - name: Retain executed native applications
         if: ${{ matrix.lane == 'native' && needs.source.result == 'success' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           path: ${{ runner.temp }}/native-reference-*.tar.gz
           archive: false
-          if-no-files-found: error
-          retention-days: 14
-      - name: Retain executed adaptive Node and WASM package
-        if: ${{ matrix.lane == 'native' && needs.source.result == 'success' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: adaptive-node-wasm-${{ github.sha }}
-          path: ${{ runner.temp }}/agent-qualification/adaptive-use-archive/*
           if-no-files-found: error
           retention-days: 14
       - name: Measure cache before deciding whether to upload

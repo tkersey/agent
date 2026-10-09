@@ -165,8 +165,8 @@ pub const Handoff = struct {
     completion_criteria: contracts.Text(256),
 };
 
-// The JS environment consumes these generated layouts and checks their exact
-// canonical wire schemas. There is no independently maintained codec table.
+// Ordinary wire contracts accompany the emitted Boundary image. External
+// inspection tools can decode them without an adaptive execution implementation.
 pub const support_types = .{
     .{ .name = "Unit", .T = void },
     .{ .name = "Message", .T = Message },
@@ -206,10 +206,4 @@ pub const support_types = .{
     .{ .name = "Input", .T = Input },
     .{ .name = "Output", .T = Output },
     .{ .name = "Inbox", .T = agent.inbox.Profile(Message).Reply },
-};
-
-pub const support_values = .{
-    .{ .name = "tools", .T = P.Tools, .value = P.allDeclarations() },
-    .{ .name = "normalization_limits", .T = model.NormalizationLimits, .value = P.normalizationLimits() },
-    .{ .name = "maximum_adaptive_reply_bytes", .T = u32, .value = P.representation.maximum_adaptive_reply_bytes },
 };

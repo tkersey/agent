@@ -199,7 +199,9 @@ pub fn build(b: *std.Build) void {
     const adaptive_image = adaptive_assets.addOutputFileArg2("program.bpi3", .{});
     const adaptive_application = adaptive_assets.addOutputFileArg2("application.json", .{});
     check.dependOn(&adaptive_assets.step);
-    b.step("adaptive-agent-image", "Emit the adaptive application and its public schemas").dependOn(&adaptive_assets.step);
+    const adaptive_image_step = b.step("adaptive-agent-image", "Emit the adaptive Boundary program and ordinary contracts");
+    adaptive_image_step.dependOn(&b.addInstallFileWithDir(adaptive_image, .prefix, "agent4/adaptive-agent/program.bpi3").step);
+    adaptive_image_step.dependOn(&b.addInstallFileWithDir(adaptive_application, .prefix, "agent4/adaptive-agent/application.json").step);
     const aggregate = b.step("check-agent4", "Check authoring and pure contracts without World");
     const mobility_protocol = b.step("check-mobility-protocol", "Check canonical mobility records and Ed25519 bindings");
     const protocol_tests = nodeCommand(b);
@@ -375,8 +377,7 @@ pub fn build(b: *std.Build) void {
     g.testModule(check, dialogue);
 
     const emit = b.step("agent4-images", "Compile the consumer images");
-    emit.dependOn(&b.addInstallFileWithDir(adaptive_image, .prefix, "agent4/adaptive-agent/program.bpi3").step);
-    emit.dependOn(&b.addInstallFileWithDir(adaptive_application, .prefix, "agent4/adaptive-agent/application.json").step);
+    emit.dependOn(adaptive_image_step);
     emit.dependOn(parser_episode);
     const participant_images = b.step("participant-images", "Emit and link the internal model participant");
     const participant_exe = fixture_driver.select("agent-participant");
@@ -719,13 +720,15 @@ pub fn build(b: *std.Build) void {
                 .environment = b.path("examples/adaptive-agent/environment.zig"),
             });
             native_example.dependOn(&adaptive_product.install.step);
-            b.step("adaptive-agent", "Build the adaptive repository application").dependOn(&adaptive_product.install.step);
+            native_example.dependOn(adaptive_image_step);
+            const adaptive_reference = b.step("adaptive-agent", "Build the native World reference host for the adaptive program");
+            adaptive_reference.dependOn(&adaptive_product.install.step);
+            adaptive_reference.dependOn(adaptive_image_step);
             const adaptive_peer = nativeCheckCommand(b);
             adaptive_peer.addArgs(&.{ "node", "test/agent4/native_adaptive.mjs" });
             adaptive_peer.addFileArg2(adaptive_product.executable.getEmittedBin(), .{ .make_absolute = true });
             adaptive_peer.addFileArg2(adaptive_application, .{ .make_absolute = true });
             adaptive_peer.addFileArg2(adaptive_image, .{ .make_absolute = true });
-            adaptive_peer.addDirectoryArg2(runtime_path, .{ .make_absolute = true });
             native_product.dependOn(&adaptive_peer.step);
             const repository_peer = nativeCheckCommand(b);
             repository_peer.addArgs(&.{ "node", "test/agent4/native_repository.mjs" });

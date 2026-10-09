@@ -128,60 +128,12 @@ pub fn write(comptime definition: type, comptime types: type, init: std.process.
             var item: std.json.Value = .{ .object = .empty };
             try item.object.put(a, "wire_sha256", .{ .string = try digest(a, wire) });
             try item.object.put(a, "wire_base64url", .{ .string = try base64(a, wire) });
-            try item.object.put(a, "shape", try shape(entry.T, a));
             try support.object.put(a, entry.name, item);
         }
         try value.object.put(a, "support", support);
-        if (comptime @hasDecl(types, "support_values")) {
-            var constants: std.json.Value = .{ .object = .empty };
-            inline for (types.support_values) |entry| try constants.object.put(a, entry.name, .{ .string = try base64(a, try agent.contracts.encodeOwned(entry.T, a, entry.value)) });
-            try value.object.put(a, "support_values", constants);
-        }
         writer.clearRetainingCapacity();
         try std.json.Stringify.value(value, .{}, &writer.writer);
     }
     try std.Io.Dir.cwd().writeFile(init.io, .{ .sub_path = image_path, .data = image });
     try std.Io.Dir.cwd().writeFile(init.io, .{ .sub_path = application_path, .data = writer.written() });
-}
-
-/// Names are emitted beside, never substituted for, the canonical wire schema.
-/// JS verifies that this layout reconstructs the exact same schema before use.
-fn shape(comptime T: type, a: std.mem.Allocator) anyerror!std.json.Value {
-    if (@typeInfo(T) == .@"struct" and @hasDecl(T, "agent_value_kind")) {
-        return switch (T.agent_value_kind) {
-            .text => tagged(a, "text", .{ .integer = @intCast(T.max_length.?) }),
-            .bytes => tagged(a, "bytes", .{ .integer = @intCast(T.max_length.?) }),
-            .vector => tagged(a, "vector", try pair(a, .{ .integer = @intCast(T.max_length) }, try shape(T.Child, a))),
-            else => error.UnsupportedSupportType,
-        };
-    }
-    return switch (@typeInfo(T)) {
-        .void => .{ .string = "unit" },
-        .bool => .{ .string = "boolean" },
-        .int => |info| .{ .string = try std.fmt.allocPrint(a, "{s}{d}", .{ if (info.signedness == .signed) "i" else "u", info.bits }) },
-        .optional => |info| tagged(a, "optional", try shape(info.child, a)),
-        .array => |info| tagged(a, "array", try pair(a, .{ .integer = @intCast(info.len) }, try shape(info.child, a))),
-        .@"enum" => |info| blk: {
-            var members: std.json.Value = .{ .array = .init(a) };
-            inline for (info.field_names) |name| try members.array.append(try pair(a, .{ .string = name }, .{ .integer = @intCast(@backingInt(@field(T, name))) }));
-            break :blk tagged(a, "enum", members);
-        },
-        inline .@"struct", .@"union" => |info| blk: {
-            var fields: std.json.Value = .{ .array = .init(a) };
-            inline for (info.field_names, info.field_types) |name, Child| try fields.array.append(try pair(a, .{ .string = name }, try shape(Child, a)));
-            break :blk tagged(a, if (@typeInfo(T) == .@"struct") "record" else "union", fields);
-        },
-        else => error.UnsupportedSupportType,
-    };
-}
-fn tagged(a: std.mem.Allocator, name: []const u8, value: std.json.Value) !std.json.Value {
-    var out: std.json.Value = .{ .object = .empty };
-    try out.object.put(a, name, value);
-    return out;
-}
-fn pair(a: std.mem.Allocator, left: std.json.Value, right: std.json.Value) !std.json.Value {
-    var out: std.json.Value = .{ .array = .init(a) };
-    try out.array.append(left);
-    try out.array.append(right);
-    return out;
 }

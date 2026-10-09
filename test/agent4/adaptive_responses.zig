@@ -12,12 +12,14 @@ const Admission = native.adaptive_responses.Admission(P);
 const Ref = model.ArtifactReference;
 const Objects = struct {
     items: std.ArrayList([]const u8) = .empty,
+    denied: ?[32]u8 = null,
     fn add(self: *Objects, a: std.mem.Allocator, bytes: []const u8) !Ref {
         try self.items.append(a, bytes);
         return .{ .digest = digest(bytes), .bytes = bytes.len };
     }
     fn read(owner: *anyopaque, a: std.mem.Allocator, ref: native.registry.ObjectReference, limit: usize) ![]u8 {
         const self: *Objects = @ptrCast(@alignCast(owner));
+        if (self.denied) |denied| if (std.mem.eql(u8, &ref.digest, &denied)) return error.MissingArtifact;
         for (self.items.items) |bytes| if (bytes.len == ref.bytes and bytes.len <= limit and std.mem.eql(u8, &digest(bytes), &ref.digest)) return a.dupe(u8, bytes);
         return error.MissingArtifact;
     }
@@ -126,6 +128,14 @@ test "adaptive projection retains audit captures while hard eviction starts expl
         const expected = try native.json.canonical(a, entry.object.get("usage").?);
         try std.testing.expectEqualStrings(expected, observed);
     }
+    inline for (.{ .{ "18446744073709551615", std.math.maxInt(u64) }, .{ "9007199254740993", @as(u64, 9007199254740993) }, .{ "1e0", @as(u64, 1) }, .{ "1.0", @as(u64, 1) } }) |case| {
+        const body = try std.fmt.allocPrint(a, "{{\"status\":\"completed\",\"error\":null,\"output\":[{{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"exact\",\"name\":\"finish\",\"arguments\":\"{{\\\"value\\\":{s}}}\"}}]}}", .{case[0]});
+        const exact = try capture(ctx, &objects, request, body);
+        try std.testing.expect(exact.result == .output);
+        const call = exact.result.output.items.items[0].function_call;
+        try std.testing.expect(call.decoded_action == .decoded);
+        try std.testing.expectEqual(case[1], call.decoded_action.decoded.finish.value);
+    }
     for ([_][]const u8{
         "[1]",
         "[{\"role\":\"developer\",\"content\":[{\"type\":\"input_image\",\"image_url\":\"https://unapproved.invalid\"}]}]",
@@ -200,4 +210,8 @@ test "adaptive projection retains audit captures while hard eviction starts expl
     graft = request;
     graft.plan.prior.?.schema.bytes = model.context_semantic_identity;
     try std.testing.expectError(error.InvalidContext, Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, graft)));
+    objects.denied = request.plan.prior.?.object.digest;
+    try std.testing.expectError(error.MissingArtifact, Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, request)));
+    objects.denied = null;
+    try std.testing.expectEqualSlices(u8, evicted, try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, request)));
 }

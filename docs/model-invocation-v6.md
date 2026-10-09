@@ -5,11 +5,36 @@ projection to the existing model/responder owner. It does not change v3, inline
 v4, or the fixed-profile v5 contract. The reference consumer is
 [`adaptive-agent`](../examples/adaptive-agent/README.md).
 
+## Authored API and execution
+
+Scope authority is the October 9, 2026 **authored program on Boundary, executed
+by World** amendment. It supersedes dual-adaptive-backend and immediate
+standalone-distribution gates without changing these effect identities.
+
+`agent.adaptive_controls.defineInference` and `defineSkill(P, ...)` construct
+reusable control transitions. `P.declareAdaptive` and
+`agent.responders.defineAdaptiveModelObserved(P, ...)` provide the admitted model
+effect and checked continuation. These owners are independent of the repository
+example. Consumers compose them through existing Agent/Boundary authoring;
+World executes the emitted BPI3 and owns its saved continuation.
+
+The program owns task state, inference selection, skill residency, revisions,
+epoch/handoff plans, D/O masks, logical budgets and completion. Native Zig
+adapters perform deterministic bounded projection, provider I/O and storage at
+explicit effect boundaries. They cannot choose the next action from a transcript,
+substitute a model, mutate a skill, reset an epoch or retry unknown delivery.
+
+The existing native reference embedding and build helper remain supported.
+`adaptive-agent-image` emits BPI3 and ordinary wire contracts; `adaptive-agent`
+adds the existing native reference vehicle. A prebuilt vehicle does not invoke
+the Zig compiler or require an adaptive JS runtime. Separate final distribution
+polish is deferred, not a blocker on the reusable API or reference integration.
+
 ## Ownership and identities
 
 | Value | Meaning and owner |
 | --- | --- |
-| Frozen task profile and ordered resources | Existing native grant identity, or the separately bound JS task store. Contains the approved universe and limits for this task. |
+| Frozen task profile and ordered resources | Existing native grant identity. Contains the approved universe and limits for this task. |
 | `AdaptiveSelection.profile_id/profile_digest` | One approved inference entry; the digest covers its ordinary encoded value. It cannot replace the task policy. |
 | `control_revision` | Authored configuration revision. Separate from native task revision, message ordinal, provider call ID, and physical attempt count. |
 | `AdaptivePlan.epoch/watermark` | Explicit projection lineage and committed response position. |
@@ -83,11 +108,9 @@ before World consumes the reply. An application can narrow the native host's
 attempt ceiling through a pure frozen-profile callback; this dispatch check is
 not applied to historical capture replay.
 
-The JS implementation uses the same image and generated wire layouts, the
-existing `WorldAdmission` executor, and a distinct local storage realization of
-that lifecycle. It never writes native namespaces. Reopening validates original
-captures against saved projections. A lost process after dispatch without
-capture leaves unknown delivery; no adapter silently retries it.
+A lost process after dispatch without capture leaves unknown delivery. Neither
+the native host nor the adapter silently retries it. Native restoration and
+archive admission use original captures and their original request settings.
 
 `P.AdaptiveResult` separates normalized result, replay reference/disposition,
 and optional usage. Exact provider bytes remain a `CapturedResponse`, while the
@@ -97,11 +120,11 @@ fields, and rejects provider-created tool additions. The aggregate reply limit
 can return `normalization_limit` with retained usage and no replay, independently
 of raw response and individual-field bounds.
 
-JS v6 adds its closed grammar around the existing JS typed-argument normalizer.
-It handles native-compatible omitted empty annotations and the one-refusal
-projection without changing legacy JS v3/v4 admission. Multiple function calls
-are rejected before adaptive replay. Legacy v3 intersection results alone are
-not evidence of adaptive support.
+The native grammar is checked against independent declarative fixtures,
+including exact failure classifications, full-width integer arguments, Unicode,
+opaque fields and ordered replay. The removed JS adaptive implementation is
+superseded by scope change; no differential execution or dual-backend gate is
+required. Existing v3/v4/fixed-profile v5 consumers retain their contracts.
 
 ## Bounds and observations
 
@@ -116,11 +139,10 @@ Provider requests are at most 256 KiB and responses at most 512 KiB. The
 normalized adaptive reply is at most 16 KiB; its raw capture is retained on
 projection overflow. Handoff fact text is at most 8 KiB. Existing native
 64 MiB requested allocation, 16 MiB worker and SQLite budgets, and 256 MiB
-namespace limits remain unchanged. The Node/WASM reference uses the locked
-64 KiB input/output and 1 MiB working limits. Protocol frames, checkpoint size,
-working memory and namespace quotas are separate limits.
+namespace limits remain unchanged. Protocol frames, checkpoint size, World
+working memory and namespace quotas remain separate limits.
 
-Read-only observations record actual byte counts, selection/epoch identities,
+External read-only qualification observations record actual byte counts, selection/epoch identities,
 skill residency, D/O identities, marker positions, local visible-prefix equality,
 returned model/context when supplied, optional usage, and bounded diagnostic
 kind/reason/counts. Missing, null and zero usage are distinguished in the

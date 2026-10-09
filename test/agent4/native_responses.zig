@@ -80,6 +80,9 @@ test "Responses cancellation before transport is definitely not sent" {
     const result = try Adapter.acquire(ctx, "{}");
     try std.testing.expect(result == .definitely_not_sent);
     try std.testing.expectEqual(error.Canceled, result.definitely_not_sent);
+    const adaptive = try native.adaptive_responses.Adapter(P).acquire(ctx, "{}");
+    try std.testing.expect(adaptive == .definitely_not_sent);
+    try std.testing.expectEqual(error.Canceled, adaptive.definitely_not_sent);
 }
 
 fn digest(bytes: []const u8) [32]u8 {

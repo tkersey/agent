@@ -787,25 +787,28 @@ test "adaptive responder keeps definitions separate from original call authority
     var compiled = try boundary.program.compile(allocator, module);
     defer compiled.deinit();
     const AdaptiveInput = struct { request: P.AdaptiveRequest, offered: [2]bool };
-    var input: AdaptiveInput = .{ .request = .{
-        .invocation = template(&.{}, single),
-        .policy = @splat(9),
-        .selection = .{ .profile_id = .{ .bytes = "analysis" }, .profile_digest = @splat(7), .effective_effort = .high, .control_revision = 4 },
-        .plan = .{
-            .epoch = 3,
-            .reason = .model_change,
-            .watermark = 12,
-            .eviction_generation = 2,
-            .prior = null,
-            .handoff = .{ .digest = @splat(4), .bytes = 128 },
-            .catalog = .{ .digest = @splat(5), .bytes = 256 },
-            .skills = .{ .items = &.{} },
+    var input: AdaptiveInput = .{
+        .request = .{
+            .invocation = template(&.{}, single),
+            .policy = @splat(9),
+            .selection = .{ .profile_id = .{ .bytes = "analysis" }, .profile_digest = @splat(7), .effective_effort = .high, .control_revision = 4 },
+            .plan = .{
+                .epoch = 3,
+                .reason = .model_change,
+                .watermark = 12,
+                .eviction_generation = 2,
+                .prior = null,
+                .handoff = .{ .digest = @splat(4), .bytes = 128 },
+                .catalog = .{ .digest = @splat(5), .bytes = 256 },
+                .skills = .{ .items = &.{} },
+            },
+            .materialized = .{ true, true },
+            // This forged template offer must not override the captured argument.
+            .offered = .{ true, true },
+            .results = .{ .items = &.{} },
         },
-        .materialized = .{ true, true },
-        // This forged template offer must not override the captured argument.
-        .offered = .{ true, true },
-        .results = .{ .items = &.{} },
-    }, .offered = .{ true, false } };
+        .offered = .{ true, false },
+    };
     const image = try allocator.alloc(u8, try data.program_image.encodedLength(compiled.program));
     defer allocator.free(image);
     _ = try data.program_image.encode(allocator, compiled.program, image);

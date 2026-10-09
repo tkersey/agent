@@ -53,16 +53,38 @@ test "adaptive projection retains audit captures while hard eviction starts expl
     const skill_body = "UNIQUE-SKILL-PAYLOAD: inspect state-transition preservation.";
     const skill = try objects.add(a, skill_body);
     const catalog = try objects.add(a, try contracts.encodeOwned(P.AdaptiveCatalog, a, .{ .skills = .{ .items = &.{.{
-        .id = .{ .bytes = "invariant" }, .version = .{ .bytes = "1" }, .description = .{ .bytes = "Inspect invariants." }, .instructions = skill, .tools = .{ false, true },
+        .id = .{ .bytes = "invariant" },
+        .version = .{ .bytes = "1" },
+        .description = .{ .bytes = "Inspect invariants." },
+        .instructions = skill,
+        .tools = .{ false, true },
     }} } }));
     const inference: model.AdaptiveInferenceProfile = .{
-        .id = .{ .bytes = "analysis" }, .model = .{ .bytes = "fixture-model-a" }, .reasoning_mode = .standard, .reasoning_context = .current_turn,
-        .efforts = .{ .items = &.{ .medium, .high } }, .effort_update = false, .explicit_cache = true, .additional_tools = true, .cache_diagnostics = true,
-        .opaque_family = .{ .bytes = "fixture-a" }, .max_output_tokens = 4096, .request_bytes = 16384, .response_bytes = 4096, .timeout_ms = 1000,
+        .id = .{ .bytes = "analysis" },
+        .model = .{ .bytes = "fixture-model-a" },
+        .reasoning_mode = .standard,
+        .reasoning_context = .current_turn,
+        .efforts = .{ .items = &.{ .medium, .high } },
+        .effort_update = false,
+        .explicit_cache = true,
+        .additional_tools = true,
+        .cache_diagnostics = true,
+        .opaque_family = .{ .bytes = "fixture-a" },
+        .max_output_tokens = 4096,
+        .request_bytes = 16384,
+        .response_bytes = 4096,
+        .timeout_ms = 1000,
     };
     const policy: P.AdaptivePolicy = .{
-        .schema = .{ .bytes = P.adaptive_policy_identity }, .endpoint = .{ .bytes = "https://example.test/v1/responses" }, .audience = .{ .bytes = "fixture" },
-        .profiles = .{ .items = &.{inference} }, .catalog = catalog, .core_tools = .{ true, false }, .permitted_tools = .{ true, true }, .model_attempts = 16, .control_transitions = 16,
+        .schema = .{ .bytes = P.adaptive_policy_identity },
+        .endpoint = .{ .bytes = "https://example.test/v1/responses" },
+        .audience = .{ .bytes = "fixture" },
+        .profiles = .{ .items = &.{inference} },
+        .catalog = catalog,
+        .core_tools = .{ true, false },
+        .permitted_tools = .{ true, true },
+        .model_attempts = 16,
+        .control_transitions = 16,
     };
     var frozen = native.json.object();
     try native.json.put(a, &frozen, "adaptive", try native.values.toJson(P.AdaptivePolicy, a, policy));
@@ -70,20 +92,24 @@ test "adaptive projection retains audit captures while hard eviction starts expl
     const ctx: native.registry.ProjectionContext = .{ .allocator = a, .task = @splat(7), .tenant = "fixture", .profile = profile_bytes, .objects = .{ .owner = &objects, .read = Objects.read } };
     var handlers = try native.Registry.init(a, &.{Adapter.declaration()});
     defer handlers.deinit();
-    const Model = agent.model(.{ .name = "adaptive-fixture", .model = "fixture-model-a", .parameters = .{ .max_output_tokens = @as(u32, 4096), .reasoning = .{ .effort = .medium } }, .protocol = struct { pub const semantic_identity = model.protocol_identity; } });
+    const Model = agent.model(.{ .name = "adaptive-fixture", .model = "fixture-model-a", .parameters = .{ .max_output_tokens = @as(u32, 4096), .reasoning = .{ .effort = .medium } }, .protocol = struct {
+        pub const semantic_identity = model.protocol_identity;
+    } });
     var invocation = try P.templateValue(Model, .{ .items = &.{
         .{ .role = .developer, .content = .{ .bytes = "Use actual evidence and approved tools." } },
         .{ .role = .user, .content = .{ .bytes = "Inspect the snapshot." } },
     } }, .{ .minimum_calls = 1, .maximum_calls = 1, .parallel_calls = false });
     invocation.tools.items = P.allDeclarations().items[0..1];
     var request: P.AdaptiveRequest = .{
-        .invocation = invocation, .policy = digest(profile_bytes),
+        .invocation = invocation,
+        .policy = digest(profile_bytes),
         .selection = .{ .profile_id = inference.id, .profile_digest = try Admission.profileDigest(a, inference), .effective_effort = .medium, .control_revision = 0 },
         .plan = .{ .epoch = 0, .reason = .initial, .watermark = 0, .eviction_generation = 0, .prior = null, .handoff = null, .catalog = catalog, .skills = .{ .items = &.{} } },
-        .materialized = .{ true, false }, .offered = .{ true, false }, .results = .{ .items = &.{} },
+        .materialized = .{ true, false },
+        .offered = .{ true, false },
+        .results = .{ .items = &.{} },
     };
-    const first = try capture(ctx, &objects, request,
-        "{\"id\":\"response-1\",\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"call-1\",\"name\":\"finish\",\"arguments\":\"{\\\"value\\\":1}\"}]}" );
+    const first = try capture(ctx, &objects, request, "{\"id\":\"response-1\",\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"call-1\",\"name\":\"finish\",\"arguments\":\"{\\\"value\\\":1}\"}]}");
     try std.testing.expect(first.replay_status == .complete and first.usage == null);
     request.plan.prior = first.replay;
     request.plan.watermark = first.replay.?.watermark;
@@ -100,8 +126,7 @@ test "adaptive projection retains audit captures while hard eviction starts expl
     try std.testing.expectEqual(1, loaded_http.object.get("tools").?.array.items.len);
     try std.testing.expectEqual(2, loaded_http.object.get("tool_choice").?.object.get("tools").?.array.items.len);
     try std.testing.expect(std.mem.indexOf(u8, loaded_bytes, skill_body) != null);
-    const second = try capture(ctx, &objects, request,
-        "{\"id\":\"response-2\",\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"reasoning\",\"summary\":[],\"encrypted_content\":\"OPAQUE-WITH-SKILL\"},{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"call-2\",\"name\":\"inspect\",\"arguments\":\"{\\\"value\\\":2}\"}],\"usage\":{\"input_tokens\":100,\"output_tokens\":10,\"input_tokens_details\":{\"cached_tokens\":40,\"cache_write_tokens\":20},\"output_tokens_details\":{\"reasoning_tokens\":5}}}" );
+    const second = try capture(ctx, &objects, request, "{\"id\":\"response-2\",\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"reasoning\",\"summary\":[],\"encrypted_content\":\"OPAQUE-WITH-SKILL\"},{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"call-2\",\"name\":\"inspect\",\"arguments\":\"{\\\"value\\\":2}\"}],\"usage\":{\"input_tokens\":100,\"output_tokens\":10,\"input_tokens_details\":{\"cached_tokens\":40,\"cache_write_tokens\":20},\"output_tokens_details\":{\"reasoning_tokens\":5}}}");
     try std.testing.expectEqual(@as(?u64, 20), second.usage.?.cache_write_tokens);
     request.plan.prior = second.replay;
     request.plan.watermark = second.replay.?.watermark;
@@ -121,8 +146,16 @@ test "adaptive projection retains audit captures while hard eviction starts expl
     request.plan.reason = .eviction;
     request.plan.eviction_generation = 1;
     const seed: P.AdaptiveSeed = .{
-        .schema = .{ .bytes = P.adaptive_seed_identity }, .policy = request.policy, .task = ctx.task, .tenant = .{ .bytes = ctx.tenant }, .audience = policy.audience,
-        .selection = request.selection, .epoch = 1, .watermark = request.plan.watermark, .eviction_generation = 1, .source = second.replay.?,
+        .schema = .{ .bytes = P.adaptive_seed_identity },
+        .policy = request.policy,
+        .task = ctx.task,
+        .tenant = .{ .bytes = ctx.tenant },
+        .audience = policy.audience,
+        .selection = request.selection,
+        .epoch = 1,
+        .watermark = request.plan.watermark,
+        .eviction_generation = 1,
+        .source = second.replay.?,
         .messages = .{ .items = &.{ .{ .role = .developer, .content = .{ .bytes = "Use actual evidence and approved tools." } }, .{ .role = .user, .content = .{ .bytes = "Inspect the snapshot. Verified observation: invariant retained. Remaining calls: 14." } } } },
     };
     request.plan.handoff = try objects.add(a, try contracts.encodeOwned(P.AdaptiveSeed, a, seed));

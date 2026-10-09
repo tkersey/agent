@@ -52,7 +52,7 @@ pub fn Projection(comptime P: type) type {
             prior_request: ?@FieldType(P.AdaptiveContext, "source_request"),
         };
 
-        fn context(ctx: registry.ProjectionContext, reference: Ref, audience: []const u8) !contracts.Decoded(P.AdaptiveContext) {
+        pub fn open(ctx: registry.ProjectionContext, reference: Ref, audience: []const u8) !contracts.Decoded(P.AdaptiveContext) {
             if (!equal(reference.schema.bytes, P.adaptive_context_identity) or !equal(&reference.policy, &storage.digest(ctx.profile)) or
                 !equal(&reference.task, &ctx.task) or !equal(reference.tenant.bytes, ctx.tenant) or !equal(reference.audience.bytes, audience)) return error.InvalidContext;
             const bytes = try read(ctx, reference.object, 2 * 1024 * 1024);
@@ -151,7 +151,7 @@ pub fn Projection(comptime P: type) type {
             defer if (previous) |*saved| saved.deinit();
             var same_epoch = false;
             if (request.plan.prior) |ref| {
-                previous = try context(ctx, ref, frozen.audience.bytes);
+                previous = try open(ctx, ref, frozen.audience.bytes);
                 // Audit parents remain required even across an eviction. Free
                 // each decoded predecessor before opening the next one.
                 var parent = previous.?.value.plan.prior;
@@ -160,7 +160,7 @@ pub fn Projection(comptime P: type) type {
                 while (parent) |ancestor| {
                     if (depth == 64) return error.Capacity;
                     if (ancestor.watermark != watermark) return error.InvalidContext;
-                    var saved = try context(ctx, ancestor, frozen.audience.bytes);
+                    var saved = try open(ctx, ancestor, frozen.audience.bytes);
                     defer saved.deinit();
                     parent = saved.value.plan.prior;
                     if (parent) |*next| {
@@ -255,9 +255,7 @@ pub fn Projection(comptime P: type) type {
                 try input.array.append(try message(a, "developer", body, false));
             };
             if (input.array.items.len > 8192) return error.Capacity;
-            return .{ .history = history, .input = input, .core_tools = core,
-                .prior_response_id = if (same_epoch) if (previous.?.value.response_id) |id| try a.dupe(u8, id.bytes) else null else null,
-                .prior_request = if (previous) |saved| saved.value.source_request else null };
+            return .{ .history = history, .input = input, .core_tools = core, .prior_response_id = if (same_epoch) if (previous.?.value.response_id) |id| try a.dupe(u8, id.bytes) else null else null, .prior_request = if (previous) |saved| saved.value.source_request else null };
         }
 
         fn settle(a: std.mem.Allocator, history: *json.Value, request: P.AdaptiveRequest) !void {

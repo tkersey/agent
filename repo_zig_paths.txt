@@ -1,6 +1,11 @@
 build.zig
 build_agent4.zig
 build_native.zig
+examples/adaptive-agent/context.zig
+examples/adaptive-agent/definition.zig
+examples/adaptive-agent/environment.zig
+examples/adaptive-agent/types.zig
+examples/adaptive-agent/work.zig
 examples/native-minimal/build.zig
 examples/native-minimal/definition.zig
 examples/native-minimal/environment.zig

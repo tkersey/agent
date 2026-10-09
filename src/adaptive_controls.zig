@@ -90,7 +90,8 @@ const Emit = struct {
     fn append(e: Emit, body: *a.Body, vector: V, item: V) !V {
         const T = @FieldType(State, "skills");
         const raw = try e.context.builder.value(.{ .schema = try e.context.schema(T), .expression = .{ .primitive = .{
-            .opcode = .sequence_append, .operands = &.{ try a.interop.valueId(body, vector), try a.interop.valueId(body, item) },
+            .opcode = .sequence_append,
+            .operands = &.{ try a.interop.valueId(body, vector), try a.interop.valueId(body, item) },
             .failures = &.{.{ .kind = .capacity_exceeded, .value = try e.context.builder.failureLiteral(e.failure) }},
         } } });
         return a.interop.adoptValue(body, raw, try e.schema(T));
@@ -150,10 +151,8 @@ pub fn defineInference(c: authoring.Context, failure: Id) !Id {
         .epoch = epoch,
         .epoch_reason = try room.select(keeps_epoch, try e.field(room, state, State, "epoch_reason"), reason),
     });
-    const changed_result = try changed.conditional(try changed.less(revision, try e.field(changed, input, InferenceInput, "maximum_revision")),
-        try room.ret(try e.outcome(room, successor, .proposed, .none)), try full.ret(try e.outcome(full, state, .rejected, .capacity)));
-    const admitted_result = try admitted.conditional(try admitted.select(same_profile, same_effort, try admitted.constant(bool, false)),
-        try unchanged.ret(try e.outcome(unchanged, state, .unchanged, .none)), try changed.ret(changed_result));
+    const changed_result = try changed.conditional(try changed.less(revision, try e.field(changed, input, InferenceInput, "maximum_revision")), try room.ret(try e.outcome(room, successor, .proposed, .none)), try full.ret(try e.outcome(full, state, .rejected, .capacity)));
+    const admitted_result = try admitted.conditional(try admitted.select(same_profile, same_effort, try admitted.constant(bool, false)), try unchanged.ret(try e.outcome(unchanged, state, .unchanged, .none)), try changed.ret(changed_result));
     const matched_result = try match.conditional(supported, try admitted.ret(admitted_result), try unsupported.ret(try e.outcome(unsupported, state, .rejected, .unsupported_effort)));
     const next_result = try next.call(lookup, &.{ .{ .name = "input", .value = input }, .{ .name = "index", .value = try e.increment(next, index) } });
     const found_result = try current.conditional(try e.sameText(current, try e.field(current, profile, model.AdaptiveInferenceProfile, "id"), try e.field(current, command, InferenceSet, "profile_id")), try match.ret(matched_result), try next.ret(next_result));
@@ -215,9 +214,10 @@ fn SkillGenerator(comptime P: type) type {
             const e = g.e;
             const t = e.typed;
             const rewrite = try t.function("adaptive skill materialization", &.{
-                .{ .name = "input", .schema = try e.schema(Input) }, .{ .name = "entry", .schema = try e.schema(P.AdaptiveSkill) },
-                .{ .name = "index", .schema = try t.scalar(u64) }, .{ .name = "items", .schema = try e.schema(Skills) },
-                .{ .name = "found", .schema = try t.scalar(bool) }, .{ .name = "changed", .schema = try t.scalar(bool) }, .{ .name = "removed", .schema = try t.scalar(bool) },
+                .{ .name = "input", .schema = try e.schema(Input) },  .{ .name = "entry", .schema = try e.schema(P.AdaptiveSkill) },
+                .{ .name = "index", .schema = try t.scalar(u64) },    .{ .name = "items", .schema = try e.schema(Skills) },
+                .{ .name = "found", .schema = try t.scalar(bool) },   .{ .name = "changed", .schema = try t.scalar(bool) },
+                .{ .name = "removed", .schema = try t.scalar(bool) },
             }, try e.schema(Proposal), &.{});
             const b = try t.body(rewrite);
             const input = try b.parameter("input");
@@ -247,18 +247,13 @@ fn SkillGenerator(comptime P: type) type {
             const incompatible = try load.branch();
             const active = try e.field(compatible, old, Materialization, "active");
             const reactivated = try e.replace(compatible, Materialization, old, .{ .active = try compatible.constant(bool, true) });
-            const load_result = try load.conditional(same_residency,
-                try compatible.ret(try g.recur(compatible, rewrite, input, entry, index, try e.append(compatible, items, reactivated), try compatible.constant(bool, true), try e.either(compatible, changed, try compatible.equal(active, try compatible.constant(bool, false))), removed)),
-                try incompatible.ret(try e.outcome(incompatible, state, .rejected, .invalid_operation)));
+            const load_result = try load.conditional(same_residency, try compatible.ret(try g.recur(compatible, rewrite, input, entry, index, try e.append(compatible, items, reactivated), try compatible.constant(bool, true), try e.either(compatible, changed, try compatible.equal(active, try compatible.constant(bool, false))), removed)), try incompatible.ret(try e.outcome(incompatible, state, .rejected, .invalid_operation)));
             const previously_active = try e.field(deactivate, old, Materialization, "active");
             const transient = try deactivate.equal(try deactivate.enumTag(try e.field(deactivate, old, Materialization, "residency")), try deactivate.constant(u32, 1));
             const deactivated = try e.replace(deactivate, Materialization, old, .{ .active = try deactivate.constant(bool, false) });
-            const remove_result = try remove.conditional(try remove.equal(operation, try remove.constant(u32, 2)),
-                try unload.ret(try g.recur(unload, rewrite, input, entry, index, items, try unload.constant(bool, true), try unload.constant(bool, true), try unload.constant(bool, true))),
-                try deactivate.ret(try g.recur(deactivate, rewrite, input, entry, index, try e.append(deactivate, items, deactivated), try deactivate.constant(bool, true), try e.either(deactivate, changed, previously_active), try e.either(deactivate, removed, try e.both(deactivate, previously_active, transient)))));
+            const remove_result = try remove.conditional(try remove.equal(operation, try remove.constant(u32, 2)), try unload.ret(try g.recur(unload, rewrite, input, entry, index, items, try unload.constant(bool, true), try unload.constant(bool, true), try unload.constant(bool, true))), try deactivate.ret(try g.recur(deactivate, rewrite, input, entry, index, try e.append(deactivate, items, deactivated), try deactivate.constant(bool, true), try e.either(deactivate, changed, previously_active), try e.either(deactivate, removed, try e.both(deactivate, previously_active, transient)))));
             const matched_result = try matching.conditional(try matching.equal(operation, try matching.constant(u32, 0)), try load.ret(load_result), try remove.ret(remove_result));
-            const scanned_result = try body.conditional(try e.sameText(body, try e.field(body, old, Materialization, "skill_id"), try e.field(body, command, SkillSet, "skill_id")),
-                try matching.ret(matched_result), try other.ret(try g.recur(other, rewrite, input, entry, index, try e.append(other, items, old), found, changed, removed)));
+            const scanned_result = try body.conditional(try e.sameText(body, try e.field(body, old, Materialization, "skill_id"), try e.field(body, command, SkillSet, "skill_id")), try matching.ret(matched_result), try other.ret(try g.recur(other, rewrite, input, entry, index, try e.append(other, items, old), found, changed, removed)));
             const end = none.body();
             const existing = try end.branch();
             const absent = try end.branch();
@@ -272,9 +267,7 @@ fn SkillGenerator(comptime P: type) type {
                 .{ .name = "4", .value = try create.constant(bool, true) },
                 .{ .name = "5", .value = try e.field(create, input, Input, "watermark") },
             });
-            const absent_result = try absent.conditional(try absent.equal(operation, try absent.constant(u32, 0)),
-                try create.ret(try g.finish(create, input, try e.append(create, items, materialization), try create.constant(bool, true), removed)),
-                try unknown.ret(try e.outcome(unknown, state, .rejected, .unknown_skill)));
+            const absent_result = try absent.conditional(try absent.equal(operation, try absent.constant(u32, 0)), try create.ret(try g.finish(create, input, try e.append(create, items, materialization), try create.constant(bool, true), removed)), try unknown.ret(try e.outcome(unknown, state, .rejected, .unknown_skill)));
             const end_result = try end.conditional(found, try existing.ret(try g.finish(existing, input, items, changed, removed)), try absent.ret(absent_result));
             try t.define(rewrite, try b.ret(try b.match(selected, &.{ try some.ret(scanned_result), try none.ret(end_result) })));
 
@@ -293,22 +286,22 @@ fn SkillGenerator(comptime P: type) type {
             const version_ok = try yes.branch();
             const version_bad = try yes.branch();
             const rewrite_result = try version_ok.call(rewrite, &.{
-                .{ .name = "input", .value = request }, .{ .name = "entry", .value = present.payload() },
-                .{ .name = "index", .value = try version_ok.constant(u64, 0) }, .{ .name = "items", .value = try e.literal(version_ok, Skills, .{ .items = &.{} }) },
-                .{ .name = "found", .value = try version_ok.constant(bool, false) }, .{ .name = "changed", .value = try version_ok.constant(bool, false) }, .{ .name = "removed", .value = try version_ok.constant(bool, false) },
+                .{ .name = "input", .value = request },                                .{ .name = "entry", .value = present.payload() },
+                .{ .name = "index", .value = try version_ok.constant(u64, 0) },        .{ .name = "items", .value = try e.literal(version_ok, Skills, .{ .items = &.{} }) },
+                .{ .name = "found", .value = try version_ok.constant(bool, false) },   .{ .name = "changed", .value = try version_ok.constant(bool, false) },
+                .{ .name = "removed", .value = try version_ok.constant(bool, false) },
             });
-            const version_result = try yes.conditional(try e.sameText(yes, try e.field(yes, present.payload(), P.AdaptiveSkill, "version"), try e.field(yes, control, SkillSet, "version")),
-                try version_ok.ret(rewrite_result), try version_bad.ret(try e.outcome(version_bad, prior, .rejected, .version_mismatch)));
-            const lookup_result = try present_body.conditional(try e.sameText(present_body, try e.field(present_body, present.payload(), P.AdaptiveSkill, "id"), try e.field(present_body, control, SkillSet, "skill_id")),
-                try yes.ret(version_result), try no.ret(try no.call(lookup, &.{ .{ .name = "input", .value = request }, .{ .name = "index", .value = try e.increment(no, offset) } })));
+            const version_result = try yes.conditional(try e.sameText(yes, try e.field(yes, present.payload(), P.AdaptiveSkill, "version"), try e.field(yes, control, SkillSet, "version")), try version_ok.ret(rewrite_result), try version_bad.ret(try e.outcome(version_bad, prior, .rejected, .version_mismatch)));
+            const lookup_result = try present_body.conditional(try e.sameText(present_body, try e.field(present_body, present.payload(), P.AdaptiveSkill, "id"), try e.field(present_body, control, SkillSet, "skill_id")), try yes.ret(version_result), try no.ret(try no.call(lookup, &.{ .{ .name = "input", .value = request }, .{ .name = "index", .value = try e.increment(no, offset) } })));
             try t.define(lookup, try scan.ret(try scan.match(candidate, &.{ try present.ret(lookup_result), try missing.ret(try e.outcome(missing.body(), prior, .rejected, .unknown_skill)) })));
             return g.defineEntry(lookup);
         }
 
         fn recur(g: G, body: *a.Body, function: *const a.Function, input: V, entry: V, index: V, items: V, found: V, changed: V, removed: V) !V {
             return body.call(function, &.{
-                .{ .name = "input", .value = input }, .{ .name = "entry", .value = entry }, .{ .name = "index", .value = try g.e.increment(body, index) },
-                .{ .name = "items", .value = items }, .{ .name = "found", .value = found }, .{ .name = "changed", .value = changed }, .{ .name = "removed", .value = removed },
+                .{ .name = "input", .value = input },     .{ .name = "entry", .value = entry }, .{ .name = "index", .value = try g.e.increment(body, index) },
+                .{ .name = "items", .value = items },     .{ .name = "found", .value = found }, .{ .name = "changed", .value = changed },
+                .{ .name = "removed", .value = removed },
             });
         }
 
@@ -318,7 +311,7 @@ fn SkillGenerator(comptime P: type) type {
             const unchanged = try body.branch();
             const update = try body.branch();
             const limits = try update.call(try skillCapacity(e), &.{
-                .{ .name = "skills", .value = skills }, .{ .name = "index", .value = try update.constant(u64, 0) },
+                .{ .name = "skills", .value = skills },                      .{ .name = "index", .value = try update.constant(u64, 0) },
                 .{ .name = "active", .value = try update.constant(u64, 0) }, .{ .name = "bytes", .value = try update.constant(u64, 0) },
             });
             const selection = try e.field(update, state, State, "selection");
@@ -335,8 +328,7 @@ fn SkillGenerator(comptime P: type) type {
                 .epoch_reason = try room.select(removed, try e.literal(room, model.EpochReason, .eviction), try e.field(room, state, State, "epoch_reason")),
                 .eviction_generation = try room.select(removed, try e.increment(room, generation), generation),
             });
-            const admitted = try update.conditional(try e.both(update, limits, try update.less(revision, try e.field(update, input, Input, "maximum_revision"))),
-                try room.ret(try e.outcome(room, successor, .proposed, .none)), try full.ret(try e.outcome(full, state, .rejected, .capacity)));
+            const admitted = try update.conditional(try e.both(update, limits, try update.less(revision, try e.field(update, input, Input, "maximum_revision"))), try room.ret(try e.outcome(room, successor, .proposed, .none)), try full.ret(try e.outcome(full, state, .rejected, .capacity)));
             return body.conditional(changed, try update.ret(admitted), try unchanged.ret(try e.outcome(unchanged, state, .unchanged, .none)));
         }
 
@@ -354,12 +346,8 @@ fn SkillGenerator(comptime P: type) type {
             const unchanged = try fresh.equal(try fresh.enumTag(try e.field(fresh, command, SkillSet, "residency")), try fresh.constant(u32, 2));
             const valid = try fresh.branch();
             const invalid = try fresh.branch();
-            const result = try fresh.conditional(try fresh.equal(load, unchanged),
-                try invalid.ret(try e.outcome(invalid, state, .rejected, .invalid_operation)),
-                try valid.ret(try valid.call(lookup, &.{ .{ .name = "input", .value = input }, .{ .name = "index", .value = try valid.constant(u64, 0) } })));
-            try t.define(entry_function, try b.ret(try b.conditional(
-                try b.equal(try e.field(b, command, SkillSet, "expected_revision"), try e.field(b, try e.field(b, state, State, "selection"), model.AdaptiveSelection, "control_revision")),
-                try fresh.ret(result), try stale.ret(try e.outcome(stale, state, .rejected, .stale_revision)))));
+            const result = try fresh.conditional(try fresh.equal(load, unchanged), try invalid.ret(try e.outcome(invalid, state, .rejected, .invalid_operation)), try valid.ret(try valid.call(lookup, &.{ .{ .name = "input", .value = input }, .{ .name = "index", .value = try valid.constant(u64, 0) } })));
+            try t.define(entry_function, try b.ret(try b.conditional(try b.equal(try e.field(b, command, SkillSet, "expected_revision"), try e.field(b, try e.field(b, state, State, "selection"), model.AdaptiveSelection, "control_revision")), try fresh.ret(result), try stale.ret(try e.outcome(stale, state, .rejected, .stale_revision)))));
             return a.interop.functionId(t, entry_function);
         }
     };
@@ -372,7 +360,7 @@ fn skillCapacity(e: Emit) !*const a.Function {
     if (cached.cached) |existing| return a.interop.declaredFunction(t, existing);
     const function = try t.function("adaptive skill capacity", &.{
         .{ .name = "skills", .schema = try e.schema(@FieldType(State, "skills")) }, .{ .name = "index", .schema = try t.scalar(u64) },
-        .{ .name = "active", .schema = try t.scalar(u64) }, .{ .name = "bytes", .schema = try t.scalar(u64) },
+        .{ .name = "active", .schema = try t.scalar(u64) },                         .{ .name = "bytes", .schema = try t.scalar(u64) },
     }, try t.scalar(bool), &.{});
     const body = try t.body(function);
     const skills = try body.parameter("skills");
@@ -387,13 +375,11 @@ fn skillCapacity(e: Emit) !*const a.Function {
     const next = some.body();
     const fault = try a.interop.literalFailure(t, e.failure, try a.interop.schema(t, b.values.items[e.failure].schema));
     const result = try next.call(function, &.{
-        .{ .name = "skills", .value = skills }, .{ .name = "index", .value = try e.increment(next, index) },
-        .{ .name = "active", .value = try next.select(try e.field(next, some.payload(), model.SkillMaterialization, "active"), try e.increment(next, active), active) },
-        .{ .name = "bytes", .value = try next.checkedAdd(bytes, try e.field(next, try e.field(next, some.payload(), model.SkillMaterialization, "resource"), model.ArtifactReference, "bytes"), fault) },
+        .{ .name = "skills", .value = skills },                                                                                                                          .{ .name = "index", .value = try e.increment(next, index) },
+        .{ .name = "active", .value = try next.select(try e.field(next, some.payload(), model.SkillMaterialization, "active"), try e.increment(next, active), active) }, .{ .name = "bytes", .value = try next.checkedAdd(bytes, try e.field(next, try e.field(next, some.payload(), model.SkillMaterialization, "resource"), model.ArtifactReference, "bytes"), fault) },
     });
     const valid = try e.both(body, try body.less(active, try body.constant(u64, 5)), try body.less(bytes, try body.constant(u64, 128 * 1024 + 1)));
-    try t.define(function, try body.ret(try body.conditional(valid,
-        try room.ret(try room.match(item, &.{ try some.ret(result), try none.ret(try none.body().constant(bool, true)) })), try full.ret(try full.constant(bool, false)))));
+    try t.define(function, try body.ret(try body.conditional(valid, try room.ret(try room.match(item, &.{ try some.ret(result), try none.ret(try none.body().constant(bool, true)) })), try full.ret(try full.constant(bool, false)))));
     const id = try a.interop.functionId(t, function);
     _ = try cached.finish(b, id);
     return function;

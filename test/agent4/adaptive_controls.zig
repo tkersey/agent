@@ -23,9 +23,20 @@ test "authored inference control proposes independent effort and model changes w
     defer allocator.free(image);
     _ = try boundary.data.program_image.encode(allocator, compiled.program, image);
     const profile: model.AdaptiveInferenceProfile = .{
-        .id = .{ .bytes = "analysis" }, .model = .{ .bytes = "fixture-model-a" }, .reasoning_mode = .standard, .reasoning_context = .current_turn,
-        .efforts = .{ .items = &.{ .medium, .high } }, .effort_update = false, .explicit_cache = true, .additional_tools = true, .cache_diagnostics = false,
-        .opaque_family = .{ .bytes = "fixture" }, .max_output_tokens = 4096, .request_bytes = 16384, .response_bytes = 4096, .timeout_ms = 1000,
+        .id = .{ .bytes = "analysis" },
+        .model = .{ .bytes = "fixture-model-a" },
+        .reasoning_mode = .standard,
+        .reasoning_context = .current_turn,
+        .efforts = .{ .items = &.{ .medium, .high } },
+        .effort_update = false,
+        .explicit_cache = true,
+        .additional_tools = true,
+        .cache_diagnostics = false,
+        .opaque_family = .{ .bytes = "fixture" },
+        .max_output_tokens = 4096,
+        .request_bytes = 16384,
+        .response_bytes = 4096,
+        .timeout_ms = 1000,
     };
     var other = profile;
     other.id.bytes = "reporting";
@@ -33,11 +44,16 @@ test "authored inference control proposes independent effort and model changes w
     var profiles = [_]controls.ProfileChoice{ .{ .profile = profile, .digest = @splat(2) }, .{ .profile = other, .digest = @splat(3) } };
     const state: controls.State = .{
         .selection = .{ .profile_id = profile.id, .profile_digest = @splat(2), .effective_effort = .medium, .control_revision = 5 },
-        .top_effort = .medium, .epoch = 2, .epoch_reason = .model_change, .eviction_generation = 1,
+        .top_effort = .medium,
+        .epoch = 2,
+        .epoch_reason = .model_change,
+        .eviction_generation = 1,
         .skills = .{ .items = &.{.{ .resource = .{ .digest = @splat(7), .bytes = 100 }, .skill_id = .{ .bytes = "review" }, .version = .{ .bytes = "1" }, .residency = .resident, .active = true, .introduced_at = 1 }} },
     };
     var input: controls.InferenceInput = .{
-        .state = state, .profiles = .{ .items = &profiles }, .maximum_revision = 16,
+        .state = state,
+        .profiles = .{ .items = &profiles },
+        .maximum_revision = 16,
         .command = .{ .profile_id = profile.id, .effort = .high, .expected_revision = 5, .reason = .{ .bytes = "Inspect a difficult invariant." } },
     };
     // The same image handles all cases; no host changes control state.
@@ -82,7 +98,11 @@ test "authored inference control proposes independent effort and model changes w
             2, 3, 4 => {
                 try std.testing.expectEqual(.rejected, proposal.disposition);
                 try std.testing.expectEqualDeep(state, proposal.state);
-                try std.testing.expectEqual(switch (scenario) { 2 => controls.Rejection.stale_revision, 3 => .unsupported_effort, else => .unknown_profile }, proposal.rejection);
+                try std.testing.expectEqual(switch (scenario) {
+                    2 => controls.Rejection.stale_revision,
+                    3 => .unsupported_effort,
+                    else => .unknown_profile,
+                }, proposal.rejection);
             },
             5 => {
                 try std.testing.expectEqual(.unchanged, proposal.disposition);
@@ -121,7 +141,11 @@ test "authored skill control preserves state on rejection and fences actual evic
     _ = try boundary.data.program_image.encode(allocator, compiled.program, image);
     const state: controls.State = .{
         .selection = .{ .profile_id = .{ .bytes = "analysis" }, .profile_digest = @splat(2), .effective_effort = .high, .control_revision = 5 },
-        .top_effort = .medium, .epoch = 2, .epoch_reason = .model_change, .eviction_generation = 1, .skills = .{ .items = &.{} },
+        .top_effort = .medium,
+        .epoch = 2,
+        .epoch_reason = .model_change,
+        .eviction_generation = 1,
+        .skills = .{ .items = &.{} },
     };
     var catalog: [5]P.AdaptiveSkill = undefined;
     var loaded: [5]model.SkillMaterialization = undefined;
@@ -133,7 +157,10 @@ test "authored skill control preserves state on rejection and fences actual evic
     for (0..12) |scenario| {
         loaded[0].residency = .resident;
         var input: Input = .{
-            .state = state, .catalog = .{ .skills = .{ .items = &catalog } }, .watermark = 7, .maximum_revision = 16,
+            .state = state,
+            .catalog = .{ .skills = .{ .items = &catalog } },
+            .watermark = 7,
+            .maximum_revision = 16,
             .command = .{ .operation = .load, .skill_id = catalog[0].id, .version = .{ .bytes = "1" }, .residency = .resident, .expected_revision = 5, .reason = .{ .bytes = "Use approved guidance." } },
         };
         switch (scenario) {
@@ -172,7 +199,11 @@ test "authored skill control preserves state on rejection and fences actual evic
             try std.testing.expectEqual(.rejected, proposal.disposition);
             try std.testing.expectEqualDeep(input.state, proposal.state);
             try std.testing.expectEqual(switch (scenario) {
-                5, 10 => controls.Rejection.invalid_operation, 6 => .version_mismatch, 7 => .stale_revision, 8, 9 => .capacity, else => .unknown_skill,
+                5, 10 => controls.Rejection.invalid_operation,
+                6 => .version_mismatch,
+                7 => .stale_revision,
+                8, 9 => .capacity,
+                else => .unknown_skill,
             }, proposal.rejection);
         } else if (scenario == 1) {
             try std.testing.expectEqual(.unchanged, proposal.disposition);

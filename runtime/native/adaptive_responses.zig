@@ -165,25 +165,22 @@ pub fn Admission(comptime P: type) type {
 pub fn Adapter(comptime P: type) type {
     return struct {
         const A = Admission(P);
-        const Context = @import("adaptive_context.zig").Projection(P);
+        pub const Context = @import("adaptive_context.zig").Projection(P);
         pub const Prepared = struct {
             version: u32,
             request: P.AdaptiveRequest,
             body: contracts.Bytes(256 * 1024),
         };
         pub fn declaration() registry.Declaration {
-            return .{ .identity = P.adaptive_identity, .resource_role = "inference", .kind = .leaf, .inference = true, .background = true,
-                .payload_schema = struct {
-                    fn schema(a: std.mem.Allocator) ![]u8 {
-                        return values.schemaBytes(P.AdaptiveRequest, a);
-                    }
-                }.schema,
-                .resume_schema = struct {
-                    fn schema(a: std.mem.Allocator) ![]u8 {
-                        return values.schemaBytes(P.AdaptiveResult, a);
-                    }
-                }.schema,
-                .capture = .{ .prepare = prepare, .acquire = acquire, .interpret = interpret } };
+            return .{ .identity = P.adaptive_identity, .resource_role = "inference", .kind = .leaf, .inference = true, .background = true, .payload_schema = struct {
+                fn schema(a: std.mem.Allocator) ![]u8 {
+                    return values.schemaBytes(P.AdaptiveRequest, a);
+                }
+            }.schema, .resume_schema = struct {
+                fn schema(a: std.mem.Allocator) ![]u8 {
+                    return values.schemaBytes(P.AdaptiveResult, a);
+                }
+            }.schema, .capture = .{ .prepare = prepare, .acquire = acquire, .interpret = interpret } };
         }
 
         pub fn prepare(ctx: registry.ProjectionContext, bytes: []const u8) ![]u8 {
@@ -312,12 +309,10 @@ pub fn Adapter(comptime P: type) type {
             return .{ .value = observed, .valid = valid };
         }
         fn encode(ctx: registry.ProjectionContext, result: P.AdaptiveResult, objects: []const []const u8) !registry.Projection {
-            return .{ .reply = try contracts.encodeOwned(P.AdaptiveResult, ctx.allocator, result), .objects = objects,
-                .output_tokens = if (result.usage) |available| available.output_tokens else null };
+            return .{ .reply = try contracts.encodeOwned(P.AdaptiveResult, ctx.allocator, result), .objects = objects, .output_tokens = if (result.usage) |available| available.output_tokens else null };
         }
         fn unsupported(ctx: registry.ProjectionContext, reason: @FieldType(P.Result, "unsupported_response"), observed: ?Usage) !registry.Projection {
-            return encode(ctx, .{ .result = .{ .unsupported_response = reason }, .replay = null,
-                .replay_status = if (reason == .normalization_limit) .capacity else .unsupported, .usage = observed }, &.{});
+            return encode(ctx, .{ .result = .{ .unsupported_response = reason }, .replay = null, .replay_status = if (reason == .normalization_limit) .capacity else .unsupported, .usage = observed }, &.{});
         }
 
         pub fn interpret(ctx: registry.ProjectionContext, request_bytes: []const u8, prepared_bytes: []const u8, captured: []const u8) !registry.Projection {
@@ -355,22 +350,34 @@ pub fn Adapter(comptime P: type) type {
             }
             const watermark = try std.math.add(u64, request.value.plan.watermark, 1);
             const artifact = try contracts.encodeOwned(P.AdaptiveContext, ctx.allocator, .{
-                .schema = .{ .bytes = P.adaptive_context_identity }, .policy = request.value.policy, .task = ctx.task,
-                .tenant = .{ .bytes = ctx.tenant }, .audience = policy.audience,
-                .selection = request.value.selection, .top_effort = request.value.invocation.parameters.reasoning.?.effort.?,
-                .plan = request.value.plan, .watermark = watermark,
+                .schema = .{ .bytes = P.adaptive_context_identity },
+                .policy = request.value.policy,
+                .task = ctx.task,
+                .tenant = .{ .bytes = ctx.tenant },
+                .audience = policy.audience,
+                .selection = request.value.selection,
+                .top_effort = request.value.invocation.parameters.reasoning.?.effort.?,
+                .plan = request.value.plan,
+                .watermark = watermark,
                 .source_capture = .{ .digest = storage.digest(captured), .bytes = captured.len },
                 .source_request = .{ .digest = storage.digest(prepared_bytes), .bytes = prepared_bytes.len },
-                .response_id = response_id, .items = .{ .bytes = items },
+                .response_id = response_id,
+                .items = .{ .bytes = items },
             });
             if (artifact.len > 2 * 1024 * 1024) return unsupported(ctx, .normalization_limit, observed.value);
             const objects = try ctx.allocator.alloc([]const u8, 1);
             objects[0] = artifact;
             return encode(ctx, .{ .result = normalized, .replay_status = .complete, .usage = observed.value, .replay = .{
-                .object = .{ .digest = storage.digest(artifact), .bytes = artifact.len }, .schema = .{ .bytes = P.adaptive_context_identity },
-                .policy = request.value.policy, .selection = request.value.selection.profile_digest, .task = ctx.task,
-                .tenant = .{ .bytes = ctx.tenant }, .audience = policy.audience, .epoch = request.value.plan.epoch,
-                .watermark = watermark, .eviction_generation = request.value.plan.eviction_generation,
+                .object = .{ .digest = storage.digest(artifact), .bytes = artifact.len },
+                .schema = .{ .bytes = P.adaptive_context_identity },
+                .policy = request.value.policy,
+                .selection = request.value.selection.profile_digest,
+                .task = ctx.task,
+                .tenant = .{ .bytes = ctx.tenant },
+                .audience = policy.audience,
+                .epoch = request.value.plan.epoch,
+                .watermark = watermark,
+                .eviction_generation = request.value.plan.eviction_generation,
             } }, objects);
         }
     };

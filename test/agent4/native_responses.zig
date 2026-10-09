@@ -120,21 +120,39 @@ test "adaptive admission binds selected profiles and skill permissions to the fr
     const body = "Inspect the invariant with actual source evidence.";
     const resource: agent.model_invocation.ArtifactReference = .{ .digest = digest(body), .bytes = body.len };
     const catalog_bytes = try contracts.encodeOwned(P.AdaptiveCatalog, a, .{ .skills = .{ .items = &.{.{
-        .id = .{ .bytes = "invariant-review" }, .version = .{ .bytes = "1" }, .description = .{ .bytes = "Review invariants." }, .instructions = resource, .tools = .{true},
+        .id = .{ .bytes = "invariant-review" },
+        .version = .{ .bytes = "1" },
+        .description = .{ .bytes = "Review invariants." },
+        .instructions = resource,
+        .tools = .{true},
     }} } });
     var objects: Objects = .{ .bytes = catalog_bytes, .raw = body };
     const inference: agent.model_invocation.AdaptiveInferenceProfile = .{
-        .id = .{ .bytes = "analysis" }, .model = .{ .bytes = "fixture-model" },
-        .reasoning_mode = .standard, .reasoning_context = .current_turn,
-        .efforts = .{ .items = &.{ .medium, .high } }, .effort_update = false,
-        .explicit_cache = true, .additional_tools = true, .cache_diagnostics = false,
-        .opaque_family = .{ .bytes = "fixture" }, .max_output_tokens = 4096,
-        .request_bytes = 16384, .response_bytes = 4096, .timeout_ms = 1000,
+        .id = .{ .bytes = "analysis" },
+        .model = .{ .bytes = "fixture-model" },
+        .reasoning_mode = .standard,
+        .reasoning_context = .current_turn,
+        .efforts = .{ .items = &.{ .medium, .high } },
+        .effort_update = false,
+        .explicit_cache = true,
+        .additional_tools = true,
+        .cache_diagnostics = false,
+        .opaque_family = .{ .bytes = "fixture" },
+        .max_output_tokens = 4096,
+        .request_bytes = 16384,
+        .response_bytes = 4096,
+        .timeout_ms = 1000,
     };
     const policy: P.AdaptivePolicy = .{
-        .schema = .{ .bytes = P.adaptive_policy_identity }, .endpoint = .{ .bytes = "https://example.test/v1/responses" }, .audience = .{ .bytes = "fixture" },
-        .profiles = .{ .items = &.{inference} }, .catalog = .{ .digest = digest(catalog_bytes), .bytes = catalog_bytes.len },
-        .core_tools = .{false}, .permitted_tools = .{true}, .model_attempts = 16, .control_transitions = 16,
+        .schema = .{ .bytes = P.adaptive_policy_identity },
+        .endpoint = .{ .bytes = "https://example.test/v1/responses" },
+        .audience = .{ .bytes = "fixture" },
+        .profiles = .{ .items = &.{inference} },
+        .catalog = .{ .digest = digest(catalog_bytes), .bytes = catalog_bytes.len },
+        .core_tools = .{false},
+        .permitted_tools = .{true},
+        .model_attempts = 16,
+        .control_transitions = 16,
     };
     var frozen = native.json.object();
     try native.json.put(a, &frozen, "adaptive", try native.values.toJson(P.AdaptivePolicy, a, policy));
@@ -144,14 +162,21 @@ test "adaptive admission binds selected profiles and skill permissions to the fr
     var skills = try Admission.catalog(ctx, admitted);
     defer skills.deinit();
     var materialization = [_]agent.model_invocation.SkillMaterialization{.{
-        .resource = resource, .skill_id = .{ .bytes = "invariant-review" }, .version = .{ .bytes = "1" }, .residency = .resident, .active = true, .introduced_at = 1,
+        .resource = resource,
+        .skill_id = .{ .bytes = "invariant-review" },
+        .version = .{ .bytes = "1" },
+        .residency = .resident,
+        .active = true,
+        .introduced_at = 1,
     }};
     var adaptive: P.AdaptiveRequest = .{
         .invocation = request().invocation,
         .policy = digest(policy_bytes),
         .selection = .{ .profile_id = inference.id, .profile_digest = try Admission.profileDigest(a, inference), .effective_effort = .medium, .control_revision = 1 },
         .plan = .{ .epoch = 0, .reason = .initial, .watermark = 1, .eviction_generation = 0, .prior = null, .handoff = null, .catalog = policy.catalog, .skills = .{ .items = &materialization } },
-        .materialized = .{true}, .offered = .{true}, .results = .{ .items = &.{} },
+        .materialized = .{true},
+        .offered = .{true},
+        .results = .{ .items = &.{} },
     };
     const selected = try Admission.bind(ctx, admitted, adaptive, skills.value);
     try std.testing.expectEqualStrings("fixture-model", selected.transport.model.bytes);

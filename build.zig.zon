@@ -46,6 +46,7 @@
         "tools/native",
         "examples/native-minimal",
         "examples/repository-agent",
+        "examples/adaptive-agent",
         "tools/check_zig_paths.sh",
     },
     .fingerprint = 0x268b9c9d84371874,

@@ -186,7 +186,7 @@ pub fn build(b: *std.Build) void {
     // Native examples share the already compiled fixture owner. Downstream
     // applications use the same asset writer through addNativeSystem.
     fixture_driver.artifact.root_module.addImport("native_asset_writer", g.module("tools/native/emit.zig"));
-    inline for (.{ .{ "native-minimal", "native_minimal" }, .{ "repository-agent", "repository_agent" } }) |item| {
+    inline for (.{ .{ "native-minimal", "native_minimal" }, .{ "repository-agent", "repository_agent" }, .{ "adaptive-agent", "adaptive_agent" } }) |item| {
         const types = g.module("examples/" ++ item[0] ++ "/types.zig");
         const definition = g.module("examples/" ++ item[0] ++ "/definition.zig");
         definition.addImport("application_types", types);
@@ -195,6 +195,11 @@ pub fn build(b: *std.Build) void {
     }
     const application_driver = g.emitter("agent4-applications", g.module("test/application_driver.zig"));
     const check = b.step("agent4-authoring-tests", "Authoring test implementation");
+    const adaptive_assets = g.runArtifact(fixture_driver.select("adaptive-agent-assets"));
+    const adaptive_image = adaptive_assets.addOutputFileArg2("program.bpi3", .{});
+    const adaptive_application = adaptive_assets.addOutputFileArg2("application.json", .{});
+    check.dependOn(&adaptive_assets.step);
+    b.step("adaptive-agent-image", "Emit the adaptive application and its public schemas").dependOn(&adaptive_assets.step);
     const aggregate = b.step("check-agent4", "Check authoring and pure contracts without World");
     const mobility_protocol = b.step("check-mobility-protocol", "Check canonical mobility records and Ed25519 bindings");
     const protocol_tests = nodeCommand(b);
@@ -207,7 +212,7 @@ pub fn build(b: *std.Build) void {
 
     const lint = b.step("lint", "Check formatting and the Zig source inventory");
     const format_check = b.addRunFile(.zig_exe);
-    format_check.addArgs(&.{ "fmt", "--check", "build.zig", "build_agent4.zig", "build_native.zig", "src", "runtime/native", "tools/native", "examples/native-minimal", "examples/repository-agent", "test/agent4", "test/consumers", "test/fixture_driver.zig", "test/application_driver.zig", "test/authoring_tests.zig" });
+    format_check.addArgs(&.{ "fmt", "--check", "build.zig", "build_agent4.zig", "build_native.zig", "src", "runtime/native", "tools/native", "examples/native-minimal", "examples/repository-agent", "examples/adaptive-agent", "test/agent4", "test/consumers", "test/fixture_driver.zig", "test/application_driver.zig", "test/authoring_tests.zig" });
     const paths = b.addSystemCommand(&.{ "sh", "tools/check_zig_paths.sh" });
     lint.dependOn(&format_check.step);
     lint.dependOn(&paths.step);
@@ -706,6 +711,16 @@ pub fn build(b: *std.Build) void {
                 .environment = b.path("examples/repository-agent/environment.zig"),
             });
             native_example.dependOn(&repository_product.install.step);
+            const adaptive_product = @import("build_native.zig").addWithModules(b, native_modules, .{
+                .name = "adaptive-agent",
+                .application = .{ .emitted = .{ .image = adaptive_image, .application = adaptive_application, .types = b.path("examples/adaptive-agent/types.zig") } },
+                .environment = b.path("examples/adaptive-agent/environment.zig"),
+            });
+            native_example.dependOn(&adaptive_product.install.step);
+            const adaptive_peer = nativeCheckCommand(b);
+            adaptive_peer.addArgs(&.{ "node", "test/agent4/native_adaptive.mjs" });
+            adaptive_peer.addFileArg2(adaptive_product.executable.getEmittedBin(), .{ .make_absolute = true });
+            native_product.dependOn(&adaptive_peer.step);
             const repository_peer = nativeCheckCommand(b);
             repository_peer.addArgs(&.{ "node", "test/agent4/native_repository.mjs" });
             repository_peer.addFileArg2(repository_product.executable.getEmittedBin(), .{ .make_absolute = true });

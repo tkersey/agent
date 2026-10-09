@@ -170,6 +170,15 @@ pub const Transport = struct {
         }
     }
     pub fn wait(self: *Transport, read: bool, milliseconds: c_int) !void {
+        if (@import("builtin").os.tag == .macos and self.count == 0) {
+            // Darwin does not report a disconnected pipe/socket with events=0.
+            // Probe write readiness without waiting, then retain the ordinary
+            // input timeout below: an idle writable stdout must not cause spin.
+            var output = c.struct_pollfd{ .fd = 1, .events = c.POLLOUT, .revents = 0 };
+            const ready = c.poll(&output, 1, 0);
+            if (ready < 0 and std.c.errno(ready) != .INTR) return error.IoUnavailable;
+            if (output.revents & (c.POLLERR | c.POLLHUP | c.POLLNVAL) != 0) return error.OutputClosed;
+        }
         var fds = [_]c.struct_pollfd{
             .{ .fd = if (read and !self.eof and self.pending == null) 0 else -1, .events = c.POLLIN, .revents = 0 },
             // Closure is a connection event even without a pending write.
@@ -181,6 +190,32 @@ pub const Transport = struct {
         if (fds[1].revents & (c.POLLERR | c.POLLHUP | c.POLLNVAL) != 0) return error.OutputClosed;
     }
 };
+
+test "idle output waits without spinning and detects closed pipe and socket readers" {
+    const saved = c.dup(1);
+    try std.testing.expect(saved >= 0);
+    defer _ = c.close(saved);
+    defer _ = c.dup2(saved, 1);
+    for ([_]bool{ false, true }) |socket| {
+        var fds: [2]c_int = undefined;
+        const opened = if (socket) c.socketpair(c.AF_UNIX, c.SOCK_STREAM, 0, &fds) else c.pipe(&fds);
+        try std.testing.expectEqual(0, opened);
+        var reader_open = true;
+        defer {
+            if (reader_open) _ = c.close(fds[0]);
+        }
+        defer _ = c.close(fds[1]);
+        try std.testing.expectEqual(1, c.dup2(fds[1], 1));
+        var transport = try Transport.init(std.testing.allocator, std.testing.io, .{});
+        defer transport.deinit();
+        const started = transport.now();
+        try transport.wait(false, 40);
+        try std.testing.expect(transport.now() - started >= 20);
+        try std.testing.expectEqual(0, c.close(fds[0]));
+        reader_open = false;
+        try std.testing.expectError(error.OutputClosed, transport.wait(false, 40));
+    }
+}
 
 test "outstanding request identity normalizes integer spellings without conflating strings" {
     const first = try Id.from(.{ .number_string = "1" });

@@ -2,6 +2,7 @@
 #include <sqlite3.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
 #include <sys/file.h>
 #include <fcntl.h>
 #include <unistd.h>

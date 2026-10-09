@@ -115,3 +115,22 @@ reuse. They do not prove global cache optimality, billed savings, shared cross-m
 KV state, autonomous routing quality or broad model efficacy. Exact unchanged input
 prefixes are local byte observations; cached tokens and cache diagnostics are separate
 [provider observations](https://developers.openai.com/api/docs/guides/prompt-caching).
+
+## Subsequent macOS disconnect repair
+
+The closed-output failures above were traced to the native transport: Darwin did
+not report a closed pipe/socket when stdout was polled with an empty event mask.
+The transport now makes a nonblocking write-readiness probe before its ordinary
+idle wait. This detects disconnects without continuously waking on writable stdout.
+A regression test covers both pipes and sockets, including the idle wait.
+
+The full macOS `zig build check-native-product -Doptimize=safe` check passed with
+its existing process assertions unchanged. The held-provider disconnect completed
+in 21.15 ms, and restart retained unknown delivery without retry. The controlled
+14-call adaptive peer also passed. The tested host, repository and adaptive binary
+SHA-256 values were respectively
+`f561cee6a2c21ad904f4be3d6b946c9952c01f7e772b6ab45d39ef3240657813`,
+`5c405256853c726b4b341e9875f6784fd7e759410c6ed5b03b5a6a705711696e`, and
+`7710b67b3053caf6d1ae0577836698355939402c1f1eb427759b7781872ecc0b`.
+The preceding failures remain historical observations; no additional live-provider
+calls were made for this transport-only repair.

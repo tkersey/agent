@@ -150,6 +150,9 @@ pub const Limits = struct {
     arguments_json_bytes: u32,
     result_text_bytes: u32,
     provider_response_bytes: u32,
+    /// Aggregate v6 reply budget, including normalized items and replay binding.
+    /// Raw provider capture remains available when this projection is too large.
+    maximum_adaptive_reply_bytes: u32 = 64 * 1024,
 };
 
 pub const Selection = struct {
@@ -213,6 +216,8 @@ pub fn Profile(
         if (@field(limits, name) == 0)
             @compileError("Agent model limit must be positive: " ++ name);
     };
+    if (limits.maximum_adaptive_reply_bytes < 128)
+        @compileError("adaptive reply budget must hold a capacity result and exact usage");
     const maxima = comptime blk: {
         var name: usize = 1;
         var description: usize = 0;

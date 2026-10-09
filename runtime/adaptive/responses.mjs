@@ -100,18 +100,19 @@ export async function acquire(ctx, preparedBytes, options) {
 
 export function usage(body) {
   let valid = true;
+  const record = value => value !== null && typeof value === 'object' && [Object.prototype, null].includes(Object.getPrototypeOf(value));
   const count = value => {
     if (value === undefined || value === null) return null;
     try { return integer(value); } catch { valid = false; return null; }
   };
   const detail = (value, key) => {
     if (value === undefined || value === null) return null;
-    if (typeof value !== 'object' || Array.isArray(value)) { valid = false; return null; }
+    if (!record(value)) { valid = false; return null; }
     return count(value[key]);
   };
   const value = body?.usage;
   if (value === undefined || value === null) return {value: null, valid};
-  if (typeof value !== 'object' || Array.isArray(value)) return {value: null, valid: false};
+  if (!record(value)) return {value: null, valid: false};
   const observed = {input_tokens: count(value.input_tokens), output_tokens: count(value.output_tokens),
     cached_input_tokens: detail(value.input_tokens_details, 'cached_tokens'), cache_write_tokens: detail(value.input_tokens_details, 'cache_write_tokens'),
     reasoning_tokens: detail(value.output_tokens_details, 'reasoning_tokens')};
@@ -124,10 +125,14 @@ export function interpret(ctx, requestBytes, preparedBytes, capturedBytes) {
   assert(same(prepare(ctx, requestBytes), preparedBytes), 'capture preparation mismatch');
   const {request, frozen, skills, selected} = admitted(ctx, requestBytes);
   const raw = ctx.codec.decode('CapturedResponse', capturedBytes);
-  const encode = (result, observed = null, replay = null, status = 'unsupported', objects = []) => ({
-    reply: ctx.codec.encode('AdaptiveResult', {result, replay, replay_status: status, usage: observed}),
-    objects, output_tokens: observed?.output_tokens ?? null,
-  });
+  const encode = (result, observed = null, replay = null, status = 'unsupported', objects = []) => {
+    let reply = ctx.codec.encode('AdaptiveResult', {result, replay, replay_status: status, usage: observed});
+    if (reply.length > ctx.codec.constant('maximum_adaptive_reply_bytes', 'MaximumAdaptiveReplyBytes')) {
+      reply = ctx.codec.encode('AdaptiveResult', {result: {tag: 'unsupported_response', value: 'normalization_limit'},
+        replay: null, replay_status: 'capacity', usage: observed}); objects = [];
+    }
+    return {reply, objects, output_tokens: observed?.output_tokens ?? null};
+  };
   const unsupported = (reason, observed = null) => encode({tag: 'unsupported_response', value: reason}, observed, null,
     reason === 'normalization_limit' ? 'capacity' : 'unsupported');
   if (raw.status < 200 || raw.status >= 300) return encode({tag: 'provider_failure', value: {kind: 'http_status', http_status: raw.status}});

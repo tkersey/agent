@@ -34,15 +34,19 @@ export async function verifyAdaptiveProvider(codec) {
       normalization_limits: codec.constant('normalization_limits', 'NormalizationLimits'), maximum_provider_response_bytes: inference.response_bytes}};
   const bytes = () => codec.encode('AdaptiveRequest', request);
   const http = () => parse(codec.decode('AdaptivePrepared', prepare(ctx, bytes())).body);
-  const capture = output => {
+  const capture = (output, usage = undefined) => {
     const payload = bytes(), prepared = prepare(ctx, payload); retain(prepared);
     const raw = codec.encode('CapturedResponse', {status: 200, identity_encoding: true, request_id: null,
-      body: canonical({id: 'response', status: 'completed', error: null, output})}); retain(raw);
+      body: canonical({id: 'response', status: 'completed', error: null, output, ...(usage === undefined ? {} : {usage})})}); retain(raw);
     const result = interpret(ctx, payload, prepared, raw); result.objects.forEach(retain);
     return codec.decode('AdaptiveResult', result.reply);
   };
   const call = (name, args) => ({type: 'function_call', status: 'completed', call_id: 'reused-after-settlement', name, arguments: JSON.stringify(args)});
   assert.equal(http().tool_choice.tools.length, 7);
+  const aggregate = capture(Array.from({length: 4}, () => ({type: 'message', role: 'assistant', status: 'completed',
+    content: [{type: 'output_text', text: 'x'.repeat(5000), annotations: []}]})), {input_tokens: 100, output_tokens: 9});
+  assert.equal(aggregate.replay_status, 'capacity'); assert.equal(aggregate.replay, null);
+  assert.equal(aggregate.usage.output_tokens, 9);
   const first = capture([call('list', {prefix: '', after: ''})]);
   assert.equal(first.replay_status, 'complete');
   request.plan.prior = first.replay; request.plan.watermark = first.replay.watermark;
@@ -79,4 +83,7 @@ export async function verifyAdaptiveProvider(codec) {
   const counted = usage(parse(Buffer.from('{"usage":{"input_tokens":9007199254740993,"output_tokens":0,"input_tokens_details":{"cached_tokens":0}}}')));
   assert(counted.valid); assert.equal(counted.value.input_tokens, 9007199254740993n); assert.equal(counted.value.cache_write_tokens, null);
   assert(!usage(parse(Buffer.from('{"usage":{"input_tokens":1,"input_tokens_details":{"cached_tokens":2}}}'))).valid);
+  assert(!usage(parse(Buffer.from('{"usage":1}'))).valid);
+  assert(!usage(parse(Buffer.from('{"usage":{"input_tokens_details":1}}'))).valid);
+  assert.throws(() => parse(Buffer.from('['.repeat(33) + '0' + ']'.repeat(33))), /depth capacity/);
 }

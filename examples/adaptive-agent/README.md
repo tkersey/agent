@@ -6,7 +6,8 @@ next request before the computation commits the new control revision.
 
 The implementation is under qualification. The native offline scenario is a
 recorded provider fixture, not evidence of live API acceptance or cache hits.
-Node/WASM packaging and the complete acceptance report are still pending.
+The Node/WASM counterpart and package integration are under qualification. The
+complete acceptance report remains pending.
 
 ## Native use
 
@@ -34,6 +35,37 @@ Use `--help` for the inherited status, result, response, resume, cancellation,
 and checkpoint commands. The TypeScript client remains
 [`stdio-client.mts`](../native-minimal/stdio-client.mts).
 
+## Node/WASM use package
+
+The source-independent use archive contains the same `program.bpi3`, generated
+contracts, pure projections and a thin Node CLI. Supply the separately
+authenticated, locked World runtime. Linux and Node 26 are the qualification
+target; this CLI does not advertise the native machine protocol.
+
+```sh
+node runtime/adaptive/cli.mjs demo --offline \
+  --world-runtime /absolute/world-runtime/runtime --state-dir ./adaptive-js-demo
+node runtime/adaptive/cli.mjs validate-config --config ./approved-adaptive.json
+node runtime/adaptive/cli.mjs run --config ./approved-adaptive.json \
+  --world-runtime /absolute/world-runtime/runtime --state-dir ./adaptive-js-task \
+  --input-json '{"task":"Explain the entry point using source evidence."}'
+```
+
+Live execution additionally requires `--authorize-inference --credential-file
+FILE`. Without both, execution parks before inference. `resume` uses the same
+state directory; `status` performs no inference. `message` requires a stable
+`--operation-id` and `--message-json '{"message":"…"}'`. `respond` requires the
+reported `--question-id`, `--request-digest`, a stable `--operation-id`, and
+`--answer-json '{"message":"…"}'`; then run `resume`. A queued message cannot
+answer a pending question. Use one private directory per task and stop a running
+CLI before another local mutation. The embedding API also accepts messages
+while an inference is in flight.
+
+The JS store is distinct from native state. It commits prepared requests,
+charged dispatch, captured bytes, interpreted replies and World successors in
+that order. Recovery reinterprets original captures and does not resend an
+unknown delivery. Neither format implies automatic native-to-JS state import.
+
 ## Frozen configuration
 
 Configuration has these fields:
@@ -60,6 +92,12 @@ No skill executes scripts or installs code. Markdown is admitted before task
 creation (32 KiB per body, 128 KiB total); the catalog allows 32 entries and
 at most four active skills. Context and continuation limits can reject a
 proposed transition before it is acknowledged.
+
+The adaptive model reply has a 16 KiB aggregate projection ceiling, independent
+of the 512 KiB raw response ceiling. An oversized projection returns a typed
+capacity result, retains its captured response and observed usage, and does not
+trigger another provider attempt. The full allowed combinations remain subject
+to the existing World, worker, object and namespace budgets.
 
 The snapshot, skill bytes, catalog, profiles and limits are frozen into task
 resources. Reopening reads those bytes. Editing a configuration or Markdown

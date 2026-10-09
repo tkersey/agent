@@ -9,6 +9,8 @@ import { DEFAULT_LOCK, readDependencyLock, readRegular, sha256, verifyRuntime } 
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const runtimeFiles = ["runtime/world.mjs", "runtime/world.d.mts", "runtime/values.mjs", "runtime/runner.mjs", "runtime/cli.mjs",
+  ...["codec", "json", "admission", "context", "responses", "snapshot", "work", "preparation", "environment", "journal", "runner", "cli"].map(name => `runtime/adaptive/${name}.mjs`),
+  "examples/adaptive-agent/README.md",
   ...["boundary.wire-natural.v1", "world.allocation-budget.v1", "agent.model-json-bounds.v1"].map(name => `runtime/repository-profiles/${name}.json`),
   "runtime/model.mjs", "runtime/document.mjs", "runtime/repository_delivery.mjs", "runtime/repository.mjs", "runtime/repository_snapshot.mjs", "runtime/repository_publication_gate.mjs", "runtime/repository_checks.mjs", "runtime/repository_zig_sandbox.mjs", "runtime/repository_wasm_observer.mjs", "runtime/repository_tests.mjs", "runtime/inquiry.mjs", "runtime/inquiry_sandbox.mjs",
   "runtime/inquiry_driver.mjs", "runtime/inquiry_wire.mjs", "runtime/inquiry_delivery.mjs", "runtime/inquiry_cli.mjs", "runtime/text_inspection.mjs", "runtime/text_file.mjs", "tools/agent4/dependencies.mjs", "tools/agent4/toolchain.mjs",
@@ -24,7 +26,7 @@ const runtimeFiles = ["runtime/world.mjs", "runtime/world.d.mts", "runtime/value
 const exampleFixtures = ["fixtures/repository-repair-v1/README.md", "fixtures/repository-repair-v1/package.json",
   "fixtures/repository-repair-v1/src/range.mjs", "fixtures/repository-repair-v1/test/range.test.mjs",
   "test/consumers/inquiry/contract.txt", "test/consumers/inquiry/fixtures/session.mjs"];
-const roles = new Set(["image", "component", "initial-args", "schema", "contract", "synthetic-fixture", "native-helper"]);
+const roles = new Set(["image", "component", "initial-args", "schema", "application", "contract", "synthetic-fixture", "native-helper"]);
 const compare = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b));
 const json = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
 
@@ -85,7 +87,7 @@ function readInventory(directory) {
         !roles.has(record.role) || !/^[a-f0-9]{64}$/.test(record.sha256) || records.has(record.path))
       fail("invalid or duplicate inventory file");
     if (record.role === "native-helper" && !["native/agent-publication-gate", "native/agent-check-limit", "native/libagent-check-lock.dylib"].includes(record.path)) fail("unknown native helper");
-    const extension = record.role === "native-helper" ? /^[a-zA-Z0-9/.-]+$/ : record.role === "image" ? /\.bpi3$/ : record.role === "component" ? /\.bmo1$/ : record.role === "schema" ? /\.bin$/ : record.role === "initial-args" ? /\.(bin|args)$/ :
+    const extension = record.role === "native-helper" ? /^[a-zA-Z0-9/.-]+$/ : record.role === "image" ? /\.bpi3$/ : record.role === "component" ? /\.bmo1$/ : record.role === "schema" ? /\.bin$/ : record.role === "application" ? /\.json$/ : record.role === "initial-args" ? /\.(bin|args)$/ :
       record.role === "contract" ? /\.(md|txt)$/ : /\.(json|bin|txt|md)$/;
     if (!extension.test(record.path)) fail(`unexpected ${record.role} file type: ${record.path}`);
     const path = join(directory, record.path);
@@ -185,6 +187,7 @@ export function packageArtifacts(argv) {
   const declaredVersion = readRegular(join(ROOT, "build.zig.zon")).toString("utf8").match(/\.version\s*=\s*"([^"]+)"/)?.[1];
   if (declaredVersion !== options.version) fail("archive version differs from Agent's package version");
   const { manifest, files, inputSha256 } = readInventory(imageRoot);
+  const inputFiles = new Map(files);
   const sources = new Map([...runtimeFiles, ...exampleFixtures].map(path => [path, readRegular(join(ROOT, path))]));
   sources.set("conformance/agent4/dependencies.lock.json", readRegular(lockPath));
   for (const [path, bytes] of sources) files.set(path, bytes);
@@ -219,7 +222,7 @@ export function packageArtifacts(argv) {
   if (runtimeRoot !== undefined)
     assert.deepEqual(verifyRuntime(runtimeRoot, { lockPath }), before, "World runtime changed during packaging");
   // Re-read all image inputs: generated files must not change mid-package.
-  assert.deepEqual([...readInventory(imageRoot).files], [...files].filter(([path]) => path.startsWith("examples/")));
+  assert.deepEqual([...readInventory(imageRoot).files], [...inputFiles]);
   for (const [path, bytes] of sources)
     assert.deepEqual(readRegular(path === "conformance/agent4/dependencies.lock.json" ? lockPath : join(ROOT, path)), bytes,
       `Agent package source changed: ${path}`);

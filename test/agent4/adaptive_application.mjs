@@ -1,13 +1,36 @@
 // Same authored image under the Node/WASM environment, with durable capture loss.
 import assert from 'node:assert/strict';
-import {mkdtempSync, rmSync} from 'node:fs';
+import {mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {AdaptiveRunner} from '../../runtime/adaptive/runner.mjs';
+import {pathToFileURL} from 'node:url';
+import {execFileSync} from 'node:child_process';
+import {packageArtifacts} from '../../tools/agent4/package.mjs';
+import {codecs, hash} from '../../runtime/adaptive/codec.mjs';
 
 export async function verifyAdaptiveApplication({image, application, worldRuntime}) {
   const directory = mkdtempSync(join(tmpdir(), 'adaptive-js-'));
-  const options = {image, application, worldRuntime, stateDir: directory, offline: true, create: true};
+  const inputs = join(directory, 'inputs'), extracted = join(directory, 'extracted');
+  mkdirSync(join(inputs, 'adaptive-agent'), {recursive: true}); mkdirSync(extracted);
+  const applicationBytes = readFileSync(application), codec = codecs(JSON.parse(applicationBytes));
+  const files = [];
+  const asset = (path, role, bytes) => { writeFileSync(join(inputs, path), bytes); files.push({path, role, sha256: hash(bytes)}); };
+  asset('adaptive-agent/program.bpi3', 'image', readFileSync(image));
+  asset('adaptive-agent/application.json', 'application', applicationBytes);
+  asset('adaptive-agent/initial.args', 'initial-args', codec.encode('Input', {task: 'Explain the admitted snapshot using source evidence.'}));
+  asset('contract.txt', 'contract', Buffer.from('One authored adaptive computation with explicit model and skill controls.\n'));
+  asset('offline.txt', 'synthetic-fixture', Buffer.from('The approved offline Responses corpus is embedded in application resources.\n'));
+  writeFileSync(join(inputs, 'inventory.json'), JSON.stringify({format: 'agent4-use-inventory/v1', examples: [{name: 'adaptive-agent',
+    image: 'adaptive-agent/program.bpi3', initialArgs: 'adaptive-agent/initial.args'}], files}));
+  const version = readFileSync('build.zig.zon', 'utf8').match(/\.version\s*=\s*"([^"]+)"/)[1];
+  const output = process.env.AGENT4_BUILD_PREFIX ? join(process.env.AGENT4_BUILD_PREFIX, 'adaptive-use-archive') : join(directory, 'archive');
+  const receipt = packageArtifacts(['--images-dir', inputs, '--output-dir', output, '--version', version, '--world-runtime', worldRuntime]);
+  execFileSync('tar', ['-xzf', join(output, receipt.archive.name), '-C', extracted]);
+  const root = join(extracted, receipt.archive.name.slice(0, -7));
+  for (const file of receipt.files) assert(!/\.(zig|wasm)$/.test(file.path), 'the use package contains no compiler or kernel source');
+  const {AdaptiveRunner} = await import(pathToFileURL(join(root, 'runtime/adaptive/runner.mjs')).href);
+  const options = {image: join(root, 'examples/adaptive-agent/program.bpi3'), application: join(root, 'examples/adaptive-agent/application.json'),
+    worldRuntime, stateDir: join(directory, 'state'), offline: true, create: true};
   let runner, captures = 0, injections = 0;
   try {
     runner = await AdaptiveRunner.open(options, {onBoundary: async event => {
@@ -51,7 +74,7 @@ export async function verifyAdaptiveApplication({image, application, worldRuntim
     await runner.close(); runner = null;
     runner = await AdaptiveRunner.open({...options, create: false});
     assert.deepEqual(runner.status().output, completed.output);
-    console.log(JSON.stringify({adaptive_js: 'same-image controls, inbox and captured-reply recovery', model_attempts: captures,
+    console.log(JSON.stringify({adaptive_js: 'extracted same-image controls, inbox and captured-reply recovery', archive_sha256: receipt.archive.sha256, model_attempts: captures,
       controls: completed.output.receipts.length, consumed_messages: completed.consumed_messages, metrics, live_provider: false},
     (_key, value) => typeof value === 'bigint' ? String(value) : value));
   } finally { if (runner) await runner.close(); rmSync(directory, {recursive: true, force: true}); }

@@ -136,6 +136,7 @@ export class AdaptiveRunner {
     }
   }
   async drive() {
+    if (terminal(this.#journal.task()?.kind)) return this.status();
     assert(this.#executor && !this.#busy, 'executor unavailable'); this.#busy = true;
     try {
       for (let steps = 0; steps < 4096; steps++) {

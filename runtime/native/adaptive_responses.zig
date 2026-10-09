@@ -305,7 +305,18 @@ pub fn Adapter(comptime P: type) type {
             return .{ .value = observed, .valid = valid };
         }
         fn encode(ctx: registry.ProjectionContext, result: P.AdaptiveResult, objects: []const []const u8) !registry.Projection {
-            return .{ .reply = try contracts.encodeOwned(P.AdaptiveResult, ctx.allocator, result), .objects = objects, .output_tokens = if (result.usage) |available| available.output_tokens else null };
+            const bytes = try contracts.encodeOwned(P.AdaptiveResult, ctx.allocator, result);
+            const tokens = if (result.usage) |available| available.output_tokens else null;
+            if (bytes.len > P.representation.maximum_adaptive_reply_bytes) {
+                ctx.allocator.free(bytes);
+                return .{ .reply = try contracts.encodeOwned(P.AdaptiveResult, ctx.allocator, .{
+                    .result = .{ .unsupported_response = .normalization_limit },
+                    .replay = null,
+                    .replay_status = .capacity,
+                    .usage = result.usage,
+                }), .objects = &.{}, .output_tokens = tokens };
+            }
+            return .{ .reply = bytes, .objects = objects, .output_tokens = tokens };
         }
         fn unsupported(ctx: registry.ProjectionContext, reason: @FieldType(P.Result, "unsupported_response"), observed: ?Usage) !registry.Projection {
             return encode(ctx, .{ .result = .{ .unsupported_response = reason }, .replay = null, .replay_status = if (reason == .normalization_limit) .capacity else .unsupported, .usage = observed }, &.{});

@@ -41,7 +41,7 @@ pub const P = model.Profile(Action, .{
     .{ .name = "inference_set", .description = "Select an approved profile and effort for the next inference, using the current control revision." },
     .{ .name = "skill_set", .description = "Load, deactivate or physically unload a pinned approved skill. Use an exact version and current control revision." },
     .{ .name = "inspect", .description = "Locate guard-like lines in acquired evidence. This lexical aid requires an active invariant-review skill; it is not a correctness proof." },
-}, .{ .model_id_bytes = 128, .temperature_bytes = 32, .maximum_messages = 4, .message_bytes = 8192, .maximum_output_items = 8, .call_id_bytes = 128, .arguments_json_bytes = 16384, .result_text_bytes = 32768, .provider_response_bytes = 512 * 1024 });
+}, .{ .model_id_bytes = 128, .temperature_bytes = 32, .maximum_messages = 4, .message_bytes = 8192, .maximum_output_items = 8, .call_id_bytes = 128, .arguments_json_bytes = 16384, .result_text_bytes = 32768, .provider_response_bytes = 512 * 1024, .maximum_adaptive_reply_bytes = 16 * 1024 });
 pub const PolicyView = struct { profiles: controls.Profiles, catalog: controls.Catalog, maximum_model_calls: u16, maximum_revision: u64 };
 pub const Bindings = struct {
     policy: [32]u8,
@@ -192,6 +192,7 @@ pub const support_types = .{
     .{ .name = "Invocation", .T = P.Request },
     .{ .name = "Tools", .T = P.Tools },
     .{ .name = "NormalizationLimits", .T = model.NormalizationLimits },
+    .{ .name = "MaximumAdaptiveReplyBytes", .T = u32 },
     .{ .name = "ModelResult", .T = P.Result },
     .{ .name = "CapturedResponse", .T = model.CapturedResponse },
     .{ .name = "AdaptiveRequest", .T = P.AdaptiveRequest },
@@ -210,4 +211,5 @@ pub const support_types = .{
 pub const support_values = .{
     .{ .name = "tools", .T = P.Tools, .value = P.allDeclarations() },
     .{ .name = "normalization_limits", .T = model.NormalizationLimits, .value = P.normalizationLimits() },
+    .{ .name = "maximum_adaptive_reply_bytes", .T = u32, .value = P.representation.maximum_adaptive_reply_bytes },
 };

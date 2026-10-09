@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { decodeSchema, decodeValue, encodeValue } from '../../runtime/values.mjs';
 import { requirement } from '../../runtime/mobility/policy.mjs';
 import { schemas as mobilitySchemas } from '../../runtime/mobility/values.mjs';
+import {codecs} from '../../runtime/adaptive/codec.mjs';
 const root=resolve(import.meta.dirname,'../..');
 const [directory,...extra]=process.argv.slice(2);
 assert(directory && !extra.length,'usage: emit_inventory.mjs EMITTED_DIRECTORY');
@@ -16,6 +17,11 @@ async function add(path,role,bytes){
   const content=bytes??await readFile(join(output,path));
   files.push({path,role,sha256:hash(content)});
 }
+const adaptiveApplication = JSON.parse(await readFile(join(output, 'adaptive-agent/application.json'), 'utf8'));
+await add('adaptive-agent/program.bpi3', 'image');
+await add('adaptive-agent/application.json', 'application');
+await add('adaptive-agent/initial.args', 'initial-args', codecs(adaptiveApplication).encode('Input', {task: 'Explain the admitted snapshot using source evidence.'}));
+examples.push({name: 'adaptive-agent', image: 'adaptive-agent/program.bpi3', initialArgs: 'adaptive-agent/initial.args'});
 const textContent=Buffer.from('alpha\nbeta gamma\ndelta epsilon zeta\nomega\n');
 const subject=['fixture/story',[...createHash('sha256').update(textContent).digest()],BigInt(textContent.length)];
 // Pure fixture values and contracts; the traveling image owns all control.

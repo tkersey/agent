@@ -5,6 +5,17 @@ class NumberToken { constructor(source) { this.source = source; Object.freeze(th
 export function parse(bytes, maximum = 512 * 1024) {
   assert(bytes instanceof Uint8Array && bytes.length <= maximum, 'JSON capacity');
   const text = new TextDecoder('utf-8', {fatal: true, ignoreBOM: true}).decode(bytes);
+  // Bound recursion before the strict scanner and JSON reviver traverse it.
+  let depth = 0, quoted = false, escaped = false;
+  for (const character of text) {
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === '"') quoted = false;
+    } else if (character === '"') quoted = true;
+    else if (character === '{' || character === '[') assert(++depth <= 32, 'JSON depth capacity');
+    else if (character === '}' || character === ']') depth--;
+  }
   let nodes = 0;
   const value = parseJsonStrict(text, (_key, child, context) => {
     assert(++nodes <= 65536, 'JSON node capacity');
@@ -35,6 +46,7 @@ export function canonical(value, maximum = 2 * 1024 * 1024) {
     assert(item && typeof item === 'object' && [Object.prototype, null].includes(Object.getPrototypeOf(item)));
     const keys = Object.keys(item).sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
     assert(keys.length <= 8192);
+    assert(keys.every(key => key.isWellFormed()), 'invalid Unicode');
     return `{${keys.map(key => `${JSON.stringify(key)}:${render(item[key], depth + 1)}`).join(',')}}`;
   }
   const bytes = Buffer.from(render(value, 0));

@@ -328,7 +328,10 @@ pub fn run(comptime Types: type, comptime Environment: type, init: std.process.I
                 const id = selectTask(Types, profile_allocator, &service.?, human_options.task_id, human == .@"resume" or human == .cancel) catch return 64;
                 frozen = service.?.frozenInputs(profile_allocator, id) catch return 64;
             }
-            const admitted = Environment.configure(profile_allocator, init.io, .{ .offline = offline, .scratch_allocator = a, .test_provider = test_provider, .config_path = config_path, .credential_path = credential_path, .trust_root_path = trust_root_path }, frozen, assets) catch return 64;
+            const admitted = Environment.configure(profile_allocator, init.io, .{ .offline = offline, .scratch_allocator = a, .test_provider = test_provider, .config_path = config_path, .credential_path = credential_path, .trust_root_path = trust_root_path }, frozen, assets) catch |err| {
+                _ = reportFailure(err);
+                return 64;
+            };
             if (admitted.bytes.len > 256 * 1024) return 64;
             if (frozen) |saved| {
                 if (!std.mem.eql(u8, saved.profile, admitted.bytes) or !std.mem.eql(u8, saved.profile_id, admitted.id)) return 64;

@@ -375,6 +375,8 @@ pub fn build(b: *std.Build) void {
     g.testModule(check, dialogue);
 
     const emit = b.step("agent4-images", "Compile the consumer images");
+    emit.dependOn(&b.addInstallFileWithDir(adaptive_image, .prefix, "agent4/adaptive-agent/program.bpi3").step);
+    emit.dependOn(&b.addInstallFileWithDir(adaptive_application, .prefix, "agent4/adaptive-agent/application.json").step);
     emit.dependOn(parser_episode);
     const participant_images = b.step("participant-images", "Emit and link the internal model participant");
     const participant_exe = fixture_driver.select("agent-participant");

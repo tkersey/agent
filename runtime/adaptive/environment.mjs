@@ -107,7 +107,7 @@ export function configure(app, options, saved = null) {
     assert([...resources, profile].every(bytes => !Buffer.from(bytes).includes(token)), 'credential embedded in task resources');
   }
   const testTrustRoot = options.testTrustRoot ? readFile(options.testTrustRoot, 64 * 1024) : undefined;
-  return {codec: app.codec, tools: app.tools, profile, resources, policy, catalog, snapshot: snapshots.open(app.codec, resources[0]), initial, instructions,
+  return {codec: app.codec, tools: app.tools, profile, resources, policy, catalog, snapshot: snapshots.open(app.codec, resources[0]), initial, instructions, tenant: 'local',
     object, offline: !!options.offline, provider: {enabled: !!options.authorizeInference, token, endpoint: policy.endpoint, testTrustRoot},
     fixture: options.offline ? parseJsonStrict(utf8(app.resources.get('adaptive-agent.offline-responses'))) : null};
 }

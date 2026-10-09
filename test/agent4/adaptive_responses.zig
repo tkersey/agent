@@ -6,7 +6,7 @@ const model = agent.model_invocation;
 const P = model.Profile(union(enum) { finish: struct { value: u64 }, inspect: struct { value: u64 } }, .{
     .{ .name = "finish", .description = "Finish with evidence." },
     .{ .name = "inspect", .description = "Inspect an invariant." },
-}, .{ .model_id_bytes = 128, .temperature_bytes = 32, .maximum_messages = 4, .message_bytes = 1024, .maximum_output_items = 8, .call_id_bytes = 64, .arguments_json_bytes = 256, .result_text_bytes = 1024, .provider_response_bytes = 4096 });
+}, .{ .model_id_bytes = 128, .temperature_bytes = 32, .maximum_messages = 4, .message_bytes = 1024, .maximum_output_items = 8, .call_id_bytes = 64, .arguments_json_bytes = 256, .result_text_bytes = 1024, .provider_response_bytes = 4096, .maximum_adaptive_reply_bytes = 1024 });
 const Adapter = native.adaptive_responses.Adapter(P);
 const Admission = native.adaptive_responses.Admission(P);
 const Ref = model.ArtifactReference;
@@ -109,6 +109,11 @@ test "adaptive projection retains audit captures while hard eviction starts expl
         .offered = .{ true, false },
         .results = .{ .items = &.{} },
     };
+    const long_text: [900]u8 = @splat('x');
+    const oversized = try std.fmt.allocPrint(a, "{{\"status\":\"completed\",\"error\":null,\"output\":[{{\"type\":\"message\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{{\"type\":\"output_text\",\"text\":\"{s}\",\"annotations\":[]}}]}}],\"usage\":{{\"output_tokens\":9}}}}", .{long_text});
+    const limited = try capture(ctx, &objects, request, oversized);
+    try std.testing.expect(limited.replay_status == .capacity and limited.replay == null);
+    try std.testing.expectEqual(@as(?u64, 9), limited.usage.?.output_tokens);
     const first = try capture(ctx, &objects, request, "{\"id\":\"response-1\",\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"call-1\",\"name\":\"finish\",\"arguments\":\"{\\\"value\\\":1}\"}]}");
     try std.testing.expect(first.replay_status == .complete and first.usage == null);
     request.plan.prior = first.replay;

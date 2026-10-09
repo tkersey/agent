@@ -177,7 +177,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
     const answer = {client_operation_id: 'adaptive-answer', task_id: accepted.task_id,
       question_id: waiting.question.question_id, question_revision: waiting.question.question_revision, request_digest: waiting.question.request_digest,
       answer: {schema_id: waiting.question.answer_schema_id, value: {message: 'Focus on observable behavior.'}}};
-    await assert.rejects(client.call('task.respond', {...answer, client_operation_id: 'adaptive-stale-answer', request_digest: '0'.repeat(64)}), error => error.data?.kind === 'StateConflict');
+    await assert.rejects(client.call('task.respond', {...answer, client_operation_id: 'adaptive-stale-answer', request_digest: '0'.repeat(64)}), error => error.data?.kind === 'StaleInteraction');
     const answered = await client.call('task.respond', answer);
     assert.equal((await client.call('task.respond', answer)).receipt_id, answered.receipt_id);
     const result = await until(() => client.call('task.result', {task_id: accepted.task_id}), value => value.ready);

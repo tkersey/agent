@@ -91,6 +91,7 @@ src/text_inspection.zig
 src/tools.zig
 src/value_equality.zig
 test/agent4/adaptive_controls.zig
+test/agent4/adaptive_recovery.zig
 test/agent4/adaptive_responses.zig
 test/agent4/admission.zig
 test/agent4/approval_equality.zig

@@ -159,6 +159,7 @@ pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration
     const catalog_bytes = resources.items[resources.items.len - 1];
     if (policy.catalog.bytes != catalog_bytes.len or !std.mem.eql(u8, &policy.catalog.digest, &digest(catalog_bytes))) return error.InvalidSkill;
     const catalog = try contracts.decodeOwned(t.P.AdaptiveCatalog, a, catalog_bytes);
+    if (catalog.value.skills.items.len > 14) return error.Capacity;
     if (catalog.value.skills.items.len + 2 != resources.items.len) return error.MissingArtifact;
     var total: usize = 0;
     for (catalog.value.skills.items, resources.items[1 .. resources.items.len - 1], 0..) |skill, body, index| {

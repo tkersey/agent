@@ -243,6 +243,30 @@ export function missingCaptures(bytes, change = 'all') {
   return encode(archive);
 }
 
+// Keep the original raw object available to its audit dependents while changing
+// the response selected by one capture record. This reaches pure projection
+// comparison instead of merely breaking the archive's hash graph.
+export function tamperedAdaptiveControl(bytes, codec) {
+  const archive = readArchive(bytes);
+  for (const row of archive.manifest[6]) {
+    if (row[0] !== 4) continue;
+    const attemptRow = archive.manifest[6].find(([kind, id]) => kind === 5 && Buffer.from(id).equals(Buffer.from(row[1])));
+    const attempt = decodeValue(archive.schemas.get('attempt'), archive.object(attemptRow[2]));
+    if (attempt[5] !== 'agent.model.invoke.v6') continue;
+    const capture = decodeValue(archive.schemas.get('capture'), archive.object(row[2]));
+    const raw = codec.decode('CapturedResponse', archive.object(capture[4].value));
+    const body = JSON.parse(Buffer.from(raw.body).toString('utf8'));
+    const call = body.output.find(item => item.type === 'function_call' && item.name === 'inference_set');
+    if (!call) continue;
+    const args = JSON.parse(call.arguments); args.expected_revision++; call.arguments = JSON.stringify(args);
+    raw.body = Buffer.from(JSON.stringify(body));
+    capture[4] = {tag: 1, value: replace(archive, null, codec.encode('CapturedResponse', raw))};
+    row[2] = replace(archive, row[2], Buffer.from(encodeValue(archive.schemas.get('capture'), capture)));
+    return encode(archive);
+  }
+  assert.fail('adaptive inference control capture is required');
+}
+
 export function invalidQueuedMessage(bytes, change) {
   const archive = readArchive(bytes);
   assert.equal(archive.task.messages.length, 1);

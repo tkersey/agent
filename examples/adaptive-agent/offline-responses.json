@@ -47,6 +47,11 @@
     "error": null,
     "output": [
       {
+        "type": "reasoning",
+        "summary": [],
+        "encrypted_content": "OPAQUE-SKILL-CONTEXT-3"
+      },
+      {
         "type": "function_call",
         "status": "completed",
         "call_id": "offline-3",
@@ -88,6 +93,11 @@
     "status": "completed",
     "error": null,
     "output": [
+      {
+        "type": "reasoning",
+        "summary": [],
+        "encrypted_content": "OPAQUE-SKILL-CONTEXT-6"
+      },
       {
         "type": "function_call",
         "status": "completed",

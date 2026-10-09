@@ -90,6 +90,7 @@ export function configure(app, options, saved = null) {
   const objects = new Map(resources.map(bytes => [hash(bytes), bytes]));
   const object = ref => { const bytes = objects.get(Buffer.from(ref.digest).toString('hex')); assert(bytes, 'missing frozen resource'); return bytes; };
   const catalog = admitCatalog({codec: app.codec, object}, policy);
+  assert(catalog.skills.length <= 14, 'frozen resource count capacity');
   assert(resources.length === catalog.skills.length + 2 && same(policy.catalog.digest, digest(resources.at(-1))) && BigInt(policy.catalog.bytes) === BigInt(resources.at(-1).length));
   catalog.skills.forEach((skill, index) => {
     const body = resources[index + 1]; assert(same(skill.instructions.digest, digest(body)) && BigInt(skill.instructions.bytes) === BigInt(body.length)); utf8(body);

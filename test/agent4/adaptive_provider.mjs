@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {prepare, interpret, usage, acquire} from '../../runtime/adaptive/responses.mjs';
 import {digest, identities} from '../../runtime/adaptive/admission.mjs';
 import {parse, canonical} from '../../runtime/adaptive/json.mjs';
+import {readFileSync} from 'node:fs';
 
 export async function verifyAdaptiveProvider(codec) {
   const objects = new Map();
@@ -34,19 +35,27 @@ export async function verifyAdaptiveProvider(codec) {
       normalization_limits: codec.constant('normalization_limits', 'NormalizationLimits'), maximum_provider_response_bytes: inference.response_bytes}};
   const bytes = () => codec.encode('AdaptiveRequest', request);
   const http = () => parse(codec.decode('AdaptivePrepared', prepare(ctx, bytes())).body);
-  const capture = (output, usage = undefined) => {
+  const capturedBody = body => {
     const payload = bytes(), prepared = prepare(ctx, payload); retain(prepared);
     const raw = codec.encode('CapturedResponse', {status: 200, identity_encoding: true, request_id: null,
-      body: canonical({id: 'response', status: 'completed', error: null, output, ...(usage === undefined ? {} : {usage})})}); retain(raw);
+      body}); retain(raw);
     const result = interpret(ctx, payload, prepared, raw); result.objects.forEach(retain);
     return codec.decode('AdaptiveResult', result.reply);
   };
+  const capture = (output, usage = undefined) => capturedBody(canonical({id: 'response', status: 'completed', error: null, output, ...(usage === undefined ? {} : {usage})}));
   const call = (name, args) => ({type: 'function_call', status: 'completed', call_id: 'reused-after-settlement', name, arguments: JSON.stringify(args)});
   assert.equal(http().tool_choice.tools.length, 7);
+  const corpus = JSON.parse(readFileSync(new URL('./adaptive-responses-v1.json', import.meta.url), 'utf8'));
+  assert.equal(corpus.format, 'adaptive-responses-corpus/v1');
+  for (const entry of corpus.cases) {
+    const result = capturedBody(Buffer.from(entry.body));
+    assert.equal(result.result.tag, entry.result, entry.name); assert.equal(result.replay_status, entry.replay, entry.name);
+    assert.deepEqual(result.usage === null ? null : Object.fromEntries(Object.entries(result.usage).map(([key, count]) => [key, count === null ? null : String(count)])), entry.usage, entry.name);
+  }
   const aggregate = capture(Array.from({length: 4}, () => ({type: 'message', role: 'assistant', status: 'completed',
     content: [{type: 'output_text', text: 'x'.repeat(5000), annotations: []}]})), {input_tokens: 100, output_tokens: 9});
   assert.equal(aggregate.replay_status, 'capacity'); assert.equal(aggregate.replay, null);
-  assert.equal(aggregate.usage.output_tokens, 9);
+  assert.equal(aggregate.usage.output_tokens, 9n);
   const first = capture([call('list', {prefix: '', after: ''})]);
   assert.equal(first.replay_status, 'complete');
   request.plan.prior = first.replay; request.plan.watermark = first.replay.watermark;
@@ -74,6 +83,8 @@ export async function verifyAdaptiveProvider(codec) {
   const valid = prepare(ctx, bytes());
   const graft = structuredClone(request); graft.plan.prior.task[0] ^= 1;
   assert.throws(() => prepare(ctx, codec.encode('AdaptiveRequest', graft)));
+  const relabeled = structuredClone(request); relabeled.plan.prior.schema = 'agent.model.context.responses.v1';
+  assert.throws(() => prepare(ctx, codec.encode('AdaptiveRequest', relabeled)));
   const missing = objects.get(Buffer.from(second.replay.object.digest).toString('hex'));
   objects.delete(Buffer.from(second.replay.object.digest).toString('hex'));
   assert.throws(() => prepare(ctx, bytes()), /missing artifact/);

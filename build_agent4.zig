@@ -778,6 +778,14 @@ pub fn build(b: *std.Build) void {
         native_suite.strip = optimize != .debug;
         native_suite.addImport("world", checked_world);
         native_suite.addImport("agent_native", checked_environment);
+        const adaptive_test_types = native_graph.module("examples/adaptive-agent/types.zig");
+        const adaptive_test_environment = native_graph.module("examples/adaptive-agent/environment.zig");
+        adaptive_test_environment.addImport("application_types", adaptive_test_types);
+        adaptive_test_environment.addImport("agent_native", checked_environment);
+        native_suite.addImport("adaptive_types", adaptive_test_types);
+        native_suite.addImport("adaptive_environment", adaptive_test_environment);
+        native_suite.addAnonymousImport("adaptive_image", .{ .root_source_file = adaptive_image });
+        native_suite.addAnonymousImport("adaptive_application", .{ .root_source_file = adaptive_application });
         native_suite.addImport("native_asset_writer", native_graph.module("tools/native/emit.zig"));
         native_suite.addAnonymousImport("native_model_reference", .{ .root_source_file = responses_peer.captureStdOut(.{}) });
         native_suite.addImport("document", native_graph.module("test/consumers/document/consequence.zig"));

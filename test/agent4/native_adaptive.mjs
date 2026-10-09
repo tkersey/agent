@@ -8,6 +8,7 @@ import {codecs} from '../../runtime/adaptive/codec.mjs';
 import {parse as parseLossless, canonical as canonicalLossless, integer as losslessInteger} from '../../runtime/adaptive/json.mjs';
 import {verifyAdaptiveProvider} from './adaptive_provider.mjs';
 import {verifyAdaptiveApplication} from './adaptive_application.mjs';
+import {verifyAdaptiveNative} from './adaptive_native_peer.mjs';
 
 const exactNumber = parseLossless(Buffer.from('{"count":9007199254740993,"zero":0,"nullable":null,"decimal":1.0,"exponent":1e0}'));
 assert.equal(losslessInteger(exactNumber.count), 9007199254740993n);
@@ -52,6 +53,7 @@ try {
   assert.equal(result.output.receipts[3].context_epoch, result.output.receipts[2].context_epoch, 'resident deactivation retains the epoch');
   assert.equal(BigInt(result.output.receipts[4].context_epoch), BigInt(result.output.receipts[3].context_epoch) + 1n, 'physical unload creates a new projection');
   assert.equal(BigInt(result.output.control.eviction_generation), 2n);
+  await verifyAdaptiveNative({app, applicationPath: process.argv[3], worldRuntime: process.argv[5]});
   passed = true;
   console.log(JSON.stringify({adaptive: 'authored control scenario', model_calls: result.output.model_calls, controls: result.output.receipts.length, live_provider: false}));
 } finally {

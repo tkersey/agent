@@ -89,8 +89,10 @@ inference_set, skill_set, inspect. The first seven are core tools. `inspect` is
 a lexical guard-line count over previously acquired evidence and is available
 only while a loaded approved skill grants it. It does not prove correctness.
 No skill executes scripts or installs code. Markdown is admitted before task
-creation (32 KiB per body, 128 KiB total); the catalog allows 32 entries and
-at most four active skills. Context and continuation limits can reject a
+creation (32 KiB per body, 128 KiB total). The shared catalog format allows 32
+entries; this deployment admits 14, leaving two of the native host's 16 frozen
+resource slots for snapshot and catalog. At most four skills may be active.
+Context and continuation limits can reject a
 proposed transition before it is acknowledged.
 
 The adaptive model reply has a 16 KiB aggregate projection ceiling, independent

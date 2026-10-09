@@ -109,6 +109,15 @@ test "adaptive projection retains audit captures while hard eviction starts expl
         .offered = .{ true, false },
         .results = .{ .items = &.{} },
     };
+    const corpus = try native.json.parse(a, @embedFile("adaptive-responses-v1.json"), .{ .bytes = 64 * 1024 });
+    for (corpus.value.object.get("cases").?.array.items) |entry| {
+        const result = try capture(ctx, &objects, request, entry.object.get("body").?.string);
+        try std.testing.expectEqualStrings(entry.object.get("result").?.string, @tagName(result.result));
+        try std.testing.expectEqualStrings(entry.object.get("replay").?.string, @tagName(result.replay_status));
+        const observed = try native.json.canonical(a, try native.values.toJson(@TypeOf(result.usage), a, result.usage));
+        const expected = try native.json.canonical(a, entry.object.get("usage").?);
+        try std.testing.expectEqualStrings(expected, observed);
+    }
     const long_text: [900]u8 = @splat('x');
     const oversized = try std.fmt.allocPrint(a, "{{\"status\":\"completed\",\"error\":null,\"output\":[{{\"type\":\"message\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{{\"type\":\"output_text\",\"text\":\"{s}\",\"annotations\":[]}}]}}],\"usage\":{{\"output_tokens\":9}}}}", .{long_text});
     const limited = try capture(ctx, &objects, request, oversized);
@@ -174,5 +183,8 @@ test "adaptive projection retains audit captures while hard eviction starts expl
     try std.testing.expect(std.mem.indexOf(u8, loaded_bytes, skill_body) != null);
     var graft = request;
     graft.plan.prior.?.task[0] ^= 1;
+    try std.testing.expectError(error.InvalidContext, Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, graft)));
+    graft = request;
+    graft.plan.prior.?.schema.bytes = model.context_semantic_identity;
     try std.testing.expectError(error.InvalidContext, Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, graft)));
 }

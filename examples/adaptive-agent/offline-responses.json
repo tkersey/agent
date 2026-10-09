@@ -1,0 +1,208 @@
+[
+  {
+    "id": "fixture-0",
+    "status": "completed",
+    "error": null,
+    "output": [
+      {
+        "type": "function_call",
+        "status": "completed",
+        "call_id": "offline-0",
+        "name": "list",
+        "arguments": "{\"prefix\":\"\",\"after\":\"\"}"
+      }
+    ]
+  },
+  {
+    "id": "fixture-1",
+    "status": "completed",
+    "error": null,
+    "output": [
+      {
+        "type": "function_call",
+        "status": "completed",
+        "call_id": "offline-1",
+        "name": "read",
+        "arguments": "{\"path\":\"src/main.zig\",\"start\":0,\"maximum\":4096}"
+      }
+    ]
+  },
+  {
+    "id": "fixture-2",
+    "status": "completed",
+    "error": null,
+    "output": [
+      {
+        "type": "function_call",
+        "status": "completed",
+        "call_id": "offline-2",
+        "name": "skill_set",
+        "arguments": "{\"operation\":\"load\",\"skill_id\":\"invariant-review\",\"version\":\"1\",\"residency\":\"resident\",\"expected_revision\":0,\"reason\":\"Inspect acquired guards.\"}"
+      }
+    ]
+  },
+  {
+    "id": "fixture-3",
+    "status": "completed",
+    "error": null,
+    "output": [
+      {
+        "type": "reasoning",
+        "summary": [],
+        "encrypted_content": "OPAQUE-SKILL-CONTEXT-3"
+      },
+      {
+        "type": "function_call",
+        "status": "completed",
+        "call_id": "offline-3",
+        "name": "inspect",
+        "arguments": "{\"evidence_index\":0}"
+      }
+    ]
+  },
+  {
+    "id": "fixture-4",
+    "status": "completed",
+    "error": null,
+    "output": [
+      {
+        "type": "function_call",
+        "status": "completed",
+        "call_id": "offline-4",
+        "name": "inference_set",
+        "arguments": "{\"profile_id\":\"analysis\",\"effort\":\"high\",\"expected_revision\":1,\"reason\":\"Check reasoning.\"}"
+      }
+    ]
+  },
+  {
+    "id": "fixture-5",
+    "status": "completed",
+    "error": null,
+    "output": [
+      {
+        "type": "function_call",
+        "status": "completed",
+        "call_id": "offline-5",
+        "name": "inference_set",
+        "arguments": "{\"profile_id\":\"deep\",\"effort\":\"high\",\"expected_revision\":2,\"reason\":\"Use the distinct approved model.\"}"
+      }
+    ]
+  },
+  {
+    "id": "fixture-6",
+    "status": "completed",
+    "error": null,
+    "output": [
+      {
+        "type": "reasoning",
+        "summary": [],
+        "encrypted_content": "OPAQUE-SKILL-CONTEXT-6"
+      },
+      {
+        "type": "function_call",
+        "status": "completed",
+        "call_id": "offline-6",
+        "name": "skill_set",
+        "arguments": "{\"operation\":\"deactivate\",\"skill_id\":\"invariant-review\",\"version\":\"1\",\"residency\":\"unchanged\",\"expected_revision\":3,\"reason\":\"Remove execution permission.\"}"
+      }
+    ]
+  },
+  {
+    "id": "fixture-7",
+    "status": "completed",
+    "error": null,
+    "output": [
+      {
+        "type": "function_call",
+        "status": "completed",
+        "call_id": "offline-7",
+        "name": "skill_set",
+        "arguments": "{\"operation\":\"unload\",\"skill_id\":\"invariant-review\",\"version\":\"1\",\"residency\":\"unchanged\",\"expected_revision\":4,\"reason\":\"Physically evict its instructions and definition.\"}"
+      }
+    ]
+  },
+  {
+    "id": "fixture-8",
+    "status": "completed",
+    "error": null,
+    "output": [
+      {
+        "type": "function_call",
+        "status": "completed",
+        "call_id": "offline-8",
+        "name": "inference_set",
+        "arguments": "{\"profile_id\":\"analysis\",\"effort\":\"medium\",\"expected_revision\":5,\"reason\":\"Return without resurrecting the evicted skill.\"}"
+      }
+    ]
+  },
+  {
+    "id": "fixture-9",
+    "status": "completed",
+    "error": null,
+    "output": [
+      {
+        "type": "function_call",
+        "status": "completed",
+        "call_id": "offline-9",
+        "name": "skill_set",
+        "arguments": "{\"operation\":\"load\",\"skill_id\":\"technical-reporting\",\"version\":\"1\",\"residency\":\"transient\",\"expected_revision\":6,\"reason\":\"Prepare the report.\"}"
+      }
+    ]
+  },
+  {
+    "id": "fixture-10",
+    "status": "completed",
+    "error": null,
+    "output": [
+      {
+        "type": "function_call",
+        "status": "completed",
+        "call_id": "offline-10",
+        "name": "list",
+        "arguments": "{\"prefix\":\"src/\",\"after\":\"\"}"
+      }
+    ]
+  },
+  {
+    "id": "fixture-11",
+    "status": "completed",
+    "error": null,
+    "output": [
+      {
+        "type": "function_call",
+        "status": "completed",
+        "call_id": "offline-11",
+        "name": "skill_set",
+        "arguments": "{\"operation\":\"unload\",\"skill_id\":\"technical-reporting\",\"version\":\"1\",\"residency\":\"unchanged\",\"expected_revision\":7,\"reason\":\"Finish the bounded use.\"}"
+      }
+    ]
+  },
+  {
+    "id": "fixture-12",
+    "status": "completed",
+    "error": null,
+    "output": [
+      {
+        "type": "function_call",
+        "status": "completed",
+        "call_id": "offline-12",
+        "name": "ask",
+        "arguments": "{\"question\":\"Should the report focus on observable behavior?\"}"
+      }
+    ]
+  },
+  {
+    "id": "fixture-13",
+    "status": "completed",
+    "error": null,
+    "output": [
+      {
+        "type": "function_call",
+        "status": "completed",
+        "call_id": "offline-13",
+        "name": "report",
+        "arguments": "{\"summary\":\"The fixture entry point has an empty body and performs no external operations.\",\"evidence_index\":0}"
+      }
+    ]
+  }
+]

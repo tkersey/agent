@@ -15,11 +15,17 @@ pub fn run(comptime Types: type, comptime Environment: type, a: std.mem.Allocato
     var effects: u32 = 0;
     var yields: u32 = 0;
     for (0..1024) |_| {
-        const step = try service.pump(a);
+        // Requests and projections are already durably owned by the service.
+        // Keep only this iteration's decoded values; a long adaptive demo must
+        // not retain every historical decoding in the caller's report arena.
+        var iteration = std.heap.ArenaAllocator.init(a);
+        defer iteration.deinit();
+        const frame = iteration.allocator();
+        const step = try service.pump(frame);
         switch (step) {
             .work => |work| {
                 slot.start(work, service.profile.authority, service.profile.environment) catch |err| {
-                    try service.notSent(a, work);
+                    try service.notSent(frame, work);
                     return err;
                 };
                 // Offline demo has no interactive input loop. Use the same
@@ -29,24 +35,24 @@ pub fn run(comptime Types: type, comptime Environment: type, a: std.mem.Allocato
                 try slot.join();
                 defer slot.release() catch unreachable;
                 if (slot.reply) |reply| {
-                    try service.acquire(a, work, reply);
+                    try service.acquire(frame, work, reply);
                 } else {
                     const err = slot.failure orelse error.DemoDidNotComplete;
-                    if (slot.invoked) try service.unknown(a, work) else try service.notSent(a, work);
+                    if (slot.invoked) try service.unknown(frame, work) else try service.notSent(frame, work);
                     return err;
                 }
                 effects += 1;
             },
             .waiting => {
-                var question = (try service.pendingQuestion(a, accepted.receipt.task)) orelse return error.DemoDidNotComplete;
+                var question = (try service.pendingQuestion(frame, accepted.receipt.task)) orelse return error.DemoDidNotComplete;
                 defer question.deinit();
-                const id = try std.fmt.allocPrint(a, "demo-answer-{s}", .{std.fmt.bytesToHex(question.value.id, .lower)});
-                _ = try service.respond(a, id, accepted.receipt.task, question.value.id, question.value.revision, question.value.request_digest, question.value.answer_schema_id.bytes, try values.toJson(Types.Answer, a, Environment.demo_answer));
+                const id = try std.fmt.allocPrint(frame, "demo-answer-{s}", .{std.fmt.bytesToHex(question.value.id, .lower)});
+                _ = try service.respond(frame, id, accepted.receipt.task, question.value.id, question.value.revision, question.value.request_digest, question.value.answer_schema_id.bytes, try values.toJson(Types.Answer, frame, Environment.demo_answer));
                 effects += 1;
             },
             .progressed, .idle => {},
         }
-        var current = try service.task(a, accepted.receipt.task);
+        var current = try service.task(frame, accepted.receipt.task);
         defer current.deinit();
         if (current.value.outcome_kind == .yielded) yields += 1;
         if (!current.value.terminal()) continue;

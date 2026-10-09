@@ -1,6 +1,11 @@
 build.zig
 build_agent4.zig
 build_native.zig
+examples/adaptive-agent/context.zig
+examples/adaptive-agent/definition.zig
+examples/adaptive-agent/environment.zig
+examples/adaptive-agent/types.zig
+examples/adaptive-agent/work.zig
 examples/native-minimal/build.zig
 examples/native-minimal/definition.zig
 examples/native-minimal/environment.zig
@@ -11,6 +16,8 @@ examples/repository-agent/tools.zig
 examples/repository-agent/types.zig
 runtime/inquiry_process_limit.zig
 runtime/inquiry_process_lock.zig
+runtime/native/adaptive_context.zig
+runtime/native/adaptive_responses.zig
 runtime/native/archive.zig
 runtime/native/client.zig
 runtime/native/configuration.zig
@@ -41,6 +48,7 @@ runtime/native/transport.zig
 runtime/native/values.zig
 runtime/native/worker.zig
 runtime/repository_publication_gate.zig
+src/adaptive_controls.zig
 src/admission.zig
 src/agent4.zig
 src/approval.zig
@@ -82,6 +90,9 @@ src/test_root.zig
 src/text_inspection.zig
 src/tools.zig
 src/value_equality.zig
+test/agent4/adaptive_controls.zig
+test/agent4/adaptive_recovery.zig
+test/agent4/adaptive_responses.zig
 test/agent4/admission.zig
 test/agent4/approval_equality.zig
 test/agent4/approval_probe.zig

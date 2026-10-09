@@ -101,6 +101,15 @@ is an optional authoring layer, not a restriction on what Boundary can express.
 The repository includes independent consuming packages built with the public
 Agent and Boundary APIs.
 
+**[Adaptive repository agent](examples/adaptive-agent/README.md).** One authored
+read-only investigation can select its next approved model/effort and load,
+deactivate or physically unload approved skills. Reusable Agent/Boundary
+constructions lower to BPI3, executed and continued by World through the existing
+native environment. The native executable is a reference vehicle; a separate
+JS adaptive backend is not required, and new standalone-distribution work is
+deferred. Deterministic qualification is separate from live API and cache
+measurements.
+
 **[Document assistant](test/consumers/document).** Combines clarification,
 live document reads, model-backed assessment of alternatives, a retained critic
 dialogue, approval, and conditional replacement of a real file. The application
@@ -270,6 +279,7 @@ guarantee. See [the architecture](docs/architecture.md) and
 | [Architecture](docs/architecture.md) | Ownership, typed decisions, continuations, scopes, and protected admission |
 | [Runtime and portable archives](docs/agent4-runtime.md) | Running, saving, resuming, inspecting, cancelling, and embedding agents |
 | [Model invocation contract](docs/model-invocation-v3.md) | Model configuration, offered actions, normalization, and response admission |
+| [Adaptive Responses contract](docs/model-invocation-v6.md) | Frozen policy, model/effort selection, skill residency, context epochs and capture recovery |
 | [Acceptance evidence](conformance/agent4/evidence.md) | Executable capability checks, regular CI coverage and limitations |
 
 [MIT licensed](LICENSE).

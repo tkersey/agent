@@ -247,15 +247,25 @@ jobs:
         if: ${{ matrix.lane == 'native' && needs.source.result == 'success' }}
         run: |
           output="$RUNNER_TEMP/agent-qualification/executables"
-          for application in agent-native-example repository-agent; do
+          for application in agent-native-example repository-agent adaptive-agent; do
             "$output/$application" describe-build > "$output/$application.build.json"
           done
           cp docs/native-single-binary.md "$output/RUNBOOK.md"
           cp examples/repository-agent/README.md "$output/REPOSITORY.md"
+          cp examples/adaptive-agent/README.md "$output/ADAPTIVE.md"
+          mkdir -p "$output/adaptive-example/skills"
+          cp examples/adaptive-agent/adaptive.example.json "$output/adaptive-example/"
+          cp examples/adaptive-agent/skills/*.md "$output/adaptive-example/skills/"
+          cp docs/model-invocation-v6.md "$output/MODEL-V6.md"
+          cp docs/adaptive-responses-acceptance.md "$output/ADAPTIVE-ACCEPTANCE.md"
+          mkdir -p "$output/adaptive-program"
+          cp "$RUNNER_TEMP/agent-qualification/agent4/adaptive-agent/program.bpi3" "$output/adaptive-program/"
+          cp "$RUNNER_TEMP/agent-qualification/agent4/adaptive-agent/application.json" "$output/adaptive-program/"
+          cp "$RUNNER_TEMP/agent-qualification/adaptive-observations.json" "$output/ADAPTIVE-OBSERVATIONS.json"
           cp examples/native-minimal/stdio-client.mts "$output/stdio-client.mts"
           tar -czf "$RUNNER_TEMP/native-reference-$RUNNER_OS-$RUNNER_ARCH-$GITHUB_SHA-$GITHUB_RUN_ATTEMPT.tar.gz" \
-            -C "$output" agent-native-example repository-agent \
-            agent-native-example.build.json repository-agent.build.json RUNBOOK.md REPOSITORY.md stdio-client.mts
+            -C "$output" agent-native-example repository-agent adaptive-agent \
+            agent-native-example.build.json repository-agent.build.json adaptive-agent.build.json RUNBOOK.md REPOSITORY.md ADAPTIVE.md MODEL-V6.md ADAPTIVE-ACCEPTANCE.md ADAPTIVE-OBSERVATIONS.json adaptive-program adaptive-example stdio-client.mts
       - name: Retain executed native applications
         if: ${{ matrix.lane == 'native' && needs.source.result == 'success' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

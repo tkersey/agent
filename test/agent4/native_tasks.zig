@@ -111,7 +111,7 @@ test "durable owner replays admissions and acquired work, binds answers, and con
     };
 }
 
-fn ownerManifest(a: std.mem.Allocator, image: []const u8, identity: [32]u8, application: []const u8) ![]u8 {
+pub fn ownerManifest(a: std.mem.Allocator, image: []const u8, identity: [32]u8, application: []const u8) ![]u8 {
     var image_digest: [32]u8 = undefined;
     var assets_digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(image, &image_digest, .{});

@@ -23,12 +23,7 @@ pub const Environment = struct {
     approved_endpoint: []const u8,
     trust_root: ?[]const u8 = null,
 };
-pub const Raw = struct {
-    status: u16,
-    identity_encoding: bool,
-    request_id: ?contracts.Text(256),
-    body: contracts.Bytes(2 * 1024 * 1024),
-};
+pub const Raw = contracts.CapturedResponse;
 
 fn equal(a: []const u8, b: []const u8) bool {
     return std.mem.eql(u8, a, b);
@@ -228,13 +223,7 @@ pub fn Adapter(comptime P: type) type {
         pub fn acquire(ctx: registry.Context, rendered: []const u8) !registry.Acquisition {
             ctx.checkCancellation() catch |err| return .{ .definitely_not_sent = err };
             const config = settings(ctx.allocator, ctx.profile) catch |err| return .{ .definitely_not_sent = err };
-            const environment: *const Environment = @ptrCast(@alignCast(ctx.environment orelse return .{ .definitely_not_sent = error.MissingCredential }));
-            if (!equal(config.endpoint.bytes, environment.approved_endpoint) or !ctx.authority.inference) return .{ .definitely_not_sent = error.Denied };
-            return switch (https.post(ctx.allocator, ctx.io, .{ .endpoint = config.endpoint.bytes, .token = environment.token, .trust_root = environment.trust_root, .request_limit = config.request_bytes, .response_limit = config.response_bytes, .timeout_ms = config.timeout_ms }, rendered)) {
-                .definitely_not_sent => |err| .{ .definitely_not_sent = err },
-                .unknown => |err| .{ .unknown = err },
-                .captured => |raw| .{ .captured = try contracts.encodeOwned(Raw, ctx.allocator, .{ .status = raw.status, .identity_encoding = raw.identity_encoding, .request_id = if (raw.request_id) |id| .{ .bytes = id } else null, .body = .{ .bytes = raw.body } }) },
-            };
+            return acquireSettings(ctx, config, rendered);
         }
 
         const Interpreted = struct {
@@ -277,7 +266,7 @@ pub fn Adapter(comptime P: type) type {
             const output = field(body, "output") catch return unsupported(.unsupported_status);
             if (output != .array) return unsupported(.unsupported_status);
             if (output.array.items.len > P.representation.maximum_output_items) return unsupported(.normalization_limit);
-            const normalized = normalize(ctx.allocator, request, output) catch |err| return unsupported(if (err == error.Capacity) .normalization_limit else if (err == error.MixedRefusal) .mixed_refusal else .unsupported_output_item);
+            const normalized = normalize(ctx.allocator, request.invocation, output) catch |err| return unsupported(if (err == error.Capacity) .normalization_limit else if (err == error.MixedRefusal) .mixed_refusal else .unsupported_output_item);
             var input = try history(ctx, request, config);
             for (output.array.items) |item| try input.array.append(try replayItem(ctx.allocator, item));
             _ = replayCalls(ctx.allocator, input) catch return unsupported(.unsupported_output_item);
@@ -337,7 +326,9 @@ pub fn Adapter(comptime P: type) type {
             return .{ .invalid = .unknown_field };
         }
 
-        fn normalize(a: std.mem.Allocator, request: P.ReferenceRequest, output: json.Value) !P.Result {
+        /// Shared output grammar and exact argument codec. Version-specific
+        /// policy and context admission stay with their respective adapters.
+        pub fn normalize(a: std.mem.Allocator, invocation: P.Request, output: json.Value) !P.Result {
             var items: std.ArrayList(P.OutputItem) = .empty;
             var calls: usize = 0;
             var refusal: ?[]const u8 = null;
@@ -351,7 +342,7 @@ pub fn Adapter(comptime P: type) type {
                     const args = try text(item, "arguments");
                     if (call_id.len == 0 or call_id.len > P.representation.call_id_bytes or name.len > P.ToolName.max_length.? or args.len > P.representation.arguments_json_bytes) return error.Capacity;
                     var ordinal: u32 = std.math.maxInt(u32);
-                    for (request.invocation.tools.items) |tool| if (equal(tool.name.bytes, name)) {
+                    for (invocation.tools.items) |tool| if (equal(tool.name.bytes, name)) {
                         ordinal = tool.action_ordinal;
                     };
                     try items.append(a, .{ .function_call = .{ .call_id = .{ .bytes = call_id }, .name = .{ .bytes = name }, .arguments_json = .{ .bytes = args }, .tool_ordinal_claim = ordinal, .decoded_action = if (ordinal == std.math.maxInt(u32)) .{ .invalid = .unknown_field } else try decodeAction(a, name, args) } });
@@ -406,6 +397,20 @@ pub fn Adapter(comptime P: type) type {
     };
 }
 
+/// Transport only: callers derive these settings from their frozen policy and
+/// exact prepared occurrence. This never changes Context.profile or chooses a
+/// fallback model after ambiguous delivery.
+pub fn acquireSettings(ctx: registry.Context, config: Settings, rendered: []const u8) !registry.Acquisition {
+    ctx.checkCancellation() catch |err| return .{ .definitely_not_sent = err };
+    const environment: *const Environment = @ptrCast(@alignCast(ctx.environment orelse return .{ .definitely_not_sent = error.MissingCredential }));
+    if (!equal(config.endpoint.bytes, environment.approved_endpoint) or !ctx.authority.inference or ctx.authority.revoked or !ctx.authority.disclosure) return .{ .definitely_not_sent = error.Denied };
+    return switch (https.post(ctx.allocator, ctx.io, .{ .endpoint = config.endpoint.bytes, .token = environment.token, .trust_root = environment.trust_root, .request_limit = config.request_bytes, .response_limit = config.response_bytes, .timeout_ms = config.timeout_ms }, rendered)) {
+        .definitely_not_sent => |err| .{ .definitely_not_sent = err },
+        .unknown => |err| .{ .unknown = err },
+        .captured => |raw| .{ .captured = try contracts.encodeOwned(Raw, ctx.allocator, .{ .status = raw.status, .identity_encoding = raw.identity_encoding, .request_id = if (raw.request_id) |id| .{ .bytes = id } else null, .body = .{ .bytes = raw.body } }) },
+    };
+}
+
 fn count(value: json.Value) !u64 {
     if (value != .number_string) return error.UnsupportedResponse;
     return json.numberInteger(u64, value.number_string);
@@ -413,7 +418,7 @@ fn count(value: json.Value) !u64 {
 
 /// Closed output-to-input grammar. Only these admitted item fields survive;
 /// the response envelope is never appended as input. Opaque bytes stay opaque.
-fn replayItem(a: std.mem.Allocator, item: json.Value) !json.Value {
+pub fn replayItem(a: std.mem.Allocator, item: json.Value) !json.Value {
     _ = a;
     if (is(item, "type", "function_call")) {
         try only(item, &.{ "type", "id", "call_id", "name", "arguments", "status" });

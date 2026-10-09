@@ -120,6 +120,20 @@ pub fn write(comptime definition: type, comptime types: type, init: std.process.
     };
     var writer = std.Io.Writer.Allocating.init(a);
     try std.json.Stringify.value(metadata, .{}, &writer.writer);
+    if (comptime @hasDecl(types, "support_types")) {
+        var value = try std.json.parseFromSliceLeaky(std.json.Value, a, writer.written(), .{ .allocate = .alloc_always });
+        var support: std.json.Value = .{ .object = .empty };
+        inline for (types.support_types) |entry| {
+            const wire = try schemaWire(entry.T, a);
+            var item: std.json.Value = .{ .object = .empty };
+            try item.object.put(a, "wire_sha256", .{ .string = try digest(a, wire) });
+            try item.object.put(a, "wire_base64url", .{ .string = try base64(a, wire) });
+            try support.object.put(a, entry.name, item);
+        }
+        try value.object.put(a, "support", support);
+        writer.clearRetainingCapacity();
+        try std.json.Stringify.value(value, .{}, &writer.writer);
+    }
     try std.Io.Dir.cwd().writeFile(init.io, .{ .sub_path = image_path, .data = image });
     try std.Io.Dir.cwd().writeFile(init.io, .{ .sub_path = application_path, .data = writer.written() });
 }

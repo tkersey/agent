@@ -7,6 +7,27 @@ const wire = data.wire;
 /// Pure JSON projections share this module identity with the ordinary codecs.
 pub const json = @import("model_json.zig");
 
+/// Immutable HTTP capture retained separately from model result projections.
+pub const CapturedResponse = struct {
+    status: u16,
+    identity_encoding: bool,
+    request_id: ?Text(256),
+    body: Bytes(2 * 1024 * 1024),
+};
+
+/// Frozen read-only repository bytes; validation and capture belong to each
+/// environment, while the record itself has one shared wire definition.
+pub const RepositorySnapshotFile = struct {
+    path: Text(256),
+    sha256: [32]u8,
+    contents: Bytes(256 * 1024),
+};
+pub const RepositorySnapshot = struct {
+    version: u32,
+    excluded_entries: u32,
+    files: Vector(RepositorySnapshotFile, 512),
+};
+
 /// One ordinary inbox result shared by authoring and native environments.
 /// The message identity and value stay bound across saved-reply recovery.
 pub const inbox_semantic_identity = "agent.input.inbox.v1";

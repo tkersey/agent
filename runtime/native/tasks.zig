@@ -934,7 +934,11 @@ pub fn Service(comptime Types: type) type {
                     if (prepared) |body| if (body.len > 2 * 1024 * 1024) return self.blocked(a, initial, .capacity);
                     const charged_bytes = if (prepared) |body| body.len else request_bytes.len;
                     if (entry.declaration.inference) {
-                        if (value.inference_attempts >= 16 or value.inference_request_bytes + charged_bytes > 8 * 1024 * 1024) return self.blocked(a, initial, .capacity);
+                        const maximum = if (entry.declaration.inference_attempt_limit) |limit|
+                            @min(@as(u32, 16), limit(preparation.allocator(), self.profile.bytes) catch return self.blocked(a, initial, .incompatible_profile))
+                        else
+                            16;
+                        if (value.inference_attempts >= maximum or value.inference_request_bytes + charged_bytes > 8 * 1024 * 1024) return self.blocked(a, initial, .capacity);
                         value.inference_attempts += 1;
                         value.inference_request_bytes += charged_bytes;
                     }
@@ -1416,6 +1420,10 @@ pub fn Service(comptime Types: type) type {
                 if (entry.declaration.kind != .leaf or !same(&request.value.request_identity, &saved.value.request) or
                     !std.meta.eql(attempt.value.request, saved.value.request_object) or !std.meta.eql(attempt.value.profile, value.profile) or !same(attempt.value.capability.bytes, entry.declaration.identity) or
                     attempt.value.inference != entry.declaration.inference or (attempt.value.prepared != null) != (entry.declaration.capture != null)) return error.InvalidArchive;
+                if (entry.declaration.inference_attempt_limit) |limit| {
+                    const profile = try self.store().object(temporary, value.profile, 256 * 1024);
+                    if (value.inference_attempts > @min(@as(u32, 16), try limit(temporary, profile))) return error.InvalidArchive;
+                }
             }
             var output_tokens: u64 = 0;
             for (records) |row| {

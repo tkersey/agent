@@ -8,16 +8,8 @@ const c = @import("native_c");
 pub const maximum_files = 512;
 pub const maximum_file_bytes = 256 * 1024;
 pub const maximum_snapshot_bytes = storage.maximum_object_bytes;
-pub const File = struct {
-    path: contracts.Text(256),
-    sha256: [32]u8,
-    contents: contracts.Bytes(maximum_file_bytes),
-};
-pub const Record = struct {
-    version: u32,
-    excluded_entries: u32,
-    files: contracts.Vector(File, maximum_files),
-};
+pub const File = contracts.RepositorySnapshotFile;
+pub const Record = contracts.RepositorySnapshot;
 
 pub fn pathAllowed(path: []const u8) bool {
     if (path.len == 0 or path.len > 256 or !std.unicode.utf8ValidateSlice(path)) return false;
@@ -210,4 +202,63 @@ test "capture freezes bytes, reports exclusions and refuses repository symlinks"
     try std.testing.expectEqualStrings("old\n", snapshot.get("z.zig").?.contents.bytes);
     try temporary.dir.symLink(io, "z.zig", "link.zig", .{});
     try std.testing.expectError(error.UnsupportedSnapshotEntry, capture(a, io, path[0..length]));
+}
+
+/// Bounded snapshot queries shared by fixed and adaptive applications.
+/// Application-owned records keep their published schema identities.
+pub fn Tools(comptime t: type) type {
+    return struct {
+        pub fn list(a: std.mem.Allocator, snapshot: Snapshot, request: t.ListRequest) !t.ListObservation {
+            // These are bounded lexical selectors over admitted snapshot paths, not
+            // filesystem paths. A directory prefix such as "src/" is valid; a prefix
+            // that matches no admitted path simply produces an empty page.
+            var entries: std.ArrayList(t.ListEntry) = .empty;
+            var truncated = false;
+            for (snapshot.files()) |file| {
+                if (!std.mem.startsWith(u8, file.path.bytes, request.prefix.bytes) or
+                    !std.mem.lessThan(u8, request.after.bytes, file.path.bytes)) continue;
+                if (entries.items.len == 32) {
+                    truncated = true;
+                    break;
+                }
+                try entries.append(a, .{ .path = file.path, .bytes = file.contents.bytes.len });
+            }
+            const value: t.Listing = .{
+                .entries = .{ .items = entries.items },
+                .truncated = truncated,
+                .next = .{ .bytes = if (truncated) entries.items[entries.items.len - 1].path.bytes else "" },
+            };
+            return .{ .value = value, .model_text = try text(t.Listing, a, value) };
+        }
+
+        pub fn read(a: std.mem.Allocator, snapshot: Snapshot, request: t.ReadRequest) !t.ReadObservation {
+            const value: t.ReadResult = value: {
+                if (!pathAllowed(request.path.bytes)) break :value .{ .invalid = .{ .bytes = "Invalid logical snapshot path." } };
+                const file = snapshot.get(request.path.bytes) orelse break :value .{ .missing = request.path };
+                if (request.maximum == 0 or request.maximum > 4096 or request.start > file.contents.bytes.len)
+                    break :value .{ .invalid = .{ .bytes = "Read requires maximum 1..4096 and an offset within the file." } };
+                const start: usize = @intCast(request.start);
+                const end = start + @min(@as(usize, request.maximum), file.contents.bytes.len - start);
+                const content = file.contents.bytes[start..end];
+                if (!std.unicode.utf8ValidateSlice(content)) break :value .{ .invalid = .{ .bytes = "Selected byte window is not complete UTF-8; adjust its boundaries." } };
+                const hex = std.fmt.bytesToHex(file.sha256, .lower);
+                break :value .{ .found = .{
+                    .snapshot = snapshot.identity,
+                    .path = file.path,
+                    .sha256 = .{ .bytes = try a.dupe(u8, &hex) },
+                    .start = start,
+                    .end = end,
+                    .file_bytes = file.contents.bytes.len,
+                    .content = .{ .bytes = content },
+                } };
+            };
+            return .{ .value = value, .model_text = try text(t.ReadResult, a, value) };
+        }
+
+        fn text(comptime T: type, a: std.mem.Allocator, value: T) !t.P.ResultText {
+            const bytes = try @import("json.zig").canonical(a, try @import("values.zig").toJson(T, a, value));
+            if (bytes.len > t.P.ResultText.max_length.?) return error.Capacity;
+            return .{ .bytes = bytes };
+        }
+    };
 }

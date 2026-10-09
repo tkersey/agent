@@ -23,12 +23,7 @@ pub const Environment = struct {
     approved_endpoint: []const u8,
     trust_root: ?[]const u8 = null,
 };
-pub const Raw = struct {
-    status: u16,
-    identity_encoding: bool,
-    request_id: ?contracts.Text(256),
-    body: contracts.Bytes(2 * 1024 * 1024),
-};
+pub const Raw = contracts.CapturedResponse;
 
 fn equal(a: []const u8, b: []const u8) bool {
     return std.mem.eql(u8, a, b);

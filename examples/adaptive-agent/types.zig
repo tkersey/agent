@@ -163,7 +163,9 @@ pub const support_types = .{
     .{ .name = "Action", .T = Action },
     .{ .name = "Invocation", .T = P.Request },
     .{ .name = "Tools", .T = P.Tools },
+    .{ .name = "NormalizationLimits", .T = model.NormalizationLimits },
     .{ .name = "ModelResult", .T = P.Result },
+    .{ .name = "CapturedResponse", .T = model.CapturedResponse },
     .{ .name = "AdaptiveRequest", .T = P.AdaptiveRequest },
     .{ .name = "AdaptiveResult", .T = P.AdaptiveResult },
     .{ .name = "AdaptiveContext", .T = P.AdaptiveContext },
@@ -177,4 +179,7 @@ pub const support_types = .{
     .{ .name = "Inbox", .T = agent.inbox.Profile(Message).Reply },
 };
 
-pub const support_values = .{.{ .name = "tools", .T = P.Tools, .value = P.allDeclarations() }};
+pub const support_values = .{
+    .{ .name = "tools", .T = P.Tools, .value = P.allDeclarations() },
+    .{ .name = "normalization_limits", .T = model.NormalizationLimits, .value = P.normalizationLimits() },
+};

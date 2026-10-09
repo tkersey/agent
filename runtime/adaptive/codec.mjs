@@ -69,6 +69,38 @@ function convert(shape, value, toWire) {
   throw new Error('unsupported generated shape');
 }
 
+function client(shape, value, fromJson) {
+  if (typeof shape === 'string') {
+    if (shape === 'unit') { if (fromJson) { exact(value, []); return null; } return {}; }
+    if (/^[iu]64$/.test(shape)) {
+      if (fromJson) { assert(typeof value === 'string' && /^-?(0|[1-9][0-9]*)$/.test(value)); return BigInt(value); }
+      return String(value);
+    }
+    if (/^[iu]\d+$/.test(shape) && fromJson) assert(typeof value === 'number' && Number.isSafeInteger(value));
+    return value;
+  }
+  const kind = Object.keys(shape)[0], body = shape[kind];
+  if (kind === 'bytes') {
+    if (!fromJson) return Buffer.from(value).toString('base64url');
+    assert.equal(typeof value, 'string'); const bytes = Buffer.from(value, 'base64url');
+    assert.equal(bytes.toString('base64url'), value); return bytes;
+  }
+  if (kind === 'text' || kind === 'enum') return value;
+  if (kind === 'array' || kind === 'vector') { assert(Array.isArray(value)); return value.map(child => client(body[1], child, fromJson)); }
+  if (kind === 'record') { exact(value, body.map(([name]) => name)); return Object.fromEntries(body.map(([name, child]) => [name, client(child, value[name], fromJson)])); }
+  if (kind === 'optional') {
+    if (value === null) return null;
+    const tagged = body === 'unit' || (body && typeof body === 'object' && Object.hasOwn(body, 'optional'));
+    if (tagged) { exact(value, ['tag', 'value']); assert.equal(value.tag, 'some'); return {tag: 'some', value: client(body, value.value, fromJson)}; }
+    return client(body, value, fromJson);
+  }
+  if (kind === 'union') {
+    exact(value, ['tag', 'value']); const member = body.find(([name]) => name === value.tag); assert(member);
+    return {tag: value.tag, value: client(member[1], value.value, fromJson)};
+  }
+  assert.fail('unsupported client layout');
+}
+
 export function codecs(application) {
   assert(application?.support && typeof application.support === 'object', 'adaptive schema support missing');
   const entries = new Map();
@@ -87,5 +119,21 @@ export function codecs(application) {
     encode(name, value) { const {descriptor, shape} = entry(name); return Buffer.from(encodeValue(descriptor, convert(shape, value, true))); },
     decode(name, bytes) { const {descriptor, shape} = entry(name); return convert(shape, decodeValue(descriptor, bytes), false); },
     schema(name) { return Buffer.from(entry(name).wire); },
+    fromClient(name, value) {
+      const {descriptor, shape} = entry(name);
+      return convert(shape, decodeValue(descriptor, encodeValue(descriptor, convert(shape, client(shape, value, true), true))), false);
+    },
+    toClient(name, value) {
+      const {descriptor, shape} = entry(name);
+      return client(shape, convert(shape, decodeValue(descriptor, encodeValue(descriptor, convert(shape, value, true))), false), false);
+    },
+    constant(name, type) {
+      const source = application.support_values?.[name];
+      assert.equal(typeof source, 'string', `missing constant ${name}`);
+      const bytes = Buffer.from(source, 'base64url');
+      assert.equal(bytes.toString('base64url'), source);
+      const {descriptor, shape} = entry(type);
+      return convert(shape, decodeValue(descriptor, bytes), false);
+    },
   });
 }

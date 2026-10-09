@@ -87,6 +87,9 @@ pub const AdaptiveUsage = struct {
     cache_write_tokens: ?u64,
     reasoning_tokens: ?u64,
 };
+/// Captured HTTP response, before provider interpretation. Both environments
+/// retain these bytes separately from their bounded model result projection.
+pub const CapturedResponse = contracts.CapturedResponse;
 /// Immutable environmental data, not an authorization token. The environment
 /// checks every binding and the full closure before rendering another request.
 /// Sequence bounds describe the half-open range of ordered replay items.

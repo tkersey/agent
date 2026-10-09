@@ -206,7 +206,7 @@ export class AdaptiveRunner {
     const result = {task_id: task.task_id, kind: task.kind, revision: task.revision, occurrence: occurrence?.status ?? null,
       model_attempts: task.attempts, observed_output_tokens: task.output_tokens, calls_without_output_usage: task.missing_output_usage,
       queued_messages: task.inbox.length, consumed_messages: task.consumed_messages.length, not_consumed_messages: task.not_consumed_messages?.length ?? 0, cancellation_requested: task.cancel !== null,
-      storage: this.#journal.metrics(), live_provider: !this.#ctx.offline};
+      storage: this.#journal.metrics(), provider_mode: this.#ctx.mode};
     if (occurrence?.status === 'waiting') result.question = {id: occurrence.id, request_digest: occurrence.request,
       value: this.#ctx.codec.toClient('Question', this.#ctx.codec.decode('Question', this.#journal.object(occurrence.question)))};
     if (occurrence?.reason) result.blocked = occurrence.reason;

@@ -42,15 +42,22 @@ export function measureAdaptive(ctx, rows, resources = {}) {
       hard_eviction: name === 'eager' ? 'fails by retaining all approved skill bodies' : name === 'projected' ? 'qualified by task trace' : 'body exclusion only; altered prompt behavior unqualified',
       cache_hits: null, billed_cost: null};
   });
-  const transientIndex = rows.findIndex(row => ctx.codec.decode('AdaptivePrepared', row.prepared).request.plan.skills.some(skill => skill.residency === 'transient' && skill.active));
-  assert(transientIndex >= 0 && transientIndex < rows.length - 1);
+  const transientIndices = rows.flatMap((row, index) => ctx.codec.decode('AdaptivePrepared', row.prepared).request.plan.skills.some(skill => skill.residency === 'transient' && skill.active) ? [index] : []);
+  assert(transientIndices.length >= 2 && transientIndices.at(-1) < rows.length - 1, 'repeat transient use before physical unload');
+  const transientIndex = transientIndices[0];
   const transient = layouts.projected[transientIndex], active = ctx.codec.decode('AdaptivePrepared', rows[transientIndex].prepared).request.plan.skills.find(skill => skill.residency === 'transient' && skill.active);
   const transientBody = bodies.find(skill => skill.id === active.skill_id).body;
   const transientPosition = transient.input.findIndex(item => item.content?.some(part => part.text === transientBody));
   assert(transientPosition >= 0);
-  assert(markers(transient).every(path => Number(path.match(/^input\[(\d+)\]/)[1]) < transientPosition), 'transient body follows every selected write boundary');
+  for (const index of transientIndices) {
+    const body = layouts.projected[index];
+    const position = body.input.findIndex(item => item.content?.some(part => part.text === transientBody));
+    assert(position >= 0 && markers(body).every(path => Number(path.match(/^input\[(\d+)\]/)[1]) < position), 'transient body follows every selected write boundary');
+  }
+  assert(calls[transientIndices[1]].local_visible_prefix_bytes < visibleProjection(layouts.projected[transientIndex]).length,
+    'reinjecting transient material after new history does not preserve the old whole-request prefix');
   const containsText = value => typeof value === 'string' ? value.includes(transientBody) : value && typeof value === 'object' ? Object.values(value).some(containsText) : false;
-  assert(!containsText(layouts.projected[transientIndex + 1]), 'next inference physically excludes the unloaded transient body');
+  assert(!containsText(layouts.projected[transientIndices.at(-1) + 1]), 'next inference physically excludes the unloaded transient body');
   const report = {format: 'adaptive-observations/v1', source_head: process.env.GITHUB_SHA ?? null,
     qualification: 'controlled offline workload; no live provider or cache measurements',
     comparison_scope: 'same recorded provider/work/control workload and callable sets; alternative prompt layouts are rendering counterfactuals, not proof of equal model behavior',

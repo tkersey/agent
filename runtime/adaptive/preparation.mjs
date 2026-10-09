@@ -131,6 +131,7 @@ export function prepare(ctx, bytes) {
     else if (/unknown inference profile/.test(error.message)) rejection = 'unknown_profile';
     else if (/unknown or duplicate skill/.test(error.message)) rejection = 'unknown_skill';
     else if (/unsupported effort/.test(error.message)) rejection = 'unsupported_effort';
+    else if (error.message === 'profile does not support added definitions') rejection = 'invalid_operation';
     else throw error;
     product = {result: {tag: 'rejected', value: rejection}, objects: []};
   }

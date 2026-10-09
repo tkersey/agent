@@ -40,8 +40,8 @@ try {
   const result = invoke('demo', '--offline', '--state-dir', join(app.data, 'adaptive state'));
   assert.equal(result.mode, 'offline-demo');
   assert.equal(result.output.disposition, 'report');
-  assert.equal(result.output.model_calls, 13);
-  assert.equal(result.output.work_calls, 4);
+  assert.equal(result.output.model_calls, 14);
+  assert.equal(result.output.work_calls, 5);
   assert.equal(result.output.control.selection.profile_id, 'analysis');
   assert.equal(result.output.control.selection.effective_effort, 'medium');
   assert.equal(result.output.control.selection.control_revision, '8');

@@ -4,10 +4,11 @@ This example runs one authored computation on the existing native host. The
 model can call `inference_set` and `skill_set`; the host admits their proposed
 next request before the computation commits the new control revision.
 
-The implementation is under qualification. The native offline scenario is a
-recorded provider fixture, not evidence of live API acceptance or cache hits.
-The Node/WASM counterpart and package integration are under qualification. The
-complete acceptance report remains pending.
+The native and Node/WASM paths have deterministic Linux reference checks. The
+offline scenario uses recorded provider replies; live API feature acceptance
+and cache reuse remain unqualified. The
+[acceptance map](../../docs/adaptive-responses-acceptance.md) identifies exact
+subjects, proof surfaces and limits.
 
 ## Native use
 
@@ -23,8 +24,16 @@ zig build adaptive-agent -Doptimize=safe \
 `demo --offline` uses embedded source and recorded function-call replies. It
 exercises a resident skill, its independently granted inspection tool, effort
 and model changes, deactivation, physical unload, a return to the original
-profile, a transient skill, a question, and a report. Production requests are
+profile, repeated transient use, a question, and a report. Production requests are
 ordinary task inputs; production action selection does not use this script.
+The extracted native bundle can run `./adaptive-agent demo --offline
+--state-dir ./adaptive-demo` directly.
+
+For a downstream build, pass these `definition.zig`, `types.zig`, and
+`environment.zig` paths to the existing `build.zig.addNativeSystem` helper.
+Use its `.application.emitted` option when reusing the exact image/assets/types;
+the repository target does this through the helper's shared module owner.
+The public downstream recipe remains `examples/native-minimal`.
 
 A configured launch uses `validate --config FILE`, then the existing
 `run --config FILE --input-json '{"task":"…"}' --state-dir PATH` or
@@ -68,6 +77,13 @@ unknown delivery. Neither format implies automatic native-to-JS state import.
 
 ## Frozen configuration
 
+[`adaptive.example.json`](adaptive.example.json) is a disabled-by-default launch
+template, not a model approval. Replace both model placeholders with approved
+Responses IDs, check their declared feature flags, and select your read-only
+snapshot. Paths are relative to the launch working directory. The template and
+skill files are included in both distributions. Configuration alone never
+authorizes inference; the launch flag and explicit credential file are separate.
+
 Configuration has these fields:
 
 - `workspace`, `snapshot_root`, `endpoint`, `audience`;
@@ -92,6 +108,7 @@ No skill executes scripts or installs code. Markdown is admitted before task
 creation (32 KiB per body, 128 KiB total). The shared catalog format allows 32
 entries; this deployment admits 14, leaving two of the native host's 16 frozen
 resource slots for snapshot and catalog. At most four skills may be active.
+The complete frozen resource set, including the snapshot, must fit 16 MiB.
 Context and continuation limits can reject a
 proposed transition before it is acknowledged.
 The task admits four answers and follow-ups in total. At that limit it stops

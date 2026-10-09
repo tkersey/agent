@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import {decodeModelInvocation, normalizeOpenAIResponses} from '../model.mjs';
+import {normalizeAdaptiveOutput} from './responses.mjs';
 import {object, digest, same} from './admission.mjs';
 import {open as openContext} from './context.mjs';
-import {canonical} from './json.mjs';
+import {canonical, parse} from './json.mjs';
 import {list, read} from './snapshot.mjs';
 
 export const reference = bytes => ({digest: digest(bytes), bytes: bytes.length});
@@ -29,8 +29,7 @@ export function capturedCall(ctx, ref, callId) {
   const context = openContext(ctx, ref, ctx.policy.audience);
   const prepared = ctx.codec.decode('AdaptivePrepared', object(ctx, context.source_request, 2 * 1024 * 1024));
   const raw = ctx.codec.decode('CapturedResponse', object(ctx, context.source_capture, 4 * 1024 * 1024));
-  const invocation = decodeModelInvocation(ctx.codec.encode('Invocation', prepared.request.invocation));
-  const normalized = ctx.codec.decode('ModelResult', normalizeOpenAIResponses(raw.body, invocation.normalizationLimits, invocation.tools));
+  const normalized = normalizeAdaptiveOutput(ctx.codec, prepared.request.invocation, parse(raw.body, 512 * 1024).output);
   assert.equal(normalized.tag, 'output', 'invalid source capture');
   const calls = normalized.value.items.filter(item => item.tag === 'function_call' && item.value.call_id === callId);
   assert.equal(calls.length, 1, 'missing or duplicate captured call');

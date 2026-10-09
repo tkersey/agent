@@ -307,6 +307,7 @@ fn prepare(ctx: native.registry.ProjectionContext, bytes: []const u8) ![]u8 {
         error.UnknownSkill, error.InvalidSkill => Product{ .result = .{ .rejected = .unknown_skill }, .objects = .{ .items = &.{} } },
         error.UnknownInferenceProfile => Product{ .result = .{ .rejected = .unknown_profile }, .objects = .{ .items = &.{} } },
         error.UnsupportedEffort => Product{ .result = .{ .rejected = .unsupported_effort }, .objects = .{ .items = &.{} } },
+        error.IncompatibleProfile => Product{ .result = .{ .rejected = .invalid_operation }, .objects = .{ .items = &.{} } },
         else => return err,
     };
     return contracts.encodeOwned(Product, ctx.allocator, product);

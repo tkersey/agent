@@ -54,6 +54,20 @@ const Config = t.Configuration;
 fn hex(a: std.mem.Allocator, bytes: []const u8) ![]const u8 {
     return a.dupe(u8, &std.fmt.bytesToHex(digest(bytes), .lower));
 }
+fn containsCredential(value: native.json.Value, token: []const u8) bool {
+    return switch (value) {
+        .string => |text| std.mem.indexOf(u8, text, token) != null,
+        .array => |items| blk: {
+            for (items.items) |item| if (containsCredential(item, token)) break :blk true;
+            break :blk false;
+        },
+        .object => |fields| blk: {
+            for (fields.keys(), fields.values()) |key, child| if (std.mem.indexOf(u8, key, token) != null or containsCredential(child, token)) break :blk true;
+            break :blk false;
+        },
+        else => false,
+    };
+}
 pub fn taskInput(a: std.mem.Allocator, text: []const u8) !t.Input {
     if (text.len > 2048 or !std.unicode.utf8ValidateSlice(text)) return error.InvalidParams;
     return .{ .task = .{ .bytes = try a.dupe(u8, text) } };
@@ -154,6 +168,11 @@ pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration
         } else if (!std.mem.eql(u8, policy.endpoint.bytes, "https://api.openai.com/v1/responses")) return error.InvalidConfiguration;
     }
     if (resources.items.len < 2) return error.MissingArtifact;
+    var resource_bytes: usize = 0;
+    for (resources.items) |bytes| {
+        resource_bytes = try std.math.add(usize, resource_bytes, bytes.len);
+        if (resource_bytes > 16 * 1024 * 1024) return error.Capacity;
+    }
     const snapshot_ref = try native.values.fromJson(native.registry.ObjectReference, a, native.json.get(root, "snapshot") orelse return error.InvalidConfiguration);
     if (snapshot_ref.bytes != resources.items[0].len or !std.mem.eql(u8, &snapshot_ref.digest, &digest(resources.items[0]))) return error.InvalidSnapshot;
     const catalog_bytes = resources.items[resources.items.len - 1];
@@ -182,7 +201,12 @@ pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration
     if (options.credential_path) |path| token = std.mem.trim(u8, try native.configuration.readFile(a, io, path, 16 * 1024, true), "\r\n");
     const trust_root = if (options.trust_root_path) |path| try native.configuration.readFile(a, io, path, 256 * 1024, false) else null;
     // Frozen bodies as well as the snapshot must not embed the transport secret.
-    if (options.credential_path != null and token.len != 0) for (resources.items) |resource| if (std.mem.indexOf(u8, resource, token) != null) return error.UnsafeCredentialFile;
+    if (options.credential_path != null) {
+        if (token.len == 0 or token.len > 4096) return error.InvalidCredential;
+        for (token) |byte| if (byte <= 0x20 or byte >= 0x7f) return error.InvalidCredential;
+        if (containsCredential(root, token)) return error.UnsafeCredentialFile;
+        for (resources.items) |resource| if (std.mem.indexOf(u8, resource, token) != null) return error.UnsafeCredentialFile;
+    }
     const owner = try a.create(State);
     owner.* = .{ .snapshot = try native.repository.Snapshot.openBorrowed(a, resources.items[0]), .profile_identity = digest(profile_bytes), .policy = policy, .catalog = catalog.value, .initial = .{ .selection = .{ .profile_id = initial.id, .profile_digest = try Admission.profileDigest(a, initial), .effective_effort = effort, .control_revision = 0 }, .top_effort = effort, .epoch = 0, .epoch_reason = .initial, .eviction_generation = 0, .skills = .{ .items = &.{} } }, .provider = .{ .token = token, .approved_endpoint = policy.endpoint.bytes, .trust_root = trust_root }, .offline = options.offline };
     // Fail admission before dispatch if catalog metadata cannot fit core input.

@@ -87,6 +87,7 @@ export function configure(app, options, saved = null) {
     else assert.equal(policy.endpoint, 'https://api.openai.com/v1/responses');
   }
   assert(resources.length >= 2 && same(root.snapshot.digest, digest(resources[0])) && BigInt(root.snapshot.bytes) === BigInt(resources[0].length));
+  assert(resources.reduce((total, bytes) => total + bytes.length, 0) <= 16 * 1024 * 1024, 'frozen resource byte capacity');
   const objects = new Map(resources.map(bytes => [hash(bytes), bytes]));
   const object = ref => { const bytes = objects.get(Buffer.from(ref.digest).toString('hex')); assert(bytes, 'missing frozen resource'); return bytes; };
   const catalog = admitCatalog({codec: app.codec, object}, policy);
@@ -105,11 +106,14 @@ export function configure(app, options, saved = null) {
   if (options.credential) token = utf8(readFile(options.credential, 16 * 1024, true)).replace(/^[\r\n]+|[\r\n]+$/g, '');
   if (options.credential) {
     assert(/^[\x21-\x7e]{1,4096}$/.test(token), 'invalid explicit credential');
+    const contains = value => typeof value === 'string' ? value.includes(token) : value && typeof value === 'object' ?
+      Object.entries(value).some(([key, child]) => key.includes(token) || contains(child)) : false;
+    assert(!contains(root), 'credential embedded in task profile');
     assert([...resources, profile].every(bytes => !Buffer.from(bytes).includes(token)), 'credential embedded in task resources');
   }
   const testTrustRoot = options.testTrustRoot ? readFile(options.testTrustRoot, 64 * 1024) : undefined;
   return {codec: app.codec, tools: app.tools, profile, resources, policy, catalog, snapshot: snapshots.open(app.codec, resources[0]), initial, instructions, tenant: 'local',
-    object, offline: !!options.offline, provider: {enabled: !!options.authorizeInference, token, endpoint: policy.endpoint, testTrustRoot},
+    object, mode, offline: !!options.offline, provider: {enabled: !!options.authorizeInference, token, endpoint: policy.endpoint, testTrustRoot},
     fixture: options.offline ? parseJsonStrict(utf8(app.resources.get('adaptive-agent.offline-responses'))) : null};
 }
 

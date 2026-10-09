@@ -93,6 +93,13 @@ export async function verifyAdaptiveNative({app, applicationPath, worldRuntime})
   const started = performance.now();
   try {
     invoke('validate', '--config', configPath); assert.equal(requests.length, 0);
+    const credential = join(app.data, 'synthetic-private-credential'), leakedConfig = join(app.data, 'credential-profile.json');
+    await writeFile(credential, 'qualification-only\n', {mode: 0o600});
+    await writeFile(leakedConfig, JSON.stringify({...config, endpoint: 'https://api.openai.com/v1/responses', workspace: 'qualification-only'}));
+    const leaked = spawnSync(app.command, ['validate', '--config', leakedConfig, '--credential-file', credential],
+      {cwd: app.data, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 10000});
+    assert.equal(leaked.status, 64); assert(!`${leaked.stdout}${leaked.stderr}`.includes('qualification-only'));
+    assert.equal(requests.length, 0, 'credential validation cannot dispatch inference');
     await launch(['--config', configPath]);
     const description = await client.call('describe');
     const accepted = await client.call('task.submit', {client_operation_id: 'adaptive-controlled-submit', application_id: 'adaptive-agent', profile_id: description.profile.id,
@@ -111,7 +118,7 @@ export async function verifyAdaptiveNative({app, applicationPath, worldRuntime})
     releaseHeld();
     const waiting = await until(() => client.call('task.status', {task_id: accepted.task_id}), value => value.question != null);
     if (providerFailure) throw providerFailure;
-    assert.equal(requests.length, 12); assert(requests[1].bytes.includes('FOLLOWUP-A'));
+    assert.equal(requests.length, 13); assert(requests[1].bytes.includes('FOLLOWUP-A'));
     assert(requests[7].bytes.includes('OPAQUE-SKILL-CONTEXT-6'));
     assert(!requests[8].bytes.includes('OPAQUE-SKILL-CONTEXT-6'));
     assert(!requests[8].body.input.some(item => item.type === 'additional_tools' && item.tools.some(tool => tool.name === 'inspect')));
@@ -122,19 +129,19 @@ export async function verifyAdaptiveNative({app, applicationPath, worldRuntime})
     await writeFile(changedConfig, JSON.stringify({...config, initial_effort: 'high'}));
     const refused = spawnSync(app.command, ['resume', '--state-dir', state, '--task-id', accepted.task_id, '--config', changedConfig, '--test-provider', '--trust-root', trust],
       {cwd: app.data, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 10000});
-    assert.equal(refused.status, 64); assert.equal(requests.length, 12);
+    assert.equal(refused.status, 64); assert.equal(requests.length, 13);
     await launch(['--profile-task', accepted.task_id]);
     const reopenedDescription = await client.call('describe');
     assert.equal(reopenedDescription.profile.resource_identity, description.profile.resource_identity);
     const reopened = await client.call('task.status', {task_id: accepted.task_id});
-    assert.deepEqual(reopened.question, waiting.question); assert.equal(requests.length, 12);
+    assert.deepEqual(reopened.question, waiting.question); assert.equal(requests.length, 13);
     await client.call('task.resume', {client_operation_id: 'adaptive-resume', task_id: accepted.task_id, expected_revision: reopened.revision});
     await client.call('task.respond', {client_operation_id: 'adaptive-answer', task_id: accepted.task_id,
       question_id: waiting.question.question_id, question_revision: waiting.question.question_revision, request_digest: waiting.question.request_digest,
       answer: {schema_id: waiting.question.answer_schema_id, value: {message: 'Focus on observable behavior.'}}});
     const result = await until(() => client.call('task.result', {task_id: accepted.task_id}), value => value.ready);
     if (providerFailure) throw providerFailure;
-    assert.equal(requests.length, 13); assert.equal(result.outcome.value.control.selection.control_revision, '8');
+    assert.equal(requests.length, 14); assert.equal(result.outcome.value.control.selection.control_revision, '8');
     assert.equal(result.outcome.value.control.eviction_generation, '2'); assert.equal(result.outcome.value.evidence[0].sha256, hash(Buffer.from(source)));
     assert.deepEqual(await client.close(), {code: 0, signal: null}); client = null;
     const archivePath = join(app.data, 'adaptive-complete.bundle');
@@ -145,6 +152,7 @@ export async function verifyAdaptiveNative({app, applicationPath, worldRuntime})
     assert.equal(imported.task_id, accepted.task_id);
     assert.deepEqual(invoke('result', '--state-dir', importedState, '--task-id', accepted.task_id).outcome.value, result.outcome.value);
     const appData = application(assetBytes, archive.object(archive.task.image));
+    assert.throws(() => configure(appData, {config: leakedConfig, credential}), /credential embedded in task profile/);
     const base = configure(appData, {testTrustRoot: trust}, {profile: archive.object(archive.task.profile), resources: archive.task.resources.map(archive.object)});
     const ctx = {...base, task: archive.task.id, tenant: archive.task.tenant, object: ref => archive.object([ref.digest, BigInt(ref.bytes)])};
     const world = await import(pathToFileURL(verifyRuntime(worldRuntime).entrypoint).href);
@@ -167,14 +175,14 @@ export async function verifyAdaptiveNative({app, applicationPath, worldRuntime})
       assert(Buffer.from(projected.reply).equals(resultValue(archive.object(capture[6].value[0]))), 'JS reproduces the native committed projection');
       assert.deepEqual(projected.objects.map(hash), capture[6].value[1].map(ref => Buffer.from(ref[0]).toString('hex')));
     }
-    assert.equal(providerProjections, 13); assert(controlProjections >= 8 && workProjections >= 3);
+    assert.equal(providerProjections, 14); assert.equal(controlProjections, 22); assert.equal(workProjections, 4);
     for (const [name, bytes] of [['missing-capture', missingCaptures(archiveBytes, 'one')], ['tampered-control', tamperedAdaptiveControl(archiveBytes, appData.codec)]]) {
       const path = join(app.data, `${name}.bundle`); await writeFile(path, bytes, {mode: 0o600});
       const rejected = spawnSync(app.command, ['import-checkpoint', '--state-dir', join(app.data, `${name}-state`), '--input', path, '--operation-id', name,
         '--test-provider', '--trust-root', trust], {cwd: app.data, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 30000, maxBuffer: 1024 * 1024});
       assert.equal(rejected.status, 64, name);
     }
-    assert.equal(requests.length, 13, 'recovery, import and pure projection replay perform no inference');
+    assert.equal(requests.length, 14, 'recovery, import and pure projection replay perform no inference');
     const measurements = measureAdaptive(ctx, measurementRows, {archive_bytes: archiveBytes.length, archive_objects: archive.objects.size,
       namespace_object_bytes: [...archive.objects.values()].reduce((sum, bytes) => sum + bytes.length, 0),
       request_time_scope: 'controlled provider request-body acquisition to response send; includes deliberate first-request hold',

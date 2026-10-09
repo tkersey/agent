@@ -87,6 +87,21 @@ export async function main(argv) {
 
 if (isMain(import.meta.url)) main(process.argv.slice(2)).catch(error => {
   // Do not print assertion dumps: they may contain prompts or opaque records.
-  print({error: {code: error.code === 'EADDRINUSE' ? 'StateInUse' : error.code ?? 'AdaptiveExecutionFailed'}});
+  const reasons = new Map([
+    ['approved configuration required', 'Supply --config or choose --offline.'],
+    ['frozen configuration mismatch', 'The launch does not match the saved immutable task profile.'],
+    ['invalid initial inference selection', 'Choose an initial profile and effort from the approved catalog.'],
+    ['unqualified capacity or effort-update profile', 'Use at most 16 attempts/revisions and effort_update: false.'],
+    ['frozen resource count capacity', 'The deployment admits at most 14 approved skill bodies.'],
+    ['frozen resource byte capacity', 'Snapshot, skill bodies and catalog together must fit 16 MiB.'],
+    ['credential embedded in task profile', 'The selected credential appears in the task profile.'],
+    ['credential embedded in task resources', 'The selected credential appears in the task resources.'],
+    ['closed record', 'Object fields must match the published application contract.'],
+    ['incompatible JS state', 'This state belongs to a different application, image or runtime.'],
+  ]);
+  const code = error.code === 'EADDRINUSE' ? 'StateInUse' : error.code === 'ERR_ASSERTION' ?
+    process.argv[2] === 'validate-config' ? 'InvalidConfiguration' : 'InvalidStateOrInput' : error.code ?? 'AdaptiveExecutionFailed';
+  const reason = reasons.get(String(error.message).split('\n')[0]);
+  print({error: {code, ...(reason ? {reason} : {})}});
   process.exitCode = 1;
 });

@@ -121,6 +121,33 @@ export function usage(body) {
   return {value: observed, valid};
 }
 
+// v6 uses the native closed replay grammar while retaining the existing JS
+// typed-argument normalizer. Compatibility defaults affect only its temporary
+// input; raw capture and replay retain the exact original provider items.
+export function normalizeAdaptiveOutput(codec, invocationValue, output) {
+  const unsupported = reason => ({tag: 'unsupported_response', value: reason});
+  if (!Array.isArray(output)) return unsupported('unsupported_output_item');
+  const invocation = decodeModelInvocation(codec.encode('Invocation', invocationValue));
+  if (output.length > invocation.normalizationLimits.maximumOutputItems) return unsupported('normalization_limit');
+  let calls = 0, refusals = 0;
+  const compatible = [];
+  try {
+    for (const item of output) {
+      replayItem(item);
+      if (item.type === 'function_call' && ++calls > 1) return unsupported('unsupported_output_item');
+      if (item.type !== 'message') { compatible.push(item); continue; }
+      for (const part of item.content) if (part.type === 'refusal' && ++refusals > 1) return unsupported('mixed_refusal');
+      let content = item.content.map(part => part.type === 'output_text' && !Object.hasOwn(part, 'annotations') ? {...part, annotations: []} : part);
+      // Native normalization permits semantically empty text before its one
+      // refusal in the same message; later text or another message is mixed.
+      const refusal = content.findIndex(part => part.type === 'refusal');
+      if (refusal > 0 && content.slice(0, refusal).every(part => part.type === 'output_text' && part.text === '')) content = content.slice(refusal);
+      compatible.push({...item, content});
+    }
+  } catch { return unsupported('unsupported_output_item'); }
+  return codec.decode('ModelResult', normalizeOpenAIResponses(canonical({status: 'completed', error: null, output: compatible}), invocation.normalizationLimits, invocation.tools));
+}
+
 export function interpret(ctx, requestBytes, preparedBytes, capturedBytes) {
   assert(same(prepare(ctx, requestBytes), preparedBytes), 'capture preparation mismatch');
   const {request, frozen, skills, selected} = admitted(ctx, requestBytes);
@@ -147,9 +174,7 @@ export function interpret(ctx, requestBytes, preparedBytes, capturedBytes) {
     kind: body.status === 'failed' ? 'response_failed' : 'response_incomplete', http_status: 0}}, observed.value);
   if (body?.status !== 'completed' || body.error !== null) return unsupported('unsupported_status', observed.value);
   if (!Array.isArray(body.output)) return unsupported('unsupported_output_item', observed.value);
-  const invocation = decodeModelInvocation(ctx.codec.encode('Invocation', request.invocation));
-  if (body.output.length > invocation.normalizationLimits.maximumOutputItems) return unsupported('normalization_limit', observed.value);
-  const normalized = ctx.codec.decode('ModelResult', normalizeOpenAIResponses(raw.body, invocation.normalizationLimits, invocation.tools));
+  const normalized = normalizeAdaptiveOutput(ctx.codec, request.invocation, body.output);
   if (normalized.tag === 'unsupported_response' || normalized.tag === 'provider_failure') return encode(normalized, observed.value, null,
     normalized.value === 'normalization_limit' ? 'capacity' : 'unsupported');
   if (!observed.valid) return unsupported('unsupported_output_item', observed.value);

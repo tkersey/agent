@@ -77,7 +77,7 @@ test "adaptive unload capture recovers under its original plan without another a
             var output = try agent.contracts.decodeOwned(t.Output, frame, result);
             defer output.deinit();
             try std.testing.expect(output.value.disposition == .report);
-            try std.testing.expectEqual(13, output.value.model_calls);
+            try std.testing.expectEqual(14, output.value.model_calls);
             try std.testing.expectEqual(8, output.value.receipts.items.len);
             try std.testing.expectEqual(8, output.value.control.selection.control_revision);
             finished = true;
@@ -145,7 +145,7 @@ test "adaptive unload capture recovers under its original plan without another a
         }
     }
     try std.testing.expect(witnessed and finished);
-    try std.testing.expectEqual(13, model_calls);
+    try std.testing.expectEqual(14, model_calls);
     std.debug.print("adaptive capture recovery: model_acquisitions={d} state_bytes_peak={d} prepared_bytes_peak={d} projection_and_step_scratch_peak={d} requested_memory_peak={d}\n", .{ model_calls, maximum_state, maximum_prepared, maximum_scratch, budget.peak });
     try service.close(a);
     service_live = false;

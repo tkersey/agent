@@ -53,8 +53,8 @@ export function measureAdaptive(application, rows, skillBodies, resources = {}) 
     const selectedMarkers = markers(row.http), priorMarkers = prior ? markers(prior.http) : [];
     const newlyMarked = sameEpoch ? selectedMarkers.filter(path => !priorMarkers.includes(path)) : selectedMarkers;
     assert(newlyMarked.length <= 2);
-    const definitions = invocation[4], offeredDefinitions = definitions.filter(tool => offered[names.indexOf(tool[0])]);
-    assert.deepEqual(definitions.map(tool => tool[0]), names.filter((_, n) => materialized[n]));
+    const definitions = invocation[4], offeredDefinitions = definitions.filter(tool => offered[names.indexOf(tool[2])]);
+    assert.deepEqual(definitions.map(tool => tool[2]), names.filter((_, n) => materialized[n]));
     const usage = optional(row.reply[3]);
     const skillBytes = (residency, active) => String(skills.filter(skill => (residency === null || skill[3] === residency) && (!active || skill[4]))
       .reduce((total, skill) => total + skill[0][1], 0n));

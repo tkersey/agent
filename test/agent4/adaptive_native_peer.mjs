@@ -237,7 +237,9 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         assert.equal(reply[0].tag, 0); assert.equal(reply[1].tag, 1); assert.equal(reply[2], 0); assert.equal(reply[3].tag, 0);
         const call = reply[0].value[0].find(item => item.tag === 0).value;
         const expectedCall = fixture[index].output.find(item => item.type === 'function_call');
-        assert.deepEqual(call.slice(0, 4), [expectedCall.call_id, expectedCall.name, expectedCall.arguments, toolNames.indexOf(expectedCall.name)]);
+        assert.deepEqual(call.slice(0, 2), [expectedCall.call_id, expectedCall.name]);
+        assert(Buffer.from(call[2]).equals(Buffer.from(expectedCall.arguments)), 'argument JSON bytes are preserved exactly');
+        assert.equal(call[3], toolNames.indexOf(expectedCall.name));
         const context = decodeValue(schemas.AdaptiveContext, archive.object(reply[1].value[0]));
         assert.equal(context.length, 13); assert.deepEqual(context[2], archive.task.id);
         assert.equal(context[0], 'agent.model.context.responses.adaptive.v1'); assert.deepEqual(context[1], request[1]);

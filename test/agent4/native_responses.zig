@@ -112,6 +112,80 @@ fn request() P.ReferenceRequest {
     } };
 }
 
+test "adaptive admission binds selected profiles and skill permissions to the frozen policy" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const Admission = native.adaptive_responses.Admission(P);
+    const body = "Inspect the invariant with actual source evidence.";
+    const resource: agent.model_invocation.ArtifactReference = .{ .digest = digest(body), .bytes = body.len };
+    const catalog_bytes = try contracts.encodeOwned(P.AdaptiveCatalog, a, .{ .skills = .{ .items = &.{.{
+        .id = .{ .bytes = "invariant-review" }, .version = .{ .bytes = "1" }, .description = .{ .bytes = "Review invariants." }, .instructions = resource, .tools = .{true},
+    }} } });
+    var objects: Objects = .{ .bytes = catalog_bytes, .raw = body };
+    const inference: agent.model_invocation.AdaptiveInferenceProfile = .{
+        .id = .{ .bytes = "analysis" }, .model = .{ .bytes = "fixture-model" },
+        .reasoning_mode = .standard, .reasoning_context = .current_turn,
+        .efforts = .{ .items = &.{ .medium, .high } }, .effort_update = false,
+        .explicit_cache = true, .additional_tools = true, .cache_diagnostics = false,
+        .opaque_family = .{ .bytes = "fixture" }, .max_output_tokens = 4096,
+        .request_bytes = 16384, .response_bytes = 4096, .timeout_ms = 1000,
+    };
+    const policy: P.AdaptivePolicy = .{
+        .schema = .{ .bytes = P.adaptive_policy_identity }, .endpoint = .{ .bytes = "https://example.test/v1/responses" }, .audience = .{ .bytes = "fixture" },
+        .profiles = .{ .items = &.{inference} }, .catalog = .{ .digest = digest(catalog_bytes), .bytes = catalog_bytes.len },
+        .core_tools = .{false}, .permitted_tools = .{true}, .model_attempts = 16, .control_transitions = 16,
+    };
+    var frozen = native.json.object();
+    try native.json.put(a, &frozen, "adaptive", try native.values.toJson(P.AdaptivePolicy, a, policy));
+    const policy_bytes = try native.json.canonical(a, frozen);
+    const ctx: native.registry.ProjectionContext = .{ .allocator = a, .task = @splat(7), .tenant = "fixture", .profile = policy_bytes, .objects = .{ .owner = &objects, .read = Objects.read } };
+    const admitted = try Admission.policy(a, policy_bytes);
+    var skills = try Admission.catalog(ctx, admitted);
+    defer skills.deinit();
+    var materialization = [_]agent.model_invocation.SkillMaterialization{.{
+        .resource = resource, .skill_id = .{ .bytes = "invariant-review" }, .version = .{ .bytes = "1" }, .residency = .resident, .active = true, .introduced_at = 1,
+    }};
+    var adaptive: P.AdaptiveRequest = .{
+        .invocation = request().invocation,
+        .policy = digest(policy_bytes),
+        .selection = .{ .profile_id = inference.id, .profile_digest = try Admission.profileDigest(a, inference), .effective_effort = .medium, .control_revision = 1 },
+        .plan = .{ .epoch = 0, .reason = .initial, .watermark = 1, .eviction_generation = 0, .prior = null, .handoff = null, .catalog = policy.catalog, .skills = .{ .items = &materialization } },
+        .materialized = .{true}, .offered = .{true}, .results = .{ .items = &.{} },
+    };
+    const selected = try Admission.bind(ctx, admitted, adaptive, skills.value);
+    try std.testing.expectEqualStrings("fixture-model", selected.transport.model.bytes);
+    // Valid effort-only selection changes neither the policy nor resource set.
+    adaptive.selection.effective_effort = .high;
+    adaptive.invocation.parameters.reasoning.?.effort = .high;
+    _ = try Admission.bind(ctx, admitted, adaptive, skills.value);
+    adaptive.selection.effective_effort = .max;
+    try std.testing.expectError(error.UnsupportedEffort, Admission.bind(ctx, admitted, adaptive, skills.value));
+    adaptive.selection.effective_effort = .high;
+    adaptive.selection.profile_id.bytes = "unapproved";
+    try std.testing.expectError(error.UnknownInferenceProfile, Admission.bind(ctx, admitted, adaptive, skills.value));
+    adaptive.selection.profile_id = inference.id;
+    adaptive.policy[0] ^= 1;
+    try std.testing.expectError(error.IncompatibleProfile, Admission.bind(ctx, admitted, adaptive, skills.value));
+    adaptive.policy = digest(policy_bytes);
+    // Deactivation retains the definition but removes callable authority.
+    materialization[0].active = false;
+    try std.testing.expectError(error.InvalidDeclaration, Admission.bind(ctx, admitted, adaptive, skills.value));
+    adaptive.offered = .{false};
+    _ = try Admission.bind(ctx, admitted, adaptive, skills.value);
+    // An unloaded skill cannot justify retaining its exclusive definition.
+    adaptive.plan.skills.items = &.{};
+    try std.testing.expectError(error.InvalidDeclaration, Admission.bind(ctx, admitted, adaptive, skills.value));
+    adaptive.materialized = .{false};
+    adaptive.invocation.tools.items = &.{};
+    _ = try Admission.bind(ctx, admitted, adaptive, skills.value);
+    adaptive.plan.skills.items = &materialization;
+    adaptive.materialized = .{true};
+    adaptive.invocation.tools = P.allDeclarations();
+    objects.raw = "Changed at the old source path.";
+    try std.testing.expectError(error.MissingArtifact, Admission.bind(ctx, admitted, adaptive, skills.value));
+}
+
 test "native Responses v1 independently specified capture corpus" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

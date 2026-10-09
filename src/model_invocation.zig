@@ -11,6 +11,7 @@ pub const reference_semantic_identity = "agent.model.invoke.v5";
 pub const context_semantic_identity = "agent.model.context.responses.v1";
 pub const adaptive_semantic_identity = "agent.model.invoke.v6";
 pub const adaptive_context_semantic_identity = "agent.model.context.responses.adaptive.v1";
+pub const adaptive_policy_semantic_identity = "agent.model.policy.adaptive.v1";
 pub fn isModelIdentity(identity: []const u8) bool {
     return std.mem.eql(u8, identity, semantic_identity) or
         std.mem.eql(u8, identity, replay_semantic_identity) or
@@ -25,6 +26,23 @@ pub const AdaptiveSelection = struct {
     profile_digest: [32]u8,
     effective_effort: models.ReasoningEffort,
     control_revision: u64,
+};
+pub const AdaptiveInferenceProfile = struct {
+    id: contracts.Text(64),
+    model: contracts.Text(128),
+    reasoning_mode: enum { standard, pro },
+    reasoning_context: enum { auto, current_turn, all_turns },
+    efforts: contracts.Vector(models.ReasoningEffort, 7),
+    /// An explicit capability, never inferred from a model-name prefix.
+    effort_update: bool,
+    explicit_cache: bool,
+    additional_tools: bool,
+    cache_diagnostics: bool,
+    opaque_family: contracts.Text(64),
+    max_output_tokens: u32,
+    request_bytes: u32,
+    response_bytes: u32,
+    timeout_ms: u32,
 };
 pub const EpochReason = enum { initial, model_change, effort_change, eviction, capacity_handoff };
 pub const SkillResidency = enum { resident, transient };
@@ -212,6 +230,7 @@ pub fn Profile(
         pub const Context = ContextArtifact;
         pub const adaptive_identity = adaptive_semantic_identity;
         pub const adaptive_context_identity = adaptive_context_semantic_identity;
+        pub const adaptive_policy_identity = adaptive_policy_semantic_identity;
         pub const AnswerType = Answer;
         pub const Interpretation = @import("model_interpretation.zig").Result(Answer);
         pub const BatchInterpretation = @import("model_interpretation.zig").Result([]const Answer);
@@ -332,6 +351,27 @@ pub fn Profile(
             materialized: [declarations.len]bool,
             offered: [declarations.len]bool,
             results: contracts.Vector(ToolResult, limits.maximum_output_items),
+        };
+        pub const AdaptivePolicy = struct {
+            schema: contracts.Text(128),
+            endpoint: contracts.Text(2048),
+            audience: contracts.Text(128),
+            profiles: contracts.Vector(AdaptiveInferenceProfile, 8),
+            catalog: ArtifactReference,
+            core_tools: [declarations.len]bool,
+            permitted_tools: [declarations.len]bool,
+            model_attempts: u16,
+            control_transitions: u16,
+        };
+        pub const AdaptiveSkill = struct {
+            id: contracts.Text(64),
+            version: contracts.Text(64),
+            description: contracts.Text(256),
+            instructions: ArtifactReference,
+            tools: [declarations.len]bool,
+        };
+        pub const AdaptiveCatalog = struct {
+            skills: contracts.Vector(AdaptiveSkill, 32),
         };
         pub const AdaptiveResult = struct {
             result: Result,

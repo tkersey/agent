@@ -31,16 +31,25 @@ pub fn ReferenceModelObservation(comptime P: type, comptime batch: bool) type {
     };
 }
 
+pub fn AdaptiveModelObservation(comptime P: type, comptime batch: bool) type {
+    return struct {
+        normalized: P.AdaptiveResult,
+        interpretation: if (batch) P.BatchInterpretation else P.Interpretation,
+    };
+}
+
 const Format = enum {
     plain,
     inline_replay,
     reference,
+    adaptive,
 
     fn Request(comptime format: Format, comptime P: type) type {
         return switch (format) {
             .plain => P.Request,
             .inline_replay => P.ReplayRequest,
             .reference => P.ReferenceRequest,
+            .adaptive => P.AdaptiveRequest,
         };
     }
     fn Result(comptime format: Format, comptime P: type) type {
@@ -48,6 +57,7 @@ const Format = enum {
             .plain => P.Result,
             .inline_replay => P.ReplayResult,
             .reference => P.ReferenceResult,
+            .adaptive => P.AdaptiveResult,
         };
     }
     fn Observation(comptime format: Format, comptime P: type, comptime batch: bool) type {
@@ -55,6 +65,7 @@ const Format = enum {
             .plain => ModelObservation(P, batch),
             .inline_replay => ReplayModelObservation(P, batch),
             .reference => ReferenceModelObservation(P, batch),
+            .adaptive => AdaptiveModelObservation(P, batch),
         };
     }
 };
@@ -115,12 +126,20 @@ pub fn defineReferenceModelObserved(comptime P: type, c: authoring.Context, fail
     return defineObserved(P, c, failure, batch, .reference);
 }
 
+/// Definitions come from the compiled catalog filtered by materialized. Calls
+/// are admitted against the independently captured offered argument, never the
+/// template's offered field or a later control state's permissions.
+pub fn defineAdaptiveModelObserved(comptime P: type, c: authoring.Context, failure: Id, comptime batch: bool) !Id {
+    return defineObserved(P, c, failure, batch, .adaptive);
+}
+
 fn defineObserved(comptime P: type, c: authoring.Context, failure: Id, comptime batch: bool, comptime format: Format) !Id {
     const b = c.builder;
     const effect = switch (format) {
         .plain => try P.declare(b),
         .inline_replay => try P.declareReplay(b),
         .reference => try P.declareReference(b),
+        .adaptive => try P.declareAdaptive(b),
     };
     try c.registry.classify(effect, .model);
     const fault = try b.failureLiteral(failure);
@@ -128,6 +147,7 @@ fn defineObserved(comptime P: type, c: authoring.Context, failure: Id, comptime 
         .plain => "agent.model.observed-responder/v3",
         .inline_replay => "agent.model.observed-responder/v4",
         .reference => "agent.model.observed-responder/v5",
+        .adaptive => "agent.model.observed-responder/v6",
     }, .{
         @typeName(P), effect, fault, batch,
     });
@@ -216,12 +236,22 @@ fn Generator(comptime P: type, comptime batch: bool, comptime format: Format) ty
             const envelope = try root.parameter("request");
             const template = if (replay) try g.field(root, envelope, Request, "invocation") else envelope;
             const offered = try root.parameter("offered");
+            const materialized = if (format == .adaptive) try g.field(root, envelope, Request, "materialized") else offered;
+            if (format == .adaptive) try g.checkMaterialized(root, materialized, offered);
             var tools = try g.literal(root, P.Tools, .{ .items = &.{} });
-            for (0..P.declaration_count) |index| tools = try g.filter(root, offered, index, tools);
+            for (0..P.declaration_count) |index| tools = try g.filter(root, materialized, index, tools);
             const selection = try g.field(root, template, P.Request, "selection");
             try g.checkTemplate(root, template, selection);
             const invocation = try g.request(root, template, tools);
-            const payload = if (format == .reference) try root.product(try g.schema(Request), &.{
+            const payload = if (format == .adaptive) try root.product(try g.schema(Request), &.{
+                .{ .name = "0", .value = invocation },
+                .{ .name = "1", .value = try g.field(root, envelope, Request, "policy") },
+                .{ .name = "2", .value = try g.field(root, envelope, Request, "selection") },
+                .{ .name = "3", .value = try g.field(root, envelope, Request, "plan") },
+                .{ .name = "4", .value = materialized },
+                .{ .name = "5", .value = offered },
+                .{ .name = "6", .value = try g.field(root, envelope, Request, "results") },
+            }) else if (format == .reference) try root.product(try g.schema(Request), &.{
                 .{ .name = "0", .value = invocation },
                 .{ .name = "1", .value = try g.field(root, envelope, Request, "replay") },
                 .{ .name = "2", .value = try g.field(root, envelope, Request, "results") },
@@ -256,6 +286,20 @@ fn Generator(comptime P: type, comptime batch: bool, comptime format: Format) ty
             return root.ret(try root.product(try g.schema(format.Observation(P, batch)), &.{
                 .{ .name = "0", .value = observation }, .{ .name = "1", .value = admitted },
             }));
+        }
+        fn checkMaterialized(g: G, body: *typed.Body, materialized: *const typed.Value, offered: *const typed.Value) !void {
+            const b = g.context.builder;
+            const set = try sets.define(b, P.declaration_count);
+            for (0..P.declaration_count) |index| {
+                const defined = try typed.interop.term(body, try sets.member(b, set, try typed.interop.valueId(body, materialized), index), try g.schema(bool));
+                const callable = try typed.interop.term(body, try sets.member(b, set, try typed.interop.valueId(body, offered), index), try g.schema(bool));
+                const valid = try g.pure(body, try b.primitive(try g.context.schema(bool), .select, &.{
+                    try typed.interop.valueId(body, callable),
+                    try typed.interop.valueId(body, defined),
+                    try b.constant(bool, true),
+                }, 0));
+                try g.rejectWhen(body, try body.equal(valid, try body.constant(bool, false)));
+            }
         }
         fn filter(g: G, body: *typed.Body, offered: *const typed.Value, index: usize, previous: *const typed.Value) !*const typed.Value {
             const b = g.context.builder;

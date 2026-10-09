@@ -9,11 +9,65 @@ pub const semantic_identity = "agent.model.invoke.v3";
 pub const replay_semantic_identity = "agent.model.invoke.v4";
 pub const reference_semantic_identity = "agent.model.invoke.v5";
 pub const context_semantic_identity = "agent.model.context.responses.v1";
+pub const adaptive_semantic_identity = "agent.model.invoke.v6";
+pub const adaptive_context_semantic_identity = "agent.model.context.responses.adaptive.v1";
 pub fn isModelIdentity(identity: []const u8) bool {
     return std.mem.eql(u8, identity, semantic_identity) or
         std.mem.eql(u8, identity, replay_semantic_identity) or
-        std.mem.eql(u8, identity, reference_semantic_identity);
+        std.mem.eql(u8, identity, reference_semantic_identity) or
+        std.mem.eql(u8, identity, adaptive_semantic_identity);
 }
+
+/// Selection is subordinate to the immutable task policy. Neither the selected
+/// profile nor a context reference can replace that policy's resource grant.
+pub const AdaptiveSelection = struct {
+    profile_id: contracts.Text(64),
+    profile_digest: [32]u8,
+    effective_effort: models.ReasoningEffort,
+    control_revision: u64,
+};
+pub const EpochReason = enum { initial, model_change, effort_change, eviction, capacity_handoff };
+pub const SkillResidency = enum { resident, transient };
+pub const SkillMaterialization = struct {
+    resource: ArtifactReference,
+    skill_id: contracts.Text(64),
+    version: contracts.Text(64),
+    residency: SkillResidency,
+    active: bool,
+    introduced_at: u64,
+};
+pub const AdaptiveContextReference = struct {
+    object: ArtifactReference,
+    schema: contracts.Text(128),
+    policy: [32]u8,
+    selection: [32]u8,
+    task: [16]u8,
+    tenant: contracts.Text(128),
+    audience: contracts.Text(128),
+    epoch: u64,
+    watermark: u64,
+    eviction_generation: u64,
+};
+/// Large immutable history stays outside World values. A handoff is an explicit
+/// representation change, never an implicit replay-null reset. Adapters validate
+/// the plan against its original capture/resource closure before dispatch.
+pub const AdaptivePlan = struct {
+    epoch: u64,
+    reason: EpochReason,
+    watermark: u64,
+    eviction_generation: u64,
+    prior: ?AdaptiveContextReference,
+    handoff: ?ArtifactReference,
+    catalog: ArtifactReference,
+    skills: contracts.Vector(SkillMaterialization, 32),
+};
+pub const AdaptiveUsage = struct {
+    input_tokens: ?u64,
+    output_tokens: ?u64,
+    cached_input_tokens: ?u64,
+    cache_write_tokens: ?u64,
+    reasoning_tokens: ?u64,
+};
 /// Immutable environmental data, not an authorization token. The environment
 /// checks every binding and the full closure before rendering another request.
 /// Sequence bounds describe the half-open range of ordered replay items.
@@ -156,6 +210,8 @@ pub fn Profile(
         pub const reference_identity = reference_semantic_identity;
         pub const context_identity = context_semantic_identity;
         pub const Context = ContextArtifact;
+        pub const adaptive_identity = adaptive_semantic_identity;
+        pub const adaptive_context_identity = adaptive_context_semantic_identity;
         pub const AnswerType = Answer;
         pub const Interpretation = @import("model_interpretation.zig").Result(Answer);
         pub const BatchInterpretation = @import("model_interpretation.zig").Result([]const Answer);
@@ -262,6 +318,26 @@ pub fn Profile(
             replay: ?ContextReference,
             replay_status: ReplayStatus,
             usage: ?Usage,
+        };
+
+        /// v6 independently represents definition residency and call authority.
+        /// The checked responder replaces invocation.tools from materialized,
+        /// and replaces offered from its separately captured argument. All
+        /// definitions still come from this compiled answer catalog.
+        pub const AdaptiveRequest = struct {
+            invocation: Request,
+            policy: [32]u8,
+            selection: AdaptiveSelection,
+            plan: AdaptivePlan,
+            materialized: [declarations.len]bool,
+            offered: [declarations.len]bool,
+            results: contracts.Vector(ToolResult, limits.maximum_output_items),
+        };
+        pub const AdaptiveResult = struct {
+            result: Result,
+            replay: ?AdaptiveContextReference,
+            replay_status: ReplayStatus,
+            usage: ?AdaptiveUsage,
         };
 
         pub fn allDeclarations() Tools {
@@ -441,6 +517,15 @@ pub fn Profile(
             const slot = try builder.specialization(u64, reference_semantic_identity, .{ payload, result });
             if (slot.cached) |cached| return cached;
             const effect = try builder.effect(.{ .identity = reference_semantic_identity, .payload = payload, .result = result });
+            return slot.finish(builder, effect);
+        }
+
+        pub fn declareAdaptive(builder: anytype) !u64 {
+            const payload = try contracts.schema(AdaptiveRequest, builder);
+            const result = try contracts.schema(AdaptiveResult, builder);
+            const slot = try builder.specialization(u64, adaptive_semantic_identity, .{ payload, result });
+            if (slot.cached) |cached| return cached;
+            const effect = try builder.effect(.{ .identity = adaptive_semantic_identity, .payload = payload, .result = result });
             return slot.finish(builder, effect);
         }
 

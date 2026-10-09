@@ -774,3 +774,85 @@ test "reference model identity cannot bypass the protected responder" {
         try std.testing.expectError(if (role == .model) error.ProtectedEffectBypass else error.EffectRoleMismatch, agent.admission.verify(allocator, b.module(entry, try b.scalar(void)), &registry));
     }
 }
+
+test "adaptive responder keeps definitions separate from original call authority" {
+    var b = source.Builder.init(allocator);
+    defer b.deinit();
+    var registry = agent.admission.Registry.init(b.allocator());
+    defer registry.deinit();
+    const c: agent.Context = .{ .builder = &b, .registry = &registry };
+    const entry = try agent.responders.defineAdaptiveModelObserved(P, c, try b.constant(void, {}), false);
+    const module = b.module(entry, try b.scalar(void));
+    try agent.admission.verify(allocator, module, &registry);
+    var compiled = try boundary.program.compile(allocator, module);
+    defer compiled.deinit();
+    const AdaptiveInput = struct { request: P.AdaptiveRequest, offered: [2]bool };
+    var input: AdaptiveInput = .{ .request = .{
+        .invocation = template(&.{}, single),
+        .policy = @splat(9),
+        .selection = .{ .profile_id = .{ .bytes = "analysis" }, .profile_digest = @splat(7), .effective_effort = .high, .control_revision = 4 },
+        .plan = .{
+            .epoch = 3,
+            .reason = .model_change,
+            .watermark = 12,
+            .eviction_generation = 2,
+            .prior = null,
+            .handoff = .{ .digest = @splat(4), .bytes = 128 },
+            .catalog = .{ .digest = @splat(5), .bytes = 256 },
+            .skills = .{ .items = &.{} },
+        },
+        .materialized = .{ true, true },
+        // This forged template offer must not override the captured argument.
+        .offered = .{ true, true },
+        .results = .{ .items = &.{} },
+    }, .offered = .{ true, false } };
+    const image = try allocator.alloc(u8, try data.program_image.encodedLength(compiled.program));
+    defer allocator.free(image);
+    _ = try data.program_image.encode(allocator, compiled.program, image);
+    const args = try contracts.encodeOwned(AdaptiveInput, allocator, input);
+    defer allocator.free(args);
+    var parked = try world.invocation.invoke(allocator, .{ .image = image, .instance = .{ .initial_args = args } });
+    defer parked.deinit();
+    try std.testing.expect(parked.record == .requested);
+    var request = try data.invocation.decode(data.invocation.Request, allocator, parked.record.requested.request);
+    defer request.deinit();
+    try std.testing.expectEqualStrings(model.adaptive_semantic_identity, request.value.binding.semantic_identity);
+    var payload = try contracts.decodeOwned(P.AdaptiveRequest, allocator, request.value.binding.payload);
+    defer payload.deinit();
+    try std.testing.expectEqualDeep(input.request.selection, payload.value.selection);
+    try std.testing.expectEqualDeep(input.request.plan, payload.value.plan);
+    try std.testing.expectEqualSlices(u8, &input.request.policy, &payload.value.policy);
+    try std.testing.expectEqualDeep(input.offered, payload.value.offered);
+    try std.testing.expectEqual(2, payload.value.invocation.tools.items.len);
+    try std.testing.expectEqualStrings("other", payload.value.invocation.tools.items[1].name.bytes);
+    inline for (.{ .choose, .other }) |answer| {
+        const reply: P.AdaptiveResult = .{ .result = result(&.{call(answer, 42)}), .replay = null, .replay_status = .complete, .usage = null };
+        var finished = try resumeResult(P.AdaptiveResult, compiled.program, parked, reply);
+        defer finished.deinit();
+        var observation = try contracts.decodeOwned(agent.responders.AdaptiveModelObservation(P, false), allocator, finished.record.completed);
+        defer observation.deinit();
+        if (answer == .choose) try std.testing.expectEqual(42, observation.value.interpretation.accepted.choose.value) else try std.testing.expectEqual(.unoffered, observation.value.interpretation.rejected);
+    }
+    // An offered action without a materialized definition fails before I/O.
+    input.request.materialized = .{ false, true };
+    const invalid_args = try contracts.encodeOwned(AdaptiveInput, allocator, input);
+    defer allocator.free(invalid_args);
+    var rejected = try world.invocation.invoke(allocator, .{ .image = image, .instance = .{ .initial_args = invalid_args } });
+    defer rejected.deinit();
+    try std.testing.expect(rejected.record == .failed);
+}
+
+test "adaptive model identity cannot bypass the protected responder" {
+    inline for (.{ @as(?agent.admission.Role, null), @as(?agent.admission.Role, .read), @as(?agent.admission.Role, .model) }) |role| {
+        var b = source.Builder.init(allocator);
+        defer b.deinit();
+        var registry = agent.admission.Registry.init(b.allocator());
+        defer registry.deinit();
+        const c: agent.Context = .{ .builder = &b, .registry = &registry };
+        const effect = try P.declareAdaptive(&b);
+        if (role) |classification| try registry.classify(effect, classification);
+        const entry = try b.declare(&.{try c.schema(P.AdaptiveRequest)}, try c.schema(P.AdaptiveResult), &.{effect}, &.{});
+        try b.define(entry, try b.term(.{ .perform = .{ .effect = effect, .payload = try b.reference(b.parameter(entry, 0)) } }));
+        try std.testing.expectError(if (role == .model) error.ProtectedEffectBypass else error.EffectRoleMismatch, agent.admission.verify(allocator, b.module(entry, try b.scalar(void)), &registry));
+    }
+}

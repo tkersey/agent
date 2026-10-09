@@ -147,3 +147,34 @@ pub const Ready = struct {
     results: PendingResults,
 };
 pub const PreparationResult = union(enum) { ready: Ready, rejected: controls.Rejection };
+
+// The JS environment consumes these generated layouts and checks their exact
+// canonical wire schemas. There is no independently maintained codec table.
+pub const support_types = .{
+    .{ .name = "Bindings", .T = Bindings },
+    .{ .name = "Preparation", .T = Preparation },
+    .{ .name = "PreparationResult", .T = PreparationResult },
+    .{ .name = "WorkRequest", .T = WorkRequest },
+    .{ .name = "WorkReply", .T = WorkReply },
+    .{ .name = "WorkArtifact", .T = WorkArtifact },
+    .{ .name = "ReceiptArtifact", .T = ReceiptArtifact },
+    .{ .name = "Question", .T = Question },
+    .{ .name = "Answer", .T = Answer },
+    .{ .name = "Action", .T = Action },
+    .{ .name = "Invocation", .T = P.Request },
+    .{ .name = "Tools", .T = P.Tools },
+    .{ .name = "ModelResult", .T = P.Result },
+    .{ .name = "AdaptiveRequest", .T = P.AdaptiveRequest },
+    .{ .name = "AdaptiveResult", .T = P.AdaptiveResult },
+    .{ .name = "AdaptiveContext", .T = P.AdaptiveContext },
+    .{ .name = "AdaptiveSeed", .T = P.AdaptiveSeed },
+    .{ .name = "AdaptivePrepared", .T = P.AdaptivePrepared },
+    .{ .name = "Policy", .T = P.AdaptivePolicy },
+    .{ .name = "Profile", .T = model.AdaptiveInferenceProfile },
+    .{ .name = "Catalog", .T = P.AdaptiveCatalog },
+    .{ .name = "Input", .T = Input },
+    .{ .name = "Output", .T = Output },
+    .{ .name = "Inbox", .T = agent.inbox.Profile(Message).Reply },
+};
+
+pub const support_values = .{.{ .name = "tools", .T = P.Tools, .value = P.allDeclarations() }};

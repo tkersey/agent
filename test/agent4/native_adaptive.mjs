@@ -3,6 +3,26 @@ import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {join} from 'node:path';
 import {deployment} from './native_deployment.mjs';
+import {readFileSync} from 'node:fs';
+import {codecs} from '../../runtime/adaptive/codec.mjs';
+import {parse as parseLossless, canonical as canonicalLossless, integer as losslessInteger} from '../../runtime/adaptive/json.mjs';
+
+const exactNumber = parseLossless(Buffer.from('{"count":9007199254740993,"zero":0,"nullable":null,"decimal":1.0,"exponent":1e0}'));
+assert.equal(losslessInteger(exactNumber.count), 9007199254740993n);
+assert.equal(losslessInteger(exactNumber.decimal), 1n);
+assert.equal(losslessInteger(exactNumber.exponent), 1n);
+assert.equal(losslessInteger(exactNumber.zero), 0n);
+assert.equal(exactNumber.nullable, null);
+assert.equal(exactNumber.absent, undefined);
+assert.equal(canonicalLossless(exactNumber).toString(), '{"count":9007199254740993,"decimal":1.0,"exponent":1e0,"nullable":null,"zero":0}');
+assert.throws(() => parseLossless(Buffer.from('{"x":1,"x":2}')));
+assert.throws(() => losslessInteger(parseLossless(Buffer.from('1.5'))));
+
+const codec = codecs(JSON.parse(readFileSync(process.argv[3], 'utf8')));
+for (const action of [
+  {tag: 'inference_set', value: {profile_id: 'analysis', effort: 'high', expected_revision: 9007199254740993n, reason: 'Inspect 雪 precisely.'}},
+  {tag: 'skill_set', value: {operation: 'unload', skill_id: 'invariant-review', version: '1', residency: 'unchanged', expected_revision: 18446744073709551615n, reason: 'Physical eviction.'}},
+]) assert.deepEqual(codec.decode('Action', codec.encode('Action', action)), action);
 
 const app = deployment(process.argv[2], 'adaptive-agent');
 let passed = false;

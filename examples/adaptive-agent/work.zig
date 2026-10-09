@@ -122,7 +122,7 @@ fn interpret(ctx: native.registry.ProjectionContext, request: []const u8, prepar
     return .{ .reply = try contracts.encodeOwned(t.WorkReply, ctx.allocator, reply), .objects = objects };
 }
 pub fn declaration() native.Declaration {
-    return .{ .identity = t.work_identity, .resource_role = "snapshot", .kind = .leaf, .payload_schema = struct {
+    return .{ .identity = t.work_identity, .resource_role = "snapshot", .kind = .leaf, .background = true, .payload_schema = struct {
         fn schema(a: std.mem.Allocator) ![]u8 {
             return native.values.schemaBytes(t.WorkRequest, a);
         }

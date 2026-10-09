@@ -58,7 +58,7 @@ pub fn instructions(a: std.mem.Allocator, policy: P.AdaptivePolicy, catalog: P.A
 }
 
 pub fn declaration() native.Declaration {
-    return .{ .identity = t.prepare_identity, .resource_role = "context", .kind = .leaf, .payload_schema = struct {
+    return .{ .identity = t.prepare_identity, .resource_role = "context", .kind = .leaf, .background = true, .payload_schema = struct {
         fn schema(a: std.mem.Allocator) ![]u8 {
             return native.values.schemaBytes(t.Preparation, a);
         }

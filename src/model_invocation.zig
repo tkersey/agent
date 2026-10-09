@@ -354,6 +354,7 @@ pub fn Profile(
             offered: [declarations.len]bool,
             results: contracts.Vector(ToolResult, limits.maximum_output_items),
         };
+        pub const AdaptivePrepared = struct { version: u32, request: AdaptiveRequest, body: contracts.Bytes(256 * 1024) };
         pub const AdaptivePolicy = struct {
             schema: contracts.Text(128),
             endpoint: contracts.Text(2048),

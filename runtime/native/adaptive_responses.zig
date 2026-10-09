@@ -166,11 +166,7 @@ pub fn Adapter(comptime P: type) type {
     return struct {
         const A = Admission(P);
         pub const Context = @import("adaptive_context.zig").Projection(P);
-        pub const Prepared = struct {
-            version: u32,
-            request: P.AdaptiveRequest,
-            body: contracts.Bytes(256 * 1024),
-        };
+        pub const Prepared = P.AdaptivePrepared;
         pub fn declaration() registry.Declaration {
             return .{ .identity = P.adaptive_identity, .resource_role = "inference", .kind = .leaf, .inference = true, .background = true, .payload_schema = struct {
                 fn schema(a: std.mem.Allocator) ![]u8 {

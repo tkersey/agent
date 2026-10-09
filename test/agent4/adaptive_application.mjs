@@ -9,6 +9,22 @@ import {once} from 'node:events';
 import {packageArtifacts} from '../../tools/agent4/package.mjs';
 import {codecs, hash} from '../../runtime/adaptive/codec.mjs';
 
+async function killAt(root, options, phase) {
+  const child = spawn(process.execPath, [fileURLToPath(new URL('./adaptive_capture_child.mjs', import.meta.url)), root, JSON.stringify(options), phase],
+    {cwd: root, env: {PATH: '/nonexistent'}, stdio: ['ignore', 'ignore', 'pipe', 'ipc']});
+  const exit = once(child, 'exit'); let stderr = '', reaped = false;
+  child.stderr.on('data', bytes => { stderr = (stderr + bytes).slice(-1024 * 1024); });
+  try {
+    const status = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`capture child timeout: ${stderr}`)), 30000);
+      child.once('message', value => { clearTimeout(timer); resolve(value.status); });
+      child.once('exit', () => { clearTimeout(timer); reject(new Error(`capture child exited early: ${stderr}`)); });
+      child.once('error', error => { clearTimeout(timer); reject(error); });
+    });
+    child.kill('SIGKILL'); assert.deepEqual(await exit, [null, 'SIGKILL']); reaped = true; return status;
+  } finally { if (!reaped) { child.kill('SIGKILL'); await exit; } }
+}
+
 export async function verifyAdaptiveApplication({image, application, worldRuntime}) {
   const directory = mkdtempSync(join(tmpdir(), 'adaptive-js-'));
   const inputs = join(directory, 'inputs'), extracted = join(directory, 'extracted');
@@ -32,20 +48,11 @@ export async function verifyAdaptiveApplication({image, application, worldRuntim
   const {AdaptiveRunner} = await import(pathToFileURL(join(root, 'runtime/adaptive/runner.mjs')).href);
   const options = {image: join(root, 'examples/adaptive-agent/program.bpi3'), application: join(root, 'examples/adaptive-agent/application.json'),
     worldRuntime, stateDir: join(directory, 'state'), offline: true, create: true};
-  let runner, child, childExit, captures = 0;
+  let runner, captures = 0;
   try {
-    child = spawn(process.execPath, [fileURLToPath(new URL('./adaptive_capture_child.mjs', import.meta.url)), root, JSON.stringify(options)],
-      {cwd: root, env: {PATH: '/nonexistent'}, stdio: ['ignore', 'ignore', 'pipe', 'ipc']});
-    childExit = once(child, 'exit'); let stderr = '';
-    child.stderr.on('data', bytes => { stderr += bytes; assert(stderr.length < 1024 * 1024); });
-    const stopped = await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`capture child timeout: ${stderr}`)), 30000);
-      child.once('message', value => { clearTimeout(timer); resolve(value.captured); });
-      child.once('exit', () => { clearTimeout(timer); reject(new Error(`capture child exited early: ${stderr}`)); });
-      child.once('error', error => { clearTimeout(timer); reject(error); });
-    });
+    const stopped = await killAt(root, options, 'capture');
     assert.equal(stopped.model_attempts, 8); assert.equal(stopped.occurrence, 'captured'); assert.equal(stopped.consumed_messages, 3);
-    child.kill('SIGKILL'); assert.deepEqual(await childExit, [null, 'SIGKILL']); child = null; captures = 8;
+    captures = 8;
     runner = await AdaptiveRunner.open({...options, create: false}, {onBoundary: async event => {
       if (event.operation === 'agent.model.invoke.v6' && event.phase === 'capture') captures++;
     }});
@@ -94,11 +101,18 @@ export async function verifyAdaptiveApplication({image, application, worldRuntim
     writeFileSync(configPath, JSON.stringify(template));
     const validated = JSON.parse(invoke('validate-config', '--application', options.application, '--image', options.image, '--config', configPath));
     assert.equal(validated.valid, true); assert.equal(validated.live_provider, false);
+    const unknownOptions = {...options, stateDir: join(directory, 'unknown delivery')};
+    const dispatched = await killAt(root, unknownOptions, 'dispatch');
+    assert.equal(dispatched.occurrence, 'dispatching'); assert.equal(dispatched.model_attempts, 1);
+    let newBoundaries = 0;
+    runner = await AdaptiveRunner.open({...unknownOptions, create: false}, {onBoundary: async () => { newBoundaries++; }});
+    assert.equal(runner.status().occurrence, 'unknown');
+    const unchanged = await runner.drive();
+    assert.equal(unchanged.occurrence, 'unknown'); assert.equal(unchanged.model_attempts, 1); assert.equal(newBoundaries, 0);
     console.log(JSON.stringify({adaptive_js: 'extracted same-image controls, inbox and captured-reply recovery', archive_sha256: receipt.archive.sha256, model_attempts: captures,
       controls: completed.output.receipts.length, consumed_messages: completed.consumed_messages, metrics, live_provider: false},
     (_key, value) => typeof value === 'bigint' ? String(value) : value));
   } finally {
-    if (child) { child.kill('SIGKILL'); await childExit; }
     if (runner) await runner.close(); rmSync(directory, {recursive: true, force: true});
   }
 }

@@ -85,7 +85,7 @@ export async function main(argv) {
   } finally { process.off('SIGINT', interrupt); process.off('SIGTERM', interrupt); await runner.close(); }
 }
 
-if (isMain(import.meta.url)) main(process.argv.slice(2)).catch(error => {
+if (isMain(import.meta)) main(process.argv.slice(2)).catch(error => {
   // Do not print assertion dumps: they may contain prompts or opaque records.
   const reasons = new Map([
     ['approved configuration required', 'Supply --config or choose --offline.'],

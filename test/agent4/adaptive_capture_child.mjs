@@ -1,7 +1,7 @@
 // Fault controller only; all execution and recovery code comes from the archive.
 import {pathToFileURL} from 'node:url';
 import {join} from 'node:path';
-const [root, encoded] = process.argv.slice(2), options = JSON.parse(encoded);
+const [root, encoded, stopPhase = 'capture'] = process.argv.slice(2), options = JSON.parse(encoded);
 const {AdaptiveRunner} = await import(pathToFileURL(join(root, 'runtime/adaptive/runner.mjs')).href);
 let runner, captures = 0;
 try {
@@ -12,8 +12,9 @@ try {
       runner.message('followup-two', {message: 'Keep the acquired source identity in the report.'});
       runner.message('followup-three', {message: 'Do not claim that lexical inspection proves correctness.'});
     }
-    if (event.phase === 'capture' && ++captures === 8) {
-      await new Promise((resolve, reject) => process.send({captured: runner.status()}, error => error ? reject(error) : resolve()));
+    if (event.phase === 'capture') captures++;
+    if (event.phase === stopPhase && (stopPhase === 'dispatch' || captures === 8)) {
+      await new Promise((resolve, reject) => process.send({status: runner.status()}, error => error ? reject(error) : resolve()));
       await new Promise(() => {}); // Parent kills the process before interpretation.
     }
   }});

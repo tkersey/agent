@@ -82,6 +82,7 @@ pub const Work = struct {
     request: []const u8,
     prepared: ?[]const u8 = null,
     profile: []const u8 = &.{},
+    exhausted_capabilities: []const []const u8 = &.{},
     entry: registry.Entry,
     cleanup: bool,
 };
@@ -971,7 +972,9 @@ pub fn Service(comptime Types: type) type {
                     errdefer if (retained_prepared) |body| self.allocator.free(body);
                     const retained_profile = try self.allocator.dupe(u8, self.profile.bytes);
                     errdefer self.allocator.free(retained_profile);
-                    const work: Work = .{ .task = value.id, .occurrence = pending.id, .attempt = attempt, .request = retained, .prepared = retained_prepared, .profile = retained_profile, .entry = entry, .cleanup = value.cancellation_applied };
+                    const exhausted = try self.exhaustedCapabilities(value.id, entry.declaration.identity);
+                    errdefer self.allocator.free(exhausted);
+                    const work: Work = .{ .task = value.id, .occurrence = pending.id, .attempt = attempt, .request = retained, .prepared = retained_prepared, .profile = retained_profile, .exhausted_capabilities = exhausted, .entry = entry, .cleanup = value.cancellation_applied };
                     try self.store().begin();
                     defer self.store().rollback();
                     if (entry.declaration.capture != null) try self.store().reserveCapture(attempt) else try self.store().reserve(attempt);
@@ -982,6 +985,17 @@ pub fn Service(comptime Types: type) type {
                     return .{ .work = work };
                 },
             }
+        }
+
+        fn exhaustedCapabilities(self: *Self, task_id: state.TaskId, dispatch_identity: []const u8) ![]const []const u8 {
+            var exhausted: std.ArrayList([]const u8) = .empty;
+            errdefer exhausted.deinit(self.allocator);
+            for (self.handlers.entries) |entry| if (entry.declaration.attempt_limit) |limit| {
+                const used = try self.store().capabilityAttempts(task_id, entry.declaration.identity);
+                const dispatched: u32 = @intFromBool(same(entry.declaration.identity, dispatch_identity));
+                if (used + dispatched >= limit) try exhausted.append(self.allocator, entry.declaration.identity);
+            };
+            return exhausted.toOwnedSlice(self.allocator);
         }
 
         fn projectionContext(self: *Self, a: std.mem.Allocator, value: state.Task) registry.ProjectionContext {
@@ -1090,6 +1104,7 @@ pub fn Service(comptime Types: type) type {
             self.allocator.free(self.work.?.request);
             if (self.work.?.prepared) |body| self.allocator.free(body);
             self.allocator.free(self.work.?.profile);
+            self.allocator.free(self.work.?.exhausted_capabilities);
             self.work = null;
         }
         /// A worker has returned and will no longer access this work item.

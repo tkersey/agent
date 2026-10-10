@@ -138,10 +138,13 @@ const Application = struct {
             .e = e,
             .ops = ops,
             .loop = loop,
+            .source_at = try c.function("source evidence at global index", &.{ .{ .name = "evidence", .schema = try e.schema(t.EvidenceList) }, .{ .name = "index", .schema = try e.schema(u64) } }, try e.schema(?t.SourceEvidenceReference), &.{}),
+            .has_source = try c.function("source evidence availability", &.{ .{ .name = "evidence", .schema = try e.schema(t.EvidenceList) }, .{ .name = "index", .schema = try e.schema(u64) } }, try e.schema(bool), &.{}),
             .responder = try agent.responders.defineAdaptiveModelObserved(P, context, try context.literal(t.Failure, .invalid_response), false),
             .inference = try t.controls.defineInference(context, try context.literal(t.Failure, .capacity)),
             .skill = try t.controls.defineSkill(P, context, try context.literal(t.Failure, .capacity)),
         };
+        try program.defineEvidence();
         try program.defineLoop();
         const entry = try c.function("adaptive-agent", &.{.{ .name = "input", .schema = try e.schema(t.Input) }}, try e.schema(t.Output), &.{ ops.bindings, ops.prepare, ops.work, ops.ask, ops.inspect, ops.tool_build, ops.tool_run, ops.inbox, ops.model });
         const root = try c.body(entry);
@@ -179,9 +182,45 @@ const Program = struct {
     e: Emit,
     ops: Ops,
     loop: *const a.Function,
+    source_at: *const a.Function,
+    has_source: *const a.Function,
     responder: boundary.source.Id,
     inference: boundary.source.Id,
     skill: boundary.source.Id,
+
+    fn defineEvidence(p: Program) !void {
+        const e = p.e;
+        const b = try e.author.body(p.source_at);
+        const selected = try b.sequenceGet(try b.parameter("evidence"), try b.parameter("index"));
+        const present = try b.caseOf(selected, "some");
+        const absent = try b.caseOf(selected, "none");
+        const item = try e.named(present.body(), t.EvidenceReference, present.payload());
+        const source = try present.body().caseOf(item, "source");
+        const generated = try present.body().caseOf(item, "generated");
+        const projection = try present.body().match(item, &.{
+            try source.ret(try source.body().variant(try e.schema(?t.SourceEvidenceReference), "some", source.payload())),
+            try generated.ret(try e.literal(generated.body(), ?t.SourceEvidenceReference, null)),
+        });
+        try e.author.define(p.source_at, try b.ret(try b.match(selected, &.{
+            try present.ret(projection),
+            try absent.ret(try e.literal(absent.body(), ?t.SourceEvidenceReference, null)),
+        })));
+
+        const any = try e.author.body(p.has_source);
+        const evidence = try any.parameter("evidence");
+        const index = try any.parameter("index");
+        const scan = try any.branch();
+        const end = try any.branch();
+        const candidate = try scan.call(p.source_at, &.{ .{ .name = "evidence", .value = evidence }, .{ .name = "index", .value = index } });
+        const found = try scan.caseOf(candidate, "some");
+        const skipped = try scan.caseOf(candidate, "none");
+        const next = try skipped.body().checkedAdd(index, try skipped.body().constant(u64, 1), try e.failure());
+        const result = try scan.match(candidate, &.{
+            try found.ret(try found.body().constant(bool, true)),
+            try skipped.ret(try skipped.body().call(p.has_source, &.{ .{ .name = "evidence", .value = evidence }, .{ .name = "index", .value = next } })),
+        });
+        try e.author.define(p.has_source, try any.ret(try any.conditional(try any.less(index, try any.sequenceLength(evidence)), try scan.ret(result), try end.ret(try end.constant(bool, false)))));
+    }
 
     fn offers(p: Program, b: *a.Body, bindings: V, state: V) !V {
         const work = try b.less(try b.field(state, "work_calls"), try b.constant(u16, 12));
@@ -198,7 +237,8 @@ const Program = struct {
         offered[t.ordinal("stop")] = try b.constant(bool, true);
         offered[t.ordinal("inference_set")] = controls;
         offered[t.ordinal("skill_set")] = controls;
-        offered[t.ordinal("inspect")] = try b.select(work, reportable, try b.constant(bool, false));
+        const inspectable = try b.call(p.has_source, &.{ .{ .name = "evidence", .value = evidence }, .{ .name = "index", .value = try b.constant(u64, 0) } });
+        offered[t.ordinal("inspect")] = try b.select(work, inspectable, try b.constant(bool, false));
         offered[t.ordinal("tool_build")] = work;
         offered[t.ordinal("tool_run")] = readable;
         return p.e.sequence(b, [P.declaration_count]bool, &offered);
@@ -272,30 +312,41 @@ const Program = struct {
         });
         return p.resumeTask(b, bindings, successor);
     }
+    fn workResult(p: Program, b: *a.Body, bindings: V, state: V, call_id: V, payload: V, comptime index: usize) !V {
+        const e = p.e;
+        const context = try b.variantPayload(try b.field(state, "replay"), "some", try e.failure());
+        const request = try b.product(try e.schema(t.WorkRequest), &.{
+            .{ .name = "context", .value = context },                                                                                                                                     .{ .name = "call_id", .value = call_id },
+            .{ .name = "action", .value = try b.variant(try e.schema(@FieldType(t.WorkRequest, "action")), if (index == 0) "list" else if (index == 1) "read" else "inspect", payload) },
+        });
+        const reply = try b.perform(if (index == 7) p.ops.inspect else p.ops.work, request);
+        const reference = try b.field(reply, "artifact");
+        const evidence = try b.field(reply, "evidence");
+        const some = try b.caseOf(evidence, "some");
+        const none = try b.caseOf(evidence, "none");
+        const updated = try b.match(evidence, &.{
+            try some.ret(try e.update(some.body(), state, .{ .evidence = try e.append(some.body(), t.EvidenceList, try some.body().field(state, "evidence"), try some.body().variant(try e.schema(t.EvidenceReference), "source", some.payload())) })),
+            try none.ret(state),
+        });
+        return p.toolResult(b, bindings, updated, call_id, try b.variant(try e.schema(t.ResultValue), "work", reference));
+    }
     fn dispatchAction(p: Program, b: *a.Body, bindings: V, state: V, call_id: V, value: V, comptime index: usize) !V {
         const e = p.e;
         switch (index) {
-            0, 1, 7 => {
-                const context = try b.variantPayload(try b.field(state, "replay"), "some", try e.failure());
-                const WorkAction = @FieldType(t.WorkRequest, "action");
-                const payload = if (index == 7) try b.product(try e.schema(@FieldType(WorkAction, "inspect")), &.{
-                    .{ .name = "evidence_index", .value = try b.field(value, "evidence_index") },
-                    .{ .name = "evidence", .value = try b.variantPayload(try e.named(b, t.EvidenceReference, try b.variantPayload(try b.sequenceGet(try b.field(state, "evidence"), try b.field(value, "evidence_index")), "some", try e.failure())), "source", try e.failure()) },
-                }) else value;
-                const request = try b.product(try e.schema(t.WorkRequest), &.{
-                    .{ .name = "context", .value = context },                                                                                                            .{ .name = "call_id", .value = call_id },
-                    .{ .name = "action", .value = try b.variant(try e.schema(WorkAction), if (index == 0) "list" else if (index == 1) "read" else "inspect", payload) },
+            0, 1 => return p.workResult(b, bindings, state, call_id, value, index),
+            7 => {
+                const selected = try b.call(p.source_at, &.{ .{ .name = "evidence", .value = try b.field(state, "evidence") }, .{ .name = "index", .value = try b.field(value, "evidence_index") } });
+                const source = try b.caseOf(selected, "some");
+                const unavailable = try b.caseOf(selected, "none");
+                const payload = try source.body().product(try e.schema(@FieldType(@FieldType(t.WorkRequest, "action"), "inspect")), &.{
+                    .{ .name = "evidence_index", .value = try source.body().field(value, "evidence_index") },
+                    .{ .name = "evidence", .value = source.payload() },
                 });
-                const reply = try b.perform(if (index == 7) p.ops.inspect else p.ops.work, request);
-                const reference = try b.field(reply, "artifact");
-                const evidence = try b.field(reply, "evidence");
-                const some = try b.caseOf(evidence, "some");
-                const none = try b.caseOf(evidence, "none");
-                const updated = try b.match(evidence, &.{
-                    try some.ret(try e.update(some.body(), state, .{ .evidence = try e.append(some.body(), t.EvidenceList, try some.body().field(state, "evidence"), try some.body().variant(try e.schema(t.EvidenceReference), "source", some.payload())) })),
-                    try none.ret(state),
+                const rejected = try unavailable.body().variant(try e.schema(t.ResultValue), "inline_text", try e.literal(unavailable.body(), t.Summary, .{ .bytes = "Inspection requires an acquired source-file evidence index." }));
+                return b.match(selected, &.{
+                    try source.ret(try p.workResult(source.body(), bindings, state, call_id, payload, 7)),
+                    try unavailable.ret(try p.toolResult(unavailable.body(), bindings, state, call_id, rejected)),
                 });
-                return p.toolResult(b, bindings, updated, call_id, try b.variant(try e.schema(t.ResultValue), "work", reference));
             },
             2 => {
                 const question = try b.product(try e.schema(t.Question), &.{.{ .name = "prompt", .value = try b.field(value, "question") }});

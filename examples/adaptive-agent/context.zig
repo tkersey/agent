@@ -1,5 +1,5 @@
-//! Pure preparation of the next request and a recoverable control receipt.
-//! Selection is authored. No model, work tool, or mutable host policy runs here.
+//! Pure context construction with captured native allowance observations.
+//! Selection stays authored; native dispatch remains the authority for work.
 const std = @import("std");
 const native = @import("agent_native");
 const contracts = @import("agent_contracts");
@@ -252,12 +252,25 @@ fn prepare(ctx: native.registry.ProjectionContext, bytes: []const u8) ![]u8 {
 }
 fn acquire(ctx: native.Context, bytes: []const u8) !native.registry.Acquisition {
     ctx.checkCancellation() catch |err| return .{ .definitely_not_sent = err };
-    return .{ .captured = try ctx.allocator.dupe(u8, bytes) };
+    return .{ .captured = try contracts.encodeOwned(t.PreparationCapture, ctx.allocator, .{
+        .prepared = digest(bytes),
+        .build_exhausted = ctx.nextAttemptLimitExhausted(t.tool_build_identity),
+        .run_exhausted = ctx.nextAttemptLimitExhausted(t.tool_run_identity),
+    }) };
 }
 fn interpret(ctx: native.registry.ProjectionContext, request: []const u8, prepared: []const u8, captured: []const u8) !native.registry.Projection {
-    if (!equal(prepared, captured) or !equal(try prepare(ctx, request), prepared)) return error.InvalidCapture;
+    var observation = try contracts.decodeOwned(t.PreparationCapture, ctx.allocator, captured);
+    defer observation.deinit();
+    if (!equal(&observation.value.prepared, &digest(prepared)) or !equal(try prepare(ctx, request), prepared)) return error.InvalidCapture;
     var product = try contracts.decodeOwned(Product, ctx.allocator, prepared);
     defer product.deinit();
+    // Replay the original observation, never today's mutable attempt count.
+    // Intersecting the prepared mask cannot introduce an ungranted operation.
+    if (product.value.result == .ready) {
+        const offered = &product.value.result.ready.request.offered;
+        offered[t.ordinal("tool_build")] = offered[t.ordinal("tool_build")] and !observation.value.build_exhausted;
+        offered[t.ordinal("tool_run")] = offered[t.ordinal("tool_run")] and !observation.value.run_exhausted;
+    }
     const objects = try ctx.allocator.alloc([]const u8, @intFromBool(product.value.receipt != null));
     if (product.value.receipt) |receipt| objects[0] = try ctx.allocator.dupe(u8, receipt.bytes);
     return .{ .reply = try contracts.encodeOwned(t.PreparationResult, ctx.allocator, product.value.result), .objects = objects };

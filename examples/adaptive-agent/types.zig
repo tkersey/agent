@@ -49,7 +49,7 @@ pub const P = model.Profile(Action, .{
     .{ .name = "stop", .description = "Stop honestly if the task cannot be supported by the admitted evidence." },
     .{ .name = "inference_set", .description = "Select an approved profile and effort for the next inference, using the current control revision." },
     .{ .name = "skill_set", .description = "Load, deactivate or physically unload a pinned approved skill. Use an exact version and current control revision." },
-    .{ .name = "inspect", .description = "Locate guard-like lines in acquired evidence. This lexical aid requires an active invariant-review skill; it is not a correctness proof." },
+    .{ .name = "inspect", .description = "Locate guard-like lines in source-file evidence by its global evidence_index. Generated results are not source files. Requires an active invariant-review skill; it is not a correctness proof." },
     .{ .name = "tool_build", .description = "Construct a pure Boundary program from a closed JSON link recipe over the admitted component catalog. Construction does not execute it or establish task correctness." },
     .{ .name = "tool_run", .description = "Run an admitted generated program on one authorized compatible input reference through native World." },
 }, .{ .model_id_bytes = 128, .temperature_bytes = 32, .maximum_messages = 4, .message_bytes = model.maximum_adaptive_request_bytes, .maximum_output_items = 8, .call_id_bytes = 128, .arguments_json_bytes = 16384, .result_text_bytes = 32768, .provider_response_bytes = 512 * 1024, .maximum_adaptive_reply_bytes = 16 * 1024 });
@@ -185,6 +185,7 @@ pub const Ready = struct {
 };
 pub const PreparationResult = union(enum) { ready: Ready, rejected: controls.Rejection };
 pub const PreparationProduct = struct { result: PreparationResult, receipt: ?contracts.Bytes(128 * 1024) };
+pub const PreparationCapture = struct { prepared: [32]u8, build_exhausted: bool, run_exhausted: bool };
 // The original configuration keeps its eight declaration bits. Version 2 adds
 // explicit construction policy; admission maps these original bits by name.
 pub const SkillConfig = struct { id: contracts.Text(64), version: contracts.Text(64), description: contracts.Text(256), markdown: contracts.Text(4096), tools: [8]bool };
@@ -208,6 +209,7 @@ pub const support_types = .{
     .{ .name = "Preparation", .T = Preparation },
     .{ .name = "PreparationResult", .T = PreparationResult },
     .{ .name = "PreparationProduct", .T = PreparationProduct },
+    .{ .name = "PreparationCapture", .T = PreparationCapture },
     .{ .name = "ControlReceipt", .T = ControlReceipt },
     .{ .name = "ControlState", .T = controls.State },
     .{ .name = "Snapshot", .T = contracts.RepositorySnapshot },

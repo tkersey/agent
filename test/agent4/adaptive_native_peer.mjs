@@ -81,15 +81,16 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
       if (scenario.startsWith('tools-')) {
         const index = alternateIndex++, subject = toolSubject;
         const offered = new Set(body.tool_choice.tools.map(tool => tool.name));
-        const output = call => {
+        const outputText = call => {
           const item = body.input.find(item => item.type === 'function_call_output' && item.call_id === `tools-${call}`);
           assert(item, `missing acquired tool output ${call}`);
-          if (typeof item.output === 'string') return JSON.parse(item.output);
+          if (typeof item.output === 'string') return item.output;
           assert(Array.isArray(item.output) && item.output.length === 1);
           assert.equal(item.output[0].type, 'input_text');
-          return JSON.parse(item.output[0].text);
+          return item.output[0].text;
         };
-        const skill = (operation, revision) => ['skill_set', {operation, skill_id: 'tool-construction', version: '1', residency: operation === 'load' ? 'resident' : 'unchanged', expected_revision: revision, reason: 'Exercise checked composition and independent execution authority.'}];
+        const output = call => JSON.parse(outputText(call));
+        const skill = (operation, revision, skill_id = 'tool-construction') => ['skill_set', {operation, skill_id, version: '1', residency: operation === 'load' ? 'resident' : 'unchanged', expected_revision: revision, reason: 'Exercise checked composition and independent execution authority.'}];
         if (index === 0) {
           assert(!offered.has('tool_build')); assert(offered.has('tool_run'));
           const marker = 'Authorized typed Table inputs: ', text = strings(body.input).find(text => text.includes(marker));
@@ -112,19 +113,32 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
           assert(index <= 3);
         } else {
           if (index === 0) call = skill('load', 0);
-          if (index === 1) { assert(offered.has('tool_build')); call = ['tool_build', {proposal_json: JSON.stringify({...subject.recipe, pure: true})}]; }
-          if (index === 2) { assert.equal(output(1).disposition, 'rejected'); call = ['tool_build', {proposal_json: JSON.stringify(subject.recipe)}]; }
-          if (index === 3) { const built = output(2); assert.equal(built.disposition, 'structurally_admitted', JSON.stringify(built)); subject.program = built.tool_ref; call = ['tool_run', {tool_ref: subject.program, input_ref: subject.inputs[0].input_ref}]; }
-          if (index === 4) { const result = output(3); assert.equal(result.disposition, 'completed', JSON.stringify(result)); assert.deepEqual(result.value.rows.map(row => [row.id, row.status]), [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']]); call = ['ask', {question: 'The first audit is acquired. Continue with the second admitted input?'}]; }
-          if (index === 5) call = skill('deactivate', 1);
-          if (index === 6) call = skill('unload', 2);
-          if (index === 7) {
+          if (index >= 1 && index <= 3) {
+            assert(offered.has('tool_build'));
+            if (index > 1) assert.equal(output(index - 1).disposition, 'rejected');
+            call = ['tool_build', {proposal_json: JSON.stringify({...subject.recipe, unapproved_policy: index})}];
+          }
+          if (index === 4) { assert.equal(output(3).disposition, 'rejected'); assert(offered.has('tool_build')); call = ['tool_build', {proposal_json: JSON.stringify(subject.recipe)}]; }
+          if (index === 5) {
+            const built = output(4); assert.equal(built.disposition, 'structurally_admitted', JSON.stringify(built)); subject.program = built.tool_ref;
+            assert(!offered.has('tool_build'), 'four physical construction attempts exhaust the offered allowance');
+            assert(offered.has('tool_run')); call = ['tool_run', {tool_ref: subject.program, input_ref: subject.inputs[0].input_ref}];
+          }
+          if (index === 6) { const result = output(5); assert.equal(result.disposition, 'completed', JSON.stringify(result)); assert.deepEqual(result.value.rows.map(row => [row.id, row.status]), [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']]); call = skill('load', 1, 'invariant-review'); }
+          if (index === 7) { assert(!offered.has('inspect'), 'generated-only evidence is not a source inspection target'); call = ['read', {path: 'src/main.zig', start: 0, maximum: 4096}]; }
+          if (index === 8) { assert(offered.has('inspect')); call = ['inspect', {evidence_index: 0}]; }
+          if (index === 9) { assert.match(outputText(8), /source-file evidence/); call = ['inspect', {evidence_index: 1}]; }
+          if (index === 10) { assert.match(outputText(9), /Observed 0 lines.*evidence 1/); call = skill('unload', 2, 'invariant-review'); }
+          if (index === 11) call = ['ask', {question: 'The first audit and source inspection are acquired. Continue on the second input?'}];
+          if (index === 12) { assert(!offered.has('tool_build'), 'exhausted construction remains unavailable after restart/import while its skill is active'); call = skill('deactivate', 3); }
+          if (index === 13) call = skill('unload', 4);
+          if (index === 14) {
             assert(!offered.has('tool_build')); assert(offered.has('tool_run'));
             assert(strings(body.input).some(text => text.includes('Retained generated tool references') && text.includes(subject.program)));
             call = ['tool_run', {tool_ref: subject.program, input_ref: subject.inputs[1].input_ref}];
           }
-          if (index === 8) { const result = output(7); assert.equal(result.disposition, 'completed', JSON.stringify(result)); assert.equal(result.tool_ref, subject.program); assert.deepEqual(result.value.rows.map(row => [row.id, row.status]), [['80', '1']]); call = ['report', {summary: 'The same admitted program found agreement on the changed second input.', evidence_index: 1}]; }
-          assert(index <= 8);
+          if (index === 15) { const result = output(14); assert.equal(result.disposition, 'completed', JSON.stringify(result)); assert.equal(result.tool_ref, subject.program); assert.deepEqual(result.value.rows.map(row => [row.id, row.status]), [['80', '1']]); call = ['report', {summary: 'The same admitted program found agreement on the changed second input.', evidence_index: 2}]; }
+          assert(index <= 15);
         }
         assert(call);
         response.writeHead(200, {'content-type': 'application/json'});
@@ -273,7 +287,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
     const imported = invoke('import-checkpoint', '--state-dir', importedState, '--input', archivePath, '--operation-id', 'adaptive-import');
     assert.equal(imported.task_id, accepted.task_id);
     assert.deepEqual(invoke('result', '--state-dir', importedState, '--task-id', accepted.task_id).outcome.value, result.outcome.value);
-    const schemas = Object.fromEntries(['AdaptivePrepared', 'CapturedResponse', 'AdaptiveResult', 'AdaptiveContext', 'PreparationProduct', 'PreparationResult', 'WorkReply', 'WorkArtifact']
+    const schemas = Object.fromEntries(['AdaptivePrepared', 'CapturedResponse', 'AdaptiveResult', 'AdaptiveContext', 'PreparationProduct', 'PreparationCapture', 'PreparationResult', 'WorkReply', 'WorkArtifact']
       .map(name => [name, contract(asset, name)]));
     assert.equal(archive.task.resources.length, skillBodies.length + 2);
     for (const [index, skill] of skillBodies.entries()) assert.equal(archive.object(archive.task.resources[index + 1]).toString('utf8'), skill.body);
@@ -338,13 +352,16 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
           requestBytes, responseBytes, preparedBytes: prepared, capturedBytes: rawBytes, http_status: raw[0], request_ms: requestTimes[index]});
         providerProjections++;
       } else {
-        assert(prepared.equals(rawBytes), 'deterministic capability retained its original prepared capture');
         if (identity === 'agent.adaptive.context.prepare.v1') {
-          const product = decodeValue(schemas.PreparationProduct, rawBytes);
+          const observation = decodeValue(schemas.PreparationCapture, rawBytes);
+          assert.equal(Buffer.from(observation[0]).toString('hex'), hash(prepared));
+          assert.deepEqual(observation.slice(1), [false, false], 'legacy trajectory performs no constructed-tool attempts');
+          const product = decodeValue(schemas.PreparationProduct, prepared);
           assert(Buffer.from(encodeValue(schemas.PreparationResult, product[0])).equals(replyBytes));
           assert.deepEqual((product[1].tag === 1 ? [reference(Buffer.from(product[1].value))] : []), capture[6].value[1]);
           controlProjections++;
         } else {
+          assert(prepared.equals(rawBytes), 'deterministic work retained its original prepared capture');
           assert(['agent.adaptive.snapshot.work.v1', 'agent.adaptive.snapshot.guards.v1'].includes(identity));
           const work = decodeValue(schemas.WorkArtifact, rawBytes), reply = decodeValue(schemas.WorkReply, replyBytes);
           assert.deepEqual(reply[0], reference(rawBytes)); assert.deepEqual(capture[6].value[1], [reference(rawBytes)]);
@@ -447,7 +464,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
       toolSubject = {recipe: name === 'tools-reverse' ? reverseRecipe : coverageRecipe, foreign: retainedProgram};
       let selectedState = name === 'tools-foreign' ? retainedState : join(app.data, name);
       const selectedConfig = join(app.data, `${name}.json`);
-      await writeFile(selectedConfig, JSON.stringify({schema: 'adaptive-agent.configuration.v2', adaptive: {...config, skills: []}, tools: {build: name !== 'tools-foreign', run: true, inputs}}));
+      await writeFile(selectedConfig, JSON.stringify({schema: 'adaptive-agent.configuration.v2', adaptive: {...config, skills: name === 'tools-reuse' ? config.skills.filter(skill => skill.id === 'invariant-review') : []}, tools: {build: name !== 'tools-foreign', run: true, inputs}}));
       await launch(['--config', selectedConfig], selectedState);
       const description = await client.call('describe');
       const task = await client.call('task.submit', {client_operation_id: name, application_id: 'adaptive-agent', profile_id: description.profile.id,
@@ -459,7 +476,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
           return value;
         }, value => value.question != null, 2000);
         if (providerFailure) throw providerFailure;
-        assert.equal(alternateIndex, 5);
+        assert.equal(alternateIndex, 12);
         const originalProgram = await artifact(task.task_id, toolSubject.program);
         assert.equal(Buffer.from(decodeValue(contract(asset, 'ToolProgram'), originalProgram)[5][0]).subarray(0, 8).toString(), 'ABL_BPI3');
         app.signal(client.child, 'SIGKILL'); await client.closed; client = null;
@@ -469,9 +486,12 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         assert.equal(invoke('import-checkpoint', '--state-dir', selectedState, '--input', bundle, '--operation-id', 'constructed-import').task_id, task.task_id);
         await launch(['--profile-task', task.task_id], selectedState);
         const reopened = await client.call('task.status', {task_id: task.task_id});
-        assert.deepEqual(reopened.question, waiting.question); assert.equal(alternateIndex, 5);
+        assert.deepEqual(reopened.question, waiting.question); assert.equal(alternateIndex, 12);
         assert((await artifact(task.task_id, toolSubject.program)).equals(originalProgram));
         const exported = readArchive(await readFile(bundle));
+        const attempts = exported.manifest[6].filter(([kind]) => kind === 5).map(([, , ref]) => decodeValue(exported.schemas.get('attempt'), exported.object(ref))[5]);
+        assert.equal(attempts.filter(identity => identity === 'agent.adaptive.tool.build.v1').length, 4);
+        assert.equal(attempts.filter(identity => identity === 'agent.adaptive.snapshot.guards.v1').length, 1, 'generated-evidence rejection never dispatches source inspection');
         let privateChecks = 0;
         for (const [kind, id, ref] of exported.manifest[6]) {
           if (kind !== 4) continue;
@@ -507,7 +527,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         assert.equal(result.outcome.value.programs.length, 0);
         assert.equal(result.outcome.value.work_calls, name === 'tools-disabled' ? 0 : 1);
       }
-      if (name === 'tools-reuse') { retainedProgram = toolSubject.program; retainedState = selectedState; assert.equal(alternateIndex, 9); assert.equal(result.outcome.value.control.skills.length, 0); }
+      if (name === 'tools-reuse') { retainedProgram = toolSubject.program; retainedState = selectedState; assert.equal(alternateIndex, 16); assert.equal(result.outcome.value.control.skills.length, 0); }
       toolRuns.push({scenario: name, provider_calls: alternateIndex, disposition: result.outcome.value.disposition});
       assert.deepEqual(await client.close(), {code: 0, signal: null}); client = null;
     }

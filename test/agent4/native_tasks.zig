@@ -421,6 +421,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     defer application.deinit();
     application.manifest = (try native.json.parse(application.arena.allocator(), manifest, .{})).value;
     var increment_declaration = native.leaf(u32, u32, .{ .identity = "task-owner.increment.v1", .resource_role = "local" }, increment);
+    increment_declaration.attempt_limit = if (captured) 2 else 1;
     if (captured) {
         increment_declaration.background = true;
         increment_declaration.capture = .{ .prepare = CapturingIncrement.prepare, .acquire = CapturingIncrement.invoke, .interpret = CapturingIncrement.interpret };
@@ -467,6 +468,8 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     for (0..32) |_| {
         const step = try service.pump(frame);
         if (step == .work) {
+            const ctx: native.Context = .{ .allocator = frame, .io = io, .authority = &profile.authority, .task_id = "test", .profile = profile.bytes, .environment = profile.environment, .exhausted_capabilities = step.work.exhausted_capabilities };
+            try std.testing.expectEqual(!captured or retried, ctx.nextAttemptLimitExhausted("task-owner.increment.v1"));
             if (captured and !retried) {
                 try service.notSent(frame, step.work);
                 const archive_path = try std.fmt.allocPrint(frame, "{s}/not-sent.bundle", .{path_buffer[0..length]});
@@ -479,7 +482,6 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
             }
             var request = try protocol.decode(protocol.Request, frame, step.work.request);
             defer request.deinit();
-            const ctx: native.Context = .{ .allocator = frame, .io = io, .authority = &profile.authority, .task_id = "test", .profile = profile.bytes, .environment = profile.environment };
             const reply = if (step.work.entry.declaration.capture) |adapter| (try adapter.acquire(ctx, step.work.prepared.?)).captured else try step.work.entry.declaration.invoke.?(ctx, request.value.binding.payload);
             calls += 1;
             try service.acquire(frame, step.work, reply);

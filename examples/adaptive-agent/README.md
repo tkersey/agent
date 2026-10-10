@@ -234,6 +234,12 @@ destroy a constructed program. After unload, the parent exposes retained tool
 references without reinserting the removed instructions. References from a
 different task or policy do not confer authority.
 
+Exhausted construction and execution allowances remove those tools from future
+offers using the native attempt records. Captured allowance observations replay
+unchanged across restart. `inspect` accepts source-file evidence only; generated
+results remain reportable, and selecting one for inspection returns a recoverable
+tool rejection.
+
 The model-facing recipe limit is 2,700 bytes so worst-case escaping fits the
 existing 16-KiB argument envelope. The native construction API has an 8-KiB
 upper ceiling. Both enforce at most 16 instances, 64 bindings, an acyclic

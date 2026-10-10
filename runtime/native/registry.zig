@@ -82,6 +82,14 @@ pub const Context = struct {
     /// Application/environment handles only; no evaluator handle is supplied.
     environment: ?*anyopaque,
     cancellation: ?*const std.atomic.Value(bool) = null,
+    /// Dispatch-time observation, including the current physical attempt.
+    /// This can narrow presentation; only the task owner admits actual work.
+    exhausted_capabilities: []const []const u8 = &.{},
+
+    pub fn nextAttemptLimitExhausted(self: Context, identity: []const u8) bool {
+        for (self.exhausted_capabilities) |item| if (std.mem.eql(u8, item, identity)) return true;
+        return false;
+    }
 
     pub fn checkCancellation(self: Context) error{Canceled}!void {
         if (self.cancellation) |flag| if (flag.load(.acquire)) return error.Canceled;

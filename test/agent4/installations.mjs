@@ -2,7 +2,7 @@
 // acquisition/build/install command runs behind a native executable allowlist.
 import assert from 'node:assert/strict';
 import {execFileSync, spawnSync} from 'node:child_process';
-import {copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync} from 'node:fs';
+import {copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync} from 'node:fs';
 import {dirname, join, resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 
@@ -30,6 +30,10 @@ if (process.platform === 'darwin') {
   prefix = ['/usr/bin/bwrap', '--unshare-user', '--die-with-parent', '--new-session', '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp'];
   for (const path of ['/usr/lib', '/lib', '/lib64', '/etc/ssl', '/etc/resolv.conf', '/etc/hosts', '/etc/nsswitch.conf', '/usr/bin/tar', '/usr/bin/gzip', '/usr/bin/unzip', zig, library, root])
     if (existsSync(path)) prefix.push('--ro-bind', path, path);
+  // Native metadata reads Zig's license beside its executable or library.
+  // Expose those regular sidecar files without mounting an executable directory.
+  for (const path of new Set([join(dirname(zig), 'LICENSE'), resolve(dirname(zig), '../LICENSE'), resolve(library, '../LICENSE'), resolve(library, '../../LICENSE')]))
+    if (lstatSync(path, {throwIfNoEntry: false})?.isFile()) prefix.push('--ro-bind', path, path);
   prefix.push('--bind', scratch, scratch);
   if (!cache.startsWith(scratch + '/')) prefix.push('--bind', cache, cache);
 } else throw new Error('unsupported downstream qualification platform');

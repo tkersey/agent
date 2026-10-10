@@ -3,38 +3,38 @@
   "status": "development-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "b46285b8e171622e66d3616ffd9c15e209ea702e",
-    "gitTree": "10d55508e3153ef11308d4ca1151c3d4a1c4854e",
+    "commit": "abc7092b96becd03e5c7792b20dafad0da17881a",
+    "gitTree": "0ec08b0a7995ffefce812e8c1f766857858bf80a",
     "version": "3.0.0",
     "source": {
-      "inventorySha256": "492997213159c181567e939a777b1fa8f71c09f82d8047a3645810743e37bf51",
+      "inventorySha256": "1f2803cb4ab3f57bc1efbc97a8a5232d2967f4eef6d7c442deccd255204240ff",
       "entries": 320,
-      "bytes": 8085202
+      "bytes": 8085238
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/b46285b8e171622e66d3616ffd9c15e209ea702e.tar.gz",
-      "bytes": 1456785,
-      "sha256": "fca95b4a4f4f1f6400af231e6c7b67893b89727c61c99d0c8e74c59657304601"
+      "url": "https://github.com/tkersey/boundary/archive/abc7092b96becd03e5c7792b20dafad0da17881a.tar.gz",
+      "bytes": 1456755,
+      "sha256": "62f4fe020e80aff3d72a910f25efcc375144591ccbf6b4f33575607adce8ba07"
     },
     "authentication": "Development successor source archive compared file-for-file and executable-bit-for-bit with the exact Git commit; complete normalized source inventory authenticated.",
     "package": {
-      "zigHash": "boundary-3.0.0-flclaDLSMwDCOj_NYDaHit0VKo2p-jrlLogPcCQvz5Hq",
+      "zigHash": "boundary-3.0.0-flclaFbSMwBDSNcw9PhVPcn46Czi6LwYmXrVM1LNHhmo",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "1b9528528e8a0ced91328c8759462d227ca40cd826d3913ddddd30d8c37eb98a",
+          "inventorySha256": "bc8099980de9545dac41f457eec72f70ba2926385fc1e88362bf36dfbf3c60a8",
           "entries": 300,
-          "bytes": 3396146
+          "bytes": 3396182
         },
         "archive-extracted": {
-          "inventorySha256": "1b9528528e8a0ced91328c8759462d227ca40cd826d3913ddddd30d8c37eb98a",
+          "inventorySha256": "bc8099980de9545dac41f457eec72f70ba2926385fc1e88362bf36dfbf3c60a8",
           "entries": 300,
-          "bytes": 3396146
+          "bytes": 3396182
         }
       },
       "archive": {
-        "bytes": 667706,
-        "sha256": "686da6f35f63a7d90df4a040f6d3835582c76796688200c4847673c5c08f4a5a"
+        "bytes": 667717,
+        "sha256": "59d3d09e0c2c2102d9cce39218af1ab8c4c7b568fbaf5f2ac165c26054184b59"
       }
     },
     "api": {
@@ -88,18 +88,18 @@
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "3dcb8b3feff280e0093b9dbbe913f77f423a9bde",
-    "gitTree": "2b7b1281bf8dcbb24d29ad93b34920947edbdef3",
+    "commit": "38f0b313edd68cb75fff3778ec0bfed48debbc78",
+    "gitTree": "d9da4b30863afada37a4a3d15489ca751538b2ff",
     "version": "6.0.0",
     "source": {
-      "inventorySha256": "cf202eb7ba622abebb40734c61021192c0e20f46a7d381bc422620566de2153c",
+      "inventorySha256": "38086fa90a47c723446be06d91676b814009ffb8520b7951a4772f6ac0821bbe",
       "entries": 111,
-      "bytes": 1450682
+      "bytes": 1451661
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/3dcb8b3feff280e0093b9dbbe913f77f423a9bde.tar.gz",
-      "bytes": 324897,
-      "sha256": "c85038925b4ee1063c12fe885daa256a487446e193f8ce91523e136ec21681ca"
+      "url": "https://github.com/tkersey/world/archive/38f0b313edd68cb75fff3778ec0bfed48debbc78.tar.gz",
+      "bytes": 325232,
+      "sha256": "1a933b7a63adfa4f39b75e74e5eb8a7ee27d4871154e6e08acd0b186ef900302"
     },
     "authentication": "Development successor source archive compared file-for-file and executable-bit-for-bit with the exact Git commit; complete normalized source inventory authenticated."
   },
@@ -112,8 +112,8 @@
     "architecture": "arm64"
   },
   "publicationObservation": {
-    "boundarySource": "https://github.com/tkersey/boundary/pull/167 at b46285b8e171622e66d3616ffd9c15e209ea702e",
-    "worldSource": "https://github.com/tkersey/world/pull/65 at 3dcb8b3feff280e0093b9dbbe913f77f423a9bde",
+    "boundarySource": "https://github.com/tkersey/boundary/pull/167 at abc7092b96becd03e5c7792b20dafad0da17881a",
+    "worldSource": "https://github.com/tkersey/world/pull/65 at 38f0b313edd68cb75fff3778ec0bfed48debbc78",
     "compatiblePublishedReleaseObserved": false
   },
   "limitations": [

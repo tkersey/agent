@@ -451,7 +451,8 @@ fn sourceAt(c: Context, parent: []const u8, name: []const u8, item: Value, offli
         const directory = std.mem.eql(u8, try text(row, "kind"), "directory");
         const executable = (try number(try field(row, "mode"))) & 0o111 != 0;
         if (directory) {
-            var dir = try Dir.cwd().openDir(c.io, path, .{ .follow_symlinks = false });
+            // Linux path-only directory handles cannot service fchmod.
+            var dir = try Dir.cwd().openDir(c.io, path, .{ .iterate = true, .follow_symlinks = false });
             defer dir.close(c.io);
             try dir.setPermissions(c.io, .fromMode(0o755));
         } else {

@@ -222,39 +222,6 @@ const System = agent.system(.{
     .application = Application,
 });
 
-fn output(init: std.process.Init, bytes: []const u8) !void {
-    var buffer: [4096]u8 = undefined;
-    var writer = std.Io.File.stdout().writer(init.io, &buffer);
-    try writer.interface.writeAll(bytes);
-    try writer.interface.flush();
-}
-pub fn main(init: std.process.Init) !void {
-    var args = init.minimal.args.iterate();
-    _ = args.next();
-    const mode = args.next() orelse return error.ExpectedMode;
-    if (std.mem.eql(u8, mode, "link")) {
-        const p = args.next() orelse return error.ExpectedProducer;
-        const c = args.next() orelse return error.ExpectedConsumer;
-        if (args.next() != null) return error.UnexpectedArgument;
-        const producer = try std.Io.Dir.cwd().readFileAlloc(init.io, p, init.gpa, .limited(64 << 20));
-        defer init.gpa.free(producer);
-        const consumer = try std.Io.Dir.cwd().readFileAlloc(init.io, c, init.gpa, .limited(64 << 20));
-        defer init.gpa.free(consumer);
-        Application.producer_bytes = producer;
-        Application.consumer_bytes = consumer;
-        var compiled = try agent.compile(init.gpa, System);
-        defer compiled.deinit();
-        const bytes = try init.gpa.alloc(u8, try data.program_image.encodedLength(compiled.program));
-        defer init.gpa.free(bytes);
-        _ = try compiled.encode(init.gpa, bytes);
-        return output(init, bytes);
-    }
-    if (args.next() != null) return error.UnexpectedArgument;
-    const bytes = if (std.mem.eql(u8, mode, "producer")) try object(init.gpa, false) else if (std.mem.eql(u8, mode, "consumer")) try object(init.gpa, true) else if (std.mem.eql(u8, mode, "consumer-alt")) try objectChecked(init.gpa, true, false, true) else if (std.mem.eql(u8, mode, "input")) try fixture.inputBytes(init.gpa) else if (std.mem.eql(u8, mode, "reply")) try fixture.replyBytes(init.gpa) else return error.UnknownMode;
-    defer init.gpa.free(bytes);
-    return output(init, bytes);
-}
-
 fn discardIdle(b: *source.Builder, g: boundary.library.generator.Generator, value: Id) !Id {
     const payload = try b.variable(g.element);
     const package = try b.variable(g.package);

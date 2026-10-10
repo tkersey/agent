@@ -101,15 +101,3 @@ test "assessment cannot launder write authority through retained cleanup" {
     try compile(false, false, true);
     try std.testing.expectError(error.SpeculativeEffect, compile(false, true, true));
 }
-pub fn main(init: std.process.Init) !void {
-    const System = agent.system(.{ .InitialArgs = void, .Result = void, .Failure = void, .application = Application(false, false, false) });
-    var result = try agent.compile(init.gpa, System);
-    defer result.deinit();
-    const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(result.program));
-    defer init.gpa.free(bytes);
-    _ = try result.encode(init.gpa, bytes);
-    var buffer: [4096]u8 = undefined;
-    var writer = std.Io.File.stdout().writer(init.io, &buffer);
-    try writer.interface.writeAll(bytes);
-    try writer.interface.flush();
-}

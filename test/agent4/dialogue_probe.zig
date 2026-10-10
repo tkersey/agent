@@ -376,22 +376,3 @@ test "borrowed dialogue future cannot escape creator region" {
     defer b.deinit();
     try std.testing.expectError(error.InvalidOwnership, boundary.program.compile(std.testing.allocator, try build(&b, .borrowed_escape)));
 }
-
-pub fn main(init: std.process.Init) !void {
-    var args = init.minimal.args.iterate();
-    _ = args.next();
-    const mode = std.meta.stringToEnum(Mode, args.next() orelse "twice") orelse
-        return error.UnknownProbe;
-    if (args.next() != null) return error.UnknownProbe;
-    var b = Builder.init(init.gpa);
-    defer b.deinit();
-    var compiled = try boundary.program.compile(init.gpa, try build(&b, mode));
-    defer compiled.deinit();
-    const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
-    defer init.gpa.free(bytes);
-    _ = try compiled.encode(init.gpa, bytes);
-    var buffer: [4096]u8 = undefined;
-    var out = std.Io.File.stdout().writer(init.io, &buffer);
-    try out.interface.writeAll(bytes);
-    try out.interface.flush();
-}

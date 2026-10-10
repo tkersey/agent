@@ -167,10 +167,10 @@ works from an extracted source package without Git metadata.
 Acquire the locked World inputs and emit the product archive:
 
 ```sh
-node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-zig17"
+node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-released"
 zig build emit-agent4 -Doptimize=safe \
-  -Dworld-source="$PWD/.agent4-zig17/inputs/world" \
-  -Dworld-runtime="$PWD/.agent4-zig17/out/world-runtime/runtime"
+  -Dworld-source="$PWD/.agent4-released/inputs/world" \
+  -Dworld-runtime="$PWD/.agent4-released/out/world-runtime/runtime"
 ```
 
 Use the [runtime guide](docs/agent4-runtime.md) to start, inspect, resume or cancel
@@ -227,7 +227,7 @@ or runtime dependency. Supplied catalogs are checked and available through
 </details>
 
 <details>
-<summary>Packaging and development inputs</summary>
+<summary>Packaging and locked inputs</summary>
 
 Creating a use archive is separate from checking authoring. Run this from an
 Agent Git checkout so packaging can record its source provenance:
@@ -260,8 +260,8 @@ Permission modes are never normalized to bypass exact inventories.
 ## Compatibility and trust boundaries
 
 The current package is **Agent 4 development** (`4.0.0-dev.0`), with the exact
-Boundary 3 / World 6 development inputs recorded in the lock. That dependency selection is
-not a claim of compatibility with independently released versions. Agent 3
+released Boundary 3.0.0 / World 6.0.0 inputs recorded in the lock. Compatibility
+is qualified for that exact dependency tuple. Agent 3
 artifacts stay on their frozen BPI1/PST1 runtime; active-state migration is not
 supported. See [migration from Agent 3](docs/migration_from_3.md).
 

@@ -93,8 +93,8 @@ Both native examples now use the existing shared fixture compiler and the public
 helper's asset writer, removing two standalone compiler invocations.
 On Linux x86_64, build-time emitters and contract-test executables select Zig's
 self-hosted backend while retaining the requested optimization/safety mode.
-Linux x86_64 application binaries also use that backend; the public native
-API/HTTPS probe retains LLVM. Copied-binary witnesses still run in full.
+Linux x86_64 application binaries and the public native API/HTTPS probe also
+use that backend, retaining ReleaseSafe and all copied-binary witnesses.
 SQLite and the native C shim are compiled once per target ABI into a static
 library, with the same flags and dependency admission, then linked by consumers.
 The optimized standard-library SHA helper shares a private Zig-declared C ABI

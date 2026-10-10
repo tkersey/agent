@@ -746,8 +746,12 @@ pub fn build(b: *std.Build) void {
                 .imports = &.{ .{ .name = "world", .module = checked_world }, .{ .name = "boundary_data", .module = native_graph.data }, .{ .name = "agent_native", .module = checked_environment }, .{ .name = "agent_contracts", .module = native_graph.contracts }, .{ .name = "application_types", .module = native_graph.module("examples/native-minimal/types.zig") } },
             });
             consumer_module.addAnonymousImport("image", .{ .root_source_file = product.assets.image });
-            const consumer = b.addExecutable(.{ .name = "agent-native-consumer", .root_module = consumer_module });
-            // Release the long protocol peer before the LLVM probe occupies a
+            const consumer = b.addExecutable(.{
+                .name = "agent-native-consumer",
+                .root_module = consumer_module,
+                .use_llvm = if (native_target.result.os.tag == .linux and native_target.result.cpu.arch == .x86_64) false else null,
+            });
+            // Release the long protocol peer before the API probe occupies a
             // compile slot. Its short product build otherwise queues behind
             // the probe and delays checks that can overlap the remaining work.
             consumer.step.dependOn(&product.executable.step);

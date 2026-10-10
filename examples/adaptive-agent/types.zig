@@ -1,6 +1,7 @@
 //! One application state and the additive adaptive Responses contract.
 const agent = @import("agent");
 const contracts = @import("agent_contracts");
+pub const tool_types = @import("tool_types.zig");
 pub const controls = agent.adaptive_controls;
 pub const model = agent.model_invocation;
 pub const application_id = "adaptive-agent";

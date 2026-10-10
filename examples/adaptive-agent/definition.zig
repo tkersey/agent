@@ -22,7 +22,11 @@ pub const resources = .{
     .{ .id = "repository-orientation", .version = "1", .media_type = "text/markdown", .bytes = @embedFile("skills/orientation.md") },
     .{ .id = "invariant-review", .version = "1", .media_type = "text/markdown", .bytes = @embedFile("skills/invariant-review.md") },
     .{ .id = "technical-reporting", .version = "1", .media_type = "text/markdown", .bytes = @embedFile("skills/technical-reporting.md") },
+    .{ .id = "tool-construction", .version = "1", .media_type = "text/markdown", .bytes = @embedFile("skills/tool-construction/SKILL.md") },
 };
+pub fn generatedResources(allocator: std.mem.Allocator) ![1]struct { id: []const u8, version: []const u8, media_type: []const u8, bytes: []const u8 } {
+    return .{.{ .id = "tool-construction.catalog", .version = "1", .media_type = "application/octet-stream", .bytes = try @import("tool_catalog.zig").catalog(allocator) }};
+}
 pub const System = agent.system(.{ .InitialArgs = t.Input, .Result = t.Output, .Failure = t.Failure, .application = Application });
 
 const Emit = struct {

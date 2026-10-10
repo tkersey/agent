@@ -183,7 +183,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
     const result = await until(() => client.call('task.result', {task_id: accepted.task_id}), value => value.ready);
     if (providerFailure) throw providerFailure;
     assert.equal(requests.length, 14); assert.equal(result.outcome.value.control.selection.control_revision, '8');
-    assert.equal(result.outcome.value.control.eviction_generation, '2'); assert.equal(result.outcome.value.evidence[0].sha256, hash(Buffer.from(source)));
+    assert.equal(result.outcome.value.control.eviction_generation, '2'); assert.equal(result.outcome.value.evidence[0].tag, 'source'); assert.equal(result.outcome.value.evidence[0].value.sha256, hash(Buffer.from(source)));
     assert.deepEqual(await client.close(), {code: 0, signal: null}); client = null;
     const archivePath = join(app.data, 'adaptive-complete.bundle');
     invoke('export-checkpoint', '--state-dir', state, '--task-id', accepted.task_id, '--output', archivePath);

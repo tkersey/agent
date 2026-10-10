@@ -25,7 +25,7 @@ pub fn open(ctx: native.registry.ProjectionContext, ref: t.model.ArtifactReferen
     if (record.value.version != 1 or !same(&record.value.task, &ctx.task) or !same(&record.value.policy, &digest(ctx.profile))) return error.InvalidWorkArtifact;
     return record;
 }
-pub fn evidence(ctx: native.registry.ProjectionContext, ref: t.EvidenceReference) !t.Evidence {
+pub fn evidence(ctx: native.registry.ProjectionContext, ref: t.SourceEvidenceReference) !t.Evidence {
     var record = try open(ctx, ref.object);
     defer record.deinit();
     const item = record.value.evidence orelse return error.InvalidEvidence;

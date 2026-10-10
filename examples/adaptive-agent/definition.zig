@@ -12,6 +12,8 @@ pub const capabilities = .{
     .{ .identity = t.prepare_identity, .resource_role = "context" },
     .{ .identity = t.work_identity, .resource_role = "snapshot" },
     .{ .identity = t.inspect_identity, .resource_role = "invariant-review" },
+    .{ .identity = t.tool_build_identity, .resource_role = "tool-construction" },
+    .{ .identity = t.tool_run_identity, .resource_role = "tool-execution" },
     .{ .identity = t.question_identity, .resource_role = "user" },
     .{ .identity = agent.inbox.semantic_identity, .resource_role = "user" },
     .{ .identity = P.adaptive_identity, .resource_role = "inference" },
@@ -86,6 +88,7 @@ const Emit = struct {
             .{ .name = "disposition", .value = try e.literal(b, @FieldType(t.Output, "disposition"), disposition) },
             .{ .name = "summary", .value = summary },
             .{ .name = "evidence", .value = evidence },
+            .{ .name = "programs", .value = try b.field(state, "programs") },
             .{ .name = "control", .value = try b.field(state, "control") },
             .{ .name = "receipts", .value = try b.field(state, "receipts") },
             .{ .name = "model_calls", .value = try b.field(state, "model_calls") },
@@ -110,7 +113,7 @@ const Emit = struct {
     }
 };
 
-const Ops = struct { bindings: *const a.Operation, prepare: *const a.Operation, work: *const a.Operation, ask: *const a.Operation, inspect: *const a.Operation, inbox: *const a.Operation, model: *const a.Operation };
+const Ops = struct { bindings: *const a.Operation, prepare: *const a.Operation, work: *const a.Operation, ask: *const a.Operation, inspect: *const a.Operation, tool_build: *const a.Operation, tool_run: *const a.Operation, inbox: *const a.Operation, model: *const a.Operation };
 const Application = struct {
     pub fn emit(context: agent.Context) !boundary.source.Module {
         const c = try a.Context.init(context.builder);
@@ -125,10 +128,12 @@ const Application = struct {
             .work = try e.external(t.work_identity, t.WorkRequest, t.WorkReply),
             .ask = try e.external(t.question_identity, t.Question, t.Answer),
             .inspect = try e.external(t.inspect_identity, t.WorkRequest, t.WorkReply),
+            .tool_build = try e.external(t.tool_build_identity, t.ToolRequest, t.ToolReply),
+            .tool_run = try e.external(t.tool_run_identity, t.ToolRequest, t.ToolReply),
             .inbox = try a.interop.operation(c, try Inbox.declare(context)),
             .model = try a.interop.operation(c, try P.declareAdaptive(context.builder)),
         };
-        const loop = try c.function("adaptive repository investigation", &.{ .{ .name = "bindings", .schema = try e.schema(t.PolicyView) }, .{ .name = "state", .schema = try e.schema(t.State) } }, try e.schema(t.Output), &.{ ops.prepare, ops.work, ops.ask, ops.inspect, ops.inbox, ops.model });
+        const loop = try c.function("adaptive repository investigation", &.{ .{ .name = "bindings", .schema = try e.schema(t.PolicyView) }, .{ .name = "state", .schema = try e.schema(t.State) } }, try e.schema(t.Output), &.{ ops.prepare, ops.work, ops.ask, ops.inspect, ops.tool_build, ops.tool_run, ops.inbox, ops.model });
         const program: Program = .{
             .e = e,
             .ops = ops,
@@ -138,7 +143,7 @@ const Application = struct {
             .skill = try t.controls.defineSkill(P, context, try context.literal(t.Failure, .capacity)),
         };
         try program.defineLoop();
-        const entry = try c.function("adaptive-agent", &.{.{ .name = "input", .schema = try e.schema(t.Input) }}, try e.schema(t.Output), &.{ ops.bindings, ops.prepare, ops.work, ops.ask, ops.inspect, ops.inbox, ops.model });
+        const entry = try c.function("adaptive-agent", &.{.{ .name = "input", .schema = try e.schema(t.Input) }}, try e.schema(t.Output), &.{ ops.bindings, ops.prepare, ops.work, ops.ask, ops.inspect, ops.tool_build, ops.tool_run, ops.inbox, ops.model });
         const root = try c.body(entry);
         const frozen = try root.perform(ops.bindings, try root.constant(void, {}));
         const task = try root.field(try root.parameter("input"), "task");
@@ -150,6 +155,7 @@ const Application = struct {
             .results = .{ .items = &.{} },
             .messages = .{ .items = &.{} },
             .evidence = .{ .items = &.{} },
+            .programs = .{ .items = &.{} },
             .receipts = .{ .items = &.{} },
             .model_calls = 0,
             .work_calls = 0,
@@ -184,7 +190,18 @@ const Program = struct {
         const reportable = try b.less(try b.constant(u64, 0), try b.sequenceLength(evidence));
         const askable = try b.select(work, try b.less(try b.sequenceLength(try b.field(state, "followups")), try b.constant(u64, 4)), try b.constant(bool, false));
         const controls = try b.select(try b.less(try b.field(try b.field(try b.field(state, "control"), "selection"), "control_revision"), try b.field(bindings, "maximum_revision")), try b.less(try b.sequenceLength(try b.field(state, "receipts")), try b.constant(u64, 16)), try b.constant(bool, false));
-        return p.e.sequence(b, [P.declaration_count]bool, &.{ work, readable, askable, reportable, try b.constant(bool, true), controls, controls, try b.select(work, reportable, try b.constant(bool, false)) });
+        var offered: [P.declaration_count]V = undefined;
+        offered[t.ordinal("list")] = work;
+        offered[t.ordinal("read")] = readable;
+        offered[t.ordinal("ask")] = askable;
+        offered[t.ordinal("report")] = reportable;
+        offered[t.ordinal("stop")] = try b.constant(bool, true);
+        offered[t.ordinal("inference_set")] = controls;
+        offered[t.ordinal("skill_set")] = controls;
+        offered[t.ordinal("inspect")] = try b.select(work, reportable, try b.constant(bool, false));
+        offered[t.ordinal("tool_build")] = work;
+        offered[t.ordinal("tool_run")] = readable;
+        return p.e.sequence(b, [P.declaration_count]bool, &offered);
     }
     fn stopped(p: Program, b: *a.Body, state: V, reason: []const u8) !V {
         return p.e.finish(b, state, .capacity, try p.e.literal(b, t.Summary, .{ .bytes = reason }), try b.field(state, "evidence"));
@@ -263,7 +280,7 @@ const Program = struct {
                 const WorkAction = @FieldType(t.WorkRequest, "action");
                 const payload = if (index == 7) try b.product(try e.schema(@FieldType(WorkAction, "inspect")), &.{
                     .{ .name = "evidence_index", .value = try b.field(value, "evidence_index") },
-                    .{ .name = "evidence", .value = try e.named(b, t.EvidenceReference, try b.variantPayload(try b.sequenceGet(try b.field(state, "evidence"), try b.field(value, "evidence_index")), "some", try e.failure())) },
+                    .{ .name = "evidence", .value = try b.variantPayload(try e.named(b, t.EvidenceReference, try b.variantPayload(try b.sequenceGet(try b.field(state, "evidence"), try b.field(value, "evidence_index")), "some", try e.failure())), "source", try e.failure()) },
                 }) else value;
                 const request = try b.product(try e.schema(t.WorkRequest), &.{
                     .{ .name = "context", .value = context },                                                                                                            .{ .name = "call_id", .value = call_id },
@@ -275,7 +292,7 @@ const Program = struct {
                 const some = try b.caseOf(evidence, "some");
                 const none = try b.caseOf(evidence, "none");
                 const updated = try b.match(evidence, &.{
-                    try some.ret(try e.update(some.body(), state, .{ .evidence = try e.append(some.body(), t.EvidenceList, try some.body().field(state, "evidence"), some.payload()) })),
+                    try some.ret(try e.update(some.body(), state, .{ .evidence = try e.append(some.body(), t.EvidenceList, try some.body().field(state, "evidence"), try some.body().variant(try e.schema(t.EvidenceReference), "source", some.payload())) })),
                     try none.ret(state),
                 });
                 return p.toolResult(b, bindings, updated, call_id, try b.variant(try e.schema(t.ResultValue), "work", reference));
@@ -297,6 +314,30 @@ const Program = struct {
             },
             4 => return e.finish(b, state, .no_result, try e.widen(b, t.Summary, try b.field(value, "reason")), try b.field(state, "evidence")),
             5, 6 => return p.control(b, bindings, state, call_id, value, index == 5),
+            t.ordinal("tool_build"), t.ordinal("tool_run") => {
+                const build = index == t.ordinal("tool_build");
+                const request = try b.product(try e.schema(t.ToolRequest), &.{
+                    .{ .name = "context", .value = try b.variantPayload(try b.field(state, "replay"), "some", try e.failure()) },
+                    .{ .name = "call_id", .value = call_id },
+                    .{ .name = "action", .value = try b.variant(try e.schema(@FieldType(t.ToolRequest, "action")), if (build) "build" else "run", value) },
+                });
+                const reply = try b.perform(if (build) p.ops.tool_build else p.ops.tool_run, request);
+                const program = try b.field(reply, "program");
+                const constructed = try b.caseOf(program, "some");
+                const absent = try b.caseOf(program, "none");
+                const retained = try b.match(program, &.{
+                    try constructed.ret(try e.update(constructed.body(), state, .{ .programs = try e.append(constructed.body(), t.Programs, try constructed.body().field(state, "programs"), constructed.payload()) })),
+                    try absent.ret(state),
+                });
+                const evidence = try b.field(reply, "evidence");
+                const some = try b.caseOf(evidence, "some");
+                const none = try b.caseOf(evidence, "none");
+                const updated = try b.match(evidence, &.{
+                    try some.ret(try e.update(some.body(), retained, .{ .evidence = try e.append(some.body(), t.EvidenceList, try some.body().field(retained, "evidence"), try some.body().variant(try e.schema(t.EvidenceReference), "generated", some.payload())) })),
+                    try none.ret(retained),
+                });
+                return p.toolResult(b, bindings, updated, call_id, try b.variant(try e.schema(t.ResultValue), "tool", try b.field(reply, "artifact")));
+            },
             else => unreachable,
         }
     }

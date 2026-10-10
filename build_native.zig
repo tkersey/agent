@@ -91,6 +91,7 @@ pub fn addWithModules(b: *std.Build, modules: Modules, options: Options) Product
             .{ .name = "agent_native", .module = modules.native },
             .{ .name = "application_types", .module = types },
             .{ .name = "agent_contracts", .module = modules.native_contracts },
+            .{ .name = "boundary_data", .module = modules.native_data },
         },
     });
     const manifest = b.addSystemCommand(&.{ "env", "-u", "NODE_TEST_CONTEXT" });

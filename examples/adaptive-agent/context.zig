@@ -6,6 +6,8 @@ const contracts = @import("agent_contracts");
 const t = @import("application_types");
 const P = t.P;
 const work = @import("work.zig");
+const tool_work = @import("tool_work.zig");
+const tool_resources = @import("tool_resources.zig");
 const A = native.adaptive_responses.Admission(P);
 const Adapter = native.adaptive_responses.Adapter(P);
 const Product = t.PreparationProduct;
@@ -123,6 +125,12 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
                 if (!equal(record.value.call_id.bytes, item.call_id.bytes)) return error.InvalidWorkArtifact;
                 break :blk try a.dupe(u8, record.value.model_text.bytes);
             },
+            .tool => |ref| blk: {
+                var record = try tool_work.open(ctx, ref);
+                defer record.deinit();
+                if (!equal(record.value.call_id.bytes, item.call_id.bytes)) return error.InvalidToolArtifact;
+                break :blk try a.dupe(u8, record.value.model_text.bytes);
+            },
             .control => |ref| blk: {
                 const bytes = try ctx.object(.{ .digest = ref.digest, .bytes = ref.bytes }, 128 * 1024);
                 var record = try contracts.decodeOwned(t.ReceiptArtifact, a, bytes);
@@ -181,6 +189,17 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
     for (&offered, input.offered, policy.permitted_tools) |*allowed, requested, permitted| allowed.* = allowed.* and requested and permitted;
     var declarations: std.ArrayList(P.ToolDeclaration) = .empty;
     for (materialized, P.allDeclarations().items) |defined, item| if (defined) try declarations.append(a, item);
+    var messages = input.state.messages;
+    if (input.state.replay) |prior| if (prior.eviction_generation != control.eviction_generation and input.state.programs.items.len != 0) {
+        if (messages.items.len == t.P.Messages.max_length) return error.Capacity;
+        var retained: native.json.Value = .{ .array = .init(a) };
+        for (input.state.programs.items) |ref| try retained.array.append(native.json.string(try tool_resources.referenceText(a, ref)));
+        const text_value = try std.fmt.allocPrint(a, "Retained generated tool references after instruction eviction: {s}. These references carry no authority; tool_run still checks the frozen policy and input. Acquired evidence indexes remain stable.", .{try native.json.canonical(a, retained)});
+        const items = try a.alloc(t.P.Message, messages.items.len + 1);
+        @memcpy(items[0..messages.items.len], messages.items);
+        items[messages.items.len] = .{ .role = .developer, .content = .{ .bytes = text_value } };
+        messages = .{ .items = items };
+    };
     const request: P.AdaptiveRequest = .{
         .policy = digest(ctx.profile),
         .selection = control.selection,
@@ -192,7 +211,7 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
             .protocol = .{ .bytes = t.model.protocol_identity },
             .model = selected.model,
             .parameters = .{ .max_output_tokens = selected.max_output_tokens, .temperature = null, .reasoning = .{ .effort = control.top_effort, .summary = null } },
-            .messages = input.state.messages,
+            .messages = messages,
             .tools = .{ .items = declarations.items },
             .selection = .{ .minimum_calls = 1, .maximum_calls = 1, .parallel_calls = false },
             .response_policy = .{ .store = false, .stream = false, .background = false, .truncation = .disabled },

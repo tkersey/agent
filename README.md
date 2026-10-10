@@ -1,288 +1,93 @@
 # Agent
 
-**Build agents as portable, resumable programs.**
+Agent builds agents as typed, resumable programs. Its supported application is
+**Adaptive Agent**: a native executable that investigates a read-only snapshot,
+selects among approved models and reasoning settings, loads approved skills,
+asks questions, and constructs and reuses bounded pure tools.
 
-This branch is migrating to Boundary 3 / World 6. Authoring emits BPI3, and the
-normal bridge and runner use the authenticated ABI 3 runtime. Full application
-integration and the compiled-tool transfer witness pass; component-contract,
-performance and retirement work remains in progress. See
-[migration status](docs/compositional-execution.md).
+The application is authored in Zig. Boundary checks and compiles its control
+flow into BPI3; native World owns execution and continuation. Agent supplies
+provider I/O, tools, task storage, and CLI/stdio clients. The host does not
+interpret a recipe or run a second application policy loop.
 
-Agent is a Zig library for building agents that work with models, people, and
-tools. You author the control flow; [Boundary](https://github.com/tkersey/boundary)
-checks and compiles it into portable program data;
-[World](https://github.com/tkersey/world) executes it natively or in WebAssembly.
+## Build and run
 
-The important difference is what can travel: **not just the conversation, but
-what the agent is doing and what happens next.** Pause for clarification, retain
-a child dialogue, explore alternatives, or wait for approval. Save the execution
-state and resume on another compatible host, with the program's local state,
-scopes, and pending cleanup intact.
-
-[Capabilities](#what-you-can-build) ·
-[How it works](#why-boundary-and-world) ·
-[Examples](#complete-applications-not-just-api-snippets) ·
-[Get started](#get-started)
-
-## What you can build
-
-### Your agent, your control flow
-
-Compose the interactions your application needs: decisions, loops, nested
-computations, tool use, and continuing conversations. ReAct is an available
-library composition, not a mandatory runtime loop. Model profiles, prompts,
-skills, and application policies become part of the compiled program rather
-than executable policy hidden in host callbacks.
-
-### The same question, answered by a model, a person, or a rule
-
-A typed question separates **what the program needs to know** from **how it gets
-the answer**. Interpret the same decision body with a model responder, a human
-interaction, a deterministic rule, or another authored computation. Each answer
-returns to the same call site. Model responses are checked against the exact
-actions offered when the request was made; an answer is not permission to act.
-
-### Conversations that survive interruptions
-
-Ask for clarification in the middle of a turn without flattening the rest of the
-work into a host-side state machine. Keep a child dialogue parked while the
-surrounding program does other work, then resume or dispose of it explicitly.
-Scoped model, prompt, skill, tool, and memory interpretations survive suspension
-and restore their enclosing context on exit. A turn can finish while the
-conversation stays open; aborting a turn, closing the conversation, and cancelling
-execution remain distinct operations.
-
-### Explore alternatives before committing to one
-
-Use multi-shot continuations to evaluate alternatives from the same point in a
-computation, retaining alternatives across state transfers. Immutable evidence
-can inform the exploration while captured mutable state follows Boundary's
-branch-local region semantics. Agent's protected authoring checks reject writes,
-commits, approval, live-evidence acquisition, and unclassified effects inside
-speculation. This is **exploration without granting speculative branches the
-authority to commit**, not a claim that model calls or search are free.
-
-### Make approval part of the program, not a prompt convention
-
-Bind approval to the exact proposal, the approving principal, current policy,
-and required live evidence. An amendment requires a new approval; simulated
-observations cannot manufacture the corresponding live-read authority. The
-program consumes its internal grant before requesting the commit and treats
-uncertain delivery as something to reconcile, not automatically retry. The
-external tool still enforces its final preconditions atomically.
-
-## Why Boundary and World?
-
-**Agent authors. Boundary checks and compiles. World executes. The environment
-supplies effects.**
-
-| Layer | Responsibility | What you gain |
-| --- | --- | --- |
-| **Agent** | Typed agent constructions, semantic contracts, and protected authoring checks | Agent-specific building blocks without a second execution model |
-| **Boundary** | Check types, effects, captures, and resource use; compile the complete computation | Control flow, handlers, and policies represented as portable program data |
-| **World** | Interpret the program and admit its saved state using one generic native/WASM runtime | Execution without the Agent compiler, application source, or an application-specific WASM kernel |
-| **Your environment** | Resolve typed requests using models, people, credentials, and real tools | External authority stays explicit rather than becoming hidden continuation state |
-
-Boundary turns the authored computation into a **program image** (`BPI3`). World
-carries unfinished execution in **saved state** (`PST3`), including the
-continuations needed to resume. The program image and complete saved state—not
-a transcript, a suspended JavaScript callback, or an originating process—carry
-the application control.
-
-That separation makes it possible to deploy compiled agents without their
-source, inspect a pending request without executing a tool, and resume the same
-program through a different compatible embedding. Every application uses the
-same World kernel. Agent adds neither its own evaluator nor another portable
-execution-state format. Boundary remains a general computation library; Agent
-is an optional authoring layer, not a restriction on what Boundary can express.
-
-## Complete applications, not just API snippets
-
-The repository includes independent consuming packages built with the public
-Agent and Boundary APIs.
-
-**[Adaptive repository agent](examples/adaptive-agent/README.md).** One authored
-read-only investigation can select its next approved model/effort and load,
-deactivate or physically unload approved skills. Reusable Agent/Boundary
-constructions lower to BPI3, executed and continued by World through the existing
-native environment. The native executable is a reference vehicle; a separate
-JS adaptive backend is not required, and new standalone-distribution work is
-deferred. Deterministic qualification is separate from live API and cache
-measurements.
-
-**[Document assistant](test/consumers/document).** Combines clarification,
-live document reads, model-backed assessment of alternatives, a retained critic
-dialogue, approval, and conditional replacement of a real file. The application
-keeps its conversation open across turns. Its tests exercise successful changes,
-amendments, conflicting edits, declined approval, uncertain delivery, and
-cleanup—not just a happy-path transcript.
-
-Its opt-in [consequence-sensitive mode](docs/consequence-clarification.md) explores
-both scopes of a terminology edit before asking. Equal permitted edits skip the
-scope question; different edits expose their actual consequences. Fresh evidence
-and exact-proposal approval still precede replacement.
-
-**[Review agent](test/consumers/review).** Runs the same decision body with human,
-model, and rule responders; composes clarification before or during review; and
-includes an ordinary ReAct composition. The application, not the compiler or a
-host adapter, chooses the order of work.
-
-The [acceptance evidence](conformance/agent4/evidence.md) maps these capabilities
-to executable tests, including source-independent execution, state transfer,
-and agreement between native World, Node/WASM, and an independent Wasmtime
-embedding. Required tests use synthetic provider replies and real tools in
-isolated fixture directories: no personal credentials or paid inference. These
-are finite execution checks, not claims about live-model quality.
-
-## Get started
-
-Use **exact Zig 0.17.0 only** and **Node 26.8.1 or newer**. Agent 4 pins released Boundary 3.0.0 and
-World 6.0.0 source commits in its [dependency lock](conformance/agent4/dependencies.lock.json); use
-that exact Boundary/World combination rather than substituting other versions.
-The locked source-installation profile uses POSIX tooling and is qualified on
-Linux x86_64; Windows setup is not qualified. World is acquired anonymously from
-its hash-pinned public release archive and external descriptor. Use a fresh
-setup directory when changing tuples; retained inputs are never overwritten.
-See [runtime status](docs/agent4-runtime.md)
-and the [Zig 0.17 execution and cost evidence](https://github.com/tkersey/boundary/blob/a39014232db44c6780a3a2d953dacea111168aec/docs/zig-0.17-upgrade.md).
-
-For ordinary changes, use [focused local verification](.github/CI.md#local-completion-focused-checks-five-minutes-total)
-with a five-minute total budget. Retained tests run in normal CI; optional
-qualification campaigns have been removed.
-
-### Compile and check the examples
+Use Zig **0.17.0**, `tar`, and `unzip`. Approved source archives and SQLite are
+acquired and authenticated by a Zig bootstrap; Node and Python are not needed.
+From this checkout:
 
 ```sh
-git clone https://github.com/tkersey/agent.git
-cd agent
-zig build check-agent4 -Doptimize=safe
+zig run tools/native/dependencies.zig -- setup \
+  conformance/agent4/dependencies.lock.json \
+  conformance/agent4/native-dependencies.lock.json \
+  .agent4-native/inputs "$(command -v zig)"
+zig build adaptive-agent -Doptimize=safe
+./zig-out/bin/adaptive-agent describe-build
+./zig-out/bin/adaptive-agent demo --offline --state-dir ./adaptive-demo
 ```
 
-This fetches the exact locked Boundary package and checks authoring, contracts,
-and example compilation **without installing World**. The authoring check also
-works from an extracted source package without Git metadata.
+Setup authenticates complete source inventories, seeds Zig's pinned Boundary
+package, and retains only native World source and SQLite inputs. Append
+`--offline` to setup to require previously cached archives. Existing dependency
+directories are rechecked and never silently replaced.
 
-### Execute the examples
+The offline demo uses recorded replies through the actual authored program.
+For configured operation, see [Adaptive Agent](examples/adaptive-agent/README.md)
+and the [native build and operations guide](docs/native-single-binary.md).
+Inference requires explicit configuration, authorization, and a credential file;
+there is no credential discovery or paid call in ordinary qualification.
 
-Acquire the locked World inputs and emit the product archive:
+Supported native targets are `aarch64-macos` and `x86_64-linux-musl`. SQLite,
+the small native C bridge, libc, and OS facilities remain dependencies. The
+installed agent needs no compiler, JS/WASM runtime, or adjacent source tree.
+
+## Reusable authoring and embedding
+
+Agent remains a library. `agent.system`, `Context`, and `compile` construct
+ordinary Boundary programs. Checked model responders retain request-time offers;
+adaptive controls, inboxes, prompts, skills, compiled tools, and the generic
+interaction/approval constructions remain available to downstream authors.
+Model calls, choices, and continuations belong to the program.
+
+The public `addNativeSystem` build function accepts caller-owned definition,
+types, and environment paths, or an already emitted image/assets/types tuple.
+It uses the same native source admission and asset/metadata writers as the
+repository application. The [downstream recipe](test/consumers/adaptive/build.zig)
+builds the adaptive application through that public API.
+
+[Architecture](docs/architecture.md) ·
+[Trust boundaries](docs/security_model.md) ·
+[Adaptive model contracts](docs/model-invocation-v6.md) ·
+[Native Responses](docs/native-responses.md)
+
+## Qualification
 
 ```sh
-node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-released"
-zig build emit-agent4 -Doptimize=safe \
-  -Dworld-source="$PWD/.agent4-released/inputs/world" \
-  -Dworld-runtime="$PWD/.agent4-released/out/world-runtime/runtime"
+zig build check-agent4 check-native -Doptimize=safe
+node test/agent4/installations.mjs .agent4-native/inputs zig-out/bin/adaptive-agent
 ```
 
-Use the [runtime guide](docs/agent4-runtime.md) to start, inspect, resume or cancel
-an example. Setup authenticates the pinned inputs; the supported repository
-execution profile remains macOS-only and has no unsandboxed fallback.
+Node is an external verification controller only. The independent native peer
+uses controlled HTTPS, actual authored actions and created tools, killed/restarted
+tasks, frozen inputs, malformed archives, and cancellation. The downstream witness
+uses a clean source package and an OS executable boundary that excludes Node and
+Python during acquisition, authoring, public-API building, installation, inspection,
+and offline execution. Source and compiler caches are authenticated or reused
+without deleting unrelated local data.
 
-### Author your own program
+CI qualifies Linux and retains only the adaptive executable, its build metadata,
+program/contracts, and example configuration. The complete workflow target is
+300 seconds and its maximum is 360 seconds. Exact-head results belong to the PR;
+a previous run does not qualify a changed candidate.
 
-A consuming package imports `agent` and `boundary`. An application emitter
-constructs a Boundary module; `agent.system` binds its input, result, failure,
-and optional catalogs, and `agent.compile` produces the compiled program. The
-[document](test/consumers/document) and [review](test/consumers/review) packages
-include complete build configuration and executable emitters.
+## Retired applications
 
-<details>
-<summary>Minimal staged Zig example</summary>
+The fixed repository agent, native minimal demo, inquiry/parser/document
+applications, JavaScript runners, and JavaScript mobility deployment have been
+removed. See [migration notes](docs/migration_from_3.md). Distributed adaptive
+mobility is future work. Checkpoint export/import preserves local continuation
+and compatibility checks; it does not establish exclusive distributed custody.
 
-This small emitter performs one typed external read. It illustrates the
-authoring boundary; the complete applications above show the agent compositions.
-
-```zig
-const agent = @import("agent");
-const boundary = @import("boundary");
-
-const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.source.Module {
-        const b = c.builder;
-        const integer = try c.schema(u32);
-        const unit = try c.schema(void);
-        const read = try c.external("example.read.v1", integer, integer, .read);
-        const entry = try b.declare(&.{integer}, integer, &.{read}, &.{});
-        try b.define(entry, try b.term(.{ .perform = .{
-            .effect = read, .payload = try b.reference(b.parameter(entry, 0)),
-        } }));
-        return b.module(entry, unit);
-    }
-};
-
-const System = agent.system(.{
-    .InitialArgs = u32, .Result = u32, .Failure = void,
-    .application = Application,
-});
-// var compiled = try agent.compile(allocator, System);
-// defer compiled.deinit();
-```
-
-Native emitters run only while authoring: arbitrary Zig closures and stack
-frames are not translated or checkpointed. Helpers construct the same public
-Boundary source terms available to your application. The optional
-`agent_contracts` module provides pure schema/value support without a compiler
-or runtime dependency. Supplied catalogs are checked and available through
-`Context.catalogs`.
-
-</details>
-
-<details>
-<summary>Packaging and locked inputs</summary>
-
-Creating a use archive is separate from checking authoring. Run this from an
-Agent Git checkout so packaging can record its source provenance:
-
-```sh
-zig build emit-agent4 -Doptimize=safe
-```
-
-The archive contains compiled examples and runtime support; World remains a
-separately supplied, authenticated dependency. No runtime kernel is built per
-application. See [packaging and execution](docs/agent4-runtime.md) for archive
-contents, receipts, and source-independent use.
-
-Use `--cache-dir` and `--global-cache-dir` inside the isolated Agent checkout when
-working alongside other deliveries. `-Dboundary-source=/absolute/immutable/copy`
-is an optional development input, verified against the same lock. Its authentication
-check also runs when an external build consumes Agent's exported modules.
-Native agreement tests use the separately authenticated unchanged World source acquired by setup.
-
-For `node tools/agent4/setup.mjs --work-dir "$PWD/.agent4-inputs"`, pass
-`-Dworld-source="$PWD/.agent4-inputs/inputs/world"` and
-`-Dworld-runtime="$PWD/.agent4-inputs/out/world-runtime/runtime"` to both aggregates.
-The archive defaults to `world-<first seven commit characters>.tar.gz` beside the selected source;
-`-Dworld-archive=/absolute/immutable/archive.tar.gz` selects a different location.
-All selected inputs are checked against the same lock before and after execution.
-Permission modes are never normalized to bypass exact inventories.
-
-</details>
-
-## Compatibility and trust boundaries
-
-The current package is **Agent 4 development** (`4.0.0-dev.0`), with the exact
-released Boundary 3.0.0 / World 6.0.0 inputs recorded in the lock. Compatibility
-is qualified for that exact dependency tuple. Agent 3
-artifacts stay on their frozen BPI1/PST1 runtime; active-state migration is not
-supported. See [migration from Agent 3](docs/migration_from_3.md).
-
-Portable state is not a distributed persistence service. Your embedding must
-persist and protect checkpoints; the reference runner is single-writer, with
-one outstanding external request per computation. Snapshot portability supplies
-neither encryption nor global anti-replay. Protected authoring assumes trusted
-application authors and conforming environmental handlers. Authentication,
-external deduplication, and atomic tool preconditions remain environmental
-responsibilities; cancellation is not external rollback or an exactly-once
-guarantee. See [the architecture](docs/architecture.md) and
-[runtime custody rules](docs/agent4-runtime.md) for the precise boundaries.
-
-## Go deeper
-
-| Guide | Start here for |
-| --- | --- |
-| [Architecture](docs/architecture.md) | Ownership, typed decisions, continuations, scopes, and protected admission |
-| [Runtime and portable archives](docs/agent4-runtime.md) | Running, saving, resuming, inspecting, cancelling, and embedding agents |
-| [Model invocation contract](docs/model-invocation-v3.md) | Model configuration, offered actions, normalization, and response admission |
-| [Adaptive Responses contract](docs/model-invocation-v6.md) | Frozen policy, model/effort selection, skill residency, context epochs and capture recovery |
-| [Acceptance evidence](conformance/agent4/evidence.md) | Executable capability checks, regular CI coverage and limitations |
-
-[MIT licensed](LICENSE).
+Boundary's independent source oracle and World's source-agreement tests remain
+outside this product. World's optional JS/WASM embedding remains supported by
+World and is not a native Agent prerequisite.

@@ -13,5 +13,4 @@ test {
     _ = @import("approval_equality.zig");
     _ = @import("callable_runtime.zig");
     _ = @import("clarification.zig");
-    _ = @import("terminology.zig");
 }

@@ -19,6 +19,18 @@ try {
     assert.equal(result.status, 0, `${args[0]}: ${result.error ?? result.stderr}\n${result.stdout}`);
     return JSON.parse(result.stdout);
   };
+  const manifest = invoke('describe-build');
+  assert.equal(manifest.format, 'agent-native-build/v1');
+  assert.equal(manifest.application_id, 'adaptive-agent');
+  assert.equal(manifest.protocol, 'agent-host/1.0');
+  assert.equal(manifest.compiler.version, '0.17.0');
+  assert.equal(manifest.artifact_sha256, createHash('sha256').update(readFileSync(app.executable)).digest('hex'));
+  assert.equal(manifest.program_sha256, application.program_sha256);
+  assert.equal(manifest.application_assets_sha256, createHash('sha256').update(readFileSync(process.argv[3])).digest('hex'));
+  assert.equal(manifest.dependencies.sqlite.version, '3.53.4');
+  assert.deepEqual(manifest.licenses.map(item => item.component).sort(), ['Agent', 'World', 'Boundary', 'Zig standard library', 'SQLite', ...(manifest.target.includes('linux') ? ['musl libc'] : [])].sort());
+  assert(manifest.licenses.some(item => item.component === 'SQLite' && item.text.includes('disclaims copyright')));
+  assert(!JSON.stringify(manifest).includes(process.cwd()));
   const result = invoke('demo', '--offline', '--state-dir', join(app.data, 'adaptive state'));
   assert.equal(result.mode, 'offline-demo');
   assert.equal(result.output.disposition, 'report');

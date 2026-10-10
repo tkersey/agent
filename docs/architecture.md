@@ -3,8 +3,10 @@
 The application emitter constructs one Boundary source module. Agent checks its
 catalogs and protected construction, then calls Boundary's compiler once. Boundary
 owns type/effect/capture/use checking, direct stable-activation lowering, and
-BPI3/PST3/ERQ3/ERS3/PKI3/PKO3. World owns execution. The normal dependency lock selects the coordinated
-successor pair; full performance acceptance and serial review closeout remain open.
+BPI3/PST3/ERQ3/ERS3/PKI3/PKO3. World owns execution. The native source lock
+selects an explicit development successor tuple for Boundary and World.
+Published 3.0.0 / 6.0.0 artifacts retain their original identities. The adaptive
+agent is the supported application; reusable authoring and native-host owners remain.
 
 | Owner | Responsibility |
 |---|---|
@@ -65,7 +67,7 @@ instead of trusting a list of helper names. Native application authors choose po
 and are trusted not to mutate Builder internals or forge admission metadata. Raw
 Boundary authoring without the same Agent gate carries no protected-system claim.
 
-The bridge delegates to World and returns original canonical outcomes. Inspection
+The native host delegates to World and returns original canonical outcomes. Inspection
 is a non-authoritative view. Missing input stays parked; cleanup can itself park.
 Killing an execution worker produces no authoritative successor or cleanup proof.
 Content identity, conversation identity and delivery occurrence are distinct; whole

@@ -4,9 +4,9 @@
 and result are application-specific schemas derived by `model_invocation.Profile`.
 Its provider protocol remains `agent.model.protocol.openai-responses-v2`.
 The image selects model configuration, semantic messages, offered declarations,
-normalization bounds and answer policy. `runtime/model.mjs` only transports and
-normalizes those values. It does not select a model, add instructions, retry,
-select a winning call or execute a tool.
+normalization bounds and answer policy. These schema and authoring contracts
+remain shared by the native v5/v6 adapters. The former JavaScript v3 transport
+is retired; the native application uses v6.
 
 Use `Profile(Answer, declarations, limits)` for a tagged answer union and one
 name/description per variant. Each payload is an enum or a flat product of bounded

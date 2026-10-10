@@ -4,20 +4,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      lane:
-        description: 'Focused check (only all can qualify the whole change)'
-        type: choice
-        default: all
-        options: [all, source, installation, authoring, native]
-      collect_all:
-        description: 'Diagnostic only: continue independent lanes after failures'
-        type: boolean
-        default: false
-      measure_builds:
-        description: 'Manual native cold/warm/resource-edit build measurements'
-        type: boolean
-        default: false
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -33,28 +19,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: '26.9.0'
-      # No Zig setup, dependency fetch, or consumer compilation precedes this check.
-      - name: Classify authoring source using the installation scanner
-        run: node test/agent4/installations.mjs --scan-only
-      - name: Check preflight and non-destructive cache admission
-        run: node --test test/agent4/installations.test.mjs .github/scripts/zig-cache.test.mjs
+      - name: Check source inventory
+        run: |
+          command -v rg >/dev/null || sudo apt-get install --yes --no-install-recommends ripgrep
+          sh tools/check_zig_paths.sh
   qualify:
     name: Qualification / ${{ matrix.lane }} / linux-x86_64
     needs: source
-    if: ${{ !cancelled() && inputs.lane != 'source' && (needs.source.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.collect_all)) }}
     strategy:
-      fail-fast: ${{ !inputs.collect_all }}
+      fail-fast: false
       matrix:
-        lane: ${{ fromJSON((inputs.lane == '' || inputs.lane == 'all') && '["installation","authoring","native"]' || format('["{0}"]', inputs.lane)) }}
+        lane: [authoring, native]
     runs-on: ${{ matrix.lane == 'native' && 'ubuntu-22.04' || 'ubuntu-24.04' }}
-    timeout-minutes: 60
+    timeout-minutes: 10
     env:
-      # Include cold fetch/install: these also compile Zig's internal driver.
-      # Explicit application -Doptimize=safe settings remain authoritative.
       ZIG_DEBUG_CMD: '1'
+      ZIG_GLOBAL_CACHE_DIR: ${{ github.workspace }}/.zig-cache/global
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -65,255 +45,128 @@ jobs:
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with:
           version: '0.17.0'
-          # A stable library path lets C compilation reuse authenticated objects.
           use-tool-cache: true
-          # Its post hook clears the entire cache above its cap. Save explicitly below.
           use-cache: false
-      - name: Restore this lane's compiler cache
+      - name: Restore complete compiler cache
         id: cache
-        if: matrix.lane != 'installation'
         continue-on-error: true
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
-          path: ${{ matrix.lane == 'native' && '.zig-cache-upload' || '.zig-cache' }}
-          # Native5 accepts only complete snapshots within the byte bound.
-          # Native4 could omit compiler-runtime archives; never restore it here.
-          key: zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane == 'native' && 'native5' || matrix.lane }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .zig-cache-upload
+          key: zig-adaptive-v1-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane == 'native' && 'native5' || matrix.lane }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}-
-            zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane == 'native' && 'native5' || matrix.lane }}-
-      - name: Use the restored native snapshot as the working cache
-        if: matrix.lane == 'native'
+            zig-adaptive-v1-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}-
+      - name: Prepare compiler scratch and native isolation tools
         run: |
           if [ -d .zig-cache-upload ]; then
             test ! -e .zig-cache
             mv .zig-cache-upload .zig-cache
           fi
-          # The cached configurer can write here before any compiler cache miss.
-          # Keep scratch preparation explicit for cold or restored caches.
           mkdir -p .zig-cache/tmp
-      - name: Record restored cache contents and matched key
-        if: matrix.lane != 'installation'
-        continue-on-error: true
-        env:
-          RESTORED_CACHE_KEY: ${{ steps.cache.outputs.cache-matched-key }}
-        run: node .github/scripts/zig-cache.mjs .zig-cache restored
-      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
-        if: matrix.lane == 'native'
-        with:
-          cache-dependency-glob: |
-            test/agent4/native_host.mjs
-            test/agent4/native_schema.py
-      - name: Ensure this lane's required system tools
-        if: matrix.lane != 'installation'
-        run: |
           packages=()
+          command -v rg >/dev/null || packages+=(ripgrep)
           if [ "${{ matrix.lane }}" = native ]; then
             test -x /usr/bin/bwrap || packages+=(bubblewrap)
             test -x /usr/bin/strace || packages+=(strace)
-          elif ! command -v rg >/dev/null; then
-            packages+=(ripgrep)
           fi
           if [ "${#packages[@]}" -gt 0 ]; then
-            # The image's HTTP Azure mirror can stall before its working HTTPS fallback.
             if [ -f /etc/apt/apt-mirrors.txt ]; then
               sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
             fi
-            # Runner images already include authenticated package indexes.
-            # Refresh only when those indexes cannot install the missing tools.
             if ! sudo apt-get install --yes --no-install-recommends "${packages[@]}"; then
               sudo apt-get update
               sudo apt-get install --yes --no-install-recommends "${packages[@]}"
             fi
           fi
           if [ "${{ matrix.lane }}" = native ]; then
-            # Reject an unavailable namespace boundary before compiling products.
             /usr/bin/bwrap --unshare-user --ro-bind / / /usr/bin/true
-          else
-            rg --version
           fi
-      - name: Restore locked dependency bytes
-        if: matrix.lane != 'installation'
+      - name: Restore locked native transport bytes
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: |
-            .agent4/inputs/boundary
-            .agent4/inputs/boundary-package
-            .agent4/inputs/boundary-*.tar.gz
-            .agent4/inputs/world
-            .agent4/inputs/world-*.tar.gz
-            .agent4/inputs/sqlite
-            .agent4/out/world-runtime
-          key: agent-locked-inputs-v1-${{ runner.os }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}
-      # Restored bytes are untrusted until setup rechecks every selected digest,
-      # inventory, package and runtime binding. Never skip this on a cache hit.
-      - name: Authenticate the locked source and delivered runtime
-        if: matrix.lane != 'installation'
+            .agent4-native/inputs/*.tar.gz
+            .agent4-native/inputs/*.zip
+          key: agent-native-archives-v2-${{ matrix.lane }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}
+      - name: Authenticate and provision selected native inputs
         run: |
-          if [ "${{ matrix.lane }}" = native ]; then
-            node tools/agent4/setup.mjs --native --zig-exe "$(command -v zig)"
-            node .agent4/out/world-runtime/runtime/bin/world.mjs runtime verify \
-              --root .agent4/out/world-runtime \
-              --manifest-sha256 "$(node -p "require('./conformance/agent4/dependencies.lock.json').world.delivery.manifestSha256")" \
-              --smoke
+          options=()
+          if [ "${{ matrix.lane }}" = authoring ]; then options+=(--authoring-only); fi
+          zig run tools/native/dependencies.zig -- setup \
+            conformance/agent4/dependencies.lock.json \
+            conformance/agent4/native-dependencies.lock.json \
+            .agent4-native/inputs "$(command -v zig)" "${options[@]}"
+      - name: Run retained qualification
+        run: |
+          if [ "${{ matrix.lane }}" = authoring ]; then
+            zig build check-agent4 -Dnative=false -Doptimize=safe --summary all
           else
-            node tools/agent4/setup.mjs --zig-exe "$(command -v zig)"
+            zig build check-native -Doptimize=safe --summary all \
+              --prefix "$RUNNER_TEMP/agent-qualification" --prefix-exe-dir executables
+            node test/agent4/installations.mjs .agent4-native/inputs \
+              "$RUNNER_TEMP/agent-qualification/executables/adaptive-agent"
           fi
-      - name: Run only the selected check
-        env:
-          LANE: ${{ matrix.lane }}
-          TMPDIR: ${{ runner.temp }}
-        run: |
-          test "$(uname -s)" = Linux
-          test "$(uname -m)" = x86_64
-          case "$LANE" in
-            installation)
-              # This witness deliberately owns fresh compiler/package caches.
-              node test/agent4/installations.mjs --output "$RUNNER_TEMP/installation-authoring.json"
-              exit 0 ;;
-            authoring) target=check-authoring-core ;;
-            native)
-              target=check-native ;;
-            *) exit 2 ;;
-          esac
-          trace=()
-          if [ "$LANE" = native ]; then
-            # The lightweight test roots allow independent peers to overlap
-            # compilation instead of waiting behind the LLVM API/HTTPS probe.
-            native_build_jobs="$(getconf _NPROCESSORS_ONLN)"
-            echo "Native build jobs: $native_build_jobs"
-            # Match the public recipe's SQLite input spelling so Zig can reuse
-            # the authenticated C object across the two build roots.
-            trace=("-j$native_build_jobs" --verbose "-Dsqlite-source=$PWD/.agent4/inputs/sqlite")
-          fi
-          zig build "$target" -Doptimize=safe \
-            -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime" \
-            --prefix "$RUNNER_TEMP/agent-qualification" --prefix-exe-dir executables --summary all "${trace[@]}"
-      - name: Build and run the public downstream recipe offline
-        if: ${{ matrix.lane == 'native' && needs.source.result == 'success' }}
-        working-directory: examples/native-minimal
-        env:
-          TMPDIR: ${{ runner.temp }}
-          MEASURE_BUILDS: ${{ inputs.measure_builds }}
-          ZIG_DEBUG_CMD: '1'
-        run: |
-          offline=(unshare --user --map-root-user --net)
-          if [ "$MEASURE_BUILDS" = true ]; then
-            # Retain only provisioned package bytes, never compiled objects.
-            mkdir "$RUNNER_TEMP/native-measure-global" "$RUNNER_TEMP/native-measure-local"
-            cp -R "$ZIG_GLOBAL_CACHE_DIR/p" "$RUNNER_TEMP/native-measure-global/p"
-            export ZIG_GLOBAL_CACHE_DIR="$RUNNER_TEMP/native-measure-global"
-            export ZIG_LOCAL_CACHE_DIR="$RUNNER_TEMP/native-measure-local"
-            TIMEFORMAT='native_recipe_cold real=%3R user=%3U sys=%3S'
-          else
-            TIMEFORMAT='native_recipe_provisioned real=%3R user=%3U sys=%3S'
-          fi
-          build_recipe() {
-            "${offline[@]}" zig build -Doptimize=safe \
-              -Dworld-source="$GITHUB_WORKSPACE/.agent4/inputs/world" \
-              -Dworld-runtime="$GITHUB_WORKSPACE/.agent4/out/world-runtime/runtime" \
-              -Dsqlite-source="$GITHUB_WORKSPACE/.agent4/inputs/sqlite" \
-              --prefix "$RUNNER_TEMP/Public native ü" --prefix-exe-dir executables --summary all --verbose
-          }
-          time build_recipe
-          node --input-type=module - "$RUNNER_TEMP/Public native ü/executables/agent-native-example" "$RUNNER_TEMP/agent-qualification/executables/agent-native-example" <<'JS'
-          import assert from 'node:assert/strict';
-          import {execFileSync} from 'node:child_process';
-          import {mkdtempSync, rmSync} from 'node:fs';
-          import {tmpdir} from 'node:os';
-          import {join} from 'node:path';
-          const [recipe, reference] = process.argv.slice(2);
-          const describe = binary => JSON.parse(execFileSync(binary, ['describe-build']));
-          const actual = describe(recipe), expected = describe(reference);
-          for (const key of ['program_sha256', 'application_assets_sha256', 'dependencies', 'compiler', 'target']) assert.deepEqual(actual[key], expected[key], key);
-          const directory = mkdtempSync(join(tmpdir(), 'Public native demo ü '));
-          try {
-            const demo = JSON.parse(execFileSync(recipe, ['demo', '--offline', '--state-dir', join(directory, 'state')], {env: {PATH: '/nonexistent'}, timeout: 10000}));
-            assert.deepEqual(demo.output, {value: 41, answer: 'offline answer'});
-            console.log(JSON.stringify({public_native_recipe: true, offline_build: true, target: actual.target, program: actual.program_sha256, artifact: actual.artifact_sha256}));
-          } finally { rmSync(directory, {recursive: true, force: true}); }
-          JS
-          if [ "$MEASURE_BUILDS" = true ]; then
-            recipe_binary="$RUNNER_TEMP/Public native ü/executables/agent-native-example"
-            recipe_before="$(shasum -a 256 "$recipe_binary")"
-            TIMEFORMAT='native_recipe_warm real=%3R user=%3U sys=%3S'
-            time build_recipe
-            test "$recipe_before" = "$(shasum -a 256 "$recipe_binary")"
-            cp instructions.txt "$RUNNER_TEMP/native-instructions-before"
-            trap 'cp "$RUNNER_TEMP/native-instructions-before" instructions.txt' EXIT
-            printf '\nNative qualification resource edit.\n' >> instructions.txt
-            TIMEFORMAT='native_recipe_resource_edit real=%3R user=%3U sys=%3S'
-            time build_recipe
-            test "$recipe_before" != "$(shasum -a 256 "$recipe_binary")"
-          fi
-      - name: Package executed native applications
-        if: ${{ matrix.lane == 'native' && needs.source.result == 'success' }}
+      - name: Package the executed adaptive application
+        if: matrix.lane == 'native'
         run: |
           output="$RUNNER_TEMP/agent-qualification/executables"
-          for application in agent-native-example repository-agent adaptive-agent; do
-            "$output/$application" describe-build > "$output/$application.build.json"
-          done
+          "$output/adaptive-agent" describe-build > "$output/adaptive-agent.build.json"
           cp docs/native-single-binary.md "$output/RUNBOOK.md"
-          cp examples/repository-agent/README.md "$output/REPOSITORY.md"
           cp examples/adaptive-agent/README.md "$output/ADAPTIVE.md"
-          mkdir -p "$output/adaptive-example/skills"
+          mkdir -p "$output/adaptive-example"
           cp examples/adaptive-agent/adaptive.example.json "$output/adaptive-example/"
-          cp examples/adaptive-agent/skills/*.md "$output/adaptive-example/skills/"
-          cp docs/model-invocation-v6.md "$output/MODEL-V6.md"
-          cp docs/adaptive-responses-acceptance.md "$output/ADAPTIVE-ACCEPTANCE.md"
-          mkdir -p "$output/adaptive-program"
-          cp "$RUNNER_TEMP/agent-qualification/agent4/adaptive-agent/program.bpi3" "$output/adaptive-program/"
-          cp "$RUNNER_TEMP/agent-qualification/agent4/adaptive-agent/application.json" "$output/adaptive-program/"
-          cp "$RUNNER_TEMP/agent-qualification/adaptive-observations.json" "$output/ADAPTIVE-OBSERVATIONS.json"
-          cp examples/native-minimal/stdio-client.mts "$output/stdio-client.mts"
-          tar -czf "$RUNNER_TEMP/native-reference-$RUNNER_OS-$RUNNER_ARCH-$GITHUB_SHA-$GITHUB_RUN_ATTEMPT.tar.gz" \
-            -C "$output" agent-native-example repository-agent adaptive-agent \
-            agent-native-example.build.json repository-agent.build.json adaptive-agent.build.json RUNBOOK.md REPOSITORY.md ADAPTIVE.md MODEL-V6.md ADAPTIVE-ACCEPTANCE.md ADAPTIVE-OBSERVATIONS.json adaptive-program adaptive-example stdio-client.mts
-      - name: Retain executed native applications
-        if: ${{ matrix.lane == 'native' && needs.source.result == 'success' }}
+          cp -R examples/adaptive-agent/skills "$output/adaptive-example/skills"
+          cp -R "$RUNNER_TEMP/agent-qualification/agent4/adaptive-agent" "$output/adaptive-program"
+          tar -czf "$RUNNER_TEMP/adaptive-agent-$RUNNER_OS-$RUNNER_ARCH-$GITHUB_SHA.tar.gz" \
+            -C "$output" adaptive-agent adaptive-agent.build.json RUNBOOK.md ADAPTIVE.md adaptive-program adaptive-example
+      - name: Retain executed adaptive application
+        if: matrix.lane == 'native'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          path: ${{ runner.temp }}/native-reference-*.tar.gz
+          path: ${{ runner.temp }}/adaptive-agent-*.tar.gz
           archive: false
           if-no-files-found: error
           retention-days: 14
-      - name: Measure cache before deciding whether to upload
+      - name: Admit a complete bounded cache snapshot
         id: cache_size
-        if: ${{ !cancelled() && matrix.lane != 'installation' }}
+        if: ${{ !cancelled() }}
         continue-on-error: true
-        env:
-          RESTORED_CACHE_KEY: ${{ steps.cache.outputs.cache-matched-key }}
         run: |
-          if [ "${{ matrix.lane }}" = native ]; then
-            GITHUB_OUTPUT= node .github/scripts/zig-cache.mjs .zig-cache final
-            node .github/scripts/zig-cache.mjs .zig-cache upload .zig-cache-upload
-          else
-            node .github/scripts/zig-cache.mjs .zig-cache final
-          fi
-      - name: Save useful bounded cache, including after a failed check
+          echo 'save=false' >> "$GITHUB_OUTPUT"
+          test -d .zig-cache/o || exit 0
+          test -z "$(find .zig-cache ! -type d ! -type f -print -quit)" || exit 0
+          test -n "$(find .zig-cache/o -type f -size +0c -print -quit)" || exit 0
+          bytes=$(find .zig-cache -type f -printf '%s\n' | awk '{n+=$1} END {printf "%.0f",n}')
+          echo "Compiler cache: $bytes bytes (4 GiB upload maximum)"
+          test "$bytes" -le 4294967296 || exit 0
+          test ! -e .zig-cache-upload
+          cp -al .zig-cache .zig-cache-upload
+          echo 'save=true' >> "$GITHUB_OUTPUT"
+      - name: Save useful cache without deleting local outputs
         if: ${{ !cancelled() && steps.cache_size.outputs.save == 'true' }}
         continue-on-error: true
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
-          path: ${{ matrix.lane == 'native' && '.zig-cache-upload' || '.zig-cache' }}
-          key: zig-feedback-v2-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane == 'native' && 'native5' || matrix.lane }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
-  # Preserve the old check name as a strict all-lanes gate; a focused run is not full qualification.
+          path: .zig-cache-upload
+          key: zig-adaptive-v1-${{ runner.os }}-${{ runner.arch }}-0.17.0-${{ matrix.lane }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
   native:
-    name: ${{ (inputs.lane == '' || inputs.lane == 'all') && 'native' || format('Focused result / {0} / linux-x86_64', inputs.lane) }}
+    name: native
     needs: [source, qualify]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Require source accounting and every qualification lane
+      - name: Require complete qualification within the existing workflow budget
         env:
-          LANE: ${{ inputs.lane }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
           SOURCE: ${{ needs.source.result }}
           QUALIFICATION: ${{ needs.qualify.result }}
         run: |
           test "$SOURCE" = success
-          if [ "$LANE" = source ]; then
-            test "$QUALIFICATION" = skipped
-          else
-            test "$QUALIFICATION" = success
-          fi
+          test "$QUALIFICATION" = success
+          started="$(gh api "repos/$GH_REPO/actions/runs/$RUN_ID" --jq .run_started_at)"
+          elapsed=$(( $(date +%s) - $(date -d "$started" +%s) ))
+          echo "Complete workflow before terminal gate: ${elapsed}s (target 300s, maximum 360s)" | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$elapsed" -le 360

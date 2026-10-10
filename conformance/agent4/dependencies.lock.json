@@ -1,39 +1,40 @@
 {
-  "format": "agent4-dependency-lock/v1",
-  "status": "released-integration",
+  "format": "agent-native-source-lock/v2",
+  "status": "development-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "c9d719a6c4ed3a34d8acb8b0f2808c39322883f3",
-    "gitTree": "f4ba4d7ebac8f3e2eb8ca200aa3d73b112be4265",
+    "commit": "abc7092b96becd03e5c7792b20dafad0da17881a",
+    "gitTree": "0ec08b0a7995ffefce812e8c1f766857858bf80a",
     "version": "3.0.0",
     "source": {
-      "inventorySha256": "30aa4f68446fd73605c1c300c9b3d9a3c35c2fcb16cca45302bae8bbca0f9f8b",
-      "entries": 538,
-      "bytes": 13367749
+      "inventorySha256": "1f2803cb4ab3f57bc1efbc97a8a5232d2967f4eef6d7c442deccd255204240ff",
+      "entries": 320,
+      "bytes": 8085238
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/c9d719a6c4ed3a34d8acb8b0f2808c39322883f3.tar.gz",
-      "bytes": 4110403,
-      "sha256": "49a669e4effb198f95d2a722c1cf52ee44a74fecb5c4a02466b856d6a93521a8"
+      "url": "https://github.com/tkersey/boundary/archive/abc7092b96becd03e5c7792b20dafad0da17881a.tar.gz",
+      "bytes": 1456755,
+      "sha256": "62f4fe020e80aff3d72a910f25efcc375144591ccbf6b4f33575607adce8ba07"
     },
+    "authentication": "Development successor source archive compared file-for-file and executable-bit-for-bit with the exact Git commit; complete normalized source inventory authenticated.",
     "package": {
-      "zigHash": "boundary-3.0.0-flclaCwSRgCWzefAdYTuW8qR-dz1_f0yzoLJHegGXjo7",
+      "zigHash": "boundary-3.0.0-flclaFbSMwBDSNcw9PhVPcn46Czi6LwYmXrVM1LNHhmo",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "493ab5736fe7855f2b29dec3c8d0b6fbae7c1d98fa6e84b2dbebb596f6db80dc",
-          "entries": 483,
-          "bytes": 4592172
+          "inventorySha256": "bc8099980de9545dac41f457eec72f70ba2926385fc1e88362bf36dfbf3c60a8",
+          "entries": 300,
+          "bytes": 3396182
         },
         "archive-extracted": {
-          "inventorySha256": "9c4531834465fb5dfc0ab43efdba2434ff669d828430834698b3c20f142c52db",
-          "entries": 483,
-          "bytes": 4592172
+          "inventorySha256": "bc8099980de9545dac41f457eec72f70ba2926385fc1e88362bf36dfbf3c60a8",
+          "entries": 300,
+          "bytes": 3396182
         }
       },
       "archive": {
-        "bytes": 899946,
-        "sha256": "a43399c3bb378749de030b6a481be8790581d78e035a7f26051e246a2a1e525b"
+        "bytes": 667717,
+        "sha256": "59d3d09e0c2c2102d9cce39218af1ab8c4c7b568fbaf5f2ac165c26054184b59"
       }
     },
     "api": {
@@ -83,328 +84,40 @@
           "sha256": "7fcd44cf03a22748a798bf528aae9ba9606c49d4ee789c03ca49f3dc15e2999b"
         }
       ]
-    },
-    "authentication": "Public release source archive authenticated against the exact tag commit tree; normal Zig package hash and complete package inventories verified."
+    }
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "797fe962810f1276604d7fe3fcff58da7c644b7a",
-    "gitTree": "fbce3401293b1458de94158d7253d1384d9faa84",
+    "commit": "a55f12682638c943f06373a61ecb3cf6117100e5",
+    "gitTree": "668d6ad58f5a3106163afb7be7c867672f2df104",
     "version": "6.0.0",
     "source": {
-      "inventorySha256": "26b49a8a1382f9f72906d91970fbf87b800fa2dddb19f31ec19336b6a62fd498",
-      "entries": 199,
-      "bytes": 17764620
+      "inventorySha256": "b06411f6beaaa21296631c03beb65be1b6a4739ae4494b5afe93bfee7653162a",
+      "entries": 111,
+      "bytes": 1452061
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/797fe962810f1276604d7fe3fcff58da7c644b7a.tar.gz",
-      "bytes": 15760096,
-      "sha256": "d3e6715e5b7f0c9feca7ec1b14a95776b6b0d39df39a26456b648f590886b7f6"
+      "url": "https://github.com/tkersey/world/archive/a55f12682638c943f06373a61ecb3cf6117100e5.tar.gz",
+      "bytes": 325418,
+      "sha256": "4b75ade5cd40e393d8fb2b97e47ac6115b6ea05a2b196ba0bc6af1a82a6355ef"
     },
-    "runtime": {
-      "entrypoint": "src/embedding/index.mjs",
-      "files": [
-        {
-          "path": "LICENSE",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 1067,
-          "sha256": "f0a877bb381b63236b2794e47491a09784fb7b108adf7947bc10c1f998f52913"
-        },
-        {
-          "path": "README.md",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 5059,
-          "sha256": "7f07643fd4037a11231a2223897a3de0569dd54489e0cfeec9e8a596eea29ae8"
-        },
-        {
-          "path": "bin",
-          "kind": "directory",
-          "mode": 493
-        },
-        {
-          "path": "bin/world.mjs",
-          "kind": "file",
-          "mode": 493,
-          "bytes": 2952,
-          "sha256": "60344c487f9e0ba9d4fbc23231a47b6b102d298f113125c4d95ecd38207a574a"
-        },
-        {
-          "path": "docs",
-          "kind": "directory",
-          "mode": 493
-        },
-        {
-          "path": "docs/kernel-abi.md",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 9305,
-          "sha256": "8a363578832859119e2540099696c876d691562ad286c98d27152f90db6dc8dd"
-        },
-        {
-          "path": "docs/runtime-bundles.md",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 6788,
-          "sha256": "5fd31833d3ea33981b16012200b466efd7000b8dd0e49004c2e3053a1bbb267e"
-        },
-        {
-          "path": "package.json",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 539,
-          "sha256": "f4abff214be29688ebab573f7f28f9802216d13f449dd03c312d3236dec9b981"
-        },
-        {
-          "path": "src",
-          "kind": "directory",
-          "mode": 493
-        },
-        {
-          "path": "src/embedding",
-          "kind": "directory",
-          "mode": 493
-        },
-        {
-          "path": "src/embedding/codec.mjs",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 4990,
-          "sha256": "0d8a633733359a52ec393defdb680c7f1e041017fd46a6dfe4605d60f5c2859d"
-        },
-        {
-          "path": "src/embedding/errors.mjs",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 2292,
-          "sha256": "7cf79f9095beab8e41b5844fc3f4c67117d3723275655837a2ac42952c2d6b3f"
-        },
-        {
-          "path": "src/embedding/index.mjs",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 305,
-          "sha256": "c3ae5ede1be7e56f516cbec0f176972720299d11966ed45d520fb8f2ae46a915"
-        },
-        {
-          "path": "src/embedding/kernel.mjs",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 6004,
-          "sha256": "7f3be362b474b49c632722d2a02ae16117ffe65c83818887589cf3c56877b13d"
-        },
-        {
-          "path": "src/embedding/values.mjs",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 5374,
-          "sha256": "1c0faa397f829cbf804d3ef3202ee338648344626c95a5c931b1e1c62f0f5e69"
-        },
-        {
-          "path": "src/embedding/wasm.mjs",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 14480,
-          "sha256": "ac164590e77034bbafef8112bbaf34303fa8c744d306547d5afa9e53d2ca0a18"
-        },
-        {
-          "path": "src/embedding/wire.mjs",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 4352,
-          "sha256": "3afff4d7dd778dba8b1984c735b0a630d91664c5f53ca5a15a810cf6a8d560e2"
-        },
-        {
-          "path": "src/node",
-          "kind": "directory",
-          "mode": 493
-        },
-        {
-          "path": "src/node/file-input.mjs",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 1456,
-          "sha256": "e0c36b83fafebc72f6d14ecff3acf2c819856b65b4432b97b5a83ab2102a624d"
-        },
-        {
-          "path": "src/node/runtime-acquire.mjs",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 4040,
-          "sha256": "2f9a7fce4e0932a0b26e9907abd671411f7c0872abc9fe498baaefdf3263c490"
-        },
-        {
-          "path": "src/node/runtime-bundle.mjs",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 11659,
-          "sha256": "e677c7264c45019af7550baf960881ba06d7a3933c29f5fdff5a168d4022163c"
-        },
-        {
-          "path": "src/node/runtime-command.mjs",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 2148,
-          "sha256": "0ee312284adf1891bf83b0deed19fb878a247299204ec0c76ee126a3278e9cd6"
-        },
-        {
-          "path": "src/node/runtime-output.mjs",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 2845,
-          "sha256": "89141ad802e2ee620d1e11e055af23e899b577935edee22785b2d8a6e7d3b424"
-        },
-        {
-          "path": "src/node/runtime-prepare.mjs",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 16420,
-          "sha256": "8e7fdc256a57117978f1ab44ef467f0bbb8bc8c2f0bda360249c1025c5479423"
-        },
-        {
-          "path": "src/node/runtime-profile.json",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 845,
-          "sha256": "a507e924427fd16eb5287c3c9a1f71160b8dbe41eda8458d1f2ff0dbaec18e3c"
-        },
-        {
-          "path": "src/node/runtime-smoke.mjs",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 4358,
-          "sha256": "6cc4dcf28df071ec32ec8f0234e6b1ea6e8c15f93b6eede62b35c05515357309"
-        },
-        {
-          "path": "src/node/toolchain.mjs",
-          "kind": "file",
-          "mode": 420,
-          "bytes": 4863,
-          "sha256": "4e3e3ed52e530b3aaa7b2b4706bef7c59eedb1998d6c83c26ee5342432983abd"
-        },
-        {
-          "path": "world-kernel.wasm",
-          "kind": "file",
-          "mode": 493,
-          "bytes": 451779,
-          "sha256": "e6a982f3f13790e3dec7a5e26770549a6be8d0cb5e97a25cd97cead993f2b394"
-        }
-      ],
-      "inventorySha256": "0c53ba7bd053dc68258c98da1651bfba9de374579c7cdbf2252d001e14f2fc21",
-      "entries": 28,
-      "bytes": 563920,
-      "kernel": {
-        "path": "world-kernel.wasm",
-        "bytes": 451779,
-        "sha256": "e6a982f3f13790e3dec7a5e26770549a6be8d0cb5e97a25cd97cead993f2b394",
-        "abi": 3
-      },
-      "abi": 3,
-      "exports": [
-        "Kernel",
-        "decodeOutcome",
-        "decodeRequest",
-        "encodeInput",
-        "encodeResult",
-        "inspectKernelWasm",
-        "packageVersion",
-        "validateValue"
-      ],
-      "physicalProfile": {
-        "inputCapacity": 65536,
-        "workingCapacity": 1048576,
-        "outputCapacity": 65536,
-        "stackBytes": 65536,
-        "maximumMemoryBytes": 268435456,
-        "inspection": {
-          "format": "world-kernel-inspection/v3",
-          "wasm32": true,
-          "importCount": 0,
-          "exportCount": 23,
-          "hasStart": false,
-          "memory": {
-            "initialPages": 18,
-            "maximumPages": 4096,
-            "shared": false,
-            "memory64": false
-          }
-        }
-      },
-      "build": {
-        "target": "qualified-runtime-bundle",
-        "optimize": "small",
-        "machine": "wasm32-freestanding",
-        "boundarySourceCommit": "c9d719a6c4ed3a34d8acb8b0f2808c39322883f3",
-        "capacityOverrides": [],
-        "requestedOptimize": "safe",
-        "zig": "0.17.0",
-        "backend": "llvm",
-        "linker": "lld",
-        "cpu": "lime1",
-        "features": [
-          "bulk_memory_opt",
-          "call_indirect_overlong",
-          "extended_const",
-          "multivalue",
-          "mutable_globals",
-          "nontrapping_fptoint",
-          "sign_ext"
-        ],
-        "toolchain": {
-          "version": "0.17.0",
-          "executable": "/home/runner/work/_temp/8dc3506d-a629-4c11-a373-4f1d6d3592b8/zig-x86_64-linux-0.17.0/zig",
-          "executableIdentity": {
-            "bytes": 185514480,
-            "mode": 493,
-            "sha256": "7c61539af19fa4082c94848f1c2b57b89e76dc6cfd5bd4c57764c3caf8f82272"
-          },
-          "library": "/home/runner/work/_temp/8dc3506d-a629-4c11-a373-4f1d6d3592b8/zig-x86_64-linux-0.17.0/lib",
-          "libraryInventorySha256": "57c284a5bd1fb1b41d0f83b0de35287873f622eb912e25ca214a1307263596a4",
-          "libraryEntries": 20770,
-          "libraryBytes": 187639324
-        }
-      },
-      "provenance": "World v6.0.0, qualified producer38031129110; published archive and descriptor downloaded anonymously and verified byte-for-byte."
-    },
-    "authentication": "Public release source archive authenticated against the exact tagged Git tree; runtime acquired from unchanged qualified release assets.",
-    "delivery": {
-      "commit": "797fe962810f1276604d7fe3fcff58da7c644b7a",
-      "manifestSha256": "3029ed3c2307f888eb06b9c3a54469e91d8998eaf6b196b5e735d9b52ae75e18",
-      "archive": {
-        "url": "https://github.com/tkersey/world/releases/download/v6.0.0/world-runtime-bundle.tar.gz",
-        "bytes": 226290,
-        "sha256": "4dd2d571e3c0443013be97da6163871109faa7c603b037614d16b6b83797b8e8"
-      },
-      "release": {
-        "tag": "v6.0.0",
-        "descriptor": {
-          "url": "https://github.com/tkersey/world/releases/download/v6.0.0/world-runtime-bundle.delivery.json",
-          "bytes": 1167,
-          "sha256": "ea77032fbf51a2954d2a7a239696cca231e7dd31f2dd4f8156dcf578d7b57b47"
-        }
-      }
-    }
+    "authentication": "Development successor source archive compared file-for-file and executable-bit-for-bit with the exact Git commit; complete normalized source inventory authenticated."
   },
   "toolchain": {
     "zig": {
       "version": "0.17.0",
-      "executableSha256": "1c5f706db0ed6d55451940f31dc05a6177d05696bc1fa5d853696d04c718b523"
-    },
-    "node": {
-      "version": "v26.10.0",
-      "executableSha256": "d4cd917f05a5730ffda8a203e32fb8f9b70f79213fff1fafb045e438db8a6c06"
+      "executableSha256": "18fbdb9fb852846f0e91008c5b99c9c18db1115671701c2890bf84a44ddc202d"
     },
     "platform": "darwin",
     "architecture": "arm64"
   },
   "publicationObservation": {
-    "boundarySource": "https://github.com/tkersey/boundary/releases/tag/v3.0.0 at c9d719a6c4ed3a34d8acb8b0f2808c39322883f3",
-    "worldSource": "https://github.com/tkersey/world/releases/tag/v6.0.0 at 797fe962810f1276604d7fe3fcff58da7c644b7a",
-    "compatiblePublishedReleaseObserved": true
+    "boundarySource": "https://github.com/tkersey/boundary/pull/167 at abc7092b96becd03e5c7792b20dafad0da17881a",
+    "worldSource": "https://github.com/tkersey/world/pull/65 at a55f12682638c943f06373a61ecb3cf6117100e5",
+    "compatiblePublishedReleaseObserved": false
   },
   "limitations": [
-    "Exact Zig 0.17.0 released Boundary 3.0.0 / World 6.0.0 tuple; prior tasks retain their original runtime bindings.",
-    "World producer qualification is Linux-based; Agent released-tuple qualification is recorded in its current CI. No live-provider qualification is implied."
+    "Explicit Zig 0.17.0 development successor tuple; version strings retain the public API names and do not claim new releases. Existing releases and prior task bindings remain unchanged.",
+    "Current candidate qualification is recorded in the coordinated PRs and Agent CI. No live-provider qualification is implied."
   ]
 }

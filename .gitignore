@@ -12,3 +12,8 @@
 .ledger/.definitions/
 .ledger/.transactions/
 .ledger/**/*.cas.lock.advisory
+
+# Authenticated native build inputs and disposable qualification output.
+/.agent4-native/
+
+/.zig-cache-upload/

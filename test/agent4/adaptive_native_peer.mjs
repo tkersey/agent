@@ -7,11 +7,11 @@ import {once} from 'node:events';
 import {mkdir, writeFile, readFile} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
 import {join} from 'node:path';
-import {AgentClient} from '../../examples/native-minimal/stdio-client.mts';
-import {certificates} from './mobility_tls_fixture.mjs';
-import {readArchive, missingCaptures, tamperedAdaptiveControl} from './native_archive.mjs';
-import {decodeValue, encodeValue} from '../../runtime/values.mjs';
-import {contract, measureAdaptive} from './adaptive_measurements.mjs';
+import {AgentClient} from '../support/stdio-client.mts';
+import {certificates} from '../support/tls.mjs';
+import {readArchive, missingCaptures, tamperedAdaptiveControl, missingCheckpoint, changedProfile, extraPrivateArtifact, omittedAttempts, changedOperationKey, invalidEventData} from './native_archive.mjs';
+import {decodeValue, encodeValue} from '../support/values.mjs';
+import {contract, assertAdaptiveCaptures} from './adaptive_capture_checks.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const reference = bytes => [[...createHash('sha256').update(bytes).digest()], BigInt(bytes.length)];
@@ -63,7 +63,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
   await writeFile(join(root, 'src/main.zig'), source);
   const tls = await certificates(app.controller), trust = join(app.data, 'adaptive-root.der');
   await writeFile(trust, new X509Certificate(tls.ca).raw);
-  const requests = [], requestTimes = [], sockets = new Set();
+  const requests = [], sockets = new Set();
   let providerFailure, announceHeld, releaseHeld;
   let scenario = 'trajectory', alternateIndex = 0, alternateRequests = 0, announceAlternate;
   let toolSubject;
@@ -73,7 +73,6 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
   };
   const held = new Promise(resolve => { announceHeld = resolve; }), release = new Promise(resolve => { releaseHeld = resolve; });
   const server = createServer(tls.A, async (request, response) => {
-    const started = performance.now();
     try {
       const chunks = []; for await (const bytes of request) chunks.push(bytes);
       const bytes = Buffer.concat(chunks), body = JSON.parse(bytes);
@@ -184,7 +183,6 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
       assert.equal(body.tool_choice.tools.some(tool => tool.name === 'inspect'), index >= 3 && index <= 6);
       if (index === 0) { announceHeld(); await release; }
       response.writeHead(200, {'content-type': 'application/json'}); response.end(JSON.stringify(fixture[index]));
-      requestTimes.push(performance.now() - started);
     } catch (error) { providerFailure = error; response.writeHead(500); response.end('{}'); }
   });
   server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
@@ -221,7 +219,6 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
     }
     const bytes = Buffer.concat(chunks); assert.equal(hash(bytes), id); return bytes;
   };
-  const started = performance.now();
   try {
     invoke('validate', '--config', configPath); assert.equal(requests.length, 0);
     for (const [field, value] of [['id', 'review/guards'], ['version', '1.0.0+local']]) {
@@ -310,7 +307,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
     assert.equal(messageStates.filter(state => state === 2).length, 3, 'three authored follow-ups consumed');
     assert.equal(messageStates.filter(state => state === 3).length, 1, 'input beyond the authored allowance remains not consumed');
     let providerProjections = 0, controlProjections = 0, workProjections = 0, readEvidence = 0;
-    const measurementRows = [], toolNames = ['list', 'read', 'ask', 'report', 'stop', 'inference_set', 'skill_set', 'inspect'];
+    const captureRows = [], toolNames = ['list', 'read', 'ask', 'report', 'stop', 'inference_set', 'skill_set', 'inspect'];
     const revisions = [0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 7, 8, 8];
     const epochs = [0, 0, 0, 0, 0, 1, 2, 2, 3, 4, 4, 4, 5, 5];
     const eviction = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2];
@@ -363,8 +360,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         assert(context[13].every(origin => origin[0] <= plan[2]), 'history origins cannot claim future exposure');
         const committedInput = requests[index].body.input.filter(item => !(item.role === 'developer' && item.content?.length === 1 && transientBodies.includes(item.content[0]?.text)));
         assert.deepEqual(JSON.parse(Buffer.from(context[12]).toString('utf8')), [...committedInput, ...fixture[index].output], 'ordered replay appends original output without retaining transient injection');
-        measurementRows.push({request, http: requests[index].body, response: fixture[index], reply,
-          requestBytes, responseBytes, preparedBytes: prepared, capturedBytes: rawBytes, http_status: raw[0], request_ms: requestTimes[index]});
+        captureRows.push({request, http: requests[index].body});
         providerProjections++;
       } else {
         if (identity === 'agent.adaptive.context.prepare.v1') {
@@ -387,14 +383,19 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
       }
     }
     assert.equal(providerProjections, 14); assert.equal(controlProjections, 22); assert.equal(workProjections, 4); assert.equal(readEvidence, 1);
-    for (const [name, bytes] of [['missing-capture', missingCaptures(archiveBytes, 'one')], ['tampered-control', tamperedAdaptiveControl(archiveBytes, schemas.CapturedResponse)]]) {
+    for (const [name, bytes] of [
+      ['missing-capture', missingCaptures(archiveBytes, 'one')], ['tampered-control', tamperedAdaptiveControl(archiveBytes, schemas.CapturedResponse)],
+      ['missing-checkpoint', missingCheckpoint(archiveBytes)], ['changed-profile', changedProfile(archiveBytes)],
+      ['private-checkpoint', extraPrivateArtifact(archiveBytes)], ['private-capture', extraPrivateArtifact(archiveBytes, 'capture')],
+      ['omitted-attempts', omittedAttempts(archiveBytes)], ['changed-operation', changedOperationKey(archiveBytes)],
+      ['omitted-submission', changedOperationKey(archiveBytes, 'omitted')], ['invalid-event', invalidEventData(archiveBytes, 'null')],
+    ]) {
       const path = join(app.data, `${name}.bundle`); await writeFile(path, bytes, {mode: 0o600});
       const rejected = spawnSync(app.command, ['import-checkpoint', '--state-dir', join(app.data, `${name}-state`), '--input', path, '--operation-id', name,
         '--test-provider', '--trust-root', trust], {cwd: app.data, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 30000, maxBuffer: 1024 * 1024});
       assert.equal(rejected.status, 64, name);
     }
     assert.equal(requests.length, 14, 'recovery, import and pure projection replay perform no inference');
-    const trajectoryMilliseconds = performance.now() - started;
     // A well-typed call can still be forbidden by the original offered set.
     selectScenario('disabled-offer');
     const deniedState = join(app.data, 'disabled offer');
@@ -546,18 +547,14 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
       toolRuns.push({scenario: name, provider_calls: alternateIndex, disposition: result.outcome.value.disposition});
       assert.deepEqual(await client.close(), {code: 0, signal: null}); client = null;
     }
-    const measurements = measureAdaptive(asset, measurementRows, skillBodies, {archive_bytes: archiveBytes.length, archive_objects: archive.objects.size,
-      namespace_object_bytes: [...archive.objects.values()].reduce((sum, bytes) => sum + bytes.length, 0),
-      request_time_scope: 'controlled provider request-body acquisition to response send; includes deliberate first-request hold',
-      task_ms: trajectoryMilliseconds, independent_negative_provider_requests: alternateRequests, qualification_ms: performance.now() - started});
+    assertAdaptiveCaptures(captureRows, skillBodies);
     console.log(JSON.stringify({adaptive_native: 'controlled HTTPS, held inbox, frozen policy, killed question, archive and independent captured-record checks',
-      model_attempts: requests.length, request_bytes: requests.map(item => item.bytes.length), request_ms: requestTimes,
-      held_ping_ms: pingMs, held_status_ms: statusMs, task_ms: trajectoryMilliseconds, archive_bytes: archiveBytes.length,
+      model_attempts: requests.length, request_bytes: requests.map(item => item.bytes.length),
+      held_ping_ms: pingMs, held_status_ms: statusMs, archive_bytes: archiveBytes.length,
       independent_negative_provider_requests: alternateRequests,
       provider_projections: providerProjections, context_projections: controlProjections, work_projections: workProjections,
       consumed_messages: 3, not_consumed_messages: 1, disabled_offer_rejected: offeredWitness, cancellations, tool_construction: toolRuns,
-      layout_comparison: measurements.comparison.map(({policy, total_request_bytes, summed_local_visible_prefix_bytes, actual_execution, hard_eviction}) =>
-        ({policy, total_request_bytes, summed_local_visible_prefix_bytes, actual_execution, hard_eviction})), live_provider: false}));
+      live_provider: false}));
   } catch (error) {
     throw providerFailure ?? error;
   } finally {

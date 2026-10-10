@@ -147,29 +147,6 @@ test "protected source rejects raw commit, stolen private call, and speculative 
     }
 }
 
-pub fn main(init: std.process.Init) !void {
-    var args = init.minimal.args.iterate();
-    _ = args.next();
-    const mode = if (args.next()) |name| std.meta.stringToEnum(Mode, name) orelse
-        return error.UnknownArgument else .valid;
-    if (args.next() != null) return error.UnknownArgument;
-    var b = source.Builder.init(init.gpa);
-    defer b.deinit();
-    var registry = agent.admission.Registry.init(init.gpa);
-    defer registry.deinit();
-    const module = try build(.{ .builder = &b, .registry = &registry }, mode);
-    try agent.admission.verify(init.gpa, module, &registry);
-    var compiled = try boundary.program.compile(init.gpa, module);
-    defer compiled.deinit();
-    const bytes = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
-    defer init.gpa.free(bytes);
-    _ = try compiled.encode(init.gpa, bytes);
-    var buffer: [4096]u8 = undefined;
-    var out = std.Io.File.stdout().writer(init.io, &buffer);
-    try out.interface.writeAll(bytes);
-    try out.interface.flush();
-}
-
 test "tool metadata and dispatch share one declaration without granting commit" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();

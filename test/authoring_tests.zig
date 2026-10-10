@@ -6,8 +6,4 @@ test {
     _ = @import("agent4/composed_owners.zig");
     _ = @import("agent4/recursive_participant.zig");
     _ = @import("agent4/selection.zig");
-    _ = @import("agent4/mobility_ensure.zig");
-    _ = @import("agent4/inquiry_probe.zig");
-    _ = @import("agent4/inquiry_broker_probe.zig");
-    _ = @import("consumers/inquiry/main.zig");
 }

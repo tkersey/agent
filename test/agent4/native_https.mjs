@@ -8,7 +8,7 @@ import {X509Certificate} from 'node:crypto';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {once} from 'node:events';
-import {certificates} from './mobility_tls_fixture.mjs';
+import {certificates} from '../support/tls.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'native HTTPS ü '));
 const binary = resolve(process.argv[2]);

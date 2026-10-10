@@ -91,6 +91,21 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         };
         const output = call => JSON.parse(outputText(call));
         const skill = (operation, revision, skill_id = 'tool-construction') => ['skill_set', {operation, skill_id, version: '1', residency: operation === 'load' ? 'resident' : 'unchanged', expected_revision: revision, reason: 'Exercise checked composition and independent execution authority.'}];
+        if (index === 1 && (scenario === 'tools-reuse' || scenario === 'tools-reverse')) {
+          const marker = 'Recipe JSON schema:\n', text = strings(body.input).find(text => text.includes(marker));
+          assert(text, 'loading construction exposes the nested recipe contract to the model');
+          const recipe = JSON.parse(text.slice(text.indexOf(marker) + marker.length).split('\n')[0]);
+          assert.deepEqual(recipe.required, ['instances', 'bindings', 'entry']);
+          assert.equal(recipe.additionalProperties, false);
+          assert.equal(recipe.properties.instances.maxItems, 16);
+          assert.deepEqual(recipe.properties.instances.items.required, ['key', 'component_id']);
+          assert.equal(recipe.properties.instances.items.properties.key.maxLength, 64);
+          assert.equal(recipe.properties.bindings.maxItems, 64);
+          assert.deepEqual(recipe.properties.bindings.items.required, ['required', 'supplied']);
+          assert.deepEqual(recipe.properties.bindings.items.properties.required.required, ['instance', 'symbol']);
+          assert.deepEqual(recipe.properties.entry.required, ['instance', 'symbol']);
+          assert.match(text, /proposal_json \(at most 2700 UTF-8 bytes\)/);
+        }
         if (index === 0) {
           assert(!offered.has('tool_build')); assert(offered.has('tool_run'));
           const marker = 'Authorized typed Table inputs: ', text = strings(body.input).find(text => text.includes(marker));

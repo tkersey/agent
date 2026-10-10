@@ -202,8 +202,8 @@ four inputs may be frozen. The original unversioned configuration and its eight
 skill bits retain their meanings and enable neither new operation.
 
 Version 2 admits the exact developer-owned skill automatically. Loading it
-introduces its instructions and complete machine-derived component signatures
-at the normal skill context position. This checked recipe selects matching rows
+introduces its instructions, recipe JSON schema and complete machine-derived
+component signatures at the normal skill context position. This checked recipe selects matching rows
 and is a small working example, not a complete audit:
 
 ```json

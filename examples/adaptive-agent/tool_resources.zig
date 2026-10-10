@@ -71,7 +71,12 @@ pub fn skillBody(a: std.mem.Allocator, bytes: []const u8) ![]const u8 {
         try view.array.append(entry);
     }
     const rendered = try native.json.canonicalBounded(a, view, 16 * 1024);
-    const body = try std.fmt.allocPrint(a, "{s}\n\n## Frozen reference domain\n" ++
+    const body = try std.fmt.allocPrint(a, "{s}\n\n## Construction recipe contract\n" ++
+        "Encode an object matching this schema as proposal_json (at most {d} UTF-8 bytes). " ++
+        "Use unique instance keys; endpoint instance fields refer to those keys. " ++
+        "Bind required imports to supplied exports using the catalog's actual symbols. " ++
+        "Use at least one instance and an acyclic inter-instance graph. Unknown fields reject.\n" ++
+        "Recipe JSON schema:\n{s}\n\n## Frozen reference domain\n" ++
         "Table contains rows, relation (each at most 32 Row values), and selected (at most 32 keys). " ++
         "Row has u64 fields id, key, value, group, matches, match_id, mismatches, status. " ++
         "compose applies first then second; map applies row to each row; filter retains rows satisfying keep; " ++
@@ -79,7 +84,12 @@ pub fn skillBody(a: std.mem.Allocator, bytes: []const u8) ![]const u8 {
         "classify sets status 1 agreement, 2 mismatch, 3 missing, 4 ambiguous; orphan tests matches=0; " ++
         "swap exchanges rows and relation; group reduces rows by group to a count in value (status 5). " ++
         "All preserve Table's other fields except swap. These semantics do not select your composition.\n\n" ++
-        "Actual frozen component signatures (complete):\n{s}\n", .{ @embedFile("skills/tool-construction/SKILL.md"), rendered });
+        "Actual frozen component signatures (complete):\n{s}\n", .{
+        @embedFile("skills/tool-construction/SKILL.md"),
+        contracts.json.maximumTextBytes(@FieldType(@FieldType(t.Action, "tool_build"), "proposal_json")),
+        &contracts.json.ClientSchema(wire.Recipe).value,
+        rendered,
+    });
     if (body.len > 32 * 1024) return error.Capacity;
     return body;
 }

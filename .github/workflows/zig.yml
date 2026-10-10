@@ -51,6 +51,10 @@ jobs:
         lane: ${{ fromJSON((inputs.lane == '' || inputs.lane == 'all') && '["installation","authoring","native"]' || format('["{0}"]', inputs.lane)) }}
     runs-on: ${{ matrix.lane == 'native' && 'ubuntu-22.04' || 'ubuntu-24.04' }}
     timeout-minutes: 60
+    env:
+      # Include cold fetch/install: these also compile Zig's internal driver.
+      # Explicit application -Doptimize=safe settings remain authoritative.
+      ZIG_DEBUG_CMD: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -169,9 +173,6 @@ jobs:
               exit 0 ;;
             authoring) target=check-authoring-core ;;
             native)
-              # Avoid release-optimizing Zig's on-demand build driver.
-              # Explicit -Doptimize=safe still governs the application artifacts.
-              export ZIG_DEBUG_CMD=1
               target=check-native ;;
             *) exit 2 ;;
           esac

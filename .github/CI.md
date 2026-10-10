@@ -179,12 +179,18 @@ The earlier native3 cache exceeded 8 GiB and took 53 seconds to restore in run
 Compiler reuse and complete-workflow duration still require actual measurement.
 Authoring keeps its existing cache policy.
 
-Native CI sets `ZIG_DEBUG_CMD=1` for Zig's internal on-demand build commands.
+Qualification CI sets `ZIG_DEBUG_CMD=1` for Zig's internal on-demand commands,
+including cold dependency fetching and the isolated installation witness.
 The pinned compiler applies this to its build driver and translation helper,
-not to application compilation. Explicit `-Doptimize=safe`, the probe's LLVM
-backend and every existing qualification assertion remain selected. This targets
+not to application compilation. Explicit `-Doptimize=safe`, the selected native
+backends and every existing qualification assertion remain selected. This targets
 the observed 89-second delay before the first build-graph command; its complete
-workflow effect must be measured separately from a cache restore.
+workflow effect must be measured separately from a cache restore. PR run
+`38063685748` spent 103 seconds in cold dependency setup and took 403 seconds
+overall; the earlier export inside the native build step did not reach that
+setup. A warm-input run on the same head took 331 seconds. The job-level setting
+keeps package authentication and application optimization unchanged; a cold-input
+full workflow must establish its effect.
 
 The native build-worker count matches the runner's online CPU count, allowing
 the lightweight test roots and protocol peers to overlap independent compilation.

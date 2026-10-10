@@ -91,7 +91,7 @@ jobs:
           path: |
             .agent4-native/inputs/*.tar.gz
             .agent4-native/inputs/*.zip
-          key: agent-native-archives-v2-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}
+          key: agent-native-archives-v2-${{ matrix.lane }}-${{ hashFiles('conformance/agent4/dependencies.lock.json', 'conformance/agent4/native-dependencies.lock.json') }}
       - name: Authenticate and provision selected native inputs
         run: |
           options=()

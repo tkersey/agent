@@ -6,6 +6,10 @@ import {copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpath
 import {dirname, join, resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 
+const usage = 'usage: installations.mjs [ARCHIVE_SEED_DIRECTORY [REFERENCE_EXECUTABLE]]';
+if (process.argv.length === 3 && process.argv[2] === '--help') { console.log(usage); process.exit(0); }
+if (process.argv.length > 4 || process.argv.slice(2).some(arg => arg.startsWith('-'))) throw new Error(usage);
+
 const root = resolve(import.meta.dirname, '../..');
 const zig = realpathSync(process.env.AGENT_ZIG_EXE ?? execFileSync('which', ['zig'], {encoding: 'utf8'}).trim());
 const description = execFileSync(zig, ['env'], {encoding: 'utf8'});

@@ -26,7 +26,7 @@ fn constructionRecipe(a: std.mem.Allocator, stages: []const struct { component: 
             const composition = try std.fmt.allocPrint(a, "compose{d}", .{i});
             try instances.append(a, .{ .key = .{ .bytes = composition }, .component_id = .{ .bytes = "compose" } });
             try bindings.append(a, .{ .required = .{ .instance = .{ .bytes = composition }, .symbol = .{ .bytes = "first" } }, .supplied = .{ .instance = .{ .bytes = key }, .symbol = .{ .bytes = "apply" } } });
-            const second = try std.fmt.allocPrint(a, if (i + 2 == stages.len) "stage{d}" else "compose{d}", .{i + 1});
+            const second = try std.fmt.allocPrint(a, "{s}{d}", .{ if (i + 2 == stages.len) "stage" else "compose", i + 1 });
             try bindings.append(a, .{ .required = .{ .instance = .{ .bytes = composition }, .symbol = .{ .bytes = "second" } }, .supplied = .{ .instance = .{ .bytes = second }, .symbol = .{ .bytes = "apply" } } });
         }
     }

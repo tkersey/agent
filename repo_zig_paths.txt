@@ -4,6 +4,10 @@ build_native.zig
 examples/adaptive-agent/context.zig
 examples/adaptive-agent/definition.zig
 examples/adaptive-agent/environment.zig
+examples/adaptive-agent/tool_catalog.zig
+examples/adaptive-agent/tool_resources.zig
+examples/adaptive-agent/tool_types.zig
+examples/adaptive-agent/tool_work.zig
 examples/adaptive-agent/types.zig
 examples/adaptive-agent/work.zig
 examples/native-minimal/build.zig
@@ -44,6 +48,7 @@ runtime/native/sqlite.zig
 runtime/native/state.zig
 runtime/native/store.zig
 runtime/native/tasks.zig
+runtime/native/tool_construction.zig
 runtime/native/transport.zig
 runtime/native/values.zig
 runtime/native/worker.zig
@@ -88,6 +93,7 @@ src/sets.zig
 src/skill.zig
 src/test_root.zig
 src/text_inspection.zig
+src/tool_construction_contracts.zig
 src/tools.zig
 src/value_equality.zig
 test/agent4/adaptive_controls.zig

@@ -83,7 +83,11 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         const offered = new Set(body.tool_choice.tools.map(tool => tool.name));
         const output = call => {
           const item = body.input.find(item => item.type === 'function_call_output' && item.call_id === `tools-${call}`);
-          assert(item, `missing acquired tool output ${call}`); return JSON.parse(item.output);
+          assert(item, `missing acquired tool output ${call}`);
+          if (typeof item.output === 'string') return JSON.parse(item.output);
+          assert(Array.isArray(item.output) && item.output.length === 1);
+          assert.equal(item.output[0].type, 'input_text');
+          return JSON.parse(item.output[0].text);
         };
         const skill = (operation, revision) => ['skill_set', {operation, skill_id: 'tool-construction', version: '1', residency: operation === 'load' ? 'resident' : 'unchanged', expected_revision: revision, reason: 'Exercise checked composition and independent execution authority.'}];
         if (index === 0) {

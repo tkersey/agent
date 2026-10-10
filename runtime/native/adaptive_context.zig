@@ -89,10 +89,6 @@ pub fn Projection(comptime P: type) type {
             ctx.allocator.free(raw);
             const prepared = try read(ctx, value.source_request, 2 * 1024 * 1024);
             ctx.allocator.free(prepared);
-            if (value.plan.handoff) |ref| {
-                const seed = try read(ctx, ref, 128 * 1024);
-                ctx.allocator.free(seed);
-            }
             return decoded;
         }
 
@@ -323,11 +319,11 @@ pub fn Projection(comptime P: type) type {
                 if (same_epoch) {
                     if (removing or request.plan.eviction_generation != old.plan.eviction_generation or !same_profile or
                         request.invocation.parameters.reasoning.?.effort.? != old.top_effort or
-                        !same(request.plan.handoff, old.plan.handoff) or request.plan.reason != old.plan.reason) return error.InvalidContext;
+                        request.plan.reason != old.plan.reason) return error.InvalidContext;
                 } else {
                     if (request.plan.epoch != try std.math.add(u64, old.plan.epoch, 1) or
                         request.plan.eviction_generation != try std.math.add(u64, old.plan.eviction_generation, @intFromBool(removing))) return error.InvalidContext;
-                    if (same_profile and request.plan.handoff == null and request.plan.reason == .eviction and request.invocation.parameters.reasoning.?.effort.? != old.top_effort) return error.InvalidContext;
+                    if (same_profile and request.plan.reason == .eviction and request.invocation.parameters.reasoning.?.effort.? != old.top_effort) return error.InvalidContext;
                 }
                 history = (try json.parse(a, old.items.bytes, .{ .bytes = 2 * 1024 * 1024 })).value;
                 if (old.origins.items.len != history.array.items.len) return error.InvalidContext;
@@ -337,31 +333,12 @@ pub fn Projection(comptime P: type) type {
                 try settle(a, &history, request, selected.profile.explicit_cache);
                 try fillOrigins(a, &origins, history.array.items.len, request.plan.watermark);
                 if (!same_epoch) {
-                    if (request.plan.handoff) |seed_ref| {
-                        // Explicit application-authored replacement remains a
-                        // separate operation; normal controls do not create it.
-                        const bytes = try read(ctx, seed_ref, 128 * 1024);
-                        defer a.free(bytes);
-                        var seed = try contracts.decodeOwned(P.AdaptiveSeed, a, bytes);
-                        defer seed.deinit();
-                        const value = seed.value;
-                        if (!equal(value.schema.bytes, P.adaptive_seed_identity) or !equal(&value.policy, &request.policy) or !equal(&value.task, &ctx.task) or
-                            !equal(value.tenant.bytes, ctx.tenant) or !equal(value.audience.bytes, frozen.audience.bytes) or
-                            !try encodedEqual(a, @TypeOf(value.selection), value.selection, request.selection) or value.epoch != request.plan.epoch or value.watermark != request.plan.watermark or
-                            value.eviction_generation != request.plan.eviction_generation or !try encodedEqual(a, Ref, value.source, ref) or value.messages.items.len == 0) return error.InvalidContext;
-                        history = list(a);
-                        origins = .empty;
-                        for (value.messages.items, 0..) |item, index| try history.array.append(try message(a, @tagName(item.role), try a.dupe(u8, item.content.bytes), selected.profile.explicit_cache and index == 0));
-                        try fillOrigins(a, &origins, history.array.items.len, request.plan.watermark);
-                        new_start = 0;
-                    } else {
-                        try revise(ctx, &history, &origins, old, request, catalog, selected.profile.explicit_cache);
-                        new_start = 0;
-                        while (new_start < origins.items.len and origins.items[new_start].watermark < request.plan.watermark) new_start += 1;
-                    }
+                    try revise(ctx, &history, &origins, old, request, catalog, selected.profile.explicit_cache);
+                    new_start = 0;
+                    while (new_start < origins.items.len and origins.items[new_start].watermark < request.plan.watermark) new_start += 1;
                 }
             } else {
-                if (request.plan.epoch != 0 or request.plan.watermark != 0 or request.plan.eviction_generation != 0 or request.plan.handoff != null or request.plan.reason != .initial) return error.InvalidContext;
+                if (request.plan.epoch != 0 or request.plan.watermark != 0 or request.plan.eviction_generation != 0 or request.plan.reason != .initial) return error.InvalidContext;
                 try settle(a, &history, request, selected.profile.explicit_cache);
                 try fillOrigins(a, &origins, history.array.items.len, request.plan.watermark);
             }

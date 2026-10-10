@@ -54,8 +54,8 @@ test "adaptive unload capture recovers under its original plan without another a
     var service = try native.tasks.Service(t).init(a, io, &namespace, assets, &application, handlers, profile);
     var service_live = true;
     defer if (service_live) service.close(a) catch unreachable;
-    // Valid admitted task/input text must survive a handoff larger than the
-    // former 8 KiB message ceiling, including captured-before-interpreted recovery.
+    // Large admitted task/input text must survive transcript continuation,
+    // including captured-before-interpreted recovery.
     const long_task: [2048]u8 = @splat('T');
     const long_followup: [2048]u8 = @splat('F');
     const task = (try service.submit(permanent, "adaptive-recovery-submit", .{ .task = .{ .bytes = &long_task } })).receipt.task;
@@ -105,7 +105,6 @@ test "adaptive unload capture recovers under its original plan without another a
                     try std.testing.expectEqual(0, adaptive.value.plan.skills.items.len);
                     try std.testing.expect(!adaptive.value.offered[7] and !adaptive.value.materialized[7]);
                     try std.testing.expectEqual(8, saved.value.inference_attempts);
-                    try std.testing.expect(adaptive.value.plan.handoff == null);
                     witnessed = true;
                 }
             }

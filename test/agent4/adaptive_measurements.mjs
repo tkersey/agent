@@ -21,7 +21,7 @@ const optional = value => value.tag === 0 ? null : value.value;
 const count = value => Number.isSafeInteger(value) && value >= 0 ? String(value) : null;
 const text = (value, maximum) => typeof value === 'string' && value.isWellFormed() && Buffer.byteLength(value) <= maximum ? value : null;
 const efforts = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
-const reasons = ['initial', 'model_change', 'effort_change', 'eviction', 'capacity_handoff'];
+const reasons = ['initial', 'model_change', 'effort_change', 'eviction'];
 const names = ['list', 'read', 'ask', 'report', 'stop', 'inference_set', 'skill_set', 'inspect'];
 const usageNames = ['input_tokens', 'output_tokens', 'cached_input_tokens', 'cache_write_tokens', 'reasoning_tokens'];
 function markers(body) {
@@ -48,7 +48,7 @@ export function measureAdaptive(application, rows, skillBodies, resources = {}) 
   const toolsSchema = contract(application, 'Tools');
   const calls = rows.map((row, index) => {
     const [invocation, policy, selection, plan, materialized, offered] = row.request;
-    const [epoch, reason, watermark, eviction, , , , skills] = plan;
+    const [epoch, reason, watermark, eviction, , , skills] = plan;
     const prior = rows[index - 1], sameEpoch = prior && prior.request[3][0] === epoch;
     const selectedMarkers = markers(row.http), priorMarkers = prior ? markers(prior.http) : [];
     // A logical epoch no longer replaces history. Existing breakpoints in an
@@ -96,7 +96,7 @@ export function measureAdaptive(application, rows, skillBodies, resources = {}) 
   for (const row of rows) {
     const retained = row.http.input.filter(item => !(item.role === 'developer' && item.content?.length === 1 &&
       skillBodies.some(skill => item.content[0]?.text === skill.body)));
-    const current = row.request[3][7].filter(skill => skill[3] === 0 || skill[4]).map(skill => skillBodies.find(body => body.id === skill[1]).body);
+    const current = row.request[3][6].filter(skill => skill[3] === 0 || skill[4]).map(skill => skillBodies.find(body => body.id === skill[1]).body);
     layouts.projected.push(row.http);
     layouts.eager.push({...row.http, input: [retained[0], ...skillBodies.map(skill => textMessage(skill.body)), ...retained.slice(1)]});
     layouts.naive.push({...row.http, input: [retained[0], ...(current.length ? [textMessage(`Current skill instructions:\n${current.join('\n')}`)] : []), ...retained.slice(1)]});
@@ -114,9 +114,9 @@ export function measureAdaptive(application, rows, skillBodies, resources = {}) 
       hard_eviction: policy === 'projected' ? 'qualified by native task trace' : policy === 'eager' ? 'fails by retaining all approved bodies' : 'body exclusion only; changed prompt behavior unqualified',
       cache_hits: null, billed_cost: null};
   });
-  const transientIndices = rows.flatMap((row, index) => row.request[3][7].some(skill => skill[3] === 1 && skill[4]) ? [index] : []);
+  const transientIndices = rows.flatMap((row, index) => row.request[3][6].some(skill => skill[3] === 1 && skill[4]) ? [index] : []);
   assert(transientIndices.length >= 2 && transientIndices.at(-1) < rows.length - 1);
-  const active = rows[transientIndices[0]].request[3][7].find(skill => skill[3] === 1 && skill[4]);
+  const active = rows[transientIndices[0]].request[3][6].find(skill => skill[3] === 1 && skill[4]);
   const transientBody = skillBodies.find(skill => skill.id === active[1]).body;
   for (const index of transientIndices) {
     const body = rows[index].http, position = body.input.findIndex(item => item.content?.some(part => part.text === transientBody));

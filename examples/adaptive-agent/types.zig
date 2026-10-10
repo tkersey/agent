@@ -142,7 +142,7 @@ pub const Ready = struct {
     results: PendingResults,
 };
 pub const PreparationResult = union(enum) { ready: Ready, rejected: controls.Rejection };
-pub const PreparationProduct = struct { result: PreparationResult, objects: contracts.Vector(contracts.Bytes(128 * 1024), 2) };
+pub const PreparationProduct = struct { result: PreparationResult, receipt: ?contracts.Bytes(128 * 1024) };
 pub const SkillConfig = struct { id: contracts.Text(64), version: contracts.Text(64), description: contracts.Text(256), markdown: contracts.Text(4096), tools: [P.declaration_count]bool };
 pub const Configuration = struct { workspace: contracts.Text(128), snapshot_root: contracts.Text(4096), endpoint: contracts.Text(2048), audience: contracts.Text(128), profiles: @FieldType(P.AdaptivePolicy, "profiles"), initial_profile: contracts.Text(64), initial_effort: @FieldType(model.AdaptiveSelection, "effective_effort"), skills: contracts.Vector(SkillConfig, 14), maximum_model_calls: u16, maximum_control_revision: u16 };
 // Ordinary wire contracts accompany the emitted Boundary image. External
@@ -177,7 +177,6 @@ pub const support_types = .{
     .{ .name = "AdaptiveRequest", .T = P.AdaptiveRequest },
     .{ .name = "AdaptiveResult", .T = P.AdaptiveResult },
     .{ .name = "AdaptiveContext", .T = P.AdaptiveContext },
-    .{ .name = "AdaptiveSeed", .T = P.AdaptiveSeed },
     .{ .name = "AdaptivePrepared", .T = P.AdaptivePrepared },
     .{ .name = "Policy", .T = P.AdaptivePolicy },
     .{ .name = "Profile", .T = model.AdaptiveInferenceProfile },

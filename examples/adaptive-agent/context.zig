@@ -187,7 +187,7 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
         .materialized = materialized,
         .offered = offered,
         .results = results,
-        .plan = .{ .epoch = control.epoch, .reason = control.epoch_reason, .watermark = if (input.state.replay) |ref| ref.watermark else 0, .eviction_generation = control.eviction_generation, .prior = input.state.replay, .handoff = null, .catalog = policy.catalog, .skills = control.skills },
+        .plan = .{ .epoch = control.epoch, .reason = control.epoch_reason, .watermark = if (input.state.replay) |ref| ref.watermark else 0, .eviction_generation = control.eviction_generation, .prior = input.state.replay, .catalog = policy.catalog, .skills = control.skills },
         .invocation = .{
             .protocol = .{ .bytes = t.model.protocol_identity },
             .model = selected.model,
@@ -203,30 +203,30 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
     // Boundary retains the computation and task facts. Continue its immutable
     // transcript; only the projection owner changes provider-visible material.
     _ = try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, request));
-    var objects: std.ArrayList(contracts.Bytes(128 * 1024)) = .empty;
+    var receipt_object: ?contracts.Bytes(128 * 1024) = null;
     var receipt_ref: ?t.ReceiptReference = null;
     var next_results = pending;
     if (receipt) |value| {
         const bytes = try contracts.encodeOwned(t.ReceiptArtifact, a, .{ .receipt = value, .model_text = text.? });
-        try objects.append(a, .{ .bytes = bytes });
+        receipt_object = .{ .bytes = bytes };
         const ref = work.reference(bytes);
         receipt_ref = .{ .object = ref, .previous_revision = value.previous_revision, .next_revision = value.next_revision, .disposition = value.disposition, .rejection = value.rejection, .next_profile = value.next_profile, .next_effort = value.next_effort, .context_epoch = value.context_epoch, .eviction_generation = value.eviction_generation };
         const items = try a.alloc(t.PendingResult, 1);
         items[0] = .{ .call_id = value.call_id, .output = .{ .control = ref } };
         next_results = .{ .items = items };
     }
-    return .{ .result = .{ .ready = .{ .request = request, .receipt = receipt_ref, .results = next_results } }, .objects = .{ .items = objects.items } };
+    return .{ .result = .{ .ready = .{ .request = request, .receipt = receipt_ref, .results = next_results } }, .receipt = receipt_object };
 }
 
 fn prepare(ctx: native.registry.ProjectionContext, bytes: []const u8) ![]u8 {
     var input = try contracts.decodeOwned(t.Preparation, ctx.allocator, bytes);
     defer input.deinit();
     const product = evaluate(ctx, input.value) catch |err| switch (err) {
-        error.Capacity => Product{ .result = .{ .rejected = .capacity }, .objects = .{ .items = &.{} } },
-        error.UnknownSkill, error.InvalidSkill => Product{ .result = .{ .rejected = .unknown_skill }, .objects = .{ .items = &.{} } },
-        error.UnknownInferenceProfile => Product{ .result = .{ .rejected = .unknown_profile }, .objects = .{ .items = &.{} } },
-        error.UnsupportedEffort => Product{ .result = .{ .rejected = .unsupported_effort }, .objects = .{ .items = &.{} } },
-        error.IncompatibleProfile => Product{ .result = .{ .rejected = .invalid_operation }, .objects = .{ .items = &.{} } },
+        error.Capacity => Product{ .result = .{ .rejected = .capacity }, .receipt = null },
+        error.UnknownSkill, error.InvalidSkill => Product{ .result = .{ .rejected = .unknown_skill }, .receipt = null },
+        error.UnknownInferenceProfile => Product{ .result = .{ .rejected = .unknown_profile }, .receipt = null },
+        error.UnsupportedEffort => Product{ .result = .{ .rejected = .unsupported_effort }, .receipt = null },
+        error.IncompatibleProfile => Product{ .result = .{ .rejected = .invalid_operation }, .receipt = null },
         else => return err,
     };
     return contracts.encodeOwned(Product, ctx.allocator, product);
@@ -239,7 +239,7 @@ fn interpret(ctx: native.registry.ProjectionContext, request: []const u8, prepar
     if (!equal(prepared, captured) or !equal(try prepare(ctx, request), prepared)) return error.InvalidCapture;
     var product = try contracts.decodeOwned(Product, ctx.allocator, prepared);
     defer product.deinit();
-    const objects = try ctx.allocator.alloc([]const u8, product.value.objects.items.len);
-    for (objects, product.value.objects.items) |*out, object| out.* = try ctx.allocator.dupe(u8, object.bytes);
+    const objects = try ctx.allocator.alloc([]const u8, @intFromBool(product.value.receipt != null));
+    if (product.value.receipt) |receipt| objects[0] = try ctx.allocator.dupe(u8, receipt.bytes);
     return .{ .reply = try contracts.encodeOwned(t.PreparationResult, ctx.allocator, product.value.result), .objects = objects };
 }

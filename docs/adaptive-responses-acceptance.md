@@ -30,16 +30,6 @@ This file is the current proof inventory, not a substitute for a passing run.
 A row is qualified only by the matching exact-head Linux result and review
 status in the PR. Superseded obligations are not recorded as passed.
 
-The [October 9 live campaign](adaptive-live-validation-2026-10-09.md) separately
-records original-main failures and repaired-artifact successes. Its exact
-subjects, live feature/cache evidence, and macOS limitations do not retroactively
-turn the original merged artifact's unrun live rows below into passes.
-
-The [cache-preserving continuation follow-up](adaptive-cache-continuation-2026-10-09.md)
-qualifies the subsequent history-preserving design, including in-place effort
-updates. Historical new-context/handoff descriptions below describe the earlier
-subject and do not replace that follow-up's exact-subject evidence.
-
 ## Subjects and retained evidence
 
 The foundation is Agent `7d86739af1a47ce8ec36905ba5fe578fa3ce4d9d` (PR #45).
@@ -115,7 +105,7 @@ All AR-001–AR-080 identifiers are retained with the amended meanings below.
 | AR-029 | Exact values, Unicode, replay and client mappings checked against independent records and Zig assertions; a JS adaptive counterpart is not required. |
 | AR-030 | Settled call/result groups and explicit lineage transitions; no unresolved-call or replay-null shortcut. |
 | AR-031–033 | Generic authored/projection representation is retained. The consumer rejects in-place effort updates and uses its named new-lineage fallback. Immediate tool-only API-update qualification is not run. |
-| AR-034–036 | Bound visible-fact handoffs retain admitted task facts, evidence, allowances and labeled hypotheses; oversized handoffs reject and opaque cross-model compatibility is not assumed. |
+| AR-034–036 | Transcript continuation retains admitted task facts and settled exchanges while excluding incompatible opaque material. Explicit replacement contexts are retired. |
 | AR-037–038 | Input-text marker locations, retained boundaries, at most two new writes, no transient suffix markers and explicit cache/diagnostic fields. Live API acceptance is not run. |
 | AR-039–040 | Labeled local byte-prefix measurements, zero prewarm/compaction calls and no automatic model substitution or ambiguous retry. |
 | AR-041–042 | State/preparation/allocation/storage observations, existing reservations and namespace ceilings, original-reference binding and missing-reference rejection. Maximal input combinations are not promised to fit. |

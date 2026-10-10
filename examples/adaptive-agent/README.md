@@ -13,13 +13,7 @@ distribution is deferred; the existing embedded executable remains useful for
 reference execution.
 
 Linux reference qualification uses recorded provider replies and controlled I/O.
-The [cache-preserving continuation report](../../docs/adaptive-cache-continuation-2026-10-09.md)
-qualifies the current history-preserving effort/model/skill transitions.
-The [October 9 live report](../../docs/adaptive-live-validation-2026-10-09.md)
-records the merged artifact's failure, subsequent repairs, and successful
-Sol/medium → Sol/high → Astra/medium continuation, skills, restart, and
-provider-reported cache reuse on the identified repaired artifact. The
-[acceptance map](../../docs/adaptive-responses-acceptance.md) binds the current
+The [acceptance map](../../docs/adaptive-responses-acceptance.md) binds the current
 obligations to proof surfaces and exact-head PR evidence.
 
 ## Author and build
@@ -184,7 +178,7 @@ definitions, and work dispatch binds to that captured call. Queued user messages
 are consumed through the authored inbox only after the current call settles.
 
 The new contracts are `agent.model.invoke.v6` and
-`agent.model.context.responses.adaptive.v3`. Existing v3/v4/v5 consumers and the
+`agent.model.context.responses.adaptive.v4`. Existing v3/v4/v5 consumers and the
 fixed `repository-agent` keep their meanings. Reports expose bounded evidence
 and control receipts; raw provider captures and opaque reasoning are not public
 report artifacts. Absent usage remains unavailable. Explicit cache markers and

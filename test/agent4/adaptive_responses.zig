@@ -127,7 +127,7 @@ test "adaptive projection preserves history and owns skill and opaque eviction" 
         .invocation = invocation,
         .policy = digest(profile_bytes),
         .selection = .{ .profile_id = inference.id, .profile_digest = try Admission.profileDigest(a, inference), .effective_effort = .medium, .control_revision = 0 },
-        .plan = .{ .epoch = 0, .reason = .initial, .watermark = 0, .eviction_generation = 0, .prior = null, .handoff = null, .catalog = catalog, .skills = .{ .items = &.{} } },
+        .plan = .{ .epoch = 0, .reason = .initial, .watermark = 0, .eviction_generation = 0, .prior = null, .catalog = catalog, .skills = .{ .items = &.{} } },
         .materialized = .{ true, false },
         .offered = .{ true, false },
         .results = .{ .items = &.{} },
@@ -270,28 +270,6 @@ test "adaptive projection preserves history and owns skill and opaque eviction" 
             try std.testing.expect(!std.mem.eql(u8, definition.object.get("name").?.string, "inspect"));
         };
     }
-    // Explicit replacement is a different operation from preserved-history
-    // eviction: its fresh seed initializes top-level effort to effective high.
-    const seed: P.AdaptiveSeed = .{
-        .schema = .{ .bytes = P.adaptive_seed_identity },
-        .policy = request.policy,
-        .task = ctx.task,
-        .tenant = .{ .bytes = ctx.tenant },
-        .audience = policy.audience,
-        .selection = request.selection,
-        .epoch = request.plan.epoch,
-        .watermark = request.plan.watermark,
-        .eviction_generation = request.plan.eviction_generation,
-        .source = second.replay.?,
-        .messages = .{ .items = &.{.{ .role = .developer, .content = .{ .bytes = "Explicitly authorized replacement." } }} },
-    };
-    var replacement = request;
-    replacement.plan.handoff = try objects.add(a, try contracts.encodeOwned(P.AdaptiveSeed, a, seed));
-    replacement.invocation.parameters.reasoning.?.effort = .high;
-    const replaced = try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, replacement));
-    const replaced_http = try http(a, replaced);
-    try std.testing.expectEqualStrings("high", replaced_http.object.get("reasoning").?.object.get("effort").?.string);
-    try std.testing.expectEqual(@as(usize, 1), replaced_http.object.get("input").?.array.items.len);
     // Original captures and the original projection remain byte-identical.
     try std.testing.expect(std.mem.indexOf(u8, loaded_bytes, skill_body) != null);
     var graft = request;
@@ -317,7 +295,6 @@ test "adaptive projection preserves history and owns skill and opaque eviction" 
     request.results.items = &.{.{ .call_id = .{ .bytes = "call-3" }, .output = .{ .bytes = "Last old-model observation." } }};
     const switched = try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, request));
     const switched_http = try native.json.canonical(a, try http(a, switched));
-    try std.testing.expect(request.plan.handoff == null);
     try std.testing.expect(std.mem.indexOf(u8, switched_http, "OPAQUE-BEFORE-SKILL") == null);
     try std.testing.expect(std.mem.indexOf(u8, switched_http, "OPAQUE-WITH-SKILL") == null);
     try std.testing.expect(std.mem.indexOf(u8, switched_http, "configuration_update") == null);

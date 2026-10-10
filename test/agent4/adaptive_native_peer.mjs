@@ -218,7 +218,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         const envelope = decodeValue(schemas.AdaptivePrepared, prepared);
         assert.equal(envelope.length, 3); assert.equal(envelope[0], 1);
         const request = envelope[1], plan = request[3], index = Number(plan[2]);
-        assert.equal(request.length, 7); assert.equal(plan.length, 8); assert(index >= 0 && index < 14 && !seen.has(index)); seen.add(index);
+        assert.equal(request.length, 7); assert.equal(plan.length, 7); assert(index >= 0 && index < 14 && !seen.has(index)); seen.add(index);
         assert.equal(Buffer.from(request[1]).toString('hex'), hash(frozenProfileBytes));
         const requestBytes = Buffer.from(envelope[2]), raw = decodeValue(schemas.CapturedResponse, rawBytes);
         assert(requestBytes.equals(requests[index].bytes), 'immutable preparation equals observed HTTPS bytes');
@@ -232,7 +232,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         assert.equal(request[5][7], index >= 3 && index <= 6, 'deactivation removes callable permission');
         assert.equal(request[5][2], index !== 13, 'the exact authored input allowance removes ask');
         const expectedSkills = index >= 3 && index <= 7 ? ['invariant-review'] : index === 10 || index === 11 ? ['technical-reporting'] : [];
-        assert.deepEqual(plan[7].map(skill => skill[1]), expectedSkills);
+        assert.deepEqual(plan[6].map(skill => skill[1]), expectedSkills);
         const reply = decodeValue(schemas.AdaptiveResult, replyBytes);
         assert.equal(reply[0].tag, 0); assert.equal(reply[1].tag, 1); assert.equal(reply[2], 0); assert.equal(reply[3].tag, 0);
         const call = reply[0].value[0].find(item => item.tag === 0).value;
@@ -242,13 +242,13 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         assert.equal(call[3], toolNames.indexOf(expectedCall.name));
         const context = decodeValue(schemas.AdaptiveContext, archive.object(reply[1].value[0]));
         assert.equal(context.length, 14); assert.deepEqual(context[2], archive.task.id);
-        assert.equal(context[0], 'agent.model.context.responses.adaptive.v3'); assert.deepEqual(context[1], request[1]);
+        assert.equal(context[0], 'agent.model.context.responses.adaptive.v4'); assert.deepEqual(context[1], request[1]);
         assert.equal(context[3], archive.task.tenant); assert.equal(context[4], frozenProfile.adaptive.audience);
         assert.equal(context[6], request[2][2]);
         assert.deepEqual(context[5], request[2]); assert.deepEqual(context[7], plan); assert.equal(context[8], BigInt(index + 1));
         assert.deepEqual(context[9], reference(rawBytes)); assert.deepEqual(context[10], reference(prepared));
         assert.deepEqual(context[11], {tag: 1, value: fixture[index].id});
-        const transientBodies = plan[7].filter(skill => skill[3] === 1 && skill[4]).map(skill => skillBodies.find(body => body.id === skill[1]).body);
+        const transientBodies = plan[6].filter(skill => skill[3] === 1 && skill[4]).map(skill => skillBodies.find(body => body.id === skill[1]).body);
         assert.equal(context[13].length, JSON.parse(Buffer.from(context[12]).toString('utf8')).length);
         assert(context[13].every(origin => origin[0] <= plan[2]), 'history origins cannot claim future exposure');
         const committedInput = requests[index].body.input.filter(item => !(item.role === 'developer' && item.content?.length === 1 && transientBodies.includes(item.content[0]?.text)));
@@ -261,7 +261,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         if (identity === 'agent.adaptive.context.prepare.v1') {
           const product = decodeValue(schemas.PreparationProduct, rawBytes);
           assert(Buffer.from(encodeValue(schemas.PreparationResult, product[0])).equals(replyBytes));
-          assert.deepEqual(product[1].map(bytes => reference(Buffer.from(bytes))), capture[6].value[1]);
+          assert.deepEqual((product[1].tag === 1 ? [reference(Buffer.from(product[1].value))] : []), capture[6].value[1]);
           controlProjections++;
         } else {
           assert(['agent.adaptive.snapshot.work.v1', 'agent.adaptive.snapshot.guards.v1'].includes(identity));

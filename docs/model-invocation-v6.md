@@ -41,8 +41,8 @@ polish is deferred, not a blocker on the reusable API or reference integration.
 | `eviction_generation` | Authored exclusion fence. Every newly selected lineage must respect it. |
 | `AdaptiveContextReference` | Content reference plus schema, policy, inference selection, task, tenant, audience, epoch, watermark, and eviction bindings. |
 
-The additional identities are `agent.model.context.responses.adaptive.v3`,
-`agent.model.policy.adaptive.v1`, and `agent.model.seed.adaptive.v1`. The v5
+The additional identities are `agent.model.context.responses.adaptive.v4` and
+`agent.model.policy.adaptive.v1`. The v5
 `agent.model.context.responses.v1` reference is not an adaptive reference.
 
 ## Requests and checked actions
@@ -111,10 +111,11 @@ eligible suffix boundary. Shared provider cache across models is not assumed.
 The reference program uses Boundary resumptions through World to retain task
 state, evidence references, control state and pending results. It no longer
 constructs a second JSON representation of task state for ordinary transitions.
-The generic explicit seed operation remains separately available to an author
-that deliberately supplies a replacement context; the reference does not use it.
+Explicit replacement contexts are retired: a plan continues its prior transcript
+and cannot supply replacement messages for an existing context.
 
-Context schema v3 includes per-item projection provenance. Exact application,
+Context schema v4 retains per-item projection provenance and removes replacement
+seeds from the embedded plan. Exact application,
 image, schema and runtime bindings remain recovery gates; old saved tasks are
 not migrated or reinterpreted under a new build.
 
@@ -159,8 +160,7 @@ Provider requests are at most 256 KiB and responses at most 512 KiB. The
 normalized adaptive reply is at most 16 KiB; its raw capture is retained on
 projection overflow. Preparation checks the complete rendered request before
 admitting a control. The reference has no handoff bundle or handoff-size gate.
-Its message representation shares the transport's 256 KiB ceiling; the generic
-explicit seed operation retains its native 128 KiB object envelope. Existing native
+Its message representation shares the transport's 256 KiB ceiling. Existing native
 64 MiB requested allocation, 16 MiB worker and SQLite budgets, and 256 MiB
 namespace limits remain unchanged. Protocol frames, checkpoint size, World
 working memory and namespace quotas remain separate limits.

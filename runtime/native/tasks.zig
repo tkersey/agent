@@ -24,6 +24,7 @@ pub fn cleanupComplete(outcome: data.invocation.Outcome) bool {
     };
 }
 
+pub const maximum_resources = state.maximum_resources;
 pub const Profile = struct {
     id: []const u8,
     runtime_identity: state.Digest,
@@ -44,8 +45,8 @@ pub const Profile = struct {
     }
 
     pub fn resourceIdentity(self: Profile, image: state.Digest) !state.Digest {
-        if (self.resources.len > 16) return error.Capacity;
-        var refs: [16]state.Reference = undefined;
+        if (self.resources.len > maximum_resources) return error.Capacity;
+        var refs: [maximum_resources]state.Reference = undefined;
         for (self.resources, refs[0..self.resources.len]) |bytes, *ref| ref.* = .{ .digest = storage.digest(bytes), .bytes = bytes.len };
         return registry.resourceIdentity(image, storage.digest(self.bytes), refs[0..self.resources.len]);
     }
@@ -442,7 +443,7 @@ pub fn Service(comptime Types: type) type {
             const checkpoint = try driver.checkpoint(a);
             defer a.free(checkpoint);
             if (checkpoint.len > 1024 * 1024) return error.Capacity;
-            if (self.profile.resources.len > 16) return error.Capacity;
+            if (self.profile.resources.len > maximum_resources) return error.Capacity;
             var resource_bytes: u64 = 0;
             for (self.profile.resources) |bytes| {
                 resource_bytes = std.math.add(u64, resource_bytes, bytes.len) catch return error.Capacity;

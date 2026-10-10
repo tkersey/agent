@@ -189,7 +189,7 @@ pub const PreparationCapture = struct { prepared: [32]u8, build_exhausted: bool,
 // The original configuration keeps its eight declaration bits. Version 2 adds
 // explicit construction policy; admission maps these original bits by name.
 pub const SkillConfig = struct { id: contracts.Text(64), version: contracts.Text(64), description: contracts.Text(256), markdown: contracts.Text(4096), tools: [8]bool };
-pub const Configuration = struct { workspace: contracts.Text(128), snapshot_root: contracts.Text(4096), endpoint: contracts.Text(2048), audience: contracts.Text(128), profiles: @FieldType(P.AdaptivePolicy, "profiles"), initial_profile: contracts.Text(64), initial_effort: @FieldType(model.AdaptiveSelection, "effective_effort"), skills: contracts.Vector(SkillConfig, 14), maximum_model_calls: u16, maximum_control_revision: u16 };
+pub const Configuration = struct { workspace: contracts.Text(128), snapshot_root: contracts.Text(4096), endpoint: contracts.Text(2048), audience: contracts.Text(128), profiles: @FieldType(P.AdaptivePolicy, "profiles"), initial_profile: contracts.Text(64), initial_effort: @FieldType(model.AdaptiveSelection, "effective_effort"), skills: contracts.Vector(SkillConfig, 32), maximum_model_calls: u16, maximum_control_revision: u16 };
 pub const DataRow = struct { id: u64, key: u64, value: u64, group: u64 };
 pub const DataRows = contracts.Vector(DataRow, 32);
 pub const ToolInputConfig = struct { id: contracts.Text(64), description: contracts.Text(256), rows: DataRows, relation: DataRows, selected: tool_types.Keys };

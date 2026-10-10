@@ -15,50 +15,57 @@ pub const Status = enum { queued, running, waiting_input, parked, cancelling, bl
 pub const RecordKind = enum { occurrence, question, message, artifact, capture, attempt, origin };
 pub const Blocker = enum { missing_capability, denied, capacity, missing_artifact, incompatible_profile, unavailable_environment };
 
-pub const Task = struct {
-    id: TaskId,
-    application_id: Name,
-    input_schema_id: Name,
-    output_schema_id: Name,
-    failure_schema_id: Name,
-    message_schema_id: Name,
-    principal: Name,
-    tenant: Name,
-    profile_id: Name,
-    profile: Reference,
-    resources: contracts.Vector(Reference, 16) = .{ .items = &.{} },
-    image: Reference,
-    runtime_identity: Digest,
-    input: Reference,
-    checkpoint: Reference,
-    outcome: Reference,
-    outcome_kind: Outcome,
-    current_occurrence: ?Digest,
-    revision: u64,
-    execution_revision: u64,
-    schedule: Schedule,
-    cancellation: ?Reason,
-    cancellation_applied: bool,
-    blocker: ?Blocker,
-    result: ?Reference,
-    client_result: ?Reference,
-    result_artifact: ?Digest,
-    event_floor: u64,
-    event_high: u64,
-    next_message: u64,
-    messages: contracts.Vector(Digest, 16),
-    inference_attempts: u32,
-    inference_request_bytes: u64,
-    inference_output_tokens: u64,
-    evidence_bytes: u64,
+/// Reference metadata is bounded independently of the unchanged payload quota.
+pub const maximum_resources = 64;
+pub const Task = TaskRecord(maximum_resources);
+pub const LegacyTask = TaskRecord(16);
 
-    pub fn terminal(task: Task) bool {
-        return switch (task.outcome_kind) {
-            .completed, .failed, .cancelled => true,
-            else => false,
-        };
-    }
-};
+fn TaskRecord(comptime resource_limit: u64) type {
+    return struct {
+        id: TaskId,
+        application_id: Name,
+        input_schema_id: Name,
+        output_schema_id: Name,
+        failure_schema_id: Name,
+        message_schema_id: Name,
+        principal: Name,
+        tenant: Name,
+        profile_id: Name,
+        profile: Reference,
+        resources: contracts.Vector(Reference, resource_limit) = .{ .items = &.{} },
+        image: Reference,
+        runtime_identity: Digest,
+        input: Reference,
+        checkpoint: Reference,
+        outcome: Reference,
+        outcome_kind: Outcome,
+        current_occurrence: ?Digest,
+        revision: u64,
+        execution_revision: u64,
+        schedule: Schedule,
+        cancellation: ?Reason,
+        cancellation_applied: bool,
+        blocker: ?Blocker,
+        result: ?Reference,
+        client_result: ?Reference,
+        result_artifact: ?Digest,
+        event_floor: u64,
+        event_high: u64,
+        next_message: u64,
+        messages: contracts.Vector(Digest, 16),
+        inference_attempts: u32,
+        inference_request_bytes: u64,
+        inference_output_tokens: u64,
+        evidence_bytes: u64,
+
+        pub fn terminal(task: @This()) bool {
+            return switch (task.outcome_kind) {
+                .completed, .failed, .cancelled => true,
+                else => false,
+            };
+        }
+    };
+}
 
 pub const Method = enum { submit, message, respond, cancel, @"resume", import_checkpoint };
 pub const Disposition = enum { accepted, queued, answer_acquired, cancellation_requested, resumed, imported };
@@ -211,3 +218,27 @@ pub const Archive = struct {
     reservations: contracts.Vector(ArchiveReservation, 64),
     objects: contracts.Vector(Reference, 4096),
 };
+
+test "larger resource capacity preserves legacy task bytes" {
+    const a = std.testing.allocator;
+    const references: [maximum_resources + 1]Reference = @splat(.{ .digest = @splat(7), .bytes = 3 });
+    var legacy = std.mem.zeroes(LegacyTask);
+    legacy.resources.items = references[0..16];
+    const old_bytes = try contracts.encodeOwned(LegacyTask, a, legacy);
+    defer a.free(old_bytes);
+    var current = try contracts.decodeOwned(Task, a, old_bytes);
+    defer current.deinit();
+    const same_bytes = try contracts.encodeOwned(Task, a, current.value);
+    defer a.free(same_bytes);
+    try std.testing.expectEqualSlices(u8, old_bytes, same_bytes);
+    var larger = current.value;
+    larger.resources.items = references[0..maximum_resources];
+    const new_bytes = try contracts.encodeOwned(Task, a, larger);
+    defer a.free(new_bytes);
+    var decoded = try contracts.decodeOwned(Task, a, new_bytes);
+    defer decoded.deinit();
+    try std.testing.expectEqual(maximum_resources, decoded.value.resources.items.len);
+    try std.testing.expectError(error.InvalidValue, contracts.decodeOwned(LegacyTask, a, new_bytes));
+    larger.resources.items = &references;
+    try std.testing.expectError(error.InvalidValue, contracts.encodeOwned(Task, a, larger));
+}

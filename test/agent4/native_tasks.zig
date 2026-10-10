@@ -436,7 +436,12 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     var grants: [3]native.registry.Grant = undefined;
     for (&grants, handlers.entries) |*grant, entry| grant.* = .{ .identity = entry.declaration.identity, .resource_role = entry.declaration.resource_role, .resource_identity = application.image_identity };
     var configured: u32 = 37;
-    const profile: native.tasks.Profile = .{ .id = "offline", .runtime_identity = @splat(42), .bytes = "fixed-profile", .environment = &configured, .resources = &.{"immutable snapshot bytes"}, .authority = .{ .grants = &grants, .principal = "test", .tenant = "test" } };
+    const resource_set: [native.tasks.maximum_resources][]const u8 = @splat("immutable snapshot bytes");
+    const profile: native.tasks.Profile = .{ .id = "offline", .runtime_identity = @splat(42), .bytes = "fixed-profile", .environment = &configured, .resources = &resource_set, .authority = .{ .grants = &grants, .principal = "test", .tenant = "test" } };
+    const oversized_resources: [native.tasks.maximum_resources + 1][]const u8 = @splat("immutable snapshot bytes");
+    var oversized_profile = profile;
+    oversized_profile.resources = &oversized_resources;
+    try std.testing.expectError(error.Capacity, oversized_profile.resourceIdentity(application.image_identity));
     for (&grants) |*grant| grant.resource_identity = try profile.resourceIdentity(application.image_identity);
     var temporary = std.testing.tmpDir(.{});
     defer temporary.cleanup();
@@ -520,6 +525,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     service = try native.tasks.Service(T).init(a, io, &namespace, assets, &application, handlers, profile);
     service_live = true;
     const frozen = try service.frozenInputs(frame, accepted.receipt.task);
+    try std.testing.expectEqual(native.tasks.maximum_resources, frozen.resources.len);
     try std.testing.expectEqualStrings(profile.bytes, frozen.profile);
     try std.testing.expectEqualStrings(profile.resources[0], frozen.resources[0]);
     try std.testing.expect(try service.pump(frame) == .idle);

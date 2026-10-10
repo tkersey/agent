@@ -228,7 +228,7 @@ pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration
         } else if (!std.mem.eql(u8, policy.endpoint.bytes, "https://api.openai.com/v1/responses")) return error.InvalidConfiguration;
     }
     if (resources.items.len < 2) return error.MissingArtifact;
-    if (resources.items.len > 16) return error.Capacity;
+    if (resources.items.len > native.tasks.maximum_resources) return error.Capacity;
     var resource_bytes: usize = 0;
     for (resources.items) |bytes| {
         resource_bytes = try std.math.add(usize, resource_bytes, bytes.len);
@@ -240,7 +240,7 @@ pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration
     if (policy.catalog.bytes != catalog_bytes.len or !std.mem.eql(u8, &policy.catalog.digest, &digest(catalog_bytes))) return error.InvalidSkill;
     const catalog = try contracts.decodeOwned(t.P.AdaptiveCatalog, a, catalog_bytes);
     try Admission.validateCatalog(policy, catalog.value);
-    if (catalog.value.skills.items.len > 14) return error.Capacity;
+    if (catalog.value.skills.items.len > 32) return error.Capacity;
     const tool_policy = if (native.json.get(root, "tool_construction")) |value| try native.values.fromJson(t.ToolPolicy, a, value) else null;
     const extra: usize = if (tool_policy) |value| 1 + value.inputs.items.len else 0;
     if (catalog.value.skills.items.len + 2 + extra != resources.items.len) return error.MissingArtifact;

@@ -132,8 +132,8 @@ a lexical guard-line count over previously acquired evidence and is available
 only while a loaded approved skill grants it. It does not prove correctness.
 No skill executes scripts or installs code. Markdown is admitted before task
 creation (32 KiB per body, 128 KiB total). The shared catalog format allows 32
-entries; this deployment admits 14, subject to the native host's 16 frozen
-resource slots. Snapshot and skill catalog use two slots; construction-enabled
+entries; this deployment admits 32 (including the built-in construction skill),
+subject to the native host's 64 frozen resource slots. Snapshot and skill catalog use two slots; construction-enabled
 configuration also stores its component catalog and admitted input values.
 At most four skills may be active.
 The complete frozen resource set, including the snapshot, must fit 16 MiB.

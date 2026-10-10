@@ -411,8 +411,16 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
     try collector.add(archive.task);
     try collector.add(archive.build);
     if (archive.schemas.items.len != expected.schemas.len) return error.NonPortable;
+    var legacy_task = false;
     for (archive.schemas.items, expected.schemas) |declared, wanted| {
-        if (!same(declared.name.bytes, wanted.name.bytes) or declared.definition.bytes != wanted.definition.bytes or !same(&declared.definition.digest, &wanted.definition.digest)) return error.NonPortable;
+        if (!same(declared.name.bytes, wanted.name.bytes)) return error.NonPortable;
+        if (declared.definition.bytes != wanted.definition.bytes or !same(&declared.definition.digest, &wanted.definition.digest)) {
+            if (!same(declared.name.bytes, "task")) return error.NonPortable;
+            const legacy = try values.schemaBytes(state.LegacyTask, a);
+            defer a.free(legacy);
+            if (declared.definition.bytes != legacy.len or !same(&declared.definition.digest, &storage.digest(legacy))) return error.NonPortable;
+            legacy_task = true;
+        }
         try collector.add(declared.definition);
     }
     const task_bytes = try store.object(store.allocator, archive.task, 256 * 1024);
@@ -420,6 +428,9 @@ pub fn inspect(a: std.mem.Allocator, store: *storage.Store, archive: state.Archi
     var task = try contracts.decodeOwned(state.Task, store.allocator, task_bytes);
     errdefer task.deinit();
     const value = task.value;
+    // The wire layout is unchanged, but the old descriptor must still enforce
+    // its own bound. Never accept a larger record under an old schema claim.
+    if (legacy_task and value.resources.items.len > 16) return error.NonPortable;
     try collector.visit(state.Task, value);
     if (value.revision == 0 or value.revision > std.math.maxInt(i64) or value.execution_revision >= value.revision or value.event_floor == 0 or value.event_high < value.event_floor or value.event_high > std.math.maxInt(i64)) return error.CorruptState;
     var current: ?occurrence.Occurrence = null;

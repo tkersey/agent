@@ -1,190 +1,107 @@
-import { selectZig } from "../../tools/agent4/toolchain.mjs";
-import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync, existsSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { isMain } from "../../runtime/cli.mjs";
-import { execFileSync } from "node:child_process";
-import { inventory, readDependencyLock, readRegular, sha256,
-  withVerifiedDependencies } from "../../tools/agent4/dependencies.mjs";
+// Independent downstream build witness. The controller uses Node; every
+// acquisition/build/install command runs behind a native executable allowlist.
+import assert from 'node:assert/strict';
+import {execFileSync, spawnSync} from 'node:child_process';
+import {copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync} from 'node:fs';
+import {dirname, join, resolve} from 'node:path';
+import {tmpdir} from 'node:os';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const MODULES = new Set(["std", "builtin", "boundary", "boundary_data", "agent_contracts"]);
-const FORBIDDEN = /(?:^|\/)(?:system_compiler|strategy_v3|flow|runtime|world|kernel)(?:[._/]|$)/;
+const root = resolve(import.meta.dirname, '../..');
+const zig = realpathSync(process.env.AGENT_ZIG_EXE ?? execFileSync('which', ['zig'], {encoding: 'utf8'}).trim());
+const description = execFileSync(zig, ['env'], {encoding: 'utf8'});
+const library = realpathSync(JSON.parse(description.match(/^\s*\.lib_dir = (".*"),$/m)?.[1] ?? 'null'));
+assert.equal(execFileSync(zig, ['version'], {encoding: 'utf8'}).trim(), '0.17.0');
+const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'Agent downstream ü ')));
+const cache = resolve(process.env.ZIG_GLOBAL_CACHE_DIR ?? join(scratch, 'global-cache'));
+const local = join(scratch, 'local-cache'), inputs = join(scratch, 'inputs');
+mkdirSync(cache, {recursive: true}); mkdirSync(local); mkdirSync(inputs);
+const env = {...process.env, PATH: '/usr/bin:/bin', ZIG_GLOBAL_CACHE_DIR: cache, ZIG_LOCAL_CACHE_DIR: local, ZIG_LIB_DIR: library};
+delete env.NODE_OPTIONS; delete env.NODE_TEST_CONTEXT; delete env.TAR_OPTIONS;
+let prefix;
+if (process.platform === 'darwin') {
+  const profile = join(scratch, 'build.sb');
+  writeFileSync(profile, `(version 1)\n(allow default)\n(deny process-exec)\n(allow process-exec (literal ${JSON.stringify(zig)}) (literal ${JSON.stringify(realpathSync("/usr/bin/tar"))}) (literal "/usr/bin/unzip") (subpath ${JSON.stringify(scratch)}) (subpath ${JSON.stringify(cache)}))\n`);
+  prefix = ['/usr/bin/sandbox-exec', '-f', profile];
+} else if (process.platform === 'linux') {
+  prefix = ['/usr/bin/bwrap', '--unshare-user', '--die-with-parent', '--new-session', '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp'];
+  for (const path of ['/usr/lib', '/lib', '/lib64', '/etc/ssl', '/etc/resolv.conf', '/etc/hosts', '/etc/nsswitch.conf', '/usr/bin/tar', '/usr/bin/gzip', '/usr/bin/unzip', dirname(zig), library, root])
+    if (existsSync(path)) prefix.push('--ro-bind', path, path);
+  prefix.push('--bind', scratch, scratch);
+  if (!cache.startsWith(scratch + '/')) prefix.push('--bind', cache, cache);
+} else throw new Error('unsupported downstream qualification platform');
 
-export function authoringFiles(sourceRoot = ROOT) {
-  const files = new Map();
-  const pending = ["src/agent4.zig", "src/contracts.zig", "build.zig", "build_agent4.zig"];
-  while (pending.length) {
-    const name = pending.pop();
-    if (files.has(name)) continue;
-    assert(!FORBIDDEN.test(name), `forbidden authoring dependency: ${name}`);
-    const bytes = readRegular(join(sourceRoot, name));
-    files.set(name, bytes);
-    const text = bytes.toString("utf8");
-    const imports = [...text.matchAll(/@import\("([^"\n]+)"\)/g)];
-    assert.equal(imports.length, [...text.matchAll(/@import\(/g)].length, "nonliteral import needs installation accounting");
-    for (const [, imported] of imports) {
-      if (imported.endsWith(".zig")) {
-        const absolute = resolve(sourceRoot, dirname(name), imported);
-        const child = relative(sourceRoot, absolute);
-        assert(!child.startsWith("../") && !child.startsWith("/"), "source import escapes package");
-        pending.push(child);
-      } else assert(MODULES.has(imported), `unclassified authoring module: ${imported}`);
-    }
-    assert(!/@embedFile\(/.test(text), "embedded authoring input needs explicit installation accounting");
+function run(executable, args, cwd = scratch, {failure = false, diagnostic, timeout = 300000} = {}) {
+  const command = [...prefix, ...(process.platform === 'linux' ? ['--chdir', cwd] : []), executable, ...args];
+  const result = spawnSync(command[0], command.slice(1), {cwd, env, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout});
+  assert.equal(result.error, undefined, result.error?.message);
+  assert.equal(result.signal, null, result.stderr);
+  if (failure) {
+    assert.notEqual(result.status, 0, 'negative witness unexpectedly succeeded');
+    if (diagnostic) assert(result.stderr.includes(diagnostic), result.stderr);
+  } else assert.equal(result.status, 0, result.stderr);
+  return result.stdout.trim();
+}
+
+try {
+  // An absolute interpreter path also fails, not only PATH lookup.
+  run(process.execPath, ['--version'], scratch, {failure: true});
+  if (existsSync('/usr/bin/python3')) run('/usr/bin/python3', ['--version'], scratch, {failure: true});
+  const sourceLock = join(root, 'conformance/agent4/dependencies.lock.json');
+  const nativeLock = join(root, 'conformance/agent4/native-dependencies.lock.json');
+  const lock = JSON.parse(readFileSync(sourceLock)), sqlite = JSON.parse(readFileSync(nativeLock)).sqlite;
+  // Cached transport bytes are optional and remain untrusted until native setup
+  // authenticates them. No source or pre-generated manifest is copied.
+  const seed = resolve(process.argv[2] ?? join(root, '.agent4-native/inputs'));
+  for (const name of [`boundary-${lock.boundary.commit}.tar.gz`, `world-${lock.world.commit}.tar.gz`, `${sqlite.archive.root}.zip`])
+    if (existsSync(join(seed, name))) copyFileSync(join(seed, name), join(inputs, name));
+  const started = performance.now();
+  run(zig, ['run', join(root, 'tools/native/dependencies.zig'), '--', 'setup', sourceLock, nativeLock, inputs, zig]);
+  // Export declared source from the working candidate, excluding ignored local
+  // stores/caches and their sockets. Zig still owns the package and its hash.
+  const exportRoot = join(scratch, 'source'); mkdirSync(exportRoot);
+  const declared = [...readFileSync(join(root, 'build.zig.zon'), 'utf8').split('.paths = .{')[1].split('},')[0].matchAll(/"([^"]+)"/g)].map(match => match[1]);
+  const sourceFiles = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {cwd: root}).toString().split('\0').filter(Boolean);
+  for (const file of sourceFiles) if (declared.some(path => file === path || file.startsWith(path + '/')) && existsSync(join(root, file))) {
+    const target = join(exportRoot, file); mkdirSync(dirname(target), {recursive: true}); copyFileSync(join(root, file), target);
   }
-  for (const name of ["build.zig.zon", "LICENSE", "README.md",
-    "tools/agent4/dependencies.mjs", "runtime/cli.mjs", "conformance/agent4/dependencies.lock.json"])
-    files.set(name, readRegular(join(sourceRoot, name)));
-  return files;
-}
-
-const BUILD = `const std = @import("std");
-pub fn build(b: *std.Build) void {
-    const optimize = b.standardOptimizeOption(.{});
-    const dependency = b.dependency("agent", .{ .target = b.graph.host, .optimize = optimize });
-    const root = b.createModule(.{
-        .root_source_file = b.path("main.zig"),
-        .target = b.graph.host,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "agent", .module = dependency.module("agent") },
-            .{ .name = "agent_contracts", .module = dependency.module("agent_contracts") },
-            .{ .name = "boundary", .module = dependency.module("boundary") },
-        },
-    });
-    const emitter = b.addExecutable(.{ .name = "installed-author", .root_module = root });
-    const run = b.addRunArtifact(emitter);
-    b.getInstallStep().dependOn(&b.addInstallFileWithDir(run.captureStdOut(.{}), .prefix, "application.bpi3").step);
-}
-`;
-
-const MANIFEST = `.{
-    .name = .agent_review_consumer,
-    .version = "4.0.0-dev.0",
-    .minimum_zig_version = "0.17.0",
-    .fingerprint = 0x0d924ec48f15f9eb,
-    .dependencies = .{ .agent = .{ .path = "../agent" } },
-    .paths = .{ "build.zig", "build.zig.zon", "main.zig" },
-}
-`;
-
-const MAIN = `const std = @import("std");
-const agent = @import("agent");
-const contracts = @import("agent_contracts");
-const boundary = @import("boundary");
-comptime {
-    if (agent.contracts.Utf8 != contracts.Utf8)
-        @compileError("Agent and its pure contracts must share nominal types");
-}
-const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.source.Module {
-        const integer = try contracts.schema(u32, c.builder);
-        const effect = try c.external("consumer.installed.read.v1", integer, integer, .read);
-        const entry = try c.builder.declare(&.{integer}, integer, &.{effect}, &.{});
-        const input = try c.builder.reference(c.builder.parameter(entry, 0));
-        try c.builder.define(entry, try c.builder.term(.{ .perform = .{ .effect = effect, .payload = input } }));
-        return c.builder.module(entry, try c.schema(void));
-    }
-};
-pub fn main(init: std.process.Init) !void {
-    const System = agent.system(.{ .InitialArgs = u32, .Result = u32, .Failure = void, .application = Application });
-    var compiled = try agent.compile(init.gpa, System);
-    defer compiled.deinit();
-    const buffer = try init.gpa.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
-    defer init.gpa.free(buffer);
-    const bytes = try compiled.encode(init.gpa, buffer);
-    var decoded = try boundary.data.program_image.decode(init.gpa, bytes);
-    defer decoded.deinit();
-    if (decoded.program.effects.len != 1 or
-        !std.mem.eql(u8, decoded.program.effects[0].identity, "consumer.installed.read.v1"))
-        return error.UnexpectedEffectContract;
-    var scratch: [4096]u8 = undefined;
-    var output = std.Io.File.stdout().writer(init.io, &scratch);
-    try output.interface.writeAll(bytes);
-    try output.interface.flush();
-}
-`;
-
-/** A02: real external authoring using only the installed public Zig package surfaces. */
-export async function authoringInstallation({ sourceRoot = ROOT, output } = {}) {
-  // Account for source before selecting a compiler, fetching, or creating output.
-  const source = authoringFiles(sourceRoot);
-  const toolchain = selectZig([]);
-  const lock = readDependencyLock(join(sourceRoot, "conformance/agent4/dependencies.lock.json"));
-  const area = join(sourceRoot, ".agent4/installation-tests"); mkdirSync(area, { recursive: true });
-  const work = mkdtempSync(join(area, "authoring-"));
-  const installed = join(work, "agent"), consumer = join(work, "consumer");
-  for (const [path, bytes] of source) {
-    const destination = join(installed, path); mkdirSync(dirname(destination), { recursive: true });
-    writeFileSync(destination, bytes, { flag: "wx" });
+  const packageHash = run(zig, ['fetch', exportRoot]);
+  assert.match(packageHash, /^agent-4\.0\.0-dev\.0-[A-Za-z0-9_-]+$/);
+  const packageDir = join(scratch, 'package'); mkdirSync(packageDir);
+  run('/usr/bin/tar', ['-xzf', join(cache, 'p', `${packageHash}.tar.gz`), '-C', packageDir]);
+  const source = join(packageDir, packageHash);
+  assert(existsSync(join(source, 'build.zig')));
+  for (const retired of ['runtime/model.mjs', 'runtime/mobility', 'examples/native-minimal', 'examples/repository-agent', 'tools/agent4/setup.mjs'])
+    assert(!existsSync(join(source, retired)), `retired package member: ${retired}`);
+  const consumer = join(scratch, 'consumer'); mkdirSync(consumer);
+  copyFileSync(join(root, 'test/consumers/adaptive/build.zig'), join(consumer, 'build.zig'));
+  const zon = readFileSync(join(root, 'test/consumers/adaptive/build.zig.zon'), 'utf8').replace('.path = "../../.."', `.path = "../package/${packageHash}"`);
+  writeFileSync(join(consumer, 'build.zig.zon'), zon);
+  const prefixDir = join(scratch, 'installed');
+  const buildArgs = ['build', '-Doptimize=safe', `-Dworld-source=${join(inputs, 'world')}`, `-Dsqlite-source=${join(inputs, 'sqlite')}`, '--prefix', prefixDir, '--prefix-exe-dir', 'executables', '--summary', 'all'];
+  run(zig, buildArgs, consumer);
+  // The actual exported module graph must stop on either a changed package or
+  // a changed native source override, before compiling/claiming new assets.
+  for (const path of [join(consumer, 'zig-pkg', lock.boundary.package.zigHash, 'src/root.zig'), join(inputs, 'world/src/root.zig')]) {
+    const original = readFileSync(path);
+    try {
+      writeFileSync(path, Buffer.concat([original, Buffer.from('\n// changed after admission\n')]));
+      run(zig, buildArgs, consumer, {failure: true, diagnostic: 'IdentityMismatch'});
+    } finally { writeFileSync(path, original); }
   }
-  const before = inventory(installed);
-  // The pure CLI identity helper serves lock authentication. No World runtime,
-  // environmental handler, kernel, or old Agent compiler is installed.
-  for (const path of ["runtime/world.mjs", "runtime/model.mjs", "runtime/document.mjs",
-    "runtime/runner.mjs", ".agent4", "zig-pkg", "src/system_compiler.zig"])
-    assert(!existsSync(join(installed, path)), `forbidden installation input: ${path}`);
-  mkdirSync(consumer);
-  writeFileSync(join(consumer, "build.zig"), BUILD);
-  writeFileSync(join(consumer, "build.zig.zon"), MANIFEST);
-  writeFileSync(join(consumer, "main.zig"), MAIN);
-  const args = ["build", "-Doptimize=safe", "--cache-dir", join(work, "cache/local"),
-    "--prefix", join(work, "out")];
-  const options = { cwd: consumer, encoding: "utf8", timeout: 600000, maxBuffer: 4 * 1024 * 1024,
-    env: { ...toolchain.env, ZIG_GLOBAL_CACHE_DIR: join(work, "cache/global"), ZIG_LOCAL_PKG_DIR: join(work, "packages") } };
-  execFileSync(toolchain.executable, [args[0], "--fetch=all", ...args.slice(1)], options);
-  const packageRoot = join(work, "packages", lock.boundary.package.zigHash);
-  let packageEvidence;
-  try {
-    await withVerifiedDependencies({ boundaryPackage: packageRoot, authoringOnly: true,
-      lockPath: join(sourceRoot, "conformance/agent4/dependencies.lock.json") }, observations => {
-      packageEvidence = observations.boundary;
-      execFileSync(toolchain.executable, args, options);
-    });
-  } finally {
-    assert.deepEqual(inventory(installed), before, "authoring installation changed while compiling");
-    for (const [path, bytes] of source)
-      assert(readRegular(join(sourceRoot, path)).equals(bytes), `source changed during A02: ${path}`);
+  const executable = join(prefixDir, 'executables/adaptive-agent');
+  const manifest = JSON.parse(run(executable, ['describe-build']));
+  assert.equal(manifest.application_id, 'adaptive-agent');
+  assert.equal(manifest.dependencies.world, lock.world.commit);
+  assert.equal(manifest.dependencies.boundary, lock.boundary.commit);
+  const reference = process.argv[3];
+  if (reference) {
+    const expected = JSON.parse(execFileSync(resolve(reference), ['describe-build'], {encoding: 'utf8'}));
+    for (const key of ['program_sha256', 'application_assets_sha256', 'dependencies', 'compiler', 'target']) assert.deepEqual(manifest[key], expected[key], key);
   }
-  toolchain.assertUnchanged();
-  const image = readRegular(join(work, "out/application.bpi3"));
-  assert.equal(image.subarray(0, 8).toString(), "ABL_BPI3", "external author did not emit a Boundary 3 image");
-  assert.equal(image.readUInt16LE(8), 3, "unexpected Boundary record version");
-  assert.equal(image.readBigUInt64LE(12), BigInt(image.length - 20), "incomplete image record");
-  const result = { acceptance: "A02", result: "passed", relation: "external public-module authoring without World",
-    installedSource: { inventorySha256: before.inventorySha256, files: before.files },
-    consumerSha256: sha256(Buffer.from(BUILD + MANIFEST + MAIN)), boundary: packageEvidence,
-    image: { bytes: image.length, sha256: sha256(image) },
-    moduleIdentity: "agent.contracts.Utf8 equals separately imported agent_contracts.Utf8",
-    workDirectory: work, command: [toolchain.executable, ...args],
-    limitations: ["This case emits BPI3; runtime execution is covered by separate integration cases."] };
-  if (output) { mkdirSync(dirname(resolve(output)), { recursive: true }); writeFileSync(output, JSON.stringify(result, null, 2) + "\n"); }
-  return result;
-}
-
-if (isMain(import.meta)) {
-  try {
-    const args = process.argv.slice(2);
-    let output, sourceRoot, scanOnly = false;
-    const seen = new Set();
-    for (let i = 0; i < args.length; i++) {
-      const flag = args[i];
-      if (seen.has(flag)) throw new Error(`duplicate option: ${flag}`);
-      seen.add(flag);
-      if (flag === "--scan-only") { scanOnly = true; continue; }
-      if (!["--output", "--source-root"].includes(flag) || !args[i + 1] || args[i + 1].startsWith("--"))
-        throw new Error("usage: installations.mjs [--scan-only] [--source-root DIR] [--output FILE]");
-      const value = resolve(args[++i]);
-      if (flag === "--output") output = value;
-      else sourceRoot = value;
-    }
-    if (scanOnly) {
-      const files = authoringFiles(sourceRoot);
-      const result = { check: "authoring-source-accounting", result: "passed", files: [...files.keys()].sort() };
-      if (output) { mkdirSync(dirname(output), { recursive: true }); writeFileSync(output, JSON.stringify(result, null, 2) + "\n"); }
-      console.log(JSON.stringify(result, null, 2));
-    } else console.log(JSON.stringify(await authoringInstallation({ sourceRoot, output }), null, 2));
-  } catch (error) { console.error(error.message); process.exitCode = 1; }
+  const demo = JSON.parse(run(executable, ['demo', '--offline', '--state-dir', join(scratch, 'state')]));
+  assert.equal(demo.output.disposition, 'report');
+  assert.equal(demo.output.model_calls, 14);
+  console.log(JSON.stringify({downstream: 'public addNativeSystem', node_free_acquisition_build_install: true, package: packageHash, target: manifest.target, program: manifest.program_sha256, elapsed_seconds: (performance.now() - started) / 1000}));
+} finally {
+  rmSync(scratch, {recursive: true, force: true});
 }

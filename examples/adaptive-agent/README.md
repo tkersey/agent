@@ -1,16 +1,11 @@
-# Adaptive repository agent
+# Adaptive Agent
 
 This example runs one authored computation on the existing native host. The
 model can call `inference_set` and `skill_set`; the host admits their proposed
 next request before the computation commits the new control revision.
 
-The current scope is the **October 9, 2026 authored-program amendment**: one
-reusable Zig Agent/Boundary computation, executed and continued by World, with
-the existing native environmental adapters. The repository investigation is its
-reference consumer. The separate JS adaptive implementation and Node/WASM
-adaptive package are **superseded by scope change**. A new polished standalone
-distribution is deferred; the existing embedded executable remains useful for
-reference execution.
+This is Agent's supported application. It uses the reusable Zig authoring and
+native-host APIs; Boundary owns compiled control and World owns continuation.
 
 Linux reference qualification uses recorded provider replies and controlled I/O.
 The [acceptance map](../../docs/adaptive-responses-acceptance.md) binds the current
@@ -28,11 +23,10 @@ skills, offers, budgets, epochs and next actions stay in that authored program.
 The native adapter realizes its explicit requests; it has no transcript-driven
 policy loop. See the [v6 API contract](../../docs/model-invocation-v6.md).
 
-From the Agent repository with its authenticated dependencies:
+From the Agent repository after the [native setup](../../docs/native-single-binary.md):
 
 ```sh
-zig build adaptive-agent -Doptimize=safe \
-  -Dworld-runtime="$PWD/.agent4/out/world-runtime/runtime"
+zig build adaptive-agent -Doptimize=safe
 ```
 
 This produces the reference executable `zig-out/bin/adaptive-agent` and the
@@ -53,7 +47,7 @@ with that consumer's action/catalog types. For native embedding, the existing
 `build.zig.addNativeSystem` / `build_native.zig` entry accepts definition, types
 and environment paths. Its `.application.emitted` option reuses exact compiled
 image/assets/types; the repository reference already uses it. That is also the
-entry for later single-binary assembly, not a new framework to implement.
+public path used by downstream native hosts.
 
 ## Execute the compiled program
 
@@ -90,15 +84,15 @@ Configuration and discovery alone perform no inference or credential discovery.
 Use `--help` for status, result, response, resume, cancellation and checkpoint
 commands. The CLI and `agent-host/1.0` front end use the same image and native
 task owner. Protocol callers may use any language; the existing optional
-[`stdio-client.mts`](../native-minimal/stdio-client.mts) is a caller, not an agent
+[`stdio-client.mts`](../../test/support/stdio-client.mts) is a caller, not an agent
 runtime dependency. Questions require the reported identity/revision/digest;
 queued follow-ups cannot substitute for a question response. Stable client
 operation IDs support lost-ack retries, not new inference after unknown delivery.
 
 SQLite, the existing C shim, libc and OS facilities remain admitted native
 dependencies. Zig and setup/build tools are authoring dependencies; JavaScript
-and Python qualification controllers stay outside the deployed reference
-boundary. Existing non-adaptive JS/WASM products are unchanged.
+qualification controllers stay outside the deployed product boundary. Distributed
+adaptive mobility is future work; checkpoint copying does not transfer custody.
 
 ## Frozen configuration
 
@@ -292,8 +286,8 @@ definitions, and work dispatch binds to that captured call. Queued user messages
 are consumed through the authored inbox only after the current call settles.
 
 The new contracts are `agent.model.invoke.v6` and
-`agent.model.context.responses.adaptive.v4`. Existing v3/v4/v5 consumers and the
-fixed `repository-agent` keep their meanings. Reports expose bounded evidence
+`agent.model.context.responses.adaptive.v4`. Shared earlier schema meanings
+remain intact; the fixed applications are retired. Reports expose bounded evidence
 and control receipts; raw provider captures and opaque reasoning are not public
 report artifacts. Absent usage remains unavailable. Explicit cache markers and
 unchanged request prefixes do not establish provider cache reuse.

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { decodeNatural, encodeNatural, decodeValue, encodeValue, decodeSchema, encodeSchema, parseJsonValue, ValueCodecError } from '../../runtime/values.mjs';
+import { decodeNatural, encodeNatural, decodeValue, encodeValue, decodeSchema, encodeSchema, ValueCodecError } from '../support/values.mjs';
 
 const schema = type => ({ root: 0, types: [type] });
 const hex = bytes => Buffer.from(bytes).toString('hex');
@@ -150,37 +150,6 @@ test('host materialization limits do not label well-typed zero-width sequences i
   const vector = { root: 0, types: [{ vector: { element: 1, maximum: 2 } }, 'unit'] };
   rejects('InvalidValue', () => decodeValue(vector, bytes('03')));
   rejects('Truncated', () => decodeValue({ root: 0, types: [{ seq: 1 }, 'u64'] }, bytes('0200')));
-});
-
-test('JSON preserves full-width integer lexemes and rejects duplicate or unexpected fields', () => {
-  const descriptor = { root: 0, types: [{ product: [1, 2, 3], fields: ['id', 'small', 'optional'] }, 'u64', 'u8', { sum: [4, 1] }, 'unit'] };
-  const source = '{"id":18446744073709551615,"small":255,"optional":{"tag":1,"value":"9007199254740993"}}';
-  assert.deepEqual(parseJsonValue(descriptor, source), { id: 18446744073709551615n, small: 255, optional: { tag: 1, value: 9007199254740993n } });
-  for (const bad of [
-    '{"id":1,"id":2,"small":1,"optional":{"tag":0,"value":null}}',
-    '{"id":1,"\\u0069d":2,"small":1,"optional":{"tag":0,"value":null}}',
-    '{"id":1,"small":1,"optional":{"tag":0,"tag":1,"value":null}}',
-    '{"id":1,"small":1,"optional":{"tag":0,"value":null},"extra":1}',
-    '{"id":1,"small":1}',
-    '{"id":1,"small":1,"optional":{"tag":0,"value":null},}',
-    '{"id":1e3,"small":1,"optional":{"tag":0,"value":null}}',
-    '{"id":1.0,"small":1,"optional":{"tag":0,"value":null}}',
-    '{"id":01,"small":1,"optional":{"tag":0,"value":null}}',
-    '{"id":18446744073709551616,"small":1,"optional":{"tag":0,"value":null}}',
-  ]) rejects('InvalidValue', () => parseJsonValue(descriptor, bad));
-  for (const bad of ['"\\ud800"', '"\\udfff"', '"bad\ntext"', '"\\x20"']) rejects('InvalidValue', () => parseJsonValue(schema('text'), bad));
-  const seq = { root: 0, types: [{ seq: 1 }, 'u8'] };
-  assert.deepEqual(parseJsonValue(seq, ' [1,2] \n'), [1, 2]);
-  for (const bad of ['[1,]', '[,]', '[1 2]', '[] []', 'NaN', '[truefalse]']) rejects('InvalidValue', () => parseJsonValue(seq, bad));
-});
-
-test('JSON and named values safely retain prototype-sensitive property names', () => {
-  const descriptor = { root: 0, types: [{ product: [1, 1], fields: ['__proto__', 'constructor'] }, 'text'] };
-  const value = parseJsonValue(descriptor, '{"__proto__":"evidence","constructor":"data"}');
-  assert.equal(Object.getPrototypeOf(value), Object.prototype);
-  assert.equal(value.__proto__, 'evidence');
-  assert.equal(value.constructor, 'data');
-  assert.deepEqual(decodeValue(descriptor, encodeValue(descriptor, value)), value);
 });
 
 test('schema bounds retain u64 precision, including equivalent declared bounds', () => {

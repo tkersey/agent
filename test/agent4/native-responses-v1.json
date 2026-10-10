@@ -1,27 +1,181 @@
 {
   "version": 1,
   "cases": [
-    {"name":"reasoning and phase","body":"{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"inspect\"}],\"encrypted_content\":\"opaque+/=\"},{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"phase\":\"commentary\",\"content\":[{\"type\":\"output_text\",\"text\":\"雪\",\"annotations\":[]}]}]}","result":"output","replay":"complete"},
-    {"name":"exact integer call","body":"{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":9007199254740993}\"}],\"usage\":{\"input_tokens\":12,\"output_tokens\":7,\"input_tokens_details\":{\"cached_tokens\":0}}}","result":"output","replay":"complete"},
-    {"name":"refusal","body":"{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"message\",\"status\":\"completed\",\"role\":\"assistant\",\"content\":[{\"type\":\"refusal\",\"refusal\":\"declined\"}]}]}","result":"refusal","replay":"complete"},
-    {"name":"duplicate envelope key","body":"{\"status\":\"completed\",\"status\":\"failed\",\"error\":null,\"output\":[]}","result":"unsupported_response","reason":"malformed_json","replay":"unsupported"},
-    {"name":"invalid Unicode","body":"{\"status\":\"completed\",\"error\":null,\"output\":[],\"bad\":\"\\ud800\"}","result":"unsupported_response","reason":"malformed_json","replay":"unsupported"},
-    {"name":"missing call id","body":"{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":1}\"}]}","result":"unsupported_response","reason":"unsupported_output_item","replay":"unsupported"},
-    {"name":"invalid whole batch","body":"{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"a\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":1}\"},{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"b\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":2}\"}]}","result":"unsupported_response","reason":"unsupported_output_item","replay":"unsupported"},
-    {"name":"duplicate arguments","body":"{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"a\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":1,\\\"value\\\":2}\"}]}","result":"output","replay":"complete"},
-    {"name":"unsupported hosted tool","body":"{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"web_search_call\",\"status\":\"completed\"}]}","result":"unsupported_response","reason":"unsupported_output_item","replay":"unsupported"},
-    {"name":"incomplete","body":"{\"status\":\"incomplete\",\"error\":null,\"output\":[]}","result":"provider_failure","replay":"unsupported"},
-    {"name":"mixed refusal","body":"{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"a\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":1}\"},{\"type\":\"message\",\"status\":\"completed\",\"role\":\"assistant\",\"content\":[{\"type\":\"refusal\",\"refusal\":\"no\"}]}]}","result":"unsupported_response","reason":"mixed_refusal","replay":"unsupported"},
-    {"name":"fractional integer spelling","body":"{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":4096.0}\"}],\"usage\":{\"input_tokens\":12,\"output_tokens\":7,\"input_tokens_details\":{\"cached_tokens\":0}}}","result":"output","replay":"complete"},
-    {"name":"exponential full-width integer","body":"{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":184467440737095516150e-1}\"}],\"usage\":{\"input_tokens\":12,\"output_tokens\":7,\"input_tokens_details\":{\"cached_tokens\":0}}}","result":"output","replay":"complete"},
-    {"name":"negative zero integer","body":"{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":-0}\"}],\"usage\":{\"input_tokens\":12,\"output_tokens\":7,\"input_tokens_details\":{\"cached_tokens\":0}}}","result":"output","replay":"complete"},
-    {"name":"nonintegral argument","body":"{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":1.5}\"}],\"usage\":{\"input_tokens\":12,\"output_tokens\":7,\"input_tokens_details\":{\"cached_tokens\":0}}}","result":"output","replay":"complete"},
-    {"name":"out-of-range exponential argument","body":"{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":18446744073709551616e0}\"}],\"usage\":{\"input_tokens\":12,\"output_tokens\":7,\"input_tokens_details\":{\"cached_tokens\":0}}}","result":"output","replay":"complete"},
-    {"name":"integral usage spellings","body":"{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":1}\"}],\"usage\":{\"input_tokens\":12.0,\"output_tokens\":7e0,\"input_tokens_details\":{\"cached_tokens\":-0}}}","result":"output","replay":"complete"},
-    {"name":"failed with usage","body":"{\"status\":\"failed\",\"error\":null,\"output\":[],\"usage\":{\"input_tokens\":17,\"output_tokens\":9,\"input_tokens_details\":{\"cached_tokens\":3}}}","result":"provider_failure","replay":"unsupported","usage":{"input_tokens":17,"output_tokens":9,"cached_input_tokens":3}},
-    {"name":"incomplete with usage","body":"{\"status\":\"incomplete\",\"error\":null,\"output\":[],\"usage\":{\"input_tokens\":17,\"output_tokens\":9,\"input_tokens_details\":{\"cached_tokens\":3}}}","result":"provider_failure","replay":"unsupported","usage":{"input_tokens":17,"output_tokens":9,"cached_input_tokens":3}},
-    {"name":"unsupported output with usage","body":"{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"web_search_call\",\"status\":\"completed\"}],\"usage\":{\"input_tokens\":17,\"output_tokens\":9,\"input_tokens_details\":{\"cached_tokens\":3}}}","result":"unsupported_response","reason":"unsupported_output_item","replay":"unsupported","usage":{"input_tokens":17,"output_tokens":9,"cached_input_tokens":3}},
-    {"name":"incomplete with malformed usage","body":"{\"status\":\"incomplete\",\"error\":null,\"output\":[],\"usage\":{\"input_tokens\":17,\"output_tokens\":\"9\"}}","result":"provider_failure","replay":"unsupported","usage_absent":true},
-    {"name":"failed without usage","body":"{\"status\":\"failed\",\"error\":null,\"output\":[]}","result":"provider_failure","replay":"unsupported","usage_absent":true}
-  ]
+    {
+      "name": "reasoning and phase",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"inspect\"}],\"encrypted_content\":\"opaque+/=\"},{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"phase\":\"commentary\",\"content\":[{\"type\":\"output_text\",\"text\":\"雪\",\"annotations\":[]}]}]}",
+      "result": "output",
+      "replay": "complete",
+      "result_wire": "00020207696e7370656374010300000003e99baa63764cb383dc3076ab72e404b7007f8bd4a673b09ff94b2d30791a1dbf1a263b"
+    },
+    {
+      "name": "exact integer call",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":9007199254740993}\"}],\"usage\":{\"input_tokens\":12,\"output_tokens\":7,\"input_tokens_details\":{\"cached_tokens\":0}}}",
+      "result": "output",
+      "replay": "complete",
+      "result_wire": "0001000663616c6c5f310663686f6f73651a7b2276616c7565223a393030373139393235343734303939337d000000000000010000000000200028bc4e43e297cef898ffb8e09cfce3e13da2218b4c016ac264b4b8a9bdeb16d1"
+    },
+    {
+      "name": "refusal",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"message\",\"status\":\"completed\",\"role\":\"assistant\",\"content\":[{\"type\":\"refusal\",\"refusal\":\"declined\"}]}]}",
+      "result": "refusal",
+      "replay": "complete",
+      "result_wire": "01086465636c696e6564"
+    },
+    {
+      "name": "duplicate envelope key",
+      "body": "{\"status\":\"completed\",\"status\":\"failed\",\"error\":null,\"output\":[]}",
+      "result": "unsupported_response",
+      "reason": "malformed_json",
+      "replay": "unsupported",
+      "result_wire": "0402000000"
+    },
+    {
+      "name": "invalid Unicode",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[],\"bad\":\"\\ud800\"}",
+      "result": "unsupported_response",
+      "reason": "malformed_json",
+      "replay": "unsupported"
+    },
+    {
+      "name": "missing call id",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":1}\"}]}",
+      "result": "unsupported_response",
+      "reason": "unsupported_output_item",
+      "replay": "unsupported"
+    },
+    {
+      "name": "invalid whole batch",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"a\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":1}\"},{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"b\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":2}\"}]}",
+      "result": "unsupported_response",
+      "reason": "unsupported_output_item",
+      "replay": "unsupported"
+    },
+    {
+      "name": "duplicate arguments",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"a\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":1,\\\"value\\\":2}\"}]}",
+      "result": "output",
+      "replay": "complete",
+      "result_wire": "00010001610663686f6f7365157b2276616c7565223a312c2276616c7565223a327d00000000010600000079d1a40010fd3fb42ce37fff98f04c085e743a10af3269a14656f0c2864e38aa"
+    },
+    {
+      "name": "unsupported hosted tool",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"web_search_call\",\"status\":\"completed\"}]}",
+      "result": "unsupported_response",
+      "reason": "unsupported_output_item",
+      "replay": "unsupported",
+      "result_wire": "0405000000"
+    },
+    {
+      "name": "incomplete",
+      "body": "{\"status\":\"incomplete\",\"error\":null,\"output\":[]}",
+      "result": "provider_failure",
+      "replay": "unsupported",
+      "result_wire": "03020000000000"
+    },
+    {
+      "name": "mixed refusal",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":\"a\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":1}\"},{\"type\":\"message\",\"status\":\"completed\",\"role\":\"assistant\",\"content\":[{\"type\":\"refusal\",\"refusal\":\"no\"}]}]}",
+      "result": "unsupported_response",
+      "reason": "mixed_refusal",
+      "replay": "unsupported",
+      "result_wire": "0406000000"
+    },
+    {
+      "name": "fractional integer spelling",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":4096.0}\"}],\"usage\":{\"input_tokens\":12,\"output_tokens\":7,\"input_tokens_details\":{\"cached_tokens\":0}}}",
+      "result": "output",
+      "replay": "complete",
+      "result_wire": "0001000663616c6c5f310663686f6f7365107b2276616c7565223a343039362e307d0000000000000010000000000000e1c93c1846a224a669644806f16299275d02849b53a9c0a36968646679acdb9a"
+    },
+    {
+      "name": "exponential full-width integer",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":184467440737095516150e-1}\"}],\"usage\":{\"input_tokens\":12,\"output_tokens\":7,\"input_tokens_details\":{\"cached_tokens\":0}}}",
+      "result": "output",
+      "replay": "complete",
+      "result_wire": "0001000663616c6c5f310663686f6f7365227b2276616c7565223a313834343637343430373337303935353136313530652d317d000000000000ffffffffffffffff5fb18c5c5b1a234d4c5f7758abf87a2a64ad4be610fb2e657516e4556fc11600"
+    },
+    {
+      "name": "negative zero integer",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":-0}\"}],\"usage\":{\"input_tokens\":12,\"output_tokens\":7,\"input_tokens_details\":{\"cached_tokens\":0}}}",
+      "result": "output",
+      "replay": "complete",
+      "result_wire": "0001000663616c6c5f310663686f6f73650c7b2276616c7565223a2d307d0000000000000000000000000000eac63f5815c4eea0d86add0a435eb22a66092f8b75e015a3b21225a16480397d"
+    },
+    {
+      "name": "nonintegral argument",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":1.5}\"}],\"usage\":{\"input_tokens\":12,\"output_tokens\":7,\"input_tokens_details\":{\"cached_tokens\":0}}}",
+      "result": "output",
+      "replay": "complete",
+      "result_wire": "0001000663616c6c5f310663686f6f73650d7b2276616c7565223a312e357d00000000010400000074a9ccc5ff7f3c3771d12d523b187e6ab3ed2f948253dbce9c0019ece183dacb"
+    },
+    {
+      "name": "out-of-range exponential argument",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":18446744073709551616e0}\"}],\"usage\":{\"input_tokens\":12,\"output_tokens\":7,\"input_tokens_details\":{\"cached_tokens\":0}}}",
+      "result": "output",
+      "replay": "complete",
+      "result_wire": "0001000663616c6c5f310663686f6f7365207b2276616c7565223a313834343637343430373337303935353136313665307d0000000001040000003193307987b27f15fc4878942c278e4274893c1b320087feed145c7ff06e8010"
+    },
+    {
+      "name": "integral usage spellings",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"function_call\",\"status\":\"completed\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"choose\",\"arguments\":\"{\\\"value\\\":1}\"}],\"usage\":{\"input_tokens\":12.0,\"output_tokens\":7e0,\"input_tokens_details\":{\"cached_tokens\":-0}}}",
+      "result": "output",
+      "replay": "complete",
+      "result_wire": "0001000663616c6c5f310663686f6f73650b7b2276616c7565223a317d000000000000010000000000000000b14f7ffcb33c0eb067e1e4ad32e3e121edd6cab569c91df6347cc786ef590a"
+    },
+    {
+      "name": "failed with usage",
+      "body": "{\"status\":\"failed\",\"error\":null,\"output\":[],\"usage\":{\"input_tokens\":17,\"output_tokens\":9,\"input_tokens_details\":{\"cached_tokens\":3}}}",
+      "result": "provider_failure",
+      "replay": "unsupported",
+      "usage": {
+        "input_tokens": 17,
+        "output_tokens": 9,
+        "cached_input_tokens": 3
+      },
+      "result_wire": "03010000000000"
+    },
+    {
+      "name": "incomplete with usage",
+      "body": "{\"status\":\"incomplete\",\"error\":null,\"output\":[],\"usage\":{\"input_tokens\":17,\"output_tokens\":9,\"input_tokens_details\":{\"cached_tokens\":3}}}",
+      "result": "provider_failure",
+      "replay": "unsupported",
+      "usage": {
+        "input_tokens": 17,
+        "output_tokens": 9,
+        "cached_input_tokens": 3
+      },
+      "result_wire": "03020000000000"
+    },
+    {
+      "name": "unsupported output with usage",
+      "body": "{\"status\":\"completed\",\"error\":null,\"output\":[{\"type\":\"web_search_call\",\"status\":\"completed\"}],\"usage\":{\"input_tokens\":17,\"output_tokens\":9,\"input_tokens_details\":{\"cached_tokens\":3}}}",
+      "result": "unsupported_response",
+      "reason": "unsupported_output_item",
+      "replay": "unsupported",
+      "usage": {
+        "input_tokens": 17,
+        "output_tokens": 9,
+        "cached_input_tokens": 3
+      },
+      "result_wire": "0405000000"
+    },
+    {
+      "name": "incomplete with malformed usage",
+      "body": "{\"status\":\"incomplete\",\"error\":null,\"output\":[],\"usage\":{\"input_tokens\":17,\"output_tokens\":\"9\"}}",
+      "result": "provider_failure",
+      "replay": "unsupported",
+      "usage_absent": true,
+      "result_wire": "03020000000000"
+    },
+    {
+      "name": "failed without usage",
+      "body": "{\"status\":\"failed\",\"error\":null,\"output\":[]}",
+      "result": "provider_failure",
+      "replay": "unsupported",
+      "usage_absent": true,
+      "result_wire": "03010000000000"
+    }
+  ],
+  "wire_provenance": "Fixed ordinary result bytes from the previously checked v3/native intersection. The three nonintersecting cases keep their independently specified native assertions."
 }

@@ -2,9 +2,7 @@
 // No execution, admission, prompt rendering, provider interpretation or recovery.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {mkdirSync, writeFileSync} from 'node:fs';
-import {join} from 'node:path';
-import {decodeSchema, encodeValue} from '../../runtime/values.mjs';
+import {decodeSchema, encodeValue} from '../support/values.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 export function contract(application, name) {
@@ -130,9 +128,6 @@ export function measureAdaptive(application, rows, skillBodies, resources = {}) 
     qualification: 'controlled native workload; no live provider or cache measurements',
     comparison_scope: 'same recorded work, provider replies and offers; alternatives are unexecuted byte-layout counterfactuals',
     prewarm_requests: 0, compaction_requests: 0, physical_model_attempts: rows.length, calls, comparison, resources};
-  if (process.env.AGENT4_BUILD_PREFIX) {
-    mkdirSync(process.env.AGENT4_BUILD_PREFIX, {recursive: true});
-    writeFileSync(join(process.env.AGENT4_BUILD_PREFIX, 'adaptive-observations.json'), JSON.stringify(report, null, 2) + '\n');
-  }
+
   return report;
 }

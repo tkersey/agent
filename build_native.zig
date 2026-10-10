@@ -32,7 +32,7 @@ pub const Product = struct {
     manifest: std.Build.LazyPath,
 };
 
-/// The dependency must select its admitted World source/runtime with the normal
+/// The dependency must select its admitted World source and SQLite with the normal
 /// Agent build options. Pure authoring consumers never need those options.
 pub fn addNativeSystem(b: *std.Build, dependency: *std.Build.Dependency, options: Options) Product {
     const product = addWithModules(b, .{
@@ -46,6 +46,7 @@ pub fn addNativeSystem(b: *std.Build, dependency: *std.Build.Dependency, options
         .native_agent = dependency.module("agent_native_types"),
         .native_data = dependency.module("agent_native_data"),
         .sqlite_source = dependency.namedLazyPath("native-sqlite-source"),
+        .host_tool = dependency.artifact("agent-native-build"),
     }, options);
     b.getInstallStep().dependOn(&product.install.step);
     return product;
@@ -64,6 +65,7 @@ pub const Modules = struct {
     native_agent: *std.Build.Module,
     native_data: *std.Build.Module,
     sqlite_source: std.Build.LazyPath,
+    host_tool: *std.Build.Step.Compile,
 };
 
 pub fn addWithModules(b: *std.Build, modules: Modules, options: Options) Product {
@@ -94,16 +96,8 @@ pub fn addWithModules(b: *std.Build, modules: Modules, options: Options) Product
             .{ .name = "boundary_data", .module = modules.native_data },
         },
     });
-    const manifest = b.addSystemCommand(&.{ "env", "-u", "NODE_TEST_CONTEXT" });
-    manifest.addFileArg2(.zig_exe, .{ .prefix = "AGENT_ZIG_EXE=", .make_absolute = true });
-    manifest.addDirectoryArg2(.zig_lib, .{ .prefix = "ZIG_LIB_DIR=", .make_absolute = true });
-    manifest.addArg("node");
-    manifest.addFileArg2(modules.root.path(b, "tools/agent4/native-manifest.mjs"), .{});
-    manifest.addFileInput(modules.root.path(b, "tools/agent4/toolchain.mjs"));
-    manifest.addFileInput(modules.root.path(b, "tools/agent4/native-dependencies.mjs"));
-    manifest.addFileInput(modules.root.path(b, "conformance/agent4/native-dependencies.lock.json"));
-    // The selected distribution's license can sit outside its library tree.
-    // Authenticate current compiler/library/license inputs on each build.
+    const manifest = b.addRunArtifact(modules.host_tool);
+    manifest.addArg("manifest");
     manifest.has_side_effects = true;
     manifest.addFileArg2(assets.image, .{});
     manifest.addFileArg2(assets.application, .{});
@@ -122,6 +116,9 @@ pub fn addWithModules(b: *std.Build, modules: Modules, options: Options) Product
     // in Zig 0.17. Distinguish the named products even on the same target so
     // concurrent manifest writers cannot overwrite one another's output.
     const manifest_file = manifest.addOutputFileArg2(b.fmt("{s}-manifest.json", .{options.name}), .{});
+    manifest.addFileArg2(modules.root.path(b, "conformance/agent4/native-dependencies.lock.json"), .{});
+    manifest.addFileArg2(.zig_exe, .{ .make_absolute = true });
+    manifest.addDirectoryArg2(.zig_lib, .{ .make_absolute = true });
 
     const root = b.createModule(.{
         .root_source_file = modules.root.path(b, "runtime/native/entry.zig"),
@@ -162,6 +159,8 @@ fn generate(b: *std.Build, modules: Modules, source: Source) Assets {
         .imports = &.{
             .{ .name = "agent", .module = modules.agent },
             .{ .name = "boundary", .module = modules.boundary },
+            .{ .name = "boundary_data", .module = modules.data },
+            .{ .name = "agent_contracts", .module = modules.contracts },
             .{ .name = "application_types", .module = types },
         },
     });

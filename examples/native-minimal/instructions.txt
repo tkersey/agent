@@ -1,3 +1,0 @@
-This offline example retains its input across a native increment and yield,
-asks for a label, and returns the sum and the exact answer. It has no inference
-or filesystem capability. Cleanup is an authored typed native request.

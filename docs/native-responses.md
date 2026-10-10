@@ -69,28 +69,16 @@ The versioned independent corpus is
 [`native-responses-v1.json`](../test/agent4/native-responses-v1.json). It includes
 reasoning/phase, exact integers, refusal, duplicate keys, invalid Unicode,
 missing call IDs, invalid batches, malformed arguments, unsupported output and
-incomplete responses. Native tests compare complete normalized bytes against the
-existing JS v3 normalizer for their shared semantics. Whole-batch policy and
-lone-surrogate escapes in ignored envelope fields are explicit nonintersections:
-the retained v3 normalizer accepts those fixtures; native admission rejects them.
-A missing call ID rejects in both versions, with v3's `normalization_limit` and
-v5's `unsupported_output_item` classifications asserted separately.
+incomplete responses. Native tests compare complete normalized bytes against
+fixed expectations from the previously checked shared v3/native corpus. The
+retired JS normalizer is no longer executed or shipped. Native whole-batch,
+Unicode and missing-call-ID behavior retain explicit independent expectations.
 The controlled HTTPS peer checks chain, hostname and expiry rejection, response
-size and truncation, deadlines, exact bodies and no retries/redirects. These cases
-run in Linux qualification; see the [executed subjects](native-single-binary-qualification.md).
+size and truncation, deadlines, exact bodies and no retries/redirects.
+[Adaptive Agent](../examples/adaptive-agent/README.md) uses the native v6 adapter
+and the same capture, recovery and transport owners. Current exact-head proof
+surfaces are listed in the [acceptance map](adaptive-responses-acceptance.md).
 Live inference requires separate authorization and is not claimed here.
-
-The `examples/repository-agent` application uses the same build
-helper. Its authored program limits model calls to 16, work calls (including
-clarifications) to 12, and retained evidence records to eight. Reports select an
-actual acquired evidence record. Native snapshot capture rejects symlinks and
-nonregular entries, freezes bounded file bytes and digests, and exposes only
-paginated listings and UTF-8 byte-window reads. Configuration admission and a
-copied-binary offline witness passed Linux CI, together with the controlled HTTPS
-investigation, crash/restart, frozen evidence and recorded-reply native/WASM/native
-continuation (`e4ef34ba458fb7136cadebcaf250bfab5e7d99df`, run `37588057282`).
-Later runs include clean deployment; exact current qualification and serial
-review disposition are maintained on [PR #45](https://github.com/tkersey/agent/pull/45).
 
 The projection follows the official
 [conversation-state guide](https://developers.openai.com/api/docs/guides/conversation-state),

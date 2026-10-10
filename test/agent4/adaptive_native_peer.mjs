@@ -7,10 +7,10 @@ import {once} from 'node:events';
 import {mkdir, writeFile, readFile} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
 import {join} from 'node:path';
-import {AgentClient} from '../../examples/native-minimal/stdio-client.mts';
-import {certificates} from './mobility_tls_fixture.mjs';
-import {readArchive, missingCaptures, tamperedAdaptiveControl} from './native_archive.mjs';
-import {decodeValue, encodeValue} from '../../runtime/values.mjs';
+import {AgentClient} from '../support/stdio-client.mts';
+import {certificates} from '../support/tls.mjs';
+import {readArchive, missingCaptures, tamperedAdaptiveControl, missingCheckpoint, changedProfile, extraPrivateArtifact, omittedAttempts, changedOperationKey, invalidEventData} from './native_archive.mjs';
+import {decodeValue, encodeValue} from '../support/values.mjs';
 import {contract, measureAdaptive} from './adaptive_measurements.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -387,7 +387,13 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
       }
     }
     assert.equal(providerProjections, 14); assert.equal(controlProjections, 22); assert.equal(workProjections, 4); assert.equal(readEvidence, 1);
-    for (const [name, bytes] of [['missing-capture', missingCaptures(archiveBytes, 'one')], ['tampered-control', tamperedAdaptiveControl(archiveBytes, schemas.CapturedResponse)]]) {
+    for (const [name, bytes] of [
+      ['missing-capture', missingCaptures(archiveBytes, 'one')], ['tampered-control', tamperedAdaptiveControl(archiveBytes, schemas.CapturedResponse)],
+      ['missing-checkpoint', missingCheckpoint(archiveBytes)], ['changed-profile', changedProfile(archiveBytes)],
+      ['private-checkpoint', extraPrivateArtifact(archiveBytes)], ['private-capture', extraPrivateArtifact(archiveBytes, 'capture')],
+      ['omitted-attempts', omittedAttempts(archiveBytes)], ['changed-operation', changedOperationKey(archiveBytes)],
+      ['omitted-submission', changedOperationKey(archiveBytes, 'omitted')], ['invalid-event', invalidEventData(archiveBytes, 'null')],
+    ]) {
       const path = join(app.data, `${name}.bundle`); await writeFile(path, bytes, {mode: 0o600});
       const rejected = spawnSync(app.command, ['import-checkpoint', '--state-dir', join(app.data, `${name}-state`), '--input', path, '--operation-id', name,
         '--test-provider', '--trust-root', trust], {cwd: app.data, env: {PATH: '/nonexistent'}, encoding: 'utf8', timeout: 30000, maxBuffer: 1024 * 1024});

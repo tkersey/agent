@@ -230,8 +230,6 @@ test "native Responses v1 independently specified capture corpus" {
     const req = try contracts.encodeOwned(P.ReferenceRequest, a, request());
     const rendered = try Adapter.prepare(ctx, req);
     const fixture = try native.json.parse(a, @embedFile("native-responses-v1.json"), .{});
-    const reference = try native.json.parse(a, @embedFile("native_model_reference"), .{});
-    const references = reference.value.object.get("items").?.array.items;
     var compared: usize = 0;
     const cases = fixture.value.object.get("cases").?.array.items;
     for (cases) |case| {
@@ -255,14 +253,14 @@ test "native Responses v1 independently specified capture corpus" {
             try std.testing.expect(result.value.usage == null);
             try std.testing.expect(projection.output_tokens == null);
         }
-        for (references) |expected| if (std.mem.eql(u8, name, expected.object.get("name").?.string)) {
+        if (case.object.get("result_wire")) |expected| {
             const encoded = try contracts.encodeOwned(P.Result, a, result.value.result);
-            const hex = expected.object.get("result").?.string;
+            const hex = expected.string;
             const expected_bytes = try a.alloc(u8, hex.len / 2);
             _ = try std.fmt.hexToBytes(expected_bytes, hex);
             try std.testing.expectEqualSlices(u8, expected_bytes, encoded);
             compared += 1;
-        };
+        }
         if (std.mem.eql(u8, name, "reasoning and phase")) {
             try std.testing.expect(result.value.usage == null);
             var artifact = try contracts.decodeOwned(P.Context, a, projection.objects[0]);
@@ -272,7 +270,7 @@ test "native Responses v1 independently specified capture corpus" {
             try std.testing.expectEqualStrings("commentary", replay.value.array.items[2].object.get("phase").?.string);
         }
         // Two supplied fields exceed this profile's one-field bound before
-        // duplicate-field decoding. The JS bytes independently assert it too.
+        // duplicate-field decoding. The fixed wire fixture independently asserts it too.
         if (std.mem.eql(u8, name, "duplicate arguments")) try std.testing.expectEqual(.capacity, result.value.result.output.items.items[0].function_call.decoded_action.invalid);
         if (std.mem.eql(u8, name, "integral usage spellings")) {
             try std.testing.expectEqual(@as(u64, 12), result.value.usage.?.input_tokens);
@@ -318,9 +316,7 @@ test "native Responses v1 independently specified capture corpus" {
             try std.testing.expectError(error.MissingArtifact, Adapter.prepare(ctx, try contracts.encodeOwned(P.ReferenceRequest, a, next)));
         }
     }
-    const nonintersection = reference.value.object.get("explicit_nonintersection").?.array.items;
-    try std.testing.expectEqual(3, nonintersection.len);
-    try std.testing.expectEqual(cases.len - nonintersection.len, compared);
+    try std.testing.expectEqual(cases.len - 3, compared);
     var bad = request();
     var tools = [_]P.ToolDeclaration{P.allDeclarations().items[0]};
     tools[0].strict = false;

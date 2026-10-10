@@ -19,3 +19,15 @@ pub const Interface = struct {
     failure: contracts.Bytes(maximum_asset_bytes),
 };
 pub const Built = struct { image: contracts.Bytes(maximum_asset_bytes), interface: Interface };
+
+/// A derived product remains bound to its creating task and frozen policy.
+/// The ordinary object store supplies the reference to these canonical bytes.
+pub const Program = struct {
+    version: u8 = 1,
+    task: [16]u8,
+    policy: [32]u8,
+    catalog: [32]u8,
+    recipe: contracts.Text(maximum_recipe_bytes),
+    built: Built,
+};
+pub const Input = struct { schema: contracts.Bytes(maximum_asset_bytes), value: contracts.Bytes(maximum_value_bytes) };

@@ -18,6 +18,8 @@ pub const Endpoint = wire.Endpoint;
 pub const Recipe = wire.Recipe;
 pub const Interface = wire.Interface;
 pub const Built = wire.Built;
+pub const Program = wire.Program;
+pub const Input = wire.Input;
 pub const Limits = struct {
     working_bytes: usize = 16 * 1024 * 1024,
     transitions: u64 = 1_000_000,
@@ -26,6 +28,41 @@ pub const Limits = struct {
 
 fn same(left: []const u8, right: []const u8) bool {
     return std.mem.eql(u8, left, right);
+}
+
+fn digest(bytes: []const u8) [32]u8 {
+    var result: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(bytes, &result, .{});
+    return result;
+}
+
+/// Catalog bytes come from the frozen resource closure, never model arguments.
+pub fn construct(output: std.mem.Allocator, scratch: std.mem.Allocator, task: [16]u8, profile: []const u8, catalog_bytes: []const u8, proposal: []const u8) !Program {
+    if (catalog_bytes.len > maximum_asset_bytes or proposal.len > maximum_recipe_bytes) return error.Capacity;
+    var catalog = try contracts.decodeOwned(Catalog, scratch, catalog_bytes);
+    defer catalog.deinit();
+    const recipe = try output.dupe(u8, proposal);
+    errdefer output.free(recipe);
+    return .{ .task = task, .policy = digest(profile), .catalog = digest(catalog_bytes), .recipe = .{ .bytes = recipe }, .built = try build(output, scratch, catalog.value, proposal) };
+}
+
+/// Re-admit the derivation and compare it to the exact retained program. Linking
+/// is validation here: execution still receives the originally referenced bytes.
+pub fn execute(output: std.mem.Allocator, scratch: std.mem.Allocator, io: std.Io, cancellation: ?*const std.atomic.Value(bool), task: [16]u8, profile: []const u8, catalog_bytes: []const u8, program: Program, input: Input, limits: Limits) ![]u8 {
+    if (program.version != 1 or !same(&program.task, &task) or !same(&program.policy, &digest(profile)) or !same(&program.catalog, &digest(catalog_bytes))) return error.UnauthorizedProgram;
+    if (catalog_bytes.len > maximum_asset_bytes) return error.Capacity;
+    if (cancellation) |flag| if (flag.load(.acquire)) return error.Canceled;
+    var arena = std.heap.ArenaAllocator.init(scratch);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var catalog = try contracts.decodeOwned(Catalog, a, catalog_bytes);
+    defer catalog.deinit();
+    const derived = try build(a, scratch, catalog.value, program.recipe.bytes);
+    if (!same(derived.image.bytes, program.built.image.bytes) or
+        !same(derived.interface.input.bytes, program.built.interface.input.bytes) or
+        !same(derived.interface.output.bytes, program.built.interface.output.bytes) or
+        !same(derived.interface.failure.bytes, program.built.interface.failure.bytes)) return error.InvalidDerivation;
+    return run(output, scratch, io, cancellation, program.built, input.schema.bytes, input.value.bytes, limits);
 }
 
 /// The caller supplies an already task-admitted catalog, never model bytes.
@@ -85,11 +122,14 @@ pub fn interfaceOf(a: std.mem.Allocator, program: data.activation.Program) !Inte
 }
 
 pub fn build(output: std.mem.Allocator, scratch: std.mem.Allocator, catalog: Catalog, proposal: []const u8) !Built {
-    var parsed = try json.parse(scratch, proposal, .{ .bytes = maximum_recipe_bytes, .depth = 6, .tokens = 2048, .members = 64 });
+    var budget: world.AllocationBudget = .{ .parent = scratch, .limit = 16 * 1024 * 1024 };
+    const bounded = budget.allocator();
+    var parsed = try json.parse(bounded, proposal, .{ .bytes = maximum_recipe_bytes, .depth = 6, .tokens = 2048, .members = 64 });
     defer parsed.deinit();
-    var arena = std.heap.ArenaAllocator.init(scratch);
+    var arena = std.heap.ArenaAllocator.init(bounded);
     defer arena.deinit();
     const a = arena.allocator();
+    try validateCatalog(a, catalog);
     const recipe = try values.fromJson(Recipe, a, parsed.value);
     if (recipe.instances.items.len == 0) return error.InvalidRecipe;
     try acyclic(recipe);
@@ -107,7 +147,7 @@ pub fn build(output: std.mem.Allocator, scratch: std.mem.Allocator, catalog: Cat
         .required = .{ .instance = item.required.instance.bytes, .symbol = item.required.symbol.bytes },
         .supplied = .{ .instance = item.supplied.instance.bytes, .symbol = item.supplied.symbol.bytes },
     };
-    var linked = try data.linker.linkWithCompilation(scratch, instances, bindings, .{ .instance = recipe.entry.instance.bytes, .symbol = recipe.entry.symbol.bytes }, .{ .max_image_bytes = maximum_asset_bytes });
+    var linked = try data.linker.linkWithCompilation(bounded, instances, bindings, .{ .instance = recipe.entry.instance.bytes, .symbol = recipe.entry.symbol.bytes }, .{ .max_image_bytes = maximum_asset_bytes });
     defer linked.deinit();
     const interface = try interfaceOf(a, linked.program);
     const length = try data.program_image.encodedLength(linked.program);
@@ -134,6 +174,7 @@ pub fn build(output: std.mem.Allocator, scratch: std.mem.Allocator, catalog: Cat
 pub fn run(output: std.mem.Allocator, parent: std.mem.Allocator, io: std.Io, cancellation: ?*const std.atomic.Value(bool), built: Built, input_schema: []const u8, input: []const u8, limits: Limits) ![]u8 {
     if (built.image.bytes.len > maximum_asset_bytes or input.len > maximum_value_bytes or limits.working_bytes == 0 or limits.working_bytes > 16 * 1024 * 1024 or limits.transitions == 0 or limits.transitions > 1_000_000 or limits.deadline_ms == 0 or limits.deadline_ms > 10_000) return error.Capacity;
     const start = std.Io.Clock.awake.now(io).toMilliseconds();
+    if (cancellation) |flag| if (flag.load(.acquire)) return error.Canceled;
     var budget: world.AllocationBudget = .{ .parent = parent, .limit = limits.working_bytes };
     const a = budget.allocator();
     var prepared = try world.Prepared.init(a, built.image.bytes);
@@ -150,7 +191,10 @@ pub fn run(output: std.mem.Allocator, parent: std.mem.Allocator, io: std.Io, can
         if (std.Io.Clock.awake.now(io).toMilliseconds() - start >= limits.deadline_ms) return error.Timeout;
         const quantum = @min(remaining, 256);
         remaining -= quantum;
-        switch (try session.run(quantum)) {
+        const progress = try session.run(quantum);
+        if (cancellation) |flag| if (flag.load(.acquire)) return error.Canceled;
+        if (std.Io.Clock.awake.now(io).toMilliseconds() - start >= limits.deadline_ms) return error.Timeout;
+        switch (progress) {
             .progressed => {},
             .yielded => try session.resumeYield(),
             .requested => return error.ForbiddenEffect,

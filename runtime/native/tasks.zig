@@ -923,6 +923,9 @@ pub fn Service(comptime Types: type) type {
                     return .progressed;
                 },
                 .leaf => {
+                    if (entry.declaration.attempt_limit) |limit| {
+                        if (try self.store().capabilityAttempts(value.id, entry.declaration.identity) >= limit) return self.blocked(a, initial, .capacity);
+                    }
                     var preparation = std.heap.ArenaAllocator.init(a);
                     defer preparation.deinit();
                     const prepared = if (entry.declaration.capture) |adapter| adapter.prepare(self.projectionContext(preparation.allocator(), value), request.value.binding.payload) catch |err|
@@ -1419,6 +1422,9 @@ pub fn Service(comptime Types: type) type {
                 var request = try data.invocation.decode(data.invocation.Request, temporary, encoded);
                 defer request.deinit();
                 const entry = try self.handlers.resolve(request.value, self.application.image_identity);
+                if (entry.declaration.attempt_limit) |limit| {
+                    if (try self.store().capabilityAttempts(value.id, entry.declaration.identity) > limit) return error.InvalidArchive;
+                }
                 if (entry.declaration.kind != .leaf or !same(&request.value.request_identity, &saved.value.request) or
                     !std.meta.eql(attempt.value.request, saved.value.request_object) or !std.meta.eql(attempt.value.profile, value.profile) or !same(attempt.value.capability.bytes, entry.declaration.identity) or
                     attempt.value.inference != entry.declaration.inference or (attempt.value.prepared != null) != (entry.declaration.capture != null)) return error.InvalidArchive;

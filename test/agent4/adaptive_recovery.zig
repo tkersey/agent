@@ -54,10 +54,19 @@ test "compiled catalog composes coverage and orphan grouping and reuses exact BP
     try engine.validateCatalog(a, catalog.value);
     const coverage = try constructionRecipe(a, &.{ .{ .component = "filter", .operation = "selected" }, .{ .component = "map", .operation = "join" }, .{ .component = "map", .operation = "classify" } });
     var scratch: world.AllocationBudget = .{ .parent = a, .limit = 16 * 1024 * 1024 };
-    const tool = try engine.build(a, scratch.allocator(), catalog.value, coverage);
+    const task: [16]u8 = @splat(17);
+    const product = try engine.construct(a, scratch.allocator(), task, "frozen-policy", encoded_catalog.?, coverage);
+    const tool = product.built;
+    // Persistence round-trip keeps the exact image, recipe and task binding.
+    var recovered = try agent.contracts.decodeOwned(wire.Program, a, try agent.contracts.encodeOwned(wire.Program, a, product));
+    defer recovered.deinit();
+    try std.testing.expectEqualSlices(u8, tool.image.bytes, recovered.value.built.image.bytes);
     const schema = try native.values.schemaBytes(t.tool_types.Table, a);
     const input: t.tool_types.Table = .{ .rows = .{ .items = &.{ auditRow(1, 10, 100, 1), auditRow(2, 20, 200, 1), auditRow(3, 30, 300, 2), auditRow(4, 40, 400, 2), auditRow(5, 50, 500, 3) } }, .relation = .{ .items = &.{ auditRow(11, 10, 100, 1), auditRow(12, 20, 201, 1), auditRow(13, 40, 400, 2), auditRow(14, 40, 401, 2), auditRow(15, 90, 1, 3), auditRow(16, 91, 1, 3), auditRow(17, 92, 1, 4) } }, .selected = .{ .items = &.{ 10, 20, 30, 40 } } };
-    const first = try engine.run(a, a, std.testing.io, null, tool, schema, try agent.contracts.encodeOwned(t.tool_types.Table, a, input), .{});
+    const admitted_input: wire.Input = .{ .schema = .{ .bytes = schema }, .value = .{ .bytes = try agent.contracts.encodeOwned(t.tool_types.Table, a, input) } };
+    try std.testing.expectError(error.UnauthorizedProgram, engine.execute(a, a, std.testing.io, null, @splat(18), "frozen-policy", encoded_catalog.?, recovered.value, admitted_input, .{}));
+    try std.testing.expectError(error.UnauthorizedProgram, engine.execute(a, a, std.testing.io, null, task, "changed-policy", encoded_catalog.?, recovered.value, admitted_input, .{}));
+    const first = try engine.execute(a, a, std.testing.io, null, task, "frozen-policy", encoded_catalog.?, recovered.value, admitted_input, .{});
     var result = try agent.contracts.decodeOwned(t.tool_types.Table, a, first);
     defer result.deinit();
     try std.testing.expectEqual(4, result.value.rows.items.len);
@@ -66,7 +75,7 @@ test "compiled catalog composes coverage and orphan grouping and reuses exact BP
         try std.testing.expectEqual(status, row.status);
     }
     const next: t.tool_types.Table = .{ .rows = .{ .items = &.{auditRow(80, 20, 201, 9)} }, .relation = input.relation, .selected = .{ .items = &.{20} } };
-    var reused = try agent.contracts.decodeOwned(t.tool_types.Table, a, try engine.run(a, a, std.testing.io, null, tool, schema, try agent.contracts.encodeOwned(t.tool_types.Table, a, next), .{}));
+    var reused = try agent.contracts.decodeOwned(t.tool_types.Table, a, try engine.execute(a, a, std.testing.io, null, task, "frozen-policy", encoded_catalog.?, recovered.value, .{ .schema = .{ .bytes = schema }, .value = .{ .bytes = try agent.contracts.encodeOwned(t.tool_types.Table, a, next) } }, .{}));
     defer reused.deinit();
     try std.testing.expectEqual(1, reused.value.rows.items.len);
     try std.testing.expectEqual(80, reused.value.rows.items[0].id);

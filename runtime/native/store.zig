@@ -416,6 +416,24 @@ pub const Store = struct {
         return ids.toOwnedSlice(a);
     }
 
+    pub fn capabilityAttempts(self: *Store, task: state.TaskId, capability: []const u8) !u32 {
+        var query = try self.database.prepare("SELECT body FROM records WHERE kind='attempt' AND task=? LIMIT 1025", &.{.{ .blob = &task }});
+        defer query.deinit();
+        var seen: usize = 0;
+        var count: u32 = 0;
+        while (try query.step() == .row) {
+            if (seen == 1024) return error.Capacity;
+            seen += 1;
+            const bytes = try self.recordObject(self.allocator, try query.bytes(0));
+            defer self.allocator.free(bytes);
+            var attempt = try contracts.decodeOwned(state.Attempt, self.allocator, bytes);
+            defer attempt.deinit();
+            if (!std.mem.eql(u8, &task, &attempt.value.task)) return error.CorruptState;
+            if (std.mem.eql(u8, capability, attempt.value.capability.bytes)) count += 1;
+        }
+        return count;
+    }
+
     pub fn objectReference(self: *Store, id: Digest, limit: usize) !state.Reference {
         var query = try self.database.prepare("SELECT length(body) FROM objects WHERE digest=?", &.{.{ .blob = &id }});
         defer query.deinit();

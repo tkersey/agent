@@ -52,7 +52,14 @@ const E = struct {
         return e.primitive(e.integer, .integer_add, &.{ left, right }, .arithmetic_overflow);
     }
     fn get(e: E, schema: Id, list: Id, index: Id) !Id {
-        return e.primitive(schema, .sequence_get, &.{ list, index }, .invalid_index);
+        const optional = try e.b.schema(.{ .sum = &.{ e.unit, schema } });
+        const found = try e.b.primitive(optional, .sequence_get, &.{ list, index }, 0);
+        return e.b.value(.{ .schema = schema, .expression = .{ .primitive = .{
+            .opcode = .variant_payload,
+            .operands = &.{found},
+            .immediate = 1,
+            .failures = &.{.{ .kind = .invalid_variant, .value = try e.b.failureLiteral(try e.b.constant(void, {})) }},
+        } } });
     }
     fn append(e: E, list: Id, row: Id) !Id {
         return e.primitive(e.rows, .sequence_append, &.{ list, row }, .capacity_exceeded);
@@ -160,7 +167,11 @@ pub fn emit(allocator: std.mem.Allocator, kind: Kind) ![]u8 {
         },
         .group => try grouped(e),
     };
-    var compiled = try source.component.compile(allocator, b.module(root, e.unit), .{ .imports = imports.items, .borrows = borrows.items, .exports = &.{symbol("apply", root)} });
+    var diagnostic: source.Diagnostic = .{};
+    var compiled = source.component.compileObserved(allocator, b.module(root, e.unit), .{ .imports = imports.items, .borrows = borrows.items, .exports = &.{symbol("apply", root)} }, .{ .diagnostic = &diagnostic }) catch |err| {
+        std.log.err("tool component {s}: {s}; {any}", .{ @tagName(kind), @errorName(err), diagnostic });
+        return err;
+    };
     defer compiled.deinit();
     const bytes = try allocator.alloc(u8, try data.component.encodedLength(compiled.object));
     errdefer allocator.free(bytes);

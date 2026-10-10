@@ -492,6 +492,8 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
         }
     }
     try std.testing.expectEqual(1, calls);
+    try std.testing.expectEqual(@as(u32, if (captured) 2 else 1), try namespace.store.capabilityAttempts(accepted.receipt.task, "task-owner.increment.v1"));
+    try std.testing.expectEqual(@as(u32, 0), try namespace.store.capabilityAttempts(accepted.receipt.task, "another-capability"));
     // Restart at durable acquisition, before World consumes the reply.
     try service.close(frame);
     service_live = false;
@@ -499,6 +501,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     namespace_live = false;
     namespace = try native.Namespace.open(a, io, path);
     namespace_live = true;
+    try std.testing.expectEqual(@as(u32, if (captured) 2 else 1), try namespace.store.capabilityAttempts(accepted.receipt.task, "task-owner.increment.v1"));
     // Both fixtures preserve the exact image and value types. Independently
     // changing either nominal application or message identity must still reject
     // new input, while retaining access to the old task and its queued message.

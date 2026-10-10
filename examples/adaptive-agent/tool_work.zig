@@ -162,7 +162,7 @@ fn interpret(ctx: native.registry.ProjectionContext, request: []const u8, prepar
     return .{ .reply = try contracts.encodeOwned(t.ToolReply, ctx.allocator, .{ .artifact = ref, .program = if (result.artifact.outcome == .built) result.artifact.outcome.built else null, .evidence = evidence }), .objects = objects };
 }
 pub fn declaration(comptime build: bool) native.Declaration {
-    return .{ .identity = if (build) t.tool_build_identity else t.tool_run_identity, .resource_role = if (build) "tool-construction" else "tool-execution", .kind = .leaf, .background = true, .attempt_limit = if (build) 4 else 8, .payload_schema = struct {
+    return .{ .identity = if (build) t.tool_build_identity else t.tool_run_identity, .resource_role = if (build) "tool-construction" else "tool-execution", .kind = .leaf, .background = true, .attempt_limit = if (build) 4 else 8, .public_outputs = true, .payload_schema = struct {
         fn schema(a: std.mem.Allocator) ![]u8 {
             return native.values.schemaBytes(t.ToolRequest, a);
         }

@@ -162,6 +162,26 @@ pub fn Service(comptime Types: type) type {
             try self.allowed();
             return self.application.schemaArtifact(id);
         }
+        pub fn projectedArtifact(self: *Self, a: std.mem.Allocator, task_id: state.TaskId, id: state.Digest) !state.Reference {
+            var value = try self.task(a, task_id);
+            defer value.deinit();
+            try self.compatibleApplication(value.value);
+            if (!same(&value.value.runtime_identity, &self.profile.runtime_identity)) return error.ArtifactUnavailable;
+            const owners = try self.store().projectionOwners(a, task_id, id);
+            defer a.free(owners);
+            for (owners) |owner| {
+                var attempt = try self.record(state.Attempt, a, "attempt", owner.attempt, task_id);
+                defer attempt.deinit();
+                if (!std.meta.eql(attempt.value.profile, value.value.profile)) return error.CorruptState;
+                const bytes = try self.store().object(a, attempt.value.request, 4 * 1024 * 1024);
+                defer a.free(bytes);
+                var request = try data.invocation.decode(data.invocation.Request, a, bytes);
+                defer request.deinit();
+                const entry = try self.handlers.resolve(request.value, self.application.image_identity);
+                if (entry.declaration.public_outputs) return owner.object;
+            }
+            return error.ArtifactUnavailable;
+        }
         /// Rebuild adapter state from owned immutable data, never from the
         /// original filesystem paths. This read does not resume or grant work.
         pub fn frozenInputs(self: *Self, a: std.mem.Allocator, id: state.TaskId) !FrozenInputs {

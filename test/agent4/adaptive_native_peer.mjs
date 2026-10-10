@@ -24,7 +24,7 @@ async function within(promise, milliseconds, message) {
 async function until(read, predicate, maximum = 400) {
   for (let n = 0; n < maximum; n++) {
     const value = await read(); if (predicate(value)) return value;
-    assert(!['blocked', 'failed', 'unknown'].includes(value.status), `unexpected adaptive status ${JSON.stringify(value)}`);
+    assert(!['blocked', 'failed', 'unknown', 'completed', 'cancelled'].includes(value.status), `unexpected adaptive status ${JSON.stringify(value)}`);
     await delay(10);
   }
   assert.fail('adaptive task timeout');
@@ -103,15 +103,15 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         } else if (scenario === 'tools-reverse') {
           if (index === 0) call = skill('load', 0);
           if (index === 1) call = ['tool_build', {proposal_json: JSON.stringify(subject.recipe)}];
-          if (index === 2) { const built = output(1); assert.equal(built.disposition, 'structurally_admitted'); subject.program = built.tool_ref; call = ['tool_run', {tool_ref: subject.program, input_ref: subject.inputs[0].input_ref}]; }
-          if (index === 3) { const result = output(2); assert.equal(result.disposition, 'completed'); assert.deepEqual(result.value.rows.map(row => [row.group, row.value]), [['3', '2'], ['4', '1']]); call = ['report', {summary: 'Three unsupported source records, grouped into counts two and one.', evidence_index: 0}]; }
+          if (index === 2) { const built = output(1); assert.equal(built.disposition, 'structurally_admitted', JSON.stringify(built)); subject.program = built.tool_ref; call = ['tool_run', {tool_ref: subject.program, input_ref: subject.inputs[0].input_ref}]; }
+          if (index === 3) { const result = output(2); assert.equal(result.disposition, 'completed', JSON.stringify(result)); assert.deepEqual(result.value.rows.map(row => [row.group, row.value]), [['3', '2'], ['4', '1']]); call = ['report', {summary: 'Three unsupported source records, grouped into counts two and one.', evidence_index: 0}]; }
           assert(index <= 3);
         } else {
           if (index === 0) call = skill('load', 0);
           if (index === 1) { assert(offered.has('tool_build')); call = ['tool_build', {proposal_json: JSON.stringify({...subject.recipe, pure: true})}]; }
           if (index === 2) { assert.equal(output(1).disposition, 'rejected'); call = ['tool_build', {proposal_json: JSON.stringify(subject.recipe)}]; }
-          if (index === 3) { const built = output(2); assert.equal(built.disposition, 'structurally_admitted'); subject.program = built.tool_ref; call = ['tool_run', {tool_ref: subject.program, input_ref: subject.inputs[0].input_ref}]; }
-          if (index === 4) { const result = output(3); assert.equal(result.disposition, 'completed'); assert.deepEqual(result.value.rows.map(row => [row.id, row.status]), [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']]); call = ['ask', {question: 'The first audit is acquired. Continue with the second admitted input?'}]; }
+          if (index === 3) { const built = output(2); assert.equal(built.disposition, 'structurally_admitted', JSON.stringify(built)); subject.program = built.tool_ref; call = ['tool_run', {tool_ref: subject.program, input_ref: subject.inputs[0].input_ref}]; }
+          if (index === 4) { const result = output(3); assert.equal(result.disposition, 'completed', JSON.stringify(result)); assert.deepEqual(result.value.rows.map(row => [row.id, row.status]), [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']]); call = ['ask', {question: 'The first audit is acquired. Continue with the second admitted input?'}]; }
           if (index === 5) call = skill('deactivate', 1);
           if (index === 6) call = skill('unload', 2);
           if (index === 7) {
@@ -119,7 +119,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
             assert(strings(body.input).some(text => text.includes('Retained generated tool references') && text.includes(subject.program)));
             call = ['tool_run', {tool_ref: subject.program, input_ref: subject.inputs[1].input_ref}];
           }
-          if (index === 8) { const result = output(7); assert.equal(result.disposition, 'completed'); assert.equal(result.tool_ref, subject.program); assert.deepEqual(result.value.rows.map(row => [row.id, row.status]), [['80', '1']]); call = ['report', {summary: 'The same admitted program found agreement on the changed second input.', evidence_index: 1}]; }
+          if (index === 8) { const result = output(7); assert.equal(result.disposition, 'completed', JSON.stringify(result)); assert.equal(result.tool_ref, subject.program); assert.deepEqual(result.value.rows.map(row => [row.id, row.status]), [['80', '1']]); call = ['report', {summary: 'The same admitted program found agreement on the changed second input.', evidence_index: 1}]; }
           assert(index <= 8);
         }
         assert(call);
@@ -178,6 +178,15 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
   const launch = async (extra, selectedState = state) => {
     client = new AgentClient(app.command, ['--state-dir', selectedState, '--authorize-inference', '--test-provider', '--trust-root', trust, ...extra], {cwd: app.data, env: {PATH: '/nonexistent'}});
     await client.initialize(); return client;
+  };
+  const artifact = async (taskId, ref) => {
+    const id = typeof ref === 'string' ? ref.split(':')[0] : Buffer.from(ref.digest).toString('hex');
+    const chunks = []; let offset = '0', done = false;
+    while (!done) {
+      const chunk = await client.call('artifact.read', {task_id: taskId, artifact_id: id, offset, length: '32768'});
+      assert.equal(chunk.sha256, id); chunks.push(Buffer.from(chunk.data, 'base64url')); offset = chunk.next_offset; done = chunk.eof;
+    }
+    const bytes = Buffer.concat(chunks); assert.equal(hash(bytes), id); return bytes;
   };
   const started = performance.now();
   try {
@@ -443,6 +452,8 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         const waiting = await until(() => client.call('task.status', {task_id: task.task_id}), value => value.question != null, 2000);
         if (providerFailure) throw providerFailure;
         assert.equal(alternateIndex, 5);
+        const originalProgram = await artifact(task.task_id, toolSubject.program);
+        assert.equal(Buffer.from(decodeValue(contract(asset, 'ToolProgram'), originalProgram)[5][0]).subarray(0, 8).toString(), 'ABL_BPI3');
         app.signal(client.child, 'SIGKILL'); await client.closed; client = null;
         const bundle = join(app.data, 'constructed-tool.bundle');
         invoke('export-checkpoint', '--state-dir', selectedState, '--task-id', task.task_id, '--output', bundle);
@@ -451,6 +462,22 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         await launch(['--profile-task', task.task_id], selectedState);
         const reopened = await client.call('task.status', {task_id: task.task_id});
         assert.deepEqual(reopened.question, waiting.question); assert.equal(alternateIndex, 5);
+        assert((await artifact(task.task_id, toolSubject.program)).equals(originalProgram));
+        const exported = readArchive(await readFile(bundle));
+        let privateChecks = 0;
+        for (const [kind, id, ref] of exported.manifest[6]) {
+          if (kind !== 4) continue;
+          const row = exported.manifest[6].find(([kind, candidate]) => kind === 5 && Buffer.from(candidate).equals(Buffer.from(id)));
+          const attempt = decodeValue(exported.schemas.get('attempt'), exported.object(row[2]));
+          if (attempt[5] !== 'agent.model.invoke.v6') continue;
+          const capture = decodeValue(exported.schemas.get('capture'), exported.object(ref));
+          for (const privateRef of [capture[4].value, ...capture[6].value[1]]) {
+            await assert.rejects(client.call('artifact.read', {task_id: task.task_id, artifact_id: Buffer.from(privateRef[0]).toString('hex'), offset: '0', length: '1'}), error => error.data?.kind === 'ArtifactUnavailable');
+            privateChecks++;
+          }
+          break;
+        }
+        assert(privateChecks >= 2, 'raw capture and private projection remain unreadable');
         await client.call('task.resume', {client_operation_id: 'constructed-resume', task_id: task.task_id, expected_revision: reopened.revision});
         await client.call('task.respond', {client_operation_id: 'constructed-answer', task_id: task.task_id, question_id: waiting.question.question_id,
           question_revision: waiting.question.question_revision, request_digest: waiting.question.request_digest,
@@ -465,6 +492,8 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
         const program = result.outcome.value.programs[0];
         assert.equal(`${Buffer.from(program.digest).toString('hex')}:${program.bytes}`, toolSubject.program);
         assert.deepEqual(result.outcome.value.evidence[0].value.program, program);
+        const evidence = decodeValue(contract(asset, 'ToolArtifact'), await artifact(task.task_id, result.outcome.value.evidence[0].value.object));
+        assert.equal(evidence[3].tag, 1, 'public evidence is the acquired run result');
       } else {
         assert.equal(result.outcome.value.disposition, 'no_result');
         assert.equal(result.outcome.value.programs.length, 0);
@@ -486,6 +515,8 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
       consumed_messages: 3, not_consumed_messages: 1, disabled_offer_rejected: offeredWitness, cancellations, tool_construction: toolRuns,
       layout_comparison: measurements.comparison.map(({policy, total_request_bytes, summed_local_visible_prefix_bytes, actual_execution, hard_eviction}) =>
         ({policy, total_request_bytes, summed_local_visible_prefix_bytes, actual_execution, hard_eviction})), live_provider: false}));
+  } catch (error) {
+    throw providerFailure ?? error;
   } finally {
     releaseHeld(); if (client) { client.child.kill('SIGKILL'); await client.closed; }
     for (const socket of sockets) socket.destroy(); await new Promise(resolve => server.close(resolve));

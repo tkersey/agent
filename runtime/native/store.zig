@@ -434,6 +434,31 @@ pub const Store = struct {
         return count;
     }
 
+    pub const ProjectionOwner = struct { attempt: Digest, object: state.Reference };
+    /// Return provenance candidates, not permission. The capability owner must
+    /// authorize disclosure before any returned object is read publicly.
+    pub fn projectionOwners(self: *Store, a: std.mem.Allocator, task: state.TaskId, object: Digest) ![]ProjectionOwner {
+        var query = try self.database.prepare("SELECT id,body FROM records WHERE kind='capture' AND task=? LIMIT 1025", &.{.{ .blob = &task }});
+        defer query.deinit();
+        var result: std.ArrayList(ProjectionOwner) = .empty;
+        errdefer result.deinit(a);
+        var seen: usize = 0;
+        while (try query.step() == .row) {
+            if (seen == 1024) return error.Capacity;
+            seen += 1;
+            const bytes = try self.recordObject(self.allocator, try query.bytes(1));
+            defer self.allocator.free(bytes);
+            var capture = try contracts.decodeOwned(state.Capture, self.allocator, bytes);
+            defer capture.deinit();
+            if (!std.mem.eql(u8, &task, &capture.value.task) or !std.mem.eql(u8, try query.bytes(0), &capture.value.attempt)) return error.CorruptState;
+            if (capture.value.disposition != .complete) continue;
+            if (capture.value.projection) |projection| for (projection.objects.items) |ref| {
+                if (std.mem.eql(u8, &ref.digest, &object)) try result.append(a, .{ .attempt = capture.value.attempt, .object = ref });
+            };
+        }
+        return result.toOwnedSlice(a);
+    }
+
     pub fn objectReference(self: *Store, id: Digest, limit: usize) !state.Reference {
         var query = try self.database.prepare("SELECT length(body) FROM objects WHERE digest=?", &.{.{ .blob = &id }});
         defer query.deinit();

@@ -219,6 +219,8 @@ pub const support_types = .{
     .{ .name = "ToolRequest", .T = ToolRequest },
     .{ .name = "ToolReply", .T = ToolReply },
     .{ .name = "ToolArtifact", .T = ToolArtifact },
+    .{ .name = "ToolProgram", .T = contracts.tool_construction.Program },
+    .{ .name = "ToolInput", .T = contracts.tool_construction.Input },
     .{ .name = "ReceiptArtifact", .T = ReceiptArtifact },
     .{ .name = "Question", .T = Question },
     .{ .name = "Answer", .T = Answer },

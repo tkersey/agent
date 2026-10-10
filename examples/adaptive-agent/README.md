@@ -252,6 +252,13 @@ retained in `programs`. `report.evidence_index` selects the stable acquired
 evidence list. Old saved tasks retain their original image/runtime bindings and
 must use their original compatible executable; no implicit migration occurs.
 
+Use the existing `artifact.read` method with `task_id` and the reference's
+hex digest as `artifact_id` to inspect a generated program or result in bounded
+chunks. `ToolProgram` and `ToolArtifact` in the application metadata describe
+their ordinary wire values. Disclosure requires that the producing capability
+explicitly permits public output objects; raw captures, prepared requests and
+private context objects remain unavailable.
+
 ## Controls and context
 
 Both tools require `expected_revision` and a bounded `reason`. The inference

@@ -150,13 +150,27 @@ function packageAt(paths, lock, { verifyOnly, lockPath, zig, toolchain }) {
   return packageRoot;
 }
 
-function runtimeTransport(paths, delivery, {offline, verifyOnly}) {
+function verifyDeliveryRecord(record, delivery) {
+  equal(record.source.commit, delivery.commit, "delivery source mismatch");
+  equal(record.manifestSha256, delivery.manifestSha256, "delivery manifest mismatch");
+  equal(record.archive.sha256, delivery.archive.sha256, "delivery archive binding mismatch");
+  equal(record.archive.bytes, delivery.archive.bytes, "delivery archive length mismatch");
+}
+
+async function runtimeTransport(paths, delivery, {offline, verifyOnly}) {
   const archive = join(paths.input, "world-runtime-bundle.tar.gz");
   if (existsSync(archive)) {
     authenticateArchive(readRegular(archive), delivery.archive);
     return archive;
   }
   if (offline || verifyOnly) fail("missing authenticated World bundle transport");
+  if (delivery.release) {
+    const descriptor = await archiveAt(join(paths.input, "world-runtime-bundle.delivery.json"),
+      delivery.release.descriptor, {offline, verifyOnly});
+    verifyDeliveryRecord(JSON.parse(descriptor.toString()), delivery);
+    await archiveAt(archive, delivery.archive, {offline, verifyOnly});
+    return archive;
+  }
   mkdirSync(paths.temporary, {recursive: true});
   const staged = mkdtempSync(join(paths.temporary, "delivery-"));
   try {
@@ -170,9 +184,7 @@ function runtimeTransport(paths, delivery, {offline, verifyOnly}) {
     equal(JSON.stringify(names), JSON.stringify(["world-runtime-bundle.delivery.json", "world-runtime-bundle.tar.gz"]),
       "unexpected delivery members");
     const record = JSON.parse(command("unzip", ["-p", zipPath, names[0]]));
-    equal(record.source.commit, delivery.commit, "delivery source mismatch");
-    equal(record.manifestSha256, delivery.manifestSha256, "delivery manifest mismatch");
-    equal(record.archive.sha256, delivery.archive.sha256, "delivery archive binding mismatch");
+    verifyDeliveryRecord(record, delivery);
     const bytes = command("unzip", ["-p", zipPath, names[1]], {
       encoding: null, maxBuffer: MAX_ARCHIVE_BYTES,
     });
@@ -185,12 +197,12 @@ function runtimeTransport(paths, delivery, {offline, verifyOnly}) {
   } finally { rmSync(staged, {recursive: true, force: true}); }
 }
 
-function runtimeAt(paths, lock, options) {
+async function runtimeAt(paths, lock, options) {
   if (existsSync(paths.worldRuntime)) return verifyRuntime(paths.worldRuntime, {lockPath: options.lockPath});
   if (options.verifyOnly) fail("missing qualified World runtime");
   const delivery = lock.world.delivery;
   if (!delivery || delivery.commit !== lock.world.commit) fail("missing qualified World delivery binding");
-  const archive = runtimeTransport(paths, delivery, options);
+  const archive = await runtimeTransport(paths, delivery, options);
   mkdirSync(paths.out, {recursive: true});
   options.report("Acquiring the pinned qualified World bundle");
   // World owns its bundle format and acquisition. The source copy was already
@@ -220,7 +232,7 @@ export async function setup(options = {}) {
       report("Authenticating locked World source and runtime");
       const worldBytes = await archiveAt(worldArchive, lock.world.archive, selected);
       sourceAt(paths.worldSource, worldBytes, lock.world, paths, options.verifyOnly);
-      runtimeAt(paths, lock, selected);
+      await runtimeAt(paths, lock, selected);
     }
     const native = options.native ? await provisionNativeDependency(paths, {offline: options.offline, verifyOnly: options.verifyOnly}) : null;
     const observations = snapshotDependencies({ ...paths, boundaryArchive, worldArchive,

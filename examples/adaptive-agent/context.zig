@@ -1,11 +1,13 @@
-//! Pure preparation of the next request and a recoverable control receipt.
-//! Selection is authored. No model, work tool, or mutable host policy runs here.
+//! Pure context construction with captured native allowance observations.
+//! Selection stays authored; native dispatch remains the authority for work.
 const std = @import("std");
 const native = @import("agent_native");
 const contracts = @import("agent_contracts");
 const t = @import("application_types");
 const P = t.P;
 const work = @import("work.zig");
+const tool_work = @import("tool_work.zig");
+const tool_resources = @import("tool_resources.zig");
 const A = native.adaptive_responses.Admission(P);
 const Adapter = native.adaptive_responses.Adapter(P);
 const Product = t.PreparationProduct;
@@ -123,6 +125,12 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
                 if (!equal(record.value.call_id.bytes, item.call_id.bytes)) return error.InvalidWorkArtifact;
                 break :blk try a.dupe(u8, record.value.model_text.bytes);
             },
+            .tool => |ref| blk: {
+                var record = try tool_work.open(ctx, ref);
+                defer record.deinit();
+                if (!equal(record.value.call_id.bytes, item.call_id.bytes)) return error.InvalidToolArtifact;
+                break :blk try a.dupe(u8, record.value.model_text.bytes);
+            },
             .control => |ref| blk: {
                 const bytes = try ctx.object(.{ .digest = ref.digest, .bytes = ref.bytes }, 128 * 1024);
                 var record = try contracts.decodeOwned(t.ReceiptArtifact, a, bytes);
@@ -181,6 +189,17 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
     for (&offered, input.offered, policy.permitted_tools) |*allowed, requested, permitted| allowed.* = allowed.* and requested and permitted;
     var declarations: std.ArrayList(P.ToolDeclaration) = .empty;
     for (materialized, P.allDeclarations().items) |defined, item| if (defined) try declarations.append(a, item);
+    var messages = input.state.messages;
+    if (input.state.replay) |prior| if (prior.eviction_generation != control.eviction_generation and input.state.programs.items.len != 0) {
+        if (messages.items.len == t.P.Messages.max_length) return error.Capacity;
+        var retained: native.json.Value = .{ .array = .init(a) };
+        for (input.state.programs.items) |ref| try retained.array.append(native.json.string(try tool_resources.referenceText(a, ref)));
+        const text_value = try std.fmt.allocPrint(a, "Retained generated tool references after instruction eviction: {s}. These references carry no authority; tool_run still checks the frozen policy and input. Acquired evidence indexes remain stable.", .{try native.json.canonical(a, retained)});
+        const items = try a.alloc(t.P.Message, messages.items.len + 1);
+        @memcpy(items[0..messages.items.len], messages.items);
+        items[messages.items.len] = .{ .role = .developer, .content = .{ .bytes = text_value } };
+        messages = .{ .items = items };
+    };
     const request: P.AdaptiveRequest = .{
         .policy = digest(ctx.profile),
         .selection = control.selection,
@@ -192,7 +211,7 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
             .protocol = .{ .bytes = t.model.protocol_identity },
             .model = selected.model,
             .parameters = .{ .max_output_tokens = selected.max_output_tokens, .temperature = null, .reasoning = .{ .effort = control.top_effort, .summary = null } },
-            .messages = input.state.messages,
+            .messages = messages,
             .tools = .{ .items = declarations.items },
             .selection = .{ .minimum_calls = 1, .maximum_calls = 1, .parallel_calls = false },
             .response_policy = .{ .store = false, .stream = false, .background = false, .truncation = .disabled },
@@ -233,12 +252,25 @@ fn prepare(ctx: native.registry.ProjectionContext, bytes: []const u8) ![]u8 {
 }
 fn acquire(ctx: native.Context, bytes: []const u8) !native.registry.Acquisition {
     ctx.checkCancellation() catch |err| return .{ .definitely_not_sent = err };
-    return .{ .captured = try ctx.allocator.dupe(u8, bytes) };
+    return .{ .captured = try contracts.encodeOwned(t.PreparationCapture, ctx.allocator, .{
+        .prepared = digest(bytes),
+        .build_exhausted = ctx.nextAttemptLimitExhausted(t.tool_build_identity),
+        .run_exhausted = ctx.nextAttemptLimitExhausted(t.tool_run_identity),
+    }) };
 }
 fn interpret(ctx: native.registry.ProjectionContext, request: []const u8, prepared: []const u8, captured: []const u8) !native.registry.Projection {
-    if (!equal(prepared, captured) or !equal(try prepare(ctx, request), prepared)) return error.InvalidCapture;
+    var observation = try contracts.decodeOwned(t.PreparationCapture, ctx.allocator, captured);
+    defer observation.deinit();
+    if (!equal(&observation.value.prepared, &digest(prepared)) or !equal(try prepare(ctx, request), prepared)) return error.InvalidCapture;
     var product = try contracts.decodeOwned(Product, ctx.allocator, prepared);
     defer product.deinit();
+    // Replay the original observation, never today's mutable attempt count.
+    // Intersecting the prepared mask cannot introduce an ungranted operation.
+    if (product.value.result == .ready) {
+        const offered = &product.value.result.ready.request.offered;
+        offered[t.ordinal("tool_build")] = offered[t.ordinal("tool_build")] and !observation.value.build_exhausted;
+        offered[t.ordinal("tool_run")] = offered[t.ordinal("tool_run")] and !observation.value.run_exhausted;
+    }
     const objects = try ctx.allocator.alloc([]const u8, @intFromBool(product.value.receipt != null));
     if (product.value.receipt) |receipt| objects[0] = try ctx.allocator.dupe(u8, receipt.bytes);
     return .{ .reply = try contracts.encodeOwned(t.PreparationResult, ctx.allocator, product.value.result), .objects = objects };

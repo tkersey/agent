@@ -66,7 +66,9 @@ try {
   assert.equal(calls.filter(call => call.url === '/forbidden').length, 0);
   assert.equal(await run('/large'), 'unknown ResponseCapacity\n');
   assert.equal(await run('/encoded'), 'captured 200 fixture-response\nunsupported');
-  assert.equal(await run('/held', {timeout: 100}), 'unknown Timeout\n');
+  // Allow the ordinary TLS/request budget before testing the held response.
+  // The recorded request below establishes that this timeout was post-send.
+  assert.equal(await run('/held'), 'unknown Timeout\n');
   assert.equal(calls.filter(call => call.url === '/held').length, 1, 'no timeout retry');
   for (const [path, failure] of [['/truncated', 'TruncatedResponse'], ['/truncated-chunked', 'HttpChunkTruncated']]) {
     assert.equal(await run(path), `unknown ${failure}\n`, 'truncated response cannot become a complete capture or wait for the deadline');

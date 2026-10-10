@@ -25,7 +25,7 @@ pub fn open(ctx: native.registry.ProjectionContext, ref: t.model.ArtifactReferen
     if (record.value.version != 1 or !same(&record.value.task, &ctx.task) or !same(&record.value.policy, &digest(ctx.profile))) return error.InvalidWorkArtifact;
     return record;
 }
-pub fn evidence(ctx: native.registry.ProjectionContext, ref: t.EvidenceReference) !t.Evidence {
+pub fn evidence(ctx: native.registry.ProjectionContext, ref: t.SourceEvidenceReference) !t.Evidence {
     var record = try open(ctx, ref.object);
     defer record.deinit();
     const item = record.value.evidence orelse return error.InvalidEvidence;
@@ -40,8 +40,16 @@ fn snapshot(ctx: native.registry.ProjectionContext) !native.repository.Snapshot 
 /// Bind work to a function call in the exact captured response and its original
 /// offered set. The authored image supplies its current context, not a host loop.
 fn admit(ctx: native.registry.ProjectionContext, request: t.WorkRequest) !void {
+    const expected: t.Action = switch (request.action) {
+        .list => |value| .{ .list = value },
+        .read => |value| .{ .read = value },
+        .inspect => |value| .{ .inspect = .{ .evidence_index = value.evidence_index } },
+    };
+    return admitAction(ctx, request.context, request.call_id, expected);
+}
+pub fn admitAction(ctx: native.registry.ProjectionContext, source_context: t.model.AdaptiveContextReference, call_id: P.CallId, expected: t.Action) !void {
     const policy = try native.adaptive_responses.Admission(P).policy(ctx.allocator, ctx.profile);
-    var context = try Adapter.Context.open(ctx, request.context, policy.audience.bytes);
+    var context = try Adapter.Context.open(ctx, source_context, policy.audience.bytes);
     defer context.deinit();
     const bytes = try ctx.object(.{ .digest = context.value.source_request.digest, .bytes = context.value.source_request.bytes }, 2 * 1024 * 1024);
     var prepared = try contracts.decodeOwned(Adapter.Prepared, ctx.allocator, bytes);
@@ -52,13 +60,8 @@ fn admit(ctx: native.registry.ProjectionContext, request: t.WorkRequest) !void {
     const response = (try native.json.parse(ctx.allocator, raw.value.body.bytes, .{ .bytes = P.representation.provider_response_bytes })).value;
     const normalized = try native.responses.Adapter(P).normalize(ctx.allocator, prepared.value.request.invocation, native.json.get(response, "output") orelse return error.InvalidCapture);
     if (normalized != .output) return error.InvalidCapture;
-    const expected: t.Action = switch (request.action) {
-        .list => |value| .{ .list = value },
-        .read => |value| .{ .read = value },
-        .inspect => |value| .{ .inspect = .{ .evidence_index = value.evidence_index } },
-    };
     var found = false;
-    for (normalized.output.items.items) |item| if (item == .function_call and same(item.function_call.call_id.bytes, request.call_id.bytes)) {
+    for (normalized.output.items.items) |item| if (item == .function_call and same(item.function_call.call_id.bytes, call_id.bytes)) {
         const call = item.function_call;
         if (found or call.tool_ordinal_claim >= P.declaration_count or !prepared.value.request.offered[call.tool_ordinal_claim] or call.decoded_action != .decoded) return error.InvalidCapture;
         if (!same(try contracts.encodeOwned(t.Action, ctx.allocator, expected), try contracts.encodeOwned(t.Action, ctx.allocator, call.decoded_action.decoded))) return error.InvalidCapture;

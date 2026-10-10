@@ -6,6 +6,7 @@ const p = data.program;
 const wire = data.wire;
 /// Pure JSON projections share this module identity with the ordinary codecs.
 pub const json = @import("model_json.zig");
+pub const tool_construction = @import("tool_construction_contracts.zig");
 
 /// Immutable HTTP capture retained separately from model result projections.
 pub const CapturedResponse = struct {

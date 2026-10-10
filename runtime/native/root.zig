@@ -16,6 +16,7 @@ pub const https = @import("https.zig");
 pub const responses = @import("responses.zig");
 pub const adaptive_responses = @import("adaptive_responses.zig");
 pub const repository = @import("repository.zig");
+pub const tool_construction = @import("tool_construction.zig");
 pub const configuration = @import("configuration.zig");
 pub const tasks = @import("tasks.zig");
 pub const client = @import("client.zig");

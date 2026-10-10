@@ -93,8 +93,8 @@ Both native examples now use the existing shared fixture compiler and the public
 helper's asset writer, removing two standalone compiler invocations.
 On Linux x86_64, build-time emitters and contract-test executables select Zig's
 self-hosted backend while retaining the requested optimization/safety mode.
-Linux x86_64 application binaries also use that backend; the public native
-API/HTTPS probe retains LLVM. Copied-binary witnesses still run in full.
+Linux x86_64 application binaries and the public native API/HTTPS probe also
+use that backend, retaining ReleaseSafe and all copied-binary witnesses.
 SQLite and the native C shim are compiled once per target ABI into a static
 library, with the same flags and dependency admission, then linked by consumers.
 The optimized standard-library SHA helper shares a private Zig-declared C ABI
@@ -104,6 +104,9 @@ The caller's bounded executable reads and metadata checks remain unchanged.
 Locked dependency bytes are cached separately from compiler outputs. Setup still
 authenticates their archives, inventories, package hashes and runtime bindings
 on every run; the installation lane still provisions its own fresh inputs.
+After setup, the native lane runs World's existing portable bundle smoke against
+the acquired archive's locked manifest identity. This checks the installed CLI,
+pure execution and checkpoint transfer through the same delivered runtime.
 The durable-owner test compiles its one image once for both direct and captured
 acquisition recovery. It also retains the inbox contract-conflict and message-ID
 checks formerly split into a separate inbox fixture. `native_repository.mjs`
@@ -176,12 +179,18 @@ The earlier native3 cache exceeded 8 GiB and took 53 seconds to restore in run
 Compiler reuse and complete-workflow duration still require actual measurement.
 Authoring keeps its existing cache policy.
 
-Native CI sets `ZIG_DEBUG_CMD=1` for Zig's internal on-demand build commands.
+Qualification CI sets `ZIG_DEBUG_CMD=1` for Zig's internal on-demand commands,
+including cold dependency fetching and the isolated installation witness.
 The pinned compiler applies this to its build driver and translation helper,
-not to application compilation. Explicit `-Doptimize=safe`, the probe's LLVM
-backend and every existing qualification assertion remain selected. This targets
+not to application compilation. Explicit `-Doptimize=safe`, the selected native
+backends and every existing qualification assertion remain selected. This targets
 the observed 89-second delay before the first build-graph command; its complete
-workflow effect must be measured separately from a cache restore.
+workflow effect must be measured separately from a cache restore. PR run
+`38063685748` spent 103 seconds in cold dependency setup and took 403 seconds
+overall; the earlier export inside the native build step did not reach that
+setup. A warm-input run on the same head took 331 seconds. The job-level setting
+keeps package authentication and application optimization unchanged; a cold-input
+full workflow must establish its effect.
 
 The native build-worker count matches the runner's online CPU count, allowing
 the lightweight test roots and protocol peers to overlap independent compilation.

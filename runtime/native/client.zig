@@ -256,7 +256,9 @@ pub fn Client(comptime Types: type) type {
                 if (!std.mem.eql(u8, &question.value.prompt.digest, &id)) return error.ArtifactUnavailable;
                 return self.objectChunk(a, question.value.prompt, offset, length);
             }
-            const public_result = task.value.client_result orelse return error.ArtifactUnavailable;
+            if (task.value.client_result == null or !std.mem.eql(u8, &(task.value.result_artifact orelse task.value.client_result.?.digest), &id))
+                return self.objectChunk(a, try self.service.projectedArtifact(a, task_id, id), offset, length);
+            const public_result = task.value.client_result.?;
             const published = task.value.result_artifact orelse public_result.digest;
             if (!std.mem.eql(u8, &published, &id)) return error.ArtifactUnavailable;
             if (task.value.result_artifact == null) return self.objectChunk(a, public_result, offset, length);

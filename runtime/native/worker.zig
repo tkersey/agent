@@ -58,7 +58,7 @@ pub const Worker = struct {
         var request = try data.invocation.decode(data.invocation.Request, a, self.work.request);
         defer request.deinit();
         const id = std.fmt.bytesToHex(self.work.task, .lower);
-        const ctx: registry.Context = .{ .allocator = a, .io = self.io, .authority = &self.authority, .task_id = &id, .profile = self.work.profile, .environment = self.environment, .cancellation = &self.cancellation };
+        const ctx: registry.Context = .{ .allocator = a, .io = self.io, .authority = &self.authority, .task_id = &id, .profile = self.work.profile, .environment = self.environment, .cancellation = &self.cancellation, .exhausted_capabilities = self.work.exhausted_capabilities };
         try ctx.checkCancellation();
         self.invoked = true;
         if (self.work.entry.declaration.capture) |adapter| {

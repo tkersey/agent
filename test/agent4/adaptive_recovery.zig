@@ -9,6 +9,117 @@ const t = @import("adaptive_types");
 const environment = @import("adaptive_environment");
 const protocol = boundary.data.invocation;
 const Ref = t.model.ArtifactReference;
+
+fn constructionRecipe(a: std.mem.Allocator, stages: []const struct { component: []const u8, operation: ?[]const u8 = null }) ![]u8 {
+    const wire = agent.contracts.tool_construction;
+    var instances: std.ArrayList(@FieldType(wire.Recipe, "instances").Child) = .empty;
+    var bindings: std.ArrayList(@FieldType(wire.Recipe, "bindings").Child) = .empty;
+    for (stages, 0..) |stage, i| {
+        const key = try std.fmt.allocPrint(a, "stage{d}", .{i});
+        try instances.append(a, .{ .key = .{ .bytes = key }, .component_id = .{ .bytes = stage.component } });
+        if (stage.operation) |operation| {
+            const operation_key = try std.fmt.allocPrint(a, "operation{d}", .{i});
+            try instances.append(a, .{ .key = .{ .bytes = operation_key }, .component_id = .{ .bytes = operation } });
+            try bindings.append(a, .{ .required = .{ .instance = .{ .bytes = key }, .symbol = .{ .bytes = if (std.mem.eql(u8, stage.component, "map")) "row" else "keep" } }, .supplied = .{ .instance = .{ .bytes = operation_key }, .symbol = .{ .bytes = "apply" } } });
+        }
+        if (i + 1 < stages.len) {
+            const composition = try std.fmt.allocPrint(a, "compose{d}", .{i});
+            try instances.append(a, .{ .key = .{ .bytes = composition }, .component_id = .{ .bytes = "compose" } });
+            try bindings.append(a, .{ .required = .{ .instance = .{ .bytes = composition }, .symbol = .{ .bytes = "first" } }, .supplied = .{ .instance = .{ .bytes = key }, .symbol = .{ .bytes = "apply" } } });
+            const second = try std.fmt.allocPrint(a, "{s}{d}", .{ if (i + 2 == stages.len) "stage" else "compose", i + 1 });
+            try bindings.append(a, .{ .required = .{ .instance = .{ .bytes = composition }, .symbol = .{ .bytes = "second" } }, .supplied = .{ .instance = .{ .bytes = second }, .symbol = .{ .bytes = "apply" } } });
+        }
+    }
+    const recipe: wire.Recipe = .{ .instances = .{ .items = instances.items }, .bindings = .{ .items = bindings.items }, .entry = .{ .instance = .{ .bytes = if (stages.len == 1) "stage0" else "compose0" }, .symbol = .{ .bytes = "apply" } } };
+    return native.json.canonical(a, try native.values.toJson(wire.Recipe, a, recipe));
+}
+
+fn auditRow(id: u64, key: u64, value: u64, group: u64) t.tool_types.Row {
+    return .{ .id = id, .key = key, .value = value, .group = group, .matches = 0, .match_id = 0, .mismatches = 0, .status = 0 };
+}
+
+test "compiled catalog composes coverage and orphan grouping and reuses exact BPI3" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const wire = agent.contracts.tool_construction;
+    const engine = native.tool_construction;
+    const metadata = (try native.json.parse(a, @embedFile("adaptive_application"), .{ .bytes = 1024 * 1024 })).value;
+    var encoded_catalog: ?[]const u8 = null;
+    for ((native.json.get(metadata, "resources") orelse return error.MissingCatalog).array.items) |resource| {
+        if (std.mem.eql(u8, try native.json.text(native.json.get(resource, "id").?), "tool-construction.catalog")) encoded_catalog = (try native.values.fromJson(agent.contracts.Bytes(128 * 1024), a, native.json.get(resource, "base64url").?)).bytes;
+    }
+    var catalog = try agent.contracts.decodeOwned(wire.Catalog, a, encoded_catalog orelse return error.MissingCatalog);
+    defer catalog.deinit();
+    try engine.validateCatalog(a, catalog.value);
+    const coverage = try constructionRecipe(a, &.{ .{ .component = "filter", .operation = "selected" }, .{ .component = "map", .operation = "join" }, .{ .component = "map", .operation = "classify" } });
+    var scratch: world.AllocationBudget = .{ .parent = a, .limit = 16 * 1024 * 1024 };
+    const task: [16]u8 = @splat(17);
+    const product = try engine.construct(a, scratch.allocator(), task, "frozen-policy", encoded_catalog.?, coverage);
+    const tool = product.built;
+    // Persistence round-trip keeps the exact image, recipe and task binding.
+    var recovered = try agent.contracts.decodeOwned(wire.Program, a, try agent.contracts.encodeOwned(wire.Program, a, product));
+    defer recovered.deinit();
+    try std.testing.expectEqualSlices(u8, tool.image.bytes, recovered.value.built.image.bytes);
+    const schema = try native.values.schemaBytes(t.tool_types.Table, a);
+    const input: t.tool_types.Table = .{ .rows = .{ .items = &.{ auditRow(1, 10, 100, 1), auditRow(2, 20, 200, 1), auditRow(3, 30, 300, 2), auditRow(4, 40, 400, 2), auditRow(5, 50, 500, 3) } }, .relation = .{ .items = &.{ auditRow(11, 10, 100, 1), auditRow(12, 20, 201, 1), auditRow(13, 40, 400, 2), auditRow(14, 40, 401, 2), auditRow(15, 90, 1, 3), auditRow(16, 91, 1, 3), auditRow(17, 92, 1, 4) } }, .selected = .{ .items = &.{ 10, 20, 30, 40 } } };
+    const admitted_input: wire.Input = .{ .schema = .{ .bytes = schema }, .value = .{ .bytes = try agent.contracts.encodeOwned(t.tool_types.Table, a, input) } };
+    try std.testing.expectError(error.UnauthorizedProgram, engine.execute(a, a, std.testing.io, null, @splat(18), "frozen-policy", encoded_catalog.?, recovered.value, admitted_input, .{}));
+    try std.testing.expectError(error.UnauthorizedProgram, engine.execute(a, a, std.testing.io, null, task, "changed-policy", encoded_catalog.?, recovered.value, admitted_input, .{}));
+    const first = try engine.execute(a, a, std.testing.io, null, task, "frozen-policy", encoded_catalog.?, recovered.value, admitted_input, .{});
+    var result = try agent.contracts.decodeOwned(t.tool_types.Table, a, first);
+    defer result.deinit();
+    try std.testing.expectEqual(4, result.value.rows.items.len);
+    for (result.value.rows.items, [_]u64{ 1, 2, 3, 4 }, 1..) |row, status, id| {
+        try std.testing.expectEqual(id, row.id);
+        try std.testing.expectEqual(status, row.status);
+    }
+    const next: t.tool_types.Table = .{ .rows = .{ .items = &.{auditRow(80, 20, 201, 9)} }, .relation = input.relation, .selected = .{ .items = &.{20} } };
+    var reused = try agent.contracts.decodeOwned(t.tool_types.Table, a, try engine.execute(a, a, std.testing.io, null, task, "frozen-policy", encoded_catalog.?, recovered.value, .{ .schema = .{ .bytes = schema }, .value = .{ .bytes = try agent.contracts.encodeOwned(t.tool_types.Table, a, next) } }, .{}));
+    defer reused.deinit();
+    try std.testing.expectEqual(1, reused.value.rows.items.len);
+    try std.testing.expectEqual(80, reused.value.rows.items[0].id);
+    try std.testing.expectEqual(1, reused.value.rows.items[0].status);
+    const reverse = try constructionRecipe(a, &.{ .{ .component = "filter", .operation = "selected" }, .{ .component = "swap" }, .{ .component = "map", .operation = "join" }, .{ .component = "filter", .operation = "orphan" }, .{ .component = "group" } });
+    const reverse_tool = try engine.build(a, scratch.allocator(), catalog.value, reverse);
+    try std.testing.expect(!std.mem.eql(u8, tool.image.bytes, reverse_tool.image.bytes));
+    var grouped = try agent.contracts.decodeOwned(t.tool_types.Table, a, try engine.run(a, a, std.testing.io, null, reverse_tool, schema, try agent.contracts.encodeOwned(t.tool_types.Table, a, input), .{}));
+    defer grouped.deinit();
+    try std.testing.expectEqual(2, grouped.value.rows.items.len);
+    try std.testing.expectEqual(3, grouped.value.rows.items[0].group);
+    try std.testing.expectEqual(2, grouped.value.rows.items[0].value);
+    try std.testing.expectEqual(4, grouped.value.rows.items[1].group);
+    try std.testing.expectEqual(1, grouped.value.rows.items[1].value);
+    try std.testing.expectError(error.InvalidParams, engine.build(a, scratch.allocator(), catalog.value, "{\"instances\":[],\"bindings\":[],\"entry\":{\"instance\":\"x\",\"symbol\":\"apply\"},\"pure\":true}"));
+    try std.testing.expectError(error.UnknownComponent, engine.build(a, scratch.allocator(), catalog.value, "{\"instances\":[{\"key\":\"x\",\"component_id\":\"not-approved\"}],\"bindings\":[],\"entry\":{\"instance\":\"x\",\"symbol\":\"apply\"}}"));
+    try std.testing.expectError(error.IncompatibleInterface, engine.build(a, scratch.allocator(), catalog.value, try constructionRecipe(a, &.{.{ .component = "filter", .operation = "swap" }})));
+    try std.testing.expectError(error.CyclicComposition, engine.build(a, scratch.allocator(), catalog.value, "{\"instances\":[{\"key\":\"x\",\"component_id\":\"compose\"}],\"bindings\":[{\"required\":{\"instance\":\"x\",\"symbol\":\"first\"},\"supplied\":{\"instance\":\"x\",\"symbol\":\"apply\"}}],\"entry\":{\"instance\":\"x\",\"symbol\":\"apply\"}}"));
+    // Add a valid but unreachable external declaration to an actual component.
+    // Pure admission rejects the declaration even though the entry never uses it.
+    var component = try boundary.data.component.decode(a, catalog.value.items[7].object.bytes);
+    defer component.deinit();
+    var forbidden = component.object;
+    var unit: ?u64 = null;
+    for (forbidden.program.schemas, 0..) |shape, i| if (shape == .unit) {
+        unit = @intCast(i);
+        break;
+    };
+    const external = [_]boundary.data.program.Effect{.{ .identity = "forbidden.external", .payload = unit.?, .result = unit.?, .external = true }};
+    forbidden.program.effects = &external;
+    const forbidden_bytes = try a.alloc(u8, try boundary.data.component.encodedLength(forbidden));
+    _ = try boundary.data.component.encode(a, forbidden, forbidden_bytes);
+    try std.testing.expectError(error.ForbiddenEffect, engine.validateCatalog(a, .{ .items = &.{.{ .id = .{ .bytes = "swap" }, .object = .{ .bytes = forbidden_bytes } }} }));
+    var substituted = recovered.value;
+    const altered = try a.dupe(u8, substituted.built.image.bytes);
+    altered[0] ^= 1;
+    substituted.built.image.bytes = altered;
+    try std.testing.expectError(error.InvalidDerivation, engine.execute(a, a, std.testing.io, null, task, "frozen-policy", encoded_catalog.?, substituted, admitted_input, .{}));
+    try std.testing.expectError(error.IncompatibleInterface, engine.run(a, a, std.testing.io, null, tool, try native.values.schemaBytes(bool, a), admitted_input.value.bytes, .{}));
+    try std.testing.expectError(error.OutOfMemory, engine.run(a, a, std.testing.io, null, tool, schema, admitted_input.value.bytes, .{ .working_bytes = 1 }));
+    var cancelled: std.atomic.Value(bool) = .init(true);
+    try std.testing.expectError(error.Canceled, engine.run(a, a, std.testing.io, &cancelled, tool, schema, admitted_input.value.bytes, .{}));
+    try std.testing.expectError(error.FuelExhausted, engine.run(a, a, std.testing.io, null, tool, schema, try agent.contracts.encodeOwned(t.tool_types.Table, a, input), .{ .transitions = 1 }));
+}
 // Independent projection of the persisted capture record, including the
 // acquired-but-not-interpreted discriminant exercised below.
 const CaptureRecord = struct {

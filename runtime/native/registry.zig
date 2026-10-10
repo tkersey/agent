@@ -82,6 +82,14 @@ pub const Context = struct {
     /// Application/environment handles only; no evaluator handle is supplied.
     environment: ?*anyopaque,
     cancellation: ?*const std.atomic.Value(bool) = null,
+    /// Dispatch-time observation, including the current physical attempt.
+    /// This can narrow presentation; only the task owner admits actual work.
+    exhausted_capabilities: []const []const u8 = &.{},
+
+    pub fn nextAttemptLimitExhausted(self: Context, identity: []const u8) bool {
+        for (self.exhausted_capabilities) |item| if (std.mem.eql(u8, item, identity)) return true;
+        return false;
+    }
 
     pub fn checkCancellation(self: Context) error{Canceled}!void {
         if (self.cancellation) |flag| if (flag.load(.acquire)) return error.Canceled;
@@ -96,6 +104,13 @@ pub const Declaration = struct {
     /// A frozen application policy may narrow the host's physical-attempt
     /// ceiling. This is dispatch admission, never capture reinterpretation.
     inference_attempt_limit: ?*const fn (std.mem.Allocator, []const u8) anyerror!u32 = null,
+    /// All physical attempts for this identity, including rejected/failed work.
+    /// Counted from the existing durable attempt records across restart/import.
+    /// Every schema specialization of one identity must use the same limit.
+    attempt_limit: ?u32 = null,
+    /// Only this adapter's committed projection objects are public task data.
+    /// Raw captures, prepared requests and other adapters' objects stay private.
+    public_outputs: bool = false,
     background: bool = false,
     /// acquire receives prepared bytes and returns an uninterpreted capture.
     capture: ?CaptureAdapter = null,
@@ -129,6 +144,8 @@ pub const Registry = struct {
         for (declarations, entries, 0..) |declaration, *entry, i| {
             if (declaration.identity.len == 0 or declaration.resource_role.len == 0) return error.InvalidCapability;
             if (declaration.inference_attempt_limit != null and !declaration.inference) return error.InvalidCapability;
+            if (declaration.attempt_limit) |limit| if (limit == 0 or limit > 64 or declaration.kind != .leaf) return error.InvalidCapability;
+            if (declaration.public_outputs and declaration.capture == null) return error.InvalidCapability;
             if (declaration.kind == .leaf and declaration.invoke == null and declaration.capture == null) return error.InvalidCapability;
             if (declaration.capture != null and (declaration.kind != .leaf or !declaration.background or declaration.invoke != null)) return error.InvalidCapability;
             if (declaration.kind == .question and (declaration.present == null or declaration.answer == null or declaration.answer_schema_id == null)) return error.InvalidCapability;
@@ -139,7 +156,11 @@ pub const Registry = struct {
             };
             // A request names its exact schemas, but has no independent role
             // selector. Indistinguishable bindings must never depend on order.
-            for (entries[0..i]) |prior| if (sameBinding(prior, declaration.identity, entry.payload_schema, entry.resume_schema)) return error.DuplicateCapability;
+            for (entries[0..i]) |prior| {
+                if (std.mem.eql(u8, prior.declaration.identity, declaration.identity) and
+                    prior.declaration.attempt_limit != declaration.attempt_limit) return error.InvalidCapability;
+                if (sameBinding(prior, declaration.identity, entry.payload_schema, entry.resume_schema)) return error.DuplicateCapability;
+            }
         }
         return .{ .arena = arena, .entries = entries };
     }
@@ -290,19 +311,34 @@ test "schema-specialized capability families resolve independently of declaratio
     const small = leaf(u32, u32, .{ .identity = "model-family", .resource_role = "small" }, Handler.small);
     const large = leaf(u64, u64, .{ .identity = "model-family", .resource_role = "large" }, Handler.large);
     try std.testing.expectError(error.DuplicateCapability, Registry.init(a, &.{ small, small }));
-    for ([_][2]Declaration{ .{ small, large }, .{ large, small } }) |declarations| {
+    var limited_small = small;
+    limited_small.attempt_limit = 2;
+    var limited_large = large;
+    limited_large.attempt_limit = 2;
+    var distinct_large = large;
+    distinct_large.identity = "other-family";
+    distinct_large.attempt_limit = 3;
+    // Shared accounting requires a single policy for the entire identity;
+    // neither declaration order nor a different schema can select a new budget.
+    for ([_]?u32{ null, 1, 3 }) |limit| {
+        var conflicting = large;
+        conflicting.attempt_limit = limit;
+        try std.testing.expectError(error.InvalidCapability, Registry.init(a, &.{ limited_small, conflicting }));
+        try std.testing.expectError(error.InvalidCapability, Registry.init(a, &.{ conflicting, limited_small }));
+    }
+    for ([_][2]Declaration{ .{ small, large }, .{ large, small }, .{ limited_small, limited_large }, .{ limited_large, limited_small }, .{ limited_small, distinct_large }, .{ distinct_large, limited_small } }) |declarations| {
         var registry = try Registry.init(a, &declarations);
         defer registry.deinit();
         for (registry.entries) |entry| {
             const input: [8]u8 = @splat(0);
             const length: usize = if (std.mem.eql(u8, entry.declaration.resource_role, "small")) 4 else 8;
-            const request = try data.invocation.request(.{ .program_identity = @splat(1), .pending_state_digest = @splat(2), .effect = 0, .semantic_identity = "model-family", .payload_schema = entry.payload_schema, .resume_schema = entry.resume_schema, .payload = input[0..length] });
+            const request = try data.invocation.request(.{ .program_identity = @splat(1), .pending_state_digest = @splat(2), .effect = 0, .semantic_identity = entry.declaration.identity, .payload_schema = entry.payload_schema, .resume_schema = entry.resume_schema, .payload = input[0..length] });
             const resolved = try registry.resolve(request, @splat(1));
             try std.testing.expectEqualStrings(entry.declaration.resource_role, resolved.declaration.resource_role);
-            const authority: Authority = .{ .principal = "test", .tenant = "test", .grants = &.{.{ .identity = "model-family", .resource_role = entry.declaration.resource_role, .resource_identity = @splat(3) }} };
+            const authority: Authority = .{ .principal = "test", .tenant = "test", .grants = &.{.{ .identity = entry.declaration.identity, .resource_role = entry.declaration.resource_role, .resource_identity = @splat(3) }} };
             _ = try registry.admit(request, authority, @splat(1), @splat(3));
             var denied = authority;
-            denied.grants = &.{.{ .identity = "model-family", .resource_role = "unrelated", .resource_identity = @splat(3) }};
+            denied.grants = &.{.{ .identity = entry.declaration.identity, .resource_role = "unrelated", .resource_identity = @splat(3) }};
             try std.testing.expectError(error.Denied, registry.admit(request, denied, @splat(1), @splat(3)));
             var wrong = request;
             wrong.binding.payload_schema = "unknown";

@@ -82,6 +82,7 @@ pub const Work = struct {
     request: []const u8,
     prepared: ?[]const u8 = null,
     profile: []const u8 = &.{},
+    exhausted_capabilities: []const []const u8 = &.{},
     entry: registry.Entry,
     cleanup: bool,
 };
@@ -161,6 +162,26 @@ pub fn Service(comptime Types: type) type {
         pub fn schemaArtifact(self: *Self, id: state.Digest) !discovery.Artifact {
             try self.allowed();
             return self.application.schemaArtifact(id);
+        }
+        pub fn projectedArtifact(self: *Self, a: std.mem.Allocator, task_id: state.TaskId, id: state.Digest) !state.Reference {
+            var value = try self.task(a, task_id);
+            defer value.deinit();
+            try self.compatibleApplication(value.value);
+            if (!same(&value.value.runtime_identity, &self.profile.runtime_identity)) return error.ArtifactUnavailable;
+            const owners = try self.store().projectionOwners(a, task_id, id);
+            defer a.free(owners);
+            for (owners) |owner| {
+                var attempt = try self.record(state.Attempt, a, "attempt", owner.attempt, task_id);
+                defer attempt.deinit();
+                if (!std.meta.eql(attempt.value.profile, value.value.profile)) return error.CorruptState;
+                const bytes = try self.store().object(a, attempt.value.request, 4 * 1024 * 1024);
+                defer a.free(bytes);
+                var request = try data.invocation.decode(data.invocation.Request, a, bytes);
+                defer request.deinit();
+                const entry = try self.handlers.resolve(request.value, self.application.image_identity);
+                if (entry.declaration.public_outputs) return owner.object;
+            }
+            return error.ArtifactUnavailable;
         }
         /// Rebuild adapter state from owned immutable data, never from the
         /// original filesystem paths. This read does not resume or grant work.
@@ -923,6 +944,9 @@ pub fn Service(comptime Types: type) type {
                     return .progressed;
                 },
                 .leaf => {
+                    if (entry.declaration.attempt_limit) |limit| {
+                        if (try self.store().capabilityAttempts(value.id, entry.declaration.identity) >= limit) return self.blocked(a, initial, .capacity);
+                    }
                     var preparation = std.heap.ArenaAllocator.init(a);
                     defer preparation.deinit();
                     const prepared = if (entry.declaration.capture) |adapter| adapter.prepare(self.projectionContext(preparation.allocator(), value), request.value.binding.payload) catch |err|
@@ -948,7 +972,9 @@ pub fn Service(comptime Types: type) type {
                     errdefer if (retained_prepared) |body| self.allocator.free(body);
                     const retained_profile = try self.allocator.dupe(u8, self.profile.bytes);
                     errdefer self.allocator.free(retained_profile);
-                    const work: Work = .{ .task = value.id, .occurrence = pending.id, .attempt = attempt, .request = retained, .prepared = retained_prepared, .profile = retained_profile, .entry = entry, .cleanup = value.cancellation_applied };
+                    const exhausted = try self.exhaustedCapabilities(value.id, entry.declaration.identity);
+                    errdefer self.allocator.free(exhausted);
+                    const work: Work = .{ .task = value.id, .occurrence = pending.id, .attempt = attempt, .request = retained, .prepared = retained_prepared, .profile = retained_profile, .exhausted_capabilities = exhausted, .entry = entry, .cleanup = value.cancellation_applied };
                     try self.store().begin();
                     defer self.store().rollback();
                     if (entry.declaration.capture != null) try self.store().reserveCapture(attempt) else try self.store().reserve(attempt);
@@ -959,6 +985,17 @@ pub fn Service(comptime Types: type) type {
                     return .{ .work = work };
                 },
             }
+        }
+
+        fn exhaustedCapabilities(self: *Self, task_id: state.TaskId, dispatch_identity: []const u8) ![]const []const u8 {
+            var exhausted: std.ArrayList([]const u8) = .empty;
+            errdefer exhausted.deinit(self.allocator);
+            for (self.handlers.entries) |entry| if (entry.declaration.attempt_limit) |limit| {
+                const used = try self.store().capabilityAttempts(task_id, entry.declaration.identity);
+                const dispatched: u32 = @intFromBool(same(entry.declaration.identity, dispatch_identity));
+                if (used + dispatched >= limit) try exhausted.append(self.allocator, entry.declaration.identity);
+            };
+            return exhausted.toOwnedSlice(self.allocator);
         }
 
         fn projectionContext(self: *Self, a: std.mem.Allocator, value: state.Task) registry.ProjectionContext {
@@ -1067,6 +1104,7 @@ pub fn Service(comptime Types: type) type {
             self.allocator.free(self.work.?.request);
             if (self.work.?.prepared) |body| self.allocator.free(body);
             self.allocator.free(self.work.?.profile);
+            self.allocator.free(self.work.?.exhausted_capabilities);
             self.work = null;
         }
         /// A worker has returned and will no longer access this work item.
@@ -1419,6 +1457,9 @@ pub fn Service(comptime Types: type) type {
                 var request = try data.invocation.decode(data.invocation.Request, temporary, encoded);
                 defer request.deinit();
                 const entry = try self.handlers.resolve(request.value, self.application.image_identity);
+                if (entry.declaration.attempt_limit) |limit| {
+                    if (try self.store().capabilityAttempts(value.id, entry.declaration.identity) > limit) return error.InvalidArchive;
+                }
                 if (entry.declaration.kind != .leaf or !same(&request.value.request_identity, &saved.value.request) or
                     !std.meta.eql(attempt.value.request, saved.value.request_object) or !std.meta.eql(attempt.value.profile, value.profile) or !same(attempt.value.capability.bytes, entry.declaration.identity) or
                     attempt.value.inference != entry.declaration.inference or (attempt.value.prepared != null) != (entry.declaration.capture != null)) return error.InvalidArchive;

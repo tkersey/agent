@@ -30,7 +30,8 @@ try {
   assert.equal(result.output.control.skills.length, 0);
   assert.equal(result.output.receipts.length, 8);
   assert.equal(result.output.evidence.length, 1);
-  assert.equal(result.output.evidence[0].path, 'src/main.zig');
+  assert.equal(result.output.evidence[0].tag, 'source');
+  assert.equal(result.output.evidence[0].value.path, 'src/main.zig');
   assert.deepEqual(result.output.receipts.map(item => item.next_revision), ['1', '2', '3', '4', '5', '6', '7', '8']);
   assert.equal(result.output.receipts[3].context_epoch, result.output.receipts[2].context_epoch, 'resident deactivation retains the epoch');
   assert.equal(BigInt(result.output.receipts[4].context_epoch), BigInt(result.output.receipts[3].context_epoch) + 1n, 'physical unload creates a new projection');

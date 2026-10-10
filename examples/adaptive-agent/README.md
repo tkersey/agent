@@ -132,8 +132,10 @@ a lexical guard-line count over previously acquired evidence and is available
 only while a loaded approved skill grants it. It does not prove correctness.
 No skill executes scripts or installs code. Markdown is admitted before task
 creation (32 KiB per body, 128 KiB total). The shared catalog format allows 32
-entries; this deployment admits 14, leaving two of the native host's 16 frozen
-resource slots for snapshot and catalog. At most four skills may be active.
+entries; this deployment admits 14, subject to the native host's 16 frozen
+resource slots. Snapshot and skill catalog use two slots; construction-enabled
+configuration also stores its component catalog and admitted input values.
+At most four skills may be active.
 The complete frozen resource set, including the snapshot, must fit 16 MiB.
 Context and continuation limits can reject a
 proposed transition before it is acknowledged.
@@ -150,6 +152,118 @@ to the existing World, worker, object and namespace budgets.
 The snapshot, skill bytes, catalog, profiles and limits are frozen into task
 resources. Reopening reads those bytes. Editing a configuration or Markdown
 file cannot update a saved task; supply a new task for new authorization.
+
+## Construct and reuse a pure tool
+
+The `tool-construction` skill exposes a frozen catalog of compiled BMO1
+components. `tool_build` links a bounded recipe with Boundary's data-only
+linker; `tool_run` executes the resulting BPI3 with native World. Neither invokes
+the Zig compiler, another model, or a host interpreter for the recipe. Generated
+programs receive ordinary values and cannot perform external effects.
+
+Enable this explicitly with configuration version 2:
+
+```text
+schema: "adaptive-agent.configuration.v2"
+adaptive: the complete original configuration object described above
+tools: the object below
+```
+
+For example, the `tools` object can admit two compatible inputs:
+
+```json
+{
+  "build": true,
+  "run": true,
+  "inputs": [
+    {
+      "id": "first",
+      "description": "Selected lock records and related source records.",
+      "rows": [{"id":"1","key":"10","value":"100","group":"1"}],
+      "relation": [{"id":"11","key":"10","value":"100","group":"1"}],
+      "selected": ["10"]
+    },
+    {
+      "id": "second",
+      "description": "The lock value changed; reuse the same procedure.",
+      "rows": [{"id":"2","key":"10","value":"101","group":"1"}],
+      "relation": [{"id":"11","key":"10","value":"100","group":"1"}],
+      "selected": ["10"]
+    }
+  ]
+}
+```
+
+The host supplies each input's opaque reference in the initial bindings. All
+64-bit numbers use decimal strings. Admission converts these records to the
+ordinary `Table` schema and initializes result fields; it performs no audit.
+Each table has at most 32 rows, 32 related records and 32 selected keys. Up to
+four inputs may be frozen. The original unversioned configuration and its eight
+skill bits retain their meanings and enable neither new operation.
+
+Version 2 admits the exact developer-owned skill automatically. Loading it
+introduces its instructions, recipe JSON schema and complete machine-derived
+component signatures at the normal skill context position. This checked recipe selects matching rows
+and is a small working example, not a complete audit:
+
+```json
+{
+  "instances": [
+    {"key":"select","component_id":"filter"},
+    {"key":"predicate","component_id":"selected"}
+  ],
+  "bindings": [{
+    "required":{"instance":"select","symbol":"keep"},
+    "supplied":{"instance":"predicate","symbol":"apply"}
+  }],
+  "entry":{"instance":"select","symbol":"apply"}
+}
+```
+
+The model passes that complete JSON as the string field `proposal_json` to
+`tool_build`. Its successful response says `structurally_admitted`, supplies
+`tool_ref`, and identifies the actual input, output and failure schemas. It
+does not establish that the composition meets the task. A subsequent
+`tool_run` call takes that `tool_ref` and an admitted `input_ref`; its result
+contains the actual computed table. The same tool reference can run on the
+second compatible input after a normal parent restart.
+
+Construction is offered only while the skill is active and policy allows it.
+Execution has an independent `run` permission; deactivation or unload does not
+destroy a constructed program. After unload, the parent exposes retained tool
+references without reinserting the removed instructions. References from a
+different task or policy do not confer authority.
+
+Exhausted construction and execution allowances remove those tools from future
+offers using the native attempt records. Captured allowance observations replay
+unchanged across restart. `inspect` accepts source-file evidence only; generated
+results remain reportable, and selecting one for inspection returns a recoverable
+tool rejection.
+
+The model-facing recipe limit is 2,700 bytes so worst-case escaping fits the
+existing 16-KiB argument envelope. The native construction API has an 8-KiB
+upper ceiling. Both enforce at most 16 instances, 64 bindings, an acyclic
+inter-instance graph, and 128-KiB catalog/image assets. Each task permits four
+physical build attempts and eight runs, including failed attempts and retries,
+within its existing twelve-work-call allowance. Runs admit 32-KiB values,
+one million cumulative World transitions, and a ten-second checked deadline;
+cancellation and time are checked between 256-transition quanta. The existing
+16-MiB worker allocation region also covers decoding, linking and publication.
+Limits intersect: an individually valid value can still exceed a combined
+worker or model-envelope budget and receive an explicit failure.
+
+Application version 2 reports `adaptive-agent.output.v2`: each evidence entry
+is tagged `source` or `generated`, and constructed program references are
+retained in `programs`. `report.evidence_index` selects the stable acquired
+evidence list. Old saved tasks retain their original image/runtime bindings and
+must use their original compatible executable; no implicit migration occurs.
+
+Use the existing `artifact.read` method with `task_id` and the reference's
+hex digest as `artifact_id` to inspect a generated program or result in bounded
+chunks. `ToolProgram` and `ToolArtifact` in the application metadata describe
+their ordinary wire values. Disclosure requires that the producing capability
+explicitly permits public output objects; raw captures, prepared requests and
+private context objects remain unavailable.
 
 ## Controls and context
 

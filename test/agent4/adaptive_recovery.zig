@@ -91,6 +91,33 @@ test "compiled catalog composes coverage and orphan grouping and reuses exact BP
     try std.testing.expectEqual(4, grouped.value.rows.items[1].group);
     try std.testing.expectEqual(1, grouped.value.rows.items[1].value);
     try std.testing.expectError(error.InvalidParams, engine.build(a, scratch.allocator(), catalog.value, "{\"instances\":[],\"bindings\":[],\"entry\":{\"instance\":\"x\",\"symbol\":\"apply\"},\"pure\":true}"));
+    try std.testing.expectError(error.UnknownComponent, engine.build(a, scratch.allocator(), catalog.value, "{\"instances\":[{\"key\":\"x\",\"component_id\":\"not-approved\"}],\"bindings\":[],\"entry\":{\"instance\":\"x\",\"symbol\":\"apply\"}}"));
+    try std.testing.expectError(error.IncompatibleInterface, engine.build(a, scratch.allocator(), catalog.value, try constructionRecipe(a, &.{.{ .component = "filter", .operation = "swap" }})));
+    try std.testing.expectError(error.CyclicComposition, engine.build(a, scratch.allocator(), catalog.value, "{\"instances\":[{\"key\":\"x\",\"component_id\":\"compose\"}],\"bindings\":[{\"required\":{\"instance\":\"x\",\"symbol\":\"first\"},\"supplied\":{\"instance\":\"x\",\"symbol\":\"apply\"}}],\"entry\":{\"instance\":\"x\",\"symbol\":\"apply\"}}"));
+    // Add a valid but unreachable external declaration to an actual component.
+    // Pure admission rejects the declaration even though the entry never uses it.
+    var component = try boundary.data.component.decode(a, catalog.value.items[7].object.bytes);
+    defer component.deinit();
+    var forbidden = component.object;
+    var unit: ?u64 = null;
+    for (forbidden.program.schemas, 0..) |shape, i| if (shape == .unit) {
+        unit = @intCast(i);
+        break;
+    };
+    const external = [_]boundary.data.program.Effect{.{ .identity = "forbidden.external", .payload = unit.?, .result = unit.?, .external = true }};
+    forbidden.program.effects = &external;
+    const forbidden_bytes = try a.alloc(u8, try boundary.data.component.encodedLength(forbidden));
+    _ = try boundary.data.component.encode(a, forbidden, forbidden_bytes);
+    try std.testing.expectError(error.ForbiddenEffect, engine.validateCatalog(a, .{ .items = &.{.{ .id = .{ .bytes = "swap" }, .object = .{ .bytes = forbidden_bytes } }} }));
+    var substituted = recovered.value;
+    const altered = try a.dupe(u8, substituted.built.image.bytes);
+    altered[0] ^= 1;
+    substituted.built.image.bytes = altered;
+    try std.testing.expectError(error.InvalidDerivation, engine.execute(a, a, std.testing.io, null, task, "frozen-policy", encoded_catalog.?, substituted, admitted_input, .{}));
+    try std.testing.expectError(error.IncompatibleInterface, engine.run(a, a, std.testing.io, null, tool, try native.values.schemaBytes(bool, a), admitted_input.value.bytes, .{}));
+    try std.testing.expectError(error.OutOfMemory, engine.run(a, a, std.testing.io, null, tool, schema, admitted_input.value.bytes, .{ .working_bytes = 1 }));
+    var cancelled: std.atomic.Value(bool) = .init(true);
+    try std.testing.expectError(error.Canceled, engine.run(a, a, std.testing.io, &cancelled, tool, schema, admitted_input.value.bytes, .{}));
     try std.testing.expectError(error.FuelExhausted, engine.run(a, a, std.testing.io, null, tool, schema, try agent.contracts.encodeOwned(t.tool_types.Table, a, input), .{ .transitions = 1 }));
 }
 // Independent projection of the persisted capture record, including the

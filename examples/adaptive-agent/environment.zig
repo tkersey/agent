@@ -77,7 +77,7 @@ fn componentCatalog(a: std.mem.Allocator, assets: native.discovery.Assets) ![]co
     }
     return error.MissingArtifact;
 }
-fn resource(resources: []const []const u8, ref: t.model.ArtifactReference) ![]const u8 {
+fn resourceBytes(resources: []const []const u8, ref: t.model.ArtifactReference) ![]const u8 {
     for (resources) |bytes| if (bytes.len == ref.bytes and std.mem.eql(u8, &digest(bytes), &ref.digest)) return bytes;
     return error.MissingArtifact;
 }
@@ -245,16 +245,16 @@ pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration
     const extra: usize = if (tool_policy) |value| 1 + value.inputs.items.len else 0;
     if (catalog.value.skills.items.len + 2 + extra != resources.items.len) return error.MissingArtifact;
     for (catalog.value.skills.items) |skill| {
-        const body = try resource(resources.items, skill.instructions);
+        const body = try resourceBytes(resources.items, skill.instructions);
         if (!std.unicode.utf8ValidateSlice(body) or skill.instructions.bytes != body.len or !std.mem.eql(u8, &skill.instructions.digest, &digest(body))) return error.InvalidSkill;
     }
     if (tool_policy) |value| {
-        const components = try resource(resources.items, value.catalog);
+        const components = try resourceBytes(resources.items, value.catalog);
         if (!std.mem.eql(u8, components, try componentCatalog(a, assets))) return error.InvalidCatalog;
         const expected_body = try tool_resources.skillBody(a, components);
         var found = false;
         for (catalog.value.skills.items) |skill| if (std.mem.eql(u8, skill.id.bytes, "tool-construction")) {
-            if (found or !std.mem.eql(u8, skill.version.bytes, "1") or !std.mem.eql(u8, try resource(resources.items, skill.instructions), expected_body)) return error.InvalidSkill;
+            if (found or !std.mem.eql(u8, skill.version.bytes, "1") or !std.mem.eql(u8, try resourceBytes(resources.items, skill.instructions), expected_body)) return error.InvalidSkill;
             var mask: [t.P.declaration_count]bool = @splat(false);
             mask[t.ordinal("tool_build")] = value.build;
             if (!std.meta.eql(mask, skill.tools)) return error.InvalidSkill;
@@ -262,7 +262,7 @@ pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration
         };
         if (!found or policy.permitted_tools[t.ordinal("tool_build")] != value.build or policy.core_tools[t.ordinal("tool_build")] or policy.permitted_tools[t.ordinal("tool_run")] != value.run or policy.core_tools[t.ordinal("tool_run")] != value.run) return error.InvalidConfiguration;
         for (value.inputs.items) |input| {
-            var admitted = try contracts.decodeOwned(contracts.tool_construction.Input, a, try resource(resources.items, input.object));
+            var admitted = try contracts.decodeOwned(contracts.tool_construction.Input, a, try resourceBytes(resources.items, input.object));
             defer admitted.deinit();
             if (!std.mem.eql(u8, admitted.value.schema.bytes, try native.values.schemaBytes(t.tool_types.Table, a))) return error.InvalidConfiguration;
             var table = try contracts.decodeOwned(t.tool_types.Table, a, admitted.value.value.bytes);

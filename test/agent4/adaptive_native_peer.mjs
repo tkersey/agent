@@ -85,7 +85,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
           const item = body.input.find(item => item.type === 'function_call_output' && item.call_id === `tools-${call}`);
           assert(item, `missing acquired tool output ${call}`); return JSON.parse(item.output);
         };
-        const skill = (operation, revision) => ['skill_set', {operation, skill_id: 'tool-construction', version: '1', residency: 'resident', expected_revision: revision, reason: 'Exercise checked composition and independent execution authority.'}];
+        const skill = (operation, revision) => ['skill_set', {operation, skill_id: 'tool-construction', version: '1', residency: operation === 'load' ? 'resident' : 'unchanged', expected_revision: revision, reason: 'Exercise checked composition and independent execution authority.'}];
         if (index === 0) {
           assert(!offered.has('tool_build')); assert(offered.has('tool_run'));
           const marker = 'Authorized typed Table inputs: ', text = strings(body.input).find(text => text.includes(marker));

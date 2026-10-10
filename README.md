@@ -136,11 +136,14 @@ are finite execution checks, not claims about live-model quality.
 
 ## Get started
 
-Use **exact Zig 0.17.0 only** and **Node 26.8.1 or newer**. Agent 4 pins Boundary 3.0.0-dev.0 and
-World 6.0.0-dev.0 source commits in its [dependency lock](conformance/agent4/dependencies.lock.json); use
+Use **exact Zig 0.17.0 only** and **Node 26.8.1 or newer**. Agent 4 pins released Boundary 3.0.0 and
+World 6.0.0 source commits in its [dependency lock](conformance/agent4/dependencies.lock.json); use
 that exact Boundary/World combination rather than substituting other versions.
-The locked source-installation profile is POSIX, qualified on Darwin arm64 and
-Linux x86_64; Windows setup is not qualified. See [runtime status](docs/agent4-runtime.md)
+The locked source-installation profile uses POSIX tooling and is qualified on
+Linux x86_64; Windows setup is not qualified. World is acquired anonymously from
+its hash-pinned public release archive and external descriptor. Use a fresh
+setup directory when changing tuples; retained inputs are never overwritten.
+See [runtime status](docs/agent4-runtime.md)
 and the [Zig 0.17 execution and cost evidence](https://github.com/tkersey/boundary/blob/a39014232db44c6780a3a2d953dacea111168aec/docs/zig-0.17-upgrade.md).
 
 For ordinary changes, use [focused local verification](.github/CI.md#local-completion-focused-checks-five-minutes-total)

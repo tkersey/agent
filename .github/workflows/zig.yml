@@ -145,11 +145,13 @@ jobs:
       # inventory, package and runtime binding. Never skip this on a cache hit.
       - name: Authenticate the locked source and delivered runtime
         if: matrix.lane != 'installation'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ matrix.lane }}" = native ]; then
             node tools/agent4/setup.mjs --native --zig-exe "$(command -v zig)"
+            node .agent4/out/world-runtime/runtime/bin/world.mjs runtime verify \
+              --root .agent4/out/world-runtime \
+              --manifest-sha256 "$(node -p "require('./conformance/agent4/dependencies.lock.json').world.delivery.manifestSha256")" \
+              --smoke
           else
             node tools/agent4/setup.mjs --zig-exe "$(command -v zig)"
           fi

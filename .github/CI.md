@@ -104,6 +104,9 @@ The caller's bounded executable reads and metadata checks remain unchanged.
 Locked dependency bytes are cached separately from compiler outputs. Setup still
 authenticates their archives, inventories, package hashes and runtime bindings
 on every run; the installation lane still provisions its own fresh inputs.
+After setup, the native lane runs World's existing portable bundle smoke against
+the acquired archive's locked manifest identity. This checks the installed CLI,
+pure execution and checkpoint transfer through the same delivered runtime.
 The durable-owner test compiles its one image once for both direct and captured
 acquisition recovery. It also retains the inbox contract-conflict and message-ID
 checks formerly split into a separate inbox fixture. `native_repository.mjs`

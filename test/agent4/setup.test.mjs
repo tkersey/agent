@@ -170,9 +170,9 @@ test("delivery lock rejects unbound source, endpoint and transport before acquis
   for (const mutate of [
     lock => { delete lock.world.delivery; },
     lock => { lock.world.delivery.commit = "0".repeat(40); },
-    lock => { lock.world.delivery.artifact.apiPath = "user"; },
+    lock => { if (lock.world.delivery.release) lock.world.delivery.release.descriptor.url = "https://example.com/unbound"; else lock.world.delivery.artifact.apiPath = "user"; },
     lock => { lock.world.delivery.archive.sha256 = "bad"; },
-    lock => { lock.world.delivery.artifact.bytes = 129 * 1024 * 1024; },
+    lock => { (lock.world.delivery.release?.descriptor ?? lock.world.delivery.artifact).bytes = 129 * 1024 * 1024; },
   ]) {
     const lock = JSON.parse(readFileSync(DEFAULT_LOCK));
     mutate(lock); writeFileSync(lockPath, JSON.stringify(lock));
@@ -190,13 +190,34 @@ test("missing or corrupt offline bundle cannot trigger a kernel build", async co
   assert.equal(existsSync(f.worldBundle), false);
 });
 
-test("cached transport delegates acquisition to authenticated World source", async context => {
+for (const publicRelease of [false, true]) test(publicRelease ?
+  "public release transport authenticates descriptor and archive without GitHub credentials" :
+  "cached transport delegates acquisition to authenticated World source", async context => {
   const f = existingFixture(context);
   const expectedFiles = inventory(f.worldRuntime);
   const archivePath = join(f.input, "world-runtime-bundle.tar.gz");
   const bytes = Buffer.from("opaque World-owned transport fixture");
-  writeFileSync(archivePath, bytes);
-  f.lock.world.delivery.archive = {bytes: bytes.length, sha256: sha256(bytes)};
+  if (!publicRelease) writeFileSync(archivePath, bytes);
+  f.lock.world.delivery.archive = {...f.lock.world.delivery.archive, bytes: bytes.length, sha256: sha256(bytes)};
+  const downloads = [];
+  if (publicRelease) {
+    f.lock.status = "released-integration";
+    for (const name of ["boundary", "world"]) f.lock[name].version = f.lock[name].version.split("-")[0];
+    const tag = `v${f.lock.world.version}`;
+    const prefix = `https://github.com/tkersey/world/releases/download/${tag}/world-runtime-bundle`;
+    const descriptor = Buffer.from(JSON.stringify({source: {commit: f.lock.world.commit},
+      manifestSha256: f.lock.world.delivery.manifestSha256, archive: {bytes: bytes.length, sha256: sha256(bytes)}}));
+    f.lock.world.delivery = {commit: f.lock.world.commit, manifestSha256: f.lock.world.delivery.manifestSha256,
+      archive: {url: `${prefix}.tar.gz`, bytes: bytes.length, sha256: sha256(bytes)},
+      release: {tag, descriptor: {url: `${prefix}.delivery.json`, bytes: descriptor.length, sha256: sha256(descriptor)}}};
+    context.mock.method(globalThis, "fetch", async url => {
+      downloads.push(url);
+      assert([`${prefix}.delivery.json`, `${prefix}.tar.gz`].includes(url));
+      const response = new Response(url.endsWith(".json") ? descriptor : bytes);
+      Object.defineProperty(response, "url", {value: url});
+      return response;
+    });
+  }
   mkdirSync(join(f.worldSource, "bin"));
   const args = ["runtime", "acquire", "--archive", archivePath,
     "--archive-sha256", sha256(bytes), "--manifest-sha256", f.lock.world.delivery.manifestSha256,
@@ -215,9 +236,21 @@ writeFileSync(${JSON.stringify(join(f.worldRuntime, "kernel.wasm"))}, "fixture k
   f.lock.world.gitTree = gitTree(f.worldSource);
   writeFileSync(f.lockPath, JSON.stringify(f.lock));
   rmSync(f.worldBundle, {recursive: true});
-  const result = await setup({agentRoot: f.agentRoot, lockPath: f.lockPath, zig: f.zig, offline: true});
+  const result = await setup({agentRoot: f.agentRoot, lockPath: f.lockPath, zig: f.zig, offline: !publicRelease});
   assert.equal(result.worldRuntime, f.worldRuntime);
   assert.deepEqual(inventory(f.worldRuntime), expectedFiles);
+  assert.equal(downloads.length, publicRelease ? 2 : 0);
+  assert.deepEqual(readFileSync(archivePath), bytes);
+  if (publicRelease) for (const mutate of [
+    lock => { lock.world.delivery.release.tag = "v0.0.0"; },
+    lock => { lock.world.delivery.archive.url = "https://example.com/unbound"; },
+    lock => { lock.world.delivery.release.descriptor.url = "https://example.com/unbound"; },
+    lock => { lock.world.delivery.release.descriptor.sha256 = "bad"; },
+  ]) {
+    const invalid = structuredClone(f.lock); mutate(invalid);
+    writeFileSync(f.lockPath, JSON.stringify(invalid));
+    assert.throws(() => readDependencyLock(f.lockPath), /invalid World delivery/);
+  }
 });
 
 test("an existing corrupt archive is rejected without replacing retained inputs", async context => {

@@ -133,13 +133,23 @@ export function readDependencyLock(lockPath = DEFAULT_LOCK) {
   const runtime = lock.world.runtime;
   const delivery = lock.world.delivery;
   if (!delivery || delivery.commit !== lock.world.commit ||
+      !/^[a-f0-9]{64}$/.test(delivery.manifestSha256 ?? ""))
+    fail("invalid World delivery binding");
+  if (delivery.release) {
+    const tag = `v${lock.world.version}`;
+    const prefix = `https://github.com/tkersey/world/releases/download/${tag}/world-runtime-bundle`;
+    if (lock.status !== "released-integration" || delivery.release.tag !== tag ||
+        delivery.archive?.url !== `${prefix}.tar.gz` ||
+        delivery.release.descriptor?.url !== `${prefix}.delivery.json`)
+      fail("invalid World delivery release binding");
+  } else if (lock.status === "released-integration" ||
       !Number.isSafeInteger(delivery.runId) || delivery.runId <= 0 ||
       delivery.artifactName !== `world-runtime-${lock.world.commit}` ||
       !Number.isFinite(Date.parse(delivery.expiresAt)) ||
-      !/^[a-f0-9]{64}$/.test(delivery.manifestSha256 ?? "") ||
-      !/^repos\/tkersey\/world\/actions\/artifacts\/[1-9][0-9]*\/zip$/.test(delivery.artifact?.apiPath ?? ""))
+      !/^repos\/tkersey\/world\/actions\/artifacts\/[1-9][0-9]*\/zip$/.test(delivery.artifact?.apiPath ?? "")) {
     fail("invalid World delivery binding");
-  for (const transport of [delivery.archive, delivery.artifact]) {
+  }
+  for (const transport of [delivery.archive, delivery.release ? delivery.release.descriptor : delivery.artifact]) {
     if (!/^[a-f0-9]{64}$/.test(transport?.sha256 ?? "") ||
         !Number.isSafeInteger(transport.bytes) || transport.bytes <= 0 || transport.bytes > MAX_FILE_BYTES)
       fail("invalid World delivery transport");

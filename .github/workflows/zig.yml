@@ -24,6 +24,7 @@ jobs:
           node-version: '26.9.0'
       - name: Check source inventory and non-destructive cache admission
         run: |
+          command -v rg >/dev/null || sudo apt-get install --yes --no-install-recommends ripgrep
           sh tools/check_zig_paths.sh
           node --test .github/scripts/zig-cache.test.mjs
   qualify:

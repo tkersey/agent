@@ -12,8 +12,8 @@ const Ref = t.model.ArtifactReference;
 
 fn constructionRecipe(a: std.mem.Allocator, stages: []const struct { component: []const u8, operation: ?[]const u8 = null }) ![]u8 {
     const wire = agent.contracts.tool_construction;
-    var instances: std.ArrayList(@TypeOf(@as(wire.Recipe, undefined).instances.items[0])) = .empty;
-    var bindings: std.ArrayList(@TypeOf(@as(wire.Recipe, undefined).bindings.items[0])) = .empty;
+    var instances: std.ArrayList(@FieldType(wire.Recipe, "instances").Child) = .empty;
+    var bindings: std.ArrayList(@FieldType(wire.Recipe, "bindings").Child) = .empty;
     for (stages, 0..) |stage, i| {
         const key = try std.fmt.allocPrint(a, "stage{d}", .{i});
         try instances.append(a, .{ .key = .{ .bytes = key }, .component_id = .{ .bytes = stage.component } });

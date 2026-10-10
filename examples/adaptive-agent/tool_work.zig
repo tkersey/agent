@@ -115,12 +115,17 @@ fn compute(ctx: native.Context, prepared: Prepared, program_bytes: *?contracts.B
     }
 }
 fn acquire(ctx: native.Context, bytes: []const u8) !native.registry.Acquisition {
+    const started = std.Io.Clock.awake.now(ctx.io).toMilliseconds();
     var decoded = try contracts.decodeOwned(Prepared, ctx.allocator, bytes);
     defer decoded.deinit();
     const prepared = decoded.value;
     if (!same(&prepared.policy, &work.digest(ctx.profile)) or !same(ctx.task_id, &std.fmt.bytesToHex(prepared.task, .lower))) return error.InvalidPreparedRequest;
     var program_bytes: ?contracts.Bytes(maximum_program_bytes) = null;
     var artifact: t.ToolArtifact = .{ .task = prepared.task, .policy = prepared.policy, .call_id = prepared.request.call_id, .outcome = compute(ctx, prepared, &program_bytes) catch |err| .{ .rejected = failure(if (prepared.request.action == .build) .construction else .execution, err) }, .model_text = .{ .bytes = "" } };
+    if (std.Io.Clock.awake.now(ctx.io).toMilliseconds() - started >= (engine.Limits{}).deadline_ms) {
+        program_bytes = null;
+        artifact.outcome = .{ .rejected = failure(if (prepared.request.action == .build) .construction else .execution, error.Timeout) };
+    }
     const program = if (program_bytes) |encoded| (try contracts.decodeOwned(wire.Program, ctx.allocator, encoded.bytes)).value else null;
     artifact.model_text = render(ctx.allocator, artifact, program) catch |err| blk: {
         program_bytes = null;

@@ -449,7 +449,11 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
       const task = await client.call('task.submit', {client_operation_id: name, application_id: 'adaptive-agent', profile_id: description.profile.id,
         input: {schema_id: 'adaptive-agent.input.v1', value: {task: name === 'tools-reverse' ? 'Group source records unsupported by the selected lock scope.' : 'Audit selected lock records against source records, retaining all classifications and reuse the tool on the second input.'}}});
       if (name === 'tools-reuse') {
-        const waiting = await until(() => client.call('task.status', {task_id: task.task_id}), value => value.question != null, 2000);
+        const waiting = await until(async () => {
+          const value = await client.call('task.status', {task_id: task.task_id});
+          if (value.status === 'completed' || value.status === 'failed') assert.fail(`${name}: ${JSON.stringify(await client.call('task.result', {task_id: task.task_id}))}`);
+          return value;
+        }, value => value.question != null, 2000);
         if (providerFailure) throw providerFailure;
         assert.equal(alternateIndex, 5);
         const originalProgram = await artifact(task.task_id, toolSubject.program);

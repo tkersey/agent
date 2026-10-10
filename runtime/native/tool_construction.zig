@@ -25,6 +25,9 @@ pub const Limits = struct {
     transitions: u64 = 1_000_000,
     deadline_ms: u64 = 10_000,
 };
+fn validateLimits(limits: Limits) !void {
+    if (limits.working_bytes == 0 or limits.working_bytes > 16 * 1024 * 1024 or limits.transitions == 0 or limits.transitions > 1_000_000 or limits.deadline_ms == 0 or limits.deadline_ms > 10_000) return error.Capacity;
+}
 
 fn same(left: []const u8, right: []const u8) bool {
     return std.mem.eql(u8, left, right);
@@ -49,8 +52,10 @@ pub fn construct(output: std.mem.Allocator, scratch: std.mem.Allocator, task: [1
 /// Re-admit the derivation and compare it to the exact retained program. Linking
 /// is validation here: execution still receives the originally referenced bytes.
 pub fn execute(output: std.mem.Allocator, scratch: std.mem.Allocator, io: std.Io, cancellation: ?*const std.atomic.Value(bool), task: [16]u8, profile: []const u8, catalog_bytes: []const u8, program: Program, input: Input, limits: Limits) ![]u8 {
+    try validateLimits(limits);
+    const start = std.Io.Clock.awake.now(io).toMilliseconds();
     if (program.version != 1 or !same(&program.task, &task) or !same(&program.policy, &digest(profile)) or !same(&program.catalog, &digest(catalog_bytes))) return error.UnauthorizedProgram;
-    if (catalog_bytes.len > maximum_asset_bytes) return error.Capacity;
+    if (catalog_bytes.len > maximum_asset_bytes or input.value.bytes.len > maximum_value_bytes or input.schema.bytes.len > maximum_asset_bytes) return error.Capacity;
     if (cancellation) |flag| if (flag.load(.acquire)) return error.Canceled;
     var arena = std.heap.ArenaAllocator.init(scratch);
     defer arena.deinit();
@@ -62,7 +67,11 @@ pub fn execute(output: std.mem.Allocator, scratch: std.mem.Allocator, io: std.Io
         !same(derived.interface.input.bytes, program.built.interface.input.bytes) or
         !same(derived.interface.output.bytes, program.built.interface.output.bytes) or
         !same(derived.interface.failure.bytes, program.built.interface.failure.bytes)) return error.InvalidDerivation;
-    return run(output, scratch, io, cancellation, program.built, input.schema.bytes, input.value.bytes, limits);
+    const elapsed = std.Io.Clock.awake.now(io).toMilliseconds() - start;
+    if (elapsed >= limits.deadline_ms) return error.Timeout;
+    var remaining = limits;
+    remaining.deadline_ms -= @intCast(elapsed);
+    return run(output, scratch, io, cancellation, program.built, input.schema.bytes, input.value.bytes, remaining);
 }
 
 /// The caller supplies an already task-admitted catalog, never model bytes.
@@ -172,7 +181,8 @@ pub fn build(output: std.mem.Allocator, scratch: std.mem.Allocator, catalog: Cat
 /// deinitializer releases interrupted work; no resident or checkpoint escapes.
 /// Fuel is reserved cumulatively across quanta, including explicit yields.
 pub fn run(output: std.mem.Allocator, parent: std.mem.Allocator, io: std.Io, cancellation: ?*const std.atomic.Value(bool), built: Built, input_schema: []const u8, input: []const u8, limits: Limits) ![]u8 {
-    if (built.image.bytes.len > maximum_asset_bytes or input.len > maximum_value_bytes or limits.working_bytes == 0 or limits.working_bytes > 16 * 1024 * 1024 or limits.transitions == 0 or limits.transitions > 1_000_000 or limits.deadline_ms == 0 or limits.deadline_ms > 10_000) return error.Capacity;
+    try validateLimits(limits);
+    if (built.image.bytes.len > maximum_asset_bytes or input.len > maximum_value_bytes) return error.Capacity;
     const start = std.Io.Clock.awake.now(io).toMilliseconds();
     if (cancellation) |flag| if (flag.load(.acquire)) return error.Canceled;
     var budget: world.AllocationBudget = .{ .parent = parent, .limit = limits.working_bytes };

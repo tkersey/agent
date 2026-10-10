@@ -13,8 +13,7 @@ regime belong in the PR; a previous-head run is not current proof.
 
 ## Checks and reruns
 
-The source job provisions `rg`, checks `repo_zig_paths.txt`, and runs the existing
-non-destructive cache-admission tests. It does not require Zig or product
+The source job provisions `rg`, checks `repo_zig_paths.txt`. It does not require Zig or product
 acquisition. It is source accounting, not a substitute for compiling a consumer.
 
 The authoring job uses native setup with `--authoring-only`, then runs
@@ -57,9 +56,8 @@ macOS verification supplements the required Linux workflow; it does not replace
 Linux qualification or add a new CI platform matrix.
 
 ```sh
-# Cheap source checks; rg and Node are development tools here.
+# Cheap source accounting; rg is a development tool.
 sh tools/check_zig_paths.sh
-node --test .github/scripts/zig-cache.test.mjs
 
 # Native bootstrap; append --authoring-only when only authoring is needed.
 zig run tools/native/dependencies.zig -- setup \
@@ -86,8 +84,8 @@ never run to produce metadata. SQLite and the native C bridge share one static
 library per target ABI. Linux keeps the accepted self-hosted compiler backend;
 C compilation and its existing optimization flags are unchanged.
 
-Compiler caches use the existing complete bounded snapshot helper. It saves
-useful compiler objects without deleting local outputs and refuses unsupported
+Compiler caches use ordinary CI filesystem operations to save
+useful compiler objects without deleting local outputs. They reject unsupported
 or oversized snapshots. OS, architecture, compiler version, lane and locked
 inputs remain part of the cache key. Setup-Zig's destructive automatic cache
 post-hook stays disabled.

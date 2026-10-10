@@ -18,9 +18,9 @@ zig run tools/native/dependencies.zig -- setup \
 zig build adaptive-agent -Doptimize=safe
 ```
 
-The approved tuple is Boundary 3.0.0 at
-`c9d719a6c4ed3a34d8acb8b0f2808c39322883f3`, World 6.0.0 at
-`797fe962810f1276604d7fe3fcff58da7c644b7a`, and SQLite 3.53.4. The versioned
+The approved development successor tuple is Boundary at
+`b46285b8e171622e66d3616ffd9c15e209ea702e`, World at
+`311d40836102344fbeb97158510fc9a71cb62343`, and SQLite 3.53.4. The versioned
 `agent-native-source-lock/v2` binds exact archives and complete source/package
 inventories. It intentionally contains no WASM delivery contract. World owns
 its optional JS/WASM release descriptor, which this build never rewrites.

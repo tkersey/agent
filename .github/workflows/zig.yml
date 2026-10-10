@@ -19,14 +19,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: '26.9.0'
-      - name: Check source inventory and non-destructive cache admission
+      - name: Check source inventory
         run: |
           command -v rg >/dev/null || sudo apt-get install --yes --no-install-recommends ripgrep
           sh tools/check_zig_paths.sh
-          node --test .github/scripts/zig-cache.test.mjs
   qualify:
     name: Qualification / ${{ matrix.lane }} / linux-x86_64
     needs: source
@@ -135,7 +131,17 @@ jobs:
         id: cache_size
         if: ${{ !cancelled() }}
         continue-on-error: true
-        run: node .github/scripts/zig-cache.mjs .zig-cache upload .zig-cache-upload
+        run: |
+          echo 'save=false' >> "$GITHUB_OUTPUT"
+          test -d .zig-cache/o || exit 0
+          test -z "$(find .zig-cache ! -type d ! -type f -print -quit)" || exit 0
+          test -n "$(find .zig-cache/o -type f -size +0c -print -quit)" || exit 0
+          bytes=$(find .zig-cache -type f -printf '%s\n' | awk '{n+=$1} END {printf "%.0f",n}')
+          echo "Compiler cache: $bytes bytes (4 GiB upload maximum)"
+          test "$bytes" -le 4294967296 || exit 0
+          test ! -e .zig-cache-upload
+          cp -al .zig-cache .zig-cache-upload
+          echo 'save=true' >> "$GITHUB_OUTPUT"
       - name: Save useful cache without deleting local outputs
         if: ${{ !cancelled() && steps.cache_size.outputs.save == 'true' }}
         continue-on-error: true

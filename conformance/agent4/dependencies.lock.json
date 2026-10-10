@@ -1,39 +1,40 @@
 {
   "format": "agent-native-source-lock/v2",
-  "status": "released-integration",
+  "status": "development-integration",
   "boundary": {
     "repository": "tkersey/boundary",
-    "commit": "c9d719a6c4ed3a34d8acb8b0f2808c39322883f3",
-    "gitTree": "f4ba4d7ebac8f3e2eb8ca200aa3d73b112be4265",
+    "commit": "b46285b8e171622e66d3616ffd9c15e209ea702e",
+    "gitTree": "10d55508e3153ef11308d4ca1151c3d4a1c4854e",
     "version": "3.0.0",
     "source": {
-      "inventorySha256": "30aa4f68446fd73605c1c300c9b3d9a3c35c2fcb16cca45302bae8bbca0f9f8b",
-      "entries": 538,
-      "bytes": 13367749
+      "inventorySha256": "492997213159c181567e939a777b1fa8f71c09f82d8047a3645810743e37bf51",
+      "entries": 320,
+      "bytes": 8085202
     },
     "archive": {
-      "url": "https://github.com/tkersey/boundary/archive/c9d719a6c4ed3a34d8acb8b0f2808c39322883f3.tar.gz",
-      "bytes": 4110403,
-      "sha256": "49a669e4effb198f95d2a722c1cf52ee44a74fecb5c4a02466b856d6a93521a8"
+      "url": "https://github.com/tkersey/boundary/archive/b46285b8e171622e66d3616ffd9c15e209ea702e.tar.gz",
+      "bytes": 1456785,
+      "sha256": "fca95b4a4f4f1f6400af231e6c7b67893b89727c61c99d0c8e74c59657304601"
     },
+    "authentication": "Development successor source archive compared file-for-file and executable-bit-for-bit with the exact Git commit; complete normalized source inventory authenticated.",
     "package": {
-      "zigHash": "boundary-3.0.0-flclaCwSRgCWzefAdYTuW8qR-dz1_f0yzoLJHegGXjo7",
+      "zigHash": "boundary-3.0.0-flclaDLSMwDCOj_NYDaHit0VKo2p-jrlLogPcCQvz5Hq",
       "defaultProfile": "zig-managed",
       "profiles": {
         "zig-managed": {
-          "inventorySha256": "493ab5736fe7855f2b29dec3c8d0b6fbae7c1d98fa6e84b2dbebb596f6db80dc",
-          "entries": 483,
-          "bytes": 4592172
+          "inventorySha256": "1b9528528e8a0ced91328c8759462d227ca40cd826d3913ddddd30d8c37eb98a",
+          "entries": 300,
+          "bytes": 3396146
         },
         "archive-extracted": {
-          "inventorySha256": "9c4531834465fb5dfc0ab43efdba2434ff669d828430834698b3c20f142c52db",
-          "entries": 483,
-          "bytes": 4592172
+          "inventorySha256": "1b9528528e8a0ced91328c8759462d227ca40cd826d3913ddddd30d8c37eb98a",
+          "entries": 300,
+          "bytes": 3396146
         }
       },
       "archive": {
-        "bytes": 899946,
-        "sha256": "a43399c3bb378749de030b6a481be8790581d78e035a7f26051e246a2a1e525b"
+        "bytes": 667706,
+        "sha256": "686da6f35f63a7d90df4a040f6d3835582c76796688200c4847673c5c08f4a5a"
       }
     },
     "api": {
@@ -83,25 +84,24 @@
           "sha256": "7fcd44cf03a22748a798bf528aae9ba9606c49d4ee789c03ca49f3dc15e2999b"
         }
       ]
-    },
-    "authentication": "Public release source archive authenticated against the exact tag commit tree; normal Zig package hash and complete package inventories verified."
+    }
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "797fe962810f1276604d7fe3fcff58da7c644b7a",
-    "gitTree": "fbce3401293b1458de94158d7253d1384d9faa84",
+    "commit": "311d40836102344fbeb97158510fc9a71cb62343",
+    "gitTree": "128dd3f5191fad1fa62a1531c6aa8484d9d746b8",
     "version": "6.0.0",
     "source": {
-      "inventorySha256": "26b49a8a1382f9f72906d91970fbf87b800fa2dddb19f31ec19336b6a62fd498",
-      "entries": 199,
-      "bytes": 17764620
+      "inventorySha256": "015a882181505494222b453bd5af4460e32d944a8d1af53068254e58d2b85e12",
+      "entries": 111,
+      "bytes": 1452016
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/797fe962810f1276604d7fe3fcff58da7c644b7a.tar.gz",
-      "bytes": 15760096,
-      "sha256": "d3e6715e5b7f0c9feca7ec1b14a95776b6b0d39df39a26456b648f590886b7f6"
+      "url": "https://github.com/tkersey/world/archive/311d40836102344fbeb97158510fc9a71cb62343.tar.gz",
+      "bytes": 325453,
+      "sha256": "16e868aab187a42d537e86adad438dae506ae5a904fab1ec29241ea3dd5e2843"
     },
-    "authentication": "Published release source archive and complete source inventory; native consumption requires no World JS/WASM delivery."
+    "authentication": "Development successor source archive compared file-for-file and executable-bit-for-bit with the exact Git commit; complete normalized source inventory authenticated."
   },
   "toolchain": {
     "zig": {
@@ -112,12 +112,12 @@
     "architecture": "arm64"
   },
   "publicationObservation": {
-    "boundarySource": "https://github.com/tkersey/boundary/releases/tag/v3.0.0 at c9d719a6c4ed3a34d8acb8b0f2808c39322883f3",
-    "worldSource": "https://github.com/tkersey/world/releases/tag/v6.0.0 at 797fe962810f1276604d7fe3fcff58da7c644b7a",
-    "compatiblePublishedReleaseObserved": true
+    "boundarySource": "https://github.com/tkersey/boundary/pull/167 at b46285b8e171622e66d3616ffd9c15e209ea702e",
+    "worldSource": "https://github.com/tkersey/world/commit/311d40836102344fbeb97158510fc9a71cb62343",
+    "compatiblePublishedReleaseObserved": false
   },
   "limitations": [
-    "Exact Zig 0.17.0 released Boundary 3.0.0 / World 6.0.0 tuple; prior tasks retain their original runtime bindings.",
-    "World producer qualification is Linux-based; Agent released-tuple qualification is recorded in its current CI. No live-provider qualification is implied."
+    "Explicit Zig 0.17.0 development successor tuple; version strings retain the public API names and do not claim new releases. Existing releases and prior task bindings remain unchanged.",
+    "Current candidate qualification is recorded in the coordinated PRs and Agent CI. No live-provider qualification is implied."
   ]
 }

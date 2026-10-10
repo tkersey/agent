@@ -4,8 +4,9 @@ The application emitter constructs one Boundary source module. Agent checks its
 catalogs and protected construction, then calls Boundary's compiler once. Boundary
 owns type/effect/capture/use checking, direct stable-activation lowering, and
 BPI3/PST3/ERQ3/ERS3/PKI3/PKO3. World owns execution. The native source lock
-selects the published Boundary 3.0.0 / World 6.0.0 tuple. The adaptive agent is
-the supported application; reusable authoring and native-host owners remain.
+selects an explicit development successor tuple for Boundary and World.
+Published 3.0.0 / 6.0.0 artifacts retain their original identities. The adaptive
+agent is the supported application; reusable authoring and native-host owners remain.
 
 | Owner | Responsibility |
 |---|---|

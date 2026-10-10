@@ -32,11 +32,13 @@ explicit expected outcomes. No second provider implementation runs as an oracle.
 
 The 14-call adaptive trajectory and generated-tool scenarios use the actual
 compiled application. They establish neither live-model quality nor cache reuse,
-billed cost, exhaustive scheduling, or all maximal input combinations. Local
-prefix/layout comparisons remain explicitly bounded, unexecuted counterfactuals.
+billed cost, exhaustive scheduling, or all maximal input combinations. Transient
+prefixes and marker placement are checked directly; hypothetical eager/naive
+layout reports are retired.
 
 The complete CI workflow retains its 300-second target and 360-second maximum,
 including downstream qualification. No new platform matrix is required. Native
 C/SQLite/libc are admitted dependencies; remaining JavaScript is an external
-verification controller, wire support, or cache/source checker. World retains
+verification controller or wire support. A small shell source check reports
+missing tracked inputs early. World retains
 its own optional JS/WASM embedding and independent source-agreement checks.

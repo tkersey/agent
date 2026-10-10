@@ -164,7 +164,8 @@ const Inventory = struct {
 fn lockAt(c: Context, path: []const u8) !Value {
     const lock = try c.json(path);
     try equal(try text(lock, "format"), "agent-native-source-lock/v2");
-    try equal(try text(lock, "status"), "released-integration");
+    const status = try text(lock, "status");
+    if (!std.mem.eql(u8, status, "released-integration") and !std.mem.eql(u8, status, "development-integration")) return error.InvalidMetadata;
     inline for (.{ "boundary", "world" }) |name| {
         const item = try field(lock, name);
         const repository = "tkersey/" ++ name;

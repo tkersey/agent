@@ -265,14 +265,15 @@ fn manifest(c: Context, args: []const []const u8) !void {
     const flags = try std.json.parseFromSliceLeaky(Value, c.a, args[8], .{});
     if (flags != .array) return error.InvalidMetadata;
     try sqlite.object.put(c.a, "compile_flags", flags);
-    const library = try Inventory.load(c, args[16], 100000);
+    const library_path = try Dir.cwd().realPathFileAlloc(c.io, args[16], c.a);
+    const library = try Inventory.load(c, library_path, 100000);
     var licenses: std.ArrayList(Value) = .empty;
     inline for (.{ "Agent", "World", "Boundary" }, 3..) |component, index| {
         try licenses.append(c.a, try c.value(.{ .component = component, .text = try c.read(args[index], 1024 * 1024) }));
     }
     const exe_dir = std.fs.path.dirname(args[15]) orelse return error.InvalidPath;
     var zig_license: ?[]const u8 = null;
-    for ([_][]const u8{ try c.join(&.{ exe_dir, "LICENSE" }), try c.join(&.{ exe_dir, "../LICENSE" }), try c.join(&.{ args[16], "../LICENSE" }), try c.join(&.{ args[16], "../../LICENSE" }) }) |path| {
+    for ([_][]const u8{ try c.join(&.{ exe_dir, "LICENSE" }), try c.join(&.{ exe_dir, "../LICENSE" }), try c.join(&.{ library_path, "../LICENSE" }), try c.join(&.{ library_path, "../../LICENSE" }) }) |path| {
         const bytes = c.read(path, 1024 * 1024) catch |err| switch (err) {
             error.FileNotFound => continue,
             else => return err,
@@ -285,7 +286,7 @@ fn manifest(c: Context, args: []const []const u8) !void {
     try licenses.append(c.a, try c.value(.{ .component = "Zig standard library", .text = zig_license orelse return error.InvalidLicense }));
     try licenses.append(c.a, try c.value(.{ .component = "SQLite", .text = try c.read(try c.join(&.{ args[6], "LICENSE" }), 65536) }));
     const linux = std.mem.indexOf(u8, args[11], "linux") != null;
-    if (linux) try licenses.append(c.a, try c.value(.{ .component = "musl libc", .text = try c.read(try c.join(&.{ args[16], "libc/musl/COPYRIGHT" }), 1024 * 1024) }));
+    if (linux) try licenses.append(c.a, try c.value(.{ .component = "musl libc", .text = try c.read(try c.join(&.{ library_path, "libc/musl/COPYRIGHT" }), 1024 * 1024) }));
     const result = .{
         .format = "agent-native-build/v1",
         .application_id = try text(application, "application_id"),
@@ -308,7 +309,7 @@ fn manifest(c: Context, args: []const []const u8) !void {
         .licenses = licenses.items,
     };
     try equal(compiler_digest, try c.fileDigest(args[15]));
-    try equal(try library.identity(c), try (try Inventory.load(c, args[16], 100000)).identity(c));
+    try equal(try library.identity(c), try (try Inventory.load(c, library_path, 100000)).identity(c));
     try Dir.cwd().writeFile(c.io, .{ .sub_path = args[13], .data = try c.encode(result) });
 }
 

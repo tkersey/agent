@@ -2,7 +2,7 @@
 // acquisition/build/install command runs behind a native executable allowlist.
 import assert from 'node:assert/strict';
 import {execFileSync, spawnSync} from 'node:child_process';
-import {copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync} from 'node:fs';
+import {copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
 import {dirname, join, resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 
@@ -19,7 +19,10 @@ const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'Agent downstream ü '))
 const cache = resolve(process.env.ZIG_GLOBAL_CACHE_DIR ?? join(scratch, 'global-cache'));
 const local = join(scratch, 'local-cache'), inputs = join(scratch, 'inputs');
 mkdirSync(cache, {recursive: true}); mkdirSync(local); mkdirSync(inputs);
-const env = {...process.env, PATH: '/usr/bin:/bin', ZIG_GLOBAL_CACHE_DIR: cache, ZIG_LOCAL_CACHE_DIR: local, ZIG_LIB_DIR: library};
+// Package managers may expose the selected library through a directory link.
+const libraryAlias = join(scratch, 'selected-zig-lib');
+symlinkSync(library, libraryAlias, 'dir');
+const env = {...process.env, PATH: '/usr/bin:/bin', ZIG_GLOBAL_CACHE_DIR: cache, ZIG_LOCAL_CACHE_DIR: local, ZIG_LIB_DIR: libraryAlias};
 delete env.NODE_OPTIONS; delete env.NODE_TEST_CONTEXT; delete env.TAR_OPTIONS;
 let prefix;
 if (process.platform === 'darwin') {
